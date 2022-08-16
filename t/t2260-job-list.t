@@ -78,6 +78,14 @@ test_expect_success 'submit jobs for job list testing' '
         echo $jobid >> inactiveids &&
         flux job id $jobid > failed.ids &&
         #
+        #  Run a job that will timeout, copy its JOBID to both inactive and
+        #   timeout lists.
+        #
+        jobid=`flux mini submit --time-limit=0.5s sleep 30` &&
+        echo $jobid >> inactiveids &&
+        flux job id $jobid > timeout.ids &&
+        fj_wait_event ${jobid} clean &&
+        #
         #  Submit 8 sleep jobs to fill up resources
         #
         for i in $(seq 0 7); do
@@ -169,6 +177,7 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
 test_expect_success HAVE_JQ 'flux job list inactive jobs results are correct' '
         flux job list -s inactive | jq .result | ${JOB_CONV} resulttostr > list_result_I.out &&
         echo "CANCELED" >> list_result_I.exp &&
+        echo "TIMEOUT" >> list_result_I.exp &&
         echo "FAILED" >> list_result_I.exp &&
         for count in `seq 1 4`; do \
             echo "COMPLETED" >> list_result_I.exp; \
@@ -195,6 +204,15 @@ test_expect_success HAVE_JQ 'flux job list only failed jobs' '
         $jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
           | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_failed.out &&
         test_cmp failed.ids list_result_failed.out
+'
+
+test_expect_success HAVE_JQ 'flux job list only timeout jobs' '
+        id=$(id -u) &&
+        state=`${JOB_CONV} strtostate INACTIVE` &&
+        result=`${JOB_CONV} strtoresult TIMEOUT` &&
+        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
+          | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_timeout.out &&
+        test_cmp timeout.ids list_result_timeout.out
 '
 
 test_expect_success HAVE_JQ 'flux job list only completed jobs' '
@@ -419,7 +437,7 @@ test_expect_success HAVE_JQ 'flux job list-inactive w/ since (second to most rec
 test_expect_success HAVE_JQ 'flux job list-inactive w/ since (oldest timestamp)' '
         timestamp=`cat list-inactive.out | tail -n 1 | jq .t_inactive` &&
         count=`flux job list-inactive --since=${timestamp} | wc -l` &&
-        test $count -eq 21
+        test $count -eq 22
 '
 
 test_expect_success HAVE_JQ 'flux job list-inactive w/ since (middle timestamp #1)' '

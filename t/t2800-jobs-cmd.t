@@ -30,7 +30,7 @@ runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer -f asciicast"
 
 # Return the expected jobids list in a given state:
 #   "all", "run", "sched", "active", "inactive",
-#   "completed", "canceled", "failed"
+#   "completed", "canceled", "failed", "timeout'
 #
 state_ids() {
 	for f in "$@"; do
@@ -102,6 +102,14 @@ test_expect_success HAVE_JQ 'submit jobs for job list testing' '
 	echo $jobid >> inactiveids &&
 	echo $jobid > failed.ids &&
 	#
+	#  Run a job that will timeout, copy its JOBID to both inactive and
+	#   timeout lists.
+	#
+	jobid=`flux mini submit --time-limit=0.5s sleep 30` &&
+	echo $jobid >> inactiveids &&
+	echo $jobid > timeout.ids &&
+	fj_wait_event ${jobid} clean &&
+	#
 	#  Submit 8 sleep jobs to fill up resources
 	#
 	for i in $(seq 0 7); do
@@ -145,7 +153,8 @@ test_expect_success 'flux-jobs default output works' '
 	test $(grep -c "  R " default.out) -eq $(state_count run) &&
 	test $(grep -c " CD " default.out) -eq 0 &&
 	test $(grep -c " CA " default.out) -eq 0 &&
-	test $(grep -c "  F " default.out) -eq 0
+	test $(grep -c "  F " default.out) -eq 0 &&
+	test $(grep -c " TO " default.out) -eq 0
 '
 
 test_expect_success 'flux-jobs: custom format with numeric spec works' '
@@ -213,24 +222,36 @@ test_expect_success 'flux-jobs --filter works (job results)' '
 	test $count -eq $(state_count failed) &&
 	count=`flux jobs --suppress-header --filter=canceled | wc -l` &&
 	test $count -eq $(state_count canceled) &&
+	count=`flux jobs --suppress-header --filter=timeout | wc -l` &&
+	test $count -eq $(state_count timeout) &&
 	count=`flux jobs --suppress-header --filter=completed,failed | wc -l` &&
 	test $count -eq $(state_count completed failed) &&
 	count=`flux jobs --suppress-header --filter=completed,canceled | wc -l` &&
 	test $count -eq $(state_count completed canceled) &&
+	count=`flux jobs --suppress-header --filter=completed,timeout | wc -l` &&
+	test $count -eq $(state_count completed timeout) &&
 	count=`flux jobs --suppress-header --filter=completed,failed,canceled | wc -l` &&
 	test $count -eq $(state_count completed failed canceled) &&
+	count=`flux jobs --suppress-header --filter=completed,failed,timeout | wc -l` &&
+	test $count -eq $(state_count completed failed timeout) &&
+	count=`flux jobs --suppress-header --filter=completed,failed,canceled,timeout | wc -l` &&
+	test $count -eq $(state_count completed failed canceled timeout) &&
 	count=`flux jobs --suppress-header --filter=pending,completed | wc -l` &&
 	test $count -eq $(state_count sched completed) &&
 	count=`flux jobs --suppress-header --filter=pending,failed | wc -l` &&
 	test $count -eq $(state_count sched failed) &&
 	count=`flux jobs --suppress-header --filter=pending,canceled | wc -l` &&
 	test $count -eq $(state_count sched canceled) &&
+	count=`flux jobs --suppress-header --filter=pending,timeout | wc -l` &&
+	test $count -eq $(state_count sched timeout) &&
 	count=`flux jobs --suppress-header --filter=running,completed | wc -l` &&
 	test $count -eq $(state_count run completed) &&
 	count=`flux jobs --suppress-header --filter=running,failed | wc -l` &&
 	test $count -eq $(state_count run failed) &&
 	count=`flux jobs --suppress-header --filter=running,canceled | wc -l` &&
-	test $count -eq $(state_count run canceled)
+	test $count -eq $(state_count run canceled) &&
+	count=`flux jobs --suppress-header --filter=running,timeout | wc -l` &&
+	test $count -eq $(state_count run timeout)
 '
 
 
@@ -397,8 +418,9 @@ test_expect_success 'flux-jobs --format={name} works' '
 	test_cmp jobnamePR.out jobnamePR.exp &&
 	flux jobs --filter=inactive -no "{name}" > jobnameI.out &&
 	echo "canceledjob" >> jobnameI.exp &&
+	echo "sleep" >> jobnameI.exp &&
 	echo "nosuchcommand" >> jobnameI.exp &&
-	count=$(($(state_count inactive) - 2)) &&
+	count=$(($(state_count inactive) - 3)) &&
 	for i in `seq 1 $count`; do
 		echo "hostname" >> jobnameI.exp
 	done &&
@@ -418,7 +440,7 @@ test_expect_success 'flux-jobs --format={ntasks},{nnodes},{nnodes:h} works' '
 	test_cmp nodecountR.exp nodecountR.out &&
 	flux jobs --filter=inactive -no "{ntasks},{nnodes},{nnodes:h}" > nodecountI.out &&
 	echo "1,,-" > nodecountI.exp &&
-	for i in `seq 1 $(state_count completed failed)`;
+	for i in `seq 1 $(state_count completed failed timeout)`;
 		do echo "1,1,1" >> nodecountI.exp
 	done &&
 	test_cmp nodecountI.exp nodecountI.out
@@ -432,7 +454,7 @@ test_expect_success 'flux-jobs --format={runtime:0.3f} works' '
 	done &&
 	test_cmp runtime-dotP.out runtime-dotP.exp &&
 	flux jobs --filter=running,inactive -no "{runtime:0.3f}" > runtime-dotRI.out &&
-	[ "$(grep -E "\.[0-9]{3}" runtime-dotRI.out | wc -l)" = "14" ]
+	[ "$(grep -E "\.[0-9]{3}" runtime-dotRI.out | wc -l)" = "15" ]
 '
 
 test_expect_success 'flux-jobs emits useful error on invalid format' '
@@ -471,7 +493,10 @@ test_expect_success 'flux-jobs --format={ranks},{ranks:h} works' '
 	test "$(sort -n ranksCD.out | head -1)" = "0,0" &&
 	flux jobs -no "{ranks},{ranks:h}" $(state_ids canceled) > ranksCA.out &&
 	test_debug "cat ranksCA.out" &&
-	test "$(sort -n ranksCA.out | head -1)" = ",-"
+	test "$(sort -n ranksCA.out | head -1)" = ",-" &&
+	flux jobs -no "{ranks},{ranks:h}" $(state_ids timeout) > ranksTO.out &&
+	test_debug "cat ranksTO.out" &&
+	test "$(sort -n ranksTO.out | head -1)" = "0,0"
 '
 
 test_expect_success 'flux-jobs --format={nodelist},{nodelist:h} works' '
@@ -487,13 +512,13 @@ test_expect_success 'flux-jobs --format={nodelist},{nodelist:h} works' '
 	done &&
 	test_debug "cat nodelistR.out" &&
 	test_cmp nodelistR.out nodelistR.exp &&
-	flux jobs -no "{nodelist},{nodelist:h}" $(state_ids completed) > nodelistCD.out &&
-	for id in $(state_ids completed); do
+	flux jobs -no "{nodelist},{nodelist:h}" $(state_ids completed timeout) > nodelistCDTO.out &&
+	for id in $(state_ids completed timeout); do
 		nodes=`flux job info ${id} R | flux R decode --nodelist`
-		echo "${nodes},${nodes}" >> nodelistCD.exp
+		echo "${nodes},${nodes}" >> nodelistCDTO.exp
 	done &&
-	test_debug "cat nodelistCD.out" &&
-	test_cmp nodelistCD.out nodelistCD.exp &&
+	test_debug "cat nodelistCDTO.out" &&
+	test_cmp nodelistCDTO.out nodelistCDTO.exp &&
 	flux jobs -no "{nodelist},{nodelist:h}" $(state_ids canceled) > nodelistCA.out &&
 	test_debug "cat nodelistCA.out" &&
 	echo ",-" > nodelistCA.exp &&
@@ -521,8 +546,8 @@ test_expect_success 'flux-jobs --format={t_run} works' '
 	cat t_runI.out &&
 	count=`head -n 1 t_runI.out | grep "^0.0$" | wc -l` &&
 	test $count -eq 1 &&
-	count=`tail -n $(state_count completed) t_runI.out | grep -v "^0.0$" | wc -l` &&
-	test $count -eq $(state_count completed)
+	count=`tail -n $(state_count completed timeout) t_runI.out | grep -v "^0.0$" | wc -l` &&
+	test $count -eq $(state_count completed timeout)
 '
 test_expect_success 'flux jobs --format={t_cleanup/{in}active} works' '
 	flux jobs --filter=pending,running -no "{t_cleanup},{t_cleanup:h},{t_inactive},{t_inactive:h}" > t_cleanupPR.out &&
@@ -558,12 +583,12 @@ test_expect_success 'flux-jobs --format={runtime},{runtime!F},{runtime!F:h},{run
 		test $count -eq $runcount &&
 		i=$((i+1))
 	done &&
-	expected=$(state_count completed) &&
-	flux jobs -no "$fmt" $(state_ids completed) >runtimeCD.out &&
+	expected=$(state_count completed timeout) &&
+	flux jobs -no "$fmt" $(state_ids completed timeout) >runtimeCDTO.out &&
 	i=1 &&
 	for nomatch in 0.0 0s 0:00:00 - -; do
 		name=$(echo $fmt | cut -d, -f${i}) &&
-		count=$(cut -d, -f${i} runtimeCD.out |grep -v "^${nomatch}$" | wc -l) &&
+		count=$(cut -d, -f${i} runtimeCDTO.out |grep -v "^${nomatch}$" | wc -l) &&
 		test_debug "echo $name: field $i: ${nomatch} $count/$expected times" &&
 		test $count -eq $expected &&
 		i=$((i+1))
@@ -577,7 +602,7 @@ test_expect_success 'flux-jobs --format={success},{success:h} works' '
 	done &&
 	test_cmp successPR.out successPR.exp &&
 	flux jobs --filter=inactive -no "{success},{success:h}" > successI.out &&
-	test $(grep -c False,False successI.out) -eq $(state_count failed canceled) &&
+	test $(grep -c False,False successI.out) -eq $(state_count failed canceled timeout) &&
 	test $(grep -c True,True successI.out) -eq $(state_count completed)
 '
 
@@ -594,6 +619,8 @@ test_expect_success 'flux-jobs --format={exception.*},{exception.*:h} works' '
 	test $count -eq $(state_count canceled) &&
 	count=$(grep -c "^True,True,0,0,exec,exec,.*No such file.*" exceptionI.out) &&
 	test $count -eq $(state_count failed) &&
+	count=$(grep -c "^True,True,0,0,timeout,timeout,.*expired.*" exceptionI.out) &&
+	test $count -eq $(state_count timeout) &&
 	count=$(grep -c "^False,False,,-,,-,," exceptionI.out) &&
 	test $count -eq $(state_count completed)
 '
@@ -612,6 +639,9 @@ test_expect_success 'flux-jobs --format={result},{result:h},{result_abbrev},{res
 	count=$(grep -c "FAILED,FAILED,F,F" resultI.out) &&
 	test_debug "echo checking failed got $count" &&
 	test $count -eq $(state_count failed) &&
+	count=$(grep -c "TIMEOUT,TIMEOUT,TO,TO" resultI.out) &&
+	test_debug "echo checking timeout got $count" &&
+	test $count -eq $(state_count timeout) &&
 	count=$(grep -c "COMPLETED,COMPLETED,CD,CD" resultI.out) &&
 	test_debug "echo checking completed got $count" &&
 	test $count -eq $(state_count completed)
@@ -629,6 +659,8 @@ test_expect_success 'flux-jobs --format={status},{status_abbrev} works' '
 	test $count -eq $(state_count canceled) &&
 	count=$(grep -c "FAILED,F" statusI.out) &&
 	test $count -eq $(state_count failed) &&
+	count=$(grep -c "TIMEOUT,TO" statusI.out) &&
+	test $count -eq $(state_count failed) &&
 	count=$(grep -c "COMPLETED,CD" statusI.out) &&
 	test $count -eq $(state_count completed)
 '
@@ -645,6 +677,9 @@ test_expect_success 'flux-jobs --format={waitstatus},{returncode}' '
 	count=$(grep -c "^32512,127$" returncodeI.out) &&
 	test_debug "echo exit 127 got $count, want $(state_count failed)" &&
 	test $count -eq $(state_count failed) &&
+	count=$(grep -c "^36352,142$" returncodeI.out) &&
+	test_debug "echo exit 142 got $count, want $(state_count timeout)" &&
+	test $count -eq $(state_count timeout) &&
 	count=$(grep -c "^0,0$" returncodeI.out) &&
 	test_debug "echo complete got $count, want $(state_count completed)" &&
 	test $count -eq $(state_count completed) &&
@@ -861,7 +896,7 @@ for opt in "" "--color=always" "--color=auto"; do
 		count=$(green_line_count $outfile) &&
 		test $count -eq $(state_count completed) &&
 		count=$(red_line_count $outfile) &&
-		test $count -eq $(state_count failed) &&
+		test $count -eq $(state_count failed timeout) &&
 		count=$(grey_line_count $outfile) &&
 		test $count -eq $(state_count canceled)
 	'
@@ -963,7 +998,7 @@ done
 test_expect_success 'flux-jobs --stats works' '
 	flux jobs --stats -a >stats.output &&
 	test_debug "cat stats.output" &&
-	fail=$(state_count failed canceled) &&
+	fail=$(state_count failed canceled timeout) &&
 	run=$(state_count run) &&
 	inactive=$(state_count inactive) &&
 	active=$(state_count active) &&
