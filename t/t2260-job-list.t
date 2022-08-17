@@ -12,6 +12,7 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-list/list-rpc.py"
 PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-list/jobspec-permissive.jsonschema
 JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
+runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py"
 
 fj_wait_event() {
   flux job wait-event --timeout=20 "$@"
@@ -1184,6 +1185,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with i
         cat list_id_illegal_R.out | $jq -e ".id == ${jobid}"
 '
 
+
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with illegal eventlog' '
 	${RPC} job-list.job-state-pause 0 </dev/null
         jobid=`flux mini submit --wait hostname | flux job id`
@@ -1211,6 +1213,19 @@ test_expect_success HAVE_JQ 'flux job list works on racy annotations' '
         test "$i" -lt "5"  &&
         flux job list --states=inactive | grep $jobid > list_racy_annotation.out &&
         cat list_racy_annotation.out | $jq -e ".annotations"
+'
+
+test_expect_success 'flux job list subcommands are not displayed in help' '
+	test_must_fail flux job -h 2>job-help.err &&
+	test_must_fail grep "^[ ]*list" job-help.err
+'
+test_expect_success 'flux job list subcommands fail when stdout is a tty' '
+	test_must_fail $runpty --stderr=tty1.err flux job list &&
+	grep "This is not the command" tty1.err &&
+	test_must_fail $runpty --stderr=tty2.err flux job list-inactive &&
+	grep "This is not the command" tty2.err &&
+	test_must_fail $runpty --stderr=tty3.err flux job list-ids &&
+	grep "This is not the command" tty3.err
 '
 
 test_done

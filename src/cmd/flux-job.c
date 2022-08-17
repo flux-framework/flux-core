@@ -360,21 +360,21 @@ static struct optparse_subcommand subcommands[] = {
       "[OPTIONS]",
       "List jobs",
       cmd_list,
-      0,
+      OPTPARSE_SUBCMD_HIDDEN,
       list_opts
     },
     { "list-inactive",
       "[OPTIONS]",
       "List Inactive jobs",
       cmd_list_inactive,
-      0,
+      OPTPARSE_SUBCMD_HIDDEN,
       list_inactive_opts
     },
     { "list-ids",
       "[OPTIONS] ID [ID ...]",
       "List job(s) by id",
       cmd_list_ids,
-      0,
+      OPTPARSE_SUBCMD_HIDDEN,
       NULL,
     },
     { "urgency",
@@ -522,7 +522,8 @@ int usage (optparse_t *p, struct optparse_option *o, const char *optarg)
     fprintf (stderr, "Common commands from flux-job:\n");
     s = subcommands;
     while (s->name) {
-        fprintf (stderr, "   %-15s %s\n", s->name, s->doc);
+        if (!(s->flags & OPTPARSE_SUBCMD_HIDDEN))
+            fprintf (stderr, "   %-15s %s\n", s->name, s->doc);
         s++;
     }
     exit (1);
@@ -1109,6 +1110,12 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     uint32_t userid;
     int states = 0;
 
+    if (isatty (STDOUT_FILENO)) {
+        fprintf (stderr,
+                 "This is not the command you are looking for. "
+                 "Try flux-jobs(1).\n");
+        exit (1);
+    }
     if (optindex != argc) {
         optparse_print_usage (p);
         exit (1);
@@ -1159,6 +1166,12 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
     size_t index;
     json_t *value;
 
+    if (isatty (STDOUT_FILENO)) {
+        fprintf (stderr,
+                 "This is not the command you are looking for. "
+                 "Try flux-jobs(1).\n");
+        exit (1);
+    }
     if (optindex != argc) {
         optparse_print_usage (p);
         exit (1);
@@ -1204,6 +1217,12 @@ int cmd_list_ids (optparse_t *p, int argc, char **argv)
     flux_t *h;
     int i, ids_len;
 
+    if (isatty (STDOUT_FILENO)) {
+        fprintf (stderr,
+                 "This is not the command you are looking for. "
+                 "Try flux-jobs(1).\n");
+        exit (1);
+    }
     if ((argc - optindex) < 1) {
         optparse_print_usage (p);
         exit (1);
