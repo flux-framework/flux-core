@@ -112,13 +112,13 @@ alias for RUN,CLEANUP; "active", an alias for "pending,running".
 
 After a job has finished and is in the INACTIVE state, it can be
 marked with one of three possible results: COMPLETED, FAILED,
-CANCELED. Under the *result_abbrev* field name, these are
-abbreviated as CD, F, and CA respectively.
+CANCELED, TIMEOUT. Under the *result_abbrev* field name, these are
+abbreviated as CD, F, CA, and TO respectively.
 
 The job status is a user friendly mix of both, a job is always in one
 of the following five statuses: PENDING, RUNNING, COMPLETED, FAILED,
-or CANCELED. Under the *status_abbrev* field name, these are
-abbreviated as P, R, CD, F, and CA respectively.
+CANCELED, or TIMEOUT. Under the *status_abbrev* field name, these are
+abbreviated as P, R, CD, F, CA, and TO respectively.
 
 
 OUTPUT FORMAT
@@ -213,7 +213,7 @@ The field names that can be specified are:
    list of any currently outstanding job dependencies
 
 **status**
-   job status (PENDING, RUNNING, COMPLETED, FAILED, or CANCELED)
+   job status (PENDING, RUNNING, COMPLETED, FAILED, CANCELED, or TIMEOUT)
 
 **status_abbrev**
    status but in a max 2 character abbreviation
@@ -240,7 +240,8 @@ The field names that can be specified are:
    job state as a single character
 
 **result**
-   job result if job is inactive (COMPLETED, FAILED, CANCELED), empty string otherwise
+   job result if job is inactive (COMPLETED, FAILED, CANCELED, TIMEOUT),
+   empty string otherwise
 
 **result_abbrev**
    result but in a max 2 character abbreviation
