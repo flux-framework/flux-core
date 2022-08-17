@@ -177,9 +177,10 @@ class JobList:
             try:
                 self.userid = pwd.getpwnam(user).pw_uid
             except KeyError:
-                self.userid = int(user)
-            except ValueError:
-                raise ValueError(f"Invalid user {user} specified")
+                try:
+                    self.userid = int(user)
+                except ValueError:
+                    raise ValueError(f"Invalid user {user} specified")
 
     def add_filter(self, fname):
         """Append a state or result filter to JobList query"""

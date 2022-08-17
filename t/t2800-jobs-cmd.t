@@ -281,7 +281,8 @@ test_expect_success 'flux-jobs --user=USERNAME works' '
 
 test_expect_success 'flux-jobs --user with invalid username fails' '
 	username="foobarfoobaz" &&
-	test_must_fail flux jobs --suppress-header --user=${username}
+	test_must_fail flux jobs --suppress-header --user=${username} 2> baduser.out &&
+	grep "Invalid user" baduser.out
 '
 
 test_expect_success 'flux-jobs --user=all works' '
