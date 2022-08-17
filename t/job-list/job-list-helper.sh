@@ -7,7 +7,7 @@ JOB_LIST_WAIT_ITERS=50
 
 # Return the expected jobids list in a given state:
 #   "all", "pending", "running", "inactive", "active",
-#   "completed", "canceled", "failed"
+#   "completed", "canceled", "failed", "timeout"
 #
 job_list_state_ids() {
     for f in "$@"; do
