@@ -21,6 +21,7 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <ctype.h>
+#include <langinfo.h>
 #include <locale.h>
 
 #include "fluid.h"
@@ -171,11 +172,12 @@ static int b58revenc (char *buf, int bufsz, fluid_t id)
 
 static inline int is_utf8_locale (void)
 {
-    /* Assume if MB_CUR_MAX > 1, this locale can handle wide characters
-     *  and therefore will properly handle UTF-8, but allow ascii encoding
-     *  to be enforced if FLUX_F58_FORCE_ASCII is set.
+    /* Check for UTF-8, only if the current encoding is multibyte (not C.UTF-8
+     * or similar), but allow ascii encoding to be enforced if
+     * FLUX_F58_FORCE_ASCII is set.
      */
-    if (MB_CUR_MAX > 1 && !getenv ("FLUX_F58_FORCE_ASCII"))
+    if (MB_CUR_MAX > 1 && !strcmp (nl_langinfo (CODESET), "UTF-8")
+        && !getenv ("FLUX_F58_FORCE_ASCII"))
         return 1;
     return 0;
 }
