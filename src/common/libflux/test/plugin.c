@@ -73,6 +73,9 @@ void test_invalid_args ()
     ok (flux_plugin_get_uuid (NULL) == NULL && errno == EINVAL,
         "flux_plugin_get_uuid (NULL) returns EINVAL");
 
+    ok (flux_plugin_get_path (NULL) == NULL,
+        "flux_plugin_get_path (NULL) returns NULL");
+
     ok (flux_plugin_get_flags (NULL) == 0,
         "flux_plugin_get_flags (NULL) returns 0");
     ok (flux_plugin_set_flags (NULL, 0) < 0 && errno == EINVAL,
@@ -304,6 +307,9 @@ void test_basic ()
     is (flux_plugin_get_name (p), "op",
         "flux_plugin_get_name() works");
 
+    ok (flux_plugin_get_path (p) == NULL,
+        "flux_plugin_get_path() returns NULL when no loaded plugin path");
+
     ok (flux_plugin_add_handler (p, "foo.*", NULL, NULL) == 0,
         "flux_plugin_add_handler (p, 'foo.*', NULL) works");
     ok (flux_plugin_get_handler (p, "foo.*") == NULL,
@@ -426,6 +432,11 @@ void test_load ()
                   flux_plugin_strerror (p));
     is (flux_plugin_get_name (p), "plugin-test",
         "loaded dso registered its own name");
+
+    result = flux_plugin_get_path (p);
+    diag (result);
+    like (result, ".*test/.libs/plugin_foo.so",
+        "flux_plugin_get_path() on loaded dso works");
 
     flux_plugin_arg_t *args = flux_plugin_arg_create ();
     if (!args)
