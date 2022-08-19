@@ -227,4 +227,16 @@ test_expect_success 'jobs with dependencies can be safely canceled' '
 	flux job urgency $jobid default &&
 	flux job wait-event -vt 15 $jobid clean
 '
+test_expect_success HAVE_JQ 'flux jobtap query dependency-after works' '
+	flux jobtap query .dependency-after > query-none.json &&
+	test_debug "jq -S . query-none.json" &&
+	jq -e ".dependencies | length == 0" query-none.json &&
+	jobid=$(flux mini submit --urgency=hold hostname) &&
+	depid=$(flux mini submit --dependency=after:$jobid hostname) &&
+	flux jobtap query .dependency-after > query.json &&
+	test_debug "jq -S . query.json" &&
+	jq -e ".dependencies | length == 1" query.json &&
+	flux job urgency $jobid default &&
+	flux job wait-event -vt 15 $depid clean
+'
 test_done
