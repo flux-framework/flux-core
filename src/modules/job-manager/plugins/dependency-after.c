@@ -23,6 +23,8 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
+static zlistx_t *global_reflist = NULL;
+
 /* Types of "after*" dependencies:
  */
 enum after_type {
@@ -123,6 +125,9 @@ static void after_ref_destroy (struct after_ref *ref)
 static void after_ref_destructor (void **item)
 {
     if (*item) {
+        void *handle = zlistx_find (global_reflist, *item);
+        if (handle)
+            zlistx_delete (global_reflist, handle);
         after_ref_destroy (*item);
         *item = NULL;
     }
@@ -138,6 +143,7 @@ static struct after_ref * after_ref_create (flux_jobid_t id,
     ref->id = id;
     ref->list = l;
     ref->info = after;
+    zlistx_add_end (global_reflist, ref);
     return ref;
 }
 
@@ -617,6 +623,64 @@ static int inactive_cb (flux_plugin_t *p,
     return 0;
 }
 
+static json_t *deps_to_json (flux_plugin_t *p)
+{
+    json_t *o = NULL;
+    zlistx_t *l;
+
+    if (!(o = json_array ()))
+        return NULL;
+
+    if ((l = global_reflist)) {
+        struct after_ref *ref = zlistx_first (l);
+        while (ref) {
+            struct after_info *info = ref->info;
+            json_t *entry = NULL;
+
+            if (!(entry = json_pack ("{s:I s:I s:s s:s}",
+                                     "id", ref->id,
+                                     "depid", info->depid,
+                                     "type", after_typestr (info->type),
+                                     "description", info->description))
+                || json_array_append_new (o, entry) < 0) {
+                json_decref (entry);
+                goto error;
+            }
+            ref = zlistx_next (l);
+        }
+    }
+    return o;
+error:
+    json_decref (o);
+    return NULL;
+}
+
+static int query_cb (flux_plugin_t *p,
+                     const char *topic,
+                     flux_plugin_arg_t *args,
+                     void *data)
+{
+    json_t *o = deps_to_json (p);
+
+    if (!o) {
+        flux_log (flux_jobtap_get_flux (p),
+                  LOG_ERR,
+                  "dependency-after: deps_to_json failed");
+        return -1;
+    }
+
+    if (flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_OUT,
+                              "{s:O}",
+                              "dependencies",
+                              o) < 0)
+        flux_log_error (flux_jobtap_get_flux (p),
+                        "dependency-after: query_cb: flux_plugin_arg_pack: %s",
+                        flux_plugin_arg_strerror (args));
+    json_decref (o);
+    return 0;
+}
+
 static const struct flux_plugin_handler tab[] = {
     { "job.dependency.after",      dependency_after_cb, NULL },
     { "job.dependency.afterok",    dependency_after_cb, NULL },
@@ -625,11 +689,26 @@ static const struct flux_plugin_handler tab[] = {
     { "job.state.priority",        priority_cb,         NULL },
     { "job.state.inactive",        inactive_cb,         NULL },
     { "job.event.start",           start_cb,            NULL },
+    { "plugin.query",              query_cb,            NULL },
     { 0 }
 };
 
+static void reflist_destroy (zlistx_t *l)
+{
+    zlistx_destroy (&l);
+    global_reflist = NULL;
+}
+
 int after_plugin_init (flux_plugin_t *p)
 {
+    if (!(global_reflist = zlistx_new ())
+        || flux_plugin_aux_set (p,
+                                NULL,
+                                global_reflist,
+                                (flux_free_f)reflist_destroy) < 0) {
+        reflist_destroy (global_reflist);
+        return -1;
+    }
     return flux_plugin_register (p, ".dependency-after", tab);
 }
 
