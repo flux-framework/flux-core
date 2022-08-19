@@ -125,6 +125,12 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
+        "job-manager.jobtap-query",
+        jobtap_query_handler,
+        FLUX_ROLE_OWNER,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
         "job-manager.disconnect",
         disconnect_rpc,
         0

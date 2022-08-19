@@ -1425,6 +1425,90 @@ void jobtap_handler (flux_t *h,
         flux_log_error (h, "jobtap_handler: flux_respond");
 }
 
+static int jobtap_query_plugin (flux_plugin_t *p,
+                                char **json_str,
+                                flux_error_t *errp)
+{
+    int rc = -1;
+    flux_plugin_arg_t *args;
+    const char *path = flux_plugin_get_path (p);
+    const char *name = jobtap_plugin_name (p);
+
+    if (path == NULL)
+        path = "builtin";
+
+    if (!(args = flux_plugin_arg_create ()))
+        return errprintf (errp,
+                          "flux_plugin_arg_create: %s",
+                          strerror (errno));
+
+    if (flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_OUT,
+                             "{s:s s:s}",
+                             "name", name,
+                             "path", path) < 0) {
+        errprintf (errp, "%s", flux_plugin_arg_strerror (args));
+        goto out;
+    }
+
+    if (flux_plugin_call (p, "plugin.query", args) < 0) {
+        errprintf (errp, "plugin.query failed");
+        goto out;
+    }
+
+    if (flux_plugin_arg_get (args, FLUX_PLUGIN_ARG_OUT, json_str) < 0
+        && errno != ENOENT) {
+        errprintf (errp,
+                   "failed to get plugin.query out args: %s",
+                   strerror (errno));
+        goto out;
+    }
+    rc = 0;
+out:
+    flux_plugin_arg_destroy (args);
+    return rc;
+}
+
+void jobtap_query_handler (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct job_manager *ctx = arg;
+    const char *name = NULL;
+    char *result = NULL;
+    flux_plugin_t *p;
+    flux_error_t error;
+    bool found = false;
+
+    if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0) {
+        errprintf (&error, "Protocol error");
+        goto error;
+    }
+
+    p = zlistx_first (ctx->jobtap->plugins);
+    while (p) {
+        if (streq (name, jobtap_plugin_name (p))) {
+            found = true;
+            if (jobtap_query_plugin (p, &result, &error) < 0)
+                goto error;
+            break;
+        }
+        p = zlistx_next (ctx->jobtap->plugins);
+    }
+    if (!found) {
+        errprintf (&error, "%s: plugin not found", name);
+        goto error;
+    }
+    if (flux_respond (h, msg, result) < 0)
+        flux_log_error (h, "jobtap_query_handler: flux_respond");
+    free (result);
+    return;
+error:
+    if (flux_respond_error (h, msg, 0, error.text) < 0)
+        flux_log_error (h, "jobtap_query_handler: flux_respond_error");
+}
+
 flux_t *flux_jobtap_get_flux (flux_plugin_t *p)
 {
     struct jobtap *jobtap = NULL;

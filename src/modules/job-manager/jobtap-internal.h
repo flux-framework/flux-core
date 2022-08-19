@@ -79,6 +79,12 @@ void jobtap_handler (flux_t *h,
                      const flux_msg_t *msg,
                      void *arg);
 
+/*  Job manager RPC handler for querying jobtap plugin data.
+ */
+void jobtap_query_handler (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg);
 
 int jobtap_notify_subscribers (struct jobtap *jobtap,
                                struct job *job,
