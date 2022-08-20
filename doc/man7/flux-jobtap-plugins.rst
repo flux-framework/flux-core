@@ -237,6 +237,21 @@ The callback should return 0 on success, and -1 on failure.  On failure,
 it may optionally set a human readable error string in the ``errstr`` output
 argument.  The ``flux_jobtap_error()`` convenience function may be useful here.
 
+
+PLUGIN CALLBACK TOPICS
+======================
+
+plugin.query
+  The job manager calls the ``plugin.query`` callback topic to give a plugin
+  the opportunity to provide extra data in response to a ``jobtap-query``
+  request (as used by the ``flux jobtap query PLUGIN`` command). This can be
+  used by a plugin to export internal plugin state for inspection by an admin
+  or user by placing the data in the output arguments of the callback, e.g.::
+
+    flux_plugin_arg_pack (p, FLUX_PLUGIN_ARG_OUT,
+                          "{s:O}"
+                          "data", internal_data);
+
 .. _priority:
 
 PRIORITY

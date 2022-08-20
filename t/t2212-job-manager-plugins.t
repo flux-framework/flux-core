@@ -53,6 +53,17 @@ test_expect_success 'job-manager: loading duplicate plugins fails' '
 	test_must_fail flux jobtap load ${PLUGINPATH}/args.so &&
 	flux jobtap remove args.so
 '
+test_expect_success HAVE_JQ 'job-manager: query of plugin works' '
+	flux jobtap load ${PLUGINPATH}/test.so &&
+	flux jobtap query test.so >query.json &&
+	test_debug "jq -S . <query.json" &&
+	jq -e ".name == \"test.so\"" <query.json &&
+	jq -e ".path == \"${PLUGINPATH}/test.so\"" <query.json &&
+	flux jobtap remove test.so
+'
+test_expect_success 'job-manager: query of invalid plugin fals' '
+	test_must_fail flux jobtap query foo
+'
 test_expect_success 'job-manager: plugins can be loaded by configuration' '
 	mkdir testconf &&
 	cat <<-EOF >testconf/job-manager.toml &&

@@ -53,6 +53,12 @@ def jobtap_list(args):
             print(name)
 
 
+def jobtap_query(args):
+    """Query extended information about and from a specific plugin"""
+    service = "job-manager.jobtap-query"
+    print(flux.Flux().rpc(service, {"name": args.plugin}).get_str())
+
+
 LOGGER = logging.getLogger("flux-jobtap")
 
 
@@ -104,6 +110,12 @@ def main():
         action="store_true",
     )
     list_parser.set_defaults(func=jobtap_list)
+
+    query_parser = subparsers.add_parser(
+        "query", formatter_class=flux.util.help_formatter()
+    )
+    query_parser.add_argument("plugin", help="Plugin name to query")
+    query_parser.set_defaults(func=jobtap_query)
 
     args = parser.parse_args()
     args.func(args)

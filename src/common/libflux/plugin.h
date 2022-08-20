@@ -63,6 +63,8 @@ const char * flux_plugin_get_name (flux_plugin_t *p);
 
 const char * flux_plugin_get_uuid (flux_plugin_t *p);
 
+const char * flux_plugin_get_path (flux_plugin_t *p);
+
 /*  Add a handler for topic 'topic' for the plugin 'p'.
  *  The topic string may be a glob to cause 'cb' to be invoked for
  *  a set of topic strings called by the host.

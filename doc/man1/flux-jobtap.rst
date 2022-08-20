@@ -36,6 +36,12 @@ COMMANDS
   be removed explicitly or by preceding *NAME* with ``.``,
   e.g. ``.*``.
 
+**query** NAME
+  Print a JSON object with extended information about plugin NAME. This
+  includes at least the plugin name and path (or "builtin" if the plugin
+  was loaded internally), but may contain plugin-specific data if the plugin
+  supports the ``plugin.query`` callback topic.
+
 RESOURCES
 =========
 

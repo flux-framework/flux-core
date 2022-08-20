@@ -229,6 +229,13 @@ const char * flux_plugin_get_uuid (flux_plugin_t *p)
     return p->uuid_str;
 }
 
+const char * flux_plugin_get_path (flux_plugin_t *p)
+{
+    if (p)
+        return p->path;
+    return NULL;
+}
+
 int flux_plugin_aux_set (flux_plugin_t *p, const char *key,
                          void *val, aux_free_f free_fn)
 {
