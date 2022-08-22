@@ -27,6 +27,7 @@
 #include "src/common/libjob/sign_none.h"
 #include "src/common/libjob/job_hash.h"
 
+#include "util.h"
 #include "workcrew.h"
 
 /* job-ingest takes in signed jobspec submitted through flux_job_submit(),
@@ -855,41 +856,6 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static char *json_array_join (json_t *o)
-{
-    int n = 0;
-    size_t index;
-    json_t *value;
-    const char *arg;
-    char *result;
-
-    if (!json_is_array (o)) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    json_array_foreach (o, index, value) {
-        if (!(arg = json_string_value (value))) {
-            errno = EINVAL;
-            return NULL;
-        }
-        n += strlen (arg) + 1;  /* arg + "," */
-    }
-    n += 2; /* ',\0' */
-
-    if (!(result = malloc (n)))
-        return NULL;
-    result[0] = '\0';
-
-     json_array_foreach (o, index, value) {
-        strcat (result, json_string_value (value));
-        strcat (result, ",");
-    }
-    result[n-3] = '\0';
-
-    return result;
-}
-
 /*  Configure job ingest from flux_conf_t and/or  argc, argv.
  *
  *  Supported configuration:
@@ -931,12 +897,12 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
         goto out;
     }
 
-    if (plugins && !(validator_plugins = json_array_join (plugins))) {
+    if (plugins && !(validator_plugins = util_join_arguments (plugins))) {
         flux_log_error (ctx->h,
                         "error in [ingest.validator] plugins array");
         goto out;
     }
-    if (args && !(validator_args = json_array_join (args))) {
+    if (args && !(validator_args = util_join_arguments (args))) {
         flux_log_error (ctx->h,
                         "error in [ingest.validator] args array");
         goto out;
