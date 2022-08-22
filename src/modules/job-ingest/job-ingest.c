@@ -811,7 +811,7 @@ static void shutdown_timeout_cb (flux_reactor_t *r,
 }
 
 /* Override built-in shutdown handler that calls flux_reactor_stop().
- * Since libsubprocess client is not able ot run outside of the reactor,
+ * Since libsubprocess client is not able to run outside of the reactor,
  * take care of cleaning up validator before exiting reactor.
  */
 static void shutdown_cb (flux_t *h,
