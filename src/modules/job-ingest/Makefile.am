@@ -23,7 +23,9 @@ libingest_la_SOURCES = \
 	util.h \
 	util.c \
 	job.h \
-	job.c
+	job.c \
+	pipeline.h \
+	pipeline.c
 
 fluxmod_LTLIBRARIES = job-ingest.la
 

@@ -28,7 +28,7 @@
 
 #include "util.h"
 #include "job.h"
-#include "workcrew.h"
+#include "pipeline.h"
 
 /* job-ingest takes in signed jobspec submitted through flux_job_submit(),
  * performing the following tasks for each job:
@@ -70,18 +70,11 @@
  * Too large, and individual job submit latency will suffer.
  * Too small, and KVS commit overhead will increase.
  */
-const double batch_timeout = 0.01;
-
-/* Timeout (seconds) to wait for validators to terminate when
- * stopped by closing their stdin.  If the timer pops, stop the reactor
- * and allow workcrew_destroy() to signal them.
- */
-const double shutdown_timeout = 5.;
-
+static const double batch_timeout = 0.01;
 
 struct job_ingest_ctx {
     flux_t *h;
-    struct workcrew *validate;
+    struct pipeline *pipeline;
 #if HAVE_FLUX_SECURITY
     flux_security_t *sec;
 #else
@@ -95,9 +88,7 @@ struct job_ingest_ctx {
 
     int batch_count;            // if nonzero, batch by count not timer
 
-    bool shutdown;              // no new jobs are accepted in shutdown mode
-    int shutdown_process_count; // number of validators executing at shutdown
-    flux_watcher_t *shutdown_timer;
+    bool shutdown;
 };
 
 struct batch {
@@ -528,7 +519,7 @@ static int ingest_add_job (struct job_ingest_ctx *ctx, struct job *job)
     return 0;
 }
 
-void validate_continuation (flux_future_t *f, void *arg)
+void pipeline_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
     struct job_ingest_ctx *ctx = flux_future_aux_get (f, "ctx");
@@ -564,81 +555,40 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *errmsg = NULL;
     flux_error_t error;
     flux_future_t *f = NULL;
-    json_error_t json_error;
-    json_t *o = NULL;
 
     if (ctx->shutdown) {
         errno = ENOSYS;
         goto error;
     }
-
-    /* Parse request.
-     */
     if (!(job = job_create_from_request (msg, ctx->sec, &error))) {
         errmsg = error.text;
         goto error;
     }
-    if (ctx->validate && !(job->flags & FLUX_JOB_NOVALIDATE)) {
-        /* Validate jobspec asynchronously.
-         * Continue submission process in validate_continuation().
-         */
-        if (!(o = json_pack_ex (&json_error,
-                                0,
-                                "{s:O s:I s:i s:i s:i}",
-                                "jobspec", job->jobspec_obj,
-                                "userid", (json_int_t) job->cred.userid,
-                                "rolemask", job->cred.rolemask,
-                                "urgency", job->urgency,
-                                "flags", job->flags))) {
-            errprintf (&error, "Internal error: %s", json_error.text);
-            errmsg = error.text;
+    if (pipeline_process_job (ctx->pipeline, job, &f, &error) < 0) {
+        errmsg = error.text;
+        goto error;
+    }
+    if (f) {
+        if (flux_future_then (f, -1., pipeline_continuation, job) < 0
+            || flux_future_aux_set (f, "ctx", ctx, NULL) < 0) {
             goto error;
         }
-        if (!(f = workcrew_process_job (ctx->validate, o)))
-            goto error;
-        if (flux_future_then (f, -1., validate_continuation, job) < 0
-            || flux_future_aux_set (f, "ctx", ctx, NULL) < 0)
-            goto error;
-        json_decref (o);
     }
-    else if (ingest_add_job (ctx, job) < 0)
-        goto error;
+    else {
+        if (ingest_add_job (ctx, job) < 0)
+            goto error;
+    }
     return;
 error:
-    json_decref (o);
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     job_destroy (job);
     flux_future_destroy (f);
 }
 
-static void exit_cb (void *arg)
-{
-    struct job_ingest_ctx *ctx = arg;
-
-    if (--ctx->shutdown_process_count == 0) {
-        flux_watcher_stop (ctx->shutdown_timer);
-        flux_reactor_stop (flux_get_reactor (ctx->h));
-    }
-}
-
-static void shutdown_timeout_cb (flux_reactor_t *r,
-                                 flux_watcher_t *w,
-                                 int revents,
-                                 void *arg)
-{
-    struct job_ingest_ctx *ctx = arg;
-
-    flux_log (ctx->h,
-              LOG_ERR,
-              "shutdown timed out with %d validators active",
-              ctx->shutdown_process_count);
-    flux_reactor_stop (flux_get_reactor (ctx->h));
-}
-
 /* Override built-in shutdown handler that calls flux_reactor_stop().
- * Since libsubprocess client is not able to run outside of the reactor,
- * take care of cleaning up validator before exiting reactor.
+ * Since libsubprocess clients must run in reactive mode,
+ * take care of cleaning up the pipeline before exiting reactor.
  */
 static void shutdown_cb (flux_t *h,
                          flux_msg_handler_t *mh,
@@ -648,15 +598,8 @@ static void shutdown_cb (flux_t *h,
     struct job_ingest_ctx *ctx = arg;
 
     ctx->shutdown = true; // fail any new submit requests
-    ctx->shutdown_process_count = workcrew_stop_notify (ctx->validate,
-                                                        exit_cb,
-                                                        ctx);
-    if (ctx->shutdown_process_count == 0)
-        flux_reactor_stop (flux_get_reactor (h));
-    else {
-        flux_timer_watcher_reset (ctx->shutdown_timer, shutdown_timeout, 0.);
-        flux_watcher_start (ctx->shutdown_timer);
-    }
+
+    pipeline_shutdown (ctx->pipeline);
 }
 
 static void getinfo_cb (flux_t *h,
@@ -698,105 +641,45 @@ error:
 static int job_ingest_configure (struct job_ingest_ctx *ctx,
                                  const flux_conf_t *conf,
                                  int argc,
-                                 char **argv)
+                                 char **argv,
+                                 flux_error_t *error)
 {
-    flux_error_t error;
-    json_t *plugins = NULL;
-    json_t *args = NULL;
-    char *validator_plugins = NULL;
-    char *validator_args = NULL;
-    int disable_validator = 0;
-    int rc = -1;
+    flux_error_t conf_error;
 
+    if (pipeline_configure (ctx->pipeline, conf, argc, argv, error) < 0)
+        return -1;
     if (flux_conf_unpack (conf,
-                          &error,
-                          "{s?{s?{s?o s?o s?b !} s?i !}}",
+                          &conf_error,
+                          "{s?{s?i}}",
                           "ingest",
-                            "validator",
-                              "args", &args,
-                              "plugins", &plugins,
-                              "disable", &disable_validator,
                             "batch-count", &ctx->batch_count) < 0) {
-        flux_log (ctx->h, LOG_ERR,
+        errprintf (error,
                   "error reading [ingest] config table: %s",
-                  error.text);
-        goto out;
+                  conf_error.text);
+        return -1;
     }
-
-    if (plugins && !(validator_plugins = util_join_arguments (plugins))) {
-        flux_log_error (ctx->h,
-                        "error in [ingest.validator] plugins array");
-        goto out;
-    }
-    if (args && !(validator_args = util_join_arguments (args))) {
-        flux_log_error (ctx->h,
-                        "error in [ingest.validator] args array");
-        goto out;
-    }
-
-    /*  Process cmdline args */
     for (int i = 0; i < argc; i++) {
-        if (!strncmp (argv[i], "validator-args=", 15)) {
-            free (validator_args);
-            validator_args = strdup (argv[i] + 15);
-        }
-        else if (!strncmp (argv[i], "validator-plugins=", 18)) {
-            free (validator_plugins);
-            validator_plugins = strdup (argv[i] + 18);
+        if (!strncmp (argv[i], "validator-args=", 15)
+            || !strncmp (argv[i], "validator-plugins=", 18)
+            || !strcmp (argv[i], "disable-validator")) {
+            /* handled in pipeline.c */
         }
         else if (!strncmp (argv[i], "batch-count=", 12)) {
             char *endptr;
             ctx->batch_count = strtol (argv[i]+12, &endptr, 0);
             if (*endptr != '\0' || ctx->batch_count < 0) {
-                flux_log (ctx->h, LOG_ERR, "Invalid batch-count: %s", argv[i]);
-                goto out;
+                errprintf (error, "Invalid batch-count: %s", argv[i]);
+                errno = EINVAL;
+                return -1;
             }
         }
-        else if (!strcmp (argv[i], "disable-validator")) {
-            disable_validator = 1;
-        }
         else {
-            flux_log (ctx->h, LOG_ERR, "invalid option %s", argv[i]);
+            errprintf (error, "Invalid option: %s", argv[i]);
             errno = EINVAL;
-            goto out;
+            return -1;
         }
     }
-    if (disable_validator) {
-        if (ctx->validate)
-            flux_log (ctx->h,
-                      LOG_ERR,
-                      "Unable to disable validator at runtime");
-        else {
-            flux_log (ctx->h,
-                      LOG_DEBUG,
-                      "Disabling job validator");
-            rc = 0;
-        }
-        goto out;
-    }
-    if (!ctx->validate && !(ctx->validate = workcrew_create (ctx->h))) {
-        flux_log_error (ctx->h, "workcrew_create");
-        goto out;
-    }
-
-    flux_log (ctx->h,
-              LOG_DEBUG,
-              "configuring with plugins=%s, args=%s",
-              validator_plugins,
-              validator_args);
-
-    if (workcrew_configure (ctx->validate,
-                            "job-validator",
-                            validator_plugins,
-                            validator_args) < 0) {
-        flux_log_error (ctx->h, "failed to configure validator workcrew");
-        goto out;
-    }
-    rc = 0;
-out:
-    free (validator_plugins);
-    free (validator_args);
-    return rc;
+    return 0;
 }
 
 static void reload_cb (flux_t *h,
@@ -806,11 +689,17 @@ static void reload_cb (flux_t *h,
 {
     struct job_ingest_ctx *ctx = arg;
     const flux_conf_t *conf;
-    const char *errstr = "Failed to reconfigure job-ingest";
-    if (flux_conf_reload_decode (msg, &conf) < 0)
+    flux_error_t error;
+    const char *errstr = NULL;
+
+    if (flux_conf_reload_decode (msg, &conf) < 0) {
+        errstr = "Failed to parse config-reload request";
         goto error;
-    if (job_ingest_configure (ctx, conf, 0, NULL) < 0)
+    }
+    if (job_ingest_configure (ctx, conf, 0, NULL, &error) < 0) {
+        errstr = error.text;
         goto error;
+    }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config-reload request");
     return;
@@ -835,10 +724,16 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
     flux_reactor_t *r = flux_get_reactor (h);
     memset (ctx, 0, sizeof (*ctx));
     ctx->h = h;
+    flux_error_t error;
 
-    if (job_ingest_configure (ctx, flux_get_conf (h), argc, argv) < 0)
+    if (!(ctx->pipeline = pipeline_create (h))) {
+        flux_log_error (h, "error initializing job preprocessing pipeline");
         return -1;
-
+    }
+    if (job_ingest_configure (ctx, flux_get_conf (h), argc, argv, &error) < 0) {
+        flux_log (h, LOG_ERR, "%s", error.text);
+        return -1;
+    }
 #if HAVE_FLUX_SECURITY
     if (!(ctx->sec = flux_security_create (0))) {
         flux_log_error (h, "flux_security_create");
@@ -857,14 +752,6 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
     if (!(ctx->timer = flux_timer_watcher_create (r, 0., 0.,
                                                   batch_timer_cb,
                                                   ctx))) {
-        flux_log_error (h, "flux_timer_watcher_create");
-        return -1;
-    }
-    if (!(ctx->shutdown_timer = flux_timer_watcher_create (r,
-                                                           0.,
-                                                           0.,
-                                                           shutdown_timeout_cb,
-                                                           ctx))) {
         flux_log_error (h, "flux_timer_watcher_create");
         return -1;
     }
@@ -947,11 +834,10 @@ int mod_main (flux_t *h, int argc, char **argv)
 done:
     flux_msg_handler_delvec (ctx.handlers);
     flux_watcher_destroy (ctx.timer);
-    flux_watcher_destroy (ctx.shutdown_timer);
 #if HAVE_FLUX_SECURITY
     flux_security_destroy (ctx.sec);
 #endif
-    workcrew_destroy (ctx.validate);
+    pipeline_destroy (ctx.pipeline);
     return rc;
 }
 
