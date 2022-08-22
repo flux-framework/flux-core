@@ -16,8 +16,8 @@ fluxmod_LTLIBRARIES = job-ingest.la
 
 job_ingest_la_SOURCES = \
 	job-ingest.c \
-	validate.c \
-	validate.h \
+	workcrew.c \
+	workcrew.h \
 	worker.c \
 	worker.h \
 	types.h

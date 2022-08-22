@@ -27,7 +27,7 @@
 #include "src/common/libjob/sign_none.h"
 #include "src/common/libjob/job_hash.h"
 
-#include "validate.h"
+#include "workcrew.h"
 
 /* job-ingest takes in signed jobspec submitted through flux_job_submit(),
  * performing the following tasks for each job:
@@ -73,14 +73,14 @@ const double batch_timeout = 0.01;
 
 /* Timeout (seconds) to wait for validators to terminate when
  * stopped by closing their stdin.  If the timer pops, stop the reactor
- * and allow validate_destroy() to signal them.
+ * and allow workcrew_destroy() to signal them.
  */
 const double shutdown_timeout = 5.;
 
 
 struct job_ingest_ctx {
     flux_t *h;
-    struct validate *validate;
+    struct workcrew *validate;
 #if HAVE_FLUX_SECURITY
     flux_security_t *sec;
 #endif
@@ -768,7 +768,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
             errmsg = error.text;
             goto error;
         }
-        if (!(f = validate_job (ctx->validate, o)))
+        if (!(f = workcrew_process_job (ctx->validate, o)))
             goto error;
         if (flux_future_then (f, -1., validate_continuation, job) < 0)
             goto error;
@@ -821,7 +821,7 @@ static void shutdown_cb (flux_t *h,
     struct job_ingest_ctx *ctx = arg;
 
     ctx->shutdown = true; // fail any new submit requests
-    ctx->shutdown_process_count = validate_stop_notify (ctx->validate,
+    ctx->shutdown_process_count = workcrew_stop_notify (ctx->validate,
                                                         exit_cb,
                                                         ctx);
     if (ctx->shutdown_process_count == 0)
@@ -982,8 +982,8 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
         }
         goto out;
     }
-    if (!ctx->validate && !(ctx->validate = validate_create (ctx->h))) {
-        flux_log_error (ctx->h, "validate_create");
+    if (!ctx->validate && !(ctx->validate = workcrew_create (ctx->h))) {
+        flux_log_error (ctx->h, "workcrew_create");
         goto out;
     }
 
@@ -993,10 +993,11 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
               validator_plugins,
               validator_args);
 
-    if (validate_configure (ctx->validate,
+    if (workcrew_configure (ctx->validate,
+                            "job-validator",
                             validator_plugins,
                             validator_args) < 0) {
-        flux_log_error (ctx->h, "validate_configure");
+        flux_log_error (ctx->h, "failed to configure validator workcrew");
         goto out;
     }
     rc = 0;
@@ -1158,7 +1159,7 @@ done:
 #if HAVE_FLUX_SECURITY
     flux_security_destroy (ctx.sec);
 #endif
-    validate_destroy (ctx.validate);
+    workcrew_destroy (ctx.validate);
     return rc;
 }
 
