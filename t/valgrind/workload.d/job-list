@@ -8,4 +8,4 @@ set -x
 flux mini submit -n 1 /bin/true
 flux mini submit -n 1 /bin/false
 
-flux job list -A
+flux jobs -a -A
