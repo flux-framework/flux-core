@@ -24,10 +24,10 @@
 #include "src/common/libutil/fluid.h"
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/errprintf.h"
-#include "src/common/libjob/sign_none.h"
 #include "src/common/libjob/job_hash.h"
 
 #include "util.h"
+#include "job.h"
 #include "workcrew.h"
 
 /* job-ingest takes in signed jobspec submitted through flux_job_submit(),
@@ -84,6 +84,8 @@ struct job_ingest_ctx {
     struct workcrew *validate;
 #if HAVE_FLUX_SECURITY
     flux_security_t *sec;
+#else
+    void *sec;
 #endif
     struct fluid_generator gen;
     flux_msg_handler_t **handlers;
@@ -96,24 +98,6 @@ struct job_ingest_ctx {
     bool shutdown;              // no new jobs are accepted in shutdown mode
     int shutdown_process_count; // number of validators executing at shutdown
     flux_watcher_t *shutdown_timer;
-};
-
-struct job {
-    fluid_t id;         // jobid
-
-    const flux_msg_t *msg; // submit request message
-    const char *J;      // signed jobspec
-    struct flux_msg_cred cred;    // submitting user's creds
-    int urgency;        // requested job urgency
-    int flags;          // submit flags
-
-    char *jobspec;      // jobspec, not \0 terminated (unwrapped from signed)
-    int jobspecsz;      // jobspec string length
-    json_t *jobspec_obj;// jobspec in object form
-                        //   N.B. after obj validation, environment is dropped
-                        //   to reduce size, since job-manager doesn't need it
-
-    struct job_ingest_ctx *ctx;
 };
 
 struct batch {
@@ -132,53 +116,6 @@ struct batch_response {
 };
 
 static int make_key (char *buf, int bufsz, struct job *job, const char *name);
-
-/* Free decoded jobspec after it has been transferred to the batch txn,
- * to conserve memory.
- */
-static void job_clean (struct job *job)
-{
-    if (job) {
-        free (job->jobspec);
-        job->jobspec = NULL;
-        json_decref (job->jobspec_obj);
-        job->jobspec_obj = NULL;
-    }
-}
-
-static void job_destroy (struct job *job)
-{
-    if (job) {
-        int saved_errno = errno;
-        free (job->jobspec);
-        flux_msg_decref (job->msg);
-        json_decref (job->jobspec_obj);
-        free (job);
-        errno = saved_errno;
-    }
-}
-
-static struct job *job_create (const flux_msg_t *msg,
-                               struct job_ingest_ctx *ctx)
-{
-    struct job *job;
-
-    if (!(job = calloc (1, sizeof (*job))))
-        return NULL;
-    job->msg = flux_msg_incref (msg);
-    if (flux_request_unpack (job->msg, NULL, "{s:s s:i s:i}",
-                             "J", &job->J,
-                             "urgency", &job->urgency,
-                             "flags", &job->flags) < 0)
-        goto error;
-    if (flux_msg_get_cred (job->msg, &job->cred) < 0)
-        goto error;
-    job->ctx = ctx;
-    return job;
-error:
-    job_destroy (job);
-    return NULL;
-}
 
 static void batch_destroy (struct batch *batch)
 {
@@ -596,7 +533,7 @@ static int ingest_add_job (struct job_ingest_ctx *ctx, struct job *job)
 void validate_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
-    struct job_ingest_ctx *ctx = job->ctx;
+    struct job_ingest_ctx *ctx = flux_future_aux_get (f, "ctx");
     flux_t *h = flux_future_get_flux (f);
     const char *errmsg = NULL;
 
@@ -619,16 +556,6 @@ error:
     flux_future_destroy (f);
 }
 
-static int valid_flags (int flags)
-{
-    int allowed = FLUX_JOB_DEBUG | FLUX_JOB_WAITABLE | FLUX_JOB_NOVALIDATE;
-    if ((flags & ~allowed)) {
-        errno = EPROTO;
-        return -1;
-    }
-    return 0;
-}
-
 /* Handle "job-ingest.submit" request to add a new job.
  */
 static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -638,10 +565,8 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     struct job *job = NULL;
     const char *errmsg = NULL;
     flux_error_t error;
-    int64_t userid_signer;
-    const char *mech_type;
     flux_future_t *f = NULL;
-    json_error_t e;
+    json_error_t json_error;
     json_t *o = NULL;
 
     if (ctx->shutdown) {
@@ -651,127 +576,30 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* Parse request.
      */
-    if (!(job = job_create (msg, ctx)))
-        goto error;
-    /* Validate submit flags.
-     */
-    if (valid_flags (job->flags) < 0)
-        goto error;
-    if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
-        && (job->flags & FLUX_JOB_NOVALIDATE)) {
-        errprintf (&error,
-                   "only the instance owner can submit "
-                   "with FLUX_JOB_NOVALIDATE");
+    if (!(job = job_create_from_request (msg, ctx->sec, &error))) {
         errmsg = error.text;
-        errno = EPERM;
-        goto error;
-    }
-    /* Validate requested job urgency.
-     */
-    if (job->urgency < FLUX_JOB_URGENCY_MIN
-            || job->urgency > FLUX_JOB_URGENCY_MAX) {
-        errprintf (&error, "urgency range is [%d:%d]",
-                   FLUX_JOB_URGENCY_MIN, FLUX_JOB_URGENCY_MAX);
-        errmsg = error.text;
-        errno = EINVAL;
-        goto error;
-    }
-    if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
-           && job->urgency > FLUX_JOB_URGENCY_DEFAULT) {
-        errprintf (&error,
-                   "only the instance owner can submit with urgency >%d",
-                   FLUX_JOB_URGENCY_DEFAULT);
-        errmsg = error.text;
-        errno = EINVAL;
-        goto error;
-    }
-    /* Only owner can set FLUX_JOB_WAITABLE.
-     */
-    if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
-            && (job->flags & FLUX_JOB_WAITABLE)) {
-        errprintf (&error,
-                   "only the instance onwer can submit with FLUX_JOB_WAITABLE");
-        errmsg = error.text;
-        errno = EINVAL;
-        goto error;
-    }
-    /* Validate jobspec signature, and unwrap(J) -> jobspec,  jobspecsz.
-     * Userid claimed by signature must match authenticated job->cred.userid.
-     * If not the instance owner, a strong signature is required
-     * to give the IMP permission to launch processes on behalf of the user.
-     */
-#if HAVE_FLUX_SECURITY
-    const void *jobspec;
-    if (flux_sign_unwrap_anymech (ctx->sec, job->J, &jobspec, &job->jobspecsz,
-                                  &mech_type, &userid_signer,
-                                  FLUX_SIGN_NOVERIFY) < 0) {
-        errmsg = flux_security_last_error (ctx->sec);
-        goto error;
-    }
-    if (!(job->jobspec = malloc (job->jobspecsz)))
-        goto error;
-    memcpy (job->jobspec, jobspec, job->jobspecsz);
-#else
-    uint32_t userid_signer_u32;
-    /* Simplified unwrap only understands mech=none.
-     * Unlike flux-security version, returned payload must be freed,
-     * and returned userid is a uint32_t.
-     */
-    if (sign_none_unwrap (job->J, (void **)&job->jobspec, &job->jobspecsz,
-                          &userid_signer_u32) < 0) {
-        errmsg = "could not unwrap jobspec";
-        goto error;
-    }
-    mech_type = "none";
-    userid_signer = userid_signer_u32;
-#endif
-    if (userid_signer != job->cred.userid) {
-        errprintf (&error,
-                  "signer=%lu != requestor=%lu",
-                  (unsigned long)userid_signer,
-                  (unsigned long)job->cred.userid);
-        errmsg = error.text;
-        errno = EPERM;
-        goto error;
-    }
-    if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
-                                && !strcmp (mech_type, "none")) {
-        errprintf (&error,
-                  "only instance owner can use sign-type=none");
-        errmsg = error.text;
-        errno = EPERM;
-        goto error;
-    }
-    /* Decode jobspec, returning detailed parse errors to the user.
-     * N.B. fails if jobspec was submitted as YAML.
-     */
-    if (!(job->jobspec_obj = json_loadb (job->jobspec,
-                                         job->jobspecsz,
-                                         0,
-                                         &e))) {
-        errprintf (&error, "jobspec: invalid JSON: %s", e.text);
-        errmsg = error.text;
-        errno = EINVAL;
         goto error;
     }
     if (ctx->validate && !(job->flags & FLUX_JOB_NOVALIDATE)) {
         /* Validate jobspec asynchronously.
          * Continue submission process in validate_continuation().
          */
-        if (!(o = json_pack_ex (&e, 0,
+        if (!(o = json_pack_ex (&json_error,
+                                0,
                                 "{s:O s:I s:i s:i s:i}",
                                 "jobspec", job->jobspec_obj,
                                 "userid", (json_int_t) job->cred.userid,
                                 "rolemask", job->cred.rolemask,
                                 "urgency", job->urgency,
                                 "flags", job->flags))) {
-            errprintf (&error, "Internal error: %s", e.text);
+            errprintf (&error, "Internal error: %s", json_error.text);
             errmsg = error.text;
             goto error;
         }
         if (!(f = workcrew_process_job (ctx->validate, o)))
             goto error;
-        if (flux_future_then (f, -1., validate_continuation, job) < 0)
+        if (flux_future_then (f, -1., validate_continuation, job) < 0
+            || flux_future_aux_set (f, "ctx", ctx, NULL) < 0)
             goto error;
         json_decref (o);
     }
