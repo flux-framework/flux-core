@@ -125,13 +125,16 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
 
     if args.a:
-        args.filter = "pending,running,inactive"
+        args.filter.update(["pending", "running", "inactive"])
+
+    if not args.filter:
+        args.filter = {"pending", "running"}
 
     jobs_rpc = JobList(
         flux_handle,
         ids=args.jobids,
         attrs=attrs,
-        filters=[args.filter],
+        filters=args.filter,
         user=args.user,
         max_entries=args.count,
     )
@@ -170,6 +173,13 @@ class FilterAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, values)
         setattr(namespace, "filtered", True)
+
+
+class FilterActionSetUpdate(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, "filtered", True)
+        values = values.split(",")
+        getattr(namespace, self.dest).update(values)
 
 
 # pylint: disable=redefined-builtin
@@ -220,10 +230,9 @@ def parse_args():
     parser.add_argument(
         "-f",
         "--filter",
-        action=FilterAction,
-        type=str,
+        action=FilterActionSetUpdate,
         metavar="STATE|RESULT",
-        default="pending,running",
+        default=set(),
         help="List jobs with specific job state or result",
     )
     parser.add_argument(
