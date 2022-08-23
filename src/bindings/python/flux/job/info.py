@@ -36,11 +36,13 @@ def resulttostr(resultid, fmt="L"):
     return raw.flux_job_resulttostr(resultid, fmt).decode("utf-8")
 
 
+# Status is the job state when pending/running (i.e. not inactive)
+# status is the result when inactive
 def statustostr(stateid, resultid, fmt="L"):
-    if stateid & flux.constants.FLUX_JOB_STATE_PENDING:
-        statusstr = "PD" if fmt == "S" else "PENDING"
-    elif stateid & flux.constants.FLUX_JOB_STATE_RUNNING:
-        statusstr = "R" if fmt == "S" else "RUNNING"
+    if (stateid & flux.constants.FLUX_JOB_STATE_PENDING) or (
+        stateid & flux.constants.FLUX_JOB_STATE_RUNNING
+    ):
+        statusstr = statetostr(stateid, fmt)
     else:  # flux.constants.FLUX_JOB_STATE_INACTIVE
         statusstr = resulttostr(resultid, fmt)
     return statusstr
@@ -276,7 +278,7 @@ class JobInfo:
 
     def get_remaining_time(self):
         status = str(self.status)
-        if status != "RUNNING":
+        if status != "RUN":
             return 0.0
         tleft = self.expiration - time.time()
         if tleft < 0.0:

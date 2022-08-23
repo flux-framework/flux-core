@@ -149,7 +149,7 @@ test_expect_success 'flux-jobs --suppress-header works' '
 test_expect_success 'flux-jobs default output works' '
 	flux jobs -n > default.out &&
 	test $(wc -l < default.out) -eq $(state_count active) &&
-	test $(grep -c " PD " default.out) -eq $(state_count sched) &&
+	test $(grep -c "  S " default.out) -eq $(state_count sched) &&
 	test $(grep -c "  R " default.out) -eq $(state_count run) &&
 	test $(grep -c " CD " default.out) -eq 0 &&
 	test $(grep -c " CA " default.out) -eq 0 &&
@@ -693,12 +693,12 @@ test_expect_success 'flux-jobs --format={result},{result:h},{result_abbrev},{res
 '
 
 test_expect_success 'flux-jobs --format={status},{status_abbrev} works' '
-	flux jobs --filter=pending  -no "{status},{status_abbrev}" > statusP.out &&
-	flux jobs --filter=running  -no "{status},{status_abbrev}" > statusR.out &&
+	flux jobs --filter=sched    -no "{status},{status_abbrev}" > statusS.out &&
+	flux jobs --filter=run      -no "{status},{status_abbrev}" > statusR.out &&
 	flux jobs --filter=inactive -no "{status},{status_abbrev}" > statusI.out &&
-	count=$(grep -c "PENDING,PD" statusP.out) &&
+	count=$(grep -c "SCHED,S" statusS.out) &&
 	test $count -eq $(state_count sched) &&
-	count=$(grep -c "RUNNING,R" statusR.out) &&
+	count=$(grep -c "RUN,R" statusR.out) &&
 	test $count -eq $(state_count run) &&
 	count=$(grep -c "CANCELED,CA" statusI.out) &&
 	test $count -eq $(state_count canceled) &&
