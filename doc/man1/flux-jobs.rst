@@ -130,9 +130,9 @@ CANCELED, TIMEOUT. Under the *result_abbrev* field name, these are
 abbreviated as CD, F, CA, and TO respectively.
 
 The job status is a user friendly mix of both, a job is always in one
-of the following five statuses: PENDING, RUNNING, COMPLETED, FAILED,
-CANCELED, or TIMEOUT. Under the *status_abbrev* field name, these are
-abbreviated as P, R, CD, F, CA, and TO respectively.
+of the following statuses: DEPEND, SCHED, RUN, CLEANUP, COMPLETED,
+FAILED, CANCELED, or TIMEOUT. Under the *status_abbrev* field name,
+these are abbreviated as D, S, R, C, CD, F, CA, and TO respectively.
 
 
 OUTPUT FORMAT
@@ -227,7 +227,8 @@ The field names that can be specified are:
    list of any currently outstanding job dependencies
 
 **status**
-   job status (PENDING, RUNNING, COMPLETED, FAILED, CANCELED, or TIMEOUT)
+   job status (DEPEND, SCHED, RUN, CLEANUP, COMPLETED, FAILED,
+   CANCELED, or TIMEOUT)
 
 **status_abbrev**
    status but in a max 2 character abbreviation
