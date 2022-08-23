@@ -172,6 +172,50 @@ test_expect_success 'flux-jobs -a and -A works' '
 	test $count -eq $nall
 '
 
+test_expect_success 'flux-jobs --since implies -a' '
+	nall=$(state_count all) &&
+	count=$(flux jobs --suppress-header --since=0.0 | wc -l) &&
+	test $count -eq $nall
+'
+
+test_expect_success 'flux-jobs --since with --filter does not imply -a' '
+	nfailed=$(state_count failed) &&
+	count=$(flux jobs -n --since=0.0 -f failed | wc -l) &&
+	test $count -eq $nfailed
+'
+
+test_expect_success 'flux-jobs --since option must specify a time in the past' '
+	test_must_fail flux jobs --since=+1m
+'
+
+# Print the t_inactive timestamp for the 3rd most recently inactive job
+# Then ensure this timestamp limits output to 2 jobs
+test_expect_success 'flux-jobs --since works with timestamp' '
+	ts=$(flux jobs --filter=inactive -no {t_inactive} | sed -n 3p) &&
+	test_debug "flux jobs --filter=inactive --since=${ts}" &&
+	count=$(flux jobs -n --filter=inactive --since=${ts} | wc -l) &&
+	test $count -eq 2
+'
+
+test_expect_success 'flux-jobs --since works with datetime' '
+	nall=$(state_count all) &&
+	count=$(flux jobs -n --since="a year ago" | wc -l) &&
+	test $count -eq $nall
+'
+
+test_expect_success 'flux-jobs --since works with fsd offset' '
+	nall=$(state_count all) &&
+	count=$(flux jobs -n --since=-8.8h | wc -l) &&
+	test $count -eq $nall
+'
+
+test_expect_success 'flux-jobs --name works' '
+	test_debug "flux jobs -an --name=nosuchcommand" &&
+	test $(flux jobs -an --name=nosuchcommand | wc -l) -eq 1 &&
+	test_debug "flux jobs -an --name=xxyyzz" &&
+	test $(flux jobs -an --name=xxyyzz | wc -l) -eq 0
+'
+
 # Recall pending = depend | priority | sched, running = run | cleanup,
 #  active = pending | running
 test_expect_success 'flux-jobs --filter works (job states)' '
