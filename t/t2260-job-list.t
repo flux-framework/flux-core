@@ -1043,41 +1043,6 @@ test_expect_success HAVE_JQ 'list-id request with invalid input fails with EINVA
 	EOF
 	test_cmp ${name}.expected ${name}.out
 '
-test_expect_success 'list-inactive request with empty payload fails with EPROTO(71)' '
-	name="list-inactive-empty" &&
-	${listRPC} list-inactive </dev/null >${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 71: invalid payload: '\''['\'' or '\''{'\'' expected near end of file
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success HAVE_JQ 'list-inactive request with invalid input fails with EPROTO(71) (attrs not an array)' '
-	name="list-inactive-invalid" &&
-        $jq -j -c -n  "{max_entries:5, since:0.0, attrs:5}" \
-          | $listRPC list-inactive > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 71: invalid payload: attrs must be an array
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success HAVE_JQ 'list-inactive request with invalid input fails with EINVAL(22) (attrs non-string)' '
-	name="list-inactive-attrs-invalid" &&
-        $jq -j -c -n  "{max_entries:5, since:0.0, attrs:[5]}" \
-          | $listRPC list-inactive >${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: attr has no string value
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success HAVE_JQ 'list-inactive request with invalid input fails with EINVAL(22) (attrs illegal field)' '
-        $jq -j -c -n  "{max_entries:5, since:0.0, attrs:[\"foo\"]}" \
-          | $listRPC list-inactive >${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: foo is not a valid attribute
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-
 #
 # stress test
 #
