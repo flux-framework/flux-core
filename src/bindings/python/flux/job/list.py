@@ -58,10 +58,15 @@ def job_list(
 
 
 def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[], name=None):
-    payload = {"since": float(since), "max_entries": int(max_entries), "attrs": attrs}
-    if name:
-        payload["name"] = name
-    return JobListRPC(flux_handle, "job-list.list-inactive", payload)
+    return job_list(
+        flux_handle,
+        max_entries=max_entries,
+        attrs=attrs,
+        userid=flux.constants.FLUX_USERID_UNKNOWN,
+        states=flux.constants.FLUX_JOB_STATE_INACTIVE,
+        since=since,
+        name=name,
+    )
 
 
 class JobListIdRPC(RPC):
