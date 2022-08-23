@@ -35,7 +35,14 @@ class JobListRPC(RPC):
 #
 # pylint: disable=dangerous-default-value
 def job_list(
-    flux_handle, max_entries=1000, attrs=[], userid=os.getuid(), states=0, results=0
+    flux_handle,
+    max_entries=1000,
+    attrs=[],
+    userid=os.getuid(),
+    states=0,
+    results=0,
+    since=0.0,
+    name=None,
 ):
     payload = {
         "max_entries": int(max_entries),
@@ -43,7 +50,10 @@ def job_list(
         "userid": int(userid),
         "states": states,
         "results": results,
+        "since": since,
     }
+    if name:
+        payload["name"] = name
     return JobListRPC(flux_handle, "job-list.list", payload)
 
 
@@ -154,17 +164,21 @@ class JobList:
         ids=[],
         user=None,
         max_entries=1000,
+        since=0.0,
+        name=None,
     ):
         self.handle = flux_handle
         self.attrs = list(attrs)
         self.states = 0
         self.results = 0
         self.max_entries = max_entries
+        self.since = since
+        self.name = name
         self.ids = ids
         self.errors = []
         for fname in filters:
-            for name in fname.split(","):
-                self.add_filter(name)
+            for x in fname.split(","):
+                self.add_filter(x)
         self.set_user(user)
 
     def set_user(self, user):
@@ -221,6 +235,8 @@ class JobList:
             userid=self.userid,
             states=self.states,
             results=self.results,
+            since=self.since,
+            name=self.name,
         )
 
     def jobs(self):
