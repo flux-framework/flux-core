@@ -43,6 +43,7 @@ def fetch_jobs_stdin():
     return jobs
 
 
+# pylint: disable=too-many-branches
 def fetch_jobs_flux(args, fields, flux_handle=None):
     if not flux_handle:
         flux_handle = flux.Flux()
@@ -124,16 +125,37 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
     if args.A:
         args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
 
+    since = 0.0
+    if args.since:
+        # Implies -a, *unless* another filter option is already in effect:
+        if not args.filter:
+            args.a = True
+
+        try:
+            since = flux.util.parse_datetime(args.since).timestamp()
+        except ValueError:
+            since = float(args.since)
+
+        # Ensure args.since is in the past
+        if since > flux.util.parse_datetime("now").timestamp():
+            LOGGER.error("--since=%s appears to be in the future", args.since)
+            sys.exit(1)
+
     if args.a:
-        args.filter = "pending,running,inactive"
+        args.filter.update(["pending", "running", "inactive"])
+
+    if not args.filter:
+        args.filter = {"pending", "running"}
 
     jobs_rpc = JobList(
         flux_handle,
         ids=args.jobids,
         attrs=attrs,
-        filters=[args.filter],
+        filters=args.filter,
         user=args.user,
         max_entries=args.count,
+        since=since,
+        name=args.name,
     )
 
     jobs = jobs_rpc.jobs()
@@ -170,6 +192,13 @@ class FilterAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         setattr(namespace, self.dest, values)
         setattr(namespace, "filtered", True)
+
+
+class FilterActionSetUpdate(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, "filtered", True)
+        values = values.split(",")
+        getattr(namespace, self.dest).update(values)
 
 
 # pylint: disable=redefined-builtin
@@ -220,11 +249,19 @@ def parse_args():
     parser.add_argument(
         "-f",
         "--filter",
+        action=FilterActionSetUpdate,
+        metavar="STATE|RESULT",
+        default=set(),
+        help="List jobs with specific job state or result",
+    )
+    parser.add_argument(
+        "--since",
         action=FilterAction,
         type=str,
-        metavar="STATE|RESULT",
-        default="pending,running",
-        help="List jobs with specific job state or result",
+        metavar="WHEN",
+        default=0.0,
+        help="Include jobs that have become inactive since WHEN. "
+        + "(implies -a if no other --filter option is specified)",
     )
     parser.add_argument(
         "-n",
@@ -241,6 +278,13 @@ def parse_args():
         default=str(os.getuid()),
         help="Limit output to specific username or userid "
         '(Specify "all" for all users)',
+    )
+    parser.add_argument(
+        "--name",
+        action=FilterAction,
+        type=str,
+        metavar="JOB-NAME",
+        help="Limit output to specific job name",
     )
     parser.add_argument(
         "-o",
