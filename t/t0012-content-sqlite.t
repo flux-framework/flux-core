@@ -133,6 +133,20 @@ test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref bar' '
 	test_cmp rootref.exp rootref.out
 '
 
+test_expect_success HAVE_JQ 'checkpoint-put on rank 1 forwards to rank 0' '
+       o=$(checkpoint_put_msg rankone rankref) &&
+       jq -j -c -n ${o} | flux exec -r 1 ${RPC} content.checkpoint-put
+'
+
+test_expect_success HAVE_JQ 'checkpoint-get on rank 1 forwards to rank 0' '
+       echo rankref >rankref.exp &&
+       o=$(checkpoint_get_msg rankone) &&
+       jq -j -c -n ${o} \
+	   | flux exec -r 1 ${RPC} content.checkpoint-get \
+	   | jq -r .value | jq -r .rootref > rankref.out &&
+       test_cmp rankref.exp rankref.out
+'
+
 # use grep instead of compare, incase of floating point rounding
 test_expect_success HAVE_JQ 'checkpoint-get foo returned correct timestamp' '
         checkpoint_get foo | jq -r .value | jq -r .timestamp >timestamp.out &&
