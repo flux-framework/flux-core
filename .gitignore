@@ -23,6 +23,16 @@ libtool
 .libs/
 libltdl/
 
+# python environments
+env
+.eggs
+dist
+build
+flux.egg-info
+_*_clean.h
+_*_preproc.h
+*.so-built
+
 # generated library version header
 /src/common/libflux/version.h
 

@@ -243,22 +243,6 @@ if test -n "$PYTHON_LDFLAGS"; then
   ac_python_ldflags_set_by_user=true
 fi
 
-AM_CHECK_PYMOD(cffi,
-               [cffi.__version_info__ >= (1,1)],
-               ,
-               [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
-               )
-AM_CHECK_PYMOD(yaml,
-               [StrictVersion(yaml.__version__) >= StrictVersion ('3.10.0')],
-               ,
-               [AC_MSG_ERROR([could not find python module yaml, version 3.10+ required])]
-               )
-AM_CHECK_PYMOD(jsonschema,
-               [StrictVersion(jsonschema.__version__) >= StrictVersion ('2.3.0')],
-               ,
-               [AC_MSG_ERROR([could not find python module jsonschema, version 2.3.0+ required])]
-               )
-
 AS_IF([test "x$enable_docs" != "xno"], [
             AM_CHECK_PYMOD(sphinx,
                            [StrictVersion(sphinx.__version__) >= StrictVersion ('1.6.7')],
@@ -542,9 +526,6 @@ AC_CONFIG_FILES( \
   src/common/libtaskmap/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
-  src/bindings/python/Makefile \
-  src/bindings/python/flux/Makefile \
-  src/bindings/python/_flux/Makefile \
   src/broker/Makefile \
   src/cmd/Makefile \
   src/shell/Makefile \
@@ -586,7 +567,8 @@ AC_CONFIG_FILES( \
   t/Makefile \
   t/fluxometer/conf.lua \
   t/fluxometer/conf.lua.installed \
-  src/test/docker/poison-libflux.sh
+  src/test/docker/poison-libflux.sh \
+  src/bindings/python/Makefile
 )
 
 AC_CONFIG_LINKS([ \
@@ -602,4 +584,5 @@ AS_IF([test "x$enable_docs" != "xno"], [
     AC_MSG_WARN([Python Docutils not found. Manual pages will not be generated.])
   fi
 ])
+
 

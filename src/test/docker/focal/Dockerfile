@@ -37,6 +37,8 @@ RUN apt-get update \
         lua-posix \
         valgrind \
         jq \
+        gdb \
+        strace \
  && rm -rf /var/lib/apt/lists/*
 
 # Compilers, autotools
@@ -68,8 +70,9 @@ RUN apt-get update \
         python3-jsonschema \
  && rm -rf /var/lib/apt/lists/*
 
-# Sphinx packages for docs
-RUN python3 -m pip install sphinx sphinx-rtd-theme sphinxcontrib-spelling
+# Sphinx packages for docs and python linting
+RUN python3 -m pip install sphinx sphinx-rtd-theme sphinxcontrib-spelling && \
+    python3 -m pip install black pylint pyflakes
 
 # Other deps
 RUN apt-get update \

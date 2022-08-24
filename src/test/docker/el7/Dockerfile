@@ -52,6 +52,9 @@ RUN yum -y update \
       python36-six \
       python36-yaml \
       python36-jsonschema \
+      python36-black \
+      python36-pylint \
+      python36-pyflakes \
       sqlite \
       valgrind \
       valgrind-devel \
@@ -65,6 +68,8 @@ RUN yum -y update \
       libs3-devel \
       libarchive-devel \
       pam-devel \
+      gdb \
+      strace \
  && yum clean all
 
 # Sphinx packages for docs

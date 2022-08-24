@@ -67,7 +67,8 @@ RUN for PY in python3.6 python3.7 python3.8 ; do \
         sudo $PY -m pip install --upgrade --ignore-installed \
 	    "markupsafe==2.0.0" \
             coverage cffi six pyyaml "jsonschema>=2.6,<4.0" \
-            sphinx sphinx-rtd-theme sphinxcontrib-spelling; \
+            sphinx sphinx-rtd-theme sphinxcontrib-spelling \
+            black pyflakes pylint; \
     done ; \
     apt-get -qq purge -y python3-pip \
  && apt-get -qq autoremove -y
@@ -91,6 +92,8 @@ RUN apt-get update \
         libevent-dev \
         libarchive-dev \
         libpam-dev \
+        gdb \
+        strace \        
  && rm -rf /var/lib/apt/lists/*
 
 # Testing utils and libs
