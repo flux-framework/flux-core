@@ -45,6 +45,9 @@ RUN yum -y update \
 	python3-yaml \
 	python3-jsonschema \
 	python3-sphinx \
+	python3-black \
+	python3-pylint \
+	python3-pyflakes \
 #  Development dependencies
 	libsodium-devel \
 	zeromq-devel \
@@ -62,6 +65,8 @@ RUN yum -y update \
 	systemd-devel \
 	libarchive-devel \
 	pam-devel \
+	gdb \
+	strace \
 #  Other deps
 	perl-Time-HiRes \
 	lua-posix \
