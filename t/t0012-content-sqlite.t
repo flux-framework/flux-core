@@ -2,6 +2,8 @@
 
 test_description='Test content-sqlite service'
 
+. `dirname $0`/content/content-helper.sh
+
 . `dirname $0`/sharness.sh
 
 # Size the session to one more than the number of cores, minimum of 4
@@ -120,14 +122,6 @@ test_expect_success 'drop the cache' '
 test_expect_success 'fill the cache with more data for later purging' '
 	${SPAMUTIL} 10000 200 >/dev/null
 '
-
-checkpoint_put() {
-	o="{key:\"$1\",value:{version:1,rootref:\"$2\",timestamp:2.2}}"
-	jq -j -c -n  ${o} | $RPC content.checkpoint-put
-}
-checkpoint_get() {
-	jq -j -c -n  "{key:\"$1\"}" | $RPC content.checkpoint-get
-}
 
 test_expect_success HAVE_JQ 'checkpoint-put foo w/ rootref bar' '
 	checkpoint_put foo bar

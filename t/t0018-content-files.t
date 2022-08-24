@@ -2,6 +2,8 @@
 
 test_description='Test content-files backing store service'
 
+. `dirname $0`/content/content-helper.sh
+
 . `dirname $0`/sharness.sh
 
 test_under_flux 1 minimal -o,-Sstatedir=$(pwd)
@@ -54,15 +56,6 @@ recheck_cache_blob() {
 	local blobref=$($BLOBREF sha1 <blob.$1)
 	flux content load $blobref >blob.$1.cachecheck &&
 	test_cmp blob.$1 blob.$1.cachecheck
-}
-# Usage: checkpoint_put key rootref
-checkpoint_put() {
-        o="{key:\"$1\",value:{version:1,rootref:\"$2\",timestamp:2.2}}"
-        jq -j -c -n  ${o} | $RPC content.checkpoint-put
-}
-# Usage: checkpoint_get key >value
-checkpoint_get() {
-        jq -j -c -n  "{key:\"$1\"}" | $RPC content.checkpoint-get
 }
 
 ##
