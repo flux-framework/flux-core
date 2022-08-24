@@ -55,21 +55,25 @@ void content_checkpoint_get_request (flux_t *h, flux_msg_handler_t *mh,
                                      const flux_msg_t *msg, void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
-    const char *topic = "content-backing.checkpoint-get";
+    const char *topic = "content.checkpoint-get";
+    uint32_t rank = FLUX_NODEID_UPSTREAM;
     const char *s = NULL;
     const flux_msg_t *msgcpy = flux_msg_incref (msg);
     flux_future_t *f = NULL;
 
-    /* Temporarily maintain ENOSYS behavior */
-    if (!content_cache_backing_loaded (checkpoint->cache)) {
-        errno = ENOSYS;
-        goto error;
+    if (checkpoint->rank == 0) {
+        if (!content_cache_backing_loaded (checkpoint->cache)) {
+            errno = ENOSYS;
+            goto error;
+        }
+        topic = "content-backing.checkpoint-get";
+        rank = 0;
     }
 
     if (flux_request_decode (msg, NULL, &s) < 0)
         goto error;
 
-    if (!(f = flux_rpc (h, topic, s, 0, 0))
+    if (!(f = flux_rpc (h, topic, s, rank, 0))
         || flux_future_aux_set (f,
                                 "msg",
                                 (void *)msgcpy,
@@ -117,21 +121,25 @@ void content_checkpoint_put_request (flux_t *h, flux_msg_handler_t *mh,
                                      const flux_msg_t *msg, void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
-    const char *topic = "content-backing.checkpoint-put";
+    const char *topic = "content.checkpoint-put";
+    uint32_t rank = FLUX_NODEID_UPSTREAM;
     const char *s = NULL;
     const flux_msg_t *msgcpy = flux_msg_incref (msg);
     flux_future_t *f = NULL;
 
-    /* Temporarily maintain ENOSYS behavior */
-    if (!content_cache_backing_loaded (checkpoint->cache)) {
-        errno = ENOSYS;
-        goto error;
+    if (checkpoint->rank == 0) {
+        if (!content_cache_backing_loaded (checkpoint->cache)) {
+            errno = ENOSYS;
+            goto error;
+        }
+        topic = "content-backing.checkpoint-put";
+        rank = 0;
     }
 
     if (flux_request_decode (msg, NULL, &s) < 0)
         goto error;
 
-    if (!(f = flux_rpc (h, topic, s, 0, 0))
+    if (!(f = flux_rpc (h, topic, s, rank, 0))
         || flux_future_aux_set (f,
                                 "msg",
                                 (void *)msgcpy,
