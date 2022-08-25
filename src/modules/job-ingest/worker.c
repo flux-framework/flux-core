@@ -194,7 +194,7 @@ static void worker_unexpected_exit (struct worker *w)
     flux_future_t *f;
     const char *json_err =
         "{\"errnum\":71,"
-        "\"errstr\":\"Unrecoverable error: validator unexpectedly exited\"}";
+        "\"errstr\":\"Unrecoverable error: worker unexpectedly exited\"}";
 
     /*  Respond to any pending requests immediately with error above.
      *  The remainder of worker cleanup will happen in the exit callback.
