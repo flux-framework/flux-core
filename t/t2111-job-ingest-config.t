@@ -22,14 +22,14 @@ SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
 dmesg_grep=${SHARNESS_TEST_SRCDIR}/scripts/dmesg-grep.py
 
 test_expect_success 'job-ingest: validator was disabled by config' '
-	$dmesg_grep -t 5 "Disabling job validator"
+	$dmesg_grep -t 5 "configuring validator with plugins=\(null\), args=\(null\) \(disabled\)"
 '
 test_expect_success 'job-ingest: command line overrides config' '
 	rm conf.d/ingest.toml &&
 	flux config reload &&
 	flux dmesg -C &&
 	flux module reload job-ingest disable-validator &&
-	$dmesg_grep -t 10 "Disabling job validator"
+	$dmesg_grep -t 10 "configuring validator with plugins=\(null\), args=\(null\) \(disabled\)"
 '
 test_expect_success 'job-ingest: configuration can be reloaded' '
 	cat <<-EOF >conf.d/ingest.toml &&
@@ -40,7 +40,7 @@ test_expect_success 'job-ingest: configuration can be reloaded' '
 	flux dmesg -C &&
 	flux config reload &&
 	$dmesg_grep -vt 10 \
-	"configuring with plugins=feasibility,jobspec, args=--require-version=1"
+	"configuring validator with plugins=feasibility,jobspec, args=--require-version=1 \(enabled\)"
 '
 test_expect_success 'job-ingest: verify that feasibility plugin is in effect' '
 	test_must_fail flux mini submit -n 1024 hostname

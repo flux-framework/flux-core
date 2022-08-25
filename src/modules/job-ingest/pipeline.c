@@ -28,7 +28,11 @@ struct pipeline {
     struct workcrew *validate;
     int process_count;
     flux_watcher_t *shutdown_timer;
+    bool validator_bypass;
 };
+
+static const char *cmd_validator = "job-validator";
+
 
 /* Timeout (seconds) to wait for workers to terminate when
  * stopped by closing their stdin.  If the timer expires, stop the reactor
@@ -97,15 +101,15 @@ int pipeline_process_job (struct pipeline *pl,
                           flux_future_t **fp,
                           flux_error_t *error)
 {
-    if ((!pl->validate || (job->flags & FLUX_JOB_NOVALIDATE))) {
+    if ((pl->validator_bypass || (job->flags & FLUX_JOB_NOVALIDATE))) {
         *fp = NULL;
+        return 0;
     }
-    else {
-        flux_future_t *f;
-        if (!(f = validate_job (pl, job, error)))
-            return -1;
-        *fp = f;
-    }
+
+    flux_future_t *f;
+    if (!(f = validate_job (pl, job, error)))
+        return -1;
+    *fp = f;
     return 0;
 }
 
@@ -139,6 +143,11 @@ static int unpack_ingest_subtable (json_t *o,
             errno = EINVAL;
             return -1;
         }
+        if (!disablep && disable) {
+            errprintf (error, "[ingest.%s]: 'disable' key is unknown", name);
+            errno = EINVAL;
+            return -1;
+        }
         if (op) {
             if (!(plugins = util_join_arguments (op))) {
                 errprintf (error, "error in [ingest.%s] plugins array", name);
@@ -154,7 +163,8 @@ static int unpack_ingest_subtable (json_t *o,
     }
     *pluginsp = plugins;
     *argsp = args;
-    *disablep = disable ? true : false;
+    if (disablep)
+        *disablep = disable ? true : false;
     return 0;
 error:
     ERRNO_SAFE_WRAP (free, args);
@@ -172,7 +182,6 @@ int pipeline_configure (struct pipeline *pl,
     json_t *ingest = NULL;
     char *validator_plugins = NULL;
     char *validator_args = NULL;
-    bool disable_validator = false;
 
     /* Process toml
      */
@@ -189,7 +198,7 @@ int pipeline_configure (struct pipeline *pl,
                                 "validator",
                                 &validator_plugins,
                                 &validator_args,
-                                &disable_validator,
+                                &pl->validator_bypass,
                                 error) < 0)
         return -1;
 
@@ -205,44 +214,24 @@ int pipeline_configure (struct pipeline *pl,
             validator_plugins = strdup (argv[i] + 18);
         }
         else if (!strcmp (argv[i], "disable-validator"))
-            disable_validator = 1;
+            pl->validator_bypass = true;
     }
 
-    /* Take action on configuration update.
-     */
-    if (disable_validator) {
-        if (pl->validate) {
-            errprintf (error, "Unable to disable validator at runtime");
-            errno = EINVAL;
-            goto error;
-        }
-        // Checked for by t2111-job-ingest-config.t
-        flux_log (pl->h, LOG_DEBUG, "Disabling job validator");
-    }
-    else {
-        if (!pl->validate) {
-            if (!(pl->validate = workcrew_create (pl->h))) {
-                errprintf (error,
-                           "Error creating validator workcrew: %s",
-                           strerror (errno));
-                goto error;
-            }
-        }
-        // Checked for by t2111-job-ingest-config.t
-        flux_log (pl->h,
-                  LOG_DEBUG,
-                  "configuring with plugins=%s, args=%s",
-                  validator_plugins,
-                  validator_args);
-        if (workcrew_configure (pl->validate,
-                                "job-validator",
-                                validator_plugins,
-                                validator_args) < 0) {
-            errprintf (error,
-                       "Error (re-)configuring validator workcrew: %s",
-                       strerror (errno));
-            goto error;
-        }
+    // Checked for by t2111-job-ingest-config.t
+    flux_log (pl->h,
+              LOG_DEBUG,
+              "configuring validator with plugins=%s, args=%s (%s)",
+              validator_plugins,
+              validator_args,
+              pl->validator_bypass ? "disabled" : "enabled");
+    if (workcrew_configure (pl->validate,
+                            cmd_validator,
+                            validator_plugins,
+                            validator_args) < 0) {
+        errprintf (error,
+                   "Error (re-)configuring validator workcrew: %s",
+                   strerror (errno));
+        goto error;
     }
 
     free (validator_plugins);
@@ -290,6 +279,9 @@ struct pipeline *pipeline_create (flux_t *h)
                                                           0.,
                                                           shutdown_timeout_cb,
                                                           pl)))
+        goto error;
+    if (!(pl->validate = workcrew_create (pl->h))
+        || workcrew_configure (pl->validate, cmd_validator, NULL, NULL) < 0)
         goto error;
     return pl;
 error:
