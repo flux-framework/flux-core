@@ -51,48 +51,69 @@ error:
     flux_future_destroy (f);
 }
 
+static int checkpoint_get_forward (struct content_checkpoint *checkpoint,
+                                   const flux_msg_t *msg,
+                                   const char *s,
+                                   const char **errstr)
+{
+    const char *topic = "content.checkpoint-get";
+    uint32_t rank = FLUX_NODEID_UPSTREAM;
+    flux_future_t *f = NULL;
+
+    /* if we're on rank 0, go directly to backing store */
+    if (checkpoint->rank == 0) {
+        topic = "content-backing.checkpoint-get";
+        rank = 0;
+    }
+
+    if (!(f = flux_rpc (checkpoint->h, topic, s, rank, 0))
+        || flux_future_then (f,
+                             -1,
+                             checkpoint_get_continuation,
+                             checkpoint) < 0)
+        goto error;
+
+    if (flux_future_aux_set (f,
+                             "msg",
+                             (void *)flux_msg_incref (msg),
+                             (flux_free_f)flux_msg_decref) < 0) {
+        flux_msg_decref (msg);
+        goto error;
+    }
+
+    return 0;
+
+error:
+    (*errstr) = "error starting checkpoint-get RPC";
+    flux_future_destroy (f);
+    return -1;
+}
+
 void content_checkpoint_get_request (flux_t *h, flux_msg_handler_t *mh,
                                      const flux_msg_t *msg, void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
-    const char *topic = "content.checkpoint-get";
-    uint32_t rank = FLUX_NODEID_UPSTREAM;
     const char *s = NULL;
-    const flux_msg_t *msgcpy = flux_msg_incref (msg);
-    flux_future_t *f = NULL;
+    const char *errstr = NULL;
 
     if (checkpoint->rank == 0) {
         if (!content_cache_backing_loaded (checkpoint->cache)) {
             errno = ENOSYS;
             goto error;
         }
-        topic = "content-backing.checkpoint-get";
-        rank = 0;
     }
 
     if (flux_request_decode (msg, NULL, &s) < 0)
         goto error;
 
-    if (!(f = flux_rpc (h, topic, s, rank, 0))
-        || flux_future_aux_set (f,
-                                "msg",
-                                (void *)msgcpy,
-                                (flux_free_f)flux_msg_decref) < 0
-        || flux_future_then (f,
-                             -1,
-                             checkpoint_get_continuation,
-                             checkpoint) < 0) {
-        flux_log_error (h, "error starting checkpoint-get RPC");
+    if (checkpoint_get_forward (checkpoint, msg, s, &errstr) < 0)
         goto error;
-    }
 
     return;
 
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to checkpoint-get request");
-    flux_future_destroy (f);
-    flux_msg_decref (msgcpy);
 }
 
 static void checkpoint_put_continuation (flux_future_t *f, void *arg)
@@ -117,48 +138,69 @@ error:
     flux_future_destroy (f);
 }
 
+static int checkpoint_put_forward (struct content_checkpoint *checkpoint,
+                                   const flux_msg_t *msg,
+                                   const char *s,
+                                   const char **errstr)
+{
+    const char *topic = "content.checkpoint-put";
+    uint32_t rank = FLUX_NODEID_UPSTREAM;
+    flux_future_t *f = NULL;
+
+    /* if we're on rank 0, go directly to backing store */
+    if (checkpoint->rank == 0) {
+        topic = "content-backing.checkpoint-put";
+        rank = 0;
+    }
+
+    if (!(f = flux_rpc (checkpoint->h, topic, s, rank, 0))
+        || flux_future_then (f,
+                             -1,
+                             checkpoint_put_continuation,
+                             checkpoint) < 0)
+        goto error;
+
+    if (flux_future_aux_set (f,
+                             "msg",
+                             (void *)flux_msg_incref (msg),
+                             (flux_free_f)flux_msg_decref) < 0) {
+        flux_msg_decref (msg);
+        goto error;
+    }
+
+    return 0;
+
+error:
+    (*errstr) = "error starting checkpoint-put RPC";
+    flux_future_destroy (f);
+    return -1;
+}
+
 void content_checkpoint_put_request (flux_t *h, flux_msg_handler_t *mh,
                                      const flux_msg_t *msg, void *arg)
 {
     struct content_checkpoint *checkpoint = arg;
-    const char *topic = "content.checkpoint-put";
-    uint32_t rank = FLUX_NODEID_UPSTREAM;
     const char *s = NULL;
-    const flux_msg_t *msgcpy = flux_msg_incref (msg);
-    flux_future_t *f = NULL;
+    const char *errstr = NULL;
 
     if (checkpoint->rank == 0) {
         if (!content_cache_backing_loaded (checkpoint->cache)) {
             errno = ENOSYS;
             goto error;
         }
-        topic = "content-backing.checkpoint-put";
-        rank = 0;
     }
 
     if (flux_request_decode (msg, NULL, &s) < 0)
         goto error;
 
-    if (!(f = flux_rpc (h, topic, s, rank, 0))
-        || flux_future_aux_set (f,
-                                "msg",
-                                (void *)msgcpy,
-                                (flux_free_f)flux_msg_decref) < 0
-        || flux_future_then (f,
-                             -1,
-                             checkpoint_put_continuation,
-                             checkpoint) < 0) {
-        flux_log_error (h, "error starting checkpoint-put RPC");
+    if (checkpoint_put_forward (checkpoint, msg, s, &errstr) < 0)
         goto error;
-    }
 
     return;
 
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to checkpoint-put request");
-    flux_future_destroy (f);
-    flux_msg_decref (msgcpy);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
