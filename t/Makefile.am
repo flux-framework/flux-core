@@ -323,6 +323,7 @@ dist_check_SCRIPTS = \
 	scripts/sqlite-query.py \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
+	content/content-helper.sh \
 	kvs/kvs-helper.sh \
 	kvs/change-checkpoint.py \
 	job-manager/exec-service.lua \

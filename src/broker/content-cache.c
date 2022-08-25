@@ -27,6 +27,7 @@
 
 #include "attr.h"
 #include "content-cache.h"
+#include "content-checkpoint.h"
 
 /* A periodic callback purges the cache of least recently used entries.
  * The callback is synchronized with the instance heartbeat, with a
@@ -99,6 +100,8 @@ struct content_cache {
     uint64_t acct_size;             // total size of all cache entries
     uint32_t acct_valid;            // count of valid cache entries
     uint32_t acct_dirty;            // count of dirty cache entries
+
+    struct content_checkpoint *checkpoint;
 };
 
 static void flush_respond (struct content_cache *cache);
@@ -617,124 +620,6 @@ error:
         flux_log_error (h, "content store: flux_respond_error");
 }
 
-static void checkpoint_get_continuation (flux_future_t *f, void *arg)
-{
-    struct content_cache *cache = arg;
-    const flux_msg_t *msg = flux_future_aux_get (f, "msg");
-    const char *s;
-
-    assert (msg);
-
-    if (flux_rpc_get (f, &s) < 0)
-        goto error;
-
-    if (flux_respond (cache->h, msg, s) < 0)
-        flux_log_error (cache->h, "error responding to checkpoint-get");
-    flux_future_destroy (f);
-    return;
-
-error:
-    if (flux_respond_error (cache->h, msg, errno, NULL) < 0)
-        flux_log_error (cache->h, "error responding to checkpoint-get");
-    flux_future_destroy (f);
-}
-
-void content_checkpoint_get_request (flux_t *h, flux_msg_handler_t *mh,
-                                     const flux_msg_t *msg, void *arg)
-{
-    struct content_cache *cache = arg;
-    const char *topic = "content-backing.checkpoint-get";
-    const char *s = NULL;
-    const flux_msg_t *msgcpy = flux_msg_incref (msg);
-    flux_future_t *f = NULL;
-
-    /* Temporarily maintain ENOSYS behavior */
-    if (!cache->backing) {
-        errno = ENOSYS;
-        goto error;
-    }
-
-    if (flux_request_decode (msg, NULL, &s) < 0)
-        goto error;
-
-    if (!(f = flux_rpc (h, topic, s, 0, 0))
-        || flux_future_aux_set (f,
-                                "msg",
-                                (void *)msgcpy,
-                                (flux_free_f)flux_msg_decref) < 0
-        || flux_future_then (f, -1, checkpoint_get_continuation, cache) < 0) {
-        flux_log_error (h, "error starting checkpoint-get RPC");
-        goto error;
-    }
-
-    return;
-
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "error responding to checkpoint-get request");
-    flux_future_destroy (f);
-    flux_msg_decref (msgcpy);
-}
-
-static void checkpoint_put_continuation (flux_future_t *f, void *arg)
-{
-    struct content_cache *cache = arg;
-    const flux_msg_t *msg = flux_future_aux_get (f, "msg");
-    const char *s;
-
-    assert (msg);
-
-    if (flux_rpc_get (f, &s) < 0)
-        goto error;
-
-    if (flux_respond (cache->h, msg, s) < 0)
-        flux_log_error (cache->h, "error responding to checkpoint-put");
-    flux_future_destroy (f);
-    return;
-
-error:
-    if (flux_respond_error (cache->h, msg, errno, NULL) < 0)
-        flux_log_error (cache->h, "error responding to checkpoint-put");
-    flux_future_destroy (f);
-}
-
-void content_checkpoint_put_request (flux_t *h, flux_msg_handler_t *mh,
-                                     const flux_msg_t *msg, void *arg)
-{
-    struct content_cache *cache = arg;
-    const char *topic = "content-backing.checkpoint-put";
-    const char *s = NULL;
-    const flux_msg_t *msgcpy = flux_msg_incref (msg);
-    flux_future_t *f = NULL;
-
-    /* Temporarily maintain ENOSYS behavior */
-    if (!cache->backing) {
-        errno = ENOSYS;
-        goto error;
-    }
-
-    if (flux_request_decode (msg, NULL, &s) < 0)
-        goto error;
-
-    if (!(f = flux_rpc (h, topic, s, 0, 0))
-        || flux_future_aux_set (f,
-                                "msg",
-                                (void *)msgcpy,
-                                (flux_free_f)flux_msg_decref) < 0
-        || flux_future_then (f, -1, checkpoint_put_continuation, cache) < 0) {
-        flux_log_error (h, "error starting checkpoint-put RPC");
-        goto error;
-    }
-
-    return;
-
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "error responding to checkpoint-put request");
-    flux_future_destroy (f);
-    flux_msg_decref (msgcpy);
-}
-
 /* Backing store is enabled/disabled by modules that provide the
  * 'content.backing' service.  At module load time, the backing module
  * informs the content service of its availability, and entries are
@@ -988,6 +873,11 @@ static void sync_cb (flux_future_t *f, void *arg)
     flux_future_reset (f);
 }
 
+bool content_cache_backing_loaded (struct content_cache *cache)
+{
+    return cache->backing;
+}
+
 /* Initialization
  */
 
@@ -1002,18 +892,6 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "content.store",
         content_store_request,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "content.checkpoint-get",
-        content_checkpoint_get_request,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "content.checkpoint-put",
-        content_checkpoint_put_request,
         0
     },
     {
@@ -1127,6 +1005,7 @@ void content_cache_destroy (struct content_cache *cache)
         free (cache->backing_name);
         zhashx_destroy (&cache->entries);
         msgstack_destroy (&cache->flush_requests);
+        content_checkpoint_destroy (cache->checkpoint);
         free (cache);
         errno = saved_errno;
     }
@@ -1164,9 +1043,13 @@ struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
         goto error;
     assert (content_hash_size >= sizeof (size_t)); // hasher assumes this
 
-    if (flux_msg_handler_addvec (h, htab, cache, &cache->handlers) < 0)
-        goto error;
     if (flux_get_rank (h, &cache->rank) < 0)
+        goto error;
+
+    if (!(cache->checkpoint = content_checkpoint_create (h, cache->rank, cache)))
+        goto error;
+
+    if (flux_msg_handler_addvec (h, htab, cache, &cache->handlers) < 0)
         goto error;
     if (!(cache->f_sync = flux_sync_create (h, 0))
         || flux_future_then (cache->f_sync, sync_max, sync_cb, cache) < 0)

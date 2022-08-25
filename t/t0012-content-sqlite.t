@@ -2,6 +2,8 @@
 
 test_description='Test content-sqlite service'
 
+. `dirname $0`/content/content-helper.sh
+
 . `dirname $0`/sharness.sh
 
 # Size the session to one more than the number of cores, minimum of 4
@@ -121,14 +123,6 @@ test_expect_success 'fill the cache with more data for later purging' '
 	${SPAMUTIL} 10000 200 >/dev/null
 '
 
-checkpoint_put() {
-	o="{key:\"$1\",value:{version:1,rootref:\"$2\",timestamp:2.2}}"
-	jq -j -c -n  ${o} | $RPC content.checkpoint-put
-}
-checkpoint_get() {
-	jq -j -c -n  "{key:\"$1\"}" | $RPC content.checkpoint-get
-}
-
 test_expect_success HAVE_JQ 'checkpoint-put foo w/ rootref bar' '
 	checkpoint_put foo bar
 '
@@ -137,6 +131,20 @@ test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref bar' '
 	echo bar >rootref.exp &&
 	checkpoint_get foo | jq -r .value | jq -r .rootref >rootref.out &&
 	test_cmp rootref.exp rootref.out
+'
+
+test_expect_success HAVE_JQ 'checkpoint-put on rank 1 forwards to rank 0' '
+       o=$(checkpoint_put_msg rankone rankref) &&
+       jq -j -c -n ${o} | flux exec -r 1 ${RPC} content.checkpoint-put
+'
+
+test_expect_success HAVE_JQ 'checkpoint-get on rank 1 forwards to rank 0' '
+       echo rankref >rankref.exp &&
+       o=$(checkpoint_get_msg rankone) &&
+       jq -j -c -n ${o} \
+	   | flux exec -r 1 ${RPC} content.checkpoint-get \
+	   | jq -r .value | jq -r .rootref > rankref.out &&
+       test_cmp rankref.exp rankref.out
 '
 
 # use grep instead of compare, incase of floating point rounding
