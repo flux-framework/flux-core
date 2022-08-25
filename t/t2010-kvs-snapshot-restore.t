@@ -17,7 +17,8 @@ CHANGECHECKPOINT=${FLUX_SOURCE_DIR}/t/kvs/change-checkpoint.py
 
 test_expect_success 'run instance with statedir set (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-		   flux kvs put --sequence testkey=42 > start_sequence.out
+		   flux kvs put --sequence testkey=42 \
+		   > start_sequence_sqlite.out
 '
 
 test_expect_success 'content.sqlite file exists after instance exited' '
@@ -27,7 +28,7 @@ test_expect_success 'content.sqlite file exists after instance exited' '
 
 test_expect_success 're-run instance with statedir set (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux kvs get testkey >getsqlite.out
+		   flux kvs get testkey >getsqlite.out
 '
 
 test_expect_success 'content from previous instance survived (sqlite)' '
@@ -41,29 +42,29 @@ test_expect_success 'content from previous instance survived (sqlite)' '
 
 test_expect_success 're-run instance, get sequence number 1 (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux kvs version > restart_version1.out
+		   flux kvs version > restart_version_sqlite1.out
 '
 
 test_expect_success 'restart sequence number increasing 1 (sqlite)' '
-	seq1=$(cat start_sequence.out) &&
-	seq2=$(cat restart_version1.out) &&
+	seq1=$(cat start_sequence_sqlite.out) &&
+	seq2=$(cat restart_version_sqlite1.out) &&
 	test $seq1 -lt $seq2
 '
 
 test_expect_success 're-run instance, get sequence number 2 (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux kvs version > restart_version2.out
+		   flux kvs version > restart_version_sqlite2.out
 '
 
 test_expect_success 'restart sequence number increasing 2 (sqlite)' '
-	seq1=$(cat restart_version1.out) &&
-	seq2=$(cat restart_version2.out) &&
+	seq1=$(cat restart_version_sqlite1.out) &&
+	seq2=$(cat restart_version_sqlite2.out) &&
 	test $seq1 -lt $seq2
 '
 
 test_expect_success 're-run instance, verify checkpoint date saved (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux dmesg >dmesgsqlite1.out
+		   flux dmesg >dmesgsqlite1.out
 '
 
 # just check for todays date, not time for obvious reasons
@@ -74,17 +75,17 @@ test_expect_success 'verify date in flux logs (sqlite)' '
 
 test_expect_success 're-run instance, get rootref (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux kvs getroot -b > getrootsqlite.out
+		   flux kvs getroot -b > getrootsqlite.out
 '
 
 test_expect_success 'write rootref to checkpoint path, emulating checkpoint version=0 (sqlite)' '
-        rootref=$(cat getrootsqlite.out) &&
-        ${CHANGECHECKPOINT} $(pwd)/content.sqlite "kvs-primary" ${rootref}
+	rootref=$(cat getrootsqlite.out) &&
+	${CHANGECHECKPOINT} $(pwd)/content.sqlite "kvs-primary" ${rootref}
 '
 
 test_expect_success 're-run instance, verify checkpoint correctly loaded (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux dmesg >dmesgsqlite2.out
+		   flux dmesg >dmesgsqlite2.out
 '
 
 test_expect_success 'verify checkpoint loaded with no date (sqlite)' '
@@ -106,15 +107,15 @@ EOF
 flux module remove kvs
 flux module remove content-files
 EOF
-        chmod +x rc1-content-files &&
-        chmod +x rc3-content-files
+	chmod +x rc1-content-files &&
+	chmod +x rc3-content-files
 '
 
 test_expect_success 'run instance with statedir set (files)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-                   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
-                   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
-	           flux kvs put testkey=43
+		   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
+		   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+		   flux kvs put --sequence testkey=43 > start_sequence_files.out
 '
 
 test_expect_success 'content.files dir and kvs-primary exist after instance exit' '
@@ -124,9 +125,9 @@ test_expect_success 'content.files dir and kvs-primary exist after instance exit
 
 test_expect_success 're-run instance with statedir set (files)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-                   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
-                   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
-	           flux kvs get testkey >getfiles.out
+		   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
+		   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+		   flux kvs get testkey >getfiles.out
 '
 
 test_expect_success 'content from previous instance survived (files)' '
@@ -134,11 +135,37 @@ test_expect_success 'content from previous instance survived (files)' '
 	test_cmp getfiles.exp getfiles.out
 '
 
+# due to other KVS activity that testing can't control, we simply want
+# to ensure the sequence number does not restart at 0, it must
+# increase over several restarts
+
+test_expect_success 're-run instance, get sequence number 1 (files)' '
+	flux start -o,--setattr=statedir=$(pwd) \
+		   flux kvs version > restart_version_files1.out
+'
+
+test_expect_success 'restart sequence number increasing 1 (files)' '
+	seq1=$(cat start_sequence_files.out) &&
+	seq2=$(cat restart_version_files1.out) &&
+	test $seq1 -lt $seq2
+'
+
+test_expect_success 're-run instance, get sequence number 2 (files)' '
+	flux start -o,--setattr=statedir=$(pwd) \
+		   flux kvs version > restart_version_files2.out
+'
+
+test_expect_success 'restart sequence number increasing 2 (files)' '
+	seq1=$(cat restart_version_files1.out) &&
+	seq2=$(cat restart_version_files2.out) &&
+	test $seq1 -lt $seq2
+'
+
 test_expect_success 're-run instance, verify checkpoint date saved (files)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-                   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
-                   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
-	           flux dmesg >dmesgfiles.out
+		   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
+		   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+		   flux dmesg >dmesgfiles.out
 '
 
 # just check for todays date, not time for obvious reasons
