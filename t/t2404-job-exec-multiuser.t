@@ -13,6 +13,7 @@ fi
 
 IMP=${SHARNESS_TEST_SRCDIR}/job-exec/imp.sh
 IMP_FAIL=${SHARNESS_TEST_SRCDIR}/job-exec/imp-fail.sh
+DUMMY_SHELL=${SHARNESS_TEST_SRCDIR}/job-exec/dummy.sh
 
 #  Configure dummy IMP
 if ! test -d conf.d; then
@@ -46,7 +47,7 @@ test_expect_success HAVE_JQ 'job-exec: job as guest tries to run IMP' '
 		flux python ${SIGN_AS} ${FAKE_USERID} > job.signed &&
 	id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
 		flux job submit --flags=signed job.signed) &&
-	flux job attach ${id} &&
+	test_might_fail flux job attach ${id} &&
 	flux job list-ids ${id} > ${id}.json &&
 	jq -e ".userid == 42" < ${id}.json &&
 	flux job attach ${id} 2>&1 | grep "test-imp: Running.*$(flux job id ${id})"
@@ -60,13 +61,25 @@ test_expect_success HAVE_JQ 'job-exec: large jobspec does not get truncated' '
 			flux python ${SIGN_AS} ${FAKE_USERID} > job.signed &&
 		id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
 		flux job submit --flags=signed job.signed) &&
-		flux job attach ${id} &&
+		test_might_fail flux job attach ${id} &&
 		actual=imp-$(flux job id $id).input &&
 		test_debug "echo expecting J of size $(wc -c < job.signed)B" &&
 		test_debug "echo input to IMP was $(wc -c < $actual)B" &&
 		jq -j .J ${actual} > J.input &&
 		test_cmp job.signed J.input
 	)
+'
+#  Configure dummy job shell so that we can ignore invalid signature on J
+#   for this test, otherwise real shell would exit immediately.
+#
+test_expect_success 'job-exec: reconfig with failing dummy IMP' '
+	cat <<-EOF >>conf.d/exec.toml
+	job-shell = "${DUMMY_SHELL}"
+	EOF
+'
+test_expect_success 'job-exec: reconfig and reload module' '
+	flux config reload &&
+	flux module reload -f job-exec
 '
 test_expect_success HAVE_JQ,NO_ASAN 'job-exec: kill multiuser job uses the IMP' '
 	FAKE_USERID=42 &&
