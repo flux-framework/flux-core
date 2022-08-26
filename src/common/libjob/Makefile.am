@@ -37,7 +37,9 @@ libjob_la_SOURCES = \
 	strtab.c \
 	strtab.h \
 	jj.c \
-	jj.h
+	jj.h \
+	unwrap.c \
+	unwrap.h
 
 TESTS = \
 	test_job.t \
