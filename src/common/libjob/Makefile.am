@@ -44,6 +44,7 @@ libjob_la_SOURCES = \
 TESTS = \
 	test_job.t \
 	test_sign_none.t \
+	test_unwrap.t \
 	test_jobspec1.t
 
 check_PROGRAMS = \
@@ -74,6 +75,10 @@ test_job_t_LDADD = $(test_ldadd)
 test_sign_none_t_SOURCES = test/sign_none.c
 test_sign_none_t_CPPFLAGS = $(test_cppflags)
 test_sign_none_t_LDADD = $(test_ldadd)
+
+test_unwrap_t_SOURCES = test/unwrap.c
+test_unwrap_t_CPPFLAGS = $(test_cppflags)
+test_unwrap_t_LDADD = $(test_ldadd)
 
 test_jobspec1_t_SOURCES = test/jobspec1.c
 test_jobspec1_t_CPPFLAGS = $(test_cppflags)
