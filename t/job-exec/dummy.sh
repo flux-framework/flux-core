@@ -46,7 +46,7 @@ declare -r JOBID=$1
 #  Fetch read-only job information and verify all values found:
 #
 declare -r BROKER_RANK=$(flux getattr rank)
-declare -r JOBSPEC=$(flux job info $JOBID jobspec)
+declare -r JOBSPEC=$(flux job info --original $JOBID jobspec)
 declare -r R=$(flux job info $JOBID R)
 
 for var in FLUX_KVS_NAMESPACE BROKER_RANK JOBSPEC R; do
