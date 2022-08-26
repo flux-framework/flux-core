@@ -38,6 +38,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/jpath.h"
 #include "src/common/libjob/job.h"
+#include "src/common/libjob/unwrap.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libidset/idset.h"
@@ -322,6 +323,13 @@ static struct optparse_option wait_event_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option info_opts[] =  {
+    { .name = "original", .key = 'o', .has_arg = 0,
+      .usage = "For key \"jobspec\", return the original submitted jobspec",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option wait_opts[] =  {
     { .name = "all", .key = 'a', .has_arg = 0,
       .usage = "Wait for all (waitable) jobs",
@@ -474,7 +482,7 @@ static struct optparse_subcommand subcommands[] = {
       "Display info for a job",
       cmd_info,
       0,
-      NULL
+      info_opts
     },
     { "stats",
       NULL,
@@ -2860,19 +2868,30 @@ void info_usage (void)
 struct info_ctx {
     flux_jobid_t id;
     json_t *keys;
+    bool original;
 };
 
-void info_output (flux_future_t *f, const char *suffix, flux_jobid_t id)
+void info_output (flux_future_t *f, const char *suffix, struct info_ctx *ctx)
 {
     const char *s;
 
     if (flux_rpc_get_unpack (f, "{s:s}", suffix, &s) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
-            log_msg_exit ("job %ju id or key not found", (uintmax_t)id);
+            log_msg_exit ("job %ju id or key not found", (uintmax_t)ctx->id);
         }
         else
             log_err_exit ("flux_rpc_get_unpack");
+    }
+
+    if (ctx->original && streq (suffix, "J")) {
+        flux_error_t error;
+        char *jobspec = unwrap_string (s, false, NULL, &error);
+        if (!jobspec)
+            log_msg_exit ("Failed to unwrap jobspec: %s", error.text);
+        printf ("%s\n", jobspec);
+        free (jobspec);
+        return;
     }
 
     /* XXX - prettier output later */
@@ -2887,13 +2906,14 @@ void info_continuation (flux_future_t *f, void *arg)
 
     json_array_foreach (ctx->keys, index, key) {
         const char *s = json_string_value (key);
-        info_output (f, s, ctx->id);
+        info_output (f, s, ctx);
     }
 
     flux_future_destroy (f);
 }
 
 void info_lookup (flux_t *h,
+                  optparse_t *p,
                   int argc,
                   char **argv,
                   int optindex,
@@ -2909,7 +2929,17 @@ void info_lookup (flux_t *h,
 
     while (optindex < argc) {
         json_t *s;
-        if (!(s = json_string (argv[optindex])))
+        const char *key = argv[optindex];
+
+        /*  Special case: if --original was used and the key is "jobspec",
+         *   then fetch J and decode it on behalf of the caller.
+         */
+        if (optparse_hasopt (p, "original") && streq (key, "jobspec")) {
+            ctx.original = true;
+            key = "J";
+        }
+
+        if (!(s = json_string (key)))
             log_msg_exit ("json_string");
         if (json_array_append_new (ctx.keys, s) < 0)
             log_msg_exit ("json_array_append");
@@ -2949,7 +2979,7 @@ int cmd_info (optparse_t *p, int argc, char **argv)
     if (optindex == argc)
         info_usage ();
     else
-        info_lookup (h, argc, argv, optindex, id);
+        info_lookup (h, p, argc, argv, optindex, id);
 
     flux_close (h);
     return (0);
