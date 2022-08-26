@@ -4,6 +4,16 @@ test_description='Sanity checks for job-exec multiuser exec'
 
 . $(dirname $0)/sharness.sh
 
+#  Dummy job shell uses jq and will not have access to test_prereqs set
+#   by individual tests, which causes calls to jq to fail when
+#   TEST_CHECK_PREREQS is set in the environment.
+#
+#  Just skip all tests if jq not available, which will export
+#   SHARNESS_test_skip_all_prereq=jq to the test_under_flux instance so that
+#   the prereq validation check test passes in the dummy job shell.
+#
+skip_all_unless_have jq
+
 flux version | grep -q libflux-security && test_set_prereq FLUX_SECURITY
 
 if ! test_have_prereq FLUX_SECURITY; then
@@ -41,7 +51,7 @@ SIGN_AS=${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py
 #
 #  This will trigger the job-exec module to run job under our fake IMP.
 #
-test_expect_success HAVE_JQ 'job-exec: job as guest tries to run IMP' '
+test_expect_success 'job-exec: job as guest tries to run IMP' '
 	FAKE_USERID=42 &&
 	flux mini run --dry-run -n1 id -u | \
 		flux python ${SIGN_AS} ${FAKE_USERID} > job.signed &&
@@ -52,7 +62,7 @@ test_expect_success HAVE_JQ 'job-exec: job as guest tries to run IMP' '
 	jq -e ".userid == 42" < ${id}.json &&
 	flux job attach ${id} 2>&1 | grep "test-imp: Running.*$(flux job id ${id})"
 '
-test_expect_success HAVE_JQ 'job-exec: large jobspec does not get truncated' '
+test_expect_success 'job-exec: large jobspec does not get truncated' '
 	(FAKE_USERID=42 &&
 		for i in `seq 0 2048`; \
 			do export ENV${i}=xxxxxyyyyyyyyyzzzzzzz; \
@@ -81,7 +91,7 @@ test_expect_success 'job-exec: reconfig and reload module' '
 	flux config reload &&
 	flux module reload -f job-exec
 '
-test_expect_success HAVE_JQ,NO_ASAN 'job-exec: kill multiuser job uses the IMP' '
+test_expect_success NO_ASAN 'job-exec: kill multiuser job uses the IMP' '
 	FAKE_USERID=42 &&
 	flux mini run --dry-run -n2 -N2 sleep 1000 | \
 		flux python ${SIGN_AS} ${FAKE_USERID} > sleep-job.signed &&
