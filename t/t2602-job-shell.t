@@ -13,6 +13,27 @@ KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 
+test_expect_success HAVE_JQ 'job-shell: reads J not jobspec' '
+	id=$(flux mini submit --wait-event=priority \
+		-n1 --urgency=hold /bin/true) &&
+	flux job info ${id} jobspec \
+		| jq ".tasks[0].command[0] = \"false\"" >jobspec.new &&
+	flux kvs put \
+		$(flux job id --to=kvs ${id}).jobspec="$(cat jobspec.new)" &&
+	flux job urgency ${id} default &&
+	flux job attach -vEX ${id}
+'
+
+test_expect_success HAVE_JQ 'job-shell: fails on modified J' '
+	id=$(flux mini submit --wait-event=priority \
+		-n1 --urgency=hold /bin/true) &&
+	flux job info ${id} J | sed s/./%/85 > J.new &&
+	flux kvs put \
+		$(flux job id --to=kvs ${id}).J="$(cat J.new)" &&
+	flux job urgency ${id} default &&
+	test_must_fail flux job attach -vEX ${id}
+'
+
 test_expect_success 'job-shell: execute across all ranks' '
 	id=$(flux mini submit -n4 -N4 bash -c \
 		"flux kvs put test1.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID") &&
