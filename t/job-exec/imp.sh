@@ -18,7 +18,7 @@ case "$cmd" in
         shift 3;
         printf "test-imp: Kill pid $pid signal $signal\n" >&2
         ps -fp $pid >&2
-        kill -$signal $pid ;;
+        kill -$signal -$pid ;;
     *)
         printf "test-imp: Fatal: Unknown cmd=$cmd\n" >&2; exit 1 ;;
 esac

@@ -73,6 +73,12 @@ test_expect_success 'flux job info jobspec works' '
 	grep sleep jobspec_a.out
 '
 
+test_expect_success 'flux job info --original jobspec works' '
+	jobid=$(flux mini submit --env=ORIGINALTHING=t true) &&
+	flux job info --original $jobid jobspec > jobspec_original.out &&
+	grep ORIGINALTHING jobspec_original.out
+'
+
 test_expect_success 'flux job info jobspec fails on bad id' '
 	test_must_fail flux job info 12345 jobspec
 '

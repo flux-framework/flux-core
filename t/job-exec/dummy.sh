@@ -29,6 +29,7 @@
 #
 
 die() { echo "dummy-shell: $@" >&2; exit 1; }
+log() { echo "dummy-shell: $@" >&2; }
 
 #
 #  Declare globals:
@@ -46,7 +47,7 @@ declare -r JOBID=$1
 #  Fetch read-only job information and verify all values found:
 #
 declare -r BROKER_RANK=$(flux getattr rank)
-declare -r JOBSPEC=$(flux job info $JOBID jobspec)
+declare -r JOBSPEC=$(flux job info --original $JOBID jobspec)
 declare -r R=$(flux job info $JOBID R)
 
 for var in FLUX_KVS_NAMESPACE BROKER_RANK JOBSPEC R; do
@@ -103,6 +104,7 @@ get_command() {
 }
 
 get_traps() {
+    trap "/bin/echo got SIGTERM" 15
     TRAP=$(json_get "$JOBSPEC" '.attributes.system.environment.TRAP')
     if test "x$TRAP" != "xnull" ; then
         trap "/bin/echo got signal $TRAP" $TRAP
@@ -119,11 +121,11 @@ test_mock_failure() {
             #   is not a good way to ensure a separate shell process has
             #   reached the barrier.
             #
-            echo "Got FAIL_MODE=$FAIL_MODE"
+            log "Got FAIL_MODE=$FAIL_MODE"
             if test $JOB_SHELL_RANK -eq 0; then
                 sleep 1
             elif test $JOB_SHELL_RANK -eq 1; then
-                echo >&2 "before_barrier: exiting early on job shell rank 1"
+                log "before_barrier: exiting early on job shell rank 1"
                 exit 1
             fi
             ;;
@@ -135,9 +137,9 @@ test_mock_failure() {
             #
             echo "after_barrier_entry: rank=$JOB_SHELL_RANK"
             if test $JOB_SHELL_RANK -eq 1; then
-                echo "after_barrier: exiting early on job shell rank 1"
+                log "after_barrier: exiting early on job shell rank 1"
                 sleep 1
-                echo "exiting"
+                log "exiting"
                 exit 1
             fi
             ;;
@@ -175,7 +177,8 @@ barrier
 #
 #  Run specified COMMAND:
 #
-echo Running  "${COMMAND[@]}"
+log Running  "${COMMAND[@]}"
+flux kvs eventlog append exec.eventlog shell.start
 eval "${COMMAND[@]}"
 
 # vi: ts=4 sw=4 expandtab

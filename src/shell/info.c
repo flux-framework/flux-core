@@ -23,6 +23,7 @@
 
 #include "src/common/libutil/read_all.h"
 #include "src/common/librlist/rhwloc.h"
+#include "src/common/libjob/unwrap.h"
 
 #include "internal.h"
 #include "info.h"
@@ -47,11 +48,19 @@ static int array_append_string (json_t *array, const char *s)
  * N.B. assigned values remain valid until future is destroyed.
  */
 static int lookup_job_info_get (flux_future_t *f,
-                                const char **jobspec,
+                                char **jobspec,
                                 const char **R)
 {
-    if (!*jobspec && flux_rpc_get_unpack (f, "{s:s}", "jobspec", jobspec) < 0)
-        goto error;
+    if (*jobspec == NULL) {
+        flux_error_t error;
+        const char *J;
+        if (flux_rpc_get_unpack (f, "{s:s}", "J", &J) < 0)
+            goto error;
+        if (!(*jobspec = unwrap_string (J, true, NULL, &error))) {
+            shell_log_error ("failed to unwrap J: %s", error.text);
+            return -1;
+        }
+    }
     if (!*R && flux_rpc_get_unpack (f, "{s:s}", "R", R) < 0)
         goto error;
     return 0;
@@ -73,7 +82,7 @@ static flux_future_t *lookup_job_info (flux_t *h,
 
     if (!(keys = json_array ())
             || (!R && array_append_string (keys, "R") < 0)
-            || (!jobspec && array_append_string (keys, "jobspec") < 0)) {
+            || (!jobspec && array_append_string (keys, "J") < 0)) {
         shell_log_error ("error building json array");
         return NULL;
     }
@@ -135,14 +144,20 @@ static char *optparse_check_and_loadfile (optparse_t *p, const char *name)
  */
 static int shell_init_jobinfo (flux_shell_t *shell,
                                struct shell_info *info,
-                               const char *jobspec,
-                               const char *R)
+                               const char *jobspec_provided,
+                               const char *R_provided)
 {
     int rc = -1;
     flux_future_t *f_info = NULL;
     flux_future_t *f_hwloc = NULL;
     const char *xml;
+    char *jobspec = NULL;
+    const char *R;
     json_error_t error;
+
+    R = R_provided;
+    if (jobspec_provided && !(jobspec = strdup (jobspec_provided)))
+        shell_die (1, "Out of memory copying provided jobspec");
 
     /*  If shell is not running standlone, fetch hwloc topology
      *   from resource module to avoid having to load from scratch
@@ -163,7 +178,10 @@ static int shell_init_jobinfo (flux_shell_t *shell,
             shell_log_error ("Invalid arguments: standalone and R/jobspec are unset");
             goto out;
         }
-        if (!(f_info = lookup_job_info (shell->h, shell->jobid, jobspec, R)))
+        if (!(f_info = lookup_job_info (shell->h,
+                                        shell->jobid,
+                                        jobspec_provided,
+                                        R_provided)))
             goto out;
     }
 
@@ -182,7 +200,8 @@ static int shell_init_jobinfo (flux_shell_t *shell,
         }
     }
 
-    if (f_info && lookup_job_info_get (f_info, &jobspec, &R) < 0) {
+    if (f_info &&
+        lookup_job_info_get (f_info, &jobspec, &R) < 0) {
         shell_log_error ("error fetching jobspec,R");
         goto out;
     }
@@ -200,6 +219,7 @@ static int shell_init_jobinfo (flux_shell_t *shell,
     }
     rc = 0;
 out:
+    free (jobspec);
     flux_future_destroy (f_hwloc);
     flux_future_destroy (f_info);
     return rc;
