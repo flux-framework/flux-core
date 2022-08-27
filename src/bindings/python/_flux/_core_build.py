@@ -1,7 +1,13 @@
 from pathlib import Path
 from cffi import FFI
+import os
 
 ffi = FFI()
+
+# Ensure paths are in _flux
+here = os.path.abspath(os.path.dirname(__file__))
+preproc_file = os.path.join(here, "_core_preproc.h")
+core_c_file = os.path.join(here, "_core.c")
 
 
 ffi.set_source(
@@ -19,7 +25,9 @@ void * unpack_long(ptrdiff_t num){
 #pragma GCC visibility push(default)
 #endif
             """,
-    libraries=["flux-core"],
+    libraries=["flux-core", "python", "debugged"],
+    include_dirs=["/code", "/code/src/include", "/code/src/common/libflux"],
+    extra_compile_args=["-avoid-version", "-module", "-Wl,--no-undefined","-Wl,-rpath"]
 )
 
 cdefs = """
@@ -32,11 +40,11 @@ void free(void *ptr);
 
     """
 
-with open("_core_preproc.h") as h:
+with open(preproc_file) as h:
     cdefs = cdefs + h.read()
 
 ffi.cdef(cdefs)
 if __name__ == "__main__":
-    ffi.emit_c_code("_core.c")
+    ffi.emit_c_code(core_c_file)
     # ensure mtime of target is updated
-    Path("_core.c").touch()
+    Path(core_c_file).touch()

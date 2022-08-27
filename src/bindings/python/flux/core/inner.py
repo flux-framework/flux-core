@@ -8,9 +8,11 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import os
+import sys
+
 from _flux._core import ffi, lib
 from flux.wrapper import Wrapper
-
 
 class Core(Wrapper):
     """
