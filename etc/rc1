@@ -11,11 +11,15 @@ modload() {
     fi
 }
 
+backing_module() {
+    local backingmod=$(flux getattr content.backing-module 2>/dev/null) || :
+    echo ${backingmod:-content-sqlite}
+}
+
 modload all barrier
 
 if test $RANK -eq 0; then
-    backingmod=$(flux getattr content.backing-module 2>/dev/null) || :
-    backingmod=${backingmod:-content-sqlite}
+    backingmod=$(backing_module)
     dumpfile=$(flux getattr content.restore 2>/dev/null) || :
     if test -n "${dumpfile}"; then
         if test "${dumpfile}" = "auto"; then
@@ -30,13 +34,15 @@ if test $RANK -eq 0; then
         fi
     fi
     if test -n "${dumpfile}"; then
-        flux module load ${backingmod} truncate
+        if test "${backingmod}" != "none"; then
+            flux module load ${backingmod} truncate
+        fi
         echo "restoring content from ${dumpfile}"
         flux restore --quiet --checkpoint ${dumpfile}
         if test -n "${dumplink}"; then
             rm -f ${dumplink}
         fi
-    else
+    elif test "${backingmod}" != "none"; then
         flux module load ${backingmod}
     fi
 fi
@@ -45,7 +51,9 @@ modload all kvs
 modload all kvs-watch
 
 if test $RANK -eq 0; then
-    flux startlog --post-start-event
+    if test "$(backing_module)" != "none"; then
+        flux startlog --post-start-event
+    fi
 fi
 
 modload all resource
@@ -58,9 +66,13 @@ if test $RANK -eq 0 -a -n "${period}"; then
     flux module load job-archive
 fi
 
-if test $RANK -eq 0 && ! flux startlog --check --quiet; then
-    flux queue stop
-    flux queue disable "Flux is in safe mode due to an incomplete shutdown."
+if test $RANK -eq 0; then
+    if test "$(backing_module)" != "none"; then
+        if ! flux startlog --check --quiet; then
+            flux queue stop
+            flux queue disable "Flux is in safe mode due to an incomplete shutdown."
+        fi
+    fi
 fi
 
 modload all job-ingest

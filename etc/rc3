@@ -11,6 +11,11 @@ modrm() {
     fi
 }
 
+backing_module() {
+    local backingmod=$(flux getattr content.backing-module 2>/dev/null) || :
+    echo ${backingmod:-content-sqlite}
+}
+
 core_dir=$(cd ${0%/*} && pwd -P)
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
 IFS=:
@@ -37,17 +42,20 @@ modrm 0 cron
 modrm all barrier
 
 if test $RANK -eq 0; then
-    flux startlog --post-finish-event || exit_rc=1
+    if test "$(backing_module)" != "none"; then
+        flux startlog --post-finish-event || exit_rc=1
+    fi
 fi
 
 modrm all kvs-watch
 modrm all kvs
 
-flux content flush || exit_rc=1
+if test "$(backing_module)" != "none"; then
+    flux content flush || exit_rc=1
+fi
 
 if test $RANK -eq 0; then
-    backingmod=$(flux getattr content.backing-module 2>/dev/null)
-    backingmod=${backingmod:-content-sqlite}
+    backingmod=$(backing_module)
     dumpfile=$(flux getattr content.dump 2>/dev/null)
     if test $exit_rc -eq 0 -a -n "${dumpfile}"; then
         if test "${dumpfile}" = "auto"; then
@@ -63,7 +71,9 @@ if test $RANK -eq 0; then
             exit_rc=1
         fi
     fi
-    flux module remove ${backingmod} || exit_rc=1
+    if test "${backingmod}" != "none"; then
+        flux module remove ${backingmod} || exit_rc=1
+    fi
 fi
 
 exit $exit_rc

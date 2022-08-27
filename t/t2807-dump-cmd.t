@@ -23,7 +23,7 @@ test_expect_success 'flux-restore with no args prints Usage message' '
 '
 test_expect_success 'flux-dump with no backing store fails' '
 	test_must_fail flux dump --checkpoint foo.tar 2>nostore.err &&
-	grep "Function not implemented" nostore.err
+	grep "checkpoint key unavailable" nostore.err
 '
 test_expect_success 'flux-dump with bad archive file fails' '
 	test_must_fail flux dump /badfile.tar 2>badfile.err &&
@@ -177,9 +177,9 @@ test_expect_success 'restore to key fails when kvs is not loaded' '
 test_expect_success 'unload content-sqlite' '
 	flux module remove content-sqlite
 '
-test_expect_success 'restore --checkpoint with no backing store fails' '
-	test_must_fail flux restore --checkpoint foo.tar 2>noback.err &&
-	grep "error updating checkpoint" noback.err
+test_expect_success 'restore --checkpoint with no backing store cant flush' '
+	flux restore --checkpoint foo.tar 2>noback.err &&
+	grep "error flushing content cache" noback.err
 '
 test_expect_success 'dump --no-cache with no backing store fails' '
 	test_must_fail flux dump --no-cache --checkpoint x.tar
