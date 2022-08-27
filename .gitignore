@@ -23,6 +23,10 @@ libtool
 .libs/
 libltdl/
 
+# python environments
+env
+.eggs
+
 # generated library version header
 /src/common/libflux/version.h
 
