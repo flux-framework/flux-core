@@ -9,7 +9,6 @@ here = os.path.abspath(os.path.dirname(__file__))
 preproc_file = os.path.join(here, "_core_preproc.h")
 core_c_file = os.path.join(here, "_core.c")
 
-
 ffi.set_source(
     "_flux._core",
     """
@@ -25,9 +24,13 @@ void * unpack_long(ptrdiff_t num){
 #pragma GCC visibility push(default)
 #endif
             """,
-    libraries=["flux-core", "python", "debugged"],
+    libraries=["flux-core", "debugged"],
+    library_dirs=["/code/src/common/libdebugged/.libs"],
     include_dirs=["/code", "/code/src/include", "/code/src/common/libflux"],
-    extra_compile_args=["-avoid-version", "-module", "-Wl,--no-undefined","-Wl,-rpath"]
+    extra_compile_args=[
+        "-L/code/src/common/.libs",
+        "-L/code/src/common/libdebugged/.libs",
+    ],
 )
 
 cdefs = """
@@ -44,7 +47,13 @@ with open(preproc_file) as h:
     cdefs = cdefs + h.read()
 
 ffi.cdef(cdefs)
+
+# This doesn't seem to happen in the block below
+ffi.emit_c_code(core_c_file)
+ffi.compile(verbose=True)
+
 if __name__ == "__main__":
     ffi.emit_c_code(core_c_file)
     # ensure mtime of target is updated
     Path(core_c_file).touch()
+    ffi.compile(verbose=True)

@@ -310,4 +310,5 @@ def setup():
         cffi_modules=["_flux/_core_build.py:ffi"],
     )
 
+
 setup()
