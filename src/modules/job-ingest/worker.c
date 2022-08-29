@@ -62,6 +62,8 @@ struct worker {
     zlist_t *trash;
     process_exit_f exit_cb;
     void *exit_arg;
+    int request_count;
+    int error_count;
 };
 
 static int worker_start (struct worker *w);
@@ -182,6 +184,7 @@ static void worker_fulfill_future (struct worker *w, flux_future_t *f, const cha
     json_decref (o);
     return;
 error:
+    w->error_count++;
     flux_future_fulfill_error (f, errnum, errstr);
     json_decref (o);
 }
@@ -199,6 +202,7 @@ static void worker_unexpected_exit (struct worker *w)
     while ((f = zlist_pop (w->queue))) {
         worker_fulfill_future (w, f, json_err);
         flux_future_decref (f);
+        w->error_count++;
     }
 }
 
@@ -286,6 +290,7 @@ flux_future_t *worker_request (struct worker *w, const char *s)
         goto error;
     flux_future_incref (f); // queue takes a reference on the future
     free (buf);
+    w->request_count++;
     return f;
 error:
     saved_errno = errno;
@@ -358,12 +363,27 @@ static int worker_start (struct worker *w)
 
 int worker_queue_depth (struct worker *w)
 {
-    return zlist_size (w->queue);
+    return w ? zlist_size (w->queue) : 0;
+}
+
+int worker_request_count (struct worker *w)
+{
+    return w ? w->request_count : 0;
+}
+
+int worker_error_count (struct worker *w)
+{
+    return w ? w->error_count : 0;
 }
 
 bool worker_is_running (struct worker *w)
 {
-    return (w->p ? true : false);
+    return (w && w->p ? true : false);
+}
+
+pid_t worker_pid (struct worker *w)
+{
+    return (w && w->p) ? flux_subprocess_pid (w->p) : 0;
 }
 
 void worker_destroy (struct worker *w)
