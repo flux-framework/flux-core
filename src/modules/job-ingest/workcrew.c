@@ -171,6 +171,10 @@ int workcrew_configure (struct workcrew *crew,
         if (worker_set_cmdline (crew->worker[i], argc, argv) < 0)
             goto error;
     }
+    /* Close stdin of current workers and allow them to restart on demand.
+     * This forces them to re-acquire their configuration, if any.
+     */
+    workcrew_stop_notify (crew, NULL, NULL);
     rc = 0;
 error:
     ERRNO_SAFE_WRAP (free, argv);
