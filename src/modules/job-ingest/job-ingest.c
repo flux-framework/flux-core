@@ -708,11 +708,36 @@ error:
         flux_log_error (h, "error responding to config-reload request");
 }
 
+static void stats_get_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
+{
+    struct job_ingest_ctx *ctx = arg;
+    json_t *pstats = NULL;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    pstats = pipeline_stats_get (ctx->pipeline);
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:O}",
+                           "pipeline", pstats) < 0)
+        flux_log_error (h, "error responding to stats.get request");
+    json_decref (pstats);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to stats.get request");
+}
+
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.getinfo", getinfo_cb, 0},
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.submit", submit_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.shutdown", shutdown_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.config-reload", reload_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "job-ingest.stats.get",  stats_get_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
