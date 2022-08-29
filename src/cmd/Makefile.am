@@ -77,6 +77,7 @@ dist_fluxcmd_SCRIPTS = \
 	flux-admin.py \
 	flux-jobtap.py \
 	flux-job-validator.py \
+	flux-job-frobnicator.py \
 	flux-job-exec-override.py \
 	flux-perilog-run.py \
 	flux-uri.py \
