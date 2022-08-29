@@ -372,6 +372,25 @@ class Jobspec(object):
         self.setattr("system.duration", time)
 
     @property
+    def queue(self):
+        """
+        Target queue of job submission
+        """
+        try:
+            return self.jobspec["attributes"]["system"]["queue"]
+        except KeyError:
+            return None
+
+    @queue.setter
+    def queue(self, queue):
+        """
+        Set target submission queue
+        """
+        if not isinstance(queue, str):
+            raise TypeError("queue must be a string")
+        self.setattr("system.queue", queue)
+
+    @property
     def cwd(self):
         """
         Working directory of job.
