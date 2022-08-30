@@ -121,18 +121,5 @@ test_expect_success 'configure an invalid queue duration limit' '
 	EOT
 	test_must_fail flux config reload
 '
-test_expect_success 'configure a default duration that exceeds duration limit' '
-	cat >config/policy.toml <<-EOT &&
-	policy.limits.duration = 3600
-	policy.jobspec.defaults.system.duration = 3601
-	EOT
-	flux config reload
-'
-test_expect_success 'load jobspec-default plugin' '
-	flux jobtap load .jobspec-default
-'
-test_expect_success 'job with no duration specified is rejected' '
-	test_must_fail flux mini submit /bin/true
-'
 
 test_done

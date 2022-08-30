@@ -100,7 +100,6 @@ test_expect_success 'job-frobnicator errors on a missing queue config' '
 	[policy.jobspec.defaults.system]
 	queue = "debug"
 	EOF
-	flux jobtap remove .jobspec-default &&
 	flux config reload &&
 	flux mini run --env=-* --dry-run hostname \
 	   | test_expect_code 1 \
