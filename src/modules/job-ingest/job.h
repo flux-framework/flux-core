@@ -22,19 +22,9 @@ struct job {
     struct flux_msg_cred cred;    // submitting user's creds
     int urgency;        // requested job urgency
     int flags;          // submit flags
-
-    char *jobspec;      // jobspec, not \0 terminated (unwrapped from signed)
-    int jobspecsz;      // jobspec string length
-    json_t *jobspec_obj;// jobspec in object form
-                        //   N.B. after obj validation, environment is dropped
-                        //   to reduce size, since job-manager doesn't need it
+    json_t *jobspec;    // jobspec modified after unwrap from J
 };
 
-
-/* Free decoded jobspec after it has been transferred to the batch txn,
- * to conserve memory.
- */
-void job_clean (struct job *job);
 
 void job_destroy (struct job *job);
 

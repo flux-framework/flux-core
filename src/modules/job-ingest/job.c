@@ -21,30 +21,17 @@
 #endif
 
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libjob/sign_none.h"
 
 #include "job.h"
-
-/* Free decoded jobspec after it has been transferred to the batch txn,
- * to conserve memory.
- */
-void job_clean (struct job *job)
-{
-    if (job) {
-        free (job->jobspec);
-        job->jobspec = NULL;
-        json_decref (job->jobspec_obj);
-        job->jobspec_obj = NULL;
-    }
-}
 
 void job_destroy (struct job *job)
 {
     if (job) {
         int saved_errno = errno;
-        free (job->jobspec);
         flux_msg_decref (job->msg);
-        json_decref (job->jobspec_obj);
+        json_decref (job->jobspec);
         free (job);
         errno = saved_errno;
     }
@@ -68,6 +55,9 @@ struct job *job_create_from_request (const flux_msg_t *msg,
     int64_t userid_signer;
     const char *mech_type;
     json_error_t json_error;
+    const char *jobspec_str;
+    int jobspec_strsize;
+    char *jobspec_buf = NULL;
 
     if (!(job = calloc (1, sizeof (*job)))) {
         errprintf (error, "out of memory decoding job request");
@@ -115,28 +105,22 @@ struct job *job_create_from_request (const flux_msg_t *msg,
                    "only the instance owner can submit with FLUX_JOB_WAITABLE");
         goto inval;
     }
-    /* Validate jobspec signature, and unwrap(J) -> jobspec,  jobspecsz.
+    /* Validate jobspec signature, and unwrap(J) -> jobspec_str, _strsize.
      * Userid claimed by signature must match authenticated job->cred.userid.
      * If not the instance owner, a strong signature is required
      * to give the IMP permission to launch processes on behalf of the user.
      */
 #if HAVE_FLUX_SECURITY
-    const void *jobspec;
     if (flux_sign_unwrap_anymech (security_context,
                                   job->J,
-                                  (const void **)&jobspec,
-                                  &job->jobspecsz,
+                                  (const void **)&jobspec_str,
+                                  &jobspec_strsize,
                                   &mech_type,
                                   &userid_signer,
                                   FLUX_SIGN_NOVERIFY) < 0) {
         errprintf (error, "%s", flux_security_last_error (security_context));
         goto error;
     }
-    if (!(job->jobspec = malloc (job->jobspecsz))) {
-        errprintf (error, "out of memory while unwrapping job request");
-        goto error;
-    }
-    memcpy (job->jobspec, jobspec, job->jobspecsz);
 #else
     uint32_t userid_signer_u32;
     /* Simplified unwrap only understands mech=none.
@@ -144,12 +128,13 @@ struct job *job_create_from_request (const flux_msg_t *msg,
      * and returned userid is a uint32_t.
      */
     if (sign_none_unwrap (job->J,
-                          (void **)&job->jobspec,
-                          &job->jobspecsz,
+                          (void **)&jobspec_buf,
+                          &jobspec_strsize,
                           &userid_signer_u32) < 0) {
         errprintf (error, "could not unwrap jobspec: %s", strerror (errno));
         goto error;
     }
+    jobspec_str = jobspec_buf;
     mech_type = "none";
     userid_signer = userid_signer_u32;
 #endif
@@ -167,17 +152,19 @@ struct job *job_create_from_request (const flux_msg_t *msg,
         errno = EPERM;
         goto error;
     }
-    if (!(job->jobspec_obj = json_loadb (job->jobspec,
-                                         job->jobspecsz,
-                                         0,
-                                         &json_error))) {
+    if (!(job->jobspec = json_loadb (jobspec_str,
+                                     jobspec_strsize,
+                                     0,
+                                     &json_error))) {
         errprintf (error, "jobspec: invalid JSON: %s", json_error.text);
         goto inval;
     }
+    free (jobspec_buf);
     return job;
 inval:
     errno = EINVAL;
 error:
+    ERRNO_SAFE_WRAP (free, jobspec_buf);
     job_destroy (job);
     return NULL;
 }
@@ -190,7 +177,7 @@ json_t *job_json_object (struct job *job, flux_error_t *error)
     if (!(o = json_pack_ex (&json_error,
                             0,
                             "{s:O s:I s:i s:i s:i}",
-                            "jobspec", job->jobspec_obj,
+                            "jobspec", job->jobspec,
                             "userid", (json_int_t) job->cred.userid,
                             "rolemask", job->cred.rolemask,
                             "urgency", job->urgency,

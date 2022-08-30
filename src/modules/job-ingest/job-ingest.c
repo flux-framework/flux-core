@@ -472,27 +472,25 @@ static int batch_add_job (struct batch *batch, struct job *job)
         goto error;
     if (make_key (key, sizeof (key), job, "jobspec") < 0)
         goto error;
-    if (flux_kvs_txn_put_raw (batch->txn, 0, key,
-                              job->jobspec, job->jobspecsz) < 0)
+    if (flux_kvs_txn_pack (batch->txn, 0, key, "O", job->jobspec) < 0)
         goto error;
     /* Redact bulky environment portion of jobspec in object prior to
      * including it in job-manager.submit request.
      * The full jobspec is commited to the KVS for use by other subsystems.
      */
-    jpath_del (job->jobspec_obj, "attributes.system.environment");
+    jpath_del (job->jobspec, "attributes.system.environment");
     if (!(jobentry = json_pack ("{s:I s:I s:i s:f s:i, s:O}",
                                 "id", job->id,
                                 "userid", (json_int_t) job->cred.userid,
                                 "urgency", job->urgency,
                                 "t_submit", get_timestamp_now (),
                                 "flags", job->flags,
-                                "jobspec", job->jobspec_obj)))
+                                "jobspec", job->jobspec)))
         goto nomem;
     if (json_array_append_new (batch->joblist, jobentry) < 0) {
         json_decref (jobentry);
         goto nomem;
     }
-    job_clean (job); // batch->txn now holds this info
     return 0;
 nomem:
     errno = ENOMEM;
