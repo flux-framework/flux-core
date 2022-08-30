@@ -13,19 +13,40 @@ build the [Dockerfile](Dockerfile) here:
 $ docker build -t ghcr.io/flux-framework/flux-python -f src/bindings/python/Dockerfile .
 ```
 
-And then shell into the container:
+This will build flux from your git repository, and install the Python bindings
+with a setup.py install! You can then shell into the container:
 
 ```bash
 $ docker run -it ghcr.io/flux-framework/flux-python
 ```
 
-And flux should be compiled. You can cd to the Python bindings and build.
+And flux should be compiled, and you can use ipython to import flux:
 
 ```bash
+# ipython
+> import flux
+```
+
+And that's it! We still have other (modules?) to compile, and can do that next.
+
+## Development
+
+It's sometimes helpful to work interactively - e.g., instead of needing to rebuild with every change,
+you can bind the python directory on your host to the container:
+
+```bash
+$ docker run -v $PWD/src/bindings/python:/code/src/bindings/python -it ghcr.io/flux-framework/flux-python
+```
+
+This means that changes you make on your host will appear in your container, and then you can
+manually run the build:
+
+```bash
+$ cd src/bindings/python
 $ python3 setup.py install
 ```
 
-And to customize variables it would be run as follows:
+And the setup.py takes most things as variables, so you can customize variables it would be run as follows:
 
 ```bash
 $ python setup.py install --path=/path/to/flux
@@ -36,3 +57,7 @@ And you can see setup.py for other install options. I'm not sure this is conside
 to run additional commands in the script, but I'm not comfortable refactoring into a different
 setup routine before I know what's going on, and to do that I want to keep the logic 
 relatively close to the original.
+
+### TODO
+
+ - _core_build.py should use variables and not hard coded paths.

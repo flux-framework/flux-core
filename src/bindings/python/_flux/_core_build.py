@@ -24,9 +24,9 @@ void * unpack_long(ptrdiff_t num){
 #pragma GCC visibility push(default)
 #endif
             """,
-    libraries=["flux-core", "debugged"],
-    library_dirs=["/code/src/common/libdebugged/.libs"],
-    include_dirs=["/code", "/code/src/include", "/code/src/common/libflux"],
+    libraries=["flux-core", "debugged", "flux"],
+    library_dirs=["/code/src/common/libdebugged/.libs", "/code/src/common/libflux/.libs"],
+    include_dirs=["/code", "/code/src/include", "/code/src/common/libflux", "/code/src/common/libdebugged"],
     extra_compile_args=[
         "-L/code/src/common/.libs",
         "-L/code/src/common/libdebugged/.libs",

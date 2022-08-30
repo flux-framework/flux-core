@@ -53,7 +53,7 @@ stderr_devnull_0 = >/dev/null 2>&1
 _core.c: $(srcdir)/_core_build.py _core_preproc.h
 	$(AM_V_GEN)$(PYTHON) $< $(STDERR_DEVNULL)
 
-# THIS IS RESOLVED FIRST
+# This is resolved first
 _core_clean.h: Makefile
 	$(AM_V_GEN)$(PYTHON) $(srcdir)/make_clean_header.py \
 	  --path $(top_srcdir) \
@@ -136,7 +136,7 @@ fluxpyso_LTLIBRARIES += \
 
 nodist_fluxbindinginclude_HEADERS +=\
 	_security_preproc.h
-f
+
 nodist__security_la_SOURCES = \
 	_security.c
 
