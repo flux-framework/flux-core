@@ -109,6 +109,7 @@ TESTSCRIPTS = \
 	t2100-job-ingest.t \
 	t2110-job-ingest-validator.t \
 	t2111-job-ingest-config.t \
+	t2112-job-ingest-frobnicator.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
 	t2203-job-manager-single.t \
