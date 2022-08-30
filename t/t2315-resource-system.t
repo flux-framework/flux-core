@@ -28,8 +28,10 @@ test_expect_success 'start instance with config file and dump R' '
 		flux kvs get resource.R >R.out
 '
 
-test_expect_success 'dumped R matches configured R' '
-	test_cmp R.test R.out
+test_expect_success HAVE_JQ 'dumped R matches configured R' '
+	jq --sort-keys . <R.test >R.test.normalized &&
+	jq --sort-keys . <R.out >R.out.normalized &&
+	test_cmp R.test.normalized R.out.normalized
 '
 
 test_expect_success 'both ranks were drained' '
