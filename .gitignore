@@ -29,8 +29,8 @@ env
 dist
 build
 flux.egg-info
-_core_clean.h
-_core_preproc.h
+_*_clean.h
+_*_preproc.h
 
 # generated library version header
 /src/common/libflux/version.h
