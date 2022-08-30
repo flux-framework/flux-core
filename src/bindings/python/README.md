@@ -27,6 +27,17 @@ And flux should be compiled, and you can use ipython to import flux:
 > import flux
 ```
 
+### Installing Modules
+
+By default, we install core flux. However, you can use the setup.py to install
+any of the following modules (in addition to the core build):
+
+#### hostlist
+
+```bash
+$ python setup.py install --hostlist
+```
+
 And that's it! We still have other (modules?) to compile, and can do that next.
 
 ## Development

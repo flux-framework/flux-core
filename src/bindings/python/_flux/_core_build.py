@@ -19,14 +19,18 @@ ffi.set_source(
 void * unpack_long(ptrdiff_t num){
   return (void*)num;
 }
-// TODO: remove this when we can use cffi 1.10
-#ifdef __GNUC__
-#pragma GCC visibility push(default)
-#endif
-            """,
+""",
     libraries=["flux-core", "debugged", "flux"],
-    library_dirs=["/code/src/common/libdebugged/.libs", "/code/src/common/libflux/.libs"],
-    include_dirs=["/code", "/code/src/include", "/code/src/common/libflux", "/code/src/common/libdebugged"],
+    library_dirs=[
+        "/code/src/common/libdebugged/.libs",
+        "/code/src/common/libflux/.libs",
+    ],
+    include_dirs=[
+        "/code",
+        "/code/src/include",
+        "/code/src/common/libflux",
+        "/code/src/common/libdebugged",
+    ],
     extra_compile_args=[
         "-L/code/src/common/.libs",
         "-L/code/src/common/libdebugged/.libs",

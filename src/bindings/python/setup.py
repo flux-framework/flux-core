@@ -21,6 +21,7 @@ import subprocess
 import os
 import re
 import shutil
+import sys
 
 # Metadata
 package_name = "flux"
@@ -35,18 +36,29 @@ cffi_dep = "cffi>=1.1"
 # src/bindings/python
 here = os.path.dirname(os.path.abspath(__file__))
 
-# top level with src, etc.
+# top level with src, etc (/code here)
 root = os.path.dirname(os.path.dirname(os.path.dirname(here)))
 
-# defaults
-default_search = os.path.join(root, "src", "common", "libflux")
-additional_headers = (
-    "src/bindings/python/_flux/callbacks.h,src/common/libdebugged/debugged.h"
-)
-default_header = "src/include/flux/core.h"
+# Module specific default options files. Format strings below will be populated
+# after receiving the custom varibles from the user
+options = {
+    "core": {
+        "path": "{root}",
+        "search": [os.path.join("{root}", "src", "common", "libflux")],
+        "header": "src/include/flux/core.h",
+        "additional_headers": [
+            "src/bindings/python/_flux/callbacks.h",
+            "src/common/libdebugged/debugged.h",
+        ],
+    },
+    "hostlist": {
+        "path": "{root}/src/common/libhostlist",
+        "header": "src/include/flux/hostlist.h",
+    },
+}
 
-default_preproc_output = os.path.join(here, "_flux", "_core_preproc.h")
-default_output = os.path.join(here, "_flux", "_core_clean.h")
+# Global variables for build type, corresponds to
+build_types = {"core"}
 
 # Helper functions
 
@@ -65,6 +77,9 @@ def workdir(dirname):
 
 
 def read_file(filename):
+    """
+    Read a filename into a text blob.
+    """
     with open(filename, "r") as fd:
         data = fd.read()
     return data
@@ -95,62 +110,119 @@ class PrepareFluxHeaders(install):
     """
 
     user_options = install.user_options + [
-        ("header=", None, "C header file to parse"),
-        ("path=", None, "Include base path"),
-        ("output=", None, "Intermediate (not compiled) header file to write"),
-        ("preproc-output=", None, "Preprocessed header file to write"),
+        ("root=", None, "Root of Flux source code"),
         ("search=", None, "comma separated list to append to header search path"),
-        (
-            "additional-headers=",
-            None,
-            "comma separated list of additional headers to parse",
-        ),
-        ("ignore-headers=", None, "comma separated headers to ignore"),
-        ("include-header=", None, "Include header"),
         # This can eventually allow pointing pip to pre-compiled headers?
         ("skip-build", None, "Skip building headers"),
+        # These are additional modules to build, provided as flags
+        ("hostlist", None, "Build hostlist module"),
     ]
 
     def initialize_options(self):
         """
-        Initialize options
+        Initialize options - they are fully set later based on build type
         """
         install.initialize_options(self)
-        self.header = default_header
-        self.path = root
-        self.search = default_search
-        self.additional_headers = additional_headers
-        self.ignore_headers = None
+        self.root = root
+        self.search = ""
         self.skip_build = False
+
+        # I don't think this is being used
         self.include_header = None
-        self.output = default_output
-        self.preproc_output = default_preproc_output
+
+        # Modules
+        self.hostlist = False
+
+    def finalize_options(self):
+        """
+        Finalize options, showing user what was set.
+        """
+        self.set_builds()
+        # If we have additional headers or ignore headers, ensure list
+        for attr in ["search"]:
+            self._parse_comma_list(attr)
+        install.finalize_options(self)
+
+    def set_builds(self):
+        """
+        Given user preferences on the command line, set build flags
+        for additional modules.
+        """
+        global build_types
+        if self.hostlist:
+            build_types.add("hostlist")
 
     def _parse_comma_list(self, attr):
         """
         Given an attribute (user argument) convert string with csv to list
         """
         value = getattr(self, attr, None)
-        if value is not None:
+        if value:
             value = value.split(",")
+        elif not value:
+            value = []
         setattr(self, attr, value)
 
-    def finalize_options(self):
+    def run(self):
         """
-        Finalize options, showing user what was set.
+        Run the install
         """
-        # If we have additional headers or ignore headers, ensure list
-        for attr in ["additional_headers", "ignore_headers", "search"]:
-            self._parse_comma_list(attr)
+        if not self.skip_build:
+            for build_type in build_types:
+                cleaner = HeaderCleaner(
+                    self.root,
+                    custom_search=self.search,
+                    include_header=self.include_header,
+                    build_type=build_type,
+                    **options[build_type],
+                )
+                cleaner.clean_headers()
+        install.run(self)  # OR: install.do_egg_install(self)
 
-        # Show the user our user options that are set.
+
+class HeaderCleaner:
+    def __init__(self, root, include_header, custom_search, build_type, **kwargs):
+        """
+        Main class to run a clean!
+        """
+        self.options = [
+            "path",
+            "preproc_output",
+            "output",
+            "header",
+            "additional_headers",
+            "search",
+            "build_type",
+        ]
+        self.root = root
+        self.path = kwargs["path"].format(root=root)
+        self.build_type = build_type
+        self.include_header = include_header
+        self.preproc_output = os.path.join(here, "_flux", "_%s_preproc.h" % build_type)
+        self.output = os.path.join(here, "_flux", "_%s_clean.h" % build_type)
+
+        # Relative path to header is required
+        self.header = kwargs["header"]
+
+        # Update search to include defaults
+        self.search = custom_search + [
+            x.format(root=root) for x in kwargs.get("search", [])
+        ]
+
+        # Not required
+        self.additional_headers = kwargs.get("additional_headers", [])
+        self.ignore_headers = kwargs.get("ignore_headers", [])
+        self.show_options()
+
+    def show_options(self):
+        """
+        Show build options to the user for clarity.
+        """
         # This will not show up with pip, but it's running
-        for opt in self.user_options:
-            opt_name = opt[0].replace("-", "_").replace("=", "")
-            if hasattr(self, opt_name) and getattr(self, opt_name) is not None:
-                value = getattr(self, opt_name)
-                print("%s: %s" % (opt_name.rjust(20), value))
-        install.finalize_options(self)
+        for opt in self.options:
+            if hasattr(self, opt) and getattr(self, opt) is not None:
+                value = getattr(self, opt)
+                print("%s: %s" % (opt.rjust(20), value))
 
     def clean_headers(self):
         """
@@ -163,7 +235,7 @@ class PrepareFluxHeaders(install):
         # Prepend 'path' option to search list:
         self.search.insert(0, self.path)
         self.search = [os.path.abspath(f) for f in self.search]
-        with workdir(self.path):
+        with workdir(self.root):
             self.process_header()
 
             # Process additional headers
@@ -222,7 +294,7 @@ class PrepareFluxHeaders(install):
         """
         # If called for the first time, this is the "absolute header"
         if not f:
-            f = os.path.abspath(os.path.join(self.path, self.header))
+            f = os.path.abspath(os.path.join(self.root, self.header))
         if not os.path.isfile(f):
             f = os.path.join(including_path, f)
         f = os.path.abspath(f)
@@ -256,14 +328,6 @@ class PrepareFluxHeaders(install):
         # Flag as checked
         self.checked_heads[f] = 1
 
-    def run(self):
-        """
-        Run the install
-        """
-        if not self.skip_build:
-            self.clean_headers()
-        install.run(self)  # OR: install.do_egg_install(self)
-
 
 # Setup.py logic goes here
 
@@ -282,6 +346,14 @@ def setup():
             "develop": PrepareFluxHeaders,
         },
     )
+
+    # Request to install additional modules (we always do core0
+    # We also have to remove the setup.py flags that aren't known
+    cffi_modules = ["_flux/_core_build.py:ffi"]
+    if "hostlist" in build_types:
+        cffi_modules.append("_flux/_hostlist_build.py:ffi")
+        sys.argv.pop(sys.argv.index("--hostlist"))
+    print("cffi_modules:\n%s" % "\n".join(cffi_modules))
 
     # This assumes relative location of Flux install
     # Now with cffi for final install
@@ -307,7 +379,7 @@ def setup():
             "Operating System :: Unix",
             "Programming Language :: Python :: 3.8",
         ],
-        cffi_modules=["_flux/_core_build.py:ffi"],
+        cffi_modules=cffi_modules,
     )
 
 
