@@ -53,7 +53,9 @@ def find_first(path, name, extra=None):
     raise IOError(name)
 
 
-mega_header=""
+mega_header = ""
+
+
 def process_header(f, including_path="."):
     global mega_header
     if not os.path.isfile(f):

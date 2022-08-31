@@ -55,6 +55,20 @@ options = {
         "path": "{root}/src/common/libhostlist",
         "header": "src/include/flux/hostlist.h",
     },
+    "rlist": {
+        "path": "{root}/src/common/librlist",
+        "search": [
+            "{root}",
+            "/usr/include",
+            os.path.join("{root}", "config"),
+        ],
+        "header": "src/common/librlist/rlist.h",
+        "ignore_headers": ["czmq_containers"],
+    },
+    "idset": {
+        "path": "{root}/src/common/libidset",
+        "header": "src/common/libidset/idset.h",
+    },
 }
 
 # Global variables for build type, corresponds to
@@ -116,6 +130,8 @@ class PrepareFluxHeaders(install):
         ("skip-build", None, "Skip building headers"),
         # These are additional modules to build, provided as flags
         ("hostlist", None, "Build hostlist module"),
+        ("rlist", None, "Build rlist module (also builds idset)"),
+        ("idset", None, "Build rlist module"),
     ]
 
     def initialize_options(self):
@@ -132,6 +148,8 @@ class PrepareFluxHeaders(install):
 
         # Modules
         self.hostlist = False
+        self.rlist = False
+        self.idset = False
 
     def finalize_options(self):
         """
@@ -151,6 +169,10 @@ class PrepareFluxHeaders(install):
         global build_types
         if self.hostlist:
             build_types.add("hostlist")
+        if self.rlist:
+            build_types.add("rlist")
+        if self.idset:
+            build_types.add("idset")
 
     def _parse_comma_list(self, attr):
         """
@@ -350,9 +372,14 @@ def setup():
     # Request to install additional modules (we always do core0
     # We also have to remove the setup.py flags that aren't known
     cffi_modules = ["_flux/_core_build.py:ffi"]
-    if "hostlist" in build_types:
-        cffi_modules.append("_flux/_hostlist_build.py:ffi")
-        sys.argv.pop(sys.argv.index("--hostlist"))
+    for build_type in build_types:
+
+        # We always include / require core (may not be necessary)
+        if build_type == "core":
+            continue
+        cffi_modules.append("_flux/_%s_build.py:ffi" % build_type)
+        sys.argv.pop(sys.argv.index(f"--{build_type}"))
+
     print("cffi_modules:\n%s" % "\n".join(cffi_modules))
 
     # This assumes relative location of Flux install

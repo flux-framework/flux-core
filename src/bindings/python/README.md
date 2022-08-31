@@ -37,7 +37,32 @@ any of the following modules (in addition to the core build):
 ```bash
 $ python setup.py install --hostlist
 ```
+And to test:
+```python
+import flux.hostlist
+```
 
+#### idset
+
+```bash
+$ python setup.py install --idset
+```
+
+And to test:
+```python
+import flux.idset
+```
+
+#### rlist
+
+```bash
+$ python setup.py install --rlist
+```
+I think rlist means "resource list?"  So to test (note this isn't working yet):
+
+```python
+import flux.resource
+```
 And that's it! We still have other (modules?) to compile, and can do that next.
 
 ## Development
@@ -71,4 +96,4 @@ relatively close to the original.
 
 ### TODO
 
- - _core_build.py should use variables and not hard coded paths.
+ - _*_build.py should use variables and not hard coded paths.
