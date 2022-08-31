@@ -47,9 +47,10 @@ file is read and submitted along with the job. If no SCRIPT is
 provided, then one will be read from *stdin*.
 
 **flux-mini alloc** works similarly to **batch**, but instead blocks until
-the job has started and interactively attaches to the new Flux instance.
-By default, a new shell is spawned as the initial program of the instance,
-but this may be overridden by supplying COMMAND on the command line.
+the job has started and interactively attaches to the new Flux instance
+(unless the ``--bg`` option is used).  By default, a new shell is spawned
+as the initial program of the instance, but this may be overridden by
+supplying COMMAND on the command line.
 
 The intent is for the "mini" commands to remain simple with stable interfaces
 over time, making them suitable for use in scripts.
@@ -393,6 +394,16 @@ OTHER OPTIONS
 **--debug**
    Enable job debug events, primarily for debugging Flux itself.
    The specific effects of this option may change in the future.
+
+**--bg**
+   *(alloc only)* Do not interactively attach to the instance. Instead,
+   print jobid on stdout once the instance is ready to accept jobs. The
+   instance will run indefinitely until a time limit is reached, the
+   job is canceled, or it is shutdown with ``flux shutdown JOBID``
+   (preferred). If a COMMAND is given then the job will run until COMMAND
+   completes. Note that ``flux job attach JOBID`` cannot be used to
+   interactively attach to the job (though it will print any errors or
+   output).
 
 **-B, --broker-opts=OPT**
    *(batch only)* For batch jobs, pass specified options to the Flux brokers
