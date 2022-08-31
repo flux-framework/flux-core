@@ -152,6 +152,8 @@ int build_ssh_command (const char *uri_path,
 
     /* LD_LIBRARY_PATH */
     if (ld_lib_path) {
+        if (argz_add (&argz, &argz_len, "env") != 0)
+            goto nomem;
         (void)snprintf (buf, sizeof (buf), "LD_LIBRARY_PATH=%s", ld_lib_path);
         if (argz_add (&argz, &argz_len, buf) != 0)
             goto nomem;
