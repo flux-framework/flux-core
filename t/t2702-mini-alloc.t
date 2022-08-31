@@ -7,6 +7,8 @@ test_description='flux-mini alloc specific tests'
 
 # Start an instance with 16 cores across 4 ranks
 export TEST_UNDER_FLUX_CORES_PER_RANK=4
+# Set local URI resolution for use of flux-proxy below:
+export FLUX_URI_RESOLVE_LOCAL=t
 test_under_flux 4 job
 
 flux setattr log-stderr-level 1
@@ -62,4 +64,66 @@ test_expect_success 'flux-mini alloc -v prints jobid on stderr' '
 	test_debug "cat verbose.out" &&
 	grep "jobid: " verbose.out
 '
+test_expect_success 'flux-mini alloc --bg option works' '
+	jobid=$(flux mini alloc -n1 -v --bg) &&
+	flux proxy $jobid flux mini run hostname &&
+	flux proxy $jobid flux getattr broker.rc2_none &&
+	flux shutdown $jobid &&
+	flux job wait-event $jobid clean
+'
+test_expect_success 'flux-mini alloc --bg option works with a command' '
+	jobid=$(flux mini alloc -n1 -v --bg /bin/true) &&
+	flux job wait-event -t15 -v $jobid finish &&
+	flux job attach $jobid
+'
+test_expect_success 'flux-mini alloc --bg fails if broker fails' '
+	test_must_fail flux mini alloc -n1 -v --broker-opts=--xx --bg \
+		>badopts.log 2>&1 &&
+	test_debug "cat badopts.log" &&
+	grep "unrecognized option" badopts.log
+'
+test_expect_success 'flux-mini alloc --bg fails if rc1 fails' '
+	mkdir -p rc1.d/ &&
+	cat <<-EOF >rc1.d/rc1-fail &&
+	exit 1
+	EOF
+	( export FLUX_RC_EXTRA=$(pwd) &&
+	  test_must_fail flux mini alloc -n1 -v --broker-opts= --bg \
+		>rc1-fail.log 2>&1
+	) &&
+	test_debug "cat rc1-fail.log" &&
+	grep "instance startup failed" rc1-fail.log
+'
+
+
+#  Running a process in the background under test_expect_success()
+#   causes a copy of the shell to be run in between flux-mini, so the
+#   signal can't be delivered to the right PID. Running from a function
+#   seems to fix that.
+run_mini_bg() {
+	flux mini alloc --bg -n1 -v >sigint.log 2>&1 &
+	echo $! >sigint.pid
+}
+waitfile=$SHARNESS_TEST_SRCDIR/scripts/waitfile.lua
+test_expect_success NO_CHAIN_LINT 'flux-mini alloc --bg can be interrupted' '
+	flux queue stop &&
+	test_when_finished "flux queue start" &&
+	run_mini_bg &&
+	$waitfile -t 20 -v -p waiting sigint.log &&
+	kill -INT $(cat sigint.pid) &&
+	$waitfile -t 20 -v -p Interrupt sigint.log &&
+	wait $pid
+'
+test_expect_success NO_CHAIN_LINT 'flux-mini alloc --bg errors when job is canceled' '
+	flux queue stop &&
+	test_when_finished "flux queue start" &&
+	flux mini alloc --bg -n1 -v >canceled.log 2>&1 &
+	pid=$! &&
+	$waitfile -t 20 -v -p waiting canceled.log &&
+	flux job cancelall -f &&
+	cat canceled.log &&
+	test_must_fail wait $pid &&
+	grep "unexpectedly exited" canceled.log
+'
+
 test_done
