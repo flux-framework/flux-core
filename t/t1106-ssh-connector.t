@@ -21,6 +21,15 @@ test_expect_success 'ssh:// with local sockdir works' '
 	  grep hostname=localhost basic.err &&
 	  grep cmd= basic.err | grep "flux relay $TEST_SOCKDIR"
 '
+test -x /bin/tcsh && test_set_prereq HAVE_TCSH
+test_expect_success HAVE_TCSH 'ssh:// with local sockdir and SHELL=tcsh works' '
+	FLUX_URI=ssh://localhost${TEST_SOCKDIR} \
+	FLUX_SSH=$TEST_SSH \
+	SHELL=/bin/tcsh \
+	  flux getattr size 2>basic.err &&
+	  grep hostname=localhost basic.err &&
+	  grep cmd= basic.err | grep "flux relay $TEST_SOCKDIR"
+'
 
 test_expect_success 'ssh:// with local sockdir and port works' '
 	FLUX_URI=ssh://localhost:42${TEST_SOCKDIR} FLUX_SSH=$TEST_SSH \
