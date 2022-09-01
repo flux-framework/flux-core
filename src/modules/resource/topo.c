@@ -22,7 +22,6 @@
 #endif
 #include <jansson.h>
 #include <flux/core.h>
-#include <hwloc.h>
 
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/errno_safe.h"
