@@ -25,4 +25,4 @@ echo hostname=${hostname} >&2
 echo cmd=\"$*\" >&2
 
 unset FLUX_URI
-eval $*
+exec $SHELL -c "$*"
