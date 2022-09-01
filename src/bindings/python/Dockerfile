@@ -1,9 +1,9 @@
-FROM python:3.9
+FROM ubuntu:22.04
 
 # used in configure.ac
 ARG FLUX_VERSION=0.42.0
 ENV ${FLUX_VERSION}=${FLUX_VERSION}
-
+ENV DEBIAN_FRONTEND=noninteractive
 # from root:
 # docker build -t ghcr.io/flux-framework/flux-python -f src/bindings/python/Dockerfile .
 # docker run -it ghcr.io/flux-framework/flux-python
@@ -27,6 +27,13 @@ RUN apt-get update \
         libs3-dev \
         libevent-dev \
         libarchive-dev \
+        python3 \
+        python3-dev \
+        python3-pip \
+        python3-sphinx \
+        libtool \
+        git \
+        build-essential \
         # Flux security
         libjson-glib-1.0.0 \ 
         libjson-glib-dev \ 
@@ -37,9 +44,7 @@ RUN apt-get update \
 WORKDIR /code
 COPY . /code
 
-# Flux needs to find "system python" here or burps an error
-RUN ln -s $(which python) /usr/bin/python && \
-    chmod +x etc/gen-cmdhelp.py && \
+RUN chmod +x etc/gen-cmdhelp.py && \
     ./autogen.sh && \
     ./configure --prefix=/usr/local --without-python && \
     make && \

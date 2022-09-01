@@ -537,8 +537,6 @@ AC_CONFIG_FILES( \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
-  src/bindings/python/flux/Makefile \
-  src/bindings/python/_flux/Makefile \
   src/broker/Makefile \
   src/cmd/Makefile \
   src/shell/Makefile \
