@@ -32,6 +32,12 @@ exclude
    the scheduler, but will still be used to determine satisfiability of job
    requests until the instance is restarted.
 
+norestrict
+   (optional) Disable restricting of the loaded HWLOC topology XML to the
+   current cpu affinity mask of the Flux broker. This option should be used
+   when the Flux system instance is constrained to a subset of cores,
+   but jobs run within this instance should have access to all cores.
+
 
 EXAMPLE
 =======
@@ -41,6 +47,7 @@ EXAMPLE
    [resource]
    path = "/etc/flux/system/R"
    exclude = "test[3,108]"
+   norestrict = true
 
 
 RESOURCES
