@@ -364,7 +364,7 @@ static char *get_xml (optparse_t *p)
             log_err_exit ("failed to read XML");
     }
     else if (optparse_hasopt (p, "local")) {
-        if (!(s = rhwloc_local_topology_xml ()))
+        if (!(s = rhwloc_local_topology_xml (0)))
             log_err_exit ("failed to gather local topology XML");
     }
 

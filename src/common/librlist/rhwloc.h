@@ -13,9 +13,13 @@
 
 #include <hwloc.h>
 
+typedef enum {
+    RHWLOC_NO_RESTRICT = 0x1
+} rhwloc_flags_t;
+
 /*  Load local topology with Flux standard flags and filtering
  */
-hwloc_topology_t rhwloc_local_topology_load (void);
+hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags);
 
 /*  As above, but return hwloc_topoology_t from XML
  */
@@ -23,7 +27,7 @@ hwloc_topology_t rhwloc_xml_topology_load (const char *xml);
 
 /*  Load local topology and return XML as allocated string
  */
-char *rhwloc_local_topology_xml (void);
+char *rhwloc_local_topology_xml (rhwloc_flags_t flags);
 
 /*  Return HostName from an hwloc topology object
  */

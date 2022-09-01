@@ -781,7 +781,7 @@ void test_xml ()
     struct rlist *rl2 = NULL;
     char *s1 = NULL;
     char *s2 = NULL;
-    char *xml = rhwloc_local_topology_xml ();
+    char *xml = rhwloc_local_topology_xml (0);
     if (!xml)
         BAIL_OUT ("rhwloc_local_topology_xml failed!");
     pass ("rhwloc_topology_xml");

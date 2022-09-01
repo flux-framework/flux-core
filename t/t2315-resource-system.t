@@ -4,6 +4,11 @@ test_description='Test resource module with system instance config'
 
 . `dirname $0`/sharness.sh
 
+if which hwloc-bind > /dev/null; then
+	NCORES=$(hwloc-bind --get | hwloc-calc --number-of core | tail -n 1)
+	test $NCORES = 1 || test_set_prereq MULTICORE
+fi
+
 test_expect_success 'create test R with unlikely core count' '
 	flux R encode -r0-1 -c0-1048 >R.test
 '
@@ -115,6 +120,24 @@ test_expect_success HAVE_JQ 'gpu resources in configured R are not verified' '
 		flux resource list -s up -no {rlist} > ${name}/rlist &&
 	test_debug "cat ${name}/rlist" &&
 	grep "gpu\[42-43\]" ${name}/rlist
+'
+
+test_expect_success HAVE_JQ,MULTICORE 'resource norestrict option works' '
+	name=norestrict &&
+	mkdir $name &&
+	flux R encode -r 0 --local > ${name}/R &&
+	cat >${name}/resource.toml <<-EOF &&
+	[resource]
+	path = "$(pwd)/${name}/R"
+	norestrict = true
+	EOF
+	hwloc-bind core:0 flux start -s1 \
+		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		flux mini run -N1 --exclusive \
+		  sh -c "hwloc-bind --get | hwloc-calc --number-of core" \
+		    >${name}/ncores &&
+	test_debug "cat ${name}/ncores" &&
+	test $(cat ${name}/ncores) = $NCORES
 '
 
 test_done

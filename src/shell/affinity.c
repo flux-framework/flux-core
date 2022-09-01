@@ -39,21 +39,6 @@ static int topology_restrict (hwloc_topology_t topo, hwloc_cpuset_t set)
     return (0);
 }
 
-/*  Restrict hwloc topology object to current processes binding.
- */
-static int topology_restrict_current (hwloc_topology_t topo)
-{
-    int rc = -1;
-    hwloc_bitmap_t rset = hwloc_bitmap_alloc ();
-    if (!rset || hwloc_get_cpubind (topo, rset, HWLOC_CPUBIND_PROCESS) < 0)
-        goto out;
-    rc = topology_restrict (topo, rset);
-out:
-    if (rset)
-        hwloc_bitmap_free (rset);
-    return (rc);
-}
-
 /*  Distribute ntasks over the topology 'topo', restricted to the
  *   cpuset give in 'cset' if non-NULL.
  *
@@ -201,8 +186,6 @@ static int shell_affinity_topology_init (flux_shell_t *shell,
 
     if (hwloc_topology_load (sa->topo) < 0)
         return shell_log_errno ("hwloc_topology_load");
-    if (topology_restrict_current (sa->topo) < 0)
-        return shell_log_errno ("topology_restrict_current");
     return 0;
 }
 

@@ -194,7 +194,7 @@ static int shell_init_jobinfo (flux_shell_t *shell,
     }
     else {
         /*  We couldn't fetch hwloc, load a copy manually */
-        if (!(info->hwloc_xml = rhwloc_local_topology_xml ())) {
+        if (!(info->hwloc_xml = rhwloc_local_topology_xml (0))) {
             shell_log_error ("error loading local hwloc xml");
             goto out;
         }
