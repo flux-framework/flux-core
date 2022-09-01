@@ -1238,7 +1238,7 @@ class BulkSubmitCmd(SubmitBulkCmd):
         self.parser.add_argument(
             "command",
             nargs=argparse.REMAINDER,
-            help="Job command and iniital arguments",
+            help="Job command and initial arguments",
         )
 
     @staticmethod
@@ -1374,6 +1374,8 @@ class BulkSubmitCmd(SubmitBulkCmd):
         for xargs in commands:
             total += len(self.cc_list(xargs))
 
+        if total == 0:
+            raise ValueError("no jobs provided for bulk submission")
         #  Initialize progress bar if requested:
         if args.progress:
             if not args.dry_run:
@@ -1770,16 +1772,17 @@ def main():
     # bulksubmit
     bulksubmit = BulkSubmitCmd()
     description = """
-    Submit a series of commands given on the commandline. This is useful
-    with shell globs, e.g. `flux mini bulksubmit *.sh`, and will allow
-    jobs to be submitted much faster than calling flux-mini submit in a
-    loop.
+    Submit a series of commands given on the command line or on stdin,
+    using an interface similar to GNU parallel or xargs.
+    Allows jobs to be submitted much faster than calling flux-mini
+    submit in a loop. Inputs on the command line are separated from
+    each other and the command with the special delimiter ':::'.
     """
     bulksubmit_parser_sub = subparsers.add_parser(
         "bulksubmit",
         parents=[bulksubmit.get_parser()],
         help="enqueue jobs in bulk",
-        usage="flux mini bulksubmit [OPTIONS...] COMMAND [COMMANDS...]",
+        usage="flux mini bulksubmit [OPTIONS...] COMMAND [ARGS...]",
         description=description,
         formatter_class=flux.util.help_formatter(),
     )
