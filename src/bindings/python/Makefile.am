@@ -1,32 +1,37 @@
 if HAVE_FLUX_SECURITY
-all: core hostlist rlist security idset
+all: core.so-built hostlist.so-built idset.so-built rlist.so-built security.so-built
 else
-all: core hostlist rlist idset
+all: core.so-built hostlist.so-built idset.so-built rlist.so-built
 endif
 
-core:
-	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --root=$(top_srcdir)
+core.so-built: Makefile
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --flux-root=$(top_srcdir)
+	touch core.so-built
 
-hostlist:
-	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --hostlist --root=$(top_srcdir)
+hostlist.so-built:
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --hostlist --flux-root=$(top_srcdir)
+	touch hostlist.so-built
 
-idset:
-	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --idset --root=$(top_srcdir)
+idset.so-built:
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --idset --flux-root=$(top_srcdir)
+	touch idset.so-built
 
-rlist:
-	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --rlist --root=$(top_srcdir)
+rlist.so-built:
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --rlist --flux-root=$(top_srcdir)
+	touch rlist.so-built
 
-security:
+security.so-built:
 	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --security \
 	    --security-include=$(FLUX_SECURITY_INCDIR) \
-	    --security-src=/code/security --root=$(top_srcdir)
+	    --security-src=/code/security --flux-root=$(top_srcdir)
+	touch security.so-built
 
-.PHONY: all core hostlist idset rlist security
+.PHONY: all core.so-built core.so-built idset.so-built rlist.so-built security.so-built
 
 .PRECIOUS: Makefile
 
+clean:
+	rm -rf hostlist.so-built core.so-built idset.so-built rlist.so-built security.so-built
+
 clean-local:
 	-rm -f .coverage*
-	
-
-

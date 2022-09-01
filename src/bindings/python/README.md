@@ -28,6 +28,25 @@ And flux should be compiled, and you can use ipython to import flux:
 > import flux
 ```
 
+### Building Modules
+
+First, here is how to build (any extension below) (without install):
+
+```bash
+$ python3 setup.py build_ext
+```
+
+Any of the install commands below are shown with "install," however you can change
+any install to a build_ext to use instead.
+
+### Development Libraries
+
+You can install with development libraries:
+
+```bash
+$ pip3 install -e .[dev]
+```
+
 ### Installing Modules
 
 By default, we install core flux. However, you can use the setup.py to install
@@ -99,18 +118,38 @@ $ cd src/bindings/python
 $ python3 setup.py install
 ```
 
+And install development libraries (they are also added as an extra `flux[dev]`.
+
+```bash
+$ pip3 install -r requirements-dev.txt
+```
+
 And the setup.py takes most things as variables, so you can customize variables it would be run as follows:
 
 ```bash
-$ python setup.py install --path=/path/to/flux
-$ pip install --install-option="--path=/path/to/flux" .
+$ python setup.py install --flux-root=/path/to/flux
+```
+
+## Using Pip
+
+The setup.py exports environment variables for the build script to see:
+
+ - FLUX_INSTALL_ROOT: where flux was cloned
+ - FLUX_SECURITY_INCLUDE: the security includes directory (if installing with `--security`)
+ - FLUX_SECURITY_SOURCE: the source code of security.
+
+Pip doesn't seem to see environment variables, unfortunately, so if you install with pip you need
+to export them yourself (instead of providing on the command line):
+
+```bash
+# Install development requirements
+$ FLUX_INSTALL_ROOT=/code pip3 install .[dev]
+
+# Add install options
+$ FLUX_INSTALL_ROOT=/code pip3 install --install-option="--name=value" .
 ```
 
 And you can see setup.py for other install options. I'm not sure this is considered good practice
 to run additional commands in the script, but I'm not comfortable refactoring into a different
 setup routine before I know what's going on, and to do that I want to keep the logic 
 relatively close to the original.
-
-### TODO
-
- - _*_build.py should use variables and not hard coded paths.

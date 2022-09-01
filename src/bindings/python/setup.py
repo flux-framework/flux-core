@@ -145,7 +145,7 @@ class PrepareFluxHeaders(install):
     """
 
     user_options = install.user_options + [
-        ("root=", None, "Root of Flux source code"),
+        ("flux-root=", None, "Root of Flux source code"),
         ("search=", None, "comma separated list to append to header search path"),
         # This can eventually allow pointing pip to pre-compiled headers?
         ("skip-build", None, "Skip building headers"),
@@ -172,7 +172,7 @@ class PrepareFluxHeaders(install):
         Initialize options - they are fully set later based on build type
         """
         install.initialize_options(self)
-        self.root = root
+        self.flux_root = root
         self.search = ""
         self.skip_build = False
 
@@ -198,7 +198,7 @@ class PrepareFluxHeaders(install):
         install.finalize_options(self)
 
         # Update envars to be seen by build modules
-        self.set_envar("FLUX_INSTALL_ROOT", self.root)
+        self.set_envar("FLUX_INSTALL_ROOT", self.flux_root)
         if self.security_src:
             self.set_envar("FLUX_SECURITY_SOURCE", self.security_src)
         if self.security_include:
@@ -250,7 +250,7 @@ class PrepareFluxHeaders(install):
         if not self.skip_build:
             for build_type in build_types:
                 cleaner = HeaderCleaner(
-                    self.root,
+                    self.flux_root,
                     custom_search=self.search,
                     include_header=self.include_header,
                     build_type=build_type,
@@ -266,13 +266,16 @@ class HeaderCleaner:
         Main class to run a clean!
         """
         self.options = [
-            "path",
-            "preproc_output",
-            "output",
-            "header",
-            "additional_headers",
+            "flux_root",
             "search",
-            "build_type",
+            "skip_build",
+            "include_header",
+            "hostlist",
+            "rlist",
+            "idset",
+            "security",
+            "security_include",
+            "security_src",
         ]
         self.root = root
         self.path = kwargs["path"].format(root=root)
@@ -436,6 +439,7 @@ def setup():
         version=package_version,
         description=package_description,
         cmdclass={
+            "build_ext": PrepareFluxHeaders,
             "install": PrepareFluxHeaders,
             "develop": PrepareFluxHeaders,
         },
@@ -470,6 +474,9 @@ def setup():
         include_package_data=True,
         zip_safe=False,
         install_requires=[cffi_dep],
+        extras_require={
+            "dev": ["pyyaml", "jsonschema", "docutils", "black", "IPython"]
+        },
         classifiers=[
             "Intended Audience :: Science/Research",
             "Intended Audience :: Developers",

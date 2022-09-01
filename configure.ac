@@ -248,23 +248,7 @@ AM_COND_IF([WITH_PYTHON], [
   if test -n "$PYTHON_LDFLAGS"; then
     ac_python_ldflags_set_by_user=true
   fi
-
-  AM_CHECK_PYMOD(cffi,
-                 [cffi.__version_info__ >= (1,1)],
-                 ,
-                 [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
-                 )
-  AM_CHECK_PYMOD(yaml,
-                 [StrictVersion(yaml.__version__) >= StrictVersion ('3.10.0')],
-                 ,
-                 [AC_MSG_ERROR([could not find python module yaml, version 3.10+ required])]
-                 )
-  AM_CHECK_PYMOD(jsonschema,
-                 [StrictVersion(jsonschema.__version__) >= StrictVersion ('2.3.0')],
-                 ,
-                 [AC_MSG_ERROR([could not find python module jsonschema, version 2.3.0+ required])]
-                 )
-
+  
   AS_IF([test "x$enable_docs" != "xno"], [
               AM_CHECK_PYMOD(sphinx,
                              [StrictVersion(sphinx.__version__) >= StrictVersion ('1.6.7')],

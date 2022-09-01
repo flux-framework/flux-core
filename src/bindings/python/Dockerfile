@@ -44,29 +44,33 @@ RUN apt-get update \
 WORKDIR /code
 COPY . /code
 
-RUN chmod +x etc/gen-cmdhelp.py && \
-    ./autogen.sh && \
-    ./configure --prefix=/usr/local --without-python && \
-    make && \
-    make install
-
-# Prepare to emulate having separately
-COPY ./src/bindings/python /code/src/bindings/python
-WORKDIR /code/src/bindings/python
-RUN pip3 install --upgrade pip && \
-    pip3 install -r requirements.txt && \
-    pip3 install -r requirements-dev.txt && \
-    python3 setup.py install && \
-    ldconfig
-
 # Add flux-security directory
 RUN git clone https://github.com/flux-framework/flux-security /code/security && \
     cd /code/security && \
     ./autogen.sh && \
-    ./configure --prefix=/usr/local && \
+    
+    # First build without Python
+    ./configure --prefix=/usr/local --without-python && \
     make && \
     make install && \
     ldconfig
+
+RUN chmod +x etc/gen-cmdhelp.py && \
+    ./autogen.sh && \
+    ./configure --prefix=/usr/local #&& \
+#    ./configure --prefix=/usr/local --without-python && \
+#    make && \
+#    make install && \
+#    ldconfig
+
+# Prepare to emulate having separately
+# COPY ./src/bindings/python /code/src/bindings/python
+# WORKDIR /code/src/bindings/python
+# RUN pip3 install --upgrade pip && \
+#   pip3 install -r requirements.txt && \
+#    pip3 install -r requirements-dev.txt && \
+#    python3 setup.py install && \
+#    ldconfig
 
 WORKDIR /code
 ENTRYPOINT ["/bin/bash"]
