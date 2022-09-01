@@ -274,15 +274,18 @@ void topo_destroy (struct topo *topo)
     }
 }
 
-struct topo *topo_create (struct resource_ctx *ctx, bool no_verify)
+struct topo *topo_create (struct resource_ctx *ctx,
+                          bool no_verify,
+                          bool no_restrict)
 {
     struct topo *topo;
     json_t *R;
+    int flags = no_restrict ? RHWLOC_NO_RESTRICT : 0;
 
     if (!(topo = calloc (1, sizeof (*topo))))
         return NULL;
     topo->ctx = ctx;
-    if (!(topo->xml = rhwloc_local_topology_xml (0))) {
+    if (!(topo->xml = rhwloc_local_topology_xml (flags))) {
         flux_log_error (ctx->h, "error loading hwloc topology");
         goto error;
     }

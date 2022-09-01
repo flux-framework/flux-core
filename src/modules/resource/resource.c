@@ -43,26 +43,32 @@
  *
  * noverify = true
  *   Skip verification that configured resources match local hwloc
+ *
+ * norestrict = false
+ *   When generating hwloc topology XML, do not restrict to current cpumask
  */
 static int parse_config (struct resource_ctx *ctx,
                          const flux_conf_t *conf,
                          const char **excludep,
                          json_t **R,
                          bool *noverifyp,
+                         bool *norestrictp,
                          flux_error_t *errp)
 {
     flux_error_t error;
     const char *exclude  = NULL;
     const char *path = NULL;
     int noverify = 0;
+    int norestrict = 0;
     json_t *o = NULL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?:{s?:s s?:s s?:b !}}",
+                          "{s?:{s?:s s?:s s?:b s?b !}}",
                           "resource",
                             "path", &path,
                             "exclude", &exclude,
+                            "norestrict", &norestrict,
                             "noverify", &noverify) < 0) {
         errprintf (errp,
                    "error parsing [resource] configuration: %s",
@@ -97,6 +103,8 @@ static int parse_config (struct resource_ctx *ctx,
     *excludep = exclude;
     if (noverifyp)
         *noverifyp = noverify ? true : false;
+    if (norestrictp)
+        *norestrictp = norestrict ? true : false;
     if (R)
         *R = o;
     return 0;
@@ -124,6 +132,7 @@ static void config_reload_cb (flux_t *h,
     if (parse_config (ctx,
                       conf,
                       &exclude,
+                      NULL,
                       NULL,
                       NULL,
                       &error) < 0) {
@@ -397,6 +406,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     json_t *eventlog = NULL;
     bool monitor_force_up = false;
     bool noverify = false;
+    bool norestrict = false;
     json_t *R_from_config;
 
     if (!(ctx = resource_ctx_create (h)))
@@ -410,6 +420,7 @@ int mod_main (flux_t *h, int argc, char **argv)
                       &exclude_idset,
                       &R_from_config,
                       &noverify,
+                      &norestrict,
                       &error) < 0) {
         flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
@@ -426,7 +437,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (!(ctx->inventory = inventory_create (ctx, R_from_config)))
         goto error;
-    if (!(ctx->topology = topo_create (ctx, noverify)))
+    if (!(ctx->topology = topo_create (ctx, noverify, norestrict)))
         goto error;
     if (!(ctx->monitor = monitor_create (ctx, monitor_force_up)))
         goto error;
