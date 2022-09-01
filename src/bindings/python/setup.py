@@ -69,12 +69,33 @@ options = {
         "path": "{root}/src/common/libidset",
         "header": "src/common/libidset/idset.h",
     },
+    # path and header are set by --flux-security
+    "security": {},
 }
 
 # Global variables for build type, corresponds to
 build_types = {"core"}
 
-# Helper functions
+# Cut out early if not providing full detail about security
+def check_security_args():
+    """
+    Ensure --security is provided with --security-src and --security-include
+    """
+    if "--security" not in sys.argv:
+        return True
+    found = {}
+    for arg in sys.argv:
+        if not arg.startswith("--"):
+            continue
+        arg = arg.split("=")[0].strip()
+        found[arg] = True
+    return "--security-src" in found and "--security-include" in found
+
+
+if not check_security_args():
+    sys.exit(
+        "--security-include and --security-src are required when building security module."
+    )
 
 
 @contextmanager
@@ -128,10 +149,22 @@ class PrepareFluxHeaders(install):
         ("search=", None, "comma separated list to append to header search path"),
         # This can eventually allow pointing pip to pre-compiled headers?
         ("skip-build", None, "Skip building headers"),
+        # Only required if building security
+        (
+            "security-include=",
+            None,
+            "path to flux security include directory (only for --security module)",
+        ),
+        (
+            "security-src=",
+            None,
+            "path to security source directory (where you cloned it)",
+        ),
         # These are additional modules to build, provided as flags
         ("hostlist", None, "Build hostlist module"),
         ("rlist", None, "Build rlist module (also builds idset)"),
-        ("idset", None, "Build rlist module"),
+        ("idset", None, "Build idset module"),
+        ("security", None, "Build security module"),
     ]
 
     def initialize_options(self):
@@ -150,20 +183,35 @@ class PrepareFluxHeaders(install):
         self.hostlist = False
         self.rlist = False
         self.idset = False
+        self.security = False
+        self.security_include = None
+        self.security_src = None
 
     def finalize_options(self):
         """
         Finalize options, showing user what was set.
         """
-        global root
         self.set_builds()
         # If we have additional headers or ignore headers, ensure list
         for attr in ["search"]:
             self._parse_comma_list(attr)
         install.finalize_options(self)
 
-        # Update global root to be seen by build modules
-        root = self.root
+        # Update envars to be seen by build modules
+        self.set_envar("FLUX_INSTALL_ROOT", self.root)
+        if self.security_src:
+            self.set_envar("FLUX_SECURITY_SOURCE", self.security_src)
+        if self.security_include:
+            self.set_envar("FLUX_SECURITY_INCLUDE", self.security_include)
+
+    def set_envar(self, key, value):
+        """
+        Set an environment variable.
+
+        There isn't another good way to communicate with build modules.
+        """
+        os.putenv(key, value)
+        os.environ[key] = value
 
     def set_builds(self):
         """
@@ -177,6 +225,12 @@ class PrepareFluxHeaders(install):
             build_types.add("rlist")
         if self.idset:
             build_types.add("idset")
+        if self.security:
+            build_types.add("security")
+            options["security"]["path"] = self.security_include
+            options["security"]["header"] = os.path.join(
+                self.security_src, "src", "lib", "sign.h"
+            )
 
     def _parse_comma_list(self, attr):
         """
@@ -357,6 +411,18 @@ class HeaderCleaner:
         self.checked_heads[f] = 1
 
 
+def clean_args():
+    """
+    Ensure we remove extra flags that the second installed won't know about.
+    """
+    argregex = "(--security-src|--security-include)"
+    cleaned = []
+    for arg in sys.argv:
+        if not re.search(argregex, arg):
+            cleaned.append(arg)
+    sys.argv = cleaned
+
+
 # Setup.py logic goes here
 
 
@@ -385,6 +451,9 @@ def setup():
             continue
         cffi_modules.append("_flux/_%s_build.py:ffi" % build_type)
         sys.argv.pop(sys.argv.index(f"--{build_type}"))
+
+    # Remove extra security args
+    clean_args()
 
     print("cffi_modules:\n%s" % "\n".join(cffi_modules))
 

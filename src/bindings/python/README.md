@@ -7,7 +7,8 @@ bindings build with source flux, and we are working on means to install separate
 ## Docker
 
 Here is a way to test installing the Python bindings. From the root of flux,
-build the [Dockerfile](Dockerfile) here:
+build the [Dockerfile](Dockerfile) here. Note that we are also cloning
+flux security to show installing / building all modules.
 
 ```bash
 $ docker build -t ghcr.io/flux-framework/flux-python -f src/bindings/python/Dockerfile .
@@ -63,6 +64,16 @@ I think rlist means "resource list?"  So to test (note this isn't working yet):
 ```python
 import flux.resource
 ```
+
+#### security
+
+For Flux Security, the security include and source directories are required, since we couldn't
+know where you built it!
+
+```bash
+$ python setup.py install --security --security-include=/usr/local/include/flux/security --security-src=/code/security
+```
+
 And that's it! We still have other (modules?) to compile, and can do that next.
 
 ## Development

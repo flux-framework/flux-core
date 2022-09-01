@@ -27,6 +27,8 @@ RUN apt-get update \
         libs3-dev \
         libevent-dev \
         libarchive-dev \
+        # Flux security
+        libmunge-dev \
         libpam-dev && \
         ldconfig && \
         rm -rf /var/lib/apt/lists/*
@@ -50,6 +52,14 @@ RUN pip3 install --upgrade pip && \
     pip3 install -r requirements-dev.txt && \
     python3 setup.py install && \
     ldconfig
+
+# Add flux-security directory
+RUN git clone https://github.com/flux-framework/flux-security /code/security && \
+    cd /code/security && \
+    ./autogen.sh && \
+    ./configure --prefix=/usr/local && \
+    make && \
+    make install
 
 WORKDIR /code
 ENTRYPOINT ["/bin/bash"]
