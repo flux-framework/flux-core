@@ -1,10 +1,15 @@
 import os
+import sys
 from pathlib import Path
 
 from cffi import FFI
 
 # Ensure paths are in _flux
 here = os.path.abspath(os.path.dirname(__file__))
+
+# We need to add the path here to import other builds
+sys.path.insert(0, here)
+
 root = os.environ.get("FLUX_INSTALL_ROOT")
 
 preproc_file = os.path.join(here, "_rlist_preproc.h")

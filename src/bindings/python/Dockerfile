@@ -28,7 +28,8 @@ RUN apt-get update \
         libevent-dev \
         libarchive-dev \
         # Flux security
-        libmunge-dev \
+        libjson-glib-1.0.0 \ 
+        libjson-glib-dev \ 
         libpam-dev && \
         ldconfig && \
         rm -rf /var/lib/apt/lists/*
@@ -59,7 +60,8 @@ RUN git clone https://github.com/flux-framework/flux-security /code/security && 
     ./autogen.sh && \
     ./configure --prefix=/usr/local && \
     make && \
-    make install
+    make install && \
+    ldconfig
 
 WORKDIR /code
 ENTRYPOINT ["/bin/bash"]

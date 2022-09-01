@@ -20,16 +20,18 @@ ffi.set_source(
 #include <flux/security/sign.h>
             """,
     libraries=[
-        "security",
         "flux-security",
+        "security",
         "munge",
+        "json-glib-1.0",
         "util",
         "tomlc99",
     ],
     library_dirs=[
         "/usr/local/lib",
-        f"{source}/src/lib",
+        "/usr/lib/x86_64-linux-gnu",
         f"{source}/src/libutil/.libs",
+        f"{source}/src/lib",
         f"{source}/src/lib/.libs",
         f"{source}/src/libtomlc99/.libs",
     ],
@@ -42,6 +44,7 @@ ffi.set_source(
     ],
     extra_compile_args=[
         f"-L{source}/src/lib",
+        "-L/usr/lib/x86_64-linux-gnu",
         f"-L{source}/src/libutil/.libs",
         f"-L{source}/src/lib/.libs",
         f"-L{source}/src/libtomlc99/.libs",

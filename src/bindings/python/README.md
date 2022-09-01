@@ -59,7 +59,7 @@ import flux.idset
 ```bash
 $ python setup.py install --rlist
 ```
-I think rlist means "resource list?"  So to test (note this isn't working yet):
+I think rlist means "resource list?"  So to test:
 
 ```python
 import flux.resource
@@ -72,6 +72,12 @@ know where you built it!
 
 ```bash
 $ python setup.py install --security --security-include=/usr/local/include/flux/security --security-src=/code/security
+```
+
+Or just go NUTS
+
+```bash
+$ python3 setup.py install --hostlist --rlist --idset --security --security-include=/usr/local/include/flux/security --security-src=/code/security
 ```
 
 And that's it! We still have other (modules?) to compile, and can do that next.
