@@ -1,11 +1,19 @@
-from pathlib import Path
-from cffi import FFI
 import os
+import sys
+from pathlib import Path
+
+from cffi import FFI
 
 ffi = FFI()
 
 # Ensure paths are in _flux
 here = os.path.abspath(os.path.dirname(__file__))
+root = os.path.dirname(here)
+
+# Allow to import options from setup.py
+sys.path.insert(0, root)
+from setup import root
+
 preproc_file = os.path.join(here, "_core_preproc.h")
 core_c_file = os.path.join(here, "_core.c")
 
@@ -22,18 +30,18 @@ void * unpack_long(ptrdiff_t num){
 """,
     libraries=["flux-core", "debugged", "flux"],
     library_dirs=[
-        "/code/src/common/libdebugged/.libs",
-        "/code/src/common/libflux/.libs",
+        f"{root}/src/common/libdebugged/.libs",
+        f"{root}/src/common/libflux/.libs",
     ],
     include_dirs=[
-        "/code",
-        "/code/src/include",
-        "/code/src/common/libflux",
-        "/code/src/common/libdebugged",
+        root,
+        f"{root}/src/include",
+        f"{root}/src/common/libflux",
+        f"{root}/src/common/libdebugged",
     ],
     extra_compile_args=[
-        "-L/code/src/common/.libs",
-        "-L/code/src/common/libdebugged/.libs",
+        f"-L{root}/src/common/.libs",
+        f"-L{root}/src/common/libdebugged/.libs",
     ],
 )
 
@@ -51,13 +59,8 @@ with open(preproc_file) as h:
     cdefs = cdefs + h.read()
 
 ffi.cdef(cdefs)
-
-# This doesn't seem to happen in the block below
 ffi.emit_c_code(core_c_file)
-ffi.compile(verbose=True)
 
-if __name__ == "__main__":
-    ffi.emit_c_code(core_c_file)
-    # ensure mtime of target is updated
-    Path(core_c_file).touch()
-    ffi.compile(verbose=True)
+# ensure mtime of target is updated
+Path(core_c_file).touch()
+ffi.compile(verbose=True)

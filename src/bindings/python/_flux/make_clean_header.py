@@ -8,10 +8,9 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import argparse
 import os
 import re
-
-import argparse
 
 parser = argparse.ArgumentParser()
 

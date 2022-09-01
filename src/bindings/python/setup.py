@@ -13,15 +13,16 @@
 # python setup.py install --path=/path/to/flux
 # pip install --install-option="--path=/path/to/flux" .
 
-from setuptools import find_packages, setup as _setup
-from setuptools.command.install import install
-from contextlib import contextmanager
-
-import subprocess
 import os
 import re
 import shutil
+import subprocess
 import sys
+from contextlib import contextmanager
+
+from setuptools import find_packages
+from setuptools import setup as _setup
+from setuptools.command.install import install
 
 # Metadata
 package_name = "flux"
@@ -59,7 +60,6 @@ options = {
         "path": "{root}/src/common/librlist",
         "search": [
             "{root}",
-            "/usr/include",
             os.path.join("{root}", "config"),
         ],
         "header": "src/common/librlist/rlist.h",
@@ -155,11 +155,15 @@ class PrepareFluxHeaders(install):
         """
         Finalize options, showing user what was set.
         """
+        global root
         self.set_builds()
         # If we have additional headers or ignore headers, ensure list
         for attr in ["search"]:
             self._parse_comma_list(attr)
         install.finalize_options(self)
+
+        # Update global root to be seen by build modules
+        root = self.root
 
     def set_builds(self):
         """
@@ -264,6 +268,8 @@ class HeaderCleaner:
             for header in self.additional_headers or []:
                 self.process_header(header)
 
+        # Note that this currently isn't used - should it passed to
+        # the build script?
         include_head = self.header
         if self.include_header:
             include_head = self.include_header

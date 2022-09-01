@@ -1,10 +1,17 @@
-from pathlib import Path
-from cffi import FFI
-import sys
 import os
+import sys
+from pathlib import Path
+
+from cffi import FFI
 
 # Ensure paths are in _flux
 here = os.path.abspath(os.path.dirname(__file__))
+root = os.path.dirname(here)
+
+# Allow to import options from setup.py
+sys.path.insert(0, root)
+from setup import root
+
 preproc_file = os.path.join(here, "_rlist_preproc.h")
 core_c_file = os.path.join(here, "_rlist.c")
 
@@ -40,27 +47,27 @@ ffi.set_source(
         "jansson",
     ],
     library_dirs=[
-        "/code/src/common/libflux/.libs",
-        "/code/src/common/librlist/.libs",
-        "/code/src/common/libidset/.libs",
-        "/code/src/common/.libs",
+        f"{root}/src/common/libflux/.libs",
+        f"{root}/src/common/librlist/.libs",
+        f"{root}/src/common/libidset/.libs",
+        f"{root}/src/common/.libs",
     ],
     include_dirs=[
-        "/code",
+        root,
         "/usr/include",
         # hwloc
         "/usr/lib/x86_64-linux-gnu",
-        "/code/config",
-        "/code/src/include",
-        "/code/src/common/libflux",
-        "/code/src/common/librlist",
-        "/code/src/common/libidset",
+        f"{root}/config",
+        f"{root}/src/include",
+        f"{root}/src/common/libflux",
+        f"{root}/src/common/librlist",
+        f"{root}/src/common/libidset",
     ],
     extra_compile_args=[
-        "-L/code/src/common/.libs",
-        "-L/code/src/common/librlist/.libs",
-        "-L/code/src/common/libflux/.libs",
-        "-L/code/src/common/libidset/.libs",
+        f"-L{root}/src/common/.libs",
+        f"-L{root}/src/common/librlist/.libs",
+        f"-L{root}/src/common/libflux/.libs",
+        f"-L{root}/src/common/libidset/.libs",
     ],
 )
 
@@ -83,10 +90,6 @@ ffi.cdef(cdefs)
 
 # This doesn't seem to happen in the block below
 ffi.emit_c_code(core_c_file)
+# Ensure target mtime is updated
+Path(core_c_file).touch()
 ffi.compile(verbose=True)
-
-if __name__ == "__main__":
-    ffi.emit_c_code(core_c_file)
-    # Ensure target mtime is updated
-    Path(core_c_file).touch()
-    ffi.compile(verbose=True)
