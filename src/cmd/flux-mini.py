@@ -19,6 +19,7 @@ import re
 import random
 import itertools
 import atexit
+import time
 from itertools import chain
 from string import Template
 from collections import ChainMap
@@ -31,6 +32,7 @@ from flux import util
 from flux import debugged
 from flux.idset import IDset
 from flux.progress import ProgressBar
+from flux.uri import JobURI
 
 
 class Dependency:
@@ -1576,6 +1578,9 @@ class BatchCmd(MiniCmd):
 
 class AllocCmd(MiniCmd):
     def __init__(self):
+
+        self.t0 = None
+
         super().__init__(exclude_io=True)
         add_batch_alloc_args(self.parser)
         self.parser.add_argument(
@@ -1584,6 +1589,11 @@ class AllocCmd(MiniCmd):
             action="count",
             default=0,
             help="Increase verbosity on stderr (multiple use OK)",
+        )
+        self.parser.add_argument(
+            "--bg",
+            action="store_true",
+            help="Wait for new instance to start, but do not attach to it.",
         )
         self.parser.add_argument(
             "COMMAND",
@@ -1602,6 +1612,12 @@ class AllocCmd(MiniCmd):
             args.nslots = args.nodes
             args.exclusive = True
 
+        #  For --bg, do not run an rc2 (inital program) unless
+        #    the user explicitly specified COMMAND:
+        if args.bg and not args.COMMAND:
+            args.broker_opts = args.broker_opts or []
+            args.broker_opts.append("-Sbroker.rc2_none=1")
+
         jobspec = JobspecV1.from_nest_command(
             command=args.COMMAND,
             num_slots=args.nslots,
@@ -1611,12 +1627,90 @@ class AllocCmd(MiniCmd):
             broker_opts=list_split(args.broker_opts),
             exclusive=args.exclusive,
         )
-        if sys.stdin.isatty():
+
+        #  For --bg, always allocate a pty, but not interactive,
+        #   since an interactive pty causes the job shell to hang around
+        #   until a pty client attaches, which may never happen.
+        #
+        #  O/w, allocate an interactive pty only if stdin is a tty
+        #
+        if args.bg:
+            jobspec.setattr_shell_option("pty.capture", 1)
+        elif sys.stdin.isatty():
             jobspec.setattr_shell_option("pty.interactive", 1)
         return jobspec
 
+    @staticmethod
+    def log(jobid, ts, msg):
+        print(f"{jobid}: {ts:6.3f}s: {msg}", file=sys.stderr, flush=True)
+
+    def bg_wait_cb(self, future, args, jobid):
+        """
+        Wait for memo event, connect to child instance, and finally wait
+        for rc1 to complete
+        """
+        event = future.get_event()
+        if not event:
+            #  The job has unexpectedly exited since we're at the end
+            #   of the eventlog. Run `flux job attach` since this will dump
+            #   any errors or output, then raise an exception.
+            os.system(f"flux job attach {jobid} >&2")
+            raise OSError(f"{jobid}: unexpectedly exited")
+
+        if not self.t0:
+            self.t0 = event.timestamp
+        ts = event.timestamp - self.t0
+
+        if args.verbose and event.name == "alloc":
+            self.log(jobid, ts, "resources allocated")
+        if event.name == "memo" and "uri" in event.context:
+            if args.verbose:
+                self.log(jobid, ts, "waiting for instance")
+
+            #  Wait for child instance to finish rc1 using state-machine.wait,
+            #   then stop the reactor to return to caller.
+            uri = str(JobURI(event.context["uri"]))
+            try:
+                child_handle = flux.Flux(uri)
+            except OSError as exc:
+                raise OSError(f"Unable to connect to {jobid}: {exc}")
+            try:
+                child_handle.rpc("state-machine.wait").get()
+            except OSError as exc:
+                raise OSError(f"{jobid}: instance startup failed")
+
+            if args.verbose:
+                self.log(jobid, time.time() - self.t0, "ready")
+            self.flux_handle.reactor_stop()
+
+    def background(self, args, jobid):
+        """Handle the --bg option
+
+        Wait for child instance to be ready to accept jobs before returning.
+        Print jobid to stdout once the job is ready.
+        """
+        jobid = flux.job.JobID(jobid)
+
+        job.event_watch_async(self.flux_handle, jobid).then(
+            self.bg_wait_cb, args, jobid
+        )
+        if args.verbose:
+            self.log(jobid, 0.0, "waiting for resources")
+        try:
+            self.flux_handle.reactor_run()
+        except KeyboardInterrupt:
+            print(f"\r{jobid}: Interrupt: canceling job", file=sys.stderr)
+            job.cancel(self.flux_handle, jobid)
+            sys.exit(1)
+
+        print(jobid)
+
     def main(self, args):
         jobid = self.submit(args)
+
+        if args.bg:
+            self.background(args, jobid)
+            sys.exit(0)
 
         # Display job id on stderr if -v
         # N.B. we must flush sys.stderr due to the fact that it is buffered
