@@ -282,7 +282,7 @@ struct topo *topo_create (struct resource_ctx *ctx, bool no_verify)
     if (!(topo = calloc (1, sizeof (*topo))))
         return NULL;
     topo->ctx = ctx;
-    if (!(topo->xml = rhwloc_local_topology_xml ())) {
+    if (!(topo->xml = rhwloc_local_topology_xml (0))) {
         flux_log_error (ctx->h, "error loading hwloc topology");
         goto error;
     }

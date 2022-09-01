@@ -2269,7 +2269,7 @@ struct rlist *rlist_from_hwloc (int rank, const char *xml)
     if (xml)
         topo = rhwloc_xml_topology_load (xml);
     else
-        topo = rhwloc_local_topology_load ();
+        topo = rhwloc_local_topology_load (0);
     if (!topo)
         goto fail;
     if (!(ids = rhwloc_core_idset_string (topo))
