@@ -549,7 +549,7 @@ static int jobspec_parse (struct list_ctx *ctx,
     }
 
     /* nonfatal error - jobspec illegal, but we'll continue on.  job
-     * listing will get initialized data */
+     * listing will return whatever data is available */
 nonfatal_error:
     rc = 0;
 error:
