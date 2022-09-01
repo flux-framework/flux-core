@@ -376,8 +376,7 @@ static int parse_res_level (struct list_ctx *ctx,
 
 /* Return basename of path if there is a '/' in path.  Otherwise return
  * full path */
-static const char *
-parse_job_name (const char *path)
+static const char *parse_job_name (const char *path)
 {
     char *p = strrchr (path, '/');
     if (p) {
