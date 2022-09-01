@@ -514,7 +514,7 @@ static int jobspec_parse (struct list_ctx *ctx,
         /* For jobspec version 1, expect either:
          * - node->slot->core->NIL
          * - slot->core->NIL
-         * Set job->slot_count and job->cores_per_slot.
+         * Set job->slot_count.
          */
         memset (res, 0, sizeof (res));
         if (parse_res_level (ctx, job, resources, &res[0]) < 0)
