@@ -1374,6 +1374,8 @@ class BulkSubmitCmd(SubmitBulkCmd):
         for xargs in commands:
             total += len(self.cc_list(xargs))
 
+        if total == 0:
+            raise ValueError("no jobs provided for bulk submission")
         #  Initialize progress bar if requested:
         if args.progress:
             if not args.dry_run:
