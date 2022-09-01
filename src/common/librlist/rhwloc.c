@@ -14,7 +14,7 @@
 
 #include <flux/idset.h>
 
-#include "hwloc.h"
+#include "rhwloc.h"
 
 /*  Common hwloc_topology_init() and flags for Flux hwloc usage:
  */
