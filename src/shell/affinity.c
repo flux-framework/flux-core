@@ -63,22 +63,39 @@ static hwloc_cpuset_t *distribute_tasks (hwloc_topology_t topo,
                                          hwloc_cpuset_t cset,
                                          int ntasks)
 {
-    hwloc_obj_t obj[1];
+    hwloc_obj_t *roots;
     hwloc_cpuset_t *cpusetp = NULL;
+    int cores;
+    int depth;
 
     /* restrict topology to current cpuset */
-    if (cset && topology_restrict (topo, cset) < 0)
+    if (cset && topology_restrict (topo, cset) < 0) {
+        shell_log_errno ("topology_restrict failed");
         return NULL;
+    }
     /* create cpuset array for ntasks */
     if (!(cpusetp = calloc (ntasks, sizeof (hwloc_cpuset_t))))
         return NULL;
-    /* Distribute starting at root over remaining objects */
-    obj[0] = hwloc_get_root_obj (topo);
+
+    depth = hwloc_get_type_depth (topo, HWLOC_OBJ_CORE);
+    cores = hwloc_get_nbobjs_by_depth (topo, depth);
+    if (cores <= 0 || !(roots = calloc (cores, sizeof (*roots)))) {
+        shell_log_error ("failed to allocate %d roots for hwloc distrib",
+                         cores);
+        return NULL;
+    }
+
+    for (int i = 0; i < cores; i++)
+        roots[i] = hwloc_get_obj_by_depth (topo, depth, i);
+
+    shell_trace ("distributing %d tasks across %d cores", ntasks, cores);
 
     /* NB: hwloc_distrib() will alloc ntasks cpusets in cpusetp, which
      *     later need to be destroyed with hwloc_bitmap_free().
      */
-    hwloc_distrib (topo, obj, 1, cpusetp, ntasks, INT_MAX, 0);
+    hwloc_distrib (topo, roots, cores, cpusetp, ntasks, depth, 0);
+
+    free (roots);
     return (cpusetp);
 }
 
