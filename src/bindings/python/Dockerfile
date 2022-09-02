@@ -42,35 +42,28 @@ RUN apt-get update \
         rm -rf /var/lib/apt/lists/*
 
 WORKDIR /code
-COPY . /code
 
 # Add flux-security directory
 RUN git clone https://github.com/flux-framework/flux-security /code/security && \
     cd /code/security && \
-    ./autogen.sh && \
-    
-    # First build without Python
-    ./configure --prefix=/usr/local --without-python && \
+    ./autogen.sh && \    
+    ./configure --prefix=/usr/local && \
     make && \
     make install && \
     ldconfig
 
+COPY . /code
+
 RUN chmod +x etc/gen-cmdhelp.py && \
     ./autogen.sh && \
-    ./configure --prefix=/usr/local #&& \
-#    ./configure --prefix=/usr/local --without-python && \
-#    make && \
-#    make install && \
-#    ldconfig
+    ./configure --prefix=/usr/local && \
+    make && \
+    make install && \
+    ldconfig
 
-# Prepare to emulate having separately
-# COPY ./src/bindings/python /code/src/bindings/python
+# Here is how to install Python manually (and see README there)
 # WORKDIR /code/src/bindings/python
-# RUN pip3 install --upgrade pip && \
-#   pip3 install -r requirements.txt && \
-#    pip3 install -r requirements-dev.txt && \
-#    python3 setup.py install && \
-#    ldconfig
+# RUN python3 setup.py install && ldconfig
 
 WORKDIR /code
 ENTRYPOINT ["/bin/bash"]

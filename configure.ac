@@ -520,7 +520,6 @@ AC_CONFIG_FILES( \
   src/common/libzmqutil/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
-  src/bindings/python/Makefile \
   src/broker/Makefile \
   src/cmd/Makefile \
   src/shell/Makefile \
@@ -561,7 +560,8 @@ AC_CONFIG_FILES( \
   t/Makefile \
   t/fluxometer/conf.lua \
   t/fluxometer/conf.lua.installed \
-  src/test/docker/poison-libflux.sh
+  src/test/docker/poison-libflux.sh \
+  src/bindings/python/Makefile
 )
 
 AC_CONFIG_LINKS([ \
