@@ -377,4 +377,13 @@ test_expect_success 'job-shell: -o nosetpgrp works' '
 	flux mini run -n2 -o nosetpgrp \
 	    flux python -c "import os,sys; sys.exit(os.getpid() == os.getpgrp())"
 '
+
+# Check that job shell inherits FLUX_F58_FORCE_ASCII.
+# If not, then output filename will not match jobid returned by submit,
+#  since one will be in UTF-8 and the other in ascii.
+test_expect_success 'job-shell: shell inherits FLUX_F58_FORCE_ASCII from job' '
+	FLUX_F58_FORCE_ASCII=t \
+		id=$(flux mini submit --wait --output={{id}}.out hostname) &&
+	test -f ${id}.out
+'
 test_done
