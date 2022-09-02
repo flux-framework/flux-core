@@ -420,8 +420,6 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
     struct content_cache *cache = arg;
     const void *hash;
     int hash_size;
-    void *data = NULL;
-    int len = 0;
     struct cache_entry *e;
 
     if (flux_request_decode_raw (msg, NULL, &hash, &hash_size) < 0)
@@ -449,9 +447,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
         }
         return; /* RPC continuation will respond to msg */
     }
-    data = e->data;
-    len = e->len;
-    if (flux_respond_raw (h, msg, data, len) < 0)
+    if (flux_respond_raw (h, msg, e->data, e->len) < 0)
         flux_log_error (h, "content load: flux_respond_raw");
     return;
 error:
