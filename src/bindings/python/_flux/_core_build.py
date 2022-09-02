@@ -25,6 +25,7 @@ void * unpack_long(ptrdiff_t num){
 """,
     libraries=["flux-core", "debugged", "flux"],
     library_dirs=[
+        f"{root}/src/common/.libs",
         f"{root}/src/common/libdebugged/.libs",
         f"{root}/src/common/libflux/.libs",
     ],
@@ -36,6 +37,7 @@ void * unpack_long(ptrdiff_t num){
     ],
     extra_compile_args=[
         f"-L{root}/src/common/.libs",
+        f"-L{root}/src/common/libflux/.libs",
         f"-L{root}/src/common/libdebugged/.libs",
     ],
 )

@@ -577,4 +577,3 @@ AS_IF([test "x$enable_docs" != "xno"], [
     AC_MSG_WARN([Python Docutils not found. Manual pages will not be generated.])
   fi
 ])
-
