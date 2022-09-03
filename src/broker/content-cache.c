@@ -28,6 +28,7 @@
 #include "attr.h"
 #include "content-cache.h"
 #include "content-checkpoint.h"
+#include "content-mmap.h"
 
 /* A periodic callback purges the cache of least recently used entries.
  * The callback is synchronized with the instance heartbeat, with a
@@ -70,6 +71,7 @@ struct cache_entry {
     uint8_t ephemeral:1;            // clean entry is not on backing store
     uint8_t load_pending:1;
     uint8_t store_pending:1;
+    uint8_t mmapped:1;
     struct msgstack *load_requests;
     struct msgstack *store_requests;
     double lastused;
@@ -104,6 +106,7 @@ struct content_cache {
     uint32_t acct_dirty;            // count of dirty cache entries
 
     struct content_checkpoint *checkpoint;
+    struct content_mmap *mmap;
 };
 
 static void flush_respond (struct content_cache *cache);
@@ -189,7 +192,10 @@ static void cache_entry_destroy (struct cache_entry *e)
         int saved_errno = errno;
         assert (e->load_requests == NULL);
         assert (e->store_requests == NULL);
-        flux_msg_decref (e->data_container);
+        if (e->mmapped)
+            content_mmap_region_decref (e->data_container);
+        else
+            flux_msg_decref (e->data_container);
         free (e);
         errno = saved_errno;
     }
@@ -416,13 +422,36 @@ static void content_load_request (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (!(e = cache_entry_lookup (cache, hash, hash_size))) {
-        if (cache->rank == 0 && !cache->backing) {
-            errno = ENOENT;
-            goto error;
+        struct content_region *region = NULL;
+        const void *data = NULL;
+        int len = 0;
+
+        if (cache->rank == 0) {
+            region = content_mmap_region_lookup (cache->mmap,
+                                                 hash,
+                                                 hash_size,
+                                                 &data,
+                                                 &len);
+            if (!region && !cache->backing) {
+                errno = ENOENT;
+                goto error;
+            }
         }
         if (!(e = cache_entry_insert (cache, hash, hash_size))) {
             flux_log_error (h, "content load");
             goto error;
+        }
+        if (region) {
+            e->data_container = content_mmap_region_incref (region);
+            e->data = data;
+            e->len = len;
+            e->valid = 1;
+            e->ephemeral = 1;
+            e->mmapped = 1;
+            cache->acct_valid++;
+            cache->acct_size += e->len;
+            list_add (&cache->lru, &e->list);
+            e->lastused = flux_reactor_now (cache->reactor);
         }
     }
     if (!e->valid) {
@@ -1031,6 +1060,7 @@ void content_cache_destroy (struct content_cache *cache)
         zhashx_destroy (&cache->entries);
         msgstack_destroy (&cache->flush_requests);
         content_checkpoint_destroy (cache->checkpoint);
+        content_mmap_destroy (cache->mmap);
         free (cache);
         errno = saved_errno;
     }
@@ -1073,7 +1103,12 @@ struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
 
     if (!(cache->checkpoint = content_checkpoint_create (h, cache->rank, cache)))
         goto error;
-
+    if (cache->rank == 0) {
+        if (!(cache->mmap = content_mmap_create (h,
+                                                 cache->hash_name,
+                                                 content_hash_size)))
+            goto error;
+    }
     if (flux_msg_handler_addvec (h, htab, cache, &cache->handlers) < 0)
         goto error;
     if (!(cache->f_sync = flux_sync_create (h, 0))
