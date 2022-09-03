@@ -719,6 +719,22 @@ test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks/nodelist correct
         echo $obj | jq -e ".nodelist == \"${nodes}\""
 '
 
+# use flux queue to ensure jobs stay in pending state
+test_expect_success HAVE_JQ 'flux job list lists nnodes for pending jobs correctly' '
+        flux queue stop &&
+        id1=$(flux mini submit -N1 hostname | flux job id) &&
+        echo ${id1} >> nnodes.ids &&
+        id2=$(flux mini submit -N3 hostname | flux job id) &&
+        echo ${id2} >> nnodes.ids &&
+        flux job list -s pending | grep ${id1} &&
+        flux job list -s pending | grep ${id2} &&
+        flux job list-ids ${id1} | jq -e ".nnodes == 1" &&
+        flux job list-ids ${id2} | jq -e ".nnodes == 3" &&
+        flux job cancel ${id1} &&
+        flux job cancel ${id2} &&
+        flux queue start
+'
+
 #
 # job success
 #
