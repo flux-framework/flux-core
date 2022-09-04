@@ -721,32 +721,38 @@ class SubmitBaseCmd(MiniCmd):
 
     def __init__(self):
         super().__init__()
-        self.parser.add_argument(
+        group = self.parser.add_argument_group("Common resource options")
+        group.add_argument(
             "-N", "--nodes", metavar="N", help="Number of nodes to allocate"
         )
-        self.parser.add_argument(
+        group.add_argument(
+            "--exclusive",
+            action="store_true",
+            help="With -N, --nodes, allocate nodes exclusively",
+        )
+        group = self.parser.add_argument_group(
+            "Per task options",
+            "The following options allow per-task specification of resources, "
+            + "and should not be combined with per-resource options.",
+        )
+        group.add_argument(
             "-n",
             "--ntasks",
             metavar="N",
             help="Number of tasks to start",
         )
-        self.parser.add_argument(
+        group.add_argument(
             "-c",
             "--cores-per-task",
             metavar="N",
             default=1,
             help="Number of cores to allocate per task",
         )
-        self.parser.add_argument(
+        group.add_argument(
             "-g",
             "--gpus-per-task",
             metavar="N",
             help="Number of GPUs to allocate per task",
-        )
-        self.parser.add_argument(
-            "--exclusive",
-            action="store_true",
-            help="With -N, --nodes, allocate nodes exclusively",
         )
         self.parser.add_argument(
             "-v",
