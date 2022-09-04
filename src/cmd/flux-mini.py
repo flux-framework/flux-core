@@ -228,6 +228,10 @@ class Xcmd:
         "nodes": "-N",
         "cores_per_task": "-c",
         "gpus_per_task": "-g",
+        "cores": "--cores=",
+        "tasks_per_node": "--tasks-per-node=",
+        "tasks_per_core": "--tasks-per-core=",
+        "gpus_per_node": "--gpus-per-node=",
         "time_limit": "-t",
         "env": "--env=",
         "env_file": "--env-file=",
@@ -745,7 +749,6 @@ class SubmitBaseCmd(MiniCmd):
             "-c",
             "--cores-per-task",
             metavar="N",
-            default=1,
             help="Number of cores to allocate per task",
         )
         group.add_argument(
@@ -753,6 +756,31 @@ class SubmitBaseCmd(MiniCmd):
             "--gpus-per-task",
             metavar="N",
             help="Number of GPUs to allocate per task",
+        )
+        group = self.parser.add_argument_group(
+            "Per resource options",
+            "The following options allow per-resource specification of "
+            + "tasks, and should not be used with per-task options above",
+        )
+        group.add_argument(
+            "--cores",
+            metavar="N",
+            help="Request a total number of cores",
+        )
+        group.add_argument(
+            "--tasks-per-node",
+            metavar="N",
+            help="Force number of tasks per node",
+        )
+        group.add_argument(
+            "--tasks-per-core",
+            metavar="N",
+            help="Force number of tasks per core",
+        )
+        group.add_argument(
+            "--gpus-per-node",
+            metavar="N",
+            help="Request a number of GPUs per node with --nodes",
         )
         self.parser.add_argument(
             "-v",
@@ -762,24 +790,28 @@ class SubmitBaseCmd(MiniCmd):
             help="Increase verbosity on stderr (multiple use OK)",
         )
 
+    # pylint: disable=too-many-branches
     def init_jobspec(self, args):
+        per_resource_type = None
+        per_resource_count = None
+
         if not args.command:
             raise ValueError("job command and arguments are missing")
-
-        #  If ntasks not set, then set it to either node count, with
-        #   exclusive flag enabled, or to 1 (the default).
-        if not args.ntasks:
-            if args.nodes:
-                args.ntasks = args.nodes
-                args.exclusive = True
-            else:
-                args.ntasks = 1
 
         #  Ensure integer args are converted to int() here.
         #  This is done because we do not use type=int in argparse in order
         #   to allow these options to be mutable for bulksubmit:
         #
-        for arg in ["ntasks", "nodes", "cores_per_task", "gpus_per_task"]:
+        for arg in [
+            "ntasks",
+            "nodes",
+            "cores",
+            "cores_per_task",
+            "gpus_per_task",
+            "tasks_per_node",
+            "tasks_per_core",
+            "gpus_per_node",
+        ]:
             value = getattr(args, arg)
             if value:
                 try:
@@ -787,6 +819,82 @@ class SubmitBaseCmd(MiniCmd):
                 except ValueError:
                     opt = arg.replace("_", "-")
                     raise ValueError(f"--{opt}: invalid int value '{value}'")
+
+        if args.tasks_per_node is not None and args.tasks_per_core is not None:
+            raise ValueError(
+                "Do not specify both the number of tasks per node and per core"
+            )
+
+        #  Handle --tasks-per-node or --tasks-per-core (it is an error to
+        #   specify both). Check options for validity and assign the
+        #   per_resource variable when valid.
+        #
+        if args.tasks_per_node is not None or args.tasks_per_core is not None:
+            if args.tasks_per_node is not None:
+                if args.tasks_per_node < 1:
+                    raise ValueError("--tasks-per-node must be >= 1")
+
+                per_resource_type = "node"
+                per_resource_count = args.tasks_per_node
+            elif args.tasks_per_core is not None:
+                if args.tasks_per_core < 1:
+                    raise ValueError("--tasks-per-core must be >= 1")
+                per_resource_type = "core"
+                per_resource_count = args.tasks_per_core
+
+        if args.gpus_per_node:
+            if not args.nodes:
+                raise ValueError("--gpus-per-node requires --nodes")
+
+        #  If any of --tasks-per-node, --tasks-per-core, --cores, or
+        #   --gpus-per-node is used, then use the per_resource constructor:
+        #
+        if (
+            per_resource_type is not None
+            or args.gpus_per_node is not None
+            or args.cores is not None
+        ):
+            #  If any of the per-task options was also specified, raise an
+            #   error here instead of silently ignoring those options:
+            if (
+                args.ntasks is not None
+                or args.cores_per_task is not None
+                or args.gpus_per_task
+            ):
+                raise ValueError(
+                    "Per-resource options can't be used with per-task options."
+                    + " (See --help for details)"
+                )
+
+            #  In per-resource mode, set the exclusive flag if nodes is
+            #   specified without cores. This preserves the default behavior
+            #   of requesting nodes exclusively when only -N is used:
+            if args.nodes and args.cores is None:
+                args.exclusive = True
+
+            return JobspecV1.per_resource(
+                args.command,
+                ncores=args.cores,
+                nnodes=args.nodes,
+                per_resource_type=per_resource_type,
+                per_resource_count=per_resource_count,
+                gpus_per_node=args.gpus_per_node,
+                exclusive=args.exclusive,
+            )
+
+        #  If ntasks not set, then set it to node count, with
+        #   exclusive flag enabled
+        if not args.ntasks and args.nodes:
+            args.ntasks = args.nodes
+            args.exclusive = True
+
+        # O/w default ntasks for from_command() is 1:
+        if not args.ntasks:
+            args.ntasks = 1
+
+        # default cores_per_task for from_command() is 1:
+        if not args.cores_per_task:
+            args.cores_per_task = 1
 
         return JobspecV1.from_command(
             args.command,
