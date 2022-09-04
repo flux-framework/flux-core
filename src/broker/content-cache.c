@@ -60,8 +60,9 @@ struct msgstack {
 };
 
 struct cache_entry {
-    void *data;
+    const void *data;
     int len;
+    void *data_container;
     void *hash;                     // key storage is contiguous with struct
     uint8_t valid:1;                // entry contains valid data
     uint8_t dirty:1;                // entry needs to be stored upstream
@@ -181,7 +182,7 @@ static void cache_entry_destroy (struct cache_entry *e)
         int saved_errno = errno;
         assert (e->load_requests == NULL);
         assert (e->store_requests == NULL);
-        free (e->data);
+        flux_msg_decref (e->data_container);
         free (e);
         errno = saved_errno;
     }
@@ -223,49 +224,6 @@ static struct cache_entry *cache_entry_create (const void *hash)
     memcpy (e->hash, hash, content_hash_size);
     list_node_init (&e->list);
     return e;
-}
-
-/* Make an invalid cache entry valid, filling in its data.
- * Set dirty flag if 'dirty' is true.
- * Perform accounting.
- * Respond to any pending load requests.
- * If entry is already valid, do not fill, do not set dirty; there will be
- * no load requests.
- * Returns 0 on success, -1 on failure with errno set.
- */
-static int cache_entry_fill (struct content_cache *cache,
-                             struct cache_entry *e,
-                             const void *data,
-                             int len,
-                             bool dirty)
-{
-    if (!e->valid) {
-        assert (!e->data);
-        assert (e->len == 0);
-        if (len > 0) {
-            if (!(e->data = malloc (len)))
-                return -1;
-            memcpy (e->data, data, len);
-        }
-        e->len = len;
-        e->valid = 1;
-        cache->acct_valid++;
-        cache->acct_size += len;
-        if (dirty) {
-            e->dirty = 1;
-            cache->acct_dirty++;
-        }
-        else {
-            list_add (&cache->lru, &e->list);
-            e->lastused = flux_reactor_now (cache->reactor);
-        }
-        request_list_respond_raw (&e->load_requests,
-                                  cache->h,
-                                  e->data,
-                                  e->len,
-                                  "load");
-    }
-    return 0;
 }
 
 static void cache_entry_dirty_clear (struct content_cache *cache,
@@ -367,20 +325,38 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
 {
     struct content_cache *cache = arg;
     struct cache_entry *e = flux_future_aux_get (f, "entry");
-    const void *data = NULL;
-    int len = 0;
+    const flux_msg_t *msg;
 
     e->load_pending = 0;
-    if (content_load_get (f, &data, &len) < 0) {
+    if (flux_future_get (f, (const void **)&msg) < 0) {
         if (errno == ENOSYS && cache->rank == 0)
             errno = ENOENT;
         if (errno != ENOENT)
             flux_log_error (cache->h, "content load");
         goto error;
     }
-    if (cache_entry_fill (cache, e, data, len, false) < 0) {
-        flux_log_error (cache->h, "content load");
-        goto error;
+    /* N.B. the entry may already be valid if a store filled it while
+     * we were waiting for this load completion.  Do nothing in that case.
+     * Any pending load requests would have been answered already.
+     */
+    if (!e->valid) {
+        assert (!e->data_container);
+        assert (!e->dirty);
+        if (flux_response_decode_raw (msg, NULL, &e->data, &e->len) < 0) {
+            flux_log_error (cache->h, "content load");
+            goto error;
+        }
+        e->data_container = (void *)flux_msg_incref (msg);
+        e->valid = 1;
+        cache->acct_valid++;
+        cache->acct_size += e->len;
+        list_add (&cache->lru, &e->list);
+        e->lastused = flux_reactor_now (cache->reactor);
+        request_list_respond_raw (&e->load_requests,
+                                  cache->h,
+                                  e->data,
+                                  e->len,
+                                  "load");
     }
     flux_future_destroy (f);
     return;
@@ -590,8 +566,27 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
         if (!(e = cache_entry_insert (cache, hash, hash_size)))
             goto error;
     }
-    if (cache_entry_fill (cache, e, data, len, true) < 0)
-        goto error;
+    /* Fill invalid cache entry, which may have been just created above,
+     * or could be there because a load was requested and it still awaits
+     * a response from up.  For the latter case, respond to any pending load
+     * requests after we fill the entry.
+     */
+    if (!e->valid) {
+        assert (!e->data_container);
+        e->data = data;
+        e->len = len;
+        e->data_container = (void *)flux_msg_incref (msg);
+        e->valid = 1;
+        e->dirty = 1;
+        cache->acct_valid++;
+        cache->acct_size += e->len;
+        cache->acct_dirty++;
+        request_list_respond_raw (&e->load_requests,
+                                  cache->h,
+                                  e->data,
+                                  e->len,
+                                  "load");
+    }
     if (e->dirty) {
         if (cache->rank > 0 || cache->backing) {
             if (cache_store (cache, e) < 0)
