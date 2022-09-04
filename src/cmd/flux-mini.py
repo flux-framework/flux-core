@@ -452,7 +452,7 @@ class MiniCmd:
         """
         Create default parser with args for mini subcommands
         """
-        parser = argparse.ArgumentParser(add_help=False)
+        parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
         parser.add_argument(
             "-t",
             "--time-limit",
