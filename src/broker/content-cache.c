@@ -414,8 +414,8 @@ static int cache_load (struct content_cache *cache, struct cache_entry *e)
     return 0;
 }
 
-void content_load_request (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
+static void content_load_request (flux_t *h, flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg, void *arg)
 {
     struct content_cache *cache = arg;
     const void *hash;
