@@ -17,9 +17,86 @@
 #include <errno.h>
 #include <jansson.h>
 
+#include <flux/hostlist.h>
+
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/aux.h"
 
 #include "match.h"
+
+struct job_constraint {
+    json_t *constraint;
+    struct aux_item *aux;
+};
+
+static struct hostlist * array_to_hostlist (struct job_constraint *jc,
+                                            const char *s,
+                                            json_t *hostlists,
+                                            flux_error_t *errp)
+{
+    json_t *entry;
+    size_t index;
+    struct hostlist *hl = hostlist_create ();
+
+    if (!hl)
+        return NULL;
+
+    json_array_foreach (hostlists, index, entry) {
+        if (hostlist_append (hl, json_string_value (entry)) < 0) {
+            errprintf (errp,
+                       "invalid hostlist '%s' in %s",
+                       json_string_value (entry),
+                       s);
+            goto error;
+        }
+    }
+    if (job_constraint_aux_set (jc,
+                                s,
+                                hl,
+                                (flux_free_f) hostlist_destroy) < 0) {
+        errprintf (errp, "out of memory");
+        goto error;
+    }
+
+    return hl;
+error:
+    hostlist_destroy (hl);
+    return NULL;
+}
+
+static int validate_hostlist (struct job_constraint *jc,
+                              json_t *args,
+                              flux_error_t *errp)
+{
+    char *s;
+    struct hostlist *hl;
+
+    if (!json_is_array (args))
+        return errprintf (errp, "hostlist operator argument not an array");
+
+    s = json_dumps (args, JSON_COMPACT);
+    hl = array_to_hostlist (jc, s, args, errp);
+    free (s);
+    if (!hl)
+        return -1;
+    return 0;
+}
+
+static bool rnode_in_hostlist (const struct rnode *n,
+                               struct job_constraint *jc,
+                               json_t *hostlists)
+{
+    struct hostlist *hl;
+    char *s = json_dumps (hostlists, JSON_COMPACT);
+
+    if (!(hl = job_constraint_aux_get (jc, s)))
+        hl = array_to_hostlist (jc, s, hostlists, NULL);
+    free (s);
+    if (!hl || hostlist_find (hl, n->hostname) < 0)
+        return false;
+
+    return true;
+}
 
 static bool rnode_has (const struct rnode *n, const char *property)
 {
@@ -103,6 +180,8 @@ bool rnode_match (const struct rnode *n,
         bool result;
         if (strcmp (op, "properties") == 0)
             result = rnode_has_all (n, args);
+        else if (strcmp (op, "hostlist") == 0)
+            result = rnode_in_hostlist (n, jc, args);
         else if (strcmp (op, "or") == 0)
             result = rnode_or (n, jc, args);
         else if (strcmp (op, "and") == 0)
@@ -183,6 +262,10 @@ int rnode_match_validate (struct job_constraint *jc,
     json_object_foreach (constraint, op, args) {
         if (strcmp (op, "properties") == 0) {
             if (validate_properties (args, errp) < 0)
+                return -1;
+        }
+        else if (strcmp (op, "hostlist") == 0) {
+            if (validate_hostlist (jc, args, errp) < 0)
                 return -1;
         }
         else if (strcmp (op, "or") == 0

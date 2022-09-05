@@ -182,7 +182,17 @@ struct validate_test validate_tests[] = {
            } \
          ] \
       }",
-      0,
+      true,
+      NULL
+    },
+    { "hostlist can be included",
+      "{\"hostlist\": [\"foo[0-10]\"]}",
+      true,
+      NULL
+    },
+    { "invalid hostlist fails",
+      "{\"hostlist\": [\"foo0-10]\"]}",
+      false,
       NULL
     },
     { NULL, NULL, 0, NULL }
