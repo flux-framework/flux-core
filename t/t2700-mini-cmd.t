@@ -305,4 +305,135 @@ test_expect_success HAVE_JQ 'flux-mini submit does not substitute {} without --c
 		--dry-run true > nocc.json &&
 	jq -e ".attributes.system.test == {}" < nocc.json
 '
+test_expect_success HAVE_JQ 'flux-mini submit --tasks-per-node works' '
+	flux mini submit \
+		--env=-* \
+		-N 2 \
+		--tasks-per-node=2 \
+		--dry-run true > ntasks-per-node.json &&
+	jq -e \
+	 ".attributes.system.shell.options.\"per-resource\".type == \"node\"" &&
+	jq -e \
+	 ".attributes.system.shell.options.\"per-resource\".count == 2"
+'
+
+#  Per-resource expected failure tests
+cat <<EOF >per-resource-failure.txt
+\
+--tasks-per-core=1 --tasks-per-node=1 \
+==Do not specify both the number of tasks per node and per core
+\
+--tasks-per-node=0 \
+==--tasks-per-node must be >= 1
+\
+--tasks-per-core=0 \
+==--tasks-per-core must be >= 1
+\
+--cores=-4 \
+==ncores must be an integer >= 1
+\
+--nodes=1 --gpus-per-node=-1 \
+==gpus_per_node must be an integer >= 0
+\
+--gpus-per-node=1 \
+==gpus-per-node requires --nodes
+\
+--cores=4 --exclusive \
+==exclusive can only be set with a node count
+\
+--nodes=4 --cores=2 \
+==number of cores cannot be less than nnodes
+\
+--nodes=5 --cores=9 \
+==number of cores must be evenly divisible by node count
+\
+--cores=2 --cores-per-task=1 \
+==Per-resource options.*per-task options
+\
+--cores=1 --ntasks=1 \
+==Per-resource options.*per-task options
+\
+--nodes=1 --tasks-per-node=1 --gpus-per-task=1 \
+==Per-resource options.*per-task options
+\
+--nodes=1 --tasks-per-core=1 --cores-per-task=1 \
+==Per-resource options.*per-task options
+EOF
+
+while read line; do
+	args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
+	expected=$(echo $line | awk -F== '{print $2}')
+	test_expect_success "per-resource: $args error: $expected" '
+		output=per-resource-error.${test_count}.out &&
+		test_must_fail flux mini run $args --env=-* --dry-run hostname \
+			>${output} 2>&1 &&
+		test_debug "cat $output" &&
+		grep -- "$expected" $output
+	'
+done < per-resource-failure.txt
+
+
+#  Per-resource expected success tests
+cat <<EOF >per-resource-args.txt
+\
+-N2 --cores=2 \
+==nnodes=2 nslots=2 slot_size=1 slot_gpus=0 exclusive=false duration=0.0 \
+==
+\
+-N2 --cores=2 --tasks-per-node=2 \
+==nnodes=2 nslots=2 slot_size=1 slot_gpus=0 exclusive=false duration=0.0 \
+=={"type": "node", "count": 2}
+\
+-N2 --cores=2 --tasks-per-core=2 \
+==nnodes=2 nslots=2 slot_size=1 slot_gpus=0 exclusive=false duration=0.0 \
+=={"type": "core", "count": 2}
+\
+--cores=16 \
+==nnodes=0 nslots=16 slot_size=1 slot_gpus=0 exclusive=false duration=0.0 \
+==
+\
+--cores=16 --tasks-per-node=1 \
+==nnodes=0 nslots=16 slot_size=1 slot_gpus=0 exclusive=false duration=0.0 \
+=={"type": "node", "count": 1}
+\
+--cores=5 --tasks-per-core=2 \
+==nnodes=0 nslots=5 slot_size=1 slot_gpus=0 exclusive=false duration=0.0 \
+=={"type": "core", "count": 2}
+\
+--nodes=2 --tasks-per-node=2 \
+==nnodes=2 nslots=2 slot_size=1 slot_gpus=0 exclusive=true duration=0.0 \
+=={"type": "node", "count": 2}
+\
+--nodes=2 --tasks-per-core=1 \
+==nnodes=2 nslots=2 slot_size=1 slot_gpus=0 exclusive=true duration=0.0 \
+=={"type": "core", "count": 1}
+\
+-N1 --gpus-per-node=2 \
+==nnodes=1 nslots=1 slot_size=1 slot_gpus=2 exclusive=true duration=0.0 \
+==
+\
+-N2 --cores=4 --tasks-per-node=1 --gpus-per-node=1 \
+==nnodes=2 nslots=2 slot_size=2 slot_gpus=1 exclusive=false duration=0.0 \
+=={"type": "node", "count": 1}
+EOF
+
+jj=${FLUX_BUILD_DIR}/t/sched-simple/jj-reader
+while read line; do
+        args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
+        expected=$(echo $line | awk -F== '{print $2}')
+        per_resource=$(echo $line | awk -F== '{print $3}' | sed 's/  *$//')
+	test_expect_success HAVE_JQ "per-resource: $args" '
+		echo $expected >expected.$test_count &&
+                flux mini run $args --dry-run hostname > jobspec.$test_count &&
+		$jj < jobspec.$test_count >output.$test_count &&
+		test_debug "cat output.$test_count" &&
+                test_cmp expected.$test_count output.$test_count &&
+		if test -n "$per_resource"; then
+		    test_debug "echo expected $per_resource" &&
+		    jq -e ".attributes.system.shell.options.per_resource == \
+			   $per_resource"
+		fi
+	'
+done < per-resource-args.txt
+
 test_done
