@@ -54,36 +54,44 @@ static bool rnode_has_all (const struct rnode *n, json_t *properties)
     return true;
 }
 
-static bool rnode_or (const struct rnode *n, json_t *args)
+static bool rnode_or (const struct rnode *n,
+                      struct job_constraint *jc,
+                      json_t *args)
 {
     json_t *constraint;
     size_t index;
     json_array_foreach (args, index, constraint) {
-        if (rnode_match (n, constraint))
+        if (rnode_match (n, jc, constraint))
             return true;
     }
     /* No matches */
     return false;
 }
 
-static bool rnode_and (const struct rnode *n, json_t *args)
+static bool rnode_and (const struct rnode *n,
+                       struct job_constraint *jc,
+                       json_t *args)
 {
     json_t *constraint;
     size_t index;
     json_array_foreach (args, index, constraint) {
-        if (!rnode_match (n, constraint))
+        if (!rnode_match (n, jc, constraint))
             return false;
     }
     /* All matches */
     return true;
 }
 
-static bool rnode_not (const struct rnode *n, json_t *args)
+static bool rnode_not (const struct rnode *n,
+                       struct job_constraint *jc,
+                       json_t *args)
 {
-    return !rnode_and (n, args);
+    return !rnode_and (n, jc, args);
 }
 
-bool rnode_match (const struct rnode *n, json_t *constraint)
+bool rnode_match (const struct rnode *n,
+                  struct job_constraint *jc,
+                  json_t *constraint)
 {
     const char *op;
     json_t *args;
@@ -96,11 +104,11 @@ bool rnode_match (const struct rnode *n, json_t *constraint)
         if (strcmp (op, "properties") == 0)
             result = rnode_has_all (n, args);
         else if (strcmp (op, "or") == 0)
-            result = rnode_or (n, args);
+            result = rnode_or (n, jc, args);
         else if (strcmp (op, "and") == 0)
-            result = rnode_and (n, args);
+            result = rnode_and (n, jc, args);
         else if (strcmp (op, "not") == 0)
-            result = rnode_not (n, args);
+            result = rnode_not (n, jc, args);
         else
             result = false;
 
@@ -144,7 +152,8 @@ static int validate_properties (json_t *args, flux_error_t *errp)
     return 0;
 }
 
-static int validate_conditional (const char *type,
+static int validate_conditional (struct job_constraint *jc,
+                                 const char *type,
                                  json_t *args,
                                  flux_error_t *errp)
 {
@@ -155,18 +164,20 @@ static int validate_conditional (const char *type,
         return errprintf (errp, "%s operator value must be an array", type);
 
     json_array_foreach (args, index, entry) {
-        if (rnode_match_validate (entry, errp) < 0)
+        if (rnode_match_validate (jc, entry, errp) < 0)
             return -1;
     }
     return 0;
 }
 
-int rnode_match_validate (json_t *constraint, flux_error_t *errp)
+int rnode_match_validate (struct job_constraint *jc,
+                          json_t *constraint,
+                          flux_error_t *errp)
 {
     const char *op;
     json_t *args;
 
-    if (!constraint || !json_is_object (constraint))
+    if (!jc || !json_is_object (constraint))
         return errprintf (errp, "constraint must be JSON object");
 
     json_object_foreach (constraint, op, args) {
@@ -177,7 +188,7 @@ int rnode_match_validate (json_t *constraint, flux_error_t *errp)
         else if (strcmp (op, "or") == 0
                 || strcmp (op, "and") == 0
                 || strcmp (op, "not") == 0) {
-            if (validate_conditional (op, args, errp) < 0)
+            if (validate_conditional (jc, op, args, errp) < 0)
                 return -1;
         }
         else
@@ -187,15 +198,69 @@ int rnode_match_validate (json_t *constraint, flux_error_t *errp)
 }
 
 struct rnode *rnode_copy_match (const struct rnode *orig,
-                                json_t *constraint)
+                                struct job_constraint *jc)
 {
     struct rnode *n = NULL;
-    if (rnode_match (orig, constraint)) {
+    if (!jc) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (rnode_match (orig, jc, jc->constraint)) {
         if ((n = rnode_copy (orig)))
             n->up = orig->up;
     }
     return n;
 }
+
+void job_constraint_destroy (struct job_constraint *jc)
+{
+    if (jc) {
+        int saved_errno = errno;
+        aux_destroy (&jc->aux);
+        json_decref (jc->constraint);
+        free (jc);
+        errno = saved_errno;
+    }
+}
+
+struct job_constraint *job_constraint_create (json_t *constraint,
+                                              flux_error_t *errp)
+{
+    struct job_constraint *jc;
+
+    if (!(jc = calloc (1, sizeof (*jc))))
+        return NULL;
+    jc->constraint = json_incref (constraint);
+
+    if (rnode_match_validate (jc, constraint, errp) < 0) {
+        job_constraint_destroy (jc);
+        return NULL;
+    }
+
+   return (jc);
+}
+
+int job_constraint_aux_set (struct job_constraint *jc,
+                            const char *key,
+                            void *val,
+                            flux_free_f free_fn)
+{
+    if (!jc) {
+        errno = EINVAL;
+        return -1;
+    }
+    return aux_set (&jc->aux, key, val, free_fn);
+}
+
+void * job_constraint_aux_get (struct job_constraint *jc, const char *key)
+{
+    if (!jc) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return aux_get (jc->aux, key);
+}
+
 
 /* vi: ts=4 sw=4 expandtab
  */
