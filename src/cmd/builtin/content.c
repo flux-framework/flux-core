@@ -22,33 +22,50 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/libcontent/content.h"
 
-static int internal_content_load (optparse_t *p, int ac, char *av[])
+static void catblob (flux_t *h, const char *blobref, int flags)
 {
-    int n;
-    const char *ref;
+    flux_future_t *f;
     const uint8_t *data;
     int size;
-    flux_t *h;
-    flux_future_t *f;
-    int flags = 0;
 
-    n = optparse_option_index (p);
-    if (n != ac - 1) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-    ref = av[n];
-    if (!(h = builtin_get_flux_handle (p)))
-        log_err_exit ("flux_open");
-    if (optparse_hasopt (p, "bypass-cache"))
-        flags |= CONTENT_FLAG_CACHE_BYPASS;
-    if (!(f = content_load_byblobref (h, ref, flags)))
+    if (!(f = content_load_byblobref (h, blobref, flags)))
         log_err_exit ("content_load_byblobref");
     if (content_load_get (f, (const void **)&data, &size) < 0)
         log_err_exit ("content_load_get");
     if (write_all (STDOUT_FILENO, data, size) < 0)
         log_err_exit ("write");
     flux_future_destroy (f);
+}
+
+static int internal_content_load (optparse_t *p, int ac, char *av[])
+{
+    int n;
+    flux_t *h;
+    int flags = 0;
+
+    if (!(h = builtin_get_flux_handle (p)))
+        log_err_exit ("flux_open");
+    if (optparse_hasopt (p, "bypass-cache"))
+        flags |= CONTENT_FLAG_CACHE_BYPASS;
+
+    n = optparse_option_index (p);
+    if (n == ac) {
+        char blobref[BLOBREF_MAX_STRING_SIZE];
+        while ((fgets (blobref, sizeof (blobref), stdin))) {
+            int len = strlen (blobref);
+            if (blobref[len - 1] == '\n')
+                blobref[len - 1] = '\0';
+            catblob (h, blobref, flags);
+        }
+    }
+    else if (n == ac - 1) {
+        const char *blobref = av[n];
+        catblob (h, blobref, flags);
+    }
+    else {
+        optparse_print_usage (p);
+        exit (1);
+    }
     flux_close (h);
     return (0);
 }
