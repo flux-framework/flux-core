@@ -14,6 +14,9 @@
 #include "builtin.h"
 
 #include <unistd.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/read_all.h"
@@ -120,6 +123,88 @@ static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+static int internal_content_mmap (optparse_t *p, int ac, char *av[])
+{
+    int optindex = optparse_option_index (p);
+    int blobsize = 1048576;
+    flux_t *h;
+    flux_future_t *f;
+    char path[PATH_MAX];
+    size_t index;
+    json_t *blobrefs;
+    json_t *blob;
+
+    if (optindex == ac) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (optindex < ac) {
+        if (!realpath (av[optindex++], path))
+            log_err_exit ("path");
+    }
+    if (optindex < ac) {
+        errno = 0;
+        blobsize = strtoul (av[optindex++], NULL, 10);
+        if (errno > 0)
+            log_msg_exit ("error parsing optional blobsize argument");
+    }
+    if (optindex != ac) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = builtin_get_flux_handle (p)))
+        log_err_exit ("flux_open");
+    if (!(f = flux_rpc_pack (h,
+                             "content.mmap",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s s:i}",
+                             "path", path,
+                             "blobsize", blobsize))
+        || flux_rpc_get_unpack (f, "{s:o}", "blobrefs", &blobrefs) < 0)
+        log_err_exit ("content.mmap: %s", future_strerror (f, errno));
+    json_array_foreach (blobrefs, index, blob) {
+        printf ("%s\n", json_string_value (blob));
+    }
+    flux_future_destroy (f);
+    flux_close (h);
+    return 0;
+}
+
+static int internal_content_munmap (optparse_t *p, int ac, char *av[])
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h;
+    flux_future_t *f;
+    char path[PATH_MAX];
+
+    if (optindex == ac) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (optindex < ac) {
+        if (!realpath (av[optindex++], path))
+            log_err_exit ("path");
+    }
+    if (optindex != ac) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = builtin_get_flux_handle (p)))
+        log_err_exit ("flux_open");
+    if (!(f = flux_rpc_pack (h,
+                             "content.munmap",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s}",
+                             "path", path))
+        || flux_rpc_get (f, NULL) < 0)
+        log_err_exit ("content.munmap: %s", future_strerror (f, errno));
+    flux_future_destroy (f);
+    flux_close (h);
+    return 0;
+}
+
 int cmd_content (optparse_t *p, int ac, char *av[])
 {
     log_init ("flux-content");
@@ -167,6 +252,20 @@ static struct optparse_subcommand content_subcmds[] = {
       NULL,
       "Flush dirty entries from local content cache",
       internal_content_flush,
+      0,
+      NULL,
+    },
+    { "mmap",
+      "PATH [BLOBSIZE]",
+      "Map a file into the content cache",
+      internal_content_mmap,
+      0,
+      NULL,
+    },
+    { "munmap",
+      "PATH",
+      "Unmap a file from the content cache",
+      internal_content_munmap,
       0,
       NULL,
     },
