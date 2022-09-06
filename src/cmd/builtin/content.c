@@ -19,33 +19,48 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/libcontent/content.h"
 
+static void load_to_fd (flux_t *h, int fd, const char *blobref, int flags)
+{
+    flux_future_t *f;
+    const uint8_t *data;
+    int size;
+
+    if (!(f = content_load_byblobref (h, blobref, flags))
+        || content_load_get (f, (const void **)&data, &size) < 0)
+        log_msg_exit ("error loading blob: %s", future_strerror (f, errno));
+    if (write_all (fd, data, size) < 0)
+        log_err_exit ("write");
+    flux_future_destroy (f);
+}
+
 static int internal_content_load (optparse_t *p, int ac, char *av[])
 {
     int n;
-    const char *ref;
-    const uint8_t *data;
-    int size;
     flux_t *h;
-    flux_future_t *f;
     int flags = 0;
 
-    n = optparse_option_index (p);
-    if (n != ac - 1) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-    ref = av[n];
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
     if (optparse_hasopt (p, "bypass-cache"))
         flags |= CONTENT_FLAG_CACHE_BYPASS;
-    if (!(f = content_load_byblobref (h, ref, flags)))
-        log_err_exit ("content_load_byblobref");
-    if (content_load_get (f, (const void **)&data, &size) < 0)
-        log_err_exit ("content_load_get");
-    if (write_all (STDOUT_FILENO, data, size) < 0)
-        log_err_exit ("write");
-    flux_future_destroy (f);
+
+    n = optparse_option_index (p);
+    if (n == ac) {
+        char blobref[BLOBREF_MAX_STRING_SIZE];
+        int count = 0;
+        while ((fgets (blobref, sizeof (blobref), stdin))) {
+            int len = strlen (blobref);
+            if (blobref[len - 1] == '\n')
+                blobref[len - 1] = '\0';
+            load_to_fd (h, STDOUT_FILENO, blobref, flags);
+            count++;
+        }
+        if (count == 0)
+            log_msg_exit ("no blobrefs were specified");
+    }
+    else while (n < ac) {
+        load_to_fd (h, STDOUT_FILENO, av[n++], flags);
+    }
     flux_close (h);
     return (0);
 }
@@ -143,8 +158,8 @@ static struct optparse_option store_opts[] = {
 
 static struct optparse_subcommand content_subcmds[] = {
     { "load",
-      "[OPTIONS] BLOBREF",
-      "Load blob for digest BLOBREF to stdout",
+      "[OPTIONS] BLOBREF ...",
+      "Concatentate blobs stored under BLOBREF(s) to stdout",
       internal_content_load,
       0,
       load_opts,
