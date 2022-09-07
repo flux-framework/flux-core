@@ -2,6 +2,8 @@
 
 test_description='Test resource module with system instance config'
 
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
 if which hwloc-bind > /dev/null; then
