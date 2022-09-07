@@ -746,6 +746,8 @@ class JobspecV1(Jobspec):
             #  With nnodes, nslots is slots/node (total_slots=slots*nodes)
             nslots = 1
             slot_size = 1
+        else:
+            raise ValueError("must specify node or core count with per_resource")
 
         children = [cls._create_resource("core", slot_size)]
         if gpus_per_node:
