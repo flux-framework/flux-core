@@ -70,6 +70,7 @@ TESTSCRIPTS = \
 	t0012-content-sqlite.t \
 	t0024-content-s3.t \
 	t0028-content-backing-none.t \
+	t0029-content-mmap.t \
 	t0025-broker-state-machine.t \
 	t0027-broker-groups.t \
 	t0013-config-file.t \
