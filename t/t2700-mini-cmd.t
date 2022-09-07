@@ -358,6 +358,12 @@ cat <<EOF >per-resource-failure.txt
 \
 --nodes=1 --tasks-per-core=1 --cores-per-task=1 \
 ==Per-resource options.*per-task options
+\
+--tasks-per-core=1 \
+==must specify node or core count with per_resource
+\
+--tasks-per-node=1 \
+==must specify node or core count with per_resource
 EOF
 
 while read line; do
