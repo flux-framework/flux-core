@@ -136,7 +136,7 @@ test_expect_success HAVE_JQ,MULTICORE 'resource norestrict option works' '
 	hwloc-bind core:0 flux start -s1 \
 		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
 		flux mini run -N1 --exclusive \
-		  sh -c "hwloc-bind --get | hwloc-calc --number-of core" \
+		  sh -c "hwloc-bind --get | hwloc-calc --number-of core | tail -n1" \
 		    >${name}/ncores &&
 	test_debug "cat ${name}/ncores" &&
 	test $(cat ${name}/ncores) = $NCORES
