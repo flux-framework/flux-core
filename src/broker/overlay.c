@@ -1092,10 +1092,9 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
      */
     if (subtree_is_online (child->status)) { // crash
         flux_log (ov->h, LOG_ERR,
-                  "%s (rank %lu) reconnected after crash, dropping old uuid %s",
+        "%s (rank %lu) reconnected after crash, dropping old connection state",
                   flux_get_hostbyrank (ov->h, child->rank),
-                  (unsigned long)child->rank,
-                  child->uuid);
+                  (unsigned long)child->rank);
         overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
         hello_log_level = LOG_ERR; // want hello log to stand out in this case
     }
@@ -1112,10 +1111,9 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
 
     flux_log (ov->h,
               hello_log_level,
-              "accepting connection from %s (rank %lu) uuid %s status %s",
+              "accepting connection from %s (rank %lu) status %s",
               flux_get_hostbyrank (ov->h, child->rank),
               (unsigned long)child->rank,
-              child->uuid,
               subtree_status_str (child->status));
 
     if (!(response = flux_response_derive (msg, 0))
@@ -1126,10 +1124,9 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     return;
 error_log:
     flux_log (ov->h, LOG_ERR,
-              "rejecting connection from %s (rank %lu) uuid %s: %s",
+              "rejecting connection from %s (rank %lu): %s",
               flux_get_hostbyrank (ov->h, rank),
               (unsigned long)rank,
-              uuid,
               reason);
 error:
     if (!(response = flux_response_derive (msg, errno))
