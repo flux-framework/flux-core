@@ -2,8 +2,8 @@ name: Build and Deploy Container
 
 on:
 
-  # Added just for testing
-  pull_request: []
+  # Enable just for testing cobntainer builds
+  # pull_request: []
   
   # Always have a base image ready to go - this is a nightly build
   schedule:
