@@ -20,7 +20,7 @@ RUN mkdir -p /opt/flux-env \
 &&   echo "  view:" \
 &&   echo "    mfem:" \
 &&   echo "      root: /opt/flux-view" \
-&&   echo "      link_type: copy" \
+# &&   echo "      link_type: copy" \
 &&   echo "  packages:" \
 &&   echo "    all:" \
 &&   echo "      target:" \
