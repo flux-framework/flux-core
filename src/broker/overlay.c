@@ -897,8 +897,13 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
          * Send CONTROL_DISCONNECT to force subtree panic.
          */
         else {
-            if (overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0) < 0)
-                flux_log_error (ov->h, "failed to send CONTROL_DISCONNECT");
+            if (overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0) < 0) {
+                // not LOG_ERR per flux-framework/flux-core#4464
+                flux_log (ov->h,
+                          LOG_DEBUG,
+                          "failed to send CONTROL_DISCONNECT: %s",
+                          strerror (errno));
+            }
         }
         goto done;
     }
