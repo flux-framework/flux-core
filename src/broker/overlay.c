@@ -1064,7 +1064,7 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     flux_msg_t *response;
     const char *uuid;
     int status;
-    int hello_log_level = LOG_INFO;
+    int hello_log_level = LOG_DEBUG;
 
     if (flux_request_unpack (msg,
                              NULL,
