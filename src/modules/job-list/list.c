@@ -301,12 +301,12 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
         goto cleanup;
     }
     else {
-        /* Job ID is legal.  Chance job-info has seen ID since this
+        /* Job ID is legal.  Chance job-list has seen ID since this
          * lookup was done */
         struct job *job;
         if (!(job = zhashx_lookup (ctx->jsctx->index, &isd->id))
             || job->state == FLUX_JOB_STATE_NEW) {
-            /* Must wait for job-info to see state change */
+            /* Must wait for job-list to see state change */
             if (wait_id_valid (ctx, isd) < 0)
                 flux_log_error (ctx->h, "%s: wait_id_valid", __FUNCTION__);
             goto cleanup;
@@ -343,7 +343,7 @@ int check_id_valid (struct list_ctx *ctx,
     char path[256];
     int saved_errno;
 
-    /* Check to see if the ID is legal, job-info may have not yet
+    /* Check to see if the ID is legal, job-list may have not yet
      * seen the ID publication yet */
     if (flux_job_kvs_key (path, sizeof (path), id, NULL) < 0)
         goto error;
@@ -416,7 +416,7 @@ json_t *get_job_by_id (struct list_ctx *ctx,
                 flux_log_error (ctx->h, "%s: idsync_data_create", __FUNCTION__);
                 return NULL;
             }
-            /* Must wait for job-info to see state change */
+            /* Must wait for job-list to see state change */
             if (wait_id_valid (ctx, isd) < 0) {
                 flux_log_error (ctx->h, "%s: wait_id_valid", __FUNCTION__);
                 return NULL;
