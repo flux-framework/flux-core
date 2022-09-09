@@ -1282,7 +1282,6 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
                                  struct job *job,
                                  flux_jobid_t id,
                                  int eventlog_seq,
-                                 double timestamp,
                                  json_t *context)
 {
     if (!job) {
@@ -1667,7 +1666,6 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
                                   job,
                                   id,
                                   eventlog_seq,
-                                  timestamp,
                                   context) < 0)
             return -1;
     }
