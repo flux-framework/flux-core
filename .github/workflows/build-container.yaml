@@ -1,4 +1,4 @@
-name: Build and Deploy Container
+name: Build and Deploy Containers
 
 on:
 
@@ -31,9 +31,8 @@ jobs:
       matrix:
 
         # Dockerfiles to build, a matrix supports future expanded builds
-        container: [["etc/docker/Dockerfile.base", "ghcr.io/flux-framework/flux-core-base"]]
-                    # This will be enabled after the first container builds.
-                    #["config/docker/Dockerfile", "ghcr.io/flux-framework/flux-core-ubuntu"]]
+        container: [["etc/docker/Dockerfile.base", "ghcr.io/flux-framework/flux-core-base"],
+                    ["etc/docker/Dockerfile", "ghcr.io/flux-framework/flux-core-ubuntu"]]
 
     runs-on: ubuntu-latest
     name: Build
