@@ -260,7 +260,7 @@ int wait_id_valid (struct list_ctx *ctx, struct idsync_data *isd)
         zlistx_detach (ctx->idsync_lookups, handle);
     }
 
-    /* idsync_waits holds lists of ids waiting on, b/c multiplers callers
+    /* idsync_waits holds lists of ids waiting on, b/c multiple callers
      * could wait on same id */
     if (!(list_isd = zhashx_lookup (ctx->idsync_waits, &isd->id))) {
         if (!(list_isd = zlistx_new ())) {
