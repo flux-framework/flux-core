@@ -79,18 +79,18 @@ EXAMPLE
 
 ::
 
-   [policy.defaults]
+   [policy.jobspec.defaults.system]
    duration = "1h"
    queue = "batch"
 
    [policy.limits]
    duration = "4h"
    job-size.max.nnodes = 8
-   job-size.max.gpus = 4
+   job-size.max.ngpus = 4
 
-   [queues.pdebug.policy.limits]
+   [queues.debug.policy.limits]
    duration = "30m"
-   job-size.max.gpus = -1  # unlimited
+   job-size.max.ngpus = -1  # unlimited
 
 
 RESOURCES
