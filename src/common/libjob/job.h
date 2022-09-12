@@ -136,36 +136,16 @@ int flux_job_wait_get_status (flux_future_t *f,
                               const char **errstr);
 int flux_job_wait_get_id (flux_future_t *f, flux_jobid_t *id);
 
-/* Request a list of jobs.
- * If 'max_entries' > 0, fetch at most that many jobs.
- * 'attrs_json_str' is an encoded JSON array of attribute strings, e.g.
- * ["id","userid",...] that will be returned in response.
- *
- * Process the response payload with flux_rpc_get() or flux_rpc_get_unpack().
- * It is a JSON object containing an array of job objects, e.g.
- * { "jobs":[
- *   {"id":m, "userid":n},
- *   {"id":m, "userid":n},
- *   ...
- * ])
- *
- * states can be set to an OR of any job state or any virtual job
- * states to retrieve jobs of only those states.  Specify 0 for all
- * states.
- */
-flux_future_t *flux_job_list (flux_t *h,
-                              int max_entries,
-                              const char *attrs_json_str,
-                              uint32_t userid,
-                              int states);
+FLUX_DEPRECATED(flux_future_t *flux_job_list (flux_t *,
+                                              int,
+                                              const char *,
+                                              uint32_t,
+                                              int));
 
-/* Similar to flux_job_list(), but retrieve inactive jobs newer
- * than a timestamp.
- */
-flux_future_t *flux_job_list_inactive (flux_t *h,
-                                       int max_entries,
-                                       double since,
-                                       const char *attrs_json_str);
+FLUX_DEPRECATED(flux_future_t *flux_job_list_inactive (flux_t *,
+                                                       int,
+                                                       double,
+                                                       const char *));
 
 /* Similar to flux_job_list(), but retrieve job info for a single
  * job id */
