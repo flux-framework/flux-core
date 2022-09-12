@@ -41,6 +41,13 @@ struct rnode {
     zhashx_t *properties;
 };
 
+struct rnode *rnode_new (const char *name, uint32_t rank);
+
+struct rnode_child * rnode_add_child_idset (struct rnode *n,
+                                            const char *name,
+                                            const struct idset *ids,
+                                            const struct idset *avail);
+
 /*  Create a resource node object from an existing idset `set`
  */
 struct rnode *rnode_create_idset (const char *name,

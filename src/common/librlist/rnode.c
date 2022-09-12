@@ -125,10 +125,10 @@ out:
  *   then add 'ids' to that child (it is an error if one or more ids
  *   are already set in child 'name'.
  */
-static struct rnode_child * rnode_add_child_idset (struct rnode *n,
-                                                   const char *name,
-                                                   const struct idset *ids,
-                                                   const struct idset *avail)
+struct rnode_child * rnode_add_child_idset (struct rnode *n,
+                                            const char *name,
+                                            const struct idset *ids,
+                                            const struct idset *avail)
 {
     struct rnode_child *c = zhashx_lookup (n->children, name);
 
