@@ -1357,10 +1357,19 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     else
         userid = getuid ();
 
-    if (!(f = flux_job_list (h, max_entries, "[\"all\"]", userid, states)))
-        log_err_exit ("flux_job_list");
+    if (!(f = flux_rpc_pack (h,
+                             "job-list.list",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:i s:[s] s:i s:i s:i}",
+                             "max_entries", max_entries,
+                             "attrs", "all",
+                             "userid", userid,
+                             "states", states,
+                             "results", 0)))
+        log_err_exit ("flux_rpc_pack");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
-        log_err_exit ("flux_job_list");
+        log_err_exit ("flux job-list.list");
     json_array_foreach (jobs, index, value) {
         char *str;
         str = json_dumps (value, 0);
@@ -1399,10 +1408,20 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!(f = flux_job_list_inactive (h, max_entries, since, "[\"all\"]")))
-        log_err_exit ("flux_job_list_inactive");
+    if (!(f = flux_rpc_pack (h,
+                             "job-list.list",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:i s:f s:i s:i s:i s:[s]}",
+                             "max_entries", max_entries,
+                             "since", since,
+                             "userid", FLUX_USERID_UNKNOWN,
+                             "states", FLUX_JOB_STATE_INACTIVE,
+                             "results", 0,
+                             "attrs", "all")))
+        log_err_exit ("flux_rpc_pack");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
-        log_err_exit ("flux_job_list_inactive");
+        log_err_exit ("flux job-list.list");
     json_array_foreach (jobs, index, value) {
         char *str;
         str = json_dumps (value, 0);
