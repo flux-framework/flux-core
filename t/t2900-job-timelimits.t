@@ -16,7 +16,7 @@ test_have_prereq ASAN && TIMEOUT=3
 
 test_expect_success 'job time limits are enforced' '
 	test_expect_code 142 \
-		flux mini run --time-limit=${TIMEOUT} sleep 30 2>limit1.err &&
+		flux mini run --time-limit=${TIMEOUT}s sleep 30 2>limit1.err &&
 	grep "resource allocation expired" limit1.err
 '
 test_expect_success HAVE_JQ 'job timelimits are propagated' '
@@ -57,7 +57,7 @@ sigalrm_sigkill_test() {
 	flux module reload job-exec kill-timeout=$kill_timeout &&
 	ofile=trap.$scale.out &&
 	test_must_fail_or_be_terminated \
-           flux mini run -vvv --time-limit=${timeout} bash -xc \
+           flux mini run -vvv --time-limit=${timeout}s bash -xc \
                "trap \"echo got SIGALRM>>$ofile\" SIGALRM;sleep 10;sleep 15" \
                    > $ofile 2> trap.$scale.err &&
         test_debug "grep . trap.*" &&
@@ -74,7 +74,7 @@ test_expect_success 'expired jobs are sent SIGALRM, then SIGKILL' '
 	done
 '
 expired_cancel_test() {
-	id=$(flux mini submit --time-limit=$1 bash -c \
+	id=$(flux mini submit --time-limit=${1}s bash -c \
             "trap \"echo got SIGALRM>>trap2.out\" SIGALRM;sleep 60;sleep 60" ) &&
 	flux job wait-event --timeout=30 $id exception &&
 	flux job cancel $id &&

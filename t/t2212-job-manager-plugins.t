@@ -223,7 +223,7 @@ test_expect_success 'job-manager: load jobtap_api test plugin' '
 		/bin/false) &&
 	test_expect_code 1 flux job attach -vEX $id &&
 	test_must_fail flux job wait-event $id exception &&
-	id=$(flux mini submit -t 0.1 \
+	id=$(flux mini submit -t 0.1s \
 		--setattr=system.expected-result=timeout \
 		sleep 10) &&
 	test_must_fail flux job wait-event -vm type=test $id exception &&
