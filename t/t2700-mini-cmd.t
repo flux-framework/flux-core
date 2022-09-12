@@ -112,6 +112,10 @@ test_expect_success HAVE_JQ 'flux mini submit -t5s works' '
 	flux mini submit --dry-run -t5s hostname >t5s.out &&
 	jq -e ".attributes.system.duration == 5" < t5s.out
 '
+test_expect_success HAVE_JQ 'flux mini submit -t5 sets 5m duration' '
+	flux mini submit --dry-run -t5 hostname >t5.out &&
+	jq -e ".attributes.system.duration == 300" < t5.out
+'
 test_expect_success 'flux mini submit --time-limit=00:30 fails' '
 	test_must_fail flux mini submit --time-limit=00:30 hostname 2>st.err &&
 	grep -i "invalid Flux standard duration" st.err
