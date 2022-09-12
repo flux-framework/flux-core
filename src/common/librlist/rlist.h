@@ -280,4 +280,6 @@ int rlist_assign_properties (struct rlist *rl,
  */
 char *rlist_properties_encode (struct rlist *rl);
 
+struct rlist *rlist_from_config (json_t *conf, flux_error_t *errp);
+
 #endif /* !HAVE_SCHED_RLIST_H */
