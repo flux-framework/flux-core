@@ -437,6 +437,9 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (!(ctx->inventory = inventory_create (ctx, R_from_config)))
         goto error;
+    /*  Done with R_from_config now, so free it.
+     */
+    json_decref (R_from_config);
     if (!(ctx->topology = topo_create (ctx, noverify, norestrict)))
         goto error;
     if (!(ctx->monitor = monitor_create (ctx, monitor_force_up)))

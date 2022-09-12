@@ -280,6 +280,7 @@ static int convert_R_conf (flux_t *h, json_t *conf_R, json_t **Rp)
         errno = ENOMEM;
         goto error;
     }
+    rlist_destroy (rl);
     *Rp = R;
     return 0;
 error:
