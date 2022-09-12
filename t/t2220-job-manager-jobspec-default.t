@@ -74,7 +74,7 @@ test_expect_success HAVE_JQ 'the redacted jobspec contains default duration' '
 	jq -e ".jobspec.attributes.system.duration == 3600" <getattr4.json
 '
 test_expect_success 'submit a job that overrides the default duration' '
-	flux mini submit -t5 /bin/true >id5
+	flux mini submit -t5s /bin/true >id5
 '
 test_expect_success HAVE_JQ 'the redacted jobspec contains the override' '
 	jm_getattr $(cat id5) jobspec >getattr5.json &&
@@ -158,7 +158,7 @@ test_expect_success HAVE_JQ 'the redacted jobspec contains queue duration' '
 	jq -e ".jobspec.attributes.system.duration == 99" <getattr8.json
 '
 test_expect_success 'submit a job with with queue and duration' '
-	flux mini submit --setattr=system.queue=pdebug -t 111 /bin/true >id9
+	flux mini submit --setattr=system.queue=pdebug -t 111s /bin/true >id9
 '
 test_expect_success HAVE_JQ 'the redacted jobspec contains user duration' '
 	jm_getattr $(cat id9) jobspec >getattr9.json &&

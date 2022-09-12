@@ -150,11 +150,12 @@ Additional job options
 The **run**, **submit**, **batch**, and **alloc** commands also take
 following additional job parameters:
 
-**-t, --time-limit=FSD**
-   Set a time limit for the job in Flux standard duration (RFC 23).
-   FSD is a floating point number with a single character units suffix
-   ("s", "m", "h", or "d"). If unspecified, the job is subject to the
-   system default time limit.
+**-t, --time-limit=MINUTES|FSD**
+   Set a time limit for the job in either minutes or Flux standard duration
+   (RFC 23). FSD is a floating point number with a single character units
+   suffix ("s", "m", "h", or "d"). The default unit for the ``--time-limit``
+   option is minutes when no units are otherwise specified. If the time
+   limit is unspecified, the job is subject to the system default time limit.
 
 STANDARD I/O
 ============

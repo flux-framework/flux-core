@@ -461,8 +461,9 @@ class MiniCmd:
             "-t",
             "--time-limit",
             type=str,
-            metavar="FSD",
-            help="Time limit in Flux standard duration, e.g. 2d, 1.5h",
+            metavar="MIN|FSD",
+            help="Time limit in minutes when no units provided, otherwise "
+            + "in Flux standard duration, e.g. 30s, 2d, 1.5h",
         )
         parser.add_argument(
             "--urgency",
@@ -614,6 +615,13 @@ class MiniCmd:
                 list_split(args.requires),
             )
         if args.time_limit is not None:
+            #  With no units, time_limit is in minutes, but jobspec.duration
+            #  takes seconds or FSD by default, so convert here if necessary.
+            try:
+                limit = float(args.time_limit)
+                args.time_limit = limit * 60
+            except ValueError:
+                pass
             jobspec.duration = args.time_limit
 
         if args.job_name is not None:

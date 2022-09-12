@@ -778,7 +778,7 @@ test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (excepti
 # expiration time
 
 test_expect_success HAVE_JQ 'flux job list outputs expiration time when set' '
-	jobid=$(flux mini submit -t 30 sleep 1000 | flux job id) &&
+	jobid=$(flux mini submit -t 30s sleep 1000 | flux job id) &&
 	fj_wait_event $jobid start &&
 	flux job list | grep $jobid > expiration.json &&
 	test_debug "cat expiration.json" &&
