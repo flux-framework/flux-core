@@ -187,6 +187,7 @@ fail:
 
 int rnode_add (struct rnode *orig, struct rnode *n)
 {
+    int rc = 0;
     struct rnode_child *c;
     if (!orig || !n)
         return -1;
@@ -197,7 +198,21 @@ int rnode_add (struct rnode *orig, struct rnode *n)
             return -1;
         c = zhashx_next (n->children);
     }
-    return 0;
+    if (n->properties) {
+        zlistx_t *l = zhashx_keys (n->properties);
+        if (l != NULL) {
+            const char *property = zlistx_first (l);
+            while (property) {
+                if (rnode_set_property (orig, property) < 0)
+                    rc = -1;
+                property = zlistx_next (l);
+            }
+            zlistx_destroy (&l);
+        }
+        else
+            rc = -1;
+    }
+    return rc;
 }
 
 struct rnode *rnode_create (const char *name, uint32_t rank, const char *ids)
