@@ -142,4 +142,49 @@ test_expect_success HAVE_JQ,MULTICORE 'resource norestrict option works' '
 	test $(cat ${name}/ncores) = $NCORES
 '
 
+test_expect_success 'resources can be configured in TOML' '
+	name=conftest &&
+	mkdir -p $name &&
+	cat >${name}/resource.toml <<-EOF &&
+	[resource]
+	noverify = true
+	[[resource.config]]
+	hosts = "foo[0-10]"
+	cores = "0-3"
+	[[resource.config]]
+	hosts = "foo[9,10]"
+	gpus = "0-1"
+	[[resource.config]]
+	hosts = "foo[0-2]"
+	properties = ["debug"]
+	[[resource.config]]
+	hosts = "foo[3-10]"
+	properties = ["batch"]
+	EOF
+	flux start -s 1 \
+		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		flux resource list -s up > ${name}/output &&
+	test_debug "cat ${name}/output" &&
+	cat <<-EOF >${name}/expected &&
+	     STATE PROPERTIES NNODES   NCORES    NGPUS NODELIST
+	        up debug           3       12        0 foo[0-2]
+	        up batch           8       32        4 foo[3-10]
+	EOF
+	test_cmp ${name}/expected ${name}/output
+'
+test_expect_success 'bad resource.config causes instance failure' '
+	name=conftest-bad &&
+	mkdir -p ${name} &&
+	cat >${name}/resource.toml <<-EOF &&
+	[resource]
+	noverify = true
+	config = []
+	EOF
+	test_must_fail flux start -s 1 \
+		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		flux resource list -s up > ${name}/output 2>&1 &&
+	test_debug "cat ${name}/output" &&
+	grep "no hosts configured" ${name}/output
+'
+
 test_done

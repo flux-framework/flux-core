@@ -22,6 +22,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/librlist/rlist.h"
 
 #include "resource.h"
 #include "inventory.h"
@@ -38,8 +39,11 @@
  * exclude = "targets"
  *   Exclude specified broker rank(s) or hosts from scheduling
  *
+ * [[resource.confg]]
+ *   Resource configuration array
+ *
  * path = "/path"
- *   Set path to resource object
+ *   Set path to resource object (if no resource.config array)
  *
  * noverify = true
  *   Skip verification that configured resources match local hwloc
@@ -61,12 +65,14 @@ static int parse_config (struct resource_ctx *ctx,
     int noverify = 0;
     int norestrict = 0;
     json_t *o = NULL;
+    json_t *config = NULL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?:{s?:s s?:s s?:b s?b !}}",
+                          "{s?:{s?:s s?:o s?:s s?:b s?b !}}",
                           "resource",
                             "path", &path,
+                            "config", &config,
                             "exclude", &exclude,
                             "norestrict", &norestrict,
                             "noverify", &noverify) < 0) {
@@ -75,7 +81,19 @@ static int parse_config (struct resource_ctx *ctx,
                    error.text);
         return -1;
     }
-    if (path) {
+    if (config) {
+        struct rlist *rl = rlist_from_config (config, &error);
+        if (!rl) {
+            errprintf (errp,
+                       "error parsing [resource.config] array: %s",
+                       error.text);
+            return -1;
+        }
+        if (!(o = rlist_to_R (rl)))
+            return errprintf (errp, "rlist_to_R: %s", strerror (errno));
+        rlist_destroy (rl);
+    }
+    else if (path) {
         FILE *f;
         json_error_t e;
 
@@ -96,10 +114,7 @@ static int parse_config (struct resource_ctx *ctx,
                        e.line);
             return -1;
         }
-        if (!R)
-            json_decref (o);
     }
-
     *excludep = exclude;
     if (noverifyp)
         *noverifyp = noverify ? true : false;
@@ -107,6 +122,8 @@ static int parse_config (struct resource_ctx *ctx,
         *norestrictp = norestrict ? true : false;
     if (R)
         *R = o;
+    else
+        json_decref (o);
     return 0;
 }
 
@@ -437,6 +454,9 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (!(ctx->inventory = inventory_create (ctx, R_from_config)))
         goto error;
+    /*  Done with R_from_config now, so free it.
+     */
+    json_decref (R_from_config);
     if (!(ctx->topology = topo_create (ctx, noverify, norestrict)))
         goto error;
     if (!(ctx->monitor = monitor_create (ctx, monitor_force_up)))

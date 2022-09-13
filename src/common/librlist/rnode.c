@@ -125,10 +125,10 @@ out:
  *   then add 'ids' to that child (it is an error if one or more ids
  *   are already set in child 'name'.
  */
-static struct rnode_child * rnode_add_child_idset (struct rnode *n,
-                                                   const char *name,
-                                                   const struct idset *ids,
-                                                   const struct idset *avail)
+struct rnode_child * rnode_add_child_idset (struct rnode *n,
+                                            const char *name,
+                                            const struct idset *ids,
+                                            const struct idset *avail)
 {
     struct rnode_child *c = zhashx_lookup (n->children, name);
 
@@ -187,6 +187,7 @@ fail:
 
 int rnode_add (struct rnode *orig, struct rnode *n)
 {
+    int rc = 0;
     struct rnode_child *c;
     if (!orig || !n)
         return -1;
@@ -197,7 +198,21 @@ int rnode_add (struct rnode *orig, struct rnode *n)
             return -1;
         c = zhashx_next (n->children);
     }
-    return 0;
+    if (n->properties) {
+        zlistx_t *l = zhashx_keys (n->properties);
+        if (l != NULL) {
+            const char *property = zlistx_first (l);
+            while (property) {
+                if (rnode_set_property (orig, property) < 0)
+                    rc = -1;
+                property = zlistx_next (l);
+            }
+            zlistx_destroy (&l);
+        }
+        else
+            rc = -1;
+    }
+    return rc;
 }
 
 struct rnode *rnode_create (const char *name, uint32_t rank, const char *ids)

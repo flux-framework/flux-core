@@ -2297,5 +2297,211 @@ fail:
     return NULL;
 }
 
+/*  Check if a resource set provided by configuration is valid.
+ *  Returns -1 on failure with error in errp->text.
+ */
+static int rlist_config_check (struct rlist *rl, flux_error_t *errp)
+{
+    struct rnode *n;
+    struct hostlist *empty;
+    int rc = -1;
+
+    if (zlistx_size (rl->nodes) == 0)
+        return errprintf (errp, "no hosts configured");
+
+    if (!(empty = hostlist_create ()))
+        return errprintf (errp, "hostlist_create: Out of memory");
+
+    n = zlistx_first (rl->nodes);
+    while (n) {
+        if (rnode_avail_total (n) <= 0) {
+            if (hostlist_append (empty, n->hostname) < 0) {
+                errprintf (errp,
+                           "host %s was assigned no resources",
+                           n->hostname);
+                goto out;
+            }
+        }
+        n = zlistx_next (rl->nodes);
+    }
+    if (hostlist_count (empty) > 0) {
+        char *s = hostlist_encode (empty);
+        errprintf (errp, "resource.config: %s assigned no resources", s);
+        free (s);
+        goto out;
+    }
+    rc = 0;
+out:
+    hostlist_destroy (empty);
+    return rc;
+}
+
+/*  Process one entry from the resource.config array
+ */
+static int rlist_config_add_entry (struct rlist *rl,
+                                   struct hostlist *hostmap,
+                                   flux_error_t *errp,
+                                   int index,
+                                   const char *hosts,
+                                   const char *cores,
+                                   const char *gpus,
+                                   json_t *properties)
+{
+    struct hostlist *hl = NULL;
+    const char *host = NULL;
+    struct idset *coreids = NULL;
+    struct idset *gpuids = NULL;
+    struct idset *ranks = NULL;
+    int rc = -1;
+
+    if (!(hl = hostlist_decode (hosts))) {
+        errprintf (errp, "config[%d]: invalid hostlist '%s'", index, hosts);
+        goto error;
+    }
+    if (hostlist_count (hl) == 0) {
+        errprintf (errp, "config[%d]: empty hostlist specified", index);
+        goto error;
+    }
+    if (!(ranks = idset_create (0, IDSET_FLAG_AUTOGROW))) {
+        errprintf (errp, "idset_create: %s", strerror (errno));
+        goto error;
+    }
+    if (cores && !(coreids = idset_decode (cores))) {
+        errprintf (errp, "config[%d]: invalid idset cores='%s'", index, cores);
+        goto error;
+    }
+    if (gpus && !(gpuids = idset_decode (gpus))) {
+        errprintf (errp, "config[%d]: invalid idset gpus='%s'", index, gpus);
+        goto error;
+    }
+    host = hostlist_first (hl);
+    while (host) {
+        struct rnode *n;
+        int rank = hostlist_find (hostmap, host);
+        if (rank < 0) {
+            /*
+             *  First time encountering this host. Append to host map
+             *   hostlist and assign a rank.
+             */
+            if (hostlist_append (hostmap, host) < 0) {
+                errprintf (errp, "failed to append %s to host map", host);
+                goto error;
+            }
+            rank = hostlist_count (hostmap) - 1;
+        }
+        if (idset_set (ranks, rank) < 0) {
+            errprintf (errp, "idset_set(ranks, %d): %s",
+                       rank,
+                       strerror (errno));
+            goto error;
+        }
+        if (!(n = rnode_new (host, rank))) {
+            errprintf (errp, "rnode_new: %s", strerror (errno));
+            goto error;
+        }
+        if (coreids && !rnode_add_child_idset (n, "core", coreids, coreids)) {
+            errprintf (errp, "rnode_add_child_idset: %s", strerror (errno));
+            goto error;
+        }
+        if (gpuids && !rnode_add_child_idset (n, "gpu", gpuids, gpuids)) {
+            errprintf (errp, "rnode_add_child_idset: %s", strerror (errno));
+            goto error;
+        }
+        if (properties) {
+            size_t idx;
+            json_t *o;
+
+            json_array_foreach (properties, idx, o) {
+                const char *property;
+                if (!(property = json_string_value (o))
+                    || property_string_invalid (property)) {
+                    char *s = json_dumps (o, JSON_ENCODE_ANY);
+                    errprintf (errp,
+                               "config[%d]: invalid property \"%s\"",
+                               index,
+                               s);
+                    free (s);
+                    goto error;
+                }
+                if (rnode_set_property (n, property) < 0) {
+                    errprintf (errp,
+                               "Failed to set property %s on rank %u",
+                                property,
+                                rank);
+                    goto error;
+                }
+            }
+        }
+        if (rlist_add_rnode (rl, n) < 0) {
+            errprintf (errp, "Unable to add rnode: %s", strerror (errno));
+            goto error;
+        }
+        host = hostlist_next (hl);
+    }
+    rc = 0;
+error:
+    hostlist_destroy (hl);
+    idset_destroy (ranks);
+    idset_destroy (coreids);
+    idset_destroy (gpuids);
+    return rc;
+}
+
+struct rlist *rlist_from_config (json_t *conf, flux_error_t *errp)
+{
+    size_t index;
+    json_t *entry;
+    struct rlist *rl = NULL;
+    struct hostlist *hl = NULL;
+
+    if (!conf || !json_is_array (conf)) {
+        errprintf (errp, "resource config must be an array");
+        return NULL;
+    }
+
+    if (!(hl = hostlist_create ())
+        || !(rl = rlist_create ())) {
+        errprintf (errp, "Out of memory");
+        goto error;
+    }
+
+    json_array_foreach (conf, index, entry) {
+        const char *hosts = NULL;
+        const char *cores = NULL;
+        const char *gpus = NULL;
+        json_t *properties = NULL;
+        json_error_t error;
+
+        if (json_unpack_ex (entry, &error, 0,
+                            "{s:s s?s s?s s?o !}",
+                            "hosts", &hosts,
+                            "cores", &cores,
+                            "gpus",  &gpus,
+                            "properties", &properties) < 0) {
+            errprintf (errp, "config[%ld]: %s", index, error.text);
+            goto error;
+        }
+        if (rlist_config_add_entry (rl,
+                                    hl,
+                                    errp,
+                                    index,
+                                    hosts,
+                                    cores,
+                                    gpus,
+                                    properties) < 0)
+            goto error;
+    }
+
+    if (rlist_config_check (rl, errp) < 0)
+        goto error;
+
+    hostlist_destroy (hl);
+    return rl;
+error:
+    hostlist_destroy (hl);
+    rlist_destroy (rl);
+    return NULL;
+}
+
 /* vi: ts=4 sw=4 expandtab
  */
