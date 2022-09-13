@@ -1947,6 +1947,36 @@ static void test_issue4290 (void)
     free (R);
 }
 
+static void test_rlist_config_inval (void)
+{
+    flux_error_t error;
+    json_t *o;
+
+    ok (rlist_from_config (NULL, &error) == NULL,
+        "rlist_from_config (NULL) fails");
+    is (error.text, "resource config must be an array",
+        "error.text is expected: %s",
+        error.text);
+
+    if (!(o = json_object()))
+        BAIL_OUT ("test_rlist_config_inval: json_object: %s", strerror (errno));
+    ok (rlist_from_config (o, &error) == NULL,
+        "rlist_from_config() with empty object fails");
+    is (error.text, "resource config must be an array",
+        "error.text is expected: %s",
+        error.text);
+    json_decref (o);
+
+    if (!(o = json_array ()))
+        BAIL_OUT ("test_rlist_config_inval: json_array: %s", strerror (errno));
+    ok (rlist_from_config (o, &error) == NULL,
+        "rlist_from_config() with empty array fails");
+    is (error.text, "no hosts configured",
+        "error.text is expected: %s",
+        error.text);
+    json_decref (o);
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
@@ -1975,6 +2005,7 @@ int main (int ac, char *av[])
     test_issue4184 ();
     test_properties ();
     test_issue4290 ();
+    test_rlist_config_inval ();
 
     done_testing ();
 }
