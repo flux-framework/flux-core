@@ -666,8 +666,9 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
         }
         else if (!strncmp (argv[i], "batch-count=", 12)) {
             char *endptr;
+            errno = 0;
             ctx->batch_count = strtol (argv[i]+12, &endptr, 0);
-            if (*endptr != '\0' || ctx->batch_count < 0) {
+            if (errno != 0 || *endptr != '\0' || ctx->batch_count < 0) {
                 errprintf (error, "Invalid batch-count: %s", argv[i]);
                 errno = EINVAL;
                 return -1;
