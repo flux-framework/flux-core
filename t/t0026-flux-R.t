@@ -212,4 +212,159 @@ test_expect_success HAVE_JQ 'use of --local,--xml and --hosts is supported' '
 	test_debug "echo got $hosts" &&
 	test "$hosts" = "fluke[0-16]"
 '
+test_expect_success 'flux R parse-config works' '
+	mkdir conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo"
+	cores = "0-1"
+	gpus = "0"
+	EOF
+	flux R parse-config conf > conf.json &&
+	test_debug "flux R decode --short < conf.json" &&
+	test $(flux R decode -c node < conf.json) -eq 1 &&
+	test $(flux R decode -c core < conf.json) -eq 2 &&
+	test $(flux R decode -c gpu < conf.json) -eq 1 &&
+	test "$(flux R decode --nodelist < conf.json)" = "foo"
+'
+test_expect_success 'flux R parse-config works (multiple entries)' '
+	mkdir -p conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo[0-2]"
+	cores = "0-1"
+	[[resource.config]]
+	hosts = "foo2"
+	gpus = "0"
+	[[resource.config]]
+	hosts = "foo0"
+	properties = ["login"]
+	EOF
+	flux R parse-config conf > conf2.json &&
+	test_debug "flux R decode --short < conf2.json" &&
+	test $(flux R decode -c node < conf2.json) -eq 3 &&
+	test $(flux R decode -c core < conf2.json) -eq 6 &&
+	test $(flux R decode -c gpu < conf2.json) -eq 1 &&
+	test "$(flux R decode --nodelist < conf2.json)" = "foo[0-2]" &&
+	test "$(flux R decode -p login --nodelist < conf2.json)" = "foo0"
+'
+test_expect_success 'flux R parse-config fails on invalid TOML' '
+	mkdir -p conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	EOF
+	test_must_fail flux R parse-config conf
+'
+test_expect_success 'flux R parse-config fails on when resource.config missing' '
+	mkdir -p conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[resource]
+	noverify = true
+	EOF
+	test_must_fail flux R parse-config conf
+'
+test_expect_success 'flux R parse-config detects empty host list' '
+	mkdir -p conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo"
+	cores = "0-1"
+	[[resource.config]]
+	hosts = ""
+	cores = "0-3"
+	EOF
+	test_must_fail flux R parse-config conf
+'
+test_expect_success 'flux R parse-config detects invalid host list' '
+	mkdir -p conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo[p]"
+	cores = "0-1"
+	EOF
+	test_must_fail flux R parse-config conf
+'
+test_expect_success 'flux R parse-config detects invalid idset' '
+	mkdir -p conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo0"
+	cores = "0-"
+	EOF
+	test_must_fail flux R parse-config conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo0"
+	gpus = "2,1"
+	EOF
+	test_must_fail flux R parse-config conf
+'
+test_expect_success 'flux R parse-config detects host with no resources' '
+	mkdir -p conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo[0-10]"
+	cores = "0-1"
+	[[resource.config]]
+	hosts = "foo11"
+	EOF
+	test_must_fail flux R parse-config conf
+'
+test_expect_success 'flux R parse-config detects host with no resources' '
+	mkdir -p conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo[0-10]"
+	cores = "0-1"
+	[[resource.config]]
+	hosts = "foo11"
+	EOF
+	test_must_fail flux R parse-config conf
+'
+test_expect_success 'flux R parse-config detects missing hosts entry' '
+	mkdir -p conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo[0-10]"
+	cores = "0-1"
+	[[resource.config]]
+	cores = "0-1"
+	EOF
+	test_must_fail flux R parse-config conf
+'
+test_expect_success 'flux R parse-config detects invalid entry' '
+	mkdir -p conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo[0-10]"
+	cores = "0-1"
+	[[resource.config]]
+	hosts = "foo11"
+	cores = "0-3"
+	junk = 5
+	EOF
+	test_must_fail flux R parse-config conf
+'
+test_expect_success 'flux R parse-config detects invalid property' '
+	mkdir -p conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo[0-10]"
+	cores = "0-1"
+	[[resource.config]]
+	hosts = "foo1"
+	properties = ["de^bug"]
+	EOF
+	test_must_fail flux R parse-config conf &&
+	cat <<-EOF >conf/resource.toml &&
+	[[resource.config]]
+	hosts = "foo[0-10]"
+	cores = "0-1"
+	[[resource.config]]
+	hosts = "foo1"
+	properties = [1]
+	EOF
+	test_must_fail flux R parse-config conf
+'
+
 test_done
