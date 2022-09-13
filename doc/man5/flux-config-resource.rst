@@ -24,6 +24,36 @@ path
    passed from the enclosing Flux instance.  The ``flux R`` utility may be
    used to generate this file.
 
+config
+   (optional) An array of resource config entries used as an alternative to
+   a R object configured by ``resource.path``. Each array entry must contain
+   a ``hosts`` key in RFC 29 Hostlist Format which configures the list of
+   hosts to which the rest of the entry applies. The entry may also contain
+   ``cores`` and/or ``gpus`` keys which configure the set of core ids and
+   GPU ids (in RFC 22 idset form) available on the targeted hosts, or a
+   ``properties`` key which is an array of property strings to assign to
+   ``hosts``. It is not an error to list a host multiple times, instead
+   each entry updates ``hosts``. If the ``config`` array exists, then any
+   ``path`` is ignored.
+
+   Example::
+
+     [[resource.config]]
+     hosts = "test[1-100]"
+     cores = "0-7"
+
+     [[resource.config]]
+     hosts = "test[1,2]"
+     gpus = "0-1"
+
+     [[resource.config]]
+     hosts = "test[1-89]"
+     properties = ["batch"]
+
+     [[resource.config]]
+     hosts = "test[90-100]"
+     properties = ["debug"]
+
 exclude
    (optional) A string value that defines one or more nodes to withhold
    from scheduling, either in RFC 22 idset form, or in RFC 29 hostlist form.
