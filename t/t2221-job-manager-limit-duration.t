@@ -10,28 +10,19 @@ test_under_flux 2 full -o,--config-path=$(pwd)/config
 
 flux setattr log-stderr-level 1
 
-test_expect_success 'unload all built-in plugins' '
-	flux jobtap remove ".*"
-'
-test_expect_success 'configure an invalid numerical duration limit' '
+test_expect_success 'configuring an invalid duration limit fails' '
 	cat >config/policy.toml <<-EOT &&
 	[policy.limits]
-	duration = -1.0
+	duration = 1.0
 	EOT
-	flux config reload
+	test_must_fail flux config reload
 '
-test_expect_success 'cannot load the limit-duration plugin' '
-	test_must_fail flux jobtap load .limit-duration
-'
-test_expect_success 'configure a valid duration limit (FSD)' '
+test_expect_success 'configure a valid duration limit' '
 	cat >config/policy.toml <<-EOT &&
 	[policy.limits]
 	duration = "1m"
 	EOT
 	flux config reload
-'
-test_expect_success 'the limit-duration plugin can now be laoded' '
-	flux jobtap load .limit-duration
 '
 test_expect_success 'a job that exceeds policy.limits.duration is rejected' '
 	test_must_fail flux mini submit -t 1h /bin/true 2>duration.err &&
@@ -83,7 +74,7 @@ test_expect_success 'configure policy.limits.duration and an unlimited queue' '
 	[policy.limits]
 	duration = "1h"
 	[queues.pdebug.policy.limits]
-	duration = 0
+	duration = "0"
 	EOT
 	flux config reload
 '
@@ -100,7 +91,7 @@ test_expect_success 'a job that sets no explicit duration is accepted by the unl
 	    --setattr=system.queue=pdebug \
 	    /bin/true
 '
-test_expect_success 'configure an invalid string duration limit' '
+test_expect_success 'configure an invalid duration limit' '
 	cat >config/policy.toml <<-EOT &&
 	[policy.limits]
 	duration = "xyz123"
@@ -120,19 +111,6 @@ test_expect_success 'configure an invalid queue duration limit' '
 	duration = "xyz123"
 	EOT
 	test_must_fail flux config reload
-'
-test_expect_success 'configure a default duration that exceeds duration limit' '
-	cat >config/policy.toml <<-EOT &&
-	policy.limits.duration = 3600
-	policy.jobspec.defaults.system.duration = 3601
-	EOT
-	flux config reload
-'
-test_expect_success 'load jobspec-default plugin' '
-	flux jobtap load .jobspec-default
-'
-test_expect_success 'job with no duration specified is rejected' '
-	test_must_fail flux mini submit /bin/true
 '
 
 test_done

@@ -152,6 +152,16 @@ class TestJob(unittest.TestCase):
         jobspec.environment = new_env
         self.assertEqual(jobspec.environment, new_env)
 
+    def test_12_0_queue(self):
+        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
+        jobspec.queue = "default"
+        self.assertEqual(jobspec.queue, "default")
+
+    def test_12_1_queue_invalid(self):
+        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
+        with self.assertRaises(TypeError):
+            jobspec.queue = 12
+
     def test_13_job_kvs(self):
         jobid = job.submit(self.fh, self.basic_jobspec, waitable=True)
         job.wait(self.fh, jobid=jobid)

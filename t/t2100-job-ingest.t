@@ -77,11 +77,15 @@ test_expect_success 'job-ingest: YAML jobspec is rejected' '
 	test_must_fail flux job submit ${JOBSPEC}/valid/basic.yaml
 '
 
-test_expect_success 'job-ingest: jobspec stored accurately in KVS' '
+test_expect_success 'job-ingest: fetch jobspec from KVS' '
 	jobid=$(flux job submit basic.json) &&
 	kvsdir=$(flux job id --to=kvs $jobid) &&
-	flux kvs get --raw ${kvsdir}.jobspec >jobspec.out &&
-	test_cmp basic.json jobspec.out
+	flux kvs get --raw ${kvsdir}.jobspec >jobspec.out
+'
+test_expect_success HAVE_JQ 'job-ingest: jobspec stored accurately in KVS' '
+	jq --sort-keys . <basic.json >basic.json.normalized &&
+	jq --sort-keys . <jobspec.out >jobspec.out.normalized &&
+	test_cmp basic.json.normalized jobspec.out.normalized
 '
 
 test_expect_success 'job-ingest: job announced to job manager' '

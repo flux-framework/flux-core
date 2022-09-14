@@ -109,6 +109,8 @@ TESTSCRIPTS = \
 	t2100-job-ingest.t \
 	t2110-job-ingest-validator.t \
 	t2111-job-ingest-config.t \
+	t2112-job-ingest-frobnicator.t \
+	t2113-job-ingest-pipeline.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
 	t2203-job-manager-single.t \
@@ -128,13 +130,13 @@ TESTSCRIPTS = \
 	t2217-job-manager-priority-order-limited.t \
 	t2218-job-manager-priority-order-unlimited.t \
 	t2219-job-manager-restart.t \
-	t2220-job-manager-jobspec-default.t \
 	t2221-job-manager-limit-duration.t \
 	t2222-job-manager-limit-job-size.t \
 	t2230-job-info-lookup.t \
 	t2231-job-info-eventlog-watch.t \
 	t2232-job-info-security.t \
 	t2240-queue-cmd.t \
+	t2241-policy-config.t \
 	t2250-job-archive.t \
 	t2260-job-list.t \
 	t2261-job-list-update.t \
