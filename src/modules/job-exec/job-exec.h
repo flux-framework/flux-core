@@ -122,6 +122,11 @@ void jobinfo_tasks_complete (struct jobinfo *job,
 void jobinfo_fatal_error (struct jobinfo *job, int errnum,
                           const char *fmt, ...);
 
+void jobinfo_raise (struct jobinfo *job,
+                    const char *type,
+                    int severity,
+                    const char *fmt, ...);
+
 /* Append a log output message to exec.eventlog for job
  */
 void jobinfo_log_output (struct jobinfo *job,

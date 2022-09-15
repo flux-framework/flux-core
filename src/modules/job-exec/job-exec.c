@@ -520,6 +520,42 @@ void jobinfo_fatal_error (struct jobinfo *job, int errnum,
     errno = saved_errno;
 }
 
+static void jobinfo_vraise (struct jobinfo *job,
+                            const char *type,
+                            int severity,
+                            const char *fmt,
+                            va_list ap)
+{
+    int n;
+    char msg [256];
+    int msglen = sizeof (msg);
+    flux_t *h = job->ctx->h;
+
+    if ((n = vsnprintf (msg, msglen, fmt, ap)) < 0)
+        strcpy (msg, "vsnprintf error");
+    else if (n >= msglen) {
+        msg [msglen-2] = '+';
+        msg [msglen-1] = '\0';
+    }
+    if (jobid_exception (h, job->id, job->req, type, severity, 0, msg) < 0)
+        flux_log_error (h,
+                        "error raising exception type=%s severity=%d: %s",
+                        type,
+                        severity,
+                        msg);
+}
+
+void jobinfo_raise (struct jobinfo *job,
+                    const char *type,
+                    int severity,
+                    const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    jobinfo_vraise (job, type, severity, fmt, ap);
+    va_end (ap);
+}
+
 void jobinfo_log_output (struct jobinfo *job,
                          int rank,
                          const char *component,
