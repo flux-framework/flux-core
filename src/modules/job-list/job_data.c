@@ -19,6 +19,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/librlist/rlist.h"
+#include "src/common/libccan/ccan/str/str.h"
 
 #include "job_data.h"
 
@@ -115,6 +116,30 @@ static const char *parse_job_name (const char *path)
         return p;
     }
     return path;
+}
+
+static int parse_per_resource (struct job *job,
+                               const char **type,
+                               int *count)
+{
+    json_error_t error;
+
+    if (json_unpack_ex (job->jobspec, &error, 0,
+                        "{s:{s:{s?:{s?:{s?:{s?:s s?:i}}}}}}",
+                        "attributes",
+                          "system",
+                            "shell",
+                              "options",
+                                "per-resource",
+                                  "type", type,
+                                  "count",count) < 0) {
+        flux_log (job->h, LOG_ERR,
+                  "%s: job %ju invalid jobspec: %s",
+                  __FUNCTION__, (uintmax_t)job->id, error.text);
+        return -1;
+    }
+
+    return 0;
 }
 
 int job_parse_jobspec (struct job *job, const char *s)
@@ -224,20 +249,39 @@ int job_parse_jobspec (struct job *job, const char *s)
     if (res[1].with && parse_res_level (job, res[1].with, &res[2]) < 0)
         goto nonfatal_error;
 
-    /* Set job->nnodes if available.  In jobspec version 1, only if
-     * resources listed as node->slot->core->NIL
-     */
     if (res[0].type != NULL && !strcmp (res[0].type, "node")
         && res[1].type != NULL && !strcmp (res[1].type, "slot")
         && res[2].type != NULL && !strcmp (res[2].type, "core")
-        && res[2].with == NULL)
+        && res[2].with == NULL) {
+        const char *type = NULL;
+        int count = 0;
+
+        /* Set job->nnodes b/c it is available.  In jobspec version 1,
+         * only if resources listed as node->slot->core->NIL
+         */
         job->nnodes = res[0].count;
 
-    /* Set job->ntasks
+        /* per-resource is used to overcome short-term gaps in
+         * Jobspec V1.  Remove per-resource logic below when it
+         * has been retired
+         */
+
+        if (parse_per_resource (job, &type, &count) < 0)
+            goto nonfatal_error;
+
+        /* if nodes specified, per-resource.type == "node", and
+         * per-resource.count > 0 there is an adjustment on ntasks.
+         */
+        if (type && streq (type, "node") && count > 0)
+            job->ntasks = res[0].count * count;
+    }
+
+    /* Set job->ntasks if not yet set
      */
-    if (json_unpack_ex (tasks, NULL, 0,
-                        "[{s:{s:i}}]",
-                        "count", "total", &job->ntasks) < 0) {
+    if (job->ntasks < 0
+        && json_unpack_ex (tasks, NULL, 0,
+                           "[{s:{s:i}}]",
+                           "count", "total", &job->ntasks) < 0) {
         int per_slot, slot_count = 0;
 
         if (json_unpack_ex (tasks, &error, 0,
