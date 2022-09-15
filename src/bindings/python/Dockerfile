@@ -2,7 +2,7 @@ FROM ubuntu:22.04
 
 # used in configure.ac
 ARG FLUX_VERSION=0.42.0
-ENV ${FLUX_VERSION}=${FLUX_VERSION}
+ENV FLUX_VERSION=${FLUX_VERSION}
 ENV DEBIAN_FRONTEND=noninteractive
 # from root:
 # docker build -t ghcr.io/flux-framework/flux-python -f src/bindings/python/Dockerfile .

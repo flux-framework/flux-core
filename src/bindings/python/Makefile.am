@@ -38,36 +38,36 @@ endif
 core.so-built: Makefile
 	ldconfig
 	export FLUX_INSTALL_ROOT=$(realpath $(top_srcdir))
-	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py build_ext
 	touch core.so-built
 
 hostlist.so-built:
 	export LD_LIBRARY_PATH=$(top_builddir)/src/common/.libs:$(top_builddir)/src/common/libdebugged/.libs
 	export FLUX_INSTALL_ROOT=$(realpath $(top_srcdir))
-	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --hostlist
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py build_ext --hostlist
 	touch hostlist.so-built
 
 idset.so-built:
 	export LD_LIBRARY_PATH=$(top_builddir)/src/common/.libs:$(top_builddir)/src/common/libdebugged/.libs
 	export FLUX_INSTALL_ROOT=$(realpath $(top_srcdir))
-	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --idset
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py build_ext --idset
 	touch idset.so-built
 
 rlist.so-built:
 	export LD_LIBRARY_PATH=$(top_builddir)/src/common/.libs:$(top_builddir)/src/common/libdebugged/.libs
 	export FLUX_INSTALL_ROOT=$(realpath $(top_srcdir))
-	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --rlist
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py build_ext --rlist
 	touch rlist.so-built
 
 security.so-built:
 	export LD_LIBRARY_PATH=$(top_builddir)/src/common/.libs:$(top_builddir)/src/common/libdebugged/.libs
 	export FLUX_INSTALL_ROOT=$(realpath $(top_srcdir))
-	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install --security \
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py build_ext --security \
 	    --security-include=$(FLUX_SECURITY_INCDIR) \
 	    --security-src=/code/security
 	touch security.so-built
 
-.PHONY: all core.so-built core.so-built idset.so-built rlist.so-built security.so-built
+.PHONY: all core.so-built core.so-built idset.so-built rlist.so-built security.so-built install
 
 .PRECIOUS: Makefile
 
@@ -76,3 +76,9 @@ clean:
 
 clean-local:
 	-rm -f .coverage*
+
+# Currently we don't install with security, since we don't know the paths
+install:
+	export LD_LIBRARY_PATH=$(top_builddir)/src/common/.libs:$(top_builddir)/src/common/libdebugged/.libs
+	export FLUX_INSTALL_ROOT=$(realpath $(top_srcdir))
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/setup.py install  --hostlist --rlist --idset  # Note to Tom - if I add this it isn't found in the container with python3 --prefix=$(PREFIX)

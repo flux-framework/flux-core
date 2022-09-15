@@ -28,12 +28,24 @@ And flux should be compiled, and you can use ipython to import flux:
 > import flux
 ```
 
+Note that the `make install` doesn't currently include security, as this
+is a separate repository and we need to figure out how to package it also.
+You can still install it, however (and instructions are below).
+
 ### Building Modules
 
 First, here is how to build (any extension below) (without install):
 
 ```bash
 $ python3 setup.py build_ext
+```
+
+And how to package into a tarball:
+
+```bash
+$ python setup.py sdist
+$ ls dist/
+flux-0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.1a1-py3.10-linux-x86_64.egg  flux-0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.1a1.tar.gz
 ```
 
 Any of the install commands below are shown with "install," however you can change

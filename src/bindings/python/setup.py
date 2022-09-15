@@ -442,6 +442,7 @@ def setup():
             "build_ext": PrepareFluxHeaders,
             "install": PrepareFluxHeaders,
             "develop": PrepareFluxHeaders,
+            "sdist": PrepareFluxHeaders,
         },
     )
 
