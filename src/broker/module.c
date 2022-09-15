@@ -379,6 +379,15 @@ static void module_destroy (module_t *p)
     if (p->t) {
         if ((e = pthread_join (p->t, &res)) != 0)
             log_errn_exit (e, "pthread_cancel");
+        if (p->status != FLUX_MODSTATE_EXITED) {
+            /* Calls broker.c module_status_cb() => service_remove_byuuid()
+             * and releases a reference on 'p'.  Without this, disconnect
+             * requests sent when other modules are destroyed can still find
+             * this service name and trigger a use-after-free segfault.
+             * See also: flux-framework/flux-core#4564.
+             */
+            module_set_status (p, FLUX_MODSTATE_EXITED);
+        }
     }
 
     /* Send disconnect messages to services used by this module.
