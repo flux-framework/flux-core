@@ -283,7 +283,7 @@ static void update_job_state_and_list (struct list_ctx *ctx,
                                        double timestamp)
 {
     zlistx_t *oldlist, *newlist;
-    struct job_state_ctx *jsctx = job->ctx->jsctx;
+    struct job_state_ctx *jsctx = ctx->jsctx;
 
     oldlist = get_list (jsctx, job->state);
     newlist = get_list (jsctx, newstate);
@@ -802,7 +802,7 @@ static int add_state_transition (struct job *job,
 static void process_next_state (struct list_ctx *ctx, struct job *job)
 {
     struct state_transition *st;
-    struct job_state_ctx *jsctx = job->ctx->jsctx;
+    struct job_state_ctx *jsctx = ctx->jsctx;
 
     while ((st = zlist_head (job->next_states))
            && !st->processed) {
