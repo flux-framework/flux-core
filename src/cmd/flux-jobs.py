@@ -17,12 +17,80 @@ import json
 import concurrent.futures
 
 import flux.constants
-import flux.util
 from flux.job import JobInfo, JobInfoFormat, JobList
 from flux.job import JobID
 from flux.job.stats import JobStats
+from flux.util import UtilConfig
 
 LOGGER = logging.getLogger("flux-jobs")
+
+
+class FluxJobsConfig(UtilConfig):
+    """flux-jobs specific user configuration class"""
+
+    builtin_formats = {
+        "default": {
+            "description": "Default flux-jobs format string",
+            "format": (
+                "{id.f58:>12} {username:<8.8} {name:<10.10} "
+                "{status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} "
+                "{runtime!F:>8} {nodelist:h}"
+            ),
+        }
+    }
+
+    def __init__(self):
+        initial_dict = {"formats": dict(self.builtin_formats)}
+        super().__init__(name="flux-jobs", initial_dict=initial_dict)
+
+    def validate_formats(self, path, formats):
+        if not isinstance(formats, dict):
+            raise ValueError(f"{path}: the 'formats' key must be a mapping")
+        for name, entry in formats.items():
+            if name in self.builtin_formats:
+                raise ValueError(
+                    f"{path}: override of builtin format '{name}' not permitted"
+                )
+            if not isinstance(entry, dict):
+                raise ValueError(f"{path}: 'formats.{name}' must be a mapping")
+            if "format" not in entry:
+                raise ValueError(
+                    f"{path}: formats.{name}: required key 'format' missing"
+                )
+            if not isinstance(entry["format"], str):
+                raise ValueError(
+                    f"{path}: formats.{name}: 'format' key must be a string"
+                )
+
+    def validate(self, path, config):
+        """Validate a loaded flux-jobs config file as dictionary"""
+        for key, value in config.items():
+            if key == "formats":
+                self.validate_formats(path, value)
+            else:
+                raise ValueError(f"{path}: invalid key {key}")
+
+
+def load_format_string(args):
+    if "{" in args.format:
+        return args.format
+
+    config = FluxJobsConfig().load()
+
+    if args.format == "help":
+        print("\nConfigured flux-jobs output formats:\n")
+        for name, entry in config.formats.items():
+            print(f"  {name:<12}", end="")
+            try:
+                print(f" {entry['description']}")
+            except KeyError:
+                print()
+        sys.exit(0)
+    try:
+        return config.formats[args.format]["format"]
+    except KeyError:
+        LOGGER.error("--format: No such format %s", args.format)
+        sys.exit(1)
 
 
 def fetch_jobs_stdin():
@@ -299,8 +367,10 @@ def parse_args():
         "-o",
         "--format",
         type=str,
+        default="default",
         metavar="FORMAT",
-        help="Specify output format using Python's string format syntax",
+        help="Specify output format using Python's string format syntax "
+        + " or a defined format by name (use 'help' to get a list of names)",
     )
     parser.add_argument(
         "--color",
@@ -462,14 +532,7 @@ def main():
     if args.recurse_all:
         args.recursive = True
 
-    if args.format:
-        fmt = args.format
-    else:
-        fmt = (
-            "{id.f58:>12} {username:<8.8} {name:<10.10} {status_abbrev:>2.2} "
-            "{ntasks:>6} {nnodes:>6h} {runtime!F:>8h} "
-            "{nodelist:h}"
-        )
+    fmt = load_format_string(args)
     try:
         formatter = JobInfoFormat(fmt)
     except ValueError as err:
