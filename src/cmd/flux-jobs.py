@@ -17,12 +17,39 @@ import json
 import concurrent.futures
 
 import flux.constants
-import flux.util
 from flux.job import JobInfo, JobInfoFormat, JobList
 from flux.job import JobID
 from flux.job.stats import JobStats
 
 LOGGER = logging.getLogger("flux-jobs")
+
+
+def load_format_string(args):
+    if "{" in args.format:
+        return args.format
+
+    builtin_formats = {
+        "default": {
+            "description": "Default flux-jobs format string",
+            "format": (
+                "{id.f58:>12} {username:<8.8} {name:<10.10} "
+                "{status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} "
+                "{runtime!F:>8} {nodelist:h}"
+            ),
+        }
+    }
+
+    if args.format == "help":
+        print("\nflux-jobs output formats:\n")
+        for name, entry in builtin_formats.items():
+            desc = entry["description"]
+            print(f"  {name:<12} {desc}")
+        sys.exit(0)
+    try:
+        return builtin_formats[args.format]["format"]
+    except KeyError:
+        LOGGER.error("--format: No such format %s", args.format)
+        sys.exit(1)
 
 
 def fetch_jobs_stdin():
@@ -290,8 +317,10 @@ def parse_args():
         "-o",
         "--format",
         type=str,
+        default="default",
         metavar="FORMAT",
-        help="Specify output format using Python's string format syntax",
+        help="Specify output format using Python's string format syntax "
+        + " or a defined format by name (use 'help' to get a list of names)",
     )
     parser.add_argument(
         "--color",
@@ -452,14 +481,7 @@ def main():
     if args.recurse_all:
         args.recursive = True
 
-    if args.format:
-        fmt = args.format
-    else:
-        fmt = (
-            "{id.f58:>12} {username:<8.8} {name:<10.10} {status_abbrev:>2.2} "
-            "{ntasks:>6} {nnodes:>6h} {runtime!F:>8h} "
-            "{nodelist:h}"
-        )
+    fmt = load_format_string(args)
     try:
         formatter = JobInfoFormat(fmt)
     except ValueError as err:
