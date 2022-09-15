@@ -1,0 +1,36 @@
+.build_flux: &build_flux
+  script:
+   - module load python/3.8.2
+   - module load gcc/8.3.1
+   - mkdir -p $PWD/usr/local
+   - ./autogen.sh
+   - ./configure --without-python --prefix=$PWD/usr/local
+   - make VERBOSE=1
+   - make install
+   - tree $PWD/usr/local
+   - export PATH=$PWD/usr/local/bin:$PATH
+   - which flux
+   - module load spectrum-mpi && make check || echo "Spectrum MPI is not available."
+
+# https://lc.llnl.gov/gitlab/public-info/gitlab-ci/-/wikis/Gitlab-CI-Basic-Information
+test-lassen:
+ tags:
+  - lassen
+  - shell
+ stage: build
+ <<: *build_flux
+
+test-corona:
+ tags:
+  - corona
+  - shell
+ stage: build
+ <<: *build_flux
+  
+test-tioga:
+ tags:
+  - tioga
+  - shell
+ stage: build
+ <<: *build_flux
+
