@@ -36,7 +36,14 @@ class FluxJobsConfig(UtilConfig):
                 "{status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} "
                 "{runtime!F:>8} {nodelist:h}"
             ),
-        }
+        },
+        "deps": {
+            "description": "Show job urgency, priority, and dependencies",
+            "format": (
+                "{id.f58:>12} {name:<10.10} {urgency:<3} {priority:<12} "
+                "{state:<8.8} {dependencies}"
+            ),
+        },
     }
 
     def __init__(self):
