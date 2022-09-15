@@ -20,9 +20,19 @@ import traceback
 import signal
 import threading
 import shutil
+import glob
 from datetime import datetime, timedelta
 from string import Formatter
 from collections import namedtuple
+from pathlib import Path, PurePosixPath
+
+import yaml
+
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    from flux.utils import tomli as tomllib
 
 from flux.core.inner import ffi, raw
 from flux.utils.parsedatetime import Calendar
@@ -596,3 +606,114 @@ class Tree:
             max_level=level,
             truncate=limit,
         )
+
+
+def get_searchpath(var, suffix=""):
+    value = os.getenv(var)
+    if value is None:
+        return []
+    return [f"{x}{suffix}" for x in value.split(":")]
+
+
+#  Slightly modified from https://stackoverflow.com/posts/7205107/timeline
+def dict_merge(src, new, path=None):
+    "merges dict new into dict src"
+    if path is None:
+        path = []
+    for key in new:
+        if key in src:
+            if isinstance(src[key], dict) and isinstance(new[key], dict):
+                dict_merge(src[key], new[key], path + [str(key)])
+            elif src[key] == new[key]:
+                pass  # same leaf value
+            else:
+                #  Default is to override:
+                src[key] = new[key]
+        else:
+            src[key] = new[key]
+    return src
+
+
+class UtilConfig:
+    """
+    Very simple class for loading hierarchical configuration for Flux
+    Python utilities. Configuration is loaded as a dict from an optional
+    initial dict, overriding from XDG system and user base directories
+    in that order.
+
+    Config files are loaded from <name>.<ext>, where ext can be one
+    of json, yaml, or toml. If multiple files exist they are processed
+    in glob(3) order.
+
+    Args:
+        name: name of utility, used as the stem of config file to load
+        initial_dict: Set of default values (optional)
+
+    """
+
+    extension_handlers = {
+        ".toml": tomllib.load,
+        ".json": json.load,
+        ".yaml": yaml.safe_load,
+    }
+
+    def __init__(self, name, initial_dict=None):
+        self.name = name
+        self.dict = {}
+        if initial_dict:
+            self.dict = dict(initial_dict)
+
+        #  Build config search path in order of reverse precedence
+        #  based on XDG specification:
+        self.searchpath = (
+            ["/etc/xdg/flux"]
+            + get_searchpath("XDG_CONFIG_DIRS", "/flux")
+            + [f"{Path.home()}/.config/flux"]
+            + get_searchpath("XDG_CONFIG_HOME", "/flux")
+        )
+
+    def load(self):
+        """Load configuration from current searchpath
+
+        Returns self so that constructor and load() can be called like
+
+        >>> config = UtilConfig("myutil").load()
+
+        """
+
+        for path in self.searchpath:
+            for filepath in sorted(glob.glob(f"{path}/{self.name}.*")):
+                conf = {}
+                ppath = PurePosixPath(filepath)
+
+                # ignore files with unsupported extensions:
+                if ppath.suffix not in self.extension_handlers:
+                    continue
+
+                try:
+                    with open(filepath) as ofile:
+                        conf = self.extension_handlers[ppath.suffix](ofile)
+                except (
+                    tomllib.TOMLDecodeError,
+                    json.decoder.JSONDecodeError,
+                    yaml.scanner.ScannerError,
+                ) as exc:
+                    #  prepend file path to decode exceptions in case it
+                    #  it is missing (e.g. tomllib)
+                    raise ValueError(f"{filepath}: {exc}") from exc
+
+                self.validate(filepath, conf)
+
+                dict_merge(self.dict, conf)
+
+        return self
+
+    def validate(self, path, conf):
+        """
+        Validate config file as it is loaded before merging it with the
+        configuration. This function does nothing in the base class,
+        specific sub classes should implement this method.
+        """
+
+    def __getattr__(self, attr):
+        return self.dict[attr]
