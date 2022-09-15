@@ -376,8 +376,7 @@ static int parse_res_level (struct list_ctx *ctx,
 
 /* Return basename of path if there is a '/' in path.  Otherwise return
  * full path */
-static const char *
-parse_job_name (const char *path)
+static const char *parse_job_name (const char *path)
 {
     char *p = strrchr (path, '/');
     if (p) {
@@ -398,6 +397,7 @@ static int jobspec_parse (struct list_ctx *ctx,
     json_error_t error;
     json_t *jobspec = NULL;
     json_t *tasks, *resources, *command, *jobspec_job = NULL;
+    struct res_level res[3];
     int rc = -1;
 
     if (!(jobspec = json_loads (s, 0, &error))) {
@@ -489,13 +489,33 @@ static int jobspec_parse (struct list_ctx *ctx,
         goto nonfatal_error;
     }
 
+    /* For jobspec version 1, expect either:
+     * - node->slot->core->NIL
+     * - slot->core->NIL
+     */
+    memset (res, 0, sizeof (res));
+    if (parse_res_level (ctx, job, resources, &res[0]) < 0)
+        goto nonfatal_error;
+    if (res[0].with && parse_res_level (ctx, job, res[0].with, &res[1]) < 0)
+        goto nonfatal_error;
+    if (res[1].with && parse_res_level (ctx, job, res[1].with, &res[2]) < 0)
+        goto nonfatal_error;
+
+    /* Set job->nnodes if available.  In jobspec version 1, only if
+     * resources listed as node->slot->core->NIL
+     */
+    if (res[0].type != NULL && !strcmp (res[0].type, "node")
+        && res[1].type != NULL && !strcmp (res[1].type, "slot")
+        && res[2].type != NULL && !strcmp (res[2].type, "core")
+        && res[2].with == NULL)
+        job->nnodes = res[0].count;
+
     /* Set job->ntasks
      */
     if (json_unpack_ex (tasks, NULL, 0,
                         "[{s:{s:i}}]",
                         "count", "total", &job->ntasks) < 0) {
         int per_slot, slot_count = 0;
-        struct res_level res[3];
 
         if (json_unpack_ex (tasks, &error, 0,
                             "[{s:{s:i}}]",
@@ -511,18 +531,6 @@ static int jobspec_parse (struct list_ctx *ctx,
                       __FUNCTION__, (uintmax_t)job->id, per_slot);
             goto nonfatal_error;
         }
-        /* For jobspec version 1, expect either:
-         * - node->slot->core->NIL
-         * - slot->core->NIL
-         * Set job->slot_count and job->cores_per_slot.
-         */
-        memset (res, 0, sizeof (res));
-        if (parse_res_level (ctx, job, resources, &res[0]) < 0)
-            goto nonfatal_error;
-        if (res[0].with && parse_res_level (ctx, job, res[0].with, &res[1]) < 0)
-            goto nonfatal_error;
-        if (res[1].with && parse_res_level (ctx, job, res[1].with, &res[2]) < 0)
-            goto nonfatal_error;
         if (res[0].type != NULL && !strcmp (res[0].type, "slot")
             && res[1].type != NULL && !strcmp (res[1].type, "core")
             && res[1].with == NULL) {
@@ -549,7 +557,7 @@ static int jobspec_parse (struct list_ctx *ctx,
     }
 
     /* nonfatal error - jobspec illegal, but we'll continue on.  job
-     * listing will get initialized data */
+     * listing will return whatever data is available */
 nonfatal_error:
     rc = 0;
 error:
@@ -1274,7 +1282,6 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
                                  struct job *job,
                                  flux_jobid_t id,
                                  int eventlog_seq,
-                                 double timestamp,
                                  json_t *context)
 {
     if (!job) {
@@ -1659,7 +1666,6 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
                                   job,
                                   id,
                                   eventlog_seq,
-                                  timestamp,
                                   context) < 0)
             return -1;
     }
@@ -1735,8 +1741,8 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
             return -1;
     }
     else if (!strcmp (name, "flux-restart")) {
-        /* Presently, job-info depends on job-manager.events-journal
-         * service.  So if job-manager reloads, job-info must be
+        /* Presently, job-list depends on job-manager.events-journal
+         * service.  So if job-manager reloads, job-list must be
          * reloaded, making the probability of reaching this
          * `flux-restart` path very low.  Code added for completeness
          * and in case dependency removed in the future.

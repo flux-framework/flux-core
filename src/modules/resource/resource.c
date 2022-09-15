@@ -22,6 +22,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/librlist/rlist.h"
 
 #include "resource.h"
 #include "inventory.h"
@@ -38,38 +39,61 @@
  * exclude = "targets"
  *   Exclude specified broker rank(s) or hosts from scheduling
  *
+ * [[resource.confg]]
+ *   Resource configuration array
+ *
  * path = "/path"
- *   Set path to resource object
+ *   Set path to resource object (if no resource.config array)
  *
  * noverify = true
  *   Skip verification that configured resources match local hwloc
+ *
+ * norestrict = false
+ *   When generating hwloc topology XML, do not restrict to current cpumask
  */
 static int parse_config (struct resource_ctx *ctx,
                          const flux_conf_t *conf,
                          const char **excludep,
                          json_t **R,
                          bool *noverifyp,
+                         bool *norestrictp,
                          flux_error_t *errp)
 {
     flux_error_t error;
     const char *exclude  = NULL;
     const char *path = NULL;
     int noverify = 0;
+    int norestrict = 0;
     json_t *o = NULL;
+    json_t *config = NULL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?:{s?:s s?:s s?:b !}}",
+                          "{s?:{s?:s s?:o s?:s s?:b s?b !}}",
                           "resource",
                             "path", &path,
+                            "config", &config,
                             "exclude", &exclude,
+                            "norestrict", &norestrict,
                             "noverify", &noverify) < 0) {
         errprintf (errp,
                    "error parsing [resource] configuration: %s",
                    error.text);
         return -1;
     }
-    if (path) {
+    if (config) {
+        struct rlist *rl = rlist_from_config (config, &error);
+        if (!rl) {
+            errprintf (errp,
+                       "error parsing [resource.config] array: %s",
+                       error.text);
+            return -1;
+        }
+        if (!(o = rlist_to_R (rl)))
+            return errprintf (errp, "rlist_to_R: %s", strerror (errno));
+        rlist_destroy (rl);
+    }
+    else if (path) {
         FILE *f;
         json_error_t e;
 
@@ -90,15 +114,16 @@ static int parse_config (struct resource_ctx *ctx,
                        e.line);
             return -1;
         }
-        if (!R)
-            json_decref (o);
     }
-
     *excludep = exclude;
     if (noverifyp)
         *noverifyp = noverify ? true : false;
+    if (norestrictp)
+        *norestrictp = norestrict ? true : false;
     if (R)
         *R = o;
+    else
+        json_decref (o);
     return 0;
 }
 
@@ -124,6 +149,7 @@ static void config_reload_cb (flux_t *h,
     if (parse_config (ctx,
                       conf,
                       &exclude,
+                      NULL,
                       NULL,
                       NULL,
                       &error) < 0) {
@@ -397,6 +423,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     json_t *eventlog = NULL;
     bool monitor_force_up = false;
     bool noverify = false;
+    bool norestrict = false;
     json_t *R_from_config;
 
     if (!(ctx = resource_ctx_create (h)))
@@ -410,6 +437,7 @@ int mod_main (flux_t *h, int argc, char **argv)
                       &exclude_idset,
                       &R_from_config,
                       &noverify,
+                      &norestrict,
                       &error) < 0) {
         flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
@@ -426,7 +454,10 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (!(ctx->inventory = inventory_create (ctx, R_from_config)))
         goto error;
-    if (!(ctx->topology = topo_create (ctx, noverify)))
+    /*  Done with R_from_config now, so free it.
+     */
+    json_decref (R_from_config);
+    if (!(ctx->topology = topo_create (ctx, noverify, norestrict)))
         goto error;
     if (!(ctx->monitor = monitor_create (ctx, monitor_force_up)))
         goto error;

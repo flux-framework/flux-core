@@ -202,6 +202,9 @@ The field names that can be specified are:
 **id.f58**
   job ID in RFC 19 F58 (base58) encoding
 
+**id.dec**
+  job ID in decimal representation
+
 **id.hex**
    job ID in ``0x`` prefix hexadecimal representation
 

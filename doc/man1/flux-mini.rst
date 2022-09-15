@@ -47,9 +47,10 @@ file is read and submitted along with the job. If no SCRIPT is
 provided, then one will be read from *stdin*.
 
 **flux-mini alloc** works similarly to **batch**, but instead blocks until
-the job has started and interactively attaches to the new Flux instance.
-By default, a new shell is spawned as the initial program of the instance,
-but this may be overridden by supplying COMMAND on the command line.
+the job has started and interactively attaches to the new Flux instance
+(unless the ``--bg`` option is used).  By default, a new shell is spawned
+as the initial program of the instance, but this may be overridden by
+supplying COMMAND on the command line.
 
 The intent is for the "mini" commands to remain simple with stable interfaces
 over time, making them suitable for use in scripts.
@@ -63,8 +64,34 @@ JOB PARAMETERS
 These commands accept only the simplest parameters for expressing
 the size of the parallel program and the geometry of its task slots:
 
-The **run** and **submit** commands take the following options to specify
-the size of the job request:
+Common resource options
+-----------------------
+
+All subcommands take the following common resource allocation options:
+
+**-N, --nodes=N**
+   Set the number of nodes to assign to the job. Tasks will be distributed
+   evenly across the allocated nodes, unless the per-resource options
+   (noted below) are used with *submit*, *run*, or *bulksubmit*. It is
+   an error to request more nodes than there are tasks. If unspecified,
+   the number of nodes will be chosen by the scheduler.
+
+**--exclusive**
+   Indicate to the scheduler that nodes should be exclusively allocated to
+   this job. It is an error to specify this option without also using
+   *-N, --nodes*. If *--nodes* is specified without *--nslots* or *--ntasks*,
+   then this option will be enabled by default and the number of tasks
+   or slots will be set to the number of requested nodes.
+
+
+Per-task options
+----------------
+
+The **run**, **submit** and **bulksubmit** commands take two sets
+of mutually exclusive options to specify the size of the job request.
+The most common form uses the total number of tasks to run along with
+the amount of resources required per task to specify the resources for
+the entire job:
 
 **-n, --ntasks=N**
    Set the number of tasks to launch (default 1).
@@ -74,6 +101,34 @@ the size of the job request:
 
 **-g, --gpus-per-task=N**
    Set the number of GPU devices to assign to each task (default none).
+
+Per-resource options
+--------------------
+
+The second set of options allows an amount of resources to be specified
+with the number of tasks per core or node set on the command line. It is
+an error to specify any of these options when using any per-task option
+listed above:
+
+**--cores=N**
+   Set the total number of cores.
+
+**--tasks-per-node=N**
+   Set the number of tasks per node to run.
+
+**--gpus-per-node=N**
+   With -N, --nodes, request a specific number of GPUs per node.
+
+**--tasks-per-core=N**
+   Force a number of tasks per core. Note that this will run *N* tasks per
+   *allocated* core. If nodes are exclusively scheduled by configuration or
+   use of the ``--exclusive`` flag, then this option could result in many
+   more tasks than expected. The default for this option is effectively 1,
+   so it is useful only for oversubscribing tasks to cores for testing
+   purposes. You probably don't want to use this option.
+
+Batch job options
+-----------------
 
 The **batch** and **alloc** commands do not launch tasks directly, and
 therefore job parameters are specified in terms of resource slot size
@@ -89,27 +144,18 @@ resources required for a virtual task. The default slot size is 1 core.
 **-g, --gpus-per-slot=N**
    Set the number of GPU devices to assign to each slot (default none).
 
+Additional job options
+----------------------
+
 The **run**, **submit**, **batch**, and **alloc** commands also take
 following additional job parameters:
 
-**-N, --nodes=N**
-   Set the number of nodes to assign to the job. Tasks will be distributed
-   evenly across the allocated nodes. It is an error to request more nodes
-   than there are tasks. If unspecified, the number of nodes will be chosen
-   by the scheduler.
-
-**--exclusive**
-   Indicate to the scheduler that nodes should be exclusively allocated to
-   this job. It is an error to specify this option without also using
-   *-N, --nodes*. If *--nodes* is specified without *--nslots* or *--ntasks*,
-   then this option will be enabled by default and the number of tasks
-   or slots will be set to the number of requested nodes.
-
-**-t, --time-limit=FSD**
-   Set a time limit for the job in Flux standard duration (RFC 23).
-   FSD is a floating point number with a single character units suffix
-   ("s", "m", "h", or "d"). If unspecified, the job is subject to the
-   system default time limit.
+**-t, --time-limit=MINUTES|FSD**
+   Set a time limit for the job in either minutes or Flux standard duration
+   (RFC 23). FSD is a floating point number with a single character units
+   suffix ("s", "m", "h", or "d"). The default unit for the ``--time-limit``
+   option is minutes when no units are otherwise specified. If the time
+   limit is unspecified, the job is subject to the system default time limit.
 
 STANDARD I/O
 ============
@@ -393,6 +439,16 @@ OTHER OPTIONS
 **--debug**
    Enable job debug events, primarily for debugging Flux itself.
    The specific effects of this option may change in the future.
+
+**--bg**
+   *(alloc only)* Do not interactively attach to the instance. Instead,
+   print jobid on stdout once the instance is ready to accept jobs. The
+   instance will run indefinitely until a time limit is reached, the
+   job is canceled, or it is shutdown with ``flux shutdown JOBID``
+   (preferred). If a COMMAND is given then the job will run until COMMAND
+   completes. Note that ``flux job attach JOBID`` cannot be used to
+   interactively attach to the job (though it will print any errors or
+   output).
 
 **-B, --broker-opts=OPT**
    *(batch only)* For batch jobs, pass specified options to the Flux brokers

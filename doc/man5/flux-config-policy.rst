@@ -20,9 +20,9 @@ DEFAULTS
 Default values for job requests may be configured in the
 ``policy.jobspec.defaults.system`` table.  If a job request does not specify
 a value for a system attribute that is configured in the table, the configured
-value is substituted.  Some common examples are:
+value is substituted.  Currently the following values are allowed:
 
-policy.jobspec.defaults.system.duration (float seconds or FSD string)
+policy.jobspec.defaults.system.duration (FSD string)
    (optional) If a job is submitted without specifying a job duration,
    this value is substituted.
 
@@ -42,8 +42,8 @@ rejected at submission time if they violate configured limits.
    queue.  The actual value used to indicate `unlimited` varies by limit
    type and is noted below.
 
-policy.limits.duration (float seconds or FSD string)
-   (optional) Maximum duration that a job may request (0 = unlimited).
+policy.limits.duration (FSD string)
+   (optional) Maximum duration that a job may request ("0" = unlimited).
 
 .. note::
    Limit checks take place before the scheduler sees the request, so it is
@@ -79,18 +79,18 @@ EXAMPLE
 
 ::
 
-   [policy.defaults]
+   [policy.jobspec.defaults.system]
    duration = "1h"
-   queue = "pbatch"
+   queue = "batch"
 
    [policy.limits]
    duration = "4h"
    job-size.max.nnodes = 8
-   job-size.max.gpus = 4
+   job-size.max.ngpus = 4
 
-   [queues.pdebug.policy.limits]
+   [queues.debug.policy.limits]
    duration = "30m"
-   job-size.max.gpus = -1  # unlimited
+   job-size.max.ngpus = -1  # unlimited
 
 
 RESOURCES

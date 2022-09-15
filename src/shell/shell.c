@@ -1288,6 +1288,25 @@ static int shell_register_event_context (flux_shell_t *shell)
     return 0;
 }
 
+/*  Export a static list of environment variables from the job environment
+ *   to the current shell environment. This is important for variables like
+ *   FLUX_F58_FORCE_ASCII which should influence some shell behavior.
+ */
+static int shell_export_environment_from_job (flux_shell_t *shell)
+{
+    const char *vars[] = {
+        "FLUX_F58_FORCE_ASCII",
+        NULL,
+    };
+
+    for (int i = 0; vars[i] != NULL; i++) {
+        const char *val = flux_shell_getenv (shell, vars[i]);
+        if (val && setenv (vars[i], val, 1) < 0)
+            return shell_log_errno ("setenv (%s)", vars[i]);
+    }
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     flux_shell_t shell;
@@ -1323,6 +1342,9 @@ int main (int argc, char *argv[])
      * Fetches missing info from shell handle if set.
      */
     if (!(shell.info = shell_info_create (&shell)))
+        exit (1);
+
+    if (shell_export_environment_from_job (&shell) < 0)
         exit (1);
 
     if (shell_register_event_context (&shell) < 0)

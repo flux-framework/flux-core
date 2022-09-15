@@ -19,6 +19,7 @@ import re
 import random
 import itertools
 import atexit
+import time
 from itertools import chain
 from string import Template
 from collections import ChainMap
@@ -31,6 +32,7 @@ from flux import util
 from flux import debugged
 from flux.idset import IDset
 from flux.progress import ProgressBar
+from flux.uri import JobURI
 
 
 class Dependency:
@@ -226,6 +228,10 @@ class Xcmd:
         "nodes": "-N",
         "cores_per_task": "-c",
         "gpus_per_task": "-g",
+        "cores": "--cores=",
+        "tasks_per_node": "--tasks-per-node=",
+        "tasks_per_core": "--tasks-per-core=",
+        "gpus_per_node": "--gpus-per-node=",
         "time_limit": "-t",
         "env": "--env=",
         "env_file": "--env-file=",
@@ -450,13 +456,14 @@ class MiniCmd:
         """
         Create default parser with args for mini subcommands
         """
-        parser = argparse.ArgumentParser(add_help=False)
+        parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
         parser.add_argument(
             "-t",
             "--time-limit",
             type=str,
-            metavar="FSD",
-            help="Time limit in Flux standard duration, e.g. 2d, 1.5h",
+            metavar="MIN|FSD",
+            help="Time limit in minutes when no units provided, otherwise "
+            + "in Flux standard duration, e.g. 30s, 2d, 1.5h",
         )
         parser.add_argument(
             "--urgency",
@@ -608,6 +615,13 @@ class MiniCmd:
                 list_split(args.requires),
             )
         if args.time_limit is not None:
+            #  With no units, time_limit is in minutes, but jobspec.duration
+            #  takes seconds or FSD by default, so convert here if necessary.
+            try:
+                limit = float(args.time_limit)
+                args.time_limit = limit * 60
+            except ValueError:
+                pass
             jobspec.duration = args.time_limit
 
         if args.job_name is not None:
@@ -719,32 +733,62 @@ class SubmitBaseCmd(MiniCmd):
 
     def __init__(self):
         super().__init__()
-        self.parser.add_argument(
+        group = self.parser.add_argument_group("Common resource options")
+        group.add_argument(
             "-N", "--nodes", metavar="N", help="Number of nodes to allocate"
         )
-        self.parser.add_argument(
+        group.add_argument(
+            "--exclusive",
+            action="store_true",
+            help="With -N, --nodes, allocate nodes exclusively",
+        )
+        group = self.parser.add_argument_group(
+            "Per task options",
+            "The following options allow per-task specification of resources, "
+            + "and should not be combined with per-resource options.",
+        )
+        group.add_argument(
             "-n",
             "--ntasks",
             metavar="N",
             help="Number of tasks to start",
         )
-        self.parser.add_argument(
+        group.add_argument(
             "-c",
             "--cores-per-task",
             metavar="N",
-            default=1,
             help="Number of cores to allocate per task",
         )
-        self.parser.add_argument(
+        group.add_argument(
             "-g",
             "--gpus-per-task",
             metavar="N",
             help="Number of GPUs to allocate per task",
         )
-        self.parser.add_argument(
-            "--exclusive",
-            action="store_true",
-            help="With -N, --nodes, allocate nodes exclusively",
+        group = self.parser.add_argument_group(
+            "Per resource options",
+            "The following options allow per-resource specification of "
+            + "tasks, and should not be used with per-task options above",
+        )
+        group.add_argument(
+            "--cores",
+            metavar="N",
+            help="Request a total number of cores",
+        )
+        group.add_argument(
+            "--tasks-per-node",
+            metavar="N",
+            help="Force number of tasks per node",
+        )
+        group.add_argument(
+            "--tasks-per-core",
+            metavar="N",
+            help="Force number of tasks per core",
+        )
+        group.add_argument(
+            "--gpus-per-node",
+            metavar="N",
+            help="Request a number of GPUs per node with --nodes",
         )
         self.parser.add_argument(
             "-v",
@@ -754,24 +798,28 @@ class SubmitBaseCmd(MiniCmd):
             help="Increase verbosity on stderr (multiple use OK)",
         )
 
+    # pylint: disable=too-many-branches
     def init_jobspec(self, args):
+        per_resource_type = None
+        per_resource_count = None
+
         if not args.command:
             raise ValueError("job command and arguments are missing")
-
-        #  If ntasks not set, then set it to either node count, with
-        #   exclusive flag enabled, or to 1 (the default).
-        if not args.ntasks:
-            if args.nodes:
-                args.ntasks = args.nodes
-                args.exclusive = True
-            else:
-                args.ntasks = 1
 
         #  Ensure integer args are converted to int() here.
         #  This is done because we do not use type=int in argparse in order
         #   to allow these options to be mutable for bulksubmit:
         #
-        for arg in ["ntasks", "nodes", "cores_per_task", "gpus_per_task"]:
+        for arg in [
+            "ntasks",
+            "nodes",
+            "cores",
+            "cores_per_task",
+            "gpus_per_task",
+            "tasks_per_node",
+            "tasks_per_core",
+            "gpus_per_node",
+        ]:
             value = getattr(args, arg)
             if value:
                 try:
@@ -779,6 +827,82 @@ class SubmitBaseCmd(MiniCmd):
                 except ValueError:
                     opt = arg.replace("_", "-")
                     raise ValueError(f"--{opt}: invalid int value '{value}'")
+
+        if args.tasks_per_node is not None and args.tasks_per_core is not None:
+            raise ValueError(
+                "Do not specify both the number of tasks per node and per core"
+            )
+
+        #  Handle --tasks-per-node or --tasks-per-core (it is an error to
+        #   specify both). Check options for validity and assign the
+        #   per_resource variable when valid.
+        #
+        if args.tasks_per_node is not None or args.tasks_per_core is not None:
+            if args.tasks_per_node is not None:
+                if args.tasks_per_node < 1:
+                    raise ValueError("--tasks-per-node must be >= 1")
+
+                per_resource_type = "node"
+                per_resource_count = args.tasks_per_node
+            elif args.tasks_per_core is not None:
+                if args.tasks_per_core < 1:
+                    raise ValueError("--tasks-per-core must be >= 1")
+                per_resource_type = "core"
+                per_resource_count = args.tasks_per_core
+
+        if args.gpus_per_node:
+            if not args.nodes:
+                raise ValueError("--gpus-per-node requires --nodes")
+
+        #  If any of --tasks-per-node, --tasks-per-core, --cores, or
+        #   --gpus-per-node is used, then use the per_resource constructor:
+        #
+        if (
+            per_resource_type is not None
+            or args.gpus_per_node is not None
+            or args.cores is not None
+        ):
+            #  If any of the per-task options was also specified, raise an
+            #   error here instead of silently ignoring those options:
+            if (
+                args.ntasks is not None
+                or args.cores_per_task is not None
+                or args.gpus_per_task
+            ):
+                raise ValueError(
+                    "Per-resource options can't be used with per-task options."
+                    + " (See --help for details)"
+                )
+
+            #  In per-resource mode, set the exclusive flag if nodes is
+            #   specified without cores. This preserves the default behavior
+            #   of requesting nodes exclusively when only -N is used:
+            if args.nodes and args.cores is None:
+                args.exclusive = True
+
+            return JobspecV1.per_resource(
+                args.command,
+                ncores=args.cores,
+                nnodes=args.nodes,
+                per_resource_type=per_resource_type,
+                per_resource_count=per_resource_count,
+                gpus_per_node=args.gpus_per_node,
+                exclusive=args.exclusive,
+            )
+
+        #  If ntasks not set, then set it to node count, with
+        #   exclusive flag enabled
+        if not args.ntasks and args.nodes:
+            args.ntasks = args.nodes
+            args.exclusive = True
+
+        # O/w default ntasks for from_command() is 1:
+        if not args.ntasks:
+            args.ntasks = 1
+
+        # default cores_per_task for from_command() is 1:
+        if not args.cores_per_task:
+            args.cores_per_task = 1
 
         return JobspecV1.from_command(
             args.command,
@@ -1236,7 +1360,7 @@ class BulkSubmitCmd(SubmitBulkCmd):
         self.parser.add_argument(
             "command",
             nargs=argparse.REMAINDER,
-            help="Job command and iniital arguments",
+            help="Job command and initial arguments",
         )
 
     @staticmethod
@@ -1372,6 +1496,8 @@ class BulkSubmitCmd(SubmitBulkCmd):
         for xargs in commands:
             total += len(self.cc_list(xargs))
 
+        if total == 0:
+            raise ValueError("no jobs provided for bulk submission")
         #  Initialize progress bar if requested:
         if args.progress:
             if not args.dry_run:
@@ -1576,6 +1702,9 @@ class BatchCmd(MiniCmd):
 
 class AllocCmd(MiniCmd):
     def __init__(self):
+
+        self.t0 = None
+
         super().__init__(exclude_io=True)
         add_batch_alloc_args(self.parser)
         self.parser.add_argument(
@@ -1584,6 +1713,11 @@ class AllocCmd(MiniCmd):
             action="count",
             default=0,
             help="Increase verbosity on stderr (multiple use OK)",
+        )
+        self.parser.add_argument(
+            "--bg",
+            action="store_true",
+            help="Wait for new instance to start, but do not attach to it.",
         )
         self.parser.add_argument(
             "COMMAND",
@@ -1602,6 +1736,12 @@ class AllocCmd(MiniCmd):
             args.nslots = args.nodes
             args.exclusive = True
 
+        #  For --bg, do not run an rc2 (inital program) unless
+        #    the user explicitly specified COMMAND:
+        if args.bg and not args.COMMAND:
+            args.broker_opts = args.broker_opts or []
+            args.broker_opts.append("-Sbroker.rc2_none=1")
+
         jobspec = JobspecV1.from_nest_command(
             command=args.COMMAND,
             num_slots=args.nslots,
@@ -1611,12 +1751,90 @@ class AllocCmd(MiniCmd):
             broker_opts=list_split(args.broker_opts),
             exclusive=args.exclusive,
         )
-        if sys.stdin.isatty():
+
+        #  For --bg, always allocate a pty, but not interactive,
+        #   since an interactive pty causes the job shell to hang around
+        #   until a pty client attaches, which may never happen.
+        #
+        #  O/w, allocate an interactive pty only if stdin is a tty
+        #
+        if args.bg:
+            jobspec.setattr_shell_option("pty.capture", 1)
+        elif sys.stdin.isatty():
             jobspec.setattr_shell_option("pty.interactive", 1)
         return jobspec
 
+    @staticmethod
+    def log(jobid, ts, msg):
+        print(f"{jobid}: {ts:6.3f}s: {msg}", file=sys.stderr, flush=True)
+
+    def bg_wait_cb(self, future, args, jobid):
+        """
+        Wait for memo event, connect to child instance, and finally wait
+        for rc1 to complete
+        """
+        event = future.get_event()
+        if not event:
+            #  The job has unexpectedly exited since we're at the end
+            #   of the eventlog. Run `flux job attach` since this will dump
+            #   any errors or output, then raise an exception.
+            os.system(f"flux job attach {jobid} >&2")
+            raise OSError(f"{jobid}: unexpectedly exited")
+
+        if not self.t0:
+            self.t0 = event.timestamp
+        ts = event.timestamp - self.t0
+
+        if args.verbose and event.name == "alloc":
+            self.log(jobid, ts, "resources allocated")
+        if event.name == "memo" and "uri" in event.context:
+            if args.verbose:
+                self.log(jobid, ts, "waiting for instance")
+
+            #  Wait for child instance to finish rc1 using state-machine.wait,
+            #   then stop the reactor to return to caller.
+            uri = str(JobURI(event.context["uri"]))
+            try:
+                child_handle = flux.Flux(uri)
+            except OSError as exc:
+                raise OSError(f"Unable to connect to {jobid}: {exc}")
+            try:
+                child_handle.rpc("state-machine.wait").get()
+            except OSError as exc:
+                raise OSError(f"{jobid}: instance startup failed")
+
+            if args.verbose:
+                self.log(jobid, time.time() - self.t0, "ready")
+            self.flux_handle.reactor_stop()
+
+    def background(self, args, jobid):
+        """Handle the --bg option
+
+        Wait for child instance to be ready to accept jobs before returning.
+        Print jobid to stdout once the job is ready.
+        """
+        jobid = flux.job.JobID(jobid)
+
+        job.event_watch_async(self.flux_handle, jobid).then(
+            self.bg_wait_cb, args, jobid
+        )
+        if args.verbose:
+            self.log(jobid, 0.0, "waiting for resources")
+        try:
+            self.flux_handle.reactor_run()
+        except KeyboardInterrupt:
+            print(f"\r{jobid}: Interrupt: canceling job", file=sys.stderr)
+            job.cancel(self.flux_handle, jobid)
+            sys.exit(1)
+
+        print(jobid)
+
     def main(self, args):
         jobid = self.submit(args)
+
+        if args.bg:
+            self.background(args, jobid)
+            sys.exit(0)
 
         # Display job id on stderr if -v
         # N.B. we must flush sys.stderr due to the fact that it is buffered
@@ -1676,16 +1894,17 @@ def main():
     # bulksubmit
     bulksubmit = BulkSubmitCmd()
     description = """
-    Submit a series of commands given on the commandline. This is useful
-    with shell globs, e.g. `flux mini bulksubmit *.sh`, and will allow
-    jobs to be submitted much faster than calling flux-mini submit in a
-    loop.
+    Submit a series of commands given on the command line or on stdin,
+    using an interface similar to GNU parallel or xargs.
+    Allows jobs to be submitted much faster than calling flux-mini
+    submit in a loop. Inputs on the command line are separated from
+    each other and the command with the special delimiter ':::'.
     """
     bulksubmit_parser_sub = subparsers.add_parser(
         "bulksubmit",
         parents=[bulksubmit.get_parser()],
         help="enqueue jobs in bulk",
-        usage="flux mini bulksubmit [OPTIONS...] COMMAND [COMMANDS...]",
+        usage="flux mini bulksubmit [OPTIONS...] COMMAND [ARGS...]",
         description=description,
         formatter_class=flux.util.help_formatter(),
     )

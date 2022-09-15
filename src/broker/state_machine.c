@@ -712,6 +712,9 @@ static void broker_online_cb (flux_future_t *f, void *arg)
     struct state_machine *s = arg;
     const char *members;
     struct idset *ids;
+    static double last_update = 0;
+    double now = flux_reactor_now (flux_get_reactor (s->ctx->h));
+    bool quorum_reached = false;
 
     if (flux_rpc_get_unpack (f, "{s:s}", "members", &members) < 0
         || !(ids = idset_decode (members))) {
@@ -720,15 +723,21 @@ static void broker_online_cb (flux_future_t *f, void *arg)
         return;
     }
 
-    if (strlen (members) > 0) {
-        char *hosts = flux_hostmap_lookup (s->ctx->h, members, NULL);
-        flux_log (s->ctx->h, LOG_INFO, "online: %s (ranks %s)", hosts, members);
-        free (hosts);
-    }
-
     idset_destroy (s->quorum.have);
     s->quorum.have = ids;
     if (is_subset_of (s->quorum.want, s->quorum.have)) {
+        quorum_reached = true;
+    }
+
+    if (strlen (members) > 0
+        && (quorum_reached || now - last_update > 5)) {
+        char *hosts = flux_hostmap_lookup (s->ctx->h, members, NULL);
+        flux_log (s->ctx->h, LOG_INFO, "online: %s (ranks %s)", hosts, members);
+        free (hosts);
+        last_update = now;
+    }
+
+    if (quorum_reached) {
         if (s->state != STATE_RUN) {
             state_machine_post (s, "quorum-full");
             if (s->quorum.warned) {

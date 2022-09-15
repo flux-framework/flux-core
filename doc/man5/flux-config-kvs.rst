@@ -22,6 +22,13 @@ checkpoint-period
    primary namespace.  The checkpoint is used to protect against data
    loss in the event of a Flux broker crash.
 
+gc-threshold
+   (optional) Sets the number of KVS commits (distinct root snapshots)
+   after which offline garbage collection is performed by
+   :man1:`flux-shutdown`. A value of 100000 may be a good starting
+   point. (Default: garbage collection must be manually requested with
+   `flux-shutdown --gc`).
+
 
 EXAMPLE
 =======
@@ -30,7 +37,7 @@ EXAMPLE
 
    [kvs]
    checkpoint-period = "30m"
-
+   gc-threshold = 100000
 
 RESOURCES
 =========
@@ -43,4 +50,4 @@ RFC 23: Flux Standard Duration: https://flux-framework.readthedocs.io/projects/f
 SEE ALSO
 ========
 
-:man5:`flux-config`
+:man1:`flux-shutdown`,:man5:`flux-config`

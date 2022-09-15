@@ -12,7 +12,7 @@
  *
  * This plugin uses the job.validate callback to accept or reject job
  * requests.  Any default jobspec values would have been applied earlier
- * (where applicable) in the job.create callback.
+ * (where applicable) at ingest.
  *
  * General limit:
  *  policy.limits.duration
@@ -20,7 +20,7 @@
  *  queues.<name>.policy.limits.duration
  *
  * N.B. a queue limit may override the general limit with a higher or lower
- * limit, even "unlimited" (0).
+ * limit, or "0" for unlimited.
  *
  * See also:
  *  RFC 33/Flux Job Queues
@@ -131,36 +131,24 @@ static int duration_parse (double *duration,
                            flux_error_t *error)
 {
     double d = DURATION_INVALID;
-    json_t *o = NULL;
+    const char *ds = NULL;
     json_error_t jerror;
     const char *name = "policy.limits.duration";
 
     if (json_unpack_ex (conf,
                         &jerror,
                         0,
-                        "{s?{s?{s?o}}}",
+                        "{s?{s?{s?s}}}",
                         "policy",
                           "limits",
-                            "duration", &o) < 0) {
+                            "duration", &ds) < 0) {
         errprintf (error, "%s: %s", name, jerror.text);
-        return -1;
+        goto inval;
     }
-    if (o) {
-        if (json_is_string (o)) {
-            if (fsd_parse_duration (json_string_value (o), &d) < 0) {
-                errprintf (error, "%s: FSD value is malformed", name);
-                return -1;
-            }
-        }
-        else if (json_is_number (o)) {
-            if ((d = json_number_value (o)) < 0) {
-                errprintf (error, "%s: must be >= 0", name);
-                goto inval;
-            }
-        }
-        else {
-            errprintf (error, "%s: must be FSD (string) or seconds", name);
-            goto inval;
+    if (ds) {
+        if (fsd_parse_duration (ds, &d) < 0) {
+            errprintf (error, "%s: FSD value is malformed", name);
+            return -1;
         }
     }
     *duration = d;

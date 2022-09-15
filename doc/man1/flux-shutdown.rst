@@ -76,6 +76,12 @@ OPTIONS
    the dump, and the link is removed.  :linux:man8:`systemd-tmpfiles`
    automatically cleans up dump files in ``/var/lib/flux/dump`` after 30 days.
 
+**-y, --yes**
+   Answer yes to any yes/no questions.
+
+**-n, --no**
+   Answer no to any yes/no questions.
+
 
 RESOURCES
 =========
@@ -87,4 +93,4 @@ SEE ALSO
 ========
 
 :man1:`flux-start`, :man1:`flux-uptime`, :man1:`flux-uri`, :man1:`flux-dump`,
-:linux:man8:`systemd-tmpfiles`
+:man5:`flux-config-kvs`,:linux:man8:`systemd-tmpfiles`

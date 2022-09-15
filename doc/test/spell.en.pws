@@ -633,3 +633,6 @@ checkpointed
 pbatch
 pdebug
 parentof
+bg
+norestrict
+frobnicator

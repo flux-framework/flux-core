@@ -11,7 +11,9 @@
 #ifndef _FLUX_RESOURCE_TOPO_H
 #define _FLUX_RESOURCE_TOPO_H
 
-struct topo *topo_create (struct resource_ctx *ctx, bool no_verify);
+struct topo *topo_create (struct resource_ctx *ctx,
+                          bool no_verify,
+                          bool no_restrict);
 void topo_destroy (struct topo *topo);
 
 

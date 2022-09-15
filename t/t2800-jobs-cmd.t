@@ -1136,6 +1136,24 @@ test_expect_success HAVE_JQ 'flux jobs works on job with illegal R' '
 '
 
 #
+# special tests
+#
+
+# use flux queue to ensure jobs stay in pending state
+test_expect_success HAVE_JQ 'flux jobs lists nnodes for pending jobs correctly' '
+	flux queue stop &&
+	id1=$(flux mini submit -N1 hostname) &&
+	id2=$(flux mini submit -N3 hostname) &&
+	flux jobs -no "{state},{nnodes},{nnodes:h}" ${id1} ${id2}> nnodesP.out &&
+	echo "SCHED,1,1" >> nnodesP.exp &&
+	echo "SCHED,3,3" >> nnodesP.exp &&
+	flux job cancel ${id1} &&
+	flux job cancel ${id2} &&
+	flux queue start &&
+	test_cmp nnodesP.exp nnodesP.out
+'
+
+#
 # leave job cleanup to rc3
 #
 test_done

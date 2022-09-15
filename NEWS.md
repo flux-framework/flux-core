@@ -1,3 +1,68 @@
+flux-core version 0.43.0 - 2022-09-06
+-------------------------------------
+
+This release includes changes after several weeks of Flux running as the
+primary resource manager on two small production systems at LLNL.  Some
+noteworthy changes are:  new options to flux-jobs(1) and flux-mini(1), show
+detailed job state in flux-jobs(1) output, and automatic KVS garbage
+collection.  Also included:  bug fixes for for cpu affinity, tcsh users,
+users with non-UTF-8 compliant terminals, and a rank 0 broker segfault when
+inactive job purging is enabled.
+
+## New Features
+ * cmd: add "per-resource" allocation options to flux-mini run and submit
+   (#4544)
+ * job-list: return nnodes if jobspec specifies nodes (#4542)
+ * resource: add norestrict option to avoid restricting hwloc topology XML
+   (#4538)
+ * flux-mini: add --bg option to flux-mini alloc (#4531)
+ * kvs: support gc-threshold config (#4528)
+ * etc: support content.backing-module=none (#4492)
+ * fetch J instead of jobspec in the job shell, support flux job info
+   --original jobspec (#4523)
+ * flux-jobs: add --since=WHEN and --name=NAME options (#4517)
+ * add flux jobtap query subcommand (#4507)
+ * libkvs: Support `KVS_CHECKPOINT_FLAG_CACHE_BYPASS` flag (#4477)
+ * flux-mini: --setattr: place keys in `attributes.system` by default
+   and default value to 1 (#4483)
+ * kvs: add root sequence number to checkpoint object (#4475)
+
+## Fixes
+ * shell: inherit `FLUX_F58_FORCE_ASCII` from job environment (#4541)
+ * shell: fix cpu-affinity=per-task (#4537)
+ * flux-mini: fix bulksubmit help message (#4539)
+ * fix ssh connector with csh/tcsh shells (#4532)
+ * broker: log content store errors to `LOG_CRIT` (#4526)
+ * broker: forward content.checkpoint-{get,put} RPCs to rank 0 (#4519)
+ * cmd/flux-jobs: include job state in status output (#4515)
+ * flux-jobs: improve bad username error message (#4503)
+ * update fluid check to check explicitly for utf-8 (#4505)
+ * doc: add TIMEOUT result to flux-jobs(1) (#4500)
+ * fix formatting issues with large UIDs (#4489)
+ * broker: fix content-cache flush list corruption (#4484)
+ * top: fix detailed report in summary pane (#4479)
+ * content-{sqlite,files,s3}: route checkpoint-get and checkpoint-put
+   through broker (#4463)
+ * job-list: avoid segfault after job purge (#4470)
+
+## Cleanup
+ * job-list: remove job-list.list-inactive RPC (#4513)
+ * flux-job: point users to flux-jobs(1) (#4499)
+ * docker: typo in path to Dockerfile (#4490)
+ * add start of spack base image for flux-core (#4471)
+ * docker: add pam development package to images (#4473)
+ * refactor broker overlay for topology flexibility (#4474)
+ * github: fixes for issues found when pushing a tag (#4462)
+
+## Testsuite
+ * testsuite: fix non-bourne shell test failure (#4543)
+ * testsuite: add more checkpoint sequence tests (#4518)
+ * testsuite: use flux jobs in valgrind workload (#4512)
+ * testsuite: unset `FLUX_F58_FORCE_ASCII` during testsuite (#4509)
+ * testsuite: add timeout job tests (#4501)
+ * testsuite: misc valgrind cleanup (#4480)
+
+
 flux-core version 0.42.0 - 2022-08-02
 -------------------------------------
 

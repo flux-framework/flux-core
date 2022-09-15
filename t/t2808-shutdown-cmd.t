@@ -6,6 +6,7 @@ test_description='Test flux shutdown command'
 
 test_under_flux 4
 
+runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py"
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
 export FLUX_URI_RESOLVE_LOCAL=t
@@ -184,6 +185,135 @@ test_expect_success 'shutdown batch script with --gc' '
 '
 test_expect_success 'dump file was created with RESTORE link' '
 	tar tvf dump/RESTORE
+'
+test_expect_success 'clean up dump files from previous tests' '
+	rm -f dump.tgz &&
+	rm -f dump/RESTORE
+'
+test_expect_success 'create config with large gc-threshold config' '
+	cat >kvs.toml <<-EOT
+	[kvs]
+	gc-threshold = 10000
+	EOT
+'
+test_expect_success 'submit batch script and wait for it to start (1)' '
+	rm -f job7-has-started &&
+	cat >batch7.sh <<-EOT &&
+	#!/bin/sh
+	flux mini run /bin/true
+	touch job7-has-started
+	sleep 300
+	EOT
+	chmod +x batch7.sh &&
+	FLUX_CONF_DIR=$(pwd) flux mini batch -t30m -n1 batch7.sh >jobid7 &&
+	$waitfile job7-has-started
+'
+test_expect_success 'shutdown batch script' '
+	(FLUX_URI=$(flux uri --local $(cat jobid7)) \
+	    flux shutdown)
+'
+test_expect_success 'RESTORE dump not created, gc-threshold not crossed yet' '
+	test_must_fail ls dump/RESTORE
+'
+test_expect_success 'create config with small gc-threshold config' '
+	cat >kvs.toml <<-EOT
+	[kvs]
+	gc-threshold = 5
+	EOT
+'
+test_expect_success 'submit batch script and wait for it to start (2)' '
+	rm -f job7-has-started &&
+	FLUX_CONF_DIR=$(pwd) flux mini batch -t30m -n1 batch7.sh >jobid7_try2 &&
+	$waitfile job7-has-started
+'
+# this test goes into a script, so we can pass to test_must_fail
+test_expect_success 'shutdown, gc threshold crossed, error no -y or -n' '
+	cat >test_no_y_or_n_cmdline.sh <<-EOT &&
+	#!/bin/sh
+	FLUX_URI=$(flux uri --local $(cat jobid7_try2))
+	flux shutdown
+	EOT
+	chmod +x test_no_y_or_n_cmdline.sh &&
+	test_must_fail ./test_no_y_or_n_cmdline.sh
+'
+test_expect_success 'shutdown, gc threshold crossed, user specifies -n' '
+	(FLUX_URI=$(flux uri --local $(cat jobid7_try2)) \
+	    flux shutdown -n)
+'
+test_expect_success 'RESTORE dump not created, user declined' '
+	test_must_fail ls dump/RESTORE
+'
+test_expect_success 'submit batch script and wait for it to start (3)' '
+	rm -f job7-has-started &&
+	FLUX_CONF_DIR=$(pwd) flux mini batch -t30m -n1 batch7.sh >jobid7_try3 &&
+	$waitfile job7-has-started
+'
+test_expect_success 'shutdown, gc threshold crossed, user specifies -y' '
+	(FLUX_URI=$(flux uri --local $(cat jobid7_try3)) \
+	    flux shutdown -y)
+'
+test_expect_success 'RESTORE dump created after user accepted' '
+	tar tvf dump/RESTORE
+'
+test_expect_success 'clean up dump files from previous tests' '
+	rm -f dump.tgz &&
+	rm -f dump/RESTORE
+'
+test_expect_success 'submit batch script and wait for it to start (4)' '
+	rm -f job7-has-started &&
+	FLUX_CONF_DIR=$(pwd) flux mini batch -t30m -n1 batch7.sh >jobid7_try4 &&
+	$waitfile job7-has-started
+'
+test_expect_success 'shutdown, gc threshold crossed, user input n' '
+	cat <<-EOF >jobid7_try4.in &&
+	{ "version": 2 }
+	[0.5, "i", "n\n"]
+	EOF
+	(FLUX_URI=$(flux uri --local $(cat jobid7_try4)) \
+	    $runpty --input=jobid7_try4.in flux shutdown)
+'
+test_expect_success 'RESTORE dump not created, user declined' '
+	test_must_fail ls dump/RESTORE
+'
+test_expect_success 'submit batch script and wait for it to start (5)' '
+	rm -f job7-has-started &&
+	FLUX_CONF_DIR=$(pwd) flux mini batch -t30m -n1 batch7.sh >jobid7_try5 &&
+	$waitfile job7-has-started
+'
+test_expect_success 'shutdown, gc threshold crossed, user input y' '
+	cat <<-EOF >jobid7_try5.in &&
+	{ "version": 2 }
+	[0.5, "i", "y\n"]
+	EOF
+	(FLUX_URI=$(flux uri --local $(cat jobid7_try5)) \
+	    $runpty --input=jobid7_try5.in flux shutdown)
+'
+test_expect_success 'RESTORE dump created after user accepted' '
+	tar tvf dump/RESTORE
+'
+test_expect_success 'clean up dump files from previous tests' '
+	rm -f dump.tgz &&
+	rm -f dump/RESTORE
+'
+test_expect_success 'submit batch script and wait for it to start (6)' '
+	rm -f job7-has-started &&
+	FLUX_CONF_DIR=$(pwd) flux mini batch -t30m -n1 batch7.sh >jobid7_try6 &&
+	$waitfile job7-has-started
+'
+test_expect_success 'shutdown, gc threshold crossed, user input default' '
+	cat <<-EOF >jobid7_try6.in &&
+	{ "version": 2 }
+	[0.5, "i", "\n"]
+	EOF
+	(FLUX_URI=$(flux uri --local $(cat jobid7_try6)) \
+	    $runpty --input=jobid7_try6.in flux shutdown)
+'
+test_expect_success 'RESTORE dump created after user accepted' '
+	tar tvf dump/RESTORE
+'
+test_expect_success 'clean up dump files from previous tests' '
+	rm -f dump.tgz &&
+	rm -f dump/RESTORE
 '
 
 test_done

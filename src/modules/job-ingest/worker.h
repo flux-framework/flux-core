@@ -11,6 +11,7 @@
 #ifndef _JOB_INGEST_WORKER_H
 #define _JOB_INGEST_WORKER_H
 
+#include <sys/types.h>
 #include <flux/core.h>
 
 #include "types.h"
@@ -21,7 +22,10 @@ struct worker;
 flux_future_t *worker_request (struct worker *w, const char *s);
 
 int worker_queue_depth (struct worker *w);
+int worker_request_count (struct worker *w);
+int worker_error_count (struct worker *w);
 bool worker_is_running (struct worker *w);
+pid_t worker_pid (struct worker *w);
 
 flux_future_t *worker_kill (struct worker *w, int signo);
 void worker_destroy (struct worker *w);

@@ -91,9 +91,9 @@ static int store_attr (struct job *job,
         val = json_integer (job->ntasks);
     }
     else if (!strcmp (attr, "nnodes")) {
-        /* job->nnodes potentially < 0 if R invalid */
-        if (!(job->states_mask & FLUX_JOB_STATE_RUN)
-            || job->nnodes < 0)
+        /* job->nnodes < 0 if not set yet or R invalid, may be set in
+         * DEPEND or RUN state */
+        if (job->nnodes < 0)
             return 0;
         val = json_integer (job->nnodes);
     }

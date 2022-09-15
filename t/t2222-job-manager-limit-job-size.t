@@ -10,18 +10,12 @@ test_under_flux 2 full -o,--config-path=$(pwd)/config
 
 flux setattr log-stderr-level 1
 
-test_expect_success 'unload all built-in plugins' '
-        flux jobtap remove ".*"
-'
 test_expect_success 'configure an invalid job-size limit' '
 	cat >config/policy.toml <<-EOT &&
 	[policy.limits]
 	job-size.max.nnodes = -42
 	EOT
-	flux config reload
-'
-test_expect_success 'cannot load the limit-job-size plugin' '
-        test_must_fail flux jobtap load .limit-job-size
+	test_must_fail flux config reload
 '
 test_expect_success 'configure valid job-size.*.nnodes limits' '
 	cat >config/policy.toml <<-EOT &&
@@ -30,9 +24,6 @@ test_expect_success 'configure valid job-size.*.nnodes limits' '
 	job-size.min.nnodes = 2
 	EOT
 	flux config reload
-'
-test_expect_success 'and plugin can now be loaded' '
-        flux jobtap load .limit-job-size
 '
 test_expect_success 'a job that exceeds job-size.max.nnodes is rejected' '
 	test_must_fail flux mini submit -N 3 /bin/true 2>max-nnodes.err &&

@@ -6,18 +6,22 @@ flux-config-ingest(5)
 DESCRIPTION
 ===========
 
-The Flux **job-ingest** service verifies and validates job requests
+The Flux **job-ingest** service optionally modifies and validates job requests
 before announcing new jobs to the **job-manager**. Configuration of the
-**job-ingest** module can be accomplished either via the module command
-line or an ``ingest`` TOML table. See the KEYS section below for supported
-``ingest`` table keys.
+**job-ingest** module can be accomplished via the ``ingest`` TOML table.
+See the KEYS section below for supported ``ingest`` table keys.
 
-The **job-ingest** module validates jobspec using a work crew of
-``flux job-validator`` processes. The validator supports a set of plugins,
-and each plugin may consume additional arguments from the command line
-for specific configuration. The validator plugins and any arguments are
-configured in the ``ingest.validator`` TOML table. See the VALIDATOR KEYS
-section below for supported ``ingest.validator`` keys.
+The **job-ingest** module implements a two stage pipeline for job requests.
+The first stage modifies jobspec and is implemented as a work crew of
+``flux job-frobnicator`` processes.  The second stage validates the modified
+requests and is implemented as a work crew of ``flux job-validator`` processes.
+The frobnicator is disabled by default, and the validator is enabled by default.
+
+The frobnicator and validator each supports a set of plugins, and each plugin
+may consume additional arguments from the command line for specific
+configuration.  The plugins and any arguments are configured in the
+``ingest.frobnicator`` and ``ingest.validator`` TOML tables, respectively.
+See the FROBNICATOR KEYS and VALIDATOR KEYS sections for supported keys.
 
 KEYS
 ====
@@ -27,6 +31,19 @@ batch-count
    for efficiency. Normally this is done using a timer, but if the
    ``batch-count`` key is nonzero then jobs are batched based on a counter
    instead. This is mostly useful for testing.
+
+FROBNICATOR KEYS
+================
+
+plugins
+   (optional) An array of frobnicator plugins to use.
+   For a list of supported plugins on your system run
+   ``flux job-frobnicator --list-plugins``
+
+args
+   (optional) An array of extra arguments to pass on the frobnicator
+   command line. Valid arguments can be found by running
+   ``flux job-frobnicator --plugins=LIST --help``
 
 VALIDATOR KEYS
 ==============
@@ -51,6 +68,9 @@ EXAMPLE
 =======
 
 ::
+
+   [ingest.frobnicator]
+   plugins = [ "defaults" ]
 
    [ingest.validator]
    plugins = [ "jobspec", "feasibility" ]

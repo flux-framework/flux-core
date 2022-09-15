@@ -162,7 +162,7 @@ test_expect_success 'setup fake csm_allocation_query for mock lsf testing' '
 	export FLUX_SSH=${SHARNESS_TEST_SRCDIR}/scripts/tssh
 '
 test_expect_success 'flux-uri mock testing of lsf resolver works' '
-	result=$(flux uri --local lsf:12345) &&
+	result=$(SHELL=/bin/sh flux uri --local lsf:12345) &&
 	test "$result" = "$FLUX_URI"
 '
 test_expect_success 'cleanup jobs' '

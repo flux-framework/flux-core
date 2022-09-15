@@ -191,7 +191,7 @@ int flux_kvs_txn_vpack (flux_kvs_txn_t *txn, int flags,
         errno = EINVAL;
         goto error;
     }
-    if (!(s = json_dumps (val, JSON_ENCODE_ANY))) {
+    if (!(s = json_dumps (val, JSON_ENCODE_ANY | JSON_COMPACT))) {
         errno = ENOMEM;
         json_decref (val);
         goto error;

@@ -29,6 +29,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/librouter/rpc_track.h"
 #include "src/common/libccan/ccan/ptrint/ptrint.h"
 
@@ -897,8 +898,13 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
          * Send CONTROL_DISCONNECT to force subtree panic.
          */
         else {
-            if (overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0) < 0)
-                flux_log_error (ov->h, "failed to send CONTROL_DISCONNECT");
+            if (overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0) < 0) {
+                // not LOG_ERR per flux-framework/flux-core#4464
+                flux_log (ov->h,
+                          LOG_DEBUG,
+                          "failed to send CONTROL_DISCONNECT: %s",
+                          strerror (errno));
+            }
         }
         goto done;
     }
@@ -1023,13 +1029,13 @@ done:
 /* Check child flux-core version 'v1' against this broker's version 'v2'.
  * For now we require an exact match of (major,minor,patch) and
  * ignore any commit id appended to the version string.
- * Return 0 on error, or -1 on failure with message for child in 'errubuf'.
+ * Return 0 on error, or -1 on failure with message for child in 'error'.
  */
-static bool version_check (int v1, int v2, char *errbuf, int errbufsz)
+static bool version_check (int v1, int v2, flux_error_t *error)
 {
     if (v1 != v2) {
-        snprintf (errbuf, errbufsz,
-                  "flux-core v%u.%u.%u mismatched with parent v%u.%u.%u",
+        errprintf (error,
+                  "client (%u.%u.%u) version mismatched with server (%u.%u.%u)",
                   (v1 >> 16) & 0xff,
                   (v1 >> 8) & 0xff,
                   v1 & 0xff,
@@ -1054,12 +1060,11 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     json_int_t rank;
     int version;
     const char *errmsg = NULL;
-    char errbuf[128];
-    const char *reason = "";
+    flux_error_t error;
     flux_msg_t *response;
     const char *uuid;
     int status;
-    int hello_log_level = LOG_INFO;
+    int hello_log_level = LOG_DEBUG;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -1070,16 +1075,19 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
                              "status", &status) < 0
         || flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0)
         goto error; // EPROTO or EPERM (unlikely)
-
     if (!(child = child_lookup_byrank (ov, rank))) {
-        snprintf (errbuf, sizeof (errbuf),
+        errprintf (&error,
                   "rank %lu is not a peer of parent %lu: mismatched config?",
                   (unsigned long)rank,
                   (unsigned long)ov->parent.rank);
-        errmsg = errbuf;
+        flux_log (ov->h, LOG_ERR,
+                  "rejecting connection from %s (rank %lu): %s",
+                  flux_get_hostbyrank (ov->h, rank),
+                  (unsigned long)rank,
+                  error.text);
+        errmsg = error.text;
         errno = EINVAL;
-        reason = "not a peer of this broker - mismatched config?";
-        goto error_log;
+        goto error;
     }
     /* Oops, child was previously online, but is now saying hello.
      * Update the (old) child's subtree status to LOST.  If the hello
@@ -1087,19 +1095,22 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
      */
     if (subtree_is_online (child->status)) { // crash
         flux_log (ov->h, LOG_ERR,
-                  "%s (rank %lu) reconnected after crash, dropping old uuid %s",
+        "%s (rank %lu) reconnected after crash, dropping old connection state",
                   flux_get_hostbyrank (ov->h, child->rank),
-                  (unsigned long)child->rank,
-                  child->uuid);
+                  (unsigned long)child->rank);
         overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
         hello_log_level = LOG_ERR; // want hello log to stand out in this case
     }
 
-    if (!version_check (version, ov->version, errbuf, sizeof (errbuf))) {
-        errmsg = errbuf;
+    if (!version_check (version, ov->version, &error)) {
+        flux_log (ov->h, LOG_ERR,
+                  "rejecting connection from %s (rank %lu): %s",
+                  flux_get_hostbyrank (ov->h, rank),
+                  (unsigned long)rank,
+                  error.text);
+        errmsg = error.text;
         errno = EINVAL;
-        reason = "flux-core version mismatch - needs software update?";
-        goto error_log;
+        goto error;
     }
 
     snprintf (child->uuid, sizeof (child->uuid), "%s", uuid);
@@ -1107,10 +1118,9 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
 
     flux_log (ov->h,
               hello_log_level,
-              "accepting connection from %s (rank %lu) uuid %s status %s",
+              "accepting connection from %s (rank %lu) status %s",
               flux_get_hostbyrank (ov->h, child->rank),
               (unsigned long)child->rank,
-              child->uuid,
               subtree_status_str (child->status));
 
     if (!(response = flux_response_derive (msg, 0))
@@ -1119,13 +1129,6 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
         flux_log_error (ov->h, "error responding to overlay.hello request");
     flux_msg_destroy (response);
     return;
-error_log:
-    flux_log (ov->h, LOG_ERR,
-              "rejecting connection from %s (rank %lu) uuid %s: %s",
-              flux_get_hostbyrank (ov->h, rank),
-              (unsigned long)rank,
-              uuid,
-              reason);
 error:
     if (!(response = flux_response_derive (msg, errno))
         || (errmsg && flux_msg_set_string (response, errmsg) < 0)

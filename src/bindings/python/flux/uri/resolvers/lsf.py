@@ -19,6 +19,7 @@ It can be used like:
 import getpass
 import os
 import subprocess
+import shutil
 from pathlib import PurePath
 
 import yaml
@@ -79,8 +80,19 @@ def lsf_get_uri(hostname, jobid):
     and converting the result from bytecode to a string.
     """
     ssh_path = os.getenv("FLUX_SSH", "ssh")
+
+    #  Allow path to remote flux to be overridden as in ssh connector,
+    #   o/w, use path the current `flux` executable:
+    flux_cmd_path = os.getenv("FLUX_SSH_RCMD", shutil.which("flux"))
     sp = subprocess.run(
-        [ssh_path, hostname, "flux", "uri", "--remote", f"lsf:{jobid}?is_compute"],
+        [
+            ssh_path,
+            hostname,
+            flux_cmd_path,
+            "uri",
+            "--remote",
+            f"lsf:{jobid}?is_compute",
+        ],
         stdout=subprocess.PIPE,
         check=True,
     )

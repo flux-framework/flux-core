@@ -505,7 +505,8 @@ static void cache_store_continuation (flux_future_t *f, void *arg)
             flux_log (cache->h, LOG_DEBUG, "content store: %s",
                       "backing store service unavailable");
         else
-            flux_log_error (cache->h, "content store");
+            flux_log (cache->h, LOG_CRIT, "content store: %s",
+                      strerror (errno));
         goto error;
     }
     if (hash_size != content_hash_size

@@ -12,12 +12,87 @@
 # include <config.h>
 #endif
 #include <unistd.h>
+#include <jansson.h>
 #include <flux/core.h>
 
 #include "src/broker/state_machine.h"
+#include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libutil/uri.h"
 
 #include "builtin.h"
+
+static void get_kvs_version (flux_t *h, int *version)
+{
+    (*version) = 0;
+    if (flux_kvs_get_version (h, NULL, version) < 0
+        && errno != ENOSYS)
+        log_err_exit ("Error fetching KVS version");
+}
+
+static void get_gc_threshold (flux_t *h, int *gc_threshold)
+{
+    flux_future_t *f;
+    json_t *o;
+    (*gc_threshold) = 0;
+    if (!(f = flux_rpc (h, "config.get", NULL, FLUX_NODEID_ANY, 0))
+        || flux_rpc_get_unpack (f, "o", &o) < 0)
+        log_msg_exit ("Error fetching flux config: %s",
+                      future_strerror (f, errno));
+    (void)json_unpack (o, "{s:{s:i}}", "kvs", "gc-threshold", gc_threshold);
+}
+
+static int askyn (char *prompt, bool default_value, bool *result)
+{
+    while (1) {
+        char buf[16];
+        printf ("%s [%s]? ", prompt, default_value ? "Y/n" : "y/N");
+        fflush (stdout);
+        if (fgets (buf, sizeof (buf), stdin) == NULL)
+            return -1;
+        if (buf[0] == '\n')
+            break;
+        if (buf[0] == 'y' || buf[0] == 'Y') {
+            (*result) = true;
+            return 0;
+        }
+        if (buf[0] == 'n' || buf[0] == 'N') {
+            (*result) = false;
+            return 0;
+        }
+        printf ("Please answer y or n\n");
+    };
+    (*result) = default_value;
+    return 0;
+}
+
+static bool gc_threshold_check (flux_t *h, optparse_t *p)
+{
+    int gc_threshold, version;
+    bool rc = false;
+
+    get_kvs_version (h, &version);
+    get_gc_threshold (h, &gc_threshold);
+
+    if (gc_threshold > 0 && version > gc_threshold) {
+        if (optparse_hasopt (p, "yes") || optparse_hasopt (p, "no")) {
+            if (optparse_hasopt (p, "yes"))
+                rc = true;
+            else
+                rc = false;
+            return rc;
+        }
+
+        if (!isatty (STDIN_FILENO))
+            log_msg_exit ("gc threshold exceeded, specify -y or -n\n");
+
+        if (askyn ("gc threshold exceeded, "
+                   "do you want to perform garbage collection",
+                   true,
+                   &rc) < 0)
+            log_msg_exit ("error retrieving user input");
+    }
+    return rc;
+}
 
 static void process_updates (flux_future_t *f)
 {
@@ -68,7 +143,9 @@ static int subcmd (optparse_t *p, int ac, char *av[])
     if (optparse_hasopt (p, "background"))
         flags &= ~FLUX_RPC_STREAMING;
 
-    if (optparse_hasopt (p, "gc") || optparse_hasopt (p, "dump")) {
+    if (optparse_hasopt (p, "gc")
+        || optparse_hasopt (p, "dump")
+        || gc_threshold_check (h, p)) {
         const char *val = optparse_get_str (p, "dump", "auto");
 
         if (flux_attr_set (h, "content.dump", val) < 0)
@@ -115,6 +192,12 @@ static struct optparse_option opts[] = {
       .usage = "Increase log verbosity:"
                " 0=show log messages <= LOG_INFO level (default),"
                " 1=show all log messages",
+    },
+    { .name = "yes", .key = 'y', .has_arg = 0,
+      .usage = "Answer yes to any yes/no questions",
+    },
+    { .name = "no", .key = 'n', .has_arg = 0,
+      .usage = "Answer no to any yes/no questions",
     },
     OPTPARSE_TABLE_END
 };

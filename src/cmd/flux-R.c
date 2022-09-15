@@ -29,6 +29,7 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/librlist/rlist.h"
 #include "src/common/librlist/rhwloc.h"
+#include "src/common/libtomlc99/toml.h"
 
 #define RSET_DOC "\
 Read, generate, and process RFC 20 Resource Set objects.\n\
@@ -43,6 +44,7 @@ int cmd_rerank (optparse_t *p, int argc, char **argv);
 int cmd_decode (optparse_t *p, int argc, char **argv);
 int cmd_verify (optparse_t *p, int argc, char **argv);
 int cmd_set_property (optparse_t *p, int argc, char **argv);
+int cmd_parse_config (optparse_t *p, int argc, char **argv);
 
 static struct optparse_option global_opts[] =  {
     OPTPARSE_TABLE_END
@@ -145,6 +147,11 @@ static struct optparse_option decode_opts[] = {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option parse_config_opts[] = {
+    OPTPARSE_TABLE_END
+};
+
+
 static struct optparse_subcommand subcommands[] = {
     { "encode",
       "[OPTIONS]...",
@@ -217,6 +224,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_set_property,
       0,
       set_property_opts,
+    },
+    { "parse-config",
+      "PATH",
+      "Read config from resource.config array",
+      cmd_parse_config,
+      0,
+      parse_config_opts,
     },
     OPTPARSE_SUBCMD_END
 };
@@ -364,7 +378,7 @@ static char *get_xml (optparse_t *p)
             log_err_exit ("failed to read XML");
     }
     else if (optparse_hasopt (p, "local")) {
-        if (!(s = rhwloc_local_topology_xml ()))
+        if (!(s = rhwloc_local_topology_xml (0)))
             log_err_exit ("failed to gather local topology XML");
     }
 
@@ -823,6 +837,33 @@ int cmd_set_property (optparse_t *p, int argc, char **argv)
 
     json_decref (o);
     free (allranks);
+    rlist_destroy (rl);
+
+    return 0;
+}
+
+int cmd_parse_config (optparse_t *p, int argc, char **argv)
+{
+    flux_error_t error;
+    json_t *o = NULL;
+    struct rlist *rl = NULL;
+    flux_conf_t *conf;
+
+    if (!(conf = flux_conf_parse (argv[1], &error)))
+        log_msg_exit ("flux_conf_parse: %s", error.text);
+
+    if (flux_conf_unpack (conf, &error,
+                          "{s:{s:o}}",
+                          "resource",
+                          "config", &o) < 0)
+        log_msg_exit ("Config file error: %s", error.text);
+
+    if (!(rl = rlist_from_config (o, &error)))
+        log_msg_exit ("Config file error: %s", error.text);
+
+    rlist_puts (rl);
+
+    flux_conf_decref (conf);
     rlist_destroy (rl);
 
     return 0;
