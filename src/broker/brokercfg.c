@@ -161,7 +161,7 @@ inval:
     return -1;
 }
 
-static bool is_string_array (json_t *o)
+static bool is_string_array (json_t *o, const char *banned)
 {
     size_t index;
     json_t *val;
@@ -171,6 +171,12 @@ static bool is_string_array (json_t *o)
     json_array_foreach (o, index, val) {
         if (!json_is_string (val))
             return false;
+        if (banned) {
+            for (int i = 0; banned[i] != '\0'; i++) {
+                if (strchr (json_string_value (val), banned[i]))
+                    return false;
+            }
+        }
     }
     return true;
 }
@@ -193,13 +199,13 @@ static int validate_policy_access (json_t *o,
         goto inval;
     }
     if (allow_user) {
-        if (!is_string_array (allow_user)) {
+        if (!is_string_array (allow_user, NULL)) {
             errprintf (error, "%s.allow-user must be a string array", key);
             goto inval;
         }
     }
     if (allow_group) {
-        if (!is_string_array (allow_group)) {
+        if (!is_string_array (allow_group, NULL)) {
             errprintf (error, "%s.allow-group must be a string array", key);
             goto inval;
         }
@@ -286,15 +292,16 @@ static int validate_queues_config (flux_conf_t *conf, flux_error_t *error)
         json_object_foreach (queues, name, entry) {
             json_error_t jerror;
             json_t *policy = NULL;
+            json_t *requires = NULL;
 
             if (json_unpack_ex (entry,
                                 &jerror,
                                 0,
-                                "{s?o !}",
-                                "policy", &policy) < 0) {
+                                "{s?o s?o !}",
+                                "policy", &policy,
+                                "requires", &requires) < 0) {
                 errprintf (error, "queues.%s: %s", name, jerror.text);
-                errno = EINVAL;
-                return -1;
+                goto inval;
             }
             if (policy) {
                 char key[1024];
@@ -302,9 +309,22 @@ static int validate_queues_config (flux_conf_t *conf, flux_error_t *error)
                 if (validate_policy_json (policy, key, error) < 0)
                     return -1;
             }
+            if (requires) {
+                const char *banned_property_chars = " \t!&'\"`'|()";
+                if (!is_string_array (requires, banned_property_chars)) {
+                    errprintf (error,
+                               "queues.%s.requires must be an array of %s",
+                               name,
+                               "property strings (RFC 20)");
+                    goto inval;
+                }
+            }
         }
     }
     return 0;
+inval:
+    errno = EINVAL;
+    return -1;
 }
 
 /* Parse config object from TOML config files if path is set;

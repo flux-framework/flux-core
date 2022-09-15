@@ -136,6 +136,33 @@ test_expect_success 'malformed queues.NAME.policy.limits.duration key fails' '
 	EOT
 	test_must_fail flux config reload
 '
+test_expect_success 'unknown queues.NAME.requires.foo key fails' '
+	cat >config/policy.toml <<-EOT &&
+	queues.x.requires = 1
+	EOT
+	test_must_fail flux config reload
+'
+test_expect_success 'malformed queues.NAME.requires fails' '
+	cat >config/policy.toml <<-EOT &&
+	queues.x.requires = [ 1 ]
+	EOT
+	test_must_fail flux config reload
+'
+test_expect_success 'malformed queues.NAME.requires property string' '
+	cat >config/policy.toml <<-EOT &&
+	queues.x.requires = [ "foo|bar" ]
+	EOT
+	test_must_fail flux config reload
+'
+test_expect_success 'well formed queues.NAME.requires works' '
+	cat >config/policy.toml <<-EOT &&
+	[queues.x]
+	requires = [ "batch" ]
+	[queues.z]
+	requires = [ "debug", "foo" ]
+	EOT
+	flux config reload
+'
 # Example from flux-config-policy(5)
 test_expect_success 'valid config passes' '
 	cat >config/policy.toml <<-EOT &&
