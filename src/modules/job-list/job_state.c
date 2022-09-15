@@ -711,7 +711,7 @@ out:
 }
 
 static flux_future_t *state_run_lookup (struct job_state_ctx *jsctx,
-                                           struct job *job)
+                                        struct job *job)
 {
     flux_future_t *f = NULL;
     int saved_errno;
