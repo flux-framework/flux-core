@@ -229,6 +229,17 @@ int job_parse_jobspec (struct job *job, const char *s)
     }
 
     if (json_unpack_ex (job->jobspec, &error, 0,
+                        "{s:{s:{s?:s}}}",
+                        "attributes",
+                        "system",
+                        "queue", &job->queue) < 0) {
+        flux_log (job->h, LOG_ERR,
+                  "%s: job %ju invalid jobspec: %s",
+                  __FUNCTION__, (uintmax_t)job->id, error.text);
+        goto nonfatal_error;
+    }
+
+    if (json_unpack_ex (job->jobspec, &error, 0,
                         "{s:o}",
                         "resources", &resources) < 0) {
         flux_log (job->h, LOG_ERR,
