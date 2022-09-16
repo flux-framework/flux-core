@@ -239,6 +239,9 @@ The field names that can be specified are:
 **name**
    job name
 
+**queue**
+   job queue
+
 **ntasks**
    job task count
 

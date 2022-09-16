@@ -64,6 +64,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         "state": ("state",),
         "state_single": ("state",),
         "name": ("name",),
+        "queue": ("queue",),
         "ntasks": ("ntasks",),
         "nnodes": ("nnodes",),
         "ranks": ("ranks",),
