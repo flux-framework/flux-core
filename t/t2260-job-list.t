@@ -639,6 +639,35 @@ test_expect_success HAVE_JQ 'verify job names preserved across restart' '
 '
 
 #
+# job queue
+#
+
+test_expect_success HAVE_JQ 'flux job list output no queue if queue not set' '
+        jobid=`flux mini submit --wait /bin/true | flux job id` &&
+        echo $jobid > jobqueue1.id &&
+        wait_jobid_state $jobid inactive &&
+        flux job list -s inactive | grep $jobid | jq -e ".queue == null"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs queue' '
+        jobid=`flux mini submit --wait --setattr=queue=foo /bin/true | flux job id` &&
+        echo $jobid > jobqueue2.id &&
+        wait_jobid_state $jobid inactive &&
+        flux job list -s inactive | grep $jobid | jq -e ".queue == \"foo\""
+'
+
+test_expect_success 'reload the job-list module' '
+        flux module reload job-list
+'
+
+test_expect_success HAVE_JQ 'verify job queue preserved across restart' '
+        jobid1=`cat jobqueue1.id` &&
+        jobid2=`cat jobqueue2.id` &&
+        flux job list -s inactive | grep ${jobid1} | jq -e ".queue == null" &&
+        flux job list -s inactive | grep ${jobid2} | jq -e ".queue == \"foo\""
+'
+
+#
 # job task count
 #
 

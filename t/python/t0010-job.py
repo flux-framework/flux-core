@@ -473,6 +473,7 @@ class TestJob(unittest.TestCase):
             "t_inactive",
             "state",
             "name",
+            "queue",
             "ntasks",
             "nnodes",
             "ranks",
