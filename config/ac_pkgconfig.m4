@@ -5,7 +5,7 @@ AC_DEFUN([AC_PKGCONFIG],
     pkgconfigdir='${libdir}/pkgconfig'
     AC_MSG_CHECKING(whether to install pkg-config *.pc files)
     AC_ARG_WITH(pkgconfig-dir,
-     AC_HELP_STRING([--with-pkgconfig-dir=PATH], [where to install pkg-config *.pc files (EPREFIX/lib/pkgconfig)]),
+     AS_HELP_STRING([--with-pkgconfig-dir=PATH],[where to install pkg-config *.pc files (EPREFIX/lib/pkgconfig)]),
      [
         case "${withval}" in
             yes|auto)

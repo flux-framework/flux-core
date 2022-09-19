@@ -6,7 +6,7 @@ AC_INIT([flux-core],
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_MACRO_DIR([config])
 AC_CONFIG_SRCDIR([NEWS.md])
-AC_CANONICAL_SYSTEM
+AC_CANONICAL_TARGET
 ##
 # If runstatedir not explicitly set on command line, use '/run' as default
 # N.B. runstatedir is not set at all in autoconf < 2.70.
@@ -21,7 +21,7 @@ X_AC_EXPAND_INSTALL_DIRS
 ##
 AM_INIT_AUTOMAKE([subdir-objects tar-pax foreign])
 AM_SILENT_RULES([yes])
-AM_CONFIG_HEADER([config/config.h])
+AC_CONFIG_HEADERS([config/config.h])
 AM_MAINTAINER_MODE([enable])
 
 AC_DEFINE([_GNU_SOURCE], 1,
@@ -94,7 +94,7 @@ AC_SUBST([LIBFLUX_HOSTLIST_VERSION_INFO])
 ##
 # Checks for programs
 ##
-AC_PROG_CC_C99
+m4_version_prereq(2.70, [AC_PROG_CC], [AC_PROG_CC_C99])
 AM_PROG_CC_C_O
 AX_COMPILER_VENDOR
 AX_COMPILER_VERSION
@@ -144,7 +144,6 @@ AC_PROG_AWK
 ##
 # Checks for header files.
 ##
-AC_HEADER_STDC
 AC_CHECK_HEADERS( \
   pthread.h \
   getopt.h \
