@@ -3,7 +3,11 @@ name: Build and Deploy Containers
 on:
 
   # Enable just for testing cobntainer builds
-  # pull_request: []
+  pull_request:
+    paths:
+      - etc/docker/**
+      - etc/docker/*/*
+      - etc/**/Dockerfile.*
   
   # Always have a base image ready to go - this is a nightly build
   schedule:
@@ -31,8 +35,11 @@ jobs:
       matrix:
 
         # Dockerfiles to build, a matrix supports future expanded builds
-        container: [["etc/docker/Dockerfile.base", "ghcr.io/flux-framework/flux-core-base"],
-                    ["etc/docker/Dockerfile", "ghcr.io/flux-framework/flux-core-ubuntu"]]
+        # spack: flux-core built by spack, otherwise from source on ubuntu
+        container: [["etc/docker/spack/Dockerfile.base", "ghcr.io/flux-framework/flux-spack-base", "true"],
+                    ["etc/docker/spack/Dockerfile", "ghcr.io/flux-framework/flux-spack-ubuntu", "true"],
+                    ["etc/docker/ubuntu/Dockerfile", "ghcr.io/flux-framework/flux-ubuntu", "true"],
+                    ["etc/docker/ubuntu/Dockerfile.test", "ghcr.io/flux-framework/flux-ubuntu-test", "false"]]
 
     runs-on: ubuntu-latest
     name: Build
@@ -72,12 +79,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy
-        if: (github.event_name != 'pull_request')
+        if: (github.event_name != 'pull_request' && matrix.container[2] == 'true')
         run: |
             docker push ${container}
 
       - name: Tag and Push Release
-        if: (github.event_name == 'release')
+        if: (github.event_name == 'release' && matrix.container[2] == 'true')
         run: |
             tag=${GITHUB_REF#refs/tags/}
             echo "Tagging and releasing ${uri}:${tag}"

@@ -1,0 +1,3 @@
+FROM vanessa/flux-core:test
+# This is just temporary until we build the image here
+RUN make check-prep

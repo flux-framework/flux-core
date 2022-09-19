@@ -3,7 +3,7 @@ FROM ghcr.io/flux-framework/flux-core-base:latest as builder
 # docker build -f etc/docker/Dockerfile -t ghcr.io/flux-framework/flux-core-ubuntu .
 
 # The development config cannot have git@ clone, must be https
-COPY ./etc/docker/git-config /code/.git/config
+COPY ./etc/docker/spack/git-config /code/.git/config
 
 # Get upstream tags for version (otherwise won't build)
 WORKDIR /code
