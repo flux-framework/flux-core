@@ -430,11 +430,17 @@ int event_job_action (struct event *event, struct job *job)
             job->eventlog_readonly = 1;
             if ((job->flags & FLUX_JOB_WAITABLE))
                 wait_notify_inactive (ctx->wait, job);
-            if (zhashx_insert (ctx->inactive_jobs, &job->id, job) < 0
-                || purge_enqueue_job (ctx->purge, job) < 0) {
-                flux_log_error (event->ctx->h,
-                                "%ju: error preserving inactive job",
-                                (uintmax_t) job->id);
+            /* Reminder: event_job_action() may be called more than once
+             * for a job + state, therefore zhashx_insert() may fail here and
+             * not be indicative of a problem.
+             */
+            if (zhashx_insert (ctx->inactive_jobs, &job->id, job) == 0) {
+                if (purge_enqueue_job (ctx->purge, job) < 0) {
+                    flux_log (event->ctx->h,
+                              LOG_ERR,
+                              "%ju: error adding inactive job to purge queue",
+                               (uintmax_t)job->id);
+                }
             }
             (void) jobtap_call (ctx->jobtap, job, "job.destroy", NULL);
             job_aux_destroy (job);
