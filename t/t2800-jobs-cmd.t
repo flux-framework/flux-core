@@ -1153,6 +1153,21 @@ test_expect_success HAVE_JQ 'flux jobs lists nnodes for pending jobs correctly' 
 	test_cmp nnodesP.exp nnodesP.out
 '
 
+# over subscribe tasks onto nodes through workaround, ensure
+# ntasks is larger than the tasks specified via -n option
+test_expect_success 'flux jobs lists ntasks with per-resource type=node correctly' '
+	nnodes=$(flux resource list -s up -no {nnodes}) &&
+	ncores=$(flux resource list -s up -no {ncores}) &&
+	extra=$((ncores / nnodes + 2)) &&
+	id=$(flux mini submit -N ${nnodes} -n ${ncores} \
+	        -o per-resource.type=node \
+	        -o per-resource.count=${extra} \
+	        /bin/true) &&
+	fj_wait_event ${id} clean &&
+	flux jobs -no "{ntasks}" ${id} > per_resource_ntasks.out &&
+        test $(cat per_resource_ntasks.out) -eq $((nnodes * extra))
+'
+
 #
 # leave job cleanup to rc3
 #
