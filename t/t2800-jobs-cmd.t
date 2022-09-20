@@ -221,6 +221,17 @@ test_expect_success 'flux-jobs --name works' '
 	test $(flux jobs -an --name=xxyyzz | wc -l) -eq 0
 '
 
+# in job submissions above: completed jobs should be in queue1, running jobs
+# in queue2
+test_expect_success 'flux-jobs --queue works' '
+	test_debug "flux jobs -an --queue=queue1" &&
+	test $(flux jobs -an --queue=queue1 | wc -l) -eq $(state_count completed) &&
+	test_debug "flux jobs -an --queue=queue2" &&
+	test $(flux jobs -an --queue=queue2 | wc -l) -eq $(state_count sched run) &&
+	test_debug "flux jobs -an --queue=foobar" &&
+	test $(flux jobs -an --queue=foobar | wc -l) -eq 0
+'
+
 # Recall pending = depend | priority | sched, running = run | cleanup,
 #  active = pending | running
 test_expect_success 'flux-jobs --filter works (job states)' '
