@@ -189,6 +189,7 @@ TESTSCRIPTS = \
 	t2800-jobs-cmd.t \
 	t2800-jobs-recursive.t \
 	t2800-jobs-instance-info.t \
+	t2800-jobs-config.t \
 	t2801-top-cmd.t \
 	t2802-uri-cmd.t \
 	t2803-flux-pstree.t \
