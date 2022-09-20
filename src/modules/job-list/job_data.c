@@ -123,20 +123,32 @@ static int parse_per_resource (struct job *job,
                                int *count)
 {
     json_error_t error;
+    json_t *o = NULL;
 
     if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:{s:{s?:{s?:{s?:{s?:s s?:i}}}}}}",
+                        "{s:{s:{s?:{s?:{s?:o}}}}}",
                         "attributes",
                           "system",
                             "shell",
                               "options",
-                                "per-resource",
-                                  "type", type,
-                                  "count",count) < 0) {
+                                "per-resource", &o) < 0) {
         flux_log (job->h, LOG_ERR,
                   "%s: job %ju invalid jobspec: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
         return -1;
+    }
+
+    (*count) = 1;
+    if (o) {
+        if (json_unpack_ex (o, &error, 0,
+                            "{s:s s?:i}",
+                            "type", type,
+                            "count", count) < 0) {
+            flux_log (job->h, LOG_ERR,
+                      "%s: job %ju invalid per-resource spec: %s",
+                      __FUNCTION__, (uintmax_t)job->id, error.text);
+            return -1;
+        }
     }
 
     return 0;
