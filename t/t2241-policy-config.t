@@ -124,6 +124,12 @@ test_expect_success 'well formed policy.access works' '
 	EOT
 	flux config reload
 '
+test_expect_success 'malformed queues table fails' '
+	cat >config/policy.toml <<-EOT &&
+	queues = 1
+	EOT
+	test_must_fail flux config reload
+'
 test_expect_success 'unknown queues.NAME.policy.foo key fails' '
 	cat >config/policy.toml <<-EOT &&
 	queues.x.policy.foo = 1

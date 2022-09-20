@@ -289,6 +289,10 @@ static int validate_queues_config (flux_conf_t *conf, flux_error_t *error)
         const char *name;
         json_t *entry;
 
+        if (!json_is_object (queues)) {
+            errprintf (error, "queues must be a table");
+            goto inval;
+        }
         json_object_foreach (queues, name, entry) {
             json_error_t jerror;
             json_t *policy = NULL;
