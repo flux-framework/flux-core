@@ -37,6 +37,7 @@ struct brokercfg {
 
 static int validate_policy_jobspec (json_t *o,
                                     const char *key,
+                                    const char **default_queue,
                                     flux_error_t *error)
 {
     json_error_t jerror;
@@ -71,6 +72,8 @@ static int validate_policy_jobspec (json_t *o,
             goto inval;
         }
     }
+    if (default_queue)
+        *default_queue = queue ? json_string_value (queue) : NULL;
     return 0;
 inval:
     errno = EINVAL;
@@ -221,6 +224,7 @@ inval:
  */
 static int validate_policy_json (json_t *policy,
                                  const char *key,
+                                 const char **default_queue,
                                  flux_error_t *error)
 {
     json_error_t jerror;
@@ -228,6 +232,7 @@ static int validate_policy_json (json_t *policy,
     json_t *limits = NULL;
     json_t *access = NULL;
     json_t *scheduler = NULL;
+    const char *defqueue = NULL;
     char key2[1024];
 
     if (json_unpack_ex (policy,
@@ -244,7 +249,7 @@ static int validate_policy_json (json_t *policy,
     }
     if (jobspec) {
         snprintf (key2, sizeof (key2), "%s.jobspec", key);
-        if (validate_policy_jobspec (jobspec, key2, error) < 0)
+        if (validate_policy_jobspec (jobspec, key2, &defqueue, error) < 0)
             return -1;
     }
     if (limits) {
@@ -257,12 +262,17 @@ static int validate_policy_json (json_t *policy,
         if (validate_policy_access (access, key2, error) < 0)
             return -1;
     }
+    if (default_queue)
+        *default_queue = defqueue;
     return 0;
 }
 
-static int validate_policy_config (flux_conf_t *conf, flux_error_t *error)
+static int validate_policy_config (flux_conf_t *conf,
+                                   const char **default_queue,
+                                   flux_error_t *error)
 {
     json_t *policy = NULL;
+    const char *defqueue = NULL;
 
     if (flux_conf_unpack (conf,
                           error,
@@ -270,13 +280,17 @@ static int validate_policy_config (flux_conf_t *conf, flux_error_t *error)
                           "policy", &policy) < 0)
         return -1;
     if (policy) {
-        if (validate_policy_json (policy, "policy", error) < 0)
+        if (validate_policy_json (policy, "policy", &defqueue, error) < 0)
             return -1;
     }
+    if (default_queue)
+        *default_queue = defqueue;
     return 0;
 }
 
-static int validate_queues_config (flux_conf_t *conf, flux_error_t *error)
+static int validate_queues_config (flux_conf_t *conf,
+                                   const char *default_queue,
+                                   flux_error_t *error)
 {
     json_t *queues = NULL;
 
@@ -309,9 +323,16 @@ static int validate_queues_config (flux_conf_t *conf, flux_error_t *error)
             }
             if (policy) {
                 char key[1024];
+                const char *defqueue;
                 snprintf (key, sizeof (key), "queues.%s.policy", name);
-                if (validate_policy_json (policy, key, error) < 0)
+                if (validate_policy_json (policy, key, &defqueue, error) < 0)
                     return -1;
+                if (defqueue) {
+                    errprintf (error,
+                               "%s: queue policy includes default queue!",
+                               key);
+                    goto inval;
+                }
             }
             if (requires) {
                 const char *banned_property_chars = " \t!&'\"`'|()";
@@ -323,6 +344,14 @@ static int validate_queues_config (flux_conf_t *conf, flux_error_t *error)
                     goto inval;
                 }
             }
+        }
+    }
+    if (default_queue) {
+        if (!queues || !json_object_get (queues, default_queue)) {
+            errprintf (error,
+                       "default queue '%s' is not in queues table",
+                       default_queue);
+            goto inval;
         }
     }
     return 0;
@@ -341,6 +370,7 @@ static int brokercfg_parse (flux_t *h,
 {
     flux_error_t error;
     flux_conf_t *conf;
+    const char *defqueue;
 
     if (path) {
         if (!(conf = flux_conf_parse (path, &error))) {
@@ -356,9 +386,9 @@ static int brokercfg_parse (flux_t *h,
             return -1;
         }
     }
-    if (validate_policy_config (conf, errp) < 0)
+    if (validate_policy_config (conf, &defqueue, errp) < 0)
         goto error;
-    if (validate_queues_config (conf, errp) < 0)
+    if (validate_queues_config (conf, defqueue, errp) < 0)
         goto error;
     if (flux_set_conf (h, conf) < 0) {
         errprintf (errp, "Error caching config object");

@@ -95,30 +95,5 @@ test_expect_success HAVE_JQ 'job-frobnicator sets specified queue duration' '
 	jq -e ".data.attributes.system.queue == \"batch\"" < queue-batch.out &&
 	jq -e ".data.attributes.system.duration == 28800"  < queue-batch.out
 '
-test_expect_success 'job-frobnicator errors on a missing queue config' '
-	cat <<-EOF >conf.d/conf.toml &&
-	[policy.jobspec.defaults.system]
-	queue = "debug"
-	EOF
-	flux config reload &&
-	flux mini run --env=-* --dry-run hostname \
-	   | test_expect_code 1 \
-	       flux job-frobnicator --jobspec-only --plugins=defaults \
-	       >bad1.out 2>&1 &&
-	grep "default queue.*debug.*must be in" bad1.out
-'
-test_expect_success 'job-frobnicator errors on an invalid queue config' '
-	cat <<-EOF >conf.d/conf.toml &&
-	queues = 42
-	[policy.jobspec.defaults.system]
-	queue = "debug"
-	EOF
-	flux config reload &&
-	flux mini run --env=-* --dry-run hostname \
-	   | test_expect_code 1 \
-	       flux job-frobnicator --jobspec-only --plugins=defaults \
-	       >bad2.out 2>&1 &&
-	grep "queues must be a table" bad2.out
-'
 
 test_done
