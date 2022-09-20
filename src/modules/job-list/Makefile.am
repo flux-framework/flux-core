@@ -20,6 +20,8 @@ job_list_la_SOURCES = \
 	job-list.h \
 	job_state.h \
 	job_state.c \
+	job_data.h \
+	job_data.c \
 	list.h \
 	list.c \
 	job_util.h \

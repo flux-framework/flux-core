@@ -22,7 +22,6 @@
 
 #include "job-list.h"
 #include "job_util.h"
-#include "job_state.h"
 
 void seterror (job_list_error_t *errp, const char *fmt, ...)
 {

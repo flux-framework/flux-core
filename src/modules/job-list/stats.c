@@ -15,8 +15,8 @@
 #include <ctype.h>
 #include <flux/core.h>
 
-#include "job_state.h"
 #include "stats.h"
+#include "job_data.h"
 
 /*  Return the index into stats->state_count[] array for the
  *   job state 'state'

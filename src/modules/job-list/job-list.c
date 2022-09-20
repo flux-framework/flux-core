@@ -17,6 +17,7 @@
 
 #include "job-list.h"
 #include "job_state.h"
+#include "job_data.h"
 #include "list.h"
 #include "idsync.h"
 
