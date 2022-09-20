@@ -1,6 +1,6 @@
-# ===========================================================================
-#  http://www.gnu.org/software/autoconf-archive/ax_compile_check_sizeof.html
-# ===========================================================================
+# ============================================================================
+#  https://www.gnu.org/software/autoconf-archive/ax_compile_check_sizeof.html
+# ============================================================================
 #
 # SYNOPSIS
 #
@@ -24,8 +24,8 @@
 #
 #     switch (0) case 0: case 0:;
 #
-#   Thus, the AC_TRY_COMPILE will fail if the currently tried size does not
-#   match.
+#   Thus, the AC_COMPILE_IFELSE will fail if the currently tried size does
+#   not match.
 #
 #   Here is an example skeleton configure.in script, demonstrating the
 #   macro's usage:
@@ -57,6 +57,7 @@
 # LICENSE
 #
 #   Copyright (c) 2008 Kaveh Ghazi <ghazi@caip.rutgers.edu>
+#   Copyright (c) 2017 Reini Urban <rurban@cpan.org>
 #
 #   This program is free software: you can redistribute it and/or modify it
 #   under the terms of the GNU General Public License as published by the
@@ -69,7 +70,7 @@
 #   Public License for more details.
 #
 #   You should have received a copy of the GNU General Public License along
-#   with this program. If not, see <http://www.gnu.org/licenses/>.
+#   with this program. If not, see <https://www.gnu.org/licenses/>.
 #
 #   As a special exception, the respective Autoconf Macro's copyright owner
 #   gives unlimited permission to copy, distribute and modify the configure
@@ -84,7 +85,7 @@
 #   modified version of the Autoconf Macro, you may extend this special
 #   exception to the GPL to apply to your modified version as well.
 
-#serial 5
+#serial 8
 
 AU_ALIAS([AC_COMPILE_CHECK_SIZEOF], [AX_COMPILE_CHECK_SIZEOF])
 AC_DEFUN([AX_COMPILE_CHECK_SIZEOF],
@@ -97,10 +98,10 @@ changequote([, ])dnl
 AC_MSG_CHECKING(size of $1)
 AC_CACHE_VAL(AC_CV_NAME,
 [for ac_size in 4 8 1 2 16 $3 ; do # List sizes in rough order of prevalence.
-  AC_TRY_COMPILE([#include "confdefs.h"
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <sys/types.h>
 $2
-], [switch (0) case 0: case (sizeof ($1) == $ac_size):;], AC_CV_NAME=$ac_size)
+]], [[switch (0) case 0: case (sizeof ($1) == $ac_size):;]])], [AC_CV_NAME=$ac_size])
   if test x$AC_CV_NAME != x ; then break; fi
 done
 ])
