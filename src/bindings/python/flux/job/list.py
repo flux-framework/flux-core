@@ -43,6 +43,7 @@ def job_list(
     results=0,
     since=0.0,
     name=None,
+    queue=None,
 ):
     payload = {
         "max_entries": int(max_entries),
@@ -54,10 +55,14 @@ def job_list(
     }
     if name:
         payload["name"] = name
+    if queue:
+        payload["queue"] = queue
     return JobListRPC(flux_handle, "job-list.list", payload)
 
 
-def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[], name=None):
+def job_list_inactive(
+    flux_handle, since=0.0, max_entries=1000, attrs=[], name=None, queue=None
+):
     return job_list(
         flux_handle,
         max_entries=max_entries,
@@ -66,6 +71,7 @@ def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[], name=N
         states=flux.constants.FLUX_JOB_STATE_INACTIVE,
         since=since,
         name=name,
+        queue=queue,
     )
 
 
@@ -171,6 +177,7 @@ class JobList:
         max_entries=1000,
         since=0.0,
         name=None,
+        queue=None,
     ):
         self.handle = flux_handle
         self.attrs = list(attrs)
@@ -179,6 +186,7 @@ class JobList:
         self.max_entries = max_entries
         self.since = since
         self.name = name
+        self.queue = queue
         self.ids = ids
         self.errors = []
         for fname in filters:
@@ -242,6 +250,7 @@ class JobList:
             results=self.results,
             since=self.since,
             name=self.name,
+            queue=self.queue,
         )
 
     def jobs(self):
