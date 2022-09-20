@@ -15,3 +15,4 @@ man5
    flux-config-archive
    flux-config-job-manager
    flux-config-policy
+   flux-config-queues

@@ -37,6 +37,7 @@ struct brokercfg {
 
 static int validate_policy_jobspec (json_t *o,
                                     const char *key,
+                                    const char **default_queue,
                                     flux_error_t *error)
 {
     json_error_t jerror;
@@ -71,6 +72,8 @@ static int validate_policy_jobspec (json_t *o,
             goto inval;
         }
     }
+    if (default_queue)
+        *default_queue = queue ? json_string_value (queue) : NULL;
     return 0;
 inval:
     errno = EINVAL;
@@ -161,7 +164,7 @@ inval:
     return -1;
 }
 
-static bool is_string_array (json_t *o)
+static bool is_string_array (json_t *o, const char *banned)
 {
     size_t index;
     json_t *val;
@@ -171,6 +174,12 @@ static bool is_string_array (json_t *o)
     json_array_foreach (o, index, val) {
         if (!json_is_string (val))
             return false;
+        if (banned) {
+            for (int i = 0; banned[i] != '\0'; i++) {
+                if (strchr (json_string_value (val), banned[i]))
+                    return false;
+            }
+        }
     }
     return true;
 }
@@ -193,13 +202,13 @@ static int validate_policy_access (json_t *o,
         goto inval;
     }
     if (allow_user) {
-        if (!is_string_array (allow_user)) {
+        if (!is_string_array (allow_user, NULL)) {
             errprintf (error, "%s.allow-user must be a string array", key);
             goto inval;
         }
     }
     if (allow_group) {
-        if (!is_string_array (allow_group)) {
+        if (!is_string_array (allow_group, NULL)) {
             errprintf (error, "%s.allow-group must be a string array", key);
             goto inval;
         }
@@ -215,6 +224,7 @@ inval:
  */
 static int validate_policy_json (json_t *policy,
                                  const char *key,
+                                 const char **default_queue,
                                  flux_error_t *error)
 {
     json_error_t jerror;
@@ -222,6 +232,7 @@ static int validate_policy_json (json_t *policy,
     json_t *limits = NULL;
     json_t *access = NULL;
     json_t *scheduler = NULL;
+    const char *defqueue = NULL;
     char key2[1024];
 
     if (json_unpack_ex (policy,
@@ -238,7 +249,7 @@ static int validate_policy_json (json_t *policy,
     }
     if (jobspec) {
         snprintf (key2, sizeof (key2), "%s.jobspec", key);
-        if (validate_policy_jobspec (jobspec, key2, error) < 0)
+        if (validate_policy_jobspec (jobspec, key2, &defqueue, error) < 0)
             return -1;
     }
     if (limits) {
@@ -251,12 +262,17 @@ static int validate_policy_json (json_t *policy,
         if (validate_policy_access (access, key2, error) < 0)
             return -1;
     }
+    if (default_queue)
+        *default_queue = defqueue;
     return 0;
 }
 
-static int validate_policy_config (flux_conf_t *conf, flux_error_t *error)
+static int validate_policy_config (flux_conf_t *conf,
+                                   const char **default_queue,
+                                   flux_error_t *error)
 {
     json_t *policy = NULL;
+    const char *defqueue = NULL;
 
     if (flux_conf_unpack (conf,
                           error,
@@ -264,13 +280,17 @@ static int validate_policy_config (flux_conf_t *conf, flux_error_t *error)
                           "policy", &policy) < 0)
         return -1;
     if (policy) {
-        if (validate_policy_json (policy, "policy", error) < 0)
+        if (validate_policy_json (policy, "policy", &defqueue, error) < 0)
             return -1;
     }
+    if (default_queue)
+        *default_queue = defqueue;
     return 0;
 }
 
-static int validate_queues_config (flux_conf_t *conf, flux_error_t *error)
+static int validate_queues_config (flux_conf_t *conf,
+                                   const char *default_queue,
+                                   flux_error_t *error)
 {
     json_t *queues = NULL;
 
@@ -283,28 +303,61 @@ static int validate_queues_config (flux_conf_t *conf, flux_error_t *error)
         const char *name;
         json_t *entry;
 
+        if (!json_is_object (queues)) {
+            errprintf (error, "queues must be a table");
+            goto inval;
+        }
         json_object_foreach (queues, name, entry) {
             json_error_t jerror;
             json_t *policy = NULL;
+            json_t *requires = NULL;
 
             if (json_unpack_ex (entry,
                                 &jerror,
                                 0,
-                                "{s?o !}",
-                                "policy", &policy) < 0) {
+                                "{s?o s?o !}",
+                                "policy", &policy,
+                                "requires", &requires) < 0) {
                 errprintf (error, "queues.%s: %s", name, jerror.text);
-                errno = EINVAL;
-                return -1;
+                goto inval;
             }
             if (policy) {
                 char key[1024];
+                const char *defqueue;
                 snprintf (key, sizeof (key), "queues.%s.policy", name);
-                if (validate_policy_json (policy, key, error) < 0)
+                if (validate_policy_json (policy, key, &defqueue, error) < 0)
                     return -1;
+                if (defqueue) {
+                    errprintf (error,
+                               "%s: queue policy includes default queue!",
+                               key);
+                    goto inval;
+                }
+            }
+            if (requires) {
+                const char *banned_property_chars = " \t!&'\"`'|()";
+                if (!is_string_array (requires, banned_property_chars)) {
+                    errprintf (error,
+                               "queues.%s.requires must be an array of %s",
+                               name,
+                               "property strings (RFC 20)");
+                    goto inval;
+                }
             }
         }
     }
+    if (default_queue) {
+        if (!queues || !json_object_get (queues, default_queue)) {
+            errprintf (error,
+                       "default queue '%s' is not in queues table",
+                       default_queue);
+            goto inval;
+        }
+    }
     return 0;
+inval:
+    errno = EINVAL;
+    return -1;
 }
 
 /* Parse config object from TOML config files if path is set;
@@ -317,6 +370,7 @@ static int brokercfg_parse (flux_t *h,
 {
     flux_error_t error;
     flux_conf_t *conf;
+    const char *defqueue;
 
     if (path) {
         if (!(conf = flux_conf_parse (path, &error))) {
@@ -332,9 +386,9 @@ static int brokercfg_parse (flux_t *h,
             return -1;
         }
     }
-    if (validate_policy_config (conf, errp) < 0)
+    if (validate_policy_config (conf, &defqueue, errp) < 0)
         goto error;
-    if (validate_queues_config (conf, errp) < 0)
+    if (validate_queues_config (conf, defqueue, errp) < 0)
         goto error;
     if (flux_set_conf (h, conf) < 0) {
         errprintf (errp, "Error caching config object");

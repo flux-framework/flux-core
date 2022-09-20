@@ -95,30 +95,47 @@ test_expect_success HAVE_JQ 'job-frobnicator sets specified queue duration' '
 	jq -e ".data.attributes.system.queue == \"batch\"" < queue-batch.out &&
 	jq -e ".data.attributes.system.duration == 28800"  < queue-batch.out
 '
-test_expect_success 'job-frobnicator errors on a missing queue config' '
+test_expect_success 'configure queue constraints' '
 	cat <<-EOF >conf.d/conf.toml &&
-	[policy.jobspec.defaults.system]
-	queue = "debug"
+	[queues.debug]
+	requires = [ "debug" ]
 	EOF
-	flux config reload &&
-	flux mini run --env=-* --dry-run hostname \
-	   | test_expect_code 1 \
-	       flux job-frobnicator --jobspec-only --plugins=defaults \
-	       >bad1.out 2>&1 &&
-	grep "default queue.*debug.*must be in" bad1.out
+	flux config reload
 '
-test_expect_success 'job-frobnicator errors on an invalid queue config' '
-	cat <<-EOF >conf.d/conf.toml &&
-	queues = 42
-	[policy.jobspec.defaults.system]
-	queue = "debug"
-	EOF
+test_expect_success HAVE_JQ 'constraints plugin sets queue constraint' '
+	flux mini run --env=-* --dry-run --setattr queue=debug hostname \
+	   | flux job-frobnicator --jobspec-only --plugins=constraints \
+	   > constraint-setqueue.out &&
+	jq -e ".data.attributes.system.constraints.properties \
+	    == [ \"debug\" ]" < constraint-setqueue.out
+'
+test_expect_success HAVE_JQ 'constraints plugin appends queue constraint' '
+	flux mini run --env=-* --dry-run --requires=foo \
+	  --setattr queue=debug hostname \
+	   | flux job-frobnicator --jobspec-only --plugins=constraints \
+	   > constraint-addqueue.out &&
+	jq -e ".data.attributes.system.constraints.properties \
+	   == [ \"foo\", \"debug\" ]" \
+	   < constraint-addqueue.out
+'
+test_expect_success HAVE_JQ 'constraints plugin works with no configured queues' '
+	cp /dev/null conf.d/conf.toml &&
 	flux config reload &&
 	flux mini run --env=-* --dry-run hostname \
-	   | test_expect_code 1 \
-	       flux job-frobnicator --jobspec-only --plugins=defaults \
-	       >bad2.out 2>&1 &&
-	grep "queues must be a table" bad2.out
+	   | flux job-frobnicator --jobspec-only --plugins=constraints \
+	> constraint-noqueue.out &&
+	jq -e "has(\"data\")" <constraint-noqueue.out
+'
+test_expect_success HAVE_JQ 'constraints plugin works without requires' '
+	cat >conf.d/conf.toml <<-EOT &&
+	[queues.debug]
+	EOT
+	flux config reload &&
+	flux mini run --env=-* --dry-run hostname \
+           --setattr queue=debug \
+	   | flux job-frobnicator --jobspec-only --plugins=constraints \
+	> constraint-norequires.out &&
+	jq -e "has(\"data\")" <constraint-norequires.out
 '
 
 test_done

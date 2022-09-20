@@ -124,6 +124,12 @@ test_expect_success 'well formed policy.access works' '
 	EOT
 	flux config reload
 '
+test_expect_success 'malformed queues table fails' '
+	cat >config/policy.toml <<-EOT &&
+	queues = 1
+	EOT
+	test_must_fail flux config reload
+'
 test_expect_success 'unknown queues.NAME.policy.foo key fails' '
 	cat >config/policy.toml <<-EOT &&
 	queues.x.policy.foo = 1
@@ -135,6 +141,47 @@ test_expect_success 'malformed queues.NAME.policy.limits.duration key fails' '
 	queues.x.policy.limits.duration = 1
 	EOT
 	test_must_fail flux config reload
+'
+test_expect_success 'default queue as queue policy fails' '
+	cat >config/policy.toml <<-EOT &&
+	queues.x.policy.jobspec.defaults.system.queue = "x"
+	EOT
+	test_must_fail flux config reload
+'
+test_expect_success 'unknown default queue fails' '
+	cat >config/policy.toml <<-EOT &&
+	[queues.foo]
+	[policy]
+	jobspec.defaults.system.queue = "bar"
+	EOT
+	test_must_fail flux config reload
+'
+test_expect_success 'unknown queues.NAME.requires.foo key fails' '
+	cat >config/policy.toml <<-EOT &&
+	queues.x.requires = 1
+	EOT
+	test_must_fail flux config reload
+'
+test_expect_success 'malformed queues.NAME.requires fails' '
+	cat >config/policy.toml <<-EOT &&
+	queues.x.requires = [ 1 ]
+	EOT
+	test_must_fail flux config reload
+'
+test_expect_success 'malformed queues.NAME.requires property string' '
+	cat >config/policy.toml <<-EOT &&
+	queues.x.requires = [ "foo|bar" ]
+	EOT
+	test_must_fail flux config reload
+'
+test_expect_success 'well formed queues.NAME.requires works' '
+	cat >config/policy.toml <<-EOT &&
+	[queues.x]
+	requires = [ "batch" ]
+	[queues.z]
+	requires = [ "debug", "foo" ]
+	EOT
+	flux config reload
 '
 # Example from flux-config-policy(5)
 test_expect_success 'valid config passes' '
@@ -151,6 +198,8 @@ test_expect_success 'valid config passes' '
 	[queues.debug.policy.limits]
 	duration = "30m"
 	job-size.max.ngpus = -1  # unlimited
+
+	[queues.batch]
 	EOT
 	flux config reload
 '

@@ -92,6 +92,7 @@ EXAMPLE
    duration = "30m"
    job-size.max.ngpus = -1  # unlimited
 
+   [queues.batch]
 
 RESOURCES
 =========
