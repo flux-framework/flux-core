@@ -58,9 +58,12 @@ OPTIONS
    results can be listed separated by comma. See JOB STATUS below for
    additional information. Defaults to *pending,running*.
 
-**-o, --format**\ *=FORMAT*
-   Specify output format using Python's string format syntax. See OUTPUT
-   FORMAT below for field names.
+**-o, --format**\ *=NAME|FORMAT*
+   Specify a named output format *NAME* or a format string using Python's
+   format syntax. See OUTPUT FORMAT below for field names. Named formats
+   may be listed via ``--format=help``. Additional named formats may be
+   registered with ``flux jobs`` via configuration. See the CONFIGURATION
+   section for more details.
 
 **--color**\ *=WHEN*
    Control output coloring. WHEN can be *never*, *always*, or *auto*.
@@ -354,6 +357,56 @@ include:
    number of cores, gpus in state ``state``, where ``state`` can be
    ``all``, ``up``, ``down``, ``allocated``, or ``free``, e.g.
    ``{instance.resources.all.ncores}``
+
+
+CONFIGURATION
+=============
+
+The ``flux-jobs`` command supports registration of named output formats
+in configuration files. The command loads configuration files from
+``flux-jobs.EXT`` from the following paths in order of increasing precedence:
+
+ * ``/etc/xdg/flux``
+ * ``$XDG_CONFIG_DIRS/flux``
+ * ``$HOME/.config/flux``
+ * ``XDG_CONFIG_HOME/flux``
+
+where ``EXT`` can be one of ``toml``, ``yaml``, or ``json``.
+
+If there are multiple ``flux-jobs.*`` files found in a directory, then
+they are loaded in lexical order (i.e. ``.json`` first, then ``.toml``,
+then ``.yaml``)
+
+Named formats are registered in a ``formats`` table or dictionary with a
+key per format pointing to a table or dictionary with the keys:
+
+**format**
+   (required) The format string
+
+**description**
+   (optional) A short description of the named format, displayed with
+   ``flux jobs --format=help``
+
+If a format name is specified in more than one config file, then the last
+one loaded is used. Due to the order that ``flux-jobs`` loads config files,
+this allows user configuration to override system configuration which
+overrides internal defaults.
+
+If a format name or string is not specified on the command line,
+``flux-jobs`` uses the named format ``default``. The default output format
+may therefore be overridden by system or user configuration by registering
+a format named ``default`` in a configuration file.
+
+Example::
+
+  # $HOME/.config/flux/flux-jobs.toml
+
+  [formats.myformat]
+  description = "My useful format"
+  format = """\
+  {id.f58:>12} {name:>8.8} {t_submit!D:<19} \
+  {t_run!D:<19} {t_remaining!F}\
+  """
 
 
 EXAMPLES

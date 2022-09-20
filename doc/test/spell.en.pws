@@ -641,3 +641,8 @@ lonodex
 nosched
 qmanager
 rv
+DIRS
+myformat
+xdg
+XDG
+yaml
