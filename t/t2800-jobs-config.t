@@ -57,18 +57,18 @@ test_expect_success 'flux-jobs config can be json' '
 	XDG_CONFIG_HOME="$(pwd)/json" flux jobs --format=myformat
 '
 
-test_expect_success 'XDG_CONFIG_HOME can be colon-separated paths' '
+test_expect_success 'XDG_CONFIG_DIRS can be colon-separated paths' '
 	mkdir -p dir2/flux &&
 	cat <<-EOF >dir2/flux/flux-jobs.toml &&
 	[formats.myformat]
         description = "my new format"
 	format = "{id.words} {name}"
 	EOF
-	XDG_CONFIG_HOME="$(pwd)/dir:$(pwd)/dir2" \
+	XDG_CONFIG_DIRS="$(pwd)/dir2:$(pwd)/dir" \
 		flux jobs --format=help >myformat.out &&
 	test_debug "cat myformat.out" &&
 	grep "my new format" myformat.out &&
-	XDG_CONFIG_HOME="$(pwd)/dir:$(pwd)/dir2" \
+	XDG_CONFIG_DIRS="$(pwd)/dir:$(pwd)/dir2" \
 		flux jobs --format=myformat
 '
 test_expect_success 'Invalid flux-jobs config file causes meaningful error' '
