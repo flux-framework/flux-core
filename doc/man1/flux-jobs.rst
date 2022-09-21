@@ -66,7 +66,8 @@ OPTIONS
    format syntax. See OUTPUT FORMAT below for field names. Named formats
    may be listed via ``--format=help``. Additional named formats may be
    registered with ``flux jobs`` via configuration. See the CONFIGURATION
-   section for more details.
+   section for more details. A configuration snippet for an existing
+   named format may be generated with ``--format=get-config=NAME``.
 
 **--color**\ *=WHEN*
    Control output coloring. WHEN can be *never*, *always*, or *auto*.
@@ -422,6 +423,14 @@ Example::
   {id.f58:>12} {name:>8.8} {t_submit!D:<19} \
   {t_run!D:<19} {t_remaining!F}\
   """
+
+It may be helpful to start with an existing named format by using the
+``--format=get-config=NAME`` option, e.g.::
+
+  $ flux jobs --format=get-config=default >> ~/.config/flux/flux-jobs.toml
+
+Be sure to change the name of the format string from ``default``. It is an
+error to redefine the default format string.
 
 
 EXAMPLES
