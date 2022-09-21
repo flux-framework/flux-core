@@ -663,14 +663,18 @@ class UtilConfig:
         if initial_dict:
             self.dict = dict(initial_dict)
 
-        #  Build config search path in order of reverse precedence
-        #  based on XDG specification:
-        self.searchpath = (
-            ["/etc/xdg/flux"]
-            + get_searchpath("XDG_CONFIG_DIRS", "/flux")
-            + [f"{Path.home()}/.config/flux"]
-            + get_searchpath("XDG_CONFIG_HOME", "/flux")
-        )
+        #  Build config search path in precedence order based on XDG
+        #  specification, starting with XDG_CONFIG_HOME (or ~/.config)
+        confdirs = [os.getenv("XDG_CONFIG_HOME") or f"{Path.home()}/.config"]
+
+        #  Append XDG_CONFIG_DIRS as colon separated path (or /etc/xdg)
+        confdirs += (os.getenv("XDG_CONFIG_DIRS") or "/etc/xdg").split(":")
+
+        #  Append "/flux" to all members of confdirs to build searchpath:
+        self.searchpath = [Path(directory, "flux") for directory in confdirs]
+
+        #  Reorder searchpath into reverse precedence order
+        self.searchpath.reverse()
 
     def load(self):
         """Load configuration from current searchpath
