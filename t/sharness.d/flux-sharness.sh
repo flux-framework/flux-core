@@ -394,4 +394,11 @@ unset FLUX_F58_FORCE_ASCII
 #  this specifically. In general it breaks other URI tests:
 unset FLUX_URI_RESOLVE_LOCAL
 
+# Set XDG_CONFIG_DIRS and XDG_CONFIG_HOME to a nonexistent directory to
+#  avoid system or user configuration influencing tests for utilities
+#  that use flux.util.UtilConfig or other config classes utilizing
+#  the XDG base directory specification.
+export XDG_CONFIG_DIRS=/noexist
+export XDG_CONFIG_HOME=/noexist
+
 # vi: ts=4 sw=4 expandtab
