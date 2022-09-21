@@ -395,6 +395,24 @@ test_expect_success 'flux-jobs ouputs warning on invalid options' '
 # format tests
 #
 
+test_expect_success 'flux-jobs --format=help works' '
+	flux jobs --format=help >format-help.out &&
+	test_debug "cat format-help.out" &&
+	grep "flux-jobs output formats:" format-help.out
+'
+
+test_expect_success 'flux-jobs --format=default works' '
+	flux jobs --format=default
+'
+test_expect_success 'flux-jobs --format=deps works' '
+	flux jobs --format=deps >format-deps.out &&
+	test_debug "cat format-deps.out" &&
+	grep DEPENDENCIES format-deps.out
+'
+test_expect_success 'flux-jobs --format=invalid fails' '
+	test_must_fail flux jobs --format=invalid
+'
+
 test_expect_success 'flux-jobs --format={id} works' '
 	flux jobs --suppress-header --filter=pending --format="{id}" > idsP.out &&
 	test_cmp idsP.out sched.ids &&
