@@ -93,6 +93,20 @@ def load_format_string(args):
             except KeyError:
                 print()
         sys.exit(0)
+    elif args.format.startswith("get-config="):
+        _, name = args.format.split("=", 1)
+        try:
+            entry = config.formats[name]
+        except KeyError:
+            LOGGER.error("--format: No such format %s", name)
+            sys.exit(1)
+        print(f"[formats.{name}]")
+        try:
+            print(f"description = \"{entry['description']}\"")
+        except KeyError:
+            pass
+        print(f"format = \"{entry['format']}\"")
+        sys.exit(0)
     try:
         return config.formats[args.format]["format"]
     except KeyError:
