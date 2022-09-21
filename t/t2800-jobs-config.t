@@ -65,6 +65,11 @@ test_expect_success 'flux-jobs config may omit description' '
 	test_debug "cat myformat.out" &&
 	grep "myformat" myformat.out
 '
+test_expect_success 'flux-jobs --format=get-config works' '
+	flux jobs --format=get-config=default >get-config.out &&
+	test_debug "cat get-config.out" &&
+	grep default get-config.out
+'
 test_expect_success 'XDG_CONFIG_DIRS can be colon-separated paths' '
 	mkdir -p dir2/flux &&
 	cat <<-EOF >dir2/flux/flux-jobs.toml &&
