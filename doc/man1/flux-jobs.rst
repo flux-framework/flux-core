@@ -58,9 +58,10 @@ OPTIONS
    results can be listed separated by comma. See JOB STATUS below for
    additional information. Defaults to *pending,running*.
 
-**-o, --format**\ *=FORMAT*
-   Specify output format using Python's string format syntax. See OUTPUT
-   FORMAT below for field names.
+**-o, --format**\ *=NAME|FORMAT*
+   Specify output format by name or using Python's string format syntax.
+   See OUTPUT FORMAT below for field names. Use ``--format=help`` to
+   get a list of valid named formats.
 
 **--color**\ *=WHEN*
    Control output coloring. WHEN can be *never*, *always*, or *auto*.
