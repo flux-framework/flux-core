@@ -41,7 +41,7 @@ bool job_filter (struct job *job,
                  int results,
                  const char *name)
 {
-    if (name && job->name && !streq (job->name, name))
+    if (name && (!job->name || !streq (job->name, name)))
         return false;
     if (!(job->state & states))
         return false;
