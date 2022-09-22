@@ -29,6 +29,8 @@ struct joblist_pane {
     json_t *jobs;
     struct ucache *ucache;
 
+    bool show_queue;
+
     /*  Currently selected jobid. Ironically FLUX_JOBID_ANY means
      *   no current selection.
      */
@@ -62,21 +64,57 @@ static json_t *get_current_job (struct joblist_pane *joblist)
 }
 
 
+/*  Return true if any job in joblist->jobs has a queue defined. If
+ *  joblist->jobs is NULL or empty, then return the current show_queue
+ *  value.
+ */
+static bool show_queue (struct joblist_pane *joblist)
+{
+    size_t index;
+    json_t *job;
+
+    if (!joblist->jobs || json_array_size (joblist->jobs) == 0)
+        return joblist->show_queue;
+
+    json_array_foreach (joblist->jobs, index, job) {
+        if (json_object_get (job, "queue"))
+            return true;
+    }
+    return false;
+}
+
 void joblist_pane_draw (struct joblist_pane *joblist)
 {
     double now = flux_reactor_now (flux_get_reactor (joblist->top->h));
     size_t index;
     json_t *job;
-    int name_width = getmaxx (joblist->win) - (12 + 8 + 2 + 6 + 6 + 7 + 6);
+    int queue_width = 0;
+    int name_width;
 
     werase (joblist->win);
     wattron (joblist->win, A_REVERSE);
-    mvwprintw (joblist->win,
-               0,
-               0,
-               "%12s %8s %2s %6s %6s %7s %-*s",
-               "JOBID", "USER", "ST", "NTASKS", "NNODES", "RUNTIME",
-               name_width, "NAME");
+
+    if ((joblist->show_queue = show_queue (joblist)))
+        queue_width = 8;
+
+    name_width = getmaxx (joblist->win)
+                 - (12 + 8 + queue_width + 2 + 6 + 6 + 7 + 6);
+    if (joblist->show_queue)
+        mvwprintw (joblist->win,
+                   0,
+                   0,
+                   "%12s %8s %8s %2s %6s %6s %7s %-*s",
+                   "JOBID", "QUEUE", "USER", "ST",
+                   "NTASKS", "NNODES", "RUNTIME",
+                   name_width, "NAME");
+    else
+        mvwprintw (joblist->win,
+                   0,
+                   0,
+                   "%12s %8s %2s %6s %6s %7s %-*s",
+                   "JOBID","USER", "ST", "NTASKS", "NNODES", "RUNTIME",
+                   name_width, "NAME");
+
     wattroff (joblist->win, A_REVERSE);
     if (joblist->jobs == NULL)
         return;
@@ -88,17 +126,19 @@ void joblist_pane_draw (struct joblist_pane *joblist)
         int userid;
         const char *username;
         const char *name;
+        const char *queue = "";
         int state;
         int ntasks;
         int nnodes;
         double t_run;
 
         if (json_unpack (job,
-                         "{s:I s:i s:i s:s s:i s:i s:f s?{s?{s?s}}}",
+                         "{s:I s:i s:i s:s s?s s:i s:i s:f s?{s?{s?s}}}",
                          "id", &id,
                          "userid", &userid,
                          "state", &state,
                          "name", &name,
+                         "queue", &queue,
                          "nnodes", &nnodes,
                          "ntasks", &ntasks,
                          "t_run", &t_run,
@@ -119,19 +159,35 @@ void joblist_pane_draw (struct joblist_pane *joblist)
             wattron (joblist->win, A_REVERSE);
         if (uri != NULL)
             wattron (joblist->win, COLOR_PAIR(TOP_COLOR_BLUE) | A_BOLD);
-        mvwprintw (joblist->win,
-                   1 + index,
-                   0,
-                   "%13.13s %8.8s %2.2s %6d %6d %7.7s %-*.*s",
-                   idstr,
-                   username,
-                   flux_job_statetostr (state, "S"),
-                   ntasks,
-                   nnodes,
-                   run,
-                   name_width,
-                   name_width,
-                   name);
+        if (joblist->show_queue)
+            mvwprintw (joblist->win,
+                       1 + index,
+                       0,
+                        "%13.13s %8.8s %8.8s %2.2s %6d %6d %7.7s %-*.*s",
+                       idstr,
+                       queue,
+                       username,
+                       flux_job_statetostr (state, "S"),
+                       ntasks,
+                       nnodes,
+                       run,
+                       name_width,
+                       name_width,
+                       name);
+        else
+            mvwprintw (joblist->win,
+                       1 + index,
+                       0,
+                        "%13.13s %8.8s %2.2s %6d %6d %7.7s %-*.*s",
+                       idstr,
+                       username,
+                       flux_job_statetostr (state, "S"),
+                       ntasks,
+                       nnodes,
+                       run,
+                       name_width,
+                       name_width,
+                       name);
         wattroff (joblist->win, A_REVERSE);
         wattroff (joblist->win, COLOR_PAIR(TOP_COLOR_BLUE) | A_BOLD);
     }
@@ -243,7 +299,7 @@ void joblist_pane_query (struct joblist_pane *joblist)
                              "job-list.list",
                              0,
                              0,
-                             "{s:i s:i s:i s:i s:[s,s,s,s,s,s,s]}",
+                             "{s:i s:i s:i s:i s:[s,s,s,s,s,s,s,s]}",
                              "max_entries", win_dim.y_length - 1,
                              "userid", FLUX_USERID_UNKNOWN,
                              "states", FLUX_JOB_STATE_RUNNING,
@@ -253,6 +309,7 @@ void joblist_pane_query (struct joblist_pane *joblist)
                                "userid",
                                "state",
                                "name",
+                               "queue",
                                "nnodes",
                                "ntasks",
                                "t_run"))
