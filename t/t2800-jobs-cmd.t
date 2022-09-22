@@ -82,11 +82,11 @@ test_expect_success HAVE_JQ 'submit jobs for job list testing' '
 	#  for efficiency (vs serial `flux mini submit`.
 	#
 	flux mini submit --dry-run \
-		--setattr=queue=queue1 \
+		--queue=queue1 \
 		hostname >hostname.json &&
 	flux mini submit --dry-run \
 		--time-limit=5m \
-		--setattr=queue=queue2 \
+		--queue=queue2 \
 		sleep 600 > sleeplong.json &&
 	#
 	#  Submit jobs that will complete

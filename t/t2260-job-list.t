@@ -650,7 +650,7 @@ test_expect_success HAVE_JQ 'flux job list output no queue if queue not set' '
 '
 
 test_expect_success HAVE_JQ 'flux job list outputs queue' '
-        jobid=`flux mini submit --wait --setattr=queue=foo /bin/true | flux job id` &&
+        jobid=`flux mini submit --wait --queue=foo /bin/true | flux job id` &&
         echo $jobid > jobqueue2.id &&
         wait_jobid_state $jobid inactive &&
         flux job list -s inactive | grep $jobid | jq -e ".queue == \"foo\""
