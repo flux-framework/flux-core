@@ -577,3 +577,58 @@ class JobInfoFormat(flux.util.OutputFormat):
         format header with custom HeaderFormatter
         """
         return self.HeaderFormatter().format(self.header_format(), **self.headings)
+
+    def filter_empty(self, items):
+        """
+        Check for format fields that are prefixed with `?:` (e.g. "?:{name}")
+        and filter them out of the current format string if they result in an
+        empty string for every entry in `items`.
+        """
+        #  Build a list of all format strings that have the collapsible
+        #  sentinel '?:' to determine which are subject to the test for
+        #  emptiness.
+        #
+        #  Note: we remove the leading `text` and the format `spec` because
+        #  these may make even empty formatted fields non-empty. E.g. a spec
+        #  of `:>8` will always make the format result 8 characters wide.
+        #
+        lst = []
+        index = 0
+        for (text, field, _, conv) in self.format_list:
+            if text.endswith("?:"):
+                fmt = self._fmt_tuple("", "0." + field, None, conv)
+                lst.append(dict(fmt=fmt, index=index))
+            index = index + 1
+
+        # Return immediately if no format fields are collapsible
+        if not lst:
+            return self
+
+        formatter = self.JobFormatter()
+
+        #  Iterate over all items, rebuilding lst each time to contain
+        #  only those fields that resulted in nonzero strings:
+        for item in items:
+            lst = [x for x in lst if not formatter.format(x["fmt"], item)]
+
+            #  If lst is now empty, that means all fields already returned
+            #  nonzero strings, so we can break early
+            if not lst:
+                break
+
+        #  Remove any entries that were empty from self.format_list
+        #  (use index field of lst to remove by postition in self.format_list)
+        format_list = [
+            x
+            for i, x in enumerate(self.format_list)
+            if i not in [x["index"] for x in lst]
+        ]
+
+        #  Remove "?:" from remaining entries so they disappear in ouput.
+        for entry in format_list:
+            if entry[0].endswith("?:"):
+                entry[0] = entry[0][:-2]
+
+        #  Return new format string created from pruned format_list
+        fmt = "".join(self._fmt_tuple(*x) for x in format_list)
+        return JobInfoFormat(fmt)
