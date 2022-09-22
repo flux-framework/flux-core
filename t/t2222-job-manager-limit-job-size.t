@@ -78,7 +78,7 @@ test_expect_success 'configure job-size.max.ngpus and queue with unlimited' '
 	cat >config/policy.toml <<-EOT &&
 	[policy.limits]
 	job-size.max.ngpus = 0
-	[queues.pdebug.policy.limits]
+	[queues.debug.policy.limits]
 	job-size.max.ngpus = -1
 	EOT
 	flux config reload
@@ -90,7 +90,7 @@ test_expect_success 'a job with no queue is rejected if over gpu limit' '
 	test_must_fail flux mini submit -n1 -g1 /bin/true
 '
 test_expect_success 'same job is accepted with unlimited queue override' '
-	flux mini submit --queue=pdebug -n1 -g1 /bin/true
+	flux mini submit --queue=debug -n1 -g1 /bin/true
 '
 test_expect_success 'configure an invalid job-size object' '
 	cat >config/policy.toml <<-EOT &&
@@ -108,7 +108,7 @@ test_expect_success 'configure an out of bounds job-size.max.nnodes object' '
 '
 test_expect_success 'configure an invalid queue job-size.min.nnodes object' '
 	cat >config/policy.toml <<-EOT &&
-	[queues.pdebug.policy.limits]
+	[queues.debug.policy.limits]
 	job-size.min.nnodes = "xyz"
 	EOT
 	test_must_fail flux config reload

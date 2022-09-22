@@ -38,9 +38,9 @@ test_expect_success 'configure policy.limits.duration and queue durations' '
 	cat >config/policy.toml <<-EOT &&
 	[policy.limits]
 	duration = "1h"
-	[queues.pdebug.policy.limits]
+	[queues.debug.policy.limits]
 	duration = "1m"
-	[queues.pbatch.policy.limits]
+	[queues.batch.policy.limits]
 	duration = "8h"
 	EOT
 	flux config reload
@@ -50,13 +50,13 @@ test_expect_success 'a no-queue job that exceeds policy.limits.duration is rejec
 '
 test_expect_success 'but is accepted by a queue with higher limit' '
 	flux mini submit \
-	    --queue=pbatch \
+	    --queue=batch \
 	    -t 2h \
 	    /bin/true
 '
 test_expect_success 'and is rejected when it exceeds the queue limit' '
 	test_must_fail flux mini submit \
-	    --queue=pbatch \
+	    --queue=batch \
 	    -t 16h \
 	    /bin/true
 '
@@ -65,7 +65,7 @@ test_expect_success 'a job that is under policy.limits.duration is accepted' '
 '
 test_expect_success 'but is rejected on a queue with lower limit' '
 	test_must_fail flux mini submit \
-	    --queue=pdebug \
+	    --queue=debug \
 	    -t 1h \
 	    /bin/true
 '
@@ -73,7 +73,7 @@ test_expect_success 'configure policy.limits.duration and an unlimited queue' '
 	cat >config/policy.toml <<-EOT &&
 	[policy.limits]
 	duration = "1h"
-	[queues.pdebug.policy.limits]
+	[queues.debug.policy.limits]
 	duration = "0"
 	EOT
 	flux config reload
@@ -83,12 +83,12 @@ test_expect_success 'a job that is over policy.limits.duration is rejected' '
 '
 test_expect_success 'but is accepted by the unlimited queue' '
 	flux mini submit \
-	    --queue=pdebug \
+	    --queue=debug \
 	    -t 2h /bin/true
 '
 test_expect_success 'a job that sets no explicit duration is accepted by the unlimited queue' '
 	flux mini submit \
-	    --queue=pdebug \
+	    --queue=debug \
 	    /bin/true
 '
 test_expect_success 'configure an invalid duration limit' '
@@ -107,7 +107,7 @@ test_expect_success 'configure a duration limit of an invalid type' '
 '
 test_expect_success 'configure an invalid queue duration limit' '
 	cat >config/policy.toml <<-EOT &&
-	[queues.pdebug.policy.limits]
+	[queues.debug.policy.limits]
 	duration = "xyz123"
 	EOT
 	test_must_fail flux config reload
