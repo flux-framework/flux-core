@@ -933,7 +933,6 @@ class SubmitBulkCmd(SubmitBaseCmd):
 
         super().__init__()
         self.parser.add_argument(
-            "-q",
             "--quiet",
             action="store_true",
             help="Do not print jobid to stdout on submission",

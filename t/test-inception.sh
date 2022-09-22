@@ -14,7 +14,7 @@ stats() {
 stats &
 PID=$!
 export FLUX_TESTS_LOGFILE=t
-flux mini bulksubmit -o pty --watch -q \
+flux mini bulksubmit -o pty --watch --quiet \
 	sh -c './{} --root=$FLUX_JOB_TMPDIR' \
 	::: t[0-9]*.t python/t*.py lua/t*.t
 RC=$?
