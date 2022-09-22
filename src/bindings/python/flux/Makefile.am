@@ -66,7 +66,13 @@ nobase_fluxpy_PYTHON = \
 	utils/parsedatetime/pdt_locales/fr_FR.py \
 	utils/parsedatetime/pdt_locales/nl_NL.py \
 	utils/parsedatetime/pdt_locales/pt_BR.py \
-	utils/parsedatetime/pdt_locales/ru_RU.py
+	utils/parsedatetime/pdt_locales/ru_RU.py \
+	utils/tomli/_re.py \
+	utils/tomli/_parser.py \
+	utils/tomli/__init__.py \
+	utils/tomli/py.typed \
+	utils/tomli/LICENSE \
+	utils/tomli/_types.py
 
 if HAVE_FLUX_SECURITY
 nobase_fluxpy_PYTHON += security.py
