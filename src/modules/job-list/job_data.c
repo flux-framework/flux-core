@@ -244,6 +244,11 @@ static int parse_jobspec_ntasks (struct job *job,
             && res[2].type != NULL && !strcmp (res[2].type, "core")
             && res[2].with == NULL)
             job->ntasks = res[0].count * count;
+        else if (streq (type, "core")
+                 && res[0].type != NULL && !strcmp (res[0].type, "slot")
+                 && res[1].type != NULL && !strcmp (res[1].type, "core")
+                 && res[1].with == NULL)
+            job->ntasks = res[0].count * count;
     }
 
     /* if job->ntasks not yet set, check tasks, then check resources
