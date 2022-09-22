@@ -125,6 +125,15 @@ test_expect_success 'flux mini submit --time-limit=4-00:30:00 fails' '
 	grep -i "invalid Flux standard duration" st2.err
 '
 
+test_expect_success HAVE_JQ 'flux mini submit --queue works' '
+	flux mini submit --env=-* --dry-run \
+		--queue=batch hostname >queue.out &&
+	jq -e ".attributes.system.queue == \"batch\"" &&
+	flux mini submit --env=-* --dry-run \
+		-q debug hostname >queue2.out &&
+	jq -e ".attributes.system.queue == \"debug\""
+'
+
 test_expect_success HAVE_JQ 'flux mini submit --setattr works' '
 	flux mini submit --env=-* --dry-run \
 		--setattr user.meep=false \

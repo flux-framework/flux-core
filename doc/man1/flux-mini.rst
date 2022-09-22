@@ -150,6 +150,13 @@ Additional job options
 The **run**, **submit**, **batch**, and **alloc** commands also take
 following additional job parameters:
 
+**-q, --queue=NAME**
+   Submit a job to a specific named queue. If a queue is not specified
+   and queues are configured, then the jobspec will be modified at ingest
+   to specify the default queue. If queues are not configured, then this
+   option is ignored, though :man1:`flux-jobs` may display the queue
+   name in its rendering of the ``{queue}`` attribute.
+
 **-t, --time-limit=MINUTES|FSD**
    Set a time limit for the job in either minutes or Flux standard duration
    (RFC 23). FSD is a floating point number with a single character units
@@ -472,6 +479,9 @@ OTHER OPTIONS
    ``FLUX_JOB_CC`` in each job. All jobs will be identical copies.
    As with ``--cc``, ``{cc}`` in option arguments and commands will be
    replaced with the current ``id``.
+
+**--quiet**
+   *(submit,bulksubmit)* Suppress logging of jobids to stdout.
 
 **--log=FILE**
    *(submit,bulksubmit)* Log ``flux-mini`` output and stderr to ``FILE``

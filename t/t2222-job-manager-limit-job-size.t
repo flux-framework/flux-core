@@ -90,8 +90,7 @@ test_expect_success 'a job with no queue is rejected if over gpu limit' '
 	test_must_fail flux mini submit -n1 -g1 /bin/true
 '
 test_expect_success 'same job is accepted with unlimited queue override' '
-	flux mini submit \
-	    --setattr=system.queue=pdebug -n1 -g1 /bin/true
+	flux mini submit --queue=pdebug -n1 -g1 /bin/true
 '
 test_expect_success 'configure an invalid job-size object' '
 	cat >config/policy.toml <<-EOT &&

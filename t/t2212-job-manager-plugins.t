@@ -272,7 +272,7 @@ test_expect_success 'job-manager: run all test plugin test modes' '
 	EOF
 	COUNT=$(cat test-modes.txt | wc -l) &&
 	run_timeout 20 \
-	  flux mini bulksubmit -q --watch \
+	  flux mini bulksubmit --quiet --watch \
 	    --setattr=system.jobtap.test-mode={} \
 	    hostname :::: test-modes.txt >test-plugin.out &&
 	test_debug "cat test-plugin.out" &&

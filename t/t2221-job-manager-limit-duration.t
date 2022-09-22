@@ -50,13 +50,13 @@ test_expect_success 'a no-queue job that exceeds policy.limits.duration is rejec
 '
 test_expect_success 'but is accepted by a queue with higher limit' '
 	flux mini submit \
-	    --setattr=system.queue=pbatch \
+	    --queue=pbatch \
 	    -t 2h \
 	    /bin/true
 '
 test_expect_success 'and is rejected when it exceeds the queue limit' '
 	test_must_fail flux mini submit \
-	    --setattr=system.queue=pbatch \
+	    --queue=pbatch \
 	    -t 16h \
 	    /bin/true
 '
@@ -65,7 +65,7 @@ test_expect_success 'a job that is under policy.limits.duration is accepted' '
 '
 test_expect_success 'but is rejected on a queue with lower limit' '
 	test_must_fail flux mini submit \
-	    --setattr=system.queue=pdebug \
+	    --queue=pdebug \
 	    -t 1h \
 	    /bin/true
 '
@@ -83,12 +83,12 @@ test_expect_success 'a job that is over policy.limits.duration is rejected' '
 '
 test_expect_success 'but is accepted by the unlimited queue' '
 	flux mini submit \
-	    --setattr=system.queue=pdebug \
+	    --queue=pdebug \
 	    -t 2h /bin/true
 '
 test_expect_success 'a job that sets no explicit duration is accepted by the unlimited queue' '
 	flux mini submit \
-	    --setattr=system.queue=pdebug \
+	    --queue=pdebug \
 	    /bin/true
 '
 test_expect_success 'configure an invalid duration limit' '

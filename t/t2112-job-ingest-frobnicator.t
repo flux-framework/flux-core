@@ -89,7 +89,7 @@ test_expect_success HAVE_JQ 'job-frobnicator sets default queue duration' '
 	jq -e ".data.attributes.system.duration == 3600"   < queue-debug.out
 '
 test_expect_success HAVE_JQ 'job-frobnicator sets specified queue duration' '
-	flux mini run --env=-* --setattr queue=batch --dry-run hostname \
+	flux mini run --env=-* --queue=batch --dry-run hostname \
 		| flux job-frobnicator --jobspec-only --plugins=defaults \
 		> queue-batch.out &&
 	jq -e ".data.attributes.system.queue == \"batch\"" < queue-batch.out &&
@@ -103,7 +103,7 @@ test_expect_success 'configure queue constraints' '
 	flux config reload
 '
 test_expect_success HAVE_JQ 'constraints plugin sets queue constraint' '
-	flux mini run --env=-* --dry-run --setattr queue=debug hostname \
+	flux mini run --env=-* --dry-run --queue=debug hostname \
 	   | flux job-frobnicator --jobspec-only --plugins=constraints \
 	   > constraint-setqueue.out &&
 	jq -e ".data.attributes.system.constraints.properties \
@@ -111,7 +111,7 @@ test_expect_success HAVE_JQ 'constraints plugin sets queue constraint' '
 '
 test_expect_success HAVE_JQ 'constraints plugin appends queue constraint' '
 	flux mini run --env=-* --dry-run --requires=foo \
-	  --setattr queue=debug hostname \
+	  --queue=debug hostname \
 	   | flux job-frobnicator --jobspec-only --plugins=constraints \
 	   > constraint-addqueue.out &&
 	jq -e ".data.attributes.system.constraints.properties \
@@ -132,7 +132,7 @@ test_expect_success HAVE_JQ 'constraints plugin works without requires' '
 	EOT
 	flux config reload &&
 	flux mini run --env=-* --dry-run hostname \
-           --setattr queue=debug \
+           --queue=debug \
 	   | flux job-frobnicator --jobspec-only --plugins=constraints \
 	> constraint-norequires.out &&
 	jq -e "has(\"data\")" <constraint-norequires.out

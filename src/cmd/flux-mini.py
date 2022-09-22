@@ -224,6 +224,7 @@ class Xcmd:
     # dict of mutable argparse args. The values are used in
     #  the string representation of an Xcmd object.
     mutable_args = {
+        "queue": "-q",
         "ntasks": "-n",
         "nodes": "-N",
         "cores_per_task": "-c",
@@ -458,6 +459,13 @@ class MiniCmd:
         """
         parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
         parser.add_argument(
+            "-q",
+            "--queue",
+            type=str,
+            metavar="NAME",
+            help="Submit a job to a specific named queue",
+        )
+        parser.add_argument(
             "-t",
             "--time-limit",
             type=str,
@@ -651,6 +659,9 @@ class MiniCmd:
         if debugged.get_mpir_being_debugged() == 1:
             # if stop-tasks-in-exec is present, overwrite
             jobspec.setattr_shell_option("stop-tasks-in-exec", json.loads("1"))
+
+        if args.queue is not None:
+            jobspec.setattr("system.queue", args.queue)
 
         if args.setattr is not None:
             for keyval in args.setattr:
@@ -933,7 +944,6 @@ class SubmitBulkCmd(SubmitBaseCmd):
 
         super().__init__()
         self.parser.add_argument(
-            "-q",
             "--quiet",
             action="store_true",
             help="Do not print jobid to stdout on submission",
