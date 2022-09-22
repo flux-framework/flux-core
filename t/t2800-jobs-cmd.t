@@ -815,6 +815,23 @@ test_expect_success 'flux-jobs --format={expiration!d:%FT%T},{t_remaining!H} wor
 	test_debug "echo expiration OK" &&
 	echo ${t_remaining} | grep "[0-9]:[0-9][0-9]:[0-9][0-9]"
 '
+test_expect_success 'flux-jobs --format={expiration!d:%FT%T::>20.20} works' '
+	cat expiration.in | \
+	    flux jobs --from-stdin -o "{expiration!d:%b%d %R::>20.20}" \
+	    >exp-fmt.out &&
+	test_debug "cat exp-fmt.out" &&
+	grep "          EXPIRATION" exp-fmt.out &&
+	grep "         $(date --date=@${exp} +%b%d\ %R)" exp-fmt.out
+'
+test_expect_success 'flux-jobs --format={expiration!d:%FT%T::=^20} works' '
+	cat expiration.in | \
+	    flux jobs --from-stdin -o "{expiration!d:%b%d %R::=^20}" \
+	    >exp-fmt.out &&
+	test_debug "cat exp-fmt.out" &&
+	grep "     EXPIRATION     " exp-fmt.out &&
+	grep "====$(date --date=@${exp} +%b%d\ %R)====" exp-fmt.out
+'
+test_done
 test_expect_success 'flux-jobs --format={expiration!D:h},{t_remaining!H:h} works' '
 	cat <<-EOF >expiration.in &&
 {"id": 1447588528128, "state": 8,  "expiration": 0 }

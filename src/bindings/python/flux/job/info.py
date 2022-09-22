@@ -366,6 +366,31 @@ def fsd(secs):
     return strtmp
 
 
+class JobDatetime(datetime):
+    """
+    Subclass of datetime but with a __format__ method that supports
+    width and alignment specification after any time formatting via
+    two colons `::` before the Python format spec, e.g::
+
+    >>> "{0:%b%d %R::>16}".format(JobDatetime.now())
+    '     Sep21 18:36'
+    """
+
+    def __format__(self, fmt):
+        # The string "::" is used to split the strftime() fromat from
+        # any Python format spec:
+        vals = fmt.split("::", 1)
+
+        # Call strftime() to get the formatted datetime as a string
+        result = self.strftime(vals[0])
+
+        # If there was a format spec, apply it here:
+        try:
+            return f"{{0:{vals[1]}}}".format(result)
+        except IndexError:
+            return result
+
+
 class JobInfoFormat(flux.util.OutputFormat):
     """
     Store a parsed version of an output format string for JobInfo objects,
@@ -388,10 +413,10 @@ class JobInfoFormat(flux.util.OutputFormat):
                 # User can than use datetime specific format fields, e.g.
                 # {t_inactive!d:%H:%M:%S}.
                 try:
-                    value = datetime.fromtimestamp(value)
+                    value = JobDatetime.fromtimestamp(value)
                 except TypeError:
                     if orig_value == "":
-                        value = datetime.fromtimestamp(0.0)
+                        value = JobDatetime.fromtimestamp(0.0)
                     else:
                         raise
             elif conv == "D":
