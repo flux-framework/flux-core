@@ -81,8 +81,13 @@ test_expect_success HAVE_JQ 'submit jobs for job list testing' '
 	#  N.B. Used w/ `flux job submit` for serial job submission
 	#  for efficiency (vs serial `flux mini submit`.
 	#
-	flux mini submit --dry-run hostname >hostname.json &&
-	flux mini submit --dry-run --time-limit=5m sleep 600 > sleeplong.json &&
+	flux mini submit --dry-run \
+		--setattr=queue=queue1 \
+		hostname >hostname.json &&
+	flux mini submit --dry-run \
+		--time-limit=5m \
+		--setattr=queue=queue2 \
+		sleep 600 > sleeplong.json &&
 	#
 	#  Submit jobs that will complete
 	#
@@ -214,6 +219,17 @@ test_expect_success 'flux-jobs --name works' '
 	test $(flux jobs -an --name=nosuchcommand | wc -l) -eq 1 &&
 	test_debug "flux jobs -an --name=xxyyzz" &&
 	test $(flux jobs -an --name=xxyyzz | wc -l) -eq 0
+'
+
+# in job submissions above: completed jobs should be in queue1, running jobs
+# in queue2
+test_expect_success 'flux-jobs --queue works' '
+	test_debug "flux jobs -an --queue=queue1" &&
+	test $(flux jobs -an --queue=queue1 | wc -l) -eq $(state_count completed) &&
+	test_debug "flux jobs -an --queue=queue2" &&
+	test $(flux jobs -an --queue=queue2 | wc -l) -eq $(state_count sched run) &&
+	test_debug "flux jobs -an --queue=foobar" &&
+	test $(flux jobs -an --queue=foobar | wc -l) -eq 0
 '
 
 # Recall pending = depend | priority | sched, running = run | cleanup,
@@ -470,6 +486,26 @@ test_expect_success 'flux-jobs --format={name} works' '
 		echo "hostname" >> jobnameI.exp
 	done &&
 	test_cmp jobnameI.out jobnameI.exp
+'
+
+# in job submissions above: completed jobs should be in queue1, running jobs
+# in queue2, and the rest in no queue
+test_expect_success 'flux-jobs --format={queue} works' '
+	flux jobs --filter=completed -no "{queue}" > jobqueueCD.out &&
+	for i in `seq 1 $(state_count completed)`; do
+		echo "queue1" >> jobqueueCD.exp
+	done &&
+	test_cmp jobqueueCD.out jobqueueCD.exp &&
+	flux jobs --filter=running -no "{queue}" > jobqueueR.out &&
+	for i in `seq 1 $(state_count run)`; do
+		echo "queue2" >> jobqueueR.exp
+	done &&
+	test_cmp jobqueueR.out jobqueueR.exp &&
+	flux jobs --filter=failed -no "{queue},{queue:h}" > jobqueueF.out &&
+	for i in `seq 1 $(state_count failed)`; do
+		echo ",-" >> jobqueueF.exp
+	done &&
+	test_cmp jobqueueF.out jobqueueF.exp
 '
 
 test_expect_success 'flux-jobs --format={ntasks},{nnodes},{nnodes:h} works' '
@@ -852,6 +888,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	state==STATE
 	state_single==S
 	name==NAME
+	queue==QUEUE
 	ntasks==NTASKS
 	nnodes==NNODES
 	ranks==RANKS

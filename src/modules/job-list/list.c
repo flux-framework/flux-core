@@ -39,9 +39,12 @@ bool job_filter (struct job *job,
                  uint32_t userid,
                  int states,
                  int results,
-                 const char *name)
+                 const char *name,
+                 const char *queue)
 {
-    if (name && job->name && !streq (job->name, name))
+    if (name && (!job->name || !streq (job->name, name)))
+        return false;
+    if (queue && (!job->queue || !streq (job->queue, queue)))
         return false;
     if (!(job->state & states))
         return false;
@@ -68,7 +71,8 @@ int get_jobs_from_list (json_t *jobs,
                         int states,
                         int results,
                         double since,
-                        const char *name)
+                        const char *name,
+                        const char *queue)
 {
     struct job *job;
 
@@ -82,7 +86,7 @@ int get_jobs_from_list (json_t *jobs,
         if (job->t_inactive > 0. && job->t_inactive <= since)
             break;
 
-        if (job_filter (job, userid, states, results, name)) {
+        if (job_filter (job, userid, states, results, name, queue)) {
             json_t *o;
             if (!(o = job_to_json (job, attrs, errp)))
                 return -1;
@@ -116,7 +120,8 @@ json_t *get_jobs (struct list_ctx *ctx,
                   uint32_t userid,
                   int states,
                   int results,
-                  const char *name)
+                  const char *name,
+                  const char *queue)
 {
     json_t *jobs = NULL;
     int saved_errno;
@@ -138,7 +143,8 @@ json_t *get_jobs (struct list_ctx *ctx,
                                        states,
                                        results,
                                        0.,
-                                       name)) < 0)
+                                       name,
+                                       queue)) < 0)
             goto error;
     }
 
@@ -153,7 +159,8 @@ json_t *get_jobs (struct list_ctx *ctx,
                                            states,
                                            results,
                                            0.,
-                                           name)) < 0)
+                                           name,
+                                           queue)) < 0)
                 goto error;
         }
     }
@@ -169,7 +176,8 @@ json_t *get_jobs (struct list_ctx *ctx,
                                            states,
                                            results,
                                            since,
-                                           name)) < 0)
+                                           name,
+                                           queue)) < 0)
                 goto error;
         }
     }
@@ -198,15 +206,17 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
     int states;
     int results;
     const char *name = NULL;
+    const char *queue = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s:o s:i s:i s:i s?F s?s}",
+    if (flux_request_unpack (msg, NULL, "{s:i s:o s:i s:i s:i s?F s?s s?s}",
                              "max_entries", &max_entries,
                              "attrs", &attrs,
                              "userid", &userid,
                              "states", &states,
                              "results", &results,
                              "since", &since,
-                             "name", &name) < 0) {
+                             "name", &name,
+                             "queue", &queue) < 0) {
         seterror (&err, "invalid payload: %s", flux_msg_last_error (msg));
         errno = EPROTO;
         goto error;
@@ -235,7 +245,7 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
                    | FLUX_JOB_RESULT_TIMEOUT);
 
     if (!(jobs = get_jobs (ctx, &err, max_entries, since,
-                           attrs, userid, states, results, name)))
+                           attrs, userid, states, results, name, queue)))
         goto error;
 
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)

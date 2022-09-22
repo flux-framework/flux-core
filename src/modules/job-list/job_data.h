@@ -45,6 +45,7 @@ struct job {
     double t_inactive;
     flux_job_state_t state;
     const char *name;
+    const char *queue;
     int ntasks;
     int nnodes;
     char *ranks;

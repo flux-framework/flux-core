@@ -64,6 +64,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         "state": ("state",),
         "state_single": ("state",),
         "name": ("name",),
+        "queue": ("queue",),
         "ntasks": ("ntasks",),
         "nnodes": ("nnodes",),
         "ranks": ("ranks",),
@@ -156,6 +157,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         max_entries=args.count,
         since=since,
         name=args.name,
+        queue=args.queue,
     )
 
     jobs = jobs_rpc.jobs()
@@ -285,6 +287,13 @@ def parse_args():
         type=str,
         metavar="JOB-NAME",
         help="Limit output to specific job name",
+    )
+    parser.add_argument(
+        "--queue",
+        action=FilterAction,
+        type=str,
+        metavar="QUEUE",
+        help="Limit output to specific queue",
     )
     parser.add_argument(
         "-o",

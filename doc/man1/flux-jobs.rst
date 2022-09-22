@@ -39,6 +39,9 @@ OPTIONS
 **--name**\ *=[JOB NAME]*
    List jobs with a specific job name.
 
+**--queue**\ *=[QUEUE]*
+   List jobs in a specific queue.
+
 **-c, --count**\ *=N*
    Limit output to N jobs (default 1000)
 
@@ -238,6 +241,9 @@ The field names that can be specified are:
 
 **name**
    job name
+
+**queue**
+   job queue
 
 **ntasks**
    job task count

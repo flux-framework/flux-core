@@ -83,6 +83,15 @@ static int store_attr (struct job *job,
             return 0;
         val = json_string (job->name);
     }
+    else if (!strcmp (attr, "queue")) {
+        /* job->queue potentially NULL if:
+         * - unspecified
+         * - jobspec invalid
+         */
+        if (!job->queue)
+            return 0;
+        val = json_string (job->queue);
+    }
     else if (!strcmp (attr, "ntasks")) {
         /* job->ntasks potentially < 0 if jobspec invalid */
         if (job->ntasks < 0)
