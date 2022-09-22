@@ -473,6 +473,9 @@ OTHER OPTIONS
    As with ``--cc``, ``{cc}`` in option arguments and commands will be
    replaced with the current ``id``.
 
+**--quiet**
+   *(submit,bulksubmit)* Suppress logging of jobids to stdout.
+
 **--log=FILE**
    *(submit,bulksubmit)* Log ``flux-mini`` output and stderr to ``FILE``
    instead of the terminal. If a replacement (e.g. ``{}`` or ``{cc}``)
