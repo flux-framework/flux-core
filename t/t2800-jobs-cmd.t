@@ -1228,8 +1228,20 @@ test_expect_success 'flux jobs lists ntasks with per-resource type=node correctl
 	        -o per-resource.count=${extra} \
 	        /bin/true) &&
 	fj_wait_event ${id} clean &&
-	flux jobs -no "{ntasks}" ${id} > per_resource_ntasks.out &&
-        test $(cat per_resource_ntasks.out) -eq $((nnodes * extra))
+	flux jobs -no "{ntasks}" ${id} > per_resource_node_ntasks.out &&
+        test $(cat per_resource_node_ntasks.out) -eq $((nnodes * extra))
+'
+
+# over subscribe tasks onto cores through workaround
+test_expect_success 'flux jobs lists ntasks with per-resource type=core correctly' '
+	ncores=$(flux resource list -s up -no {ncores}) &&
+	id=$(flux mini submit --cores=${ncores} \
+	        -o per-resource.type=core \
+	        -o per-resource.count=2 \
+	        /bin/true) &&
+	fj_wait_event ${id} clean &&
+	flux jobs -no "{ntasks}" ${id} > per_resource_core_ntasks.out &&
+        test $(cat per_resource_core_ntasks.out) -eq $((ncores * 2))
 '
 
 #
