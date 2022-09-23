@@ -20,6 +20,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/librlist/rlist.h"
 #include "src/common/libccan/ccan/str/str.h"
+#include "src/common/libjob/jj.h"
 
 #include "job_data.h"
 
@@ -70,36 +71,6 @@ struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
     job->states_events_mask = FLUX_JOB_STATE_NEW;
     job->eventlog_seq = -1;
     return job;
-}
-
-struct res_level {
-    const char *type;
-    int count;
-    json_t *with;
-};
-
-static int parse_res_level (struct job *job,
-                            json_t *o,
-                            struct res_level *resp)
-{
-    json_error_t error;
-    struct res_level res;
-
-    res.with = NULL;
-    /* For jobspec version 1, expect exactly one array element per level.
-     */
-    if (json_unpack_ex (o, &error, 0,
-                        "[{s:s s:i s?o}]",
-                        "type", &res.type,
-                        "count", &res.count,
-                        "with", &res.with) < 0) {
-        flux_log (job->h, LOG_ERR,
-                  "%s: job %ju invalid jobspec: %s",
-                  __FUNCTION__, (uintmax_t)job->id, error.text);
-        return -1;
-    }
-    *resp = res;
-    return 0;
 }
 
 /* Return basename of path if there is a '/' in path.  Otherwise return
@@ -171,16 +142,13 @@ static int parse_jobspec_job_name (struct job *job,
     return 0;
 }
 
-static int parse_jobspec_nnodes (struct job *job, struct res_level *res)
+static int parse_jobspec_nnodes (struct job *job, struct jj_counts *jj)
 {
-    /* Set job->nnodes if it is available.  In jobspec version 1,
-     * only if resources listed as node->slot->core->NIL
+    /* Set job->nnodes if it is available, otherwise it will be set
+     * later when R is available.
      */
-    if (res[0].type != NULL && !strcmp (res[0].type, "node")
-        && res[1].type != NULL && !strcmp (res[1].type, "slot")
-        && res[2].type != NULL && !strcmp (res[2].type, "core")
-        && res[2].with == NULL)
-        job->nnodes = res[0].count;
+    if (jj->nnodes > 0)
+        job->nnodes = jj->nnodes;
 
     return 0;
 }
@@ -221,11 +189,8 @@ static int parse_per_resource (struct job *job,
     return 0;
 }
 
-static int parse_jobspec_ntasks (struct job *job,
-                                 json_t * tasks,
-                                 struct res_level *res)
+static int parse_jobspec_ntasks (struct job *job, struct jj_counts *jj)
 {
-    json_error_t error;
     const char *type = NULL;
     int count = 0;
 
@@ -241,71 +206,22 @@ static int parse_jobspec_ntasks (struct job *job,
         /* if per-resource type == nodes and nodes specified
          * (node->slot->core), this is a special case of ntasks.
          */
-        if (streq (type, "node")
-            && res[0].type != NULL && !strcmp (res[0].type, "node")
-            && res[1].type != NULL && !strcmp (res[1].type, "slot")
-            && res[2].type != NULL && !strcmp (res[2].type, "core")
-            && res[2].with == NULL)
-            job->ntasks = res[0].count * count;
+        if (streq (type, "node") && jj->nnodes > 0) {
+            job->ntasks = jj->nnodes * count;
+            return 0;
+        }
     }
 
-    /* if job->ntasks not yet set, check tasks, then check resources
-     * directly.
-     */
-    if (job->ntasks < 0
-        && json_unpack_ex (tasks, NULL, 0,
-                           "[{s:{s:i}}]",
-                           "count", "total", &job->ntasks) < 0) {
-        int per_slot, slot_count = 0;
-
-        if (json_unpack_ex (tasks, &error, 0,
-                            "[{s:{s:i}}]",
-                            "count", "per_slot", &per_slot) < 0) {
-            flux_log (job->h, LOG_ERR,
-                      "%s: job %ju invalid jobspec: %s",
-                      __FUNCTION__, (uintmax_t)job->id, error.text);
-            return -1;
-        }
-        if (per_slot != 1) {
-            flux_log (job->h, LOG_ERR,
-                      "%s: job %ju: per_slot count: expected 1 got %d",
-                      __FUNCTION__, (uintmax_t)job->id, per_slot);
-            return -1;
-        }
-        if (res[0].type != NULL && !strcmp (res[0].type, "slot")
-            && res[1].type != NULL && !strcmp (res[1].type, "core")
-            && res[1].with == NULL) {
-            slot_count = res[0].count;
-        }
-        else if (res[0].type != NULL && !strcmp (res[0].type, "node")
-                 && res[1].type != NULL && !strcmp (res[1].type, "slot")
-                 && res[2].type != NULL && !strcmp (res[2].type, "core")
-                 && res[2].with == NULL) {
-            slot_count = res[0].count * res[1].count;
-        }
-        else {
-            flux_log (job->h, LOG_WARNING,
-                      "%s: job %ju: Unexpected resources: %s->%s->%s%s",
-                      __FUNCTION__,
-                      (uintmax_t)job->id,
-                      res[0].type ? res[0].type : "NULL",
-                      res[1].type ? res[1].type : "NULL",
-                      res[2].type ? res[2].type : "NULL",
-                      res[2].with ? "->..." : NULL);
-            slot_count = -1;
-        }
-        job->ntasks = slot_count;
-    }
-
+    job->ntasks = jj->nslots;
     return 0;
 }
 
 int job_parse_jobspec (struct job *job, const char *s)
 {
+    struct jj_counts jj;
     json_error_t error;
     json_t *jobspec_job = NULL;
-    json_t *tasks, *resources;
-    struct res_level res[3];
+    json_t *tasks;
     int rc = -1;
 
     if (!(job->jobspec = json_loads (s, 0, &error))) {
@@ -359,31 +275,17 @@ int job_parse_jobspec (struct job *job, const char *s)
         goto nonfatal_error;
     }
 
-    if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:o}",
-                        "resources", &resources) < 0) {
+    if (jj_get_counts_json (job->jobspec, &jj) < 0) {
         flux_log (job->h, LOG_ERR,
-                  "%s: job %ju invalid jobspec: %s",
-                  __FUNCTION__, (uintmax_t)job->id, error.text);
+                  "%s: job %ju invalid jobspec; %s",
+                  __FUNCTION__, (uintmax_t)job->id, jj.error);
         goto nonfatal_error;
     }
 
-    /* For jobspec version 1, expect either:
-     * - node->slot->core->NIL
-     * - slot->core->NIL
-     */
-    memset (res, 0, sizeof (res));
-    if (parse_res_level (job, resources, &res[0]) < 0)
-        goto nonfatal_error;
-    if (res[0].with && parse_res_level (job, res[0].with, &res[1]) < 0)
-        goto nonfatal_error;
-    if (res[1].with && parse_res_level (job, res[1].with, &res[2]) < 0)
+    if (parse_jobspec_nnodes (job, &jj) < 0)
         goto nonfatal_error;
 
-    if (parse_jobspec_nnodes (job, res) < 0)
-        goto nonfatal_error;
-
-    if (parse_jobspec_ntasks (job, tasks, res) < 0)
+    if (parse_jobspec_ntasks (job, &jj) < 0)
         goto nonfatal_error;
 
     /* nonfatal error - jobspec illegal, but we'll continue on.  job
