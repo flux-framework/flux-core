@@ -35,8 +35,14 @@ batch-count
 FROBNICATOR KEYS
 ================
 
+disable
+   (optional) A boolean indicating whether to disable job frobnication,
+   usually for testing purposes.
+
 plugins
-   (optional) An array of frobnicator plugins to use.
+   (optional) An array of frobnicator plugins to use.  The default value is
+   ``[ "defaults", "constraints" ]`` which are needed for assigning configured
+   jobspec defaults, and adding queue constraints, respectively.
    For a list of supported plugins on your system run
    ``flux job-frobnicator --list-plugins``
 
