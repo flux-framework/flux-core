@@ -32,7 +32,7 @@ class FluxJobsConfig(UtilConfig):
         "default": {
             "description": "Default flux-jobs format string",
             "format": (
-                "{id.f58:>12} {username:<8.8} {name:<10.10} "
+                "{id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10} "
                 "{status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} "
                 "{runtime!F:>8} {nodelist:h}"
             ),
@@ -40,8 +40,8 @@ class FluxJobsConfig(UtilConfig):
         "deps": {
             "description": "Show job urgency, priority, and dependencies",
             "format": (
-                "{id.f58:>12} {name:<10.10} {urgency:<3} {priority:<12} "
-                "{state:<8.8} {dependencies}"
+                "{id.f58:>12} ?:{queue:<8.8} {name:<10.10} {urgency:<3} "
+                "{priority:<12} {state:<8.8} {dependencies}"
             ),
         },
     }
