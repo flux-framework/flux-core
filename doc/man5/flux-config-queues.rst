@@ -35,10 +35,6 @@ EXAMPLE
 
 ::
 
-   [ingest]
-   validator.plugins = ["feasibility", "jobspec"]
-   frobnicator.plugins = ["defaults", "constraints"]
-
    [[resource.config]]
    hosts = test[0-7]
    properties = ["debug"]
