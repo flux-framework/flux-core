@@ -30,6 +30,9 @@ struct top {
     flux_t *h;
     char *title;
     flux_jobid_t id;
+
+    unsigned int test_exit:1;    /*  Exit after first joblist pane update */
+
     uint32_t size;
     struct summary_pane *summary_pane;
     struct joblist_pane *joblist_pane;

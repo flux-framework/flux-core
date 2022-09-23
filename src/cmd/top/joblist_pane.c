@@ -207,6 +207,11 @@ static void joblist_continuation (flux_future_t *f, void *arg)
     json_decref (joblist->jobs);
     joblist->jobs = json_incref (jobs);
     joblist_pane_draw (joblist);
+    if (joblist->top->test_exit) {
+        /* Ensure joblist window is refreshed before exiting */
+        wrefresh (joblist->win);
+        flux_reactor_stop (flux_future_get_reactor (f));
+    }
     flux_future_destroy (f);
 }
 
