@@ -257,8 +257,7 @@ static int unpack_ingest_subtable (json_t *o,
     }
     *pluginsp = plugins;
     *argsp = args;
-    if (disablep)
-        *disablep = disable ? true : false;
+    *disablep = disable ? true : false;
     return 0;
 error:
     ERRNO_SAFE_WRAP (free, args);
@@ -278,6 +277,7 @@ int pipeline_configure (struct pipeline *pl,
     char *validator_args = NULL;
     char *frobnicator_plugins = NULL;
     char *frobnicator_args = NULL;
+    bool frobnicator_bypass = false;
     int rc = -1;
 
     /* Process toml
@@ -302,7 +302,7 @@ int pipeline_configure (struct pipeline *pl,
                                 "frobnicator",
                                 &frobnicator_plugins,
                                 &frobnicator_args,
-                                NULL,
+                                &frobnicator_bypass,
                                 error) < 0)
         return -1;
 
@@ -321,10 +321,29 @@ int pipeline_configure (struct pipeline *pl,
             pl->validator_bypass = true;
     }
 
-    if (frobnicator_plugins && strlen (frobnicator_plugins) > 0)
-        pl->frobnicate_enable = true;
-    else
-        pl->frobnicate_enable = false;
+    /* Enable the frobnicator if not bypassed AND either explicitly configured
+     * or implicitly required by queues or jobspec defaults configuration.
+     * See flux-framework/flux-core#4598.
+     */
+    pl->frobnicate_enable = false;
+    if (!frobnicator_bypass) {
+        if (frobnicator_plugins && strlen (frobnicator_plugins) > 0)
+            pl->frobnicate_enable = true;
+        else {
+            json_t *defaults = NULL;
+            json_t *queues = NULL;
+            (void)flux_conf_unpack (conf,
+                                    NULL,
+                                    "{s?{s?{s?o}} s?o}",
+                                    "policy",
+                                      "jobspec",
+                                        "defaults", &defaults,
+                                    "queues", &queues);
+            if (defaults || queues)
+                pl->frobnicate_enable = true;
+        }
+    }
+
     if (workcrew_configure (pl->frobnicate,
                             cmd_frobnicator,
                             frobnicator_plugins,
