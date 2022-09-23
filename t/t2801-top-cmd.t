@@ -128,4 +128,14 @@ test_expect_success NO_CHAIN_LINT 'flux-top does not exit on recursive failure' 
 	        --input=recurse-fail.in flux top &&
 	grep -qi "error connecting to Flux" recurse-fail.log
 '
+test_expect_success 'flux-top displays job queues when present' '
+	$runpty -f asciicast -o no-queue.log flux top --test-exit &&
+	grep -v QUEUE no-queue.log &&
+	jobid=$(flux mini submit --wait-event=start -q testq sleep 30) &&
+	$runpty -f asciicast -o queue.log flux top --test-exit &&
+	grep QUEUE queue.log &&
+	grep testq queue.log &&
+	flux job cancel $jobid &&
+	flux job wait-event $jobid clean
+'
 test_done

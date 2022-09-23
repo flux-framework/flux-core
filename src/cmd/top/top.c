@@ -297,11 +297,16 @@ int main (int argc, char *argv[])
     if (!(top = top_create (target, NULL, &error)))
         fatal (0, "%s", error.text);
     if (optparse_hasopt (opts, "test-exit"))
-        reactor_flags |= FLUX_REACTOR_ONCE;
+        top->test_exit = 1;
     if (top_run (top, reactor_flags) < 0)
         fatal (errno, "reactor loop unexpectedly terminated");
 
-    endwin ();
+    if (top->test_exit) {
+        curs_set (1); // restore cursor
+        reset_shell_mode ();
+    }
+    else
+        endwin ();
     top_destroy (top);
     optparse_destroy (opts);
     return 0;
