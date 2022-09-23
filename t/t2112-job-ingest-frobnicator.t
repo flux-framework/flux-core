@@ -154,5 +154,16 @@ test_expect_success HAVE_JQ 'frobnicator defaults are defaults,constraints' '
 	    == [ \"debug\" ]" \
 	    <defaultplugins.out
 '
+test_expect_success HAVE_JQ 'defaults plugin allows queues without default' '
+	cat <<-EOF >conf.d/conf.toml &&
+	[queues.debug]
+	requires = [ "debug" ]
+	EOF
+	flux config reload &&
+	flux mini run --env=-* --dry-run --queue=debug hostname \
+	   | flux job-frobnicator --jobspec-only --plugins=defaults \
+	    > nodefault.out &&
+	jq -e "has(\"data\")" <nodefault.out
+'
 
 test_done
