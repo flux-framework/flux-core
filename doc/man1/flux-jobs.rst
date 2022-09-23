@@ -151,7 +151,8 @@ following is the format used for the default format:
 
 ::
 
-   {id.f58:>12} {username:<8.8} {name:<10.10} {status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} {runtime!F:>8h} {nodelist:h}
+   {id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10} \
+   {status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} {runtime!F:>8h} {nodelist:h}
 
 If a format field is preceded by the special string ``?:`` this will
 cause the field to be removed entirely from output if the result would
@@ -160,7 +161,8 @@ be an empty string for all jobs in the listing. E.g.::
    {id.f58:>12} ?:{exception.type}
 
 would eliminate the EXCEPTION-TYPE column if no jobs in the list received
-an exception.
+an exception. (Thus the job queue is only displayed if at least one job
+has a queue assigned in the default format shown above).
 
 The special presentation type *h* can be used to convert an empty
 string, "0s", "0.0", or "0:00:00" to a hyphen. For example, normally
