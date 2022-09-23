@@ -66,6 +66,7 @@ class JobFrobnicator:
     namespace.
     """
 
+    default_frobnicators = ["defaults", "constraints"]
     plugin_namespace = "flux.job.frobnicator.plugins"
 
     def __init__(self, argv, pluginpath=None, parser=None):
@@ -90,7 +91,9 @@ class JobFrobnicator:
         self.parser_group.add_argument("--plugins", action="append", default=[])
 
         args, self.remaining_args = self.parser.parse_known_args(argv)
-        if args.plugins:
+        if not args.plugins:
+            args.plugins = self.default_frobnicators
+        else:
             args.plugins = [x for xs in args.plugins for x in xs.split(",")]
 
         #  Load all available frobnicator plugins

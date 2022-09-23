@@ -137,5 +137,33 @@ test_expect_success HAVE_JQ 'constraints plugin works without requires' '
 	> constraint-norequires.out &&
 	jq -e "has(\"data\")" <constraint-norequires.out
 '
+test_expect_success HAVE_JQ 'frobnicator defaults are defaults,constraints' '
+	cat <<-EOF >conf.d/conf.toml &&
+	[policy]
+	jobspec.defaults.system.queue = "debug"
+	[queues.debug]
+	requires = [ "debug" ]
+	EOF
+	flux config reload &&
+	flux mini run --env=-* --dry-run hostname \
+	   | flux job-frobnicator --jobspec-only \
+	> defaultplugins.out &&
+	jq -e ".data.attributes.system.queue == \"debug\"" \
+	    <defaultplugins.out &&
+	jq -e ".data.attributes.system.constraints.properties \
+	    == [ \"debug\" ]" \
+	    <defaultplugins.out
+'
+test_expect_success HAVE_JQ 'defaults plugin allows queues without default' '
+	cat <<-EOF >conf.d/conf.toml &&
+	[queues.debug]
+	requires = [ "debug" ]
+	EOF
+	flux config reload &&
+	flux mini run --env=-* --dry-run --queue=debug hostname \
+	   | flux job-frobnicator --jobspec-only --plugins=defaults \
+	    > nodefault.out &&
+	jq -e "has(\"data\")" <nodefault.out
+'
 
 test_done

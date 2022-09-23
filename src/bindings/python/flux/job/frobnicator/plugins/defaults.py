@@ -26,6 +26,10 @@ class DefaultsConfig:
         try:
             self.defaults = config["policy"]["jobspec"]["defaults"]["system"]
             self.default_queue = self.defaults["queue"]
+        except KeyError:
+            pass
+
+        try:
             self.queues = config["queues"]
         except KeyError:
             pass
