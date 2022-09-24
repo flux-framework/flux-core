@@ -107,11 +107,15 @@ static void shell_output_control_task (struct shell_task *task,
 {
     if (stop) {
         if (flux_subprocess_stream_stop (task->proc, stream) < 0)
-            shell_log_errno ("flux_subprocess_stream_stop %d:%s", task->rank, stream);
+            shell_log_errno ("flux_subprocess_stream_stop %d:%s",
+                             task->rank,
+                             stream);
     }
     else {
         if (flux_subprocess_stream_start (task->proc, stream) < 0)
-            shell_log_errno ("flux_subprocess_stream_start %d:%s", task->rank, stream);
+            shell_log_errno ("flux_subprocess_stream_start %d:%s",
+                             task->rank,
+                             stream);
     }
 }
 
@@ -918,7 +922,8 @@ static int parse_alternate_buffer_type (struct shell_output *out,
     if (buffer_type) {
         if (strcasecmp (buffer_type, "none")
             && strcasecmp (buffer_type, "line"))
-            shell_log_error ("invalid buffer type specified: %s", buffer_type);
+            shell_log_error ("invalid buffer type specified: %s",
+                             buffer_type);
         else
             (*buffer_type_ptr) = buffer_type;
     }
@@ -1172,11 +1177,13 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
                 goto error;
             }
             if (out->stdout_type == FLUX_OUTPUT_TYPE_FILE) {
-                if (shell_output_type_file_setup (out, &(out->stdout_file)) < 0)
+                if (shell_output_type_file_setup (out,
+                                                  &(out->stdout_file)) < 0)
                     goto error;
             }
             if (out->stderr_type == FLUX_OUTPUT_TYPE_FILE) {
-                if (shell_output_type_file_setup (out, &(out->stderr_file)) < 0)
+                if (shell_output_type_file_setup (out,
+                                                  &(out->stderr_file)) < 0)
                     goto error;
             }
         }
@@ -1222,11 +1229,21 @@ static void task_line_output_cb (struct shell_task *task,
         shell_log_errno ("read %s task %d", stream, task->rank);
     }
     else if (len > 0) {
-        if (shell_output_write (out, task->rank, stream, data, len, false) < 0)
+        if (shell_output_write (out,
+                                task->rank,
+                                stream,
+                                data,
+                                len,
+                                false) < 0)
             shell_log_errno ("write %s task %d", stream, task->rank);
     }
     else if (flux_subprocess_read_stream_closed (task->proc, stream)) {
-        if (shell_output_write (out, task->rank, stream, NULL, 0, true) < 0)
+        if (shell_output_write (out,
+                                task->rank,
+                                stream,
+                                NULL,
+                                0,
+                                true) < 0)
             shell_log_errno ("write eof %s task %d", stream, task->rank);
     }
 }
@@ -1251,11 +1268,21 @@ static void task_none_output_cb (struct shell_task *task,
         }
     }
     if (len > 0) {
-        if (shell_output_write (out, task->rank, stream, data, len, false) < 0)
+        if (shell_output_write (out,
+                                task->rank,
+                                stream,
+                                data,
+                                len,
+                                false) < 0)
             shell_log_errno ("write %s task %d", stream, task->rank);
     }
     else if (flux_subprocess_read_stream_closed (task->proc, stream)) {
-        if (shell_output_write (out, task->rank, stream, NULL, 0, true) < 0)
+        if (shell_output_write (out,
+                                task->rank,
+                                stream,
+                                NULL,
+                                0,
+                                true) < 0)
             shell_log_errno ("write eof %s task %d", stream, task->rank);
     }
 }
