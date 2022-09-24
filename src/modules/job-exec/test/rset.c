@@ -38,6 +38,19 @@ struct resource_set_test {
     "    } " \
     "}"
 
+#define BASIC_ALT_RANKS \
+    "{ \"version\": 1," \
+    "  \"execution\": { " \
+    "    \"starttime\":  12345, " \
+    "    \"expiration\": 12445, " \
+    "    \"R_lite\": " \
+    "       [ {\"rank\": \"7,14,21\", " \
+    "          \"children\": { \"core\": \"0-3\" } " \
+    "         } " \
+    "       ] " \
+    "    } " \
+    "}"
+
 #define BAD_VERSION \
     "{ \"version\": 2," \
     "  \"execution\": { " \
@@ -86,8 +99,47 @@ struct resource_set_test tests[] = {
       "0-2", 12345., 12445.,
       NULL
     },
+    { "basic alternate ranks R check",
+      BASIC_ALT_RANKS,
+      "7,14,21", 12345., 12445.,
+      NULL
+    },
     RESOURCE_SET_TEST_END
 };
+
+void test_rank_conversions ()
+{
+    json_error_t err;
+    struct resource_set *r = resource_set_create (BASIC_ALT_RANKS, &err);
+
+    if (r == NULL)
+        BAIL_OUT ("resource_set_create: %s", err.text);
+
+    ok (resource_set_nth_rank (NULL, 0) == IDSET_INVALID_ID && errno == EINVAL,
+        "resource_set_nth_rank (NULL, 0) returns EINVAL");
+    ok (resource_set_nth_rank (r, -1) == IDSET_INVALID_ID && errno == EINVAL,
+        "resource_set_nth_rank (r, -1) returns EINVAL");
+
+    ok (resource_set_nth_rank (r, 3) == IDSET_INVALID_ID && errno == ENOENT,
+        "resource_set_nth_rank too big a rank returns ENOENT");
+
+    ok (resource_set_nth_rank (r, 0) == 7
+        && resource_set_nth_rank (r, 1) == 14
+        && resource_set_nth_rank (r, 2) == 21,
+        "resource_set_nth_rank works");
+
+    ok (resource_set_rank_index (NULL, 0) == IDSET_INVALID_ID
+        && errno == EINVAL,
+        "resource_set_rank_index (NULL, 0) returns EINVAL");
+    ok (resource_set_rank_index (r, 3) == IDSET_INVALID_ID
+        && errno == ENOENT,
+        "resource_set_rank_index with invalid rank returns ENOENT");
+
+    ok (resource_set_rank_index (r, 7) == 0
+        && resource_set_rank_index (r, 14) == 1
+        && resource_set_rank_index (r, 21) == 2,
+        "resource_set_rank_index works");
+}
 
 int main (int ac, char *av[])
 {
@@ -133,6 +185,8 @@ int main (int ac, char *av[])
         resource_set_destroy (r);
         e++;
     }
+
+    test_rank_conversions ();
 
     done_testing ();
 }
