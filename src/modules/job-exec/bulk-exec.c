@@ -188,8 +188,17 @@ static void exec_state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
             code = EXIT_CODE(126);
         else if (errnum == ENOENT)
             code = EXIT_CODE(127);
-        else if (errnum == EHOSTUNREACH)
-            code = EXIT_CODE(68);
+        else if (errnum == EHOSTUNREACH) {
+            /*  Do not set a "failure" exit code for a lost job shell.
+             *  This is because if the child job is an instance of Flux
+             *  that wants to continue running after losing a broker, then
+             *  we don't want to force a nonzero instance exit code which
+             *  would make the job appear to have failed. If the instance
+             *  does exit due to a node failure, then a nonzero exit code
+             *  will be set later anyway by the resultant job exception.
+             */
+            code = 0;
+        }
 
         if (code > exec->exit_status)
             exec->exit_status = code;
