@@ -463,7 +463,8 @@ static void shell_output_decref (struct shell_output *out,
                                  flux_msg_handler_t *mh)
 {
     if (--out->refcount == 0) {
-        flux_msg_handler_stop (mh);
+        if (mh)
+            flux_msg_handler_stop (mh);
         if (flux_shell_remove_completion_ref (out->shell, "output.write") < 0)
             shell_log_errno ("flux_shell_remove_completion_ref");
 
@@ -1118,6 +1119,20 @@ static int log_output (flux_plugin_t *p,
     return rc;
 }
 
+static int shell_lost (flux_plugin_t *p,
+                       const char *topic,
+                       flux_plugin_arg_t *args,
+                       void *data)
+{
+    struct shell_output *out = data;
+    /*  A shell has been lost. We need to decref the output refcount by 1
+     *  since we'll never hear from that shell to avoid rank 0 shell from
+     *  hanging.
+     */
+    shell_output_decref (out, NULL);
+    return 0;
+}
+
 struct shell_output *shell_output_create (flux_shell_t *shell)
 {
     struct shell_output *out;
@@ -1373,6 +1388,8 @@ static int shell_output_init (flux_plugin_t *p,
             return shell_log_errno ("failed to add shell.log handler");
         flux_shell_log_setlevel (FLUX_SHELL_QUIET, "eventlog");
     }
+    if (flux_plugin_add_handler (p, "shell.lost", shell_lost, out) < 0)
+        return shell_log_errno ("failed to add shell.log handler");
 
     return 0;
 }
