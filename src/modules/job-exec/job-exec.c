@@ -158,6 +158,33 @@ static struct jobinfo * jobinfo_new (void)
     return job;
 }
 
+flux_future_t *jobinfo_shell_rpc_pack (struct jobinfo *job,
+                                       const char *topic,
+                                       const char *fmt,
+                                       ...)
+{
+    va_list ap;
+    char *shell_topic = NULL;
+    flux_future_t *f = NULL;
+    uint32_t rank;
+
+    if (asprintf (&shell_topic,
+                  "%ju-shell-%ju.%s",
+                  (uintmax_t) job->userid,
+                  (uintmax_t) job->id,
+                  topic) < 0
+        || ((rank = resource_set_nth_rank (job->R, 0)) == IDSET_INVALID_ID))
+        goto out;
+    va_start (ap, fmt);
+    f = flux_rpc_vpack (job->ctx->h, shell_topic, rank, 0, fmt, ap);
+    va_end (ap);
+    flux_future_aux_set (f, "jobinfo", job, (flux_free_f) jobinfo_decref);
+    jobinfo_incref (job);
+out:
+    ERRNO_SAFE_WRAP (free ,shell_topic);
+    return f;
+}
+
 /*  Emit an event to the exec system eventlog and return a future from
  *   flux_kvs_commit().
  */

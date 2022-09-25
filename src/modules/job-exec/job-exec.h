@@ -136,6 +136,12 @@ void jobinfo_log_output (struct jobinfo *job,
                          const char *data,
                          int len);
 
+
+flux_future_t *jobinfo_shell_rpc_pack (struct jobinfo *job,
+                                       const char *topic,
+                                       const char *fmt,
+                                       ...);
+
 #endif /* !HAVE_JOB_EXEC_EXEC_H */
 
 /* vi: ts=4 sw=4 expandtab
