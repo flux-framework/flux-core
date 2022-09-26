@@ -1547,6 +1547,20 @@ const char *overlay_get_subtree_status (struct overlay *ov, int rank)
     return result;
 }
 
+struct idset *overlay_get_default_critical_ranks (struct overlay *ov)
+{
+    struct idset *ranks;
+
+    /* For now, return all internal ranks plus rank 0
+     */
+    if (!(ranks = topology_get_internal_ranks (ov->topo))
+        || idset_set (ranks, 0) < 0) {
+        idset_destroy (ranks);
+        return NULL;
+    }
+    return ranks;
+}
+
 /* Recursive function to build subtree topology object.
  * Right now the tree is regular.  In the future support the configuration
  * of irregular tree topologies.
