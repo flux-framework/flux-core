@@ -38,6 +38,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libpmi/pmi.h"
+#include "src/common/libpmi/clique.h"
 #include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
@@ -1002,6 +1003,73 @@ static flux_future_t *set_uri_job_memo (flux_t *h,
                             "uri", uri);
 }
 
+/*  Encode idset of critical nodes/shell ranks, which is calculated
+ *   from broker.mapping and broker.critical-ranks.
+ */
+static char *encode_critical_nodes (attr_t *attrs)
+{
+    struct idset *ranks = NULL;
+    struct idset *nodeids = NULL;
+    struct pmi_map_block *blocks = NULL;
+    char *s = NULL;
+    int nblocks;
+    int nodeid;
+    const char *mapping;
+    const char *ranks_attr;
+    unsigned int i;
+
+    if (attr_get (attrs, "broker.mapping", &mapping, NULL) < 0
+        || mapping == NULL
+        || pmi_process_mapping_parse (mapping, &blocks, &nblocks) < 0
+        || attr_get (attrs, "broker.critical-ranks", &ranks_attr, NULL) < 0
+        || !(ranks = idset_decode (ranks_attr))
+        || !(nodeids = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        goto done;
+
+    /*  Map the broker ranks from the broker.critical-ranks attr to
+     *  shell ranks/nodeids using PMI_process_mapping (this handles the
+     *  rare case where multiple brokers per node/shell were launched)
+     */
+    i = idset_first (ranks);
+    while (i != IDSET_INVALID_ID) {
+        if (pmi_process_mapping_find_nodeid (blocks,
+                                             nblocks,
+                                             i,
+                                             &nodeid) < 0
+            || idset_set (nodeids, nodeid) < 0)
+            goto done;
+        i = idset_next (ranks, i);
+    }
+    s = idset_encode (nodeids, IDSET_FLAG_RANGE);
+done:
+    idset_destroy (ranks);
+    idset_destroy (nodeids);
+    free (blocks);
+    return s;
+}
+
+static flux_future_t *set_critical_ranks (flux_t *h,
+                                          flux_jobid_t id,
+                                          attr_t *attrs)
+{
+    int saved_errno;
+    flux_future_t *f;
+    char *nodeids;
+
+    if (!(nodeids = encode_critical_nodes (attrs)))
+        return NULL;
+    f = flux_rpc_pack (h,
+                       "job-exec.critical-ranks",
+                       FLUX_NODEID_ANY, 0,
+                       "{s:I s:s}",
+                       "id", id,
+                       "ranks", nodeids);
+    saved_errno = errno;
+    free (nodeids);
+    errno = saved_errno;
+    return f;
+}
+
 static int execute_parental_notifications (struct broker *ctx)
 {
     const char *jobid = NULL;
@@ -1009,7 +1077,8 @@ static int execute_parental_notifications (struct broker *ctx)
     flux_jobid_t id;
     flux_t *h = NULL;
     flux_future_t *f = NULL;
-    int rc;
+    flux_future_t *f2 = NULL;
+    int rc = -1;
 
     /* Skip if "jobid" or "parent-uri" not set, this is probably
      *  not a child of any Flux instance.
@@ -1033,7 +1102,8 @@ static int execute_parental_notifications (struct broker *ctx)
     }
 
     /*  Perform any RPCs to parent in parallel */
-    if (!(f = set_uri_job_memo (h, id, ctx->attrs)))
+    if (!(f = set_uri_job_memo (h, id, ctx->attrs))
+        || !(f2 = set_critical_ranks (h, id, ctx->attrs)))
         goto out;
 
     /*  Wait for RPC results */
@@ -1041,10 +1111,15 @@ static int execute_parental_notifications (struct broker *ctx)
         log_err ("job-manager.memo uri");
         goto out;
     }
+    if (flux_future_get (f2, NULL) < 0) {
+        log_err ("job-exec.critical-ranks");
+        goto out;
+    }
     rc = 0;
 out:
     flux_close (h);
     flux_future_destroy (f);
+    flux_future_destroy (f2);
     return rc;
 }
 
