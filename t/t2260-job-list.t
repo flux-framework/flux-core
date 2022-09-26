@@ -797,6 +797,37 @@ test_expect_success HAVE_JQ 'flux job list lists nnodes for pending jobs correct
         flux queue start
 '
 
+test_expect_success 'reload the job-list module' '
+        flux module reload job-list
+'
+
+test_expect_success HAVE_JQ 'verify nnodes/ranks/nodelist preserved across restart' '
+        jobid1=`cat nodecount1.id` &&
+        jobid2=`cat nodecount2.id` &&
+        jobid3=`cat nodecount3.id` &&
+        jobid4=`cat nodecount4.id` &&
+        obj=$(flux job list -s inactive | grep ${jobid1}) &&
+        echo $obj | jq -e ".nnodes == 1" &&
+        echo $obj | jq -e ".ranks == \"0\"" &&
+        nodes=`flux job info ${jobid1} R | flux R decode --nodelist` &&
+        echo $obj | jq -e ".nodelist == \"${nodes}\"" &&
+        obj=$(flux job list -s inactive | grep ${jobid2}) &&
+        echo $obj | jq -e ".nnodes == 1" &&
+        echo $obj | jq -e ".ranks == \"0\"" &&
+        nodes=`flux job info ${jobid2} R | flux R decode --nodelist` &&
+        echo $obj | jq -e ".nodelist == \"${nodes}\"" &&
+        obj=$(flux job list -s inactive | grep ${jobid3}) &&
+        echo $obj | jq -e ".nnodes == 2" &&
+        echo $obj | jq -e ".ranks == \"[0-1]\"" &&
+        nodes=`flux job info ${jobid3} R | flux R decode --nodelist` &&
+        echo $obj | jq -e ".nodelist == \"${nodes}\"" &&
+        obj=$(flux job list -s inactive | grep ${jobid4}) &&
+        echo $obj | jq -e ".nnodes == 3" &&
+        echo $obj | jq -e ".ranks == \"[0-2]\"" &&
+        nodes=`flux job info ${jobid4} R | flux R decode --nodelist` &&
+        echo $obj | jq -e ".nodelist == \"${nodes}\""
+'
+
 #
 # job success
 #
@@ -846,37 +877,6 @@ test_expect_success HAVE_JQ 'flux job list outputs expiration time when set' '
 	test_debug "cat expiration.json" &&
 	jq -e ".expiration > now" < expiration.json &&
 	flux job cancel $jobid
-'
-
-test_expect_success 'reload the job-list module' '
-        flux module reload job-list
-'
-
-test_expect_success HAVE_JQ 'verify nnodes/ranks/nodelist preserved across restart' '
-        jobid1=`cat nodecount1.id` &&
-        jobid2=`cat nodecount2.id` &&
-        jobid3=`cat nodecount3.id` &&
-        jobid4=`cat nodecount4.id` &&
-        obj=$(flux job list -s inactive | grep ${jobid1}) &&
-        echo $obj | jq -e ".nnodes == 1" &&
-        echo $obj | jq -e ".ranks == \"0\"" &&
-        nodes=`flux job info ${jobid1} R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\"" &&
-        obj=$(flux job list -s inactive | grep ${jobid2}) &&
-        echo $obj | jq -e ".nnodes == 1" &&
-        echo $obj | jq -e ".ranks == \"0\"" &&
-        nodes=`flux job info ${jobid2} R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\"" &&
-        obj=$(flux job list -s inactive | grep ${jobid3}) &&
-        echo $obj | jq -e ".nnodes == 2" &&
-        echo $obj | jq -e ".ranks == \"[0-1]\"" &&
-        nodes=`flux job info ${jobid3} R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\"" &&
-        obj=$(flux job list -s inactive | grep ${jobid4}) &&
-        echo $obj | jq -e ".nnodes == 3" &&
-        echo $obj | jq -e ".ranks == \"[0-2]\"" &&
-        nodes=`flux job info ${jobid4} R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\""
 '
 
 # all job attributes
