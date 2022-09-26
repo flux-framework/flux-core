@@ -135,7 +135,9 @@ static struct optparse_option opts[] = {
       .name = "test-rundir-cleanup", .has_arg = 0,
       .usage = "Clean up --test-rundir DIR upon flux-start completion", },
     { .group = 2,
-      .name = "test-pmi-clique", .has_arg = 1, .arginfo = "single|none",
+      .name = "test-pmi-clique",
+      .has_arg = 1,
+      .arginfo = "single|per-broker|none",
       .usage = "Set PMI_process_mapping mode (default=single)", },
     { .flags = OPTPARSE_OPT_HIDDEN,
       .name = "killer-timeout", .has_arg = 1, .arginfo = "FSD",
@@ -617,6 +619,17 @@ void pmi_server_initialize (int flags)
             .nodeid = 0,
             .nodes = 1,
             .procs = ctx.test_size,
+        };
+        char buf[256];
+        if (pmi_process_mapping_encode (&mapblock, 1, buf, sizeof (buf)) < 0)
+            log_msg_exit ("error encoding PMI_process_mapping");
+        zhash_update (ctx.pmi.kvs, "PMI_process_mapping", xstrdup (buf));
+    }
+    else if (!strcmp (mode, "per-broker")) {
+        struct pmi_map_block mapblock = {
+            .nodeid = 0,
+            .nodes = ctx.test_size,
+            .procs = 1,
         };
         char buf[256];
         if (pmi_process_mapping_encode (&mapblock, 1, buf, sizeof (buf)) < 0)
