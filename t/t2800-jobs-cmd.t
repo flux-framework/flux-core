@@ -657,7 +657,7 @@ test_expect_success 'flux jobs --format={t_cleanup/{in}active} works' '
 	test $count -eq $(state_count inactive)
 '
 
-test_expect_success 'flux-jobs --format={runtime},{runtime!F},{runtime!F:h},{runtime!H},{runtime!H:h} works' '
+test_expect_success 'flux-jobs --format={runtime},{runtime!F},{runtime!H},{runtime!F:h},{runtime!H:h} works' '
 	fmt="{runtime},{runtime!F},{runtime!H},{runtime!F:h},{runtime!H:h}" &&
 	flux jobs --filter=pending -no "${fmt}" > runtimeP.out &&
 	for i in `seq 1 $(state_count sched)`; do
