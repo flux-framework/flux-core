@@ -56,6 +56,7 @@ struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
     job->priority = FLUX_JOB_PRIORITY_MIN;
     job->state = FLUX_JOB_STATE_NEW;
     job->ntasks = -1;
+    job->duration = -1.0;
     job->nnodes = -1;
     job->expiration = -1.0;
     job->wait_status = -1;
@@ -150,6 +151,15 @@ static int parse_jobspec_nnodes (struct job *job, struct jj_counts *jj)
     if (jj->nnodes > 0)
         job->nnodes = jj->nnodes;
 
+    return 0;
+}
+
+static int parse_jobspec_duration (struct job *job, struct jj_counts *jj)
+{
+    /* N.B. Jobspec V1 requires duration to be set, so duration will
+     * always be >= 0 from libjj.
+     */
+    job->duration = jj->duration;
     return 0;
 }
 
@@ -286,6 +296,9 @@ int job_parse_jobspec (struct job *job, const char *s)
         goto nonfatal_error;
 
     if (parse_jobspec_ntasks (job, &jj) < 0)
+        goto nonfatal_error;
+
+    if (parse_jobspec_duration (job, &jj) < 0)
         goto nonfatal_error;
 
     /* nonfatal error - jobspec illegal, but we'll continue on.  job
