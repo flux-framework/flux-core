@@ -264,6 +264,9 @@ The field names that can be specified are:
 **ntasks**
    job task count
 
+**duration**
+   job duration in seconds
+
 **nnodes**
    job node count (if job ran / is running), empty string otherwise
 
