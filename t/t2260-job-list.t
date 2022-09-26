@@ -927,6 +927,28 @@ test_expect_success HAVE_JQ 'verify task count preserved across restart' '
         jq -e ".expiration > now" < expiration2.json
 '
 
+# duration time
+
+test_expect_success HAVE_JQ 'flux job list outputs duration time when set' '
+	jobid=$(flux mini submit -t 60m sleep 1000 | flux job id) &&
+        echo $jobid > duration.id &&
+	fj_wait_event $jobid start &&
+	flux job list | grep $jobid > duration.json &&
+	test_debug "cat duration.json" &&
+	jq -e ".duration == 3600.0" < duration.json &&
+	flux job cancel $jobid
+'
+
+test_expect_success 'reload the job-list module' '
+        flux module reload job-list
+'
+
+test_expect_success HAVE_JQ 'verify task count preserved across restart' '
+        jobid=`cat duration.id` &&
+        flux job list -s inactive | grep ${jobid} > duration2.json &&
+        jq -e ".duration == 3600.0" < duration2.json
+'
+
 # all job attributes
 
 # note that not all attributes may be returned by via the 'all'
@@ -1052,6 +1074,7 @@ t_inactive \
 state \
 name \
 ntasks \
+duration \
 nnodes \
 ranks \
 nodelist \
