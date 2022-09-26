@@ -186,7 +186,7 @@ the following conversion flags are supported by *flux-jobs*:
    datetime of epoch if timestamp field does not exist.
 
 **!F**
-   convert a duration in floating point seconds to Flux Standard Duration (FSD).
+   convert a duration in floating point seconds to Flux Standard Duration (FSD)
    string.  Defaults to empty string if duration field does not exist.
 
 **!H**
