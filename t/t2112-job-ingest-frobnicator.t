@@ -165,5 +165,16 @@ test_expect_success HAVE_JQ 'defaults plugin allows queues without default' '
 	    > nodefault.out &&
 	jq -e "has(\"data\")" <nodefault.out
 '
+test_expect_success HAVE_JQ 'defaults plugin requires queue if configured' '
+	cat <<-EOF >conf.d/conf.toml &&
+	[queues.debug]
+	requires = [ "debug" ]
+	EOF
+	flux config reload &&
+	flux mini run --env=-* --dry-run hostname \
+	   | flux job-frobnicator --jobspec-only --plugins=defaults \
+	    > nodefaultnojob.out &&
+	jq -e ".errstr == \"no queue specified\"" <nodefaultnojob.out
+'
 
 test_done
