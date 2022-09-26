@@ -104,7 +104,7 @@ static void init_attrs_starttime (attr_t *attrs, double starttime);
 
 static int init_local_uri_attr (struct overlay *ov, attr_t *attrs);
 
-static int set_uri_job_memo (attr_t *attrs);
+static int execute_parental_notifications (struct broker *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
 
@@ -397,7 +397,7 @@ int main (int argc, char *argv[])
     if (init_local_uri_attr (ctx.overlay, ctx.attrs) < 0) // used by runat
         goto cleanup;
 
-    if (ctx.rank == 0 && set_uri_job_memo (ctx.attrs) < 0)
+    if (ctx.rank == 0 && execute_parental_notifications (&ctx) < 0)
         goto cleanup;
 
     if (create_runat_phases (&ctx) < 0)
@@ -921,39 +921,22 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
     return 0;
 }
 
-static int set_uri_job_memo (attr_t *attrs)
+static flux_future_t *set_uri_job_memo (flux_t *h,
+                                        flux_jobid_t id,
+                                        attr_t *attrs)
 {
-    const char *jobid = NULL;
-    const char *parent_uri = NULL;
     const char *local_uri = NULL;
     const char *path;
     char uri [1024];
     char hostname [MAXHOSTNAMELEN + 1];
-    flux_jobid_t id;
-    flux_t *h;
-    flux_future_t *f;
-    int rc = -1;
 
-    /* Skip if "jobid" or "parent-uri" not set, this is probably
-     *  not a child of any Flux instance.
-     */
-    if (attr_get (attrs, "parent-uri", &parent_uri, NULL) < 0
-        || parent_uri == NULL
-        || attr_get (attrs, "jobid", &jobid, NULL) < 0
-        || jobid == NULL)
-        return 0;
-
-    if (flux_job_id_parse (jobid, &id) < 0) {
-        log_err ("Unable to parse jobid attribute '%s'", jobid);
-        return -1;
-    }
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
         log_err ("Unexpectedly unable to fetch local-uri attribute");
-        return -1;
+        return NULL;
     }
     if (gethostname (hostname, sizeof (hostname)) < 0) {
         log_err ("gethostname failure");
-        return -1;
+        return NULL;
     }
     path = local_uri + 8; /* forward past "local://" */
     if (snprintf (uri,
@@ -961,31 +944,61 @@ static int set_uri_job_memo (attr_t *attrs)
                  "ssh://%s%s",
                  hostname, path) >= sizeof (uri)) {
         log_msg ("buffer overflow while checking local-uri");
+        return NULL;
+    }
+    return flux_rpc_pack (h,
+                          "job-manager.memo",
+                          FLUX_NODEID_ANY,
+                          0,
+                          "{s:I s:{s:s}}",
+                          "id", id,
+                          "memo",
+                            "uri", uri);
+}
+
+static int execute_parental_notifications (struct broker *ctx)
+{
+    const char *jobid = NULL;
+    const char *parent_uri = NULL;
+    flux_jobid_t id;
+    flux_t *h = NULL;
+    flux_future_t *f = NULL;
+    int rc;
+
+    /* Skip if "jobid" or "parent-uri" not set, this is probably
+     *  not a child of any Flux instance.
+     */
+    if (attr_get (ctx->attrs, "parent-uri", &parent_uri, NULL) < 0
+        || parent_uri == NULL
+        || attr_get (ctx->attrs, "jobid", &jobid, NULL) < 0
+        || jobid == NULL)
+        return 0;
+
+    if (flux_job_id_parse (jobid, &id) < 0) {
+        log_err ("Unable to parse jobid attribute '%s'", jobid);
         return -1;
     }
 
-    /*  Open connection to parent instance and post "uri" user annotation
+    /*  Open connection to parent instance:
      */
     if (!(h = flux_open (parent_uri, 0))) {
         log_err ("flux_open to parent failed");
         return -1;
     }
-    if (!(f = flux_rpc_pack (h,
-                             "job-manager.memo",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:I s:{s:s}}",
-                             "id", id,
-                             "memo",
-                               "uri", uri))
-        || flux_rpc_get (f, NULL) < 0) {
+
+    /*  Perform any RPCs to parent in parallel */
+    if (!(f = set_uri_job_memo (h, id, ctx->attrs)))
+        goto out;
+
+    /*  Wait for RPC results */
+    if (flux_future_get (f, NULL) < 0) {
         log_err ("job-manager.memo uri");
         goto out;
     }
     rc = 0;
 out:
-    flux_future_destroy (f);
     flux_close (h);
+    flux_future_destroy (f);
     return rc;
 }
 
