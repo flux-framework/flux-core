@@ -34,19 +34,20 @@ test_expect_success 'a job that sets no explicit duration is accepted' '
 test_expect_success 'a job that is under policy.limits.duration is accepted' '
 	flux mini submit -t 30s /bin/true
 '
-test_expect_success 'configure policy.limits.duration and queue durations' '
+test_expect_success 'configure policy.limits.duration and queue duration' '
 	cat >config/policy.toml <<-EOT &&
 	[policy.limits]
 	duration = "1h"
-	[queues.debug.policy.limits]
-	duration = "1m"
+	[queues.debug]
 	[queues.batch.policy.limits]
 	duration = "8h"
+	[queues.short.policy.limits]
+	duration = "1m"
 	EOT
 	flux config reload
 '
-test_expect_success 'a no-queue job that exceeds policy.limits.duration is rejected' '
-	test_must_fail flux mini submit -t 2h /bin/true
+test_expect_success 'a job that exceeds policy.limits.duration is rejected' '
+	test_must_fail flux mini submit --queue=debug -t 2h /bin/true
 '
 test_expect_success 'but is accepted by a queue with higher limit' '
 	flux mini submit \
@@ -61,11 +62,11 @@ test_expect_success 'and is rejected when it exceeds the queue limit' '
 	    /bin/true
 '
 test_expect_success 'a job that is under policy.limits.duration is accepted' '
-	flux mini submit -t 1h /bin/true
+	flux mini submit --queue=debug -t 1h /bin/true
 '
 test_expect_success 'but is rejected on a queue with lower limit' '
 	test_must_fail flux mini submit \
-	    --queue=debug \
+	    --queue=short \
 	    -t 1h \
 	    /bin/true
 '
@@ -73,22 +74,23 @@ test_expect_success 'configure policy.limits.duration and an unlimited queue' '
 	cat >config/policy.toml <<-EOT &&
 	[policy.limits]
 	duration = "1h"
-	[queues.debug.policy.limits]
+	[queues.batch.policy.limits]
 	duration = "0"
+	[queues.debug]
 	EOT
 	flux config reload
 '
 test_expect_success 'a job that is over policy.limits.duration is rejected' '
-	test_must_fail flux mini submit -t 2h /bin/true
+	test_must_fail flux mini submit --queue=debug -t 2h /bin/true
 '
 test_expect_success 'but is accepted by the unlimited queue' '
 	flux mini submit \
-	    --queue=debug \
+	    --queue=batch \
 	    -t 2h /bin/true
 '
 test_expect_success 'a job that sets no explicit duration is accepted by the unlimited queue' '
 	flux mini submit \
-	    --queue=debug \
+	    --queue=batch \
 	    /bin/true
 '
 test_expect_success 'configure an invalid duration limit' '
