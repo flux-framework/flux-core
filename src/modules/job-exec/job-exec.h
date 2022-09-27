@@ -70,6 +70,8 @@ struct jobinfo {
     json_t *              jobspec;   /* Fetched jobspec */
     char *                J;         /* Signed jobspec */
 
+    struct idset *        critical_ranks;  /* critical shell ranks */
+
     uint8_t               multiuser:1;
     uint8_t               has_namespace:1;
     uint8_t               exception_in_progress:1;

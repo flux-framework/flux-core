@@ -133,6 +133,7 @@ void jobinfo_decref (struct jobinfo *job)
 {
     if (job && (--job->refcount == 0)) {
         int saved_errno = errno;
+        idset_destroy (job->critical_ranks);
         eventlogger_destroy (job->ev);
         flux_watcher_destroy (job->kill_timer);
         flux_watcher_destroy (job->expiration_timer);
@@ -822,6 +823,7 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
 {
     json_error_t error;
     const char *R = NULL;
+    size_t size;
     struct jobinfo *job = arg;
 
     if (flux_future_get (flux_future_get_child (f, "ns"), NULL) < 0) {
@@ -842,6 +844,16 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
     }
     if (!(job->R = resource_set_create (R, &error))) {
         jobinfo_fatal_error (job, errno, "reading R: %s", error.text);
+        goto done;
+    }
+    /*  Initialize critical ranks to the set of all _shell_ ranks
+     *  (i.e. zero origin to size-1). This means that loss of any rank
+     *  will result in a fatal job exception.
+     */
+    size = idset_count (resource_set_ranks (job->R));
+    if (!(job->critical_ranks = idset_create (0, IDSET_FLAG_AUTOGROW))
+        || idset_range_set (job->critical_ranks, 0, size - 1) < 0) {
+        jobinfo_fatal_error (job, errno, "initializing critical ranks");
         goto done;
     }
     if (job->multiuser) {
@@ -1177,6 +1189,43 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 }
 
+static void critical_ranks_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
+{
+    struct job_exec_ctx *ctx = arg;
+    flux_jobid_t id;
+    const char *ranks;
+    struct idset *idset;
+    struct jobinfo *job;
+
+    if (flux_request_unpack (msg, NULL,
+                             "{s:I s:s}",
+                             "id", &id,
+                             "ranks", &ranks) < 0)
+        goto error;
+
+    if (!(job = zhashx_lookup (ctx->jobs, &id))) {
+        errno = ENOENT;
+        goto error;
+    }
+    if (flux_msg_authorize (msg, job->userid) < 0
+        || !(idset = idset_decode (ranks)))
+        goto error;
+
+    idset_destroy (job->critical_ranks);
+    job->critical_ranks = idset;
+
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
 static void job_exec_ctx_destroy (struct job_exec_ctx *ctx)
 {
     if (ctx == NULL)
@@ -1319,6 +1368,11 @@ static int unload_implementations (struct job_exec_ctx *ctx)
 static const struct flux_msg_handler_spec htab[]  = {
     { FLUX_MSGTYPE_REQUEST, "job-exec.start", start_cb,     0 },
     { FLUX_MSGTYPE_EVENT,   "job-exception",  exception_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,
+      "job-exec.critical-ranks",
+       critical_ranks_cb,
+       FLUX_ROLE_USER
+    },
     FLUX_MSGHANDLER_TABLE_END
 };
 
