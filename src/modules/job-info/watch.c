@@ -246,10 +246,21 @@ static void watch_continuation (flux_future_t *f, void *arg)
     const char *input;
     const char *tok;
     size_t toklen;
+    const char *errmsg = NULL;
 
     if (flux_kvs_lookup_get (f, &s) < 0) {
         if (errno != ENOENT && errno != ENODATA && errno != ENOTSUP)
             flux_log_error (ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+        goto error;
+    }
+
+    /* Issue #4612 - zero length append illegal for an eventlog.  This
+     * most likely occurred through an illegal overwrite of the whole
+     * eventlog.
+     */
+    if (!s) {
+        errmsg = "illegal append of zero bytes";
+        errno = EINVAL;
         goto error;
     }
 
@@ -310,7 +321,7 @@ error_cancel:
     }
 
 error:
-    if (flux_respond_error (ctx->h, w->msg, errno, NULL) < 0)
+    if (flux_respond_error (ctx->h, w->msg, errno, errmsg) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
 
     /* flux future destroyed in watch_ctx_destroy, which is called
