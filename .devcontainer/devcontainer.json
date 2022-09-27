@@ -9,6 +9,8 @@
           "terminal.integrated.defaultProfile.linux": "bash",
 
           // Ensure that Python autocomplete works out of the box
+          // If you want to test Python just do (after make install)
+          // export PYTHONPATH=/usr/local/lib/python3.8/site-packages
           "python.autoComplete.extraPaths": [
             "/usr/local/lib/flux/python3.8",
             "/usr/local/lib/python3.8/site-packages",

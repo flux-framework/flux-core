@@ -42,4 +42,5 @@ repos:
     rev: v1.4.2
     hooks:
       - id: vermin
-        args: ['-t=3.6-', '--violations']
+        args: ['-t=3.6-', '--violations', '--exclude', 'asyncio.get_running_loop']
+        # We exclude the asyncio function because we fall back to one supported by Python 3.6

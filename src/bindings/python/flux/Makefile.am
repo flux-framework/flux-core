@@ -1,5 +1,8 @@
 nobase_fluxpy_PYTHON = \
 	__init__.py \
+	asyncio/__init__.py \
+	asyncio/events.py \
+	asyncio/selector.py \
 	kvs.py \
 	wrapper.py \
 	rpc.py \

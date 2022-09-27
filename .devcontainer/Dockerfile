@@ -13,9 +13,6 @@ RUN python3 -m pip install IPython && \
 # Assuming installing to /usr/local
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
-# Assuming installing to /usr/local
-ENV LD_LIBRARY_PATH=/usr/local/lib
-
 # extra interactive utilities and compilation_database generation
 RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
