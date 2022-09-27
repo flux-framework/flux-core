@@ -238,6 +238,59 @@ void test_k2_router (void)
     topology_decref (topo);
 }
 
+struct internal_ranks_test {
+    int size;
+    int kary;
+    const char *expected_ranks;
+};
+
+struct internal_ranks_test internal_ranks_tests[] = {
+    { 1,  2,  ""    },
+    { 2,  2,  "0"   },
+    { 4,  2,  "0-1" },
+    { 4,  0,  "0"   },
+    { 16, 2,  "0-7" },
+    { 48, 2,  "0-23"},
+    { 48, 0,  "0"   },
+    { 48, 16, "0-2" },
+    { -1, -1, NULL  }
+};
+
+void test_internal_ranks (void)
+{
+    struct topology *topo;
+    struct idset *result;
+    struct idset *expected;
+    char *s;
+
+    struct internal_ranks_test *t = internal_ranks_tests;
+    while (t && t->expected_ranks) {
+        if (!(topo = topology_create (t->size))
+            || topology_set_kary (topo, t->kary) < 0)
+            BAIL_OUT ("failed to create topology size=%d kary=%d",
+                      t->size,
+                      t->kary);
+        if (!(expected = idset_decode (t->expected_ranks)))
+            BAIL_OUT ("failed to decode expected ranks=%d",
+                      t->expected_ranks);
+        result = topology_get_internal_ranks (topo);
+        ok (result != NULL,
+            "topology_get_internal_ranks(size=%d, kary=%d) works");
+        s = idset_encode (result, IDSET_FLAG_RANGE);
+
+        ok (idset_equal (result, expected),
+            "result was %s (expected %s)",
+            s,
+            t->expected_ranks);
+
+        topology_decref (topo);
+        idset_destroy (expected);
+        idset_destroy (result);
+        free (s);
+        t++;
+    }
+}
+
 void test_invalid (void)
 {
     struct topology *topo;
@@ -318,6 +371,10 @@ void test_invalid (void)
     ok (topology_aux_get (topo, 0, "foo") == NULL && errno == ENOENT,
         "topology_aux_get key=unknown fails with ENOENT");
 
+    errno = 0;
+    ok (topology_get_internal_ranks (NULL) == NULL && errno == EINVAL,
+        "topolog_get_internal_ranks (NULL) returns EINVAL");
+
     topology_decref (topo);
 }
 
@@ -330,6 +387,7 @@ int main (int argc, char *argv[])
     test_k2 ();
     test_k2_router ();
     test_invalid ();
+    test_internal_ranks ();
 
     done_testing ();
 }
