@@ -25,6 +25,10 @@ class SubmitFuture(Future):
         """Return the job ID represented by this future."""
         return submit_get_id(self)
 
+    def get(self):
+        """Return the job represented by this future."""
+        super().get()
+        return submit_get_id(self)
 
 def submit_async(
     flux_handle,

@@ -334,7 +334,9 @@ class FluxExecutorFuture(concurrent.futures.Future):
     result.__doc__ = concurrent.futures.Future.result.__doc__
 
     def set_exception(self, exception):
-        """When setting an exception on the future, set the jobid if it hasn't
+        """Set an exception.
+
+        When setting an exception on the future, set the jobid if it hasn't
         been set already. The jobid will already have been set unless the exception
         was generated before the job could be successfully submitted.
         """
@@ -350,7 +352,9 @@ class FluxExecutorFuture(concurrent.futures.Future):
     set_exception.__doc__ = concurrent.futures.Future.set_exception.__doc__
 
     def cancel(self, *args, **kwargs):  # pylint: disable=arguments-differ
-        """If a thread is waiting for the future's jobid, and another
+        """Cancel a future job.
+
+        If a thread is waiting for the future's jobid, and another
         thread cancels the future, the waiting thread would never wake up
         because the jobid would never be set.
 

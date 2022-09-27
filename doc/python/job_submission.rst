@@ -94,9 +94,10 @@ restricted to instance owners.
 Asynchronous interfaces
 -----------------------
 
-There are two primary asynchronous interfaces to job manipulations. The first is
-an event-loop interface, which is closer to the native C interface, and consists of
-functions like ``flux.job.submit_async`` and ``flux.job.result_async`` (note the
+There are two primary asynchronous interfaces to job manipulations, and a third
+that uses Python asyncio to submit jobs. The first is an event-loop interface,
+which is closer to the native C interface, and consists of functions like 
+``flux.job.submit_async`` and ``flux.job.result_async`` (note the
 functions are the same as in the synchronous interface, only with an "_async"
 suffix). The second is an interface which is almost identical to the
 `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_
@@ -106,7 +107,12 @@ futures, the difference being that the ``FluxExecutor`` is designed so that
 all futures fulfill in the background, and there is no need for user code
 to enter the Flux event loop, while the event-loop-based interface
 requires the user to call into the Flux event loop in order for futures
-to fulfill and for callbacks to trigger.
+to fulfill and for callbacks to trigger. For the third interface (using asyncio)
+we are still using Flux' implementation of futures, but we create some of
+the backend watchers (e.g., a file descriptor, timer, or signal watcher)
+within the context of a customized asyncio event loop. This means that we are
+able to have Flux run alongside a more traditional (and native) Python 
+asyncronous interface.
 
 Our general recommendation is that you use the ``FluxExecutor`` interface
 unless you are familiar with event-loop based programming.
@@ -197,3 +203,43 @@ as futures complete.
 .. autofunction:: flux.job.result_async
 
 .. autofunction:: flux.job.wait_async
+
+
+The ``FluxEventLoop`` (asyncio) interface
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you are familiar with `asyncio <https://docs.python.org/3/library/asyncio.html>`_
+Flux has support for using these native Python event loops to submit jobs. As an example,
+here we use the ``FluxEventLoop`` to submit a job, along with running an ``asyncio.sleep`` job.
+
+
+.. code:: python
+
+    # ensure the script is running in an active flux instance
+    import asyncio
+    from flux.asyncio import loop
+    import flux.job
+
+    fluxsleep = flux.job.JobspecV1.from_command(['sleep', '2'])
+    fluxecho = flux.job.JobspecV1.from_command(['echo', 'pancakes'])
+
+    tasks = [
+       loop.create_task(asyncio.sleep(5)),
+       loop.create_task(flux.asyncio.submit(fluxecho)),
+       loop.create_task(flux.asyncio.submit(fluxsleep)),
+    ]
+
+    asyncio.set_event_loop(loop)
+    results = loop.run_until_complete(asyncio.gather(*tasks))
+    # [JobID(456004999315456), JobID(456004999315457)]
+
+
+For the above, you get back the job ID. Note that we also use a common event loop 
+and handle that ``flux.asyncio`` defines. 
+You are, however, free to use the ``FluxEventLoop`` (loop already created in the
+example above) class to define your own, using your own Flux handle, which is
+accepted as the only init argument to the loop class.
+
+.. autofunction:: flux.asyncio.submit
+
+.. autofunction:: flux.asyncio.FluxEventLoop

@@ -232,6 +232,7 @@ TESTSCRIPTS = \
 	python/t0005-kvs.py \
 	python/t0006-request.py \
 	python/t0007-watchers.py \
+	python/t0008-asyncio.py \
 	python/t0010-job.py \
 	python/t0012-futures.py \
 	python/t0013-job-list-inactive.py \

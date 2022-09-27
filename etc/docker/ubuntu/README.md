@@ -11,6 +11,12 @@ Build the main `flux-ubuntu` image:
 $ docker build -f etc/docker/ubuntu/Dockerfile -t ghcr.io/flux-framework/flux-ubuntu .
 ```
 
+If you want to shell inside (and bind for re-compile and development):
+
+```bash
+$ docker run -it -v $PWD:/code ghcr.io/flux-framework/flux-ubuntu
+```
+
 And then tests:
 
 ```bash
