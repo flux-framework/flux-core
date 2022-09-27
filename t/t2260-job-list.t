@@ -687,6 +687,30 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (4 tasks)' '
         echo $obj | jq -e ".ntasks == 4"
 '
 
+test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (4 nodes, 4 tasks)' '
+        jobid=`flux mini submit --wait -N4 -n4 hostname | flux job id` &&
+        echo $jobid > taskcount3.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ntasks == 4"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (3 cores)' '
+        jobid=`flux mini submit --wait --cores=3 hostname | flux job id` &&
+        echo $jobid > taskcount4.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ntasks == 3"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (tasks-per-node)' '
+        jobid=`flux mini submit --wait -N2 --tasks-per-node=3 hostname | flux job id` &&
+        echo $jobid > taskcount5.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ntasks == 6"
+'
+
 test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
@@ -694,10 +718,19 @@ test_expect_success 'reload the job-list module' '
 test_expect_success HAVE_JQ 'verify task count preserved across restart' '
         jobid1=`cat taskcount1.id` &&
         jobid2=`cat taskcount2.id` &&
+        jobid3=`cat taskcount3.id` &&
+        jobid4=`cat taskcount4.id` &&
+        jobid5=`cat taskcount5.id` &&
         obj=$(flux job list -s inactive | grep ${jobid1}) &&
         echo $obj | jq -e ".ntasks == 1" &&
         obj=$(flux job list -s inactive | grep ${jobid2}) &&
-        echo $obj | jq -e ".ntasks == 4"
+        echo $obj | jq -e ".ntasks == 4" &&
+        obj=$(flux job list -s inactive | grep ${jobid3}) &&
+        echo $obj | jq -e ".ntasks == 4" &&
+        obj=$(flux job list -s inactive | grep ${jobid4}) &&
+        echo $obj | jq -e ".ntasks == 3" &&
+        obj=$(flux job list -s inactive | grep ${jobid5}) &&
+        echo $obj | jq -e ".ntasks == 6"
 '
 
 #
