@@ -47,6 +47,7 @@ struct job {
     const char *name;
     const char *queue;
     int ntasks;
+    double duration;
     int nnodes;
     char *ranks;
     char *nodelist;

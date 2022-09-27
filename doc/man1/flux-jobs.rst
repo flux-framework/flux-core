@@ -186,12 +186,14 @@ the following conversion flags are supported by *flux-jobs*:
    datetime of epoch if timestamp field does not exist.
 
 **!F**
-   convert a duration in floating point seconds to Flux Standard Duration (FSD).
-   string.  Defaults to empty string if duration field does not exist.
+   convert a time duration in floating point seconds to Flux Standard
+   Duration (FSD) string (e.g. *{runtime!F}*).  Defaults to empty string if
+   field does not exist.
 
 **!H**
-   convert a duration to hours:minutes:seconds form (e.g. *{runtime!H}*).
-   Defaults to empty string if duration field does not exist.
+   convert a time duration in floating point seconds to
+   hours:minutes:seconds form (e.g. *{runtime!H}*).  Defaults to empty
+   string if time duration field does not exist.
 
 **!P**
    convert a floating point number into a percentage fitting in 5 characters
@@ -263,6 +265,9 @@ The field names that can be specified are:
 
 **ntasks**
    job task count
+
+**duration**
+   job duration in seconds
 
 **nnodes**
    job node count (if job ran / is running), empty string otherwise

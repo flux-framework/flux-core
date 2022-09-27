@@ -155,6 +155,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         "name": ("name",),
         "queue": ("queue",),
         "ntasks": ("ntasks",),
+        "duration": ("duration",),
         "nnodes": ("nnodes",),
         "ranks": ("ranks",),
         "nodelist": ("nodelist",),

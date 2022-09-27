@@ -537,6 +537,19 @@ test_expect_success 'flux-jobs --format={ntasks},{nnodes},{nnodes:h} works' '
 	test_cmp nodecountI.exp nodecountI.out
 '
 
+test_expect_success 'flux-jobs --format={duration},{duration:h},{duration!F},{duration!H},{duration!F:h},{duration!H:h} works' '
+	fmt="{duration},{duration:h},{duration!F},{duration!H},{duration!F:h},{duration!H:h}" &&
+	flux jobs --filter=pending,running -no "${fmt}" > durationPR.out &&
+	for i in `seq 1 $(state_count sched run)`; do
+		echo "300.0,300.0,5m,0:05:00,5m,0:05:00" >> durationPR.exp
+	done &&
+	test_cmp durationPR.exp durationPR.out &&
+	flux jobs --filter=completed -no "${fmt}" > durationCD.out &&
+	for i in `seq 1 $(state_count completed)`;
+		do echo "0.0,-,0s,0:00:00,-,-" >> durationCD.exp
+	done &&
+	test_cmp durationCD.exp durationCD.out
+'
 
 test_expect_success 'flux-jobs --format={runtime:0.3f} works' '
 	flux jobs --filter=pending -no "{runtime:0.3f}" > runtime-dotP.out &&
@@ -657,7 +670,7 @@ test_expect_success 'flux jobs --format={t_cleanup/{in}active} works' '
 	test $count -eq $(state_count inactive)
 '
 
-test_expect_success 'flux-jobs --format={runtime},{runtime!F},{runtime!F:h},{runtime!H},{runtime!H:h} works' '
+test_expect_success 'flux-jobs --format={runtime},{runtime!F},{runtime!H},{runtime!F:h},{runtime!H:h} works' '
 	fmt="{runtime},{runtime!F},{runtime!H},{runtime!F:h},{runtime!H:h}" &&
 	flux jobs --filter=pending -no "${fmt}" > runtimeP.out &&
 	for i in `seq 1 $(state_count sched)`; do
@@ -917,6 +930,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	name==NAME
 	queue==QUEUE
 	ntasks==NTASKS
+	duration==DURATION
 	nnodes==NNODES
 	ranks==RANKS
 	nodelist==NODELIST

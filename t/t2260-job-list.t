@@ -797,57 +797,6 @@ test_expect_success HAVE_JQ 'flux job list lists nnodes for pending jobs correct
         flux queue start
 '
 
-#
-# job success
-#
-
-test_expect_success HAVE_JQ 'flux job list outputs success correctly (true)' '
-        jobid=`flux mini submit --wait hostname | flux job id` &&
-        wait_jobid_state $jobid inactive &&
-        obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".success == true"
-'
-
-test_expect_success HAVE_JQ 'flux job list outputs success correctly (false)' '
-        jobid=`flux mini submit --wait nosuchcommand | flux job id` &&
-        wait_jobid_state $jobid inactive &&
-        obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".success == false"
-'
-
-# job exceptions
-
-test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (no exception)' '
-        jobid=`flux mini submit --wait hostname | flux job id` &&
-        wait_jobid_state $jobid inactive &&
-        obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".exception_occurred == false" &&
-        echo $obj | jq -e ".exception_severity == null" &&
-        echo $obj | jq -e ".exception_type == null" &&
-        echo $obj | jq -e ".exception_note == null"
-'
-
-test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (exception)' '
-        jobid=`flux mini submit --wait nosuchcommand | flux job id` &&
-        wait_jobid_state $jobid inactive &&
-        obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".exception_occurred == true" &&
-        echo $obj | jq -e ".exception_severity == 0" &&
-        echo $obj | jq -e ".exception_type == \"exec\"" &&
-        echo $obj | jq .exception_note | grep "No such file or directory"
-'
-
-# expiration time
-
-test_expect_success HAVE_JQ 'flux job list outputs expiration time when set' '
-	jobid=$(flux mini submit -t 30s sleep 1000 | flux job id) &&
-	fj_wait_event $jobid start &&
-	flux job list | grep $jobid > expiration.json &&
-	test_debug "cat expiration.json" &&
-	jq -e ".expiration > now" < expiration.json &&
-	flux job cancel $jobid
-'
-
 test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
@@ -877,6 +826,127 @@ test_expect_success HAVE_JQ 'verify nnodes/ranks/nodelist preserved across resta
         echo $obj | jq -e ".ranks == \"[0-2]\"" &&
         nodes=`flux job info ${jobid4} R | flux R decode --nodelist` &&
         echo $obj | jq -e ".nodelist == \"${nodes}\""
+'
+
+#
+# job success
+#
+
+test_expect_success HAVE_JQ 'flux job list outputs success correctly (true)' '
+        jobid=`flux mini submit --wait hostname | flux job id` &&
+        echo $jobid > success1.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".success == true"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs success correctly (false)' '
+        jobid=`flux mini submit --wait nosuchcommand | flux job id` &&
+        echo $jobid > success2.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".success == false"
+'
+
+test_expect_success 'reload the job-list module' '
+        flux module reload job-list
+'
+
+test_expect_success HAVE_JQ 'verify task count preserved across restart' '
+        jobid1=`cat success1.id` &&
+        jobid2=`cat success2.id` &&
+        obj=$(flux job list -s inactive | grep ${jobid1}) &&
+        echo $obj | jq -e ".success == true" &&
+        obj=$(flux job list -s inactive | grep ${jobid2}) &&
+        echo $obj | jq -e ".success == false"
+'
+
+# job exceptions
+
+test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (no exception)' '
+        jobid=`flux mini submit --wait hostname | flux job id` &&
+        echo $jobid > exceptions1.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".exception_occurred == false" &&
+        echo $obj | jq -e ".exception_severity == null" &&
+        echo $obj | jq -e ".exception_type == null" &&
+        echo $obj | jq -e ".exception_note == null"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (exception)' '
+        jobid=`flux mini submit --wait nosuchcommand | flux job id` &&
+        echo $jobid > exceptions2.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".exception_occurred == true" &&
+        echo $obj | jq -e ".exception_severity == 0" &&
+        echo $obj | jq -e ".exception_type == \"exec\"" &&
+        echo $obj | jq .exception_note | grep "No such file or directory"
+'
+
+test_expect_success 'reload the job-list module' '
+        flux module reload job-list
+'
+
+test_expect_success HAVE_JQ 'verify task count preserved across restart' '
+        jobid1=`cat exceptions1.id` &&
+        jobid2=`cat exceptions2.id` &&
+        obj=$(flux job list -s inactive | grep ${jobid1}) &&
+        echo $obj | jq -e ".success == true" &&
+        echo $obj | jq -e ".exception_occurred == false" &&
+        echo $obj | jq -e ".exception_severity == null" &&
+        echo $obj | jq -e ".exception_type == null" &&
+        echo $obj | jq -e ".exception_note == null" &&
+        obj=$(flux job list -s inactive | grep ${jobid2}) &&
+        echo $obj | jq -e ".exception_occurred == true" &&
+        echo $obj | jq -e ".exception_severity == 0" &&
+        echo $obj | jq -e ".exception_type == \"exec\"" &&
+        echo $obj | jq .exception_note | grep "No such file or directory"
+'
+
+# expiration time
+
+test_expect_success HAVE_JQ 'flux job list outputs expiration time when set' '
+	jobid=$(flux mini submit -t 500s sleep 1000 | flux job id) &&
+	echo $jobid > expiration.id &&
+	fj_wait_event $jobid start &&
+	flux job list | grep $jobid > expiration.json &&
+	test_debug "cat expiration.json" &&
+	jq -e ".expiration > now" < expiration.json &&
+	flux job cancel $jobid
+'
+
+test_expect_success 'reload the job-list module' '
+        flux module reload job-list
+'
+
+test_expect_success HAVE_JQ 'verify task count preserved across restart' '
+        jobid=`cat expiration.id` &&
+        flux job list -s inactive | grep ${jobid} > expiration2.json &&
+        jq -e ".expiration > now" < expiration2.json
+'
+
+# duration time
+
+test_expect_success HAVE_JQ 'flux job list outputs duration time when set' '
+	jobid=$(flux mini submit -t 60m sleep 1000 | flux job id) &&
+        echo $jobid > duration.id &&
+	fj_wait_event $jobid start &&
+	flux job list | grep $jobid > duration.json &&
+	test_debug "cat duration.json" &&
+	jq -e ".duration == 3600.0" < duration.json &&
+	flux job cancel $jobid
+'
+
+test_expect_success 'reload the job-list module' '
+        flux module reload job-list
+'
+
+test_expect_success HAVE_JQ 'verify task count preserved across restart' '
+        jobid=`cat duration.id` &&
+        flux job list -s inactive | grep ${jobid} > duration2.json &&
+        jq -e ".duration == 3600.0" < duration2.json
 '
 
 # all job attributes
@@ -1004,6 +1074,7 @@ t_inactive \
 state \
 name \
 ntasks \
+duration \
 nnodes \
 ranks \
 nodelist \
