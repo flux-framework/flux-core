@@ -711,6 +711,22 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (tasks-per-n
         echo $obj | jq -e ".ntasks == 6"
 '
 
+test_expect_success 'flux jobs list outputs ntasks correctly (per-resource.type=node)' '
+        nnodes=$(flux resource list -s up -no {nnodes}) &&
+        ncores=$(flux resource list -s up -no {ncores}) &&
+        extra=$((ncores / nnodes + 2)) &&
+        jobid=$(flux mini submit --wait -N ${nnodes} -n ${ncores} \
+                -o per-resource.type=node \
+                -o per-resource.count=${extra} \
+                hostname | flux job id) &&
+        echo $jobid > taskcount6.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        expected=$((nnodes * extra)) &&
+        echo ${expected} > per_resource_type_node_ntasks.exp &&
+        echo $obj | jq -e ".ntasks == ${expected}"
+'
+
 test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
@@ -721,6 +737,7 @@ test_expect_success HAVE_JQ 'verify task count preserved across restart' '
         jobid3=`cat taskcount3.id` &&
         jobid4=`cat taskcount4.id` &&
         jobid5=`cat taskcount5.id` &&
+        jobid6=`cat taskcount6.id` &&
         obj=$(flux job list -s inactive | grep ${jobid1}) &&
         echo $obj | jq -e ".ntasks == 1" &&
         obj=$(flux job list -s inactive | grep ${jobid2}) &&
@@ -730,7 +747,10 @@ test_expect_success HAVE_JQ 'verify task count preserved across restart' '
         obj=$(flux job list -s inactive | grep ${jobid4}) &&
         echo $obj | jq -e ".ntasks == 3" &&
         obj=$(flux job list -s inactive | grep ${jobid5}) &&
-        echo $obj | jq -e ".ntasks == 6"
+        echo $obj | jq -e ".ntasks == 6" &&
+        obj=$(flux job list -s inactive | grep ${jobid6}) &&
+        expected=$(cat per_resource_type_node_ntasks.exp) &&
+        echo $obj | jq -e ".ntasks == ${expected}"
 '
 
 #
