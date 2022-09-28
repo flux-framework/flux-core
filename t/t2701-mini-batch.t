@@ -117,4 +117,38 @@ test_expect_success 'flux-mini batch: --broker-opts works' '
 	grep "boot: rank=0 size=1" flux-${id2}.out &&
 	grep "entering event loop" flux-${id2}.out
 '
+test_expect_success 'flux mini batch: critical-ranks attr is set on all ranks' '
+	id=$(flux mini batch -N4 \
+		--output=critical-ranks.out \
+		--error=critical-ranks.err \
+		--broker-opts=-Stbon.fanout=2 \
+		--wrap flux exec flux getattr broker.critical-ranks) &&
+	flux job status $id &&
+	test_debug "cat critical-ranks.out" &&
+	test_debug "cat critical-ranks.err" &&
+	cat <<-EOF >critical-ranks.expected &&
+	0-1
+	0-1
+	0-1
+	0-1
+	EOF
+	test_cmp critical-ranks.expected critical-ranks.out
+'
+test_expect_success 'flux mini batch: user can set broker.critical-ranks' '
+	id=$(flux mini batch -N4 \
+		--output=critical-ranks2.out \
+		--error=critical-ranks2.err \
+		--broker-opts=-Sbroker.critical-ranks=0 \
+		--wrap flux exec flux getattr broker.critical-ranks) &&
+	flux job status $id &&
+	test_debug "cat critical-ranks2.out" &&
+	test_debug "cat critical-ranks2.err" &&
+	cat <<-EOF >critical-ranks2.expected &&
+	0
+	0
+	0
+	0
+	EOF
+	test_cmp critical-ranks2.expected critical-ranks2.out
+'
 test_done
