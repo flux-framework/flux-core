@@ -104,6 +104,8 @@ static void init_attrs_starttime (attr_t *attrs, double starttime);
 
 static int init_local_uri_attr (struct overlay *ov, attr_t *attrs);
 
+static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs);
+
 static int execute_parental_notifications (struct broker *ctx);
 
 static const struct flux_handle_ops broker_handle_ops;
@@ -394,7 +396,8 @@ int main (int argc, char *argv[])
 
     set_proctitle (ctx.rank);
 
-    if (init_local_uri_attr (ctx.overlay, ctx.attrs) < 0) // used by runat
+    if (init_local_uri_attr (ctx.overlay, ctx.attrs) < 0 // used by runat
+        || init_critical_ranks_attr (ctx.overlay, ctx.attrs) < 0)
         goto cleanup;
 
     if (ctx.rank == 0 && execute_parental_notifications (&ctx) < 0)
@@ -919,6 +922,49 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
         }
     }
     return 0;
+}
+
+static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs)
+{
+    int rc = -1;
+    const char *val;
+    char *ranks = NULL;
+    struct idset *critical_ranks = NULL;
+
+    if (attr_get (attrs, "broker.critical-ranks", &val, NULL) < 0) {
+        if (!(critical_ranks = overlay_get_default_critical_ranks (ov))
+            || !(ranks = idset_encode (critical_ranks, IDSET_FLAG_RANGE))) {
+            log_err ("unable to calculate critical-ranks attribute");
+            goto out;
+        }
+        if (attr_add (attrs,
+                      "broker.critical-ranks",
+                      ranks,
+                      FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+            log_err ("attr_add critical_ranks");
+            goto out;
+        }
+    }
+    else {
+        if (!(critical_ranks = idset_decode (val))
+            || idset_last (critical_ranks) >= overlay_get_size (ov)) {
+            log_msg ("invalid value for broker.critical-ranks='%s'", val);
+            goto out;
+        }
+        /*  Need to set immutable flag when attr set on command line
+         */
+        if (attr_set_flags (attrs,
+                            "broker.critical-ranks",
+                            FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+            log_err ("failed to make broker.criitcal-ranks attr immutable");
+            goto out;
+        }
+    }
+    rc = 0;
+out:
+    idset_destroy (critical_ranks);
+    free (ranks);
+    return rc;
 }
 
 static flux_future_t *set_uri_job_memo (flux_t *h,
