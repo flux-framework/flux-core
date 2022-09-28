@@ -47,6 +47,7 @@ struct job {
     const char *name;
     const char *queue;
     int ntasks;
+    int ntasks_per_core_on_node_count;  /* flag for ntasks calculation */
     double duration;
     int nnodes;
     char *ranks;
