@@ -312,6 +312,7 @@ dist_check_SCRIPTS = \
 	issues/t4413-empty-eventlog.sh \
 	issues/t4465-job-list-use-after-free.sh \
 	issues/t4482-flush-list-corruption.sh \
+	issues/t4612-eventlog-overwrite-crash.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
