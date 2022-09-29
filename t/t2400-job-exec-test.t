@@ -167,4 +167,22 @@ test_expect_success 'job-exec: flux job-exec-override fails for invalid userid' 
 	flux job cancel ${jobid} &&
 	flux job wait-event -t 5 -v ${jobid} clean
 '
+test_expect_success 'job-exec: critical-ranks RPC handles unexpected input' '
+	cat <<-EOF >critical-ranks.py &&
+	import sys
+	import flux
+	from flux.job import JobID
+	h = flux.Flux()
+	h.rpc("job-exec.critical-ranks",
+	      {"id": JobID(sys.argv[1]), "ranks": sys.argv[2]}).get()
+	EOF
+	test_must_fail flux python critical-ranks.py 1234 0-1 &&
+	id=$(flux mini submit --wait-event=start sleep 300) &&
+	test_must_fail flux python critical-ranks.py $id foo &&
+	newid=$(($(id -u)+1)) &&
+        ( export FLUX_HANDLE_ROLEMASK=0x2 &&
+          export FLUX_HANDLE_USERID=$newid &&
+            test_must_fail flux python critical-ranks.py $id 0
+        )
+'
 test_done
