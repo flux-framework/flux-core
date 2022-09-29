@@ -40,7 +40,7 @@ static struct optparse_option stop_opts[] = {
     { .name = "verbose", .key = 'v',
       .usage = "Display more detail about internal job manager state",
     },
-    { .name = "quiet", .key = 'q',
+    { .name = "quiet",
       .usage = "Display only errors",
     },
     OPTPARSE_TABLE_END
@@ -50,7 +50,7 @@ static struct optparse_option start_opts[] = {
     { .name = "verbose", .key = 'v',
       .usage = "Display more detail about internal job manager state",
     },
-    { .name = "quiet", .key = 'q',
+    { .name = "quiet",
       .usage = "Display only errors",
     },
     OPTPARSE_TABLE_END
@@ -74,7 +74,7 @@ static struct optparse_option idle_opts[] =  {
     { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
       .usage = "timeout after DURATION",
     },
-    { .name = "quiet", .key = 'q', .has_arg = 0,
+    { .name = "quiet", .has_arg = 0,
       .usage = "Only display pending job count if nonzero",
     },
     OPTPARSE_TABLE_END
