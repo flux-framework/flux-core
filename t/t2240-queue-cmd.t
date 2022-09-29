@@ -259,45 +259,32 @@ test_expect_success 'flux-queue: status allowed for guest' '
 
 test_expect_success 'flux-queue: stop denied for guest' '
 	test_must_fail runas_guest flux queue stop 2>guest_stop.err &&
-	cat <<-EOT >guest_alloc.exp &&
-	flux-queue: alloc-admin: Request requires owner credentials
-	EOT
-	test_cmp guest_alloc.exp guest_stop.err
+	grep "requires owner credentials" guest_stop.err
 '
 
 test_expect_success 'flux-queue: start denied for guest' '
 	test_must_fail runas_guest flux queue start 2>guest_start.err &&
-	test_cmp guest_alloc.exp guest_start.err
+	grep "requires owner credentials" guest_start.err
 '
 
 test_expect_success 'flux-queue: disable denied for guest' '
 	test_must_fail runas_guest flux queue disable foo 2>guest_dis.err &&
-	cat <<-EOT >guest_submit.exp &&
-	flux-queue: submit-admin: Request requires owner credentials
-	EOT
-	test_cmp guest_submit.exp guest_dis.err
+	grep "requires owner credentials" guest_dis.err
 '
 
 test_expect_success 'flux-queue: enable denied for guest' '
 	test_must_fail runas_guest flux queue enable 2>guest_ena.err &&
-	test_cmp guest_submit.exp guest_ena.err
+	grep "requires owner credentials" guest_ena.err
 '
 
 test_expect_success 'flux-queue: drain denied for guest' '
 	test_must_fail runas_guest flux queue drain 2>guest_drain.err &&
-	cat <<-EOT >guest_drain.exp &&
-	flux-queue: drain: Request requires owner credentials
-	EOT
-	test_cmp guest_drain.exp guest_drain.err
+	grep "requires owner credentials" guest_drain.err
 '
 
 test_expect_success 'flux-queue: idle denied for guest' '
 	test_must_fail runas_guest flux queue idle 2>guest_idle.err &&
-	cat <<-EOT >guest_idle.exp &&
-	flux-queue: idle: Request requires owner credentials
-	EOT
-	test_cmp guest_idle.exp guest_idle.err
+	grep "requires owner credentials" guest_idle.err
 '
-
 
 test_done
