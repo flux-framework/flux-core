@@ -349,6 +349,35 @@ class JobInfo:
             code = os.WEXITSTATUS(status)
         return code
 
+    @memoized_property
+    def contextual_info(self):
+        """
+        Generate contextual nodelist/reason information based on job state:
+         PRIORITY: returns "priority-wait"
+         DEPEND:   returns depends:dependencies list
+         SCHED:    returns eta:sched.t_estimate if available
+         RUN+:     returns assigned nodelist
+        """
+        # Required for pylint, o/w it thinks state is a callable:
+        state = str(self.state)
+        if state == "PRIORITY":
+            return "priority-wait"
+        if state == "DEPEND":
+            return f"depends:{self.dependencies}"
+        if state == "SCHED":
+            try:
+                eta = self.sched.t_estimate - time.time()
+                if eta < 0:
+                    eta = "now"
+                else:
+                    eta = fsd(eta)
+                return f"eta:{eta}"
+            except TypeError:
+                return ""
+        else:
+            return self.nodelist
+
+
 def job_fields_to_attrs(fields):
     # Note there is no attr for "id", it is always returned
     fields2attrs = {
@@ -393,6 +422,7 @@ def job_fields_to_attrs(fields):
         "t_remaining": ("expiration", "state", "result"),
         "annotations": ("annotations",),
         "dependencies": ("dependencies",),
+        "contextual_info": ("state", "dependencies", "annotations", "nodelist"),
         # Special cases, pointers to sub-dicts in annotations
         "sched": ("annotations",),
         "user": ("annotations",),
@@ -601,6 +631,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "exception.note": "EXCEPTION-NOTE",
         "annotations": "ANNOTATIONS",
         "dependencies": "DEPENDENCIES",
+        "contextual_info": "INFO",
         # The following are special pre-defined cases per RFC27
         "annotations.sched.t_estimate": "T_ESTIMATE",
         "annotations.sched.reason_pending": "REASON",
