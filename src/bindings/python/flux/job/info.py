@@ -349,6 +349,75 @@ class JobInfo:
             code = os.WEXITSTATUS(status)
         return code
 
+def job_fields_to_attrs(fields):
+    # Note there is no attr for "id", it is always returned
+    fields2attrs = {
+        "id": (),
+        "id.dec": (),
+        "id.hex": (),
+        "id.f58": (),
+        "id.kvs": (),
+        "id.words": (),
+        "id.dothex": (),
+        "userid": ("userid",),
+        "username": ("userid",),
+        "urgency": ("urgency",),
+        "priority": ("priority",),
+        "state": ("state",),
+        "state_single": ("state",),
+        "name": ("name",),
+        "queue": ("queue",),
+        "ntasks": ("ntasks",),
+        "duration": ("duration",),
+        "nnodes": ("nnodes",),
+        "ranks": ("ranks",),
+        "nodelist": ("nodelist",),
+        "success": ("success",),
+        "waitstatus": ("waitstatus",),
+        "returncode": ("waitstatus", "result"),
+        "exception.occurred": ("exception_occurred",),
+        "exception.severity": ("exception_severity",),
+        "exception.type": ("exception_type",),
+        "exception.note": ("exception_note",),
+        "result": ("result",),
+        "result_abbrev": ("result",),
+        "t_submit": ("t_submit",),
+        "t_depend": ("t_depend",),
+        "t_run": ("t_run",),
+        "t_cleanup": ("t_cleanup",),
+        "t_inactive": ("t_inactive",),
+        "runtime": ("t_run", "t_cleanup"),
+        "status": ("state", "result"),
+        "status_abbrev": ("state", "result"),
+        "expiration": ("expiration", "state", "result"),
+        "t_remaining": ("expiration", "state", "result"),
+        "annotations": ("annotations",),
+        "dependencies": ("dependencies",),
+        # Special cases, pointers to sub-dicts in annotations
+        "sched": ("annotations",),
+        "user": ("annotations",),
+        "uri": ("annotations",),
+        "uri.local": ("annotations",),
+    }
+
+    attrs = set()
+    for field in fields:
+        # Special case for annotations, can be arbitrary field names determined
+        # by scheduler/user.
+        if (
+            field.startswith("annotations.")
+            or field.startswith("sched.")
+            or field.startswith("user.")
+        ):
+            attrs.update(fields2attrs["annotations"])
+        elif field.startswith("instance."):
+            attrs.update(fields2attrs["annotations"])
+            attrs.update(fields2attrs["status"])
+        else:
+            attrs.update(fields2attrs[field])
+
+    return attrs
+
 
 def fsd(secs):
     #  Round <1ms down to 0s for now

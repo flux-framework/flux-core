@@ -17,7 +17,7 @@ import json
 import concurrent.futures
 
 import flux.constants
-from flux.job import JobInfo, JobInfoFormat, JobList
+from flux.job import JobInfo, JobInfoFormat, JobList, job_fields_to_attrs
 from flux.job import JobID
 from flux.job.stats import JobStats
 from flux.util import UtilConfig
@@ -132,86 +132,24 @@ def fetch_jobs_stdin():
     return jobs
 
 
+def need_instance_info(fields):
+    for field in fields:
+        if field.startswith("instance."):
+            return True
+    return False
+
+
 # pylint: disable=too-many-branches
 def fetch_jobs_flux(args, fields, flux_handle=None):
     if not flux_handle:
         flux_handle = flux.Flux()
 
-    # Note there is no attr for "id", its always returned
-    fields2attrs = {
-        "id": (),
-        "id.dec": (),
-        "id.hex": (),
-        "id.f58": (),
-        "id.kvs": (),
-        "id.words": (),
-        "id.dothex": (),
-        "userid": ("userid",),
-        "username": ("userid",),
-        "urgency": ("urgency",),
-        "priority": ("priority",),
-        "state": ("state",),
-        "state_single": ("state",),
-        "name": ("name",),
-        "queue": ("queue",),
-        "ntasks": ("ntasks",),
-        "duration": ("duration",),
-        "nnodes": ("nnodes",),
-        "ranks": ("ranks",),
-        "nodelist": ("nodelist",),
-        "success": ("success",),
-        "waitstatus": ("waitstatus",),
-        "returncode": ("waitstatus", "result"),
-        "exception.occurred": ("exception_occurred",),
-        "exception.severity": ("exception_severity",),
-        "exception.type": ("exception_type",),
-        "exception.note": ("exception_note",),
-        "result": ("result",),
-        "result_abbrev": ("result",),
-        "t_submit": ("t_submit",),
-        "t_depend": ("t_depend",),
-        "t_run": ("t_run",),
-        "t_cleanup": ("t_cleanup",),
-        "t_inactive": ("t_inactive",),
-        "runtime": ("t_run", "t_cleanup"),
-        "status": ("state", "result"),
-        "status_abbrev": ("state", "result"),
-        "expiration": ("expiration", "state", "result"),
-        "t_remaining": ("expiration", "state", "result"),
-        "annotations": ("annotations",),
-        "dependencies": ("dependencies",),
-        # Special cases, pointers to sub-dicts in annotations
-        "sched": ("annotations",),
-        "user": ("annotations",),
-        "uri": ("annotations",),
-        "uri.local": ("annotations",),
-    }
-
-    get_instance_info = False
-    attrs = set()
-    for field in fields:
-        # Special case for annotations, can be arbitrary field names determined
-        # by scheduler/user.
-        if (
-            field.startswith("annotations.")
-            or field.startswith("sched.")
-            or field.startswith("user.")
-        ):
-            attrs.update(fields2attrs["annotations"])
-        elif field.startswith("instance."):
-            get_instance_info = True
-            attrs.update(fields2attrs["annotations"])
-            attrs.update(fields2attrs["status"])
-        else:
-            attrs.update(fields2attrs[field])
+    attrs = job_fields_to_attrs(fields)
 
     if args.color == "always" or args.color == "auto":
-        attrs.update(fields2attrs["result"])
-        attrs.update(fields2attrs["annotations"])
+        attrs.update(job_fields_to_attrs(["result", "annotations"]))
     if args.recursive:
-        attrs.update(fields2attrs["annotations"])
-        attrs.update(fields2attrs["status"])
-        attrs.update(fields2attrs["userid"])
+        attrs.update(job_fields_to_attrs(["annotations", "status", "userid"]))
 
     if args.A:
         args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
@@ -252,7 +190,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
 
     jobs = jobs_rpc.jobs()
 
-    if get_instance_info:
+    if need_instance_info(fields):
         with concurrent.futures.ThreadPoolExecutor(args.threads) as executor:
             concurrent.futures.wait(
                 [executor.submit(job.get_instance_info) for job in jobs]
