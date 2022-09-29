@@ -59,6 +59,7 @@ static bool sched_disabled (flux_t *h)
                              "reason", ""))
         || flux_rpc_get_unpack (f, "{s:b}", "enable", &enable) < 0)
         log_err_exit ("Error fetching alloc status");
+    flux_future_destroy (f);
     return enable ? false : true;
 }
 
@@ -79,6 +80,7 @@ static bool submit_disabled (flux_t *h)
                              "reason", ""))
         || flux_rpc_get_unpack (f, "{s:b}", "enable", &enable) < 0)
         log_err_exit ("Error fetching submit status");
+    flux_future_destroy (f);
     return enable ? false : true;
 }
 
@@ -153,6 +155,7 @@ static double attr_get_starttime (flux_t *h)
     d = strtod (s, &endptr);
     if (errno != 0 || *endptr != '\0')
         log_msg_exit ("Error parsing %s", name);
+    flux_future_destroy (f);
     return d;
 }
 
