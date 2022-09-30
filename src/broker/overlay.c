@@ -36,6 +36,11 @@
 #include "overlay.h"
 #include "attr.h"
 
+/* How long to wait (seconds) for a peer broker's TCP ACK before disconnecting.
+ * This can be configured via TOML and on the broker command line.
+ */
+static const double default_tcp_user_timeout = 20.;
+
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers
 #endif
@@ -1813,6 +1818,14 @@ static int overlay_configure_tcp_user_timeout (struct overlay *ov)
 {
     const flux_conf_t *cf;
     const char *fsd = NULL;
+    bool override = false;
+#ifdef ZMQ_TCP_MAXRT
+    bool have_tcp_maxrt = true;
+#else
+    bool have_tcp_maxrt = false;
+#endif
+
+    ov->tcp_user_timeout = default_tcp_user_timeout;
 
     if ((cf = flux_get_conf (ov->h))) {
         flux_error_t error;
@@ -1831,6 +1844,7 @@ static int overlay_configure_tcp_user_timeout (struct overlay *ov)
                 log_msg ("Config file error parsing tbon.tcp_user_timeout");
                 return -1;
             }
+            override = true;
         }
     }
 
@@ -1844,22 +1858,25 @@ static int overlay_configure_tcp_user_timeout (struct overlay *ov)
         }
         if (attr_delete (ov->attrs, "tbon.tcp_user_timeout", true) < 0)
             return -1;
+        override = true;
     }
-#ifdef ZMQ_TCP_MAXRT
-    char buf[64];
-    if (fsd_format_duration (buf, sizeof (buf), ov->tcp_user_timeout) < 0)
-        return -1;
-    if (attr_add (ov->attrs,
-                  "tbon.tcp_user_timeout",
-                  buf,
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        return -1;
-#else
-    if (ov->tcp_user_timeout != 0) {
-        log_msg ("tbon.tcp_user_timeout unsupported by this zeromq version");
-        return -1;
+    if (have_tcp_maxrt) {
+        char buf[64];
+        if (fsd_format_duration (buf, sizeof (buf), ov->tcp_user_timeout) < 0)
+            return -1;
+        if (attr_add (ov->attrs,
+                      "tbon.tcp_user_timeout",
+                      buf,
+                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            return -1;
     }
-#endif
+    else {
+        if (override) {
+            log_msg ("tbon.tcp_user_timeout unsupported by this zeromq "
+                     "version");
+            return -1;
+        }
+    }
     return 0;
 }
 
