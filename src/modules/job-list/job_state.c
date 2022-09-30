@@ -74,7 +74,7 @@ static int memo_update (flux_t *h,
                         struct job *job,
                         json_t *context);
 
-static void process_next_state (struct list_ctx *ctx, struct job *job);
+static void process_next_state (struct job_state_ctx *jsctx, struct job *job);
 
 static int journal_process_events (struct job_state_ctx *jsctx,
                                    const flux_msg_t *msg);
@@ -134,12 +134,12 @@ static bool search_direction (struct job *job)
         return false;
 }
 
-static void update_job_state (struct list_ctx *ctx,
+static void update_job_state (struct job_state_ctx *jsctx,
                               struct job *job,
                               flux_job_state_t new_state,
                               double timestamp)
 {
-    job_stats_update (&ctx->jsctx->stats, job, new_state);
+    job_stats_update (&jsctx->stats, job, new_state);
 
     job->state = new_state;
     if (job->state == FLUX_JOB_STATE_DEPEND)
@@ -153,7 +153,7 @@ static void update_job_state (struct list_ctx *ctx,
     job->states_mask |= job->state;
 }
 
-static void revert_job_state (struct list_ctx *ctx,
+static void revert_job_state (struct job_state_ctx *jsctx,
                               struct job *job,
                               double timestamp)
 {
@@ -164,7 +164,7 @@ static void revert_job_state (struct list_ctx *ctx,
      */
     if (job->state == FLUX_JOB_STATE_SCHED) {
         job->states_mask &= ~(job->state);
-        update_job_state (ctx, job, FLUX_JOB_STATE_PRIORITY, timestamp);
+        update_job_state (jsctx, job, FLUX_JOB_STATE_PRIORITY, timestamp);
     }
 }
 
@@ -228,13 +228,12 @@ static zlistx_t *get_list (struct job_state_ctx *jsctx, flux_job_state_t state)
         return jsctx->inactive;
 }
 
-static void update_job_state_and_list (struct list_ctx *ctx,
+static void update_job_state_and_list (struct job_state_ctx *jsctx,
                                        struct job *job,
                                        flux_job_state_t newstate,
                                        double timestamp)
 {
     zlistx_t *oldlist, *newlist;
-    struct job_state_ctx *jsctx = ctx->jsctx;
 
     oldlist = get_list (jsctx, job->state);
     newlist = get_list (jsctx, newstate);
@@ -242,7 +241,7 @@ static void update_job_state_and_list (struct list_ctx *ctx,
     /* must call before job_change_list(), to ensure timestamps are
      * set before any sorting based on timestamps are done
      */
-    update_job_state (ctx, job, newstate, timestamp);
+    update_job_state (jsctx, job, newstate, timestamp);
 
     /* when FLUX_JOB_STATE_SCHED is reached, the queue priority has
      * been determined, meaning we can now sort the job on the pending
@@ -313,10 +312,10 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
 
     st = zlist_head (job->next_states);
     assert (st);
-    update_job_state_and_list (ctx, job, st->state, st->timestamp);
+    update_job_state_and_list (ctx->jsctx, job, st->state, st->timestamp);
     check_waiting_id (ctx, job);
     zlist_remove (job->next_states, st);
-    process_next_state (ctx, job);
+    process_next_state (ctx->jsctx, job);
 
 out:
     handle = zlistx_find (ctx->jsctx->futures, f);
@@ -373,9 +372,9 @@ static void state_run_lookup_continuation (flux_future_t *f, void *arg)
 
     st = zlist_head (job->next_states);
     assert (st);
-    update_job_state_and_list (ctx, job, st->state, st->timestamp);
+    update_job_state_and_list (ctx->jsctx, job, st->state, st->timestamp);
     zlist_remove (job->next_states, st);
-    process_next_state (ctx, job);
+    process_next_state (ctx->jsctx, job);
 
 out:
     handle = zlistx_find (ctx->jsctx->futures, f);
@@ -472,10 +471,9 @@ static int add_state_transition (struct job *job,
     return -1;
 }
 
-static void process_next_state (struct list_ctx *ctx, struct job *job)
+static void process_next_state (struct job_state_ctx *jsctx, struct job *job)
 {
     struct state_transition *st;
-    struct job_state_ctx *jsctx = ctx->jsctx;
 
     while ((st = zlist_head (job->next_states))
            && !st->processed) {
@@ -485,7 +483,7 @@ static void process_next_state (struct list_ctx *ctx, struct job *job)
             if (job->state == st->expected_state) {
                 job->states_mask &= ~job->state;
                 job->states_mask &= ~st->state;
-                update_job_state_and_list (ctx, job, st->state, st->timestamp);
+                update_job_state_and_list (jsctx, job, st->state, st->timestamp);
             }
             else {
                 zlist_remove (job->next_states, st);
@@ -539,7 +537,7 @@ static void process_next_state (struct list_ctx *ctx, struct job *job)
             if (st->state == FLUX_JOB_STATE_INACTIVE)
                 eventlog_inactive_complete (job);
 
-            update_job_state_and_list (ctx, job, st->state, st->timestamp);
+            update_job_state_and_list (jsctx, job, st->state, st->timestamp);
             zlist_remove (job->next_states, st);
         }
     }
@@ -584,6 +582,7 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
                                            const char *eventlog,
                                            flux_jobid_t id)
 {
+    struct job_state_ctx *jsctx = ctx->jsctx;
     struct job *job = NULL;
     json_t *a = NULL;
     size_t index;
@@ -615,16 +614,16 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
                 goto error;
         }
         else if (!strcmp (name, "validate")) {
-            update_job_state (ctx, job, FLUX_JOB_STATE_DEPEND, timestamp);
+            update_job_state (jsctx, job, FLUX_JOB_STATE_DEPEND, timestamp);
         }
         else if (!strcmp (name, "depend")) {
-            update_job_state (ctx, job, FLUX_JOB_STATE_PRIORITY, timestamp);
+            update_job_state (jsctx, job, FLUX_JOB_STATE_PRIORITY, timestamp);
         }
         else if (!strcmp (name, "priority")) {
             if (priority_context_parse (ctx->h, job, context) < 0)
                 goto error;
             if (job->state == FLUX_JOB_STATE_PRIORITY)
-                update_job_state (ctx, job, FLUX_JOB_STATE_SCHED, timestamp);
+                update_job_state (jsctx, job, FLUX_JOB_STATE_SCHED, timestamp);
         }
         else if (!strcmp (name, "urgency")) {
             if (urgency_context_parse (ctx->h, job, context) < 0)
@@ -635,7 +634,7 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
             if (exception_context_parse (ctx->h, job, context, &severity) < 0)
                 goto error;
             if (severity == 0)
-                update_job_state (ctx, job, FLUX_JOB_STATE_CLEANUP, timestamp);
+                update_job_state (jsctx, job, FLUX_JOB_STATE_CLEANUP, timestamp);
         }
         else if (!strcmp (name, "alloc")) {
             /* context not required if no annotations */
@@ -653,19 +652,19 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
             }
 
             if (job->state == FLUX_JOB_STATE_SCHED)
-                update_job_state (ctx, job, FLUX_JOB_STATE_RUN, timestamp);
+                update_job_state (jsctx, job, FLUX_JOB_STATE_RUN, timestamp);
         }
         else if (!strcmp (name, "finish")) {
             if (finish_context_parse (ctx->h, job, context) < 0)
                 goto error;
             if (job->state == FLUX_JOB_STATE_RUN)
-                update_job_state (ctx, job, FLUX_JOB_STATE_CLEANUP, timestamp);
+                update_job_state (jsctx, job, FLUX_JOB_STATE_CLEANUP, timestamp);
         }
         else if (!strcmp (name, "clean")) {
-            update_job_state (ctx, job, FLUX_JOB_STATE_INACTIVE, timestamp);
+            update_job_state (jsctx, job, FLUX_JOB_STATE_INACTIVE, timestamp);
         }
         else if (!strcmp (name, "flux-restart")) {
-            revert_job_state (ctx, job, timestamp);
+            revert_job_state (jsctx, job, timestamp);
         }
         else if (!strncmp (name, "dependency-", 11)) {
             if (dependency_context_parse (ctx->h, job, name+11, context) < 0)
@@ -899,7 +898,7 @@ static int job_transition_state (struct job_state_ctx *jsctx,
                         __FUNCTION__);
         return -1;
     }
-    process_next_state (jsctx->ctx, job);
+    process_next_state (jsctx, job);
     return 0;
 }
 
