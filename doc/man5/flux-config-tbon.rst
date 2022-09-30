@@ -35,10 +35,9 @@ tcp_user_timeout
    a broker waits for a TBON child connection to acknowledge transmitted TCP
    data before forcibly closing the connection.  A value of 0 means use the
    system default.  This value affects how Flux responds to an abruptly turned
-   off node, which could take up to 20m if this value is not set.  This
-   configured value may be overridden by setting the ``tbon.tcp_user_timeout``
-   broker attribute.  See also: :linux:man7:`tcp`, TCP_USER_TIMEOUT socket
-   option.
+   off node.  The configured value may be overridden by setting the
+   ``tbon.tcp_user_timeout`` broker attribute.  See also: :linux:man7:`tcp`,
+   TCP_USER_TIMEOUT socket option.  Default: 20s.
 
 zmqdebug
    (optional) Integer value indicating whether ZeroMQ socket debug logging
