@@ -69,7 +69,7 @@ struct idsync_data *idsync_data_create (struct list_ctx *ctx,
     return NULL;
 }
 
-void idsync_waits_list_destroy (void **data)
+static void idsync_waits_list_destroy (void **data)
 {
     if (data)
         zlistx_destroy ((zlistx_t **) data);
