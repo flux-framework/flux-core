@@ -152,7 +152,8 @@ following is the format used for the default format:
 ::
 
    {id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10} \
-   {status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} {runtime!F:>8h} {nodelist:h}
+   {status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} {runtime!F:>8h} \
+   {contextual_info}
 
 If a format field is preceded by the special string ``?:`` this will
 cause the field to be removed entirely from output if the result would
@@ -381,6 +382,17 @@ include:
    number of cores, gpus in state ``state``, where ``state`` can be
    ``all``, ``up``, ``down``, ``allocated``, or ``free``, e.g.
    ``{instance.resources.all.ncores}``
+
+The following fields may return different information depending on
+the state of the job or other context:
+
+**contextual_info**
+   Returns selected information based on the job's current state.  If the
+   job is in PRIORITY state, then the string ``priority-wait`` is returned,
+   if the job is in DEPEND state, then a list of outstanding  dependencies
+   is returned, if the job is in SCHED state then an estimated time the
+   job will run is returned (if the scheduler supports it). Otherwise,
+   the assigned nodelist is returned (if resources were assigned).
 
 
 CONFIGURATION
