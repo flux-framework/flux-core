@@ -14,7 +14,6 @@
 #include <flux/core.h>
 
 #include "job-list.h"
-#include "job_state.h"
 
 struct idsync_data {
     struct list_ctx *ctx;
