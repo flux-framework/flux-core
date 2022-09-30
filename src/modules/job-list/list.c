@@ -274,19 +274,19 @@ int wait_id_valid (struct list_ctx *ctx, struct idsync_data *isd)
      * could wait on same id */
     if (!(list_isd = zhashx_lookup (ctx->idsync_waits, &isd->id))) {
         if (!(list_isd = zlistx_new ())) {
-            flux_log_error (isd->ctx->h, "%s: zlistx_new", __FUNCTION__);
+            flux_log_error (ctx->h, "%s: zlistx_new", __FUNCTION__);
             goto error_destroy;
         }
         zlistx_set_destructor (list_isd, idsync_data_destroy_wrapper);
 
         if (zhashx_insert (ctx->idsync_waits, &isd->id, list_isd) < 0) {
-            flux_log_error (isd->ctx->h, "%s: zhashx_insert", __FUNCTION__);
+            flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
             goto error_destroy;
         }
     }
 
     if (!zlistx_add_end (list_isd, isd)) {
-        flux_log_error (isd->ctx->h, "%s: zlistx_add_end", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: zlistx_add_end", __FUNCTION__);
         goto error_destroy;
     }
 
