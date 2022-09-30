@@ -3,7 +3,9 @@ test_description='Test flux queue command'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1
+mkdir -p conf.d
+
+test_under_flux 1 full -o,--config-path=$(pwd)/conf.d
 
 flux setattr log-stderr-level 1
 
@@ -285,6 +287,81 @@ test_expect_success 'flux-queue: drain denied for guest' '
 test_expect_success 'flux-queue: idle denied for guest' '
 	test_must_fail runas_guest flux queue idle 2>guest_idle.err &&
 	grep "requires owner credentials" guest_idle.err
+'
+
+#
+# Test support for named queues
+#
+
+test_expect_success 'flux queue status --queue fails with no queues' '
+	test_must_fail flux queue status --queue=batch
+'
+test_expect_success 'flux queue enable --queue fails with no queues' '
+	test_must_fail flux queue enable --queue=batch
+'
+test_expect_success 'ensure instance is drained' '
+	flux queue drain &&
+	flux queue status -v
+'
+test_expect_success 'configure batch,debug queues' '
+	cat >conf.d/config.toml <<-EOT &&
+	[queues.batch]
+	[queues.debug]
+	EOT
+	flux config reload
+'
+test_expect_success 'jobs may be submitted to either queue' '
+	flux mini submit -q batch /bin/true &&
+	flux mini submit -q debug /bin/true
+'
+test_expect_success 'flux-queue status reports all queues' '
+	flux queue status >mqstatus.out &&
+	grep batch mqstatus.out &&
+	grep debug mqstatus.out
+'
+test_expect_success 'flux-queue status can show one queue' '
+	flux queue status -q debug >mqstatus_debug.out &&
+	test_must_fail grep batch mqstatus_debug.out
+'
+test_expect_success 'flux-queue disable without --queue or --all fails' '
+	test_must_fail flux queue disable test reasons
+'
+test_expect_success 'flux-queue disable --all affects all queues' '
+	flux queue disable --all test reasons &&
+	flux queue status >mqstatus_dis.out &&
+	test $(grep -c "submission is disabled" mqstatus_dis.out) -eq 2
+'
+test_expect_success 'jobs may not be submitted to either queue' '
+	test_must_fail flux mini submit -q batch /bin/true &&
+	test_must_fail flux mini submit -q debug /bin/true
+'
+test_expect_success 'flux-queue enable without --queue or --all fails' '
+	test_must_fail flux queue enable
+'
+test_expect_success 'flux-queue enable --all affects all queues' '
+	flux queue enable -a &&
+	flux queue status >mqstatus_ena.out &&
+	test $(grep -c "submission is enabled" mqstatus_ena.out) -eq 2
+'
+test_expect_success 'flux-queue disable can do one queue' '
+	flux queue disable -q batch nobatch &&
+	flux queue status >mqstatus_batchdis.out &&
+	test $(grep -c "submission is enabled" mqstatus_batchdis.out) -eq 1 &&
+	test_must_fail flux mini submit -q batch /bin/true &&
+	flux mini submit -q debug /bin/true
+'
+test_expect_success 'flux-queue enable can do one queue' '
+	flux queue enable -q batch &&
+	flux queue status >mqstatus_batchena.out &&
+	test $(grep -c "submission is enabled" mqstatus_batchena.out) -eq 2 &&
+	flux mini submit -q batch /bin/true &&
+	flux mini submit -q debug /bin/true
+'
+test_expect_success 'flux-queue enable fails on unknown queue' '
+	test_must_fail flux queue enable -q notaqueue
+'
+test_expect_success 'flux-queue status fails on unknown queue' '
+	test_must_fail flux queue status -q notaqueue
 '
 
 test_done
