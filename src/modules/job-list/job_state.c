@@ -282,14 +282,14 @@ static void check_waiting_id (struct list_ctx *ctx,
 {
     zlistx_t *list_isd;
 
-    if ((list_isd = zhashx_lookup (ctx->idsync_waits, &job->id))) {
+    if ((list_isd = zhashx_lookup (ctx->isctx->waits, &job->id))) {
         struct idsync_data *isd;
         isd = zlistx_first (list_isd);
         while (isd) {
             list_id_respond (ctx, isd, job);
             isd = zlistx_next (list_isd);
         }
-        zhashx_delete (ctx->idsync_waits, &job->id);
+        zhashx_delete (ctx->isctx->waits, &job->id);
     }
 }
 
@@ -1325,7 +1325,7 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
         }
         zhashx_delete (jsctx->index, &job->id);
         /* N.B. since invalid job ids are not released to the submitter, there
-         * should be no pending ctx->idsync_lookups requests to clean up here.
+         * should be no pending ctx->isctx->lookups requests to clean up here.
          * A test in t2212-job-manager-plugins.t does query invalid ids, but
          * it is careful to ensure that it does so only _after_ the invalidate
          * event has been processed here.

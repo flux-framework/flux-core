@@ -75,31 +75,53 @@ static void idsync_waits_list_destroy (void **data)
         zlistx_destroy ((zlistx_t **) data);
 }
 
-int idsync_setup (struct list_ctx *ctx)
+struct idsync_ctx *idsync_ctx_create (flux_t *h)
 {
-    if (!(ctx->idsync_lookups = zlistx_new ()))
-        return -1;
-    zlistx_set_destructor (ctx->idsync_lookups, idsync_data_destroy_wrapper);
-    if (!(ctx->idsync_waits = job_hash_create ()))
-        return -1;
-    zhashx_set_destructor (ctx->idsync_waits, idsync_waits_list_destroy);
-    return 0;
+    struct idsync_ctx *isctx = NULL;
+    int saved_errno;
+
+    if (!(isctx = calloc (1, sizeof (*isctx)))) {
+        flux_log_error (h, "calloc");
+        return NULL;
+    }
+    isctx->h = h;
+
+    if (!(isctx->lookups = zlistx_new ()))
+        goto error;
+
+    zlistx_set_destructor (isctx->lookups, idsync_data_destroy_wrapper);
+
+    if (!(isctx->waits = job_hash_create ()))
+        goto error;
+
+    zhashx_set_destructor (isctx->waits, idsync_waits_list_destroy);
+
+    return isctx;
+
+error:
+    saved_errno = errno;
+    idsync_ctx_destroy (isctx);
+    errno = saved_errno;
+    return NULL;
 }
 
-void idsync_cleanup (struct list_ctx *ctx)
+void idsync_ctx_destroy (struct idsync_ctx *isctx)
 {
-    struct idsync_data *isd;
-    isd = zlistx_first (ctx->idsync_lookups);
-    while (isd) {
-        if (isd->f_lookup) {
-            if (flux_future_get (isd->f_lookup, NULL) < 0)
-                flux_log_error (ctx->h, "%s: flux_future_get",
-                                __FUNCTION__);
+    if (isctx) {
+        struct idsync_data *isd;
+        isd = zlistx_first (isctx->lookups);
+        while (isd) {
+            if (isd->f_lookup) {
+                if (flux_future_get (isd->f_lookup, NULL) < 0)
+                    flux_log_error (isctx->h, "%s: flux_future_get",
+                                    __FUNCTION__);
+            }
+            isd = zlistx_next (isctx->lookups);
         }
-        isd = zlistx_next (ctx->idsync_lookups);
+        zlistx_destroy (&isctx->lookups);
+        zhashx_destroy (&isctx->waits);
+        free (isctx);
     }
-    zlistx_destroy (&ctx->idsync_lookups);
-    zhashx_destroy (&ctx->idsync_waits);
 }
 
 /*
