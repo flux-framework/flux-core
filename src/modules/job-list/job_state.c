@@ -414,8 +414,7 @@ static flux_future_t *state_run_lookup (struct job_state_ctx *jsctx,
 }
 
 /* calculate any remaining fields */
-static void eventlog_inactive_complete (struct list_ctx *ctx,
-                                        struct job *job)
+static void eventlog_inactive_complete (struct job *job)
 {
     /* Default result is failed, overridden below */
     if (job->success)
@@ -538,7 +537,7 @@ static void process_next_state (struct list_ctx *ctx, struct job *job)
             /* FLUX_JOB_STATE_INACTIVE */
 
             if (st->state == FLUX_JOB_STATE_INACTIVE)
-                eventlog_inactive_complete (ctx, job);
+                eventlog_inactive_complete (job);
 
             update_job_state_and_list (ctx, job, st->state, st->timestamp);
             zlist_remove (job->next_states, st);
@@ -761,7 +760,7 @@ static int depthfirst_map_one (struct list_ctx *ctx, const char *key,
     }
 
     if (job->states_mask & FLUX_JOB_STATE_INACTIVE)
-        eventlog_inactive_complete (ctx, job);
+        eventlog_inactive_complete (job);
 
     if (zhashx_insert (ctx->jsctx->index, &job->id, job) < 0) {
         flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
