@@ -445,7 +445,11 @@ def print_jobs(jobs, args, formatter, path="", level=0):
 
     for job in jobs:
         color_set = color_setup(args, job)
-        print(formatter.format(job))
+        line = formatter.format(job)
+        try:
+            print(line)
+        except UnicodeEncodeError:
+            print(line.encode("utf-8", errors="surrogateescape").decode())
         color_reset(color_set)
         if args.recursive and is_user_instance(job, args):
             children.append(job)
