@@ -19,6 +19,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/librlist/rlist.h"
+#include "src/common/librlist/rnode.h"
 #include "src/common/libccan/ccan/str/str.h"
 #include "src/common/libjob/jj.h"
 
@@ -220,6 +221,19 @@ static int parse_jobspec_ntasks (struct job *job, struct jj_counts *jj)
             job->ntasks = jj->nnodes * count;
             return 0;
         }
+        if (streq (type, "core")) {
+            if (jj->nnodes == 0)
+                job->ntasks = jj->nslots * jj->slot_size * count;
+            else {
+                /* if nnodes > 0, can't determine until nodes
+                 * allocated and number of cores on node(s) are known.
+                 * Set a flag / count to retrieve data later when
+                 * R has been retrieved.
+                 */
+                job->ntasks_per_core_on_node_count = count;
+            }
+            return 0;
+        }
     }
 
     job->ntasks = jj->nslots;
@@ -349,6 +363,16 @@ int job_parse_R (struct job *job, const char *s)
 
     if (!(job->nodelist = hostlist_encode (hl)))
         goto nonfatal_error;
+
+    if (job->ntasks_per_core_on_node_count > 0) {
+        int core_count = 0;
+        struct rnode *rnode = zlistx_first (rl->nodes);
+        while (rnode) {
+            core_count += idset_count (rnode->cores->ids);
+            rnode = zlistx_next (rl->nodes);
+        }
+        job->ntasks = core_count * job->ntasks_per_core_on_node_count;
+    }
 
     /* nonfatal error - invalid R, but we'll continue on.  job listing
      * will get initialized data */
