@@ -14,6 +14,8 @@
 #include <flux/core.h> /* FLUX_JOB_NR_STATES */
 #include <jansson.h>
 
+#include "job_data.h"
+
 struct job_stats {
     unsigned int state_count[FLUX_JOB_NR_STATES];
     unsigned int failed;
@@ -21,10 +23,6 @@ struct job_stats {
     unsigned int canceled;
 };
 
-/* Forward declaration of struct job to avoid circular header file
- *  dependemncy.
- */
-struct job;
 void job_stats_update (struct job_stats *stats,
                        struct job *job,
                        flux_job_state_t newstate);
