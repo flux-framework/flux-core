@@ -36,13 +36,11 @@ def resulttostr(resultid, fmt="L"):
     return raw.flux_job_resulttostr(resultid, fmt).decode("utf-8")
 
 
-# Status is the job state when pending/running (i.e. not inactive)
-# status is the result when inactive
 def statustostr(stateid, resultid, fmt="L"):
-    if (stateid & flux.constants.FLUX_JOB_STATE_PENDING) or (
-        stateid & flux.constants.FLUX_JOB_STATE_RUNNING
-    ):
-        statusstr = statetostr(stateid, fmt)
+    if stateid & flux.constants.FLUX_JOB_STATE_PENDING:
+        statusstr = "PD" if fmt == "S" else "PENDING"
+    elif stateid & flux.constants.FLUX_JOB_STATE_RUNNING:
+        statusstr = "R" if fmt == "S" else "RUNNING"
     else:  # flux.constants.FLUX_JOB_STATE_INACTIVE
         statusstr = resulttostr(resultid, fmt)
     return statusstr
@@ -97,10 +95,7 @@ class AnnotationsInfo:
     def __init__(self, annotationsDict):
         self.annotationsDict = annotationsDict
         self.atuple = namedtuple("X", annotationsDict.keys())(
-            *(
-                AnnotationsInfo(v) if isinstance(v, dict) else v
-                for v in annotationsDict.values()
-            )
+            *(AnnotationsInfo(v) if isinstance(v, dict) else v for v in annotationsDict.values())
         )
 
     def __repr__(self):
@@ -125,10 +120,7 @@ class StatsInfo(JobStats):
         super().__init__(handle)
 
     def __repr__(self):
-        return (
-            f"PD:{self.pending} R:{self.running} "
-            f"CD:{self.successful} F:{self.failed}"
-        )
+        return f"PD:{self.pending} R:{self.running} " f"CD:{self.successful} F:{self.failed}"
 
     def __format__(self, fmt):
         return str(self).__format__(fmt)
@@ -200,10 +192,8 @@ class JobInfo:
         "t_run": 0.0,
         "t_cleanup": 0.0,
         "t_inactive": 0.0,
-        "duration": 0.0,
         "expiration": 0.0,
         "name": "",
-        "queue": "",
         "ntasks": "",
         "nnodes": "",
         "priority": "",
@@ -280,7 +270,7 @@ class JobInfo:
 
     def get_remaining_time(self):
         status = str(self.status)
-        if status != "RUN":
+        if status != "RUNNING":
             return 0.0
         tleft = self.expiration - time.time()
         if tleft < 0.0:
@@ -367,31 +357,6 @@ def fsd(secs):
     return strtmp
 
 
-class JobDatetime(datetime):
-    """
-    Subclass of datetime but with a __format__ method that supports
-    width and alignment specification after any time formatting via
-    two colons `::` before the Python format spec, e.g::
-
-    >>> "{0:%b%d %R::>16}".format(JobDatetime.now())
-    '     Sep21 18:36'
-    """
-
-    def __format__(self, fmt):
-        # The string "::" is used to split the strftime() fromat from
-        # any Python format spec:
-        vals = fmt.split("::", 1)
-
-        # Call strftime() to get the formatted datetime as a string
-        result = self.strftime(vals[0])
-
-        # If there was a format spec, apply it here:
-        try:
-            return f"{{0:{vals[1]}}}".format(result)
-        except IndexError:
-            return result
-
-
 class JobInfoFormat(flux.util.OutputFormat):
     """
     Store a parsed version of an output format string for JobInfo objects,
@@ -414,10 +379,10 @@ class JobInfoFormat(flux.util.OutputFormat):
                 # User can than use datetime specific format fields, e.g.
                 # {t_inactive!d:%H:%M:%S}.
                 try:
-                    value = JobDatetime.fromtimestamp(value)
+                    value = datetime.fromtimestamp(value)
                 except TypeError:
                     if orig_value == "":
-                        value = JobDatetime.fromtimestamp(0.0)
+                        value = datetime.fromtimestamp(0.0)
                     else:
                         raise
             elif conv == "D":
@@ -505,9 +470,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "state": "STATE",
         "state_single": "S",
         "name": "NAME",
-        "queue": "QUEUE",
         "ntasks": "NTASKS",
-        "duration": "DURATION",
         "nnodes": "NNODES",
         "expiration": "EXPIRATION",
         "t_remaining": "T_REMAINING",
@@ -604,58 +567,3 @@ class JobInfoFormat(flux.util.OutputFormat):
         format header with custom HeaderFormatter
         """
         return self.HeaderFormatter().format(self.header_format(), **self.headings)
-
-    def filter_empty(self, items):
-        """
-        Check for format fields that are prefixed with `?:` (e.g. "?:{name}")
-        and filter them out of the current format string if they result in an
-        empty string for every entry in `items`.
-        """
-        #  Build a list of all format strings that have the collapsible
-        #  sentinel '?:' to determine which are subject to the test for
-        #  emptiness.
-        #
-        #  Note: we remove the leading `text` and the format `spec` because
-        #  these may make even empty formatted fields non-empty. E.g. a spec
-        #  of `:>8` will always make the format result 8 characters wide.
-        #
-        lst = []
-        index = 0
-        for (text, field, _, conv) in self.format_list:
-            if text.endswith("?:"):
-                fmt = self._fmt_tuple("", "0." + field, None, conv)
-                lst.append(dict(fmt=fmt, index=index))
-            index = index + 1
-
-        # Return immediately if no format fields are collapsible
-        if not lst:
-            return self
-
-        formatter = self.JobFormatter()
-
-        #  Iterate over all items, rebuilding lst each time to contain
-        #  only those fields that resulted in nonzero strings:
-        for item in items:
-            lst = [x for x in lst if not formatter.format(x["fmt"], item)]
-
-            #  If lst is now empty, that means all fields already returned
-            #  nonzero strings, so we can break early
-            if not lst:
-                break
-
-        #  Remove any entries that were empty from self.format_list
-        #  (use index field of lst to remove by postition in self.format_list)
-        format_list = [
-            x
-            for i, x in enumerate(self.format_list)
-            if i not in [x["index"] for x in lst]
-        ]
-
-        #  Remove "?:" from remaining entries so they disappear in ouput.
-        for entry in format_list:
-            if entry[0].endswith("?:"):
-                entry[0] = entry[0][:-2]
-
-        #  Return new format string created from pruned format_list
-        fmt = "".join(self._fmt_tuple(*x) for x in format_list)
-        return JobInfoFormat(fmt)

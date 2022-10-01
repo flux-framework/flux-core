@@ -61,9 +61,7 @@ class ErrorPrinter(object):
         if not any([re.search("^" + x, self.name) for x in self.prefixes]):
             c_name = self.prefixes[0] + self.name
 
-        raise MissingFunctionError(
-            self.name, c_name, [p + self.name for p in self.prefixes], args
-        )
+        raise MissingFunctionError(self.name, c_name, [p + self.name for p in self.prefixes], args)
 
 
 # A do-nothing class for checking for composition-based wrappers that offer a
@@ -200,9 +198,8 @@ class FunctionWrapper(object):
         if result == calling_object.ffi.NULL:
             result = None
 
-        elif (
-            result is not None
-            and self.function_type.result is calling_object.ffi.typeof("char *")
+        elif result is not None and self.function_type.result is calling_object.ffi.typeof(
+            "char *"
         ):
             result = calling_object.ffi.string(result)
 
@@ -280,9 +277,7 @@ signatures do not match, create a new subclass to change matching parameters:
                     raise AttributeError(
                         "Flux Wrapper object "
                         + str(self)
-                        + "masks function {} type: {} match: {}".format(
-                            name, fun_type, self.match
-                        )
+                        + "masks function {} type: {} match: {}".format(name, fun_type, self.match)
                     )
         return False
 
@@ -369,14 +364,12 @@ signatures do not match, create a new subclass to change matching parameters:
 
     @handle.setter
     def handle(self, h):
-        """ Override handle setter to clean up old handle if requested """
+        """Override handle setter to clean up old handle if requested"""
         if h is not None and self.match is not None:
             if self.ffi.typeof(h) != self.match:
                 raise TypeError(
                     "Invalid handle {} of type {} assigned to "
-                    "wrapper with handle type {}".format(
-                        h, self.ffi.typeof(h), self.match
-                    )
+                    "wrapper with handle type {}".format(h, self.ffi.typeof(h), self.match)
                 )
         if self._handle is not None:
             self._clear()

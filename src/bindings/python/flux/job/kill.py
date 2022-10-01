@@ -17,9 +17,7 @@ from flux.job.JobID import JobID  # for typing
 from _flux._core import ffi
 
 
-def kill_async(
-    flux_handle: Flux, jobid: Union[JobID, int], signum: Optional[int] = None
-):
+def kill_async(flux_handle: Flux, jobid: Union[JobID, int], signum: Optional[int] = None):
     """Send a signal to a running job asynchronously
 
     :param flux_handle: handle for Flux broker from flux.Flux()
@@ -45,9 +43,7 @@ def kill(flux_handle: Flux, jobid: Union[JobID, int], signum: Optional[int] = No
     return kill_async(flux_handle, jobid, signum).get()
 
 
-def cancel_async(
-    flux_handle: Flux, jobid: Union[JobID, int], reason: Optional[str] = None
-):
+def cancel_async(flux_handle: Flux, jobid: Union[JobID, int], reason: Optional[str] = None):
     """Cancel a pending or or running job asynchronously
 
     Arguments:

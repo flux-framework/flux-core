@@ -137,9 +137,7 @@ class Future(WrapperPimpl):
 
     def then(self, callback, *args, timeout=-1.0, **kwargs):
         if self in _THEN_HANDLES:
-            raise EnvironmentError(
-                errno.EEXIST, "then callback already exists for this future"
-            )
+            raise EnvironmentError(errno.EEXIST, "then callback already exists for this future")
         if callback is None:
             raise ValueError("Callback cannot be None")
 

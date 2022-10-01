@@ -199,7 +199,7 @@ class Flux(Wrapper):
         return None
 
     def rpc(self, topic, payload=None, nodeid=raw.FLUX_NODEID_ANY, flags=0):
-        """ Create a new RPC object """
+        """Create a new RPC object"""
         return RPC(self, topic, payload, nodeid, flags)
 
     def event_create(self, topic, payload=None):
@@ -213,7 +213,7 @@ class Flux(Wrapper):
         return Message.from_event_encode(topic, payload)
 
     def event_send(self, topic, payload=None):
-        """ Create and send a new event in one step """
+        """Create and send a new event in one step"""
         return self.send(self.event_create(topic, payload))
 
     def event_recv(self, topic=None):

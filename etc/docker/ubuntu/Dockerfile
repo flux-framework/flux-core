@@ -47,7 +47,7 @@ COPY . /code
 
 RUN chmod +x etc/gen-cmdhelp.py && \
     ./autogen.sh && \
-    ./configure --prefix=/usr/local --without-python && \
+    ./configure --prefix=/usr/local && \
     make && \
     make install && \
     ldconfig

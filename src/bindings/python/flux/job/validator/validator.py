@@ -152,9 +152,7 @@ class JobValidator:
 
         self.parser = parser
         self.parser_group = self.parser.add_argument_group("Validator options")
-        self.plugins_group = self.parser.add_argument_group(
-            "Options provided by plugins"
-        )
+        self.plugins_group = self.parser.add_argument_group("Options provided by plugins")
         self.parser_group.add_argument("--plugins", action="append", default=[])
 
         #  Parse provided argv, but only parse known args, save
@@ -216,10 +214,7 @@ class JobValidator:
             jobinfo = json.loads(jobinfo)
         job = ValidatorJobInfo(jobinfo)
 
-        futures = [
-            self.executor.submit(validator.validate, job)
-            for validator in self.validators
-        ]
+        futures = [self.executor.submit(validator.validate, job) for validator in self.validators]
 
         result = ValidatorResult()
         for fut in concurrent.futures.as_completed(futures):

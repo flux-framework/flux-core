@@ -20,19 +20,9 @@ import traceback
 import signal
 import threading
 import shutil
-import glob
 from datetime import datetime, timedelta
 from string import Formatter
 from collections import namedtuple
-from pathlib import Path, PurePosixPath
-
-import yaml
-
-
-try:
-    import tomllib
-except ModuleNotFoundError:
-    from flux.utils import tomli as tomllib
 
 from flux.core.inner import ffi, raw
 from flux.utils.parsedatetime import Calendar
@@ -52,11 +42,7 @@ def check_future_error(func):
             return func(calling_obj, *args, **kwargs)
         except EnvironmentError as error:
             try:
-                future = (
-                    calling_obj.handle
-                    if hasattr(calling_obj, "handle")
-                    else calling_obj
-                )
+                future = calling_obj.handle if hasattr(calling_obj, "handle") else calling_obj
                 errmsg = raw.flux_future_error_string(future)
             except EnvironmentError:
                 raise error from None
@@ -100,9 +86,7 @@ def encode_payload(payload):
     elif isinstance(payload, str):
         payload = payload.encode("UTF-8", errors="surrogateescape")
     elif not isinstance(payload, bytes):
-        payload = json.dumps(payload, ensure_ascii=False).encode(
-            "UTF-8", errors="surrogateescape"
-        )
+        payload = json.dumps(payload, ensure_ascii=False).encode("UTF-8", errors="surrogateescape")
     return payload
 
 
@@ -207,9 +191,7 @@ class CLIMain(object):
 
     def __call__(self, main_func):
         loglevel = int(os.environ.get("FLUX_PYCLI_LOGLEVEL", logging.INFO))
-        logging.basicConfig(
-            level=loglevel, format="%(name)s: %(levelname)s: %(message)s"
-        )
+        logging.basicConfig(level=loglevel, format="%(name)s: %(levelname)s: %(message)s")
         exit_code = 0
         try:
             main_func()
@@ -352,15 +334,13 @@ class OutputFormat:
         for (text, field, spec, _) in self.format_list:
             #  Remove number formatting on any spec:
             spec = re.sub(r"(0?\.)?(\d+)?[bcdoxXeEfFgGn%]$", r"\2", spec)
-
             #  Only keep fill, align, and min width of the result.
             #  This strips possible type-specific formatting spec that
             #   will not apply to a heading, but keeps width and alignment.
-            match = re.search(r"([<>=^])?(\d+)", spec)
+            match = re.match(r"(.?[<>=^])?(\d+)", spec)
             if match is None:
                 spec = ""
-            else:
-                spec = match[0]
+
             #  Remove any conversion, these do not make sense for headings
             format_list.append(self._fmt_tuple(text, field, spec, None))
         fmt = "".join(format_list)
@@ -608,115 +588,3 @@ class Tree:
             max_level=level,
             truncate=limit,
         )
-
-
-#  Slightly modified from https://stackoverflow.com/a/7205107
-def dict_merge(src, new):
-    "merges dict new into dict src"
-    for key in new:
-        if key in src:
-            if isinstance(src[key], dict) and isinstance(new[key], dict):
-                dict_merge(src[key], new[key])
-            elif src[key] == new[key]:
-                pass  # same leaf value
-            else:
-                #  Default is to override:
-                src[key] = new[key]
-        else:
-            src[key] = new[key]
-    return src
-
-
-class UtilConfig:
-    """
-    Very simple class for loading hierarchical configuration for Flux
-    Python utilities. Configuration is loaded as a dict from an optional
-    initial dict, overriding from XDG system and user base directories
-    in that order.
-
-    Config files are loaded from <name>.<ext>, where ext can be one
-    of json, yaml, or toml. If multiple files exist they are processed
-    in glob(3) order.
-
-    Args:
-        name: name of utility, used as the stem of config file to load
-        initial_dict: Set of default values (optional)
-
-    """
-
-    extension_handlers = {
-        ".toml": tomllib.load,
-        ".json": json.load,
-        ".yaml": yaml.safe_load,
-    }
-
-    def __init__(self, name, initial_dict=None):
-        self.name = name
-        self.dict = {}
-        if initial_dict:
-            self.dict = dict(initial_dict)
-
-        #  Build config search path in precedence order based on XDG
-        #  specification. Later this will be reversed since we want
-        #  to traverse the paths in _reverse_ precedence order in this
-        #  implementation.
-        #
-        #  Start with XDG_CONFIG_HOME (or ~/.config) since it is the
-        #  highest precedence:
-        confdirs = [os.getenv("XDG_CONFIG_HOME") or f"{Path.home()}/.config"]
-
-        #  Append XDG_CONFIG_DIRS as colon separated path (or /etc/xdg)
-        #  Note: colon separated paths are in order of precedence.
-        confdirs += (os.getenv("XDG_CONFIG_DIRS") or "/etc/xdg").split(":")
-
-        #  Append "/flux" to all members of confdirs to build searchpath:
-        self.searchpath = [Path(directory, "flux") for directory in confdirs]
-
-        #  Reorder searchpath into reverse precedence order
-        self.searchpath.reverse()
-
-    def load(self):
-        """Load configuration from current searchpath
-
-        Returns self so that constructor and load() can be called like
-
-        >>> config = UtilConfig("myutil").load()
-
-        """
-
-        for path in self.searchpath:
-            for filepath in sorted(glob.glob(f"{path}/{self.name}.*")):
-                conf = {}
-                ppath = PurePosixPath(filepath)
-
-                # ignore files with unsupported extensions:
-                if ppath.suffix not in self.extension_handlers:
-                    continue
-
-                try:
-                    with open(filepath) as ofile:
-                        conf = self.extension_handlers[ppath.suffix](ofile)
-                except (
-                    tomllib.TOMLDecodeError,
-                    json.decoder.JSONDecodeError,
-                    yaml.scanner.ScannerError,
-                ) as exc:
-                    #  prepend file path to decode exceptions in case it
-                    #  it is missing (e.g. tomllib)
-                    raise ValueError(f"{filepath}: {exc}") from exc
-
-                self.validate(filepath, conf)
-
-                dict_merge(self.dict, conf)
-
-        return self
-
-    def validate(self, path, conf):
-        """
-        Validate config file as it is loaded before merging it with the
-        configuration. This function does nothing in the base class, but
-        subclasses may define it to implement higher level validation.
-        """
-
-    def __getattr__(self, attr):
-        return self.dict[attr]

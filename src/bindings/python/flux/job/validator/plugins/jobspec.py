@@ -34,9 +34,7 @@ class Validator(ValidatorPlugin):
         try:
             self.require_version = int(args.require_version)
             if self.require_version < 1:
-                raise ValueError(
-                    f"Required jobspec version too low: {args.require_version} is < 1"
-                )
+                raise ValueError(f"Required jobspec version too low: {args.require_version} is < 1")
             elif self.require_version > 1:
                 raise ValueError(
                     f"Required jobspec version too high: {args.require_version} is > 1"

@@ -26,7 +26,7 @@ def msg_typestr(msg_type):
 
 
 class Message(WrapperPimpl):
-    """ Flux message wrapper class. """
+    """Flux message wrapper class."""
 
     class InnerWrapper(Wrapper):
         def __init__(

@@ -41,9 +41,7 @@ class URIResolver(URIResolverPlugin):
 
         #  Fetch the jobinfo object for this job
         try:
-            job = job_list_id(
-                flux_handle, jobid, attrs=["state", "annotations"]
-            ).get_jobinfo()
+            job = job_list_id(flux_handle, jobid, attrs=["state", "annotations"]).get_jobinfo()
             if job.state != "RUN":
                 raise ValueError(f"jobid {arg} is not running")
             uri = job.user.uri
@@ -60,9 +58,7 @@ class URIResolver(URIResolverPlugin):
             resolver_uri = URIResolverURI(f"jobid:{arg}")
             if force_local:
                 uri = JobURI(uri).local
-            return self._do_resolve(
-                resolver_uri, flux.Flux(uri), force_local=force_local
-            )
+            return self._do_resolve(resolver_uri, flux.Flux(uri), force_local=force_local)
         return uri
 
     def resolve(self, uri):

@@ -35,9 +35,7 @@ class RPC(Future):
             if prefixes is None:
                 prefixes = ["flux_rpc_", "flux_future_"]
 
-            super().__init__(
-                ffi, lib, handle, match, filter_match, prefixes, destructor
-            )
+            super().__init__(ffi, lib, handle, match, filter_match, prefixes, destructor)
 
         def check_wrap(self, fun, name):
             func = super().check_wrap(fun, name)

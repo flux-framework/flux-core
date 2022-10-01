@@ -39,9 +39,7 @@ def _convert_jobspec_arg_to_string(jobspec):
         # catch this here rather than in C for a better error message
         raise EnvironmentError(errno.EINVAL, "jobspec must not be None/NULL")
     elif not isinstance(jobspec, bytes):
-        raise TypeError(
-            "jobspec must be a Jobspec or string (either binary or unicode)"
-        )
+        raise TypeError("jobspec must be a Jobspec or string (either binary or unicode)")
     return jobspec
 
 
@@ -212,10 +210,7 @@ class Jobspec(object):
             if range_dict[key] < 1:
                 raise ValueError("{} must be > 0".format(key))
         valid_operator_values = ["+", "*", "^"]
-        if (
-            "operator" in range_dict
-            and range_dict["operator"] not in valid_operator_values
-        ):
+        if "operator" in range_dict and range_dict["operator"] not in valid_operator_values:
             raise ValueError("operator must be one of {}".format(valid_operator_values))
 
     @classmethod
@@ -293,8 +288,7 @@ class Jobspec(object):
             raise TypeError("command array cannot have length of zero")
         if not (
             (  # sequence of strings - N.B. also true for just a plain string
-                isinstance(command, abc.Sequence)
-                and all(isinstance(x, str) for x in command)
+                isinstance(command, abc.Sequence) and all(isinstance(x, str) for x in command)
             )
         ) or isinstance(command, str):
             raise TypeError("command must be a list of strings")
@@ -370,25 +364,6 @@ class Jobspec(object):
         if math.isnan(time) or math.isinf(time):
             raise ValueError("duration must be a normal, finite value")
         self.setattr("system.duration", time)
-
-    @property
-    def queue(self):
-        """
-        Target queue of job submission
-        """
-        try:
-            return self.jobspec["attributes"]["system"]["queue"]
-        except KeyError:
-            return None
-
-    @queue.setter
-    def queue(self, queue):
-        """
-        Set target submission queue
-        """
-        if not isinstance(queue, str):
-            raise TypeError("queue must be a string")
-        self.setattr("system.queue", queue)
 
     @property
     def cwd(self):
@@ -472,9 +447,9 @@ class Jobspec(object):
         :param stream_name: the name of the io stream
         """
         try:
-            return self.jobspec["attributes"]["system"]["shell"]["options"][iotype][
-                stream_name
-            ]["path"]
+            return self.jobspec["attributes"]["system"]["shell"]["options"][iotype][stream_name][
+                "path"
+            ]
         except KeyError:
             return None
 
@@ -489,8 +464,7 @@ class Jobspec(object):
             path = os.fspath(path)
         if not isinstance(path, str):
             raise TypeError(
-                "The path must be a string or pathlib object, "
-                f"got {type(path).__name__}"
+                "The path must be a string or pathlib object, " f"got {type(path).__name__}"
             )
         self.setattr_shell_option("{}.{}.type".format(iotype, stream_name), "file")
         self.setattr_shell_option("{}.{}.path".format(iotype, stream_name), path)
@@ -667,126 +641,6 @@ class JobspecV1(Jobspec):
             raise ValueError("attributes.system.duration must be a number")
 
     @classmethod
-    # pylint: disable=too-many-branches,too-many-locals,too-many-statements
-    def per_resource(
-        cls,
-        command,
-        ncores=None,
-        nnodes=None,
-        per_resource_type=None,
-        per_resource_count=None,
-        gpus_per_node=None,
-        exclusive=False,
-    ):
-        """
-        Factory function that builds a v1 jobspec from an explicit count
-        of nodes or cores and a number of tasks per one of these resources.
-
-        Use setters to assign additional properties.
-
-        Args:
-            ncores: Total number of cores to allocate
-            nnodes: Total number of nodes to allocate
-            per_resource_type: (optional) Type of resource over which to
-                               schedule a count of tasks. Only "node" or
-                               "core" are currently supported.
-            per_resource_count: (optional) Count of tasks per
-                                `per_resource_type`
-            gpus_per_node: With nnodes, request a number of gpus per node
-            exclusive: with nnodes, request whole nodes exclusively
-        """
-
-        #  Handle per-resource specification:
-        #  It is an error to specify one of per_resource_{type,count} and
-        #   not the other:
-        #
-        per_resource = None
-        if per_resource_type is not None and per_resource_count is not None:
-            if not isinstance(per_resource_type, str):
-                raise ValueError("per_resource_type must be a string")
-            if per_resource_type not in ("node", "core"):
-                raise ValueError(
-                    f"Invalid per_resource_type='{per_resource_type}' specified"
-                )
-            if not isinstance(per_resource_count, int):
-                raise ValueError("per_resource_count must be an integer")
-            if per_resource_count < 1:
-                raise ValueError("per_resource_count must be >= 1")
-
-            per_resource = {"type": per_resource_type, "count": per_resource_count}
-        elif per_resource_type is not None:
-            raise ValueError("must specify a per_resource_count with per_resource_type")
-        elif per_resource_count is not None:
-            raise ValueError("must specify a per_resource_type with per_resource_count")
-
-        if ncores is not None:
-            if not isinstance(ncores, int) or ncores < 1:
-                raise ValueError("ncores must be an integer >= 1")
-        if gpus_per_node is not None:
-            if not isinstance(gpus_per_node, int) or gpus_per_node < 0:
-                raise ValueError("gpus_per_node must be an integer >= 0")
-            if not nnodes:
-                raise ValueError("gpus_per_node must be specified with nnodes")
-        if nnodes is not None:
-            if not isinstance(nnodes, int) or nnodes < 1:
-                raise ValueError("nnodes must be an integer >= 1")
-        elif exclusive:
-            raise ValueError("exclusive can only be set with a node count")
-
-        nslots = None
-        slot_size = 1
-        if nnodes and ncores:
-            #  Request ncores across nnodes, actually running a given
-            #   number of tasks per node or core
-            if ncores < nnodes:
-                raise ValueError("number of cores cannot be less than nnodes")
-            if ncores % nnodes != 0:
-                raise ValueError(
-                    "number of cores must be evenly divisible by node count"
-                )
-            #
-            #  With nnodes, nslots is slots/node (total_slots=slots*nodes)
-            nslots = 1
-            slot_size = int(ncores / nnodes)
-        elif ncores:
-            #  Request ncores total, actually running a given
-            #   number of tasks per node or core
-            #
-            #  Without nnodes, nslots is total number of slots:
-            nslots = ncores
-            slot_size = 1
-        elif nnodes:
-            #  Request nnodes total with a given number of tasks per node
-            #   or per core. (requires exclusive)
-            if not exclusive:
-                raise ValueError(
-                    "Specifying nnodes also requires ncores or exclusive",
-                )
-            #  With nnodes, nslots is slots/node (total_slots=slots*nodes)
-            nslots = 1
-            slot_size = 1
-        else:
-            raise ValueError("must specify node or core count with per_resource")
-
-        children = [cls._create_resource("core", slot_size)]
-        if gpus_per_node:
-            children.append(cls._create_resource("gpu", gpus_per_node))
-
-        slot = cls._create_slot("task", nslots, children)
-
-        if nnodes:
-            resources = cls._create_resource("node", nnodes, [slot], exclusive)
-        else:
-            resources = slot
-
-        resources = [resources]
-        tasks = [{"command": command, "slot": "task", "count": {"per_slot": 1}}]
-        attributes = {"system": {"duration": 0}}
-        if per_resource:
-            set_treedict(attributes, "system.shell.options.per-resource", per_resource)
-        return cls(resources, tasks, attributes=attributes)
-
-    @classmethod
     # pylint: disable=too-many-branches
     def from_command(
         cls,
@@ -834,9 +688,7 @@ class JobspecV1(Jobspec):
             else:
                 task_count_dict = {"per_slot": 1}
             slot = cls._create_slot("task", num_slots, children)
-            resource_section = cls._create_resource(
-                "node", num_nodes, [slot], exclusive
-            )
+            resource_section = cls._create_resource("node", num_nodes, [slot], exclusive)
         else:
             task_count_dict = {"per_slot": 1}
             slot = cls._create_slot("task", num_tasks, children)

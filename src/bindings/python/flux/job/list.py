@@ -34,45 +34,22 @@ class JobListRPC(RPC):
 # - Desired return value is json array, not a single value
 #
 # pylint: disable=dangerous-default-value
-def job_list(
-    flux_handle,
-    max_entries=1000,
-    attrs=[],
-    userid=os.getuid(),
-    states=0,
-    results=0,
-    since=0.0,
-    name=None,
-    queue=None,
-):
+def job_list(flux_handle, max_entries=1000, attrs=[], userid=os.getuid(), states=0, results=0):
     payload = {
         "max_entries": int(max_entries),
         "attrs": attrs,
         "userid": int(userid),
         "states": states,
         "results": results,
-        "since": since,
     }
-    if name:
-        payload["name"] = name
-    if queue:
-        payload["queue"] = queue
     return JobListRPC(flux_handle, "job-list.list", payload)
 
 
-def job_list_inactive(
-    flux_handle, since=0.0, max_entries=1000, attrs=[], name=None, queue=None
-):
-    return job_list(
-        flux_handle,
-        max_entries=max_entries,
-        attrs=attrs,
-        userid=flux.constants.FLUX_USERID_UNKNOWN,
-        states=flux.constants.FLUX_JOB_STATE_INACTIVE,
-        since=since,
-        name=name,
-        queue=queue,
-    )
+def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[], name=None):
+    payload = {"since": float(since), "max_entries": int(max_entries), "attrs": attrs}
+    if name:
+        payload["name"] = name
+    return JobListRPC(flux_handle, "job-list.list-inactive", payload)
 
 
 class JobListIdRPC(RPC):
@@ -175,23 +152,17 @@ class JobList:
         ids=[],
         user=None,
         max_entries=1000,
-        since=0.0,
-        name=None,
-        queue=None,
     ):
         self.handle = flux_handle
         self.attrs = list(attrs)
         self.states = 0
         self.results = 0
         self.max_entries = max_entries
-        self.since = since
-        self.name = name
-        self.queue = queue
         self.ids = ids
         self.errors = []
         for fname in filters:
-            for x in fname.split(","):
-                self.add_filter(x)
+            for name in fname.split(","):
+                self.add_filter(name)
         self.set_user(user)
 
     def set_user(self, user):
@@ -204,10 +175,9 @@ class JobList:
             try:
                 self.userid = pwd.getpwnam(user).pw_uid
             except KeyError:
-                try:
-                    self.userid = int(user)
-                except ValueError:
-                    raise ValueError(f"Invalid user {user} specified")
+                self.userid = int(user)
+            except ValueError:
+                raise ValueError(f"Invalid user {user} specified")
 
     def add_filter(self, fname):
         """Append a state or result filter to JobList query"""
@@ -248,9 +218,6 @@ class JobList:
             userid=self.userid,
             states=self.states,
             results=self.results,
-            since=self.since,
-            name=self.name,
-            queue=self.queue,
         )
 
     def jobs(self):

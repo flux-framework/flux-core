@@ -23,9 +23,7 @@ from flux.job.validator import ValidatorPlugin
 
 class Validator(ValidatorPlugin):
     def __init__(self, parser):
-        parser.add_argument(
-            "--schema", type=str, help="Validate with SCHEMA", required=True
-        )
+        parser.add_argument("--schema", type=str, help="Validate with SCHEMA", required=True)
 
     def configure(self, args):
         try:

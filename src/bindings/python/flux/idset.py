@@ -86,9 +86,7 @@ class IDset(WrapperPimpl):
         try:
             self.pimpl = self.InnerWrapper(arg=arg, handle=handle)
         except (TypeError, AttributeError):
-            raise TypeError(
-                "IDset() expected an idset string or iterable, got " + type(arg)
-            )
+            raise TypeError("IDset() expected an idset string or iterable, got " + type(arg))
 
     def __str__(self):
         return self.encode()

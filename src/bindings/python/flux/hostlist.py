@@ -80,17 +80,13 @@ class Hostlist(WrapperPimpl):
                 for hosts in arg:
                     if not isinstance(hosts, str):
                         typestr = type(hosts)
-                        raise TypeError(
-                            f"Hostlist(): expected string or Iterable, got {typestr}"
-                        )
+                        raise TypeError(f"Hostlist(): expected string or Iterable, got {typestr}")
                     result = lib.hostlist_append(handle, hosts.encode("utf-8"))
                     if result < 0:
                         raise ValueError(f"Invalid hostlist: '{hosts}'")
             else:
                 typestr = type(arg)
-                raise TypeError(
-                    f"Hostlist(): expected string or Iterable, got {typestr}"
-                )
+                raise TypeError(f"Hostlist(): expected string or Iterable, got {typestr}")
         super().__init__()
         self.pimpl = self.InnerWrapper(handle)
 

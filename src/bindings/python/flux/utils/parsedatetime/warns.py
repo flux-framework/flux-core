@@ -22,5 +22,5 @@ class pdt20DeprecationWarning(pdtPendingDeprecationWarning):
     pass
 
 
-warnings.simplefilter('default', pdtDeprecationWarning)
-warnings.simplefilter('ignore', pdtPendingDeprecationWarning)
+warnings.simplefilter("default", pdtDeprecationWarning)
+warnings.simplefilter("ignore", pdtPendingDeprecationWarning)

@@ -77,10 +77,7 @@ class URIResolver(URIResolverPlugin):
     """A URIResolver that can fetch a FLUX_URI value from a local PID"""
 
     #  Determine which broker_get_child method to use:
-    if (
-        _proc_has_task_children()
-        and not "FLUX_FORCE_BROKER_CHILD_FALLBACK" in os.environ
-    ):
+    if _proc_has_task_children() and not "FLUX_FORCE_BROKER_CHILD_FALLBACK" in os.environ:
         get_broker_child = staticmethod(_get_broker_child)
     else:
         get_broker_child = staticmethod(_get_broker_child_fallback)

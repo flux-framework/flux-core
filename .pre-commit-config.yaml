@@ -1,0 +1,38 @@
+files: src/bindings/python/flux
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.2.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-docstring-first
+      - id: check-shebang-scripts-are-executable
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+
+  - repo: local
+    hooks:
+      - id: black
+        name: black
+        language: python
+        types: [python]
+        entry: black
+
+#      - id: isort
+#        name: isort
+#        language: python
+#        types: [python]
+#        entry: isort
+
+#      - id: flake8
+#        name: flake8
+#        language: python
+#        types: [python]
+#        entry: flake8
+
+      - id: mypy
+        name: mypy
+        language: python
+        types: [python]
+        entry: mypy

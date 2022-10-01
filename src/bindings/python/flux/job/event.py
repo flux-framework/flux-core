@@ -224,10 +224,6 @@ def event_wait(flux_handle, jobid, name, eventlog="eventlog", raiseJobException=
     for event in event_watch(flux_handle, jobid, eventlog):
         if event.name == name:
             return event
-        if (
-            raiseJobException
-            and event.name == "exception"
-            and event.context["severity"] == 0
-        ):
+        if raiseJobException and event.name == "exception" and event.context["severity"] == 0:
             raise JobException(event)
     raise OSError(errno.ENODATA, f"eventlog ended before event='{name}'")

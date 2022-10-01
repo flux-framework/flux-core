@@ -42,9 +42,7 @@ class SecurityContext(WrapperPimpl):
         def check_wrap(self, fun, name):
             fun_type = self.ffi.typeof(fun)
             add_handle = self.check_handle(name, fun_type)
-            return SecurityFunctionWrapper(
-                fun, name, fun_type, self.ffi, add_handle=add_handle
-            )
+            return SecurityFunctionWrapper(fun, name, fun_type, self.ffi, add_handle=add_handle)
 
     def __init__(self, config_pattern=None, flags=0):
         super().__init__()
@@ -75,9 +73,7 @@ class SecurityContext(WrapperPimpl):
         output_payload = ffi.new("void *[1]")  # char**
         output_payload_len = ffi.new("int [1]")  # int*
         output_userid = ffi.new("int64_t [1]")  # int64_t*
-        self.pimpl.unwrap(
-            signed_payload, output_payload, output_payload_len, output_userid, flags
-        )
+        self.pimpl.unwrap(signed_payload, output_payload, output_payload_len, output_userid, flags)
 
         # deference int* to int then copy into python int
         output_userid = int(output_userid[0])
