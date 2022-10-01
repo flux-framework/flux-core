@@ -233,9 +233,9 @@ test_expect_success '[bootstrap] curve_cert file must be mode o-r' '
 # [tbon] test
 #
 
-test_expect_success MAXRT 'tbon.tcp_user_timeout is zero by default' '
+test_expect_success MAXRT 'tbon.tcp_user_timeout is 20s by default' '
 	cat <<-EOT >maxrt.exp &&
-	0s
+	20s
 	EOT
 	flux broker ${ARGS} \
 		flux getattr tbon.tcp_user_timeout >maxrt.out &&
