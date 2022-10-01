@@ -88,6 +88,20 @@ test_expect_success HAVE_JQ 'job-ingest: jobspec stored accurately in KVS' '
 	test_cmp basic.json.normalized jobspec.out.normalized
 '
 
+test_expect_success 'job-ingest: submit a job with environment' '
+	flux mini run --env=-* --env=FOO=bar --dry-run /bin/true \
+	    >jobspec_env.json &&
+	jobid=$(flux job submit jobspec_env.json) &&
+	kvsdir=$(flux job id --to=kvs $jobid) &&
+	flux kvs get --raw ${kvsdir}.jobspec >jobspec_env.out
+'
+test_expect_success HAVE_JQ 'job-ingest: KVS jobspec lacks environment' '
+	jq -e ".attributes.system.environment.FOO == \"bar\"" \
+	    <jobspec_env.json &&
+	test_must_fail jq -e ".attributes.system.environment.FOO == \"bar\"" \
+	    <jobspec_env.out
+'
+
 test_expect_success 'job-ingest: job announced to job manager' '
 	jobid=$(flux job submit --urgency=10 basic.json | flux job id) &&
 	flux kvs eventlog get ${DUMMY_EVENTLOG} \
