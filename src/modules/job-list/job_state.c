@@ -591,21 +591,20 @@ error:
         flux_log_error (h, "error responding to unpause request");
 }
 
-static struct job *eventlog_restart_parse (struct list_ctx *ctx,
+static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
                                            const char *eventlog,
                                            flux_jobid_t id)
 {
-    struct job_state_ctx *jsctx = ctx->jsctx;
     struct job *job = NULL;
     json_t *a = NULL;
     size_t index;
     json_t *value;
 
-    if (!(job = job_create (ctx->h, id)))
+    if (!(job = job_create (jsctx->h, id)))
         goto error;
 
     if (!(a = eventlog_decode (eventlog))) {
-        flux_log_error (ctx->h, "%s: error parsing eventlog for %ju",
+        flux_log_error (jsctx->h, "%s: error parsing eventlog for %ju",
                         __FUNCTION__, (uintmax_t)job->id);
         goto error;
     }
@@ -616,14 +615,14 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
         json_t *context = NULL;
 
         if (eventlog_entry_parse (value, &timestamp, &name, &context) < 0) {
-            flux_log_error (ctx->h, "%s: error parsing entry for %ju",
+            flux_log_error (jsctx->h, "%s: error parsing entry for %ju",
                             __FUNCTION__, (uintmax_t)job->id);
             goto error;
         }
 
         job->eventlog_seq++;
         if (!strcmp (name, "submit")) {
-            if (submit_context_parse (ctx->h, job, context) < 0)
+            if (submit_context_parse (jsctx->h, job, context) < 0)
                 goto error;
         }
         else if (!strcmp (name, "validate")) {
@@ -633,18 +632,18 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
             update_job_state (jsctx, job, FLUX_JOB_STATE_PRIORITY, timestamp);
         }
         else if (!strcmp (name, "priority")) {
-            if (priority_context_parse (ctx->h, job, context) < 0)
+            if (priority_context_parse (jsctx->h, job, context) < 0)
                 goto error;
             if (job->state == FLUX_JOB_STATE_PRIORITY)
                 update_job_state (jsctx, job, FLUX_JOB_STATE_SCHED, timestamp);
         }
         else if (!strcmp (name, "urgency")) {
-            if (urgency_context_parse (ctx->h, job, context) < 0)
+            if (urgency_context_parse (jsctx->h, job, context) < 0)
                 goto error;
         }
         else if (!strcmp (name, "exception")) {
             int severity;
-            if (exception_context_parse (ctx->h, job, context, &severity) < 0)
+            if (exception_context_parse (jsctx->h, job, context, &severity) < 0)
                 goto error;
             if (severity == 0)
                 update_job_state (jsctx, job, FLUX_JOB_STATE_CLEANUP, timestamp);
@@ -654,7 +653,7 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
             if (context) {
                 json_t *annotations;
                 if (!(annotations = json_object_get (context, "annotations"))) {
-                    flux_log (ctx->h, LOG_ERR,
+                    flux_log (jsctx->h, LOG_ERR,
                               "%s: alloc context for %ju invalid",
                               __FUNCTION__, (uintmax_t)job->id);
                     errno = EPROTO;
@@ -668,7 +667,7 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
                 update_job_state (jsctx, job, FLUX_JOB_STATE_RUN, timestamp);
         }
         else if (!strcmp (name, "finish")) {
-            if (finish_context_parse (ctx->h, job, context) < 0)
+            if (finish_context_parse (jsctx->h, job, context) < 0)
                 goto error;
             if (job->state == FLUX_JOB_STATE_RUN)
                 update_job_state (jsctx, job, FLUX_JOB_STATE_CLEANUP, timestamp);
@@ -680,17 +679,17 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
             revert_job_state (jsctx, job, timestamp);
         }
         else if (!strncmp (name, "dependency-", 11)) {
-            if (dependency_context_parse (ctx->h, job, name+11, context) < 0)
+            if (dependency_context_parse (jsctx->h, job, name+11, context) < 0)
                 goto error;
         }
         else if (!strcmp (name, "memo")) {
-            if (context && memo_update (ctx->h, job, context) < 0)
+            if (context && memo_update (jsctx->h, job, context) < 0)
                 goto error;
         }
     }
 
     if (job->state == FLUX_JOB_STATE_NEW) {
-        flux_log (ctx->h, LOG_ERR, "%s: eventlog has no transition events",
+        flux_log (jsctx->h, LOG_ERR, "%s: eventlog has no transition events",
                   __FUNCTION__);
         errno = EPROTO;
         goto error;
@@ -715,7 +714,8 @@ static int depthfirst_count_depth (const char *s)
     return count;
 }
 
-static int depthfirst_map_one (struct list_ctx *ctx, const char *key,
+static int depthfirst_map_one (struct job_state_ctx *jsctx,
+                               const char *key,
                                int dirskip)
 {
     struct job *job = NULL;
@@ -737,19 +737,19 @@ static int depthfirst_map_one (struct list_ctx *ctx, const char *key,
         errno = EINVAL;
         return -1;
     }
-    if (!(f1 = flux_kvs_lookup (ctx->h, NULL, 0, path)))
+    if (!(f1 = flux_kvs_lookup (jsctx->h, NULL, 0, path)))
         goto done;
     if (flux_kvs_lookup_get (f1, &eventlog) < 0)
         goto done;
 
-    if (!(job = eventlog_restart_parse (ctx, eventlog, id)))
+    if (!(job = eventlog_restart_parse (jsctx, eventlog, id)))
         goto done;
 
     if (flux_job_kvs_key (path, sizeof (path), id, "jobspec") < 0) {
         errno = EINVAL;
         goto done;
     }
-    if (!(f2 = flux_kvs_lookup (ctx->h, NULL, 0, path)))
+    if (!(f2 = flux_kvs_lookup (jsctx->h, NULL, 0, path)))
         goto done;
     if (flux_kvs_lookup_get (f2, &jobspec) < 0)
         goto done;
@@ -762,7 +762,7 @@ static int depthfirst_map_one (struct list_ctx *ctx, const char *key,
             errno = EINVAL;
             return -1;
         }
-        if (!(f3 = flux_kvs_lookup (ctx->h, NULL, 0, path)))
+        if (!(f3 = flux_kvs_lookup (jsctx->h, NULL, 0, path)))
             goto done;
         if (flux_kvs_lookup_get (f3, &R) < 0)
             goto done;
@@ -774,11 +774,11 @@ static int depthfirst_map_one (struct list_ctx *ctx, const char *key,
     if (job->states_mask & FLUX_JOB_STATE_INACTIVE)
         eventlog_inactive_complete (job);
 
-    if (zhashx_insert (ctx->jsctx->index, &job->id, job) < 0) {
-        flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
+    if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
+        flux_log_error (jsctx->h, "%s: zhashx_insert", __FUNCTION__);
         goto done;
     }
-    job_insert_list (ctx->jsctx, job, job->state);
+    job_insert_list (jsctx, job, job->state);
 
     rc = 1;
 done:
@@ -790,7 +790,8 @@ done:
     return rc;
 }
 
-static int depthfirst_map (struct list_ctx *ctx, const char *key,
+static int depthfirst_map (struct job_state_ctx *jsctx,
+                           const char *key,
                            int dirskip)
 {
     flux_future_t *f;
@@ -802,7 +803,7 @@ static int depthfirst_map (struct list_ctx *ctx, const char *key,
     int rc = -1;
 
     path_level = depthfirst_count_depth (key + dirskip);
-    if (!(f = flux_kvs_lookup (ctx->h, NULL, FLUX_KVS_READDIR, key)))
+    if (!(f = flux_kvs_lookup (jsctx->h, NULL, FLUX_KVS_READDIR, key)))
         return -1;
     if (flux_kvs_lookup_get_dir (f, &dir) < 0) {
         if (errno == ENOENT && path_level == 0)
@@ -819,9 +820,9 @@ static int depthfirst_map (struct list_ctx *ctx, const char *key,
         if (!(nkey = flux_kvsdir_key_at (dir, name)))
             goto done_destroyitr;
         if (path_level == 3) // orig 'key' = .A.B.C, thus 'nkey' is complete
-            n = depthfirst_map_one (ctx, nkey, dirskip);
+            n = depthfirst_map_one (jsctx, nkey, dirskip);
         else
-            n = depthfirst_map (ctx, nkey, dirskip);
+            n = depthfirst_map (jsctx, nkey, dirskip);
         if (n < 0) {
             int saved_errno = errno;
             free (nkey);
@@ -856,19 +857,19 @@ static void sort_job_list (zlistx_t *list)
 }
 
 /* Read jobs present in the KVS at startup. */
-int job_state_init_from_kvs (struct list_ctx *ctx)
+int job_state_init_from_kvs (struct job_state_ctx *jsctx)
 {
     const char *dirname = "job";
     int dirskip = strlen (dirname);
     int count;
 
-    count = depthfirst_map (ctx, dirname, dirskip);
+    count = depthfirst_map (jsctx, dirname, dirskip);
     if (count < 0)
         return -1;
-    flux_log (ctx->h, LOG_DEBUG, "%s: read %d jobs", __FUNCTION__, count);
+    flux_log (jsctx->h, LOG_DEBUG, "%s: read %d jobs", __FUNCTION__, count);
 
-    sort_job_list (ctx->jsctx->running);
-    sort_job_list (ctx->jsctx->inactive);
+    sort_job_list (jsctx->running);
+    sort_job_list (jsctx->inactive);
     return 0;
 }
 
