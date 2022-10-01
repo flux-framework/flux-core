@@ -9,12 +9,11 @@
 ###############################################################
 
 import errno
-
 from typing import Dict
 
+from flux.core.inner import ffi, lib, raw
 from flux.util import check_future_error, interruptible
 from flux.wrapper import Wrapper, WrapperPimpl
-from flux.core.inner import ffi, lib, raw
 
 # Reference count dictionary to keep futures with a pending `then` callback
 # alive, even if there are no remaining references to the future in the user's
@@ -137,9 +136,7 @@ class Future(WrapperPimpl):
 
     def then(self, callback, *args, timeout=-1.0, **kwargs):
         if self in _THEN_HANDLES:
-            raise EnvironmentError(
-                errno.EEXIST, "then callback already exists for this future"
-            )
+            raise EnvironmentError(errno.EEXIST, "then callback already exists for this future")
         if callback is None:
             raise ValueError("Callback cannot be None")
 

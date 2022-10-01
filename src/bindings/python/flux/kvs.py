@@ -8,10 +8,9 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import json
-import errno
-
 import collections.abc as abc
+import errno
+import json
 from typing import Any, Mapping
 
 from _flux._core import ffi, lib
@@ -141,9 +140,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
                 )
             if handle is None:
                 directory = ffi.new("flux_kvsdir_t *[1]")
-                future = RAW.flux_kvs_lookup(
-                    flux_handle, None, RAW.FLUX_KVS_READDIR, path
-                )
+                future = RAW.flux_kvs_lookup(flux_handle, None, RAW.FLUX_KVS_READDIR, path)
                 RAW.flux_kvs_lookup_get_dir(future, directory)
                 self.handle = RAW.flux_kvsdir_copy(directory[0])
                 RAW.flux_future_destroy(future)
@@ -175,9 +172,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
         try:
             return get(self.fhdl, self.key_at(key))
         except EnvironmentError:
-            raise KeyError(
-                "{} not found under directory {}".format(key, self.key_at(""))
-            )
+            raise KeyError("{} not found under directory {}".format(key, self.key_at("")))
 
     def __setitem__(self, key, value):
         if put(self.fhdl, key, value) < 0:
@@ -301,7 +296,7 @@ def inner_walk(kvsdir, curr_dir, topdown=False):
 
 
 def walk(directory, topdown=False, flux_handle=None):
-    """ Walk a directory in the style of os.walk() """
+    """Walk a directory in the style of os.walk()"""
     if not isinstance(directory, KVSDir):
         if flux_handle is None:
             raise ValueError("If directory is a key, flux_handle must be specified")

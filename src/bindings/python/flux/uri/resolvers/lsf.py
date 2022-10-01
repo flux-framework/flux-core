@@ -18,22 +18,19 @@ It can be used like:
 
 import getpass
 import os
-import subprocess
 import shutil
+import subprocess
 from pathlib import PurePath
 
-import yaml
-
 import flux.hostlist as hostlist
-from flux.uri import URIResolverPlugin, FluxURIResolver
+import yaml
+from flux.uri import FluxURIResolver, URIResolverPlugin
 
 
 def lsf_find_compute_node(jobid):
     """Figure out where the job is being run using YAML output from IBM Cluster Systems Manager."""
 
-    csm_path = os.getenv(
-        "CSM_ALLOCATION_QUERY", "/opt/ibm/csm/bin/csm_allocation_query"
-    )
+    csm_path = os.getenv("CSM_ALLOCATION_QUERY", "/opt/ibm/csm/bin/csm_allocation_query")
 
     sp = subprocess.run(
         [csm_path, "-j", str(jobid)],
@@ -43,9 +40,7 @@ def lsf_find_compute_node(jobid):
         hosts = yaml.safe_load(sp.stdout.decode("utf-8"))["compute_nodes"]
         return str(hostlist.decode(hosts).sort()[0])
     except Exception as exc:
-        raise ValueError(
-            f"Unable to find a compute node attached to job {jobid}"
-        ) from exc
+        raise ValueError(f"Unable to find a compute node attached to job {jobid}") from exc
 
 
 def check_lsf_jobid(pid, jobid):
@@ -68,7 +63,7 @@ def lsf_job_pid(jobid):
             pid = line.split()[0]
             if check_lsf_jobid(pid, jobid):
                 return pid
-    raise ValueError(f"Unable to find a flux session attached to your job")
+    raise ValueError("Unable to find a flux session attached to your job")
 
 
 def lsf_get_uri(hostname, jobid):
@@ -116,6 +111,4 @@ class URIResolver(URIResolverPlugin):
             hostname = lsf_find_compute_node(jobid)
             return lsf_get_uri(hostname, jobid)
         except OSError as exc:
-            raise ValueError(
-                f"LSF Job {jobid} doesn't seem to have a FLUX_URI"
-            ) from exc
+            raise ValueError(f"LSF Job {jobid} doesn't seem to have a FLUX_URI") from exc

@@ -36,6 +36,8 @@ libltdl/
 # docs intermediate files
 /doc/man*/*.xml
 /doc/_build
+/doc/man
+etc/completions/flux
 
 # Object files
 *.o
@@ -99,6 +101,10 @@ compile_flags.txt
 .idea
 .clangd
 
+# local environmnt
+env
+
 # Rules to ignore auto-generated test harness scripts
 test_*.t
 !/src/bindings/python/test_commands/test_runner.t
+src/bindings/python/_flux/*.h

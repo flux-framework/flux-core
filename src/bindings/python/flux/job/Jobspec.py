@@ -7,17 +7,16 @@
 #
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
-import os
-import math
-import json
-import errno
-import datetime
 import collections
 import collections.abc as abc
+import datetime
+import errno
+import json
+import math
 import numbers
+import os
 
 import yaml
-
 from _flux._core import ffi
 from flux.util import parse_fsd, set_treedict
 
@@ -39,9 +38,7 @@ def _convert_jobspec_arg_to_string(jobspec):
         # catch this here rather than in C for a better error message
         raise EnvironmentError(errno.EINVAL, "jobspec must not be None/NULL")
     elif not isinstance(jobspec, bytes):
-        raise TypeError(
-            "jobspec must be a Jobspec or string (either binary or unicode)"
-        )
+        raise TypeError("jobspec must be a Jobspec or string (either binary or unicode)")
     return jobspec
 
 
@@ -212,10 +209,7 @@ class Jobspec(object):
             if range_dict[key] < 1:
                 raise ValueError("{} must be > 0".format(key))
         valid_operator_values = ["+", "*", "^"]
-        if (
-            "operator" in range_dict
-            and range_dict["operator"] not in valid_operator_values
-        ):
+        if "operator" in range_dict and range_dict["operator"] not in valid_operator_values:
             raise ValueError("operator must be one of {}".format(valid_operator_values))
 
     @classmethod
@@ -293,8 +287,7 @@ class Jobspec(object):
             raise TypeError("command array cannot have length of zero")
         if not (
             (  # sequence of strings - N.B. also true for just a plain string
-                isinstance(command, abc.Sequence)
-                and all(isinstance(x, str) for x in command)
+                isinstance(command, abc.Sequence) and all(isinstance(x, str) for x in command)
             )
         ) or isinstance(command, str):
             raise TypeError("command must be a list of strings")
@@ -472,9 +465,9 @@ class Jobspec(object):
         :param stream_name: the name of the io stream
         """
         try:
-            return self.jobspec["attributes"]["system"]["shell"]["options"][iotype][
-                stream_name
-            ]["path"]
+            return self.jobspec["attributes"]["system"]["shell"]["options"][iotype][stream_name][
+                "path"
+            ]
         except KeyError:
             return None
 
@@ -489,8 +482,7 @@ class Jobspec(object):
             path = os.fspath(path)
         if not isinstance(path, str):
             raise TypeError(
-                "The path must be a string or pathlib object, "
-                f"got {type(path).__name__}"
+                "The path must be a string or pathlib object, " f"got {type(path).__name__}"
             )
         self.setattr_shell_option("{}.{}.type".format(iotype, stream_name), "file")
         self.setattr_shell_option("{}.{}.path".format(iotype, stream_name), path)
@@ -705,9 +697,7 @@ class JobspecV1(Jobspec):
             if not isinstance(per_resource_type, str):
                 raise ValueError("per_resource_type must be a string")
             if per_resource_type not in ("node", "core"):
-                raise ValueError(
-                    f"Invalid per_resource_type='{per_resource_type}' specified"
-                )
+                raise ValueError(f"Invalid per_resource_type='{per_resource_type}' specified")
             if not isinstance(per_resource_count, int):
                 raise ValueError("per_resource_count must be an integer")
             if per_resource_count < 1:
@@ -741,9 +731,7 @@ class JobspecV1(Jobspec):
             if ncores < nnodes:
                 raise ValueError("number of cores cannot be less than nnodes")
             if ncores % nnodes != 0:
-                raise ValueError(
-                    "number of cores must be evenly divisible by node count"
-                )
+                raise ValueError("number of cores must be evenly divisible by node count")
             #
             #  With nnodes, nslots is slots/node (total_slots=slots*nodes)
             nslots = 1
@@ -834,9 +822,7 @@ class JobspecV1(Jobspec):
             else:
                 task_count_dict = {"per_slot": 1}
             slot = cls._create_slot("task", num_slots, children)
-            resource_section = cls._create_resource(
-                "node", num_nodes, [slot], exclusive
-            )
+            resource_section = cls._create_resource("node", num_nodes, [slot], exclusive)
         else:
             task_count_dict = {"per_slot": 1}
             slot = cls._create_slot("task", num_tasks, children)

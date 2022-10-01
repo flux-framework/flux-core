@@ -7,9 +7,9 @@
 #
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
+import errno
 import os
 import pwd
-import errno
 
 import flux.constants
 from flux.future import WaitAllFuture
@@ -60,9 +60,7 @@ def job_list(
     return JobListRPC(flux_handle, "job-list.list", payload)
 
 
-def job_list_inactive(
-    flux_handle, since=0.0, max_entries=1000, attrs=[], name=None, queue=None
-):
+def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[], name=None, queue=None):
     return job_list(
         flux_handle,
         max_entries=max_entries,

@@ -8,18 +8,16 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 import signal
-from typing import Union, Optional
+from typing import Optional, Union
 
+from _flux._core import ffi
+from flux.core.handle import Flux  # for typing
 from flux.future import Future
 from flux.job._wrapper import _RAW as RAW
-from flux.core.handle import Flux  # for typing
 from flux.job.JobID import JobID  # for typing
-from _flux._core import ffi
 
 
-def kill_async(
-    flux_handle: Flux, jobid: Union[JobID, int], signum: Optional[int] = None
-):
+def kill_async(flux_handle: Flux, jobid: Union[JobID, int], signum: Optional[int] = None):
     """Send a signal to a running job asynchronously
 
     :param flux_handle: handle for Flux broker from flux.Flux()
@@ -45,9 +43,7 @@ def kill(flux_handle: Flux, jobid: Union[JobID, int], signum: Optional[int] = No
     return kill_async(flux_handle, jobid, signum).get()
 
 
-def cancel_async(
-    flux_handle: Flux, jobid: Union[JobID, int], reason: Optional[str] = None
-):
+def cancel_async(flux_handle: Flux, jobid: Union[JobID, int], reason: Optional[str] = None):
     """Cancel a pending or or running job asynchronously
 
     Arguments:

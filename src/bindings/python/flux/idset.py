@@ -8,8 +8,9 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import numbers
 import collections
+import numbers
+
 from _flux._idset import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl
 
@@ -86,9 +87,7 @@ class IDset(WrapperPimpl):
         try:
             self.pimpl = self.InnerWrapper(arg=arg, handle=handle)
         except (TypeError, AttributeError):
-            raise TypeError(
-                "IDset() expected an idset string or iterable, got " + type(arg)
-            )
+            raise TypeError("IDset() expected an idset string or iterable, got " + type(arg))
 
     def __str__(self):
         return self.encode()

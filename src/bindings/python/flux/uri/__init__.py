@@ -8,4 +8,4 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from flux.uri.uri import URI, JobURI, URIResolverURI, FluxURIResolver, URIResolverPlugin
+from flux.uri.uri import URI, FluxURIResolver, JobURI, URIResolverPlugin, URIResolverURI

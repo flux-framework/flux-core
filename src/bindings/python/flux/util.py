@@ -8,26 +8,25 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import re
-import sys
+import argparse
 import errno
+import glob
 import json
 import logging
-import os
 import math
-import argparse
-import traceback
-import signal
-import threading
+import os
+import re
 import shutil
-import glob
-from datetime import datetime, timedelta
-from string import Formatter
+import signal
+import sys
+import threading
+import traceback
 from collections import namedtuple
+from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
+from string import Formatter
 
 import yaml
-
 
 try:
     import tomllib
@@ -52,11 +51,7 @@ def check_future_error(func):
             return func(calling_obj, *args, **kwargs)
         except EnvironmentError as error:
             try:
-                future = (
-                    calling_obj.handle
-                    if hasattr(calling_obj, "handle")
-                    else calling_obj
-                )
+                future = calling_obj.handle if hasattr(calling_obj, "handle") else calling_obj
                 errmsg = raw.flux_future_error_string(future)
             except EnvironmentError:
                 raise error from None
@@ -100,9 +95,7 @@ def encode_payload(payload):
     elif isinstance(payload, str):
         payload = payload.encode("UTF-8", errors="surrogateescape")
     elif not isinstance(payload, bytes):
-        payload = json.dumps(payload, ensure_ascii=False).encode(
-            "UTF-8", errors="surrogateescape"
-        )
+        payload = json.dumps(payload, ensure_ascii=False).encode("UTF-8", errors="surrogateescape")
     return payload
 
 
@@ -207,9 +200,7 @@ class CLIMain(object):
 
     def __call__(self, main_func):
         loglevel = int(os.environ.get("FLUX_PYCLI_LOGLEVEL", logging.INFO))
-        logging.basicConfig(
-            level=loglevel, format="%(name)s: %(levelname)s: %(message)s"
-        )
+        logging.basicConfig(level=loglevel, format="%(name)s: %(levelname)s: %(message)s")
         exit_code = 0
         try:
             main_func()
@@ -318,7 +309,7 @@ class OutputFormat:
 
         #  Throw an exception if any requested fields are invalid:
         for field in self._fields:
-            if field and not field in self.headings:
+            if field and field not in self.headings:
                 raise ValueError("Unknown format field: " + field)
 
         #  Prepend arbitrary string to format fields if requested

@@ -11,11 +11,11 @@
 import errno
 import json
 
-from flux.wrapper import Wrapper, WrapperPimpl
+import flux.constants
 from flux.core.inner import ffi, lib, raw
 from flux.core.watchers import Watcher
-import flux.constants
 from flux.util import encode_payload, encode_topic
+from flux.wrapper import Wrapper, WrapperPimpl
 
 __all__ = ["Message", "MessageWatcher", "msg_typestr"]
 
@@ -26,7 +26,7 @@ def msg_typestr(msg_type):
 
 
 class Message(WrapperPimpl):
-    """ Flux message wrapper class. """
+    """Flux message wrapper class."""
 
     class InnerWrapper(Wrapper):
         def __init__(

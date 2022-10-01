@@ -13,11 +13,10 @@ import socket
 from collections.abc import Mapping
 
 from _flux._rlist import ffi, lib
-from flux.wrapper import Wrapper, WrapperPimpl
-
-from flux.resource.ResourceSetImplementation import ResourceSetImplementation
 from flux.hostlist import Hostlist
 from flux.idset import IDset
+from flux.resource.ResourceSetImplementation import ResourceSetImplementation
+from flux.wrapper import Wrapper, WrapperPimpl
 
 
 @ResourceSetImplementation.register
@@ -35,7 +34,7 @@ class Rlist(WrapperPimpl):
                         rstring = json.dumps(rstring)
                     handle = lib.rlist_from_R(rstring.encode("utf-8"))
             if handle == ffi.NULL:
-                raise ValueError(f"Rlist: invalid argument")
+                raise ValueError("Rlist: invalid argument")
             super().__init__(
                 ffi,
                 lib,
@@ -125,9 +124,7 @@ class Rlist(WrapperPimpl):
         try:
             self.pimpl.add_property(error, name, ranks)
         except OSError as exc:
-            raise ValueError(
-                "set_property: " + ffi.string(error.text).decode("utf-8")
-            ) from exc
+            raise ValueError("set_property: " + ffi.string(error.text).decode("utf-8")) from exc
 
     def copy_constraint(self, constraint):
         error = ffi.new("flux_error_t *")
@@ -136,7 +133,5 @@ class Rlist(WrapperPimpl):
         try:
             handle = self.pimpl.copy_constraint_string(constraint, error)
         except OSError as exc:
-            raise ValueError(
-                "copy_constraint: " + ffi.string(error.text).decode("utf-8")
-            ) from exc
+            raise ValueError("copy_constraint: " + ffi.string(error.text).decode("utf-8")) from exc
         return Rlist(handle=handle)

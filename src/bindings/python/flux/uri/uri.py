@@ -12,8 +12,7 @@ import os
 import platform
 import re
 from abc import ABC, abstractmethod
-
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from flux.importer import import_plugins
 
@@ -79,9 +78,7 @@ class JobURI(URI):
                 hostname = platform.uname()[1]
                 self.remote_uri = f"ssh://{hostname}{self.path}"
             else:
-                raise ValueError(
-                    f"Cannot convert JobURI with scheme {self.scheme} to remote"
-                )
+                raise ValueError(f"Cannot convert JobURI with scheme {self.scheme} to remote")
         return self.remote_uri
 
     @property
@@ -92,9 +89,7 @@ class JobURI(URI):
             elif self.scheme == "ssh":
                 self.local_uri = f"local://{self.path}"
             else:
-                raise ValueError(
-                    f"Cannot convert JobURI with scheme {self.scheme} to local"
-                )
+                raise ValueError(f"Cannot convert JobURI with scheme {self.scheme} to local")
 
         return self.local_uri
 

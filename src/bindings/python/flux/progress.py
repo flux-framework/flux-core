@@ -8,11 +8,11 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import sys
-import shutil
 import atexit
-import time
 import datetime
+import shutil
+import sys
+import time
 
 # Bottombar heavily borrows from
 #

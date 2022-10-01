@@ -1,6 +1,6 @@
+import re
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
 from functools import lru_cache
-import re
 from typing import Any, Optional, Union
 
 from ._types import ParseFloat
@@ -31,7 +31,7 @@ RE_NUMBER = re.compile(
 )
 RE_LOCALTIME = re.compile(_TIME_RE_STR)
 RE_DATETIME = re.compile(
-    fr"""
+    rf"""
 ([0-9]{{4}})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])  # date, e.g. 1988-10-27
 (?:
     [Tt ]
@@ -68,9 +68,7 @@ def match_to_datetime(match: "re.Match") -> Union[datetime, date]:
     hour, minute, sec = int(hour_str), int(minute_str), int(sec_str)
     micros = int(micros_str.ljust(6, "0")) if micros_str else 0
     if offset_sign_str:
-        tz: Optional[tzinfo] = cached_tz(
-            offset_hour_str, offset_minute_str, offset_sign_str
-        )
+        tz: Optional[tzinfo] = cached_tz(offset_hour_str, offset_minute_str, offset_sign_str)
     elif zulu_time:
         tz = timezone.utc
     else:  # local date-time

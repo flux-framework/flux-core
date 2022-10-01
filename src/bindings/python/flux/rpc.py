@@ -10,12 +10,11 @@
 
 import json
 
-from flux.util import check_future_error
-from flux.wrapper import Wrapper
-from flux.future import Future
-from flux.core.inner import ffi, lib, raw
 import flux.constants
-from flux.util import encode_payload, encode_topic, interruptible
+from flux.core.inner import ffi, lib, raw
+from flux.future import Future
+from flux.util import check_future_error, encode_payload, encode_topic, interruptible
+from flux.wrapper import Wrapper
 
 
 class RPC(Future):
@@ -35,9 +34,7 @@ class RPC(Future):
             if prefixes is None:
                 prefixes = ["flux_rpc_", "flux_future_"]
 
-            super().__init__(
-                ffi, lib, handle, match, filter_match, prefixes, destructor
-            )
+            super().__init__(ffi, lib, handle, match, filter_match, prefixes, destructor)
 
         def check_wrap(self, fun, name):
             func = super().check_wrap(fun, name)

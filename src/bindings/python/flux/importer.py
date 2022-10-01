@@ -8,10 +8,10 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import sys
+import importlib
 import os
 import pkgutil
-import importlib
+import sys
 
 
 def import_plugins_pkg(ns_pkg):

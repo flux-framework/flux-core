@@ -8,8 +8,8 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 import flux.kvs
-from flux.job._wrapper import _RAW as RAW
 from _flux._core import ffi
+from flux.job._wrapper import _RAW as RAW
 
 
 def job_kvs(flux_handle, jobid):

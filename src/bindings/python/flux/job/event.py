@@ -7,13 +7,12 @@
 #
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
-import json
 import errno
+import json
 
+from _flux._core import ffi
 from flux.future import Future
 from flux.job._wrapper import _RAW as RAW
-from _flux._core import ffi
-
 
 # Names of events that may appear in the main eventlog (i.e. ``eventlog="eventlog"``)
 # See Flux RFC 21 for documentation on each event.
@@ -224,10 +223,6 @@ def event_wait(flux_handle, jobid, name, eventlog="eventlog", raiseJobException=
     for event in event_watch(flux_handle, jobid, eventlog):
         if event.name == name:
             return event
-        if (
-            raiseJobException
-            and event.name == "exception"
-            and event.context["severity"] == 0
-        ):
+        if raiseJobException and event.name == "exception" and event.context["severity"] == 0:
             raise JobException(event)
     raise OSError(errno.ENODATA, f"eventlog ended before event='{name}'")

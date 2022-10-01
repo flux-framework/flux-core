@@ -41,9 +41,7 @@ class DefaultsConfig:
             raise ValueError("queues must be a table")
 
         if self.default_queue and self.default_queue not in self.queues:
-            raise ValueError(
-                f"default queue '{self.default_queue}' must be in [queues]"
-            )
+            raise ValueError(f"default queue '{self.default_queue}' must be in [queues]")
 
         for queue in self.queues:
             self.queue_defaults(queue)
@@ -79,7 +77,7 @@ class DefaultsConfig:
                 for attr in queue_defaults:
                     self.setattr_default(jobspec, attr, queue_defaults[attr])
         elif self.queues:
-            raise ValueError(f"no queue specified")
+            raise ValueError("no queue specified")
 
 
 class Frobnicator(FrobnicatorPlugin):

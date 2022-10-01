@@ -12,19 +12,18 @@
 This module defines the ``FluxExecutor`` and ``FluxExecutorFuture`` classes.
 """
 
-import threading
-import logging
-import itertools
 import collections
 import concurrent.futures
-import weakref
-import time
+import itertools
+import logging
 import os
+import threading
+import time
+import weakref
 
 import flux
+from flux.job.event import MAIN_EVENTS, JobException, event_watch_async
 from flux.job.submit import submit_async, submit_get_id
-from flux.job.event import event_watch_async, JobException, MAIN_EVENTS
-
 
 _SubmitPackage = collections.namedtuple(
     "_SubmitPackage", ["submit_args", "submit_kwargs", "future"]
@@ -134,9 +133,9 @@ class _FluxExecutorThread(threading.Thread):
     def __handle_submit(self, package):
         """Submit a _SubmitPackage and set a jobid callback."""
         try:
-            submit_async(
-                self.__flux_handle, *package.submit_args, **package.submit_kwargs
-            ).then(self.__submission_callback, package.future)
+            submit_async(self.__flux_handle, *package.submit_args, **package.submit_kwargs).then(
+                self.__submission_callback, package.future
+            )
         except Exception as submit_exc:  # pylint: disable=broad-except
             package.future.set_exception(submit_exc)
         else:
@@ -157,9 +156,7 @@ class _FluxExecutorThread(threading.Thread):
         """Callback invoked when a jobid is ready for a submitted jobspec."""
         jobid = submit_get_id(submission_future)
         user_future._set_jobid(jobid)  # pylint: disable=protected-access
-        event_watch_async(self.__flux_handle, jobid).then(
-            self.__event_update, user_future
-        )
+        event_watch_async(self.__flux_handle, jobid).then(self.__event_update, user_future)
 
     def __event_update(self, event_future, user_future):
         """Callback invoked when a job has an event update."""
@@ -303,9 +300,7 @@ class FluxExecutorFuture(concurrent.futures.Future):
         try:
             callback(self, *args)
         except Exception:  # pylint: disable=broad-except
-            logging.getLogger(__name__).exception(
-                "exception calling callback for %r", self
-            )
+            logging.getLogger(__name__).exception("exception calling callback for %r", self)
 
     def exception(self, *args, **kwargs):  # pylint: disable=arguments-differ
         """If this method is invoked from a jobid/event callback by an executor thread,
@@ -342,9 +337,7 @@ class FluxExecutorFuture(concurrent.futures.Future):
             self.jobid(0)
         except concurrent.futures.TimeoutError:
             # set jobid to something
-            self._set_jobid(
-                None, RuntimeError(f"job could not be submitted due to {exception}")
-            )
+            self._set_jobid(None, RuntimeError(f"job could not be submitted due to {exception}"))
         return super().set_exception(exception)
 
     set_exception.__doc__ = concurrent.futures.Future.set_exception.__doc__
@@ -490,9 +483,7 @@ class FluxExecutor:
         self._shutdown_lock = threading.Lock()
         self._broken_event = threading.Event()
         self._shutdown_event = threading.Event()
-        thread_name_prefix = (
-            thread_name_prefix or f"{type(self).__name__}-{self._counter()}"
-        )
+        thread_name_prefix = thread_name_prefix or f"{type(self).__name__}-{self._counter()}"
         self._executor_threads = [
             _FluxExecutorThread(
                 self._broken_event,
@@ -601,9 +592,7 @@ class FluxExecutor:
                 raise RuntimeError("cannot schedule new futures after shutdown")
             future_owner_id = self._executor_threads[self._next_thread].ident
             fut = FluxExecutorFuture(future_owner_id)
-            self._submission_queues[self._next_thread].append(
-                factory(*factory_args, fut)
-            )
+            self._submission_queues[self._next_thread].append(factory(*factory_args, fut))
             self._next_thread = (self._next_thread + 1) % len(self._submission_queues)
             return fut
 

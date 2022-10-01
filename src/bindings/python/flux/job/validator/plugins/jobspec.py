@@ -16,6 +16,7 @@ supplied, then only that version of jobspec is permitted.
 """
 
 import json
+
 from flux.job import validate_jobspec
 from flux.job.validator import ValidatorPlugin
 
@@ -34,16 +35,14 @@ class Validator(ValidatorPlugin):
         try:
             self.require_version = int(args.require_version)
             if self.require_version < 1:
-                raise ValueError(
-                    f"Required jobspec version too low: {args.require_version} is < 1"
-                )
+                raise ValueError(f"Required jobspec version too low: {args.require_version} is < 1")
             elif self.require_version > 1:
                 raise ValueError(
                     f"Required jobspec version too high: {args.require_version} is > 1"
                 )
         except ValueError:
             if args.require_version != "any":
-                raise ValueError(f"Invalid argument to --require-version")
+                raise ValueError("Invalid argument to --require-version")
             self.require_version = None
 
     def validate(self, args):

@@ -24,6 +24,7 @@ does not support the sched.feasibility RPC
 """
 
 import errno
+
 from flux.job.validator import ValidatorPlugin
 
 
@@ -33,8 +34,7 @@ class Validator(ValidatorPlugin):
         parser.add_argument(
             "--feasibility-service",
             metavar="NAME",
-            help="Set feasibility RPC service endpoint "
-            f"(default={self.service_name})",
+            help="Set feasibility RPC service endpoint " f"(default={self.service_name})",
         )
 
     def configure(self, args):

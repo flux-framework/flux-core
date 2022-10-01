@@ -66,7 +66,7 @@ def _proc_has_task_children():
     pid = os.getpid()
     for taskid in os.listdir(f"/proc/{pid}/task"):
         try:
-            with open(f"/proc/{pid}/task/{taskid}/children") as cfile:
+            with open(f"/proc/{pid}/task/{taskid}/children"):
                 return True
         except FileNotFoundError:
             return False
@@ -77,10 +77,7 @@ class URIResolver(URIResolverPlugin):
     """A URIResolver that can fetch a FLUX_URI value from a local PID"""
 
     #  Determine which broker_get_child method to use:
-    if (
-        _proc_has_task_children()
-        and not "FLUX_FORCE_BROKER_CHILD_FALLBACK" in os.environ
-    ):
+    if _proc_has_task_children() and "FLUX_FORCE_BROKER_CHILD_FALLBACK" not in os.environ:
         get_broker_child = staticmethod(_get_broker_child)
     else:
         get_broker_child = staticmethod(_get_broker_child_fallback)

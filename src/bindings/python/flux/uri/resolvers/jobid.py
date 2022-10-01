@@ -8,12 +8,12 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import os
 from pathlib import PurePath
 
-import os
 import flux
 from flux.job import JobID, job_list_id
-from flux.uri import URIResolverPlugin, URIResolverURI, JobURI
+from flux.uri import JobURI, URIResolverPlugin, URIResolverURI
 
 
 def filter_slash(iterable):
@@ -36,14 +36,12 @@ class URIResolver(URIResolverPlugin):
         arg = jobids.pop(0)
         try:
             jobid = JobID(arg)
-        except OSError as exc:
+        except OSError:
             raise ValueError(f"{arg} is not a valid jobid")
 
         #  Fetch the jobinfo object for this job
         try:
-            job = job_list_id(
-                flux_handle, jobid, attrs=["state", "annotations"]
-            ).get_jobinfo()
+            job = job_list_id(flux_handle, jobid, attrs=["state", "annotations"]).get_jobinfo()
             if job.state != "RUN":
                 raise ValueError(f"jobid {arg} is not running")
             uri = job.user.uri
@@ -60,9 +58,7 @@ class URIResolver(URIResolverPlugin):
             resolver_uri = URIResolverURI(f"jobid:{arg}")
             if force_local:
                 uri = JobURI(uri).local
-            return self._do_resolve(
-                resolver_uri, flux.Flux(uri), force_local=force_local
-            )
+            return self._do_resolve(resolver_uri, flux.Flux(uri), force_local=force_local)
         return uri
 
     def resolve(self, uri):

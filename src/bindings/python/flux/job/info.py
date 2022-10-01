@@ -8,21 +8,21 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import os
-import time
-import pwd
 import json
+import os
+import pwd
 import string
-from datetime import datetime, timedelta
+import time
 from collections import namedtuple
+from datetime import datetime, timedelta
 
 import flux.constants
-from flux.memoized_property import memoized_property
+from flux.core.inner import raw
 from flux.job.JobID import JobID
 from flux.job.stats import JobStats
+from flux.memoized_property import memoized_property
 from flux.resource import SchedResourceList
 from flux.uri import JobURI
-from flux.core.inner import raw
 
 
 def statetostr(stateid, fmt="L"):
@@ -97,10 +97,7 @@ class AnnotationsInfo:
     def __init__(self, annotationsDict):
         self.annotationsDict = annotationsDict
         self.atuple = namedtuple("X", annotationsDict.keys())(
-            *(
-                AnnotationsInfo(v) if isinstance(v, dict) else v
-                for v in annotationsDict.values()
-            )
+            *(AnnotationsInfo(v) if isinstance(v, dict) else v for v in annotationsDict.values())
         )
 
     def __repr__(self):
@@ -125,10 +122,7 @@ class StatsInfo(JobStats):
         super().__init__(handle)
 
     def __repr__(self):
-        return (
-            f"PD:{self.pending} R:{self.running} "
-            f"CD:{self.successful} F:{self.failed}"
-        )
+        return f"PD:{self.pending} R:{self.running} " f"CD:{self.successful} F:{self.failed}"
 
     def __format__(self, fmt):
         return str(self).__format__(fmt)
@@ -578,7 +572,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         """
         format_list = string.Formatter().parse(fmt)
         for (_, field, _, _) in format_list:
-            if field and not field in self.headings:
+            if field and field not in self.headings:
                 if field.startswith("annotations."):
                     field_heading = field[len("annotations.") :].upper()
                     self.headings[field] = field_heading
@@ -646,9 +640,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         #  Remove any entries that were empty from self.format_list
         #  (use index field of lst to remove by postition in self.format_list)
         format_list = [
-            x
-            for i, x in enumerate(self.format_list)
-            if i not in [x["index"] for x in lst]
+            x for i, x in enumerate(self.format_list) if i not in [x["index"] for x in lst]
         ]
 
         #  Remove "?:" from remaining entries so they disappear in ouput.

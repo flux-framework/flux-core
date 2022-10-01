@@ -12,18 +12,15 @@ import signal
 import threading
 from contextlib import contextmanager
 
-from flux.wrapper import Wrapper
-from flux.future import Future
-from flux.rpc import RPC
-from flux.message import Message
-from flux.util import encode_topic, encode_payload
-from flux.core.inner import raw
-from flux.message import MessageWatcher
-from flux.core.watchers import TimerWatcher
-from flux.core.watchers import SignalWatcher
-from flux.core.watchers import FDWatcher
-from flux.constants import FLUX_POLLIN, FLUX_POLLOUT, FLUX_POLLERR
 from _flux._core import ffi, lib
+from flux.constants import FLUX_POLLERR, FLUX_POLLIN, FLUX_POLLOUT
+from flux.core.inner import raw
+from flux.core.watchers import FDWatcher, SignalWatcher, TimerWatcher
+from flux.future import Future
+from flux.message import Message, MessageWatcher
+from flux.rpc import RPC
+from flux.util import encode_payload, encode_topic
+from flux.wrapper import Wrapper
 
 
 # pylint: disable=too-many-public-methods
@@ -199,7 +196,7 @@ class Flux(Wrapper):
         return None
 
     def rpc(self, topic, payload=None, nodeid=raw.FLUX_NODEID_ANY, flags=0):
-        """ Create a new RPC object """
+        """Create a new RPC object"""
         return RPC(self, topic, payload, nodeid, flags)
 
     def event_create(self, topic, payload=None):
@@ -213,7 +210,7 @@ class Flux(Wrapper):
         return Message.from_event_encode(topic, payload)
 
     def event_send(self, topic, payload=None):
-        """ Create and send a new event in one step """
+        """Create and send a new event in one step"""
         return self.send(self.event_create(topic, payload))
 
     def event_recv(self, topic=None):
