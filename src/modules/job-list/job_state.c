@@ -26,6 +26,7 @@
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libidset/idset.h"
 
+#include "job-list.h"
 #include "job_state.h"
 #include "job_data.h"
 #include "idsync.h"
@@ -256,7 +257,7 @@ static void update_job_state_and_list (struct job_state_ctx *jsctx,
                         search_direction (job));
 }
 
-static void list_id_respond (struct list_ctx *ctx,
+static void list_id_respond (struct idsync_ctx *isctx,
                              struct idsync_data *isd,
                              struct job *job)
 {
@@ -266,45 +267,45 @@ static void list_id_respond (struct list_ctx *ctx,
     if (!(o = job_to_json (job, isd->attrs, &err)))
         goto error;
 
-    if (flux_respond_pack (ctx->h, isd->msg, "{s:O}", "job", o) < 0)
-        flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
+    if (flux_respond_pack (isctx->h, isd->msg, "{s:O}", "job", o) < 0)
+        flux_log_error (isctx->h, "%s: flux_respond_pack", __FUNCTION__);
 
     json_decref (o);
     return;
 
 error:
-    if (flux_respond_error (ctx->h, isd->msg, errno, err.text) < 0)
-        flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+    if (flux_respond_error (isctx->h, isd->msg, errno, err.text) < 0)
+        flux_log_error (isctx->h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void check_waiting_id (struct list_ctx *ctx,
+static void check_waiting_id (struct idsync_ctx *isctx,
                               struct job *job)
 {
     zlistx_t *list_isd;
 
-    if ((list_isd = zhashx_lookup (ctx->isctx->waits, &job->id))) {
+    if ((list_isd = zhashx_lookup (isctx->waits, &job->id))) {
         struct idsync_data *isd;
         isd = zlistx_first (list_isd);
         while (isd) {
-            list_id_respond (ctx, isd, job);
+            list_id_respond (isctx, isd, job);
             isd = zlistx_next (list_isd);
         }
-        zhashx_delete (ctx->isctx->waits, &job->id);
+        zhashx_delete (isctx->waits, &job->id);
     }
 }
 
 static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
-    struct list_ctx *ctx = flux_future_aux_get (f, "list_ctx");
+    struct job_state_ctx *jsctx = flux_future_aux_get (f, "job_state_ctx");
     struct state_transition *st;
     const char *s;
     void *handle;
 
-    assert (ctx);
+    assert (jsctx);
 
     if (flux_rpc_get_unpack (f, "{s:s}", "jobspec", &s) < 0) {
-        flux_log_error (ctx->h, "%s: error jobspec for %ju",
+        flux_log_error (jsctx->h, "%s: error jobspec for %ju",
                         __FUNCTION__, (uintmax_t)job->id);
         goto out;
     }
@@ -314,15 +315,15 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
 
     st = zlist_head (job->next_states);
     assert (st);
-    update_job_state_and_list (ctx->jsctx, job, st->state, st->timestamp);
-    check_waiting_id (ctx, job);
+    update_job_state_and_list (jsctx, job, st->state, st->timestamp);
+    check_waiting_id (jsctx->isctx, job);
     zlist_remove (job->next_states, st);
-    process_next_state (ctx->jsctx, job);
+    process_next_state (jsctx, job);
 
 out:
-    handle = zlistx_find (ctx->jsctx->futures, f);
+    handle = zlistx_find (jsctx->futures, f);
     if (handle)
-        zlistx_detach (ctx->jsctx->futures, handle);
+        zlistx_detach (jsctx->futures, handle);
     flux_future_destroy (f);
 }
 
@@ -346,7 +347,7 @@ static flux_future_t *state_depend_lookup (struct job_state_ctx *jsctx,
         goto error;
     }
 
-    if (flux_future_aux_set (f, "list_ctx", jsctx->ctx, NULL) < 0) {
+    if (flux_future_aux_set (f, "job_state_ctx", jsctx, NULL) < 0) {
         flux_log_error (jsctx->h, "%s: flux_future_aux_set", __FUNCTION__);
         goto error;
     }
@@ -362,15 +363,15 @@ static flux_future_t *state_depend_lookup (struct job_state_ctx *jsctx,
 static void state_run_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
-    struct list_ctx *ctx = flux_future_aux_get (f, "list_ctx");
+    struct job_state_ctx *jsctx = flux_future_aux_get (f, "job_state_ctx");
     struct state_transition *st;
     const char *s;
     void *handle;
 
-    assert (ctx);
+    assert (jsctx);
 
     if (flux_rpc_get_unpack (f, "{s:s}", "R", &s) < 0) {
-        flux_log_error (ctx->h, "%s: error eventlog for %ju",
+        flux_log_error (jsctx->h, "%s: error eventlog for %ju",
                         __FUNCTION__, (uintmax_t)job->id);
         goto out;
     }
@@ -380,14 +381,14 @@ static void state_run_lookup_continuation (flux_future_t *f, void *arg)
 
     st = zlist_head (job->next_states);
     assert (st);
-    update_job_state_and_list (ctx->jsctx, job, st->state, st->timestamp);
+    update_job_state_and_list (jsctx, job, st->state, st->timestamp);
     zlist_remove (job->next_states, st);
-    process_next_state (ctx->jsctx, job);
+    process_next_state (jsctx, job);
 
 out:
-    handle = zlistx_find (ctx->jsctx->futures, f);
+    handle = zlistx_find (jsctx->futures, f);
     if (handle)
-        zlistx_detach (ctx->jsctx->futures, handle);
+        zlistx_detach (jsctx->futures, handle);
     flux_future_destroy (f);
 }
 
@@ -411,7 +412,7 @@ static flux_future_t *state_run_lookup (struct job_state_ctx *jsctx,
         goto error;
     }
 
-    if (flux_future_aux_set (f, "list_ctx", jsctx->ctx, NULL) < 0) {
+    if (flux_future_aux_set (f, "job_state_ctx", jsctx, NULL) < 0) {
         flux_log_error (jsctx->h, "%s: flux_future_aux_set", __FUNCTION__);
         goto error;
     }
@@ -1522,17 +1523,17 @@ error:
     return NULL;
 }
 
-struct job_state_ctx *job_state_create (struct list_ctx *ctx)
+struct job_state_ctx *job_state_create (struct idsync_ctx *isctx)
 {
     struct job_state_ctx *jsctx = NULL;
     int saved_errno;
 
     if (!(jsctx = calloc (1, sizeof (*jsctx)))) {
-        flux_log_error (ctx->h, "calloc");
+        flux_log_error (isctx->h, "calloc");
         return NULL;
     }
-    jsctx->h = ctx->h;
-    jsctx->ctx = ctx;
+    jsctx->h = isctx->h;
+    jsctx->isctx = isctx;
 
     /* Index is the primary data structure holding the job data
      * structures.  It is responsible for destruction.  Lists only

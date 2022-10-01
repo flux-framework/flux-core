@@ -14,7 +14,7 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "job-list.h"
+#include "idsync.h"
 #include "stats.h"
 
 /* To handle the common case of user queries on job state, we will
@@ -38,7 +38,8 @@
 
 struct job_state_ctx {
     flux_t *h;
-    struct list_ctx *ctx;
+    struct idsync_ctx *isctx;
+
     zhashx_t *index;
     zlistx_t *pending;
     zlistx_t *running;
@@ -57,7 +58,7 @@ struct job_state_ctx {
     flux_future_t *events;
 };
 
-struct job_state_ctx *job_state_create (struct list_ctx *ctx);
+struct job_state_ctx *job_state_create (struct idsync_ctx *isctx);
 
 void job_state_destroy (void *data);
 
