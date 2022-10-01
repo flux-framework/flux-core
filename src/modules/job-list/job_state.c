@@ -296,10 +296,12 @@ static void check_waiting_id (struct list_ctx *ctx,
 static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
-    struct list_ctx *ctx = job->ctx;
+    struct list_ctx *ctx = flux_future_aux_get (f, "list_ctx");
     struct state_transition *st;
     const char *s;
     void *handle;
+
+    assert (ctx);
 
     if (flux_rpc_get_unpack (f, "{s:s}", "jobspec", &s) < 0) {
         flux_log_error (ctx->h, "%s: error jobspec for %ju",
@@ -344,6 +346,10 @@ static flux_future_t *state_depend_lookup (struct job_state_ctx *jsctx,
         goto error;
     }
 
+    if (flux_future_aux_set (f, "list_ctx", jsctx->ctx, NULL) < 0) {
+        flux_log_error (jsctx->h, "%s: flux_future_aux_set", __FUNCTION__);
+        goto error;
+    }
     return f;
 
  error:
@@ -356,10 +362,12 @@ static flux_future_t *state_depend_lookup (struct job_state_ctx *jsctx,
 static void state_run_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
-    struct list_ctx *ctx = job->ctx;
+    struct list_ctx *ctx = flux_future_aux_get (f, "list_ctx");
     struct state_transition *st;
     const char *s;
     void *handle;
+
+    assert (ctx);
 
     if (flux_rpc_get_unpack (f, "{s:s}", "R", &s) < 0) {
         flux_log_error (ctx->h, "%s: error eventlog for %ju",
@@ -400,6 +408,11 @@ static flux_future_t *state_run_lookup (struct job_state_ctx *jsctx,
 
     if (flux_future_then (f, -1, state_run_lookup_continuation, job) < 0) {
         flux_log_error (jsctx->h, "%s: flux_future_then", __FUNCTION__);
+        goto error;
+    }
+
+    if (flux_future_aux_set (f, "list_ctx", jsctx->ctx, NULL) < 0) {
+        flux_log_error (jsctx->h, "%s: flux_future_aux_set", __FUNCTION__);
         goto error;
     }
 
@@ -588,7 +601,7 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
     size_t index;
     json_t *value;
 
-    if (!(job = job_create (ctx, id)))
+    if (!(job = job_create (ctx->h, id)))
         goto error;
 
     if (!(a = eventlog_decode (eventlog))) {
@@ -957,7 +970,7 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
                                  json_t *context)
 {
     if (!job) {
-        if (!(job = job_create (jsctx->ctx, id))){
+        if (!(job = job_create (jsctx->h, id))){
             flux_log_error (jsctx->h, "%s: job_create", __FUNCTION__);
             return -1;
         }

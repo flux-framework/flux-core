@@ -41,14 +41,13 @@ void job_destroy (void *data)
     }
 }
 
-struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
+struct job *job_create (flux_t *h, flux_jobid_t id)
 {
     struct job *job = NULL;
 
     if (!(job = calloc (1, sizeof (*job))))
         return NULL;
-    job->h = ctx->h;
-    job->ctx = ctx;
+    job->h = h;
     job->id = id;
     job->userid = FLUX_USERID_UNKNOWN;
     job->urgency = -1;
