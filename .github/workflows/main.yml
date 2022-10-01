@@ -13,24 +13,8 @@ jobs:
     - run: git fetch origin master
     - uses: flux-framework/pr-validator@master
 
-  python-format:
-    name: python format
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/setup-python@v1
-      with:
-        python-version: 3.6
-    - uses: actions/checkout@v3
-      with:
-        ref: ${{ github.event.pull_request.head.sha }}
-        fetch-depth: 0
-    - name: install black
-      run: python3 -m pip install 'black==20.08.b1' --force-reinstall
-    - name: check format
-      run: ./scripts/check-format
-
   python-lint:
-    name: python lint
+    name: python linting
     runs-on: ubuntu-latest
     steps:
     - uses: actions/setup-python@v1
@@ -40,29 +24,13 @@ jobs:
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
-    - name: install pylint
-      run: python3 -m pip install 'pylint==2.4.4' --force-reinstall
-    - name: run pylint
-      run: ./scripts/pylint
-
-  mypy:
-    name: mypy
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/setup-python@v1
-      with:
-        python-version: 3.6
-    - uses: actions/checkout@v3
-      with:
-        ref: ${{ github.event.pull_request.head.sha }}
-        fetch-depth: 0
-    - name: install pylint
-      run: python3 -m pip install 'mypy==0.770' --force-reinstall
-    - name: run mypy
-      run: mypy
+    - name: install linting and formatting deps
+      run: pip install -r scripts/requirements-dev.txt
+    - name: format and linting checks
+      run: pre-commit run --all-files
 
   check-sched:
-    needs: [ python-format, python-lint, mypy ]
+    needs: [python-lint]
     name: flux-sched check
     runs-on: ubuntu-latest
     steps:
@@ -81,7 +49,7 @@ jobs:
         src/test/docker/docker-run-checks.sh -j 4 -i bionic
 
   check-accounting:
-    needs: [ python-format, python-lint, mypy ]
+    needs: [python-lint]
     name: flux-accounting check
     runs-on: ubuntu-latest
     steps:

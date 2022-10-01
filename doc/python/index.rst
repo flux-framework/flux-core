@@ -13,6 +13,7 @@ command line are possible in Python as well via the ``flux`` package.
    basics
    job_submission
    complete_api
+   developer
 
 
 Indices and tables

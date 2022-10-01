@@ -31,6 +31,7 @@ RUN apt-get update \
         python3-dev \
         python3-pip \
         python3-sphinx \
+        python3-venv \
         libtool \
         git \
         build-essential \
@@ -47,7 +48,7 @@ COPY . /code
 
 RUN chmod +x etc/gen-cmdhelp.py && \
     ./autogen.sh && \
-    ./configure --prefix=/usr/local --without-python && \
+    ./configure --prefix=/usr/local && \
     make && \
     make install && \
     ldconfig

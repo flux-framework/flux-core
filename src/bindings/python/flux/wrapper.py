@@ -369,7 +369,7 @@ signatures do not match, create a new subclass to change matching parameters:
 
     @handle.setter
     def handle(self, h):
-        """ Override handle setter to clean up old handle if requested """
+        """Override handle setter to clean up old handle if requested"""
         if h is not None and self.match is not None:
             if self.ffi.typeof(h) != self.match:
                 raise TypeError(
