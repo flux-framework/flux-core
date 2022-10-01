@@ -40,7 +40,7 @@ void idsync_data_destroy_wrapper (void **data)
     }
 }
 
-struct idsync_data *idsync_data_create (struct list_ctx *ctx,
+struct idsync_data *idsync_data_create (flux_t *h,
                                         flux_jobid_t id,
                                         const flux_msg_t *msg,
                                         json_t *attrs,
@@ -52,7 +52,7 @@ struct idsync_data *idsync_data_create (struct list_ctx *ctx,
     isd = calloc (1, sizeof (*isd));
     if (!isd)
         goto error_enomem;
-    isd->ctx = ctx;
+    isd->h = h;
     isd->id = id;
     if (!(isd->msg = flux_msg_copy (msg, false)))
         goto error;

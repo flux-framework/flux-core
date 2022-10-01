@@ -13,8 +13,6 @@
 
 #include <flux/core.h>
 
-#include "job-list.h"
-
 struct idsync_ctx {
     flux_t *h;
     zlistx_t *lookups;
@@ -22,7 +20,7 @@ struct idsync_ctx {
 };
 
 struct idsync_data {
-    struct list_ctx *ctx;
+    flux_t *h;
     flux_jobid_t id;
     flux_msg_t *msg;
     json_t *attrs;
@@ -38,7 +36,7 @@ void idsync_data_destroy (void *data);
 
 void idsync_data_destroy_wrapper (void **data);
 
-struct idsync_data *idsync_data_create (struct list_ctx *ctx,
+struct idsync_data *idsync_data_create (flux_t *h,
                                         flux_jobid_t id,
                                         const flux_msg_t *msg,
                                         json_t *attrs,

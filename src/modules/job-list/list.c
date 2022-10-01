@@ -302,8 +302,10 @@ error_destroy:
 void check_id_valid_continuation (flux_future_t *f, void *arg)
 {
     struct idsync_data *isd = arg;
-    struct list_ctx *ctx = isd->ctx;
+    struct list_ctx *ctx = flux_future_aux_get (f, "list_ctx");
     void *handle;
+
+    assert (ctx);
 
     if (flux_future_get (f, NULL) < 0) {
         if (flux_respond_error (ctx->h, isd->msg, errno, NULL) < 0)
@@ -363,11 +365,16 @@ int check_id_valid (struct list_ctx *ctx,
         goto error;
     }
 
-    if (!(isd = idsync_data_create (ctx, id, msg, attrs, f)))
+    if (!(isd = idsync_data_create (ctx->h, id, msg, attrs, f)))
         goto error;
 
     /* future now owned by struct idsync_data */
     f = NULL;
+
+    if (flux_future_aux_set (isd->f_lookup, "list_ctx", ctx, NULL) < 0) {
+        flux_log_error (ctx->h, "%s: flux_future_aux_set", __FUNCTION__);
+        goto error;
+    }
 
     if (flux_future_then (isd->f_lookup,
                           -1,
@@ -422,7 +429,7 @@ json_t *get_job_by_id (struct list_ctx *ctx,
     if (job->state == FLUX_JOB_STATE_NEW) {
         if (stall) {
             struct idsync_data *isd;
-            if (!(isd = idsync_data_create (ctx, id, msg, attrs, NULL))) {
+            if (!(isd = idsync_data_create (ctx->h, id, msg, attrs, NULL))) {
                 flux_log_error (ctx->h, "%s: idsync_data_create", __FUNCTION__);
                 return NULL;
             }
