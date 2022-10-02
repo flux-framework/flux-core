@@ -60,6 +60,29 @@ static struct optparse_option status_opts[] = {
     { .name = "verbose", .key = 'v',
       .usage = "Display more detail about internal job manager state",
     },
+    { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Specify queue to show (default all)",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option enable_opts[] = {
+    { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Specify queue to enable (default all)",
+    },
+    { .name = "all", .key = 'a', .has_arg = 0,
+      .usage = "Force command to apply to all queues if none specified",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option disable_opts[] = {
+    { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Specify queue to disable (default all)",
+    },
+    { .name = "all", .key = 'a', .has_arg = 0,
+      .usage = "Force command to apply to all queues if none specified",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -86,14 +109,14 @@ static struct optparse_subcommand subcommands[] = {
       "Enable job submission",
       cmd_enable,
       0,
-      NULL,
+      enable_opts,
     },
     { "disable",
       "[OPTIONS] [message ...]",
       "Disable job submission",
       cmd_disable,
       0,
-      NULL,
+      disable_opts,
     },
     { "start",
       "[OPTIONS]",
@@ -209,38 +232,6 @@ static char *parse_arg_message (char **argv, const char *name)
     return argz;
 }
 
-void submit_admin (flux_t *h,
-                   int query_only,
-                   int enable,
-                   const char *reason)
-{
-    flux_future_t *f;
-    if (!(f = flux_rpc_pack (h,
-                             "job-manager.submit-admin",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:b s:b s:s}",
-                             "query_only",
-                             query_only,
-                             "enable",
-                             enable,
-                             "reason",
-                             reason ? reason : "")))
-        log_err_exit ("error sending submit-admin request");
-    if (flux_rpc_get_unpack (f,
-                             "{s:b s:s}",
-                             "enable",
-                             &enable,
-                             "reason",
-                             &reason) < 0)
-        log_msg_exit ("submit-admin: %s", future_strerror (f, errno));
-    printf ("Job submission is %s%s%s\n",
-            enable ? "enabled" : "disabled",
-            enable ? "" : ": ",
-            enable ? "" : reason);
-    flux_future_destroy (f);
-}
-
 void alloc_admin (flux_t *h,
                   bool verbose,
                   bool quiet,
@@ -296,10 +287,101 @@ void alloc_admin (flux_t *h,
     flux_future_destroy (f);
 }
 
+static void add_string_if_set (json_t *o, const char *key, const char *val)
+{
+    if (val) {
+        json_t *str = json_string (val);
+        if (!str || json_object_set_new (o, key, str) < 0) {
+            json_decref (str);
+            log_msg_exit ("out of memory");
+        }
+    }
+}
+
+static void queue_admin (flux_t *h,
+                         const char *name,
+                         bool enable,
+                         const char *reason,
+                         bool all)
+{
+    json_t *payload;
+    flux_future_t *f;
+
+    if (!(payload = json_pack ("{s:b s:b}",
+                               "enable", enable ? 1 : 0,
+                               "all", all ? 1 : 0)))
+        log_msg_exit ("out of memory");
+    add_string_if_set (payload, "name", name);
+    add_string_if_set (payload, "reason", reason);
+    f = flux_rpc_pack (h, "job-manager.queue-admin", 0, 0, "O", payload);
+    if (!f || flux_rpc_get (f, NULL) < 0)
+        log_msg_exit ("%s", future_strerror (f, errno));
+    flux_future_destroy (f);
+    json_decref (payload);
+}
+
+static void queue_status_one (flux_t *h, const char *name)
+{
+    json_t *payload;
+    flux_future_t *f;
+    int enable;
+    const char *reason;
+
+    if (!(payload = json_object ()))
+        log_msg_exit ("out of memory");
+    add_string_if_set (payload, "name", name);
+    f = flux_rpc_pack (h, "job-manager.queue-status", 0, 0, "O", payload);
+    if (!f || flux_rpc_get_unpack (f,
+                                   "{s:b s?s}",
+                                   "enable", &enable,
+                                   "reason", &reason))
+        log_msg_exit ("%s", future_strerror (f, errno));
+    if (enable) {
+        printf ("%s%sJob submission is enabled\n",
+                name ? name : "",
+                name ? ": " : "");
+    }
+    else {
+        printf ("%s%sJob submission is disabled: %s\n",
+                name ? name : "",
+                name ? ": " : "", reason);
+    }
+    flux_future_destroy (f);
+    json_decref (payload);
+}
+
+static void queue_status (flux_t *h, const char *name)
+{
+    if (!name) {
+        json_t *queues;
+        size_t index;
+        json_t *value;
+        flux_future_t *f;
+
+        f = flux_rpc (h, "job-manager.queue-list", NULL, 0, 0);
+        if (!f || flux_rpc_get_unpack (f,
+                                       "{s:o}",
+                                       "queues", &queues))
+            log_msg_exit ("%s", future_strerror (f, errno));
+        if (json_array_size (queues) > 0) {
+            json_array_foreach (queues, index, value) {
+                queue_status_one (h, json_string_value (value));
+            }
+        }
+        else
+            queue_status_one (h, NULL);
+        flux_future_destroy (f);
+    }
+    else
+        queue_status_one (h, name);
+}
+
 int cmd_enable (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
     int optindex = optparse_option_index (p);
+    const char *name = optparse_get_str (p, "queue", NULL);
+    bool all = optparse_hasopt (p, "all");
 
     if (argc - optindex > 0) {
         optparse_print_usage (p);
@@ -307,7 +389,7 @@ int cmd_enable (optparse_t *p, int argc, char **argv)
     }
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    submit_admin (h, 0, 1, NULL);
+    queue_admin (h, name, true, NULL, all);
     flux_close (h);
     return (0);
 }
@@ -316,15 +398,15 @@ int cmd_disable (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
     int optindex = optparse_option_index (p);
+    const char *name = optparse_get_str (p, "queue", NULL);
+    bool all = optparse_hasopt (p, "all");
     char *reason = NULL;
 
     if (argc - optindex > 0)
         reason = parse_arg_message (argv + optindex, "reason");
-    else
-        log_msg_exit ("submit: reason is required for disable");
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    submit_admin (h, 0, 0, reason);
+    queue_admin (h, name, false, reason, all);
     flux_close (h);
     free (reason);
     return (0);
@@ -376,6 +458,7 @@ int cmd_status (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
     int optindex = optparse_option_index (p);
+    const char *name = optparse_get_str (p, "queue", NULL);
 
     if (argc - optindex > 0) {
         optparse_print_usage (p);
@@ -383,7 +466,8 @@ int cmd_status (optparse_t *p, int argc, char **argv)
     }
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    submit_admin (h, 1, 0, NULL);
+    queue_status (h, name);
+
     alloc_admin (h,
                  optparse_hasopt (p, "verbose"),
                  false,
