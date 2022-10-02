@@ -6,7 +6,9 @@ test_description='Test flux job list services'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 job
+mkdir -p conf.d
+
+test_under_flux 4 job -o,--config-path=$(pwd)/conf.d
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-list/list-rpc.py"
@@ -649,11 +651,23 @@ test_expect_success HAVE_JQ 'flux job list output no queue if queue not set' '
         flux job list -s inactive | grep $jobid | jq -e ".queue == null"
 '
 
+test_expect_success 'reconfigure with one queue' '
+	cat >conf.d/config.toml <<-EOT &&
+	[queues.foo]
+	EOT
+	flux config reload
+'
+
 test_expect_success HAVE_JQ 'flux job list outputs queue' '
         jobid=`flux mini submit --wait --queue=foo /bin/true | flux job id` &&
         echo $jobid > jobqueue2.id &&
         wait_jobid_state $jobid inactive &&
         flux job list -s inactive | grep $jobid | jq -e ".queue == \"foo\""
+'
+
+test_expect_success 'reconfigure with no queues' '
+	cp /dev/null conf.d/config.toml &&
+	flux config reload
 '
 
 test_expect_success 'reload the job-list module' '
