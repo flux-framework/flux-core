@@ -355,76 +355,6 @@ error:
         flux_log_error (h, "error responding to job-manager.queue-admin");
 }
 
-static void submit_admin_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
-{
-    struct queue *queue = arg;
-    const char *error_prefix = "job submission is disabled: ";
-    const char *errmsg = NULL;
-    int enable;
-    int query_only;
-    const char *reason;
-
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{s:b s:b s:s}",
-                             "query_only",
-                             &query_only,
-                             "enable",
-                             &enable,
-                             "reason",
-                             &reason) < 0)
-        goto error;
-    if (!query_only) {
-        if (flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0) {
-            errmsg = "Request requires owner credentials";
-            goto error;
-        }
-        if (!enable) {
-            char *errmsg;
-            if (asprintf (&errmsg, "%s%s", error_prefix, reason) < 0)
-                goto error;
-            if (queue_enable_all (queue, false, errmsg) < 0)
-                goto error;
-        }
-        else {
-            if (queue_enable_all (queue, true, NULL) < 0)
-                goto error;
-        }
-    }
-    int any_enabled = 0;
-    struct jobq *q;
-    reason = NULL;
-    if (queue->have_named_queues) {
-        q = zhashx_first (queue->named);
-        while (q) {
-            if (q->enable) {
-                any_enabled = 1;
-                break;
-            }
-            if (!reason)
-                reason = q->reason;
-            q = zhashx_next (queue->named);
-        }
-    }
-    else {
-        any_enabled = queue->anon->enable ? 1 : 0;
-        reason = queue->anon->reason;
-    }
-    if (flux_respond_pack (h,
-                           msg,
-                           "{s:b s:s}",
-                           "enable",
-                           any_enabled,
-                           "reason",
-                           reason ? reason : "") < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-}
-
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -443,12 +373,6 @@ static const struct flux_msg_handler_spec htab[] = {
         "job-manager.queue-admin",
         queue_admin_cb,
         0,
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "job-manager.submit-admin",
-        submit_admin_cb,
-        FLUX_ROLE_USER,
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
