@@ -89,8 +89,8 @@ test_expect_success 'flux-queue: start with bad broker connection fails' '
 '
 
 test_expect_success 'flux-queue: start with extra free args fails' '
-	test_must_fail flux queue start xyz 2>start_xargs.out &&
-	grep Usage: start_xargs.out
+	test_must_fail flux queue start xyz 2>start_xargs.err &&
+	grep Usage: start_xargs.err
 '
 
 test_expect_success 'flux-queue: stop works' '
@@ -98,10 +98,10 @@ test_expect_success 'flux-queue: stop works' '
 '
 
 test_expect_success 'flux-queue: status reports reason for stop' '
-	flux queue status 2>status.out &&
+	flux queue status >status.out &&
 	cat <<-EOT >status.exp &&
-	flux-queue: Job submission is enabled
-	flux-queue: Scheduling is disabled: my unique message
+	Job submission is enabled
+	Scheduling is disabled: my unique message
 	EOT
 	test_cmp status.exp status.out
 '
@@ -131,8 +131,8 @@ test_expect_success 'flux-queue: submit a job and make sure alloc sent' '
 '
 
 test_expect_success 'flux-queue: stop canceled alloc request' '
-	flux queue stop -v 2>stop.err &&
-	grep "flux-queue: 1 alloc requests pending to scheduler" stop.err
+	flux queue stop -v >stop.out &&
+	grep "1 alloc requests pending to scheduler" stop.out
 '
 
 test_expect_success 'flux-queue: start scheduling and cancel long job' '
@@ -162,12 +162,12 @@ wait_for_sched_offline() {
 
 test_expect_success 'flux-queue: queue says scheduling disabled' '
 	wait_for_sched_offline 10 &&
-	flux queue status 2>sched_stat.err &&
+	flux queue status >sched_stat.out &&
 	cat <<-EOT >sched_stat.exp &&
-	flux-queue: Job submission is enabled
-	flux-queue: Scheduling is disabled: Scheduler is offline
+	Job submission is enabled
+	Scheduling is disabled: Scheduler is offline
 	EOT
-	test_cmp sched_stat.exp sched_stat.err
+	test_cmp sched_stat.exp sched_stat.out
 '
 
 test_expect_success 'flux-queue: queue contains 1 active job' '
@@ -180,12 +180,12 @@ test_expect_success 'flux-queue: load scheduler' '
 '
 
 test_expect_success 'flux-queue: queue says scheduling is enabled' '
-	flux queue status 2>sched_stat2.err &&
+	flux queue status >sched_stat2.out &&
 	cat <<-EOT >sched_stat2.exp &&
-	flux-queue: Job submission is enabled
-	flux-queue: Scheduling is enabled
+	Job submission is enabled
+	Scheduling is enabled
 	EOT
-	test_cmp sched_stat2.exp sched_stat2.err
+	test_cmp sched_stat2.exp sched_stat2.out
 '
 
 test_expect_success 'flux-queue: job in queue ran' '
@@ -208,16 +208,16 @@ test_expect_success 'flux-queue: there are 3 active jobs' '
 '
 
 test_expect_success 'flux-queue: queue status -v shows expected counts' '
-	flux queue status -v 2>stat.err &&
+	flux queue status -v >stat.out &&
 	cat <<-EOT >stat.exp &&
-	flux-queue: Job submission is enabled
-	flux-queue: Scheduling is enabled
-	flux-queue: 1 alloc requests queued
-	flux-queue: 1 alloc requests pending to scheduler
-	flux-queue: 0 free requests pending to scheduler
-	flux-queue: 1 running jobs
+	Job submission is enabled
+	Scheduling is enabled
+	1 alloc requests queued
+	1 alloc requests pending to scheduler
+	0 free requests pending to scheduler
+	1 running jobs
 	EOT
-	test_cmp stat.exp stat.err
+	test_cmp stat.exp stat.out
 '
 
 test_expect_success 'flux-queue: stop queue and cancel long job' '
@@ -230,16 +230,16 @@ test_expect_success 'flux-queue: queue becomes idle' '
 '
 
 test_expect_success 'flux-queue: queue status -v shows expected counts' '
-	flux queue status -v 2>stat2.err &&
+	flux queue status -v >stat2.out &&
 	cat <<-EOT >stat2.exp &&
-	flux-queue: Job submission is enabled
-	flux-queue: Scheduling is disabled
-	flux-queue: 2 alloc requests queued
-	flux-queue: 0 alloc requests pending to scheduler
-	flux-queue: 0 free requests pending to scheduler
-	flux-queue: 0 running jobs
+	Job submission is enabled
+	Scheduling is disabled
+	2 alloc requests queued
+	0 alloc requests pending to scheduler
+	0 free requests pending to scheduler
+	0 running jobs
 	EOT
-	test_cmp stat2.exp stat2.err
+	test_cmp stat2.exp stat2.out
 '
 
 test_expect_success 'flux-queue: start queue and drain' '

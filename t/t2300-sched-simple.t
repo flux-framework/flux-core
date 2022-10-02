@@ -190,7 +190,7 @@ test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 	flux job cancelall -f
 '
 test_expect_success 'sched-simple: there are no outstanding sched requests' '
-	flux queue status -v 2>queue_status.out &&
+	flux queue status -v >queue_status.out &&
 	grep "0 alloc requests pending to scheduler" queue_status.out &&
 	grep "0 free requests pending to scheduler" queue_status.out
 '
@@ -257,7 +257,7 @@ test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 	flux job cancelall -f
 '
 test_expect_success 'sched-simple: there are no outstanding sched requests' '
-	flux queue status -v 2>queue_status.out &&
+	flux queue status -v >queue_status.out &&
 	grep "0 alloc requests pending to scheduler" queue_status.out &&
 	grep "0 free requests pending to scheduler" queue_status.out
 '

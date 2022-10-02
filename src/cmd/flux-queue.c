@@ -234,10 +234,10 @@ void submit_admin (flux_t *h,
                              "reason",
                              &reason) < 0)
         log_msg_exit ("submit-admin: %s", future_strerror (f, errno));
-    log_msg ("Job submission is %s%s%s",
-             enable ? "enabled" : "disabled",
-             enable ? "" : ": ",
-             enable ? "" : reason);
+    printf ("Job submission is %s%s%s\n",
+            enable ? "enabled" : "disabled",
+            enable ? "" : ": ",
+            enable ? "" : reason);
     flux_future_destroy (f);
 }
 
@@ -282,20 +282,19 @@ void alloc_admin (flux_t *h,
                              &running) < 0)
         log_msg_exit ("alloc-admin: %s", future_strerror (f, errno));
     if (!quiet) {
-        log_msg ("Scheduling is %s%s%s",
-                 enable ? "enabled" : "disabled",
-                 reason && strlen (reason) > 0 ? ": " : "",
-                 reason ? reason : "");
+        printf ("Scheduling is %s%s%s\n",
+                enable ? "enabled" : "disabled",
+                reason && strlen (reason) > 0 ? ": " : "",
+                reason ? reason : "");
     }
     if (verbose) {
-        log_msg ("%d alloc requests queued", queue_length);
-        log_msg ("%d alloc requests pending to scheduler", alloc_pending);
-        log_msg ("%d free requests pending to scheduler", free_pending);
-        log_msg ("%d running jobs", running);
+        printf ("%d alloc requests queued\n", queue_length);
+        printf ("%d alloc requests pending to scheduler\n", alloc_pending);
+        printf ("%d free requests pending to scheduler\n", free_pending);
+        printf ("%d running jobs\n", running);
     }
     flux_future_destroy (f);
 }
-
 
 int cmd_enable (optparse_t *p, int argc, char **argv)
 {
@@ -439,7 +438,7 @@ int cmd_idle (optparse_t *p, int argc, char **argv)
         log_msg_exit ("idle: %s", errno == ETIMEDOUT
                                    ? "timeout" : future_strerror (f, errno));
     if (!optparse_hasopt (p, "quiet") || pending > 0)
-        log_msg ("%d pending jobs", pending);
+        printf ("%d pending jobs\n", pending);
     flux_future_destroy (f);
     flux_close (h);
     return (0);
