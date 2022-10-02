@@ -63,25 +63,52 @@ static bool sched_disabled (flux_t *h)
     return enable ? false : true;
 }
 
+static bool queue_is_enabled (flux_t *h, const char *name)
+{
+    flux_future_t *f;
+    int enable;
+    const char *topic = "job-manager.queue-status";
+
+    if (name)
+        f = flux_rpc_pack (h, topic, 0, 0, "{s:s}", "name", name);
+    else
+        f = flux_rpc_pack (h, topic, 0, 0, "{}");
+    if (!f || flux_rpc_get_unpack (f, "{s:b}", "enable", &enable) < 0)
+        log_err_exit ("Error fetching queue status: %s",
+                      future_strerror (f, errno));
+    flux_future_destroy (f);
+    return enable ? true : false;
+}
+
 /* Return true if job submission is disabled.
+ * If there are multiple queues, return true only if ALL queues are disabled.
  */
 static bool submit_disabled (flux_t *h)
 {
     flux_future_t *f;
-    int enable;
+    bool disabled = true;
+    json_t *queues;
+    size_t index;
+    json_t *value;
 
-    if (!(f = flux_rpc_pack (h,
-                             "job-manager.submit-admin",
-                             0,
-                             0,
-                             "{s:b s:b s:s}",
-                             "query_only", 1,
-                             "enable", 0,
-                             "reason", ""))
-        || flux_rpc_get_unpack (f, "{s:b}", "enable", &enable) < 0)
-        log_err_exit ("Error fetching submit status");
+    f = flux_rpc (h, "job-manager.queue-list", NULL, 0, 0);
+    if (!f || flux_rpc_get_unpack (f, "{s:o}", "queues", &queues))
+        log_msg_exit ("queue-list: %s", future_strerror (f, errno));
+    if (json_array_size (queues) > 0) {
+        json_array_foreach (queues, index, value) {
+            if (queue_is_enabled (h, json_string_value (value))) {
+                disabled = false;
+                break;
+            }
+        }
+    }
+    else {
+        if (queue_is_enabled (h, NULL))
+            disabled = false;
+    }
     flux_future_destroy (f);
-    return enable ? false : true;
+
+    return disabled;
 }
 
 /* Each key in the drain object is an idset representing a group
