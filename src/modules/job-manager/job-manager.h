@@ -32,6 +32,7 @@ struct job_manager {
     struct annotate *annotate;
     struct journal *journal;
     struct purge *purge;
+    struct queue *queue;
     struct jobtap *jobtap;
 };
 

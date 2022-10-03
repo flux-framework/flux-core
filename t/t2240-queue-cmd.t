@@ -3,7 +3,9 @@ test_description='Test flux queue command'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1
+mkdir -p conf.d
+
+test_under_flux 1 full -o,--config-path=$(pwd)/conf.d
 
 flux setattr log-stderr-level 1
 
@@ -89,8 +91,8 @@ test_expect_success 'flux-queue: start with bad broker connection fails' '
 '
 
 test_expect_success 'flux-queue: start with extra free args fails' '
-	test_must_fail flux queue start xyz 2>start_xargs.out &&
-	grep Usage: start_xargs.out
+	test_must_fail flux queue start xyz 2>start_xargs.err &&
+	grep Usage: start_xargs.err
 '
 
 test_expect_success 'flux-queue: stop works' '
@@ -98,10 +100,10 @@ test_expect_success 'flux-queue: stop works' '
 '
 
 test_expect_success 'flux-queue: status reports reason for stop' '
-	flux queue status 2>status.out &&
+	flux queue status >status.out &&
 	cat <<-EOT >status.exp &&
-	flux-queue: Job submission is enabled
-	flux-queue: Scheduling is disabled: my unique message
+	Job submission is enabled
+	Scheduling is disabled: my unique message
 	EOT
 	test_cmp status.exp status.out
 '
@@ -131,8 +133,8 @@ test_expect_success 'flux-queue: submit a job and make sure alloc sent' '
 '
 
 test_expect_success 'flux-queue: stop canceled alloc request' '
-	flux queue stop -v 2>stop.err &&
-	grep "flux-queue: 1 alloc requests pending to scheduler" stop.err
+	flux queue stop -v >stop.out &&
+	grep "1 alloc requests pending to scheduler" stop.out
 '
 
 test_expect_success 'flux-queue: start scheduling and cancel long job' '
@@ -162,12 +164,12 @@ wait_for_sched_offline() {
 
 test_expect_success 'flux-queue: queue says scheduling disabled' '
 	wait_for_sched_offline 10 &&
-	flux queue status 2>sched_stat.err &&
+	flux queue status >sched_stat.out &&
 	cat <<-EOT >sched_stat.exp &&
-	flux-queue: Job submission is enabled
-	flux-queue: Scheduling is disabled: Scheduler is offline
+	Job submission is enabled
+	Scheduling is disabled: Scheduler is offline
 	EOT
-	test_cmp sched_stat.exp sched_stat.err
+	test_cmp sched_stat.exp sched_stat.out
 '
 
 test_expect_success 'flux-queue: queue contains 1 active job' '
@@ -180,12 +182,12 @@ test_expect_success 'flux-queue: load scheduler' '
 '
 
 test_expect_success 'flux-queue: queue says scheduling is enabled' '
-	flux queue status 2>sched_stat2.err &&
+	flux queue status >sched_stat2.out &&
 	cat <<-EOT >sched_stat2.exp &&
-	flux-queue: Job submission is enabled
-	flux-queue: Scheduling is enabled
+	Job submission is enabled
+	Scheduling is enabled
 	EOT
-	test_cmp sched_stat2.exp sched_stat2.err
+	test_cmp sched_stat2.exp sched_stat2.out
 '
 
 test_expect_success 'flux-queue: job in queue ran' '
@@ -208,16 +210,16 @@ test_expect_success 'flux-queue: there are 3 active jobs' '
 '
 
 test_expect_success 'flux-queue: queue status -v shows expected counts' '
-	flux queue status -v 2>stat.err &&
+	flux queue status -v >stat.out &&
 	cat <<-EOT >stat.exp &&
-	flux-queue: Job submission is enabled
-	flux-queue: Scheduling is enabled
-	flux-queue: 1 alloc requests queued
-	flux-queue: 1 alloc requests pending to scheduler
-	flux-queue: 0 free requests pending to scheduler
-	flux-queue: 1 running jobs
+	Job submission is enabled
+	Scheduling is enabled
+	1 alloc requests queued
+	1 alloc requests pending to scheduler
+	0 free requests pending to scheduler
+	1 running jobs
 	EOT
-	test_cmp stat.exp stat.err
+	test_cmp stat.exp stat.out
 '
 
 test_expect_success 'flux-queue: stop queue and cancel long job' '
@@ -230,16 +232,16 @@ test_expect_success 'flux-queue: queue becomes idle' '
 '
 
 test_expect_success 'flux-queue: queue status -v shows expected counts' '
-	flux queue status -v 2>stat2.err &&
+	flux queue status -v >stat2.out &&
 	cat <<-EOT >stat2.exp &&
-	flux-queue: Job submission is enabled
-	flux-queue: Scheduling is disabled
-	flux-queue: 2 alloc requests queued
-	flux-queue: 0 alloc requests pending to scheduler
-	flux-queue: 0 free requests pending to scheduler
-	flux-queue: 0 running jobs
+	Job submission is enabled
+	Scheduling is disabled
+	2 alloc requests queued
+	0 alloc requests pending to scheduler
+	0 free requests pending to scheduler
+	0 running jobs
 	EOT
-	test_cmp stat2.exp stat2.err
+	test_cmp stat2.exp stat2.out
 '
 
 test_expect_success 'flux-queue: start queue and drain' '
@@ -259,45 +261,107 @@ test_expect_success 'flux-queue: status allowed for guest' '
 
 test_expect_success 'flux-queue: stop denied for guest' '
 	test_must_fail runas_guest flux queue stop 2>guest_stop.err &&
-	cat <<-EOT >guest_alloc.exp &&
-	flux-queue: alloc-admin: Request requires owner credentials
-	EOT
-	test_cmp guest_alloc.exp guest_stop.err
+	grep "requires owner credentials" guest_stop.err
 '
 
 test_expect_success 'flux-queue: start denied for guest' '
 	test_must_fail runas_guest flux queue start 2>guest_start.err &&
-	test_cmp guest_alloc.exp guest_start.err
+	grep "requires owner credentials" guest_start.err
 '
 
 test_expect_success 'flux-queue: disable denied for guest' '
 	test_must_fail runas_guest flux queue disable foo 2>guest_dis.err &&
-	cat <<-EOT >guest_submit.exp &&
-	flux-queue: submit-admin: Request requires owner credentials
-	EOT
-	test_cmp guest_submit.exp guest_dis.err
+	grep "requires owner credentials" guest_dis.err
 '
 
 test_expect_success 'flux-queue: enable denied for guest' '
 	test_must_fail runas_guest flux queue enable 2>guest_ena.err &&
-	test_cmp guest_submit.exp guest_ena.err
+	grep "requires owner credentials" guest_ena.err
 '
 
 test_expect_success 'flux-queue: drain denied for guest' '
 	test_must_fail runas_guest flux queue drain 2>guest_drain.err &&
-	cat <<-EOT >guest_drain.exp &&
-	flux-queue: drain: Request requires owner credentials
-	EOT
-	test_cmp guest_drain.exp guest_drain.err
+	grep "requires owner credentials" guest_drain.err
 '
 
 test_expect_success 'flux-queue: idle denied for guest' '
 	test_must_fail runas_guest flux queue idle 2>guest_idle.err &&
-	cat <<-EOT >guest_idle.exp &&
-	flux-queue: idle: Request requires owner credentials
-	EOT
-	test_cmp guest_idle.exp guest_idle.err
+	grep "requires owner credentials" guest_idle.err
 '
 
+#
+# Test support for named queues
+#
+
+test_expect_success 'flux queue status --queue fails with no queues' '
+	test_must_fail flux queue status --queue=batch
+'
+test_expect_success 'flux queue enable --queue fails with no queues' '
+	test_must_fail flux queue enable --queue=batch
+'
+test_expect_success 'ensure instance is drained' '
+	flux queue drain &&
+	flux queue status -v
+'
+test_expect_success 'configure batch,debug queues' '
+	cat >conf.d/config.toml <<-EOT &&
+	[queues.batch]
+	[queues.debug]
+	EOT
+	flux config reload
+'
+test_expect_success 'jobs may be submitted to either queue' '
+	flux mini submit -q batch /bin/true &&
+	flux mini submit -q debug /bin/true
+'
+test_expect_success 'flux-queue status reports all queues' '
+	flux queue status >mqstatus.out &&
+	grep batch mqstatus.out &&
+	grep debug mqstatus.out
+'
+test_expect_success 'flux-queue status can show one queue' '
+	flux queue status -q debug >mqstatus_debug.out &&
+	test_must_fail grep batch mqstatus_debug.out
+'
+test_expect_success 'flux-queue disable without --queue or --all fails' '
+	test_must_fail flux queue disable test reasons
+'
+test_expect_success 'flux-queue disable --all affects all queues' '
+	flux queue disable --all test reasons &&
+	flux queue status >mqstatus_dis.out &&
+	test $(grep -c "submission is disabled" mqstatus_dis.out) -eq 2
+'
+test_expect_success 'jobs may not be submitted to either queue' '
+	test_must_fail flux mini submit -q batch /bin/true &&
+	test_must_fail flux mini submit -q debug /bin/true
+'
+test_expect_success 'flux-queue enable without --queue or --all fails' '
+	test_must_fail flux queue enable
+'
+test_expect_success 'flux-queue enable --all affects all queues' '
+	flux queue enable -a &&
+	flux queue status >mqstatus_ena.out &&
+	test $(grep -c "submission is enabled" mqstatus_ena.out) -eq 2
+'
+test_expect_success 'flux-queue disable can do one queue' '
+	flux queue disable -q batch nobatch &&
+	flux queue status >mqstatus_batchdis.out &&
+	test $(grep -c "submission is enabled" mqstatus_batchdis.out) -eq 1 &&
+	test_must_fail flux mini submit -q batch /bin/true &&
+	flux mini submit -q debug /bin/true
+'
+test_expect_success 'flux-queue enable can do one queue' '
+	flux queue enable -q batch &&
+	flux queue status >mqstatus_batchena.out &&
+	test $(grep -c "submission is enabled" mqstatus_batchena.out) -eq 2 &&
+	flux mini submit -q batch /bin/true &&
+	flux mini submit -q debug /bin/true
+'
+test_expect_success 'flux-queue enable fails on unknown queue' '
+	test_must_fail flux queue enable -q notaqueue
+'
+test_expect_success 'flux-queue status fails on unknown queue' '
+	test_must_fail flux queue status -q notaqueue
+'
 
 test_done

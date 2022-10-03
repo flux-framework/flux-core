@@ -4,7 +4,17 @@ test_description='Test flux jobs command'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 job
+mkdir -p conf.d
+cat >conf.d/config.toml <<-EOT
+[policy]
+jobspec.defaults.system.queue = "defaultqueue"
+
+[queues.defaultqueue]
+[queues.queue1]
+[queues.queue2]
+EOT
+
+test_under_flux 4 job -o,--config-path=$(pwd)/conf.d
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer -f asciicast"
@@ -499,7 +509,7 @@ test_expect_success 'flux-jobs --format={name} works' '
 '
 
 # in job submissions above: completed jobs should be in queue1, running jobs
-# in queue2, and the rest in no queue
+# in queue2, and the rest in defaultqueue
 test_expect_success 'flux-jobs --format={queue} works' '
 	flux jobs --filter=completed -no "{queue}" > jobqueueCD.out &&
 	for i in `seq 1 $(state_count completed)`; do
@@ -511,9 +521,9 @@ test_expect_success 'flux-jobs --format={queue} works' '
 		echo "queue2" >> jobqueueR.exp
 	done &&
 	test_cmp jobqueueR.out jobqueueR.exp &&
-	flux jobs --filter=failed -no "{queue},{queue:h}" > jobqueueF.out &&
+	flux jobs --filter=failed -no "{queue}" > jobqueueF.out &&
 	for i in `seq 1 $(state_count failed)`; do
-		echo ",-" >> jobqueueF.exp
+		echo "defaultqueue" >> jobqueueF.exp
 	done &&
 	test_cmp jobqueueF.out jobqueueF.exp
 '
@@ -1162,8 +1172,13 @@ ingest_module ()
         flux module ${cmd} job-ingest $*
 }
 
-test_expect_success 'reload job-ingest without validator' '
-        ingest_module reload disable-validator
+test_expect_success 'disable ingest preprocessing' '
+	cat >conf.d/ingest.toml <<-EOT &&
+	[ingest]
+	frobnicator.disable = true
+	validator.disable = true
+	EOT
+	flux config reload
 '
 
 test_expect_success HAVE_JQ 'create illegal jobspec with empty command array' '
@@ -1188,8 +1203,9 @@ test_expect_success HAVE_JQ 'flux jobs works on job with illegal jobspec' '
         test_cmp list_illegal_jobspec.out list_illegal_jobspec.exp
 '
 
-test_expect_success 'reload job-ingest with defaults' '
-        ingest_module reload
+test_expect_success 're-enable job-ingest preprocessing' '
+	rm -f conf.d/ingest.toml &&
+	flux config reload
 '
 
 # we make R invalid by overwriting it in the KVS before job-list will

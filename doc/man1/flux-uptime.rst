@@ -41,7 +41,7 @@ current Flux instance, on one or two lines:
 - The number of offline nodes, if greater than zero.  A node is offline if
   its broker is not connected to the instance overlay network.
 
-- A notice if job submission is disabled.
+- A notice if job submission is disabled on all queues.
 
 - A notice if scheduling is disabled.
 

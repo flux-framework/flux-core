@@ -11,8 +11,8 @@ SHELL=/bin/sh flux start '\
 && flux job wait-event $jobid depend \
 && flux job cancel $jobid \
 && flux job attach -vE $jobid \
-; flux queue status -v >t3920.output 2>&1'
+; flux queue status -v >t3920.output'
 
 cat t3920.output
 
-grep 'flux-queue: 0 running jobs' t3920.output
+grep '0 running jobs' t3920.output

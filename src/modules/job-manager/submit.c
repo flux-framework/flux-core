@@ -24,14 +24,13 @@
 #include "alloc.h"
 #include "event.h"
 #include "wait.h"
+#include "queue.h"
 #include "jobtap-internal.h"
 
 #include "submit.h"
 
 struct submit {
     struct job_manager *ctx;
-    bool submit_disable;
-    char *disable_errmsg;
     flux_msg_handler_t **handlers;
 };
 
@@ -80,8 +79,13 @@ static int submit_job (struct job_manager *ctx,
                        struct job *job,
                        json_t *errors)
 {
+    flux_error_t e;
     char *error = NULL;
 
+    if (queue_submit_check (ctx->queue, job->jobspec_redacted, &e) < 0) {
+        set_errorf (errors, job->id, e.text);
+        return -1;
+    }
     if (zhashx_insert (ctx->active_jobs, &job->id, job) < 0) {
         set_errorf (errors, job->id, "hash insert failed");
         return -1;
@@ -166,11 +170,6 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s", __FUNCTION__);
         goto error;
     }
-    if (ctx->submit->submit_disable) {
-        errno = EINVAL;
-        errmsg = ctx->submit->disable_errmsg;
-        goto error;
-    }
     if (!(errors = json_array ())) {
         errno = ENOMEM;
         goto error;
@@ -204,62 +203,11 @@ error:
     json_decref (errors);
 }
 
-static void submit_admin_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
-{
-    struct job_manager *ctx = arg;
-    const char *error_prefix = "job submission is disabled: ";
-    const char *errmsg = NULL;
-    int enable;
-    int query_only;
-    const char *reason;
-
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{s:b s:b s:s}",
-                             "query_only",
-                             &query_only,
-                             "enable",
-                             &enable,
-                             "reason",
-                             &reason) < 0)
-        goto error;
-    if (!query_only) {
-        if (flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0) {
-            errmsg = "Request requires owner credentials";
-            goto error;
-        }
-        if (!enable) {
-            char *errmsg;
-            if (asprintf (&errmsg, "%s%s", error_prefix, reason) < 0)
-                goto error;
-            free (ctx->submit->disable_errmsg);
-            ctx->submit->disable_errmsg = errmsg;
-        }
-        ctx->submit->submit_disable = enable ? false : true;
-    }
-    if (ctx->submit->submit_disable)
-        reason = ctx->submit->disable_errmsg + strlen (error_prefix);
-    if (flux_respond_pack (h,
-                           msg,
-                           "{s:b s:s}",
-                           "enable",
-                           ctx->submit->submit_disable ? 0 : 1,
-                           "reason",
-                           ctx->submit->submit_disable ? reason : "") < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-}
-
 void submit_ctx_destroy (struct submit *submit)
 {
     if (submit) {
         int saved_errno = errno;
         flux_msg_handler_delvec (submit->handlers);
-        free (submit->disable_errmsg);
         free (submit);
         errno = saved_errno;
     }
@@ -270,12 +218,6 @@ static const struct flux_msg_handler_spec htab[] = {
         "job-manager.submit",
         submit_cb,
         0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "job-manager.submit-admin",
-        submit_admin_cb,
-        FLUX_ROLE_USER,
     },
     FLUX_MSGHANDLER_TABLE_END,
 };

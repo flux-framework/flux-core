@@ -70,7 +70,8 @@ if test $RANK -eq 0; then
     if test "$(backing_module)" != "none"; then
         if ! flux startlog --check --quiet; then
             flux queue stop
-            flux queue disable "Flux is in safe mode due to an incomplete shutdown."
+            flux queue disable --all \
+                "Flux is in safe mode due to an incomplete shutdown."
         fi
     fi
 fi
