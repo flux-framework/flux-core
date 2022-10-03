@@ -321,7 +321,7 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
             /* Must wait for job-list to see state change */
             if (wait_id_valid (jsctx->isctx, isd) < 0)
                 flux_log_error (jsctx->h, "%s: wait_id_valid", __FUNCTION__);
-            goto cleanup;
+            return;
         }
         else {
             json_t *o;
