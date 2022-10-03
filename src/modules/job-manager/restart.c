@@ -24,6 +24,7 @@
 #include "restart.h"
 #include "event.h"
 #include "wait.h"
+#include "queue.h"
 #include "jobtap-internal.h"
 
 /* restart_map callback should return -1 on error to stop map with error,
@@ -212,13 +213,20 @@ static int restart_map_cb (struct job *job, void *arg, flux_error_t *error)
 
 int restart_save_state_to_txn (struct job_manager *ctx, flux_kvs_txn_t *txn)
 {
+    json_t *queue;
+
+    if (!(queue = queue_save_state (ctx->queue)))
+        return -1;
     if (flux_kvs_txn_pack (txn,
                            0,
                            checkpoint_key,
-                           "{s:I}",
-                           "max_jobid",
-                           ctx->max_jobid) < 0)
+                           "{s:I s:O}",
+                           "max_jobid", ctx->max_jobid,
+                           "queue", queue) < 0) {
+        json_decref (queue);
         return -1;
+    }
+    json_decref (queue);
     return 0;
 }
 
@@ -244,19 +252,26 @@ static int restart_restore_state (struct job_manager *ctx)
 {
     flux_future_t *f;
     flux_jobid_t id;
+    json_t *queue = NULL;
 
     if (!(f = flux_kvs_lookup (ctx->h, NULL, 0, checkpoint_key)))
         return -1;
     if (flux_kvs_lookup_get_unpack (f,
-                                    "{s:I}",
-                                    "max_jobid", &id) < 0) {
-        flux_future_destroy (f);
-        return -1;
-    }
+                                    "{s:I s?o}",
+                                    "max_jobid", &id,
+                                    "queue", &queue) < 0)
+        goto error;
     if (ctx->max_jobid < id)
         ctx->max_jobid = id;
+    if (queue) {
+        if (queue_restore_state (ctx->queue, queue) < 0)
+            goto error;
+    }
     flux_future_destroy (f);
     return 0;
+error:
+    flux_future_destroy (f);
+    return -1;
 }
 
 int restart_from_kvs (struct job_manager *ctx)

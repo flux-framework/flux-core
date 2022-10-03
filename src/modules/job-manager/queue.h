@@ -18,10 +18,12 @@
 struct queue *queue_create (struct job_manager *ctx);
 void queue_destroy (struct queue *queue);
 
+json_t *queue_save_state (struct queue *queue);
+int queue_restore_state (struct queue *queue, json_t *o);
+
 int queue_submit_check (struct queue *queue,
                         json_t *jobspec,
                         flux_error_t *error);
-
 
 #endif /* ! _FLUX_JOB_MANAGER_QUEUE_H */
 
