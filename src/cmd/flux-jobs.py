@@ -37,6 +37,15 @@ class FluxJobsConfig(UtilConfig):
                 "{contextual_time!F:>8h} {contextual_info}"
             ),
         },
+        "long": {
+            "description": "Extended flux-jobs format string",
+            "format": (
+                "{id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10} "
+                "{status:>9.9} {ntasks:>6} {nnodes:>6h} "
+                "{t_submit!d:%b%d %R::>12} {t_remaining!F:>12h} "
+                "{contextual_time!F:>8h} {contextual_info}"
+            ),
+        },
         "deps": {
             "description": "Show job urgency, priority, and dependencies",
             "format": (
