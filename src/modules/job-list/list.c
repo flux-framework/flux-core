@@ -27,7 +27,7 @@
 #include "job_util.h"
 #include "job_data.h"
 
-json_t *get_job_by_id (struct list_ctx *ctx,
+json_t *get_job_by_id (struct job_state_ctx *jsctx,
                        job_list_error_t *errp,
                        const flux_msg_t *msg,
                        flux_jobid_t id,
@@ -112,7 +112,7 @@ int get_jobs_from_list (json_t *jobs,
  * EPROTO - malformed or empty attrs array, max_entries out of range
  * ENOMEM - out of memory
  */
-json_t *get_jobs (struct list_ctx *ctx,
+json_t *get_jobs (struct job_state_ctx *jsctx,
                   job_list_error_t *errp,
                   int max_entries,
                   double since,
@@ -136,7 +136,7 @@ json_t *get_jobs (struct list_ctx *ctx,
     if (states & FLUX_JOB_STATE_PENDING) {
         if ((ret = get_jobs_from_list (jobs,
                                        errp,
-                                       ctx->jsctx->pending,
+                                       jsctx->pending,
                                        max_entries,
                                        attrs,
                                        userid,
@@ -152,7 +152,7 @@ json_t *get_jobs (struct list_ctx *ctx,
         if (!ret) {
             if ((ret = get_jobs_from_list (jobs,
                                            errp,
-                                           ctx->jsctx->running,
+                                           jsctx->running,
                                            max_entries,
                                            attrs,
                                            userid,
@@ -169,7 +169,7 @@ json_t *get_jobs (struct list_ctx *ctx,
         if (!ret) {
             if ((ret = get_jobs_from_list (jobs,
                                            errp,
-                                           ctx->jsctx->inactive,
+                                           jsctx->inactive,
                                            max_entries,
                                            attrs,
                                            userid,
@@ -244,7 +244,7 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
                    | FLUX_JOB_RESULT_CANCELED
                    | FLUX_JOB_RESULT_TIMEOUT);
 
-    if (!(jobs = get_jobs (ctx, &err, max_entries, since,
+    if (!(jobs = get_jobs (ctx->jsctx, &err, max_entries, since,
                            attrs, userid, states, results, name, queue)))
         goto error;
 
@@ -259,34 +259,34 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-int wait_id_valid (struct list_ctx *ctx, struct idsync_data *isd)
+int wait_id_valid (struct idsync_ctx *isctx, struct idsync_data *isd)
 {
     zlistx_t *list_isd;
     void *handle;
     int saved_errno;
 
-    if ((handle = zlistx_find (ctx->isctx->lookups, isd))) {
+    if ((handle = zlistx_find (isctx->lookups, isd))) {
         /* detach will not call zlistx destructor */
-        zlistx_detach (ctx->isctx->lookups, handle);
+        zlistx_detach (isctx->lookups, handle);
     }
 
     /* isctx->waits holds lists of ids waiting on, b/c multiple callers
      * could wait on same id */
-    if (!(list_isd = zhashx_lookup (ctx->isctx->waits, &isd->id))) {
+    if (!(list_isd = zhashx_lookup (isctx->waits, &isd->id))) {
         if (!(list_isd = zlistx_new ())) {
-            flux_log_error (ctx->h, "%s: zlistx_new", __FUNCTION__);
+            flux_log_error (isctx->h, "%s: zlistx_new", __FUNCTION__);
             goto error_destroy;
         }
         zlistx_set_destructor (list_isd, idsync_data_destroy_wrapper);
 
-        if (zhashx_insert (ctx->isctx->waits, &isd->id, list_isd) < 0) {
-            flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
+        if (zhashx_insert (isctx->waits, &isd->id, list_isd) < 0) {
+            flux_log_error (isctx->h, "%s: zhashx_insert", __FUNCTION__);
             goto error_destroy;
         }
     }
 
     if (!zlistx_add_end (list_isd, isd)) {
-        flux_log_error (ctx->h, "%s: zlistx_add_end", __FUNCTION__);
+        flux_log_error (isctx->h, "%s: zlistx_add_end", __FUNCTION__);
         goto error_destroy;
     }
 
@@ -302,36 +302,36 @@ error_destroy:
 void check_id_valid_continuation (flux_future_t *f, void *arg)
 {
     struct idsync_data *isd = arg;
-    struct list_ctx *ctx = flux_future_aux_get (f, "list_ctx");
+    struct job_state_ctx *jsctx = flux_future_aux_get (f, "job_state_ctx");
     void *handle;
 
-    assert (ctx);
+    assert (jsctx);
 
     if (flux_future_get (f, NULL) < 0) {
-        if (flux_respond_error (ctx->h, isd->msg, errno, NULL) < 0)
-            flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+        if (flux_respond_error (jsctx->h, isd->msg, errno, NULL) < 0)
+            flux_log_error (jsctx->h, "%s: flux_respond_error", __FUNCTION__);
         goto cleanup;
     }
     else {
         /* Job ID is legal.  Chance job-list has seen ID since this
          * lookup was done */
         struct job *job;
-        if (!(job = zhashx_lookup (ctx->jsctx->index, &isd->id))
+        if (!(job = zhashx_lookup (jsctx->index, &isd->id))
             || job->state == FLUX_JOB_STATE_NEW) {
             /* Must wait for job-list to see state change */
-            if (wait_id_valid (ctx, isd) < 0)
-                flux_log_error (ctx->h, "%s: wait_id_valid", __FUNCTION__);
+            if (wait_id_valid (jsctx->isctx, isd) < 0)
+                flux_log_error (jsctx->h, "%s: wait_id_valid", __FUNCTION__);
             goto cleanup;
         }
         else {
             json_t *o;
-            if (!(o = get_job_by_id (ctx, NULL, isd->msg,
+            if (!(o = get_job_by_id (jsctx, NULL, isd->msg,
                                      isd->id, isd->attrs, NULL))) {
-                flux_log_error (ctx->h, "%s: get_job_by_id", __FUNCTION__);
+                flux_log_error (jsctx->h, "%s: get_job_by_id", __FUNCTION__);
                 goto cleanup;
             }
-            if (flux_respond_pack (ctx->h, isd->msg, "{s:O}", "job", o) < 0) {
-                flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
+            if (flux_respond_pack (jsctx->h, isd->msg, "{s:O}", "job", o) < 0) {
+                flux_log_error (jsctx->h, "%s: flux_respond_pack", __FUNCTION__);
                 goto cleanup;
             }
         }
@@ -339,13 +339,13 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
 
 cleanup:
     /* delete will destroy struct idsync_data and future within it */
-    handle = zlistx_find (ctx->isctx->lookups, isd);
+    handle = zlistx_find (jsctx->isctx->lookups, isd);
     if (handle)
-        zlistx_delete (ctx->isctx->lookups, handle);
+        zlistx_delete (jsctx->isctx->lookups, handle);
     return;
 }
 
-int check_id_valid (struct list_ctx *ctx,
+int check_id_valid (struct job_state_ctx *jsctx,
                     const flux_msg_t *msg,
                     flux_jobid_t id,
                     json_t *attrs)
@@ -360,19 +360,22 @@ int check_id_valid (struct list_ctx *ctx,
     if (flux_job_kvs_key (path, sizeof (path), id, NULL) < 0)
         goto error;
 
-    if (!(f = flux_kvs_lookup (ctx->h, NULL, FLUX_KVS_READDIR, path))) {
-        flux_log_error (ctx->h, "%s: flux_kvs_lookup", __FUNCTION__);
+    if (!(f = flux_kvs_lookup (jsctx->h, NULL, FLUX_KVS_READDIR, path))) {
+        flux_log_error (jsctx->h, "%s: flux_kvs_lookup", __FUNCTION__);
         goto error;
     }
 
-    if (!(isd = idsync_data_create (ctx->h, id, msg, attrs, f)))
+    if (!(isd = idsync_data_create (jsctx->h, id, msg, attrs, f)))
         goto error;
 
     /* future now owned by struct idsync_data */
     f = NULL;
 
-    if (flux_future_aux_set (isd->f_lookup, "list_ctx", ctx, NULL) < 0) {
-        flux_log_error (ctx->h, "%s: flux_future_aux_set", __FUNCTION__);
+    if (flux_future_aux_set (isd->f_lookup,
+                             "job_state_ctx",
+                             jsctx,
+                             NULL) < 0) {
+        flux_log_error (jsctx->h, "%s: flux_future_aux_set", __FUNCTION__);
         goto error;
     }
 
@@ -380,12 +383,12 @@ int check_id_valid (struct list_ctx *ctx,
                           -1,
                           check_id_valid_continuation,
                           isd) < 0) {
-        flux_log_error (ctx->h, "%s: flux_future_then", __FUNCTION__);
+        flux_log_error (jsctx->h, "%s: flux_future_then", __FUNCTION__);
         goto error;
     }
 
-    if (!zlistx_add_end (ctx->isctx->lookups, isd)) {
-        flux_log_error (ctx->h, "%s: zlistx_add_end", __FUNCTION__);
+    if (!zlistx_add_end (jsctx->isctx->lookups, isd)) {
+        flux_log_error (jsctx->h, "%s: zlistx_add_end", __FUNCTION__);
         goto error;
     }
 
@@ -406,7 +409,7 @@ error:
  * EINVAL - invalid id
  * ENOMEM - out of memory
  */
-json_t *get_job_by_id (struct list_ctx *ctx,
+json_t *get_job_by_id (struct job_state_ctx *jsctx,
                        job_list_error_t *errp,
                        const flux_msg_t *msg,
                        flux_jobid_t id,
@@ -415,10 +418,10 @@ json_t *get_job_by_id (struct list_ctx *ctx,
 {
     struct job *job;
 
-    if (!(job = zhashx_lookup (ctx->jsctx->index, &id))) {
+    if (!(job = zhashx_lookup (jsctx->index, &id))) {
         if (stall) {
-            if (check_id_valid (ctx, msg, id, attrs) < 0) {
-                flux_log_error (ctx->h, "%s: check_id_valid", __FUNCTION__);
+            if (check_id_valid (jsctx, msg, id, attrs) < 0) {
+                flux_log_error (jsctx->h, "%s: check_id_valid", __FUNCTION__);
                 return NULL;
             }
             (*stall) = true;
@@ -429,13 +432,13 @@ json_t *get_job_by_id (struct list_ctx *ctx,
     if (job->state == FLUX_JOB_STATE_NEW) {
         if (stall) {
             struct idsync_data *isd;
-            if (!(isd = idsync_data_create (ctx->h, id, msg, attrs, NULL))) {
-                flux_log_error (ctx->h, "%s: idsync_data_create", __FUNCTION__);
+            if (!(isd = idsync_data_create (jsctx->h, id, msg, attrs, NULL))) {
+                flux_log_error (jsctx->h, "%s: idsync_data_create", __FUNCTION__);
                 return NULL;
             }
             /* Must wait for job-list to see state change */
-            if (wait_id_valid (ctx, isd) < 0) {
-                flux_log_error (ctx->h, "%s: wait_id_valid", __FUNCTION__);
+            if (wait_id_valid (jsctx->isctx, isd) < 0) {
+                flux_log_error (jsctx->h, "%s: wait_id_valid", __FUNCTION__);
                 return NULL;
             }
             (*stall) = true;
@@ -470,7 +473,7 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(job = get_job_by_id (ctx, &err, msg, id, attrs, &stall))) {
+    if (!(job = get_job_by_id (ctx->jsctx, &err, msg, id, attrs, &stall))) {
         /* response handled after KVS lookup complete */
         if (stall)
             goto stall;
