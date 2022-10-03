@@ -54,6 +54,36 @@ test_expect_success 'purging all jobs triggers jobid checkpoint update' '
 	    flux kvs get checkpoint.job-manager"
 '
 
+test_expect_success 'verify that anon queue status persists across restart' '
+	flux start -o,-Scontent.dump=dump_dis.tar \
+	    flux queue disable disable-restart-test &&
+	flux start -o,-Scontent.restore=dump_dis.tar \
+	    flux queue status >dump_dis.out &&
+	grep "disabled: disable-restart-test" dump_dis.out
+'
+
+test_expect_success 'verify that named queue status persists across restart' '
+	mkdir -p conf.d &&
+	cat >conf.d/queues.toml <<-EOT &&
+	[queues.debug]
+	[queues.batch]
+	EOT
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.dump=dump_queue_dis.tar \
+	    flux queue disable --queue batch xyzzy &&
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.restore=dump_queue_dis.tar \
+	    flux queue status >dump_queue_dis.out &&
+	grep "^debug: Job submission is enabled" dump_queue_dis.out &&
+	grep "^batch: Job submission is disabled: xyzzy" dump_queue_dis.out
+'
+
+test_expect_success 'verify that instance can restart after config change' '
+	flux start -o,-Scontent.restore=dump_queue_dis.tar \
+	    flux queue status >dump_queue_reconf.out &&
+	grep "^Job submission is enabled" dump_queue_reconf.out
+'
+
 for dump in ${DUMPS}/valid/*.tar.bz2; do
     testname=$(basename $dump)
     test_expect_success 'successfully started from '$testname "restart_flux $dump"
