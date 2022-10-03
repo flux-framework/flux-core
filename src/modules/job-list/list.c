@@ -489,7 +489,7 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-int list_attrs_append (json_t *a, const char *attr)
+static int list_attrs_append (json_t *a, const char *attr)
 {
     json_t *o = json_string (attr);
     if (!o) {
