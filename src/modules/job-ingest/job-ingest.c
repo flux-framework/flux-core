@@ -463,13 +463,13 @@ static int batch_add_job (struct batch *batch, struct job *job)
         goto error;
     if (make_key (key, sizeof (key), job, "jobspec") < 0)
         goto error;
-    if (flux_kvs_txn_pack (batch->txn, 0, key, "O", job->jobspec) < 0)
-        goto error;
-    /* Redact bulky environment portion of jobspec in object prior to
-     * including it in job-manager.submit request.
-     * The full jobspec is commited to the KVS for use by other subsystems.
+    /* Drop environment from the jobspec to reduce its bulk.
+     * If needed, it can be extracted from J.
+     * See also flux-framework/flux-core#4520
      */
     jpath_del (job->jobspec, "attributes.system.environment");
+    if (flux_kvs_txn_pack (batch->txn, 0, key, "O", job->jobspec) < 0)
+        goto error;
     if (!(jobentry = json_pack ("{s:I s:I s:i s:f s:i, s:O}",
                                 "id", job->id,
                                 "userid", (json_int_t) job->cred.userid,
