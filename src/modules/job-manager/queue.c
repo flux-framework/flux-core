@@ -19,10 +19,12 @@
 
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/jpath.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "job-manager.h"
 #include "conf.h"
+#include "restart.h"
 #include "queue.h"
 
 struct jobq {
@@ -136,6 +138,95 @@ struct jobq *queue_lookup (struct queue *queue,
         }
         return queue->anon;
     }
+}
+
+static int queue_save_jobq_append (json_t *a, struct jobq *q)
+{
+    json_t *entry;
+    if (!q->name)
+        entry = json_pack ("{s:b}", "enable", q->enable);
+    else
+        entry = json_pack ("{s:s s:b}", "name", q->name, "enable", q->enable);
+    if (!entry)
+        goto nomem;
+    if (!q->enable) {
+        json_t *o = json_string (q->reason);
+        if (!o)
+            goto nomem;
+        if (json_object_set_new (entry, "reason", o) < 0) {
+            json_decref (o);
+            goto nomem;
+        }
+    }
+    if (json_array_append_new (a, entry) < 0)
+        goto nomem;
+    return 0;
+nomem:
+    json_decref (entry);
+    errno = ENOMEM;
+    return -1;
+}
+
+json_t *queue_save_state (struct queue *queue)
+{
+    json_t *a;
+    struct jobq *q;
+
+    if (!(a = json_array ())) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (queue->have_named_queues) {
+        q = zhashx_first (queue->named);
+        while (q) {
+            if (queue_save_jobq_append (a, q) < 0)
+                goto error;
+            q = zhashx_next (queue->named);
+        }
+    }
+    else {
+        if (queue_save_jobq_append (a, queue->anon) < 0)
+            goto error;
+    }
+    return a;
+error:
+    ERRNO_SAFE_WRAP (json_decref, a);
+    return NULL;
+}
+
+int queue_restore_state (struct queue *queue, json_t *o)
+{
+    size_t index;
+    json_t *entry;
+
+    if (!o || !json_is_array (o)) {
+        errno = EINVAL;
+        return -1;
+    }
+    json_array_foreach (o, index, entry) {
+        const char *name = NULL;
+        const char *reason = NULL;
+        int enable;
+        struct jobq *q = NULL;
+
+        if (json_unpack (entry,
+                         "{s?s s:b s?s}",
+                         "name", &name,
+                         "enable", &enable,
+                         "reason", &reason) < 0) {
+            errno = EINVAL;
+            return -1;
+        }
+        if (name && queue->have_named_queues)
+            q = zhashx_lookup (queue->named, name);
+        else if (!name && !queue->have_named_queues)
+            q = queue->anon;
+        if (q) {
+            if (jobq_enable (q, enable, reason) < 0)
+                return -1;
+        }
+    }
+    return 0;
 }
 
 int queue_submit_check (struct queue *queue,
@@ -347,6 +438,8 @@ static void queue_admin_cb (flux_t *h,
         if (jobq_enable (q, enable, reason) < 0)
             goto error;
     }
+    if (restart_save_state (queue->ctx) < 0)
+        flux_log_error (h, "problem saving checkpoint after queue change");
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to job-manager.queue-admin");
     return;
