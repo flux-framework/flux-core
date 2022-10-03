@@ -34,7 +34,7 @@ class FluxJobsConfig(UtilConfig):
             "format": (
                 "{id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10} "
                 "{status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} "
-                "{runtime!F:>8} {contextual_info}"
+                "{contextual_time!F:>8h} {contextual_info}"
             ),
         },
         "deps": {
