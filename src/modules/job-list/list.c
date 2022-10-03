@@ -447,7 +447,7 @@ json_t *get_job_by_id (struct list_ctx *ctx,
 }
 
 void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
-                  const flux_msg_t *msg, void *arg)
+                 const flux_msg_t *msg, void *arg)
 {
     struct list_ctx *ctx = arg;
     job_list_error_t err = {{0}};
