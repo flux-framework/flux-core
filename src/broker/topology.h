@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <jansson.h>
 #include <flux/core.h>
+#include <flux/idset.h>
 
 /* Create/destroy tree topology of size.
  * The initial topology is "flat" (rank 0 is parent of all other ranks),
@@ -53,6 +54,10 @@ int topology_get_maxlevel (struct topology *topo);
 int topology_get_descendant_count (struct topology *topo);
 int topology_get_child_route (struct topology *topo, int rank);
 json_t *topology_get_json_subtree_at (struct topology *topo, int rank);
+
+/*  Return internal ranks (ranks that have one or more children)
+ */
+struct idset *topology_get_internal_ranks (struct topology *topo);
 
 #endif /* !_BROKER_TOPOLOGY_H */
 

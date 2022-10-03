@@ -37,6 +37,11 @@
 #include "bulk-exec.h"
 #include "rset.h"
 
+/*  Numeric severity used for a non-fatal, critical job exception:
+ *  (e.g. node failure)
+ */
+#define FLUX_JOB_EXCEPTION_CRIT 2
+
 extern char **environ;
 
 struct exec_ctx {
@@ -163,12 +168,53 @@ static void output_cb (struct bulk_exec *exec, flux_subprocess_t *p,
                         len);
 }
 
+static void lost_shell_continuation (flux_future_t *f, void *arg)
+{
+    struct jobinfo *job = arg;
+    if (flux_future_get (f, NULL) < 0)
+        jobinfo_fatal_error (job, errno,
+                             "failed to notify job of lost shell");
+    flux_future_destroy (f);
+}
+
+static int lost_shell (struct jobinfo *job,
+                       int shell_rank,
+                       const char *hostname)
+{
+    flux_future_t *f;
+
+    /* Raise a non-fatal job exception */
+    jobinfo_raise (job,
+                   "node-failure",
+                   FLUX_JOB_EXCEPTION_CRIT,
+                   "%s on %s (shell rank %d)",
+                   "lost contact with job shell",
+                   hostname,
+                   shell_rank);
+
+    /* Also notify job shell rank 0 of exception
+     */
+    if (!(f = jobinfo_shell_rpc_pack (job,
+                                      "exception",
+                                      "{s:s s:i s:i}",
+                                      "type", "lost-shell",
+                                      "severity", FLUX_JOB_EXCEPTION_CRIT,
+                                      "shell_rank", shell_rank)))
+            return -1;
+    if (flux_future_then (f, -1., lost_shell_continuation, job) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    return 0;
+}
+
 static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
 {
     struct jobinfo *job = arg;
     flux_cmd_t *cmd = flux_subprocess_get_cmd (p);
     int errnum = flux_subprocess_fail_errno (p);
     int rank = flux_subprocess_rank (p);
+    int shell_rank = resource_set_rank_index (job->R, rank);
     const char *hostname = flux_get_hostbyrank (job->h, rank);
 
     /*  cmd may be NULL here if exec implementation failed to
@@ -177,6 +223,9 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
     if (cmd) {
         const char *errmsg = "job shell execution error";
         if (errnum == EHOSTUNREACH) {
+            if (!idset_test (job->critical_ranks, shell_rank)
+                && lost_shell (job, shell_rank, hostname) == 0)
+                return;
             errmsg = "lost contact with job shell";
             errnum = 0;
         }

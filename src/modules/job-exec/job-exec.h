@@ -70,6 +70,8 @@ struct jobinfo {
     json_t *              jobspec;   /* Fetched jobspec */
     char *                J;         /* Signed jobspec */
 
+    struct idset *        critical_ranks;  /* critical shell ranks */
+
     uint8_t               multiuser:1;
     uint8_t               has_namespace:1;
     uint8_t               exception_in_progress:1;
@@ -122,6 +124,11 @@ void jobinfo_tasks_complete (struct jobinfo *job,
 void jobinfo_fatal_error (struct jobinfo *job, int errnum,
                           const char *fmt, ...);
 
+void jobinfo_raise (struct jobinfo *job,
+                    const char *type,
+                    int severity,
+                    const char *fmt, ...);
+
 /* Append a log output message to exec.eventlog for job
  */
 void jobinfo_log_output (struct jobinfo *job,
@@ -130,6 +137,12 @@ void jobinfo_log_output (struct jobinfo *job,
                          const char *stream,
                          const char *data,
                          int len);
+
+
+flux_future_t *jobinfo_shell_rpc_pack (struct jobinfo *job,
+                                       const char *topic,
+                                       const char *fmt,
+                                       ...);
 
 #endif /* !HAVE_JOB_EXEC_EXEC_H */
 

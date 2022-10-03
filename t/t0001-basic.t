@@ -500,6 +500,9 @@ test_expect_success 'broker -Stbon.fanout=4 option works' '
 test_expect_success 'broker -Stbon.fanout=0 works' '
 	flux start ${ARGS} -o,-Stbon.fanout=0 /bin/true
 '
+test_expect_success 'broker fails on invalid broker.critical-ranks option' '
+	test_must_fail flux start ${ARGS} -o,-Sbroker.critical-ranks=0-1
+'
 test_expect_success 'broker fails on unknown option' '
 	test_must_fail flux start ${ARGS} -o,--not-an-option /bin/true
 '

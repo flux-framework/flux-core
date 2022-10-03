@@ -12,6 +12,7 @@
 #define HAVE_JOB_EXEC_RSET_H 1
 #include <flux/idset.h>
 #include <jansson.h>
+#include <stdint.h>
 
 struct resource_set;
 
@@ -20,6 +21,10 @@ struct resource_set *resource_set_create (const char *R, json_error_t *errp);
 void resource_set_destroy (struct resource_set *rset);
 
 const struct idset * resource_set_ranks (struct resource_set *rset);
+
+uint32_t resource_set_nth_rank (struct resource_set *r, int n);
+
+uint32_t resource_set_rank_index (struct resource_set *r, uint32_t rank);
 
 double resource_set_starttime (struct resource_set *rset);
 

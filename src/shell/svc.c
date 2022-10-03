@@ -97,15 +97,7 @@ flux_future_t *shell_svc_vpack (struct shell_svc *svc,
 
 int shell_svc_allowed (struct shell_svc *svc, const flux_msg_t *msg)
 {
-    uint32_t userid;
-
-    if (flux_msg_get_userid (msg, &userid) < 0)
-        return -1;
-    if (userid != svc->uid) {
-        errno = EPERM;
-        return -1;
-    }
-    return 0;
+    return flux_msg_authorize (msg, svc->uid);
 }
 
 int shell_svc_register (struct shell_svc *svc,

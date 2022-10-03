@@ -136,6 +136,43 @@ double resource_set_expiration (struct resource_set *r)
     return r->expiration;
 }
 
+uint32_t resource_set_nth_rank (struct resource_set *r, int n)
+{
+    uint32_t rank;
+
+    if (r == NULL || n < 0) {
+        errno = EINVAL;
+        return IDSET_INVALID_ID;
+    }
+
+    rank = idset_first (r->ranks);
+    while (n-- && rank != IDSET_INVALID_ID)
+        rank = idset_next (r->ranks, rank);
+    if (rank == IDSET_INVALID_ID)
+        errno = ENOENT;
+    return rank;
+}
+
+uint32_t resource_set_rank_index (struct resource_set *r, uint32_t rank)
+{
+    uint32_t i, n;
+
+    if (r == NULL) {
+        errno = EINVAL;
+        return IDSET_INVALID_ID;
+    }
+
+    i = 0;
+    n = idset_first (r->ranks);
+    while (n != IDSET_INVALID_ID) {
+        if (n == rank)
+            return i;
+        i++;
+        n = idset_next (r->ranks, n);
+    }
+    errno = ENOENT;
+    return IDSET_INVALID_ID;
+}
 
 /* vi: ts=4 sw=4 expandtab
  */

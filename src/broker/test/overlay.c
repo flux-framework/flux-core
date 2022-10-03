@@ -124,6 +124,8 @@ void single (flux_t *h)
 {
     struct context *ctx = ctx_create (h, "single", 1, 0, 2, NULL);
     flux_msg_t *msg;
+    char *s;
+    struct idset *critical_ranks;
 
     ok (overlay_set_topology (ctx->ov, ctx->topo) == 0,
         "%s: overlay_set_topology size=1 rank=0 works", ctx->name);
@@ -132,6 +134,16 @@ void single (flux_t *h)
         "%s: overlay_get_size returns 1", ctx->name);
     ok (overlay_get_rank (ctx->ov) == 0,
         "%s: overlay_get_rank returns 0", ctx->name);
+
+    ok ((critical_ranks = overlay_get_default_critical_ranks (ctx->ov)) != NULL,
+        "%s: overlay_get_default_critical_ranks works");
+    if (!(s = idset_encode (critical_ranks, IDSET_FLAG_RANGE)))
+        BAIL_OUT ("idset_encode");
+    is (s, "0",
+        "%s: overlay_get_default_critical_ranks returned %s",
+        s);
+    free (s);
+    idset_destroy (critical_ranks);
 
     ok (overlay_register_attrs (ctx->ov) == 0,
         "%s: overlay_register_attrs works", ctx->name);

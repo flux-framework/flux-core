@@ -89,6 +89,13 @@ broker.mapping
    the instance has one broker per node on 16 nodes, and ``(vector,(0,1,16))``
    means it has 16 brokers on one node.
 
+broker.critical-ranks [Updates: C]
+   An RFC 22 idset representing broker ranks that are considered critical
+   to instance operation. The broker notifies the job execution system in
+   the parent instance of these ranks such that a fatal job exception
+   is raised when a failing node or other error occurs affecting any rank
+   in this set. Default: rank 0 plus any other overlay network routers.
+
 broker.pid
    The process id of the local broker.
 

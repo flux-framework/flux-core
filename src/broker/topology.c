@@ -302,4 +302,24 @@ error:
 
 }
 
+struct idset *topology_get_internal_ranks (struct topology *topo)
+{
+    struct idset *ranks;
+
+    if (!topo) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(ranks = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        return NULL;
+    for (int i = 1; i < topo->size; i++) {
+        if (idset_set (ranks, topo->node[i].parent) < 0)
+            goto error;
+    }
+    return ranks;
+error:
+    idset_destroy (ranks);
+    return NULL;
+}
+
 // vi:ts=4 sw=4 expandtab

@@ -92,7 +92,8 @@ OPTIONS
 **--test-pmi-clique**\ =\ *MODE*
    Set the pmi clique mode, which determines how ``PMI_process_mapping`` is set
    in the PMI server used to bootstrap the brokers.  If ``none``, the mapping
-   is not created.  If ``single``, all brokers are placed in one clique.
+   is not created.  If ``single``, all brokers are placed in one clique. If
+   ``per-broker``, each broker is placed in its own clique.
    Default: ``single``.
 
 VERBOSITY LEVELS

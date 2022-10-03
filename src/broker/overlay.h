@@ -89,6 +89,10 @@ bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid);
 bool overlay_uuid_is_child (struct overlay *ov, const char *uuid);
 void overlay_set_ipv6 (struct overlay *ov, int enable);
 
+/* Return an idset of critical ranks, i.e. non-leaf brokers
+ */
+struct idset *overlay_get_default_critical_ranks (struct overlay *ov);
+
 /* Fetch TBON subtree topo at 'rank'.  The returned topology object has the
  * following recursive structure, where "children" is an array of topology
  * objects:
