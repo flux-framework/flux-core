@@ -934,6 +934,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	nnodes==NNODES
 	ranks==RANKS
 	nodelist==NODELIST
+	contextual_info==INFO
 	success==SUCCESS
 	exception.occurred==EXCEPTION-OCCURRED
 	exception.severity==EXCEPTION-SEVERITY
