@@ -417,11 +417,13 @@ test_expect_success HAVE_JQ 'flux job list-inactive w/ count limits output of in
 '
 
 test_expect_success HAVE_JQ 'flux job list-inactive w/ since -1 leads to error' '
-        test_must_fail flux job list-inactive --since=-1
+        test_must_fail flux job list-inactive --since=-1 > list_inactive_error1.out 2>&1 &&
+        grep "Invalid argument" list_inactive_error1.out
 '
 
 test_expect_success HAVE_JQ 'flux job list-inactive w/ count -1 leads to error' '
-        test_must_fail flux job list-inactive --count=-1
+        test_must_fail flux job list-inactive --count=-1 > list_inactive_error2.out 2>&1 &&
+        grep "Invalid argument" list_inactive_error1.out
 '
 
 test_expect_success HAVE_JQ 'flux job list-inactive w/ since (most recent timestamp)' '
@@ -483,22 +485,27 @@ test_expect_success HAVE_JQ 'flux job list-ids multiple IDs works' '
 '
 
 test_expect_success HAVE_JQ 'flux job list-ids fails without ID' '
-        test_must_fail flux job list-ids
+        test_must_fail flux job list-ids > list_ids_error1.out 2>&1 &&
+        grep "Usage" list_ids_error1.out
 '
 
 test_expect_success HAVE_JQ 'flux job list-ids fails with bad ID' '
-        test_must_fail flux job list-ids 1234567890
+        test_must_fail flux job list-ids 1234567890 > list_ids_error2.out 2>&1 &&
+        grep "No such file or directory" list_ids_error2.out
 '
 
 test_expect_success HAVE_JQ 'flux job list-ids fails with not an ID' '
-        test_must_fail flux job list-ids foobar
+        test_must_fail flux job list-ids foobar > list_ids_error3.out 2>&1 &&
+        grep "No such file or directory" list_ids_error3.out
 '
 
 test_expect_success HAVE_JQ 'flux job list-ids fails with one bad ID out of several' '
         id1=`head -n 1 pending.ids` &&
         id2=`head -n 1 running.ids` &&
         id3=`head -n 1 inactive.ids` &&
-        test_must_fail flux job list-ids ${id1} ${id2} 1234567890 ${id3}
+        test_must_fail flux job list-ids ${id1} ${id2} 1234567890 ${id3} \
+            > list_ids_error4.out 2>&1 &&
+        grep "No such file or directory" list_ids_error4.out
 '
 
 # In order to test potential racy behavior, use job state pause/unpause to pause
