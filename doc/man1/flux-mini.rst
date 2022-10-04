@@ -57,6 +57,16 @@ over time, making them suitable for use in scripts.
 
 The available OPTIONS are detailed below.
 
+.. note::
+
+  These commands target the *enclosing instance*. For example, within
+  a *SCRIPT* submitted with ``flux mini batch``, a ``flux mini`` command
+  will submit a job to the batch instance, not the parent instance under
+  which the batch instance is running. To target the parent instance,
+  the ``--parent`` option of :man1:`flux` should be used, e.g::
+
+   flux --parent mini batch [OPTIONS].. ARGS..
+
 
 JOB PARAMETERS
 ==============
