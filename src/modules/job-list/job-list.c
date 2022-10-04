@@ -44,8 +44,8 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
     int pending = zlistx_size (ctx->jsctx->pending);
     int running = zlistx_size (ctx->jsctx->running);
     int inactive = zlistx_size (ctx->jsctx->inactive);
-    int idsync_lookups = zlistx_size (ctx->idsync_lookups);
-    int idsync_waits = zhashx_size (ctx->idsync_waits);
+    int idsync_lookups = zlistx_size (ctx->isctx->lookups);
+    int idsync_waits = zhashx_size (ctx->isctx->waits);
     if (flux_respond_pack (h, msg, "{s:{s:i s:i s:i} s:{s:i s:i}}",
                            "jobs",
                            "pending", pending,
@@ -160,8 +160,8 @@ static void list_ctx_destroy (struct list_ctx *ctx)
         flux_msg_handler_delvec (ctx->handlers);
         if (ctx->jsctx)
             job_state_destroy (ctx->jsctx);
-        if (ctx->idsync_lookups)
-            idsync_cleanup (ctx);
+        if (ctx->isctx)
+            idsync_ctx_destroy (ctx->isctx);
         free (ctx);
         errno = saved_errno;
     }
@@ -177,9 +177,9 @@ static struct list_ctx *list_ctx_create (flux_t *h)
         goto error;
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
         goto error;
-    if (!(ctx->jsctx = job_state_create (ctx)))
+    if (!(ctx->isctx = idsync_ctx_create (ctx->h)))
         goto error;
-    if (idsync_setup (ctx) < 0)
+    if (!(ctx->jsctx = job_state_create (ctx->isctx)))
         goto error;
     return ctx;
 error:
@@ -196,7 +196,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "initialization error");
         goto done;
     }
-    if (job_state_init_from_kvs (ctx) < 0)
+    if (job_state_init_from_kvs (ctx->jsctx) < 0)
         goto done;
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         goto done;

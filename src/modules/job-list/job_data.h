@@ -14,7 +14,6 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "job-list.h"
 #include "src/common/libutil/grudgeset.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
@@ -31,7 +30,6 @@
  */
 struct job {
     flux_t *h;
-    struct list_ctx *ctx;
 
     flux_jobid_t id;
     uint32_t userid;
@@ -90,7 +88,7 @@ struct job {
 
 void job_destroy (void *data);
 
-struct job *job_create (struct list_ctx *ctx, flux_jobid_t id);
+struct job *job_create (flux_t *h, flux_jobid_t id);
 
 /* Parse and internally cache jobspec.  Set values for:
  * - job name

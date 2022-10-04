@@ -265,28 +265,28 @@ int wait_id_valid (struct list_ctx *ctx, struct idsync_data *isd)
     void *handle;
     int saved_errno;
 
-    if ((handle = zlistx_find (ctx->idsync_lookups, isd))) {
+    if ((handle = zlistx_find (ctx->isctx->lookups, isd))) {
         /* detach will not call zlistx destructor */
-        zlistx_detach (ctx->idsync_lookups, handle);
+        zlistx_detach (ctx->isctx->lookups, handle);
     }
 
-    /* idsync_waits holds lists of ids waiting on, b/c multiple callers
+    /* isctx->waits holds lists of ids waiting on, b/c multiple callers
      * could wait on same id */
-    if (!(list_isd = zhashx_lookup (ctx->idsync_waits, &isd->id))) {
+    if (!(list_isd = zhashx_lookup (ctx->isctx->waits, &isd->id))) {
         if (!(list_isd = zlistx_new ())) {
-            flux_log_error (isd->ctx->h, "%s: zlistx_new", __FUNCTION__);
+            flux_log_error (ctx->h, "%s: zlistx_new", __FUNCTION__);
             goto error_destroy;
         }
         zlistx_set_destructor (list_isd, idsync_data_destroy_wrapper);
 
-        if (zhashx_insert (ctx->idsync_waits, &isd->id, list_isd) < 0) {
-            flux_log_error (isd->ctx->h, "%s: zhashx_insert", __FUNCTION__);
+        if (zhashx_insert (ctx->isctx->waits, &isd->id, list_isd) < 0) {
+            flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
             goto error_destroy;
         }
     }
 
     if (!zlistx_add_end (list_isd, isd)) {
-        flux_log_error (isd->ctx->h, "%s: zlistx_add_end", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: zlistx_add_end", __FUNCTION__);
         goto error_destroy;
     }
 
@@ -302,8 +302,10 @@ error_destroy:
 void check_id_valid_continuation (flux_future_t *f, void *arg)
 {
     struct idsync_data *isd = arg;
-    struct list_ctx *ctx = isd->ctx;
+    struct list_ctx *ctx = flux_future_aux_get (f, "list_ctx");
     void *handle;
+
+    assert (ctx);
 
     if (flux_future_get (f, NULL) < 0) {
         if (flux_respond_error (ctx->h, isd->msg, errno, NULL) < 0)
@@ -337,9 +339,9 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
 
 cleanup:
     /* delete will destroy struct idsync_data and future within it */
-    handle = zlistx_find (ctx->idsync_lookups, isd);
+    handle = zlistx_find (ctx->isctx->lookups, isd);
     if (handle)
-        zlistx_delete (ctx->idsync_lookups, handle);
+        zlistx_delete (ctx->isctx->lookups, handle);
     return;
 }
 
@@ -363,11 +365,16 @@ int check_id_valid (struct list_ctx *ctx,
         goto error;
     }
 
-    if (!(isd = idsync_data_create (ctx, id, msg, attrs, f)))
+    if (!(isd = idsync_data_create (ctx->h, id, msg, attrs, f)))
         goto error;
 
     /* future now owned by struct idsync_data */
     f = NULL;
+
+    if (flux_future_aux_set (isd->f_lookup, "list_ctx", ctx, NULL) < 0) {
+        flux_log_error (ctx->h, "%s: flux_future_aux_set", __FUNCTION__);
+        goto error;
+    }
 
     if (flux_future_then (isd->f_lookup,
                           -1,
@@ -377,7 +384,7 @@ int check_id_valid (struct list_ctx *ctx,
         goto error;
     }
 
-    if (!zlistx_add_end (ctx->idsync_lookups, isd)) {
+    if (!zlistx_add_end (ctx->isctx->lookups, isd)) {
         flux_log_error (ctx->h, "%s: zlistx_add_end", __FUNCTION__);
         goto error;
     }
@@ -422,7 +429,7 @@ json_t *get_job_by_id (struct list_ctx *ctx,
     if (job->state == FLUX_JOB_STATE_NEW) {
         if (stall) {
             struct idsync_data *isd;
-            if (!(isd = idsync_data_create (ctx, id, msg, attrs, NULL))) {
+            if (!(isd = idsync_data_create (ctx->h, id, msg, attrs, NULL))) {
                 flux_log_error (ctx->h, "%s: idsync_data_create", __FUNCTION__);
                 return NULL;
             }
