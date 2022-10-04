@@ -571,6 +571,20 @@ test_expect_success 'flux-jobs --format={runtime:0.3f} works' '
 	[ "$(grep -E "\.[0-9]{3}" runtime-dotRI.out | wc -l)" = "15" ]
 '
 
+test_expect_success 'flux-jobs --format={contextual_time} works' '
+	flux jobs --filter=pending -c1 -no "{contextual_time:h}" \
+		>ctx_timeP.out &&
+	flux jobs --filter=running -c1 -no "{contextual_time:h}" \
+		>ctx_timeR.out &&
+	flux jobs --filter=completed -c1 -no "{contextual_time:0.3f}" \
+		>ctx_timeCD.out &&
+	echo "300.0" >duration.expected &&
+	test_cmp duration.expected ctx_timeP.out &&
+	test_must_fail test_cmp duration.expected ctx_timeR.out &&
+	test_must_fail test_cmp duration.expected ctx_timeCD.out &&
+	grep -E "\.[0-9]{3}" ctx_timeCD.out
+'
+
 test_expect_success 'flux-jobs emits useful error on invalid format' '
 	test_expect_code 1 flux jobs --format="{runtime" >invalid.out 2>&1 &&
 	test_debug "cat invalid.out" &&
@@ -945,6 +959,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	ranks==RANKS
 	nodelist==NODELIST
 	contextual_info==INFO
+	contextual_time==TIME
 	success==SUCCESS
 	exception.occurred==EXCEPTION-OCCURRED
 	exception.severity==EXCEPTION-SEVERITY

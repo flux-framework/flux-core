@@ -152,8 +152,8 @@ following is the format used for the default format:
 ::
 
    {id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10} \
-   {status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} {runtime!F:>8h} \
-   {contextual_info}
+   {status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} \
+   {contextual_time!F:>8h} {contextual_info}
 
 If a format field is preceded by the special string ``?:`` this will
 cause the field to be removed entirely from output if the result would
@@ -394,6 +394,9 @@ the state of the job or other context:
    job will run is returned (if the scheduler supports it). Otherwise,
    the assigned nodelist is returned (if resources were assigned).
 
+**contextual_info**
+   Returns the job runtime for jobs in RUN state or later, otherwise the
+   job duration (if set) is returned.
 
 CONFIGURATION
 =============

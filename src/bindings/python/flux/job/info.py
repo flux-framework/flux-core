@@ -377,6 +377,16 @@ class JobInfo:
         else:
             return self.nodelist
 
+    @memoized_property
+    def contextual_time(self):
+        """
+        Return job duration if job is not running, otherwise runtime
+        """
+        state = str(self.state)
+        if state in ["PRIORITY", "DEPEND", "SCHED"]:
+            return self.duration
+        return self.runtime
+
 
 def job_fields_to_attrs(fields):
     # Note there is no attr for "id", it is always returned
@@ -423,6 +433,7 @@ def job_fields_to_attrs(fields):
         "annotations": ("annotations",),
         "dependencies": ("dependencies",),
         "contextual_info": ("state", "dependencies", "annotations", "nodelist"),
+        "contextual_time": ("state", "t_run", "t_cleanup", "duration"),
         # Special cases, pointers to sub-dicts in annotations
         "sched": ("annotations",),
         "user": ("annotations",),
@@ -632,6 +643,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "annotations": "ANNOTATIONS",
         "dependencies": "DEPENDENCIES",
         "contextual_info": "INFO",
+        "contextual_time": "TIME",
         # The following are special pre-defined cases per RFC27
         "annotations.sched.t_estimate": "T_ESTIMATE",
         "annotations.sched.reason_pending": "REASON",
