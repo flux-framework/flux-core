@@ -107,6 +107,9 @@ The environment variable `FLUX_TEST_INSTALLED_PATH` may also be set
 to the path to an *installed* version of the `flux(1)` command, for
 running the testsuite against an installed version of flux-core.
 
+The environment variable `FLUX_TEST_VALGRIND` may be set to `t`
+to run tests under valgrind.
+
 
 Skipping Tests
 --------------
