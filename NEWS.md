@@ -1,3 +1,80 @@
+flux-core version 0.44.0 - 2022-10-04
+-------------------------------------
+
+This release includes initial support for job queues, which can be
+configured to partition resources with different limits and defaults.
+See `flux-config-queues(5)` for details.
+
+Other highlights include:
+
+ * Add ability to modify jobspec at the time of ingest with a new
+   job frobnicator framework similar to the existing validators.
+ * A new alternative to `system.R` for configuration of resources
+   (See `flux-config-resource(5)` for details)
+ * All child Flux instances are resilient to non-critical node failures
+ * Updates to `flux jobs` including better default output, a set of
+   new default named formats (See `flux jobs --format=help`), and support
+   for config files to add more named formats.
+
+## New Features
+ * ingest: set configured queue constraints (#4587)
+ * ingest: enable frobnicator when needed by [queues] or [policy] (#4608)
+ * reject jobs submitted to a named queue when none are configured (#4627)
+ * make queue state persist across instance restart (#4640)
+ * flux-mini: add `-q, --queue=NAME` option (#4599)
+ * flux-top: add minimal support for job queues (#4605)
+ * flux-jobs: support getting job queue and filtering by job queue (#4579)
+ * flux-jobs: support collapsible format fields (#4591)
+ * flux-jobs: add configurable named formats (#4595)
+ * flux-jobs: add queue to builtin format strings (#4607)
+ * flux-jobs: add `--format=long` (#4642)
+ * flux-jobs: support width and alignment with `!d` conversion specifier (#4597)
+ * python: add `contextual_time` jobinfo field (#4641)
+ * python: add `contextual_info` jobinfo field (#4626)
+ * broker: reduce `tbon.tcp_user_timeout` (#4632)
+ * make child instances resilient to non-critical node failures (#4615)
+ * resource: support configuration of resources in TOML config (#4566)
+ * drop environment from KVS jobspec (#4637)
+ * docker: add namespaced builds for spack/ubuntu (#4577)
+
+## Fixes
+ * flux-mini: change default unit for `--time-limit` to minutes (#4565)
+ * job-list: handle per-resource "cores" special cases (#4630)
+ * job-list: handle per-resource ntasks special case (#4555)
+ * job-list: use libjj to parse jobspec (#4611)
+ * job-list: parse tasks with total count in jobspec (#4651)
+ * job-info: return error on invalid eventlog append (#4624)
+ * flux-shell: always use `pmi=pershell` by default (#4621)
+ * ingest: require job queue if [queues] are configured (#4616)
+ * job-ingest: assign jobspec defaults before scheduler feasibility check
+   (#4529)
+ * configure: remove `--without-python` (#4584)
+ * configure: fix obsolete autotools warnings (#4588)
+ * configure.ac: fix error message when running autogen.sh (#4590)
+ * job-manager: print better errors on inactive move (#4586)
+ * broker: fix use-after-free segfault (#4570)
+ * python: uri: use path to current flux executable in lsf resovler (#4559)
+ * spack: add flux-core container build (#4561)
+ * improve signal/noise ratio in systemd journal logs (#4560)
+ * flux-mini: improve an error message and documentation for per-resource
+   options (#4549)
+ * doc: document `{id.dec}` in `flux-jobs(1)` (#4548)
+ * doc: add note about flux `--parent` option in `flux-mini(1)` (#4650)
+ * job-manager: do not ignore failure to load configured plugins (#4647)
+
+## Cleanup
+ * job-list: remove circular header dependencies (#4639)
+ * job-list: split out job information into new files (#4575)
+ * job-list: misc cleanup (#4563)
+ * Container base: remove view copy (#4551)
+
+## Testsuite
+ * testsuite: document `FLUX_TEST_VALGRIND` (#4643)
+ * testsuite: remove errant `test_done` call (#4609)
+ * testsuite: fix spurious resource norestrict test failures on some version
+   of hwloc (#4550)
+
+
 flux-core version 0.43.0 - 2022-09-06
 -------------------------------------
 
