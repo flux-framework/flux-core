@@ -80,7 +80,7 @@ test_expect_success 'job-manager: plugins can be loaded by configuration' '
 	grep test confplugins.out
 '
 test_expect_success 'job-manager: bad plugins config is detected' '
-	mkdir -p badconf/a badconf/b badconf/c  &&
+	mkdir -p badconf/a badconf/b badconf/c  badconf/d &&
 	cat <<-EOF >badconf/a/job-manager.toml &&
 	[job-manager]
 	plugins = { load = "test.so" }
@@ -93,15 +93,21 @@ test_expect_success 'job-manager: bad plugins config is detected' '
 	[[job-manager.plugins]]
 	remove = "notfound.so"
 	EOF
+	cat <<-EOF >badconf/d/job-manager.toml &&
+	[[job-manager.plugins]]
+	load = "notfound.so"
+	EOF
 	test_must_fail \
 	    flux mini bulksubmit -n1 --watch --log=badconf.{}.log \
-	        flux start -o,-c$(pwd)/badconf/{} /bin/true ::: a b c &&
+	        flux start -o,-c$(pwd)/badconf/{} /bin/true ::: a b c d &&
 	test_debug "echo a:; cat badconf.a.log" &&
 	grep "config must be an array" badconf.a.log &&
 	test_debug "echo b:; cat badconf.b.log" &&
 	grep -i "expected string.*got integer" badconf.b.log &&
 	test_debug "echo c:; cat badconf.c.log" &&
-	grep -i "failed to find plugin to remove" badconf.c.log
+	grep -i "failed to find plugin to remove" badconf.c.log &&
+	test_debug "echo d:; cat badconf.d.log" &&
+	grep -i "no such plugin found" badconf.d.log
 '
 test_expect_success 'job-manager: default plugin sets priority to urgency' '
 	flux jobtap remove all &&
