@@ -475,6 +475,7 @@ class TestJob(unittest.TestCase):
             "name",
             "queue",
             "ntasks",
+            "ncores",
             "duration",
             "nnodes",
             "ranks",
