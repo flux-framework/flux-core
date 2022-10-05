@@ -431,6 +431,15 @@ int runat_push_shell_command (struct runat *r,
     }
     if (!(cmd = runat_command_create (environ, log_stdio)))
         return -1;
+
+    /*   For shell commands run the target cmdline in a separate process
+     *   group so that any processes spawned by the shell will be signaled
+     *   in runat_abort(). This is probably unnecessary for single commands,
+     *   and does not work for an interactive shell (seems to disable access
+     *   to the pty), so we set the flag only here for now.
+     */
+    cmd->flags |= FLUX_SUBPROCESS_FLAGS_SETPGRP;
+
     if (runat_command_set_cmdline (cmd, cmdline) < 0)
         goto error;
     if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
