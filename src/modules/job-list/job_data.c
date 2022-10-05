@@ -235,7 +235,12 @@ static int parse_jobspec_ntasks (struct job *job, struct jj_counts *jj)
         }
     }
 
-    job->ntasks = jj->nslots;
+    if (json_unpack_ex (job->jobspec, NULL, 0,
+                        "{s:[{s:{s:i}}]}",
+                        "tasks",
+                        "count",
+                        "total", &job->ntasks) < 0)
+        job->ntasks = jj->nslots;
     return 0;
 }
 
