@@ -16,7 +16,10 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <fcntl.h>
+#include <float.h>
+#include <math.h>
 
+#include "config.h"
 #include "handle.h"
 #include "reactor.h"
 #include "ev_flux.h"
@@ -111,6 +114,42 @@ flux_reactor_t *flux_get_reactor (flux_t *h)
         }
     }
     return r;
+}
+
+static __thread double timeout_seconds = 0;
+
+static void check_timeouts(struct ev_loop *current_loop, int t, void *vw) {
+  ev_watcher *w = vw;
+  ev_tstamp remaining = 0;
+  if (t == EV_TIMER)
+    remaining = ev_timer_remaining(current_loop, (ev_timer *)w);
+  else if (t == EV_PERIODIC)
+    remaining = ev_periodic_at(w) - ev_now(current_loop);
+
+  // take the minimum
+  if (isnan(timeout_seconds) || timeout_seconds > remaining)
+    timeout_seconds = remaining;
+}
+
+static __thread bool any_active = false;
+
+static void check_any_active(struct ev_loop *current_loop, int t, void *vw) {
+  ev_watcher *w = vw;
+  if (ev_is_active(w))
+    any_active = true;
+}
+
+double flux_reactor_resume_timeout(flux_reactor_t *r) {
+  any_active = false;
+  ev_walk(r->loop, EV_CHECK | EV_IDLE | EV_PREPARE, check_any_active);
+  if (any_active)
+    return 0;
+
+  timeout_seconds = NAN;
+  ev_walk(r->loop, EV_TIMER | EV_PERIODIC, check_timeouts);
+  if (isnan(timeout_seconds))
+    return -1;
+  return timeout_seconds;
 }
 
 int flux_reactor_run (flux_reactor_t *r, int flags)
