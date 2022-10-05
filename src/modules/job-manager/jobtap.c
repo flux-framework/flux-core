@@ -389,10 +389,7 @@ static int jobtap_conf_entry (struct jobtap *jobtap,
                           remove,
                           jobtap_err.text);
     }
-    if (load && jobtap_load_plugin (jobtap,
-                                    load,
-                                    conf,
-                                    &jobtap_err) < 0) {
+    if (load && !jobtap_load_plugin (jobtap, load, conf, &jobtap_err)) {
         return errprintf (errp,
                           "[job-manager.plugins][%d]: load %s: %s",
                           index,
