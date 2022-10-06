@@ -14,6 +14,11 @@
 #ifndef _BROKER_RUNAT_H
 #define _BROKER_RUNAT_H
 
+enum {
+    RUNAT_FLAG_LOG_STDIO = 1,   /* stdout/stderr go to flux_log (o/w
+                                 * combine w/ broker) */
+};
+
 struct runat;
 
 typedef void (*runat_completion_f)(struct runat *r,
@@ -24,26 +29,25 @@ struct runat *runat_create (flux_t *h, const char *local_uri);
 void runat_destroy (struct runat *r);
 
 /* Push command, to be run under shell -c, onto named list.
- * If log_stdio is true, stdout/stderr go to flux_log (o/w combine w/broker)
  */
 int runat_push_shell_command (struct runat *r,
                               const char *name,
                               const char *cmdline,
-                              bool log_stdio);
+                              int flags);
 
 /* Push interactive shell onto named list.
+ * Note: RUNAT_FLAG_LOG_STDIO flag not allowed
  */
-int runat_push_shell (struct runat *r, const char *name);
+int runat_push_shell (struct runat *r, const char *name, int flags);
 
 /* Push command, to be run directly, onto named list.
  * The command is specified by argz.
- * If log_stdio is true, stdout/stderr go to flux_log (o/w combine w/broker)
  */
 int runat_push_command (struct runat *r,
                         const char *name,
                         const char *argz,
                         size_t argz_len,
-                        bool log_stdio);
+                        int flags);
 
 /* Get exit code of completed command list.
  * If multiple commands fail, the exit code is that of the first failure.

@@ -79,8 +79,8 @@ void basic (flux_t *h)
         "runat_is_defined name=test1 returns false");
     ok (runat_is_completed (r, "test1") == false,
         "runat_is_completed name=test1 returns false");
-    ok (runat_push_shell_command (r, "test1", "/bin/true", false) == 0
-        && runat_push_shell_command (r, "test1", "/bin/true", false) == 0,
+    ok (runat_push_shell_command (r, "test1", "/bin/true", 0) == 0
+        && runat_push_shell_command (r, "test1", "/bin/true", 0) == 0,
         "pushed true;true");
     ok (runat_is_defined (r, "test1") == true,
         "runat_is_defined name=test1 returns true after creation");
@@ -102,8 +102,8 @@ void basic (flux_t *h)
 
     /* run false;true */
     clear_list (logs);
-    ok (runat_push_shell_command (r, "test2", "/bin/true", false) == 0
-        && runat_push_shell_command (r, "test2", "/bin/false", false) == 0,
+    ok (runat_push_shell_command (r, "test2", "/bin/true", 0) == 0
+        && runat_push_shell_command (r, "test2", "/bin/false", 0) == 0,
         "pushed true;true");
     ok (runat_start (r, "test2", test_completion, &ctx) == 0,
         "runat_start works");
@@ -120,8 +120,8 @@ void basic (flux_t *h)
 
     /* run true;false */
     clear_list (logs);
-    ok (runat_push_command (r, "test3", "/bin/false", 11, false) == 0
-        && runat_push_command (r, "test3", "/bin/true", 10, false) == 0,
+    ok (runat_push_command (r, "test3", "/bin/false", 11, 0) == 0
+        && runat_push_command (r, "test3", "/bin/true", 10, 0) == 0,
         "pushed true;true");
     ok (runat_start (r, "test3", test_completion, &ctx) == 0,
         "runat_start works");
@@ -138,8 +138,14 @@ void basic (flux_t *h)
 
     /* generate output to stdout and stderr */
     clear_list (logs);
-    ok (runat_push_shell_command (r, "test4", "echo test4-out", true) == 0
-    && runat_push_shell_command (r, "test4", "echo test4-err>&2", true) == 0,
+    ok (runat_push_shell_command (r,
+                                  "test4",
+                                  "echo test4-out",
+                                  RUNAT_FLAG_LOG_STDIO) == 0
+    && runat_push_shell_command (r,
+                                 "test4",
+                                 "echo test4-err>&2",
+                                 RUNAT_FLAG_LOG_STDIO) == 0,
         "pushed echo;echo");
     ok (runat_start (r, "test4", test_completion, &ctx) == 0,
         "runat_start works");
@@ -159,8 +165,11 @@ void basic (flux_t *h)
 
     /* run notfound;echo foo*/
     clear_list (logs);
-    ok (runat_push_shell_command (r, "test5", "echo test5-out", true) == 0
-        && runat_push_shell_command (r, "test5", "notfound", false) == 0,
+    ok (runat_push_shell_command (r,
+                                  "test5",
+                                  "echo test5-out",
+                                  RUNAT_FLAG_LOG_STDIO) == 0
+        && runat_push_shell_command (r, "test5", "notfound", 0) == 0,
         "pushed notfound;echo");
     ok (runat_start (r, "test5", test_completion, &ctx) == 0,
         "runat_start works");
@@ -178,7 +187,10 @@ void basic (flux_t *h)
 
     /* run printenv FLUX_URI */
     clear_list (logs);
-    ok (runat_push_shell_command (r, "test6", "printenv FLUX_URI", true) == 0,
+    ok (runat_push_shell_command (r,
+                                  "test6",
+                                  "printenv FLUX_URI",
+                                  RUNAT_FLAG_LOG_STDIO) == 0,
         "pushed printenv FLUX_URI");
     ok (runat_start (r, "test6", test_completion, &ctx) == 0,
         "runat_start works");
@@ -199,8 +211,8 @@ void basic (flux_t *h)
      * exit code indicating terminated.
      */
     clear_list (logs);
-    ok (runat_push_shell_command (r, "test7", "/bin/true", false) == 0
-            && runat_push_shell_command (r, "test7", "sleep 3600", false) == 0,
+    ok (runat_push_shell_command (r, "test7", "/bin/true", 0) == 0
+            && runat_push_shell_command (r, "test7", "sleep 3600", 0) == 0,
         "pushed /bin/true;sleep 3600");
     ok (runat_start (r, "test7", test_completion, &ctx) == 0,
         "runat_start works");
@@ -290,30 +302,33 @@ void badinput (flux_t *h)
         "runat_get_exit_code rc=NULL fails with ENOENT");
 
     errno = 0;
-    ok (runat_push_shell (NULL, "foo") < 0 && errno == EINVAL,
+    ok (runat_push_shell (NULL, "foo", 0) < 0 && errno == EINVAL,
         "runat_push_shell r=NULL fails with EINVAL");
     errno = 0;
-    ok (runat_push_shell (r, NULL) < 0 && errno == EINVAL,
+    ok (runat_push_shell (r, NULL, 0) < 0 && errno == EINVAL,
         "runat_push_shell name=NULL fails with EINVAL");
+    errno = 0;
+    ok (runat_push_shell (r, "foo", RUNAT_FLAG_LOG_STDIO) < 0 && errno == EINVAL,
+        "runat_push_shell flags=RUNAT_FLAG_LOG_STDIO fails with EINVAL");
 
     errno = 0;
-    ok (runat_push_shell_command (NULL, "a", "a", false) < 0 && errno == EINVAL,
+    ok (runat_push_shell_command (NULL, "a", "a", 0) < 0 && errno == EINVAL,
         "runat_push_shell_command r=NULL fails with EINVAL");
     errno = 0;
-    ok (runat_push_shell_command (r, NULL, "a", false) < 0 && errno == EINVAL,
+    ok (runat_push_shell_command (r, NULL, "a", 0) < 0 && errno == EINVAL,
         "runat_push_shell_command name=NULL fails with EINVAL");
     errno = 0;
-    ok (runat_push_shell_command (r, "foo", NULL, false) < 0 && errno == EINVAL,
+    ok (runat_push_shell_command (r, "foo", NULL, 0) < 0 && errno == EINVAL,
         "runat_push_shell_command cmdline=NULL fails with EINVAL");
 
     errno = 0;
-    ok (runat_push_command (NULL, "a", "a", 1, false) < 0 && errno == EINVAL,
+    ok (runat_push_command (NULL, "a", "a", 1, 0) < 0 && errno == EINVAL,
         "runat_push_command r=NULL fails with EINVAL");
     errno = 0;
-    ok (runat_push_command (r, NULL, "a", 1, false) < 0 && errno == EINVAL,
+    ok (runat_push_command (r, NULL, "a", 1, 0) < 0 && errno == EINVAL,
         "runat_push_command name=NULL fails with EINVAL");
     errno = 0;
-    ok (runat_push_command (r, "foo", NULL, 1, false) < 0 && errno == EINVAL,
+    ok (runat_push_command (r, "foo", NULL, 1, 0) < 0 && errno == EINVAL,
         "runat_push_command argz=NULL fails with EINVAL");
 
     runat_destroy (r);
