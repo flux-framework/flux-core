@@ -196,7 +196,7 @@ void basic (flux_t *h)
     /* N.B. if sleep has started, the abort function kills it.
      * If it is not yet started, the subprocess state callback kills it
      * when it transitions to running.  Either way we should see an
-     * exit code inidicating terminated.
+     * exit code indicating terminated.
      */
     clear_list (logs);
     ok (runat_push_shell_command (r, "test7", "/bin/true", false) == 0
