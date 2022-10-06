@@ -631,7 +631,8 @@ static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int fla
 {
     flux_subprocess_t *p = NULL;
     int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
-                       | FLUX_SUBPROCESS_FLAGS_SETPGRP);
+                       | FLUX_SUBPROCESS_FLAGS_SETPGRP
+                       | FLUX_SUBPROCESS_FLAGS_FORK_EXEC);
 
     if (!r || !cmd) {
         errno = EINVAL;

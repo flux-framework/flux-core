@@ -70,6 +70,8 @@ enum {
     FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH = 1,
     /* flux_exec(): call setpgrp() before exec(2) */
     FLUX_SUBPROCESS_FLAGS_SETPGRP = 2,
+    /* use fork(2)/exec(2) even if posix_spawn(3) available */
+    FLUX_SUBPROCESS_FLAGS_FORK_EXEC = 4,
 };
 
 /*

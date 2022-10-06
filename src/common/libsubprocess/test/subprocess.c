@@ -1134,6 +1134,31 @@ void test_flag_setpgrp (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 }
 
+void test_flag_fork_exec (flux_reactor_t *r)
+{
+    char *av[] = { "/bin/true", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb
+    };
+    completion_cb_count = 0;
+    p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_FORK_EXEC, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
 void env_passed_cb (flux_subprocess_t *p, const char *stream)
 {
     const char *ptr;
@@ -2702,6 +2727,8 @@ int main (int argc, char *argv[])
 #endif
     diag ("flag_setpgrp");
     test_flag_setpgrp (r);
+    diag ("flag_fork_exec");
+    test_flag_fork_exec (r);
     diag ("kill");
     test_kill (r);
     diag ("kill_setpgrp");

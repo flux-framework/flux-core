@@ -396,7 +396,9 @@ static void child_watch_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 static int create_process (flux_subprocess_t *p)
 {
-    if (!p->hooks.pre_exec && !flux_cmd_getcwd (p->cmd))
+    if (!(p->flags & FLUX_SUBPROCESS_FLAGS_FORK_EXEC)
+        && !p->hooks.pre_exec
+        && !flux_cmd_getcwd (p->cmd))
         return create_process_spawn (p);
     return create_process_fork (p);
 }
