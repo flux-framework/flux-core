@@ -298,6 +298,8 @@ static struct runat_command *runat_command_create (char **env, int flags)
         return NULL;
     if (!(flags & RUNAT_FLAG_LOG_STDIO))
         cmd->flags |= FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH;
+    if (flags & RUNAT_FLAG_FORK_EXEC)
+        cmd->flags |= FLUX_SUBPROCESS_FLAGS_FORK_EXEC;
     if (!(cmd->cmd = flux_cmd_create (0, NULL, env)))
         goto error;
     return cmd;

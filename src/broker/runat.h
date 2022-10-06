@@ -17,6 +17,8 @@
 enum {
     RUNAT_FLAG_LOG_STDIO = 1,   /* stdout/stderr go to flux_log (o/w
                                  * combine w/ broker) */
+    RUNAT_FLAG_FORK_EXEC = 2,  /* require use of fork/exec, not
+                                * posix_spawn */
 };
 
 struct runat;
