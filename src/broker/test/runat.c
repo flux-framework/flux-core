@@ -65,7 +65,7 @@ void basic (flux_t *h)
 {
     struct runat *r;
     struct context ctx;
-    int rc;
+    int flags, rc;
 
     ctx.h = h;
 
@@ -211,8 +211,19 @@ void basic (flux_t *h)
      * exit code indicating terminated.
      */
     clear_list (logs);
-    ok (runat_push_shell_command (r, "test7", "/bin/true", 0) == 0
-            && runat_push_shell_command (r, "test7", "sleep 3600", 0) == 0,
+    flags = 0;
+    /* older versions of glibc, POSIX_SPAWN_SETPGROUP with
+     * posix_spawn(3) can be racy, and abort below can fail to kill
+     * the child.  The result would be a wait for the 3600 sleep to
+     * complete, giving the appearance of a hang.  If we're under an
+     * old version of glibc, force the use of fork(2)/exec(2) over
+     * posix_spawn(3).
+     */
+#if __GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 24)
+    flags |= RUNAT_FLAG_FORK_EXEC;
+#endif
+    ok (runat_push_shell_command (r, "test7", "/bin/true", flags) == 0
+            && runat_push_shell_command (r, "test7", "sleep 3600", flags) == 0,
         "pushed /bin/true;sleep 3600");
     ok (runat_start (r, "test7", test_completion, &ctx) == 0,
         "runat_start works");
