@@ -679,15 +679,15 @@ static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
          */
         if (!isatty (STDIN_FILENO))
             log_msg_exit ("stdin is not a tty - can't run interactive shell");
-        if (runat_push_shell (r, "rc2") < 0)
+        if (runat_push_shell (r, "rc2", 0) < 0)
             return -1;
     }
     else if (argz_count (argz, argz_len) == 1) { // run shell -c "command"
-        if (runat_push_shell_command (r, "rc2", argz, false) < 0)
+        if (runat_push_shell_command (r, "rc2", argz, 0) < 0)
             return -1;
     }
     else { // direct exec
-        if (runat_push_command (r, "rc2", argz, argz_len, false) < 0)
+        if (runat_push_command (r, "rc2", argz, argz_len, 0) < 0)
             return -1;
     }
     return 0;
@@ -721,7 +721,10 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc1 - initialization
      */
     if (rc1 && strlen (rc1) > 0) {
-        if (runat_push_shell_command (ctx->runat, "rc1", rc1, true) < 0) {
+        if (runat_push_shell_command (ctx->runat,
+                                      "rc1",
+                                      rc1,
+                                      RUNAT_FLAG_LOG_STDIO) < 0) {
             log_err ("runat_push_shell_command rc1");
             return -1;
         }
@@ -740,7 +743,10 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc3 - finalization
      */
     if (rc3 && strlen (rc3) > 0) {
-        if (runat_push_shell_command (ctx->runat, "rc3", rc3, true) < 0) {
+        if (runat_push_shell_command (ctx->runat,
+                                      "rc3",
+                                      rc3,
+                                      RUNAT_FLAG_LOG_STDIO) < 0) {
             log_err ("runat_push_shell_command rc3");
             return -1;
         }

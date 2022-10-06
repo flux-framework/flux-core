@@ -290,14 +290,16 @@ static void runat_command_destroy (struct runat_command *cmd)
     }
 }
 
-static struct runat_command *runat_command_create (char **env, bool log_stdio)
+static struct runat_command *runat_command_create (char **env, int flags)
 {
     struct runat_command *cmd;
 
     if (!(cmd = calloc (1, sizeof (*cmd))))
         return NULL;
-    if (!log_stdio)
+    if (!(flags & RUNAT_FLAG_LOG_STDIO))
         cmd->flags |= FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH;
+    if (flags & RUNAT_FLAG_FORK_EXEC)
+        cmd->flags |= FLUX_SUBPROCESS_FLAGS_FORK_EXEC;
     if (!(cmd->cmd = flux_cmd_create (0, NULL, env)))
         goto error;
     return cmd;
@@ -421,7 +423,7 @@ static int runat_push (struct runat *r,
 int runat_push_shell_command (struct runat *r,
                               const char *name,
                               const char *cmdline,
-                              bool log_stdio)
+                              int flags)
 {
     struct runat_command *cmd;
 
@@ -429,7 +431,7 @@ int runat_push_shell_command (struct runat *r,
         errno = EINVAL;
         return -1;
     }
-    if (!(cmd = runat_command_create (environ, log_stdio)))
+    if (!(cmd = runat_command_create (environ, flags)))
         return -1;
 
     /*   For shell commands run the target cmdline in a separate process
@@ -452,15 +454,15 @@ error:
     return -1;
 }
 
-int runat_push_shell (struct runat *r, const char *name)
+int runat_push_shell (struct runat *r, const char *name, int flags)
 {
     struct runat_command *cmd;
 
-    if (!r || !name) {
+    if (!r || !name || (flags & RUNAT_FLAG_LOG_STDIO)) {
         errno = EINVAL;
         return -1;
     }
-    if (!(cmd = runat_command_create (environ, false)))
+    if (!(cmd = runat_command_create (environ, flags)))
         return -1;
     if (runat_command_set_cmdline (cmd, NULL) < 0)
         goto error;
@@ -478,7 +480,7 @@ int runat_push_command (struct runat *r,
                         const char *name,
                         const char *argz,
                         size_t argz_len,
-                        bool log_stdio)
+                        int flags)
 {
     struct runat_command *cmd;
 
@@ -486,7 +488,7 @@ int runat_push_command (struct runat *r,
         errno = EINVAL;
         return -1;
     }
-    if (!(cmd = runat_command_create (environ, log_stdio)))
+    if (!(cmd = runat_command_create (environ, flags)))
         return -1;
     if (runat_command_set_argz (cmd, argz, argz_len) < 0)
         goto error;
@@ -608,7 +610,10 @@ static void runat_push_cb (flux_t *h,
             errstr = "cannot push an empty command line";
             goto error;
         }
-        if (runat_push_shell_command (r, name, cmdline, true) < 0)
+        if (runat_push_shell_command (r,
+                                      name,
+                                      cmdline,
+                                      RUNAT_FLAG_LOG_STDIO) < 0)
             goto error;
     }
     if (flux_respond (h, msg, NULL) < 0)
