@@ -852,51 +852,39 @@ test_expect_success HAVE_JQ 'verify task count preserved across restart' '
 '
 
 #
-# job node count / rank list / nodelist
+# job node count
 #
 
-test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks/nodelist correctly (1 task / 1 node)' '
+test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (1 task / 1 node)' '
         jobid=`flux mini submit --wait -n1 hostname | flux job id` &&
         echo $jobid > nodecount1.id &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".nnodes == 1" &&
-        echo $obj | jq -e ".ranks == \"0\"" &&
-        nodes=`flux job info $jobid R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\""
+        echo $obj | jq -e ".nnodes == 1"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks/nodelist correctly (2 tasks, / 1 node)' '
+test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (2 tasks, / 1 node)' '
         jobid=`flux mini submit --wait -n2 hostname | flux job id` &&
         echo $jobid > nodecount2.id &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".nnodes == 1" &&
-        echo $obj | jq -e ".ranks == \"0\"" &&
-        nodes=`flux job info $jobid R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\""
+        echo $obj | jq -e ".nnodes == 1"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks/nodelist correctly (3 tasks, / 2 nodes)' '
+test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (3 tasks, / 2 nodes)' '
         jobid=`flux mini submit --wait -n3 hostname | flux job id` &&
         echo $jobid > nodecount3.id &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".nnodes == 2" &&
-        echo $obj | jq -e ".ranks == \"[0-1]\"" &&
-        nodes=`flux job info $jobid R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\""
+        echo $obj | jq -e ".nnodes == 2"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks/nodelist correctly (5 tasks, / 3 nodes)' '
+test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (5 tasks, / 3 nodes)' '
         jobid=`flux mini submit --wait -n5 hostname | flux job id` &&
         echo $jobid > nodecount4.id &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".nnodes == 3" &&
-        echo $obj | jq -e ".ranks == \"[0-2]\"" &&
-        nodes=`flux job info $jobid R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\""
+        echo $obj | jq -e ".nnodes == 3"
 '
 
 # use flux queue to ensure jobs stay in pending state
@@ -919,30 +907,59 @@ test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
 
-test_expect_success HAVE_JQ 'verify nnodes/ranks/nodelist preserved across restart' '
+test_expect_success HAVE_JQ 'verify nnodes preserved across restart' '
         jobid1=`cat nodecount1.id` &&
         jobid2=`cat nodecount2.id` &&
         jobid3=`cat nodecount3.id` &&
         jobid4=`cat nodecount4.id` &&
         obj=$(flux job list -s inactive | grep ${jobid1}) &&
         echo $obj | jq -e ".nnodes == 1" &&
+        obj=$(flux job list -s inactive | grep ${jobid2}) &&
+        echo $obj | jq -e ".nnodes == 1" &&
+        obj=$(flux job list -s inactive | grep ${jobid3}) &&
+        echo $obj | jq -e ".nnodes == 2" &&
+        obj=$(flux job list -s inactive | grep ${jobid4}) &&
+        echo $obj | jq -e ".nnodes == 3"
+'
+
+#
+# job rank list / nodelist
+#
+
+test_expect_success HAVE_JQ 'flux job list outputs ranks/nodelist correctly (1 node)' '
+        jobid=`flux mini submit --wait -N1 hostname | flux job id` &&
+        echo $jobid > nodelist1.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ranks == \"0\"" &&
+        nodes=`flux job info $jobid R | flux R decode --nodelist` &&
+        echo $obj | jq -e ".nodelist == \"${nodes}\""
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ranks/nodelist correctly (3 nodes)' '
+        jobid=`flux mini submit --wait -N3 hostname | flux job id` &&
+        echo $jobid > nodelist2.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ranks == \"[0-2]\"" &&
+        nodes=`flux job info $jobid R | flux R decode --nodelist` &&
+        echo $obj | jq -e ".nodelist == \"${nodes}\""
+'
+
+test_expect_success 'reload the job-list module' '
+        flux module reload job-list
+'
+
+test_expect_success HAVE_JQ 'verify ranks/nodelist preserved across restart' '
+        jobid1=`cat nodelist1.id` &&
+        jobid2=`cat nodelist2.id` &&
+        obj=$(flux job list -s inactive | grep ${jobid1}) &&
         echo $obj | jq -e ".ranks == \"0\"" &&
         nodes=`flux job info ${jobid1} R | flux R decode --nodelist` &&
         echo $obj | jq -e ".nodelist == \"${nodes}\"" &&
         obj=$(flux job list -s inactive | grep ${jobid2}) &&
-        echo $obj | jq -e ".nnodes == 1" &&
-        echo $obj | jq -e ".ranks == \"0\"" &&
-        nodes=`flux job info ${jobid2} R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\"" &&
-        obj=$(flux job list -s inactive | grep ${jobid3}) &&
-        echo $obj | jq -e ".nnodes == 2" &&
-        echo $obj | jq -e ".ranks == \"[0-1]\"" &&
-        nodes=`flux job info ${jobid3} R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\"" &&
-        obj=$(flux job list -s inactive | grep ${jobid4}) &&
-        echo $obj | jq -e ".nnodes == 3" &&
         echo $obj | jq -e ".ranks == \"[0-2]\"" &&
-        nodes=`flux job info ${jobid4} R | flux R decode --nodelist` &&
+        nodes=`flux job info ${jobid2} R | flux R decode --nodelist` &&
         echo $obj | jq -e ".nodelist == \"${nodes}\""
 '
 

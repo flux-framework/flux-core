@@ -528,23 +528,12 @@ test_expect_success 'flux-jobs --format={queue} works' '
 	test_cmp jobqueueF.out jobqueueF.exp
 '
 
-test_expect_success 'flux-jobs --format={ntasks},{nnodes},{nnodes:h} works' '
-	flux jobs --filter=pending -no "{ntasks},{nnodes},{nnodes:h}" > nodecountP.out &&
-	for i in `seq 1 $(state_count sched)`; do
-		echo "1,,-" >> nodecountP.exp
+test_expect_success 'flux-jobs --format={ntasks} works' '
+	flux jobs -a -no "{ntasks}" > ntasks.out &&
+	for i in `seq 1 $(state_count all)`; do
+		echo "1" >> ntasks.exp
 	done &&
-	test_cmp nodecountP.exp nodecountP.out &&
-	flux jobs --filter=running -no "{ntasks},{nnodes},{nnodes:h}" > nodecountR.out &&
-	for i in `seq 1 $(state_count run)`; do
-		echo "1,1,1" >> nodecountR.exp
-	done &&
-	test_cmp nodecountR.exp nodecountR.out &&
-	flux jobs --filter=inactive -no "{ntasks},{nnodes},{nnodes:h}" > nodecountI.out &&
-	echo "1,,-" > nodecountI.exp &&
-	for i in `seq 1 $(state_count completed failed timeout)`;
-		do echo "1,1,1" >> nodecountI.exp
-	done &&
-	test_cmp nodecountI.exp nodecountI.out
+	test_cmp ntasks.exp ntasks.out
 '
 
 test_expect_success 'flux-jobs --format={duration},{duration:h},{duration!F},{duration!H},{duration!F:h},{duration!H:h} works' '
@@ -559,6 +548,25 @@ test_expect_success 'flux-jobs --format={duration},{duration:h},{duration!F},{du
 		do echo "0.0,-,0s,0:00:00,-,-" >> durationCD.exp
 	done &&
 	test_cmp durationCD.exp durationCD.out
+'
+
+test_expect_success 'flux-jobs --format={nnodes},{nnodes:h} works' '
+	flux jobs --filter=pending -no "{nnodes},{nnodes:h}" > nodecountP.out &&
+	for i in `seq 1 $(state_count sched)`; do
+		echo ",-" >> nodecountP.exp
+	done &&
+	test_cmp nodecountP.exp nodecountP.out &&
+	flux jobs --filter=running -no "{nnodes},{nnodes:h}" > nodecountR.out &&
+	for i in `seq 1 $(state_count run)`; do
+		echo "1,1" >> nodecountR.exp
+	done &&
+	test_cmp nodecountR.exp nodecountR.out &&
+	flux jobs --filter=inactive -no "{nnodes},{nnodes:h}" > nodecountI.out &&
+	echo ",-" > nodecountI.exp &&
+	for i in `seq 1 $(state_count completed failed timeout)`;
+		do echo "1,1" >> nodecountI.exp
+	done &&
+	test_cmp nodecountI.exp nodecountI.out
 '
 
 test_expect_success 'flux-jobs --format={runtime:0.3f} works' '
