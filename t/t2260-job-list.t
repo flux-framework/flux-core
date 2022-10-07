@@ -888,7 +888,17 @@ test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (5 tasks, / 
 '
 
 # use flux queue to ensure jobs stay in pending state
-test_expect_success HAVE_JQ 'flux job list lists nnodes for pending jobs correctly' '
+test_expect_success HAVE_JQ 'flux job list does not list nnodes if no nodes requested' '
+        flux queue stop &&
+        id=$(flux mini submit -n1 hostname | flux job id) &&
+        flux job list -s pending | grep ${id} &&
+        flux job list-ids ${id} | jq -e ".nnodes == null" &&
+        flux job cancel ${id} &&
+        flux queue start
+'
+
+# use flux queue to ensure jobs stay in pending state
+test_expect_success HAVE_JQ 'flux job list lists nnodes for pending jobs if nodes requested' '
         flux queue stop &&
         id1=$(flux mini submit -N1 hostname | flux job id) &&
         id2=$(flux mini submit -N3 hostname | flux job id) &&
