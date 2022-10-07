@@ -329,11 +329,12 @@ int main (int argc, char *argv[])
         BAIL_OUT ("flux_security_create: %s", strerror (errno));
     if (flux_security_configure (sec, sec_config) < 0)
         BAIL_OUT ("security config %s", flux_security_last_error (sec));
-    if (!(J = flux_sign_wrap (sec, jobspec, strlen (jobspec), NULL, 0)))
-        BAIL_OUT ("failed to sign jobspec with default mech: %s",
-                  flux_security_last_error (sec));
-    if (!(J_signed = strdup (J)))
-        BAIL_OUT ("could not strdup signed J");
+
+    /*  Only enable guest tests if flux_sign_wrap(3) succeeds:
+     */
+    if ((J = flux_sign_wrap (sec, jobspec, strlen (jobspec), NULL, 0)))
+        if (!(J_signed = strdup (J)))
+            BAIL_OUT ("could not strdup signed J");
 #endif
     if (!(J_none = sign_none_wrap (jobspec, strlen (jobspec), getuid ())))
         BAIL_OUT ("failed to sign jobspec with none mech: %s",
