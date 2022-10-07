@@ -16,6 +16,12 @@ backing_module() {
     echo ${backingmod:-content-sqlite}
 }
 
+# Get the latest config in case it changed while upstream broker was down.
+# See also: flux-framework/flux-core#4663
+if test $RANK -gt 0; then
+    flux config reload
+fi
+
 modload all barrier
 
 if test $RANK -eq 0; then
