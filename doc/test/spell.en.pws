@@ -107,6 +107,7 @@ mpicc
 nnodes
 noinput
 ntasks
+ncores
 pmi
 resrc
 runtime
