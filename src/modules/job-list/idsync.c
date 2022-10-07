@@ -20,6 +20,7 @@
 #include "src/common/libjob/job_hash.h"
 
 #include "idsync.h"
+#include "job_util.h"
 
 void idsync_data_destroy (void *data)
 {
@@ -32,7 +33,8 @@ void idsync_data_destroy (void *data)
     }
 }
 
-void idsync_data_destroy_wrapper (void **data)
+/* czmq_destructor */
+static void idsync_data_destroy_wrapper (void **data)
 {
     if (data) {
         struct idsync_data **isd = (struct idsync_data **) data;
@@ -40,11 +42,11 @@ void idsync_data_destroy_wrapper (void **data)
     }
 }
 
-struct idsync_data *idsync_data_create (flux_t *h,
-                                        flux_jobid_t id,
-                                        const flux_msg_t *msg,
-                                        json_t *attrs,
-                                        flux_future_t *f_lookup)
+static struct idsync_data *idsync_data_create (flux_t *h,
+                                               flux_jobid_t id,
+                                               const flux_msg_t *msg,
+                                               json_t *attrs,
+                                               flux_future_t *f_lookup)
 {
     struct idsync_data *isd = NULL;
     int saved_errno;
@@ -121,6 +123,156 @@ void idsync_ctx_destroy (struct idsync_ctx *isctx)
         zlistx_destroy (&isctx->lookups);
         zhashx_destroy (&isctx->waits);
         free (isctx);
+    }
+}
+
+struct idsync_data *idsync_check_id_valid (struct idsync_ctx *isctx,
+                                           flux_jobid_t id,
+                                           const flux_msg_t *msg,
+                                           json_t *attrs)
+{
+    flux_future_t *f = NULL;
+    struct idsync_data *isd = NULL;
+    char path[256];
+    int saved_errno;
+
+    /* Check to see if the ID is legal, job-list may have not yet
+     * seen the ID publication yet */
+    if (flux_job_kvs_key (path, sizeof (path), id, NULL) < 0)
+        goto error;
+
+    if (!(f = flux_kvs_lookup (isctx->h, NULL, FLUX_KVS_READDIR, path))) {
+        flux_log_error (isctx->h, "%s: flux_kvs_lookup", __FUNCTION__);
+        goto error;
+    }
+
+    if (!(isd = idsync_data_create (isctx->h, id, msg, attrs, f)))
+        goto error;
+
+    /* future now owned by struct idsync_data */
+    f = NULL;
+
+    if (!zlistx_add_end (isctx->lookups, isd)) {
+        flux_log_error (isctx->h, "%s: zlistx_add_end", __FUNCTION__);
+        goto error;
+    }
+
+    return isd;
+
+error:
+    saved_errno = errno;
+    flux_future_destroy (f);
+    idsync_data_destroy (isd);
+    errno = saved_errno;
+    return NULL;
+}
+
+void idsync_check_id_valid_cleanup (struct idsync_ctx *isctx,
+                                    struct idsync_data *isd)
+{
+    /* delete will destroy struct idsync_data and future within it */
+    void *handle = zlistx_find (isctx->lookups, isd);
+    if (handle)
+        zlistx_delete (isctx->lookups, handle);
+}
+
+static int idsync_add_waiter (struct idsync_ctx *isctx,
+                              struct idsync_data *isd)
+{
+    zlistx_t *list_isd;
+    int saved_errno;
+
+    /* isctx->waits holds lists of ids waiting on, b/c multiple callers
+     * could wait on same id */
+    if (!(list_isd = zhashx_lookup (isctx->waits, &isd->id))) {
+        if (!(list_isd = zlistx_new ())) {
+            flux_log_error (isctx->h, "%s: zlistx_new", __FUNCTION__);
+            goto error;
+        }
+        zlistx_set_destructor (list_isd, idsync_data_destroy_wrapper);
+
+        if (zhashx_insert (isctx->waits, &isd->id, list_isd) < 0) {
+            flux_log_error (isctx->h, "%s: zhashx_insert", __FUNCTION__);
+            goto error;
+        }
+    }
+
+    if (!zlistx_add_end (list_isd, isd)) {
+        flux_log_error (isctx->h, "%s: zlistx_add_end", __FUNCTION__);
+        goto error;
+    }
+
+    return 0;
+
+error:
+    saved_errno = errno;
+    idsync_data_destroy (isd);
+    errno = saved_errno;
+    return -1;
+}
+
+int idsync_wait_valid (struct idsync_ctx *isctx, struct idsync_data *isd)
+{
+    void *handle;
+
+    /* make sure isd isn't on lookups list, if so remove it */
+    if ((handle = zlistx_find (isctx->lookups, isd))) {
+        /* detach will not call zlistx destructor */
+        zlistx_detach (isctx->lookups, handle);
+    }
+
+    return idsync_add_waiter (isctx, isd);
+}
+
+
+int idsync_wait_valid_id (struct idsync_ctx *isctx,
+                          flux_jobid_t id,
+                          const flux_msg_t *msg,
+                          json_t *attrs)
+{
+    struct idsync_data *isd = NULL;
+
+    if (!(isd = idsync_data_create (isctx->h, id, msg, attrs, NULL))) {
+        flux_log_error (isctx->h, "%s: idsync_data_create", __FUNCTION__);
+        return -1;
+    }
+
+    return idsync_add_waiter (isctx, isd);
+}
+
+static void idsync_data_respond (struct idsync_ctx *isctx,
+                                 struct idsync_data *isd,
+                                 struct job *job)
+{
+    job_list_error_t err;
+    json_t *o;
+
+    if (!(o = job_to_json (job, isd->attrs, &err)))
+        goto error;
+
+    if (flux_respond_pack (isctx->h, isd->msg, "{s:O}", "job", o) < 0)
+        flux_log_error (isctx->h, "%s: flux_respond_pack", __FUNCTION__);
+
+    json_decref (o);
+    return;
+
+error:
+    if (flux_respond_error (isctx->h, isd->msg, errno, err.text) < 0)
+        flux_log_error (isctx->h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+void idsync_check_waiting_id (struct idsync_ctx *isctx, struct job *job)
+{
+    zlistx_t *list_isd;
+
+    if ((list_isd = zhashx_lookup (isctx->waits, &job->id))) {
+        struct idsync_data *isd;
+        isd = zlistx_first (list_isd);
+        while (isd) {
+            idsync_data_respond (isctx, isd, job);
+            isd = zlistx_next (list_isd);
+        }
+        zhashx_delete (isctx->waits, &job->id);
     }
 }
 

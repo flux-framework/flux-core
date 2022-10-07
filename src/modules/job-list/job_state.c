@@ -257,43 +257,6 @@ static void update_job_state_and_list (struct job_state_ctx *jsctx,
                         search_direction (job));
 }
 
-static void list_id_respond (struct idsync_ctx *isctx,
-                             struct idsync_data *isd,
-                             struct job *job)
-{
-    job_list_error_t err;
-    json_t *o;
-
-    if (!(o = job_to_json (job, isd->attrs, &err)))
-        goto error;
-
-    if (flux_respond_pack (isctx->h, isd->msg, "{s:O}", "job", o) < 0)
-        flux_log_error (isctx->h, "%s: flux_respond_pack", __FUNCTION__);
-
-    json_decref (o);
-    return;
-
-error:
-    if (flux_respond_error (isctx->h, isd->msg, errno, err.text) < 0)
-        flux_log_error (isctx->h, "%s: flux_respond_error", __FUNCTION__);
-}
-
-static void check_waiting_id (struct idsync_ctx *isctx,
-                              struct job *job)
-{
-    zlistx_t *list_isd;
-
-    if ((list_isd = zhashx_lookup (isctx->waits, &job->id))) {
-        struct idsync_data *isd;
-        isd = zlistx_first (list_isd);
-        while (isd) {
-            list_id_respond (isctx, isd, job);
-            isd = zlistx_next (list_isd);
-        }
-        zhashx_delete (isctx->waits, &job->id);
-    }
-}
-
 static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
@@ -316,7 +279,7 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
     st = zlist_head (job->next_states);
     assert (st);
     update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-    check_waiting_id (jsctx->isctx, job);
+    idsync_check_waiting_id (jsctx->isctx, job);
     zlist_remove (job->next_states, st);
     process_next_state (jsctx, job);
 
