@@ -340,6 +340,12 @@ PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
 PKG_CHECK_MODULES([LIBUUID], [uuid], [], [])
 PKG_CHECK_MODULES([CURSES], [ncursesw], [], [])
 PKG_CHECK_MODULES([LIBARCHIVE], [libarchive], [], [])
+
+PKG_CHECK_EXISTS([bash-completion],
+    [bashcompdir=`$PKG_CONFIG --variable=completionsdir bash-completion`],
+    [bashcompdir="${sysconfdir}/bash_completion.d"])
+AC_SUBST(bashcompdir)
+
 LX_FIND_MPI
 AM_CONDITIONAL([HAVE_MPI], [test "$have_C_mpi" = yes])
 AX_VALGRIND_H

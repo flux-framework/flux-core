@@ -56,6 +56,5 @@ completions/flux: $(srcdir)/completions/flux.pre
 	$(srcdir)/completions/get_builtins.sh \
 	$(top_srcdir)/src/cmd/builtin >> $@
 
-fluxcompdir = $(sysconfdir)/bash_completion.d
-fluxcomp_SCRIPTS = \
+bashcomp_SCRIPTS = \
 	completions/flux
