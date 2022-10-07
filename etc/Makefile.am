@@ -50,12 +50,11 @@ EXTRA_DIST = \
 	flux.conf \
 	$(noinst_SCRIPTS)
 
-completions/flux: $(srcdir)/completions/flux.pre
+completions/flux: completions/flux.pre completions/get_builtins.sh
 	$(AM_V_GEN)test -d completions || mkdir completions && \
 	cp $< $@ && chmod +w $@ && \
 	$(srcdir)/completions/get_builtins.sh \
 	$(top_srcdir)/src/cmd/builtin >> $@
 
-fluxcompdir = $(sysconfdir)/bash_completion.d
-fluxcomp_SCRIPTS = \
+bashcomp_SCRIPTS = \
 	completions/flux
