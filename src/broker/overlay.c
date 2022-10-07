@@ -904,11 +904,14 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
          */
         else {
             if (overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0) < 0) {
-                // not LOG_ERR per flux-framework/flux-core#4464
-                flux_log (ov->h,
-                          LOG_DEBUG,
-                          "failed to send CONTROL_DISCONNECT: %s",
-                          strerror (errno));
+                /* See flux-framework/flux-core#4464
+                 * Failure to send CONTROL_DISCONNECT occurs naturally, e.g.
+                 * when requests from a peer that fails overlay.hello are in
+                 * the socket queue behind the hello request.  The peer closes
+                 * its end of the socket when hello fails, and meanwhile we
+                 * are trying to send a CONTROL_DISCONNECT for each additional
+                 * message and failing once the socket closes.  Do not log.
+                 */
             }
         }
         goto done;
