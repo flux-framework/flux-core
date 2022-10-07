@@ -16,6 +16,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "job_state.h"
+#include "idsync.h"
 
 struct list_ctx {
     flux_t *h;
