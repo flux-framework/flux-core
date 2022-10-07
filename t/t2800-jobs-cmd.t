@@ -536,6 +536,14 @@ test_expect_success 'flux-jobs --format={ntasks} works' '
 	test_cmp ntasks.exp ntasks.out
 '
 
+test_expect_success 'flux-jobs --format={ncores} works' '
+	flux jobs -a -no "{ncores}" > ncores.out &&
+	for i in `seq 1 $(state_count all)`; do
+		echo "1" >> ncores.exp
+	done &&
+	test_cmp ncores.exp ncores.out
+'
+
 test_expect_success 'flux-jobs --format={duration},{duration:h},{duration!F},{duration!H},{duration!F:h},{duration!H:h} works' '
 	fmt="{duration},{duration:h},{duration!F},{duration!H},{duration!F:h},{duration!H:h}" &&
 	flux jobs --filter=pending,running -no "${fmt}" > durationPR.out &&
