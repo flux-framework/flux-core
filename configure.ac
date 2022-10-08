@@ -341,9 +341,17 @@ PKG_CHECK_MODULES([LIBUUID], [uuid], [], [])
 PKG_CHECK_MODULES([CURSES], [ncursesw], [], [])
 PKG_CHECK_MODULES([LIBARCHIVE], [libarchive], [], [])
 
-PKG_CHECK_EXISTS([bash-completion],
-    [bashcompdir=`$PKG_CONFIG --variable=completionsdir bash-completion`],
-    [bashcompdir="${sysconfdir}/bash_completion.d"])
+AC_ARG_WITH([system-bash-completion-dir],
+    AS_HELP_STRING([--with-system-bash-completion-dir],
+                   [Build with system bash-completion dir]))
+AS_IF([test "x$with_system_bash_completion_dir" = "xyes"], [
+    PKG_CHECK_EXISTS([bash-completion],
+      [bashcompdir=`$PKG_CONFIG --variable=completionsdir bash-completion`],
+      [bashcompdir="${sysconfdir}/bash_completion.d"])
+  ], [
+    bashcompdir="${sysconfdir}/bash_completion.d"
+  ]
+)
 AC_SUBST(bashcompdir)
 
 LX_FIND_MPI
