@@ -521,7 +521,7 @@ def main():
             sys.exit(0 if stats.active else 1)
 
     jobs = fetch_jobs(args, formatter.fields)
-    sformatter = formatter.filter_empty(jobs)
+    sformatter = JobInfoFormat(formatter.filter_empty(jobs))
 
     if not args.suppress_header:
         print(sformatter.header())

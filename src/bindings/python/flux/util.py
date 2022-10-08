@@ -593,8 +593,7 @@ class OutputFormat:
                 entry[0] = entry[0][:-2]
 
         #  Return new format string created from pruned format_list
-        fmt = "".join(self._fmt_tuple(*x) for x in format_list)
-        return self.__class__(fmt)
+        return "".join(self._fmt_tuple(*x) for x in format_list)
 
 
 class Tree:
