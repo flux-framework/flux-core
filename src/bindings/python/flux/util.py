@@ -444,6 +444,7 @@ class OutputFormat:
         """
         self.headings = valid_headings
         self.fmt = fmt
+        self.fmt_orig = fmt
         #  Parse format into list of (string, field, spec, conv) tuples,
         #   replacing any None values with empty string "" (this makes
         #   substitution back into a format string in self.header() and
@@ -521,10 +522,12 @@ class OutputFormat:
             lst.append(self._fmt_tuple(text, field, spec, conv))
         return "".join(lst)
 
-    def get_format(self):
+    def get_format(self, orig=False):
         """
         Return the format string
         """
+        if orig:
+            return self.fmt_orig
         return self.fmt
 
     def format(self, obj):
@@ -562,7 +565,7 @@ class OutputFormat:
 
         # Return immediately if no format fields are collapsible
         if not lst:
-            return self
+            return self.get_format(orig=True)
 
         formatter = self.formatter()
 
