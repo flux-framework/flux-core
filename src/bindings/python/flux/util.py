@@ -457,6 +457,8 @@ class OutputFormat:
 
         #  Throw an exception if any requested fields are invalid:
         for field in self._fields:
+            #  Remove any "0." prefix:
+            field = field[2:] if field.startswith("0.") else field
             if field and not field in self.headings:
                 raise ValueError("Unknown format field: " + field)
 
