@@ -745,17 +745,17 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (tasks-per-n
 # per-resource.type=node.  But write more direct test in case of
 # future changes.
 test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (per-resource.type=node)' '
-        nnodes=$(flux resource list -s up -no {nnodes}) &&
-        ncores=$(flux resource list -s up -no {ncores}) &&
-        extra=$((ncores / nnodes + 2)) &&
-        jobid=$(flux mini submit --wait -N ${nnodes} -n ${ncores} \
+        totalnodes=$(flux resource list -s up -no {nnodes}) &&
+        totalcores=$(flux resource list -s up -no {ncores}) &&
+        extra=$((totalcores / totalnodes + 2)) &&
+        jobid=$(flux mini submit --wait -N ${totalnodes} -n ${totalcores} \
                 -o per-resource.type=node \
                 -o per-resource.count=${extra} \
                 hostname | flux job id) &&
         echo $jobid > taskcount7.id &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        expected=$((nnodes * extra)) &&
+        expected=$((totalnodes * extra)) &&
         echo ${expected} > per_resource_type_node_ntasks.exp &&
         echo $obj | jq -e ".ntasks == ${expected}"
 '
@@ -780,12 +780,12 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (tasks / cor
 '
 
 test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (nodes / tasks-per-core 2)' '
-        nnodes=$(flux resource list -s up -no {nnodes}) &&
-        ncores=$(flux resource list -s up -no {ncores}) &&
-        jobid=`flux mini submit --wait -N ${nnodes} --tasks-per-core=2 hostname | flux job id` &&
+        totalnodes=$(flux resource list -s up -no {nnodes}) &&
+        totalcores=$(flux resource list -s up -no {ncores}) &&
+        jobid=`flux mini submit --wait -N ${totalnodes} --tasks-per-core=2 hostname | flux job id` &&
         echo $jobid > taskcount10.id &&
         wait_jobid_state $jobid inactive &&
-        expected=$((ncores * 2)) &&
+        expected=$((totalcores * 2)) &&
         echo ${expected} > per_resource_type_core_ntasks1.exp &&
         obj=$(flux job list -s inactive | grep $jobid) &&
         echo $obj | jq -e ".ntasks == ${expected}"
@@ -795,15 +795,15 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (nodes / tas
 # per-resource.type=core.  But write direct test in case of future
 # changes.
 test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (cores / per-resource.type=core)' '
-	ncores=$(flux resource list -s up -no {ncores}) &&
-	jobid=$(flux mini submit --wait --cores=${ncores} \
+	totalcores=$(flux resource list -s up -no {ncores}) &&
+	jobid=$(flux mini submit --wait --cores=${totalcores} \
 	        -o per-resource.type=core \
 	        -o per-resource.count=2 \
 	        hostname | flux job id) &&
         echo $jobid > taskcount11.id &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        expected=$((ncores * 2)) &&
+        expected=$((totalcores * 2)) &&
         echo ${expected} > per_resource_type_core_ntasks2.exp &&
         echo $obj | jq -e ".ntasks == ${expected}"
 '
@@ -852,60 +852,354 @@ test_expect_success HAVE_JQ 'verify task count preserved across restart' '
 '
 
 #
-# job node count / rank list / nodelist
+# job core count
 #
 
-test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks/nodelist correctly (1 task / 1 node)' '
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 task)' '
+        jobid=`flux mini submit --wait -n1 hostname | flux job id` &&
+        echo $jobid > corecount1.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 1"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 tasks)' '
+        jobid=`flux mini submit --wait -n2 hostname | flux job id` &&
+        echo $jobid > corecount2.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 2"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 task, cores-per-task)' '
+        jobid=`flux mini submit --wait -n1 --cores-per-task=2 hostname | flux job id` &&
+        echo $jobid > corecount3.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 2"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 tasks, cores-per-task)' '
+        jobid=`flux mini submit --wait -n2 --cores-per-task=2 hostname | flux job id` &&
+        echo $jobid > corecount4.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 4"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 task)' '
+        jobid=`flux mini submit --wait -N1 -n1 hostname | flux job id` &&
+        echo $jobid > corecount5.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 1"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 2 tasks)' '
+        jobid=`flux mini submit --wait -N1 -n2 hostname | flux job id` &&
+        echo $jobid > corecount6.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 2"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 tasks)' '
+        jobid=`flux mini submit --wait -N2 -n2 hostname | flux job id` &&
+        echo $jobid > corecount7.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 2"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 task, exclusive)' '
+        totalnodes=$(flux resource list -s up -no {nnodes}) &&
+        totalcores=$(flux resource list -s up -no {ncores}) &&
+        corespernode=$((totalcores / totalnodes)) &&
+        jobid=`flux mini submit --wait -N1 -n1 --exclusive hostname | flux job id` &&
+        echo $jobid > corecount8.id &&
+        wait_jobid_state $jobid inactive &&
+        expected=$((corespernode * 1)) &&
+        echo ${expected} > ncores_exclusive1.exp &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == ${expected}"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 2 tasks, exclusive)' '
+        totalnodes=$(flux resource list -s up -no {nnodes}) &&
+        totalcores=$(flux resource list -s up -no {ncores}) &&
+        corespernode=$((totalcores / totalnodes)) &&
+        jobid=`flux mini submit --wait -N1 -n2 --exclusive hostname | flux job id` &&
+        echo $jobid > corecount9.id &&
+        wait_jobid_state $jobid inactive &&
+        expected=$((corespernode * 1)) &&
+        echo ${expected} > ncores_exclusive2.exp &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == ${expected}"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 tasks, exclusive)' '
+        totalnodes=$(flux resource list -s up -no {nnodes}) &&
+        totalcores=$(flux resource list -s up -no {ncores}) &&
+        corespernode=$((totalcores / totalnodes)) &&
+        jobid=`flux mini submit --wait -N2 -n2 --exclusive hostname | flux job id` &&
+        echo $jobid > corecount10.id &&
+        wait_jobid_state $jobid inactive &&
+        expected=$((corespernode * 2)) &&
+        echo ${expected} > ncores_exclusive3.exp &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == ${expected}"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 task, cores-per-task)' '
+        jobid=`flux mini submit --wait -N1 -n1 --cores-per-task=2 hostname | flux job id` &&
+        echo $jobid > corecount11.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 2"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 task, cores-per-task)' '
+        jobid=`flux mini submit --wait -N1 -n1 --cores-per-task=2 hostname | flux job id` &&
+        echo $jobid > corecount12.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 2"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 tasks, cores-per-task)' '
+        jobid=`flux mini submit --wait -N2 -n2 --cores-per-task=2 hostname | flux job id` &&
+        echo $jobid > corecount13.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 4"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 core)' '
+        jobid=`flux mini submit --wait --cores=1 hostname | flux job id` &&
+        echo $jobid > corecount14.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 1"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 cores)' '
+        jobid=`flux mini submit --wait --cores=2 hostname | flux job id` &&
+        echo $jobid > corecount15.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 2"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 core)' '
+        jobid=`flux mini submit --wait -N1 --cores=1 hostname | flux job id` &&
+        echo $jobid > corecount16.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 1"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 2 cores)' '
+        jobid=`flux mini submit --wait -N1 --cores=2 hostname | flux job id` &&
+        echo $jobid > corecount17.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 2"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 cores)' '
+        jobid=`flux mini submit --wait -N2 --cores=2 hostname | flux job id` &&
+        echo $jobid > corecount18.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == 2"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 task, exclusive)' '
+        totalnodes=$(flux resource list -s up -no {nnodes}) &&
+        totalcores=$(flux resource list -s up -no {ncores}) &&
+        corespernode=$((totalcores / totalnodes)) &&
+        jobid=`flux mini submit --wait -N1 --cores=1 --exclusive hostname | flux job id` &&
+        echo $jobid > corecount19.id &&
+        wait_jobid_state $jobid inactive &&
+        expected=$((corespernode * 1)) &&
+        echo ${expected} > ncores_exclusive4.exp &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == ${expected}"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 2 tasks, exclusive)' '
+        totalnodes=$(flux resource list -s up -no {nnodes}) &&
+        totalcores=$(flux resource list -s up -no {ncores}) &&
+        corespernode=$((totalcores / totalnodes)) &&
+        jobid=`flux mini submit --wait -N1 --cores=2 --exclusive hostname | flux job id` &&
+        echo $jobid > corecount20.id &&
+        wait_jobid_state $jobid inactive &&
+        expected=$((corespernode * 1)) &&
+        echo ${expected} > ncores_exclusive5.exp &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == ${expected}"
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 tasks, exclusive)' '
+        totalnodes=$(flux resource list -s up -no {nnodes}) &&
+        totalcores=$(flux resource list -s up -no {ncores}) &&
+        corespernode=$((totalcores / totalnodes)) &&
+        jobid=`flux mini submit --wait -N2 --cores=2 --exclusive hostname | flux job id` &&
+        echo $jobid > corecount21.id &&
+        wait_jobid_state $jobid inactive &&
+        expected=$((corespernode * 2)) &&
+        echo ${expected} > ncores_exclusive6.exp &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ncores == ${expected}"
+'
+
+# use flux queue to ensure jobs stay in pending state
+test_expect_success HAVE_JQ 'flux job list lists ncores if pending & tasks specified' '
+        flux queue stop &&
+        id=$(flux mini submit -n3 hostname | flux job id) &&
+        flux job list -s pending | grep ${id} &&
+        flux job list-ids ${id} | jq -e ".ncores == 3" &&
+        flux job cancel ${id} &&
+        flux queue start
+'
+
+# use flux queue to ensure jobs stay in pending state
+test_expect_success HAVE_JQ 'flux job list does not list ncores if pending & nodes exclusive' '
+        flux queue stop &&
+        id=$(flux mini submit -N1 --exclusive hostname | flux job id) &&
+        flux job list -s pending | grep ${id} &&
+        flux job list-ids ${id} | jq -e ".ncores == null" &&
+        flux job cancel ${id} &&
+        flux queue start
+'
+
+test_expect_success 'reload the job-list module' '
+        flux module reload job-list
+'
+
+test_expect_success HAVE_JQ 'verify core count preserved across restart' '
+        jobid1=`cat corecount1.id` &&
+        jobid2=`cat corecount2.id` &&
+        jobid3=`cat corecount3.id` &&
+        jobid4=`cat corecount4.id` &&
+        jobid5=`cat corecount5.id` &&
+        jobid6=`cat corecount6.id` &&
+        jobid7=`cat corecount7.id` &&
+        jobid8=`cat corecount8.id` &&
+        jobid9=`cat corecount9.id` &&
+        jobid10=`cat corecount10.id` &&
+        jobid11=`cat corecount11.id` &&
+        jobid12=`cat corecount12.id` &&
+        jobid13=`cat corecount13.id` &&
+        jobid14=`cat corecount14.id` &&
+        jobid15=`cat corecount15.id` &&
+        jobid16=`cat corecount16.id` &&
+        jobid17=`cat corecount17.id` &&
+        jobid18=`cat corecount18.id` &&
+        jobid19=`cat corecount19.id` &&
+        jobid20=`cat corecount20.id` &&
+        jobid21=`cat corecount21.id` &&
+        obj=$(flux job list -s inactive | grep ${jobid1}) &&
+        echo $obj | jq -e ".ncores == 1" &&
+        obj=$(flux job list -s inactive | grep ${jobid2}) &&
+        echo $obj | jq -e ".ncores == 2" &&
+        obj=$(flux job list -s inactive | grep ${jobid3}) &&
+        echo $obj | jq -e ".ncores == 2" &&
+        obj=$(flux job list -s inactive | grep ${jobid4}) &&
+        echo $obj | jq -e ".ncores == 4" &&
+        obj=$(flux job list -s inactive | grep ${jobid5}) &&
+        echo $obj | jq -e ".ncores == 1" &&
+        obj=$(flux job list -s inactive | grep ${jobid6}) &&
+        echo $obj | jq -e ".ncores == 2" &&
+        obj=$(flux job list -s inactive | grep ${jobid7}) &&
+        echo $obj | jq -e ".ncores == 2" &&
+        obj=$(flux job list -s inactive | grep ${jobid8}) &&
+        expected=$(cat ncores_exclusive1.exp) &&
+        echo $obj | jq -e ".ncores == ${expected}" &&
+        obj=$(flux job list -s inactive | grep ${jobid9}) &&
+        expected=$(cat ncores_exclusive2.exp) &&
+        echo $obj | jq -e ".ncores == ${expected}" &&
+        obj=$(flux job list -s inactive | grep ${jobid10}) &&
+        expected=$(cat ncores_exclusive3.exp) &&
+        echo $obj | jq -e ".ncores == ${expected}" &&
+        obj=$(flux job list -s inactive | grep ${jobid11}) &&
+        echo $obj | jq -e ".ncores == 2" &&
+        obj=$(flux job list -s inactive | grep ${jobid12}) &&
+        echo $obj | jq -e ".ncores == 2" &&
+        obj=$(flux job list -s inactive | grep ${jobid13}) &&
+        echo $obj | jq -e ".ncores == 4" &&
+        obj=$(flux job list -s inactive | grep ${jobid14}) &&
+        echo $obj | jq -e ".ncores == 1" &&
+        obj=$(flux job list -s inactive | grep ${jobid15}) &&
+        echo $obj | jq -e ".ncores == 2" &&
+        obj=$(flux job list -s inactive | grep ${jobid16}) &&
+        echo $obj | jq -e ".ncores == 1" &&
+        obj=$(flux job list -s inactive | grep ${jobid17}) &&
+        echo $obj | jq -e ".ncores == 2" &&
+        obj=$(flux job list -s inactive | grep ${jobid18}) &&
+        echo $obj | jq -e ".ncores == 2" &&
+        obj=$(flux job list -s inactive | grep ${jobid19}) &&
+        expected=$(cat ncores_exclusive4.exp) &&
+        echo $obj | jq -e ".ncores == ${expected}" &&
+        obj=$(flux job list -s inactive | grep ${jobid20}) &&
+        expected=$(cat ncores_exclusive5.exp) &&
+        echo $obj | jq -e ".ncores == ${expected}" &&
+        obj=$(flux job list -s inactive | grep ${jobid21}) &&
+        expected=$(cat ncores_exclusive6.exp) &&
+        echo $obj | jq -e ".ncores == ${expected}"
+'
+
+#
+# job node count
+#
+
+test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (1 task / 1 node)' '
         jobid=`flux mini submit --wait -n1 hostname | flux job id` &&
         echo $jobid > nodecount1.id &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".nnodes == 1" &&
-        echo $obj | jq -e ".ranks == \"0\"" &&
-        nodes=`flux job info $jobid R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\""
+        echo $obj | jq -e ".nnodes == 1"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks/nodelist correctly (2 tasks, / 1 node)' '
+test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (2 tasks, / 1 node)' '
         jobid=`flux mini submit --wait -n2 hostname | flux job id` &&
         echo $jobid > nodecount2.id &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".nnodes == 1" &&
-        echo $obj | jq -e ".ranks == \"0\"" &&
-        nodes=`flux job info $jobid R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\""
+        echo $obj | jq -e ".nnodes == 1"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks/nodelist correctly (3 tasks, / 2 nodes)' '
+test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (3 tasks, / 2 nodes)' '
         jobid=`flux mini submit --wait -n3 hostname | flux job id` &&
         echo $jobid > nodecount3.id &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".nnodes == 2" &&
-        echo $obj | jq -e ".ranks == \"[0-1]\"" &&
-        nodes=`flux job info $jobid R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\""
+        echo $obj | jq -e ".nnodes == 2"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks/nodelist correctly (5 tasks, / 3 nodes)' '
+test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (5 tasks, / 3 nodes)' '
         jobid=`flux mini submit --wait -n5 hostname | flux job id` &&
         echo $jobid > nodecount4.id &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".nnodes == 3" &&
-        echo $obj | jq -e ".ranks == \"[0-2]\"" &&
-        nodes=`flux job info $jobid R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\""
+        echo $obj | jq -e ".nnodes == 3"
 '
 
 # use flux queue to ensure jobs stay in pending state
-test_expect_success HAVE_JQ 'flux job list lists nnodes for pending jobs correctly' '
+test_expect_success HAVE_JQ 'flux job list does not list nnodes if no nodes requested' '
+        flux queue stop &&
+        id=$(flux mini submit -n1 hostname | flux job id) &&
+        flux job list -s pending | grep ${id} &&
+        flux job list-ids ${id} | jq -e ".nnodes == null" &&
+        flux job cancel ${id} &&
+        flux queue start
+'
+
+# use flux queue to ensure jobs stay in pending state
+test_expect_success HAVE_JQ 'flux job list lists nnodes for pending jobs if nodes requested' '
         flux queue stop &&
         id1=$(flux mini submit -N1 hostname | flux job id) &&
-        echo ${id1} >> nnodes.ids &&
         id2=$(flux mini submit -N3 hostname | flux job id) &&
-        echo ${id2} >> nnodes.ids &&
         flux job list -s pending | grep ${id1} &&
         flux job list -s pending | grep ${id2} &&
         flux job list-ids ${id1} | jq -e ".nnodes == 1" &&
@@ -919,30 +1213,59 @@ test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
 
-test_expect_success HAVE_JQ 'verify nnodes/ranks/nodelist preserved across restart' '
+test_expect_success HAVE_JQ 'verify nnodes preserved across restart' '
         jobid1=`cat nodecount1.id` &&
         jobid2=`cat nodecount2.id` &&
         jobid3=`cat nodecount3.id` &&
         jobid4=`cat nodecount4.id` &&
         obj=$(flux job list -s inactive | grep ${jobid1}) &&
         echo $obj | jq -e ".nnodes == 1" &&
+        obj=$(flux job list -s inactive | grep ${jobid2}) &&
+        echo $obj | jq -e ".nnodes == 1" &&
+        obj=$(flux job list -s inactive | grep ${jobid3}) &&
+        echo $obj | jq -e ".nnodes == 2" &&
+        obj=$(flux job list -s inactive | grep ${jobid4}) &&
+        echo $obj | jq -e ".nnodes == 3"
+'
+
+#
+# job rank list / nodelist
+#
+
+test_expect_success HAVE_JQ 'flux job list outputs ranks/nodelist correctly (1 node)' '
+        jobid=`flux mini submit --wait -N1 hostname | flux job id` &&
+        echo $jobid > nodelist1.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ranks == \"0\"" &&
+        nodes=`flux job info $jobid R | flux R decode --nodelist` &&
+        echo $obj | jq -e ".nodelist == \"${nodes}\""
+'
+
+test_expect_success HAVE_JQ 'flux job list outputs ranks/nodelist correctly (3 nodes)' '
+        jobid=`flux mini submit --wait -N3 hostname | flux job id` &&
+        echo $jobid > nodelist2.id &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".ranks == \"[0-2]\"" &&
+        nodes=`flux job info $jobid R | flux R decode --nodelist` &&
+        echo $obj | jq -e ".nodelist == \"${nodes}\""
+'
+
+test_expect_success 'reload the job-list module' '
+        flux module reload job-list
+'
+
+test_expect_success HAVE_JQ 'verify ranks/nodelist preserved across restart' '
+        jobid1=`cat nodelist1.id` &&
+        jobid2=`cat nodelist2.id` &&
+        obj=$(flux job list -s inactive | grep ${jobid1}) &&
         echo $obj | jq -e ".ranks == \"0\"" &&
         nodes=`flux job info ${jobid1} R | flux R decode --nodelist` &&
         echo $obj | jq -e ".nodelist == \"${nodes}\"" &&
         obj=$(flux job list -s inactive | grep ${jobid2}) &&
-        echo $obj | jq -e ".nnodes == 1" &&
-        echo $obj | jq -e ".ranks == \"0\"" &&
-        nodes=`flux job info ${jobid2} R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\"" &&
-        obj=$(flux job list -s inactive | grep ${jobid3}) &&
-        echo $obj | jq -e ".nnodes == 2" &&
-        echo $obj | jq -e ".ranks == \"[0-1]\"" &&
-        nodes=`flux job info ${jobid3} R | flux R decode --nodelist` &&
-        echo $obj | jq -e ".nodelist == \"${nodes}\"" &&
-        obj=$(flux job list -s inactive | grep ${jobid4}) &&
-        echo $obj | jq -e ".nnodes == 3" &&
         echo $obj | jq -e ".ranks == \"[0-2]\"" &&
-        nodes=`flux job info ${jobid4} R | flux R decode --nodelist` &&
+        nodes=`flux job info ${jobid2} R | flux R decode --nodelist` &&
         echo $obj | jq -e ".nodelist == \"${nodes}\""
 '
 
@@ -1192,6 +1515,7 @@ t_inactive \
 state \
 name \
 ntasks \
+ncores \
 duration \
 nnodes \
 ranks \

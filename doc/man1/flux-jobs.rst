@@ -267,6 +267,9 @@ The field names that can be specified are:
 **ntasks**
    job task count
 
+**ncores**
+   job core count
+
 **duration**
    job duration in seconds
 

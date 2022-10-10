@@ -98,6 +98,13 @@ static int store_attr (struct job *job,
             return 0;
         val = json_integer (job->ntasks);
     }
+    else if (!strcmp (attr, "ncores")) {
+        /* job->ncores potentially < 0 if not set yet or R invalid,
+         * may be set in DEPEND or RUN state */
+        if (job->ncores < 0)
+            return 0;
+        val = json_integer (job->ncores);
+    }
     else if (!strcmp (attr, "duration")) {
         /* job->duration potentially < 0 if jobspec invalid */
         if (job->duration < 0)

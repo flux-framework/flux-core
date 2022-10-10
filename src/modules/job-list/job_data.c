@@ -56,6 +56,7 @@ struct job *job_create (flux_t *h, flux_jobid_t id)
     job->priority = FLUX_JOB_PRIORITY_MIN;
     job->state = FLUX_JOB_STATE_NEW;
     job->ntasks = -1;
+    job->ncores = -1;
     job->duration = -1.0;
     job->nnodes = -1;
     job->expiration = -1.0;
@@ -244,6 +245,18 @@ static int parse_jobspec_ntasks (struct job *job, struct jj_counts *jj)
     return 0;
 }
 
+static int parse_jobspec_ncores (struct job *job, struct jj_counts *jj)
+{
+    /* number of cores can't be determined yet, calculate later when R
+     * is parsed */
+    if (jj->nnodes > 0 && jj->exclusive)
+        return 0;
+
+    /* nslots already accounts for nnodes if available */
+    job->ncores = jj->nslots * jj->slot_size;
+    return 0;
+}
+
 int job_parse_jobspec (struct job *job, const char *s)
 {
     struct jj_counts jj;
@@ -316,6 +329,9 @@ int job_parse_jobspec (struct job *job, const char *s)
     if (parse_jobspec_ntasks (job, &jj) < 0)
         goto nonfatal_error;
 
+    if (parse_jobspec_ncores (job, &jj) < 0)
+        goto nonfatal_error;
+
     if (parse_jobspec_duration (job, &jj) < 0)
         goto nonfatal_error;
 
@@ -334,6 +350,8 @@ int job_parse_R (struct job *job, const char *s)
     struct hostlist *hl = NULL;
     json_error_t error;
     int flags = IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE;
+    int core_count = 0;
+    struct rnode *rnode;
     int saved_errno, rc = -1;
 
     if (!(job->R = json_loads (s, 0, &error))) {
@@ -368,15 +386,15 @@ int job_parse_R (struct job *job, const char *s)
     if (!(job->nodelist = hostlist_encode (hl)))
         goto nonfatal_error;
 
-    if (job->ntasks_per_core_on_node_count > 0) {
-        int core_count = 0;
-        struct rnode *rnode = zlistx_first (rl->nodes);
-        while (rnode) {
-            core_count += idset_count (rnode->cores->ids);
-            rnode = zlistx_next (rl->nodes);
-        }
-        job->ntasks = core_count * job->ntasks_per_core_on_node_count;
+    rnode = zlistx_first (rl->nodes);
+    while (rnode) {
+        core_count += idset_count (rnode->cores->ids);
+        rnode = zlistx_next (rl->nodes);
     }
+    job->ncores = core_count;
+
+    if (job->ntasks_per_core_on_node_count > 0)
+        job->ntasks = core_count * job->ntasks_per_core_on_node_count;
 
     /* nonfatal error - invalid R, but we'll continue on.  job listing
      * will get initialized data */

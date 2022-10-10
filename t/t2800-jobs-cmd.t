@@ -528,23 +528,20 @@ test_expect_success 'flux-jobs --format={queue} works' '
 	test_cmp jobqueueF.out jobqueueF.exp
 '
 
-test_expect_success 'flux-jobs --format={ntasks},{nnodes},{nnodes:h} works' '
-	flux jobs --filter=pending -no "{ntasks},{nnodes},{nnodes:h}" > nodecountP.out &&
-	for i in `seq 1 $(state_count sched)`; do
-		echo "1,,-" >> nodecountP.exp
+test_expect_success 'flux-jobs --format={ntasks} works' '
+	flux jobs -a -no "{ntasks}" > ntasks.out &&
+	for i in `seq 1 $(state_count all)`; do
+		echo "1" >> ntasks.exp
 	done &&
-	test_cmp nodecountP.exp nodecountP.out &&
-	flux jobs --filter=running -no "{ntasks},{nnodes},{nnodes:h}" > nodecountR.out &&
-	for i in `seq 1 $(state_count run)`; do
-		echo "1,1,1" >> nodecountR.exp
+	test_cmp ntasks.exp ntasks.out
+'
+
+test_expect_success 'flux-jobs --format={ncores} works' '
+	flux jobs -a -no "{ncores}" > ncores.out &&
+	for i in `seq 1 $(state_count all)`; do
+		echo "1" >> ncores.exp
 	done &&
-	test_cmp nodecountR.exp nodecountR.out &&
-	flux jobs --filter=inactive -no "{ntasks},{nnodes},{nnodes:h}" > nodecountI.out &&
-	echo "1,,-" > nodecountI.exp &&
-	for i in `seq 1 $(state_count completed failed timeout)`;
-		do echo "1,1,1" >> nodecountI.exp
-	done &&
-	test_cmp nodecountI.exp nodecountI.out
+	test_cmp ncores.exp ncores.out
 '
 
 test_expect_success 'flux-jobs --format={duration},{duration:h},{duration!F},{duration!H},{duration!F:h},{duration!H:h} works' '
@@ -559,6 +556,25 @@ test_expect_success 'flux-jobs --format={duration},{duration:h},{duration!F},{du
 		do echo "0.0,-,0s,0:00:00,-,-" >> durationCD.exp
 	done &&
 	test_cmp durationCD.exp durationCD.out
+'
+
+test_expect_success 'flux-jobs --format={nnodes},{nnodes:h} works' '
+	flux jobs --filter=pending -no "{nnodes},{nnodes:h}" > nodecountP.out &&
+	for i in `seq 1 $(state_count sched)`; do
+		echo ",-" >> nodecountP.exp
+	done &&
+	test_cmp nodecountP.exp nodecountP.out &&
+	flux jobs --filter=running -no "{nnodes},{nnodes:h}" > nodecountR.out &&
+	for i in `seq 1 $(state_count run)`; do
+		echo "1,1" >> nodecountR.exp
+	done &&
+	test_cmp nodecountR.exp nodecountR.out &&
+	flux jobs --filter=inactive -no "{nnodes},{nnodes:h}" > nodecountI.out &&
+	echo ",-" > nodecountI.exp &&
+	for i in `seq 1 $(state_count completed failed timeout)`;
+		do echo "1,1" >> nodecountI.exp
+	done &&
+	test_cmp nodecountI.exp nodecountI.out
 '
 
 test_expect_success 'flux-jobs --format={runtime:0.3f} works' '
@@ -1170,97 +1186,6 @@ test_expect_success 'cleanup job listing jobs ' '
             flux job cancel $jobid; \
             fj_wait_event $jobid clean; \
         done
-'
-
-#
-# invalid job data tests
-#
-# note that these tests should be done last, as the introduction of
-# invalid job data into the KVS could affect tests above.
-#
-
-# Following tests use invalid jobspecs, must load a more permissive validator
-
-ingest_module ()
-{
-        cmd=$1; shift
-        flux module ${cmd} job-ingest $*
-}
-
-test_expect_success 'disable ingest preprocessing' '
-	cat >conf.d/ingest.toml <<-EOT &&
-	[ingest]
-	frobnicator.disable = true
-	validator.disable = true
-	EOT
-	flux config reload
-'
-
-test_expect_success HAVE_JQ 'create illegal jobspec with empty command array' '
-        cat hostname.json | $jq ".tasks[0].command = []" > bad_jobspec.json
-'
-
-# to avoid potential racyness, wait up to 5 seconds for job to appear
-# in job list.  note that ntasks will not be set if jobspec invalid
-test_expect_success HAVE_JQ 'flux jobs works on job with illegal jobspec' '
-        jobid=`flux job submit bad_jobspec.json` &&
-        fj_wait_event $jobid clean &&
-        i=0 &&
-        while ! flux jobs --filter=inactive | grep $jobid > /dev/null \
-               && [ $i -lt 5 ]
-        do
-                sleep 1
-                i=$((i + 1))
-        done &&
-        test "$i" -lt "5" &&
-        flux jobs -no "{name},{ntasks}" $jobid > list_illegal_jobspec.out &&
-        echo "," > list_illegal_jobspec.exp &&
-        test_cmp list_illegal_jobspec.out list_illegal_jobspec.exp
-'
-
-test_expect_success 're-enable job-ingest preprocessing' '
-	rm -f conf.d/ingest.toml &&
-	flux config reload
-'
-
-# we make R invalid by overwriting it in the KVS before job-list will
-# look it up
-test_expect_success HAVE_JQ 'flux jobs works on job with illegal R' '
-	${RPC} job-list.job-state-pause 0 </dev/null &&
-        jobid=`flux mini submit --wait hostname` &&
-        jobkvspath=`flux job id --to kvs $jobid` &&
-        flux kvs put "${jobkvspath}.R=foobar" &&
-	${RPC} job-list.job-state-unpause 0 </dev/null &&
-        i=0 &&
-        while ! flux jobs --filter=inactive | grep $jobid > /dev/null \
-               && [ $i -lt 5 ]
-        do
-                sleep 1
-                i=$((i + 1))
-        done &&
-        test "$i" -lt "5" &&
-        flux jobs -no "{ranks},{nnodes},{nodelist},{expiration}" $jobid \
-            > list_illegal_R.out &&
-        echo ",,,0.0" > list_illegal_R.exp &&
-        test_cmp list_illegal_R.out list_illegal_R.exp
-'
-
-#
-# special tests
-#
-
-# use flux queue to ensure jobs stay in pending state
-test_expect_success HAVE_JQ 'flux jobs lists nnodes for pending jobs correctly' '
-	flux queue stop &&
-	id1=$(flux mini submit -N1 hostname) &&
-	id2=$(flux mini submit -N3 hostname) &&
-	flux jobs -no "{state},{nnodes},{nnodes:h}" ${id1} ${id2}> nnodesP.out &&
-	echo "SCHED,1,1" >> nnodesP.exp &&
-	echo "SCHED,3,3" >> nnodesP.exp &&
-	flux job cancel ${id1} &&
-	flux job cancel ${id2} &&
-	flux queue start &&
-	test_cmp nnodesP.exp nnodesP.out
 '
 
 #
