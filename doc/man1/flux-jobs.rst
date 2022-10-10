@@ -151,7 +151,7 @@ following is the format used for the default format:
 
 ::
 
-   {id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10} \
+   {id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10+} \
    {status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} \
    {contextual_time!F:>8h} {contextual_info}
 
@@ -169,6 +169,10 @@ The special presentation type *h* can be used to convert an empty
 string, "0s", "0.0", or "0:00:00" to a hyphen. For example, normally
 "{nodelist}" would output an empty string if the job has not yet run.
 By specifying, "{nodelist:h}", a hyphen would be presented instead.
+
+The special suffix *+* can be used to indicate if a string was truncated
+by including a ``+`` character when truncation occurs. If both *h* and
+*+* are being used, then the *+* must appear after the *h*.
 
 Additionally, the custom job formatter supports a set of special
 conversion flags. Conversion flags follow the format field and are
