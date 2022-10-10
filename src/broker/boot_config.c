@@ -30,8 +30,6 @@
 #include "topology.h"
 #include "boot_config.h"
 
-#define DEFAULT_FANOUT 0
-
 
 /* Copy 'fmt' into 'buf', substituting the following tokens:
  * - %h  host
@@ -476,6 +474,17 @@ static const char *get_tbon_fanout (attr_t *attrs, const char *default_value)
     return val;
 }
 
+static bool have_parent_directives (json_t *hosts)
+{
+    size_t index;
+    json_t *entry;
+    json_array_foreach (hosts, index, entry) {
+        if (json_object_get (entry, "parent"))
+            return true;
+    }
+    return false;
+}
+
 int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
 {
     struct boot_conf conf;
@@ -483,9 +492,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
     uint32_t size;
     json_t *hosts = NULL;
     struct topology *topo = NULL;
-    const char *fanout;
     flux_error_t error;
-    char uri[16];
 
     /* Ingest the [bootstrap] stanza.
      */
@@ -517,21 +524,40 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
         rank = 0;
     }
 
-    /* Tell overlay network this broker's rank and size.
-     * If a curve certificate was provided, load it.
-     */
-    if (!(fanout = get_tbon_fanout (attrs, "0"))) {
-        log_err ("Error manipulating tbon.fanout attribute");
-        goto error;
+    if (have_parent_directives (hosts)) {
+        if (get_tbon_fanout (attrs, NULL)) {
+            errno = EINVAL;
+            log_msg ("tbon.fanout conflicts with custom topology config");
+            goto error;
+        }
+        topology_hosts_set (hosts);
+        topo = topology_create ("custom:", size, &error);
+        topology_hosts_set (NULL);
+        if (!topo) {
+            log_msg ("%s", error.text);
+            goto error;
+        }
     }
-    snprintf (uri, sizeof (uri), "kary:%s", fanout);
-    if (!(topo = topology_create (uri, size, &error))) {
-        log_msg ("Error creating %s topology: %s", uri, error.text);
-        goto error;
+    else {
+        const char *fanout;
+        char uri[16];
+
+        if (!(fanout = get_tbon_fanout (attrs, "0"))) {
+            log_err ("Error manipulating tbon.fanout attribute");
+            goto error;
+        }
+        snprintf (uri, sizeof (uri), "kary:%s", fanout);
+        if (!(topo = topology_create (uri, size, &error))) {
+            log_msg ("Error creating %s topology: %s", uri, error.text);
+            goto error;
+        }
     }
     if (topology_set_rank (topo, rank) < 0
         || overlay_set_topology (overlay, topo) < 0)
         goto error;
+
+    /* If a curve certificate was provided, load it.
+     */
     if (conf.curve_cert) {
         if (overlay_cert_load (overlay, conf.curve_cert) < 0)
             goto error; // prints error

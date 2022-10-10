@@ -16,6 +16,7 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/array_size/array_size.h"
 
 #include "src/broker/topology.h"
 
@@ -282,6 +283,175 @@ void test_internal_ranks (void)
     }
 }
 
+struct pmap {
+    int parent;
+    const char *children;
+    struct idset *ids_children;
+};
+void pmap_clean (struct pmap *map, size_t count)
+{
+    for (int i = 0; i < count; i++) {
+        idset_destroy (map[i].ids_children);
+        map[i].ids_children = NULL;
+    }
+}
+int pmap_lookup (struct pmap *map, size_t count, int rank, int *parent_rank)
+{
+    for (int i = 0; i < count; i++) {
+        if (!map[i].ids_children) {
+            if (!(map[i].ids_children = idset_decode (map[i].children)))
+                BAIL_OUT ("idset_decode failed");
+        }
+        if (idset_test (map[i].ids_children, rank)) {
+            *parent_rank = map[i].parent;
+            return 0;
+        }
+    }
+    return -1;
+}
+json_t *pmap_hosts (struct pmap *map, size_t count, int size)
+{
+    json_t *hosts;
+    if (!(hosts = json_array ()))
+        return NULL;
+    for (int rank = 0; rank < size; rank++) {
+        char host[16];
+        char phost[16];
+        json_t *entry;
+        int parent_rank;
+
+        snprintf (host, sizeof (host), "test%d", rank);
+        if (pmap_lookup (map, count, rank, &parent_rank) < 0)
+            entry = json_pack ("{s:s}", "host", host);
+        else {
+            snprintf (phost, sizeof (phost), "test%d", parent_rank);
+            entry = json_pack ("{s:s s:s}", "host", host, "parent", phost);
+        }
+        if (!entry || json_array_append_new (hosts, entry) < 0)
+            BAIL_OUT ("failed to append hosts array entry");
+    }
+    return hosts;
+}
+
+/* Does topology have 'expected' (idset) internal ranks?
+ */
+bool check_internal (struct topology *topo, const char *expected)
+{
+    struct idset *exp;
+    struct idset *out;
+    bool result;
+
+    if (!(exp = idset_decode (expected)))
+        BAIL_OUT ("idset_decode failed");
+    if (!(out = topology_get_internal_ranks (topo)))
+        BAIL_OUT ("topology_get_internal_ranks failed");
+
+    result = idset_equal (out, exp);
+
+    char *s = idset_encode (out, IDSET_FLAG_RANGE);
+    diag ("%s %s %s", s, result ? "==" : "!=", expected);
+    free (s);
+
+    idset_destroy (out);
+    idset_destroy (exp);
+
+    return result;
+}
+
+struct pmap cust1[] = {
+    { .parent = 0, .children = "1,2,64,128,192" },
+    { .parent = 1, .children = "3-63" },
+    { .parent = 64, .children = "65-127" },
+    { .parent = 128, .children = "129-191" },
+    { .parent = 192, .children = "193-255" },
+};
+struct pmap bad1[] = {
+    { .parent = 1, .children = "0" }, // 0 can't have a parent
+};
+struct pmap bad2[] = {
+    { .parent = 1, .children = "2" },
+    { .parent = 2, .children = "3" },
+    { .parent = 3, .children = "1" }, // cycle
+};
+struct pmap bad3[] = {
+    { .parent = 1, .children = "1" }, // small cycle!
+};
+
+void test_custom (void)
+{
+    struct topology *topo;
+    flux_error_t error;
+    json_t *hosts;
+
+    topo = topology_create ("custom:zzz", 256, &error);
+    if (!topo)
+        diag ("%s", error.text);
+    ok (topo == NULL,
+        "topology_create custom: fails with URI path");
+
+    topology_hosts_set (NULL);
+    topo = topology_create ("custom:", 256, &error);
+    ok (topo != NULL,
+        "topology_create custom: works without hosts array");
+    topology_decref (topo);
+
+    hosts = pmap_hosts (bad1, ARRAY_SIZE (bad1), 2);
+    topology_hosts_set (hosts);
+    topo = topology_create ("custom:", 2, &error);
+    if (!topo)
+        diag ("%s", error.text);
+    ok (topo == NULL,
+        "topology_create custom failed with rank 0 parent");
+    topology_hosts_set (NULL);
+    json_decref (hosts);
+
+    hosts = pmap_hosts (bad2, ARRAY_SIZE (bad2), 16);
+    topology_hosts_set (hosts);
+    topo = topology_create ("custom:", 16, &error);
+    if (!topo)
+        diag ("%s", error.text);
+    ok (topo == NULL,
+        "topology_create custom failed with graph cycle");
+    topology_hosts_set (NULL);
+    json_decref (hosts);
+
+    hosts = pmap_hosts (bad3, ARRAY_SIZE (bad3), 16);
+    topology_hosts_set (hosts);
+    topo = topology_create ("custom:", 16, &error);
+    if (!topo)
+        diag ("%s", error.text);
+    ok (topo == NULL,
+        "topology_create custom failed with self as parent");
+    topology_hosts_set (NULL);
+    json_decref (hosts);
+
+    hosts = pmap_hosts (cust1, ARRAY_SIZE (cust1), 256);
+    topology_hosts_set (hosts);
+
+    topo = topology_create ("custom:", 2, &error);
+    if (!topo)
+        diag ("%s", error.text);
+    ok (topo == NULL,
+        "topology_create custom failed with mistmatched topo and host size");
+
+    topo = topology_create ("custom:", 256, &error);
+    topology_hosts_set (NULL);
+    ok (topo != NULL,
+        "configured custom 256 node topo");
+    ok (topology_set_rank (topo, 1) == 0,
+        "set rank to 1");
+    ok (topology_get_parent (topo) == 0,
+        "parent is 0");
+    ok (topology_get_level (topo) == 1,
+        "level is 1");
+    ok (topology_get_descendant_count (topo) == 61,
+        "descendant_count is 61");
+    ok (check_internal (topo, "0-1,64,128,192"),
+        "topology has expected internal ranks");
+    topology_decref (topo);
+    json_decref (hosts);
+}
+
 void test_invalid (void)
 {
     struct topology *topo;
@@ -375,6 +545,7 @@ int main (int argc, char *argv[])
     test_k2_router ();
     test_invalid ();
     test_internal_ranks ();
+    test_custom ();
 
     done_testing ();
 }

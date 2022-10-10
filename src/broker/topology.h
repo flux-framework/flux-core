@@ -62,6 +62,8 @@ json_t *topology_get_json_subtree_at (struct topology *topo, int rank);
  */
 struct idset *topology_get_internal_ranks (struct topology *topo);
 
+void topology_hosts_set (json_t *hosts);
+
 /* Plugins
  */
 struct topology_plugin {

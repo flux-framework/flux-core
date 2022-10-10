@@ -79,6 +79,39 @@ test_expect_success '[bootstrap] config with bad hosts array element' '
 	test_must_fail flux broker ${ARGS} -c conf4 /bin/true
 '
 
+test_expect_success '[bootstrap] config with hosts array element with extra key' '
+	mkdir conf4a &&
+	cat <<-EOT >conf4a/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    { host = "xyz", extrakey = 42 },
+	]
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf4a /bin/true
+'
+
+test_expect_success '[bootstrap] config with hosts array element missing host' '
+	mkdir conf4b &&
+	cat <<-EOT >conf4b/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    { },
+	]
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf4b /bin/true
+'
+
+test_expect_success '[bootstrap] config with bad hostlist' '
+	mkdir conf4c &&
+	cat <<-EOT >conf4c/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    { host = "foo[0-254}" },
+	]
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf4c /bin/true
+'
+
 test_expect_success '[bootstrap] config with hostname not found' '
 	mkdir conf5 &&
 	cat <<-EOT >conf5/bootstrap.toml &&

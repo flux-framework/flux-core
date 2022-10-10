@@ -40,10 +40,21 @@ struct topology {
 static int kary_plugin_init (struct topology *topo,
                              const char *path,
                              flux_error_t *error);
+static int custom_plugin_init (struct topology *topo,
+                               const char *path,
+                               flux_error_t *error);
 
 static const struct topology_plugin builtin_plugins[] = {
     { .name = "kary",   .init = kary_plugin_init },
+    { .name = "custom", .init = custom_plugin_init },
 };
+
+static json_t *boot_hosts;
+
+void topology_hosts_set (json_t *hosts)
+{
+    boot_hosts = hosts;
+}
 
 static const struct topology_plugin *topology_plugin_lookup (const char *name)
 {
@@ -400,6 +411,87 @@ static int kary_plugin_init (struct topology *topo,
             if (topo->node[i].parent == KARY_NONE)
                 topo->node[i].parent = -1;
         }
+    }
+    return 0;
+}
+
+/* custom plugin
+ * Set rank-ordered hosts array with topology_hosts_set() before using.
+ * Each entry has the form { "host":s "parent"?s }.
+ */
+
+/* Helper to find rank of 'hostname'
+ */
+static int gethostrank (const char *hostname, json_t *hosts, int *rank)
+{
+    size_t index;
+    json_t *entry;
+    const char *host;
+
+    json_array_foreach (hosts, index, entry) {
+        if (json_unpack (entry, "{s:s}", "host", &host) == 0
+            && streq (host, hostname)) {
+            *rank = index;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static int custom_plugin_init (struct topology *topo,
+                               const char *path,
+                               flux_error_t *error)
+{
+    size_t rank;
+    json_t *entry;
+    const char *parent;
+    const char *host;
+    int parent_rank;
+
+    if (path && strlen (path) > 0) {
+        errprintf (error, "unknown custom topology directive: '%s'", path);
+        return -1;
+    }
+    if (!boot_hosts)
+        return 0;
+    json_array_foreach (boot_hosts, rank, entry) {
+        if (json_unpack (entry,
+                         "{s:s s:s}",
+                         "host", &host,
+                         "parent", &parent) < 0)
+            continue;
+        if (rank == 0) {
+            errprintf (error,
+                       "Config file [bootstrap] hosts:"
+                       " rank 0 (%s) may not have a parent in a tree topology",
+                       host);
+            return -1;
+        }
+        if (rank >= topo->size) {
+            errprintf (error, "topology size does not match host array size");
+            return -1;
+        }
+        if (gethostrank (parent, boot_hosts, &parent_rank) < 0
+            || parent_rank < 0 || parent_rank >= topo->size) {
+            errprintf (error,
+                       "Config file [bootstrap] hosts:"
+                       " invalid parent \"%s\" for %s (rank %zu)",
+                       parent,
+                       host,
+                       rank);
+            return -1;
+        }
+        if (parent_rank == rank
+            || is_descendant_of (topo, parent_rank, rank)) {
+            errprintf (error,
+                       "Config file [bootstrap] hosts: parent \"%s\""
+                       " for %s (rank %zu) violates rule against cycles",
+                       parent,
+                       host,
+                       rank);
+            return -1;
+        }
+        topo->node[rank].parent = parent_rank;
     }
     return 0;
 }
