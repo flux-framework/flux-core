@@ -27,9 +27,8 @@ for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
     '
 done
 
-test_expect_success 'flux resource list -no {properties} works' '
-	flux resource list -no {properties} \
-		--from-stdin <<-EOF >properties.out &&
+test_expect_success 'create test input with properties' '
+	cat <<-EOF >properties-test.in
 	{
 	  "all": {
 	    "version": 1,
@@ -97,6 +96,21 @@ test_expect_success 'flux resource list -no {properties} works' '
 	  }
 	}
 	EOF
+'
+
+test_expect_success 'flux resource list -no {properties} works' '
+	flux resource list -no {properties} \
+		--from-stdin <properties-test.in >properties.out &&
 	test $(cat properties.out) = "foo,xx"
+'
+test_expect_success 'flux resource list -no {properties:>4.4+} works' '
+	flux resource list -no "{properties:>5.5+}" \
+		--from-stdin <properties-test.in >properties-trunc.out &&
+	test_debug "cat properties-trunc.out" &&
+	test $(cat properties-trunc.out) = "foo,+" &&
+	flux resource list -no "{properties:>5.5h+}" \
+		--from-stdin <properties-test.in >properties-trunc+h.out &&
+	test_debug "cat properties-trunc+h.out" &&
+	test $(cat properties-trunc.out) = "foo,+"
 '
 test_done
