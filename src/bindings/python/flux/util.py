@@ -25,6 +25,7 @@ from datetime import datetime, timedelta
 from string import Formatter
 from collections import namedtuple
 from pathlib import Path, PurePosixPath
+from typing import Mapping
 
 import yaml
 
@@ -333,7 +334,7 @@ def fsd(secs):
 class UtilFormatter(Formatter):
     # pylint: disable=too-many-branches
 
-    headings = {}
+    headings: Mapping[str, str] = {}
 
     def convert_field(self, value, conv):
         """
