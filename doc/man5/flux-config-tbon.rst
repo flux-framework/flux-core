@@ -15,6 +15,13 @@ It may contain the following keys:
 KEYS
 ====
 
+topo
+   (optional) A URI that selects a specific tree topology.  The default value
+   is ``kary:2`` when bootstrapping from PMI, and ``custom`` when bootstrapping
+   from configuration, as described in :man5:`flux-config-bootstrap`.
+   The configured value may be overridden by setting the ``tbon.topo`` broker
+   attribute.
+
 torpid_min
    (optional) The amount of time (in RFC 23 Flux Standard Duration format) that
    a broker will allow the connection to its TBON parent to remain idle before

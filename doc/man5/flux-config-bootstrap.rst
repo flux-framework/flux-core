@@ -22,9 +22,14 @@ upstream peer (towards the root, rank 0) and zero or more downstream peers
 (towards the leaves).  A broker passively accepts connections from its
 downstream peers on its ZeroMQ `bind` endpoint , and actively connects to its
 upstream peer on that broker's ZeroMQ `connect` endpoint, which is the
-remote version of the peer's `bind` endpoint.  A broker calculates the ranks
-of its peers based on the broker's rank, the tree fanout, and the size of the
-instance.
+remote version of the peer's `bind` endpoint.
+
+A broker determines the ranks of its peers based on the topology.  When
+bootstrapping from configuration files, the default topology is ``custom``.
+In a ``custom`` topology, rank 0 is the upstream peer of all other ranks,
+unless ``parent`` keys are present in the ``hosts`` array to define a
+different tree shape.  The default topology may be altered from ``custom``
+by configuring ``tbon.topo`` as described in :man5:`flux-config-tbon`.
 
 A broker determines its own rank by looking for its hostname in the ``hosts``
 array.  The index of the first matching entry is the broker's rank.  The
@@ -99,6 +104,10 @@ bind
    described under ``default_bind`` above.  If the key is omitted,
    ``default_bind`` is used.
 
+parent
+    (optional) The name of the host that is the upstream peer of this entry
+    in the overlay network tree topology.
+
 ZEROMQ ENDPOINTS
 ================
 
@@ -165,9 +174,8 @@ Host ``foo`` is assigned rank 0, and binds to the interface ``eth0`` port 9001.
 
 Host ``bar`` is assigned rank 1, and connects to ``10.0.1.1`` port 9001.
 
-The following example is a 1024 node cluster that relies on default settings
-and compact hosts.  We assume a ``tbon.fanout`` of 2 (see
-:man7:`flux-broker-attributes`).
+The following example represents a 256 node cluster.  The management node has
+a different network interface configuration compared to its peers.
 
 ::
 
@@ -186,21 +194,34 @@ and compact hosts.  We assume a ``tbon.fanout`` of 2 (see
            connect="tcp://test-mgmt:9001"
        },
        {   # Other nodes use defaults
-           host = "test[1-1023]"
+           host = "test[1-255]"
        },
    ]
 
+The following example is a 256 node cluster that uses the ``parent`` key to
+create a tree topology with three levels.
 
-Host ``test0`` is assigned rank 0, and binds to interface ``en4`` port 9001.
+::
 
-Host ``test1`` is assigned rank 1, binds to interface ``en0`` port 8050,
-and connects to ``test-mgmt`` port 9001.
+   [bootstrap]
 
-Host ``test2`` is assigned rank 2, binds to interface ``en0`` port 8050,
-and connects to ``test-mgmt`` port 9001.
+   curve_cert = "/etc/flux/system/curve.cert"
 
-Host ``test3`` is assigned rank 3, binds to interface ``en0`` port 8050,
-and connects to ``etest1`` port 8050, and so on.
+   default_port = 8050
+   default_bind = "tcp://en0:%p"
+   default_connect = "tcp://e%h:%p"
+
+   [[bootstrap.hosts]]
+   host = "test[0-255]"
+   [[bootstrap.hosts]]
+   host = "test[1,128]"
+   parent = "test0"
+   [[bootstrap.hosts]]
+   host = "test[2-127]"
+   parent = "test1"
+   [[bootstrap.hosts]]
+   host = "test[129-255]"
+   parent = "test128"
 
 
 RESOURCES
