@@ -721,6 +721,12 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
     if (job_parse_jobspec (job, jobspec) < 0)
         goto done;
 
+    /* eventlog parsing above would not have tracked queue specific
+     * stats b/c queue was unknown until the jobspec was parsed.  Must
+     * add this stat in specifically. */
+    if (job->queue)
+        job_stats_add_queue (jsctx->statsctx, job);
+
     if (job->states_mask & FLUX_JOB_STATE_RUN) {
         if (flux_job_kvs_key (path, sizeof (path), id, "R") < 0) {
             errno = EINVAL;
