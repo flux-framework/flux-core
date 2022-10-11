@@ -98,6 +98,86 @@ static bool rnode_in_hostlist (const struct rnode *n,
     return true;
 }
 
+static int add_idset_string (struct idset *idset, const char *s)
+{
+    int rc;
+    struct idset *ids;
+
+    if (!(ids = idset_decode (s)))
+        return -1;
+    rc = idset_add (idset, ids);
+    idset_destroy (ids);
+    return rc;
+}
+
+static struct idset * array_to_idset (struct job_constraint *jc,
+                                      const char *s,
+                                      json_t *ids,
+                                      flux_error_t *errp)
+{
+    json_t *entry;
+    size_t index;
+    struct idset *idset = idset_create (0, IDSET_FLAG_AUTOGROW);
+
+    if (!idset)
+        return NULL;
+
+    json_array_foreach (ids, index, entry) {
+        if (add_idset_string (idset, json_string_value (entry)) < 0) {
+            errprintf (errp,
+                       "invalid ranks '%s' in %s",
+                       json_string_value (entry),
+                       s);
+            goto error;
+        }
+    }
+    if (job_constraint_aux_set (jc,
+                                s,
+                                idset,
+                                (flux_free_f) idset_destroy) < 0) {
+        errprintf (errp, "out of memory");
+        goto error;
+    }
+
+    return idset;
+error:
+    idset_destroy (idset);
+    return NULL;
+}
+
+static int validate_idset (struct job_constraint *jc,
+                           json_t *args,
+                           flux_error_t *errp)
+{
+    char *s;
+    struct idset *idset;
+
+    if (!json_is_array (args))
+        return errprintf (errp, "idset operator argument not an array");
+
+    s = json_dumps (args, JSON_COMPACT);
+    idset = array_to_idset (jc, s, args, errp);
+    free (s);
+    if (!idset)
+        return -1;
+    return 0;
+}
+
+static bool rnode_in_idset (const struct rnode *n,
+                            struct job_constraint *jc,
+                            json_t *ids)
+{
+    struct idset *idset;
+    char *s = json_dumps (ids, JSON_COMPACT);
+
+    if (!(idset = job_constraint_aux_get (jc, s)))
+        idset = array_to_idset (jc, s, ids, NULL);
+    free (s);
+    if (idset && idset_test (idset, n->rank))
+        return true;
+    return false;
+}
+
 static bool rnode_has (const struct rnode *n, const char *property)
 {
     const char *prop = property;
@@ -182,6 +262,8 @@ bool rnode_match (const struct rnode *n,
             result = rnode_has_all (n, args);
         else if (strcmp (op, "hostlist") == 0)
             result = rnode_in_hostlist (n, jc, args);
+        else if (strcmp (op, "ranks") == 0)
+            result = rnode_in_idset (n, jc, args);
         else if (strcmp (op, "or") == 0)
             result = rnode_or (n, jc, args);
         else if (strcmp (op, "and") == 0)
@@ -266,6 +348,10 @@ int rnode_match_validate (struct job_constraint *jc,
         }
         else if (strcmp (op, "hostlist") == 0) {
             if (validate_hostlist (jc, args, errp) < 0)
+                return -1;
+        }
+        else if (strcmp (op, "ranks") == 0) {
+            if (validate_idset (jc, args, errp) < 0)
                 return -1;
         }
         else if (strcmp (op, "or") == 0
