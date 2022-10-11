@@ -1,0 +1,16 @@
+{
+    "name": "Flux Core Python 3.6",
+    "dockerFile": "Dockerfile",
+  
+    "customizations": {
+      "vscode": {
+        "settings": {
+          "terminal.integrated.defaultProfile.linux": "bash"
+        }, 
+        // Note to Flux Developers! We can add extensions here that you like
+        "extensions": [],
+      },
+    },
+    // Needed for git security feature
+    "postStartCommand": "git config --global --add safe.directory /workspaces/core"    
+  }
