@@ -18,6 +18,21 @@
 #include "stats.h"
 #include "job_data.h"
 
+struct job_stats_ctx *job_stats_ctx_create (flux_t *h)
+{
+    struct job_stats_ctx *statsctx = NULL;
+
+    if (!(statsctx = calloc (1, sizeof (*statsctx))))
+        return NULL;
+    statsctx->h = h;
+    return statsctx;
+}
+
+void job_stats_ctx_destroy (struct job_stats_ctx *statsctx)
+{
+    free (statsctx);
+}
+
 /*  Return the index into stats->state_count[] array for the
  *   job state 'state'
  */
@@ -38,9 +53,9 @@ static const char *state_index_name (int index)
     return flux_job_statetostr ((1<<index), "l");
 }
 
-void job_stats_update (struct job_stats *stats,
-                       struct job *job,
-                       flux_job_state_t newstate)
+static void stats_update (struct job_stats *stats,
+                          struct job *job,
+                          flux_job_state_t newstate)
 {
     stats->state_count[state_index (newstate)]++;
 
@@ -59,12 +74,15 @@ void job_stats_update (struct job_stats *stats,
     }
 }
 
-/* An inactive job is being purged, so statistics must be updated.
- */
-void job_stats_purge (struct job_stats *stats, struct job *job)
+void job_stats_update (struct job_stats_ctx *statsctx,
+                       struct job *job,
+                       flux_job_state_t newstate)
 {
-    assert (job->state == FLUX_JOB_STATE_INACTIVE);
+    stats_update (&statsctx->all, job, newstate);
+}
 
+static void stats_purge (struct job_stats *stats, struct job *job)
+{
     stats->state_count[state_index (job->state)]--;
 
     if (!job->success) {
@@ -76,6 +94,15 @@ void job_stats_purge (struct job_stats *stats, struct job *job)
                 stats->timeout--;
         }
     }
+}
+
+/* An inactive job is being purged, so statistics must be updated.
+ */
+void job_stats_purge (struct job_stats_ctx *statsctx, struct job *job)
+{
+    assert (job->state == FLUX_JOB_STATE_INACTIVE);
+
+    stats_purge (&statsctx->all, job);
 }
 
 static int object_set_integer (json_t *o,
@@ -111,7 +138,7 @@ error:
     return NULL;
 }
 
-json_t * job_stats_encode (struct job_stats *stats)
+static json_t *stats_encode (struct job_stats *stats)
 {
     json_t *o;
     json_t *states;
@@ -128,6 +155,11 @@ json_t * job_stats_encode (struct job_stats *stats)
     }
     json_decref (states);
     return o;
+}
+
+json_t * job_stats_encode (struct job_stats_ctx *statsctx)
+{
+    return stats_encode (&statsctx->all);
 }
 
 // vi: ts=4 sw=4 expandtab

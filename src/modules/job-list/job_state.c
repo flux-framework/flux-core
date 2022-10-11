@@ -140,7 +140,7 @@ static void update_job_state (struct job_state_ctx *jsctx,
                               flux_job_state_t new_state,
                               double timestamp)
 {
-    job_stats_update (&jsctx->stats, job, new_state);
+    job_stats_update (jsctx->statsctx, job, new_state);
 
     job->state = new_state;
     if (job->state == FLUX_JOB_STATE_DEPEND)
@@ -1525,6 +1525,9 @@ struct job_state_ctx *job_state_create (struct idsync_ctx *isctx)
     if (!(jsctx->futures = zlistx_new ()))
         goto error;
 
+    if (!(jsctx->statsctx = job_stats_ctx_create (jsctx->h)))
+        goto error;
+
     if (!(jsctx->backlog = flux_msglist_create ()))
         goto error;
 
@@ -1564,6 +1567,7 @@ void job_state_destroy (void *data)
         zlistx_destroy (&jsctx->running);
         zlistx_destroy (&jsctx->pending);
         zhashx_destroy (&jsctx->index);
+        job_stats_ctx_destroy (jsctx->statsctx);
         flux_msglist_destroy (jsctx->backlog);
         flux_future_destroy (jsctx->events);
         free (jsctx);

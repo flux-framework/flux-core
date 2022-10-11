@@ -50,7 +50,7 @@ struct job_state_ctx {
     zlistx_t *futures;
 
     /*  Job statistics: */
-    struct job_stats stats;
+    struct job_stats_ctx *statsctx;
 
     /* debug/testing - journal responses queued during pause */
     bool pause;

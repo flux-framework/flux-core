@@ -20,6 +20,7 @@
 #include "job_data.h"
 #include "list.h"
 #include "idsync.h"
+#include "stats.h"
 
 static const char *attrs[] = {
     "userid", "urgency", "priority", "t_submit",
@@ -68,7 +69,7 @@ static void job_stats_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     struct list_ctx *ctx = arg;
-    json_t *o = job_stats_encode (&ctx->jsctx->stats);
+    json_t *o = job_stats_encode (ctx->jsctx->statsctx);
     if (o == NULL)
         goto error;
     if (flux_respond_pack (h, msg, "o", o) < 0) {
@@ -101,7 +102,7 @@ static void purge_cb (flux_t *h,
         if ((job = zhashx_lookup (ctx->jsctx->index, &id))) {
             if (job->state != FLUX_JOB_STATE_INACTIVE)
                 continue;
-            job_stats_purge (&ctx->jsctx->stats, job);
+            job_stats_purge (ctx->jsctx->statsctx, job);
             if (job->list_handle)
                 zlistx_delete (ctx->jsctx->inactive, job->list_handle);
             zhashx_delete (ctx->jsctx->index, &id);

@@ -23,13 +23,22 @@ struct job_stats {
     unsigned int canceled;
 };
 
-void job_stats_update (struct job_stats *stats,
+struct job_stats_ctx {
+    flux_t *h;
+    struct job_stats all;
+};
+
+struct job_stats_ctx *job_stats_ctx_create (flux_t *h);
+
+void job_stats_ctx_destroy (struct job_stats_ctx *statsctx);
+
+void job_stats_update (struct job_stats_ctx *statsctx,
                        struct job *job,
                        flux_job_state_t newstate);
 
-void job_stats_purge (struct job_stats *stats, struct job *job);
+void job_stats_purge (struct job_stats_ctx *statsctx, struct job *job);
 
-json_t * job_stats_encode (struct job_stats *stats);
+json_t * job_stats_encode (struct job_stats_ctx *statsctx);
 
 #endif /* ! _FLUX_JOB_LIST_JOB_STATS_H */
 
