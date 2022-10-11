@@ -25,6 +25,7 @@ from datetime import datetime, timedelta
 from string import Formatter
 from collections import namedtuple
 from pathlib import Path, PurePosixPath
+from typing import Mapping
 
 import yaml
 
@@ -288,12 +289,149 @@ def parse_datetime(string, now=None):
     return datetime(*time_struct[:6]).astimezone()
 
 
+class UtilDatetime(datetime):
+    """
+    Subclass of datetime but with a __format__ method that supports
+    width and alignment specification after any time formatting via
+    two colons `::` before the Python format spec, e.g::
+
+    >>> "{0:%b%d %R::>16}".format(UtilDatetime.now())
+    '     Sep21 18:36'
+    """
+
+    def __format__(self, fmt):
+        # The string "::" is used to split the strftime() fromat from
+        # any Python format spec:
+        vals = fmt.split("::", 1)
+
+        # Call strftime() to get the formatted datetime as a string
+        result = self.strftime(vals[0])
+
+        # If there was a format spec, apply it here:
+        try:
+            return f"{{0:{vals[1]}}}".format(result)
+        except IndexError:
+            return result
+
+
+def fsd(secs):
+    #  Round <1ms down to 0s for now
+    if secs < 1.0e-3:
+        strtmp = "0s"
+    elif secs < 10.0:
+        strtmp = "%.03fs" % secs
+    elif secs < 60.0:
+        strtmp = "%.4gs" % secs
+    elif secs < (60.0 * 60.0):
+        strtmp = "%.4gm" % (secs / 60.0)
+    elif secs < (60.0 * 60.0 * 24.0):
+        strtmp = "%.4gh" % (secs / (60.0 * 60.0))
+    else:
+        strtmp = "%.4gd" % (secs / (60.0 * 60.0 * 24.0))
+    return strtmp
+
+
+class UtilFormatter(Formatter):
+    # pylint: disable=too-many-branches
+
+    headings: Mapping[str, str] = {}
+
+    def convert_field(self, value, conv):
+        """
+        Flux utility-specific field conversions. Avoids the need
+        to create many different format field names to represent
+        different conversion types.
+        """
+        orig_value = str(value)
+        if conv == "d":
+            # convert from float seconds since epoch to a datetime.
+            # User can than use datetime specific format fields, e.g.
+            # {t_inactive!d:%H:%M:%S}.
+            try:
+                value = UtilDatetime.fromtimestamp(value)
+            except TypeError:
+                if orig_value == "":
+                    value = UtilDatetime.fromtimestamp(0.0)
+                else:
+                    raise
+        elif conv == "D":
+            # As above, but convert to ISO 8601 date time string.
+            try:
+                value = datetime.fromtimestamp(value).strftime("%FT%T")
+            except TypeError:
+                if orig_value == "":
+                    value = ""
+                else:
+                    raise
+        elif conv == "F":
+            # convert to Flux Standard Duration (fsd) string.
+            try:
+                value = fsd(value)
+            except TypeError:
+                if orig_value == "":
+                    value = ""
+                else:
+                    raise
+        elif conv == "H":
+            # if > 0, always round up to at least one second to
+            #  avoid presenting a nonzero timedelta as zero
+            try:
+                if 0 < value < 1:
+                    value = 1
+                value = str(timedelta(seconds=round(value)))
+            except TypeError:
+                if orig_value == "":
+                    value = ""
+                else:
+                    raise
+        elif conv == "P":
+            #  Convert a floating point to percentage
+            try:
+                value = value * 100
+                if 0 < value < 1:
+                    value = f"{value:.2f}%"
+                else:
+                    value = f"{value:.3g}%"
+            except (TypeError, ValueError):
+                if orig_value == "":
+                    value = ""
+                else:
+                    raise
+        else:
+            value = super().convert_field(value, conv)
+        return value
+
+    def format_field(self, value, spec):
+        if spec.endswith("h"):
+            basecases = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00")
+            value = "-" if str(value) in basecases else str(value)
+            spec = spec[:-1] + "s"
+        return super().format_field(value, spec)
+
+
 class OutputFormat:
     """
     Store a parsed version of the program's output format,
     allowing the fields to iterated without modifiers, building
     a new format suitable for headers display, etc...
     """
+
+    formatter = UtilFormatter
+
+    class HeaderFormatter(UtilFormatter):
+        """Custom formatter for flux utilities header row.
+
+        Override default formatter behavior of calling getattr() on dotted
+        field names. Instead look up header literally in kwargs.
+        This greatly simplifies header name registration as well as
+        registration of "valid" fields.
+        """
+
+        def get_field(self, field_name, args, kwargs):
+            """Override get_field() so we don't do the normal gettatr thing"""
+            if field_name in kwargs:
+                return kwargs[field_name], None
+            return super().get_field(field_name, args, kwargs)
 
     def __init__(self, valid_headings, fmt, prepend=None):
         """
@@ -306,6 +444,7 @@ class OutputFormat:
         """
         self.headings = valid_headings
         self.fmt = fmt
+        self.fmt_orig = fmt
         #  Parse format into list of (string, field, spec, conv) tuples,
         #   replacing any None values with empty string "" (this makes
         #   substitution back into a format string in self.header() and
@@ -318,6 +457,8 @@ class OutputFormat:
 
         #  Throw an exception if any requested fields are invalid:
         for field in self._fields:
+            #  Remove any "0." prefix:
+            field = field[2:] if field.startswith("0.") else field
             if field and not field in self.headings:
                 raise ValueError("Unknown format field: " + field)
 
@@ -367,7 +508,8 @@ class OutputFormat:
         return fmt
 
     def header(self):
-        return self.header_format().format(**self.headings)
+        formatter = self.HeaderFormatter()
+        return formatter.format(self.header_format(), **self.headings)
 
     def get_format_prepended(self, prepend):
         """
@@ -382,10 +524,12 @@ class OutputFormat:
             lst.append(self._fmt_tuple(text, field, spec, conv))
         return "".join(lst)
 
-    def get_format(self):
+    def get_format(self, orig=False):
         """
         Return the format string
         """
+        if orig:
+            return self.fmt_orig
         return self.fmt
 
     def format(self, obj):
@@ -393,11 +537,65 @@ class OutputFormat:
         format object with internal format
         """
         try:
-            retval = self.get_format().format(obj)
+            retval = self.formatter().format(self.get_format(), obj)
         except KeyError as exc:
             typestr = type(obj)
             raise KeyError(f"Invalid format field {exc} for {typestr}")
         return retval
+
+    def filter_empty(self, items):
+        """
+        Check for format fields that are prefixed with `?:` (e.g. "?:{name}")
+        and filter them out of the current format string if they result in an
+        empty string for every entry in `items`.
+        """
+        #  Build a list of all format strings that have the collapsible
+        #  sentinel '?:' to determine which are subject to the test for
+        #  emptiness.
+        #
+        #  Note: we remove the leading `text` and the format `spec` because
+        #  these may make even empty formatted fields non-empty. E.g. a spec
+        #  of `:>8` will always make the format result 8 characters wide.
+        #
+        lst = []
+        index = 0
+        for (text, field, _, conv) in self.format_list:
+            if text.endswith("?:"):
+                fmt = self._fmt_tuple("", "0." + field, None, conv)
+                lst.append(dict(fmt=fmt, index=index))
+            index = index + 1
+
+        # Return immediately if no format fields are collapsible
+        if not lst:
+            return self.get_format(orig=True)
+
+        formatter = self.formatter()
+
+        #  Iterate over all items, rebuilding lst each time to contain
+        #  only those fields that resulted in nonzero strings:
+        for item in items:
+            lst = [x for x in lst if not formatter.format(x["fmt"], item)]
+
+            #  If lst is now empty, that means all fields already returned
+            #  nonzero strings, so we can break early
+            if not lst:
+                break
+
+        #  Remove any entries that were empty from self.format_list
+        #  (use index field of lst to remove by postition in self.format_list)
+        format_list = [
+            x
+            for i, x in enumerate(self.format_list)
+            if i not in [x["index"] for x in lst]
+        ]
+
+        #  Remove "?:" from remaining entries so they disappear in ouput.
+        for entry in format_list:
+            if entry[0].endswith("?:"):
+                entry[0] = entry[0][:-2]
+
+        #  Return new format string created from pruned format_list
+        return "".join(self._fmt_tuple(*x) for x in format_list)
 
 
 class Tree:
