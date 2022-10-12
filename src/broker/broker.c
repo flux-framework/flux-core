@@ -1117,7 +1117,7 @@ static int execute_parental_notifications (struct broker *ctx)
         log_err ("job-manager.memo uri");
         goto out;
     }
-    if (flux_future_get (f2, NULL) < 0) {
+    if (flux_future_get (f2, NULL) < 0 && errno != ENOSYS) {
         log_err ("job-exec.critical-ranks");
         goto out;
     }
