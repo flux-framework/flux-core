@@ -344,6 +344,7 @@ test_expect_success HAVE_JQ 'flux job list all jobs works' '
         test_cmp all.ids list_all_jobids.out
 '
 
+# with single anonymous queue, queues arrays should be zero length
 test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
         flux job stats | jq -e ".job_states.depend == 0" &&
         flux job stats | jq -e ".job_states.priority == 0" &&
@@ -351,7 +352,9 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
         flux job stats | jq -e ".job_states.run == $(job_list_state_count running)" &&
         flux job stats | jq -e ".job_states.cleanup == 0" &&
         flux job stats | jq -e ".job_states.inactive == $(job_list_state_count inactive)" &&
-        flux job stats | jq -e ".job_states.total == $(job_list_state_count all)"
+        flux job stats | jq -e ".job_states.total == $(job_list_state_count all)" &&
+        queuelength=$(flux job stats | jq ".queues | length") &&
+        test ${queuelength} -eq 0
 '
 
 test_expect_success 'cleanup job listing jobs ' '
@@ -396,7 +399,9 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
         flux job stats | jq -e ".job_states.run == 0" &&
         flux job stats | jq -e ".job_states.cleanup == 0" &&
         flux job stats | jq -e ".job_states.inactive == $(job_list_state_count all)" &&
-        flux job stats | jq -e ".job_states.total == $(job_list_state_count all)"
+        flux job stats | jq -e ".job_states.total == $(job_list_state_count all)" &&
+        queuelength=$(flux job stats | jq ".queues | length") &&
+        test ${queuelength} -eq 0
 '
 
 # job list-inactive
@@ -1657,6 +1662,96 @@ wait_jobs_finish() {
 test_expect_success LONGTEST 'stress job-list.list-id' '
         flux python ${FLUX_SOURCE_DIR}/t/job-list/list-id.py 500 &&
         wait_jobs_finish
+'
+
+test_expect_success 'configure batch,debug queues' '
+        cat >conf.d/config.toml <<-EOF &&
+[queues.batch]
+[queues.debug]
+EOF
+        flux config reload
+'
+
+wait_id_inactive() {
+        id=$1
+        local i=0
+        while ! flux job list --states=inactive | grep ${id} > /dev/null \
+               && [ $i -lt 50 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ "$i" -eq "50" ]
+        then
+            return 1
+        fi
+        return 0
+}
+
+test_expect_success 'run some jobs in the batch,debug queues' '
+        flux mini submit -q batch --wait /bin/true | flux job id > stats1.id &&
+        flux mini submit -q debug --wait /bin/true | flux job id > stats2.id &&
+        flux mini submit -q batch --wait /bin/false | flux job id > stats3.id &&
+        flux mini submit -q debug --wait /bin/false | flux job id > stats4.id &&
+        wait_id_inactive $(cat stats1.id) &&
+        wait_id_inactive $(cat stats2.id) &&
+        wait_id_inactive $(cat stats3.id) &&
+        wait_id_inactive $(cat stats4.id)
+'
+
+test_expect_success HAVE_JQ 'job stats lists jobs in correct state in each queue' '
+        batchq=`flux job stats | jq ".queues[] | select( .name == \"batch\" )"` &&
+        debugq=`flux job stats | jq ".queues[] | select( .name == \"debug\" )"` &&
+        echo $batchq | jq -e ".job_states.depend == 0" &&
+        echo $batchq | jq -e ".job_states.priority == 0" &&
+        echo $batchq | jq -e ".job_states.sched == 0" &&
+        echo $batchq | jq -e ".job_states.run == 0" &&
+        echo $batchq | jq -e ".job_states.cleanup == 0" &&
+        echo $batchq | jq -e ".job_states.inactive == 2" &&
+        echo $batchq | jq -e ".job_states.total == 2" &&
+        echo $batchq | jq -e ".failed == 1" &&
+        echo $debugq | jq -e ".job_states.depend == 0" &&
+        echo $debugq | jq -e ".job_states.priority == 0" &&
+        echo $debugq | jq -e ".job_states.sched == 0" &&
+        echo $debugq | jq -e ".job_states.run == 0" &&
+        echo $debugq | jq -e ".job_states.cleanup == 0" &&
+        echo $debugq | jq -e ".job_states.inactive == 2" &&
+        echo $debugq | jq -e ".job_states.total == 2" &&
+        echo $debugq | jq -e ".failed == 1"
+'
+
+test_expect_success 'reload the job-list module' '
+        flux module reload job-list &&
+        wait_id_inactive $(cat stats1.id) &&
+        wait_id_inactive $(cat stats2.id) &&
+        wait_id_inactive $(cat stats3.id) &&
+        wait_id_inactive $(cat stats4.id)
+'
+
+test_expect_success HAVE_JQ 'job stats in each queue correct after reload' '
+        batchq=`flux job stats | jq ".queues[] | select( .name == \"batch\" )"` &&
+        debugq=`flux job stats | jq ".queues[] | select( .name == \"debug\" )"` &&
+        echo $batchq | jq -e ".job_states.depend == 0" &&
+        echo $batchq | jq -e ".job_states.priority == 0" &&
+        echo $batchq | jq -e ".job_states.sched == 0" &&
+        echo $batchq | jq -e ".job_states.run == 0" &&
+        echo $batchq | jq -e ".job_states.cleanup == 0" &&
+        echo $batchq | jq -e ".job_states.inactive == 2" &&
+        echo $batchq | jq -e ".job_states.total == 2" &&
+        echo $batchq | jq -e ".failed == 1" &&
+        echo $debugq | jq -e ".job_states.depend == 0" &&
+        echo $debugq | jq -e ".job_states.priority == 0" &&
+        echo $debugq | jq -e ".job_states.sched == 0" &&
+        echo $debugq | jq -e ".job_states.run == 0" &&
+        echo $debugq | jq -e ".job_states.cleanup == 0" &&
+        echo $debugq | jq -e ".job_states.inactive == 2" &&
+        echo $debugq | jq -e ".job_states.total == 2" &&
+        echo $debugq | jq -e ".failed == 1"
+'
+
+test_expect_success 'remove queues' '
+        rm -f conf.d/config.toml &&
+        flux config reload
 '
 
 # invalid job data tests
