@@ -28,7 +28,7 @@ from urllib.parse import parse_qs, urlparse
 import flux
 from flux import debugged, job, util
 from flux.idset import IDset
-from flux.job import JobspecV1
+from flux.job import Constraint, JobspecV1
 from flux.progress import ProgressBar
 from flux.uri import JobURI
 
@@ -711,10 +711,8 @@ class MiniCmd:
                 "system.dependencies", dependency_array_create(args.dependency)
             )
         if args.requires is not None:
-            jobspec.setattr(
-                "system.constraints.properties",
-                list_split(args.requires),
-            )
+            constraint = Constraint(",".join(args.requires))
+            jobspec.setattr("system.constraints", constraint)
         if args.time_limit is not None:
             #  With no units, time_limit is in minutes, but jobspec.duration
             #  takes seconds or FSD by default, so convert here if necessary.

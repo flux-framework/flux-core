@@ -15,6 +15,7 @@ import json
 import math
 import numbers
 import os
+import re
 
 import yaml
 from _flux._core import ffi
@@ -950,3 +951,110 @@ class JobspecV1(Jobspec):
         jobspec.setattr_shell_option("per-resource.type", "node")
         jobspec.setattr_shell_option("mpi", "none")
         return jobspec
+
+
+class Constraint(dict):
+    """
+    Convert a simple query string syntax into a RFC 31 constraint object
+    """
+
+    #  Shorthand operator mappings
+    operator_map = {
+        None: "properties",
+        "host": "hostlist",
+        "hosts": "hostlist",
+        "rank": "ranks",
+    }
+
+    def __init__(self, query):
+        super().__init__(self.parse_constraint_string(query))
+
+    def dumps(self):
+        return json.dumps(self)
+
+    @staticmethod
+    def is_unbalanced(string):
+        """
+        Return true if string has balanced parenthesis
+        """
+        return string.count("(") != string.count(")")
+
+    @staticmethod
+    def strip_outermost_parens(query):
+        if not query or query[0] != "(":
+            return query
+
+        count_left = 1
+        for letter in query[1:]:
+            if count_left == 0:
+                return query
+            if letter == "(":
+                count_left += 1
+            elif letter == ")":
+                count_left -= 1
+
+        if count_left != 0:
+            raise ValueError("Unbalanced parentheses in '{query}'")
+
+        return query[1:-1]
+
+    def parse_constraint_string(self, query):
+        #  Get reference to this class since we call constructor
+        #  recursively below
+        cls = self.__class__
+
+        #  Remove outer whitespace and parentheses
+        query = self.strip_outermost_parens(query.strip())
+
+        #  Find all and/or/not operators
+        match = []
+        for entry in re.finditer(r"\b(and|or|not)\b", query, re.IGNORECASE):
+            match.append((entry.group(0).lower(), entry.span(0)))
+
+        #  If at least one operator found, find the first instance with
+        #  balanced parentheses and return it
+        for operator, (start, end) in match:
+            left = query[:start].strip()
+            if self.is_unbalanced(left):
+                continue
+            right = query[end:].strip()
+            if self.is_unbalanced(right):
+                raise ValueError(f"Unbalanced parentheses in '{right}'")
+
+            # The "not" operator is bound to right term only:
+            if operator == "not":
+                if left:
+                    raise ValueError(f"invalid string '{left}' before \"not\"")
+                return {"not": [cls(right)]}
+
+            if not left or not right:
+                raise ValueError(f"invalid empty constraint at '{query}'")
+
+            #  Otherwise, return operator binding both terms:
+            return {
+                operator: [
+                    cls(left),
+                    cls(right),
+                ]
+            }
+
+        #  Otherwise, check for operator:arg
+        operator, _, args = query.partition(":")
+
+        #  return default operator if none specified:
+        if not args:
+            return {self.operator_map[None]: query.split(",")}
+
+        #  If operator is prepended with '-' then treat it like "not"
+        negate = False
+        if operator.startswith("-"):
+            negate = True
+            operator = operator[1:]
+
+        #  Map any shorthand operators to full operator name
+        if operator in self.operator_map:
+            operator = self.operator_map[operator]
+
+        if negate:
+            return {"not": [{operator: [args]}]}
+        return {operator: [args]}

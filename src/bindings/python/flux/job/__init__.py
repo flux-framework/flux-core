@@ -8,7 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from flux.job.Jobspec import Jobspec, JobspecV1, validate_jobspec
+from flux.job.Jobspec import Jobspec, JobspecV1, validate_jobspec, Constraint
 from flux.job.JobID import id_parse, id_encode, JobID
 from flux.job.kvs import job_kvs, job_kvs_guest
 from flux.job.kill import kill_async, kill, cancel_async, cancel
