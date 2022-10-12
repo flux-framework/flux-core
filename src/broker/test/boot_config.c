@@ -497,7 +497,7 @@ void test_attr (const char *dir)
     ok (rc == 0,
         "boot_config_attr works on input hosts");
     ok (attr_get (attrs, "hostlist", &val, &flags) == 0
-        && !strcmp (val, "foo[0,4,1-5,14,6-9]")
+        && !strcmp (val, "foo[0,4,1-3,5,14,6-9]")
         && flags == FLUX_ATTRFLAG_IMMUTABLE,
         "attr_get returns correct value and flags");
 
@@ -559,6 +559,53 @@ void test_ipv6 (const char *dir)
     flux_conf_decref (cf);
 }
 
+void test_dup_hosts (const char *dir)
+{
+    char path[PATH_MAX + 1];
+    json_t *hosts = NULL;
+    const char *host;
+    flux_conf_t *cf;
+    struct boot_conf conf;
+    const char *input = \
+"[bootstrap]\n" \
+"curve_cert = \"foo\"\n" \
+"[[bootstrap.hosts]]\n" \
+"host = \"test[0-127]\"\n" \
+"[[bootstrap.hosts]]\n" \
+"host = \"test[1,64]\"\n" \
+"parent = \"test0\"\n" \
+"[[bootstrap.hosts]]\n" \
+"host = \"test[2-63]\"\n" \
+"parent = \"test1\"\n" \
+"[[bootstrap.hosts]]\n" \
+"host = \"test[65-127]\"\n" \
+"parent = \"test64\"\n";
+
+    create_test_file (dir, "boot", path, sizeof (path), input);
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
+
+    ok (boot_config_parse (cf, &conf, &hosts) == 0,
+        "boot_config_parse handles duplicate hosts");
+    ok (hosts != NULL && json_array_size (hosts) == 128,
+        "and post-processed hosts array has expected size");
+    ok (json_unpack (json_array_get (hosts, 0), "{s:s}", "host", &host) == 0
+        && !strcmp (host, "test0"),
+        "test0 has rank 0");
+    ok (json_unpack (json_array_get (hosts, 65), "{s:s}", "host", &host) == 0
+        && !strcmp (host, "test65"),
+        "test65 has rank 65");
+    ok (json_unpack (json_array_get (hosts, 127), "{s:s}", "host", &host) == 0
+        && !strcmp (host, "test127"),
+        "test127 has rank 127");
+
+    if (unlink (path) < 0)
+        BAIL_OUT ("could not cleanup test file %s", path);
+
+    json_decref (hosts);
+    flux_conf_decref (cf);
+}
+
 int main (int argc, char **argv)
 {
     char dir[PATH_MAX + 1];
@@ -582,6 +629,7 @@ int main (int argc, char **argv)
     test_attr (dir);
     test_curve_cert (dir);
     test_ipv6 (dir);
+    test_dup_hosts (dir);
 
     if (rmdir (dir) < 0)
         BAIL_OUT ("could not cleanup test dir %s", dir);

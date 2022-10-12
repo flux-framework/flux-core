@@ -122,17 +122,22 @@ nomem:
 
 /* Build a new hosts array, expanding any RFC29 hostlists, so that
  * json_array_size() is the number of hosts, and json_array_get() can
- * be used to fetch an entry by rank.  Caller must free.
+ * be used to fetch an entry by rank.  Preserve the initial hosts order so
+ * that the rank mapping is deterministic, but combine the host entries of
+ * any entries that have the same host key.
+ * The caller must release the returned JSON object with json_decref().
  */
 static json_t *boot_config_expand_hosts (json_t *hosts)
 {
-    json_t *nhosts;
+    json_t *nhosts = NULL;
+    json_t *hash = NULL;
     size_t index;
     json_t *value;
 
-    if (!(nhosts = json_array ())) {
+    if (!(nhosts = json_array ())
+        || !(hash = json_object ())) {
         log_msg ("Config file error [bootstrap]: out of memory");
-        return NULL;
+        goto error;
     }
     json_array_foreach (hosts, index, value) {
         struct hostlist *hl = NULL;
@@ -150,18 +155,33 @@ static json_t *boot_config_expand_hosts (json_t *hosts)
         }
         s = hostlist_first (hl);
         while (s) {
-            if (boot_config_append_host (nhosts, s, value) < 0) {
-                log_err ("Config file error [bootstrap]: appending host %s", s);
-                hostlist_destroy (hl);
-                goto error;
+            json_t *entry;
+            if (!(entry = json_object_get (hash, s))) {
+                if (boot_config_append_host (nhosts, s, value) < 0
+                    || json_object_set (hash, s, value) < 0) {
+                    log_msg ("Config file error [bootstrap]:"
+                             " error appending host %s", s);
+                    hostlist_destroy (hl);
+                    goto error;
+                }
+            }
+            else {
+                if (json_object_update (entry, value) < 0) {
+                    log_msg ("Config file error [bootstrap]:"
+                             " error merging host %s", s);
+                    hostlist_destroy (hl);
+                    goto error;
+                }
             }
             s = hostlist_next (hl);
         }
         hostlist_destroy (hl);
     }
+    json_decref (hash);
     return nhosts;
 error:
     json_decref (nhosts);
+    json_decref (hash);
 
     return NULL;
 }
