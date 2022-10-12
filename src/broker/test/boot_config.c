@@ -280,7 +280,6 @@ void test_bad_host_bind (const char *dir)
     flux_conf_t *cf;
     struct boot_conf conf;
     json_t *hosts;
-    char uri[MAX_URI + 1];
     const char *input = \
 "[bootstrap]\n" \
 "hosts = [\n" \
@@ -291,13 +290,8 @@ void test_bad_host_bind (const char *dir)
     if (!(cf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failed");
 
-    /* hosts will initially parse OK then fail in getbindbyrank */
-    if (boot_config_parse (cf, &conf, &hosts) < 0)
-        BAIL_OUT ("boot_config_parse unexpectedly failed");
-    ok (boot_config_getbindbyrank (hosts, &conf, 0, uri, sizeof (uri)) < 0,
-        "boot_config_getbindbyrank failed on host entry with wrong bind type");
-
-    json_decref (hosts);
+    ok (boot_config_parse (cf, &conf, &hosts) < 0,
+        "boot_config_parse failed on host entry with wrong bind type");
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
@@ -305,6 +299,30 @@ void test_bad_host_bind (const char *dir)
     flux_conf_decref (cf);
 }
 
+void test_bad_host_key (const char *dir)
+{
+    char path[PATH_MAX + 1];
+    flux_conf_t *cf;
+    struct boot_conf conf;
+    json_t *hosts;
+    const char *input = \
+"[bootstrap]\n" \
+"hosts = [\n" \
+"  { host=\"foo\", wrongkey=42 },\n" \
+"]\n";
+
+    create_test_file (dir, "boot", path, sizeof (path), input);
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
+
+    ok (boot_config_parse (cf, &conf, &hosts) < 0,
+        "boot_config_parse failed on host entry with unknown key");
+
+    if (unlink (path) < 0)
+        BAIL_OUT ("could not cleanup test file %s", path);
+
+    flux_conf_decref (cf);
+}
 
 /* Just double check that an array with mismatched types
  * fails early with the expected libtomlc99 error.
@@ -622,6 +640,7 @@ int main (int argc, char **argv)
     test_bad_hosts_entry (dir);
     test_bad_host_hostlist (dir);
     test_bad_host_bind (dir);
+    test_bad_host_key (dir);
     test_empty (dir);
     test_empty_hosts (dir);
     test_missing_info (dir);

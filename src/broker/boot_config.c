@@ -141,11 +141,22 @@ static json_t *boot_config_expand_hosts (json_t *hosts)
     }
     json_array_foreach (hosts, index, value) {
         struct hostlist *hl = NULL;
+        json_error_t error;
         const char *host, *s;
+        const char *bind = NULL;
+        const char *connect = NULL;
+        const char *parent = NULL;
 
-        if (json_unpack (value, "{s:s}", "host", &host) < 0) {
-            log_msg ("Config file error [bootstrap]: missing host field");
-            log_msg ("Hint: hosts entries must be table containing a host key");
+        if (json_unpack_ex (value,
+                            &error,
+                            0,
+                            "{s:s s?s s?s s?s !}",
+                            "host", &host,
+                            "bind", &bind,
+                            "connect", &connect,
+                            "parent", &parent) < 0) {
+            log_msg ("Config file error [bootstrap] host entry: %s",
+                     error.text);
             goto error;
         }
         if (!(hl = hostlist_decode (host))) {
@@ -357,7 +368,7 @@ int boot_config_getrankbyname (json_t *hosts, const char *name, uint32_t *rank)
     json_array_foreach (hosts, index, entry) {
         const char *host;
 
-        /* N.B. missing host key already detected by boot_config_parse().
+        /* N.B. entry already validated by boot_config_parse().
          */
         if (json_unpack (entry, "{s:s}", "host", &host) == 0
                     && !strcmp (name, host)) {
@@ -383,21 +394,13 @@ static int gethostentry (json_t *hosts,
                  (unsigned int)rank);
         return -1;
     }
-    /* N.B. missing host key already detected by boot_config_parse().
+    /* N.B. entry already validated by boot_config_parse().
      */
-    if (json_unpack (entry,
-                     "{s:s s?:s s?:s}",
-                     "host",
-                     host,
-                     "bind",
-                     bind,
-                     "connect",
-                     uri) < 0) {
-        log_msg ("Config file error [bootstrap]: rank %u bad hosts entry",
-                 (unsigned int)rank);
-        log_msg ("Hint: bind and connect keys, if present, are type string");
-        return -1;
-    }
+    (void)json_unpack (entry,
+                      "{s:s s?:s s?:s}",
+                      "host", host,
+                      "bind", bind,
+                      "connect", uri);
     return 0;
 }
 
