@@ -46,7 +46,9 @@ test_expect_success 'scheduler rejects jobs with unsatisfiable constraints' '
 test_expect_success 'flux-mini: --requires works with scheduler' '
 	flux mini bulksubmit --wait --log=job.{}.id -n1 --requires={} \
 		flux getattr rank \
-		::: xx yy xx,yy ^xx ^yy &&
+		::: xx yy xx,yy ^xx ^yy \
+		    rank:1 rank:3 -rank:0-2 \
+		    host:$(hostname) &&
 	result=$(flux job attach $(cat job.xx.id)) &&
 	test_debug "echo xx: $result" &&
 	test $result -eq 2 -o $result -eq 3 &&
@@ -61,7 +63,18 @@ test_expect_success 'flux-mini: --requires works with scheduler' '
 	test $result -eq 3 &&
 	result=$(flux job attach $(cat "job.^xx.id")) &&
 	test_debug "echo ^xx: $result" &&
-	test $result -eq 0 -o $result -eq 1
+	test $result -eq 0 -o $result -eq 1 &&
+	result=$(flux job attach $(cat "job.rank:1.id")) &&
+	test_debug "echo rank:1: $result" &&
+	test $result -eq 1 &&
+	result=$(flux job attach $(cat "job.rank:3.id")) &&
+	test_debug "echo rank:3: $result" &&
+	test $result -eq 3 &&
+	result=$(flux job attach $(cat "job.-rank:0-2.id")) &&
+	test_debug "echo -rank:0-2: $result" &&
+	test $result -eq 3 &&
+	result=$(flux job attach $(cat "job.host:$(hostname).id")) &&
+	test_debug "echo host:hostname: $result"
 '
 test_expect_success 'scheduler does not schedule down nodes with constraints' '
 	flux resource drain 2 &&
