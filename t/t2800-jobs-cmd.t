@@ -188,6 +188,13 @@ test_expect_success 'flux-jobs: collapsible fields work' '
 	test_must_fail grep EXCEPTION-TYPE collapsed.out
 '
 
+test_expect_success 'flux-jobs: request indication of truncation works' '
+	flux jobs -n -c1 -ano "{id.f58:<5.5+}" | grep + &&
+	flux jobs -n -c1 -ano "{id.f58:<5.5h+}" | grep + &&
+	flux jobs -n -c1 -ano "{id.f58:<20.20h+}" > notruncate.out &&
+	test_must_fail grep + notruncate.out
+'
+
 # TODO: need to submit jobs as another user and test -A again
 test_expect_success 'flux-jobs -a and -A works' '
 	nall=$(state_count all) &&

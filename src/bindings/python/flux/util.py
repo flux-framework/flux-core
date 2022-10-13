@@ -402,11 +402,22 @@ class UtilFormatter(Formatter):
         return value
 
     def format_field(self, value, spec):
+
+        denote_truncation = False
+        if spec.endswith("+"):
+            denote_truncation = True
+            spec = spec[:-1]
+
         if spec.endswith("h"):
             basecases = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00")
             value = "-" if str(value) in basecases else str(value)
             spec = spec[:-1] + "s"
-        return super().format_field(value, spec)
+        retval = super().format_field(value, spec)
+
+        if denote_truncation and len(retval) < len(str(value)):
+            retval = retval[:-1] + "+"
+
+        return retval
 
 
 class OutputFormat:

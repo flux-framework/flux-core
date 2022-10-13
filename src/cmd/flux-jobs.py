@@ -32,7 +32,7 @@ class FluxJobsConfig(UtilConfig):
         "default": {
             "description": "Default flux-jobs format string",
             "format": (
-                "{id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10} "
+                "{id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10+} "
                 "{status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} "
                 "{contextual_time!F:>8h} {contextual_info}"
             ),
@@ -40,7 +40,7 @@ class FluxJobsConfig(UtilConfig):
         "long": {
             "description": "Extended flux-jobs format string",
             "format": (
-                "{id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10} "
+                "{id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10+} "
                 "{status:>9.9} {ntasks:>6} {nnodes:>6h} "
                 "{t_submit!d:%b%d %R::>12} {t_remaining!F:>12h} "
                 "{contextual_time!F:>8h} {contextual_info}"
@@ -49,7 +49,7 @@ class FluxJobsConfig(UtilConfig):
         "deps": {
             "description": "Show job urgency, priority, and dependencies",
             "format": (
-                "{id.f58:>12} ?:{queue:<8.8} {name:<10.10} {urgency:<3} "
+                "{id.f58:>12} ?:{queue:<8.8} {name:<10.10+} {urgency:<3} "
                 "{priority:<12} {state:<8.8} {dependencies}"
             ),
         },

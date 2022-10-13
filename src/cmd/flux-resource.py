@@ -462,7 +462,7 @@ def list_handler(args):
 
     # Only include properties list if properties exist in set:
     if resources.all.properties:
-        fmt += " {properties:<10.10}"
+        fmt += " {properties:<10.10+}"
     if args.verbose:
         fmt += " {nnodes:>6} {ncores:>8} {ngpus:>8} {rlist}"
     else:
