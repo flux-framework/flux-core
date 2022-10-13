@@ -498,6 +498,18 @@ test_expect_success 'flux-jobs --format={state},{state_single} works' '
 	test "$(cat stateI.out)" = "INACTIVE,I"
 '
 
+# grepping for specific unicode chars is hard, so we just grep to make
+# sure a unicode character was output.  Be sure to disable color too,
+# since there can be unicode in there.
+test_expect_success 'flux-jobs --format={state_emoji} works' '
+	$runpty flux jobs --filter=pending -c1 --color=never -no "{state_emoji}" > stateE_P.out &&
+	grep "\\u" stateE_P.out &&
+	$runpty flux jobs --filter=running -c1 --color=never -no "{state_emoji}" > stateE_R.out &&
+	grep "\\u" stateE_R.out &&
+	$runpty flux jobs --filter=inactive -c1 --color=never -no "{state_emoji}" > stateE_I.out &&
+	grep "\\u" stateE_I.out
+'
+
 test_expect_success 'flux-jobs --format={name} works' '
 	flux jobs --filter=pending,running -no "{name}" > jobnamePR.out &&
 	for i in `seq 1 $(state_count run sched)`; do
@@ -798,6 +810,24 @@ test_expect_success 'flux-jobs --format={result},{result:h},{result_abbrev},{res
 	test $count -eq $(state_count completed)
 '
 
+# grepping for specific unicode chars is hard, so we just grep to make
+# sure a unicode character was output.  Be sure to disable color too,
+# since there can be unicode in there.
+test_expect_success 'flux-jobs --format={result_emoji} works' '
+	$runpty flux jobs --filter=pending -c1 --color=never -no "{result_emoji}" > resultE_P.out &&
+	grep "\\u" -v resultE_P.out &&
+	$runpty flux jobs --filter=running -c1 --color=never -no "{result_emoji}" > resultE_R.out &&
+	grep "\\u" -v resultE_R.out &&
+	$runpty flux jobs --filter=completed -c1 --color=never -no "{result_emoji}" > resultE_CD.out &&
+	grep "\\u" resultE_CD.out &&
+	$runpty flux jobs --filter=failed -c1 --color=never -no "{result_emoji}" > resultE_F.out &&
+	grep "\\u" resultE_F.out &&
+	$runpty flux jobs --filter=timeout -c1 --color=never -no "{result_emoji}" > resultE_CA.out &&
+	grep "\\u" resultE_CA.out &&
+	$runpty flux jobs --filter=canceled -c1 --color=never -no "{result_emoji}" > resultE_TO.out &&
+	grep "\\u" resultE_TO.out
+'
+
 test_expect_success 'flux-jobs --format={status},{status_abbrev} works' '
 	flux jobs --filter=sched    -no "{status},{status_abbrev}" > statusS.out &&
 	flux jobs --filter=run      -no "{status},{status_abbrev}" > statusR.out &&
@@ -814,6 +844,24 @@ test_expect_success 'flux-jobs --format={status},{status_abbrev} works' '
 	test $count -eq $(state_count failed) &&
 	count=$(grep -c "COMPLETED,CD" statusI.out) &&
 	test $count -eq $(state_count completed)
+'
+
+# grepping for specific unicode chars is hard, so we just grep to make
+# sure a unicode character was output.  Be sure to disable color too,
+# since there can be unicode in there.
+test_expect_success 'flux-jobs --format={status_emoji} works' '
+	$runpty flux jobs --filter=pending -c1 --color=never -no "{status_emoji}" > statusE_P.out &&
+	grep "\\u" statusE_P.out &&
+	$runpty flux jobs --filter=running -c1 --color=never -no "{status_emoji}" > statusE_R.out &&
+	grep "\\u" statusE_R.out &&
+	$runpty flux jobs --filter=completed -c1 --color=never -no "{status_emoji}" > statusE_CD.out &&
+	grep "\\u" statusE_CD.out &&
+	$runpty flux jobs --filter=failed -c1 --color=never -no "{status_emoji}" > statusE_F.out &&
+	grep "\\u" statusE_F.out &&
+	$runpty flux jobs --filter=timeout -c1 --color=never -no "{status_emoji}" > statusE_CA.out &&
+	grep "\\u" statusE_CA.out &&
+	$runpty flux jobs --filter=canceled -c1 --color=never -no "{status_emoji}" > statusE_TO.out &&
+	grep "\\u" statusE_TO.out
 '
 
 test_expect_success 'flux-jobs --format={waitstatus},{returncode}' '
@@ -974,6 +1022,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	priority==PRI
 	state==STATE
 	state_single==S
+	state_emoji==STATE
 	name==NAME
 	queue==QUEUE
 	ntasks==NTASKS
@@ -990,6 +1039,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	exception.note==EXCEPTION-NOTE
 	result==RESULT
 	result_abbrev==RS
+	result_emoji==RESULT
 	t_submit==T_SUBMIT
 	t_depend==T_DEPEND
 	t_run==T_RUN
@@ -1009,6 +1059,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	t_run!F==T_RUN
 	status==STATUS
 	status_abbrev==ST
+	status_emoji==STATUS
 	annotations==ANNOTATIONS
 	annotations.sched==SCHED
 	annotations.sched.t_estimate==T_ESTIMATE
