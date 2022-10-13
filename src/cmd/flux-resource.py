@@ -13,7 +13,6 @@ import json
 import logging
 import os.path
 import sys
-from datetime import datetime
 
 import flux
 from flux.future import WaitAllFuture
@@ -82,7 +81,7 @@ class StatusLine:
         else:
             self.reason = ""
         if timestamp:
-            self.timestamp = datetime.fromtimestamp(timestamp).strftime("%FT%T")
+            self.timestamp = timestamp
         else:
             self.timestamp = ""
 
@@ -186,7 +185,7 @@ def drain_list():
             )
             lines.append(line)
 
-    fmt = "{timestamp:<20} {state:<8.8} {ranks:<8.8} {reason:<30} {nodelist}"
+    fmt = "{timestamp!d:%FT%T::<20} {state:<8.8} {ranks:<8.8} {reason:<30} {nodelist}"
     formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
     print(formatter.header())
     for line in lines:
