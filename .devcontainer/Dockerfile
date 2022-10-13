@@ -6,9 +6,20 @@ LABEL maintainer="Vanessasaurus <@vsoch>"
 RUN apt-get update
 COPY scripts/requirements-dev.txt /requirements.txt
 
-# For easier Python development. 
+# For easier Python development.
 RUN python3 -m pip install IPython && \
     python3 -m pip install -r /requirements.txt
 
 # Assuming installing to /usr/local
 ENV LD_LIBRARY_PATH=/usr/local/lib
+
+# Assuming installing to /usr/local
+ENV LD_LIBRARY_PATH=/usr/local/lib
+
+# extra interactive utilities and compilation_database generation
+RUN apt-get update \
+ && apt-get -qq install -y --no-install-recommends \
+    bear \
+    ripgrep \
+    fd-find \
+    gdb
