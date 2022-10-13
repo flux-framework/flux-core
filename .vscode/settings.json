@@ -1,0 +1,34 @@
+{
+    "python.defaultInterpreterPath": "python3",
+    "python.autoComplete.extraPaths": [
+        "./build/src/bindings/python",
+        "./src/bindings/python",
+        "./t/python/tap",
+    ],
+    "python.analysis.extraPaths": [
+        "./build/src/bindings/python",
+        "./src/bindings/python",
+        "./t/python/tap",
+    ],
+    "Lua.runtime.path": [
+        "?.lua",
+        "?/init.lua",
+        "${workspaceFolder}/src/bindings/lua/?.lua",
+        "${workspaceFolder}/src/bindings/lua/?/init.lua"
+    ],
+    "files.associations": {
+        "**/lua/**/*.t": "lua",
+        "*.t": "shellscript"
+    },
+    "C_Cpp.autoAddFileAssociations": false,
+    "Lua.completion.autoRequire": true,
+    "Lua.diagnostics.globals": [
+        "shell",
+        "plugin",
+        "task"
+    ],
+    "python.formatting.provider": "black",
+    "python.linting.flake8Enabled": true,
+    "python.linting.enabled": true,
+    "python.linting.mypyEnabled": true,
+}

@@ -1,0 +1,8 @@
+{
+    "recommendations": [
+        "ms-vscode.cpptools",
+        "github.vscode-pull-request-github",
+        "sumneko.lua",
+        "ms-python.python"
+    ]
+}
