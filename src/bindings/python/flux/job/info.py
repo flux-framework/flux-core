@@ -12,6 +12,7 @@ import json
 import os
 import pwd
 import string
+import sys
 import time
 from collections import namedtuple
 
@@ -28,11 +29,74 @@ def statetostr(stateid, fmt="L"):
     return raw.flux_job_statetostr(stateid, fmt).decode("utf-8")
 
 
+def statetoemoji(stateid):
+    statestr = raw.flux_job_statetostr(stateid, "S").decode("utf-8")
+    if statestr == "N":
+        # wrapped gift
+        emoji = "\U0001F381"
+    elif statestr == "D":
+        # stop sign
+        emoji = "\U0001F6D1"
+    elif statestr == "P":
+        # vertical traffic light
+        emoji = "\U0001F6A6"
+    elif statestr == "S":
+        # calendar
+        emoji = "\U0001F4C5"
+    elif statestr == "R":
+        # person running
+        emoji = "\U0001F3C3"
+    elif statestr == "C":
+        # wastebasket
+        emoji = "\U0001F5D1"
+    elif statestr == "I":
+        # skull
+        emoji = "\U0001F480"
+    # can we output unicode to stdout? if not, return the normal short
+    # string
+    try:
+        emoji.encode(sys.stdout.encoding)
+    except UnicodeEncodeError:
+        return statestr
+    return emoji
+
+
 def resulttostr(resultid, fmt="L"):
     # if result not returned, just return empty string back
     if resultid == "":
         return ""
     return raw.flux_job_resulttostr(resultid, fmt).decode("utf-8")
+
+
+def resulttoemoji(resultid):
+    if resultid != "":
+        resultstr = raw.flux_job_resulttostr(resultid, "S").decode("utf-8")
+        if resultstr == "CD":
+            # grinning face
+            emoji = "\U0001F600"
+            alt = ":-)"
+        elif resultstr == "F":
+            # pile of poo
+            emoji = "\U0001F4A9"
+            alt = ":'-("
+        elif resultstr == "CA":
+            # collision
+            emoji = "\U0001F4A5"
+            alt = "%-|"
+        elif resultstr == "TO":
+            # hourglass done
+            emoji = "\u231B"
+            alt = "(-_-)"
+    else:
+        # ideographic space
+        emoji = "\u3000"
+        alt = ""
+    # can we output unicode to stdout? if not, return the ascii
+    try:
+        emoji.encode(sys.stdout.encoding)
+    except UnicodeEncodeError:
+        return alt
+    return emoji
 
 
 # Status is the job state when pending/running (i.e. not inactive)
@@ -45,6 +109,16 @@ def statustostr(stateid, resultid, fmt="L"):
     else:  # flux.constants.FLUX_JOB_STATE_INACTIVE
         statusstr = resulttostr(resultid, fmt)
     return statusstr
+
+
+def statustoemoji(stateid, resultid):
+    if (stateid & flux.constants.FLUX_JOB_STATE_PENDING) or (
+        stateid & flux.constants.FLUX_JOB_STATE_RUNNING
+    ):
+        emoji = statetoemoji(stateid)
+    else:  # flux.constants.FLUX_JOB_STATE_INACTIVE
+        emoji = resulttoemoji(resultid)
+    return emoji
 
 
 def get_username(userid):
@@ -306,12 +380,20 @@ class JobInfo:
         return statetostr(self.state_id, fmt="S")
 
     @memoized_property
+    def state_emoji(self):
+        return statetoemoji(self.state_id)
+
+    @memoized_property
     def result(self):
         return resulttostr(self.result_id)
 
     @memoized_property
     def result_abbrev(self):
         return resulttostr(self.result_id, "S")
+
+    @memoized_property
+    def result_emoji(self):
+        return resulttoemoji(self.result_id)
 
     @memoized_property
     def username(self):
@@ -328,6 +410,10 @@ class JobInfo:
     @memoized_property
     def status_abbrev(self):
         return statustostr(self.state_id, self.result_id, fmt="S")
+
+    @memoized_property
+    def status_emoji(self):
+        return statustoemoji(self.state_id, self.result_id)
 
     @memoized_property
     def returncode(self):
@@ -404,6 +490,7 @@ def job_fields_to_attrs(fields):
         "priority": ("priority",),
         "state": ("state",),
         "state_single": ("state",),
+        "state_emoji": ("state",),
         "name": ("name",),
         "queue": ("queue",),
         "ntasks": ("ntasks",),
@@ -421,6 +508,7 @@ def job_fields_to_attrs(fields):
         "exception.note": ("exception_note",),
         "result": ("result",),
         "result_abbrev": ("result",),
+        "result_emoji": ("result",),
         "t_submit": ("t_submit",),
         "t_depend": ("t_depend",),
         "t_run": ("t_run",),
@@ -429,6 +517,7 @@ def job_fields_to_attrs(fields):
         "runtime": ("t_run", "t_cleanup"),
         "status": ("state", "result"),
         "status_abbrev": ("state", "result"),
+        "status_emoji": ("state", "result"),
         "expiration": ("expiration", "state", "result"),
         "t_remaining": ("expiration", "state", "result"),
         "annotations": ("annotations",),
@@ -483,6 +572,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "priority": "PRI",
         "state": "STATE",
         "state_single": "S",
+        "state_emoji": "STATE",
         "name": "NAME",
         "queue": "QUEUE",
         "ntasks": "NTASKS",
@@ -496,6 +586,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "success": "SUCCESS",
         "result": "RESULT",
         "result_abbrev": "RS",
+        "result_emoji": "RESULT",
         "t_submit": "T_SUBMIT",
         "t_depend": "T_DEPEND",
         "t_run": "T_RUN",
@@ -504,6 +595,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "runtime": "RUNTIME",
         "status": "STATUS",
         "status_abbrev": "ST",
+        "status_emoji": "STATUS",
         "waitstatus": "WSTATUS",
         "returncode": "RC",
         "exception.occurred": "EXCEPTION-OCCURRED",
