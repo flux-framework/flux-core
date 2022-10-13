@@ -40,7 +40,7 @@ def drain(args):
     not specified, then list currently drained targets
     """
     if args.targets is None:
-        drain_list()
+        drain_list(args)
         return
     payload = {
         "targets": args.targets,
@@ -151,45 +151,6 @@ class ListStatusRPC(WaitAllFuture):
             except EnvironmentError:
                 self.allocated_ranks = IDset()
         return self.allocated_ranks
-
-
-def drain_list():
-    headings = {
-        "timestamp": "TIMESTAMP",
-        "ranks": "RANK",
-        "reason": "REASON",
-        "nodelist": "NODELIST",
-        "state": "STATE",
-    }
-    result = ListStatusRPC(flux.Flux())
-
-    resp = result.get_status()
-    allocated = result.get_allocated_ranks()
-
-    rset = ResourceSet(resp["R"])
-    nodelist = rset.nodelist
-
-    lines = []
-    for drain_ranks, entry in resp["drain"].items():
-        for ranks, state in split_draining(IDset(drain_ranks), allocated):
-            # Do not report empty or "drain" rank sets
-            # Only draining & drained are reported in this view
-            if not ranks or state == "drain":
-                continue
-            line = StatusLine(
-                state,
-                ranks,
-                Hostlist([nodelist[i] for i in ranks]),
-                entry["reason"],
-                entry["timestamp"],
-            )
-            lines.append(line)
-
-    fmt = "{timestamp!d:%FT%T::<20} {state:<8.8} {ranks:<8.8} {reason:<30} {nodelist}"
-    formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
-    print(formatter.header())
-    for line in lines:
-        print(formatter.format(line))
 
 
 class ResourceStatus:
@@ -385,6 +346,18 @@ def status(args):
         if line.nnodes == 0 and skip_empty:
             continue
         print(formatter.format(line))
+
+
+def drain_list(args):
+    args.verbose = False
+    args.from_stdin = False
+    args.no_header = False
+    args.format = (
+        "{timestamp!d:%FT%T::<20} {state:<8.8} {ranks:<8.8} {reason:<30} {nodelist}"
+    )
+    args.states = "drained,draining"
+    args.skip_empty = True
+    status(args)
 
 
 def resources_uniq_lines(resources, states, formatter):
