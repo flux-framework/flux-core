@@ -95,29 +95,34 @@ overflow:
     return -1;
 }
 
-/* Add a host entry to hosts for the hostname in 's', cloned from the
- * original host entry object.
+static int set_string (json_t *o, const char *key, const char *s)
+{
+    json_t *val;
+
+    if (!(val = json_string (s))
+        || json_object_set_new (o, key, val) < 0) {
+        json_decref (val);
+        return -1;
+    }
+    return 0;
+}
+
+/* Make a copy of 'entry', set host key to the specificed value, and append
+ * to 'hosts' array.
  */
-static int boot_config_append_host (json_t *hosts, const char *s, json_t *entry)
+static int boot_config_append_host (json_t *hosts,
+                                    const char *hostname,
+                                    json_t *entry)
 {
     json_t *nentry;
-    json_t *o;
 
-    if (!(nentry = json_deep_copy (entry)))
-        goto nomem;
-    if (!(o = json_string (s)))
-        goto nomem;
-    if (json_object_set_new (nentry, "host", o) < 0) {
-        json_decref (o);
-        goto nomem;
+    if (!(nentry = json_deep_copy (entry))
+        || set_string (nentry, "host", hostname) < 0
+        || json_array_append_new (hosts, nentry) < 0) {
+        json_decref (nentry);
+        return -1;
     }
-    if (json_array_append_new (hosts, nentry) < 0)
-        goto nomem;
     return 0;
-nomem:
-    json_decref (nentry);
-    errno = ENOMEM;
-    return -1;
 }
 
 /* Build a new hosts array, expanding any RFC29 hostlists, so that
