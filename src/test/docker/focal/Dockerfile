@@ -113,7 +113,7 @@ RUN mkdir caliper \
  && wget -O - https://github.com/LLNL/Caliper/archive/v1.7.0.tar.gz | tar xvz --strip-components 1 \
  && mkdir build \
  && cd build \
- && CC=gcc CXX=g++ cmake .. -DCMAKE_INSTALL_PREFIX=/usr \
+ && CC=gcc CXX=g++ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DWITH_GOTCHA=Off \
  && make -j 4 \
  && make install \
  && cd ../.. \
