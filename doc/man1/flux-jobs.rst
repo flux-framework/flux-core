@@ -74,23 +74,27 @@ OPTIONS
    Defaults to *auto*.
 
 **--stats**
-   Output a summary of global job statistics before the header.
-   May be useful in conjunction with utilities like
-   :linux:man1:`watch`, e.g.::
+   Output a summary of job statistics before the header.  By default
+   shows global statistics.  If ``--queue`` is specified, shows
+   statistics for the specified queue.  May be useful in conjunction
+   with utilities like :linux:man1:`watch`, e.g.::
 
       $ watch -n 2 flux jobs --stats -f running -c 25
 
-   will display a summary of global statistics along with the top 25
+   will display a summary of statistics along with the top 25
    running jobs, updated every 2 seconds.
 
 **--stats-only**
-   Output a summary of global job statistics and exit.
-   ``flux jobs`` will exit with non-zero exit status with ``--stats-only``
-   if there are no active jobs. This allows the following loop to work::
+   Output a summary of job statistics and exit.  By default shows
+   global statistics.  If ``--queue`` is specified, shows statistics
+   for the specified queue.  ``flux jobs`` will exit with non-zero
+   exit status with ``--stats-only`` if there are no active jobs. This
+   allows the following loop to work::
 
        $ while flux jobs --stats-only; do sleep 2; done
 
-   All other options are ignored when ``--stats-only`` is used.
+   All options other than ``--queue`` are ignored when
+   ``--stats-only`` is used.
 
 **-R, --recursive**
    List jobs recursively. Each child job which is also an instance of
