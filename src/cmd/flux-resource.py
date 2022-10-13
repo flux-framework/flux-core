@@ -77,13 +77,14 @@ class StatusLine:
         self.state = state
         self.hostlist = hosts
         self.rank_idset = ranks
-        if reason is None:
-            reason = ""
-        self.reason = reason
+        if reason:
+            self.reason = reason
+        else:
+            self.reason = ""
         if timestamp:
             self.timestamp = datetime.fromtimestamp(timestamp).strftime("%FT%T")
         else:
-            self.timestamp = None
+            self.timestamp = ""
 
     def update(self, ranks, hosts):
         self.rank_idset.add(ranks)
@@ -223,13 +224,13 @@ class ResourceStatus:
             self.idsets[state] = IDset()
         self.idsets[state].add(idset)
 
-    def find(self, state, reason=""):
+    def find(self, state, reason="", timestamp=""):
         try:
-            return self.bystate[f"{state}:{reason}"]
+            return self.bystate[f"{state}:{reason}:{timestamp}"]
         except KeyError:
             return None
 
-    def append(self, state, ranks="", reason=None):
+    def append(self, state, ranks="", reason=None, timestamp=None):
         #
         # If an existing status line has matching state and reason
         #  update instead of appending a new output line:
@@ -240,8 +241,8 @@ class ResourceStatus:
         if rstatus:
             rstatus.update(ranks, hosts)
         else:
-            line = StatusLine(state, ranks, hosts, reason)
-            self.bystate[f"{state}:{reason}"] = line
+            line = StatusLine(state, ranks, hosts, reason, timestamp)
+            self.bystate[f"{state}:{reason}:{timestamp}"] = line
             self.statuslines.append(line)
 
         self._idset_update(state, ranks)
@@ -277,11 +278,14 @@ class ResourceStatus:
         for drain_ranks, entry in resp["drain"].items():
             for ranks, state in split_draining(IDset(drain_ranks), allocated):
                 #  Only include reason if it will be displayed in format
-                reason = ""
-                if ranks and "reason" in fmt:
-                    reason = entry["reason"]
+                reason, timestamp = "", ""
+                if ranks:
+                    if "reason" in fmt:
+                        reason = entry["reason"]
+                    if "timestamp" in fmt:
+                        timestamp = entry["timestamp"]
 
-                rstat.append(state, IDset(ranks), reason)
+                rstat.append(state, IDset(ranks), reason, timestamp)
                 drained = drained + 1
 
         #  If no drained nodes, append an empty StatusLine
@@ -333,12 +337,14 @@ def status(args):
         "drained",
     ]
     default_states = "avail,offline,exclude,draining,drained"
+
     headings = {
         "state": "STATUS",
         "nnodes": "NNODES",
         "ranks": "RANKS",
         "nodelist": "NODELIST",
         "reason": "REASON",
+        "timestamp": "TIME",
     }
 
     #  Emit list of valid states or formats if requested
