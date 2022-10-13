@@ -375,11 +375,14 @@ def status(args):
     formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
     if not args.no_header:
         print(formatter.header())
+
+    #  Skip empty lines unless --verbose or --states or ---skip-empty
+    skip_empty = args.skip_empty or (not args.verbose and not args.states)
+
     for line in sorted(rstat, key=lambda x: valid_states.index(x.state)):
         if line.state not in states:
             continue
-        #  Skip empty lines unless --verbose or --states
-        if line.nnodes == 0 and args.states is None and not args.verbose:
+        if line.nnodes == 0 and skip_empty:
             continue
         print(formatter.format(line))
 
@@ -563,6 +566,11 @@ def main():
     )
     status_parser.add_argument(
         "--from-stdin", action="store_true", help=argparse.SUPPRESS
+    )
+    status_parser.add_argument(
+        "--skip-empty",
+        action="store_true",
+        help="Skip empty lines of output even with --states/--verbose",
     )
     status_parser.set_defaults(func=status)
 
