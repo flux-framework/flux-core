@@ -333,8 +333,6 @@ def fsd(secs):
 class UtilFormatter(Formatter):
     # pylint: disable=too-many-branches
 
-    headings: Mapping[str, str] = {}
-
     def convert_field(self, value, conv):
         """
         Flux utility-specific field conversions. Avoids the need
@@ -427,6 +425,7 @@ class OutputFormat:
     """
 
     formatter = UtilFormatter
+    headings: Mapping[str, str] = {}
 
     class HeaderFormatter(UtilFormatter):
         """Custom formatter for flux utilities header row.
