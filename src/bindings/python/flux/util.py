@@ -609,6 +609,43 @@ class OutputFormat:
         #  Return new format string created from pruned format_list
         return "".join(self._fmt_tuple(*x) for x in format_list)
 
+    def print_items(self, items, no_header=False, pre=None, post=None):
+        """
+        Handle printing a list of items with the current format.
+
+        First pre-process format using ``items`` to remove any empty
+        fields, if requested. (The pre-processing step could be extended
+        in the future.)
+
+        Then, generate a header unless no_header is True.
+
+        Finally output a formatted line for each provided item.
+
+        Args:
+            items (iterable): list of items to format
+            no_header (boolean): disable header row (default: False)
+            pre (callable): Function to call before printing each item
+            post (callable): Function to call after printing each item
+        """
+        #  Preprocess original format by processing with filter_empty():
+        newfmt = self.filter_empty(items)
+        #  Get the current class for creating a new formatter instance:
+        cls = self.__class__
+        #  Create new instance of the current class from filtered format:
+        formatter = cls(newfmt, headings=self.headings, prepend=self.prepend)
+        if not no_header:
+            print(formatter.header())
+        for item in items:
+            if callable(pre):
+                pre(item)
+            line = formatter.format(item)
+            try:
+                print(line)
+            except UnicodeEncodeError:
+                print(line.encode("utf-8", errors="surrogateescape").decode())
+            if callable(post):
+                post(item)
+
 
 class Tree:
     """Very simple pstree-like display for the console
