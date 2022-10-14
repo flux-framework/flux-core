@@ -1,6 +1,6 @@
 black==20.08.b1
 flake8>=4.0.1
 isort>=5.9.3
-mypy==0.770
+mypy==0.971
 pre-commit>=2.9.2
 types-PyYAML
