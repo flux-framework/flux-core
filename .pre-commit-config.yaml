@@ -1,7 +1,5 @@
 files: '^(src/bindings/python/flux|src/cmd|t/.*\\.py)'
 exclude: "^(src/bindings/python/_flux/|src/bindings/python/flux/utils/)"
-default_language_version:
-    python: python3.6
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.0.1
