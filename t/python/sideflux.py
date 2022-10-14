@@ -194,7 +194,7 @@ class SimpleAsyncRunner(object):
         self.side = side
 
     def get(self, timeout=None):
-        """ Get the result, raises AsyncTimeout on timeout failure """
+        """Get the result, raises AsyncTimeout on timeout failure"""
         if not self.done:
             try:
                 self.res = self.q.get(True, timeout)
