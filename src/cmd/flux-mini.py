@@ -173,7 +173,7 @@ def get_filtered_environment(rules, environ=None):
                 lookup = ChainMap(environ, os.environ)
                 try:
                     environ[var] = Template(rest[0]).substitute(lookup)
-                except ValueError as ex:
+                except ValueError:
                     LOGGER.error("--env: Unable to substitute %s", rule)
                     raise
                 except KeyError as ex:
@@ -373,7 +373,7 @@ class Xcmd:
                     newval = [x.format(*inputs, **kwargs) for x in val]
                 else:
                     newval = val
-            except IndexError as exc:
+            except IndexError:
                 LOGGER.error(
                     "Invalid replacement index in %s%s'",
                     self.mutable_args[attr],
@@ -1810,7 +1810,7 @@ class AllocCmd(MiniCmd):
                 raise OSError(f"Unable to connect to {jobid}: {exc}")
             try:
                 child_handle.rpc("state-machine.wait").get()
-            except OSError as exc:
+            except OSError:
                 raise OSError(f"{jobid}: instance startup failed")
 
             if args.verbose:

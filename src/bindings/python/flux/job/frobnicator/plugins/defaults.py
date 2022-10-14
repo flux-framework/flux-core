@@ -79,7 +79,7 @@ class DefaultsConfig:
                 for attr in queue_defaults:
                     self.setattr_default(jobspec, attr, queue_defaults[attr])
         elif self.queues:
-            raise ValueError(f"no queue specified")
+            raise ValueError("no queue specified")
 
 
 class Frobnicator(FrobnicatorPlugin):

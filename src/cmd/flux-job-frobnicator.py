@@ -105,7 +105,7 @@ def main():
 
         # Check for valid input
         for key in ["jobspec", "userid", "urgency", "flags"]:
-            if not key in info:
+            if key not in info:
                 LOGGER.critical("missing key %s in input", key)
                 sys.exit(1)
         try:

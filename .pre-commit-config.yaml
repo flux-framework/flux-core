@@ -28,11 +28,11 @@ repos:
 #        types: [python]
 #        entry: isort
 
-#      - id: flake8
-#        name: flake8
-#        language: python
-#        types: [python]
-#        entry: flake8
+      - id: flake8
+        name: flake8
+        language: python
+        types: [python]
+        entry: flake8
 
       - id: mypy
         name: mypy

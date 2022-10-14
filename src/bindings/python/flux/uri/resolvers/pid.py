@@ -79,7 +79,7 @@ class URIResolver(URIResolverPlugin):
     #  Determine which broker_get_child method to use:
     if (
         _proc_has_task_children()
-        and not "FLUX_FORCE_BROKER_CHILD_FALLBACK" in os.environ
+        and "FLUX_FORCE_BROKER_CHILD_FALLBACK" not in os.environ
     ):
         get_broker_child = staticmethod(_get_broker_child)
     else:
