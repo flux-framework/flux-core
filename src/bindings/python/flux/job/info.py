@@ -638,7 +638,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "instance.resources.free.nnodes": "FREE",
     }
 
-    def __init__(self, fmt):
+    def __init__(self, fmt, headings=None, prepend=None):
         """
         Parse the input format fmt with string.Formatter.
         Save off the fields and list of format tokens for later use,
