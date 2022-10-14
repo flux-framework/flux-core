@@ -1,0 +1,41 @@
+files: "^(src/bindings/python/flux|src/bindings/python_flux)"
+exclude: "^(src/bindings/python/_flux/|src/bindings/python/flux/utils/)"
+default_language_version:
+    python: python3.6
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.0.1
+    hooks:
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-docstring-first
+      - id: check-shebang-scripts-are-executable
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+
+  - repo: local
+    hooks:
+      - id: black
+        name: black
+        language: python
+        types: [python]
+        entry: black
+
+#      - id: isort
+#        name: isort
+#        language: python
+#        types: [python]
+#        entry: isort
+
+#      - id: flake8
+#        name: flake8
+#        language: python
+#        types: [python]
+#        entry: flake8
+
+      - id: mypy
+        name: mypy
+        language: python
+        types: [python]
+        entry: ./scripts/run_mypy.sh

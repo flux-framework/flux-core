@@ -301,7 +301,7 @@ def inner_walk(kvsdir, curr_dir, topdown=False):
 
 
 def walk(directory, topdown=False, flux_handle=None):
-    """ Walk a directory in the style of os.walk() """
+    """Walk a directory in the style of os.walk()"""
     if not isinstance(directory, KVSDir):
         if flux_handle is None:
             raise ValueError("If directory is a key, flux_handle must be specified")

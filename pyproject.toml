@@ -1,0 +1,54 @@
+[tool.black]
+# line-length = 100
+target-version = ['py36']
+exclude = ["^env/", "^src/bindings/python/flux/utils/*/*.py", "^src/bindings/python/flux/utils/*/*/*.py"]
+
+[tool.isort]
+profile = "black"
+# line_length = 100
+exclude = ["^env/"]
+
+[tool.mypy]
+python_version = 3.6
+files = ["src/cmd/**/*.py", "src/bindings/python/flux", "t/python/*.py"]
+mypy_path = ["src/bindings/python", "t/python/tap", "t/python"]
+allow_redefinition = true
+exclude = ["src/bindings/python/flux/utils/parsedatetime", "env/", "src/bindings/python/flux/utils/tomli"]
+
+# Having the cache makes spurious errors about looking up handle
+# It's slightly slower, but more correct to not have it
+cache_dir="/dev/null"
+namespace_packages = true
+ignore_errors = true
+ignore_missing_imports = true
+
+  [[tool.mypy.overrides]]
+  module = "subflux"
+  ignore_errors = true
+  ignore_missing_imports = true
+  follow_imports = 'skip'
+
+  [[tool.mypy.overrides]]
+  module = [
+    "_flux._core",
+    "_flux._security",
+    "_flux._hostlist",
+    "_flux._idset",
+    "_flux._rlist",
+    "_flux.cffi",
+    "setuptools",
+    "jsonschema",
+    "flux.utils",
+    "flux.utils.parsedatetime",
+    "flux.utils.tomli",
+    "tomllib",
+    "pycotap",
+
+    # These are temporary while we find a way to generate stubs for flux.constants
+    "flux.job.list",
+    "flux.core.handle",
+    "python.t1000-service-add-remove"
+  ]
+  ignore_errors = true
+  ignore_missing_imports = true
+  follow_imports = 'skip'

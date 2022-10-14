@@ -8,7 +8,7 @@ EXTRA_DIST = \
 	NOTICE.LLNS \
 	README.md \
 	NEWS.md \
-	scripts/.pylintrc
+	scripts/requirements-dev.txt
 
 ACLOCAL_AMFLAGS = -I config
 
@@ -44,9 +44,6 @@ CODE_COVERAGE_LCOV_OPTIONS =
 # file's SUBDIRS, ensures that "all" is built before any of the
 # recursive checks.
 check-local: all
-if ENABLE_PYLINT
-	$(top_srcdir)/scripts/pylint
-endif
 
 check-prep: all
 	cd src && $(MAKE) check
