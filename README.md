@@ -189,26 +189,33 @@ Usage: flux [OPTIONS] COMMAND ARGS
   -V, --version          Display command and component versions
   -p, --parent           Set environment of parent instead of current instance
 
+For general Flux documentation, please visit
+    https://flux-framework.readthedocs.io
+
 Common commands from flux-core:
-   broker             Invoke Flux message broker daemon
-   content            Access instance content storage
+   config             Manage/query Flux configuration
    cron               Schedule tasks on timers and events
    dmesg              manipulate broker log ring buffer
+   dump               Write KVS snapshot to portable archive
    env                Print the flux environment or execute a command inside it
-   event              Send and receive Flux events
    exec               Execute processes across flux ranks
-   get,set,lsattr     Access, modify, and list broker attributes
-   hwloc              Control/query resource-hwloc service
+   {get,set,ls}attr   Access, modify, and list broker attributes
    jobs               list jobs submitted to Flux
-   keygen             generate keys for Flux security
+   pstree             display job hierarchies
+   uptime             Tell how long Flux has been up and running
+   shutdown           Shut down a Flux instance
+   resource           list/manipulate Flux resource status
+   restore            Read KVS snapshot from portable archive
    kvs                Flux key-value store utility
-   logger             create a Flux log entry
    mini               Minimal Job Submission Tool
    job                Job Housekeeping Tool
-   module             manage Flux extension modules
+   overlay            Show flux overlay network status
    ping               measure round-trip latency to Flux services
    proxy              Create proxy environment for Flux instance
+   queue              Manipulate flux queues
    start              bootstrap a local Flux instance
+   startlog           Show Flux instance start and stop times
+   top                Display Running Flux Jobs
    version            Display flux version information
 ```
 
