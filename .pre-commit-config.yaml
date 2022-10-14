@@ -37,3 +37,8 @@ repos:
         language: python
         types: [python]
         entry: ./scripts/run_mypy.sh
+  - repo: https://github.com/netromdk/vermin
+    rev: v1.4.2
+    hooks:
+      - id: vermin
+        args: ['-t=3.6-', '--violations']
