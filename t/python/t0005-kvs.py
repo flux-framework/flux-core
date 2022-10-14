@@ -50,7 +50,7 @@ class TestKVS(unittest.TestCase):
         self.set_and_check_context("string", "stuff")
 
     def test_set_unicode(self):
-        self.set_and_check_context(u"unicode", u"\u32db \u263a \u32e1")
+        self.set_and_check_context("unicode", "\u32db \u263a \u32e1")
 
     def test_set_list(self):
         self.set_and_check_context("list", [1, 2, 3, 4])

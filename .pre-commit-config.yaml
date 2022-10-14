@@ -1,4 +1,4 @@
-files: "^(src/bindings/python/flux|src/bindings/python_flux)"
+files: '^(src/bindings/python/flux|src/cmd|t/.*\\.py)'
 exclude: "^(src/bindings/python/_flux/|src/bindings/python/flux/utils/)"
 default_language_version:
     python: python3.6

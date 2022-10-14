@@ -39,7 +39,7 @@ class TestEvent(unittest.TestCase):
 
     def test_full_event(self):
         """Subscribe send receive and unpack event"""
-        event_names = [b"testevent.3", u"\u32db \u263a \u32e1"]
+        event_names = [b"testevent.3", "\u32db \u263a \u32e1"]
         for event_name in event_names:
             self.assertGreaterEqual(self.f.event_subscribe(event_name), 0)
             self.assertGreaterEqual(self.f.event_send(event_name, {"test": "yay!"}), 0)

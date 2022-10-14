@@ -34,4 +34,3 @@ cat <<EOF
     { NULL, NULL },
 };
 EOF
-

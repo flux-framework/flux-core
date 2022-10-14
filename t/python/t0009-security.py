@@ -41,7 +41,7 @@ allowed-types = [ "none" ]
             self.context = SecurityContext(tmpfile.name)
 
     def test_00_sign_none(self):
-        unsigned_str = u"hello world"
+        unsigned_str = "hello world"
         signed_str = self.context.sign_wrap(unsigned_str, mech_type="none")
         unwrapped_payload, wrapping_user = self.context.sign_unwrap(signed_str)
         unwrapped_str = unwrapped_payload[:].decode("utf-8")

@@ -34,11 +34,11 @@ class TestBarrier(unittest.TestCase):
 
     def test_single(self):
         self.f.barrier("testbarrier1", 1)
-        self.f.barrier(u"testbarrier1", 1)
+        self.f.barrier("testbarrier1", 1)
 
     def test_eight(self):
         p = mp.Pool(8)
-        for topic in [b"testbarrier2", u"\xa3", u"\u32db \u263a \u32e1"]:
+        for topic in [b"testbarrier2", "\xa3", "\u32db \u263a \u32e1"]:
             for i in range(1, 9):
                 reslist = []
                 for j in range(0, i):
