@@ -459,16 +459,15 @@ def get_jobs_recursive(job, args, fields):
 def print_jobs(jobs, args, formatter, path="", level=0):
     children = []
 
-    for job in jobs:
-        color_set = color_setup(args, job)
-        line = formatter.format(job)
-        try:
-            print(line)
-        except UnicodeEncodeError:
-            print(line.encode("utf-8", errors="surrogateescape").decode())
-        color_reset(color_set)
+    def pre(job):
+        job.color_set = color_setup(args, job)
+
+    def post(job):
+        color_reset(job.color_set)
         if args.recursive and is_user_instance(job, args):
             children.append(job)
+
+    formatter.print_items(jobs, no_header=True, pre=pre, post=post)
 
     if not args.recursive or args.level == level:
         return

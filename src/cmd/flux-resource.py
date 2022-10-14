@@ -334,18 +334,19 @@ def status(args):
     rstat = ResourceStatus.from_status_response(resp, fmt, allocated)
 
     formatter = flux.util.OutputFormat(fmt, headings=headings)
-    if not args.no_header:
-        print(formatter.header())
 
     #  Skip empty lines unless --verbose or --states or ---skip-empty
     skip_empty = args.skip_empty or (not args.verbose and not args.states)
 
+    lines = []
     for line in sorted(rstat, key=lambda x: valid_states.index(x.state)):
         if line.state not in states:
             continue
         if line.nnodes == 0 and skip_empty:
             continue
-        print(formatter.format(line))
+        lines.append(line)
+
+    formatter.print_items(lines, no_header=args.no_header)
 
 
 def drain_list(args):
@@ -455,11 +456,7 @@ def list_handler(args):
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
     lines = resources_uniq_lines(resources, states, formatter)
-
-    if not args.no_header:
-        print(formatter.header())
-    for _, line in lines.items():
-        print(formatter.format(line))
+    formatter.print_items(lines.values(), no_header=args.no_header)
 
 
 def info(args):
