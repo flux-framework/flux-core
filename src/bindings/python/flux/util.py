@@ -442,7 +442,7 @@ class OutputFormat:
                 return kwargs[field_name], None
             return super().get_field(field_name, args, kwargs)
 
-    def __init__(self, valid_headings, fmt, prepend=None):
+    def __init__(self, fmt, headings=None, prepend="0."):
         """
         Parse the input format fmt with string.Formatter.
         Save off the fields and list of format tokens for later use,
@@ -451,7 +451,10 @@ class OutputFormat:
         Throws an exception if any format fields do not match the allowed
         list of headings.
         """
-        self.headings = valid_headings
+        if headings is not None:
+            self.headings = headings
+        if prepend is not None:
+            self.prepend = prepend
         self.fmt = fmt
         self.fmt_orig = fmt
         #  Parse format into list of (string, field, spec, conv) tuples,
@@ -472,8 +475,8 @@ class OutputFormat:
                 raise ValueError("Unknown format field: " + field)
 
         #  Prepend arbitrary string to format fields if requested
-        if prepend:
-            self.fmt = self.get_format_prepended(prepend)
+        if self.prepend:
+            self.fmt = self.get_format_prepended(self.prepend)
 
     @property
     def fields(self):

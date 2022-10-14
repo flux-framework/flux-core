@@ -333,7 +333,7 @@ def status(args):
 
     rstat = ResourceStatus.from_status_response(resp, fmt, allocated)
 
-    formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
+    formatter = flux.util.OutputFormat(fmt, headings=headings)
     if not args.no_header:
         print(formatter.header())
 
@@ -383,7 +383,7 @@ def resources_uniq_lines(resources, states, formatter):
             if field in uniq_fields:
                 uniq_fmt += "{" + field + "}:"
 
-    fmt = flux.util.OutputFormat(formatter.headings, uniq_fmt, prepend="0.")
+    fmt = flux.util.OutputFormat(uniq_fmt, headings=formatter.headings)
 
     #  Create a mapping of resources sets that generate uniq "lines":
     lines = {}
@@ -452,7 +452,7 @@ def list_handler(args):
     if args.format:
         fmt = args.format
 
-    formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
+    formatter = flux.util.OutputFormat(fmt, headings=headings)
 
     lines = resources_uniq_lines(resources, states, formatter)
 

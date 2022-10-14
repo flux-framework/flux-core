@@ -665,4 +665,4 @@ class JobInfoFormat(flux.util.OutputFormat):
                     if field_heading.startswith("RESOURCES."):
                         field_heading = field_heading[10:]
                     self.headings[field] = field_heading
-        super().__init__(self.headings, fmt, prepend="0.")
+        super().__init__(fmt)
