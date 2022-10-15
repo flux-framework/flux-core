@@ -1,7 +1,8 @@
 {
     "name": "Flux Core Python 3.6",
     "dockerFile": "Dockerfile",
-  
+    "context": "../",
+
     "customizations": {
       "vscode": {
         "settings": {
@@ -11,6 +12,6 @@
         "extensions": [],
       },
     },
-    // Needed for git security feature
+    // Needed for git security feature (this assumes you locally cloned to flux-core)
     "postStartCommand": "git config --global --add safe.directory /workspaces/flux-core"    
   }
