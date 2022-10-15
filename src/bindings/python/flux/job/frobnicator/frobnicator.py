@@ -8,12 +8,12 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import os
 import argparse
+import os
 from abc import abstractmethod
 
 import flux
-from flux.importer import import_plugins, import_path
+from flux.importer import import_path, import_plugins
 from flux.job import Jobspec
 
 

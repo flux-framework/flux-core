@@ -7,9 +7,9 @@
 #
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
+import errno
 import os
 import pwd
-import errno
 
 import flux.constants
 from flux.future import WaitAllFuture

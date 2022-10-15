@@ -8,8 +8,9 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from setuptools import setup
 import os
+
+from setuptools import setup
 
 here = os.path.abspath(os.path.dirname(__file__))
 cffi_dep = "cffi>=1.1"

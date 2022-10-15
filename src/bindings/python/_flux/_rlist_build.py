@@ -1,8 +1,8 @@
 from pathlib import Path
-from cffi import FFI
 
 from _hostlist_build import ffi as hostlist_ffi
 from _idset_build import ffi as idset_ffi
+from cffi import FFI
 
 ffi = FFI()
 

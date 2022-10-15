@@ -8,13 +8,13 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 import signal
-from typing import Union, Optional
+from typing import Optional, Union
 
+from _flux._core import ffi
+from flux.core.handle import Flux  # for typing
 from flux.future import Future
 from flux.job._wrapper import _RAW as RAW
-from flux.core.handle import Flux  # for typing
 from flux.job.JobID import JobID  # for typing
-from _flux._core import ffi
 
 
 def kill_async(

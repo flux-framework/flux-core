@@ -11,7 +11,8 @@
 import abc
 import errno
 import signal
-from flux.core.inner import raw, lib, ffi
+
+from flux.core.inner import ffi, lib, raw
 
 __all__ = ["TimerWatcher", "FDWatcher", "SignalWatcher"]
 

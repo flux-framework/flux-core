@@ -12,19 +12,18 @@
 This module defines the ``FluxExecutor`` and ``FluxExecutorFuture`` classes.
 """
 
-import threading
-import logging
-import itertools
 import collections
 import concurrent.futures
-import weakref
-import time
+import itertools
+import logging
 import os
+import threading
+import time
+import weakref
 
 import flux
+from flux.job.event import MAIN_EVENTS, JobException, event_watch_async
 from flux.job.submit import submit_async, submit_get_id
-from flux.job.event import event_watch_async, JobException, MAIN_EVENTS
-
 
 _SubmitPackage = collections.namedtuple(
     "_SubmitPackage", ["submit_args", "submit_kwargs", "future"]

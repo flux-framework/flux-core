@@ -1,5 +1,6 @@
-from cffi import FFI
 from pathlib import Path
+
+from cffi import FFI
 
 ffi = FFI()
 

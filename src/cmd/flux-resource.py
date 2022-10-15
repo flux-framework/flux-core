@@ -8,19 +8,19 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import sys
-import logging
 import argparse
-import os.path
 import json
+import logging
+import os.path
+import sys
 from datetime import datetime
 
 import flux
-from flux.idset import IDset
-from flux.hostlist import Hostlist
-from flux.resource import ResourceSet, resource_list, SchedResourceList
-from flux.rpc import RPC
 from flux.future import WaitAllFuture
+from flux.hostlist import Hostlist
+from flux.idset import IDset
+from flux.resource import ResourceSet, SchedResourceList, resource_list
+from flux.rpc import RPC
 
 
 def reload(args):

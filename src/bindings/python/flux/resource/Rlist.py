@@ -13,11 +13,10 @@ import socket
 from collections.abc import Mapping
 
 from _flux._rlist import ffi, lib
-from flux.wrapper import Wrapper, WrapperPimpl
-
-from flux.resource.ResourceSetImplementation import ResourceSetImplementation
 from flux.hostlist import Hostlist
 from flux.idset import IDset
+from flux.resource.ResourceSetImplementation import ResourceSetImplementation
+from flux.wrapper import Wrapper, WrapperPimpl
 
 
 @ResourceSetImplementation.register

@@ -8,13 +8,14 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import json
 import argparse
-import threading
 import concurrent.futures
+import json
+import threading
 from abc import ABC, abstractmethod
+
 import flux
-from flux.importer import import_plugins, import_path
+from flux.importer import import_path, import_plugins
 
 
 class ValidatorResult:

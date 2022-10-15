@@ -4,8 +4,11 @@ target-version = ['py36']
 exclude = ["^env/", "^src/bindings/python/flux/utils/*/*.py", "^src/bindings/python/flux/utils/*/*/*.py"]
 
 [tool.isort]
-profile = "isort"
-exclude = ["^env/"]
+profile = "black" # needed for black/isort compatibility
+skip = [
+  "src/bindings/python/flux/job/kvs.py",
+  "src/bindings/python/flux/job/__init__.py",
+  "src/bindings/python/flux/resource/__init__.py"]
 
 [tool.mypy]
 python_version = 3.6

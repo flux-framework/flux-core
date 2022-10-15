@@ -24,6 +24,7 @@ does not support the sched.feasibility RPC
 """
 
 import errno
+
 from flux.job.validator import ValidatorPlugin
 
 

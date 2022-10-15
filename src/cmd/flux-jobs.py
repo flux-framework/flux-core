@@ -8,17 +8,16 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import os
-import sys
-import logging
 import argparse
+import concurrent.futures
 import fileinput
 import json
-import concurrent.futures
+import logging
+import os
+import sys
 
 import flux.constants
-from flux.job import JobInfo, JobInfoFormat, JobList, job_fields_to_attrs
-from flux.job import JobID
+from flux.job import JobID, JobInfo, JobInfoFormat, JobList, job_fields_to_attrs
 from flux.job.stats import JobStats
 from flux.util import UtilConfig
 

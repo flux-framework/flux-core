@@ -8,10 +8,9 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import json
-import errno
-
 import collections.abc as abc
+import errno
+import json
 from typing import Any, Mapping
 
 from _flux._core import ffi, lib

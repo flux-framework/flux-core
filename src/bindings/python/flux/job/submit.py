@@ -9,13 +9,13 @@
 ###############################################################
 import errno
 
+from _flux._core import ffi, lib
 from flux import constants
-from flux.util import check_future_error
 from flux.future import Future
 from flux.job import JobID
-from flux.job.Jobspec import _convert_jobspec_arg_to_string
 from flux.job._wrapper import _RAW as RAW
-from _flux._core import ffi, lib
+from flux.job.Jobspec import _convert_jobspec_arg_to_string
+from flux.util import check_future_error
 
 
 class SubmitFuture(Future):

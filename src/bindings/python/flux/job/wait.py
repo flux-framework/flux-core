@@ -7,15 +7,15 @@
 #
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
-import errno
 import collections
+import errno
 import json
 
 import flux
-from flux.util import check_future_error, interruptible
+from _flux._core import ffi, lib
 from flux.future import Future
 from flux.job._wrapper import _RAW as RAW
-from _flux._core import ffi, lib
+from flux.util import check_future_error, interruptible
 
 
 class JobWaitFuture(Future):

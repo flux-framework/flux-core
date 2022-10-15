@@ -8,9 +8,9 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import sys
-import logging
 import argparse
+import logging
+import sys
 
 import flux
 from flux.rpc import RPC

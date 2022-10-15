@@ -8,27 +8,26 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import re
-import sys
+import argparse
 import errno
+import glob
 import json
 import logging
-import os
 import math
-import argparse
-import traceback
-import signal
-import threading
+import os
+import re
 import shutil
-import glob
-from datetime import datetime, timedelta
-from string import Formatter
+import signal
+import sys
+import threading
+import traceback
 from collections import namedtuple
+from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
+from string import Formatter
 from typing import Mapping
 
 import yaml
-
 
 try:
     import tomllib

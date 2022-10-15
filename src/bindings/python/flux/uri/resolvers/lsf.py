@@ -18,14 +18,13 @@ It can be used like:
 
 import getpass
 import os
-import subprocess
 import shutil
+import subprocess
 from pathlib import PurePath
 
-import yaml
-
 import flux.hostlist as hostlist
-from flux.uri import URIResolverPlugin, FluxURIResolver
+import yaml
+from flux.uri import FluxURIResolver, URIResolverPlugin
 
 
 def lsf_find_compute_node(jobid):
