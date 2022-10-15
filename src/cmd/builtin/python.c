@@ -47,4 +47,3 @@ int subcommand_python_register (optparse_t *p)
 /*
  * vi: ts=4 sw=4 expandtab
  */
-

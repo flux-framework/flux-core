@@ -12,5 +12,5 @@
       },
     },
     // Needed for git security feature
-    "postStartCommand": "git config --global --add safe.directory /workspaces/core"    
+    "postStartCommand": "git config --global --add safe.directory /workspaces/flux-core"    
   }

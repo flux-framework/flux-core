@@ -470,7 +470,7 @@ class OutputFormat:
         for field in self._fields:
             #  Remove any "0." prefix:
             field = field[2:] if field.startswith("0.") else field
-            if field and not field in self.headings:
+            if field and field not in self.headings:
                 raise ValueError("Unknown format field: " + field)
 
         #  Prepend arbitrary string to format fields if requested

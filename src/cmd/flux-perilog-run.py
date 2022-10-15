@@ -32,7 +32,7 @@ def fetch_job_ranks(handle, jobid):
 
 
 def drain(handle, ids, reason):
-    """Drain ranks in idset `ids` with reason """
+    """Drain ranks in idset `ids` with reason"""
 
     handle.rpc(
         "resource.drain",

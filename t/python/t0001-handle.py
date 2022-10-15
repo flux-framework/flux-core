@@ -33,7 +33,7 @@ class TestHandle(unittest.TestCase):
 
     def test_log(self):
         """Successfully connected to flux"""
-        self.f.log(syslog.LOG_INFO, u"hello")
+        self.f.log(syslog.LOG_INFO, "hello")
         self.f.log(syslog.LOG_INFO, b"world")
 
     def test_rpc_ping(self):
@@ -41,7 +41,7 @@ class TestHandle(unittest.TestCase):
         # python 3 json doesn't support bytes, but python 2 will treat them as str (i.e., bytes)
         r = self.f.rpc(b"broker.ping", {"seq": 1, "pad": "stuff"}).get()
         self.assertEqual(r["seq"], 1)
-        self.assertEqual(r["pad"], u"stuff")
+        self.assertEqual(r["pad"], "stuff")
         self.assertTrue(isinstance(r["pad"], str))
 
     def test_anonymous_handle_rpc_ping(self):
@@ -49,15 +49,15 @@ class TestHandle(unittest.TestCase):
         r = flux.Flux().rpc(b"broker.ping", {"seq": 1, "pad": "stuff"}).get()
         self.assertIsNotNone(r)
         self.assertEqual(r["seq"], 1)
-        self.assertEqual(r["pad"], u"stuff")
+        self.assertEqual(r["pad"], "stuff")
 
     def test_rpc_ping_unicode(self):
         """Sending a ping"""
         r = self.f.rpc(
-            u"broker.ping", {u"\xa3": u"value", u"key": u"\u32db \u263a \u32e1"}
+            "broker.ping", {"\xa3": "value", "key": "\u32db \u263a \u32e1"}
         ).get()
-        self.assertEqual(r[u"\xa3"], u"value")
-        self.assertEqual(r["key"], u"\u32db \u263a \u32e1")
+        self.assertEqual(r["\xa3"], "value")
+        self.assertEqual(r["key"], "\u32db \u263a \u32e1")
         self.assertTrue(isinstance(r["key"], str))
 
     def test_rpc_with(self):

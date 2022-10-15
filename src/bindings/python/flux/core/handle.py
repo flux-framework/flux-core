@@ -256,7 +256,9 @@ class Flux(Wrapper):
 
     def fd_watcher_create(self, fd_int, callback, events=None, args=None):
         if events is None:
-            events = FLUX_POLLIN | FLUX_POLLOUT | FLUX_POLLERR
+            # TODO add mypy type stubs for constants so this passes vermin without
+            # comment
+            events = FLUX_POLLIN | FLUX_POLLOUT | FLUX_POLLERR  # novm
         return FDWatcher(self, fd_int, events, callback, args=args)
 
     def barrier(self, name, nprocs):
