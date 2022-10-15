@@ -1,11 +1,10 @@
 [tool.black]
-# line-length = 100
+profile = "black"
 target-version = ['py36']
 exclude = ["^env/", "^src/bindings/python/flux/utils/*/*.py", "^src/bindings/python/flux/utils/*/*/*.py"]
 
 [tool.isort]
-profile = "black"
-# line_length = 100
+profile = "isort"
 exclude = ["^env/"]
 
 [tool.mypy]
