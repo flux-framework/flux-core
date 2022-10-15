@@ -887,6 +887,8 @@ class UtilConfig:
 
     Args:
         name: name of utility, used as the stem of config file to load
+        subcommand (optional): name of subcommand. Used as name of subtable
+                               in configuration to use.
         initial_dict: Set of default values (optional)
 
     """
@@ -897,11 +899,17 @@ class UtilConfig:
         ".yaml": yaml.safe_load,
     }
 
-    def __init__(self, name, initial_dict=None):
+    builtin_formats = {}
+
+    def __init__(self, name, subcommand=None, initial_dict=None):
         self.name = name
         self.dict = {}
         if initial_dict:
             self.dict = dict(initial_dict)
+        self.config = self.dict
+
+        #  If not None,  use subcommand config in subtable = 'subtable'
+        self.subtable = subcommand
 
         #  Build config search path in precedence order based on XDG
         #  specification. Later this will be reversed since we want
@@ -956,7 +964,50 @@ class UtilConfig:
 
                 dict_merge(self.dict, conf)
 
+        # If a subtable is set, then update self.config:
+        if self.subtable and self.subtable in self.dict:
+            self.config = self.dict[self.subtable]
+
         return self
+
+    def validate_formats(self, path, formats):
+        """
+        Convenience function to validate a set of formats in config loaded
+        from path in the common flux-* formats config schema, i.e a dictionary
+        of format names in the form:
+
+            { "name": {
+                "description": "format description",
+                "format":      "format",
+              },
+              "name2": ..
+            }
+
+        Raises ValueError on failure.
+        """
+        builtin_formats = self.builtin_formats
+        #  If we're working with a subtable, then choose the same
+        #  subtable from builtin_formats if it exists:
+        if self.subtable and self.subtable in self.builtin_formats:
+            builtin_formats = self.builtin_formats[self.subtable]
+
+        if not isinstance(formats, dict):
+            raise ValueError(f"{path}: the 'formats' key must be a mapping")
+        for name, entry in formats.items():
+            if name in builtin_formats:
+                raise ValueError(
+                    f"{path}: override of builtin format '{name}' not permitted"
+                )
+            if not isinstance(entry, dict):
+                raise ValueError(f"{path}: 'formats.{name}' must be a mapping")
+            if "format" not in entry:
+                raise ValueError(
+                    f"{path}: formats.{name}: required key 'format' missing"
+                )
+            if not isinstance(entry["format"], str):
+                raise ValueError(
+                    f"{path}: formats.{name}: 'format' key must be a string"
+                )
 
     def validate(self, path, conf):
         """
@@ -965,5 +1016,47 @@ class UtilConfig:
         subclasses may define it to implement higher level validation.
         """
 
+    def get_format_string(self, format_name):
+        """
+        Convenience function to fetch a format string from the current
+        config. Assumes the current config has been loaded and contains
+        a "formats" table.
+
+        Special format names:
+            help: print a list of configured formats
+            get-config=NAME: dump the config for format "name"
+
+        Args:
+            format_name: Name of the configured format to return
+        """
+        if "{" in format_name:
+            return format_name
+
+        formats = self.formats
+        if format_name == "help":
+            print(f"\nConfigured {self.name} output formats:\n")
+            for name, entry in formats.items():
+                print(f"  {name:<12}", end="")
+                try:
+                    print(f" {entry['description']}")
+                except KeyError:
+                    print()
+            sys.exit(0)
+        elif format_name.startswith("get-config="):
+            _, name = format_name.split("=", 1)
+            try:
+                entry = formats[name]
+            except KeyError:
+                raise ValueError(f"--format: No such format {name}")
+            print(f"[formats.{name}]")
+            if "description" in entry:
+                print(f"description = \"{entry['description']}\"")
+            print(f"format = \"{entry['format']}\"")
+            sys.exit(0)
+        try:
+            return formats[format_name]["format"]
+        except KeyError:
+            raise ValueError(f"--format: No such format {format_name}")
+
     def __getattr__(self, attr):
-        return self.dict[attr]
+        return self.config[attr]
