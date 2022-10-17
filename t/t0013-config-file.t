@@ -112,6 +112,30 @@ test_expect_success '[bootstrap] config with bad hostlist' '
 	test_must_fail flux broker ${ARGS} -c conf4c /bin/true
 '
 
+test_expect_success '[bootstrap] config with with unknown parent' '
+	mkdir conf4d &&
+	cat <<-EOT >conf4d/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    { host = "fake0", parent = "noparent" },
+	]
+	EOT
+	test_must_fail flux start --test-size=1 --test-hosts=fake0 \
+	    -o,-c conf4d /bin/true
+'
+
+test_expect_success '[bootstrap] config with with impossible parent' '
+	mkdir conf4e &&
+	cat <<-EOT >conf4e/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    { host = "fake0", parent = "fake0" },
+	]
+	EOT
+	test_must_fail flux start --test-size=1 --test-hosts=fake0 \
+	    -o,-c conf4e /bin/true
+'
+
 test_expect_success '[bootstrap] config with hostname not found' '
 	mkdir conf5 &&
 	cat <<-EOT >conf5/bootstrap.toml &&
@@ -175,6 +199,33 @@ test_expect_success 'start size=2 instance with ipc://' '
 	fake[0-1]
 	EXP
 	test_cmp ipc.exp ipc.out
+'
+
+test_expect_success 'start size=3 instance with ipc:// and custom topology' '
+	BINDDIR=$(mktemp -d) &&
+	test_when_finished "rm -rf $BINDIR" &&
+	mkdir conf8a &&
+	cat <<-EOT >conf8a/bootstrap.toml &&
+	[bootstrap]
+	curve_cert = "testcert"
+	[[bootstrap.hosts]]
+	host = "fake0"
+	bind = "ipc://${BINDDIR}/fake0"
+	connect = "ipc://${BINDDIR}/fake0"
+	[[bootstrap.hosts]]
+	host="fake1"
+	bind = "ipc://${BINDDIR}/fake1"
+	connect = "ipc://${BINDDIR}/fake1"
+	[[bootstrap.hosts]]
+	host="fake2"
+	parent = "fake1"
+	EOT
+	flux start --test-size=3 --test-hosts=fake[0-2] \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		-o,--config-path=conf8a \
+		flux getattr tbon.maxlevel >conf8a.out &&
+	echo 2 >conf8a.exp &&
+	test_cmp conf8a.exp conf8a.out
 '
 
 getport() {
