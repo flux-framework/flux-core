@@ -1,13 +1,17 @@
 BasedOnStyle : google
 SpaceBeforeParens : Always
 IndentWidth : 4
-BreakBeforeBraces : Linux
+BreakBeforeBraces : Custom
+BraceWrapping :
+  BeforeElse : true
+  AfterFunction : true
 UseTab: Never
 AllowShortIfStatementsOnASingleLine : false
 ConstructorInitializerAllOnOneLineOrOnePerLine : true
 AllowShortFunctionsOnASingleLine : false
 AllowShortLoopsOnASingleLine : false
 BinPackParameters : false
+BinPackArguments : false
 AllowAllParametersOfDeclarationOnNextLine : false
 AlignTrailingComments : true
 ColumnLimit : 88
@@ -17,9 +21,103 @@ PenaltyBreakBeforeFirstCallParameter : 10000000
 PenaltyReturnTypeOnItsOwnLine : 65000
 PenaltyBreakString : 10
 
+# Preserve the hand-authored layout of jansson-style pack/unpack calls.
+# This must be a literal list -- clang-format does not accept a regex here.
+# The names are the pack/unpack-family functions that take a jansson format
+# string; regenerate after adding/removing such a function by running the
+# command below and pruning the non-jansson matches (czmq zhash/zhashx/zlistx
+# _pack/_unpack, treeobj_unpack, pty_data_unpack, dependencies_unpack,
+# test_pack, and the bare "unpack" comment hit):
+#   grep -rhoE '\b[A-Za-z_][A-Za-z0-9_]*(pack|unpack)(_ex)?\b *\(' \
+#       --include=*.c --include=*.h src | sed -E 's/ *\(//' | sort -u
+WhitespaceSensitiveMacros :
+- cred_msg_pack
+- event_job_post_pack
+- event_job_post_vpack
+- eventlog_entry_pack
+- eventlog_entry_vpack
+- eventlogger_append_pack
+- eventlogger_append_vpack
+- flux_conf_pack
+- flux_conf_unpack
+- flux_conf_vpack
+- flux_conf_vunpack
+- flux_event_pack
+- flux_event_publish_pack
+- flux_event_unpack
+- flux_event_vpack
+- flux_event_vunpack
+- flux_job_result_get_unpack
+- flux_jobspec1_attr_pack
+- flux_jobspec1_attr_unpack
+- flux_jobtap_event_post_pack
+- flux_jobtap_jobspec_update_id_pack
+- flux_jobtap_jobspec_update_pack
+- flux_kvs_lookup_get_unpack
+- flux_kvs_txn_pack
+- flux_kvs_txn_vpack
+- flux_msg_pack
+- flux_msg_unpack
+- flux_msg_vpack
+- flux_msg_vunpack
+- flux_plugin_arg_pack
+- flux_plugin_arg_unpack
+- flux_plugin_arg_vpack
+- flux_plugin_arg_vunpack
+- flux_plugin_conf_unpack
+- flux_request_unpack
+- flux_request_vunpack
+- flux_respond_pack
+- flux_respond_vpack
+- flux_rpc_get_unpack
+- flux_rpc_get_vunpack
+- flux_rpc_pack
+- flux_rpc_vpack
+- flux_shell_getopt_unpack
+- flux_shell_info_unpack
+- flux_shell_info_vunpack
+- flux_shell_jobspec_info_unpack
+- flux_shell_jobspec_info_vunpack
+- flux_shell_rank_info_unpack
+- flux_shell_rank_info_vunpack
+- flux_shell_rpc_pack
+- flux_shell_setopt_pack
+- flux_shell_task_info_unpack
+- flux_shell_task_info_vunpack
+- jobinfo_emit_event_pack
+- jobinfo_emit_event_vpack
+- jobinfo_shell_rpc_pack
+- json_pack
+- json_pack_ex
+- json_unpack
+- json_unpack_ex
+- json_vpack_ex
+- json_vunpack_ex
+- reslog_post_pack
+- schedutil_alloc_respond_annotate_pack
+- schedutil_alloc_respond_pack
+- schedutil_alloc_respond_success_pack
+- sdexec_property_dict_unpack
+- sdexec_property_get_unpack
+- server_auth_unpack
+- shell_eventlogger_context_vpack
+- shell_svc_vpack
+- test_eventlog_entry_vpack
+
+# treat foreach macros as for loops
+ForEachMacros :
+- json_array_foreach
+- json_object_foreach
+
 # These improve formatting results but require clang 3.6/7 or higher
+SortIncludes : false
 BreakBeforeBinaryOperators : NonAssignment
-AlignAfterOpenBracket: true
-BinPackArguments : false
+AlignAfterOpenBracket: Align
 AlignOperands : true
 BreakBeforeTernaryOperators : true
+SpaceBeforeSquareBrackets: false
+IndentPPDirectives: None
+
+#
+# vi:tabstop=4 shiftwidth=4 expandtab ft=yaml
+#
