@@ -185,10 +185,12 @@ test_expect_success 'start size=2 instance with ipc://' '
 	cat <<-EOT >conf8/bootstrap.toml &&
 	[bootstrap]
 	curve_cert = "testcert"
-	hosts = [
-	    { host="fake0", bind="ipc://${BINDDIR}/test-ipc2-0", connect="ipc://${BINDDIR}/test-ipc2-0" },
-	    { host="fake1" }
-	]
+	[[bootstrap.hosts]]
+	host = "fake0"
+	bind = "ipc://${BINDDIR}/test-ipc2-0"
+	connect = "ipc://${BINDDIR}/test-ipc2-0"
+	[[bootstrap.hosts]]
+	host = "fake1"
 	EOT
 	flux start -s2 --test-hosts=fake[0-1] \
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
@@ -213,11 +215,11 @@ test_expect_success 'start size=3 instance with ipc:// and custom topology' '
 	bind = "ipc://${BINDDIR}/fake0"
 	connect = "ipc://${BINDDIR}/fake0"
 	[[bootstrap.hosts]]
-	host="fake1"
+	host = "fake1"
 	bind = "ipc://${BINDDIR}/fake1"
 	connect = "ipc://${BINDDIR}/fake1"
 	[[bootstrap.hosts]]
-	host="fake2"
+	host = "fake2"
 	parent = "fake1"
 	EOT
 	flux start --test-size=3 --test-hosts=fake[0-2] \
@@ -240,11 +242,16 @@ test_expect_success 'start size=4 instance with tcp://' '
 	cat <<-EOT >conf9/bootstrap.toml &&
 	[bootstrap]
 	curve_cert = "testcert"
-	hosts = [
-	    { host="fake0", bind="tcp://127.0.0.1:$PORT1", connect="tcp://127.0.0.1:$PORT1" },
-	    { host="fake1", bind="tcp://127.0.0.1:$PORT2", connect="tcp://127.0.0.1:$PORT2" },
-	    { host="fake[2-3]" }
-	]
+	[[bootstrap.hosts]]
+	host = "fake0"
+	bind = "tcp://127.0.0.1:$PORT1"
+	connect = "tcp://127.0.0.1:$PORT1"
+	[[bootstrap.hosts]]
+	host = "fake1"
+	bind = "tcp://127.0.0.1:$PORT2"
+	connect ="tcp://127.0.0.1:$PORT2"
+	[[bootstrap.hosts]]
+	host = "fake[2-3]"
 	EOT
 	flux start -s4 --test-hosts=fake[0-3] \
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
