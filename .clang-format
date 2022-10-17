@@ -1,13 +1,17 @@
 BasedOnStyle : google
 SpaceBeforeParens : Always
 IndentWidth : 4
-BreakBeforeBraces : Linux
+BreakBeforeBraces : Custom
+BraceWrapping :
+  BeforeElse : true
+  AfterFunction : true
 UseTab: Never
 AllowShortIfStatementsOnASingleLine : false
 ConstructorInitializerAllOnOneLineOrOnePerLine : true
 AllowShortFunctionsOnASingleLine : false
 AllowShortLoopsOnASingleLine : false
 BinPackParameters : false
+BinPackArguments : false
 AllowAllParametersOfDeclarationOnNextLine : false
 AlignTrailingComments : true
 ColumnLimit : 88
@@ -17,9 +21,59 @@ PenaltyBreakBeforeFirstCallParameter : 10000000
 PenaltyReturnTypeOnItsOwnLine : 65000
 PenaltyBreakString : 10
 
+# preserve formatting of arguments to pack/unpack functions
+# found by running: rg --only-matching --no-filename --no-line-number  '(flux|json)(_[^ ,()]+)?_(un)?pack' | sort -u
+WhitespaceSensitiveMacros :
+- flux_conf_unpack
+- flux_event_pack
+- flux_event_publish_pack
+- flux_event_unpack
+- flux_job_result_get_unpack
+- flux_jobspec1_attr_pack
+- flux_jobspec1_attr_unpack
+- flux_jobspec_info_unpack
+- flux_jobtap_event_post_pack
+- flux_kvs_lookup_get_unpack
+- flux_kvs_lookup_unpack
+- flux_kvs_txn_pack
+- flux_lookup_get_unpack
+- flux_mrpc_pack
+- flux_msg_pack
+- flux_msg_unpack
+- flux_plugin_arg_pack
+- flux_plugin_arg_unpack
+- flux_plugin_args_unpack
+- flux_plugin_conf_unpack
+- flux_request_unpack
+- flux_respond_pack
+- flux_rpc_get_unpack
+- flux_rpc_pack
+- flux_shell_getopt_unpack
+- flux_shell_info_unpack
+- flux_shell_jobspec_info_unpack
+- flux_shell_rank_info_unpack
+- flux_shell_rpc_pack
+- flux_shell_setopt_pack
+- flux_shell_setopt_unpack
+- flux_shell_task_info_unpack
+- json_pack
+- json_unpack
+
+# treat foreach macros as for loops
+ForEachMacros :
+- json_array_foreach
+- json_object_foreach
+
 # These improve formatting results but require clang 3.6/7 or higher
+SortIncludes : false
 BreakBeforeBinaryOperators : NonAssignment
-AlignAfterOpenBracket: true
-BinPackArguments : false
+AlignAfterOpenBracket: Align
 AlignOperands : true
 BreakBeforeTernaryOperators : true
+AllowAllParametersOfDeclarationOnNextLine : false
+SpaceBeforeSquareBrackets: false
+IndentPPDirectives: None
+
+#
+# vi:tabstop=4 shiftwidth=4 expandtab ft=yaml
+#
