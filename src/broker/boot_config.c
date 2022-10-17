@@ -165,8 +165,9 @@ static json_t *boot_config_expand_hosts (json_t *hosts)
             goto error;
         }
         if (!(hl = hostlist_decode (host))) {
-            log_err ("Config file error [bootstrap]");
-            log_msg ("Hint: host value '%s' is not a valid hostlist", host);
+            log_msg ("Config file error [bootstrap]:"
+                     " host value '%s' is not a valid hostlist",
+                     host);
             goto error;
         }
         s = hostlist_first (hl);
