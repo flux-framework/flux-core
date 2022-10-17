@@ -25,11 +25,11 @@
 #include <sys/syscall.h>
 #endif
 #if HAVE_VALGRIND
-# if HAVE_VALGRIND_H
-#  include <valgrind.h>
-# elif HAVE_VALGRIND_VALGRIND_H
-#  include <valgrind/valgrind.h>
-# endif
+#if HAVE_VALGRIND_H
+#include <valgrind.h>
+#elif HAVE_VALGRIND_VALGRIND_H
+#include <valgrind/valgrind.h>
+#endif
 #endif
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -65,29 +65,27 @@
 
 #include "broker.h"
 
-
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
-static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
-                                            const flux_msg_t *msg);
+static int broker_request_sendmsg_internal (broker_ctx_t *ctx, const flux_msg_t *msg);
 
-static void overlay_recv_cb (const flux_msg_t *msg,
-                             overlay_where_t where,
-                             void *arg);
+static void overlay_recv_cb (const flux_msg_t *msg, overlay_where_t where, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
-static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg);
+static void signal_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
 static int broker_handle_signals (broker_ctx_t *ctx);
 
 static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
 static void broker_remove_services (flux_msg_handler_t *handlers[]);
 
-static int load_module_byname (broker_ctx_t *ctx, const char *name,
-                               const char *argz, size_t argz_len,
+static int load_module_byname (broker_ctx_t *ctx,
+                               const char *name,
+                               const char *argz,
+                               size_t argz_len,
                                const flux_msg_t *request);
-static int unload_module_byname (broker_ctx_t *ctx, const char *name,
+static int unload_module_byname (broker_ctx_t *ctx,
+                                 const char *name,
                                  const flux_msg_t *request);
 
 static void set_proctitle (uint32_t rank);
@@ -112,12 +110,27 @@ static int execute_parental_notifications (struct broker *ctx);
 static const struct flux_handle_ops broker_handle_ops;
 
 static struct optparse_option opts[] = {
-    { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
-      .usage = "Be annoyingly informative by degrees", },
-    { .name = "setattr",    .key = 'S', .has_arg = 1, .arginfo = "ATTR=VAL",
-      .usage = "Set broker attribute", },
-    { .name = "config-path",.key = 'c', .has_arg = 1, .arginfo = "PATH",
-      .usage = "Set broker config directory (default: none)", },
+    {
+        .name = "verbose",
+        .key = 'v',
+        .has_arg = 2,
+        .arginfo = "[LEVEL]",
+        .usage = "Be annoyingly informative by degrees",
+    },
+    {
+        .name = "setattr",
+        .key = 'S',
+        .has_arg = 1,
+        .arginfo = "ATTR=VAL",
+        .usage = "Set broker attribute",
+    },
+    {
+        .name = "config-path",
+        .key = 'c',
+        .has_arg = 1,
+        .arginfo = "PATH",
+        .usage = "Set broker config directory (default: none)",
+    },
     OPTPARSE_TABLE_END,
 };
 
@@ -150,8 +163,10 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
 
     if (optindex < argc) {
         int e;
-        if ((e = argz_create (argv + optindex, &ctx->init_shell_cmd,
-                              &ctx->init_shell_cmd_len)) != 0)
+        if ((e = argz_create (argv + optindex,
+                              &ctx->init_shell_cmd,
+                              &ctx->init_shell_cmd_len))
+            != 0)
             log_errn_exit (e, "argz_create");
     }
 }
@@ -205,10 +220,8 @@ int main (int argc, char *argv[])
 
     ctx.exit_rc = 1;
 
-    if (!(ctx.sigwatchers = zlist_new ())
-        || !(ctx.modhash = modhash_create ())
-        || !(ctx.services = service_switch_create ())
-        || !(ctx.attrs = attr_create ())
+    if (!(ctx.sigwatchers = zlist_new ()) || !(ctx.modhash = modhash_create ())
+        || !(ctx.services = service_switch_create ()) || !(ctx.attrs = attr_create ())
         || !(ctx.subscriptions = zlist_new ()))
         log_msg_exit ("Out of memory in early initialization");
 
@@ -276,9 +289,7 @@ int main (int argc, char *argv[])
     /* Parse config.
      */
     if (!(ctx.config = brokercfg_create (ctx.h,
-                                         optparse_get_str (ctx.opts,
-                                                           "config-path",
-                                                           NULL),
+                                         optparse_get_str (ctx.opts, "config-path", NULL),
                                          ctx.attrs,
                                          ctx.modhash)))
         goto cleanup;
@@ -294,19 +305,15 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (!(ctx.overlay = overlay_create (ctx.h,
-                                        ctx.attrs,
-                                        overlay_recv_cb,
-                                        &ctx))) {
+    if (!(ctx.overlay = overlay_create (ctx.h, ctx.attrs, overlay_recv_cb, &ctx))) {
         log_err ("overlay_create");
         goto cleanup;
     }
 
     /* Arrange for the publisher to route event messages.
      */
-    if (!(ctx.publisher = publisher_create (&ctx,
-                                            (publisher_send_f)handle_event,
-                                            &ctx))) {
+    if (!(ctx.publisher =
+              publisher_create (&ctx, (publisher_send_f)handle_event, &ctx))) {
         log_err ("error setting up event publishing service");
         goto cleanup;
     }
@@ -333,7 +340,7 @@ int main (int argc, char *argv[])
             goto cleanup;
         }
     }
-    else { // PMI
+    else {  // PMI
         if (boot_pmi (ctx.overlay, ctx.attrs) < 0) {
             log_msg ("bootstrap failed");
             goto cleanup;
@@ -354,9 +361,9 @@ int main (int argc, char *argv[])
     if (ctx.verbose) {
         flux_reactor_now_update (ctx.reactor);
         log_msg ("boot: rank=%d size=%d time %.3fs",
-                  ctx.rank,
-                  ctx.size,
-                  flux_reactor_now (ctx.reactor) - ctx.starttime);
+                 ctx.rank,
+                 ctx.size,
+                 flux_reactor_now (ctx.reactor) - ctx.starttime);
     }
 
     // Setup profiling
@@ -397,7 +404,7 @@ int main (int argc, char *argv[])
 
     set_proctitle (ctx.rank);
 
-    if (init_local_uri_attr (ctx.overlay, ctx.attrs) < 0 // used by runat
+    if (init_local_uri_attr (ctx.overlay, ctx.attrs) < 0  // used by runat
         || init_critical_ranks_attr (ctx.overlay, ctx.attrs) < 0)
         goto cleanup;
 
@@ -465,15 +472,11 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-
     /* Initialize module infrastructure.
      */
     if (ctx.verbose > 1)
         log_msg ("initializing modules");
-    modhash_initialize (ctx.modhash,
-                        ctx.h,
-                        overlay_get_uuid (ctx.overlay),
-                        ctx.attrs);
+    modhash_initialize (ctx.modhash, ctx.h, overlay_get_uuid (ctx.overlay), ctx.attrs);
 
     /* Configure broker state machine
      */
@@ -558,19 +561,19 @@ cleanup:
 struct attrmap {
     const char *env;
     const char *attr;
-    uint8_t required:1;
-    uint8_t sanitize:1;
+    uint8_t required : 1;
+    uint8_t sanitize : 1;
 };
 
 static struct attrmap attrmap[] = {
-    { "FLUX_EXEC_PATH",         "conf.exec_path",           1, 0 },
-    { "FLUX_CONNECTOR_PATH",    "conf.connector_path",      1, 0 },
-    { "FLUX_MODULE_PATH",       "conf.module_path",         1, 0 },
-    { "FLUX_PMI_LIBRARY_PATH",  "conf.pmi_library_path",    1, 0 },
+    {"FLUX_EXEC_PATH", "conf.exec_path", 1, 0},
+    {"FLUX_CONNECTOR_PATH", "conf.connector_path", 1, 0},
+    {"FLUX_MODULE_PATH", "conf.module_path", 1, 0},
+    {"FLUX_PMI_LIBRARY_PATH", "conf.pmi_library_path", 1, 0},
 
-    { "FLUX_URI",               "parent-uri",               0, 1 },
-    { "FLUX_KVS_NAMESPACE",     "parent-kvs-namespace",     0, 1 },
-    { NULL, NULL, 0, 0 },
+    {"FLUX_URI", "parent-uri", 0, 1},
+    {"FLUX_KVS_NAMESPACE", "parent-kvs-namespace", 0, 1},
+    {NULL, NULL, 0, 0},
 };
 
 static void init_attrs_from_environment (attr_t *attrs)
@@ -596,10 +599,7 @@ static void init_attrs_broker_pid (attr_t *attrs, pid_t pid)
     char pidval[32];
 
     snprintf (pidval, sizeof (pidval), "%u", pid);
-    if (attr_add (attrs,
-                  attrname,
-                  pidval,
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add (attrs, attrname, pidval, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("attr_add %s", attrname);
 }
 
@@ -608,13 +608,15 @@ static void init_attrs_rc_paths (attr_t *attrs)
     if (attr_add (attrs,
                   "broker.rc1_path",
                   flux_conf_builtin_get ("rc1_path", FLUX_CONF_AUTO),
-                  0) < 0)
+                  0)
+        < 0)
         log_err_exit ("attr_add rc1_path");
 
     if (attr_add (attrs,
                   "broker.rc3_path",
                   flux_conf_builtin_get ("rc3_path", FLUX_CONF_AUTO),
-                  0) < 0)
+                  0)
+        < 0)
         log_err_exit ("attr_add rc3_path");
 }
 
@@ -623,12 +625,14 @@ static void init_attrs_shell_paths (attr_t *attrs)
     if (attr_add (attrs,
                   "conf.shell_pluginpath",
                   flux_conf_builtin_get ("shell_pluginpath", FLUX_CONF_AUTO),
-                  0) < 0)
+                  0)
+        < 0)
         log_err_exit ("attr_add conf.shell_pluginpath");
     if (attr_add (attrs,
                   "conf.shell_initrc",
                   flux_conf_builtin_get ("shell_initrc", FLUX_CONF_AUTO),
-                  0) < 0)
+                  0)
+        < 0)
         log_err_exit ("attr_add conf.shell_initrc");
 }
 
@@ -667,13 +671,13 @@ static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
 static void set_proctitle (uint32_t rank)
 {
     static char proctitle[32];
-    snprintf (proctitle, sizeof (proctitle), "flux-broker-%"PRIu32, rank);
+    snprintf (proctitle, sizeof (proctitle), "flux-broker-%" PRIu32, rank);
     (void)prctl (PR_SET_NAME, proctitle, 0, 0, 0);
 }
 
 static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
 {
-    if (argz == NULL) { // run interactive shell
+    if (argz == NULL) {  // run interactive shell
         /*  Check if stdin is a tty and error out if not to avoid
          *   confusing users with what appears to be a hang.
          */
@@ -682,11 +686,11 @@ static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
         if (runat_push_shell (r, "rc2", 0) < 0)
             return -1;
     }
-    else if (argz_count (argz, argz_len) == 1) { // run shell -c "command"
+    else if (argz_count (argz, argz_len) == 1) {  // run shell -c "command"
         if (runat_push_shell_command (r, "rc2", argz, 0) < 0)
             return -1;
     }
-    else { // direct exec
+    else {  // direct exec
         if (runat_push_command (r, "rc2", argz, argz_len, 0) < 0)
             return -1;
     }
@@ -721,10 +725,7 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc1 - initialization
      */
     if (rc1 && strlen (rc1) > 0) {
-        if (runat_push_shell_command (ctx->runat,
-                                      "rc1",
-                                      rc1,
-                                      RUNAT_FLAG_LOG_STDIO) < 0) {
+        if (runat_push_shell_command (ctx->runat, "rc1", rc1, RUNAT_FLAG_LOG_STDIO) < 0) {
             log_err ("runat_push_shell_command rc1");
             return -1;
         }
@@ -733,8 +734,8 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc2 - initial program
      */
     if (ctx->rank == 0 && !rc2_none) {
-        if (create_runat_rc2 (ctx->runat, ctx->init_shell_cmd,
-                                          ctx->init_shell_cmd_len) < 0) {
+        if (create_runat_rc2 (ctx->runat, ctx->init_shell_cmd, ctx->init_shell_cmd_len)
+            < 0) {
             log_err ("create_runat_rc2");
             return -1;
         }
@@ -743,10 +744,7 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc3 - finalization
      */
     if (rc3 && strlen (rc3) > 0) {
-        if (runat_push_shell_command (ctx->runat,
-                                      "rc3",
-                                      rc3,
-                                      RUNAT_FLAG_LOG_STDIO) < 0) {
+        if (runat_push_shell_command (ctx->runat, "rc3", rc3, RUNAT_FLAG_LOG_STDIO) < 0) {
             log_err ("runat_push_shell_command rc3");
             return -1;
         }
@@ -858,10 +856,11 @@ static int create_rundir (attr_t *attrs)
     size_t path_limit = sizeof (sa.sun_path) - sizeof ("/local-9999");
     size_t path_length = strlen (run_dir);
     if (path_length > path_limit) {
-        log_msg ("rundir length of %zu bytes exceeds max %zu"
-                 " to allow for AF_UNIX socket creation.",
-                 path_length,
-                 path_limit);
+        log_msg (
+            "rundir length of %zu bytes exceeds max %zu"
+            " to allow for AF_UNIX socket creation.",
+            path_length,
+            path_limit);
         goto done;
     }
 
@@ -892,8 +891,8 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
             log_msg ("rundir attribute is not set");
             return -1;
         }
-        if (snprintf (buf, sizeof (buf), "local://%s/local-%d",
-                      rundir, rank) >= sizeof (buf)) {
+        if (snprintf (buf, sizeof (buf), "local://%s/local-%d", rundir, rank)
+            >= sizeof (buf)) {
             log_msg ("buffer overflow while building local-uri");
             return -1;
         }
@@ -921,10 +920,11 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
         size_t path_limit = sizeof (sa.sun_path) - 1;
         size_t path_length = strlen (uri + 8);
         if (path_length > path_limit) {
-            log_msg ("local-uri length of %zu bytes exceeds max %zu"
-                     " AF_UNIX socket path length",
-                     path_length,
-                     path_limit);
+            log_msg (
+                "local-uri length of %zu bytes exceeds max %zu"
+                " AF_UNIX socket path length",
+                path_length,
+                path_limit);
             return -1;
         }
     }
@@ -944,10 +944,8 @@ static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs)
             log_err ("unable to calculate critical-ranks attribute");
             goto out;
         }
-        if (attr_add (attrs,
-                      "broker.critical-ranks",
-                      ranks,
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        if (attr_add (attrs, "broker.critical-ranks", ranks, FLUX_ATTRFLAG_IMMUTABLE)
+            < 0) {
             log_err ("attr_add critical_ranks");
             goto out;
         }
@@ -960,9 +958,8 @@ static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs)
         }
         /*  Need to set immutable flag when attr set on command line
          */
-        if (attr_set_flags (attrs,
-                            "broker.critical-ranks",
-                            FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        if (attr_set_flags (attrs, "broker.critical-ranks", FLUX_ATTRFLAG_IMMUTABLE)
+            < 0) {
             log_err ("failed to make broker.criitcal-ranks attr immutable");
             goto out;
         }
@@ -974,14 +971,12 @@ out:
     return rc;
 }
 
-static flux_future_t *set_uri_job_memo (flux_t *h,
-                                        flux_jobid_t id,
-                                        attr_t *attrs)
+static flux_future_t *set_uri_job_memo (flux_t *h, flux_jobid_t id, attr_t *attrs)
 {
     const char *local_uri = NULL;
     const char *path;
-    char uri [1024];
-    char hostname [MAXHOSTNAMELEN + 1];
+    char uri[1024];
+    char hostname[MAXHOSTNAMELEN + 1];
 
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
         log_err ("Unexpectedly unable to fetch local-uri attribute");
@@ -992,10 +987,7 @@ static flux_future_t *set_uri_job_memo (flux_t *h,
         return NULL;
     }
     path = local_uri + 8; /* forward past "local://" */
-    if (snprintf (uri,
-                 sizeof (uri),
-                 "ssh://%s%s",
-                 hostname, path) >= sizeof (uri)) {
+    if (snprintf (uri, sizeof (uri), "ssh://%s%s", hostname, path) >= sizeof (uri)) {
         log_msg ("buffer overflow while checking local-uri");
         return NULL;
     }
@@ -1024,8 +1016,7 @@ static char *encode_critical_nodes (attr_t *attrs)
     const char *ranks_attr;
     unsigned int i;
 
-    if (attr_get (attrs, "broker.mapping", &mapping, NULL) < 0
-        || mapping == NULL
+    if (attr_get (attrs, "broker.mapping", &mapping, NULL) < 0 || mapping == NULL
         || pmi_process_mapping_parse (mapping, &blocks, &nblocks) < 0
         || attr_get (attrs, "broker.critical-ranks", &ranks_attr, NULL) < 0
         || !(ranks = idset_decode (ranks_attr))
@@ -1038,10 +1029,7 @@ static char *encode_critical_nodes (attr_t *attrs)
      */
     i = idset_first (ranks);
     while (i != IDSET_INVALID_ID) {
-        if (pmi_process_mapping_find_nodeid (blocks,
-                                             nblocks,
-                                             i,
-                                             &nodeid) < 0
+        if (pmi_process_mapping_find_nodeid (blocks, nblocks, i, &nodeid) < 0
             || idset_set (nodeids, nodeid) < 0)
             goto done;
         i = idset_next (ranks, i);
@@ -1054,9 +1042,7 @@ done:
     return s;
 }
 
-static flux_future_t *set_critical_ranks (flux_t *h,
-                                          flux_jobid_t id,
-                                          attr_t *attrs)
+static flux_future_t *set_critical_ranks (flux_t *h, flux_jobid_t id, attr_t *attrs)
 {
     int saved_errno;
     flux_future_t *f;
@@ -1089,10 +1075,8 @@ static int execute_parental_notifications (struct broker *ctx)
     /* Skip if "jobid" or "parent-uri" not set, this is probably
      *  not a child of any Flux instance.
      */
-    if (attr_get (ctx->attrs, "parent-uri", &parent_uri, NULL) < 0
-        || parent_uri == NULL
-        || attr_get (ctx->attrs, "jobid", &jobid, NULL) < 0
-        || jobid == NULL)
+    if (attr_get (ctx->attrs, "parent-uri", &parent_uri, NULL) < 0 || parent_uri == NULL
+        || attr_get (ctx->attrs, "jobid", &jobid, NULL) < 0 || jobid == NULL)
         return 0;
 
     if (flux_job_id_parse (jobid, &id) < 0) {
@@ -1160,9 +1144,10 @@ static void module_dlerror (const char *errmsg, void *arg)
     flux_log (h, LOG_DEBUG, "flux_modname: %s", errmsg);
 }
 
-
-static int load_module_bypath (broker_ctx_t *ctx, const char *path,
-                               const char *argz, size_t argz_len,
+static int load_module_bypath (broker_ctx_t *ctx,
+                               const char *path,
+                               const char *argz,
+                               size_t argz_len,
                                const flux_msg_t *request)
 {
     module_t *p = NULL;
@@ -1174,8 +1159,12 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
     }
     if (!(p = module_add (ctx->modhash, path)))
         goto error;
-    if (service_add (ctx->services, module_get_name (p),
-                                    module_get_uuid (p), mod_svc_cb, p) < 0)
+    if (service_add (ctx->services,
+                     module_get_name (p),
+                     module_get_uuid (p),
+                     mod_svc_cb,
+                     p)
+        < 0)
         goto module_remove;
     arg = argz_next (argz, argz_len, NULL);
     while (arg) {
@@ -1184,7 +1173,7 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
     }
     module_set_poller_cb (p, module_cb, ctx);
     module_set_status_cb (p, module_status_cb, ctx);
-    if (request && module_push_insmod (p, request) < 0) // response deferred
+    if (request && module_push_insmod (p, request) < 0)  // response deferred
         goto service_remove;
     if (module_start (p) < 0)
         goto service_remove;
@@ -1200,8 +1189,10 @@ error:
     return -1;
 }
 
-static int load_module_byname (broker_ctx_t *ctx, const char *name,
-                               const char *argz, size_t argz_len,
+static int load_module_byname (broker_ctx_t *ctx,
+                               const char *name,
+                               const char *argz,
+                               size_t argz_len,
                                const flux_msg_t *request)
 {
     const char *modpath;
@@ -1223,7 +1214,8 @@ static int load_module_byname (broker_ctx_t *ctx, const char *name,
     return 0;
 }
 
-static int unload_module_byname (broker_ctx_t *ctx, const char *name,
+static int unload_module_byname (broker_ctx_t *ctx,
+                                 const char *name,
                                  const flux_msg_t *request)
 {
     module_t *p;
@@ -1249,8 +1241,8 @@ static void broker_destroy_sigwatcher (void *data)
 
 static int broker_handle_signals (broker_ctx_t *ctx)
 {
-    int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGALRM };
-    int blocked[] = { SIGPIPE };
+    int i, sigs[] = {SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGALRM};
+    int blocked[] = {SIGPIPE};
     flux_watcher_t *w;
 
     for (i = 0; i < ARRAY_SIZE (sigs); i++) {
@@ -1269,7 +1261,7 @@ static int broker_handle_signals (broker_ctx_t *ctx)
 
     /*  Block the list of signals in the blocked array */
     for (i = 0; i < ARRAY_SIZE (blocked); i++)
-        signal(blocked[i], SIG_IGN);
+        signal (blocked[i], SIG_IGN);
     return 0;
 }
 
@@ -1282,8 +1274,10 @@ static int broker_handle_signals (broker_ctx_t *ctx)
  * N.B. unload_module_byname() handles response, unless it fails early
  * and returns -1.
  */
-static void broker_rmmod_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void broker_rmmod_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *name;
@@ -1302,8 +1296,10 @@ error:
  * Message format is defined by RFC 5.
  * N.B. load_module_bypath() handles response, unless it returns -1.
  */
-static void broker_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void broker_insmod_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *path;
@@ -1342,8 +1338,10 @@ error:
 /* Load a module by name.
  * Message format is defined by RFC 5.
  */
-static void broker_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void broker_lsmod_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     broker_ctx_t *ctx = arg;
     json_t *mods = NULL;
@@ -1380,8 +1378,8 @@ static void broker_module_status_cb (flux_t *h,
                              "{s:i s?i}",
                              "status", &status,
                              "errnum", &errnum) < 0
-        || !(sender = flux_msg_route_first (msg))
-        || !(p = module_lookup (ctx->modhash, sender))) {
+                             || !(sender = flux_msg_route_first (msg))
+                             || !(p = module_lookup (ctx->modhash, sender))) {
         const char *errmsg = "error decoding/finding broker.module-status";
         if (flux_msg_is_noresponse (msg))
             flux_log_error (h, "%s", errmsg);
@@ -1418,11 +1416,13 @@ static void broker_module_status_cb (flux_t *h,
 void __gcov_flush (void);
 #endif
 
-static void broker_panic_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void broker_panic_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     const char *reason;
-    int flags; // reserved
+    int flags;  // reserved
 
     if (flux_request_unpack (msg, NULL, "{s:s s:i}",
                              "reason", &reason,
@@ -1438,8 +1438,10 @@ static void broker_panic_cb (flux_t *h, flux_msg_handler_t *mh,
     /*NOTREACHED*/
 }
 
-static void broker_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void broker_disconnect_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
 {
     const char *sender;
 
@@ -1476,8 +1478,10 @@ static int service_allow (struct flux_msg_cred cred, const char *name)
  * These handlers need to appear in broker.c so that they have
  *  access to broker internals like modhash
  */
-static void service_add_cb (flux_t *h, flux_msg_handler_t *w,
-                            const flux_msg_t *msg, void *arg)
+static void service_add_cb (flux_t *h,
+                            flux_msg_handler_t *w,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *name = NULL;
@@ -1486,7 +1490,7 @@ static void service_add_cb (flux_t *h, flux_msg_handler_t *w,
     struct flux_msg_cred cred;
 
     if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0
-            || flux_msg_get_cred (msg, &cred) < 0)
+                             || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (service_allow (cred, name) < 0)
         goto error;
@@ -1508,8 +1512,10 @@ error:
         flux_log_error (h, "service_add: flux_respond_error");
 }
 
-static void service_remove_cb (flux_t *h, flux_msg_handler_t *w,
-                               const flux_msg_t *msg, void *arg)
+static void service_remove_cb (flux_t *h,
+                               flux_msg_handler_t *w,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *name;
@@ -1518,7 +1524,7 @@ static void service_remove_cb (flux_t *h, flux_msg_handler_t *w,
     struct flux_msg_cred cred;
 
     if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0
-            || flux_msg_get_cred (msg, &cred) < 0)
+                             || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (service_allow (cred, name) < 0)
         goto error;
@@ -1543,44 +1549,13 @@ error:
         flux_log_error (h, "service_remove: flux_respond_error");
 }
 
-
 static const struct flux_msg_handler_spec htab[] = {
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "broker.rmmod",
-        broker_rmmod_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "broker.insmod",
-        broker_insmod_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "broker.lsmod",
-        broker_lsmod_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "broker.module-status",
-        broker_module_status_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "broker.panic",
-        broker_panic_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "broker.disconnect",
-        broker_disconnect_cb,
-        0
-    },
+    {FLUX_MSGTYPE_REQUEST, "broker.rmmod", broker_rmmod_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "broker.insmod", broker_insmod_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "broker.lsmod", broker_lsmod_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "broker.module-status", broker_module_status_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "broker.panic", broker_panic_cb, 0},
+    {FLUX_MSGTYPE_REQUEST, "broker.disconnect", broker_disconnect_cb, 0},
     {
         FLUX_MSGTYPE_REQUEST,
         "service.add",
@@ -1601,22 +1576,21 @@ struct internal_service {
     const char *nodeset;
 };
 
-static struct internal_service services[] = {
-    { "broker",             NULL }, // kind of a catch-all, slowly deprecating
-    { "log",                NULL },
-    { "content",            NULL },
-    { "attr",               NULL },
-    { "heaptrace",          NULL },
-    { "event",              NULL },
-    { "service",            NULL },
-    { "overlay",            NULL },
-    { "config",             NULL },
-    { "runat",              NULL },
-    { "state-machine",      NULL },
-    { "groups",             NULL },
-    { "shutdown",           NULL },
-    { NULL, NULL, },
-};
+static struct internal_service services[] =
+    {{"broker", NULL},  // kind of a catch-all, slowly deprecating
+     {"log", NULL},
+     {"content", NULL},
+     {"attr", NULL},
+     {"heaptrace", NULL},
+     {"event", NULL},
+     {"service", NULL},
+     {"overlay", NULL},
+     {"config", NULL},
+     {"runat", NULL},
+     {"state-machine", NULL},
+     {"groups", NULL},
+     {"shutdown", NULL},
+     {NULL, NULL}};
 
 /* Register builtin services (sharing ctx->h and broker thread).
  * Register message handlers for some broker services.  Others are registered
@@ -1629,8 +1603,7 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
     for (svc = &services[0]; svc->name != NULL; svc++) {
         if (!nodeset_member (svc->nodeset, ctx->rank))
             continue;
-        if (service_add (ctx->services, svc->name, NULL,
-                         route_to_handle, ctx) < 0) {
+        if (service_add (ctx->services, svc->name, NULL, route_to_handle, ctx) < 0) {
             log_err ("error registering service for %s", svc->name);
             return NULL;
         }
@@ -1656,9 +1629,7 @@ static void broker_remove_services (flux_msg_handler_t *handlers[])
 
 /* Handle messages received from overlay peers.
  */
-static void overlay_recv_cb (const flux_msg_t *msg,
-                             overlay_where_t where,
-                             void *arg)
+static void overlay_recv_cb (const flux_msg_t *msg, overlay_where_t where, void *arg)
 {
     broker_ctx_t *ctx = arg;
     int type;
@@ -1668,7 +1639,7 @@ static void overlay_recv_cb (const flux_msg_t *msg,
         return;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            broker_request_sendmsg (ctx, msg); // handles errors internally
+            broker_request_sendmsg (ctx, msg);  // handles errors internally
             break;
         case FLUX_MSGTYPE_RESPONSE:
             if (broker_response_sendmsg (ctx, msg) < 0)
@@ -1697,7 +1668,8 @@ static void overlay_recv_cb (const flux_msg_t *msg,
     if (dropped && (type != FLUX_MSGTYPE_RESPONSE || errno != ENOSYS)) {
         const char *topic = "unknown";
         (void)flux_msg_get_topic (msg, &topic);
-        flux_log_error (ctx->h, "DROP %s %s topic=%s",
+        flux_log_error (ctx->h,
+                        "DROP %s %s topic=%s",
                         where == OVERLAY_UPSTREAM ? "upstream" : "downstream",
                         flux_msg_typestr (type),
                         topic);
@@ -1712,13 +1684,12 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     uint32_t seq;
     const char *topic, *s;
 
-    if (flux_msg_get_seq (msg, &seq) < 0
-            || flux_msg_get_topic (msg, &topic) < 0) {
+    if (flux_msg_get_seq (msg, &seq) < 0 || flux_msg_get_topic (msg, &topic) < 0) {
         flux_log (ctx->h, LOG_ERR, "dropping malformed event");
         return -1;
     }
     if (seq <= ctx->event_recv_seq) {
-        //flux_log (ctx->h, LOG_DEBUG, "dropping duplicate event %d", seq);
+        // flux_log (ctx->h, LOG_DEBUG, "dropping duplicate event %d", seq);
         return -1;
     }
     if (ctx->event_recv_seq > 0) { /* don't log initial missed events */
@@ -1766,10 +1737,10 @@ static bool allow_early_request (const flux_msg_t *msg)
 {
     const struct flux_match match[] = {
         // state-machine.wait may be needed early by flux_reconnect(3) users
-        { FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "state-machine.wait" },
+        {FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "state-machine.wait"},
         // let state-machine.get and attr.get work for flux-uptime(1)
-        { FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "state-machine.get" },
-        { FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "attr.get" },
+        {FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "state-machine.get"},
+        {FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "attr.get"},
     };
     for (int i = 0; i < ARRAY_SIZE (match); i++)
         if (flux_msg_cmp (msg, match[i]))
@@ -1812,8 +1783,9 @@ static void module_cb (module_t *p, void *arg)
              * a login node before cluster reboot is complete.
              */
             else if (count > 1 && !ctx->online && !allow_early_request (msg)) {
-                const char *errmsg = "Upstream Flux broker is offline."
-                                     " Try again later.";
+                const char *errmsg =
+                    "Upstream Flux broker is offline."
+                    " Try again later.";
 
                 if (flux_respond_error (ctx->h, msg, EAGAIN, errmsg) < 0)
                     flux_log_error (ctx->h, "send offline response message");
@@ -1823,14 +1795,19 @@ static void module_cb (module_t *p, void *arg)
             break;
         case FLUX_MSGTYPE_EVENT:
             if (broker_event_sendmsg (ctx, msg) < 0) {
-                flux_log_error (ctx->h, "%s(%s): broker_event_sendmsg %s",
-                                __FUNCTION__, module_get_name (p),
+                flux_log_error (ctx->h,
+                                "%s(%s): broker_event_sendmsg %s",
+                                __FUNCTION__,
+                                module_get_name (p),
                                 flux_msg_typestr (type));
             }
             break;
         default:
-            flux_log (ctx->h, LOG_ERR, "%s(%s): unexpected %s",
-                      __FUNCTION__, module_get_name (p),
+            flux_log (ctx->h,
+                      LOG_ERR,
+                      "%s(%s): unexpected %s",
+                      __FUNCTION__,
+                      module_get_name (p),
                       flux_msg_typestr (type));
             break;
     }
@@ -1884,8 +1861,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
      * respond to insmod requests now. O/w, delay responses until
      * EXITED, when any errnum is available.
      */
-    if (prev_status == FLUX_MODSTATE_INIT
-        && status == FLUX_MODSTATE_RUNNING) {
+    if (prev_status == FLUX_MODSTATE_INIT && status == FLUX_MODSTATE_RUNNING) {
         if (module_insmod_respond (ctx->h, p) < 0)
             flux_log_error (ctx->h, "flux_respond to insmod %s", name);
     }
@@ -1908,8 +1884,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
     }
 }
 
-static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
-                         int revents, void *arg)
+static void signal_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     broker_ctx_t *ctx = arg;
     int signum = flux_signal_watcher_get_signum (w);
@@ -1921,8 +1896,7 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
 /* Route request.
  * On success, return 0.  On failure, return -1 with errno set.
  */
-static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
-                                            const flux_msg_t *msg)
+static int broker_request_sendmsg_internal (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
     uint32_t nodeid;
     uint8_t flags;
@@ -1941,7 +1915,7 @@ static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
      * If there is no such service locally (ENOSYS), route up TBON.
      */
     else if (((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != ctx->rank)
-                                              || nodeid == FLUX_NODEID_ANY) {
+             || nodeid == FLUX_NODEID_ANY) {
         if (service_send (ctx->services, msg) < 0) {
             if (errno != ENOSYS)
                 return -1;
@@ -1981,7 +1955,8 @@ static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
         if (errno == ENOSYS && flux_msg_get_topic (msg, &topic) == 0) {
             snprintf (errbuf,
                       sizeof (errbuf),
-                      "No service matching %s is registered", topic);
+                      "No service matching %s is registered",
+                      topic);
             errstr = errbuf;
         }
         if (flux_respond_error (ctx->h, msg, errno, errstr) < 0)
@@ -2075,11 +2050,12 @@ static const struct flux_handle_ops broker_handle_ops = {
     .send = broker_send,
 };
 
-
 #if HAVE_VALGRIND
 /* Disable dlclose() during valgrind operation
  */
-void I_WRAP_SONAME_FNNAME_ZZ(Za,dlclose)(void *dso) {}
+void I_WRAP_SONAME_FNNAME_ZZ (Za, dlclose) (void *dso)
+{
+}
 #endif
 
 /*
