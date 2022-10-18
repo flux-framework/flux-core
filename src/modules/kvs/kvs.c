@@ -1567,7 +1567,9 @@ static void finalize_transaction_bynames (struct kvs_ctx *ctx,
         if ((tr = treq_mgr_lookup_transaction (root->trm, nameval))) {
             treq_iter_request_copies (tr, finalize_transaction_req, &cbd);
             if (treq_mgr_remove_transaction (root->trm, nameval) < 0)
-                flux_log_error (ctx->h, "%s: treq_mgr_remove_transaction", __FUNCTION__);
+                flux_log_error (ctx->h,
+                                "%s: treq_mgr_remove_transaction",
+                                __FUNCTION__);
         }
     }
 }
@@ -1936,7 +1938,13 @@ static void wait_version_request_cb (flux_t *h,
     }
 
     if (root->seq < rootseq) {
-        if (kvs_wait_version_add (root, wait_version_request_cb, h, mh, msg, ctx, rootseq)
+        if (kvs_wait_version_add (root,
+                                  wait_version_request_cb,
+                                  h,
+                                  mh,
+                                  msg,
+                                  ctx,
+                                  rootseq)
             < 0) {
             flux_log_error (h, "%s: kvs_wait_version_add", __FUNCTION__);
             goto error;
@@ -2032,7 +2040,11 @@ static void error_event_cb (flux_t *h,
      *   cleaning up lingering transactions.
      */
     if (!(root = kvsroot_mgr_lookup_root (ctx->krm, ns))) {
-        flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s", __FUNCTION__, ns);
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "%s: received unknown namespace %s",
+                  __FUNCTION__,
+                  ns);
         return;
     }
 
@@ -2092,7 +2104,11 @@ static void setroot_event_cb (flux_t *h,
      *   namespace remove event received before setroot).
      */
     if (!(root = kvsroot_mgr_lookup_root (ctx->krm, ns))) {
-        flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s", __FUNCTION__, ns);
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "%s: received unknown namespace %s",
+                  __FUNCTION__,
+                  ns);
         return;
     }
 
@@ -2460,7 +2476,9 @@ static void start_root_remove (struct kvs_ctx *ctx, const char *ns)
          * this.
          */
 
-        if (treq_mgr_iter_transactions (root->trm, root_remove_process_transactions, &cbd)
+        if (treq_mgr_iter_transactions (root->trm,
+                                        root_remove_process_transactions,
+                                        &cbd)
             < 0)
             flux_log_error (ctx->h, "%s: treq_mgr_iter_transactions", __FUNCTION__);
     }
@@ -2703,7 +2721,8 @@ static void setroot_unpause_request_cb (flux_t *h,
         goto error;
     }
 
-    if (!(root = getroot (ctx, ns, mh, msg, NULL, setroot_unpause_request_cb, &stall))) {
+    if (!(root =
+              getroot (ctx, ns, mh, msg, NULL, setroot_unpause_request_cb, &stall))) {
         if (stall)
             return;
         goto error;
@@ -2773,7 +2792,10 @@ static const struct flux_msg_handler_spec htab[] = {
     {FLUX_MSGTYPE_REQUEST, "kvs.namespace-remove", namespace_remove_request_cb, 0},
     {FLUX_MSGTYPE_EVENT, "kvs.namespace-*-removed", namespace_removed_event_cb, 0},
     {FLUX_MSGTYPE_REQUEST, "kvs.namespace-list", namespace_list_request_cb, 0},
-    {FLUX_MSGTYPE_REQUEST, "kvs.setroot-pause", setroot_pause_request_cb, FLUX_ROLE_USER},
+    {FLUX_MSGTYPE_REQUEST,
+     "kvs.setroot-pause",
+     setroot_pause_request_cb,
+     FLUX_ROLE_USER},
     {FLUX_MSGTYPE_REQUEST,
      "kvs.setroot-unpause",
      setroot_unpause_request_cb,
@@ -3001,7 +3023,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
     if (!(f_heartbeat_sync = flux_sync_create (h, heartbeat_sync_min))
-        || flux_future_then (f_heartbeat_sync, heartbeat_sync_max, heartbeat_sync_cb, ctx)
+        || flux_future_then (f_heartbeat_sync,
+                             heartbeat_sync_max,
+                             heartbeat_sync_cb,
+                             ctx)
                < 0) {
         flux_log_error (h, "error starting heartbeat synchronization");
         goto done;

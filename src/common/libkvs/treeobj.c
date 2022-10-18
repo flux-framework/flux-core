@@ -31,12 +31,9 @@ static int treeobj_unpack (json_t *obj, const char **typep, json_t **datap)
     json_t *data;
     int version;
     const char *type;
-    if (!obj
-        || json_unpack (obj, "{s:i s:s s:o !}",
-                                  "ver", &version,
-                                  "type", &type,
-                                  "data", &data) < 0
-                        || version != treeobj_version) {
+    if (!obj || version != treeobj_version
+        || json_unpack (obj, "{s:i s:s s:o !}", "ver", &version, "type", &type, "data", &data)
+                        < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -555,7 +552,10 @@ json_t *treeobj_create_dirref (const char *blobref)
     return obj;
 }
 
-json_t *treeobj_create_valref_buf (const char *hashtype, int maxblob, void *data, int len)
+json_t *treeobj_create_valref_buf (const char *hashtype,
+                                   int maxblob,
+                                   void *data,
+                                   int len)
 {
     json_t *valref = NULL;
     char blobref[BLOBREF_MAX_STRING_SIZE];

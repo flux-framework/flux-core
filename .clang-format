@@ -11,6 +11,7 @@ ConstructorInitializerAllOnOneLineOrOnePerLine : true
 AllowShortFunctionsOnASingleLine : false
 AllowShortLoopsOnASingleLine : false
 BinPackParameters : false
+BinPackArguments : false
 AllowAllParametersOfDeclarationOnNextLine : false
 AlignTrailingComments : true
 ColumnLimit : 88
@@ -66,11 +67,12 @@ ForEachMacros :
 # These improve formatting results but require clang 3.6/7 or higher
 SortIncludes : false
 BreakBeforeBinaryOperators : NonAssignment
-AlignAfterOpenBracket: true
-BinPackArguments : false
+AlignAfterOpenBracket: Align
 AlignOperands : true
 BreakBeforeTernaryOperators : true
 AllowAllParametersOfDeclarationOnNextLine : false
+SpaceBeforeSquareBrackets: false
+IndentPPDirectives: None
 
 # 
 # vi:tabstop=4 shiftwidth=4 expandtab ft=yaml

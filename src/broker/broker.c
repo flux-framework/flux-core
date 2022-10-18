@@ -288,10 +288,11 @@ int main (int argc, char *argv[])
 
     /* Parse config.
      */
-    if (!(ctx.config = brokercfg_create (ctx.h,
-                                         optparse_get_str (ctx.opts, "config-path", NULL),
-                                         ctx.attrs,
-                                         ctx.modhash)))
+    if (!(ctx.config =
+              brokercfg_create (ctx.h,
+                                optparse_get_str (ctx.opts, "config-path", NULL),
+                                ctx.attrs,
+                                ctx.modhash)))
         goto cleanup;
     conf = flux_get_conf (ctx.h);
 
@@ -530,6 +531,9 @@ cleanup:
      */
     if (sigprocmask (SIG_SETMASK, &old_sigmask, NULL) < 0
         || sigaction (SIGINT, &old_sigact_int, NULL) < 0
+        || sigaction (SIGINT, &old_sigact_int, NULL) < 0
+        || sigaction (SIGINT, &old_sigact_int, NULL) < 0
+        || sigaction (SIGINT, &old_sigact_int, NULL) < 0 || sigaction (SIGINT, NULL) < 0
         || sigaction (SIGTERM, &old_sigact_term, NULL) < 0)
         log_err ("error restoring signal mask");
 
@@ -725,7 +729,8 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc1 - initialization
      */
     if (rc1 && strlen (rc1) > 0) {
-        if (runat_push_shell_command (ctx->runat, "rc1", rc1, RUNAT_FLAG_LOG_STDIO) < 0) {
+        if (runat_push_shell_command (ctx->runat, "rc1", rc1, RUNAT_FLAG_LOG_STDIO)
+            < 0) {
             log_err ("runat_push_shell_command rc1");
             return -1;
         }
@@ -744,7 +749,8 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc3 - finalization
      */
     if (rc3 && strlen (rc3) > 0) {
-        if (runat_push_shell_command (ctx->runat, "rc3", rc3, RUNAT_FLAG_LOG_STDIO) < 0) {
+        if (runat_push_shell_command (ctx->runat, "rc3", rc3, RUNAT_FLAG_LOG_STDIO)
+            < 0) {
             log_err ("runat_push_shell_command rc3");
             return -1;
         }

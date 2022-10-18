@@ -1,5 +1,30 @@
-files: '^(src/bindings/python/flux|src/cmd|t/.*\\.py)'
-exclude: "^(src/bindings/python/_flux/|src/bindings/python/flux/utils/)"
+files: |
+  (?x)^(
+     src/bindings/python/flux
+    |t/
+    # |src/cmd
+    # |t/.*\\.py
+  )
+exclude: |
+  (?x)^(
+     src/bindings/python/(_flux/|flux/utils/|pycotap/)
+    |src/broker/test
+    |src/common/libev
+    |src/common/libflux/test
+    |src/common/libidset/test
+    |src/common/libjob/test
+    |src/common/libkvs/test
+    |src/common/liblsd
+    |src/common/libminilzo
+    |src/common/libminilzo/test
+    |src/common/liboptparse/test
+    |src/common/libpmi/test
+    |src/common/libtap
+    |src/common/libtomlc99/test
+    |src/common/libutil/test
+    |src/modules/kvs/test
+  )
+fail_fast: false
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.0.1
@@ -42,3 +67,12 @@ repos:
     hooks:
       - id: vermin
         args: ['-t=3.6-', '--violations']
+  - repo: https://github.com/pocc/pre-commit-hooks
+    rev: v1.3.5
+    hooks:
+      - id: cppcheck
+        args:
+          - --std=c99
+          - --inline-suppr
+          - --suppress=variableScope
+          - --suppress=unusedFunction
