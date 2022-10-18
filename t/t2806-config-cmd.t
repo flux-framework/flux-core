@@ -123,6 +123,49 @@ test_expect_success 'flux-config get returns empty object if no config' '
 	flux config get >empty.out &&
 	test_cmp empty.exp empty.out
 '
+test_expect_success 'flux-config load handles TOML input' '
+	echo "test.y.z=42" >load.toml &&
+	flux config load <load.toml &&
+	flux config get >load.json
+'
+test_expect_success HAVE_JQ 'flux-config get returns loaded JSON' '
+	jq -e ".test.y.z == 42" load.json
+'
+test_expect_success 'flux-config load handles empty input' '
+	flux config load </dev/null &&
+	flux config get >empty.json
+'
+test_expect_success HAVE_JQ 'now the config is empty' '
+	jq -e ". == {}" empty.json
+'
+test_expect_success 'flux-config load handles JSON input' '
+	flux config load <load.json &&
+	flux config get >load2.json
+'
+test_expect_success HAVE_JQ 'flux-config get returns loaded JSON' '
+	jq -e ".test.y.z == 42" load2.json
+'
+test_expect_success 'flux-config load handles TOML directory' '
+	mkdir -p conf.d &&
+	cat >conf.d/test.toml <<-EOT &&
+	test.a.b.c = 999
+	EOT
+	flux config load conf.d &&
+	flux config get >fromfiles.json
+'
+test_expect_success HAVE_JQ 'flux-config get returns loaded JSON' '
+	jq -e ".test.a.b.c == 999" fromfiles.json
+'
+test_expect_success 'flux-config load PATH fails on invalid TOML' '
+	cat >conf.d/test.toml <<-EOT &&
+	this is not toml
+	EOT
+	test_must_fail flux config load conf.d
+'
+test_expect_success 'flux-config load fails on invalid TOML' '
+	echo "[whoops" >bad.input &&
+	test_must_fail flux config load <bad.input
+'
 test_expect_success 'flux-config builtin requires key name' '
 	test_must_fail flux config builtin
 '
