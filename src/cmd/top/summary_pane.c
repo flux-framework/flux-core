@@ -311,15 +311,15 @@ done:
 static int get_instance_attr_int (flux_t *h, const char *attr)
 {
     const char *s;
-    unsigned long level;
+    unsigned long val;
 
     if (!(s = flux_attr_get (h, attr)))
         fatal (errno, "error fetching %s broker attribute", attr);
     errno = 0;
-    level = strtoul (s, NULL, 10);
+    val = strtoul (s, NULL, 10);
     if (errno != 0)
         fatal (errno, "error parsing %s", attr);
-    return level;
+    return val;
 }
 
 
