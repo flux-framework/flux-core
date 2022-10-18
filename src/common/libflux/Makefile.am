@@ -83,7 +83,8 @@ fluxcoreinclude_HEADERS = \
 	plugin.h \
 	sync.h \
 	disconnect.h \
-	stats.h
+	stats.h \
+	util.h
 
 nodist_fluxcoreinclude_HEADERS = \
 	version.h
@@ -130,7 +131,8 @@ libflux_la_SOURCES = \
 	disconnect.c \
 	stats.c \
 	fripp.h \
-	fripp.c
+	fripp.c \
+	util.c
 
 libflux_la_CPPFLAGS = \
 	$(installed_conf_cppflags) \
@@ -167,6 +169,7 @@ TESTS = test_message.t \
 	test_handle.t \
 	test_msg_handler.t \
 	test_version.t \
+	test_util.t \
 	test_dispatch.t \
 	test_handle.t \
 	test_log.t \
@@ -264,6 +267,10 @@ test_msg_handler_t_LDADD = $(test_ldadd)
 test_version_t_SOURCES = test/version.c
 test_version_t_CPPFLAGS = $(test_cppflags)
 test_version_t_LDADD = $(test_ldadd)
+
+test_util_t_SOURCES = test/util.c
+test_util_t_CPPFLAGS = $(test_cppflags)
+test_util_t_LDADD = $(test_ldadd)
 
 test_rpc_t_SOURCES = test/rpc.c
 test_rpc_t_CPPFLAGS = $(test_cppflags)

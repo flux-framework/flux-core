@@ -37,6 +37,7 @@
 #include "sync.h"
 #include "disconnect.h"
 #include "stats.h"
+#include "util.h"
 
 #endif /* !_FLUX_CORE_FLUX_H */
 
