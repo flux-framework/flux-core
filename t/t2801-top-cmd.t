@@ -4,9 +4,7 @@ test_description='Test flux top command'
 
 . $(dirname $0)/sharness.sh
 
-mkdir -p conf.d
-
-test_under_flux 4 full -o,--config-path=$(pwd)/conf.d
+test_under_flux 4 full
 
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py"
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
@@ -131,10 +129,9 @@ test_expect_success NO_CHAIN_LINT 'flux-top does not exit on recursive failure' 
 	grep -qi "error connecting to Flux" recurse-fail.log
 '
 test_expect_success 'configure a test queue' '
-	cat >conf.d/config.toml <<-EOT &&
+	flux config load <<-EOT
 	[queues.testq]
 	EOT
-	flux config reload
 '
 test_expect_success 'flux-top displays job queues when present' '
 	$runpty -f asciicast -o no-queue.log flux top --test-exit &&

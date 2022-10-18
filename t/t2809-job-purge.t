@@ -4,9 +4,7 @@ test_description='Test flux job purge'
 
 . $(dirname $0)/sharness.sh
 
-mkdir -p config
-
-test_under_flux 1 full -o,--config-path=$(pwd)/config
+test_under_flux 1 full
 
 # Get the number of inactive jobs
 inactive_count() {
@@ -131,11 +129,10 @@ test_expect_success 'create 10 inactive jobs' '
 	flux queue drain
 '
 test_expect_success 'reconfigure job manager with inactive-num-limit=5' '
-	cat >config/system.toml <<-EOT &&
+	flux config load <<-EOT
 	[job-manager]
 	inactive-num-limit = 5
 	EOT
-	flux config reload
 '
 test_expect_success 'wait for job-list inactive job count to reach 5' '
 	wait_inactive_count job-list 5 30
@@ -150,11 +147,10 @@ test_expect_success NO_CHAIN_LINT 'wait for job-list inactive job count to reach
 	wait_inactive_count job-list 3 30
 '
 test_expect_success 'reconfigure job manager with inactive-age-limit=1ms' '
-	cat >config/system.toml <<-EOT &&
+	flux config load <<-EOT
 	[job-manager]
 	inactive-age-limit = "1ms"
 	EOT
-	flux config reload
 '
 test_expect_success 'wait for job-list inactive job count to reach 0' '
 	wait_inactive_count job-list 0 30
@@ -163,31 +159,32 @@ test_expect_success HAVE_JQ 'confirm job-list stats show zero inactive jobs' '
 	test $(inactive_count job-list-stats) -eq 0
 '
 test_expect_success 'reconfigure job manager with incorrect type limit' '
-	cat >config/system.toml <<-EOT &&
+	test_must_fail flux config load 2>badtype.err <<-EOT &&
 	[job-manager]
 	inactive-age-limit = 42
 	EOT
-	test_must_fail flux config reload 2>badtype.err &&
 	grep "Expected string" badtype.err
 '
 test_expect_success 'reconfigure job manager with bad age-limit fsd' '
-	cat >config/system.toml <<-EOT &&
+	test_must_fail flux config load 2>badfsd.err <<-EOT &&
 	[job-manager]
 	inactive-age-limit = "notfsd"
 	EOT
-	test_must_fail flux config reload 2>badfsd.err &&
 	grep "invalid FSD" badfsd.err
 '
 test_expect_success 'reconfigure job manager with invalid num-limit' '
+	test_must_fail flux config load 2>badnum.err <<-EOT &&
+	[job-manager]
+	inactive-num-limit = -42
+	EOT
+	grep "must be >= 0" badnum.err
+'
+test_expect_success 'new instance with bad config fails to start' '
+	mkdir -p config &&
 	cat >config/system.toml <<-EOT &&
 	[job-manager]
 	inactive-num-limit = -42
 	EOT
-	test_must_fail flux config reload 2>badnum.err &&
-	grep "must be >= 0" badnum.err
-'
-# Reuse bad config from previous test
-test_expect_success 'new instance with bad config fails to start' '
 	test_must_fail flux start -o,--config-path=$(pwd)/config \
 		/bin/true 2>badnum2.err &&
 	grep "must be >= 0" badnum2.err

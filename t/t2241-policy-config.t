@@ -10,182 +10,155 @@ specified in RFC 33 for [policy] and [queue.<name>.policy].
 
 mkdir -p config
 
-test_under_flux 1 minimal -o,--config-path=$(pwd)/config
+test_under_flux 1 minimal
 
 flux setattr log-stderr-level 1
 
 test_expect_success 'unknown policy key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.foo = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'unknown policy.jobspec key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.jobspec.foo = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'unknown policy.jobspec.defaults key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.jobspec.defaults.foo = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'unknown policy.jobspec.defaults.system key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.jobspec.defaults.system.foo = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'malformed policy.jobspec.defaults.system.duration fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.jobspec.defaults.system.duration = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'wrong type policy.jobspec.defaults.system.queue fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.jobspec.defaults.system.queue = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'unknown policy.limits key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.limits.foo = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'unknown policy.limits.job-size key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.limits.job-size.foo = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'unknown policy.limits.job-size.max key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.limits.job-size.max.foo = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'unknown policy.limits.job-size.min key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.limits.job-size.min.foo = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'incorrect policy.limits.job-size.min.nnodes fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.limits.job-size.min.nnodes = -2
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'malformed policy.limits.duration fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.limits.duration = 1.0
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'unknown policy.access key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.access.foo = 1.0
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'malformed policy.access.allow-user key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.access.allow-user = 1.0
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'malformed policy.access.allow-group key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.access.allow-group = 1.0
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'malformed policy.access.allow-user entry fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.access.allow-user = [ 1 ]
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'malformed policy.access.allow-group entry fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	policy.access.allow-group = [ 1 ]
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'well formed policy.access works' '
-	cat >config/policy.toml <<-EOT &&
+	flux config load <<-EOT
 	[policy.access]
 	allow-user = [ "alice", "bob" ]
 	allow-group = [ "smurfs" ]
 	EOT
-	flux config reload
 '
 test_expect_success 'malformed queues table fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	queues = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'unknown queues.NAME.policy.foo key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	queues.x.policy.foo = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'malformed queues.NAME.policy.limits.duration key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	queues.x.policy.limits.duration = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'default queue as queue policy fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	queues.x.policy.jobspec.defaults.system.queue = "x"
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'unknown default queue fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	[queues.foo]
 	[policy]
 	jobspec.defaults.system.queue = "bar"
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'unknown queues.NAME.requires.foo key fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	queues.x.requires = 1
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'malformed queues.NAME.requires fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	queues.x.requires = [ 1 ]
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'malformed queues.NAME.requires property string' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	queues.x.requires = [ "foo|bar" ]
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'well formed queues.NAME.requires works' '
-	cat >config/policy.toml <<-EOT &&
+	flux config load <<-EOT
 	[queues.x]
 	requires = [ "batch" ]
 	[queues.z]
 	requires = [ "debug", "foo" ]
 	EOT
-	flux config reload
 '
 # Example from flux-config-policy(5)
 test_expect_success 'valid config passes' '
-	cat >config/policy.toml <<-EOT &&
+	flux config load <<-EOT
 	[policy.jobspec.defaults.system]
 	duration = "1h"
 	queue = "batch"
@@ -201,6 +174,5 @@ test_expect_success 'valid config passes' '
 
 	[queues.batch]
 	EOT
-	flux config reload
 '
 test_done
