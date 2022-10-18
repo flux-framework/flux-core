@@ -267,7 +267,7 @@ static int validate_policy_json (json_t *policy,
     return 0;
 }
 
-static int validate_policy_config (flux_conf_t *conf,
+static int validate_policy_config (const flux_conf_t *conf,
                                    const char **default_queue,
                                    flux_error_t *error)
 {
@@ -288,7 +288,7 @@ static int validate_policy_config (flux_conf_t *conf,
     return 0;
 }
 
-static int validate_queues_config (flux_conf_t *conf,
+static int validate_queues_config (const flux_conf_t *conf,
                                    const char *default_queue,
                                    flux_error_t *error)
 {
@@ -360,6 +360,23 @@ inval:
     return -1;
 }
 
+static int brokercfg_set (flux_t *h,
+                          const flux_conf_t *conf,
+                          flux_error_t *error)
+{
+    const char *defqueue;
+
+    if (validate_policy_config (conf, &defqueue, error) < 0
+        || validate_queues_config (conf, defqueue, error) < 0)
+        return -1;
+
+    if (flux_set_conf (h, conf) < 0) {
+        errprintf (error, "Error caching config object");
+        return -1;
+    }
+    return 0;
+}
+
 /* Parse config object from TOML config files if path is set;
  * otherwise, create an empty config object.  Store the object
  * in ctx->h for later access by flux_conf_get().
@@ -370,7 +387,6 @@ static int brokercfg_parse (flux_t *h,
 {
     flux_error_t error;
     flux_conf_t *conf;
-    const char *defqueue;
 
     if (path) {
         if (!(conf = flux_conf_parse (path, &error))) {
@@ -386,14 +402,8 @@ static int brokercfg_parse (flux_t *h,
             return -1;
         }
     }
-    if (validate_policy_config (conf, &defqueue, errp) < 0)
+    if (brokercfg_set (h, conf, errp) < 0)
         goto error;
-    if (validate_queues_config (conf, defqueue, errp) < 0)
-        goto error;
-    if (flux_set_conf (h, conf) < 0) {
-        errprintf (errp, "Error caching config object");
-        goto error;
-    }
     return 0;
 error:
     flux_conf_decref (conf);
@@ -401,7 +411,7 @@ error:
 }
 
 /* Now that all modules have responded to '<name>.config-reload' request,
- * send a response to the original broker 'config.reload' request.  If errors
+ * send a response to the original broker load/reload request.  If errors
  * occurred (other than ENOSYS), include as much diagnostic info as possible
  * in the response.
  */
@@ -437,7 +447,7 @@ static void reload_continuation (flux_future_t *cf, void *arg)
 
     if (flux_respond (cfg->h, msg, NULL) < 0)
         flux_log_error (cfg->h, "reload: flux_respond");
-    flux_log (cfg->h, LOG_INFO, "configuration reloaded");
+    flux_log (cfg->h, LOG_INFO, "configuration updated");
     flux_future_destroy (cfg->reload_f);
     cfg->reload_f = NULL;
     return;
@@ -491,9 +501,39 @@ error:
     return NULL;
 }
 
+static int update_modules_and_respond (flux_t *h,
+                                       struct brokercfg *cfg,
+                                       const flux_msg_t *msg,
+                                       flux_error_t *error)
+{
+    flux_future_t *f;
+
+    if (cfg->reload_f) {
+        errprintf (error, "module config-reload in progress, try again later");
+        errno = EBUSY;
+        return -1;
+    }
+    if (!(f = reload_module_configs (h, cfg))
+        || flux_future_then (f, -1., reload_continuation, cfg) < 0)
+        goto error;
+    if (flux_future_aux_set (f,
+                             "flux::request",
+                             (void *)flux_msg_incref (msg),
+                             (flux_free_f)flux_msg_decref) < 0) {
+        flux_msg_decref (msg);
+        goto error;
+    }
+    cfg->reload_f = f;
+    return 0;
+error:
+    errprintf (error, "failed to set up asynchronous module config-reload");
+    flux_future_destroy (f);
+    return -1;
+}
+
 /* Handle request to re-parse config object from TOML config files.
- * If files fail to parse, generate an immediate error response.
- * Otherwise, initiate reload of config in all loaded modules
+ * If files fail to parse, generate an immediate error response.  Otherwise,
+ * initiate reload of config in all loaded modules and respond when complete.
  */
 static void reload_cb (flux_t *h,
                        flux_msg_handler_t *mh,
@@ -502,36 +542,14 @@ static void reload_cb (flux_t *h,
 {
     struct brokercfg *cfg = arg;
     flux_error_t error;
-    const char *errmsg = NULL;
-    flux_future_t *f;
 
-    if (cfg->reload_f) {
-        errmsg = "reload in progress";
-        errno = EBUSY;
+    if (brokercfg_parse (h, cfg->path, &error) < 0
+        || update_modules_and_respond (h, cfg, msg, &error) < 0)
         goto error;
-    }
-    if (brokercfg_parse (h, cfg->path, &error) < 0) {
-        errmsg = error.text;
-        goto error;
-    }
-    if (!(f = reload_module_configs (h, cfg)))
-        goto error;
-    if (flux_future_aux_set (f,
-                             "flux::request",
-                             (void *)flux_msg_incref (msg),
-                             (flux_free_f)flux_msg_decref) < 0) {
-        flux_future_destroy (f);
-        goto error;
-    }
-    if (flux_future_then (f, -1., reload_continuation, cfg) < 0) {
-        flux_future_destroy (f);
-        goto error;
-    }
-    cfg->reload_f = f;
     return;
 error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "reload: flux_respond_error");
+    if (flux_respond_error (h, msg, errno, error.text) < 0)
+        flux_log_error (h, "error responding to config.reload request");
 }
 
 static void get_cb (flux_t *h,
