@@ -9,6 +9,7 @@
 ###############################################################
 
 import argparse
+import copy
 import errno
 import glob
 import json
@@ -905,7 +906,7 @@ class UtilConfig:
         self.name = name
         self.dict = {}
         if initial_dict:
-            self.dict = dict(initial_dict)
+            self.dict = copy.deepcopy(initial_dict)
         self.config = self.dict
 
         #  If not None,  use subcommand config in subtable = 'subtable'
