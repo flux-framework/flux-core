@@ -552,6 +552,34 @@ error:
         flux_log_error (h, "error responding to config.reload request");
 }
 
+/* Handle request to replace config object with request payload.
+ * Initiate reload of config in all loaded modules.
+ */
+static void load_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
+{
+    struct brokercfg *cfg = arg;
+    const flux_conf_t *conf = NULL;
+    flux_error_t error;
+
+    if (flux_conf_reload_decode (msg, &conf) < 0) {
+        errprintf (&error, "error decoding config.load request");
+        goto error;
+    }
+    if (brokercfg_set (h, flux_conf_incref (conf), &error) < 0) {
+        flux_conf_decref (conf);
+        goto error;
+    }
+    if (update_modules_and_respond (h, cfg, msg, &error) < 0)
+        goto error;
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, error.text) < 0)
+        flux_log_error (h, "error responding to config.load request");
+}
+
 static void get_cb (flux_t *h,
                     flux_msg_handler_t *mh,
                     const flux_msg_t *msg,
@@ -577,6 +605,7 @@ error:
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "config.reload", reload_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "config.load", load_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "config.get", get_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
