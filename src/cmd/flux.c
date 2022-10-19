@@ -95,7 +95,7 @@ static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
         log_msg_exit ("optparse_set() failed");
 
     // Don't print internal subcommands in --help (we print subcommands using
-    //  emit_command_help() above.
+    //  emit_command_help()
     e = optparse_set (p, OPTPARSE_PRINT_SUBCMDS, 0);
     if (e != OPTPARSE_SUCCESS)
         log_msg_exit ("optparse_set (OPTPARSE_PRINT_SUBCMDS");
