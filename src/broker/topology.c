@@ -19,6 +19,9 @@
 #include "src/common/libutil/kary.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/aux.h"
+#include "src/common/libutil/errprintf.h"
+#include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #include "topology.h"
 
@@ -33,6 +36,50 @@ struct topology {
     int refcount;
     struct node *node;
 };
+
+static int kary_plugin_init (struct topology *topo,
+                             const char *path,
+                             flux_error_t *error);
+
+static const struct topology_plugin builtin_plugins[] = {
+    { .name = "kary",   .init = kary_plugin_init },
+};
+
+static const struct topology_plugin *topology_plugin_lookup (const char *name)
+{
+    for (int i = 0; i < ARRAY_SIZE (builtin_plugins); i++)
+        if (streq (name, builtin_plugins[i].name))
+            return &builtin_plugins[i];
+    return NULL;
+}
+
+static int topology_plugin_call (struct topology *topo,
+                                 const char *uri,
+                                 flux_error_t *error)
+{
+    const struct topology_plugin *plugin;
+    char *name;
+    char *path;
+
+    if (!(name = strdup (uri))) {
+        errprintf (error, "out of memory");
+        goto error;
+    }
+    if ((path = strchr (name, ':')))
+        *path++ = '\0';
+    if (!(plugin = topology_plugin_lookup (name))) {
+        errprintf (error, "unknown topology scheme '%s'", name);
+        goto error;
+    }
+    if (plugin->init (topo, path, error) < 0)
+        goto error;
+    free (name);
+    return 0;
+error:
+    free (name);
+    errno = EINVAL;
+    return -1;
+}
 
 void topology_decref (struct topology *topo)
 {
@@ -52,38 +99,35 @@ struct topology *topology_incref (struct topology *topo)
     return topo;
 }
 
-struct topology *topology_create (int size)
+struct topology *topology_create (const char *uri,
+                                  int size,
+                                  flux_error_t *error)
 {
     struct topology *topo;
 
     if (size < 1) {
+        errprintf (error, "invalid topology size %d", size);
         errno = EINVAL;
         return NULL;
     }
-    if (!(topo = calloc (1, sizeof (*topo) + sizeof (topo->node[0]) * size)))
-        return NULL;
+    if (!(topo = calloc (1, sizeof (*topo) + sizeof (topo->node[0]) * size))) {
+        errprintf (error, "out of memory");
+        goto error;
+    }
     topo->refcount = 1;
     topo->size = size;
     topo->node = (struct node *)(topo + 1);
     topo->node[0].parent = -1;
     // topo->node is 0-initialized, so rank 0 is default parent of all nodes
-    return topo;
-}
 
-int topology_set_kary (struct topology *topo, int k)
-{
-    if (!topo || k < 0) {
-        errno = EINVAL;
-        return -1;
+    if (uri) {
+        if (topology_plugin_call (topo, uri, error) < 0)
+            goto error;
     }
-    if (k > 0) {
-        for (int i = 0; i < topo->size; i++) {
-            topo->node[i].parent = kary_parentof (k, i);
-            if (topo->node[i].parent == KARY_NONE)
-                topo->node[i].parent = -1;
-        }
-    }
-    return 0;
+    return topo;
+error:
+    topology_decref (topo);
+    return NULL;
 }
 
 int topology_set_rank (struct topology *topo, int rank)
@@ -320,6 +364,44 @@ struct idset *topology_get_internal_ranks (struct topology *topo)
 error:
     idset_destroy (ranks);
     return NULL;
+}
+
+/* kary plugin
+ */
+static int parse_k (const char *s, int *result, flux_error_t *error)
+{
+    char *endptr;
+    unsigned long val;
+
+    if (!s || strlen (s) == 0)
+        goto error;
+    errno = 0;
+    val = strtoul (s, &endptr, 10);
+    if (errno != 0 || *endptr != '\0')
+        goto error;
+    *result = val;
+    return 0;
+error:
+    errprintf (error, "kary k value must be an integer >= 0");
+    return -1;
+}
+
+static int kary_plugin_init (struct topology *topo,
+                             const char *path,
+                             flux_error_t *error)
+{
+    int k;
+
+    if (parse_k (path, &k, error) < 0)
+        return -1;
+    if (k > 0) {
+        for (int i = 0; i < topo->size; i++) {
+            topo->node[i].parent = kary_parentof (k, i);
+            if (topo->node[i].parent == KARY_NONE)
+                topo->node[i].parent = -1;
+        }
+    }
+    return 0;
 }
 
 // vi:ts=4 sw=4 expandtab

@@ -195,6 +195,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     int result;
     const char *uri;
     int i;
+    char topo_uri[32];
 
     /* Fetch the tbon.fanout attribute and supply a default value if unset.
      */
@@ -232,8 +233,8 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
         log_err ("error setting broker.mapping attribute");
         goto error;
     }
-    if (!(topo = topology_create (pmi_params.size))
-        || topology_set_kary (topo, fanout) < 0
+    snprintf (topo_uri, sizeof (topo_uri), "kary:%d", fanout);
+    if (!(topo = topology_create (topo_uri, pmi_params.size, NULL))
         || topology_set_rank (topo, pmi_params.rank) < 0
         || overlay_set_topology (overlay, topo) < 0)
         goto error;

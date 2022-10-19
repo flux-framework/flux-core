@@ -58,11 +58,9 @@ void test_flat (void)
     json_t *o;
     bool pass;
 
-    topo = topology_create (16);
+    topo = topology_create (NULL, 16, NULL);
     ok (topo != NULL,
         "topology_create size=16 works");
-    ok (topology_set_kary (topo, 0) == 0,
-        "topology_set_kary k=0 allowed to indicate flat topo");
     ok (topology_get_size (topo) == 16,
         "topology_get_size returns 16");
     ok (topology_get_rank (topo) == 0,
@@ -108,11 +106,9 @@ void test_k1 (void)
     int child_ranks[15];
     json_t *o;
 
-    topo = topology_create (16);
+    topo = topology_create ("kary:1", 16, NULL);
     ok (topo != NULL,
-        "topology_create size=16 works");
-    ok (topology_set_kary (topo, 1) == 0,
-        "topology_set_kary k=1 works");
+        "topology_create kary:1 size=16 works");
     ok (topology_get_rank (topo) == 0,
         "topology_get_rank returns 0");
     ok (topology_get_size (topo) == 16,
@@ -152,11 +148,9 @@ void test_k2 (void)
     int child_ranks[15];
     json_t *o;
 
-    topo = topology_create (16);
+    topo = topology_create ("kary:2", 16, NULL);
     ok (topo != NULL,
-        "topology_create size=16 works");
-    ok (topology_set_kary (topo, 2) == 0,
-        "topology_set_kary k=2 works");
+        "topology_create kary:2 size=16 works");
     ok (topology_get_rank (topo) == 0,
         "topology_get_rank returns 0");
     ok (topology_get_size (topo) == 16,
@@ -205,11 +199,9 @@ void test_k2_router (void)
     int child_ranks[15];
     json_t *o;
 
-    topo = topology_create (16);
+    topo = topology_create ("kary:2", 16, NULL);
     ok (topo != NULL,
-        "topology_create size=16 works");
-    ok (topology_set_kary (topo, 2) == 0,
-        "topology_set_kary k=2 works");
+        "topology_create kary:2 size=16 works");
     ok (topology_set_rank (topo, 1) == 0,
         "topology_set_rank 1 works");
     ok (topology_get_rank (topo) == 1,
@@ -240,20 +232,20 @@ void test_k2_router (void)
 
 struct internal_ranks_test {
     int size;
-    int kary;
+    const char *uri;
     const char *expected_ranks;
 };
 
 struct internal_ranks_test internal_ranks_tests[] = {
-    { 1,  2,  ""    },
-    { 2,  2,  "0"   },
-    { 4,  2,  "0-1" },
-    { 4,  0,  "0"   },
-    { 16, 2,  "0-7" },
-    { 48, 2,  "0-23"},
-    { 48, 0,  "0"   },
-    { 48, 16, "0-2" },
-    { -1, -1, NULL  }
+    { 1,  "kary:2",  ""    },
+    { 2,  "kary:2",  "0"   },
+    { 4,  "kary:2",  "0-1" },
+    { 4,  "kary:0",  "0"   },
+    { 16, "kary:2",  "0-7" },
+    { 48, "kary:2",  "0-23"},
+    { 48, "kary:0",  "0"   },
+    { 48, "kary:16", "0-2" },
+    { -1, NULL, NULL  }
 };
 
 void test_internal_ranks (void)
@@ -265,11 +257,10 @@ void test_internal_ranks (void)
 
     struct internal_ranks_test *t = internal_ranks_tests;
     while (t && t->expected_ranks) {
-        if (!(topo = topology_create (t->size))
-            || topology_set_kary (topo, t->kary) < 0)
-            BAIL_OUT ("failed to create topology size=%d kary=%d",
-                      t->size,
-                      t->kary);
+        if (!(topo = topology_create (t->uri, t->size, NULL)))
+            BAIL_OUT ("failed to create topology %s size=%d",
+                      t->uri,
+                      t->size);
         if (!(expected = idset_decode (t->expected_ranks)))
             BAIL_OUT ("failed to decode expected ranks=%d",
                       t->expected_ranks);
@@ -296,11 +287,11 @@ void test_invalid (void)
     struct topology *topo;
     int a[16];
 
-    if (!(topo = topology_create (16)))
+    if (!(topo = topology_create (NULL, 16, NULL)))
         BAIL_OUT ("could not create topology");
 
     errno = 0;
-    ok (topology_create (0) == NULL && errno == EINVAL,
+    ok (topology_create (NULL, 0, NULL) == NULL && errno == EINVAL,
         "topology_create size=0 fails with EINVAL");
 
     lives_ok ({topology_decref (NULL);},
@@ -308,10 +299,6 @@ void test_invalid (void)
 
     ok (topology_incref (NULL) == NULL,
         "topology_incref topo=NULL returns NULL");
-
-    errno = 0;
-    ok (topology_set_kary (NULL, 2) < 0 && errno == EINVAL,
-        "topology_set_kary topo=NULL fails with EINVAL");
 
     errno = 0;
     ok (topology_set_rank (NULL, 0) < 0 && errno == EINVAL,

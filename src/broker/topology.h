@@ -17,16 +17,19 @@
 #include <flux/idset.h>
 
 /* Create/destroy tree topology of size.
- * The initial topology is "flat" (rank 0 is parent of all other ranks),
+ * The default topology is "flat" (rank 0 is parent of all other ranks),
  * and queries are from the perspective of rank 0.
+ * If uri is non-NULL, the scheme selects a topology type, and the path
+ * provides additional detail.  The following schemes are available:
+ *
+ * kary:K
+ * Set the topology to a complete k-ary tree with fanout K.
  */
-struct topology *topology_create (int size);
+struct topology *topology_create (const char *uri,
+                                  int size,
+                                  flux_error_t *error);
 void topology_decref (struct topology *topo);
 struct topology *topology_incref (struct topology *topo);
-
-/* Configure topology as a complete k-ary tree with fanout k
- */
-int topology_set_kary (struct topology *topo, int k);
 
 /* Set "my rank", which provides the point of view for queries.
  */
@@ -58,6 +61,13 @@ json_t *topology_get_json_subtree_at (struct topology *topo, int rank);
 /*  Return internal ranks (ranks that have one or more children)
  */
 struct idset *topology_get_internal_ranks (struct topology *topo);
+
+/* Plugins
+ */
+struct topology_plugin {
+    const char *name;
+    int (*init)(struct topology *topo, const char *path, flux_error_t *error);
+};
 
 #endif /* !_BROKER_TOPOLOGY_H */
 
