@@ -4,25 +4,21 @@ test_description='Test flux job manager limit-duration plugin'
 
 . $(dirname $0)/sharness.sh
 
-mkdir -p config
-
-test_under_flux 2 full -o,--config-path=$(pwd)/config
+test_under_flux 2 full
 
 flux setattr log-stderr-level 1
 
 test_expect_success 'configuring an invalid duration limit fails' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	[policy.limits]
 	duration = 1.0
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'configure a valid duration limit' '
-	cat >config/policy.toml <<-EOT &&
+	flux config load <<-EOT
 	[policy.limits]
 	duration = "1m"
 	EOT
-	flux config reload
 '
 test_expect_success 'a job that exceeds policy.limits.duration is rejected' '
 	test_must_fail flux mini submit -t 1h /bin/true 2>duration.err &&
@@ -35,7 +31,7 @@ test_expect_success 'a job that is under policy.limits.duration is accepted' '
 	flux mini submit -t 30s /bin/true
 '
 test_expect_success 'configure policy.limits.duration and queue duration' '
-	cat >config/policy.toml <<-EOT &&
+	flux config load <<-EOT
 	[policy.limits]
 	duration = "1h"
 	[queues.debug]
@@ -44,7 +40,6 @@ test_expect_success 'configure policy.limits.duration and queue duration' '
 	[queues.short.policy.limits]
 	duration = "1m"
 	EOT
-	flux config reload
 '
 test_expect_success 'a job that exceeds policy.limits.duration is rejected' '
 	test_must_fail flux mini submit --queue=debug -t 2h /bin/true
@@ -71,14 +66,13 @@ test_expect_success 'but is rejected on a queue with lower limit' '
 	    /bin/true
 '
 test_expect_success 'configure policy.limits.duration and an unlimited queue' '
-	cat >config/policy.toml <<-EOT &&
+	flux config load <<-EOT
 	[policy.limits]
 	duration = "1h"
 	[queues.batch.policy.limits]
 	duration = "0"
 	[queues.debug]
 	EOT
-	flux config reload
 '
 test_expect_success 'a job that is over policy.limits.duration is rejected' '
 	test_must_fail flux mini submit --queue=debug -t 2h /bin/true
@@ -94,25 +88,22 @@ test_expect_success 'a job that sets no explicit duration is accepted by the unl
 	    /bin/true
 '
 test_expect_success 'configure an invalid duration limit' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	[policy.limits]
 	duration = "xyz123"
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'configure a duration limit of an invalid type' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	[policy.limits]
 	duration = [ 0 ]
 	EOT
-	test_must_fail flux config reload
 '
 test_expect_success 'configure an invalid queue duration limit' '
-	cat >config/policy.toml <<-EOT &&
+	test_must_fail flux config load <<-EOT
 	[queues.debug.policy.limits]
 	duration = "xyz123"
 	EOT
-	test_must_fail flux config reload
 '
 
 test_done

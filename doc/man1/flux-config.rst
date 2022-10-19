@@ -10,6 +10,8 @@ SYNOPSIS
 
 **flux** **config** **reload**
 
+**flux** **config** **load** [*PATH*]
+
 **flux** **config** **get** [*OPTIONS*] [*NAME*]
 
 **flux** **config** **builtin** [*NAME*]
@@ -47,6 +49,8 @@ configuration key names.  This command is available to all users.
    specific values if found to be in tree.  This enables Flux testing without
    requiring installation.
 
+``flux config load`` replaces the current config with an object read from
+standard input (JSON or TOML), or from ``*.toml`` in *PATH*, if specified.
 
 GET SUBCOMMAND OPTIONS
 ======================

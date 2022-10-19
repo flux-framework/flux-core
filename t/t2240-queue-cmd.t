@@ -3,9 +3,7 @@ test_description='Test flux queue command'
 
 . $(dirname $0)/sharness.sh
 
-mkdir -p conf.d
-
-test_under_flux 1 full -o,--config-path=$(pwd)/conf.d
+test_under_flux 1 full
 
 flux setattr log-stderr-level 1
 
@@ -304,11 +302,10 @@ test_expect_success 'ensure instance is drained' '
 	flux queue status -v
 '
 test_expect_success 'configure batch,debug queues' '
-	cat >conf.d/config.toml <<-EOT &&
+	flux config load <<-EOT
 	[queues.batch]
 	[queues.debug]
 	EOT
-	flux config reload
 '
 test_expect_success 'jobs may be submitted to either queue' '
 	flux mini submit -q batch /bin/true &&

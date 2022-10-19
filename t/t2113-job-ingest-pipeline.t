@@ -3,10 +3,7 @@ test_description='Test job ingest pipeline'
 
 . $(dirname $0)/sharness.sh
 
-rm -f $(pwd)/config/ingest.toml
-mkdir -p $(pwd)/config
-
-test_under_flux 1 full -o,--config-path=$(pwd)/config
+test_under_flux 1 full
 
 flux setattr log-stderr-level 1
 
@@ -24,13 +21,12 @@ test_expect_success HAVE_JQ 'one validator, no frobnicator started' '
 	jq -e ".pipeline.validator.running == 1" <stats2.out
 '
 test_expect_success 'configure frobnicator' '
-	cat >config/ingest.toml <<-EOT &&
+	flux config load <<-EOT
 	[policy.jobspec.defaults.system]
 	duration = "10s"
 	[ingest.frobnicator]
 	plugins = [ "defaults" ]
 	EOT
-	flux config reload
 '
 test_expect_success 'run a job with unspecified duration' '
 	flux mini submit /bin/true >jobid1
@@ -44,11 +40,11 @@ test_expect_success HAVE_JQ 'job duration was assigned from default' '
 	flux job info $(cat jobid1) jobspec >jobspec1 &&
 	jq -e ".attributes.system.duration == 10" <jobspec1
 '
-test_expect_success HAVE_JQ 'run flux config reload' '
+test_expect_success HAVE_JQ 'force module config update' '
 	flux module stats job-ingest >stats4.out &&
 	jq -r ".pipeline.frobnicator.pids[0]" <stats4.out >frob.pid &&
 	jq -r ".pipeline.validator.pids[0]" <stats4.out >val.pid &&
-	flux config reload
+	flux config get | flux config load
 '
 test_expect_success 'run a job to trigger work crew with new config' '
 	flux mini submit /bin/true
@@ -73,9 +69,7 @@ test_expect_success HAVE_JQ 'job was frobbed but not validated' '
 	test_cmp val.count val2.count
 '
 test_expect_success 'reconfig with null config' '
-	cat >config/ingest.toml <<-EOT &&
-	EOT
-	flux config reload
+	flux config load </dev/null
 '
 test_expect_success HAVE_JQ 'run a job with novalidate flag' '
 	flux mini run --flags novalidate /bin/true

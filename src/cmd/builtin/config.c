@@ -11,10 +11,13 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
 #include <jansson.h>
 
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/read_all.h"
+#include "src/common/libutil/tomltk.h"
 #include "ccan/array_size/array_size.h"
 
 #include "builtin.h"
@@ -192,6 +195,61 @@ static int internal_config_reload (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+static int config_load (optparse_t *p, int ac, char *av[])
+{
+    int index = optparse_option_index (p);
+    const char *path = NULL;
+    json_t *obj;
+    flux_t *h;
+    flux_future_t *f;
+
+    if (index < ac)
+        path = av[index++];
+    if (index != ac) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (path) {
+        flux_conf_t *conf;
+        flux_error_t error;
+
+        if (!(conf = flux_conf_parse (path, &error))
+            || flux_conf_unpack (conf, &error, "O", &obj) < 0)
+            log_msg_exit ("Error parsing config: %s", error.text);
+        flux_conf_decref (conf);
+    }
+    else {
+        ssize_t n;
+        void *buf;
+
+        if ((n = read_all (STDIN_FILENO, &buf)) < 0)
+            log_err_exit ("error reading stdin");
+
+        if (!(obj = json_loads (buf, 0, NULL))) {
+            struct tomltk_error error;
+            toml_table_t *tab;
+
+            if (!(tab = tomltk_parse (buf, n, &error)))
+                log_msg_exit ("TOML parse error: %s", error.errbuf);
+            if (!(obj = tomltk_table_to_json (tab)))
+                log_err_exit ("error converting TOML to JSON");
+            toml_free (tab);
+        }
+        free (buf);
+    }
+    if (!(h = builtin_get_flux_handle (p)))
+        log_err_exit ("flux_open");
+    if (!(f = flux_rpc_pack (h, "config.load", FLUX_NODEID_ANY, 0, "O", obj)))
+        log_err_exit ("error constructing config.load RPC");
+    if (flux_future_get (f, NULL) < 0)
+        log_msg_exit ("load: %s", flux_future_error_string (f));
+    flux_future_destroy (f);
+    flux_close (h);
+
+    json_decref (obj);
+    return 0;
+}
+
 int cmd_config (optparse_t *p, int ac, char *av[])
 {
     log_init ("flux-config");
@@ -217,6 +275,13 @@ static struct optparse_option get_opts[] = {
 
 
 static struct optparse_subcommand config_subcmds[] = {
+    { "load",
+      "[PATH]",
+      "Load broker configuration from stdin or TOML directory PATH",
+      config_load,
+      0,
+      NULL,
+    },
     { "reload",
       "[OPTIONS]",
       "Reload broker configuration from files",
