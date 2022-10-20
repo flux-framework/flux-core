@@ -312,11 +312,7 @@ def status(args):
     #  Get state list from args or defaults:
     states = status_get_state_list(args, valid_states, default_states)
 
-    #  Include reason field only with -vv
-    if args.verbose >= 2:
-        fmt = "{state:>10} {nnodes:>6} {reason:<25} {nodelist}"
-    else:
-        fmt = "{state:>10} {nnodes:>6} {nodelist}"
+    fmt = "{state:>10} {nnodes:>6} {nodelist}"
     if args.format:
         fmt = args.format
 
@@ -333,8 +329,8 @@ def status(args):
 
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
-    #  Skip empty lines unless --verbose or --states or ---skip-empty
-    skip_empty = args.skip_empty or (not args.verbose and not args.states)
+    #  Skip empty lines unless --states or ---skip-empty
+    skip_empty = args.skip_empty or not args.states
 
     lines = []
     for line in sorted(rstat, key=lambda x: valid_states.index(x.state)):
@@ -348,7 +344,6 @@ def status(args):
 
 
 def drain_list(args):
-    args.verbose = False
     args.from_stdin = False
     args.no_header = False
     args.format = (
@@ -438,16 +433,10 @@ def list_handler(args):
     else:
         resources = resource_list(flux.Flux()).get()
 
-    fmt = "{state:>10}"
-
-    # Only include properties list if properties exist in set:
-    if resources.all.properties:
-        fmt += " {properties:<10.10+}"
-    if args.verbose:
-        fmt += " {nnodes:>6} {ncores:>8} {ngpus:>8} {rlist}"
-    else:
-        fmt += " {nnodes:>6} {ncores:>8} {ngpus:>8} {nodelist}"
-
+    fmt = (
+        "{state:>10} ?:{properties:<10.10+} {nnodes:>6} {ncores:>8} "
+        "{ngpus:>8} {nodelist}"
+    )
     if args.format:
         fmt = args.format
 
@@ -463,7 +452,6 @@ def info(args):
         args.states = "all"
     args.no_header = True
     args.format = "{nnodes} Nodes, {ncores} Cores, {ngpus} GPUs"
-    args.verbose = 0
     list_handler(args)
 
 
@@ -512,13 +500,6 @@ def main():
         "status", formatter_class=flux.util.help_formatter()
     )
     status_parser.add_argument(
-        "-v",
-        "--verbose",
-        action="count",
-        default=0,
-        help="Include reason if available",
-    )
-    status_parser.add_argument(
         "-o",
         "--format",
         help="Specify output format using Python's string format syntax",
@@ -538,19 +519,12 @@ def main():
     status_parser.add_argument(
         "--skip-empty",
         action="store_true",
-        help="Skip empty lines of output even with --states/--verbose",
+        help="Skip empty lines of output even with --states",
     )
     status_parser.set_defaults(func=status)
 
     list_parser = subparsers.add_parser(
         "list", formatter_class=flux.util.help_formatter()
-    )
-    list_parser.add_argument(
-        "-v",
-        "--verbose",
-        action="count",
-        default=0,
-        help="Include lists of allocated/free resources",
     )
     list_parser.add_argument(
         "-o",
