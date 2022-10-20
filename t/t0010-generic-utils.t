@@ -79,4 +79,15 @@ test_expect_success 'heaptrace.dump request with empty payload fails with EPROTO
 	${RPC} heaptrace.dump 71 </dev/null
 '
 
+test_expect_success 'scope returns correct value for initial program' '
+	flux start flux scope > scope1.out &&
+	echo "initial program" > scope1.exp &&
+	test_cmp scope1.exp scope1.out
+'
+test_expect_success 'scope returns correct value for job' '
+	flux start flux mini run flux scope > scope2.out &&
+	echo "job" > scope2.exp &&
+	test_cmp scope2.exp scope2.out
+'
+
 test_done
