@@ -20,6 +20,58 @@ from flux.hostlist import Hostlist
 from flux.idset import IDset
 from flux.resource import ResourceSet, SchedResourceList, resource_list
 from flux.rpc import RPC
+from flux.util import UtilConfig
+
+
+class FluxResourceConfig(UtilConfig):
+    """flux-resource specific user configuration class"""
+
+    builtin_formats = {}
+    builtin_formats["status"] = {
+        "default": {
+            "description": "Default flux-resource status format string",
+            "format": "{state:>10} {nnodes:>6} {nodelist}",
+        },
+    }
+    builtin_formats["drain"] = {
+        "default": {
+            "description": "Default flux-resource drain format string",
+            "format": (
+                "{timestamp!d:%FT%T::<20} {state:<8.8} {ranks:<8.8+} "
+                "{reason:<30.30+} {nodelist}"
+            ),
+        },
+    }
+    builtin_formats["list"] = {
+        "default": {
+            "description": "Default flux-resource list format string",
+            "format": (
+                "{state:>10} ?:{properties:<10.10+} {nnodes:>6} "
+                "{ncores:>8} {ngpus:>8} {nodelist}"
+            ),
+        },
+    }
+
+    def __init__(self, subcommand):
+        initial_dict = {}
+        for key, value in self.builtin_formats.items():
+            initial_dict[key] = {"formats": value}
+        super().__init__(
+            name="flux-resource", subcommand=subcommand, initial_dict=initial_dict
+        )
+
+    def validate(self, path, conf):
+        """Validate a loaded flux-resource config file as dictionary"""
+
+        for key, value in conf.items():
+            if key in ["status", "list", "drain"]:
+                for key2, val2 in value.items():
+                    if key2 == "formats":
+                        self.validate_formats(path, val2)
+                    else:
+                        raise ValueError(f"{path}: invalid key {key}.{key2}")
+            else:
+                raise ValueError(f"{path}: invalid key {key}")
 
 
 def reload(args):
@@ -312,9 +364,7 @@ def status(args):
     #  Get state list from args or defaults:
     states = status_get_state_list(args, valid_states, default_states)
 
-    fmt = "{state:>10} {nnodes:>6} {nodelist}"
-    if args.format:
-        fmt = args.format
+    fmt = FluxResourceConfig("status").load().get_format_string(args.format)
 
     #  Get payload from stdin or from resource.status RPC:
     if args.from_stdin:
@@ -344,11 +394,9 @@ def status(args):
 
 
 def drain_list(args):
+    fmt = FluxResourceConfig("drain").load().get_format_string(args.format)
     args.from_stdin = False
-    args.no_header = False
-    args.format = (
-        "{timestamp!d:%FT%T::<20} {state:<8.8} {ranks:<8.8} {reason:<30} {nodelist}"
-    )
+    args.format = fmt
     args.states = "drained,draining"
     args.skip_empty = True
     status(args)
@@ -433,13 +481,7 @@ def list_handler(args):
     else:
         resources = resource_list(flux.Flux()).get()
 
-    fmt = (
-        "{state:>10} ?:{properties:<10.10+} {nnodes:>6} {ncores:>8} "
-        "{ngpus:>8} {nodelist}"
-    )
-    if args.format:
-        fmt = args.format
-
+    fmt = FluxResourceConfig("list").load().get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
     lines = resources_uniq_lines(resources, states, formatter)
@@ -483,6 +525,17 @@ def main():
         + "are already drained. Do not overwrite any existing drain reason.",
     )
     drain_parser.add_argument(
+        "-o",
+        "--format",
+        default="default",
+        help="Specify output format using Python's string format syntax "
+        + "or a defined format by name "
+        + "(only used when no drain targets specified)",
+    )
+    drain_parser.add_argument(
+        "-n", "--no-header", action="store_true", help="Suppress header output"
+    )
+    drain_parser.add_argument(
         "targets", nargs="?", help="List of targets to drain (IDSET or HOSTLIST)"
     )
     drain_parser.add_argument("reason", help="Reason", nargs=argparse.REMAINDER)
@@ -502,7 +555,9 @@ def main():
     status_parser.add_argument(
         "-o",
         "--format",
-        help="Specify output format using Python's string format syntax",
+        default="default",
+        help="Specify output format using Python's string format syntax "
+        + "or a defined format by name (use 'help' to get a list of names)",
     )
     status_parser.add_argument(
         "-s",
@@ -529,7 +584,9 @@ def main():
     list_parser.add_argument(
         "-o",
         "--format",
-        help="Specify output format using Python's string format syntax",
+        default="default",
+        help="Specify output format using Python's string format syntax "
+        + "or a defined format by name (use 'help' to get a list of names)",
     )
     list_parser.add_argument(
         "-s",
