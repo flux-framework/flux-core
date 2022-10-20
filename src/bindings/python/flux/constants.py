@@ -10,8 +10,9 @@
 
 """Global constants for the flux interface"""
 
-import sys
 import re
+import sys
+
 from _flux._core import lib
 
 MOD = sys.modules[__name__]

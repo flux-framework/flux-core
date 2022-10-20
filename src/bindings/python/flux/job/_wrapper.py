@@ -8,8 +8,8 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from flux.wrapper import Wrapper
 from _flux._core import ffi, lib
+from flux.wrapper import Wrapper
 
 
 class JobWrapper(Wrapper):

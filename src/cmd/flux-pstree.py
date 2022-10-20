@@ -8,15 +8,15 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import sys
-import logging
 import argparse
 import concurrent.futures
+import logging
+import sys
 
 import flux
 import flux.uri
+from flux.job import JobID, JobInfo, JobInfoFormat, JobList
 from flux.util import Tree
-from flux.job import JobInfo, JobInfoFormat, JobList, JobID
 
 DETAILS_FORMAT = {
     "default": (

@@ -8,20 +8,20 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import os
-import time
-import pwd
 import json
+import os
+import pwd
 import string
+import time
 from collections import namedtuple
 
 import flux.constants
-from flux.memoized_property import memoized_property
+from flux.core.inner import raw
 from flux.job.JobID import JobID
 from flux.job.stats import JobStats
+from flux.memoized_property import memoized_property
 from flux.resource import SchedResourceList
 from flux.uri import JobURI
-from flux.core.inner import raw
 
 
 def statetostr(stateid, fmt="L"):

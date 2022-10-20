@@ -7,17 +7,16 @@
 #
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
-import os
-import math
-import json
-import errno
-import datetime
 import collections
 import collections.abc as abc
+import datetime
+import errno
+import json
+import math
 import numbers
+import os
 
 import yaml
-
 from _flux._core import ffi
 from flux.util import parse_fsd, set_treedict
 

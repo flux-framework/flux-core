@@ -8,15 +8,15 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import argparse
+import json
+import logging
 import os
 import sys
-import logging
-import json
-import argparse
-import flux
-from flux.job.frobnicator import JobFrobnicator
-from flux.job import Jobspec
 
+import flux
+from flux.job import Jobspec
+from flux.job.frobnicator import JobFrobnicator
 
 LOGGER = logging.getLogger("flux-job-frobnicator")
 

@@ -8,8 +8,8 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from flux.job._wrapper import _RAW as RAW
 from _flux._core import ffi
+from flux.job._wrapper import _RAW as RAW
 
 
 def id_parse(jobid_str):

@@ -7,13 +7,12 @@
 #
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
-import json
 import errno
+import json
 
+from _flux._core import ffi
 from flux.future import Future
 from flux.job._wrapper import _RAW as RAW
-from _flux._core import ffi
-
 
 # Names of events that may appear in the main eventlog (i.e. ``eventlog="eventlog"``)
 # See Flux RFC 21 for documentation on each event.

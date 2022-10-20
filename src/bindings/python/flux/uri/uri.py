@@ -12,8 +12,7 @@ import os
 import platform
 import re
 from abc import ABC, abstractmethod
-
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 from flux.importer import import_plugins
 

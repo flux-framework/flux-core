@@ -20,11 +20,12 @@ repos:
         types: [python]
         entry: black
 
-#      - id: isort
-#        name: isort
-#        language: python
-#        types: [python]
-#        entry: isort
+      - id: isort
+        name: isort
+        args: [--filter-files]
+        language: python
+        types: [python]
+        entry: isort
 
       - id: flake8
         name: flake8

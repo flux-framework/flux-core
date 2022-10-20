@@ -8,12 +8,12 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import os
 import errno
+import os
 import subprocess
 from pathlib import PurePath
 
-from flux.uri import URIResolverPlugin, FluxURIResolver
+from flux.uri import FluxURIResolver, URIResolverPlugin
 
 
 def slurm_job_pids(jobid):

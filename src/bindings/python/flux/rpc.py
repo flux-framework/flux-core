@@ -10,12 +10,11 @@
 
 import json
 
-from flux.util import check_future_error
-from flux.wrapper import Wrapper
-from flux.future import Future
-from flux.core.inner import ffi, lib, raw
 import flux.constants
-from flux.util import encode_payload, encode_topic, interruptible
+from flux.core.inner import ffi, lib, raw
+from flux.future import Future
+from flux.util import check_future_error, encode_payload, encode_topic, interruptible
+from flux.wrapper import Wrapper
 
 
 class RPC(Future):

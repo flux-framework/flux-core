@@ -8,10 +8,10 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
+import argparse
+import logging
 import os
 import sys
-import logging
-import argparse
 
 import flux
 from flux.uri import FluxURIResolver

@@ -8,4 +8,4 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from flux.job.frobnicator.frobnicator import JobFrobnicator, FrobnicatorPlugin
+from flux.job.frobnicator.frobnicator import FrobnicatorPlugin, JobFrobnicator

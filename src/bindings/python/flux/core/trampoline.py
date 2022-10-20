@@ -9,6 +9,7 @@
 ###############################################################
 
 import importlib
+
 from _flux._core import lib
 from flux.core.handle import Flux
 

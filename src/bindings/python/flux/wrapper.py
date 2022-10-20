@@ -13,12 +13,12 @@ Flux interface wrapper generator.
 This could, in principle, be used for other projects as well, but it encodes a
 number of assumptions about the error propagation and handling that flux uses.
 """
-import re
-import os
 import errno
 import inspect
+import os
+import re
 from types import MethodType
-from typing import Dict, Any
+from typing import Any, Dict
 
 
 class MissingFunctionError(Exception):

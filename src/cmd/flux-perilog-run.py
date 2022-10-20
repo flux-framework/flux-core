@@ -8,18 +8,18 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import os
-import sys
-import subprocess
 import argparse
 import logging
+import os
 import signal
+import subprocess
+import sys
 from pathlib import Path
 
 import flux
-from flux.resource import ResourceSet
 from flux.idset import IDset
 from flux.job import JobID
+from flux.resource import ResourceSet
 
 
 def fetch_job_ranks(handle, jobid):

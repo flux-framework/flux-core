@@ -8,29 +8,28 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
+import argparse
+import atexit
+import fnmatch
+import itertools
+import json
+import logging
+
 # pylint: disable=duplicate-code
 import os
-import sys
-import logging
-import argparse
-import json
-import fnmatch
-import re
 import random
-import itertools
-import atexit
+import re
+import sys
 import time
+from collections import ChainMap
 from itertools import chain
 from string import Template
-from collections import ChainMap
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
 import flux
-from flux import job
-from flux.job import JobspecV1
-from flux import util
-from flux import debugged
+from flux import debugged, job, util
 from flux.idset import IDset
+from flux.job import JobspecV1
 from flux.progress import ProgressBar
 from flux.uri import JobURI
 

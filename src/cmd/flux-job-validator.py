@@ -8,14 +8,14 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import argparse
+import json
+import logging
 import os
 import sys
-import logging
-import json
-import argparse
+
 import flux
 from flux.job.validator import JobValidator
-
 
 LOGGER = logging.getLogger("flux-job-validator")
 

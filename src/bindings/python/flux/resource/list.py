@@ -8,9 +8,9 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+from flux.memoized_property import memoized_property
 from flux.resource import ResourceSet
 from flux.rpc import RPC
-from flux.memoized_property import memoized_property
 
 
 class SchedResourceList:

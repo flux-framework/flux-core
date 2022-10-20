@@ -9,7 +9,7 @@
 ###############################################################
 
 from _flux._security import ffi, lib
-from flux.wrapper import Wrapper, WrapperPimpl, FunctionWrapper
+from flux.wrapper import FunctionWrapper, Wrapper, WrapperPimpl
 
 
 class SecurityFunctionWrapper(FunctionWrapper):

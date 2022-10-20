@@ -8,12 +8,12 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import os
 from pathlib import PurePath
 
-import os
 import flux
 from flux.job import JobID, job_list_id
-from flux.uri import URIResolverPlugin, URIResolverURI, JobURI
+from flux.uri import JobURI, URIResolverPlugin, URIResolverURI
 
 
 def filter_slash(iterable):

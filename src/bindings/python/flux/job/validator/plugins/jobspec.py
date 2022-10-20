@@ -16,6 +16,7 @@ supplied, then only that version of jobspec is permitted.
 """
 
 import json
+
 from flux.job import validate_jobspec
 from flux.job.validator import ValidatorPlugin
 

@@ -8,8 +8,9 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import numbers
 import collections
+import numbers
+
 from _flux._hostlist import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl
 

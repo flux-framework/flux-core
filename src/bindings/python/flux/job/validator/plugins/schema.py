@@ -15,8 +15,9 @@ specified via the ``--schema=SCHEMA`` option.
 
 """
 
-import sys
 import json
+import sys
+
 import jsonschema
 from flux.job.validator import ValidatorPlugin
 
