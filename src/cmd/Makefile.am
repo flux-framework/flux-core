@@ -96,7 +96,8 @@ fluxcmd_PROGRAMS = \
 	flux-queue \
 	flux-exec \
 	flux-R \
-	flux-top
+	flux-top \
+	flux-scope
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
@@ -149,6 +150,9 @@ flux_top_CPPFLAGS = \
 flux_top_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(CURSES_LIBS)
+
+flux_scope_LDADD = \
+	$(fluxcmd_ldadd)
 
 #
 # Automatically build list of flux(1) builtins from
