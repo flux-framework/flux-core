@@ -262,8 +262,6 @@ class ResourceStatus:
 def status_help(args, valid_states, headings):
     if args.states == "help":
         LOGGER.info("valid states: %s", ",".join(valid_states))
-    if args.format == "help":
-        LOGGER.info("valid formats: %s", ",".join(headings.keys()))
     sys.exit(0)
 
 
@@ -307,8 +305,8 @@ def status(args):
         "timestamp": "TIME",
     }
 
-    #  Emit list of valid states or formats if requested
-    if "help" in [args.states, args.format]:
+    #  Emit list of valid states if requested
+    if args.states == "help":
         status_help(args, valid_states, headings)
 
     #  Get state list from args or defaults:
