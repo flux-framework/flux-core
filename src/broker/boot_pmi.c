@@ -31,8 +31,6 @@
 #include "boot_pmi.h"
 #include "pmiutil.h"
 
-#define DEFAULT_FANOUT 2
-
 
 /*  If the broker is launched via flux-shell, then the shell may opt
  *  to set a "flux.instance-level" parameter in the PMI kvs to tell
@@ -180,7 +178,8 @@ static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
 
 int boot_pmi (struct overlay *overlay, attr_t *attrs)
 {
-    uint32_t fanout;
+    const char *topo_uri;
+    flux_error_t error;
     char key[64];
     char val[1024];
     char hostname[MAXHOSTNAMELEN + 1];
@@ -195,21 +194,12 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     int result;
     const char *uri;
     int i;
-    char topo_uri[32];
 
-    /* Fetch the tbon.fanout attribute and supply a default value if unset.
-     */
-    if (attr_get_uint32 (attrs, "tbon.fanout", &fanout) < 0)
-        fanout = DEFAULT_FANOUT;
-    else
-        (void)attr_delete (attrs, "tbon.fanout", true);
-    if (attr_add_uint32 (attrs,
-                         "tbon.fanout",
-                         fanout,
-                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    // N.B. overlay_create() sets the tbon.topo attribute
+    if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
+        log_msg ("error fetching tbon.topo attribute");
         return -1;
-
-
+    }
     memset (&pmi_params, 0, sizeof (pmi_params));
     if (!(pmi = broker_pmi_create ())) {
         log_err ("broker_pmi_create");
@@ -233,9 +223,11 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
         log_err ("error setting broker.mapping attribute");
         goto error;
     }
-    snprintf (topo_uri, sizeof (topo_uri), "kary:%d", fanout);
-    if (!(topo = topology_create (topo_uri, pmi_params.size, NULL))
-        || topology_set_rank (topo, pmi_params.rank) < 0
+    if (!(topo = topology_create (topo_uri, pmi_params.size, &error))) {
+        log_msg ("error creating '%s' topology: %s", topo_uri, error.text);
+        goto error;
+    }
+    if (topology_set_rank (topo, pmi_params.rank) < 0
         || overlay_set_topology (overlay, topo) < 0)
         goto error;
     if (gethostname (hostname, sizeof (hostname)) < 0) {

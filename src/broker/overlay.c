@@ -1701,6 +1701,31 @@ int overlay_authorize (struct overlay *ov,
     return zmqutil_zap_authorize (ov->zap, name, pubkey);
 }
 
+static int overlay_configure_attr (attr_t *attrs,
+                                   const char *name,
+                                   const char *default_value,
+                                   const char **valuep)
+{
+    const char *val = default_value;
+    int flags;
+
+    if (attr_get (attrs, name, &val, &flags) == 0) {
+        if (!(flags & FLUX_ATTRFLAG_IMMUTABLE)) {
+            flags |= FLUX_ATTRFLAG_IMMUTABLE;
+            if (attr_set_flags (attrs, name, flags) < 0)
+                return -1;
+        }
+    }
+    else {
+        val = default_value;
+        if (attr_add (attrs, name, val, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            return -1;
+    }
+    if (valuep)
+        *valuep = val;
+    return 0;
+}
+
 static int overlay_configure_attr_int (attr_t *attrs,
                                        const char *name,
                                        int default_value,
@@ -1922,6 +1947,48 @@ static int overlay_configure_zmqdebug (struct overlay *ov)
     return 0;
 }
 
+/* Configure tbon.topo attribute.
+ * Ascending precedence: compiled-in default, TOML config, command line.
+ * Topology creation is deferred to bootstrap, when we know the instance size.
+ */
+static int overlay_configure_topo (struct overlay *ov)
+{
+    const char *topo_uri = "kary:2";
+    const flux_conf_t *cf;
+
+    if ((cf = flux_get_conf (ov->h))) {
+        flux_error_t error;
+
+        if (flux_conf_unpack (cf, NULL, "{s:{}}", "bootstrap") == 0)
+            topo_uri = "custom"; // adjust default for config boot
+
+        if (flux_conf_unpack (cf,
+                              &error,
+                              "{s?{s?s}}",
+                              "tbon",
+                                "topo", &topo_uri) < 0) {
+            log_msg ("Config file error [tbon]: %s", error.text);
+            return -1;
+        }
+    }
+    /* Treat tbon.fanout=K as an alias for tbon.topo=kary:K.
+     */
+    const char *fanout;
+    char buf[16];
+    if (attr_get (ov->attrs, "tbon.fanout", &fanout, NULL) == 0) {
+        snprintf (buf, sizeof (buf), "kary:%s", fanout);
+        topo_uri = buf;
+    }
+    if (overlay_configure_attr (ov->attrs,
+                                "tbon.topo",
+                                topo_uri,
+                                NULL) < 0) {
+        log_err ("Error manipulating tbon.topo attribute");
+        return -1;
+    }
+    return 0;
+}
+
 void overlay_destroy (struct overlay *ov)
 {
     if (ov) {
@@ -2032,6 +2099,8 @@ struct overlay *overlay_create (flux_t *h,
     if (overlay_configure_tcp_user_timeout (ov) < 0)
         goto error;
     if (overlay_configure_zmqdebug (ov) < 0)
+        goto error;
+    if (overlay_configure_topo (ov) < 0)
         goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;

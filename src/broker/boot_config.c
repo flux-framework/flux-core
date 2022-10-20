@@ -480,40 +480,6 @@ int boot_config_geturibyrank (json_t *hosts,
     return 0;
 }
 
-/* Get the value of the tbon.fanout attribute.
- * If it was set, set the immutable flag.
- * If it wasn't set, set a default value (if non-NULL).
- */
-static const char *get_tbon_fanout (attr_t *attrs, const char *default_value)
-{
-    const char *key = "tbon.fanout";
-    const char *val = NULL;
-    int flags;
-
-    if (attr_get (attrs, key, &val, &flags) == 0) {
-        if (!(flags & FLUX_ATTRFLAG_IMMUTABLE)
-            && attr_set_flags (attrs, key, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            return NULL;
-    }
-    else {
-        val = default_value;
-        if (val && attr_add (attrs, key, val, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            return NULL;
-    }
-    return val;
-}
-
-static bool have_parent_directives (json_t *hosts)
-{
-    size_t index;
-    json_t *entry;
-    json_array_foreach (hosts, index, entry) {
-        if (json_object_get (entry, "parent"))
-            return true;
-    }
-    return false;
-}
-
 int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
 {
     struct boot_conf conf;
@@ -522,6 +488,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
     json_t *hosts = NULL;
     struct topology *topo = NULL;
     flux_error_t error;
+    const char *topo_uri;
 
     /* Ingest the [bootstrap] stanza.
      */
@@ -553,33 +520,17 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
         rank = 0;
     }
 
-    if (have_parent_directives (hosts)) {
-        if (get_tbon_fanout (attrs, NULL)) {
-            errno = EINVAL;
-            log_msg ("tbon.fanout conflicts with custom topology config");
-            goto error;
-        }
-        topology_hosts_set (hosts);
-        topo = topology_create ("custom:", size, &error);
-        topology_hosts_set (NULL);
-        if (!topo) {
-            log_msg ("%s", error.text);
-            goto error;
-        }
+    // N.B. overlay_create() sets the tbon.topo attribute
+    if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
+        log_msg ("error fetching tbon.topo attribute");
+        goto error;
     }
-    else {
-        const char *fanout;
-        char uri[16];
-
-        if (!(fanout = get_tbon_fanout (attrs, "0"))) {
-            log_err ("Error manipulating tbon.fanout attribute");
-            goto error;
-        }
-        snprintf (uri, sizeof (uri), "kary:%s", fanout);
-        if (!(topo = topology_create (uri, size, &error))) {
-            log_msg ("Error creating %s topology: %s", uri, error.text);
-            goto error;
-        }
+    topology_hosts_set (hosts);
+    topo = topology_create (topo_uri, size, &error);
+    topology_hosts_set (NULL);
+    if (!topo) {
+        log_msg ("Error creating %s topology: %s", topo_uri, error.text);
+        goto error;
     }
     if (topology_set_rank (topo, rank) < 0
         || overlay_set_topology (overlay, topo) < 0)
