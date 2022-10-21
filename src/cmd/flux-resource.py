@@ -38,11 +38,17 @@ class FluxResourceConfig(UtilConfig):
         },
     }
     builtin_formats["drain"] = {
-        "default": {
-            "description": "Default flux-resource drain format string",
+        "long": {
+            "description": "Long flux-resource drain format string",
             "format": (
                 "{timestamp!d:%FT%T::<20} {state:<8.8} {ranks:<8.8+} "
                 "{reason:<30.30+} {nodelist}"
+            ),
+        },
+        "default": {
+            "description": "Default flux-resource drain format string",
+            "format": (
+                "{timestamp!d:%b%d %R::<12} {state:<8.8} {reason:<30.30+} {nodelist}"
             ),
         },
     }
