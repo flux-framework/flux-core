@@ -1049,7 +1049,10 @@ class UtilConfig:
                 entry = formats[name]
             except KeyError:
                 raise ValueError(f"--format: No such format {name}")
-            print(f"[formats.{name}]")
+            if self.subtable:
+                print(f"[{self.subtable}.formats.{name}]")
+            else:
+                print(f"[formats.{name}]")
             if "description" in entry:
                 print(f"description = \"{entry['description']}\"")
             print(f"format = \"{entry['format']}\"")
