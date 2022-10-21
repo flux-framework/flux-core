@@ -491,14 +491,26 @@ test_expect_success 'broker broker.pid attribute is immutable' '
 test_expect_success 'broker --verbose option works' '
 	flux start ${ARGS} -o,-v /bin/true
 '
-test_expect_success 'broker -Stbon.fanout=4 option works' '
-	echo 4 >fanout.exp &&
+test_expect_success 'broker -Stbon.fanout=4 is an alias for tbon.topo=kary:4' '
+	echo kary:4 >fanout.exp &&
 	flux start ${ARGS} -o,-Stbon.fanout=4 \
-		flux getattr tbon.fanout >fanout.out &&
+		flux getattr tbon.topo >fanout.out &&
 	test_cmp fanout.exp fanout.out
 '
-test_expect_success 'broker -Stbon.fanout=0 works' '
-	flux start ${ARGS} -o,-Stbon.fanout=0 /bin/true
+test_expect_success 'broker -Stbon.topo=kary:8 option works' '
+	echo kary:8 >topo.exp &&
+	flux start ${ARGS} -o,-Stbon.topo=kary:8 \
+		flux getattr tbon.topo >topo.out &&
+	test_cmp topo.exp topo.out
+'
+test_expect_success 'broker -Stbon.topo=kary:0 works' '
+	flux start ${ARGS} -o,-Stbon.topo=kary:0 /bin/true
+'
+test_expect_success 'broker -Stbon.topo=custom option works' '
+	echo custom >topo2.exp &&
+	flux start ${ARGS} -o,-Stbon.topo=custom \
+		flux getattr tbon.topo >topo2.out &&
+	test_cmp topo2.exp topo2.out
 '
 test_expect_success 'broker fails on invalid broker.critical-ranks option' '
 	test_must_fail flux start ${ARGS} -o,-Sbroker.critical-ranks=0-1
