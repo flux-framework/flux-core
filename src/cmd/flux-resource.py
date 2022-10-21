@@ -32,6 +32,10 @@ class FluxResourceConfig(UtilConfig):
             "description": "Default flux-resource status format string",
             "format": "{state:>10} {nnodes:>6} {nodelist}",
         },
+        "long": {
+            "description": "Long flux-resource status format string",
+            "format": "{state:>10} {nnodes:>6} {reason:<30.30+} {nodelist}",
+        },
     }
     builtin_formats["drain"] = {
         "default": {
