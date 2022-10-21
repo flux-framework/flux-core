@@ -103,6 +103,7 @@ man_pages = [
     ('man3/flux_future_wait_all_create', 'flux_future_next_child', 'functions for future composition', [author], 3),
     ('man3/flux_future_wait_all_create', 'flux_future_get_child', 'functions for future composition', [author], 3),
     ('man3/flux_future_wait_all_create', 'flux_future_wait_all_create', 'functions for future composition', [author], 3),
+    ('man3/flux_get_process_scope','flux_get_process_scope', 'Get current process scope', [author], 3),
     ('man3/flux_get_rank', 'flux_get_size', 'query Flux broker info', [author], 3),
     ('man3/flux_get_rank', 'flux_get_rank', 'query Flux broker info', [author], 3),
     ('man3/flux_get_reactor', 'flux_set_reactor', 'get/set reactor associated with broker handle', [author], 3),

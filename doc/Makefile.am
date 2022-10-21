@@ -126,7 +126,8 @@ MAN3_FILES_PRIMARY = \
 	man3/idset_encode.3 \
 	man3/idset_add.3 \
 	man3/flux_jobtap_get_flux.3 \
-	man3/flux_sync_create.3
+	man3/flux_sync_create.3 \
+	man3/flux_get_process_scope.3
 
 
 # These files are generated as clones of a primary page.
