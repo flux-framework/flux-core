@@ -113,4 +113,10 @@ test_expect_success 'flux resource list -no {properties:>4.4+} works' '
 	test_debug "cat properties-trunc+h.out" &&
 	test $(cat properties-trunc.out) = "xx,f+"
 '
+test_expect_success 'flux resource list -o rlist works' '
+	flux resource list -o rlist \
+		--from-stdin <properties-test.in >rlist.out &&
+	test_debug "cat rlist.out" &&
+	grep -i list rlist.out
+'
 test_done

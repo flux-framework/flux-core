@@ -31,6 +31,7 @@ test_expect_success 'flux-resource status: header included with all formats' '
 	ranks==RANKS
 	nodelist==NODELIST
 	reason==REASON
+	timestamp==TIME
 	EOF
 	sed "s/\(.*\)==.*/\1=={\1}/" headers.expected > headers.fmt &&
         flux resource status --from-stdin --format="$(cat headers.fmt)" \
@@ -56,17 +57,35 @@ test_expect_success 'flux-resource status: -o {reason} works' '
 	test $(wc -l < ${name}.out) -eq 2
 '
 
+test_expect_success 'flux-resource status -o long shows REASON field' '
+	INPUT=${INPUTDIR}/drain.json &&
+	name=long &&
+	flux resource status --from-stdin < $INPUT > ${name}.out &&
+	flux resource status -o long --from-stdin < $INPUT > ${name}-long.out &&
+	test_debug "echo default:; cat ${name}.out" &&
+	test_debug "echo long:; cat ${name}-long.out" &&
+	test_must_fail grep REASON ${name}.out &&
+	grep REASON ${name}-long.out &&
+	test $(grep -c drained  ${name}.out) -eq 1 &&
+	test $(grep -c drained ${name}-long.out) -eq 2
+'
 test_expect_success 'flux-resource status: -s always displays that state' '
 	INPUT=${INPUTDIR}/simple.json &&
 	flux resource status --from-stdin -s exclude -o {state} --no-header \
 	    < $INPUT | grep exclude
 '
-
+test_expect_success 'flux-resource status: --skip-empty works' '
+	INPUT=${INPUTDIR}/simple.json &&
+	flux resource status --from-stdin --skip-empty \
+	    -s exclude -o {state} --no-header \
+	    < $INPUT >skip-empty.out &&
+	test_debug "cat skip-empty.out" &&
+	test_must_be_empty skip-empty.out
+'
 test_expect_success 'flux-resource status: -s help displays states list' '
 	flux resource status --from-stdin -s help < /dev/null 2>&1 \
 	    | grep -i valid
 '
-
 test_expect_success 'flux-resource status: invalid state generates error' '
 	test_expect_code 1 flux resource status --from-stdin -s frelled \
 	    < /dev/null >bad-state.out 2>&1 &&
