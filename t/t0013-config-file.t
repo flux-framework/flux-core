@@ -458,5 +458,48 @@ test_expect_success 'tbon.torpid_max configured with wrong type fails' '
 		/bin/true 2>badtorpid.err &&
 	grep "Expected string" badtorpid.err
 '
+test_expect_success 'tbon.topo with unknown scheme fails' '
+	mkdir conf23 &&
+	cat <<-EOT >conf23/tbon.toml &&
+	[tbon]
+	topo = "notascheme:42"
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf23 \
+		/bin/true 2>badscheme.err &&
+	grep "unknown topology scheme" badscheme.err
+'
+test_expect_success 'tbon.topo is kary:2 by default' '
+	echo "kary:2" >topo.exp &&
+	flux broker ${ARGS} flux getattr tbon.topo >topo.out &&
+	test_cmp topo.exp topo.out
+'
+test_expect_success 'tbon.topo can be changed by configuration' '
+	mkdir conf24 &&
+	cat <<-EOT >conf24/tbon.toml &&
+	[tbon]
+	topo = "kary:8"
+	EOT
+	echo "kary:8" >topo2.exp &&
+	flux broker ${ARGS} -c conf24 \
+		flux getattr tbon.topo >topo2.out &&
+	test_cmp topo2.exp topo2.out
+'
+test_expect_success 'tbon.topo can be overridden on the command line' '
+	echo "kary:16" >topo3.exp &&
+	flux broker ${ARGS} -c conf24 -Stbon.topo=kary:16 \
+		flux getattr tbon.topo >topo3.out &&
+	test_cmp topo3.exp topo3.out
+'
+test_expect_success 'tbon.topo is custom when bootstrap is configured' '
+	mkdir conf25 &&
+	cat <<-EOT >conf25/bootstrap.toml &&
+	[bootstrap]
+	EOT
+	echo "custom" >topo4.exp &&
+	flux broker ${ARGS} -c conf25 \
+		flux getattr tbon.topo >topo4.out &&
+	test_cmp topo4.exp topo4.out
+'
+
 
 test_done
