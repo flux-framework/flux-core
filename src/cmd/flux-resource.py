@@ -54,6 +54,13 @@ class FluxResourceConfig(UtilConfig):
                 "{ncores:>8} {ngpus:>8} {nodelist}"
             ),
         },
+        "rlist": {
+            "description": "Format including resource list details",
+            "format": (
+                "{state:>10} ?:{properties:<10.10+} {nnodes:>6} "
+                "{ncores:>8} {ngpus:>8} {rlist}"
+            ),
+        },
     }
 
     def __init__(self, subcommand):
