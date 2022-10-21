@@ -13,7 +13,7 @@ This test verifies that the invariant holds when ther router crashes.
 
 . `dirname $0`/sharness.sh
 
-export TEST_UNDER_FLUX_FANOUT=1
+export TEST_UNDER_FLUX_TOPO=kary:1
 
 test_under_flux 3 system
 
