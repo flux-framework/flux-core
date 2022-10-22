@@ -45,15 +45,14 @@ RESOURCE INVENTORY section below.
 COMMANDS
 ========
 
-**list** [-v] [-n] [-o FORMAT] [-s STATE,...]
-   Show scheduler view of resources.  One or more *-v,--verbose* options
-   increase output verbosity.  *-n,--no-header* suppresses header from output.
-   *-o,--format=FORMAT*, customizes output formatting (see below).
-   *-s,--states=STATE,...* limits output to specified resource states, where
-   valid states are "up", "down", "allocated", "free", and "all".  Note that
-   the scheduler represents "offline", "exclude", and "drain" resource states
-   as "down" due to its simplified interface with the resource service defined
-   by RFC 27.
+**list** [-n] [-o FORMAT] [-s STATE,...]
+   Show scheduler view of resources. The *-n,--no-header* option suppresses
+   header from output,  *-o,--format=FORMAT*, customizes output formatting
+   (see below), and  *-s,--states=STATE,...* limits output to specified
+   resource states, where valid states are "up", "down", "allocated",
+   "free", and "all".  Note that the scheduler represents "offline",
+   "exclude", and "drain" resource states as "down" due to its simplified
+   interface with the resource service defined by RFC 27.
 
 **info** [-s STATE,...]
    Show a brief, single line summary of scheduler view of resources.
@@ -61,18 +60,22 @@ COMMANDS
    states as with ``flux resource list``. By default, the *STATE* reported
    by ``flux resource info`` is "all".
 
-**status**  [-v] [-n] [-o FORMAT] [-s STATE,...]
-   Show system view of resources.  One or more *-v,--verbose* options
-   increase output verbosity.  *-n,--no-header* suppresses header from output.
-   *-o,--format=FORMAT*, customizes output formatting (see below).
-   *-s,--states=STATE,...* limits output to specified resource states, where
-   valid states are "online", "offline", "avail", "exclude", "draining",
-   "drained", and "all". The special "drain" state is also supported, and
-   selects both draining and drained resources.
+**status**  [-n] [-o FORMAT] [-s STATE,...] [--skip-empty]
+   Show system view of resources.  The *-n,--no-header* suppresses header
+   from output, *-o,--format=FORMAT* customizes output formatting (see
+   below), and *-s,--states=STATE,...* limits output to specified resource
+   states, where valid states are "online", "offline", "avail", "exclude",
+   "draining", "drained", and "all". The special "drain" state is also
+   supported, and selects both draining and drained resources. Normally,
+   ``flux resource status`` skips lines with no resources, unless the
+   ``-s, --states`` option is used. Suppression of empty lines can always
+   be forced with the ``--skip-empty`` option.
 
-**drain** [-f] [-u] [targets] [reason ...]
-   If specified without arguments, list drained nodes.  The *targets* argument
-   is an IDSET or HOSTLIST specifying nodes to drain.  Any remaining arguments
+**drain** [-n] [-o FORMAT] [-f] [-u] [targets] [reason ...]
+   If specified without arguments, list drained nodes. In this mode,
+   *-n,--no-header* suppresses header from output and *-o,--format=FORMAT*
+   customizes output formatting (see below).  The *targets* argument is an
+   IDSET or HOSTLIST specifying nodes to drain.  Any remaining arguments
    are assumed to be a reason to be recorded with the drain event.
 
    By default, **flux resource drain** will fail if any of the *targets*
@@ -100,9 +103,29 @@ OUTPUT FORMAT
 =============
 
 The *--format* option can be used to specify an output format using Python's
-string format syntax.  See :man1:`flux-jobs` for a detailed description of
-this syntax.
+string format syntax or a defined format by name. For a list of built-in
+and configured formats use ``-o help``. See :man1:`flux-jobs` *OUTPUT FORMAT*
+section for a detailed description of this syntax.
 
+CONFIGURATION
+=============
+
+Similar to :man1:`flux-jobs`, the ``flux-resource`` command supports loading
+a set of config files for customizing utility output formats. Currently
+this can be used to register named format strings for the ``status``,
+``list``, and ``drain`` subcommands.
+
+Configuration for each ``flux-resource`` subcommand is defined in a separate
+table, so to add a new format ``myformat`` for ``flux resource list``,
+the following config file could be used::
+
+  # $HOME/.config/flux/flux-resource.toml
+  [list.formats.myformat]
+  description = "My flux resource list format"
+  format = "{state} {nodelist}"
+
+See :man1:`flux-jobs` *CONFIGURATION* section for more information about the
+order of precedence for loading these config files.
 
 RESOURCE INVENTORY
 ==================
