@@ -6,10 +6,24 @@
     "customizations": {
       "vscode": {
         "settings": {
-          "terminal.integrated.defaultProfile.linux": "bash"
+          "terminal.integrated.defaultProfile.linux": "bash",
+
+          // Ensure that Python autocomplete works out of the box
+          "python.autoComplete.extraPaths": [
+            "/usr/local/lib/flux/python3.8",
+            "/usr/local/lib/python3.8/site-packages",
+            "/workspaces/flux-core/src/bindings/python"
+          ],
+          "python.analysis.extraPaths": [
+            "/usr/local/lib/flux/python3.8",
+            "/usr/local/lib/python3.8/site-packages",
+            "/workspaces/flux-core/src/bindings/python"
+          ]      
         }, 
         // Note to Flux Developers! We can add extensions here that you like
-        "extensions": [],
+        "extensions": [
+			"ms-python.python"
+		],
       },
     },
     // Needed for git security feature (this assumes you locally cloned to flux-core)
