@@ -235,18 +235,6 @@ static int l_flux_size (lua_State *L)
     return (l_pushresult (L, size));
 }
 
-static int l_flux_fanout (lua_State *L)
-{
-    flux_t *f = lua_get_flux (L, 1);
-    const char *s;
-    int fanout;
-
-    if (!(s = flux_attr_get (f, "tbon.fanout")))
-        return lua_pusherror (L, "flux_attr_get tbon.fanout error");
-    fanout = strtoul (s, NULL, 10);
-    return (l_pushresult (L, fanout));
-}
-
 static int l_flux_index (lua_State *L)
 {
     const char *key = lua_tostring (L, 2);
@@ -258,8 +246,6 @@ static int l_flux_index (lua_State *L)
         return l_flux_size (L);
     if (strcmp (key, "rank") == 0)
         return l_flux_rank (L);
-    if (strcmp (key, "fanout") == 0)
-        return l_flux_fanout (L);
 
     lua_getmetatable (L, 1);
     lua_getfield (L, -1, key);

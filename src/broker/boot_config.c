@@ -30,8 +30,6 @@
 #include "topology.h"
 #include "boot_config.h"
 
-#define DEFAULT_FANOUT 0
-
 
 /* Copy 'fmt' into 'buf', substituting the following tokens:
  * - %h  host
@@ -97,73 +95,110 @@ overflow:
     return -1;
 }
 
-/* Add a host entry to hosts for the hostname in 's', cloned from the
- * original host entry object.
+static int set_string (json_t *o, const char *key, const char *s)
+{
+    json_t *val;
+
+    if (!(val = json_string (s))
+        || json_object_set_new (o, key, val) < 0) {
+        json_decref (val);
+        return -1;
+    }
+    return 0;
+}
+
+/* Make a copy of 'entry', set host key to the specificed value, and append
+ * to 'hosts' array.
  */
-static int boot_config_append_host (json_t *hosts, const char *s, json_t *entry)
+static int boot_config_append_host (json_t *hosts,
+                                    const char *hostname,
+                                    json_t *entry)
 {
     json_t *nentry;
-    json_t *o;
 
-    if (!(nentry = json_deep_copy (entry)))
-        goto nomem;
-    if (!(o = json_string (s)))
-        goto nomem;
-    if (json_object_set_new (nentry, "host", o) < 0) {
-        json_decref (o);
-        goto nomem;
+    if (!(nentry = json_deep_copy (entry))
+        || set_string (nentry, "host", hostname) < 0
+        || json_array_append_new (hosts, nentry) < 0) {
+        json_decref (nentry);
+        return -1;
     }
-    if (json_array_append_new (hosts, nentry) < 0)
-        goto nomem;
     return 0;
-nomem:
-    json_decref (nentry);
-    errno = ENOMEM;
-    return -1;
 }
 
 /* Build a new hosts array, expanding any RFC29 hostlists, so that
  * json_array_size() is the number of hosts, and json_array_get() can
- * be used to fetch an entry by rank.  Caller must free.
+ * be used to fetch an entry by rank.  Preserve the initial hosts order so
+ * that the rank mapping is deterministic, but combine the host entries of
+ * any entries that have the same host key.
+ * The caller must release the returned JSON object with json_decref().
  */
 static json_t *boot_config_expand_hosts (json_t *hosts)
 {
-    json_t *nhosts;
+    json_t *nhosts = NULL;
+    json_t *hash = NULL;
     size_t index;
     json_t *value;
 
-    if (!(nhosts = json_array ())) {
+    if (!(nhosts = json_array ())
+        || !(hash = json_object ())) {
         log_msg ("Config file error [bootstrap]: out of memory");
-        return NULL;
+        goto error;
     }
     json_array_foreach (hosts, index, value) {
         struct hostlist *hl = NULL;
+        json_error_t error;
         const char *host, *s;
+        const char *bind = NULL;
+        const char *connect = NULL;
+        const char *parent = NULL;
 
-        if (json_unpack (value, "{s:s}", "host", &host) < 0) {
-            log_msg ("Config file error [bootstrap]: missing host field");
-            log_msg ("Hint: hosts entries must be table containing a host key");
+        if (json_unpack_ex (value,
+                            &error,
+                            0,
+                            "{s:s s?s s?s s?s !}",
+                            "host", &host,
+                            "bind", &bind,
+                            "connect", &connect,
+                            "parent", &parent) < 0) {
+            log_msg ("Config file error [bootstrap] host entry: %s",
+                     error.text);
             goto error;
         }
         if (!(hl = hostlist_decode (host))) {
-            log_err ("Config file error [bootstrap]");
-            log_msg ("Hint: host value '%s' is not a valid hostlist", host);
+            log_msg ("Config file error [bootstrap]:"
+                     " host value '%s' is not a valid hostlist",
+                     host);
             goto error;
         }
         s = hostlist_first (hl);
         while (s) {
-            if (boot_config_append_host (nhosts, s, value) < 0) {
-                log_err ("Config file error [bootstrap]: appending host %s", s);
-                hostlist_destroy (hl);
-                goto error;
+            json_t *entry;
+            if (!(entry = json_object_get (hash, s))) {
+                if (boot_config_append_host (nhosts, s, value) < 0
+                    || json_object_set (hash, s, value) < 0) {
+                    log_msg ("Config file error [bootstrap]:"
+                             " error appending host %s", s);
+                    hostlist_destroy (hl);
+                    goto error;
+                }
+            }
+            else {
+                if (json_object_update (entry, value) < 0) {
+                    log_msg ("Config file error [bootstrap]:"
+                             " error merging host %s", s);
+                    hostlist_destroy (hl);
+                    goto error;
+                }
             }
             s = hostlist_next (hl);
         }
         hostlist_destroy (hl);
     }
+    json_decref (hash);
     return nhosts;
 error:
     json_decref (nhosts);
+    json_decref (hash);
 
     return NULL;
 }
@@ -339,7 +374,7 @@ int boot_config_getrankbyname (json_t *hosts, const char *name, uint32_t *rank)
     json_array_foreach (hosts, index, entry) {
         const char *host;
 
-        /* N.B. missing host key already detected by boot_config_parse().
+        /* N.B. entry already validated by boot_config_parse().
          */
         if (json_unpack (entry, "{s:s}", "host", &host) == 0
                     && !strcmp (name, host)) {
@@ -365,21 +400,13 @@ static int gethostentry (json_t *hosts,
                  (unsigned int)rank);
         return -1;
     }
-    /* N.B. missing host key already detected by boot_config_parse().
+    /* N.B. entry already validated by boot_config_parse().
      */
-    if (json_unpack (entry,
-                     "{s:s s?:s s?:s}",
-                     "host",
-                     host,
-                     "bind",
-                     bind,
-                     "connect",
-                     uri) < 0) {
-        log_msg ("Config file error [bootstrap]: rank %u bad hosts entry",
-                 (unsigned int)rank);
-        log_msg ("Hint: bind and connect keys, if present, are type string");
-        return -1;
-    }
+    (void)json_unpack (entry,
+                      "{s:s s?:s s?:s}",
+                      "host", host,
+                      "bind", bind,
+                      "connect", uri);
     return 0;
 }
 
@@ -458,21 +485,10 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
     struct boot_conf conf;
     uint32_t rank;
     uint32_t size;
-    uint32_t fanout;
     json_t *hosts = NULL;
     struct topology *topo = NULL;
-
-    /* Fetch the tbon.fanout attribute and supply a default value if unset.
-     */
-    if (attr_get_uint32 (attrs, "tbon.fanout", &fanout) < 0)
-        fanout = DEFAULT_FANOUT;
-    else
-        (void)attr_delete (attrs, "tbon.fanout", true);
-    if (attr_add_uint32 (attrs,
-                         "tbon.fanout",
-                         fanout,
-                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        return -1;
+    flux_error_t error;
+    const char *topo_uri;
 
     /* Ingest the [bootstrap] stanza.
      */
@@ -504,14 +520,24 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
         rank = 0;
     }
 
-    /* Tell overlay network this broker's rank and size.
-     * If a curve certificate was provided, load it.
-     */
-    if (!(topo = topology_create (size))
-        || topology_set_kary (topo, fanout) < 0
-        || topology_set_rank (topo, rank) < 0
+    // N.B. overlay_create() sets the tbon.topo attribute
+    if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
+        log_msg ("error fetching tbon.topo attribute");
+        goto error;
+    }
+    topology_hosts_set (hosts);
+    topo = topology_create (topo_uri, size, &error);
+    topology_hosts_set (NULL);
+    if (!topo) {
+        log_msg ("Error creating %s topology: %s", topo_uri, error.text);
+        goto error;
+    }
+    if (topology_set_rank (topo, rank) < 0
         || overlay_set_topology (overlay, topo) < 0)
         goto error;
+
+    /* If a curve certificate was provided, load it.
+     */
     if (conf.curve_cert) {
         if (overlay_cert_load (overlay, conf.curve_cert) < 0)
             goto error; // prints error

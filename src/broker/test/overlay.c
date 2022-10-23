@@ -86,10 +86,11 @@ struct context *ctx_create (flux_t *h,
                             const char *name,
                             int size,
                             int rank,
-                            int fanout,
+                            const char *topo_uri,
                             overlay_recv_f cb)
 {
     struct context *ctx;
+    flux_error_t error;
     const char *temp = getenv ("TMPDIR");
     if (!temp)
         temp = "/tmp";
@@ -98,14 +99,10 @@ struct context *ctx_create (flux_t *h,
         BAIL_OUT ("calloc failed");
     if (!(ctx->attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
-    if (fanout != 2) {
-        if (attr_add_int (ctx->attrs, "tbon.fanout", fanout, 0) < 0)
-            BAIL_OUT ("could not add tbon.fanout attribute");
-    }
-    if (!(ctx->topo = topology_create (size))
-        || topology_set_kary (ctx->topo, fanout) < 0
-        || topology_set_rank (ctx->topo, rank) < 0)
-        BAIL_OUT ("cannot create topology");
+    if (!(ctx->topo = topology_create (topo_uri, size, &error)))
+        BAIL_OUT ("cannot create '%s' topology: %s", topo_uri, error.text);
+    if (topology_set_rank (ctx->topo, rank) < 0)
+        BAIL_OUT ("cannot set topology rank");
     ctx->h = h;
     ctx->size = size;
     ctx->rank = rank;
@@ -122,7 +119,7 @@ struct context *ctx_create (flux_t *h,
 
 void single (flux_t *h)
 {
-    struct context *ctx = ctx_create (h, "single", 1, 0, 2, NULL);
+    struct context *ctx = ctx_create (h, "single", 1, 0, "kary:2", NULL);
     flux_msg_t *msg;
     char *s;
     struct idset *critical_ranks;
@@ -284,7 +281,7 @@ void trio (flux_t *h)
     zcert_t *cert;
     const char *sender;
 
-    ctx[0] = ctx_create (h, "trio", size, 0, 2, recv_cb);
+    ctx[0] = ctx_create (h, "trio", size, 0, "kary:2", recv_cb);
 
     ok (overlay_set_topology (ctx[0]->ov, ctx[0]->topo) == 0,
         "%s: overlay_set_topology works", ctx[0]->name);
@@ -296,7 +293,7 @@ void trio (flux_t *h)
     ok (overlay_bind (ctx[0]->ov, parent_uri) == 0,
         "%s: overlay_bind %s works", ctx[0]->name, parent_uri);
 
-    ctx[1] = ctx_create (h, "trio", size, 1, 2, recv_cb);
+    ctx[1] = ctx_create (h, "trio", size, 1, "kary:2", recv_cb);
 
     ok (overlay_set_topology (ctx[1]->ov, ctx[1]->topo) == 0,
         "%s: overlay_set_topology works", ctx[1]->name);
@@ -505,12 +502,11 @@ void test_create (flux_t *h,
                   int size,
                   struct context *ctx[])
 {
-    int fanout = size - 1;
     char uri[64] = { 0 };
     int rank;
 
     for (rank = 0; rank < size; rank++) {
-        ctx[rank] = ctx_create (h, name, size, rank, fanout, recv_cb);
+        ctx[rank] = ctx_create (h, name, size, rank, NULL, recv_cb);
         if (overlay_set_topology (ctx[rank]->ov, ctx[rank]->topo) < 0)
             BAIL_OUT ("%s: overlay_set_topology failed", ctx[rank]->name);
         if (rank == 0) {

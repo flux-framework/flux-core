@@ -107,11 +107,10 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
         goto error;
     if (!(c->h = flux_handle_create (c, &handle_ops, flags)))
         goto error;
-    /* Fake out size, rank, tbon.fanout attributes for testing.
+    /* Fake out size, rank attributes for testing.
      */
     if (flux_attr_set_cacheonly(c->h, "rank", "0") < 0
-                || flux_attr_set_cacheonly (c->h, "size", "1") < 0
-                || flux_attr_set_cacheonly (c->h, "tbon.fanout", "2") < 0)
+                || flux_attr_set_cacheonly (c->h, "size", "1") < 0)
         goto error;
     c->cred.userid = getuid ();
     c->cred.rolemask = FLUX_ROLE_OWNER;

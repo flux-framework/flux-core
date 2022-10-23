@@ -152,10 +152,12 @@ config.path [Updates: see below]
 TREE BASED OVERLAY NETWORK
 ==========================
 
-tbon.fanout [Updates: C]
-   Branching factor of the tree based overlay network.  A value of ``0``
-   means the topology is "flat" (rank 0 is the parent of all other ranks).
-   Default: ``2``.
+tbon.topo [Updates: C]
+   URI describing the TBON tree topology such as ``kary:16``.  The ``kary``
+   scheme selects a complete, k-ary tree with fanout *k*.  By convention
+   ``kary:0`` means that rank 0 is the parent of all other ranks.  Default:
+   ``kary:2``, unless bootstrapping by TOML configuration, then see
+   :man5:`flux-config-bootstrap`.
 
 tbon.descendants
    Number of descendants "below" this node of the tree based

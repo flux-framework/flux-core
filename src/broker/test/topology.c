@@ -16,6 +16,8 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/array_size/array_size.h"
+#include "ccan/ptrint/ptrint.h"
 
 #include "src/broker/topology.h"
 
@@ -58,11 +60,9 @@ void test_flat (void)
     json_t *o;
     bool pass;
 
-    topo = topology_create (16);
+    topo = topology_create (NULL, 16, NULL);
     ok (topo != NULL,
         "topology_create size=16 works");
-    ok (topology_set_kary (topo, 0) == 0,
-        "topology_set_kary k=0 allowed to indicate flat topo");
     ok (topology_get_size (topo) == 16,
         "topology_get_size returns 16");
     ok (topology_get_rank (topo) == 0,
@@ -108,11 +108,9 @@ void test_k1 (void)
     int child_ranks[15];
     json_t *o;
 
-    topo = topology_create (16);
+    topo = topology_create ("kary:1", 16, NULL);
     ok (topo != NULL,
-        "topology_create size=16 works");
-    ok (topology_set_kary (topo, 1) == 0,
-        "topology_set_kary k=1 works");
+        "topology_create kary:1 size=16 works");
     ok (topology_get_rank (topo) == 0,
         "topology_get_rank returns 0");
     ok (topology_get_size (topo) == 16,
@@ -152,11 +150,9 @@ void test_k2 (void)
     int child_ranks[15];
     json_t *o;
 
-    topo = topology_create (16);
+    topo = topology_create ("kary:2", 16, NULL);
     ok (topo != NULL,
-        "topology_create size=16 works");
-    ok (topology_set_kary (topo, 2) == 0,
-        "topology_set_kary k=2 works");
+        "topology_create kary:2 size=16 works");
     ok (topology_get_rank (topo) == 0,
         "topology_get_rank returns 0");
     ok (topology_get_size (topo) == 16,
@@ -205,11 +201,9 @@ void test_k2_router (void)
     int child_ranks[15];
     json_t *o;
 
-    topo = topology_create (16);
+    topo = topology_create ("kary:2", 16, NULL);
     ok (topo != NULL,
-        "topology_create size=16 works");
-    ok (topology_set_kary (topo, 2) == 0,
-        "topology_set_kary k=2 works");
+        "topology_create kary:2 size=16 works");
     ok (topology_set_rank (topo, 1) == 0,
         "topology_set_rank 1 works");
     ok (topology_get_rank (topo) == 1,
@@ -240,20 +234,20 @@ void test_k2_router (void)
 
 struct internal_ranks_test {
     int size;
-    int kary;
+    const char *uri;
     const char *expected_ranks;
 };
 
 struct internal_ranks_test internal_ranks_tests[] = {
-    { 1,  2,  ""    },
-    { 2,  2,  "0"   },
-    { 4,  2,  "0-1" },
-    { 4,  0,  "0"   },
-    { 16, 2,  "0-7" },
-    { 48, 2,  "0-23"},
-    { 48, 0,  "0"   },
-    { 48, 16, "0-2" },
-    { -1, -1, NULL  }
+    { 1,  "kary:2",  ""    },
+    { 2,  "kary:2",  "0"   },
+    { 4,  "kary:2",  "0-1" },
+    { 4,  "kary:0",  "0"   },
+    { 16, "kary:2",  "0-7" },
+    { 48, "kary:2",  "0-23"},
+    { 48, "kary:0",  "0"   },
+    { 48, "kary:16", "0-2" },
+    { -1, NULL, NULL  }
 };
 
 void test_internal_ranks (void)
@@ -265,11 +259,10 @@ void test_internal_ranks (void)
 
     struct internal_ranks_test *t = internal_ranks_tests;
     while (t && t->expected_ranks) {
-        if (!(topo = topology_create (t->size))
-            || topology_set_kary (topo, t->kary) < 0)
-            BAIL_OUT ("failed to create topology size=%d kary=%d",
-                      t->size,
-                      t->kary);
+        if (!(topo = topology_create (t->uri, t->size, NULL)))
+            BAIL_OUT ("failed to create topology %s size=%d",
+                      t->uri,
+                      t->size);
         if (!(expected = idset_decode (t->expected_ranks)))
             BAIL_OUT ("failed to decode expected ranks=%d",
                       t->expected_ranks);
@@ -291,16 +284,185 @@ void test_internal_ranks (void)
     }
 }
 
+struct pmap {
+    int parent;
+    const char *children;
+    struct idset *ids_children;
+};
+void pmap_clean (struct pmap *map, size_t count)
+{
+    for (int i = 0; i < count; i++) {
+        idset_destroy (map[i].ids_children);
+        map[i].ids_children = NULL;
+    }
+}
+int pmap_lookup (struct pmap *map, size_t count, int rank, int *parent_rank)
+{
+    for (int i = 0; i < count; i++) {
+        if (!map[i].ids_children) {
+            if (!(map[i].ids_children = idset_decode (map[i].children)))
+                BAIL_OUT ("idset_decode failed");
+        }
+        if (idset_test (map[i].ids_children, rank)) {
+            *parent_rank = map[i].parent;
+            return 0;
+        }
+    }
+    return -1;
+}
+json_t *pmap_hosts (struct pmap *map, size_t count, int size)
+{
+    json_t *hosts;
+    if (!(hosts = json_array ()))
+        return NULL;
+    for (int rank = 0; rank < size; rank++) {
+        char host[16];
+        char phost[16];
+        json_t *entry;
+        int parent_rank;
+
+        snprintf (host, sizeof (host), "test%d", rank);
+        if (pmap_lookup (map, count, rank, &parent_rank) < 0)
+            entry = json_pack ("{s:s}", "host", host);
+        else {
+            snprintf (phost, sizeof (phost), "test%d", parent_rank);
+            entry = json_pack ("{s:s s:s}", "host", host, "parent", phost);
+        }
+        if (!entry || json_array_append_new (hosts, entry) < 0)
+            BAIL_OUT ("failed to append hosts array entry");
+    }
+    return hosts;
+}
+
+/* Does topology have 'expected' (idset) internal ranks?
+ */
+bool check_internal (struct topology *topo, const char *expected)
+{
+    struct idset *exp;
+    struct idset *out;
+    bool result;
+
+    if (!(exp = idset_decode (expected)))
+        BAIL_OUT ("idset_decode failed");
+    if (!(out = topology_get_internal_ranks (topo)))
+        BAIL_OUT ("topology_get_internal_ranks failed");
+
+    result = idset_equal (out, exp);
+
+    char *s = idset_encode (out, IDSET_FLAG_RANGE);
+    diag ("%s %s %s", s, result ? "==" : "!=", expected);
+    free (s);
+
+    idset_destroy (out);
+    idset_destroy (exp);
+
+    return result;
+}
+
+struct pmap cust1[] = {
+    { .parent = 0, .children = "1,2,64,128,192" },
+    { .parent = 1, .children = "3-63" },
+    { .parent = 64, .children = "65-127" },
+    { .parent = 128, .children = "129-191" },
+    { .parent = 192, .children = "193-255" },
+};
+struct pmap bad1[] = {
+    { .parent = 1, .children = "0" }, // 0 can't have a parent
+};
+struct pmap bad2[] = {
+    { .parent = 1, .children = "2" },
+    { .parent = 2, .children = "3" },
+    { .parent = 3, .children = "1" }, // cycle
+};
+struct pmap bad3[] = {
+    { .parent = 1, .children = "1" }, // small cycle!
+};
+
+void test_custom (void)
+{
+    struct topology *topo;
+    flux_error_t error;
+    json_t *hosts;
+
+    topo = topology_create ("custom:zzz", 256, &error);
+    if (!topo)
+        diag ("%s", error.text);
+    ok (topo == NULL,
+        "topology_create custom: fails with URI path");
+
+    topology_hosts_set (NULL);
+    topo = topology_create ("custom:", 256, &error);
+    ok (topo != NULL,
+        "topology_create custom: works without hosts array");
+    topology_decref (topo);
+
+    hosts = pmap_hosts (bad1, ARRAY_SIZE (bad1), 2);
+    topology_hosts_set (hosts);
+    topo = topology_create ("custom:", 2, &error);
+    if (!topo)
+        diag ("%s", error.text);
+    ok (topo == NULL,
+        "topology_create custom failed with rank 0 parent");
+    topology_hosts_set (NULL);
+    json_decref (hosts);
+
+    hosts = pmap_hosts (bad2, ARRAY_SIZE (bad2), 16);
+    topology_hosts_set (hosts);
+    topo = topology_create ("custom:", 16, &error);
+    if (!topo)
+        diag ("%s", error.text);
+    ok (topo == NULL,
+        "topology_create custom failed with graph cycle");
+    topology_hosts_set (NULL);
+    json_decref (hosts);
+
+    hosts = pmap_hosts (bad3, ARRAY_SIZE (bad3), 16);
+    topology_hosts_set (hosts);
+    topo = topology_create ("custom:", 16, &error);
+    if (!topo)
+        diag ("%s", error.text);
+    ok (topo == NULL,
+        "topology_create custom failed with self as parent");
+    topology_hosts_set (NULL);
+    json_decref (hosts);
+
+    hosts = pmap_hosts (cust1, ARRAY_SIZE (cust1), 256);
+    topology_hosts_set (hosts);
+
+    topo = topology_create ("custom:", 2, &error);
+    if (!topo)
+        diag ("%s", error.text);
+    ok (topo == NULL,
+        "topology_create custom failed with mistmatched topo and host size");
+
+    topo = topology_create ("custom:", 256, &error);
+    topology_hosts_set (NULL);
+    ok (topo != NULL,
+        "configured custom 256 node topo");
+    ok (topology_set_rank (topo, 1) == 0,
+        "set rank to 1");
+    ok (topology_get_parent (topo) == 0,
+        "parent is 0");
+    ok (topology_get_level (topo) == 1,
+        "level is 1");
+    ok (topology_get_descendant_count (topo) == 61,
+        "descendant_count is 61");
+    ok (check_internal (topo, "0-1,64,128,192"),
+        "topology has expected internal ranks");
+    topology_decref (topo);
+    json_decref (hosts);
+}
+
 void test_invalid (void)
 {
     struct topology *topo;
     int a[16];
 
-    if (!(topo = topology_create (16)))
+    if (!(topo = topology_create (NULL, 16, NULL)))
         BAIL_OUT ("could not create topology");
 
     errno = 0;
-    ok (topology_create (0) == NULL && errno == EINVAL,
+    ok (topology_create (NULL, 0, NULL) == NULL && errno == EINVAL,
         "topology_create size=0 fails with EINVAL");
 
     lives_ok ({topology_decref (NULL);},
@@ -308,10 +470,6 @@ void test_invalid (void)
 
     ok (topology_incref (NULL) == NULL,
         "topology_incref topo=NULL returns NULL");
-
-    errno = 0;
-    ok (topology_set_kary (NULL, 2) < 0 && errno == EINVAL,
-        "topology_set_kary topo=NULL fails with EINVAL");
 
     errno = 0;
     ok (topology_set_rank (NULL, 0) < 0 && errno == EINVAL,
@@ -359,21 +517,62 @@ void test_invalid (void)
         "topology_get_json_subtree_at rank=-1 fails with EINVAL");
 
     errno = 0;
-    ok (topology_aux_get (NULL, 0, "foo") == NULL && errno == EINVAL,
-        "topology_aux_get topo=NULL fails with EINVAL");
+    ok (topology_rank_aux_get (NULL, 0, "foo") == NULL && errno == EINVAL,
+        "topology_rank_aux_get topo=NULL fails with EINVAL");
     errno = 0;
-    ok (topology_aux_get (topo, -1, "foo") == NULL && errno == EINVAL,
-        "topology_aux_get rank=-1 fails with EINVAL");
+    ok (topology_rank_aux_get (topo, -1, "foo") == NULL && errno == EINVAL,
+        "topology_rank_aux_get rank=-1 fails with EINVAL");
     errno = 0;
-    ok (topology_aux_get (topo, 99, "foo") == NULL && errno == EINVAL,
-        "topology_aux_get rank=99 fails with EINVAL");
+    ok (topology_rank_aux_get (topo, 99, "foo") == NULL && errno == EINVAL,
+        "topology_rank_aux_get rank=99 fails with EINVAL");
     errno = 0;
-    ok (topology_aux_get (topo, 0, "foo") == NULL && errno == ENOENT,
-        "topology_aux_get key=unknown fails with ENOENT");
+    ok (topology_rank_aux_get (topo, 0, "foo") == NULL && errno == ENOENT,
+        "topology_rank_aux_get key=unknown fails with ENOENT");
+
+    errno = 0;
+    ok (topology_rank_aux_set (NULL, 0, "foo", "bar", NULL) < 0
+        && errno == EINVAL,
+        "topology_rank_aux_set topo=NULL fails with EINVAL");
+    errno = 0;
+    ok (topology_rank_aux_set (topo, -1, "foo", "bar", NULL) < 0
+        && errno == EINVAL,
+        "topology_rank_aux_set rank=-1 fails with EINVAL");
+    errno = 0;
+    ok (topology_rank_aux_set (topo, 99, "foo", "bar", NULL) < 0
+        && errno == EINVAL,
+        "topology_rank_aux_set rank=99 fails with EINVAL");
 
     errno = 0;
     ok (topology_get_internal_ranks (NULL) == NULL && errno == EINVAL,
         "topolog_get_internal_ranks (NULL) returns EINVAL");
+
+    topology_decref (topo);
+}
+
+void test_rank_aux (void)
+{
+    struct topology *topo;
+    int errors;
+
+    if (!(topo = topology_create (NULL, 16, NULL)))
+        BAIL_OUT ("topology_create failed");
+
+    errors = 0;
+    for (int i = 0; i < 16; i++) {
+        if (topology_rank_aux_set (topo, i, "rank", int2ptr (i + 1), NULL) < 0)
+            errors++;
+    }
+    ok (errors == 0,
+        "topology_rank_aux_set works for all ranks");
+    errors = 0;
+    for (int i = 0; i < 16; i++) {
+        void *ptr;
+        if (!(ptr = (topology_rank_aux_get (topo, i, "rank")))
+            || ptr2int (ptr) != i + 1)
+            errors++;
+    }
+    ok (errors == 0,
+        "topology_rank_aux_get returns expected result for all ranks");
 
     topology_decref (topo);
 }
@@ -388,6 +587,8 @@ int main (int argc, char *argv[])
     test_k2_router ();
     test_invalid ();
     test_internal_ranks ();
+    test_custom ();
+    test_rank_aux ();
 
     done_testing ();
 }

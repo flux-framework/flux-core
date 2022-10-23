@@ -120,7 +120,7 @@ make_bootstrap_config() {
     echo "--test-exit-timeout=${TEST_UNDER_FLUX_EXIT_TIMEOUT:-0}"
     echo "-o,-Sbroker.quorum=${TEST_UNDER_FLUX_QUORUM:-$full}"
     echo "--test-start-mode=${TEST_UNDER_FLUX_START_MODE:-all}"
-    echo "-o,-Stbon.fanout=${TEST_UNDER_FLUX_FANOUT:-$size}"
+    echo "-o,-Stbon.topo=${TEST_UNDER_FLUX_TOPO:-custom}"
     echo "-o,-Stbon.zmqdebug=1"
     echo "-o,-Sstatedir=$workdir/state"
 }
@@ -176,8 +176,8 @@ remove_trashdir_wrapper() {
 #        Set the broker.quorum attribute (default: 0-<highest_rank>)
 #    - TEST_UNDER_FLUX_START_MODE
 #        Set the flux-start start mode (default: all)
-#    - TEST_UNDER_FLUX_FANOUT
-#        Set the TBON fanout (default: size (flat))
+#    - TEST_UNDER_FLUX_TOPO
+#        Set the TBON topology (default: custom (flat))
 #
 test_under_flux() {
     size=${1:-1}

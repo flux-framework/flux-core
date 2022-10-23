@@ -31,12 +31,12 @@ if test "$FREE_RANGE_TEST_ACTIVE" != "t"; then
     exec flux start -s 4 \
         --test-exit-mode=leader \
         --test-pmi-clique=per-broker \
-        -o -Stbon.fanout=0 $0
+        -o -Stbon.topo=kary:0 $0
 fi
 
-#  Start a job with tbon.fanout=0
+#  Start a job with tbon.topo=kary:0
 log "Starting a child instance with flat topology\n"
-jobid=$(flux mini alloc -N4 --bg --broker-opts=-Stbon.fanout=0)
+jobid=$(flux mini alloc -N4 --bg --broker-opts=-Stbon.topo=kary:0)
 
 log "Started job $jobid\n"
 

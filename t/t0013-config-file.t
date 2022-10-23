@@ -79,6 +79,63 @@ test_expect_success '[bootstrap] config with bad hosts array element' '
 	test_must_fail flux broker ${ARGS} -c conf4 /bin/true
 '
 
+test_expect_success '[bootstrap] config with hosts array element with extra key' '
+	mkdir conf4a &&
+	cat <<-EOT >conf4a/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    { host = "xyz", extrakey = 42 },
+	]
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf4a /bin/true
+'
+
+test_expect_success '[bootstrap] config with hosts array element missing host' '
+	mkdir conf4b &&
+	cat <<-EOT >conf4b/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    { },
+	]
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf4b /bin/true
+'
+
+test_expect_success '[bootstrap] config with bad hostlist' '
+	mkdir conf4c &&
+	cat <<-EOT >conf4c/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    { host = "foo[0-254}" },
+	]
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf4c /bin/true
+'
+
+test_expect_success '[bootstrap] config with with unknown parent' '
+	mkdir conf4d &&
+	cat <<-EOT >conf4d/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    { host = "fake0", parent = "noparent" },
+	]
+	EOT
+	test_must_fail flux start --test-size=1 --test-hosts=fake0 \
+	    -o,-c conf4d /bin/true
+'
+
+test_expect_success '[bootstrap] config with with impossible parent' '
+	mkdir conf4e &&
+	cat <<-EOT >conf4e/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    { host = "fake0", parent = "fake0" },
+	]
+	EOT
+	test_must_fail flux start --test-size=1 --test-hosts=fake0 \
+	    -o,-c conf4e /bin/true
+'
+
 test_expect_success '[bootstrap] config with hostname not found' '
 	mkdir conf5 &&
 	cat <<-EOT >conf5/bootstrap.toml &&
@@ -128,10 +185,12 @@ test_expect_success 'start size=2 instance with ipc://' '
 	cat <<-EOT >conf8/bootstrap.toml &&
 	[bootstrap]
 	curve_cert = "testcert"
-	hosts = [
-	    { host="fake0", bind="ipc://${BINDDIR}/test-ipc2-0", connect="ipc://${BINDDIR}/test-ipc2-0" },
-	    { host="fake1" }
-	]
+	[[bootstrap.hosts]]
+	host = "fake0"
+	bind = "ipc://${BINDDIR}/test-ipc2-0"
+	connect = "ipc://${BINDDIR}/test-ipc2-0"
+	[[bootstrap.hosts]]
+	host = "fake1"
 	EOT
 	flux start -s2 --test-hosts=fake[0-1] \
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
@@ -142,6 +201,33 @@ test_expect_success 'start size=2 instance with ipc://' '
 	fake[0-1]
 	EXP
 	test_cmp ipc.exp ipc.out
+'
+
+test_expect_success 'start size=3 instance with ipc:// and custom topology' '
+	BINDDIR=$(mktemp -d) &&
+	test_when_finished "rm -rf $BINDIR" &&
+	mkdir conf8a &&
+	cat <<-EOT >conf8a/bootstrap.toml &&
+	[bootstrap]
+	curve_cert = "testcert"
+	[[bootstrap.hosts]]
+	host = "fake0"
+	bind = "ipc://${BINDDIR}/fake0"
+	connect = "ipc://${BINDDIR}/fake0"
+	[[bootstrap.hosts]]
+	host = "fake1"
+	bind = "ipc://${BINDDIR}/fake1"
+	connect = "ipc://${BINDDIR}/fake1"
+	[[bootstrap.hosts]]
+	host = "fake2"
+	parent = "fake1"
+	EOT
+	flux start --test-size=3 --test-hosts=fake[0-2] \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		-o,--config-path=conf8a \
+		flux getattr tbon.maxlevel >conf8a.out &&
+	echo 2 >conf8a.exp &&
+	test_cmp conf8a.exp conf8a.out
 '
 
 getport() {
@@ -156,11 +242,16 @@ test_expect_success 'start size=4 instance with tcp://' '
 	cat <<-EOT >conf9/bootstrap.toml &&
 	[bootstrap]
 	curve_cert = "testcert"
-	hosts = [
-	    { host="fake0", bind="tcp://127.0.0.1:$PORT1", connect="tcp://127.0.0.1:$PORT1" },
-	    { host="fake1", bind="tcp://127.0.0.1:$PORT2", connect="tcp://127.0.0.1:$PORT2" },
-	    { host="fake[2-3]" }
-	]
+	[[bootstrap.hosts]]
+	host = "fake0"
+	bind = "tcp://127.0.0.1:$PORT1"
+	connect = "tcp://127.0.0.1:$PORT1"
+	[[bootstrap.hosts]]
+	host = "fake1"
+	bind = "tcp://127.0.0.1:$PORT2"
+	connect ="tcp://127.0.0.1:$PORT2"
+	[[bootstrap.hosts]]
+	host = "fake[2-3]"
 	EOT
 	flux start -s4 --test-hosts=fake[0-3] \
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
@@ -367,5 +458,48 @@ test_expect_success 'tbon.torpid_max configured with wrong type fails' '
 		/bin/true 2>badtorpid.err &&
 	grep "Expected string" badtorpid.err
 '
+test_expect_success 'tbon.topo with unknown scheme fails' '
+	mkdir conf23 &&
+	cat <<-EOT >conf23/tbon.toml &&
+	[tbon]
+	topo = "notascheme:42"
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf23 \
+		/bin/true 2>badscheme.err &&
+	grep "unknown topology scheme" badscheme.err
+'
+test_expect_success 'tbon.topo is kary:2 by default' '
+	echo "kary:2" >topo.exp &&
+	flux broker ${ARGS} flux getattr tbon.topo >topo.out &&
+	test_cmp topo.exp topo.out
+'
+test_expect_success 'tbon.topo can be changed by configuration' '
+	mkdir conf24 &&
+	cat <<-EOT >conf24/tbon.toml &&
+	[tbon]
+	topo = "kary:8"
+	EOT
+	echo "kary:8" >topo2.exp &&
+	flux broker ${ARGS} -c conf24 \
+		flux getattr tbon.topo >topo2.out &&
+	test_cmp topo2.exp topo2.out
+'
+test_expect_success 'tbon.topo can be overridden on the command line' '
+	echo "kary:16" >topo3.exp &&
+	flux broker ${ARGS} -c conf24 -Stbon.topo=kary:16 \
+		flux getattr tbon.topo >topo3.out &&
+	test_cmp topo3.exp topo3.out
+'
+test_expect_success 'tbon.topo is custom when bootstrap is configured' '
+	mkdir conf25 &&
+	cat <<-EOT >conf25/bootstrap.toml &&
+	[bootstrap]
+	EOT
+	echo "custom" >topo4.exp &&
+	flux broker ${ARGS} -c conf25 \
+		flux getattr tbon.topo >topo4.out &&
+	test_cmp topo4.exp topo4.out
+'
+
 
 test_done

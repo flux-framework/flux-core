@@ -5,7 +5,7 @@
 local test = require 'fluxometer'.init (...)
 test:start_session { size=2 }
 
-plan (19)
+plan (18)
 
 local flux = require_ok ('flux')
 local f, err = flux.new()
@@ -14,7 +14,6 @@ is (err, nil, "error is nil")
 
 is (f.rank, 0, "running on rank 0")
 is (f.size, 2, "session size is 2")
-is (f.fanout, 2, "session fanout is 2")
 
 --
 --  Use 'ping' packet to test rpc

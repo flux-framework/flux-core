@@ -13,7 +13,7 @@ commands/RPCs through their paces.
 
 . `dirname $0`/sharness.sh
 
-export TEST_UNDER_FLUX_FANOUT=2
+export TEST_UNDER_FLUX_TOPO=kary:2
 
 test_under_flux 15 system
 
