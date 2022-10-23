@@ -37,12 +37,12 @@ int topology_set_rank (struct topology *topo, int rank);
 
 /* Associate aux data with rank for lookup in O(1*rank_aux_elements)
  */
-void *topology_aux_get (struct topology *topo, int rank, const char *name);
-int topology_aux_set (struct topology *topo,
-                      int rank,
-                      const char *name,
-                      void *aux,
-                      flux_free_f destroy);
+void *topology_rank_aux_get (struct topology *topo, int rank, const char *name);
+int topology_rank_aux_set (struct topology *topo,
+                           int rank,
+                           const char *name,
+                           void *aux,
+                           flux_free_f destroy);
 
 /* Queries
  */

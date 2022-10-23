@@ -151,7 +151,7 @@ int topology_set_rank (struct topology *topo, int rank)
     return 0;
 }
 
-void *topology_aux_get (struct topology *topo, int rank, const char *name)
+void *topology_rank_aux_get (struct topology *topo, int rank, const char *name)
 {
     if (!topo || rank < 0 || rank >= topo->size) {
         errno = EINVAL;
@@ -160,11 +160,11 @@ void *topology_aux_get (struct topology *topo, int rank, const char *name)
     return aux_get (topo->node[rank].aux, name);
 }
 
-int topology_aux_set (struct topology *topo,
-                      int rank,
-                      const char *name,
-                      void *val,
-                      flux_free_f destroy)
+int topology_rank_aux_set (struct topology *topo,
+                           int rank,
+                           const char *name,
+                           void *val,
+                           flux_free_f destroy)
 {
     if (!topo || rank < 0 || rank >= topo->size) {
         errno = EINVAL;

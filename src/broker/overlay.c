@@ -280,7 +280,11 @@ int overlay_set_topology (struct overlay *ov, struct topology *topo)
             child->tracker = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG);
             if (!child->tracker)
                 return -1;
-            if (topology_aux_set (topo, child->rank, "child", child, NULL) < 0)
+            if (topology_rank_aux_set (topo,
+                                       child->rank,
+                                       "child",
+                                       child,
+                                       NULL) < 0)
                 return -1;
         }
         ov->status = SUBTREE_STATUS_PARTIAL;
@@ -446,7 +450,7 @@ bool overlay_msg_is_local (const flux_msg_t *msg)
  */
 static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank)
 {
-    return topology_aux_get (ov->topo, rank, "child");
+    return topology_rank_aux_get (ov->topo, rank, "child");
 }
 
 /* Look up child that provides route to 'rank' (NULL if none).

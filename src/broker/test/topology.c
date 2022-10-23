@@ -517,27 +517,30 @@ void test_invalid (void)
         "topology_get_json_subtree_at rank=-1 fails with EINVAL");
 
     errno = 0;
-    ok (topology_aux_get (NULL, 0, "foo") == NULL && errno == EINVAL,
-        "topology_aux_get topo=NULL fails with EINVAL");
+    ok (topology_rank_aux_get (NULL, 0, "foo") == NULL && errno == EINVAL,
+        "topology_rank_aux_get topo=NULL fails with EINVAL");
     errno = 0;
-    ok (topology_aux_get (topo, -1, "foo") == NULL && errno == EINVAL,
-        "topology_aux_get rank=-1 fails with EINVAL");
+    ok (topology_rank_aux_get (topo, -1, "foo") == NULL && errno == EINVAL,
+        "topology_rank_aux_get rank=-1 fails with EINVAL");
     errno = 0;
-    ok (topology_aux_get (topo, 99, "foo") == NULL && errno == EINVAL,
-        "topology_aux_get rank=99 fails with EINVAL");
+    ok (topology_rank_aux_get (topo, 99, "foo") == NULL && errno == EINVAL,
+        "topology_rank_aux_get rank=99 fails with EINVAL");
     errno = 0;
-    ok (topology_aux_get (topo, 0, "foo") == NULL && errno == ENOENT,
-        "topology_aux_get key=unknown fails with ENOENT");
+    ok (topology_rank_aux_get (topo, 0, "foo") == NULL && errno == ENOENT,
+        "topology_rank_aux_get key=unknown fails with ENOENT");
 
     errno = 0;
-    ok (topology_aux_set (NULL, 0, "foo", "bar", NULL) < 0 && errno == EINVAL,
-        "topology_aux_set topo=NULL fails with EINVAL");
+    ok (topology_rank_aux_set (NULL, 0, "foo", "bar", NULL) < 0
+        && errno == EINVAL,
+        "topology_rank_aux_set topo=NULL fails with EINVAL");
     errno = 0;
-    ok (topology_aux_set (topo, -1, "foo", "bar", NULL) < 0 && errno == EINVAL,
-        "topology_aux_set rank=-1 fails with EINVAL");
+    ok (topology_rank_aux_set (topo, -1, "foo", "bar", NULL) < 0
+        && errno == EINVAL,
+        "topology_rank_aux_set rank=-1 fails with EINVAL");
     errno = 0;
-    ok (topology_aux_set (topo, 99, "foo", "bar", NULL) < 0 && errno == EINVAL,
-        "topology_aux_set rank=99 fails with EINVAL");
+    ok (topology_rank_aux_set (topo, 99, "foo", "bar", NULL) < 0
+        && errno == EINVAL,
+        "topology_rank_aux_set rank=99 fails with EINVAL");
 
     errno = 0;
     ok (topology_get_internal_ranks (NULL) == NULL && errno == EINVAL,
@@ -546,7 +549,7 @@ void test_invalid (void)
     topology_decref (topo);
 }
 
-void test_aux (void)
+void test_rank_aux (void)
 {
     struct topology *topo;
     int errors;
@@ -556,20 +559,20 @@ void test_aux (void)
 
     errors = 0;
     for (int i = 0; i < 16; i++) {
-        if (topology_aux_set (topo, i, "rank", int2ptr (i + 1), NULL) < 0)
+        if (topology_rank_aux_set (topo, i, "rank", int2ptr (i + 1), NULL) < 0)
             errors++;
     }
     ok (errors == 0,
-        "topology_aux_set works for all ranks");
+        "topology_rank_aux_set works for all ranks");
     errors = 0;
     for (int i = 0; i < 16; i++) {
         void *ptr;
-        if (!(ptr = (topology_aux_get (topo, i, "rank")))
+        if (!(ptr = (topology_rank_aux_get (topo, i, "rank")))
             || ptr2int (ptr) != i + 1)
             errors++;
     }
     ok (errors == 0,
-        "topology_aux_get returns expected result for all ranks");
+        "topology_rank_aux_get returns expected result for all ranks");
 
     topology_decref (topo);
 }
@@ -585,7 +588,7 @@ int main (int argc, char *argv[])
     test_invalid ();
     test_internal_ranks ();
     test_custom ();
-    test_aux ();
+    test_rank_aux ();
 
     done_testing ();
 }
