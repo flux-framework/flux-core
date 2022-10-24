@@ -419,7 +419,7 @@ def resources_uniq_lines(resources, states, formatter):
             if key not in lines:
                 lines[key] = rset
             else:
-                lines[key] = lines[key].union(rset)
+                lines[key].add(rset)
             continue
 
         for rank in resources[state].ranks:
@@ -429,7 +429,7 @@ def resources_uniq_lines(resources, states, formatter):
             if key not in lines:
                 lines[key] = rset
             else:
-                lines[key] = lines[key].union(rset)
+                lines[key].add(rset)
 
     return lines
 
