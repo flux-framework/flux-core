@@ -28,6 +28,8 @@ struct rlist {
     int avail;
     zlistx_t *nodes;
 
+    zhashx_t *rank_index;
+
     /*  hash of resources to ignore on remap */
     zhashx_t *noremap;
 
