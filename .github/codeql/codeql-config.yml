@@ -1,0 +1,9 @@
+Name: "flux codeql defaults"
+queries:
+  - uses: security-and-quality
+paths:
+  - src
+paths-ignore:
+  - "**/flux/utils/**/*.py"
+  - "src/**/parsedatetime/**/*.py"
+  - "**/_flux/**/*.py"
