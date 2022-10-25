@@ -942,6 +942,106 @@ void test_append (void)
     }
 }
 
+struct append_test add_tests[] = {
+    {
+        "1", "0-3", "foo15",
+        "0", "0-3", "foo16",
+        8,
+        2,
+        "foo[16,15]",
+    },
+    {
+        "0-1", "0-3", "foo[16,15]",
+        "0", "0-3", "foo16",
+        8,
+        2,
+        "foo[16,15]",
+    },
+    {
+        "0,2-3", "0-3", "foo[0,2-3]",
+        "1",     "0-3", "foo1",
+        16,
+        4,
+        "foo[0-3]",
+    },
+    {
+        "0", "0-3", "foo0",
+        "0", "0-7", "foo0",
+        8,
+        1,
+        "foo0",
+    },
+    {
+        "[0-1023]", "0-3", "foo[0-1023]",
+        "[1000-1024]",  "4-7", "foo[1000-1024]",
+        4196,
+        1025,
+        "foo[0-1024]",
+    },
+    { 0 },
+};
+
+
+void test_add (void)
+{
+    struct append_test *t = add_tests;
+
+    while (t && t->ranksa) {
+        struct rlist *rl = NULL;
+        struct rlist *rl2 = NULL;
+        struct hostlist *hl = NULL;
+        char *s1;
+        char *s2;
+        char *R1 = R_create (t->ranksa, t->coresa, NULL, t->hostsa, NULL);
+        char *R2 = R_create (t->ranksb, t->coresb, NULL, t->hostsb, NULL);
+
+        if (!R1 || !R2)
+            BAIL_OUT ("R_create() failed!");
+
+        rl = rlist_from_R (R1);
+        rl2 = rlist_from_R (R2);
+        if (!rl || !rl2)
+            BAIL_OUT ("rlist_from_R failed!");
+        free (R1);
+        free (R2);
+
+        s1 = rlist_dumps (rl);
+        s2 = rlist_dumps (rl2);
+
+
+        ok (rlist_add (rl, rl2) == 0,
+            "rlist_add: %s + %s", s1, s2);
+        rlist_destroy (rl2);
+        free (s1);
+        free (s2);
+
+        s1 = rlist_dumps (rl);
+        diag ("result = %s", s1);
+        free (s1);
+
+        ok (rl->total == t->total_cores,
+            "rlist_add: result has %d cores", rl->total);
+        ok (rlist_nnodes (rl) == t->total_nodes,
+            "rlist_add: result has %d nodes", rlist_nnodes (rl));
+
+        hl = rlist_nodelist (rl);
+        s1 = hostlist_encode (hl);
+        is (s1, t->nodelist,
+            "rlist_add: result has nodelist = %s", s1);
+        free (s1);
+        hostlist_destroy (hl);
+
+        json_t *R = rlist_to_R (rl);
+        R1 = json_dumps (R, JSON_COMPACT);
+        diag ("%s", R1);
+        json_decref (R);
+        free (R1);
+        rlist_destroy (rl);
+
+        t++;
+    }
+}
+
 struct remap_test {
     const char *ranks;
     const char *cores;
@@ -1991,6 +2091,7 @@ int main (int ac, char *av[])
     test_issue2473 ();
     test_updown ();
     test_append ();
+    test_add ();
     test_diff ();
     test_union ();
     test_intersect ();
