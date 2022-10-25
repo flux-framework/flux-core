@@ -148,4 +148,32 @@ test_expect_success 'FLUX_URI is set in rc scripts' '
 	var_is_set FLUX_URI *.env
 '
 
+test_expect_success 'job environment is not set in rc scripts' '
+	var_is_unset FLUX_JOB_ID *.env &&
+	var_is_unset FLUX_JOB_SIZE *.env &&
+	var_is_unset FLUX_JOB_NNODES *.env &&
+	var_is_unset FLUX_JOB_TMPDIR *.env &&
+	var_is_unset FLUX_TASK_RANK *.env &&
+	var_is_unset FLUX_TASK_LOCAL_ID *.env &&
+	var_is_unset FLUX_KVS_NAMESPACE *.env
+'
+
+test_expect_success 'capture the environment for instance run as a job' '
+	flux start flux mini run flux start \
+		-o,-Slog-stderr-level=6 \
+		-o,-Sbroker.rc1_path="bash -c printenv >rc1.env2" \
+		-o,-Sbroker.rc3_path="bash -c printenv >rc3.env2" \
+		"bash -c printenv >rc2.env2"
+'
+
+test_expect_success 'job environment is not set in rcs of sub-instance' '
+	var_is_unset FLUX_JOB_ID *.env2 &&
+	var_is_unset FLUX_JOB_SIZE *.env2 &&
+	var_is_unset FLUX_JOB_NNODES *.env2 &&
+	var_is_unset FLUX_JOB_TMPDIR *.env2 &&
+	var_is_unset FLUX_TASK_RANK *.env2 &&
+	var_is_unset FLUX_TASK_LOCAL_ID *.env2 &&
+	var_is_unset FLUX_KVS_NAMESPACE *.env2
+'
+
 test_done
