@@ -146,6 +146,11 @@ int rlist_rank_add_child (struct rlist *rl,
  */
 int rlist_append (struct rlist *rl, const struct rlist *rl2);
 
+/*  Like append, but it is not an error if resources in `rl` also
+ *   exist in `rl2`.
+ */
+int rlist_add (struct rlist *rl, const struct rlist *rl2);
+
 /*  Return the set difference of 'rlb' from 'rla'.
  */
 struct rlist *rlist_diff (const struct rlist *rla, const struct rlist *rlb);

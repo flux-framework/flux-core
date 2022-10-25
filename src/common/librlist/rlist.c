@@ -581,6 +581,26 @@ struct rlist *rlist_union (const struct rlist *rla, const struct rlist *rlb)
     return result;
 }
 
+/*  Add resource set rlb to rla: rla becomes the union of a and b.
+ */
+int rlist_add (struct rlist *rla, const struct rlist *rlb)
+{
+    int rc;
+    struct rlist *diff = NULL;
+
+    /*  Take the set difference of a from b so there are no overlapping
+     *   resources with rla in `diff`
+     */
+    if (!(diff = rlist_diff (rlb, rla)))
+        return -1;
+
+    /*  Now append diff to rla
+     */
+    rc = rlist_append (rla, diff);
+    rlist_destroy (diff);
+    return rc;
+}
+
 struct rlist *rlist_intersect (const struct rlist *rla,
                                const struct rlist *rlb)
 {
