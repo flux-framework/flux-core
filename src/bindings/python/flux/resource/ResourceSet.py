@@ -104,6 +104,16 @@ class ResourceSet:
             self.impl.append(arg.impl)
         return self
 
+    def add(self, *args):
+        """
+        Add resources to a ResourceSet that are not already members
+        """
+        for arg in args:
+            if not isinstance(arg, ResourceSet):
+                arg = ResourceSet(arg, version=self.version)
+            self.impl.add(arg.impl)
+        return self
+
     def copy(self):
         """Return a copy of a ResourceSet"""
         rset = ResourceSet(self.impl.copy())
