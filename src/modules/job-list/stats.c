@@ -42,11 +42,11 @@ void job_stats_update (struct job_stats *stats,
                        struct job *job,
                        flux_job_state_t newstate)
 {
-    stats->state_count[state_index(newstate)]++;
+    stats->state_count[state_index (newstate)]++;
 
     /*  Stats for NEW are not tracked */
     if (job->state != FLUX_JOB_STATE_NEW)
-        stats->state_count[state_index(job->state)]--;
+        stats->state_count[state_index (job->state)]--;
 
     if (newstate == FLUX_JOB_STATE_INACTIVE && !job->success) {
         stats->failed++;
@@ -65,7 +65,7 @@ void job_stats_purge (struct job_stats *stats, struct job *job)
 {
     assert (job->state == FLUX_JOB_STATE_INACTIVE);
 
-    stats->state_count[state_index(job->state)]--;
+    stats->state_count[state_index (job->state)]--;
 
     if (!job->success) {
         stats->failed--;
