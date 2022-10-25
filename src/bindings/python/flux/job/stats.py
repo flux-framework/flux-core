@@ -39,6 +39,7 @@ class JobStats:
         self.cb_kwargs = {}
         for attr in [
             "depend",
+            "priority",
             "sched",
             "run",
             "cleanup",
