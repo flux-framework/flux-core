@@ -262,6 +262,9 @@ The field names that can be specified are:
 **status_abbrev**
    status but in a max 2 character abbreviation
 
+**status_abbrev**
+   status but an appropriate emoji instead of job state / result
+
 **name**
    job name
 
@@ -292,12 +295,20 @@ The field names that can be specified are:
 **state_single**
    job state as a single character
 
+**state_emoji**
+   job state but an appropriate emoji instead of DEPEND, SCHED, RUN,
+   CLEANUP, or INACTIVE
+
 **result**
    job result if job is inactive (COMPLETED, FAILED, CANCELED, TIMEOUT),
    empty string otherwise
 
 **result_abbrev**
    result but in a max 2 character abbreviation
+
+**result_emoji**
+   result but an appropriate emoji instead of COMPLETED, FAILED,
+   CANCELED, or TIMEOUT
 
 **success**
    True of False if job completed successfully, empty string otherwise

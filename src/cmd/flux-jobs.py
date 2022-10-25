@@ -36,6 +36,14 @@ class FluxJobsConfig(UtilConfig):
                 "{contextual_time!F:>8h} {contextual_info}"
             ),
         },
+        "cute": {
+            "description": "Cute flux-jobs format string (default with emojis)",
+            "format": (
+                "{id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10+} "
+                "{status_emoji:>5.5} {ntasks:>6} {nnodes:>6h} "
+                "{contextual_time!F:>8h} {contextual_info}"
+            ),
+        },
         "long": {
             "description": "Extended flux-jobs format string",
             "format": (
