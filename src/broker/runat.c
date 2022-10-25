@@ -62,6 +62,14 @@ static void start_next_command (struct runat *r, struct runat_entry *entry);
 static const int abort_signal = SIGHUP;
 
 static const char *env_blocklist[] = {
+    "FLUX_JOB_ID",
+    "FLUX_JOB_SIZE",
+    "FLUX_JOB_NNODES",
+    "FLUX_JOB_TMPDIR",
+    "FLUX_TASK_RANK",
+    "FLUX_TASK_LOCAL_ID",
+    "FLUX_URI",
+    "FLUX_KVS_NAMESPACE",
     "PMI_FD",
     "PMI_RANK",
     "PMI_SIZE",

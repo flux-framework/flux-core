@@ -407,14 +407,6 @@ int main (int argc, char *argv[])
     if (create_runat_phases (&ctx) < 0)
         goto cleanup;
 
-    /* If Flux was launched by Flux, now that PMI bootstrap and runat
-     * initialization is complete, unset Flux job environment variables
-     * so that they don't leak into the jobs other children of this instance.
-     */
-    unsetenv ("FLUX_JOB_ID");
-    unsetenv ("FLUX_JOB_SIZE");
-    unsetenv ("FLUX_JOB_NNODES");
-
     /* Wire up the overlay.
      */
     if (ctx.rank > 0) {
