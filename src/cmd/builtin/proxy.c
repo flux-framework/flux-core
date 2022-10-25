@@ -281,6 +281,33 @@ static void version_check (flux_t *h, bool force)
     }
 }
 
+static void owner_check (flux_t *h, bool force)
+{
+    const char *owner;
+    unsigned long userid;
+
+    if (!(owner = flux_attr_get (h, "security.owner")))
+        log_err_exit ("flux_attr_get security.owner failed");
+    errno = 0;
+    userid = strtoul (owner, NULL, 10);
+    if (errno != 0)
+        log_msg_exit ("error converting security.owner=%s to integer", owner);
+
+    if (userid != getuid ()) {
+        if (force) {
+            log_msg ("warning: proxy user %lu != instance owner %lu",
+                      (unsigned long)getuid (),
+                      userid);
+        }
+        else {
+            log_msg_exit ("fatal: proxy user %lu != instance owner %lu "
+                          "(--force to connect anyway)",
+                          (unsigned long)getuid (),
+                          userid);
+        }
+    }
+}
+
 static void proxy_command_destroy_usock_and_router (struct proxy_command *ctx)
 {
     usock_server_destroy (ctx->server); // destroy before router
@@ -386,6 +413,12 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
      */
     version_check (ctx.h, optparse_hasopt (p, "force"));
 
+    /* Check that proxy owner matches instance owner, otherwise
+     * flux_job_submit() may get confused about signing requirements.
+     * See also: flux-framework/flux-core#4648
+     */
+    owner_check (ctx.h, optparse_hasopt (p, "force"));
+
     /* Create router
      */
     if (!(ctx.router = router_create (ctx.h)))
@@ -449,7 +482,7 @@ done:
 
 static struct optparse_option proxy_opts[] = {
     { .name = "force",  .key = 'f',  .has_arg = 0,
-      .usage = "Skip version check when connecting to Flux broker", },
+      .usage = "Skip checks when connecting to Flux broker", },
     { .name = "nohup",  .key = 'n',  .has_arg = 0,
       .usage = "Do not send SIGHUP to child processes when connection"
                " to Flux is lost", },
