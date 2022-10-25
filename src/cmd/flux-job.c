@@ -393,11 +393,11 @@ static struct optparse_subcommand subcommands[] = {
       urgency_opts,
     },
     { "cancel",
-      "[OPTIONS] id [message ...]",
-      "Cancel a job",
+      "[OPTIONS] ids... [--] [message ...]",
+      "Cancel one or more jobs",
       cmd_cancel,
       0,
-      NULL,
+      cancel_opts,
     },
     { "cancelall",
       "[OPTIONS] [message ...]",
@@ -407,8 +407,8 @@ static struct optparse_subcommand subcommands[] = {
       cancelall_opts,
     },
     { "raise",
-      "[OPTIONS] id [message ...]",
-      "Raise exception for job",
+      "[OPTIONS] ids... [--] [message ...]",
+      "Raise exception on one or more jobs",
       cmd_raise,
       0,
       raise_opts,
@@ -421,8 +421,8 @@ static struct optparse_subcommand subcommands[] = {
       raiseall_opts,
     },
     { "kill",
-      "[OPTIONS] id",
-      "Send signal to running job",
+      "[OPTIONS] ids...",
+      "Send signal to one or more running jobs",
       cmd_kill,
       0,
       kill_opts,
@@ -726,37 +726,142 @@ int cmd_urgency (optparse_t *p, int argc, char **argv)
     return 0;
 }
 
+
+struct jobid_arg {
+    const char *arg;
+    flux_jobid_t id;
+};
+
+static void jobid_arg_free (void **item)
+{
+    if (item) {
+        struct jobid_arg *arg = *item;
+        free (arg);
+        arg = NULL;
+    }
+}
+
+static struct jobid_arg *jobid_arg_create (const char *s)
+{
+    flux_jobid_t id;
+    struct jobid_arg *arg;
+
+    if (flux_job_id_parse (s, &id) < 0
+        || !(arg = calloc (1, sizeof (*arg))))
+        return NULL;
+    arg->id = id;
+    arg->arg = s;
+
+    return arg;
+}
+
+/*  Parse a command line containing a list of jobids and optional
+ *   message (or note). Stops processing at first argument that
+ *   is not a jobid and, if note != NULL, consumes the rest of the
+ *   args and returns as a single string in `note`.
+ */
+static int parse_jobids_and_note (char **argv,
+                                  zlistx_t **args,
+                                  char **note)
+{
+    if (!(*args = zlistx_new ()))
+        return -1;
+    zlistx_set_destructor (*args, jobid_arg_free);
+
+    /*  Convert each argument to a jobid, stopping at the first failure
+     */
+    while (*argv) {
+        struct jobid_arg *arg;
+        if (!(arg = jobid_arg_create (*argv))) {
+            if (errno == EINVAL)
+                break;
+            log_err_exit ("Error processing argument %s", *argv);
+        }
+        if (!zlistx_add_end (*args, arg))
+            log_msg_exit ("Unable to add jobid %s to list", *argv);
+        argv++;
+    }
+
+    if (*argv != NULL) {
+        /*  If a note was not expected, then this command takes
+         *  only jobids, and a non-jobid argument should raise a
+         *  fatal error.
+         */
+        if (note == NULL)
+            log_msg_exit ("invalid jobid: %s", *argv);
+
+        /*  Forward past `--`, which may have been used to force
+         *  separation of jobid and message on command line
+         */
+        if (streq (*argv, "--"))
+            argv++;
+        *note = parse_arg_message (argv, "message");
+    }
+    return 0;
+}
+
+/*  Check the wait-all future in `f` and print any errors, one per line.
+ */
+static int wait_all_check (flux_future_t *f, const char *prefix)
+{
+    int rc;
+    if ((rc = flux_future_get (f, NULL)) < 0) {
+        const char *child = flux_future_first_child (f);
+        while (child) {
+            flux_future_t *cf = flux_future_get_child (f, child);
+            if (flux_future_get (cf, NULL) < 0)
+                log_msg ("%s %s: %s",
+                         prefix,
+                         child,
+                         future_strerror (cf, errno));
+            child = flux_future_next_child (f);
+        }
+    }
+    return rc;
+}
+
 int cmd_raise (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
     int severity = optparse_get_int (p, "severity", 0);
     const char *type = optparse_get_str (p, "type", "cancel");
     flux_t *h;
-    flux_jobid_t id;
-    const char *jobid = NULL;
     char *note = NULL;
     flux_future_t *f;
+    zlistx_t *args;
+    struct jobid_arg *arg;
+    int rc = 0;
 
     if (argc - optindex < 1) {
         optparse_print_usage (p);
         exit (1);
     }
 
-    jobid = argv[optindex++];
-    id = parse_jobid (jobid);
-    if (optindex < argc)
-        note = parse_arg_message (argv + optindex, "message");
+    parse_jobids_and_note (argv + optindex, &args, &note);
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    if (!(f = flux_job_raise (h, id, type, severity, note)))
-        log_err_exit ("flux_job_raise");
-    if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("%s: %s", jobid, future_strerror (f, errno));
+
+    if (!(f = flux_future_wait_all_create ()))
+        log_err_exit ("flux_future_wait_all_create");
+
+    /* Always need to set handle for wait_all future: */
+    flux_future_set_flux (f, h);
+
+    arg = zlistx_first (args);
+    while (arg) {
+        flux_future_t *rf = flux_job_raise (h, arg->id, type, severity, note);
+        if (!rf || flux_future_push (f, arg->arg, rf) < 0)
+            log_err_exit ("flux_job_raise");
+        arg = zlistx_next (args);
+    }
+    rc = wait_all_check (f, "raise");
+
+    zlistx_destroy (&args);
     flux_future_destroy (f);
     flux_close (h);
     free (note);
-    return 0;
+    return rc;
 }
 
 static int raiseall (flux_t *h,
@@ -940,18 +1045,18 @@ int cmd_kill (optparse_t *p, int argc, char **argv)
     flux_t *h;
     flux_future_t *f;
     int optindex = optparse_option_index (p);
-    flux_jobid_t id;
-    const char *jobid;
+    zlistx_t *args;
+    struct jobid_arg *arg;
     const char *s;
     int signum;
+    int rc = 0;
 
     if (argc - optindex < 1) {
         optparse_print_usage (p);
         exit (1);
     }
 
-    jobid = argv[optindex++];
-    id = parse_jobid (jobid);
+    parse_jobids_and_note (argv + optindex, &args, NULL);
 
     s = optparse_get_str (p, "signal", "SIGTERM");
     if ((signum = str2signum (s))< 0)
@@ -959,15 +1064,23 @@ int cmd_kill (optparse_t *p, int argc, char **argv)
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    if (!(f = flux_job_kill (h, id, signum)))
-        log_err_exit ("flux_job_kill");
-    if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("kill %s: %s",
-                      jobid,
-                      future_strerror (f, errno));
+
+    if (!(f = flux_future_wait_all_create ()))
+        log_err_exit ("flux_future_wait_all_create");
+    flux_future_set_flux (f, h);
+
+    arg = zlistx_first (args);
+    while (arg) {
+        flux_future_t *rf = flux_job_kill (h, arg->id, signum);
+        if (!rf || flux_future_push (f, arg->arg, rf) < 0)
+            log_err_exit ("flux_job_kill");
+        arg = zlistx_next (args);
+    }
+    rc = wait_all_check (f, "kill");
+
     flux_future_destroy (f);
     flux_close (h);
-    return 0;
+    return rc;
 }
 
 int cmd_killall (optparse_t *p, int argc, char **argv)
@@ -1032,31 +1145,40 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
     flux_t *h;
-    flux_jobid_t id;
-    const char *jobid;
     char *note = NULL;
+    zlistx_t *args;
+    struct jobid_arg *arg;
     flux_future_t *f;
+    int rc = 0;
 
     if (argc - optindex < 1) {
         optparse_print_usage (p);
         exit (1);
     }
 
-    jobid = argv[optindex++];
-    id = parse_jobid (jobid);
-    if (optindex < argc)
-        note = parse_arg_message (argv + optindex, "message");
+    parse_jobids_and_note (argv + optindex, &args, &note);
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    if (!(f = flux_job_cancel (h, id, note)))
-        log_err_exit ("flux_job_cancel");
-    if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("%s: %s", jobid, future_strerror (f, errno));
+
+    if (!(f = flux_future_wait_all_create ()))
+        log_err_exit ("flux_future_wait_all_create");
+    flux_future_set_flux (f, h);
+
+    arg = zlistx_first (args);
+    while (arg) {
+        flux_future_t *rf = flux_job_cancel (h, arg->id, note);
+        if (!rf || flux_future_push (f, arg->arg, rf) < 0)
+            log_err_exit ("flux_job_cancel");
+        arg = zlistx_next (args);
+    }
+    rc = wait_all_check (f, "cancel");
+
+    zlistx_destroy (&args);
     flux_future_destroy (f);
     flux_close (h);
     free (note);
-    return 0;
+    return rc;
 }
 
 int cmd_cancelall (optparse_t *p, int argc, char **argv)
