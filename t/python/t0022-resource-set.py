@@ -131,6 +131,16 @@ class TestRSet(unittest.TestCase):
         rset.append(rset2)
         self.assertEqual(str(rset), "rank[0-4]/core[0-3],gpu0")
 
+    def test_add(self):
+        rset = ResourceSet(self.R_input)
+        rset2 = ResourceSet(Rlist().add_rank(4, cores="0-3").add_child(4, "gpu", "0"))
+        rset.add(rset2)
+        self.assertEqual(str(rset), "rank[0-4]/core[0-3],gpu0")
+        # adding same resources allowed
+        rset2 = ResourceSet(Rlist().add_rank(4, cores="0-3").add_child(4, "gpu", "0"))
+        rset.add(rset2)
+        self.assertEqual(str(rset), "rank[0-4]/core[0-3],gpu0")
+
     def test_nodelist(self):
         rset = ResourceSet(self.R_input)
         self.assertIsInstance(rset.nodelist, Hostlist)
