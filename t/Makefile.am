@@ -262,10 +262,8 @@ EXTRA_DIST= \
 	test-under-flux/t_modcheck.t \
 	test-under-flux/test.t \
 	rc/rc1-kvs \
-	rc/rc1-testenv \
 	rc/rc1-job \
 	rc/rc3-kvs \
-	rc/rc3-testenv \
 	rc/rc3-job \
 	shell/input \
 	shell/output \

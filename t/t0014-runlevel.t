@@ -115,14 +115,37 @@ test_expect_success 'flux admin cleanup-push (stdin) retains cmd block order' '
 	grep "cleanup.1: Hello solar system" hello.err
 '
 
-test_expect_success 'rc1 environment is as expected' '
+test_expect_success 'capture the environment for all three rc scripts' '
 	flux start \
-		-o,-Sbroker.rc1_path=${FLUX_SOURCE_DIR}/t/rc/rc1-testenv \
-		-o,-Sbroker.rc3_path= \
 		-o,-Slog-stderr-level=6 \
-		/bin/true 2>&1 | tee rc1-test.log &&
-	grep "stderr-" rc1-test.log | egrep -q broker.*err &&
-	grep "stdout-" rc1-test.log | egrep -q broker.*info
+		-o,-Sbroker.rc1_path="bash -c printenv >rc1.env" \
+		-o,-Sbroker.rc3_path="bash -c printenv >rc3.env" \
+		"bash -c printenv >rc2.env"
+'
+
+var_is_unset() {
+	local name=$1; shift
+	while test $# -gt 0; do
+		grep "^$name=" $1 && return 1
+		shift
+	done
+}
+
+var_is_set() {
+	local name=$1; shift
+	while test $# -gt 0; do
+		grep "^$name=" $1 || return 1
+		shift
+	done
+}
+
+test_expect_success 'PMI_FD, PMI_SIZE, PMI_RANK are not set in rc scripts' '
+	var_is_unset PMI_FD *.env &&
+	var_is_unset PMI_RANK *.env &&
+	var_is_unset PMI_SIZE *.env
+'
+test_expect_success 'FLUX_URI is set in rc scripts' '
+	var_is_set FLUX_URI *.env
 '
 
 test_done
