@@ -299,7 +299,7 @@ void flux_shell_fatal (const char *component,
     flux_shell_killall (shell, SIGKILL);
 
     if (shell && !shell->standalone)
-        flux_shell_raise ("exec", 0, buf);
+        flux_shell_raise ("exec", 0, "%s", buf);
 
     exit (exit_code);
 }

@@ -83,7 +83,7 @@ static int submit_job (struct job_manager *ctx,
     char *error = NULL;
 
     if (queue_submit_check (ctx->queue, job->jobspec_redacted, &e) < 0) {
-        set_errorf (errors, job->id, e.text);
+        set_errorf (errors, job->id, "%s", e.text);
         return -1;
     }
     if (zhashx_insert (ctx->active_jobs, &job->id, job) < 0) {
@@ -105,7 +105,10 @@ static int submit_job (struct job_manager *ctx,
     if (jobtap_call_create (ctx->jobtap, job, &error) < 0
         || jobtap_validate (ctx->jobtap, job, &error) < 0
         || jobtap_check_dependencies (ctx->jobtap, job, false, &error) < 0) {
-        set_errorf (errors, job->id, error ? error : "rejected by plugin");
+        set_errorf (errors,
+                    job->id,
+                    "%s",
+                    error ? error : "rejected by plugin");
         free (error);
         goto error_post_invalid;
     }

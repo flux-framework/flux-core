@@ -501,7 +501,7 @@ static int l_shell_setenv (lua_State *L)
         overwrite = lua_tointeger (L, 3);
     int rc = flux_shell_setenvf (rc_shell, overwrite, name, "%s", val);
     if (rc < 0)
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, "%s", strerror (errno));
     lua_pushboolean (L, 1);
     return 1;
 }
@@ -518,7 +518,7 @@ static int l_shell_rankinfo (lua_State *L)
         shell_rank = lua_tointeger (L, -1);
 
     if (flux_shell_get_rank_info (rc_shell, shell_rank, &json_str) < 0)
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, "%s", strerror (errno));
     if (json_object_string_to_lua (L, json_str) < 0)
         rc = lua_pusherror (L, "json_object_to_lua: %s", strerror (errno));
     free (json_str);
@@ -781,7 +781,7 @@ static int l_task_setenv (lua_State *L)
     if (lua_gettop (L) == 3)
         overwrite = lua_tointeger (L, 3);
     if (flux_cmd_setenvf (cmd, overwrite, key, "%s", val) < 0)
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, "%s", strerror (errno));
     lua_pushboolean (L, 1);
     return 1;
 }
