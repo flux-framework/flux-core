@@ -678,7 +678,7 @@ static int errlist_concat (zlistx_t *l, char *buf, size_t len)
 
     s = zlistx_first (l);
     while (s) {
-        if (len - n > 0)
+        if ((int)len - n > 0)
             strncpy (buf + n, s, len - n);
         n += strlen (s);
         s = zlistx_next (l);
