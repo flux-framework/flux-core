@@ -88,6 +88,10 @@ class Rlist(WrapperPimpl):
         self.pimpl.append(arg)
         return self
 
+    def add(self, arg):
+        self.pimpl.add(arg)
+        return self
+
     def copy(self):
         return Rlist(handle=self.pimpl.copy_empty())
 

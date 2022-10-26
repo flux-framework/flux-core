@@ -82,6 +82,11 @@ class ResourceSetImplementation(ABC):  # pragma: no cover
         raise NotImplementedError
 
     @abstractmethod
+    def add(self, rset):
+        """Add resources not existing in one set to the other"""
+        raise NotImplementedError
+
+    @abstractmethod
     def remove_ranks(self, ranks):
         """Remove an IDset of ranks from a resource set"""
         raise NotImplementedError

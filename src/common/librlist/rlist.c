@@ -31,6 +31,55 @@
 
 static int by_rank (const void *item1, const void *item2);
 
+static size_t rank_hasher (const void *key)
+{
+    const int *id = key;
+    return *id;
+}
+
+static int rank_hash_key_cmp (const void *key1, const void *key2)
+{
+    const int *a = key1;
+    const int *b = key2;
+    return *a - *b;
+}
+
+static zhashx_t *rank_hash_create (void)
+{
+    zhashx_t *hash;
+
+    if (!(hash = zhashx_new ())) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    zhashx_set_key_hasher (hash, rank_hasher);
+    zhashx_set_key_comparator (hash, rank_hash_key_cmp);
+    zhashx_set_key_duplicator (hash, NULL);
+    zhashx_set_key_destructor (hash, NULL);
+
+    return hash;
+}
+
+static struct rnode * rank_hash_lookup (const struct rlist *rl, int rank)
+{
+    return zhashx_lookup (rl->rank_index, &rank);
+}
+
+static void rank_hash_delete (const struct rlist *rl, int rank)
+{
+    zhashx_delete (rl->rank_index, &rank);
+}
+
+static int rank_hash_insert (struct rlist *rl, struct rnode *n)
+{
+    return zhashx_insert (rl->rank_index, &n->rank, n);
+}
+
+static void rank_hash_purge (struct rlist *rl)
+{
+    zhashx_purge (rl->rank_index);
+}
+
 static int
 sprintfcat (char **s, size_t *sz, size_t *lenp, const char *fmt, ...)
 {
@@ -62,6 +111,7 @@ void rlist_destroy (struct rlist *rl)
         int saved_errno = errno;
         zlistx_destroy (&rl->nodes);
         zhashx_destroy (&rl->noremap);
+        zhashx_destroy (&rl->rank_index);
         json_decref (rl->scheduling);
         free (rl);
         errno = saved_errno;
@@ -89,7 +139,8 @@ struct rlist *rlist_create (void)
         goto err;
     zlistx_set_destructor (rl->nodes, rn_free_fn);
 
-    if (!(rl->noremap = zhashx_new ()))
+    if (!(rl->rank_index = rank_hash_create ())
+        || !(rl->noremap = zhashx_new ()))
         goto err;
     zhashx_set_destructor (rl->noremap, valfree);
     zhashx_set_duplicator (rl->noremap, (zhashx_duplicator_fn *) strdup);
@@ -121,13 +172,7 @@ static json_t * scheduling_key_append (json_t *s1, json_t *s2)
 
 static struct rnode *rlist_find_rank (const struct rlist *rl, uint32_t rank)
 {
-    struct rnode *n = zlistx_first (rl->nodes);
-    while (n) {
-        if (n->rank == rank)
-            return (n);
-        n = zlistx_next (rl->nodes);
-    }
-    return NULL;
+    return rank_hash_lookup (rl, rank);
 }
 
 static void rlist_update_totals (struct rlist *rl, struct rnode *n)
@@ -139,7 +184,10 @@ static void rlist_update_totals (struct rlist *rl, struct rnode *n)
 
 static int rlist_add_rnode_new (struct rlist *rl, struct rnode *n)
 {
-    if (!zlistx_add_end (rl->nodes, n))
+    void *handle;
+    if (!(handle = zlistx_add_end (rl->nodes, n)))
+        return -1;
+    if (rank_hash_insert (rl, n) < 0)
         return -1;
     rlist_update_totals (rl, n);
     return 0;
@@ -334,18 +382,28 @@ struct rlist *rlist_copy_constraint_string (const struct rlist *orig,
     return rl;
 }
 
+static int rlist_remove_rank (struct rlist *rl, int rank)
+{
+    void *handle;
+    struct rnode *n;
+
+    if (!(n = rank_hash_lookup (rl, rank))
+        || !(handle = zlistx_find (rl->nodes, n))) {
+        errno = ENOENT;
+        return -1;
+    }
+    zlistx_delete (rl->nodes, handle);
+    return 0;
+}
 
 int rlist_remove_ranks (struct rlist *rl, struct idset *ranks)
 {
     int count = 0;
-    struct rnode *n;
     unsigned int i;
     i = idset_first (ranks);
     while (i != IDSET_INVALID_ID) {
-        if ((n = rlist_find_rank (rl, i))) {
-            zlistx_delete (rl->nodes, zlistx_cursor (rl->nodes));
+        if (rlist_remove_rank (rl, i) == 0)
             count++;
-        }
         i = idset_next (ranks, i);
     }
     return count;
@@ -356,6 +414,8 @@ int rlist_remap (struct rlist *rl)
     uint32_t rank = 0;
     struct rnode *n;
 
+    rank_hash_purge (rl);
+
     /*   Sort list by ascending rank, then rerank starting at 0
      */
     zlistx_set_comparator (rl->nodes, by_rank);
@@ -364,6 +424,8 @@ int rlist_remap (struct rlist *rl)
     n = zlistx_first (rl->nodes);
     while (n) {
         n->rank = rank++;
+        if (rank_hash_insert (rl, n) < 0)
+            return -1;
         if (rnode_remap (n, rl->noremap) < 0)
             return -1;
         n = zlistx_next (rl->nodes);
@@ -396,6 +458,10 @@ static int rlist_rerank_hostlist (struct rlist *rl,
             return -1;
         }
         n->rank = rank++;
+        if (rank_hash_insert (rl, n) < 0) {
+            errprintf (errp, "failed to hash rank %u", n->rank);
+            return -1;
+        }
         host = hostlist_next (hl);
     }
     return 0;
@@ -429,6 +495,8 @@ int rlist_rerank (struct rlist *rl, const char *hosts, flux_error_t *errp)
         goto done;
     }
 
+    rank_hash_purge (rl);
+
     /* Save original rank mapping in case of undo
      */
     if (!(orig = rlist_nodelist (rl)))
@@ -451,8 +519,10 @@ done:
 static struct rnode *rlist_detach_rank (struct rlist *rl, uint32_t rank)
 {
     struct rnode *n = rlist_find_rank (rl, rank);
-    if (n)
-        zlistx_detach_cur (rl->nodes);
+    if (n) {
+        zlistx_detach (rl->nodes, zlistx_find (rl->nodes, n));
+        rank_hash_delete (rl, rank);
+    }
     return n;
 }
 
@@ -509,6 +579,26 @@ struct rlist *rlist_union (const struct rlist *rla, const struct rlist *rlb)
     }
 
     return result;
+}
+
+/*  Add resource set rlb to rla: rla becomes the union of a and b.
+ */
+int rlist_add (struct rlist *rla, const struct rlist *rlb)
+{
+    int rc;
+    struct rlist *diff = NULL;
+
+    /*  Take the set difference of a from b so there are no overlapping
+     *   resources with rla in `diff`
+     */
+    if (!(diff = rlist_diff (rlb, rla)))
+        return -1;
+
+    /*  Now append diff to rla
+     */
+    rc = rlist_append (rla, diff);
+    rlist_destroy (diff);
+    return rc;
 }
 
 struct rlist *rlist_intersect (const struct rlist *rla,
