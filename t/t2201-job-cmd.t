@@ -229,6 +229,14 @@ test_expect_success 'flux-job: raise fails with invalid jobid' '
 	test_must_fail flux job raise foo
 '
 
+test_expect_success 'flux-job: raise fails with invalid jobids' '
+	test_must_fail flux job raise foo fee
+'
+
+test_expect_success 'flux-job: raise fails if note set twice' '
+	test_must_fail flux job raise --message=hi ${validjob} -- hello
+'
+
 test_expect_success 'flux-job: raise fails with inactive jobid' '
 	test_must_fail flux job raise $(cat inactivejob)
 '
@@ -243,6 +251,14 @@ test_expect_success 'flux-job: cancel fails with bad FLUX_URI' '
 
 test_expect_success 'flux-job: cancel fails with unknown job id' '
 	test_must_fail flux job cancel 0
+'
+
+test_expect_success 'flux-job: cancel fails with unknown job ids' '
+	test_must_fail flux job cancel 0 f123
+'
+
+test_expect_success 'flux-job: cancel fails if note set twice' '
+	test_must_fail flux job cancel --message=hi ${validjob} -- hello
 '
 
 test_expect_success 'flux-job: cancel fails with no args' '
@@ -612,4 +628,21 @@ test_expect_success 'flux job: killall -f kills one job' '
 	run_timeout 60 flux queue drain
 '
 
+test_expect_success 'flux job: cancel can operate on multiple jobs' '
+	ids=$(flux mini submit --bcc=1-3 sleep 600) &&
+	flux job cancel ${ids} cancel multiple jobs &&
+	for id in ${ids}; do
+		flux job wait-event -t 5 ${id} exception >exception.out &&
+		grep multiple exception.out
+	done
+'
+
+test_expect_success 'flux job: raise can operate on multiple jobs' '
+	ids=$(flux mini submit --bcc=1-3 sleep 600) &&
+	flux job raise ${ids} raise multiple jobs &&
+	for id in ${ids}; do
+		flux job wait-event -t 5 ${id} exception >exception2.out &&
+		grep multiple exception2.out
+	done
+'
 test_done

@@ -1240,10 +1240,10 @@ test_expect_success 'flux-jobs --stats-only works' '
 '
 
 test_expect_success 'cleanup job listing jobs ' '
-        for jobid in `cat active.ids`; do \
-            flux job cancel $jobid; \
-            fj_wait_event $jobid clean; \
-        done
+	flux job cancel $(cat active.ids) &&
+	for jobid in `cat active.ids`; do
+		fj_wait_event $jobid clean;
+	done
 '
 
 #

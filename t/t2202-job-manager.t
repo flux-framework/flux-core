@@ -142,9 +142,7 @@ test_expect_success HAVE_JQ 'job-manager: priority listed as priority=4294967295
 '
 
 test_expect_success HAVE_JQ 'job-manager: cancel jobs' '
-	for jobid in $($jq .id <list3.out); do \
-		flux job cancel ${jobid}; \
-	done
+	flux job cancel $($jq .id <list3.out)
 '
 
 test_expect_success 'job-manager: queue contains 0 jobs' '
@@ -230,9 +228,7 @@ test_expect_success HAVE_JQ 'job-manager: max_jobid has not changed' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: cancel jobs' '
-	for jobid in $($jq .id <list_reload.out); do \
-		flux job cancel ${jobid}; \
-	done &&
+	flux job cancel $($jq .id <list_reload.out) &&
 	test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
