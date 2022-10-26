@@ -140,6 +140,13 @@ static struct optparse_option urgency_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option cancel_opts[] =  {
+    { .name = "message", .key = 'm', .has_arg = 1, .arginfo = "NOTE",
+      .usage = "Set cancel exception note",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option cancelall_opts[] =  {
     { .name = "user", .key = 'u', .has_arg = 1, .arginfo = "USER",
       .usage = "Set target user or 'all' (instance owner only)",
@@ -163,6 +170,9 @@ static struct optparse_option raise_opts[] =  {
     },
     { .name = "type", .key = 't', .has_arg = 1, .arginfo = "TYPE",
       .usage = "Set exception type (default=cancel)",
+    },
+    { .name = "message", .key = 'm', .has_arg = 1, .arginfo = "NOTE",
+      .usage = "Set exception note",
     },
     OPTPARSE_TABLE_END
 };
@@ -760,7 +770,8 @@ static struct jobid_arg *jobid_arg_create (const char *s)
  *   is not a jobid and, if note != NULL, consumes the rest of the
  *   args and returns as a single string in `note`.
  */
-static int parse_jobids_and_note (char **argv,
+static int parse_jobids_and_note (optparse_t *p,
+                                  char **argv,
                                   zlistx_t **args,
                                   char **note)
 {
@@ -796,6 +807,17 @@ static int parse_jobids_and_note (char **argv,
         if (streq (*argv, "--"))
             argv++;
         *note = parse_arg_message (argv, "message");
+    }
+    if (note) {
+        /*  If a note was expected, also see if --message was used to set
+         *  it on the cmdline. It is an error to specify both --message and
+         *  the note in free arguments.
+         */
+        const char *s;
+        if (optparse_getopt (p, "message", &s) && *note)
+            log_msg_exit ("Do not set note on command line and with --message");
+        else if (s && !(*note = strdup (s)))
+            log_err_exit ("failed to duplicate --message=%s", s);
     }
     return 0;
 }
@@ -837,7 +859,7 @@ int cmd_raise (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 
-    parse_jobids_and_note (argv + optindex, &args, &note);
+    parse_jobids_and_note (p, argv + optindex, &args, &note);
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -1056,7 +1078,7 @@ int cmd_kill (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 
-    parse_jobids_and_note (argv + optindex, &args, NULL);
+    parse_jobids_and_note (p, argv + optindex, &args, NULL);
 
     s = optparse_get_str (p, "signal", "SIGTERM");
     if ((signum = str2signum (s))< 0)
@@ -1156,7 +1178,7 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 
-    parse_jobids_and_note (argv + optindex, &args, &note);
+    parse_jobids_and_note (p, argv + optindex, &args, &note);
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
