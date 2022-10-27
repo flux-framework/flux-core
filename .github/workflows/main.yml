@@ -78,11 +78,11 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
     - id: set-matrix
-      run: echo "::set-output name=matrix::$(src/test/generate-matrix.py)"
+      run: echo "matrix=$(src/test/generate-matrix.py)" >>$GITHUB_OUTPUT
     - run: src/test/generate-matrix.py | jq -S .
-    - run: echo "::set-output name=GITHUB_BRANCH::${GITHUB_REF#refs/heads}"
-    - run: echo "::set-output name=GITHUB_TAG::${GITHUB_REF#refs/tags}"
-    - run: echo "::set-output name=EVENT_NAME::${{github.event_name}}"
+    - run: echo "GITHUB_BRANCH=${GITHUB_REF#refs/heads}" >>$GITHUB_OUTPUT
+    - run: echo "GITHUB_TAG=${GITHUB_REF#refs/tags}" >>$GITHUB_OUTPUT
+    - run: echo "EVENT_NAME=${{github.event_name}}" >>$GITHUB_OUTPUT
 
   ci-checks:
     needs: [ generate-matrix ]
