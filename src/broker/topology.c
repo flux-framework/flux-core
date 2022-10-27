@@ -40,12 +40,16 @@ struct topology {
 static int kary_plugin_init (struct topology *topo,
                              const char *path,
                              flux_error_t *error);
+static int binomial_plugin_init (struct topology *topo,
+                                 const char *path,
+                                 flux_error_t *error);
 static int custom_plugin_init (struct topology *topo,
                                const char *path,
                                flux_error_t *error);
 
 static const struct topology_plugin builtin_plugins[] = {
     { .name = "kary",   .init = kary_plugin_init },
+    { .name = "binomial", .init = binomial_plugin_init },
     { .name = "custom", .init = custom_plugin_init },
 };
 
@@ -412,6 +416,49 @@ static int kary_plugin_init (struct topology *topo,
                 topo->node[i].parent = -1;
         }
     }
+    return 0;
+}
+
+/* binomial plugin
+ */
+static int binomial_smallest_k (int size)
+{
+    size_t max_k = sizeof (int) * 8 - 1;
+
+    for (int k = 0; k < max_k; k++) {
+        int tree_size = 1 << k;
+        if (size <= tree_size)
+            return k;
+    }
+    return -1;
+}
+
+static void binomial_generate (struct topology *topo, int root, int k)
+{
+    for (int j = 0; j < k; j++) {
+        int child = root + (1 << j);
+        if (child < topo->size) {
+            topo->node[child].parent = root;
+            binomial_generate (topo, child, j);
+        }
+    }
+}
+
+static int binomial_plugin_init (struct topology *topo,
+                                 const char *path,
+                                 flux_error_t *error)
+{
+    int k;
+
+    if (path && strlen (path) > 0) {
+        errprintf (error, "unknown binomial topology directive: '%s'", path);
+        return -1;
+    }
+    if ((k = binomial_smallest_k (topo->size)) < 0) {
+        errprintf (error, "binomial: internal overflow");
+        return -1;
+    }
+    binomial_generate (topo, 0, k);
     return 0;
 }
 
