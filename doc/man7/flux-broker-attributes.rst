@@ -154,10 +154,11 @@ TREE BASED OVERLAY NETWORK
 
 tbon.topo [Updates: C]
    URI describing the TBON tree topology such as ``kary:16``.  The ``kary``
-   scheme selects a complete, k-ary tree with fanout *k*.  By convention
-   ``kary:0`` means that rank 0 is the parent of all other ranks.  Default:
-   ``kary:2``, unless bootstrapping by TOML configuration, then see
-   :man5:`flux-config-bootstrap`.
+   scheme selects a complete, k-ary tree with fanout *k*, with ``kary:0``
+   meaning that rank 0 is the parent of all other ranks by convention.  The
+   ``binomial`` scheme selects a binomial tree topology of the minimum order
+   that fits the instance size.  Default: ``kary:2``, unless bootstrapping by
+   TOML configuration, then see :man5:`flux-config-bootstrap`.
 
 tbon.descendants
    Number of descendants "below" this node of the tree based
