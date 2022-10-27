@@ -512,6 +512,12 @@ test_expect_success 'broker -Stbon.topo=custom option works' '
 		flux getattr tbon.topo >topo2.out &&
 	test_cmp topo2.exp topo2.out
 '
+test_expect_success 'broker -Stbon.topo=binomial option works' '
+	echo binomial >topo_binomial.exp &&
+	flux start ${ARGS} -o,-Stbon.topo=binomial \
+		flux getattr tbon.topo >topo_binomial.out &&
+	test_cmp topo_binomial.exp topo_binomial.out
+'
 test_expect_success 'broker fails on invalid broker.critical-ranks option' '
 	test_must_fail flux start ${ARGS} -o,-Sbroker.critical-ranks=0-1
 '
