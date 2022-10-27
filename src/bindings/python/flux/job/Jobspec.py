@@ -900,6 +900,7 @@ class JobspecV1(Jobspec):
             exclusive=exclusive,
         )
         jobspec.setattr_shell_option("per-resource.type", "node")
+        jobspec.setattr_shell_option("mpi", "none")
         #  Copy script contents into jobspec
         jobspec.setattr("system.batch.script", script)
         if broker_opts is not None:
@@ -947,4 +948,5 @@ class JobspecV1(Jobspec):
             exclusive=exclusive,
         )
         jobspec.setattr_shell_option("per-resource.type", "node")
+        jobspec.setattr_shell_option("mpi", "none")
         return jobspec

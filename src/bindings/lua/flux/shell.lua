@@ -91,7 +91,7 @@ end
 --
 function shell.source_rcpath_option (opt)
     local name, version = shell.getopt_with_version (opt)
-    if name then
+    if name and name ~= "none" then
         for path in rcpath:gmatch ("[^:]+") do
             local basename = path .. "/" .. opt .. "/" .. name
             source_if_exists (basename .. ".lua")
