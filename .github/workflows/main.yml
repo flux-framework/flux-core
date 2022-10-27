@@ -169,13 +169,7 @@ jobs:
       env: ${{matrix.env}}
       run: src/test/docker-deploy.sh
 
-    #   Prepare, create and deploy release on tag:
-    - name: prep release
-      id: prep_release
-      if: success() && matrix.create_release
-      env: ${{matrix.env}}
-      run: echo "::set-output name=tarball::$(echo flux-core*.tar.gz)"
-
+    #  Create and deploy release on tag:
     - name: create release
       id: create_release
       if: |
