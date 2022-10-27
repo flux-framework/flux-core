@@ -194,7 +194,7 @@ static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state
 
     assert (t);
 
-    cron_task_state_update (t, flux_subprocess_state_string (state));
+    cron_task_state_update (t, "%s", flux_subprocess_state_string (state));
 
     if (state == FLUX_SUBPROCESS_RUNNING) {
         clock_gettime (CLOCK_REALTIME, &t->runningtime);

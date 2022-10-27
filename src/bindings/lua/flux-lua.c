@@ -213,7 +213,7 @@ static int l_flux_new (lua_State *L)
         s = lua_tostring (L, 1);
     f = flux_open (s, 0);
     if (f == NULL)
-        return lua_pusherror (L, (char *)flux_strerror (errno));
+        return lua_pusherror (L, "%s", (char *)flux_strerror (errno));
     return (lua_push_flux_handle (L, f));
 }
 
@@ -302,12 +302,12 @@ static int l_flux_send (lua_State *L)
 
     matchtag = flux_matchtag_alloc (f);
     if (matchtag == FLUX_MATCHTAG_NONE)
-        return lua_pusherror (L, (char *)flux_strerror (errno));
+        return lua_pusherror (L, "%s", (char *)flux_strerror (errno));
 
     rc = send_json_request (f, nodeid, matchtag, tag, json_str);
     free (json_str);
     if (rc < 0)
-        return lua_pusherror (L, (char *)flux_strerror (errno));
+        return lua_pusherror (L, "%s", (char *)flux_strerror (errno));
 
     return l_pushresult (L, matchtag);
 }
@@ -363,7 +363,7 @@ error:
         flux_msg_destroy (msg);
         errno = saved_errno;
     }
-    return lua_pusherror (L, (char *)flux_strerror (errno));
+    return lua_pusherror (L, "%s", (char *)flux_strerror (errno));
 }
 
 static int l_flux_rpc (lua_State *L)
@@ -396,13 +396,13 @@ static int l_flux_rpc (lua_State *L)
      */
     if (json_str[0] != '{' || json_str[strlen (json_str) - 1] != '}') {
         errno = EINVAL;
-        rc = lua_pusherror (L, (char *)flux_strerror (errno));
+        rc = lua_pusherror (L, "%s", (char *)flux_strerror (errno));
         goto done;
     }
     fut = flux_rpc (f, tag, json_str, nodeid, 0);
     free (json_str);
     if (!fut || flux_rpc_get (fut, &s) < 0) {
-        rc = lua_pusherror (L, (char *)flux_strerror (errno));
+        rc = lua_pusherror (L, "%s", (char *)flux_strerror (errno));
         goto done;
     }
     if (json_object_string_to_lua (L, s ? : "{}") < 0) {
@@ -421,7 +421,7 @@ static int l_flux_getattr (lua_State *L)
     const char *name = luaL_checkstring (L, 2);
     const char *val = flux_attr_get (f, name);
     if (val == NULL)
-        return lua_pusherror (L, (char *)flux_strerror (errno));
+        return lua_pusherror (L, "%s", (char *)flux_strerror (errno));
     lua_pushstring (L, val);
     return (1);
 }
@@ -491,11 +491,11 @@ static int l_flux_recv_event (lua_State *L)
     flux_msg_t *msg = NULL;
 
     if (!(msg = flux_recv (f, match, 0)))
-        return lua_pusherror (L, (char *)flux_strerror (errno));
+        return lua_pusherror (L, "%s", (char *)flux_strerror (errno));
 
     if (flux_event_decode (msg, &topic, &json_str) < 0) {
         flux_msg_destroy (msg);
-        return lua_pusherror (L, (char *)flux_strerror (errno));
+        return lua_pusherror (L, "%s", (char *)flux_strerror (errno));
     }
 
     /* FIXME: create empty JSON object if message payload was empty,
@@ -654,7 +654,7 @@ static int l_flux_recvmsg (lua_State *L)
         match.matchtag = lua_tointeger (L, 2);
 
     if (!(msg = flux_recv (f, match, 0)))
-        return lua_pusherror (L, (char *)flux_strerror (errno));
+        return lua_pusherror (L, "%s", (char *)flux_strerror (errno));
 
     if (flux_msg_get_type (msg, &type) < 0)
         type = FLUX_MSGTYPE_ANY;

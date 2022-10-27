@@ -786,31 +786,31 @@ static void disconnect_cb (flux_t *h,
 static const struct flux_msg_handler_spec handler_tab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
-        "%s.list",
+        "list",
         list_sessions,
         FLUX_ROLE_USER
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "%s.new",
+        "new",
         new_session,
         FLUX_ROLE_USER
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "%s.kill",
+        "kill",
         kill_sessions,
         FLUX_ROLE_USER
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "%s.kill-server",
+        "kill-server",
         kill_server,
         FLUX_ROLE_USER
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "%s.disconnect",
+        "disconnect",
         disconnect_cb,
         0
     },
@@ -838,7 +838,10 @@ static int start_msghandlers (struct flux_terminus_server *ts,
     ts->handlers = calloc (count+1, sizeof (*ts->handlers));
     for (i = 0; i < count; i++) {
         flux_msg_handler_t *mh = NULL;
-        if (snprintf (topic, len, tab[i].topic_glob, ts->service) >= len)
+        if (snprintf (topic,
+                      len,
+                      "%s.%s", ts->service,
+                      tab[i].topic_glob) >= len)
             goto error;
         match.topic_glob = topic;
         match.typemask = tab[i].typemask;

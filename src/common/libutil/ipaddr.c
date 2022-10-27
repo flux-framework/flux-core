@@ -65,7 +65,13 @@ static int getprimary_iface4 (char *buf, size_t size,
         return -1;
     }
     while (fgets (line, sizeof (line), f)) {
-        if (sscanf (line, "%s\t%lx", buf, &dest) == 2 && dest == 0) {
+        char fmt[24];
+        /*  Format guaranteed to fit in 24 bytes (assuming 10 digit max) */
+        (void) snprintf (fmt,
+                         sizeof(fmt),
+                         "%%%us\t%%lx",
+                         (unsigned) size - 1);
+        if (sscanf (line, fmt, buf, &dest) == 2 && dest == 0) {
             fclose (f);
             return 0;
         }

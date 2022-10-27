@@ -43,7 +43,7 @@ int lua_pusherror (lua_State *L, char *fmt, ...)
 int l_pushresult (lua_State *L, int rc)
 {
     if (rc < 0)
-        return lua_pusherror (L, strerror (errno));
+        return lua_pusherror (L, "%s", strerror (errno));
     lua_pushnumber (L, rc);
     return (1);
 }
