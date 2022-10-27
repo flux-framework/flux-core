@@ -125,5 +125,19 @@ test_expect_success NO_CHAIN_LINT 'flux-mini alloc --bg errors when job is cance
 	test_must_fail wait $pid &&
 	grep "unexpectedly exited" canceled.log
 '
+test_expect_success HAVE_JQ 'flux mini alloc: sets mpi=none by default' '
+	flux mini alloc -N1 --dry-run hostname | \
+		jq -e ".attributes.system.shell.options.mpi = \"none\""
+'
+test_expect_success HAVE_JQ 'flux mini alloc: mpi option can be overridden' '
+	flux mini alloc -o mpi=foo -N1 --dry-run hostname | \
+		jq -e ".attributes.system.shell.options.mpi = \"foo\""
+'
+test_expect_success 'flux mini alloc: MPI vars are not set in initial program' '
+	flux queue start &&
+	unset OMPI_MCA_pmix &&
+	flux mini alloc -N1 printenv >envtest.out &&
+	test_must_fail grep OMPI_MCA_pmix envtest.out
+'
 
 test_done

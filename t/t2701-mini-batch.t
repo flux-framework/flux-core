@@ -151,4 +151,18 @@ test_expect_success 'flux mini batch: user can set broker.critical-ranks' '
 	EOF
 	test_cmp critical-ranks2.expected critical-ranks2.out
 '
+test_expect_success HAVE_JQ 'flux mini batch: sets mpi=none by default' '
+	flux mini batch -N1 --dry-run --wrap hostname | \
+		jq -e ".attributes.system.shell.options.mpi = \"none\""
+'
+test_expect_success HAVE_JQ 'flux mini batch: mpi option can be overridden' '
+	flux mini batch -o mpi=foo -N1 --dry-run --wrap hostname | \
+		jq -e ".attributes.system.shell.options.mpi = \"foo\""
+'
+test_expect_success 'flux mini batch: MPI env vars are not set in batch script' '
+	unset OMPI_MCA_pmix &&
+	id=$(flux mini batch -N1 --output=envtest.out --wrap printenv) &&
+	flux job status $id &&
+	test_must_fail grep OMPI_MCA_pmix envtest.out
+'
 test_done
