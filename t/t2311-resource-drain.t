@@ -225,5 +225,8 @@ test_expect_success 'flux resource drain works without scheduler loaded' '
 	test $(flux resource status -s drain -no {nnodes}) -eq ${SIZE}
 '
 
+test_expect_success 'load scheduler again to free end-of-test resources' '
+	flux module load sched-simple
+'
 
 test_done

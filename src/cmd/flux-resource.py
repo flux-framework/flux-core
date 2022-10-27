@@ -13,7 +13,6 @@ import json
 import logging
 import os.path
 import sys
-from datetime import datetime
 
 import flux
 from flux.future import WaitAllFuture
@@ -21,6 +20,75 @@ from flux.hostlist import Hostlist
 from flux.idset import IDset
 from flux.resource import ResourceSet, SchedResourceList, resource_list
 from flux.rpc import RPC
+from flux.util import UtilConfig
+
+
+class FluxResourceConfig(UtilConfig):
+    """flux-resource specific user configuration class"""
+
+    builtin_formats = {}
+    builtin_formats["status"] = {
+        "default": {
+            "description": "Default flux-resource status format string",
+            "format": "{state:>10} {nnodes:>6} {nodelist}",
+        },
+        "long": {
+            "description": "Long flux-resource status format string",
+            "format": "{state:>10} {nnodes:>6} {reason:<30.30+} {nodelist}",
+        },
+    }
+    builtin_formats["drain"] = {
+        "long": {
+            "description": "Long flux-resource drain format string",
+            "format": (
+                "{timestamp!d:%FT%T::<20} {state:<8.8} {ranks:<8.8+} "
+                "{reason:<30.30+} {nodelist}"
+            ),
+        },
+        "default": {
+            "description": "Default flux-resource drain format string",
+            "format": (
+                "{timestamp!d:%b%d %R::<12} {state:<8.8} {reason:<30.30+} {nodelist}"
+            ),
+        },
+    }
+    builtin_formats["list"] = {
+        "default": {
+            "description": "Default flux-resource list format string",
+            "format": (
+                "{state:>10} ?:{properties:<10.10+} {nnodes:>6} "
+                "{ncores:>8} {ngpus:>8} {nodelist}"
+            ),
+        },
+        "rlist": {
+            "description": "Format including resource list details",
+            "format": (
+                "{state:>10} ?:{properties:<10.10+} {nnodes:>6} "
+                "{ncores:>8} {ngpus:>8} {rlist}"
+            ),
+        },
+    }
+
+    def __init__(self, subcommand):
+        initial_dict = {}
+        for key, value in self.builtin_formats.items():
+            initial_dict[key] = {"formats": value}
+        super().__init__(
+            name="flux-resource", subcommand=subcommand, initial_dict=initial_dict
+        )
+
+    def validate(self, path, conf):
+        """Validate a loaded flux-resource config file as dictionary"""
+
+        for key, value in conf.items():
+            if key in ["status", "list", "drain"]:
+                for key2, val2 in value.items():
+                    if key2 == "formats":
+                        self.validate_formats(path, val2)
+                    else:
+                        raise ValueError(f"{path}: invalid key {key}.{key2}")
+            else:
+                raise ValueError(f"{path}: invalid key {key}")
 
 
 def reload(args):
@@ -41,7 +109,7 @@ def drain(args):
     not specified, then list currently drained targets
     """
     if args.targets is None:
-        drain_list()
+        drain_list(args)
         return
     payload = {
         "targets": args.targets,
@@ -77,13 +145,14 @@ class StatusLine:
         self.state = state
         self.hostlist = hosts
         self.rank_idset = ranks
-        if reason is None:
-            reason = ""
-        self.reason = reason
-        if timestamp:
-            self.timestamp = datetime.fromtimestamp(timestamp).strftime("%FT%T")
+        if reason:
+            self.reason = reason
         else:
-            self.timestamp = None
+            self.reason = ""
+        if timestamp:
+            self.timestamp = timestamp
+        else:
+            self.timestamp = ""
 
     def update(self, ranks, hosts):
         self.rank_idset.add(ranks)
@@ -153,45 +222,6 @@ class ListStatusRPC(WaitAllFuture):
         return self.allocated_ranks
 
 
-def drain_list():
-    headings = {
-        "timestamp": "TIMESTAMP",
-        "ranks": "RANK",
-        "reason": "REASON",
-        "nodelist": "NODELIST",
-        "state": "STATE",
-    }
-    result = ListStatusRPC(flux.Flux())
-
-    resp = result.get_status()
-    allocated = result.get_allocated_ranks()
-
-    rset = ResourceSet(resp["R"])
-    nodelist = rset.nodelist
-
-    lines = []
-    for drain_ranks, entry in resp["drain"].items():
-        for ranks, state in split_draining(IDset(drain_ranks), allocated):
-            # Do not report empty or "drain" rank sets
-            # Only draining & drained are reported in this view
-            if not ranks or state == "drain":
-                continue
-            line = StatusLine(
-                state,
-                ranks,
-                Hostlist([nodelist[i] for i in ranks]),
-                entry["reason"],
-                entry["timestamp"],
-            )
-            lines.append(line)
-
-    fmt = "{timestamp:<20} {state:<8.8} {ranks:<8.8} {reason:<30} {nodelist}"
-    formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
-    print(formatter.header())
-    for line in lines:
-        print(formatter.format(line))
-
-
 class ResourceStatus:
     """Container for resource.status RPC response"""
 
@@ -223,13 +253,13 @@ class ResourceStatus:
             self.idsets[state] = IDset()
         self.idsets[state].add(idset)
 
-    def find(self, state, reason=""):
+    def find(self, state, reason="", timestamp=""):
         try:
-            return self.bystate[f"{state}:{reason}"]
+            return self.bystate[f"{state}:{reason}:{timestamp}"]
         except KeyError:
             return None
 
-    def append(self, state, ranks="", reason=None):
+    def append(self, state, ranks="", reason=None, timestamp=None):
         #
         # If an existing status line has matching state and reason
         #  update instead of appending a new output line:
@@ -240,8 +270,8 @@ class ResourceStatus:
         if rstatus:
             rstatus.update(ranks, hosts)
         else:
-            line = StatusLine(state, ranks, hosts, reason)
-            self.bystate[f"{state}:{reason}"] = line
+            line = StatusLine(state, ranks, hosts, reason, timestamp)
+            self.bystate[f"{state}:{reason}:{timestamp}"] = line
             self.statuslines.append(line)
 
         self._idset_update(state, ranks)
@@ -277,11 +307,14 @@ class ResourceStatus:
         for drain_ranks, entry in resp["drain"].items():
             for ranks, state in split_draining(IDset(drain_ranks), allocated):
                 #  Only include reason if it will be displayed in format
-                reason = ""
-                if ranks and "reason" in fmt:
-                    reason = entry["reason"]
+                reason, timestamp = "", ""
+                if ranks:
+                    if "reason" in fmt:
+                        reason = entry["reason"]
+                    if "timestamp" in fmt:
+                        timestamp = entry["timestamp"]
 
-                rstat.append(state, IDset(ranks), reason)
+                rstat.append(state, IDset(ranks), reason, timestamp)
                 drained = drained + 1
 
         #  If no drained nodes, append an empty StatusLine
@@ -298,8 +331,6 @@ class ResourceStatus:
 def status_help(args, valid_states, headings):
     if args.states == "help":
         LOGGER.info("valid states: %s", ",".join(valid_states))
-    if args.format == "help":
-        LOGGER.info("valid formats: %s", ",".join(headings.keys()))
     sys.exit(0)
 
 
@@ -333,28 +364,24 @@ def status(args):
         "drained",
     ]
     default_states = "avail,offline,exclude,draining,drained"
+
     headings = {
         "state": "STATUS",
         "nnodes": "NNODES",
         "ranks": "RANKS",
         "nodelist": "NODELIST",
         "reason": "REASON",
+        "timestamp": "TIME",
     }
 
-    #  Emit list of valid states or formats if requested
-    if "help" in [args.states, args.format]:
+    #  Emit list of valid states if requested
+    if args.states == "help":
         status_help(args, valid_states, headings)
 
     #  Get state list from args or defaults:
     states = status_get_state_list(args, valid_states, default_states)
 
-    #  Include reason field only with -vv
-    if args.verbose >= 2:
-        fmt = "{state:>10} {nnodes:>6} {reason:<25} {nodelist}"
-    else:
-        fmt = "{state:>10} {nnodes:>6} {nodelist}"
-    if args.format:
-        fmt = args.format
+    fmt = FluxResourceConfig("status").load().get_format_string(args.format)
 
     #  Get payload from stdin or from resource.status RPC:
     if args.from_stdin:
@@ -367,16 +394,29 @@ def status(args):
 
     rstat = ResourceStatus.from_status_response(resp, fmt, allocated)
 
-    formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
-    if not args.no_header:
-        print(formatter.header())
+    formatter = flux.util.OutputFormat(fmt, headings=headings)
+
+    #  Skip empty lines unless --states or ---skip-empty
+    skip_empty = args.skip_empty or not args.states
+
+    lines = []
     for line in sorted(rstat, key=lambda x: valid_states.index(x.state)):
         if line.state not in states:
             continue
-        #  Skip empty lines unless --verbose or --states
-        if line.nnodes == 0 and args.states is None and not args.verbose:
+        if line.nnodes == 0 and skip_empty:
             continue
-        print(formatter.format(line))
+        lines.append(line)
+
+    formatter.print_items(lines, no_header=args.no_header)
+
+
+def drain_list(args):
+    fmt = FluxResourceConfig("drain").load().get_format_string(args.format)
+    args.from_stdin = False
+    args.format = fmt
+    args.states = "drained,draining"
+    args.skip_empty = True
+    status(args)
 
 
 def resources_uniq_lines(resources, states, formatter):
@@ -402,7 +442,7 @@ def resources_uniq_lines(resources, states, formatter):
             if field in uniq_fields:
                 uniq_fmt += "{" + field + "}:"
 
-    fmt = flux.util.OutputFormat(formatter.headings, uniq_fmt, prepend="0.")
+    fmt = flux.util.OutputFormat(uniq_fmt, headings=formatter.headings)
 
     #  Create a mapping of resources sets that generate uniq "lines":
     lines = {}
@@ -458,27 +498,11 @@ def list_handler(args):
     else:
         resources = resource_list(flux.Flux()).get()
 
-    fmt = "{state:>10}"
-
-    # Only include properties list if properties exist in set:
-    if resources.all.properties:
-        fmt += " {properties:<10.10+}"
-    if args.verbose:
-        fmt += " {nnodes:>6} {ncores:>8} {ngpus:>8} {rlist}"
-    else:
-        fmt += " {nnodes:>6} {ncores:>8} {ngpus:>8} {nodelist}"
-
-    if args.format:
-        fmt = args.format
-
-    formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
+    fmt = FluxResourceConfig("list").load().get_format_string(args.format)
+    formatter = flux.util.OutputFormat(fmt, headings=headings)
 
     lines = resources_uniq_lines(resources, states, formatter)
-
-    if not args.no_header:
-        print(formatter.header())
-    for _, line in lines.items():
-        print(formatter.format(line))
+    formatter.print_items(lines.values(), no_header=args.no_header)
 
 
 def info(args):
@@ -487,7 +511,6 @@ def info(args):
         args.states = "all"
     args.no_header = True
     args.format = "{nnodes} Nodes, {ncores} Cores, {ngpus} GPUs"
-    args.verbose = 0
     list_handler(args)
 
 
@@ -519,6 +542,17 @@ def main():
         + "are already drained. Do not overwrite any existing drain reason.",
     )
     drain_parser.add_argument(
+        "-o",
+        "--format",
+        default="default",
+        help="Specify output format using Python's string format syntax "
+        + "or a defined format by name "
+        + "(only used when no drain targets specified)",
+    )
+    drain_parser.add_argument(
+        "-n", "--no-header", action="store_true", help="Suppress header output"
+    )
+    drain_parser.add_argument(
         "targets", nargs="?", help="List of targets to drain (IDSET or HOSTLIST)"
     )
     drain_parser.add_argument("reason", help="Reason", nargs=argparse.REMAINDER)
@@ -536,16 +570,11 @@ def main():
         "status", formatter_class=flux.util.help_formatter()
     )
     status_parser.add_argument(
-        "-v",
-        "--verbose",
-        action="count",
-        default=0,
-        help="Include reason if available",
-    )
-    status_parser.add_argument(
         "-o",
         "--format",
-        help="Specify output format using Python's string format syntax",
+        default="default",
+        help="Specify output format using Python's string format syntax "
+        + "or a defined format by name (use 'help' to get a list of names)",
     )
     status_parser.add_argument(
         "-s",
@@ -559,22 +588,22 @@ def main():
     status_parser.add_argument(
         "--from-stdin", action="store_true", help=argparse.SUPPRESS
     )
+    status_parser.add_argument(
+        "--skip-empty",
+        action="store_true",
+        help="Skip empty lines of output even with --states",
+    )
     status_parser.set_defaults(func=status)
 
     list_parser = subparsers.add_parser(
         "list", formatter_class=flux.util.help_formatter()
     )
     list_parser.add_argument(
-        "-v",
-        "--verbose",
-        action="count",
-        default=0,
-        help="Include lists of allocated/free resources",
-    )
-    list_parser.add_argument(
         "-o",
         "--format",
-        help="Specify output format using Python's string format syntax",
+        default="default",
+        help="Specify output format using Python's string format syntax "
+        + "or a defined format by name (use 'help' to get a list of names)",
     )
     list_parser.add_argument(
         "-s",

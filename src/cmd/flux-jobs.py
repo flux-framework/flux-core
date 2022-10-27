@@ -66,25 +66,6 @@ class FluxJobsConfig(UtilConfig):
         initial_dict = {"formats": dict(self.builtin_formats)}
         super().__init__(name="flux-jobs", initial_dict=initial_dict)
 
-    def validate_formats(self, path, formats):
-        if not isinstance(formats, dict):
-            raise ValueError(f"{path}: the 'formats' key must be a mapping")
-        for name, entry in formats.items():
-            if name in self.builtin_formats:
-                raise ValueError(
-                    f"{path}: override of builtin format '{name}' not permitted"
-                )
-            if not isinstance(entry, dict):
-                raise ValueError(f"{path}: 'formats.{name}' must be a mapping")
-            if "format" not in entry:
-                raise ValueError(
-                    f"{path}: formats.{name}: required key 'format' missing"
-                )
-            if not isinstance(entry["format"], str):
-                raise ValueError(
-                    f"{path}: formats.{name}: 'format' key must be a string"
-                )
-
     def validate(self, path, config):
         """Validate a loaded flux-jobs config file as dictionary"""
         for key, value in config.items():
@@ -92,42 +73,6 @@ class FluxJobsConfig(UtilConfig):
                 self.validate_formats(path, value)
             else:
                 raise ValueError(f"{path}: invalid key {key}")
-
-
-def load_format_string(args):
-    if "{" in args.format:
-        return args.format
-
-    config = FluxJobsConfig().load()
-
-    if args.format == "help":
-        print("\nConfigured flux-jobs output formats:\n")
-        for name, entry in config.formats.items():
-            print(f"  {name:<12}", end="")
-            try:
-                print(f" {entry['description']}")
-            except KeyError:
-                print()
-        sys.exit(0)
-    elif args.format.startswith("get-config="):
-        _, name = args.format.split("=", 1)
-        try:
-            entry = config.formats[name]
-        except KeyError:
-            LOGGER.error("--format: No such format %s", name)
-            sys.exit(1)
-        print(f"[formats.{name}]")
-        try:
-            print(f"description = \"{entry['description']}\"")
-        except KeyError:
-            pass
-        print(f"format = \"{entry['format']}\"")
-        sys.exit(0)
-    try:
-        return config.formats[args.format]["format"]
-    except KeyError:
-        LOGGER.error("--format: No such format %s", args.format)
-        sys.exit(1)
 
 
 def fetch_jobs_stdin():
@@ -459,16 +404,15 @@ def get_jobs_recursive(job, args, fields):
 def print_jobs(jobs, args, formatter, path="", level=0):
     children = []
 
-    for job in jobs:
-        color_set = color_setup(args, job)
-        line = formatter.format(job)
-        try:
-            print(line)
-        except UnicodeEncodeError:
-            print(line.encode("utf-8", errors="surrogateescape").decode())
-        color_reset(color_set)
+    def pre(job):
+        job.color_set = color_setup(args, job)
+
+    def post(job):
+        color_reset(job.color_set)
         if args.recursive and is_user_instance(job, args):
             children.append(job)
+
+    formatter.print_items(jobs, no_header=True, pre=pre, post=post)
 
     if not args.recursive or args.level == level:
         return
@@ -512,7 +456,7 @@ def main():
     if args.recurse_all:
         args.recursive = True
 
-    fmt = load_format_string(args)
+    fmt = FluxJobsConfig().load().get_format_string(args.format)
     try:
         formatter = JobInfoFormat(fmt)
     except ValueError as err:
