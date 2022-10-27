@@ -8,6 +8,8 @@
 -- SPDX-License-Identifier: LGPL-3.0
 -------------------------------------------------------------
 
+if shell.options.mpi == "none" then return end
+
 shell.setenv ("OMPI_MCA_pmix", "flux")
 shell.setenv ("OMPI_MCA_schizo", "flux")
 

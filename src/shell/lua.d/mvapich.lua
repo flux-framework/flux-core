@@ -8,6 +8,8 @@
 -- SPDX-License-Identifier: LGPL-3.0
 -------------------------------------------------------------
 
+if shell.options.mpi == "none" then return end
+
 local f, err = require 'flux'.new ()
 if not f then error (err) end
 
