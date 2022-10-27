@@ -748,6 +748,7 @@ class SubmitBaseCmd(MiniCmd):
             "-N", "--nodes", metavar="N", help="Number of nodes to allocate"
         )
         group.add_argument(
+            "-x",
             "--exclusive",
             action="store_true",
             help="With -N, --nodes, allocate nodes exclusively",

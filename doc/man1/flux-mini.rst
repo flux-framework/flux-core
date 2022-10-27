@@ -86,7 +86,7 @@ All subcommands take the following common resource allocation options:
    an error to request more nodes than there are tasks. If unspecified,
    the number of nodes will be chosen by the scheduler.
 
-**--exclusive**
+**-x, --exclusive**
    Indicate to the scheduler that nodes should be exclusively allocated to
    this job. It is an error to specify this option without also using
    *-N, --nodes*. If *--nodes* is specified without *--nslots* or *--ntasks*,
