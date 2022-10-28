@@ -355,9 +355,11 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
 '
 
 test_expect_success 'cleanup job listing jobs ' '
-        for jobid in `cat active.ids`; do \
-            flux job cancel $jobid; \
-            fj_wait_event $jobid clean; \
+	# NOTE: do not use flux job cancel `cat active.ids` as it races
+	# with the reconstruction of job-list somehow
+        for jobid in `cat active.ids`; do
+	    flux job cancel $jobid &&
+            fj_wait_event $jobid clean
         done
 '
 
@@ -1204,8 +1206,7 @@ test_expect_success HAVE_JQ 'flux job list lists nnodes for pending jobs if node
         flux job list -s pending | grep ${id2} &&
         flux job list-ids ${id1} | jq -e ".nnodes == 1" &&
         flux job list-ids ${id2} | jq -e ".nnodes == 3" &&
-        flux job cancel ${id1} &&
-        flux job cancel ${id2} &&
+        flux job cancel ${id1} ${id2} &&
         flux queue start
 '
 

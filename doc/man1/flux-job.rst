@@ -8,15 +8,15 @@ flux-job(1)
 SYNOPSIS
 ========
 
-**flux** **job** **cancel** *id* [*message...*]
+**flux** **job** **cancel** [*OPTIONS*] *ids...* [*--*] [*message...*]
 
 **flux** **job** **cancelall** [*OPTIONS*] [*message...*]
 
-**flux** **job** **kill** [*--signal=SIG*] *id*
+**flux** **job** **kill** [*--signal=SIG*] *id* [*id...*]
 
 **flux** **job** **killall** [*OPTIONS*]
 
-**flux** **job** **raise** [*OPTIONS*] *id* [*message...*]
+**flux** **job** **raise** [*OPTIONS*] *ids...* [*--*] [*message...*]
 
 **flux** **job** **raiseall** [*OPTIONS*] *type* [*message...*]
 
@@ -30,7 +30,15 @@ flux-job(1) performs various job related housekeeping functions.
 CANCEL
 ======
 
-A single job may be canceled with ``flux job cancel``.
+One or more jobs by may be canceled with ``flux job cancel``.  An optional
+message included with the cancel exception may be provided via the *-m,
+--message=NOTE* option or after the list of jobids. The special argument
+*"--"* forces the end of jobid processing and can be used to separate the
+exception message from the jobids when necessary.
+
+**-m, --message=NOTE**
+   Set the optional exception note. It is an error to specify the message
+   via this option and on the command line after the jobid list.
 
 Jobs may be canceled in bulk with ``flux job cancelall``.  Target jobs are
 selected with:
@@ -50,7 +58,7 @@ selected with:
 SIGNAL
 ======
 
-Running jobs may be signaled with ``flux job kill``.
+One or more running jobs may be signaled by jobid with ``flux job kill``.
 
 **-s, --signal=SIG**
    Send signal SIG (default: SIGTERM).
@@ -67,8 +75,15 @@ to the option above, target jobs are selected with:
 EXCEPTION
 =========
 
-An exception may raised on a single job with ``flux job raise``.
+An exception may raised on one or more jobids with ``flux job raise``.
+An optional message included with the job exception may be provided via
+the *-m, --message=NOTE* option or after the list of jobids. The special
+argument *"--"* forces the end of jobid processing and can be used to
+separate the exception message from the jobids when necessary.
 
+**-m, --message=NOTE**
+   Set the optional exception note. It is an error to specify the message
+   via this option and on the command line after the jobid list.
 **-s, --severity=N**
    Set exception severity.  The severity may range from 0=fatal to
    7=least severe (default: 0).

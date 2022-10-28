@@ -976,14 +976,14 @@ test_expect_success 'flux-jobs emits empty string on invalid annotations fields'
 '
 
 test_expect_success 'flux-jobs "user" short hands work for job memo' '
-       for id in $(state_ids sched); do
-               flux job memo $id foo=42
-       done &&
-       fmt="{annotations.user},{annotations.user.foo}" &&
-       flux jobs -no "${fmt}" > user_long_hand.out &&
-       fmt="{user},{user.foo}" &&
-       flux jobs -no "${fmt}" > user_short_hand.out &&
-       test_cmp user_long_hand.out user_short_hand.out
+	for id in $(state_ids sched); do
+		flux job memo $id foo=42
+	done &&
+	fmt="{annotations.user},{annotations.user.foo}" &&
+	flux jobs -no "${fmt}" > user_long_hand.out &&
+	fmt="{user},{user.foo}" &&
+	flux jobs -no "${fmt}" > user_short_hand.out &&
+	test_cmp user_long_hand.out user_short_hand.out
 '
 
 test_expect_success 'flux-jobs emits empty string for special case t_estimate' '
@@ -1240,10 +1240,10 @@ test_expect_success 'flux-jobs --stats-only works' '
 '
 
 test_expect_success 'cleanup job listing jobs ' '
-        for jobid in `cat active.ids`; do \
-            flux job cancel $jobid; \
-            fj_wait_event $jobid clean; \
-        done
+	flux job cancel $(cat active.ids) &&
+	for jobid in `cat active.ids`; do
+		fj_wait_event $jobid clean;
+	done
 '
 
 #
