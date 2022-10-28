@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=system
 
 test_description='test handle reconnection
 '

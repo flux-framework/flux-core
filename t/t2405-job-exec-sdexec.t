@@ -1,4 +1,5 @@
 #!/bin/sh
+# ci=system
 
 test_description='Test flux job execution service using systemd'
 

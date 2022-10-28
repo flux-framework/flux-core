@@ -159,6 +159,7 @@ checks_group "Executing tests under system instance container" \
     -e HOME=/home/$USER \
     -e XDG_RUNTIME_DIR=/run/user/$(id -u) \
     -e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus \
+    -e SYSTEM=t \
     -w $WORKDIR \
     flux-system-test-$$ "$@"
 RC=$?
