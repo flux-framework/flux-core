@@ -105,14 +105,18 @@ static void stats_add (struct job_stats *stats,
 
     stats->state_count[state_index (state)]++;
 
-    if (state == FLUX_JOB_STATE_INACTIVE && !job->success) {
-        stats->failed++;
-        if (job->exception_occurred) {
-            if (strcmp (job->exception_type, "cancel") == 0)
-                stats->canceled++;
-            else if (strcmp (job->exception_type, "timeout") == 0)
-                stats->timeout++;
+    if (state == FLUX_JOB_STATE_INACTIVE) {
+        if (!job->success) {
+            stats->failed++;
+            if (job->exception_occurred) {
+                if (strcmp (job->exception_type, "cancel") == 0)
+                    stats->canceled++;
+                else if (strcmp (job->exception_type, "timeout") == 0)
+                    stats->timeout++;
+            }
         }
+        else
+            stats->successful++;
     }
 }
 
@@ -161,6 +165,8 @@ static void stats_purge (struct job_stats *stats, struct job *job)
                 stats->timeout--;
         }
     }
+    else
+        stats->successful--;
 }
 
 /* An inactive job is being purged, so statistics must be updated.
@@ -216,8 +222,9 @@ static json_t *stats_encode (struct job_stats *stats, const char *name)
     json_t *states;
 
     if (!(states = job_states_encode (stats))
-        || !(o = json_pack ("{ s:O s:i s:i s:i }",
+        || !(o = json_pack ("{ s:O s:i s:i s:i s:i }",
                             "job_states", states,
+                            "successful", stats->successful,
                             "failed", stats->failed,
                             "canceled", stats->canceled,
                             "timeout", stats->timeout))) {

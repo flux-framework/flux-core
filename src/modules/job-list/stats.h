@@ -20,6 +20,7 @@
 
 struct job_stats {
     unsigned int state_count[FLUX_JOB_NR_STATES];
+    unsigned int successful;
     unsigned int failed;
     unsigned int timeout;
     unsigned int canceled;
