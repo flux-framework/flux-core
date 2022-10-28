@@ -1,4 +1,4 @@
-on: [ push, pull_request ]
+on: [push, pull_request]
 name: asan
 jobs:
   check-asan:
@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
