@@ -353,6 +353,9 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
         flux job stats | jq -e ".job_states.cleanup == 0" &&
         flux job stats | jq -e ".job_states.inactive == $(job_list_state_count inactive)" &&
         flux job stats | jq -e ".job_states.total == $(job_list_state_count all)" &&
+        flux job stats | jq -e ".failed == $(job_list_state_count failed canceled timeout)" &&
+        flux job stats | jq -e ".canceled == $(job_list_state_count canceled)" &&
+        flux job stats | jq -e ".timeout == $(job_list_state_count timeout)" &&
         queuelength=$(flux job stats | jq ".queues | length") &&
         test ${queuelength} -eq 0
 '
@@ -392,6 +395,8 @@ test_expect_success HAVE_JQ 'job-list: list successfully reconstructed' '
         test_cmp before_reload.out after_reload.out
 '
 
+# the failed and canceled checks may look confusing.  We canceled all active jobs
+# right above here, so all those active jobs became failed / canceled as a result
 test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive)' '
         flux job stats | jq -e ".job_states.depend == 0" &&
         flux job stats | jq -e ".job_states.priority == 0" &&
@@ -400,6 +405,9 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
         flux job stats | jq -e ".job_states.cleanup == 0" &&
         flux job stats | jq -e ".job_states.inactive == $(job_list_state_count all)" &&
         flux job stats | jq -e ".job_states.total == $(job_list_state_count all)" &&
+        flux job stats | jq -e ".failed == $(job_list_state_count active failed canceled timeout)" &&
+        flux job stats | jq -e ".canceled == $(job_list_state_count active canceled)" &&
+        flux job stats | jq -e ".timeout == $(job_list_state_count timeout)" &&
         queuelength=$(flux job stats | jq ".queues | length") &&
         test ${queuelength} -eq 0
 '
@@ -1710,6 +1718,8 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state in each queue
         echo $batchq | jq -e ".job_states.inactive == 2" &&
         echo $batchq | jq -e ".job_states.total == 2" &&
         echo $batchq | jq -e ".failed == 1" &&
+        echo $batchq | jq -e ".canceled == 0" &&
+        echo $batchq | jq -e ".timeout == 0" &&
         echo $debugq | jq -e ".job_states.depend == 0" &&
         echo $debugq | jq -e ".job_states.priority == 0" &&
         echo $debugq | jq -e ".job_states.sched == 0" &&
@@ -1717,7 +1727,9 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state in each queue
         echo $debugq | jq -e ".job_states.cleanup == 0" &&
         echo $debugq | jq -e ".job_states.inactive == 2" &&
         echo $debugq | jq -e ".job_states.total == 2" &&
-        echo $debugq | jq -e ".failed == 1"
+        echo $debugq | jq -e ".failed == 1" &&
+        echo $debugq | jq -e ".canceled == 0" &&
+        echo $debugq | jq -e ".timeout == 0"
 '
 
 test_expect_success 'reload the job-list module' '
@@ -1739,6 +1751,8 @@ test_expect_success HAVE_JQ 'job stats in each queue correct after reload' '
         echo $batchq | jq -e ".job_states.inactive == 2" &&
         echo $batchq | jq -e ".job_states.total == 2" &&
         echo $batchq | jq -e ".failed == 1" &&
+        echo $batchq | jq -e ".canceled == 0" &&
+        echo $batchq | jq -e ".timeout == 0" &&
         echo $debugq | jq -e ".job_states.depend == 0" &&
         echo $debugq | jq -e ".job_states.priority == 0" &&
         echo $debugq | jq -e ".job_states.sched == 0" &&
@@ -1746,7 +1760,9 @@ test_expect_success HAVE_JQ 'job stats in each queue correct after reload' '
         echo $debugq | jq -e ".job_states.cleanup == 0" &&
         echo $debugq | jq -e ".job_states.inactive == 2" &&
         echo $debugq | jq -e ".job_states.total == 2" &&
-        echo $debugq | jq -e ".failed == 1"
+        echo $debugq | jq -e ".failed == 1" &&
+        echo $debugq | jq -e ".canceled == 0" &&
+        echo $debugq | jq -e ".timeout == 0"
 '
 
 test_expect_success 'remove queues' '
