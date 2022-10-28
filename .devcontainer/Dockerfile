@@ -2,8 +2,8 @@ FROM fluxrm/testenv:focal
 
 LABEL maintainer="Vanessasaurus <@vsoch>"
 
-# Pip not provided in this version
-RUN apt-get update
+# Captain proto (this can eventually go in testenv container)
+RUN apt-get update && apt-get install -y capnproto
 COPY scripts/requirements-dev.txt /requirements.txt
 
 # For easier Python development. 
