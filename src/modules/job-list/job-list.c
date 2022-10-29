@@ -99,6 +99,8 @@ static void purge_cb (flux_t *h,
         struct job *job;
 
         if ((job = zhashx_lookup (ctx->jsctx->index, &id))) {
+            if (job->state != FLUX_JOB_STATE_INACTIVE)
+                continue;
             job_stats_purge (&ctx->jsctx->stats, job);
             if (job->list_handle)
                 zlistx_delete (ctx->jsctx->inactive, job->list_handle);
