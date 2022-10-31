@@ -208,7 +208,10 @@ static void job_change_list (struct job_state_ctx *jsctx,
                              flux_job_state_t newstate)
 {
     if (zlistx_detach (oldlist, job->list_handle) < 0)
-        flux_log (jsctx->h, LOG_ERR, "%s: zlistx_detach", __FUNCTION__);
+        flux_log (jsctx->h,
+                  LOG_ERR,
+                  "%s: zlistx_detach: out of memory",
+                  __FUNCTION__);
     job->list_handle = NULL;
 
     if (job_insert_list (jsctx, job, newstate) < 0)
@@ -470,7 +473,10 @@ static void process_next_state (struct job_state_ctx *jsctx, struct job *job)
             }
 
             if (!zlistx_add_end (jsctx->futures, f)) {
-                flux_log (jsctx->h, LOG_ERR, "%s: zlistx_add_end", __FUNCTION__);
+                flux_log (jsctx->h,
+                          LOG_ERR,
+                          "%s: zlistx_add_end: out of memory",
+                          __FUNCTION__);
                 flux_future_destroy (f);
                 return;
             }

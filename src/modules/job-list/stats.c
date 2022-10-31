@@ -68,7 +68,10 @@ static struct job_stats *queue_stats_lookup (struct job_stats_ctx *statsctx,
         if (!(stats = calloc (1, sizeof (*stats))))
             return NULL;
         if (zhashx_insert (statsctx->queue_stats, job->queue, stats) < 0) {
-            flux_log (statsctx->h, LOG_ERR, "%s: zhashx_insert", __FUNCTION__);
+            flux_log (statsctx->h,
+                      LOG_ERR,
+                      "%s: zhashx_insert: out of memory",
+                      __FUNCTION__);
             free (stats);
             return NULL;
         }
