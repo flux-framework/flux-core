@@ -336,11 +336,19 @@ _flux_job()
     local urgency_OPTS="\
         -v --verbose \
     "
+    local cancel_OPTS="\
+        -m --message= \
+    "
     local cancelall_OPTS="\
         -u --user= \
         -S --states= \
         -f --force \
         -q --quiet \
+    "
+    local raise_OPTS="\
+        -s --severity= \
+        -t, --type= \
+        -m --message= \
     "
     local raiseall_OPTS="\
         -s --severity= \
