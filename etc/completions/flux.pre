@@ -61,6 +61,17 @@ _flux_get_subcmd() {
     echo $firstword
 }
 
+# Handle compgen for words that may contain an '=', so we need to remove
+# any `=` from COMP_WORDBREAKS
+_flux_compgen_with_equals() {
+    # Grab values to pass to compgen, removing possible trailing space
+    local values="${1%% }"
+    COMP_WORDBREAKS_saved="$COMP_WORDBREAKS"
+    COMP_WORDBREAKS="$(echo \"$COMP_WORDBREAKS\" | tr -d =)"
+    COMPREPLY=( $(compgen -W "${values}" -- "$cur") )
+    COMP_WORDBREAKS="$COMP_WORDBREAKS"
+}
+
 # Autocomplete queue name for `-q, --queue=NAME`
 # returns failure if cur or prev option is not -q,--queue
 #
@@ -73,7 +84,22 @@ _flux_complete_queue() {
         if [[ "$cur" == "--que"* ]]; then
             queues=$(printf -- '--queue=%s ' $queues)
         fi
-        COMPREPLY=( $(compgen -W "${queues}" -- "$cur") )
+        _flux_compgen_with_equals "${queues}"
+        return 0
+    fi
+    return 1
+}
+
+# Autocomplete format names for commands that take -o, --format
+_flux_complete_format_name() {
+    if [[ "$prev" == "--format" \
+        || "$prev" == "-o" \
+        || "$cur" == "--form"* ]]; then
+        local formats=$($@ --format=help | grep -v ^Conf | awk 'NF {print $1}')
+        if [[ "$cur" == "--for"* ]]; then
+            formats=$(printf -- '--format=%s ' $formats)
+        fi
+        _flux_compgen_with_equals "${formats}"
         return 0
     fi
     return 1
@@ -238,7 +264,6 @@ _flux_resource()
     "
     local list_OPTS="\
         -h --help \
-        -v --verbose \
         -o --format= \
         -s --states= \
         -n --no-header \
@@ -253,6 +278,8 @@ _flux_resource()
         -h --help \
         -f --force \
         -u --update \
+        -o --format= \
+        -n --no-header \
     "
 
     if [[ $cmd != "resource" ]]; then
@@ -266,6 +293,9 @@ _flux_resource()
         if [[ "${COMPREPLY[@]}" == *= ]]; then
             # Add space if there is not a '=' in suggestions
             compopt -o nospace
+        fi
+        if _flux_complete_format_name flux resource ${cmd}; then
+            return 0
         fi
     else
         COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
@@ -306,11 +336,19 @@ _flux_job()
     local urgency_OPTS="\
         -v --verbose \
     "
+    local cancel_OPTS="\
+        -m --message= \
+    "
     local cancelall_OPTS="\
         -u --user= \
         -S --states= \
         -f --force \
         -q --quiet \
+    "
+    local raise_OPTS="\
+        -s --severity= \
+        -t, --type= \
+        -m --message= \
     "
     local raiseall_OPTS="\
         -s --severity= \
@@ -827,6 +865,9 @@ _flux_jobs()
     if _flux_complete_queue; then
         return 0
     fi
+    if _flux_complete_format_name flux jobs; then
+        return 0
+    fi
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
@@ -1163,11 +1204,17 @@ _flux_core()
 {
     local cur prev cmd subcmd
     local cmds=$(__get_flux_subcommands)
-
-    cur=${COMP_WORDS[COMP_CWORD]}
-    prev=${COMP_WORDS[COMP_CWORD-1]}
     cmd=$(_flux_get_cmd)
     subcmd=$(_flux_get_subcmd $cmd)
+
+    #  If available, use bash-completion _get_comp_words_by_ref()
+    #  This better handles not splitting on `=` for long options.
+    if type _get_comp_words_by_ref >/dev/null 2>&1; then
+        _get_comp_words_by_ref -n = cur prev
+    else
+        cur=${COMP_WORDS[COMP_CWORD]}
+        prev=${COMP_WORDS[COMP_CWORD-1]}
+    fi
 
     case "${cmd}" in
     mini)
