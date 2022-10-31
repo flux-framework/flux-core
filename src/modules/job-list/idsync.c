@@ -153,7 +153,8 @@ struct idsync_data *idsync_check_id_valid (struct idsync_ctx *isctx,
     f = NULL;
 
     if (!zlistx_add_end (isctx->lookups, isd)) {
-        flux_log_error (isctx->h, "%s: zlistx_add_end", __FUNCTION__);
+        flux_log (isctx->h, LOG_ERR, "%s: zlistx_add_end", __FUNCTION__);
+        errno = ENOMEM;
         goto error;
     }
 
@@ -186,19 +187,22 @@ static int idsync_add_waiter (struct idsync_ctx *isctx,
      * could wait on same id */
     if (!(list_isd = zhashx_lookup (isctx->waits, &isd->id))) {
         if (!(list_isd = zlistx_new ())) {
-            flux_log_error (isctx->h, "%s: zlistx_new", __FUNCTION__);
+            flux_log (isctx->h, LOG_ERR, "%s: zlistx_new", __FUNCTION__);
+            errno = ENOMEM;
             goto error;
         }
         zlistx_set_destructor (list_isd, idsync_data_destroy_wrapper);
 
         if (zhashx_insert (isctx->waits, &isd->id, list_isd) < 0) {
-            flux_log_error (isctx->h, "%s: zhashx_insert", __FUNCTION__);
+            flux_log (isctx->h, LOG_ERR, "%s: zhashx_insert", __FUNCTION__);
+            errno = ENOMEM;
             goto error;
         }
     }
 
     if (!zlistx_add_end (list_isd, isd)) {
-        flux_log_error (isctx->h, "%s: zlistx_add_end", __FUNCTION__);
+        flux_log (isctx->h, LOG_ERR, "%s: zlistx_add_end", __FUNCTION__);
+        errno = ENOMEM;
         goto error;
     }
 

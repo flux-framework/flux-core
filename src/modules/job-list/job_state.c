@@ -181,21 +181,18 @@ static void job_insert_list (struct job_state_ctx *jsctx,
         if (!(job->list_handle = zlistx_insert (jsctx->pending,
                                                 job,
                                                 search_direction (job))))
-            flux_log_error (jsctx->h, "%s: zlistx_insert",
-                            __FUNCTION__);
+            flux_log (jsctx->h, LOG_ERR, "%s: zlistx_insert", __FUNCTION__);
     }
     else if (newstate == FLUX_JOB_STATE_RUN
              || newstate == FLUX_JOB_STATE_CLEANUP) {
         if (!(job->list_handle = zlistx_add_start (jsctx->running,
                                                    job)))
-            flux_log_error (jsctx->h, "%s: zlistx_add_start",
-                            __FUNCTION__);
+            flux_log (jsctx->h, LOG_ERR, "%s: zlistx_add_start", __FUNCTION__);
     }
     else { /* newstate == FLUX_JOB_STATE_INACTIVE */
         if (!(job->list_handle = zlistx_add_start (jsctx->inactive,
                                                    job)))
-            flux_log_error (jsctx->h, "%s: zlistx_add_start",
-                            __FUNCTION__);
+            flux_log (jsctx->h, LOG_ERR, "%s: zlistx_add_start", __FUNCTION__);
     }
 }
 
@@ -207,8 +204,7 @@ static void job_change_list (struct job_state_ctx *jsctx,
                              flux_job_state_t newstate)
 {
     if (zlistx_detach (oldlist, job->list_handle) < 0)
-        flux_log_error (jsctx->h, "%s: zlistx_detach",
-                        __FUNCTION__);
+        flux_log (jsctx->h, LOG_ERR, "%s: zlistx_detach", __FUNCTION__);
     job->list_handle = NULL;
 
     job_insert_list (jsctx, job, newstate);
@@ -497,7 +493,7 @@ static void process_next_state (struct job_state_ctx *jsctx, struct job *job)
             }
 
             if (!zlistx_add_end (jsctx->futures, f)) {
-                flux_log_error (jsctx->h, "%s: zlistx_add_end", __FUNCTION__);
+                flux_log (jsctx->h, LOG_ERR, "%s: zlistx_add_end", __FUNCTION__);
                 flux_future_destroy (f);
                 return;
             }
@@ -946,14 +942,14 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
             return -1;
         }
         if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
-            flux_log_error (jsctx->h, "%s: zhashx_insert", __FUNCTION__);
+            flux_log (jsctx->h, LOG_ERR, "%s: zhashx_insert", __FUNCTION__);
             job_destroy (job);
             errno = ENOMEM;
             return -1;
         }
         /* job always starts off on processing list */
         if (!(job->list_handle = zlistx_add_end (jsctx->processing, job))) {
-            flux_log_error (jsctx->h, "%s: zlistx_add_end", __FUNCTION__);
+            flux_log (jsctx->h, LOG_ERR, "%s: zlistx_add_end", __FUNCTION__);
             errno = ENOMEM;
             return -1;
         }
