@@ -23,13 +23,13 @@ class JobStats:
         run: Count of jobs in RUN state
         cleanup: Count of jobs in CLEANUP state
         inactive: Count of INACTIVE jobs
-        active: Total number of active jobs (all states but INACTIVE)
-        failed: Total number of jobs that did not exit with zero status
         successful: Total number of jobs completed with zero exit code
-        canceled: Total number of jobs that were canceled
+        failed: Total number of jobs that did not exit with zero status
         timeout: Total number of jobs that timed out
+        canceled: Total number of jobs that were canceled
         pending: Sum of "depend", "priority", and "sched"
         running: Sum of "run" and "cleanup"
+        active: Total number of active jobs (all states but INACTIVE)
 
     """
 
@@ -46,12 +46,12 @@ class JobStats:
             "run",
             "cleanup",
             "inactive",
+            "successful",
             "failed",
-            "canceled",
             "timeout",
+            "canceled",
             "pending",
             "running",
-            "successful",
             "active",
         ]:
             setattr(self, attr, -1)
