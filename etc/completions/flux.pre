@@ -1163,11 +1163,17 @@ _flux_core()
 {
     local cur prev cmd subcmd
     local cmds=$(__get_flux_subcommands)
-
-    cur=${COMP_WORDS[COMP_CWORD]}
-    prev=${COMP_WORDS[COMP_CWORD-1]}
     cmd=$(_flux_get_cmd)
     subcmd=$(_flux_get_subcmd $cmd)
+
+    #  If available, use bash-completion _get_comp_words_by_ref()
+    #  This better handles not splitting on `=` for long options.
+    if type _get_comp_words_by_ref >/dev/null 2>&1; then
+        _get_comp_words_by_ref -n = cur prev
+    else
+        cur=${COMP_WORDS[COMP_CWORD]}
+        prev=${COMP_WORDS[COMP_CWORD-1]}
+    fi
 
     case "${cmd}" in
     mini)
