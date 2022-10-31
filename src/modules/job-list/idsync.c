@@ -181,37 +181,32 @@ static int idsync_add_waiter (struct idsync_ctx *isctx,
                               struct idsync_data *isd)
 {
     zlistx_t *list_isd;
-    int saved_errno;
 
     /* isctx->waits holds lists of ids waiting on, b/c multiple callers
      * could wait on same id */
     if (!(list_isd = zhashx_lookup (isctx->waits, &isd->id))) {
         if (!(list_isd = zlistx_new ())) {
             flux_log (isctx->h, LOG_ERR, "%s: zlistx_new", __FUNCTION__);
-            errno = ENOMEM;
-            goto error;
+            goto enomem;
         }
         zlistx_set_destructor (list_isd, idsync_data_destroy_wrapper);
 
         if (zhashx_insert (isctx->waits, &isd->id, list_isd) < 0) {
             flux_log (isctx->h, LOG_ERR, "%s: zhashx_insert", __FUNCTION__);
-            errno = ENOMEM;
-            goto error;
+            goto enomem;
         }
     }
 
     if (!zlistx_add_end (list_isd, isd)) {
         flux_log (isctx->h, LOG_ERR, "%s: zlistx_add_end", __FUNCTION__);
-        errno = ENOMEM;
-        goto error;
+        goto enomem;
     }
 
     return 0;
 
-error:
-    saved_errno = errno;
+enomem:
     idsync_data_destroy (isd);
-    errno = saved_errno;
+    errno = ENOMEM;
     return -1;
 }
 

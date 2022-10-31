@@ -169,9 +169,9 @@ static void revert_job_state (struct job_state_ctx *jsctx,
     }
 }
 
-static void job_insert_list (struct job_state_ctx *jsctx,
-                             struct job *job,
-                             flux_job_state_t newstate)
+static int job_insert_list (struct job_state_ctx *jsctx,
+                            struct job *job,
+                            flux_job_state_t newstate)
 {
     /* Note: comparator is set for running & inactive lists, but the
      * sort calls are not called on zlistx_add_start() */
@@ -181,19 +181,23 @@ static void job_insert_list (struct job_state_ctx *jsctx,
         if (!(job->list_handle = zlistx_insert (jsctx->pending,
                                                 job,
                                                 search_direction (job))))
-            flux_log (jsctx->h, LOG_ERR, "%s: zlistx_insert", __FUNCTION__);
+            goto enomem;
     }
     else if (newstate == FLUX_JOB_STATE_RUN
              || newstate == FLUX_JOB_STATE_CLEANUP) {
-        if (!(job->list_handle = zlistx_add_start (jsctx->running,
-                                                   job)))
-            flux_log (jsctx->h, LOG_ERR, "%s: zlistx_add_start", __FUNCTION__);
+        if (!(job->list_handle = zlistx_add_start (jsctx->running, job)))
+            goto enomem;
     }
     else { /* newstate == FLUX_JOB_STATE_INACTIVE */
-        if (!(job->list_handle = zlistx_add_start (jsctx->inactive,
-                                                   job)))
-            flux_log (jsctx->h, LOG_ERR, "%s: zlistx_add_start", __FUNCTION__);
+        if (!(job->list_handle = zlistx_add_start (jsctx->inactive, job)))
+            goto enomem;
     }
+
+    return 0;
+
+enomem:
+    errno = ENOMEM;
+    return -1;
 }
 
 /* remove job from one list and move it to another based on the
@@ -207,7 +211,10 @@ static void job_change_list (struct job_state_ctx *jsctx,
         flux_log (jsctx->h, LOG_ERR, "%s: zlistx_detach", __FUNCTION__);
     job->list_handle = NULL;
 
-    job_insert_list (jsctx, job, newstate);
+    if (job_insert_list (jsctx, job, newstate) < 0)
+        flux_log_error (jsctx->h,
+                        "error moving job to new list on state transition to %s",
+                        flux_job_statetostr (newstate, "L"));
 }
 
 static zlistx_t *get_list (struct job_state_ctx *jsctx, flux_job_state_t state)
@@ -744,7 +751,9 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
         flux_log_error (jsctx->h, "%s: zhashx_insert", __FUNCTION__);
         goto done;
     }
-    job_insert_list (jsctx, job, job->state);
+
+    if (job_insert_list (jsctx, job, job->state) < 0)
+        goto done;
 
     rc = 1;
 done:
