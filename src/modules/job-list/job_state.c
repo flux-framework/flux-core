@@ -297,33 +297,18 @@ static flux_future_t *state_depend_lookup (struct job_state_ctx *jsctx,
                                            struct job *job)
 {
     flux_future_t *f = NULL;
-    int saved_errno;
 
     if (!(f = flux_rpc_pack (jsctx->h, "job-info.lookup", FLUX_NODEID_ANY, 0,
                              "{s:I s:[s] s:i}",
                              "id", job->id,
                              "keys", "jobspec",
-                             "flags", 0))) {
-        flux_log_error (jsctx->h, "%s: flux_rpc_pack", __FUNCTION__);
-        goto error;
-    }
-
-    if (flux_future_then (f, -1, state_depend_lookup_continuation, job) < 0) {
-        flux_log_error (jsctx->h, "%s: flux_future_then", __FUNCTION__);
-        goto error;
-    }
-
-    if (flux_future_aux_set (f, "job_state_ctx", jsctx, NULL) < 0) {
-        flux_log_error (jsctx->h, "%s: flux_future_aux_set", __FUNCTION__);
-        goto error;
+                             "flags", 0))
+        || flux_future_then (f, -1, state_depend_lookup_continuation, job) < 0
+        || flux_future_aux_set (f, "job_state_ctx", jsctx, NULL) < 0) {
+        flux_future_destroy (f);
+        return NULL;
     }
     return f;
-
- error:
-    saved_errno = errno;
-    flux_future_destroy (f);
-    errno = saved_errno;
-    return NULL;
 }
 
 static void state_run_lookup_continuation (flux_future_t *f, void *arg)
@@ -362,34 +347,19 @@ static flux_future_t *state_run_lookup (struct job_state_ctx *jsctx,
                                         struct job *job)
 {
     flux_future_t *f = NULL;
-    int saved_errno;
 
     if (!(f = flux_rpc_pack (jsctx->h, "job-info.lookup", FLUX_NODEID_ANY, 0,
                              "{s:I s:[s] s:i}",
                              "id", job->id,
                              "keys", "R",
-                             "flags", 0))) {
-        flux_log_error (jsctx->h, "%s: flux_rpc_pack", __FUNCTION__);
-        goto error;
-    }
-
-    if (flux_future_then (f, -1, state_run_lookup_continuation, job) < 0) {
-        flux_log_error (jsctx->h, "%s: flux_future_then", __FUNCTION__);
-        goto error;
-    }
-
-    if (flux_future_aux_set (f, "job_state_ctx", jsctx, NULL) < 0) {
-        flux_log_error (jsctx->h, "%s: flux_future_aux_set", __FUNCTION__);
-        goto error;
+                             "flags", 0))
+        || flux_future_then (f, -1, state_run_lookup_continuation, job) < 0
+        || flux_future_aux_set (f, "job_state_ctx", jsctx, NULL) < 0) {
+        flux_future_destroy (f);
+        return NULL;
     }
 
     return f;
-
- error:
-    saved_errno = errno;
-    flux_future_destroy (f);
-    errno = saved_errno;
-    return NULL;
 }
 
 /* calculate any remaining fields */
@@ -747,10 +717,8 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
     if (job->states_mask & FLUX_JOB_STATE_INACTIVE)
         eventlog_inactive_complete (job);
 
-    if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
-        flux_log_error (jsctx->h, "%s: zhashx_insert", __FUNCTION__);
+    if (zhashx_insert (jsctx->index, &job->id, job) < 0)
         goto done;
-    }
 
     if (job_insert_list (jsctx, job, job->state) < 0)
         goto done;
@@ -946,19 +914,15 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
                                  json_t *context)
 {
     if (!job) {
-        if (!(job = job_create (jsctx->h, id))){
-            flux_log_error (jsctx->h, "%s: job_create", __FUNCTION__);
+        if (!(job = job_create (jsctx->h, id)))
             return -1;
-        }
         if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
-            flux_log (jsctx->h, LOG_ERR, "%s: zhashx_insert", __FUNCTION__);
             job_destroy (job);
             errno = ENOMEM;
             return -1;
         }
         /* job always starts off on processing list */
         if (!(job->list_handle = zlistx_add_end (jsctx->processing, job))) {
-            flux_log (jsctx->h, LOG_ERR, "%s: zlistx_add_end", __FUNCTION__);
             errno = ENOMEM;
             return -1;
         }
@@ -1458,8 +1422,10 @@ static void job_events_journal_continuation (flux_future_t *f, void *arg)
         }
     }
     else {
-        if (journal_process_events (jsctx, msg) < 0)
+        if (journal_process_events (jsctx, msg) < 0) {
+            flux_log_error (jsctx->h, "error processing events");
             goto error;
+        }
     }
 
     flux_future_reset (f);

@@ -82,10 +82,8 @@ struct idsync_ctx *idsync_ctx_create (flux_t *h)
     struct idsync_ctx *isctx = NULL;
     int saved_errno;
 
-    if (!(isctx = calloc (1, sizeof (*isctx)))) {
-        flux_log_error (h, "calloc");
+    if (!(isctx = calloc (1, sizeof (*isctx))))
         return NULL;
-    }
     isctx->h = h;
 
     if (!(isctx->lookups = zlistx_new ()))
@@ -185,22 +183,16 @@ static int idsync_add_waiter (struct idsync_ctx *isctx,
     /* isctx->waits holds lists of ids waiting on, b/c multiple callers
      * could wait on same id */
     if (!(list_isd = zhashx_lookup (isctx->waits, &isd->id))) {
-        if (!(list_isd = zlistx_new ())) {
-            flux_log (isctx->h, LOG_ERR, "%s: zlistx_new", __FUNCTION__);
+        if (!(list_isd = zlistx_new ()))
             goto enomem;
-        }
         zlistx_set_destructor (list_isd, idsync_data_destroy_wrapper);
 
-        if (zhashx_insert (isctx->waits, &isd->id, list_isd) < 0) {
-            flux_log (isctx->h, LOG_ERR, "%s: zhashx_insert", __FUNCTION__);
+        if (zhashx_insert (isctx->waits, &isd->id, list_isd) < 0)
             goto enomem;
-        }
     }
 
-    if (!zlistx_add_end (list_isd, isd)) {
-        flux_log (isctx->h, LOG_ERR, "%s: zlistx_add_end", __FUNCTION__);
+    if (!zlistx_add_end (list_isd, isd))
         goto enomem;
-    }
 
     return 0;
 
@@ -231,10 +223,8 @@ int idsync_wait_valid_id (struct idsync_ctx *isctx,
 {
     struct idsync_data *isd = NULL;
 
-    if (!(isd = idsync_data_create (isctx->h, id, msg, attrs, NULL))) {
-        flux_log_error (isctx->h, "%s: idsync_data_create", __FUNCTION__);
+    if (!(isd = idsync_data_create (isctx->h, id, msg, attrs, NULL)))
         return -1;
-    }
 
     return idsync_add_waiter (isctx, isd);
 }
