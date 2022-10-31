@@ -463,7 +463,12 @@ def main():
         raise ValueError("Error in user format: " + str(err))
 
     if args.stats or args.stats_only:
-        stats = JobStats(flux.Flux()).update_sync()
+        try:
+            stats = JobStats(flux.Flux(), queue=args.queue).update_sync()
+        except ValueError as err:
+            LOGGER.error("error retrieving job stats: %s", str(err))
+            sys.exit(1)
+
         print(
             f"{stats.running} running, {stats.successful} completed, "
             f"{stats.failed} failed, {stats.pending} pending"

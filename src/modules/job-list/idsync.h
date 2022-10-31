@@ -13,6 +13,8 @@
 
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "job_data.h"
 
 struct idsync_ctx {

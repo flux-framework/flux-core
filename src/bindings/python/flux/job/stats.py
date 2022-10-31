@@ -11,6 +11,7 @@
 from flux.rpc import RPC
 
 
+# pylint: disable=too-many-instance-attributes
 class JobStats:
     """Container for job statistics as returned by job-list.job-stats
 
@@ -32,13 +33,15 @@ class JobStats:
 
     """
 
-    def __init__(self, handle):
+    def __init__(self, handle, queue=None):
         """Initialize a JobStats object with Flux handle ``handle``"""
         self.handle = handle
+        self.queue = queue
         self.callback = None
         self.cb_kwargs = {}
         for attr in [
             "depend",
+            "priority",
             "sched",
             "run",
             "cleanup",
@@ -55,6 +58,14 @@ class JobStats:
 
     def _update_cb(self, rpc):
         resp = rpc.get()
+        if self.queue:
+            tmpstat = None
+            if resp["queues"]:
+                tmpstat = [x for x in resp["queues"] if x["name"] == self.queue]
+            if not tmpstat:
+                raise ValueError(f"no stats available for queue {self.queue}")
+            resp = tmpstat[0]
+
         for state, count in resp["job_states"].items():
             setattr(self, state, count)
         for state in ["failed", "timeout", "canceled"]:

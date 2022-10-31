@@ -18,6 +18,64 @@
 #include "stats.h"
 #include "job_data.h"
 
+static void free_wrapper (void **item)
+{
+    if (item) {
+        free (*item);
+        (*item) = NULL;
+    }
+}
+
+struct job_stats_ctx *job_stats_ctx_create (flux_t *h)
+{
+    struct job_stats_ctx *statsctx = NULL;
+
+    if (!(statsctx = calloc (1, sizeof (*statsctx))))
+        return NULL;
+    statsctx->h = h;
+
+    if (!(statsctx->queue_stats = zhashx_new ()))
+        goto error;
+    zhashx_set_destructor (statsctx->queue_stats, free_wrapper);
+
+    return statsctx;
+
+error:
+    job_stats_ctx_destroy (statsctx);
+    return NULL;
+}
+
+void job_stats_ctx_destroy (struct job_stats_ctx *statsctx)
+{
+    if (statsctx) {
+        int save_errno = errno;
+        zhashx_destroy (&statsctx->queue_stats);
+        free (statsctx);
+        errno = save_errno;
+    }
+}
+
+static struct job_stats *queue_stats_lookup (struct job_stats_ctx *statsctx,
+                                             struct job *job)
+{
+    struct job_stats *stats = NULL;
+
+    if (!job->queue)
+        return NULL;
+
+    stats = zhashx_lookup (statsctx->queue_stats, job->queue);
+    if (!stats) {
+        if (!(stats = calloc (1, sizeof (*stats))))
+            return NULL;
+        if (zhashx_insert (statsctx->queue_stats, job->queue, stats) < 0) {
+            flux_log_error (statsctx->h, "%s: zhashx_insert", __FUNCTION__);
+            free (stats);
+            return NULL;
+        }
+    }
+    return stats;
+}
+
 /*  Return the index into stats->state_count[] array for the
  *   job state 'state'
  */
@@ -38,17 +96,16 @@ static const char *state_index_name (int index)
     return flux_job_statetostr ((1<<index), "l");
 }
 
-void job_stats_update (struct job_stats *stats,
+static void stats_add (struct job_stats *stats,
                        struct job *job,
-                       flux_job_state_t newstate)
+                       flux_job_state_t state)
 {
-    stats->state_count[state_index(newstate)]++;
+    if (state == FLUX_JOB_STATE_NEW)
+        return;
 
-    /*  Stats for NEW are not tracked */
-    if (job->state != FLUX_JOB_STATE_NEW)
-        stats->state_count[state_index(job->state)]--;
+    stats->state_count[state_index (state)]++;
 
-    if (newstate == FLUX_JOB_STATE_INACTIVE && !job->success) {
+    if (state == FLUX_JOB_STATE_INACTIVE && !job->success) {
         stats->failed++;
         if (job->exception_occurred) {
             if (strcmp (job->exception_type, "cancel") == 0)
@@ -59,13 +116,41 @@ void job_stats_update (struct job_stats *stats,
     }
 }
 
-/* An inactive job is being purged, so statistics must be updated.
- */
-void job_stats_purge (struct job_stats *stats, struct job *job)
+static void stats_update (struct job_stats *stats,
+                          struct job *job,
+                          flux_job_state_t newstate)
 {
-    assert (job->state == FLUX_JOB_STATE_INACTIVE);
+    /*  Stats for NEW are not tracked */
+    if (job->state != FLUX_JOB_STATE_NEW)
+        stats->state_count[state_index (job->state)]--;
 
-    stats->state_count[state_index(job->state)]--;
+    stats_add (stats, job, newstate);
+}
+
+void job_stats_update (struct job_stats_ctx *statsctx,
+                       struct job *job,
+                       flux_job_state_t newstate)
+{
+    struct job_stats *stats;
+
+    stats_update (&statsctx->all, job, newstate);
+
+    if ((stats = queue_stats_lookup (statsctx, job)))
+        stats_update (stats, job, newstate);
+}
+
+void job_stats_add_queue (struct job_stats_ctx *statsctx,
+                          struct job *job)
+{
+    struct job_stats *stats;
+
+    if ((stats = queue_stats_lookup (statsctx, job)))
+        stats_add (stats, job, job->state);
+}
+
+static void stats_purge (struct job_stats *stats, struct job *job)
+{
+    stats->state_count[state_index (job->state)]--;
 
     if (!job->success) {
         stats->failed--;
@@ -76,6 +161,20 @@ void job_stats_purge (struct job_stats *stats, struct job *job)
                 stats->timeout--;
         }
     }
+}
+
+/* An inactive job is being purged, so statistics must be updated.
+ */
+void job_stats_purge (struct job_stats_ctx *statsctx, struct job *job)
+{
+    struct job_stats *stats;
+
+    assert (job->state == FLUX_JOB_STATE_INACTIVE);
+
+    stats_purge (&statsctx->all, job);
+
+    if ((stats = queue_stats_lookup (statsctx, job)))
+        stats_purge (stats, job);
 }
 
 static int object_set_integer (json_t *o,
@@ -111,7 +210,7 @@ error:
     return NULL;
 }
 
-json_t * job_stats_encode (struct job_stats *stats)
+static json_t *stats_encode (struct job_stats *stats, const char *name)
 {
     json_t *o;
     json_t *states;
@@ -127,6 +226,73 @@ json_t * job_stats_encode (struct job_stats *stats)
         return NULL;
     }
     json_decref (states);
+
+    if (name) {
+        json_t *no = json_string (name);
+        if (!no || json_object_set_new (o, "name", no) < 0) {
+            json_decref (no);
+            json_decref (o);
+            errno = ENOMEM;
+            return NULL;
+        }
+    }
+    return o;
+}
+
+static json_t *queue_stats_encode (struct job_stats_ctx *statsctx)
+{
+    struct job_stats *stats;
+    json_t *queues;
+
+    if (!(queues = json_array ())) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    stats = zhashx_first (statsctx->queue_stats);
+    while (stats) {
+        const char *name = zhashx_cursor (statsctx->queue_stats);
+        json_t *qo = stats_encode (stats, name);
+        if (!qo) {
+            int save_errno = errno;
+            json_decref (queues);
+            errno = save_errno;
+            return NULL;
+        }
+        if (json_array_append_new (queues, qo) < 0) {
+            json_decref (qo);
+            json_decref (queues);
+            errno = ENOMEM;
+            return NULL;
+        }
+        stats = zhashx_next (statsctx->queue_stats);
+    }
+
+    return queues;
+}
+
+json_t * job_stats_encode (struct job_stats_ctx *statsctx)
+{
+    json_t *o = NULL;
+    json_t *queues;
+
+    if (!(o = stats_encode (&statsctx->all, NULL)))
+        return NULL;
+
+    if (!(queues = queue_stats_encode (statsctx))) {
+        int save_errno = errno;
+        json_decref (o);
+        errno = save_errno;
+        return NULL;
+    }
+
+    if (json_object_set_new (o, "queues", queues) < 0) {
+        json_decref (queues);
+        json_decref (o);
+        errno = ENOMEM;
+        return NULL;
+    }
+
     return o;
 }
 

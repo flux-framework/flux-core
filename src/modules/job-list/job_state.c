@@ -140,7 +140,7 @@ static void update_job_state (struct job_state_ctx *jsctx,
                               flux_job_state_t new_state,
                               double timestamp)
 {
-    job_stats_update (&jsctx->stats, job, new_state);
+    job_stats_update (jsctx->statsctx, job, new_state);
 
     job->state = new_state;
     if (job->state == FLUX_JOB_STATE_DEPEND)
@@ -720,6 +720,12 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
 
     if (job_parse_jobspec (job, jobspec) < 0)
         goto done;
+
+    /* eventlog parsing above would not have tracked queue specific
+     * stats b/c queue was unknown until the jobspec was parsed.  Must
+     * add this stat in specifically. */
+    if (job->queue)
+        job_stats_add_queue (jsctx->statsctx, job);
 
     if (job->states_mask & FLUX_JOB_STATE_RUN) {
         if (flux_job_kvs_key (path, sizeof (path), id, "R") < 0) {
@@ -1525,6 +1531,9 @@ struct job_state_ctx *job_state_create (struct idsync_ctx *isctx)
     if (!(jsctx->futures = zlistx_new ()))
         goto error;
 
+    if (!(jsctx->statsctx = job_stats_ctx_create (jsctx->h)))
+        goto error;
+
     if (!(jsctx->backlog = flux_msglist_create ()))
         goto error;
 
@@ -1564,6 +1573,7 @@ void job_state_destroy (void *data)
         zlistx_destroy (&jsctx->running);
         zlistx_destroy (&jsctx->pending);
         zhashx_destroy (&jsctx->index);
+        job_stats_ctx_destroy (jsctx->statsctx);
         flux_msglist_destroy (jsctx->backlog);
         flux_future_destroy (jsctx->events);
         free (jsctx);
