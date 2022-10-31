@@ -90,6 +90,21 @@ _flux_complete_queue() {
     return 1
 }
 
+# Autocomplete format names for commands that take -o, --format
+_flux_complete_format_name() {
+    if [[ "$prev" == "--format" \
+        || "$prev" == "-o" \
+        || "$cur" == "--form"* ]]; then
+        local formats=$($@ --format=help | grep -v ^Conf | awk 'NF {print $1}')
+        if [[ "$cur" == "--for"* ]]; then
+            formats=$(printf -- '--format=%s ' $formats)
+        fi
+        _flux_compgen_with_equals "${formats}"
+        return 0
+    fi
+    return 1
+}
+
 #  Get the list of subcommands from FLUX_EXEC_PATH and hard-coded builtins
 __get_flux_subcommands() {
     local subcommands
@@ -836,6 +851,9 @@ _flux_jobs()
         --stats-only \
     "
     if _flux_complete_queue; then
+        return 0
+    fi
+    if _flux_complete_format_name flux jobs; then
         return 0
     fi
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
