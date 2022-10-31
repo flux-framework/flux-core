@@ -61,6 +61,17 @@ _flux_get_subcmd() {
     echo $firstword
 }
 
+# Handle compgen for words that may contain an '=', so we need to remove
+# any `=` from COMP_WORDBREAKS
+_flux_compgen_with_equals() {
+    # Grab values to pass to compgen, removing possible trailing space
+    local values="${1%% }"
+    COMP_WORDBREAKS_saved="$COMP_WORDBREAKS"
+    COMP_WORDBREAKS="$(echo \"$COMP_WORDBREAKS\" | tr -d =)"
+    COMPREPLY=( $(compgen -W "${values}" -- "$cur") )
+    COMP_WORDBREAKS="$COMP_WORDBREAKS"
+}
+
 # Autocomplete queue name for `-q, --queue=NAME`
 # returns failure if cur or prev option is not -q,--queue
 #
@@ -73,7 +84,7 @@ _flux_complete_queue() {
         if [[ "$cur" == "--que"* ]]; then
             queues=$(printf -- '--queue=%s ' $queues)
         fi
-        COMPREPLY=( $(compgen -W "${queues}" -- "$cur") )
+        _flux_compgen_with_equals "${queues}"
         return 0
     fi
     return 1
