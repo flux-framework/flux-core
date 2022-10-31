@@ -264,7 +264,6 @@ _flux_resource()
     "
     local list_OPTS="\
         -h --help \
-        -v --verbose \
         -o --format= \
         -s --states= \
         -n --no-header \
@@ -279,6 +278,8 @@ _flux_resource()
         -h --help \
         -f --force \
         -u --update \
+        -o --format= \
+        -n --no-header \
     "
 
     if [[ $cmd != "resource" ]]; then
@@ -292,6 +293,9 @@ _flux_resource()
         if [[ "${COMPREPLY[@]}" == *= ]]; then
             # Add space if there is not a '=' in suggestions
             compopt -o nospace
+        fi
+        if _flux_complete_format_name flux resource ${cmd}; then
+            return 0
         fi
     else
         COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
