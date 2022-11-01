@@ -1,3 +1,55 @@
+flux-core version 0.45.0 - 2022-11-01
+-------------------------------------
+
+## New Features
+ * propagate process resource limits to jobs (#4745)
+ * flux-job: support multiple jobids for `cancel`, `raise`, and `kill` (#4721)
+ * flux-resource: unify output format options, support config files and
+   named formats (#4710)
+ * broker: support binomial tree topology (#4730)
+ * broker: allow custom topology to be configured (#4675)
+ * flux-mini: add -x short option for --exclusive (#4726)
+ * flux-jobs: support emoji output formats (#4687)
+ * flux config: add load subcommand (#4695)
+ * broker: ignore ENOSYS from parent job-exec.critical-ranks RPC (#4680)
+ * job-list: support retrieving job's core count (#4664)
+ * job-list: add successful job count stat (#4739)
+ * job-list: support queue specific stats (#4684)
+ * etc: add functional bash completions (#4661, #4742)
+
+## Fixes
+ * job-list: ensure purged jobs are inactive (#4738)
+ * flux-proxy: require owner == proxy user (#4712, #4735)
+ * support mpi=none shell option and make it the default for `flux mini
+   batch` and `flux mini alloc` (#4731)
+ * unset job environment variables in initial program (#4717)
+ * flux-resource: fix scalability issues with large sets of resources (#4713)
+ * build: fix use of system bash-completion dir (#4667)
+ * rc1: reload configuration on rank > 0 (#4665)
+ * broker/test: Fix runat race on older glibc versions (#4660)
+ * broker: launch non-interactive shells in a new process group (#4653)
+
+## Cleanup
+ * README: update flux help output (#4688)
+ * python: indicate truncation for some fields in flux-jobs and flux-resource
+   (#4670)
+ * python: move and rename some classes for reusability (#4669)
+ * job-list: refactor to abstract "idsync" logic better (#4644)
+ * broker: don't log failed `CONTROL_DISCONNECT` (#4656)
+
+## Testsuite/CI/Development
+ * fix github action syntax for output and yaml formatting (#4733)
+ * add devcontainer autocomplete (#4709)
+ * lint: update devcontainer to work with pre-commit (#4690)
+ * codeql: fix some critical issues found by security scanning (#4729)
+ * Create codeql.yml (#4705)
+ * ci: add isort to pre-commit and linting (#4691)
+ * ci: update setup-python/buildx actions to v4/v2 (#4693)
+ * Pre-commit extensions and multi-version setup (#4689)
+ * ci: consolidate python linting and formatting (#4636)
+ * Add devcontainer environment for vscode (#4674)
+ * test: job-ingest: skip guest tests when default sign-type fails (#4655)
+
 flux-core version 0.44.0 - 2022-10-04
 -------------------------------------
 
