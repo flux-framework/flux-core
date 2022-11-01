@@ -14,8 +14,6 @@ import fnmatch
 import itertools
 import json
 import logging
-
-# pylint: disable=duplicate-code
 import os
 import random
 import re
