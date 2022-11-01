@@ -169,9 +169,9 @@ static void revert_job_state (struct job_state_ctx *jsctx,
     }
 }
 
-static void job_insert_list (struct job_state_ctx *jsctx,
-                             struct job *job,
-                             flux_job_state_t newstate)
+static int job_insert_list (struct job_state_ctx *jsctx,
+                            struct job *job,
+                            flux_job_state_t newstate)
 {
     /* Note: comparator is set for running & inactive lists, but the
      * sort calls are not called on zlistx_add_start() */
@@ -181,22 +181,23 @@ static void job_insert_list (struct job_state_ctx *jsctx,
         if (!(job->list_handle = zlistx_insert (jsctx->pending,
                                                 job,
                                                 search_direction (job))))
-            flux_log_error (jsctx->h, "%s: zlistx_insert",
-                            __FUNCTION__);
+            goto enomem;
     }
     else if (newstate == FLUX_JOB_STATE_RUN
              || newstate == FLUX_JOB_STATE_CLEANUP) {
-        if (!(job->list_handle = zlistx_add_start (jsctx->running,
-                                                   job)))
-            flux_log_error (jsctx->h, "%s: zlistx_add_start",
-                            __FUNCTION__);
+        if (!(job->list_handle = zlistx_add_start (jsctx->running, job)))
+            goto enomem;
     }
     else { /* newstate == FLUX_JOB_STATE_INACTIVE */
-        if (!(job->list_handle = zlistx_add_start (jsctx->inactive,
-                                                   job)))
-            flux_log_error (jsctx->h, "%s: zlistx_add_start",
-                            __FUNCTION__);
+        if (!(job->list_handle = zlistx_add_start (jsctx->inactive, job)))
+            goto enomem;
     }
+
+    return 0;
+
+enomem:
+    errno = ENOMEM;
+    return -1;
 }
 
 /* remove job from one list and move it to another based on the
@@ -207,11 +208,16 @@ static void job_change_list (struct job_state_ctx *jsctx,
                              flux_job_state_t newstate)
 {
     if (zlistx_detach (oldlist, job->list_handle) < 0)
-        flux_log_error (jsctx->h, "%s: zlistx_detach",
-                        __FUNCTION__);
+        flux_log (jsctx->h,
+                  LOG_ERR,
+                  "%s: zlistx_detach: out of memory",
+                  __FUNCTION__);
     job->list_handle = NULL;
 
-    job_insert_list (jsctx, job, newstate);
+    if (job_insert_list (jsctx, job, newstate) < 0)
+        flux_log_error (jsctx->h,
+                        "error moving job to new list on state transition to %s",
+                        flux_job_statetostr (newstate, "L"));
 }
 
 static zlistx_t *get_list (struct job_state_ctx *jsctx, flux_job_state_t state)
@@ -294,33 +300,18 @@ static flux_future_t *state_depend_lookup (struct job_state_ctx *jsctx,
                                            struct job *job)
 {
     flux_future_t *f = NULL;
-    int saved_errno;
 
     if (!(f = flux_rpc_pack (jsctx->h, "job-info.lookup", FLUX_NODEID_ANY, 0,
                              "{s:I s:[s] s:i}",
                              "id", job->id,
                              "keys", "jobspec",
-                             "flags", 0))) {
-        flux_log_error (jsctx->h, "%s: flux_rpc_pack", __FUNCTION__);
-        goto error;
-    }
-
-    if (flux_future_then (f, -1, state_depend_lookup_continuation, job) < 0) {
-        flux_log_error (jsctx->h, "%s: flux_future_then", __FUNCTION__);
-        goto error;
-    }
-
-    if (flux_future_aux_set (f, "job_state_ctx", jsctx, NULL) < 0) {
-        flux_log_error (jsctx->h, "%s: flux_future_aux_set", __FUNCTION__);
-        goto error;
+                             "flags", 0))
+        || flux_future_then (f, -1, state_depend_lookup_continuation, job) < 0
+        || flux_future_aux_set (f, "job_state_ctx", jsctx, NULL) < 0) {
+        flux_future_destroy (f);
+        return NULL;
     }
     return f;
-
- error:
-    saved_errno = errno;
-    flux_future_destroy (f);
-    errno = saved_errno;
-    return NULL;
 }
 
 static void state_run_lookup_continuation (flux_future_t *f, void *arg)
@@ -359,34 +350,19 @@ static flux_future_t *state_run_lookup (struct job_state_ctx *jsctx,
                                         struct job *job)
 {
     flux_future_t *f = NULL;
-    int saved_errno;
 
     if (!(f = flux_rpc_pack (jsctx->h, "job-info.lookup", FLUX_NODEID_ANY, 0,
                              "{s:I s:[s] s:i}",
                              "id", job->id,
                              "keys", "R",
-                             "flags", 0))) {
-        flux_log_error (jsctx->h, "%s: flux_rpc_pack", __FUNCTION__);
-        goto error;
-    }
-
-    if (flux_future_then (f, -1, state_run_lookup_continuation, job) < 0) {
-        flux_log_error (jsctx->h, "%s: flux_future_then", __FUNCTION__);
-        goto error;
-    }
-
-    if (flux_future_aux_set (f, "job_state_ctx", jsctx, NULL) < 0) {
-        flux_log_error (jsctx->h, "%s: flux_future_aux_set", __FUNCTION__);
-        goto error;
+                             "flags", 0))
+        || flux_future_then (f, -1, state_run_lookup_continuation, job) < 0
+        || flux_future_aux_set (f, "job_state_ctx", jsctx, NULL) < 0) {
+        flux_future_destroy (f);
+        return NULL;
     }
 
     return f;
-
- error:
-    saved_errno = errno;
-    flux_future_destroy (f);
-    errno = saved_errno;
-    return NULL;
 }
 
 /* calculate any remaining fields */
@@ -406,8 +382,11 @@ static void eventlog_inactive_complete (struct job *job)
 static void state_transition_destroy (void *data)
 {
     struct state_transition *st = data;
-    if (st)
+    if (st) {
+        int saved_errno = errno;
         free (st);
+        errno = saved_errno;
+    }
 }
 
 static int add_state_transition (struct job *job,
@@ -417,7 +396,6 @@ static int add_state_transition (struct job *job,
                                  flux_job_state_t expected_state)
 {
     struct state_transition *st = NULL;
-    int saved_errno;
 
     if (!((flags & STATE_TRANSITION_FLAG_REVERT)
           || (flags & STATE_TRANSITION_FLAG_CONDITIONAL))
@@ -442,9 +420,7 @@ static int add_state_transition (struct job *job,
     return 0;
 
  cleanup:
-    saved_errno = errno;
     state_transition_destroy (st);
-    errno = saved_errno;
     return -1;
 }
 
@@ -497,7 +473,10 @@ static void process_next_state (struct job_state_ctx *jsctx, struct job *job)
             }
 
             if (!zlistx_add_end (jsctx->futures, f)) {
-                flux_log_error (jsctx->h, "%s: zlistx_add_end", __FUNCTION__);
+                flux_log (jsctx->h,
+                          LOG_ERR,
+                          "%s: zlistx_add_end: out of memory",
+                          __FUNCTION__);
                 flux_future_destroy (f);
                 return;
             }
@@ -563,6 +542,7 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
     json_t *a = NULL;
     size_t index;
     json_t *value;
+    int save_errno;
 
     if (!(job = job_create (jsctx->h, id)))
         goto error;
@@ -663,8 +643,10 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
     return job;
 
 error:
+    save_errno = errno;
     job_destroy (job);
     json_decref (a);
+    errno = save_errno;
     return NULL;
 }
 
@@ -744,11 +726,11 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
     if (job->states_mask & FLUX_JOB_STATE_INACTIVE)
         eventlog_inactive_complete (job);
 
-    if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
-        flux_log_error (jsctx->h, "%s: zhashx_insert", __FUNCTION__);
+    if (zhashx_insert (jsctx->index, &job->id, job) < 0)
         goto done;
-    }
-    job_insert_list (jsctx, job, job->state);
+
+    if (job_insert_list (jsctx, job, job->state) < 0)
+        goto done;
 
     rc = 1;
 done:
@@ -941,19 +923,15 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
                                  json_t *context)
 {
     if (!job) {
-        if (!(job = job_create (jsctx->h, id))){
-            flux_log_error (jsctx->h, "%s: job_create", __FUNCTION__);
+        if (!(job = job_create (jsctx->h, id)))
             return -1;
-        }
         if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
-            flux_log_error (jsctx->h, "%s: zhashx_insert", __FUNCTION__);
             job_destroy (job);
             errno = ENOMEM;
             return -1;
         }
         /* job always starts off on processing list */
         if (!(job->list_handle = zlistx_add_end (jsctx->processing, job))) {
-            flux_log_error (jsctx->h, "%s: zlistx_add_end", __FUNCTION__);
             errno = ENOMEM;
             return -1;
         }
@@ -1453,8 +1431,10 @@ static void job_events_journal_continuation (flux_future_t *f, void *arg)
         }
     }
     else {
-        if (journal_process_events (jsctx, msg) < 0)
+        if (journal_process_events (jsctx, msg) < 0) {
+            flux_log_error (jsctx->h, "error processing events");
             goto error;
+        }
     }
 
     flux_future_reset (f);
@@ -1495,7 +1475,6 @@ error:
 struct job_state_ctx *job_state_create (struct idsync_ctx *isctx)
 {
     struct job_state_ctx *jsctx = NULL;
-    int saved_errno;
 
     if (!(jsctx = calloc (1, sizeof (*jsctx)))) {
         flux_log_error (isctx->h, "calloc");
@@ -1543,9 +1522,7 @@ struct job_state_ctx *job_state_create (struct idsync_ctx *isctx)
     return jsctx;
 
 error:
-    saved_errno = errno;
     job_state_destroy (jsctx);
-    errno = saved_errno;
     return NULL;
 }
 
@@ -1553,6 +1530,7 @@ void job_state_destroy (void *data)
 {
     struct job_state_ctx *jsctx = data;
     if (jsctx) {
+        int saved_errno = errno;
         /* Don't destroy processing until futures are complete */
         if (jsctx->futures) {
             flux_future_t *f;
@@ -1577,6 +1555,7 @@ void job_state_destroy (void *data)
         flux_msglist_destroy (jsctx->backlog);
         flux_future_destroy (jsctx->events);
         free (jsctx);
+        errno = saved_errno;
     }
 }
 

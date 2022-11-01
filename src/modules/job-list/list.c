@@ -308,37 +308,24 @@ int check_id_valid (struct job_state_ctx *jsctx,
                     json_t *attrs)
 {
     struct idsync_data *isd = NULL;
-    int saved_errno;
 
     if (!(isd = idsync_check_id_valid (jsctx->isctx,
                                        id,
                                        msg,
-                                       attrs)))
-        goto error;
-
-    if (flux_future_aux_set (isd->f_lookup,
-                             "job_state_ctx",
-                             jsctx,
-                             NULL) < 0) {
-        flux_log_error (jsctx->h, "%s: flux_future_aux_set", __FUNCTION__);
-        goto error;
-    }
-
-    if (flux_future_then (isd->f_lookup,
-                          -1,
-                          check_id_valid_continuation,
-                          isd) < 0) {
-        flux_log_error (jsctx->h, "%s: flux_future_then", __FUNCTION__);
-        goto error;
+                                       attrs))
+        || flux_future_aux_set (isd->f_lookup,
+                                "job_state_ctx",
+                                jsctx,
+                                NULL) < 0
+        || flux_future_then (isd->f_lookup,
+                             -1,
+                             check_id_valid_continuation,
+                             isd) < 0) {
+        idsync_data_destroy (isd);
+        return -1;
     }
 
     return 0;
-
-error:
-    saved_errno = errno;
-    idsync_data_destroy (isd);
-    errno = saved_errno;
-    return -1;
 }
 
 /* Returns JSON object which the caller must free.  On error, return

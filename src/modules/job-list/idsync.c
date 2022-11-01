@@ -26,10 +26,12 @@ void idsync_data_destroy (void *data)
 {
     if (data) {
         struct idsync_data *isd = data;
+        int save_errno = errno;
         flux_msg_destroy (isd->msg);
         json_decref (isd->attrs);
         flux_future_destroy (isd->f_lookup);
         free (isd);
+        errno = save_errno;
     }
 }
 
@@ -49,7 +51,6 @@ static struct idsync_data *idsync_data_create (flux_t *h,
                                                flux_future_t *f_lookup)
 {
     struct idsync_data *isd = NULL;
-    int saved_errno;
 
     isd = calloc (1, sizeof (*isd));
     if (!isd)
@@ -65,9 +66,7 @@ static struct idsync_data *idsync_data_create (flux_t *h,
  error_enomem:
     errno = ENOMEM;
  error:
-    saved_errno = errno;
     idsync_data_destroy (isd);
-    errno = saved_errno;
     return NULL;
 }
 
@@ -82,10 +81,8 @@ struct idsync_ctx *idsync_ctx_create (flux_t *h)
     struct idsync_ctx *isctx = NULL;
     int saved_errno;
 
-    if (!(isctx = calloc (1, sizeof (*isctx)))) {
-        flux_log_error (h, "calloc");
+    if (!(isctx = calloc (1, sizeof (*isctx))))
         return NULL;
-    }
     isctx->h = h;
 
     if (!(isctx->lookups = zlistx_new ()))
@@ -134,7 +131,6 @@ struct idsync_data *idsync_check_id_valid (struct idsync_ctx *isctx,
     flux_future_t *f = NULL;
     struct idsync_data *isd = NULL;
     char path[256];
-    int saved_errno;
 
     /* Check to see if the ID is legal, job-list may have not yet
      * seen the ID publication yet */
@@ -153,17 +149,16 @@ struct idsync_data *idsync_check_id_valid (struct idsync_ctx *isctx,
     f = NULL;
 
     if (!zlistx_add_end (isctx->lookups, isd)) {
-        flux_log_error (isctx->h, "%s: zlistx_add_end", __FUNCTION__);
+        flux_log (isctx->h, LOG_ERR, "%s: zlistx_add_end", __FUNCTION__);
+        errno = ENOMEM;
         goto error;
     }
 
     return isd;
 
 error:
-    saved_errno = errno;
     flux_future_destroy (f);
     idsync_data_destroy (isd);
-    errno = saved_errno;
     return NULL;
 }
 
@@ -180,34 +175,26 @@ static int idsync_add_waiter (struct idsync_ctx *isctx,
                               struct idsync_data *isd)
 {
     zlistx_t *list_isd;
-    int saved_errno;
 
     /* isctx->waits holds lists of ids waiting on, b/c multiple callers
      * could wait on same id */
     if (!(list_isd = zhashx_lookup (isctx->waits, &isd->id))) {
-        if (!(list_isd = zlistx_new ())) {
-            flux_log_error (isctx->h, "%s: zlistx_new", __FUNCTION__);
-            goto error;
-        }
+        if (!(list_isd = zlistx_new ()))
+            goto enomem;
         zlistx_set_destructor (list_isd, idsync_data_destroy_wrapper);
 
-        if (zhashx_insert (isctx->waits, &isd->id, list_isd) < 0) {
-            flux_log_error (isctx->h, "%s: zhashx_insert", __FUNCTION__);
-            goto error;
-        }
+        if (zhashx_insert (isctx->waits, &isd->id, list_isd) < 0)
+            goto enomem;
     }
 
-    if (!zlistx_add_end (list_isd, isd)) {
-        flux_log_error (isctx->h, "%s: zlistx_add_end", __FUNCTION__);
-        goto error;
-    }
+    if (!zlistx_add_end (list_isd, isd))
+        goto enomem;
 
     return 0;
 
-error:
-    saved_errno = errno;
+enomem:
     idsync_data_destroy (isd);
-    errno = saved_errno;
+    errno = ENOMEM;
     return -1;
 }
 
@@ -232,10 +219,8 @@ int idsync_wait_valid_id (struct idsync_ctx *isctx,
 {
     struct idsync_data *isd = NULL;
 
-    if (!(isd = idsync_data_create (isctx->h, id, msg, attrs, NULL))) {
-        flux_log_error (isctx->h, "%s: idsync_data_create", __FUNCTION__);
+    if (!(isd = idsync_data_create (isctx->h, id, msg, attrs, NULL)))
         return -1;
-    }
 
     return idsync_add_waiter (isctx, isd);
 }
