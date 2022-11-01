@@ -382,8 +382,11 @@ static void eventlog_inactive_complete (struct job *job)
 static void state_transition_destroy (void *data)
 {
     struct state_transition *st = data;
-    if (st)
+    if (st) {
+        int saved_errno = errno;
         free (st);
+        errno = saved_errno;
+    }
 }
 
 static int add_state_transition (struct job *job,
@@ -393,7 +396,6 @@ static int add_state_transition (struct job *job,
                                  flux_job_state_t expected_state)
 {
     struct state_transition *st = NULL;
-    int saved_errno;
 
     if (!((flags & STATE_TRANSITION_FLAG_REVERT)
           || (flags & STATE_TRANSITION_FLAG_CONDITIONAL))
@@ -418,9 +420,7 @@ static int add_state_transition (struct job *job,
     return 0;
 
  cleanup:
-    saved_errno = errno;
     state_transition_destroy (st);
-    errno = saved_errno;
     return -1;
 }
 
@@ -542,6 +542,7 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
     json_t *a = NULL;
     size_t index;
     json_t *value;
+    int save_errno;
 
     if (!(job = job_create (jsctx->h, id)))
         goto error;
@@ -642,8 +643,10 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
     return job;
 
 error:
+    save_errno = errno;
     job_destroy (job);
     json_decref (a);
+    errno = save_errno;
     return NULL;
 }
 
@@ -1472,7 +1475,6 @@ error:
 struct job_state_ctx *job_state_create (struct idsync_ctx *isctx)
 {
     struct job_state_ctx *jsctx = NULL;
-    int saved_errno;
 
     if (!(jsctx = calloc (1, sizeof (*jsctx)))) {
         flux_log_error (isctx->h, "calloc");
@@ -1520,9 +1522,7 @@ struct job_state_ctx *job_state_create (struct idsync_ctx *isctx)
     return jsctx;
 
 error:
-    saved_errno = errno;
     job_state_destroy (jsctx);
-    errno = saved_errno;
     return NULL;
 }
 
@@ -1530,6 +1530,7 @@ void job_state_destroy (void *data)
 {
     struct job_state_ctx *jsctx = data;
     if (jsctx) {
+        int saved_errno = errno;
         /* Don't destroy processing until futures are complete */
         if (jsctx->futures) {
             flux_future_t *f;
@@ -1554,6 +1555,7 @@ void job_state_destroy (void *data)
         flux_msglist_destroy (jsctx->backlog);
         flux_future_destroy (jsctx->events);
         free (jsctx);
+        errno = saved_errno;
     }
 }
 

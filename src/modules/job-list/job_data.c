@@ -29,6 +29,7 @@ void job_destroy (void *data)
 {
     struct job *job = data;
     if (job) {
+        int save_errno = errno;
         free (job->ranks);
         free (job->nodelist);
         json_decref (job->annotations);
@@ -38,6 +39,7 @@ void job_destroy (void *data)
         json_decref (job->exception_context);
         zlist_destroy (&job->next_states);
         free (job);
+        errno = save_errno;
     }
 }
 

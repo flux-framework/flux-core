@@ -26,10 +26,12 @@ void idsync_data_destroy (void *data)
 {
     if (data) {
         struct idsync_data *isd = data;
+        int save_errno = errno;
         flux_msg_destroy (isd->msg);
         json_decref (isd->attrs);
         flux_future_destroy (isd->f_lookup);
         free (isd);
+        errno = save_errno;
     }
 }
 
@@ -49,7 +51,6 @@ static struct idsync_data *idsync_data_create (flux_t *h,
                                                flux_future_t *f_lookup)
 {
     struct idsync_data *isd = NULL;
-    int saved_errno;
 
     isd = calloc (1, sizeof (*isd));
     if (!isd)
@@ -65,9 +66,7 @@ static struct idsync_data *idsync_data_create (flux_t *h,
  error_enomem:
     errno = ENOMEM;
  error:
-    saved_errno = errno;
     idsync_data_destroy (isd);
-    errno = saved_errno;
     return NULL;
 }
 
@@ -132,7 +131,6 @@ struct idsync_data *idsync_check_id_valid (struct idsync_ctx *isctx,
     flux_future_t *f = NULL;
     struct idsync_data *isd = NULL;
     char path[256];
-    int saved_errno;
 
     /* Check to see if the ID is legal, job-list may have not yet
      * seen the ID publication yet */
@@ -159,10 +157,8 @@ struct idsync_data *idsync_check_id_valid (struct idsync_ctx *isctx,
     return isd;
 
 error:
-    saved_errno = errno;
     flux_future_destroy (f);
     idsync_data_destroy (isd);
-    errno = saved_errno;
     return NULL;
 }
 

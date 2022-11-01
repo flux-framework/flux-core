@@ -321,9 +321,7 @@ int check_id_valid (struct job_state_ctx *jsctx,
                              -1,
                              check_id_valid_continuation,
                              isd) < 0) {
-        int saved_errno = errno;
         idsync_data_destroy (isd);
-        errno = saved_errno;
         return -1;
     }
 
