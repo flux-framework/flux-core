@@ -251,11 +251,11 @@ test_expect_success HAVE_JQ 'flux-mini --env=PATTERN works' '
 	FOO_ONE=bar FOO_TWO=baz flux mini submit --dry-run \
 	    --env=-* --env="FOO_*" hostname >FOO-pattern-env.out &&
 	jq -e ".attributes.system.environment == \
-           {\"FOO_ONE\": \"bar\", \"FOO_TWO\": \"baz\"}" FOO-pattern-env.out &&
+	    {\"FOO_ONE\": \"bar\", \"FOO_TWO\": \"baz\"}" FOO-pattern-env.out &&
 	FOO_ONE=bar FOO_TWO=baz flux mini submit --dry-run \
 	    --env=-* --env="/^FOO_.*/" hostname >FOO-pattern2-env.out &&
 	jq -e ".attributes.system.environment == \
-           {\"FOO_ONE\": \"bar\", \"FOO_TWO\": \"baz\"}" FOO-pattern2-env.out
+	    {\"FOO_ONE\": \"bar\", \"FOO_TWO\": \"baz\"}" FOO-pattern2-env.out
 
 '
 test_expect_success HAVE_JQ 'flux-mini --env=VAR=VAL works' '
@@ -267,17 +267,17 @@ test_expect_success HAVE_JQ 'flux-mini --env=VAR=VAL works' '
 	jq -e ".attributes.system.environment == {\"FOO\": \"bar:baz\"}" FOO-append.out
 '
 test_expect_success 'flux-mini --env=VAR=${VAL:-default} fails' '
-    test_expect_code 1 flux mini run --dry-run \
-        --env=* --env=VAR=\${VAL:-default} hostname >env-fail.err 2>&1 &&
-    test_debug "cat env-fail.err" &&
-    grep "Unable to substitute" env-fail.err
+	test_expect_code 1 flux mini run --dry-run \
+	    --env=* --env=VAR=\${VAL:-default} hostname >env-fail.err 2>&1 &&
+	test_debug "cat env-fail.err" &&
+	grep "Unable to substitute" env-fail.err
 '
 test_expect_success 'flux-mini --env=VAR=$VAL fails when VAL not in env' '
-    unset VAL &&
-    test_expect_code 1 flux mini run --dry-run \
-        --env=* --env=VAR=\$VAL hostname >env-notset.err 2>&1 &&
-    test_debug "cat env-notset.err" &&
-    grep "env: Variable .* not found" env-notset.err
+	unset VAL &&
+	test_expect_code 1 flux mini run --dry-run \
+	    --env=* --env=VAR=\$VAL hostname >env-notset.err 2>&1 &&
+	test_debug "cat env-notset.err" &&
+	grep "env: Variable .* not found" env-notset.err
 '
 test_expect_success HAVE_JQ 'flux-mini --env-file works' '
 	cat <<-EOF >envfile &&
@@ -285,11 +285,11 @@ test_expect_success HAVE_JQ 'flux-mini --env-file works' '
 	FOO=bar
 	BAR=\${FOO}/baz
 	EOF
-    for arg in "--env=^envfile" "--env-file=envfile"; do
+	for arg in "--env=^envfile" "--env-file=envfile"; do
 	  flux mini submit --dry-run ${arg} hostname >envfile.out &&
 	  jq -e ".attributes.system.environment == \
 	       {\"FOO\":\"bar\", \"BAR\":\"bar/baz\"}" envfile.out
-    done
+	done
 '
 test_expect_success 'flux-mini submit --cc works' '
 	flux mini submit --cc=0-3 sh -c "echo \$FLUX_JOB_CC" >cc.jobids &&
@@ -434,20 +434,20 @@ EOF
 
 jj=${FLUX_BUILD_DIR}/t/sched-simple/jj-reader
 while read line; do
-        args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
-        expected=$(echo $line | awk -F== '{print $2}')
-        per_resource=$(echo $line | awk -F== '{print $3}' | sed 's/  *$//')
+	args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
+	expected=$(echo $line | awk -F== '{print $2}')
+	per_resource=$(echo $line | awk -F== '{print $3}' | sed 's/  *$//')
 	test_expect_success HAVE_JQ "per-resource: $args" '
-		echo $expected >expected.$test_count &&
-                flux mini run $args --dry-run hostname > jobspec.$test_count &&
-		$jj < jobspec.$test_count >output.$test_count &&
-		test_debug "cat output.$test_count" &&
-                test_cmp expected.$test_count output.$test_count &&
-		if test -n "$per_resource"; then
-		    test_debug "echo expected $per_resource" &&
-		    jq -e ".attributes.system.shell.options.per_resource == \
-			   $per_resource"
-		fi
+	    echo $expected >expected.$test_count &&
+	    flux mini run $args --dry-run hostname > jobspec.$test_count &&
+	    $jj < jobspec.$test_count >output.$test_count &&
+	    test_debug "cat output.$test_count" &&
+	    test_cmp expected.$test_count output.$test_count &&
+	    if test -n "$per_resource"; then
+	        test_debug "echo expected $per_resource" &&
+	        jq -e ".attributes.system.shell.options.per_resource == \
+		   $per_resource"
+	    fi
 	'
 done < per-resource-args.txt
 
