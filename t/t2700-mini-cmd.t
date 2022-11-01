@@ -291,6 +291,49 @@ test_expect_success HAVE_JQ 'flux-mini --env-file works' '
 	       {\"FOO\":\"bar\", \"BAR\":\"bar/baz\"}" envfile.out
 	done
 '
+test_expect_success HAVE_JQ 'flux-mini propagates some rlimits by default' '
+	flux mini run --dry-run hostname | \
+	    jq .attributes.system.shell.options.rlimit >rlimit-default.out &&
+	# check random sample of rlimits:
+	grep core rlimit-default.out &&
+	grep stack rlimit-default.out &&
+	grep nofile rlimit-default.out
+'
+test_expect_success HAVE_JQ 'flux-mini --rlimit=-* works' '
+	flux mini run --rlimit=-* --dry-run hostname \
+	    | jq -e ".attributes.system.shell.options.rlimit == null"
+'
+test_expect_success HAVE_JQ 'flux-mini --rlimit=name works' '
+	flux mini run --rlimit=memlock --dry-run hostname \
+	    | jq .attributes.system.shell.options.rlimit >rlimit-memlock.out &&
+	grep memlock rlimit-memlock.out &&
+	grep core rlimit-memlock.out
+'
+test_expect_success HAVE_JQ 'flux-mini --rlimit=name --rlimit=name works' '
+	flux mini run --rlimit=memlock --rlimit=ofile --dry-run hostname \
+	    | jq .attributes.system.shell.options.rlimit >rlimit-ofile.out &&
+	grep memlock rlimit-memlock.out &&
+	grep ofile rlimit-memlock.out
+'
+test_expect_success HAVE_JQ 'flux-mini --rlimit=-*,core works' '
+	flux mini run --rlimit=-*,core --dry-run hostname \
+	    | jq .attributes.system.shell.options.rlimit >rlimit-core.out &&
+	grep core rlimit-core.out &&
+	test_must_fail grep nofile rlimit-core.out
+'
+test_expect_success HAVE_JQ 'flux-mini --rlimit=name=value works' '
+	flux mini run --rlimit=core=16 --dry-run hostname \
+	    | jq -e ".attributes.system.shell.options.rlimit.core == 16" &&
+	inf=$(flux python -c "import resource as r; print(r.RLIM_INFINITY)") &&
+	flux mini run --rlimit=core=unlimited --dry-run hostname \
+	    | jq -e ".attributes.system.shell.options.rlimit.core == $inf"
+'
+test_expect_success 'flux-mini --rlimit=invalid fails with error' '
+	test_must_fail flux mini run --rlimit=frobnitz hostname
+'
+test_expect_success 'flux-mini --rlimit=core=invalid fails with error' '
+	test_must_fail flux mini run --rlimit=core=invalid hostname
+'
 test_expect_success 'flux-mini submit --cc works' '
 	flux mini submit --cc=0-3 sh -c "echo \$FLUX_JOB_CC" >cc.jobids &&
 	test_debug "cat cc.jobids" &&
