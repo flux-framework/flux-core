@@ -184,6 +184,7 @@ TESTSCRIPTS = \
 	t2612-job-shell-pty.t \
 	t2613-job-shell-batch.t \
 	t2614-job-shell-doom.t \
+	t2615-job-shell-rlimit.t \
 	t2700-mini-cmd.t \
 	t2701-mini-batch.t \
 	t2702-mini-alloc.t \
