@@ -294,6 +294,13 @@ options are supported by the builtin plugins of ``flux-shell``:
   If the first task to exit was signaled or exited with a nonzero status,
   raise a fatal exception on the job immediately.
 
+**rlimit**
+  A dictionary of soft process resource limits to apply to the job before
+  starting tasks. Resource limits are set to integer values by lowercase
+  name without the ``RLIMIT_`` prefix, e.g. ``core`` or ``nofile``. Users
+  should not need to set this shell option as it is handled by commands
+  like ``flux-mini``.
+
 SHELL INITRC
 ============
 

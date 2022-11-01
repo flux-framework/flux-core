@@ -272,13 +272,13 @@ test_expect_success HAVE_JQ 'flux-shell: initrc: load getopt plugin' '
 		> ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log"
 '
-test_expect_success 'flux-shell: plugins can use setopt with empty options' '
+test_expect_success HAVE_JQ 'flux-shell: plugins can use setopt with empty options' '
 	name=setopt &&
 	cat >${name}.lua <<-EOF &&
 	plugin.searchpath = "${INITRC_PLUGINPATH}"
 	plugin.load { file = "${name}.so" }
 	EOF
-	cat j1 >j.${name} &&
+	cat j1 | jq "del(.attributes.system.shell.options)" >j.${name} &&
 	${FLUX_SHELL} -v -s -r 0 -j j.${name} -R R1 --initrc=${name}.lua 0 \
 		> ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log"

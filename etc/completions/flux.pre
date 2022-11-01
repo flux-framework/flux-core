@@ -148,6 +148,7 @@ _flux_mini()
         --env= \
         --env-remove= \
         --env-file= \
+        --rlimit= \
         --input= \
         --output= \
         --error= \

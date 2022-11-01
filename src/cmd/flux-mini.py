@@ -14,11 +14,10 @@ import fnmatch
 import itertools
 import json
 import logging
-
-# pylint: disable=duplicate-code
 import os
 import random
 import re
+import resource
 import sys
 import time
 from collections import ChainMap
@@ -116,6 +115,69 @@ def filter_dict(env, pattern, reverseMatch=True):
     if reverseMatch:
         return dict(filter(lambda x: not regex.match(x[0]), env.items()))
     return dict(filter(lambda x: regex.match(x[0]), env.items()))
+
+
+def get_rlimits(name="*"):
+    """
+    Return set of rlimits matching `name` in a dict
+    """
+    rlimits = {}
+    pattern = f"RLIMIT_{name}".upper()
+    for limit in fnmatch.filter(resource.__dict__.keys(), pattern):
+        soft, hard = resource.getrlimit(getattr(resource, limit))
+        #  Remove RLIMIT_ prefix and lowercase the result for compatibility
+        #  with rlimit shell plugin:
+        rlimits[limit[7::].lower()] = soft
+    if not rlimits:
+        raise ValueError(f'No corresponding rlimit matching "{name}"')
+    return rlimits
+
+
+def get_filtered_rlimits(user_rules=None):
+    """
+    Get a filtered set of rlimits based on user rules and defaults
+    """
+    #  We start with the entire set of available rlimits and then apply
+    #  rules to remove or override them. Therefore, the set of default
+    #  rules excludes limits *not* to propagate by default.
+    rules = [
+        "-memlock",
+        "-ofile",
+        "-msgqueue",
+        "-nice",
+        "-rtprio",
+        "-rttime",
+        "-sigpending",
+    ]
+
+    if user_rules:
+        rules.extend(list_split(user_rules))
+
+    rlimits = get_rlimits()
+    for rule in rules:
+        if rule.startswith("-"):
+            # -name removes RLIMIT_{pattern} from propagated rlimits
+            rlimits = filter_dict(rlimits, rule[1::].lower())
+        else:
+            name, *rest = rule.split("=", 1)
+            if not rest:
+                #  limit with no value pulls in current limit(s)
+                limits = get_rlimits(name.lower())
+                for key, value in limits.items():
+                    rlimits[key] = value
+            else:
+                if not hasattr(resource, f"RLIMIT_{name}".upper()):
+                    raise ValueError(f'Invalid rlimit "{name}"')
+                #  limit with value sets limit to that value
+                if rest[0] in ["unlimited", "infinity", "inf"]:
+                    value = resource.RLIM_INFINITY
+                else:
+                    try:
+                        value = int(rest[0])
+                    except ValueError:
+                        raise ValueError(f"Invalid value in {name}={rest[0]}")
+                rlimits[name.lower()] = value
+    return rlimits
 
 
 def get_filtered_environment(rules, environ=None):
@@ -549,6 +611,18 @@ class MiniCmd:
             metavar="FILE",
         )
         parser.add_argument(
+            "--rlimit",
+            action="append",
+            help="Control how soft resource limits are propagated to the job. "
+            + "If RULE starts with a '-', then do not propagate matching "
+            + "resource limits (e.g. '-*' propagates nothing). Otherwise, "
+            + "propagate the current limit or a specific value, e.g. "
+            + "--rlimit=core or --rlimit=core=16. The option may be used "
+            + "multiple times to build a reduced set of propagated limits, "
+            + "e.g. --rlimit=-*,core will only propagate RLIMIT_CORE.",
+            metavar="RULE",
+        )
+        parser.add_argument(
             "--input",
             type=str,
             help="Redirect job stdin from FILENAME, bypassing KVS"
@@ -612,6 +686,10 @@ class MiniCmd:
         jobspec = self.init_jobspec(args)
         jobspec.cwd = os.getcwd()
         jobspec.environment = get_filtered_environment(args.env)
+        rlimits = get_filtered_rlimits(args.rlimit)
+        if rlimits:
+            jobspec.setattr_shell_option("rlimit", rlimits)
+
         if args.dependency is not None:
             jobspec.setattr(
                 "system.dependencies", dependency_array_create(args.dependency)

@@ -650,3 +650,16 @@ XDG
 yaml
 enqueued
 kary
+getrlimit
+memlock
+MEMLOCK
+msgqueue
+nofile
+NOFILE
+ofile
+RLIM
+rlimit
+RLIMIT
+rtprio
+rttime
+sigpending
