@@ -26,7 +26,7 @@ test_expect_success 'flux-shell: works when no specific rlimit propagated' '
 '
 test_expect_success 'flux-shell: nonfatal rlimit errors are logged' '
 	flux mini run --output=nofile.out --rlimit nofile=inf /bin/true &&
-	grep "nofile: Invalid argument"  nofile.out
+	grep "nofile exceeds current max"  nofile.out
 '
 test_expect_success 'flux-shell: invalid rlimit option is fatal error' '
 	test_must_fail flux mini run -o rlimit.foo=1234 /bin/true
