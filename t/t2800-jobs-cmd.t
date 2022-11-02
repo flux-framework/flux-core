@@ -1227,7 +1227,7 @@ test_expect_success 'flux-jobs --stats works (global)' '
 	comp=$(state_count completed) &&
 	pend=$((active - run)) &&
 	cat <<-EOF >stats.expected &&
-	${run} running, ${comp} completed, ${fail} failed, ${pend} pending
+	${run} running, ${comp} completed, ${fail} failed, ${pend} pending, 0 inactive purged
 	EOF
 	head -1 stats.output > stats.actual &&
 	test_cmp stats.expected stats.actual
@@ -1238,7 +1238,7 @@ test_expect_success 'flux-jobs --stats works (queue1)' '
 	test_debug "cat statsq1.output" &&
 	comp=$(state_count completed) &&
 	cat <<-EOF >statsq1.expected &&
-	0 running, ${comp} completed, 0 failed, 0 pending
+	0 running, ${comp} completed, 0 failed, 0 pending, 0 inactive purged
 	EOF
 	head -1 statsq1.output > statsq1.actual &&
 	test_cmp statsq1.expected statsq1.actual
@@ -1251,7 +1251,7 @@ test_expect_success 'flux-jobs --stats works (queue2)' '
 	active=$(state_count active) &&
 	pend=$((active - run)) &&
 	cat <<-EOF >statsq2.expected &&
-	${run} running, 0 completed, 0 failed, ${pend} pending
+	${run} running, 0 completed, 0 failed, ${pend} pending, 0 inactive purged
 	EOF
 	head -1 statsq2.output > statsq2.actual &&
 	test_cmp statsq2.expected statsq2.actual
@@ -1262,7 +1262,7 @@ test_expect_success 'flux-jobs --stats works (defaultqueue)' '
 	test_debug "cat statsqdefault.output" &&
 	fail=$(state_count failed canceled timeout) &&
 	cat <<-EOF >statsqdefault.expected &&
-	0 running, 0 completed, ${fail} failed, 0 pending
+	0 running, 0 completed, ${fail} failed, 0 pending, 0 inactive purged
 	EOF
 	head -1 statsqdefault.output > statsqdefault.actual &&
 	test_cmp statsqdefault.expected statsqdefault.actual

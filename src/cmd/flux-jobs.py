@@ -471,7 +471,8 @@ def main():
 
         print(
             f"{stats.running} running, {stats.successful} completed, "
-            f"{stats.failed} failed, {stats.pending} pending"
+            f"{stats.failed} failed, {stats.pending} pending, "
+            f"{stats.inactive_purged} inactive purged"
         )
         if args.stats_only:
             sys.exit(0 if stats.active else 1)
