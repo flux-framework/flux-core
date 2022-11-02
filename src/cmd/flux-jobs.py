@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import sys
+import time
 
 import flux.constants
 from flux.job import JobID, JobInfo, JobInfoFormat, JobList, job_fields_to_attrs
@@ -469,6 +470,15 @@ def main():
             LOGGER.error("error retrieving job stats: %s", str(err))
             sys.exit(1)
 
+        # if stats changed in last hour, give a warning message
+        if stats.t_last_purge:
+            if (time.time() - stats.t_last_purge) < (60 * 60):
+                tstr = time.strftime(
+                    "%Y-%m-%dT%H:%M:%S", time.localtime(stats.t_last_purge)
+                )
+                print(
+                    f"Warning: job(s) purged at {tstr}, stats affected", file=sys.stderr
+                )
         print(
             f"{stats.running} running, {stats.successful} completed, "
             f"{stats.failed} failed, {stats.pending} pending"

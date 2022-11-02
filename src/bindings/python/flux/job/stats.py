@@ -37,6 +37,7 @@ class JobStats:
         """Initialize a JobStats object with Flux handle ``handle``"""
         self.handle = handle
         self.queue = queue
+        self.t_last_purge = None
         self.callback = None
         self.cb_kwargs = {}
         for attr in [
@@ -58,6 +59,9 @@ class JobStats:
 
     def _update_cb(self, rpc):
         resp = rpc.get()
+        if "t_last_purge" in resp:
+            self.t_last_purge = resp["t_last_purge"]
+
         if self.queue:
             tmpstat = None
             if resp["queues"]:
