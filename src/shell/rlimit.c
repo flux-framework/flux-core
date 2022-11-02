@@ -108,6 +108,13 @@ static int rlimit_init (flux_plugin_t *p,
             continue;
         }
         rlim.rlim_cur = json_integer_value (value);
+        if (rlim.rlim_max != RLIM_INFINITY
+            && (rlim.rlim_max < rlim.rlim_cur
+                || rlim.rlim_cur == RLIM_INFINITY)) {
+            shell_warn ("%s exceeds current max, raising value to hard limit",
+                        key);
+            rlim.rlim_cur = rlim.rlim_max;
+        }
         if (setrlimit (resource, &rlim) < 0)
             shell_log_errno ("setrlimit %s", key);
     }
