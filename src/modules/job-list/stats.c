@@ -281,7 +281,7 @@ static json_t *queue_stats_encode (struct job_stats_ctx *statsctx)
     return queues;
 }
 
-json_t * job_stats_encode (struct job_stats_ctx *statsctx)
+json_t * job_stats_encode (struct job_stats_ctx *statsctx, double t_last_purge)
 {
     json_t *o = NULL;
     json_t *queues;
@@ -301,6 +301,21 @@ json_t * job_stats_encode (struct job_stats_ctx *statsctx)
         json_decref (o);
         errno = ENOMEM;
         return NULL;
+    }
+
+    if (t_last_purge > 0.0) {
+        json_t *o_purge = json_real (t_last_purge);
+        if (!o_purge) {
+            json_decref (o);
+            errno = ENOMEM;
+            return NULL;
+        }
+        if (json_object_set_new (o, "t_last_purge", o_purge) < 0) {
+            json_decref (o_purge);
+            json_decref (o);
+            errno = ENOMEM;
+            return NULL;
+        }
     }
 
     return o;

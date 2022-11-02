@@ -69,7 +69,7 @@ static void job_stats_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     struct list_ctx *ctx = arg;
-    json_t *o = job_stats_encode (ctx->jsctx->statsctx);
+    json_t *o = job_stats_encode (ctx->jsctx->statsctx, ctx->t_last_purge);
     if (o == NULL)
         goto error;
     if (flux_respond_pack (h, msg, "o", o) < 0) {
@@ -80,6 +80,17 @@ static void job_stats_cb (flux_t *h, flux_msg_handler_t *mh,
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+static double get_timestamp_now (void)
+{
+    struct timespec ts;
+    double now;
+
+    (void)clock_gettime (CLOCK_REALTIME, &ts);
+    now = ts.tv_sec;
+    now += (1E-9 * ts.tv_nsec);
+    return now;
 }
 
 static void purge_cb (flux_t *h,
@@ -109,6 +120,8 @@ static void purge_cb (flux_t *h,
             count++;
         }
     }
+    if (count)
+        ctx->t_last_purge = get_timestamp_now ();
     flux_log (h, LOG_DEBUG, "purged %d inactive jobs", count);
 }
 

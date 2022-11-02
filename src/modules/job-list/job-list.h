@@ -12,6 +12,7 @@
 #define _FLUX_JOB_LIST_H
 
 #include <flux/core.h>
+#include <time.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
@@ -23,6 +24,7 @@ struct list_ctx {
     flux_msg_handler_t **handlers;
     struct job_state_ctx *jsctx;
     struct idsync_ctx *isctx;
+    double t_last_purge;
 };
 
 const char **job_attrs (void);

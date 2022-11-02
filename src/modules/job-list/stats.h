@@ -45,7 +45,7 @@ void job_stats_add_queue (struct job_stats_ctx *statsctx,
 
 void job_stats_purge (struct job_stats_ctx *statsctx, struct job *job);
 
-json_t * job_stats_encode (struct job_stats_ctx *statsctx);
+json_t * job_stats_encode (struct job_stats_ctx *statsctx, double t_last_purge);
 
 #endif /* ! _FLUX_JOB_LIST_JOB_STATS_H */
 
