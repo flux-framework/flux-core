@@ -24,7 +24,7 @@ MINJOBID_WORDS="academy-academy-academy--academy-academy-academy"
 MINJOBID_F58="f1"
 MINJOBIDS_LIST="$MINJOBID_DEC $MINJOBID_HEX $MINJOBID_KVS $MINJOBID_DOTHEX $MINJOBID_WORDS $MINJOBID_F58"
 
-test_under_flux 1 job
+test_under_flux 2 job
 
 flux setattr log-stderr-level 1
 
@@ -245,6 +245,43 @@ test_expect_success 'flux-job: raise fails with invalid option' '
 	test_must_fail flux job raise --meep foo
 '
 
+test_expect_success 'flux-job: raise basic works' '
+	id=$(flux mini submit sleep 100) &&
+	flux job raise ${id} &&
+	flux job wait-event -t 5 ${id} exception >raise1.out &&
+	grep "cancel" raise1.out &&
+	grep "severity\=0" raise1.out
+'
+
+test_expect_success 'flux-job: raise --type works' '
+	id=$(flux mini submit sleep 100) &&
+	flux job raise -t typefoo ${id} &&
+	flux job wait-event -t 5 ${id} exception >raise2.out &&
+	grep "typefoo" raise2.out
+'
+
+test_expect_success 'flux-job: raise --severity works' '
+	id=$(flux mini submit sleep 100) &&
+	flux job raise --severity=5 ${id} &&
+	flux job wait-event -t 5 ${id} exception >raise3.out &&
+	grep "severity\=5" raise3.out &&
+	flux job cancel ${id}
+'
+
+test_expect_success 'flux-job: raise --message works' '
+	id=$(flux mini submit sleep 100) &&
+	flux job raise --message=foobarmessage ${id} &&
+	flux job wait-event -t 5 ${id} exception >raise4.out &&
+	grep "foobarmessage" raise4.out
+'
+
+test_expect_success ' flux-job: raise message works (cmdline)' '
+	id=$(flux mini submit sleep 100) &&
+	flux job raise ${id} -- eep ork ook &&
+	flux job wait-event -t 5 ${id} exception >raise5.out &&
+	grep "eep ork ook" raise5.out
+'
+
 test_expect_success 'flux-job: cancel fails with bad FLUX_URI' '
 	(FLUX_URI=/wrong test_must_fail flux job cancel ${validjob})
 '
@@ -271,6 +308,28 @@ test_expect_success 'flux-job: cancel fails with invalid jobid' '
 
 test_expect_success 'flux-job: cancel fails with invalid option' '
 	test_must_fail flux job cancel --meep foo
+'
+
+test_expect_success 'flux-job: cancel basic works' '
+	id=$(flux mini submit sleep 100) &&
+	flux job cancel ${id} &&
+	flux job wait-event -t 5 ${id} exception >cancel1.out &&
+	grep "cancel" cancel1.out &&
+	grep "severity\=0" cancel1.out
+'
+
+test_expect_success 'flux-job: cancel --message works' '
+	id=$(flux mini submit sleep 100) &&
+	flux job cancel --message=meepmessage ${id} &&
+	flux job wait-event -t 5 ${id} exception >cancel2.out &&
+	grep "meepmessage" cancel2.out
+'
+
+test_expect_success ' flux-job: cancel message works (cmdline)' '
+	id=$(flux mini submit sleep 100) &&
+	flux job cancel ${id} -- foo loo moo &&
+	flux job wait-event -t 5 ${id} exception >cancel3.out &&
+	grep "foo loo moo" cancel3.out
 '
 
 test_expect_success 'flux-job: list fails with bad FLUX_URI' '
@@ -616,9 +675,25 @@ test_expect_success 'flux-job: fatal cancel exception was raised' '
 	test ${count} -eq 3
 '
 
-test_expect_success 'flux-job: load modules for live killall test' '
+test_expect_success 'flux-job: load modules for live kill tests' '
 	flux module load sched-simple &&
 	flux module load job-exec
+'
+
+# N.B. SIGTERM == 15
+test_expect_success 'flux-job: kill basic works' '
+	id=$(flux mini submit --wait-event=start sleep 100) &&
+	flux job kill ${id} &&
+	flux job wait-event -t 5 ${id} finish > kill1.out &&
+	grep status=$((15+128<<8)) kill1.out
+'
+
+# N.B. SIGUSR1 == 10
+test_expect_success 'flux-job: kill --signal works' '
+	id=$(flux mini submit --wait-event=start sleep 100) &&
+	flux job kill --signal=SIGUSR1 ${id} &&
+	flux job wait-event -t 5 ${id} finish > kill2.out &&
+	grep status=$((10+128<<8)) kill2.out
 '
 
 test_expect_success 'flux job: killall -f kills one job' '
@@ -645,4 +720,15 @@ test_expect_success 'flux job: raise can operate on multiple jobs' '
 		grep multiple exception2.out
 	done
 '
+
+# N.B. SIGTERM == 15
+test_expect_success 'flux job: kill can operate on multiple jobs' '
+	ids=$(flux mini submit --wait-event=start --bcc=1-3 sleep 600) &&
+	flux job kill ${ids} &&
+	for id in ${ids}; do
+		flux job wait-event -t 5 ${id} finish >killmulti.out &&
+		grep status=$((15+128<<8)) killmulti.out
+	done
+'
+
 test_done
