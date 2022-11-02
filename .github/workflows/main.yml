@@ -166,13 +166,6 @@ jobs:
       env: ${{matrix.env}}
       run: src/test/docker-deploy.sh
 
-    #   Prepare, create and deploy release on tag:
-    - name: prep release
-      id: prep_release
-      if: success() && matrix.create_release
-      env: ${{matrix.env}}
-      run: echo "tarball=$(echo flux-core*.tar.gz)" >> $GITHUB_OUTPUT
-
     - name: create release
       id: create_release
       if: |
@@ -183,7 +176,7 @@ jobs:
       uses: softprops/action-gh-release@18c81ca362701a5894253311aebebe23cce43e8b # v0.1.9
       with:
         tag_name: ${{ matrix.tag }}
-        release_name: flux-core ${{ matrix.tag }}
+        name: flux-core ${{ matrix.tag }}
         prerelease: true
         files: flux-core*.tar.gz
         body: |
