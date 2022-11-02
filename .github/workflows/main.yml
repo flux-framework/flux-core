@@ -173,7 +173,7 @@ jobs:
         && matrix.create_release
         && github.repository == 'flux-framework/flux-core'
       env: ${{matrix.env}}
-      uses: softprops/action-gh-release@18c81ca362701a5894253311aebebe23cce43e8b # v0.1.9
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ matrix.tag }}
         name: flux-core ${{ matrix.tag }}
