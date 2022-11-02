@@ -30,6 +30,7 @@ flux-core version 0.45.0 - 2022-11-01
  * broker: launch non-interactive shells in a new process group (#4653)
 
 ## Cleanup
+ * job-list: cleanup error logging, remove excess logging (#4744)
  * README: update flux help output (#4688)
  * python: indicate truncation for some fields in flux-jobs and flux-resource
    (#4670)
