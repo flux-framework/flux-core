@@ -1,36 +1,40 @@
-# Captain Proto
+# Flatbuffers
 
-> No... Captain Flux! He's a hero! 👩‍🚒️
-
-I am following the [installation](https://capnproto.org/install.html) instructions here.
-The tool should be installed to the devcontainers environment. Then we define our protocol buffer
-file as [schema.capnp](schema.capnp) and use within Python. This is a fairly simple setup
-(to test things out and learn about this library!). First, you'll need flux bindings on your
-path and to start flux:
-
-```consoel
-export PYTHONPATH=/usr/local/lib/python3.8/site-packages
-flux start --test-size=4
-```
-
-Note that the path will be default added in the devcontainers environment soon!
-To start the server portion:
+We have a [schema.fbs](schema.fbs) that defines a basic schema for a Flux message.
+After installing [Flatbuffer](https://google.github.io/flatbuffers/flatbuffers_guide_tutorial.html) 
+(which comes in the devcontainer for Flux core) we can 
+compile the schema into our language of choice, C++ for Flux:\
 
 ```console
-$ python3 run-server.py
-Starting Flux Message Interface! pkill python3 in another terminal to 🔴
+$ flatc --cpp schema.fbs
 ```
 
-Yes - nothing elegant here - we are using a pkill to python3 to kill the server! 💀 
-That will start the server running on `127.0.0.1:12345`. Then we can test the client with [run-client.py](run-client.py):
+This will generate [schema_generated.h]. We can try for Python too!
 
 ```console
-$ python3 run-client.py 
-🍓 Created client <capnp.lib.capnp.TwoPartyClient object at 0x7f071c5e3220>
-{'fee': 'fi', 'route': 'de5d06ad!e058728f!0ae58f31!ee699da9', 'userid': 0, 'rolemask': 1}
+$ flatc --python schema.fbs
 ```
 
-What we basically do via the client is prepare the request, send it to the server, and then
-print what is returned. The server handles created a Flux RPC and running "get" for it.
-It's super simple, but kind of neat! I think we can make cooler stuff off of this 
-basic idea.
+And this generates a Python module for the entire namespace [Flux](Flux).
+
+```
+# tree Flux/
+Flux/
+├── Framework
+│   ├── Message.py
+│   └── __init__.py
+└── __init__.py
+```
+
+This next demo script doesn't use Flux's already existing Python API (but it could).
+Since flatbuffers doesn't come with an easy server/client implementation I'm not sure
+the direction we'd want to take here. Here is how to serialize (and unserialize)
+the buffer, just as an example:
+
+```console
+# python3 run-example.py 
+Payload: b'{"fee": "fi"}'
+Topic: b'kvs.ping'
+Flags: 0
+Nodeid: 0
+```

@@ -1,0 +1,12 @@
+// IDL file for Flux message schema.
+ 
+namespace Flux.Framework;
+
+table Message {
+  topic:string;
+  payload:string; 
+  nodeid:short = 0;
+  flags:short = 0;
+}
+ 
+root_type Message;

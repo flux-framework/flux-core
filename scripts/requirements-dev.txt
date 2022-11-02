@@ -7,4 +7,4 @@ isort>=5.9.3
 mypy==0.971
 pre-commit>=2.9.2
 types-PyYAML
-pycapnp
+flatbuffers

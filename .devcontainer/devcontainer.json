@@ -27,5 +27,5 @@
       },
     },
     // Needed for git security feature (this assumes you locally cloned to flux-core)
-    "postStartCommand": "git config --global --add safe.directory /workspaces/flux-core"    
+    "postStartCommand": "git config --global --add safe.directory /workspaces/core"    
   }
