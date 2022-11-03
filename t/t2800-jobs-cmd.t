@@ -1283,7 +1283,4 @@ test_expect_success 'cleanup job listing jobs ' '
 	done
 '
 
-#
-# leave job cleanup to rc3
-#
 test_done
