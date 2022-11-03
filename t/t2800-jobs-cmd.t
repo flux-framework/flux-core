@@ -1280,4 +1280,56 @@ test_expect_success 'cleanup job listing jobs ' '
 	done
 '
 
+test_expect_success 'purge all jobs' '
+	flux job purge --force --num-limit=0
+'
+
+#
+# All stat tests below assume all jobs purged
+#
+
+test_expect_success 'flux-jobs --stats works after jobs purged (all)' '
+	flux jobs --stats -a >statspurge.output &&
+	test_debug "cat statspurge.output" &&
+	all=$(state_count all) &&
+	cat <<-EOF >statspurge.expected &&
+	0 running, 0 completed, 0 failed, 0 pending, ${all} inactive purged
+	EOF
+	head -1 statspurge.output > statspurge.actual &&
+	test_cmp statspurge.expected statspurge.actual
+'
+
+test_expect_success 'flux-jobs --stats works after jobs purged (queue1)' '
+	flux jobs --stats -a --queue=queue1 >statspurgeq1.output &&
+	test_debug "cat statspurgeq1.output" &&
+	comp=$(state_count completed) &&
+	cat <<-EOF >statspurgeq1.expected &&
+	0 running, 0 completed, 0 failed, 0 pending, ${comp} inactive purged
+	EOF
+	head -1 statspurgeq1.output > statspurgeq1.actual &&
+	test_cmp statspurgeq1.expected statspurgeq1.actual
+'
+
+test_expect_success 'flux-jobs --stats works after jobs purged (queue2)' '
+	flux jobs --stats -a --queue=queue2 >statspurgeq2.output &&
+	test_debug "cat statspurgeq2.output" &&
+	active=$(state_count active) &&
+	cat <<-EOF >statspurgeq2.expected &&
+	0 running, 0 completed, 0 failed, 0 pending, ${active} inactive purged
+	EOF
+	head -1 statspurgeq2.output > statspurgeq2.actual &&
+	test_cmp statspurgeq2.expected statspurgeq2.actual
+'
+
+test_expect_success 'flux-jobs --stats works after jobs purged (defaultqueue)' '
+	flux jobs --stats -a --queue=defaultqueue >statspurgeqdefault.output &&
+	test_debug "cat statspurgeqdefault.output" &&
+	fail=$(state_count failed canceled timeout) &&
+	cat <<-EOF >statspurgeqdefault.expected &&
+	0 running, 0 completed, 0 failed, 0 pending, ${fail} inactive purged
+	EOF
+	head -1 statspurgeqdefault.output > statspurgeqdefault.actual &&
+	test_cmp statspurgeqdefault.expected statspurgeqdefault.actual
+'
+
 test_done
