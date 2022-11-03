@@ -1223,7 +1223,6 @@ test_expect_success 'flux-jobs --stats works (global)' '
 	test_debug "cat stats.output" &&
 	fail=$(state_count failed canceled timeout) &&
 	run=$(state_count run) &&
-	inactive=$(state_count inactive) &&
 	active=$(state_count active) &&
 	comp=$(state_count completed) &&
 	pend=$((active - run)) &&
@@ -1237,8 +1236,6 @@ test_expect_success 'flux-jobs --stats works (global)' '
 test_expect_success 'flux-jobs --stats works (queue1)' '
 	flux jobs --stats -a --queue=queue1 >statsq1.output &&
 	test_debug "cat statsq1.output" &&
-	fail=$(state_count failed canceled timeout) &&
-	inactive=$(state_count inactive) &&
 	comp=$(state_count completed) &&
 	cat <<-EOF >statsq1.expected &&
 	0 running, ${comp} completed, 0 failed, 0 pending
