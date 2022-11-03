@@ -46,8 +46,10 @@ extern struct shell_builtin builtin_batch;
 extern struct shell_builtin builtin_doom;
 extern struct shell_builtin builtin_exception;
 extern struct shell_builtin builtin_rlimit;
+extern struct shell_builtin builtin_unshare;
 
 static struct shell_builtin * builtins [] = {
+    &builtin_unshare,
     &builtin_tmpdir,
     &builtin_log_eventlog,
     &builtin_pmi,
