@@ -89,8 +89,11 @@ class JobListIdRPC(RPC):
 
 # list-id is not like list or list-inactive, it doesn't return an
 # array, so don't use JobListRPC
-def job_list_id(flux_handle, jobid, attrs=[]):
-    payload = {"id": int(jobid), "attrs": attrs}
+def job_list_id(flux_handle, jobid, attrs=None):
+    if attrs:
+        payload = {"id": int(jobid), "attrs": attrs}
+    else:
+        payload = {"id": int(jobid)}
     rpc = JobListIdRPC(flux_handle, "job-list.list-id", payload)
     #  save original JobId argument for error reporting
     rpc.jobid = jobid

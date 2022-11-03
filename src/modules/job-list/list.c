@@ -378,10 +378,10 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
     job_list_error_t err = {{0}};
     json_t *job;
     flux_jobid_t id;
-    json_t *attrs;
+    json_t *attrs = NULL;
     bool stall = false;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:o}",
+    if (flux_request_unpack (msg, NULL, "{s:I s?:O}",
                              "id", &id,
                              "attrs", &attrs) < 0) {
         seterror (&err, "invalid payload: %s", flux_msg_last_error (msg));
@@ -389,10 +389,19 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!json_is_array (attrs)) {
-        seterror (&err, "invalid payload: attrs must be an array");
-        errno = EPROTO;
-        goto error;
+    if (attrs) {
+        if (!json_is_array (attrs)) {
+            seterror (&err, "invalid payload: attrs must be an array");
+            errno = EPROTO;
+            goto error;
+        }
+    }
+    else {
+        /* if user does not specify attrs, return all attrs */
+        if (!(attrs = json_pack ("[s]", "all"))) {
+            errno = ENOMEM;
+            goto error;
+        }
     }
 
     if (!(job = get_job_by_id (ctx->jsctx, &err, msg, id, attrs, &stall))) {
@@ -407,11 +416,13 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
 
     json_decref (job);
 stall:
+    json_decref (attrs);
     return;
 
 error:
     if (flux_respond_error (h, msg, errno, err.text) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    json_decref (attrs);
 }
 
 static int list_attrs_append (json_t *a, const char *attr)

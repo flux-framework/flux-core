@@ -168,7 +168,7 @@ flux_future_t *flux_job_list_inactive (flux_t *h,
                                        const char *json_str);
 
 /* Similar to flux_job_list(), but retrieve job info for a single
- * job id */
+ * job id.  `json_str` may be NULL, to retrieve all attributes. */
 flux_future_t *flux_job_list_id (flux_t *h,
                                  flux_jobid_t id,
                                  const char *json_str);

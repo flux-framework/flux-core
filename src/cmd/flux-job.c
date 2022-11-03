@@ -1386,7 +1386,8 @@ int cmd_list_ids (optparse_t *p, int argc, char **argv)
     for (i = 0; i < ids_len; i++) {
         flux_jobid_t id = parse_jobid (argv[optindex + i]);
         flux_future_t *f;
-        if (!(f = flux_job_list_id (h, id, "[\"all\"]")))
+        /* by default flux_job_list_id gets all attrs */
+        if (!(f = flux_job_list_id (h, id, NULL)))
             log_err_exit ("flux_job_list_id");
         if (flux_future_then (f, -1, list_id_continuation, NULL) < 0)
             log_err_exit ("flux_future_then");

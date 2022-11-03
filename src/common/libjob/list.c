@@ -90,15 +90,21 @@ flux_future_t *flux_job_list_id (flux_t *h,
     json_t *o = NULL;
     int saved_errno;
 
-    if (!h || !json_str
-           || !(o = json_loads (json_str, 0, NULL))) {
+    if (!h || (json_str
+               && !(o = json_loads (json_str, 0, NULL)))) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-list.list-id", FLUX_NODEID_ANY, 0,
-                             "{s:I s:O}",
-                             "id", id,
-                             "attrs", o)))
+    if (o)
+        f = flux_rpc_pack (h, "job-list.list-id", FLUX_NODEID_ANY, 0,
+                           "{s:I s:O}",
+                           "id", id,
+                           "attrs", o);
+    else
+        f = flux_rpc_pack (h, "job-list.list-id", FLUX_NODEID_ANY, 0,
+                           "{s:I}",
+                           "id", id);
+    if (!f)
         goto error;
 
     json_decref (o);
