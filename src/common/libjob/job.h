@@ -138,7 +138,7 @@ int flux_job_wait_get_id (flux_future_t *f, flux_jobid_t *id);
 
 /* Request a list of jobs.
  * If 'max_entries' > 0, fetch at most that many jobs.
- * 'json_str' is an encoded JSON array of attribute strings, e.g.
+ * 'attrs_json_str' is an encoded JSON array of attribute strings, e.g.
  * ["id","userid",...] that will be returned in response.
  *
  * Process the response payload with flux_rpc_get() or flux_rpc_get_unpack().
@@ -155,7 +155,7 @@ int flux_job_wait_get_id (flux_future_t *f, flux_jobid_t *id);
  */
 flux_future_t *flux_job_list (flux_t *h,
                               int max_entries,
-                              const char *json_str,
+                              const char *attrs_json_str,
                               uint32_t userid,
                               int states);
 
@@ -165,13 +165,13 @@ flux_future_t *flux_job_list (flux_t *h,
 flux_future_t *flux_job_list_inactive (flux_t *h,
                                        int max_entries,
                                        double since,
-                                       const char *json_str);
+                                       const char *attrs_json_str);
 
 /* Similar to flux_job_list(), but retrieve job info for a single
  * job id */
 flux_future_t *flux_job_list_id (flux_t *h,
                                  flux_jobid_t id,
-                                 const char *json_str);
+                                 const char *attrs_json_str);
 
 /* Raise an exception for job.
  * Severity is 0-7, with severity=0 causing the job to abort.
