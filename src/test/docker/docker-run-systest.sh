@@ -170,24 +170,4 @@ if test $RC -ne 0; then
     die "system tests failed with rc=$RC"
 fi
 
-if test -n "$CI" -a -n "$COVERAGE"; then
-    curl -Os https://uploader.codecov.io/latest/linux/codecov &&
-    chmod +x codecov &&
-    docker exec \
-      -e GCOV \
-      -e USER \
-      -e CI \
-      -e PROJECT \
-      -e HOME=/home/$USER \
-      -e GITHUB_ACTIONS \
-      -e GITHUB_HEAD_REF \
-      -e GITHUB_REF \
-      -e GITHUB_REPOSITORY \
-      -e GITHUB_RUN_ID \
-      -e GITHUB_SERVER_URL \
-      -e GITHUB_SHA \
-      -e GITHUB_WORKFLOW \
-      -w $WORKDIR flux-system-test-$$ ./codecov -F ci-system
-fi
-
 # vi: ts=4 sw=4 expandtab
