@@ -357,6 +357,7 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
         flux job stats | jq -e ".failed == $(job_list_state_count failed canceled timeout)" &&
         flux job stats | jq -e ".canceled == $(job_list_state_count canceled)" &&
         flux job stats | jq -e ".timeout == $(job_list_state_count timeout)" &&
+        flux job stats | jq -e ".inactive_purged == 0" &&
         queuelength=$(flux job stats | jq ".queues | length") &&
         test ${queuelength} -eq 0
 '
@@ -410,6 +411,7 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
         flux job stats | jq -e ".failed == $(job_list_state_count active failed canceled timeout)" &&
         flux job stats | jq -e ".canceled == $(job_list_state_count active canceled)" &&
         flux job stats | jq -e ".timeout == $(job_list_state_count timeout)" &&
+        flux job stats | jq -e ".inactive_purged == 0" &&
         queuelength=$(flux job stats | jq ".queues | length") &&
         test ${queuelength} -eq 0
 '
@@ -1723,6 +1725,7 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state in each queue
         echo $batchq | jq -e ".failed == 1" &&
         echo $batchq | jq -e ".canceled == 0" &&
         echo $batchq | jq -e ".timeout == 0" &&
+        echo $batchq | jq -e ".inactive_purged == 0" &&
         echo $debugq | jq -e ".job_states.depend == 0" &&
         echo $debugq | jq -e ".job_states.priority == 0" &&
         echo $debugq | jq -e ".job_states.sched == 0" &&
@@ -1733,7 +1736,8 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state in each queue
         echo $debugq | jq -e ".successful == 1" &&
         echo $debugq | jq -e ".failed == 1" &&
         echo $debugq | jq -e ".canceled == 0" &&
-        echo $debugq | jq -e ".timeout == 0"
+        echo $debugq | jq -e ".timeout == 0" &&
+        echo $debugq | jq -e ".inactive_purged == 0"
 '
 
 test_expect_success 'reload the job-list module' '
@@ -1758,6 +1762,7 @@ test_expect_success HAVE_JQ 'job stats in each queue correct after reload' '
         echo $batchq | jq -e ".failed == 1" &&
         echo $batchq | jq -e ".canceled == 0" &&
         echo $batchq | jq -e ".timeout == 0" &&
+        echo $batchq | jq -e ".inactive_purged == 0" &&
         echo $debugq | jq -e ".job_states.depend == 0" &&
         echo $debugq | jq -e ".job_states.priority == 0" &&
         echo $debugq | jq -e ".job_states.sched == 0" &&
@@ -1768,7 +1773,48 @@ test_expect_success HAVE_JQ 'job stats in each queue correct after reload' '
         echo $debugq | jq -e ".successful == 1" &&
         echo $debugq | jq -e ".failed == 1" &&
         echo $debugq | jq -e ".canceled == 0" &&
-        echo $debugq | jq -e ".timeout == 0"
+        echo $debugq | jq -e ".timeout == 0" &&
+        echo $debugq | jq -e ".inactive_purged == 0"
+'
+
+wait_total() {
+        total=$1
+        local i=0
+        while ! flux job stats | jq -e ".job_states.total == ${total}" \
+               && [ $i -lt 50 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ "$i" -eq "50" ]
+        then
+            return 1
+        fi
+        return 0
+}
+
+# purge all jobs except two, the remaining two should be the failed
+# jobs submitted to the batch and debug queues.
+test_expect_success HAVE_JQ 'job-stats correct after purge' '
+        total=$(flux job stats | jq .job_states.total) &&
+        purged=$((total - 2)) &&
+        flux job purge --force --num-limit=2 &&
+        wait_total 2 &&
+        flux job stats | jq -e ".job_states.inactive == 2" &&
+        flux job stats | jq -e ".job_states.total == 2" &&
+        flux job stats | jq -e ".inactive_purged == ${purged}" &&
+        batchq=`flux job stats | jq ".queues[] | select( .name == \"batch\" )"` &&
+        debugq=`flux job stats | jq ".queues[] | select( .name == \"debug\" )"` &&
+        echo $batchq | jq -e ".job_states.inactive == 1" &&
+        echo $batchq | jq -e ".job_states.total == 1" &&
+        echo $batchq | jq -e ".successful == 0" &&
+        echo $batchq | jq -e ".failed == 1" &&
+        echo $batchq | jq -e ".inactive_purged == 1" &&
+        echo $debugq | jq -e ".job_states.inactive == 1" &&
+        echo $debugq | jq -e ".job_states.total == 1" &&
+        echo $debugq | jq -e ".successful == 0" &&
+        echo $debugq | jq -e ".failed == 1" &&
+        echo $debugq | jq -e ".inactive_purged == 1"
 '
 
 test_expect_success 'remove queues' '

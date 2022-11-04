@@ -170,6 +170,7 @@ static void stats_purge (struct job_stats *stats, struct job *job)
     }
     else
         stats->successful--;
+    stats->inactive_purged++;
 }
 
 /* An inactive job is being purged, so statistics must be updated.
@@ -225,12 +226,13 @@ static json_t *stats_encode (struct job_stats *stats, const char *name)
     json_t *states;
 
     if (!(states = job_states_encode (stats))
-        || !(o = json_pack ("{ s:O s:i s:i s:i s:i }",
+        || !(o = json_pack ("{ s:O s:i s:i s:i s:i s:i }",
                             "job_states", states,
                             "successful", stats->successful,
                             "failed", stats->failed,
                             "canceled", stats->canceled,
-                            "timeout", stats->timeout))) {
+                            "timeout", stats->timeout,
+                            "inactive_purged", stats->inactive_purged))) {
         json_decref (states);
         errno = ENOMEM;
         return NULL;

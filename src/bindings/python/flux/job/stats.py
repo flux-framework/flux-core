@@ -50,6 +50,7 @@ class JobStats:
             "failed",
             "timeout",
             "canceled",
+            "inactive_purged",
             "pending",
             "running",
             "active",
@@ -68,7 +69,7 @@ class JobStats:
 
         for state, count in resp["job_states"].items():
             setattr(self, state, count)
-        for state in ["successful", "failed", "timeout", "canceled"]:
+        for state in ["successful", "failed", "timeout", "canceled", "inactive_purged"]:
             setattr(self, state, resp[state])
 
         #  Compute some stats for convenience:

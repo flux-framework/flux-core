@@ -1223,12 +1223,11 @@ test_expect_success 'flux-jobs --stats works (global)' '
 	test_debug "cat stats.output" &&
 	fail=$(state_count failed canceled timeout) &&
 	run=$(state_count run) &&
-	inactive=$(state_count inactive) &&
 	active=$(state_count active) &&
 	comp=$(state_count completed) &&
 	pend=$((active - run)) &&
 	cat <<-EOF >stats.expected &&
-	${run} running, ${comp} completed, ${fail} failed, ${pend} pending
+	${run} running, ${comp} completed, ${fail} failed, ${pend} pending, 0 inactive purged
 	EOF
 	head -1 stats.output > stats.actual &&
 	test_cmp stats.expected stats.actual
@@ -1237,11 +1236,9 @@ test_expect_success 'flux-jobs --stats works (global)' '
 test_expect_success 'flux-jobs --stats works (queue1)' '
 	flux jobs --stats -a --queue=queue1 >statsq1.output &&
 	test_debug "cat statsq1.output" &&
-	fail=$(state_count failed canceled timeout) &&
-	inactive=$(state_count inactive) &&
 	comp=$(state_count completed) &&
 	cat <<-EOF >statsq1.expected &&
-	0 running, ${comp} completed, 0 failed, 0 pending
+	0 running, ${comp} completed, 0 failed, 0 pending, 0 inactive purged
 	EOF
 	head -1 statsq1.output > statsq1.actual &&
 	test_cmp statsq1.expected statsq1.actual
@@ -1254,7 +1251,7 @@ test_expect_success 'flux-jobs --stats works (queue2)' '
 	active=$(state_count active) &&
 	pend=$((active - run)) &&
 	cat <<-EOF >statsq2.expected &&
-	${run} running, 0 completed, 0 failed, ${pend} pending
+	${run} running, 0 completed, 0 failed, ${pend} pending, 0 inactive purged
 	EOF
 	head -1 statsq2.output > statsq2.actual &&
 	test_cmp statsq2.expected statsq2.actual
@@ -1265,7 +1262,7 @@ test_expect_success 'flux-jobs --stats works (defaultqueue)' '
 	test_debug "cat statsqdefault.output" &&
 	fail=$(state_count failed canceled timeout) &&
 	cat <<-EOF >statsqdefault.expected &&
-	0 running, 0 completed, ${fail} failed, 0 pending
+	0 running, 0 completed, ${fail} failed, 0 pending, 0 inactive purged
 	EOF
 	head -1 statsqdefault.output > statsqdefault.actual &&
 	test_cmp statsqdefault.expected statsqdefault.actual
@@ -1283,7 +1280,56 @@ test_expect_success 'cleanup job listing jobs ' '
 	done
 '
 
+test_expect_success 'purge all jobs' '
+	flux job purge --force --num-limit=0
+'
+
 #
-# leave job cleanup to rc3
+# All stat tests below assume all jobs purged
 #
+
+test_expect_success 'flux-jobs --stats works after jobs purged (all)' '
+	flux jobs --stats -a >statspurge.output &&
+	test_debug "cat statspurge.output" &&
+	all=$(state_count all) &&
+	cat <<-EOF >statspurge.expected &&
+	0 running, 0 completed, 0 failed, 0 pending, ${all} inactive purged
+	EOF
+	head -1 statspurge.output > statspurge.actual &&
+	test_cmp statspurge.expected statspurge.actual
+'
+
+test_expect_success 'flux-jobs --stats works after jobs purged (queue1)' '
+	flux jobs --stats -a --queue=queue1 >statspurgeq1.output &&
+	test_debug "cat statspurgeq1.output" &&
+	comp=$(state_count completed) &&
+	cat <<-EOF >statspurgeq1.expected &&
+	0 running, 0 completed, 0 failed, 0 pending, ${comp} inactive purged
+	EOF
+	head -1 statspurgeq1.output > statspurgeq1.actual &&
+	test_cmp statspurgeq1.expected statspurgeq1.actual
+'
+
+test_expect_success 'flux-jobs --stats works after jobs purged (queue2)' '
+	flux jobs --stats -a --queue=queue2 >statspurgeq2.output &&
+	test_debug "cat statspurgeq2.output" &&
+	active=$(state_count active) &&
+	cat <<-EOF >statspurgeq2.expected &&
+	0 running, 0 completed, 0 failed, 0 pending, ${active} inactive purged
+	EOF
+	head -1 statspurgeq2.output > statspurgeq2.actual &&
+	test_cmp statspurgeq2.expected statspurgeq2.actual
+'
+
+test_expect_success 'flux-jobs --stats works after jobs purged (defaultqueue)' '
+	flux jobs --stats -a --queue=defaultqueue >statspurgeqdefault.output &&
+	test_debug "cat statspurgeqdefault.output" &&
+	fail=$(state_count failed canceled timeout) &&
+	cat <<-EOF >statspurgeqdefault.expected &&
+	0 running, 0 completed, 0 failed, 0 pending, ${fail} inactive purged
+	EOF
+	head -1 statspurgeqdefault.output > statspurgeqdefault.actual &&
+	test_cmp statspurgeqdefault.expected statspurgeqdefault.actual
+'
+
 test_done

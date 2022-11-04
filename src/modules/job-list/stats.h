@@ -24,6 +24,7 @@ struct job_stats {
     unsigned int failed;
     unsigned int timeout;
     unsigned int canceled;
+    unsigned int inactive_purged;
 };
 
 struct job_stats_ctx {
