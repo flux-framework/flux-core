@@ -304,6 +304,18 @@ _flux_resource()
     return 0
 }
 
+_flux_complete_taskmap_name() {
+    if [[ "$prev" == "--to" || "$cur" == "--to"* ]]; then
+        local formats="pmi raw multiline"
+        if [[ "$cur" == "--to"* ]]; then
+            formats=$(printf -- '--to=%s ' $formats)
+        fi
+        _flux_compgen_with_equals "${formats}"
+        return 0
+    fi
+    return 1
+}
+
 # flux-job(1) completions
 _flux_job()
 {
@@ -420,11 +432,16 @@ _flux_job()
     "
     if [[ $cmd != "job" ]]; then
         if [[ $cur != -* ]]; then
-            if _flux_contains_word ${cmd} ${subcmds}; then
+           if _flux_contains_word ${cmd} ${subcmds}; then
                 #  These commands take active jobids by default:
                 compopt +o filenames
                 active_jobs=$(flux jobs -no {id})
                 COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
+                return 0
+            fi
+        fi
+        if _flux_contains_word "taskmap" "${COMP_WORDS[@]}"; then
+            if _flux_complete_taskmap_name; then
                 return 0
             fi
         fi

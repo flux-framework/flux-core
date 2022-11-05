@@ -24,7 +24,8 @@ SUBDIRS = \
 	librlist \
 	libczmqcontainers \
 	libccan \
-	libzmqutil
+	libzmqutil \
+	libtaskmap
 
 if HAVE_LIBSYSTEMD
 SUBDIRS += libsdprocess
@@ -53,6 +54,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libhostlist/libhostlist.la \
 	$(builddir)/libczmqcontainers/libczmqcontainers.la \
 	$(builddir)/libcontent/libcontent.la \
+	$(builddir)/libtaskmap/libtaskmap.la \
 	$(JANSSON_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(LIBPTHREAD) \
@@ -65,7 +67,8 @@ lib_LTLIBRARIES = libflux-core.la \
 	libflux-optparse.la \
 	libflux-idset.la \
 	libflux-schedutil.la \
-	libflux-hostlist.la
+	libflux-hostlist.la \
+	libflux-taskmap.la
 
 fluxlib_LTLIBRARIES = libpmi.la libpmi2.la
 
@@ -126,6 +129,23 @@ libflux_hostlist_la_LDFLAGS = \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
+libflux_taskmap_la_SOURCES =
+libflux_taskmap_la_LIBADD = \
+	$(builddir)/libtaskmap/libtaskmap.la \
+	$(builddir)/libczmqcontainers/libczmqcontainers.la  \
+	$(builddir)/libutil/libutil.la  \
+	$(builddir)/libccan/libccan.la  \
+	$(builddir)/libtomlc99/libtomlc99.la  \
+	$(builddir)/libyuarel/libyuarel.la  \
+	libflux-core.la \
+	libflux-idset.la \
+	$(JANSSON_LIBS)
+libflux_taskmap_la_LDFLAGS = \
+	-Wl,--version-script=$(srcdir)/libflux-taskmap.map \
+	-version-info @LIBFLUX_TASKMAP_VERSION_INFO@ \
+	-shared -export-dynamic --disable-static \
+	$(san_ld_zdef_flag)
+
 libpmi_la_SOURCES =
 libpmi_la_LIBADD = \
 	$(builddir)/libpmi/libpmi_client.la \
@@ -154,5 +174,6 @@ EXTRA_DIST = \
 	libflux-idset.map \
 	libflux-schedutil.map \
 	libflux-hostlist.map \
+	libflux-taskmap.map \
 	libpmi.map \
 	libpmi2.map
