@@ -159,7 +159,7 @@ jobs:
         DOCKER_REPO:
       uses: codecov/codecov-action@858dd794fbb81941b6d60b0dca860878cba60fa9 # v3.1.1
       with:
-        flags: ci-basic
+        flags: ${{matrix.coverage_flags}}
 
     - name: docker deploy
       if: success() && matrix.docker_tag
