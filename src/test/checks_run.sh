@@ -97,6 +97,11 @@ fi
 # Enable coverage for $CC-coverage build
 # We can't use distcheck here, it doesn't play well with coverage testing:
 if test "$COVERAGE" = "t"; then
+	export PATH=~/.local/bin/:$PATH
+
+	# install coverage via pip if necessaary
+	coverage -h >/dev/null 2>&1 || python3 -m pip install coverage
+
 	# usercustomize.py must go under USER_SITE, so determine that path:
 	USER_SITE=$(python3 -c 'import site; print(site.USER_SITE)')
 	mkdir -p ${USER_SITE}
