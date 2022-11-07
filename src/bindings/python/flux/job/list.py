@@ -37,7 +37,7 @@ class JobListRPC(RPC):
 def job_list(
     flux_handle,
     max_entries=1000,
-    attrs=[],
+    attrs=["all"],
     userid=os.getuid(),
     states=0,
     results=0,
@@ -61,7 +61,7 @@ def job_list(
 
 
 def job_list_inactive(
-    flux_handle, since=0.0, max_entries=1000, attrs=[], name=None, queue=None
+    flux_handle, since=0.0, max_entries=1000, attrs=["all"], name=None, queue=None
 ):
     return job_list(
         flux_handle,
@@ -89,7 +89,7 @@ class JobListIdRPC(RPC):
 
 # list-id is not like list or list-inactive, it doesn't return an
 # array, so don't use JobListRPC
-def job_list_id(flux_handle, jobid, attrs=[]):
+def job_list_id(flux_handle, jobid, attrs=["all"]):
     payload = {"id": int(jobid), "attrs": attrs}
     rpc = JobListIdRPC(flux_handle, "job-list.list-id", payload)
     #  save original JobId argument for error reporting
