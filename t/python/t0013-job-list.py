@@ -64,7 +64,7 @@ class TestJob(unittest.TestCase):
         waiting = 0  # number of seconds we have been waiting
         while True:
             rpc_handle = flux.job.job_list(
-                self.fh, 0, self.attrs, states=flux.constants.FLUX_JOB_STATE_INACTIVE
+                self.fh, 0, states=flux.constants.FLUX_JOB_STATE_INACTIVE
             )
             jobs = self.getJobs(rpc_handle)
             if len(jobs) >= jobs_list_length:
@@ -73,8 +73,6 @@ class TestJob(unittest.TestCase):
             waiting += 1
             if waiting > 60:
                 raise TimeoutError()
-
-    attrs = ["userid", "state", "name", "ntasks", "t_submit", "t_run", "t_inactive"]
 
     # flux job list should return an empty list if there are no jobs
     def test_00_list_expect_empty_list(self):
@@ -87,9 +85,7 @@ class TestJob(unittest.TestCase):
     # flux job list-inactive should return an empty list if there are
     # no inactive jobs
     def test_01_list_inactive_expect_empty_list(self):
-        rpc_handle = flux.job.job_list_inactive(
-            self.fh, time.time() - 3600, 10, self.attrs
-        )
+        rpc_handle = flux.job.job_list_inactive(self.fh, time.time() - 3600, 10)
 
         jobs = self.getJobs(rpc_handle)
 
@@ -110,9 +106,7 @@ class TestJob(unittest.TestCase):
 
     # flux job list-inactive make sure one job is read from RPC
     def test_03_list_inactive_success(self):
-        rpc_handle = flux.job.job_list_inactive(
-            self.fh, time.time() - 3600, 10, self.attrs
-        )
+        rpc_handle = flux.job.job_list_inactive(self.fh, time.time() - 3600, 10)
 
         jobs = self.getJobs(rpc_handle)
 
@@ -137,9 +131,7 @@ class TestJob(unittest.TestCase):
     # flux job list-inactive multiple jobs submitted should return a
     # longer list of inactive jobs
     def test_05_list_inactive_multiple_inactive(self):
-        rpc_handle = flux.job.job_list_inactive(
-            self.fh, time.time() - 3600, 20, self.attrs
-        )
+        rpc_handle = flux.job.job_list_inactive(self.fh, time.time() - 3600, 20)
 
         jobs = self.getJobs(rpc_handle)
 
@@ -147,7 +139,7 @@ class TestJob(unittest.TestCase):
 
     # flux job list-inactive with since = 0.0 should return all inactive jobs
     def test_06_list_inactive_all(self):
-        rpc_handle = flux.job.job_list_inactive(self.fh, 0.0, 20, self.attrs)
+        rpc_handle = flux.job.job_list_inactive(self.fh, 0.0, 20)
 
         jobs = self.getJobs(rpc_handle)
 
@@ -155,7 +147,7 @@ class TestJob(unittest.TestCase):
 
     # flux job list-inactive with max_entries = 5 should only return a subset
     def test_07_list_inactive_subset_of_inactive(self):
-        rpc_handle = flux.job.job_list_inactive(self.fh, 0.0, 5, self.attrs)
+        rpc_handle = flux.job.job_list_inactive(self.fh, 0.0, 5)
 
         jobs = self.getJobs(rpc_handle)
 
@@ -169,9 +161,7 @@ class TestJob(unittest.TestCase):
 
         jobs = self.getJobs(rpc_handle)
 
-        rpc_handle = flux.job.job_list_inactive(
-            self.fh, jobs[0]["t_inactive"], 1, self.attrs
-        )
+        rpc_handle = flux.job.job_list_inactive(self.fh, jobs[0]["t_inactive"], 1)
 
         jobs_inactive = self.getJobs(rpc_handle)
 
@@ -185,9 +175,7 @@ class TestJob(unittest.TestCase):
 
         jobs = self.getJobs(rpc_handle)
 
-        rpc_handle = flux.job.job_list_inactive(
-            self.fh, jobs[1]["t_inactive"], 1, self.attrs
-        )
+        rpc_handle = flux.job.job_list_inactive(self.fh, jobs[1]["t_inactive"], 1)
 
         jobs_inactive = self.getJobs(rpc_handle)
 
@@ -202,9 +190,7 @@ class TestJob(unittest.TestCase):
 
         jobs = self.getJobs(rpc_handle)
 
-        rpc_handle = flux.job.job_list_inactive(
-            self.fh, jobs[4]["t_inactive"], 10, self.attrs
-        )
+        rpc_handle = flux.job.job_list_inactive(self.fh, jobs[4]["t_inactive"], 10)
 
         jobs_inactive = self.getJobs(rpc_handle)
 
@@ -218,9 +204,7 @@ class TestJob(unittest.TestCase):
 
         jobs = self.getJobs(rpc_handle)
 
-        rpc_handle = flux.job.job_list_inactive(
-            self.fh, jobs[5]["t_inactive"], 20, self.attrs
-        )
+        rpc_handle = flux.job.job_list_inactive(self.fh, jobs[5]["t_inactive"], 20)
 
         jobs_inactive = self.getJobs(rpc_handle)
 
@@ -234,9 +218,7 @@ class TestJob(unittest.TestCase):
 
         jobs = self.getJobs(rpc_handle)
 
-        rpc_handle = flux.job.job_list_inactive(
-            self.fh, jobs[7]["t_inactive"], 20, self.attrs
-        )
+        rpc_handle = flux.job.job_list_inactive(self.fh, jobs[7]["t_inactive"], 20)
 
         jobs_inactive = self.getJobs(rpc_handle)
 
@@ -251,15 +233,13 @@ class TestJob(unittest.TestCase):
         # 16 = 5 + 11 in previous tests
         self.waitForConsistency(16)
 
-        rpc_handle = flux.job.job_list_inactive(self.fh, 0.0, 20, self.attrs, "sleep")
+        rpc_handle = flux.job.job_list_inactive(self.fh, 0.0, 20, name="sleep")
 
         jobs_inactive = self.getJobs(rpc_handle)
 
         self.assertEqual(len(jobs_inactive), 11)
 
-        rpc_handle = flux.job.job_list_inactive(
-            self.fh, 0.0, 20, self.attrs, "hostname"
-        )
+        rpc_handle = flux.job.job_list_inactive(self.fh, 0.0, 20, name="hostname")
 
         jobs_inactive = self.getJobs(rpc_handle)
 
