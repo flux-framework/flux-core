@@ -342,7 +342,11 @@ int rcalc_distribute (rcalc_t *r, int ntasks, int cores_per_task)
      *  and leaving "full" ranks off the list.
      */
     while (assigned < ntasks) {
-        ai = zlist_pop (l);
+        if (!(ai = zlist_pop (l))) {
+            zlist_destroy (&l);
+            errno = ENOSPC;
+            return -1;
+        }
         if (allocinfo_add_task (ai, cores_per_task)) {
             zlist_append (l, ai);
             assigned++;
