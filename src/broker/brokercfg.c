@@ -606,7 +606,7 @@ error:
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "config.reload", reload_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "config.load", load_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "config.get", get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "config.get", get_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
