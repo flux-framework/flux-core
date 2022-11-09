@@ -31,7 +31,6 @@ if *NAME* is unspecified, it dumps the entire configuration object.  Otherwise,
 *NAME* is expected to be a period-delimited path name representing a TOML key.
 Return values are printed in string-encoded JSON form, except for string values,
 which are printed without quotes to simplify their use in shell scripts.
-This command is restricted to the instance owner.
 
 ``flux config builtin`` prints compiled-in Flux configuration values.
 See BUILTIN VALUES below for a list of builtin

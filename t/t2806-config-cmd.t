@@ -19,6 +19,11 @@ EOF
 
 test_under_flux 1 minimal -o,--config-path=$(pwd)/config
 
+runas_guest() {
+        local userid=$(($(id -u)+1))
+        FLUX_HANDLE_USERID=$userid FLUX_HANDLE_ROLEMASK=0x2 "$@"
+}
+
 test_expect_success 'flux-config with no args fails with message' '
 	test_must_fail flux config 2>noargs.out &&
 	grep "missing subcommand" noargs.out
@@ -175,6 +180,18 @@ test_expect_success 'flux-config builtin fails on unknown key' '
 '
 test_expect_success 'flux-config builtin works on known key' '
 	flux config builtin rc1_path
+'
+test_expect_success 'flux-config get works as guest' '
+	runas_guest flux config get >obj
+'
+test_expect_success 'flux-config load fails as guest' '
+	test_must_fail runas_guest flux config load <obj
+'
+test_expect_success 'flux-config reload fails as guest' '
+	test_must_fail runas_guest flux config reload
+'
+test_expect_success 'flux-config builtin works as guest' '
+	runas_guest flux config builtin rc1_path
 '
 
 test_done
