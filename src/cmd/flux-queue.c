@@ -68,7 +68,7 @@ static struct optparse_option status_opts[] = {
 
 static struct optparse_option enable_opts[] = {
     { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
-      .usage = "Specify queue to enable (default all)",
+      .usage = "Specify queue to enable",
     },
     { .name = "all", .key = 'a', .has_arg = 0,
       .usage = "Force command to apply to all queues if none specified",
@@ -78,7 +78,7 @@ static struct optparse_option enable_opts[] = {
 
 static struct optparse_option disable_opts[] = {
     { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
-      .usage = "Specify queue to disable (default all)",
+      .usage = "Specify queue to disable",
     },
     { .name = "all", .key = 'a', .has_arg = 0,
       .usage = "Force command to apply to all queues if none specified",
