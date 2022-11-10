@@ -333,13 +333,13 @@ test_expect_success 'store a value with content service' '
 test_expect_success 'flux content load not allowed for guest user' '
 	test_must_fail bash -c "FLUX_HANDLE_ROLEMASK=0x2 \
 	    flux content load $(cat content.blobref) 2>content-load.err" &&
-	    grep "not permitted" content-load.err
+	    grep "Request requires owner credentials" content-load.err
 '
 
 test_expect_success 'flux content store not allowed for guest user' '
 	test_must_fail bash -c "FLUX_HANDLE_ROLEMASK=0x2 \
 	    flux content store <content.blob 2>content-store.err" &&
-	    grep "not permitted" content-store.err
+	    grep "Request requires owner credentials" content-store.err
 '
 
 test_done

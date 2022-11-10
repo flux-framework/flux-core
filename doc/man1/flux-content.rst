@@ -6,9 +6,9 @@ flux-content(1)
 SYNOPSIS
 ========
 
-**flux** **content** **load** [*--bypass-cache*] *blobref*
+**flux** **content** **load** [*--bypass-cache*] [*blobref* ...]
 
-**flux** **content** **store** [*--bypass-cache*]
+**flux** **content** **store** [*--bypass-cache*] [*--chunksize=N*]
 
 **flux** **content** **flush**
 
@@ -21,13 +21,15 @@ Each Flux instance implements an append-only, content addressable
 storage service, which stores blobs of arbitrary content under
 message digest keys termed "blobrefs".
 
-**flux content store** accepts a blob on standard input, stores it,
-and prints the blobref on standard output.
+**flux content store** reads data from standard input to EOF, stores it
+(possibly splitting into multiple blobs), and prints blobref(s) on
+standard output, one per line.
 
-**flux content load** accepts a blobref argument, retrieves the
-corresponding blob, and writes it to standard output.
+**flux content load** reads blobrefs from standard input, one per line, or
+parses blobrefs on the command line (but not both).  It then loads the
+corresponding blob(s), and concatenates them on standard output.
 
-After a store operation completes on any rank, the blob may be
+After a store operation completes on any rank, the blobs may be
 retrieved from any other rank.
 
 The content service includes a cache on each broker which improves
@@ -46,6 +48,9 @@ OPTIONS
 **-b, --bypass-cache**
    Bypass the in-memory cache, and directly access the backing store,
    if available (see below).
+
+**--chunksize**\ =\ *N*
+   Split a blob into chunks of *N* bytes (store only).
 
 
 BACKING STORE
