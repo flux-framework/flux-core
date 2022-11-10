@@ -188,5 +188,30 @@ test_expect_success 'load request with empty payload fails with EPROTO(71)' '
 test_expect_success 'register-backing request with empty payload fails with EPROTO(71)' '
 	${RPC} content.register-backing 71 </dev/null
 '
+test_expect_success 'content store --chunksize option splits blobs' '
+	echo "0123456789" >split.data &&
+	flux content store --chunksize=8 <split.data >split.refs &&
+	test $(wc -l <split.refs) -eq 2
+'
+test_expect_success 'content load joins multiple blobrefs on stdin' '
+	flux content load <split.refs >split.out &&
+	test_cmp split.data split.out
+'
+test_expect_success 'content load joins multiple blobrefs on command line' '
+	flux content load $(cat split.refs) >split2.out &&
+	test_cmp split.data split2.out
+'
+test_expect_success 'content store --chunksize=0 does not split blobs' '
+	flux content store --chunksize=0 <split.data >split3.refs &&
+	test $(wc -l <split3.refs) -eq 1 &&
+	flux content load <split3.refs >split3.out &&
+	test_cmp split.data split3.out
+'
+test_expect_success 'content store --chunksize=-1 fails' '
+	test_must_fail flux content store --chunksize=-1 </dev/null
+'
+test_expect_success 'content load with no blobrefs fails' '
+	test_must_fail flux content load </dev/null
+'
 
 test_done
