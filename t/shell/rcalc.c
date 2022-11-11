@@ -97,8 +97,8 @@ int main (int ac, char **av)
                      i, strerror (errno));
             exit (1);
         }
-        printf ("%d: rank=%d ntasks=%d basis=%d cores=%s",
-                ri.nodeid, ri.rank, ri.ntasks, ri.global_basis, ri.cores);
+        printf ("%d: rank=%d ntasks=%d cores=%s",
+                ri.nodeid, ri.rank, ri.ntasks, ri.cores);
         if (strlen(ri.gpus))
             printf (" gpus=%s", ri.gpus);
         printf ("\n");
