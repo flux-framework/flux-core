@@ -399,79 +399,66 @@ static void pmi_fd_cb (flux_shell_task_t *task,
  */
 static int init_clique (struct shell_pmi *pmi, const char *opt)
 {
-    struct pmi_map_block *blocks = NULL;
-    int nblocks;
-    int i;
-    char val[SIMPLE_KVS_VAL_MAX];
+    struct taskmap *tmpmap = NULL;
+    struct taskmap *taskmap;
+    char *s = NULL;
+    int saved_errno;
+    int rc = -1;
 
     if (!opt)
         opt = "pershell";
 
      /* pmi.clique=pershell (default): one clique per shell.
-      * Create an array of pmi_map_block structures, sized for worst case
-      * mapping (no compression possible).  Walk through the rcalc info for
-      * each shell rank.  If shell's mapping looks identical to previous one,
-      * increment block->nodes; otherwise consume another array slot.
+      * Use shell-generated taskmap to create PMI_process_mapping
       */
     if (!strcmp (opt, "pershell")) {
-        if (!(blocks = calloc (pmi->shell->info->shell_size, sizeof (*blocks))))
-            return -1;
-        nblocks = 0;
-
-        for (i = 0; i < pmi->shell->info->shell_size; i++) {
-            struct rcalc_rankinfo ri;
-
-            if (rcalc_get_nth (pmi->shell->info->rcalc, i, &ri) < 0)
-                goto error;
-            if (nblocks == 0 || blocks[nblocks - 1].procs != ri.ntasks) {
-                blocks[nblocks].nodeid = i;
-                blocks[nblocks].procs = ri.ntasks;
-                blocks[nblocks].nodes = 1;
-                nblocks++;
-            }
-            else
-                blocks[nblocks - 1].nodes++;
-        }
+        taskmap = pmi->shell->info->taskmap;
     }
     /* pmi.clique=single: all procs are on the same node.
      */
     else if (!strcmp (opt, "single")) {
-        if (!(blocks = calloc (1, sizeof (*blocks))))
-            return -1;
-        nblocks = 1;
-        blocks[0].nodeid = 0;
-        blocks[0].procs = pmi->shell->info->total_ntasks;
-        blocks[0].nodes = 1;
+        tmpmap = taskmap_create ();
+        if (!(tmpmap = taskmap_create ())
+            || taskmap_append (tmpmap,
+                               0,
+                               1,
+                               pmi->shell->info->total_ntasks) < 0)
+            goto out;
+        taskmap = tmpmap;
     }
     /* pmi.clique=none: disable PMI_process_mapping generation.
      */
     else if (!strcmp (opt, "none")) {
+        rc = 0;
         goto out;
     }
     else {
         shell_log_error ("pmi.clique=%s is invalid", opt);
-        goto error;
-    }
-
-    /* Encode to string, and store to local KVS hash.
-     */
-
-    /* If value exceeds SIMPLE_KVS_VAL_MAX, skip setting the key
-     * without generating an error.  The client side will not treat
-     * a missing key as an error.  It should be unusual though so log it.
-     */
-    if (pmi_process_mapping_encode (blocks, nblocks, val, sizeof (val)) < 0) {
-        shell_log_errno ("pmi_process_mapping_encode");
         goto out;
     }
-    put_dict (pmi->locals, "PMI_process_mapping", val);
+
+    /*
+     * This function always succeeds after this point, so update rc
+     */
+    rc = 0;
+
+    if (!(s = taskmap_encode (taskmap, TASKMAP_ENCODE_PMI))
+        || strlen (s) > SIMPLE_KVS_VAL_MAX) {
+        /* If value exceeds SIMPLE_KVS_VAL_MAX, skip setting the key
+         * without generating an error. The client side will not treat
+         * a missing key as an error. It should be unusual though so log it.
+         */
+        if (pmi->shell->info->shell_rank == 0)
+            shell_warn ("PMI_process_mapping overflows PMI max value.");
+        goto out;
+    }
+    put_dict (pmi->locals, "PMI_process_mapping", s);
 out:
-    free (blocks);
-    return 0;
-error:
-    free (blocks);
-    errno = EINVAL;
-    return -1;
+    saved_errno = errno;
+    taskmap_destroy (tmpmap);
+    free (s);
+    errno = saved_errno;
+    return rc;
 }
 
 static int set_flux_instance_level (struct shell_pmi *pmi)
