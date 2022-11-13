@@ -126,6 +126,7 @@ TESTS = test_sha1.t \
 	test_digest.t \
 	test_jpath.t \
 	test_errprintf.t \
+	test_fileref.t \
 	test_strstrip.t
 
 test_ldadd = \
@@ -261,3 +262,7 @@ test_errprintf_t_LDADD = $(test_ldadd)
 test_strstrip_t_SOURCES = test/strstrip.c
 test_strstrip_t_CPPFLAGS = $(test_cppflags)
 test_strstrip_t_LDADD = $(test_ldadd)
+
+test_fileref_t_SOURCES = test/fileref.c
+test_fileref_t_CPPFLAGS = $(test_cppflags)
+test_fileref_t_LDADD = $(test_ldadd)
