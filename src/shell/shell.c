@@ -1152,7 +1152,7 @@ static int load_initrc (flux_shell_t *shell, const char *default_rcfile)
     return 0;
 }
 
-static int shell_init (flux_shell_t *shell)
+static int shell_initrc (flux_shell_t *shell)
 {
     const char *default_rcfile = shell_conf_get ("shell_initrc");
 
@@ -1186,9 +1186,11 @@ static int shell_init (flux_shell_t *shell)
 
     /*  Load initrc file if necessary
      */
-    if (load_initrc (shell, default_rcfile) < 0)
-        return -1;
+    return load_initrc (shell, default_rcfile);
+}
 
+static int shell_init (flux_shell_t *shell)
+{
     return plugstack_call (shell->plugstack, "shell.init", NULL);
 }
 
@@ -1364,7 +1366,12 @@ int main (int argc, char *argv[])
     if (!(shell.svc = shell_svc_create (&shell)))
         shell_die (1, "shell_svc_create");
 
-    /* Call shell initialization routines and "shell_init" plugins.
+    /* Change working directory and Load shell initrc
+     */
+    if (shell_initrc (&shell) < 0)
+        shell_die_errno (1, "shell_initrc");
+
+    /* Call "shell_init" plugins.
      */
     if (shell_init (&shell) < 0)
         shell_die_errno (1, "shell_init");
