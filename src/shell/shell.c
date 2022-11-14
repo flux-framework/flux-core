@@ -1341,9 +1341,6 @@ int main (int argc, char *argv[])
     if (shell_export_environment_from_job (&shell) < 0)
         exit (1);
 
-    if (shell_register_event_context (&shell) < 0)
-        shell_die (1, "failed to add standard shell event context");
-
     /* Set verbose flag if set in attributes.system.shell.verbose */
     if (flux_shell_getopt_unpack (&shell, "verbose", "i", &shell.verbose) < 0)
         shell_die (1, "failed to parse attributes.system.shell.verbose");
@@ -1370,6 +1367,14 @@ int main (int argc, char *argv[])
      */
     if (shell_initrc (&shell) < 0)
         shell_die_errno (1, "shell_initrc");
+
+    /* Register the default components of the shell.init eventlog event
+     * context. This includes the current taskmap, which may have been
+     * altered by a plugin during shell_initrc(), so this must be done
+     * after that call completes.
+     */
+    if (shell_register_event_context (&shell) < 0)
+        shell_die (1, "failed to add standard shell event context");
 
     /* Call "shell_init" plugins.
      */
