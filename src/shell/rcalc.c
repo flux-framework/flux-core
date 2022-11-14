@@ -37,7 +37,6 @@ struct rankinfo {
 struct allocinfo {
     int ncores_avail;
     int ntasks;
-    int basis;
 };
 
 struct rcalc {
@@ -296,16 +295,6 @@ static bool allocinfo_add_task (struct allocinfo *ai, int size)
     return (false);
 }
 
-static void rcalc_compute_taskids (rcalc_t *r)
-{
-    int i;
-    int taskid = 0;
-    for (i = 0; i < r->nranks; i++) {
-        r->alloc[i].basis = taskid;
-        taskid += r->alloc[i].ntasks;
-    }
-}
-
 /*
  *  Distribute ntasks over the ranks in `r` "evenly" by a heuristic
  *   that first assigns a number of cores per task, then distributes
@@ -353,9 +342,6 @@ int rcalc_distribute (rcalc_t *r, int ntasks, int cores_per_task)
         }
     }
     zlist_destroy (&l);
-
-    /*  Assign taskid basis to each rank in block allocation order */
-    rcalc_compute_taskids (r);
     return (0);
 }
 
@@ -391,8 +377,6 @@ int rcalc_distribute_per_resource (rcalc_t *r, const char *name, int ntasks)
             r->ntasks += n;
         }
     }
-
-    rcalc_compute_taskids (r);
     return 0;
 }
 
@@ -430,7 +414,6 @@ static void rcalc_rankinfo_set (rcalc_t *r, int id,
     rli->rank =   ri->rank;
     rli->ncores = ri->ncores;
     rli->ntasks = ai->ntasks;
-    rli->global_basis =  ai->basis;
     /*  Copy cores string to rli, in the very unlikely event that
      *   we get a huge cores string, indicate truncation.
      */

@@ -91,7 +91,8 @@ error:
 }
 
 struct shell_task *shell_task_create (struct shell_info *info,
-                                      int index)
+                                      int index,
+                                      int taskid)
 {
     struct shell_task *task;
     const char *key;
@@ -103,7 +104,7 @@ struct shell_task *shell_task_create (struct shell_info *info,
         return NULL;
 
     task->index = index;
-    task->rank = info->rankinfo.global_basis + index;
+    task->rank = taskid;
     task->size = info->total_ntasks;
     if (!(task->cmd = flux_cmd_create (0, NULL, NULL)))
         goto error;

@@ -508,24 +508,14 @@ int flux_shell_info_unpack (flux_shell_t *shell, const char *fmt, ...)
     return rc;
 }
 
-static char *get_rank_task_idset (struct rcalc_rankinfo *ri)
+static char *get_rank_task_idset (struct taskmap *map, int nodeid)
 {
-    struct idset *ids;
-    char *result = NULL;
-
-    /*  Note: assumes taskids are always mapped using "block" allocation
-     */
-    int first = ri->global_basis;
-    int last = ri->global_basis + ri->ntasks - 1;
-
-    if (!(ids = idset_create (last+1, 0))
-        || idset_range_set (ids, first, last) < 0)
-        goto out;
-
-    result = idset_encode (ids, IDSET_FLAG_RANGE);
-out:
-    idset_destroy (ids);
-    return result;
+    const struct idset *ids;
+    if (!(ids = taskmap_taskids (map, nodeid))) {
+        shell_log_errno ("unable to get taskids set for rank %d", nodeid);
+        return NULL;
+    }
+    return idset_encode (ids, IDSET_FLAG_RANGE);
 }
 
 static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
@@ -534,28 +524,31 @@ static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
     json_error_t error;
     char key [128];
     char *taskids = NULL;
-    struct rcalc_rankinfo ri;
+    struct taskmap *map;
 
     if (!shell->info)
         return NULL;
 
     if (rank == -1)
         rank = shell->info->shell_rank;
-    if (rcalc_get_nth (shell->info->rcalc, rank, &ri) < 0)
-        return NULL;
 
+    if (rank < 0 || rank > shell->info->shell_size - 1) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (snprintf (key, sizeof (key), "shell::rinfo%d", rank) >= sizeof (key))
         return NULL;
 
     if ((o = flux_shell_aux_get (shell, key)))
         return o;
 
-    if (!(taskids = get_rank_task_idset (&ri)))
+    map = shell->info->taskmap;
+    if (!(taskids = get_rank_task_idset (map, rank)))
         return NULL;
 
     o = json_pack_ex (&error, 0, "{ s:i s:i s:s s:{s:s s:s?}}",
-                   "broker_rank", ri.rank,
-                   "ntasks", ri.ntasks,
+                   "broker_rank", rank,
+                   "ntasks", taskmap_ntasks (map, rank),
                    "taskids", taskids,
                    "resources",
                      "cores", shell->info->rankinfo.cores,
@@ -1245,6 +1238,9 @@ static void shell_log_info (flux_shell_t *shell)
 {
     if (shell->verbose) {
         struct shell_info *info = shell->info;
+        char *taskids = idset_encode (info->taskids,
+                                      IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS);
+
         if (info->shell_rank == 0)
             shell_debug ("0: task_count=%d slot_count=%d "
                          "cores_per_slot=%d slots_per_node=%d",
@@ -1252,17 +1248,12 @@ static void shell_log_info (flux_shell_t *shell)
                          info->jobspec->slot_count,
                          info->jobspec->cores_per_slot,
                          info->jobspec->slots_per_node);
-        if (info->rankinfo.ntasks > 1)
-            shell_debug ("%d: tasks [%d-%d] on cores %s",
-                         info->shell_rank,
-                         info->rankinfo.global_basis,
-                         info->rankinfo.global_basis+info->rankinfo.ntasks - 1,
-                         info->rankinfo.cores);
-        else
-            shell_debug ("%d: tasks [%d] on cores %s",
-                         info->shell_rank,
-                         info->rankinfo.global_basis,
-                         info->rankinfo.cores);
+        shell_debug ("%d: task%s %s on cores %s",
+                     info->shell_rank,
+                     idset_count (info->taskids) > 1 ? "s" : "",
+                     taskids ? taskids : "[unknown]",
+                     info->rankinfo.cores);
+        free (taskids);
     }
 }
 
@@ -1311,6 +1302,7 @@ int main (int argc, char *argv[])
 {
     flux_shell_t shell;
     int i;
+    unsigned int taskid;
 
     /* Initialize locale from environment
      */
@@ -1394,10 +1386,13 @@ int main (int argc, char *argv[])
      */
     if (!(shell.tasks = zlist_new ()))
         shell_die (1, "zlist_new failed");
-    for (i = 0; i < shell.info->rankinfo.ntasks; i++) {
+
+    i = 0;
+    taskid = idset_first (shell.info->taskids);
+    while (taskid != IDSET_INVALID_ID) {
         struct shell_task *task;
 
-        if (!(task = shell_task_create (shell.info, i)))
+        if (!(task = shell_task_create (shell.info, i, taskid)))
             shell_die (1, "shell_task_create index=%d", i);
 
         task->pre_exec_cb = shell_task_exec;
@@ -1437,6 +1432,9 @@ int main (int argc, char *argv[])
          */
         if (shell_task_forked (&shell) < 0)
             shell_die (1, "shell_task_forked");
+
+        i++;
+        taskid = idset_next (shell.info->taskids, taskid);
     }
     /*  Reset current task since we've left task-specific context:
      */

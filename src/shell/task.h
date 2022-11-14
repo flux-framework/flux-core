@@ -54,7 +54,9 @@ struct shell_task {
 
 void shell_task_destroy (struct shell_task *task);
 
-struct shell_task *shell_task_create (struct shell_info *info, int index);
+struct shell_task *shell_task_create (struct shell_info *info,
+                                      int index,
+                                      int taskid);
 
 int shell_task_start (struct flux_shell *shell,
                       struct shell_task *task,
