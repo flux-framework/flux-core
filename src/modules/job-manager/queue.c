@@ -100,10 +100,8 @@ static int queue_enable_all (struct queue *queue,
                              bool enable,
                              const char *reason)
 {
-    struct jobq *q;
-
     if (queue->have_named_queues) {
-        q = zhashx_first (queue->named);
+        struct jobq *q = zhashx_first (queue->named);
         while (q) {
             if (jobq_enable (q, enable, reason) < 0)
                 return -1;
