@@ -1355,9 +1355,6 @@ int main (int argc, char *argv[])
     if (shell_log_reinit (&shell) < 0)
         shell_die_errno (1, "shell_log_reinit");
 
-    /* Now that verbosity may have changed, log shell startup info */
-    shell_log_info (&shell);
-
     /* Register service on the leader shell.
      */
     if (!(shell.svc = shell_svc_create (&shell)))
@@ -1380,6 +1377,11 @@ int main (int argc, char *argv[])
      */
     if (shell_init (&shell) < 0)
         shell_die_errno (1, "shell_init");
+
+    /* Now that verbosity, task mapping, etc. may have changed, log
+     * basic shell info.
+     */
+    shell_log_info (&shell);
 
     /* Barrier to ensure initialization has completed across all shells.
      */
