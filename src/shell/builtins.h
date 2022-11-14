@@ -16,6 +16,7 @@
 
 struct shell_builtin {
     const char *name;
+    int (*plugin_init) (flux_plugin_t *p);
     flux_plugin_f validate;
     flux_plugin_f connect;
     flux_plugin_f reconnect;

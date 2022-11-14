@@ -89,6 +89,8 @@ static int shell_load_builtin (flux_shell_t *shell,
         return -1;
 
     shell_debug ("loading builtin plugin \"%s\"", sb->name);
+    if (sb->plugin_init && (*sb->plugin_init) (p) < 0)
+        return -1;
     if (plugstack_push (shell->plugstack, p) < 0)
         return -1;
     return (0);
