@@ -31,6 +31,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/fdutils.h"
+#include "src/common/libtaskmap/taskmap_private.h"
 
 #include "internal.h"
 #include "builtins.h"
@@ -1360,21 +1361,26 @@ static void shell_log_info (flux_shell_t *shell)
  */
 static int shell_register_event_context (flux_shell_t *shell)
 {
+    int rc = -1;
+    json_t *o = NULL;
     if (shell->standalone || shell->info->shell_rank != 0)
         return 0;
-    if (flux_shell_add_event_context (shell, "shell.init", 0,
-                                      "{s:i s:i}",
-                                      "leader-rank",
-                                      shell->info->rankinfo.rank,
-                                      "size",
-                                      shell->info->shell_size) < 0)
-        return -1;
-    if (flux_shell_add_event_context (shell, "shell.start", 0,
-                                      "{s:i}",
-                                      "task-count",
-                                      shell->info->total_ntasks) < 0)
-        return -1;
-    return 0;
+    o = taskmap_encode_json (shell->info->taskmap, TASKMAP_ENCODE_WRAPPED);
+    if (o == NULL
+        || flux_shell_add_event_context (shell, "shell.init", 0,
+                                         "{s:i s:i}",
+                                         "leader-rank",
+                                         shell->info->rankinfo.rank,
+                                         "size",
+                                         shell->info->shell_size) < 0
+        || flux_shell_add_event_context (shell, "shell.start", 0,
+                                         "{s:O}",
+                                         "taskmap", o) < 0)
+        goto out;
+    rc = 0;
+out:
+    json_decref (o);
+    return rc;
 }
 
 /*  Export a static list of environment variables from the job environment
