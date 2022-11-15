@@ -87,7 +87,8 @@ flux_shell_SOURCES = \
 	mustache.c \
 	doom.c \
 	exception.c \
-	rlimit.c
+	rlimit.c \
+	cyclic.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \
