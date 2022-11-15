@@ -1189,6 +1189,93 @@ static int shell_initrc (flux_shell_t *shell)
     return load_initrc (shell, default_rcfile);
 }
 
+static int shell_taskmap (flux_shell_t *shell)
+{
+    int rc;
+    const char *scheme;
+    const char *value = "";
+    char *topic = NULL;
+    char *map = NULL;
+    char *newmap = NULL;
+    flux_plugin_arg_t *args = NULL;
+    struct taskmap *taskmap;
+    flux_error_t error;
+
+    if ((rc = flux_shell_getopt_unpack (shell,
+                                       "taskmap",
+                                       "{s:s s?s}",
+                                       "scheme", &scheme,
+                                       "value", &value)) < 0) {
+        shell_log_error ("failed to parse taskmap shell option");
+        return -1;
+    }
+    if (rc == 0
+        || strcmp (scheme, "block") == 0)
+        return 0;
+
+    shell_trace ("remapping tasks with scheme=%s value=%s",
+                 scheme,
+                 value);
+
+    if (strcmp (scheme, "manual") == 0) {
+        if (!(taskmap = taskmap_decode (value, &error)))
+            shell_die (1, "taskmap=%s: %s", value, error.text);
+        if (shell_info_set_taskmap (shell->info, taskmap) < 0)
+            shell_die (1, "failed to set new shell taskmap");
+        return 0;
+    }
+
+    rc = -1;
+    if (!(map = taskmap_encode (shell->info->taskmap,
+                                TASKMAP_ENCODE_WRAPPED))) {
+        shell_log_errno ("taskmap.%s: taskmap_encode", scheme);
+        return -1;
+    }
+    if (!(args = flux_plugin_arg_create ())
+        || flux_plugin_arg_pack (args,
+                                 FLUX_PLUGIN_ARG_IN,
+                                 "{s:s s:s s:s}",
+                                 "taskmap", map,
+                                 "scheme", scheme,
+                                 "value", value) < 0) {
+        shell_log_error ("taskmap.%s: failed to create plugin args: %s",
+                         scheme,
+                         flux_plugin_arg_strerror (args));
+        goto out;
+    }
+    if (asprintf (&topic, "taskmap.%s", scheme) < 0
+        || plugstack_call (shell->plugstack, topic, args) < 0) {
+        shell_log_errno ("%s failed", topic);
+        goto out;
+    }
+    /*  Unpack arguments to get new taskmap  */
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_OUT,
+                                "{s:s}",
+                                "taskmap", &newmap) < 0
+        || newmap == NULL) {
+        shell_die (1, "failed to map tasks with scheme=%s", scheme);
+    }
+    if (!(taskmap = taskmap_decode (newmap, &error))) {
+        shell_log_error ("taskmap.%s returned invalid map: %s",
+                          scheme,
+                          error.text);
+        goto out;
+    }
+    if (shell_info_set_taskmap (shell->info, taskmap) < 0) {
+        shell_log_errno ("unable to update taskmap");
+        goto out;
+    }
+    if (shell->info->shell_rank == 0)
+        shell_debug ("taskmap uptdated to %s", newmap);
+    rc = 0;
+out:
+    flux_plugin_arg_destroy (args);
+    free (topic);
+    free (map);
+    return rc;
+}
+
 static int shell_init (flux_shell_t *shell)
 {
     return plugstack_call (shell->plugstack, "shell.init", NULL);
@@ -1364,6 +1451,9 @@ int main (int argc, char *argv[])
      */
     if (shell_initrc (&shell) < 0)
         shell_die_errno (1, "shell_initrc");
+
+    if (shell_taskmap (&shell) < 0)
+        shell_die (1, "shell_taskmap");
 
     /* Register the default components of the shell.init eventlog event
      * context. This includes the current taskmap, which may have been
