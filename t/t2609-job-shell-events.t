@@ -16,9 +16,9 @@ test_expect_success 'flux-shell: 1N: init and start shell events are emitted' '
 	flux job wait-event -vt 5 -p guest.exec.eventlog \
 		-m leader-rank=0 ${id} shell.init &&
 	flux job wait-event -vt 5 -p guest.exec.eventlog \
-		-m size=1 ${id} shell.init  &&
+		${id} shell.init  &&
 	flux job wait-event -vt 5 -p guest.exec.eventlog \
-		-m task-count=1 ${id} shell.start 
+		${id} shell.start
 '
 test_expect_success 'flux-shell: 2N: init and start shell events are emitted' '
 	id=$(flux mini submit -n4 -N2 /bin/true)  &&
@@ -27,7 +27,7 @@ test_expect_success 'flux-shell: 2N: init and start shell events are emitted' '
 	flux job wait-event -vt 5 -p guest.exec.eventlog \
 		-m size=2 ${id} shell.init  &&
 	flux job wait-event -vt 5 -p guest.exec.eventlog \
-		-m task-count=4 ${id} shell.start 
+		${id} shell.start
 '
 test_expect_success 'flux-shell: plugin can add event context' '
 	cat >test-event.lua <<-EOT &&
