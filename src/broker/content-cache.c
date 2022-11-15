@@ -414,6 +414,7 @@ static void content_load_request (flux_t *h, flux_msg_handler_t *mh,
     const void *hash;
     int hash_size;
     struct cache_entry *e;
+    const char *errmsg = NULL;
 
     if (flux_request_decode_raw (msg, NULL, &hash, &hash_size) < 0)
         goto error;
@@ -463,6 +464,17 @@ static void content_load_request (flux_t *h, flux_msg_handler_t *mh,
         }
         return; /* RPC continuation will respond to msg */
     }
+    if (e->valid && e->mmapped) { // rank 0 only
+        if (!content_mmap_validate (e->data_container,
+                                    e->hash,
+                                    content_hash_size,
+                                    e->data,
+                                    e->len)) {
+            errmsg = "mapped file content has changed";
+            errno = EINVAL;
+            goto error;
+        }
+    }
 
     /* Send load response with FLUX_MSGFLAG_USER1 representing the
      * ephemeral flag, if set.
@@ -477,7 +489,7 @@ static void content_load_request (flux_t *h, flux_msg_handler_t *mh,
     flux_msg_decref (response);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "content load: flux_respond_error");
 }
 
