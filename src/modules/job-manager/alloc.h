@@ -69,6 +69,8 @@ void alloc_disconnect_rpc (flux_t *h,
                            const flux_msg_t *msg,
                            void *arg);
 
+bool alloc_sched_ready (struct alloc *alloc);
+
 #endif /* ! _FLUX_JOB_MANAGER_ALLOC_H */
 
 /*

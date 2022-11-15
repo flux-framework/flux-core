@@ -22,15 +22,26 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
+#include "alloc.h"
 #include "job-manager.h"
 #include "conf.h"
 #include "restart.h"
 #include "queue.h"
 
+/* What it means to be administratively stopped:
+ *
+ * While allocation is stopped, the scheduler can remain loaded and
+ * handle requests, but the job manager won't send any more allocation
+ * requests.  Pending alloc requests are canceled.  The job manager
+ * continues to send free requests to the scheduler as jobs relinquish
+ * resources.
+ */
 struct jobq {
     char *name;
     bool enable;    // jobs may be submitted to this queue
     char *disable_reason;   // reason if disabled
+    bool start;
+    char *stop_reason; // reason if stopped (optionally set)
 };
 
 struct queue {
@@ -72,6 +83,7 @@ static struct jobq *jobq_create (const char *name)
     if (name && !(q->name = strdup (name)))
         goto error;
     q->enable = true;
+    q->start = true;
     return q;
 error:
     jobq_destroy (q);
@@ -98,6 +110,26 @@ static int jobq_enable (struct jobq *q,
     return 0;
 }
 
+static int jobq_start (struct jobq *q, bool start, const char *stop_reason)
+{
+    if (start) {
+        q->start = true;
+        free (q->stop_reason);
+        q->stop_reason = NULL;
+    }
+    else {
+        char *cpy = NULL;
+        if (stop_reason) {
+            if (!(cpy = strdup (stop_reason)))
+                return -1;
+        }
+        free (q->stop_reason);
+        q->stop_reason = cpy;
+        q->start = false;
+    }
+    return 0;
+}
+
 static int jobq_enable_all (struct queue *queue,
                             bool enable,
                             const char *disable_reason)
@@ -112,6 +144,25 @@ static int jobq_enable_all (struct queue *queue,
     }
     else {
         if (jobq_enable (queue->anon, enable, disable_reason) < 0)
+            return -1;
+    }
+    return 0;
+}
+
+static int jobq_start_all (struct queue *queue,
+                           bool start,
+                           const char *stop_reason)
+{
+    if (queue->have_named_queues) {
+        struct jobq *q = zhashx_first (queue->named);
+        while (q) {
+            if (jobq_start (q, start, stop_reason) < 0)
+                return -1;
+            q = zhashx_next (queue->named);
+        }
+    }
+    else {
+        if (jobq_start (queue->anon, start, stop_reason) < 0)
             return -1;
     }
     return 0;
@@ -260,6 +311,21 @@ int queue_submit_check (struct queue *queue,
     return 0;
 }
 
+bool queue_started (struct queue *queue)
+{
+    if (queue->have_named_queues) {
+        struct jobq *q = zhashx_first (queue->named);
+        while (q) {
+            if (q->start)
+                return true;
+            q = zhashx_next (queue->named);
+        }
+        return false;
+    }
+
+    return queue->anon->start;
+}
+
 /* N.B. the broker will have already validated the basic queue configuration so
  * we shouldn't need to produce detailed configuration errors for users here.
  */
@@ -362,6 +428,17 @@ error:
     json_decref (a);
 }
 
+static int set_string (json_t *o, const char *key, const char *val)
+{
+    json_t *s = json_string (val);
+    if (!s || json_object_set_new (o, key, s) < 0) {
+        json_decref (s);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
 static void queue_status_cb (flux_t *h,
                              flux_msg_handler_t *mh,
                              const flux_msg_t *msg,
@@ -372,7 +449,9 @@ static void queue_status_cb (flux_t *h,
     const char *errmsg = NULL;
     const char *name = NULL;
     struct jobq *q;
-    int rc;
+    json_t *o = NULL;
+    bool start;
+    const char *stop_reason = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s?s}", "name", &name) < 0)
         goto error;
@@ -381,21 +460,39 @@ static void queue_status_cb (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (q->enable)
-        rc = flux_respond_pack (h, msg, "{s:b}", "enable", 1);
-    else {
-        rc = flux_respond_pack (h,
-                                msg,
-                                "{s:b s:s}",
-                                "enable", 0,
-                                "disable_reason", q->disable_reason);
+    /* If the scheduler is not loaded the queue is considered stopped
+     * with special reason "Scheduler is offline".
+     */
+    if (!alloc_sched_ready (queue->ctx->alloc)) {
+        start = false;
+        stop_reason = "Scheduler is offline";
     }
-    if (rc < 0)
+    else {
+        start = q->start;
+        stop_reason = q->stop_reason;
+    }
+    if (!(o = json_pack ("{s:b s:b}",
+                         "enable", q->enable,
+                         "start", start))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (!q->enable) {
+        if (set_string (o, "disable_reason", q->disable_reason) < 0)
+            goto error;
+    }
+    if (!start && stop_reason) {
+        if (set_string (o, "stop_reason", stop_reason) < 0)
+            goto error;
+    }
+    if (flux_respond_pack (h, msg, "O", o) < 0)
         flux_log_error (h, "error responding to job-manager.queue-status");
+    json_decref (o);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "error responding to job-manager.queue-status");
+    json_decref (o);
 }
 
 static void queue_enable_cb (flux_t *h,
@@ -453,6 +550,48 @@ error:
         flux_log_error (h, "error responding to job-manager.queue-enable");
 }
 
+static void queue_stop (struct queue *queue)
+{
+    if (alloc_pending_count (queue->ctx->alloc) > 0) {
+        struct job *job = zhashx_first (queue->ctx->active_jobs);
+        while (job) {
+            if (job->alloc_pending)
+                alloc_cancel_alloc_request (queue->ctx->alloc, job);
+            job = zhashx_next (queue->ctx->active_jobs);
+        }
+    }
+}
+
+static void queue_start_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
+{
+    struct queue *queue = arg;
+    const char *errmsg = NULL;
+    int start;
+    const char *stop_reason = NULL;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:b s?s}",
+                             "start", &start,
+                             "reason", &stop_reason) < 0)
+        goto error;
+    if (jobq_start_all (queue, start, stop_reason))
+        goto error;
+    if (!start)
+        queue_stop (queue);
+    if (restart_save_state (queue->ctx) < 0)
+        flux_log_error (h, "problem saving checkpoint after queue change");
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to job-manager.queue-start");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to job-manager.queue-start");
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -470,6 +609,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "job-manager.queue-enable",
         queue_enable_cb,
+        0,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.queue-start",
+        queue_start_cb,
         0,
     },
     FLUX_MSGHANDLER_TABLE_END,

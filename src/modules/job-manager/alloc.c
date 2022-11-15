@@ -32,6 +32,7 @@
 #include "event.h"
 #include "drain.h"
 #include "annotate.h"
+#include "queue.h"
 
 struct alloc {
     struct job_manager *ctx;
@@ -463,7 +464,7 @@ static bool alloc_work_available (struct job_manager *ctx)
 {
     struct job *job;
 
-    if (ctx->alloc->stopped) // 'flux queue stop' stopped scheduling
+    if (!queue_started (ctx->queue))
         return false;
     if (!ctx->alloc->ready) // scheduler protocol is not ready for alloc
         return false;
@@ -678,6 +679,11 @@ int alloc_queue_recalc_pending (struct alloc *alloc)
 int alloc_pending_count (struct alloc *alloc)
 {
     return alloc->alloc_pending_count;
+}
+
+bool alloc_sched_ready (struct alloc *alloc)
+{
+    return alloc->ready;
 }
 
 /* Cancel all pending alloc requests in preparation for stopping

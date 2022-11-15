@@ -25,6 +25,8 @@ int queue_submit_check (struct queue *queue,
                         json_t *jobspec,
                         flux_error_t *error);
 
+bool queue_started (struct queue *queue);
+
 #endif /* ! _FLUX_JOB_MANAGER_QUEUE_H */
 
 // vi:ts=4 sw=4 expandtab
