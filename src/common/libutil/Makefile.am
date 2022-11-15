@@ -95,6 +95,8 @@ libutil_la_SOURCES = \
 	errprintf.h \
 	fileref.c \
 	fileref.h \
+	hola.c \
+	hola.h \
 	strstrip.c \
 	strstrip.h
 
