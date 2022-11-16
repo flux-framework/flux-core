@@ -130,9 +130,22 @@ test_expect_success 'flux-queue: submit a job and make sure alloc sent' '
 	flux job wait-event ${id} debug.alloc-request
 '
 
+wait_for_pending_cancel () {
+	local n=$1
+	local count=$2
+	for try in $(seq 1 $n); do
+		echo Check queue pending count, try ${try} of $n 2>&1
+		flux queue status -v 2>&1 \
+		  | grep "${count} alloc requests pending to scheduler" \
+		  && return
+	done
+}
+
+# internally cancel is sent to scheduler, can be racy when scheduler responds
+# to cancel request, must wait for it to be returned
 test_expect_success 'flux-queue: stop canceled alloc request' '
-	flux queue stop -v >stop.out &&
-	grep "1 alloc requests pending to scheduler" stop.out
+	flux queue stop &&
+	wait_for_pending_cancel 10 0
 '
 
 test_expect_success 'flux-queue: start scheduling and cancel long job' '
