@@ -42,12 +42,12 @@ static int groups_get_count (flux_t *h, const char *name)
     return count;
 }
 
-/* Return true if scheduling is disabled.
+/* Return true if scheduling is stopped.
  */
-static bool sched_disabled (flux_t *h)
+static bool sched_stopped (flux_t *h)
 {
     flux_future_t *f;
-    int enable;
+    int start;
 
     if (!(f = flux_rpc_pack (h,
                              "job-manager.alloc-admin",
@@ -55,11 +55,11 @@ static bool sched_disabled (flux_t *h)
                              0,
                              "{s:b s:b}",
                              "query_only", 1,
-                             "enable", 0))
-        || flux_rpc_get_unpack (f, "{s:b}", "enable", &enable) < 0)
+                             "start", 0))
+        || flux_rpc_get_unpack (f, "{s:b}", "start", &start) < 0)
         log_err_exit ("Error fetching alloc status");
     flux_future_destroy (f);
-    return enable ? false : true;
+    return start ? false : true;
 }
 
 static bool queue_is_enabled (flux_t *h, const char *name)
@@ -265,7 +265,7 @@ static void default_summary (flux_t *h)
     int drained = 0;
     int offline = 0;
     bool submit_is_disabled = false;
-    bool sched_is_disabled = false;
+    bool sched_is_stopped = false;
     flux_future_t *f;
     const char *broker_state;
     double duration;
@@ -291,7 +291,7 @@ static void default_summary (flux_t *h)
         drained = resource_status_drained (h);
         offline = size - groups_get_count (h, "broker.online");
         submit_is_disabled = submit_disabled (h);
-        sched_is_disabled = sched_disabled (h);
+        sched_is_stopped = sched_stopped (h);
     }
     if (fsd_format_duration_ex (fsd, sizeof (fsd), duration, 2) < 0)
         log_err_exit ("Error formatting uptime duration");
@@ -310,11 +310,11 @@ static void default_summary (flux_t *h)
             size,
             extra);
 
-    /* optional 2nd line for submit/sched disabled
+    /* optional 2nd line for submit disabled/sched stopped
      */
     extra[0] = '\0';
     append_if (extra, sizeof (extra), "submit disabled", submit_is_disabled);
-    append_if (extra, sizeof (extra), "scheduler disabled", sched_is_disabled);
+    append_if (extra, sizeof (extra), "scheduler stopped", sched_is_stopped);
     if (strlen (extra) > 0)
         printf ("  %s\n", extra);
 

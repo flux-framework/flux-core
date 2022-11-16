@@ -236,7 +236,7 @@ void alloc_admin (flux_t *h,
                   bool verbose,
                   bool quiet,
                   int query_only,
-                  int enable,
+                  int start,
                   const char *reason)
 {
     flux_future_t *f;
@@ -252,15 +252,15 @@ void alloc_admin (flux_t *h,
                              "{s:b s:b s:s}",
                              "query_only",
                              query_only,
-                             "enable",
-                             enable,
+                             "start",
+                             start,
                              "reason",
                              reason ? reason : "")))
         log_err_exit ("error sending alloc-admin request");
     if (flux_rpc_get_unpack (f,
                              "{s:b s:s s:i s:i s:i s:i}",
-                             "enable",
-                             &enable,
+                             "start",
+                             &start,
                              "reason",
                              &reason,
                              "queue_length",
@@ -274,7 +274,7 @@ void alloc_admin (flux_t *h,
         log_msg_exit ("alloc-admin: %s", future_strerror (f, errno));
     if (!quiet) {
         printf ("Scheduling is %s%s%s\n",
-                enable ? "enabled" : "disabled",
+                start ? "started" : "stopped",
                 reason && strlen (reason) > 0 ? ": " : "",
                 reason ? reason : "");
     }

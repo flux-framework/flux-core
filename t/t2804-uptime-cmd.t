@@ -27,9 +27,9 @@ test_expect_success 'flux-uptime reports submit disabled' '
 	flux queue disable "testing" &&
 	flux uptime | grep "submit disabled"
 '
-test_expect_success 'flux-uptime reports scheduler disabled' '
+test_expect_success 'flux-uptime reports scheduler stopped' '
 	flux queue stop &&
-	flux uptime | grep "scheduler disabled"
+	flux uptime | grep "scheduler stopped"
 '
 test_expect_success 'flux-uptime reports drained node count' '
 	flux resource drain 1,3 &&

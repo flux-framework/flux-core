@@ -39,8 +39,8 @@ struct alloc {
     zlistx_t *queue;
     zlistx_t *pending_jobs;
     bool ready;
-    bool disable;
-    char *disable_reason;
+    bool stopped;
+    char *stopped_reason;
     flux_watcher_t *prep;
     flux_watcher_t *check;
     flux_watcher_t *idle;
@@ -463,7 +463,7 @@ static bool alloc_work_available (struct job_manager *ctx)
 {
     struct job *job;
 
-    if (ctx->alloc->disable) // 'flux queue stop' disabled scheduling
+    if (ctx->alloc->stopped) // 'flux queue stop' stopped scheduling
         return false;
     if (!ctx->alloc->ready) // scheduler protocol is not ready for alloc
         return false;
@@ -680,7 +680,7 @@ int alloc_pending_count (struct alloc *alloc)
     return alloc->alloc_pending_count;
 }
 
-/* Cancel all pending alloc requests in preparation for disabling
+/* Cancel all pending alloc requests in preparation for stopping
  * resource allocation.
  */
 static void cancel_all_pending (struct alloc *alloc)
@@ -699,18 +699,18 @@ static void cancel_all_pending (struct alloc *alloc)
 
 /* Control resource allocation (query/start/stop).
  * If 'query_only' is true, report allocation status without altering it.
- * Otherwise update the alloc->disable flag, and for disable only,
- * optionally set alloc->disable_reason.
+ * Otherwise update the alloc->stopped flag, and for stopped only,
+ * optionally set alloc->stopped_reason.
  *
- * What it means to be administratively disabled:
- * While allocation is disabled, the scheduler can remain loaded and handle
+ * What it means to be administratively stopped:
+ * While allocation is stopped, the scheduler can remain loaded and handle
  * requests, but the job manager won't send any more allocation requests.
  * Pending alloc requests are canceled (jobs remain in SCHED state and
  * return to alloc->queue).  The job manager continues to send free requests
  * to the scheduler as jobs relinquish resources.
  *
- * If allocation is adminstratively enabled, but the scheduler is not loaded,
- * the current state is reported as disabled with reason "Scheduler is offline".
+ * If allocation is adminstratively started, but the scheduler is not loaded,
+ * the current state is reported as stopped with reason "Scheduler is offline".
  */
 static void alloc_admin_cb (flux_t *h,
                             flux_msg_handler_t *mh,
@@ -721,7 +721,7 @@ static void alloc_admin_cb (flux_t *h,
     struct alloc *alloc = ctx->alloc;
     const char *errmsg = NULL;
     int query_only;
-    int enable;
+    int start;
     const char *reason = NULL;
 
     if (flux_request_unpack (msg,
@@ -729,8 +729,8 @@ static void alloc_admin_cb (flux_t *h,
                              "{s:b s:b s?:s}",
                              "query_only",
                              &query_only,
-                             "enable",
-                             &enable,
+                             "start",
+                             &start,
                              "reason",
                              &reason) < 0)
         goto error;
@@ -739,33 +739,33 @@ static void alloc_admin_cb (flux_t *h,
             errmsg = "Request requires owner credentials";
             goto error;
         }
-        if (!enable) {
+        if (!start) {
             char *cpy = NULL;
             if (reason && strlen (reason) > 0 && !(cpy = strdup (reason)))
                 goto error;
-            free (alloc->disable_reason);
-            alloc->disable_reason = cpy;
+            free (alloc->stopped_reason);
+            alloc->stopped_reason = cpy;
             cancel_all_pending (alloc);
         }
-        alloc->disable = enable ? false : true;
+        alloc->stopped = start ? false : true;
     }
-    if (alloc->disable) { // administratively disabled
-        enable = 0;
-        reason  = alloc->disable_reason;
+    if (alloc->stopped) { // administratively stoppedd
+        start = 0;
+        reason  = alloc->stopped_reason;
     }
     else if (!alloc->ready) { // scheduler not loaded (waiting for hello)
-        enable = 0;
+        start = 0;
         reason = "Scheduler is offline";
     }
     else { // condtion normal
-        enable = 1;
+        start = 1;
         reason = NULL;
     }
     if (flux_respond_pack (h,
                            msg,
                            "{s:b s:s s:i s:i s:i s:i}",
-                           "enable",
-                           enable,
+                           "start",
+                           start,
                            "reason",
                            reason ? reason : "",
                            "queue_length",
@@ -809,7 +809,7 @@ void alloc_ctx_destroy (struct alloc *alloc)
         flux_watcher_destroy (alloc->idle);
         zlistx_destroy (&alloc->queue);
         zlistx_destroy (&alloc->pending_jobs);
-        free (alloc->disable_reason);
+        free (alloc->stopped_reason);
         free (alloc->sched_sender);
         free (alloc);
         errno = saved_errno;
