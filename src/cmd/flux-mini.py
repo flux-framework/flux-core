@@ -33,20 +33,25 @@ from flux.progress import ProgressBar
 from flux.uri import JobURI
 
 
-class Dependency:
+class URIArg:
     """Convenience class for handling dependencies
 
     Splits a dependency URI into fields and returns an RFC 26 dependency
     entry via the entry attribute.
     """
 
-    def __init__(self, uri):
+    def __init__(self, uri, name):
+        # append `:` if missing in uri so that a plain string is treated as
+        # a scheme with no path.
+        if ":" not in uri:
+            uri += ":"
+
         # replace first ':' with ':FXX' to work around urlparse refusal
         # to treat integer only path as a scheme:path.
         self.uri = urlparse(uri.replace(":", ":FXX", 1))
 
         if not self.uri.scheme or not self.uri.path:
-            raise ValueError(f'Invalid dependency URI "{uri}"')
+            raise ValueError(f'Invalid {name} URI "{uri}"')
 
         self.path = self.uri.path.replace("FXX", "", 1)
         self.scheme = self.uri.scheme
@@ -81,7 +86,7 @@ class Dependency:
 def dependency_array_create(uris):
     dependencies = []
     for uri in uris:
-        dependencies.append(Dependency(uri).entry)
+        dependencies.append(URIArg(uri, "dependency").entry)
     return dependencies
 
 
