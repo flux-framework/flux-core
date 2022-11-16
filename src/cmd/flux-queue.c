@@ -320,12 +320,18 @@ static void queue_admin (flux_t *h,
     json_decref (payload);
 }
 
-static void queue_status_one (flux_t *h, const char *name)
+typedef void (*queue_status_output_f) (const char *name,
+                                       bool enable,
+                                       const char *reason);
+
+static void queue_status_one (flux_t *h,
+                              const char *name,
+                              queue_status_output_f out_cb)
 {
     json_t *payload;
     flux_future_t *f;
     int enable;
-    const char *reason;
+    const char *reason = NULL;
 
     if (!(payload = json_object ()))
         log_msg_exit ("out of memory");
@@ -336,21 +342,14 @@ static void queue_status_one (flux_t *h, const char *name)
                                    "enable", &enable,
                                    "reason", &reason))
         log_msg_exit ("%s", future_strerror (f, errno));
-    if (enable) {
-        printf ("%s%sJob submission is enabled\n",
-                name ? name : "",
-                name ? ": " : "");
-    }
-    else {
-        printf ("%s%sJob submission is disabled: %s\n",
-                name ? name : "",
-                name ? ": " : "", reason);
-    }
+    out_cb (name, enable, reason);
     flux_future_destroy (f);
     json_decref (payload);
 }
 
-static void queue_status (flux_t *h, const char *name)
+static void queue_status (flux_t *h,
+                          const char *name,
+                          queue_status_output_f out_cb)
 {
     if (!name) {
         json_t *queues;
@@ -365,15 +364,15 @@ static void queue_status (flux_t *h, const char *name)
             size_t index;
             json_t *value;
             json_array_foreach (queues, index, value) {
-                queue_status_one (h, json_string_value (value));
+                queue_status_one (h, json_string_value (value), out_cb);
             }
         }
         else
-            queue_status_one (h, NULL);
+            queue_status_one (h, NULL, out_cb);
         flux_future_destroy (f);
     }
     else
-        queue_status_one (h, name);
+        queue_status_one (h, name, out_cb);
 }
 
 int cmd_enable (optparse_t *p, int argc, char **argv)
@@ -454,6 +453,23 @@ int cmd_stop (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
+static void print_enable_status (const char *name,
+                                 bool enable,
+                                 const char *reason)
+{
+    if (enable) {
+        printf ("%s%sJob submission is enabled\n",
+                name ? name : "",
+                name ? ": " : "");
+    }
+    else {
+        printf ("%s%sJob submission is disabled: %s\n",
+                name ? name : "",
+                name ? ": " : "",
+                reason);
+    }
+}
+
 int cmd_status (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
@@ -466,7 +482,7 @@ int cmd_status (optparse_t *p, int argc, char **argv)
     }
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    queue_status (h, name);
+    queue_status (h, name, print_enable_status);
 
     alloc_admin (h,
                  optparse_hasopt (p, "verbose"),
