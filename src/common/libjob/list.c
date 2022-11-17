@@ -19,7 +19,7 @@
 
 flux_future_t *flux_job_list (flux_t *h,
                               int max_entries,
-                              const char *json_str,
+                              const char *attrs_json_str,
                               uint32_t userid,
                               int states)
 {
@@ -30,8 +30,8 @@ flux_future_t *flux_job_list (flux_t *h,
                         | FLUX_JOB_STATE_INACTIVE);
     int saved_errno;
 
-    if (!h || max_entries < 0 || !json_str
-           || !(o = json_loads (json_str, 0, NULL))
+    if (!h || max_entries < 0 || !attrs_json_str
+           || !(o = json_loads (attrs_json_str, 0, NULL))
            || states & ~valid_states) {
         json_decref (o);
         errno = EINVAL;
@@ -55,14 +55,14 @@ flux_future_t *flux_job_list (flux_t *h,
 flux_future_t *flux_job_list_inactive (flux_t *h,
                                        int max_entries,
                                        double since,
-                                       const char *json_str)
+                                       const char *attrs_json_str)
 {
     flux_future_t *f;
     json_t *o = NULL;
     int saved_errno;
 
-    if (!h || max_entries < 0 || since < 0. || !json_str
-           || !(o = json_loads (json_str, 0, NULL))) {
+    if (!h || max_entries < 0 || since < 0. || !attrs_json_str
+           || !(o = json_loads (attrs_json_str, 0, NULL))) {
         errno = EINVAL;
         return NULL;
     }
@@ -84,14 +84,14 @@ flux_future_t *flux_job_list_inactive (flux_t *h,
 
 flux_future_t *flux_job_list_id (flux_t *h,
                                  flux_jobid_t id,
-                                 const char *json_str)
+                                 const char *attrs_json_str)
 {
     flux_future_t *f;
     json_t *o = NULL;
     int saved_errno;
 
-    if (!h || !json_str
-           || !(o = json_loads (json_str, 0, NULL))) {
+    if (!h || !attrs_json_str
+           || !(o = json_loads (attrs_json_str, 0, NULL))) {
         errno = EINVAL;
         return NULL;
     }
