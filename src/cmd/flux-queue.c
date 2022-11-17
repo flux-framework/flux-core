@@ -43,6 +43,12 @@ static struct optparse_option stop_opts[] = {
     { .name = "quiet", .has_arg = 0,
       .usage = "Display only errors",
     },
+    { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Specify queue to stop",
+    },
+    { .name = "all", .key = 'a', .has_arg = 0,
+      .usage = "Force command to apply to all queues if none specified",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -52,6 +58,12 @@ static struct optparse_option start_opts[] = {
     },
     { .name = "quiet", .has_arg = 0,
       .usage = "Display only errors",
+    },
+    { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Specify queue to start",
+    },
+    { .name = "all", .key = 'a', .has_arg = 0,
+      .usage = "Force command to apply to all queues if none specified",
     },
     OPTPARSE_TABLE_END
 };
@@ -298,14 +310,19 @@ static void queue_enable (flux_t *h,
 }
 
 static void queue_start (flux_t *h,
+                         const char *name,
                          bool start,
-                         const char *reason)
+                         const char *reason,
+                         bool all)
 {
     json_t *payload;
     flux_future_t *f;
 
-    if (!(payload = json_pack ("{s:b}", "start", start ? 1 : 0)))
+    if (!(payload = json_pack ("{s:b s:b}",
+                               "start", start ? 1 : 0,
+                               "all", all ? 1 : 0)))
         log_msg_exit ("out of memory");
+    add_string_if_set (payload, "name", name);
     add_string_if_set (payload, "reason", reason);
     f = flux_rpc_pack (h, "job-manager.queue-start", 0, 0, "O", payload);
     if (!f || flux_rpc_get (f, NULL) < 0)
@@ -424,10 +441,34 @@ static void print_start_status (const char *name,
             stop_reason ? stop_reason : "");
 }
 
+void check_legacy_all (flux_t *h, const char *name, bool *allp, bool quiet)
+{
+    /* to ensure backwards compatibility, we assume --all if neither
+     * --name or --all are specified.  However, only output warning
+     * if multiple queues are configured.
+     */
+    if (!name && !(*allp)) {
+        json_t *queues;
+        flux_future_t *f;
+
+        if (!quiet
+            && (f = flux_rpc (h, "job-manager.queue-list", NULL, 0, 0))
+            && flux_rpc_get_unpack (f,
+                                    "{s:o}",
+                                    "queues", &queues) == 0
+            && json_array_size (queues) > 0)
+            fprintf (stderr,
+                     "warning: --queue/--all not specified, assuming --all\n");
+        (*allp) = true;
+    }
+}
+
 int cmd_start (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
     int optindex = optparse_option_index (p);
+    const char *name = optparse_get_str (p, "queue", NULL);
+    bool all = optparse_hasopt (p, "all");
 
     if (argc - optindex > 0) {
         optparse_print_usage (p);
@@ -435,9 +476,10 @@ int cmd_start (optparse_t *p, int argc, char **argv)
     }
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    queue_start (h, true, NULL);
+    check_legacy_all (h, name, &all, optparse_hasopt (p, "quiet"));
+    queue_start (h, name, true, NULL, all);
     if (!optparse_hasopt (p, "quiet"))
-        queue_status (h, NULL, print_start_status);
+        queue_status (h, name, print_start_status);
     if (optparse_hasopt (p, "verbose"))
         alloc_query (h);
     flux_close (h);
@@ -448,15 +490,18 @@ int cmd_stop (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
     int optindex = optparse_option_index (p);
+    const char *name = optparse_get_str (p, "queue", NULL);
+    bool all = optparse_hasopt (p, "all");
     char *reason = NULL;
 
     if (argc - optindex > 0)
         reason = parse_arg_message (argv + optindex, "reason");
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    queue_start (h, false, reason);
+    check_legacy_all (h, name, &all, optparse_hasopt (p, "quiet"));
+    queue_start (h, name, false, reason, all);
     if (!optparse_hasopt (p, "quiet"))
-        queue_status (h, NULL, print_start_status);
+        queue_status (h, name, print_start_status);
     if (optparse_hasopt (p, "verbose"))
         alloc_query (h);
     flux_close (h);
