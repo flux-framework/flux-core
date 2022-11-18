@@ -391,8 +391,9 @@ static struct optparse_option taskmap_opts[] = {
     { .name = "hostname", .has_arg = 1, .arginfo = "TASKID",
       .usage = "Print the hostname on which a taskid executed",
     },
-    { .name = "to", .has_arg = 1, .arginfo="raw|pmi",
-      .usage = "Convert an RFC 34 taskmap to another form",
+    { .name = "to", .has_arg = 1, .arginfo="FORMAT",
+      .usage = "Convert an RFC 34 taskmap to another format "
+               "(FORMAT can be raw, pmi, or multiline)",
     },
 };
 
@@ -3472,6 +3473,10 @@ int cmd_taskmap (optparse_t *p, int argc, char **argv)
     char *s;
     flux_jobid_t id;
 
+    if (optindex == argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
     if (flux_job_id_parse (argv[optindex], &id) < 0) {
         flux_error_t error;
         if (!(map = taskmap_decode (argv[optindex], &error)))
