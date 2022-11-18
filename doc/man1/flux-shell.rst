@@ -138,6 +138,17 @@ file itself (see INITRC section, ``plugin.register()`` below)
 
 By default, flux-shell supports the following plugin callback topics:
 
+**taskmap.SCHEME**
+  Called when a taskmap scheme *SCHEME* is requested via the taskmap
+  shell option or corresponding ``--taskmap`` ``flux-mini`` option.
+  Plugins that want to offer a different taskmap scheme than the defaults
+  of ``block``, ``cyclic``, and ``manual`` can register a ``taskmap.*``
+  plugin callback and then users can request this mapping with the
+  appropriate ``--taskmap=name`` option. The default block taskmap is
+  passed to the plugin as "taskmap" in the plugin input arguments, and
+  the plugin should return the new taskmap as a string in the output args.
+  This callback is called before ``shell.init``.
+
 **shell.connect**
   Called just after the shell connects to the local Flux broker. (Only
   available to builtin shell plugins.)
@@ -300,6 +311,14 @@ options are supported by the builtin plugins of ``flux-shell``:
   name without the ``RLIMIT_`` prefix, e.g. ``core`` or ``nofile``. Users
   should not need to set this shell option as it is handled by commands
   like ``flux-mini``.
+
+**taskmap**
+  Request an alternate job task mapping. This option is an object
+  consisting of required key ``scheme`` and optional key ``value``. The
+  shell will attempt to call a ``taskmap.scheme`` plugin callback in the
+  shell to invoke the alternate requested mapping. If ``value`` is set,
+  this will also be passed to the invoked plugin. Normally, this option will
+  be set by the ``flux mini --taskmap`` option.
 
 SHELL INITRC
 ============
