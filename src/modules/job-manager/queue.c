@@ -345,7 +345,7 @@ static void queue_list_cb (flux_t *h,
             q = zhashx_next (queue->named);
         }
     }
-    if (flux_respond_pack (h, msg, "{s:o}", "queues", a) < 0)
+    if (flux_respond_pack (h, msg, "{s:O}", "queues", a) < 0)
         flux_log_error (h, "error responding to job-manager.queue-list");
     json_decref (a);
     return;
