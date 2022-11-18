@@ -100,10 +100,8 @@ static int queue_enable_all (struct queue *queue,
                              bool enable,
                              const char *reason)
 {
-    struct jobq *q;
-
     if (queue->have_named_queues) {
-        q = zhashx_first (queue->named);
+        struct jobq *q = zhashx_first (queue->named);
         while (q) {
             if (jobq_enable (q, enable, reason) < 0)
                 return -1;
@@ -347,7 +345,7 @@ static void queue_list_cb (flux_t *h,
             q = zhashx_next (queue->named);
         }
     }
-    if (flux_respond_pack (h, msg, "{s:o}", "queues", a) < 0)
+    if (flux_respond_pack (h, msg, "{s:O}", "queues", a) < 0)
         flux_log_error (h, "error responding to job-manager.queue-list");
     json_decref (a);
     return;

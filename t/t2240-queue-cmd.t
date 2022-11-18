@@ -297,6 +297,9 @@ test_expect_success 'flux queue status --queue fails with no queues' '
 test_expect_success 'flux queue enable --queue fails with no queues' '
 	test_must_fail flux queue enable --queue=batch
 '
+test_expect_success 'flux queue disable --queue fails with no queues' '
+	test_must_fail flux queue disable --queue=batch
+'
 test_expect_success 'ensure instance is drained' '
 	flux queue drain &&
 	flux queue status -v
@@ -326,7 +329,7 @@ test_expect_success 'flux-queue disable without --queue or --all fails' '
 test_expect_success 'flux-queue disable --all affects all queues' '
 	flux queue disable --all test reasons &&
 	flux queue status >mqstatus_dis.out &&
-	test $(grep -c "submission is disabled" mqstatus_dis.out) -eq 2
+	test $(grep -c "submission is disabled: test reason" mqstatus_dis.out) -eq 2
 '
 test_expect_success 'jobs may not be submitted to either queue' '
 	test_must_fail flux mini submit -q batch /bin/true &&
@@ -344,6 +347,7 @@ test_expect_success 'flux-queue disable can do one queue' '
 	flux queue disable -q batch nobatch &&
 	flux queue status >mqstatus_batchdis.out &&
 	test $(grep -c "submission is enabled" mqstatus_batchdis.out) -eq 1 &&
+	test $(grep -c "submission is disabled: nobatch" mqstatus_batchdis.out) -eq 1 &&
 	test_must_fail flux mini submit -q batch /bin/true &&
 	flux mini submit -q debug /bin/true
 '
@@ -356,6 +360,9 @@ test_expect_success 'flux-queue enable can do one queue' '
 '
 test_expect_success 'flux-queue enable fails on unknown queue' '
 	test_must_fail flux queue enable -q notaqueue
+'
+test_expect_success 'flux-queue disable fails on unknown queue' '
+	test_must_fail flux queue disable -q notaqueue
 '
 test_expect_success 'flux-queue status fails on unknown queue' '
 	test_must_fail flux queue status -q notaqueue

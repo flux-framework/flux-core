@@ -44,11 +44,11 @@ test_expect_success 'sched-simple: reload sched-simple with default resource.R' 
 	test "$($query)" = "rank[0-1]/core[0-3]"
 '
 test_expect_success 'sched-simple: all nodes up after reload' '
-	test_debug "flux resource list -v --states=up,down,allocated" &&
+	test_debug "flux resource list --format=rlist --states=up,down,allocated" &&
 	check_rlist "free" "rank[0-1]/core[0-3]" &&
 	check_nnodes "up" 2 &&
 	check_ncores "up" 8 &&
-	check_ncores "down" 0 
+	check_ncores "down" 0
 '
 test_expect_success 'sched-simple: flux-resource drain works' '
 	flux resource drain 0 &&

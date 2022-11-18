@@ -1504,7 +1504,8 @@ test_expect_success 'job-list parses flux-restart events' '
         flux module load job-list &&
         wait_jobid $jobid &&
         flux module reload job-exec &&
-        flux module reload sched-simple
+        flux module reload sched-simple &&
+        flux queue start
 '
 
 #
