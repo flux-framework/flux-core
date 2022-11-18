@@ -12,7 +12,8 @@ AM_CPPFLAGS = \
 	$(VALGRIND_CFLAGS) \
 	$(LUA_INCLUDE) \
 	$(HWLOC_CFLAGS) \
-	$(JANSSON_CFLAGS)
+	$(JANSSON_CFLAGS) \
+	$(LIBARCHIVE_CFLAGS)
 
 shellrcdir = \
 	$(fluxrcdir)/shell
@@ -81,6 +82,7 @@ flux_shell_SOURCES = \
 	pty.c \
 	batch.c \
 	tmpdir.c \
+	stage-in.c \
 	mpir/mpir.c \
 	mpir/ptrace.c \
 	mustache.h \
@@ -106,7 +108,8 @@ flux_shell_LDADD = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(LUA_LIB) \
 	$(HWLOC_LIBS) \
-	$(JANSSON_LIBS)
+	$(JANSSON_LIBS) \
+	$(LIBARCHIVE_LIBS)
 
 flux_shell_LDFLAGS = \
 	-export-dynamic \

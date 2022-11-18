@@ -31,6 +31,7 @@ static struct shell_builtin builtin_list_end = { 0 };
  *  to get the builtin automatically loaded at shell startup.
  */
 extern struct shell_builtin builtin_tmpdir;
+extern struct shell_builtin builtin_stage_in;
 extern struct shell_builtin builtin_log_eventlog;
 extern struct shell_builtin builtin_pmi;
 extern struct shell_builtin builtin_input;
@@ -50,6 +51,7 @@ extern struct shell_builtin builtin_cyclic;
 
 static struct shell_builtin * builtins [] = {
     &builtin_tmpdir,
+    &builtin_stage_in,
     &builtin_log_eventlog,
     &builtin_pmi,
     &builtin_input,
