@@ -431,6 +431,15 @@ int flux_shell_get_hwloc_xml (flux_shell_t *shell, const char **xmlp)
     return 0;
 }
 
+const struct taskmap *flux_shell_get_taskmap (flux_shell_t *shell)
+{
+    if (!shell || !shell->info) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return shell->info->taskmap;
+}
+
 static json_t *flux_shell_get_info_object (flux_shell_t *shell)
 {
     json_error_t err;
