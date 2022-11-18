@@ -106,6 +106,19 @@ test_expect_success 'flux-queue: status reports reason for stop' '
 	test_cmp status.exp status.out
 '
 
+test_expect_success 'flux-queue: stop works without message' '
+	flux queue stop
+'
+
+test_expect_success 'flux-queue: status reports no reason for stop' '
+	flux queue status >status2.out &&
+	cat <<-EOT >status2.exp &&
+	Job submission is enabled
+	Scheduling is stopped
+	EOT
+	test_cmp status2.exp status2.out
+'
+
 test_expect_success 'flux-queue: submit some jobs' '
 	flux mini submit --cc 1-3 --wait-event=priority /bin/true
 '
@@ -313,6 +326,12 @@ test_expect_success 'flux queue enable --queue fails with no queues' '
 test_expect_success 'flux queue disable --queue fails with no queues' '
 	test_must_fail flux queue disable --queue=batch
 '
+test_expect_success 'flux queue start --queue fails with no queues' '
+	test_must_fail flux queue start --queue=batch
+'
+test_expect_success 'flux queue stop --queue fails with no queues' '
+	test_must_fail flux queue stop --queue=batch
+'
 test_expect_success 'ensure instance is drained' '
 	flux queue drain &&
 	flux queue status -v
@@ -370,6 +389,97 @@ test_expect_success 'flux-queue enable can do one queue' '
 	test $(grep -c "submission is enabled" mqstatus_batchena.out) -eq 2 &&
 	flux mini submit -q batch /bin/true &&
 	flux mini submit -q debug /bin/true
+'
+
+
+test_expect_success 'flux-queue stop --all affects all queues' '
+	flux queue stop --all test reasons &&
+	flux queue status >mqstatus_stop.out &&
+	test $(grep -c "Scheduling is stopped: test reasons" mqstatus_stop.out) -eq 2
+'
+test_expect_success 'flux-queue stop w/o --all affects all queues but outputs warning' '
+	flux queue start --all &&
+	flux queue stop test reasons 2>mqstatus_stop2.err &&
+	grep "warning" mqstatus_stop2.err &&
+	flux queue status >mqstatus_stop2.out &&
+	test $(grep -c "Scheduling is stopped: test reasons" mqstatus_stop2.out) -eq 2
+'
+test_expect_success 'jobs may be submitted to either queue' '
+	flux mini submit --wait-event=priority -q batch /bin/true > job_batch1.id &&
+	flux mini submit --wait-event=priority -q debug /bin/true > job_debug1.id
+'
+
+wait_state() {
+	local jobid=$1
+	local state=$2
+	local i=0
+	while [ "$(flux jobs -no {state} ${jobid})" != "${state}" ] \
+		  && [ $i -lt 50 ]
+	do
+		sleep 0.1
+		i=$((i + 1))
+	done
+	if [ "$i" -eq "50" ]
+	then
+	    return 1
+	fi
+	return 0
+}
+
+test_expect_success 'submitted jobs are not running' '
+	wait_state $(cat job_batch1.id) SCHED &&
+	flux jobs -n -o "{state}" $(cat job_batch1.id) | grep SCHED &&
+	wait_state $(cat job_debug1.id) SCHED &&
+	flux jobs -n -o "{state}" $(cat job_debug1.id) | grep SCHED
+'
+test_expect_success 'flux-queue start --all affects all queues' '
+	flux queue start -a &&
+	flux queue status >mqstatus_start.out &&
+	test $(grep -c "Scheduling is started" mqstatus_start.out) -eq 2
+'
+test_expect_success 'submitted jobs ran and completed' '
+	wait_state $(cat job_batch1.id) INACTIVE &&
+	flux jobs -n -o "{state}" $(cat job_batch1.id) | grep INACTIVE &&
+	wait_state $(cat job_debug1.id) INACTIVE &&
+	flux jobs -n -o "{state}" $(cat job_debug1.id) | grep INACTIVE
+'
+test_expect_success 'flux-queue start w/o --all affects all queues but outputs warning' '
+	flux queue stop --all &&
+	flux queue start 2>mqstatus_start2.err &&
+	grep "warning" mqstatus_start2.err &&
+	flux queue status >mqstatus_start2.out &&
+	test $(grep -c "Scheduling is started" mqstatus_start2.out) -eq 2
+'
+
+test_expect_success 'flux-queue stop can do one queue' '
+	flux queue stop -q batch nobatch &&
+	flux queue status >mqstatus_batchstop.out &&
+	test $(grep -c "Scheduling is started" mqstatus_batchstop.out) -eq 1 &&
+	test $(grep -c "Scheduling is stopped: nobatch" mqstatus_batchstop.out) -eq 1 &&
+	flux mini submit -q batch /bin/true > job_batch2.id &&
+	flux mini submit -q debug /bin/true > job_debug2.id
+'
+test_expect_success 'check one job ran, other job didnt' '
+	wait_state $(cat job_debug2.id) INACTIVE &&
+	flux jobs -n -o "{state}" $(cat job_debug2.id) | grep INACTIVE &&
+	wait_state $(cat job_batch2.id) SCHED &&
+	flux jobs -n -o "{state}" $(cat job_batch2.id) | grep SCHED
+'
+test_expect_success 'flux-queue start can do one queue' '
+	flux queue start -q batch &&
+	flux queue status >mqstatus_batchstart.out &&
+	test $(grep -c "Scheduling is started" mqstatus_batchstart.out) -eq 2
+'
+test_expect_success 'previously submitted job run to completion' '
+	wait_state $(cat job_batch2.id) INACTIVE &&
+	flux jobs -n -o "{state}" $(cat job_batch2.id) | grep INACTIVE
+'
+
+test_expect_success 'flux-queue start fails on unknown queue' '
+	test_must_fail flux queue start -q notaqueue
+'
+test_expect_success 'flux-queue stop fails on unknown queue' '
+	test_must_fail flux queue stop -q notaqueue
 '
 test_expect_success 'flux-queue enable fails on unknown queue' '
 	test_must_fail flux queue enable -q notaqueue
