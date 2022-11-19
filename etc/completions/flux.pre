@@ -168,6 +168,7 @@ _flux_mini()
         --tasks-per-core= \
         --gpus-per-node= \
         -v --verbose \
+        --taskmap= \
     "
     local BATCH_ALLOC_OPTIONS="\
         -n --nslots= \
@@ -335,6 +336,7 @@ _flux_job()
         namespace \
         wait \
         memo \
+        taskmap \
     "
     local nojob_subcmds="\
         cancelall \
@@ -423,6 +425,13 @@ _flux_job()
     "
     local memo_OPTS="\
         --volatile
+    "
+    local taskmap_OPTS="\
+        --taskids= \
+        --ntasks= \
+        --nodeid= \
+        --hostname= \
+        --to= \
     "
     local purge_OPTS="\
         --age-limit= \
