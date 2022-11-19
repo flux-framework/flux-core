@@ -6,6 +6,8 @@ test_description='Test flux job manager restart'
 
 DUMPS=${SHARNESS_TEST_SRCDIR}/job-manager/dumps
 
+export FLUX_DISABLE_JOB_CLEANUP=t
+
 test_expect_success 'start instance with empty kvs, run one job, and dump' '
 	flux start -o,-Scontent.dump=dump.tar \
 	    flux mini run --env-remove=* /bin/true &&
@@ -54,7 +56,7 @@ test_expect_success 'purging all jobs triggers jobid checkpoint update' '
 	    flux kvs get checkpoint.job-manager"
 '
 
-test_expect_success 'verify that anon queue status persists across restart' '
+test_expect_success 'verify that anon queue disable persists across restart' '
 	flux start -o,-Scontent.dump=dump_dis.tar \
 	    flux queue disable disable-restart-test &&
 	flux start -o,-Scontent.restore=dump_dis.tar \
@@ -62,7 +64,15 @@ test_expect_success 'verify that anon queue status persists across restart' '
 	grep "disabled: disable-restart-test" dump_dis.out
 '
 
-test_expect_success 'verify that named queue status persists across restart' '
+test_expect_success 'verify that anon queue stopped persists across restart' '
+	flux start -o,-Scontent.dump=dump_stopped.tar \
+	    flux queue stop stop-restart-test &&
+	flux start -o,-Scontent.restore=dump_stopped.tar \
+	    flux queue status >dump_stopped.out &&
+	grep "stopped: stop-restart-test" dump_stopped.out
+'
+
+test_expect_success 'verify that named queue disable persists across restart' '
 	mkdir -p conf.d &&
 	cat >conf.d/queues.toml <<-EOT &&
 	[queues.debug]
@@ -82,6 +92,22 @@ test_expect_success 'verify that instance can restart after config change' '
 	flux start -o,-Scontent.restore=dump_queue_dis.tar \
 	    flux queue status >dump_queue_reconf.out &&
 	grep "^Job submission is enabled" dump_queue_reconf.out
+'
+
+test_expect_success 'verify that named queue stopped persists across restart' '
+	mkdir -p conf.d &&
+	cat >conf.d/queues.toml <<-EOT &&
+	[queues.debug]
+	[queues.batch]
+	EOT
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.dump=dump_queue_stopped.tar \
+	    flux queue stop --queue batch xyzzy &&
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.restore=dump_queue_stopped.tar \
+	    flux queue status >dump_queue_stopped.out &&
+	grep "^debug: Scheduling is started" dump_queue_stopped.out &&
+	grep "^batch: Scheduling is stopped: xyzzy" dump_queue_stopped.out
 '
 
 test_expect_success 'checkpointed queue no longer configured on restart is ignored' '
