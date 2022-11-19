@@ -495,6 +495,28 @@ OTHER OPTIONS
    is accepted, e.g. ``2021-06-21 8am``, ``in an hour``,
    ``tomorrow morning``, etc.
 
+**--taskmap=SCHEME[:VALUE]**
+   Choose an alternate method for mapping job task IDs to nodes of the
+   job. The job shell maps tasks using a "block" distribution scheme by
+   default (consecutive tasks share nodes) This option allows the
+   activation of alternate schemes by name, including an optional *VALUE*.
+   Supported schemes which are built in to the job shell include
+
+   cyclic[:N]
+    Tasks are distributed over consecutive nodes with a stride of *N*
+    (where N=1 by default).
+
+   manual:TASKMAP
+    An explicit RFC 34 taskmap is provided and used to manually map
+    task ids to nodes. The provided *TASKMAP* must match the total number
+    of tasks in the job and the number of tasks per node assigned by
+    the job shell, so this option is not useful unless the total number
+    of nodes and tasks per node are known at job submission time.
+
+   However, shell plugins may provide other task mapping schemes, so
+   check the current job shell configuration for a full list of supported
+   taskmap schemes.
+
 **--dry-run**
    Don't actually submit job. Just emit jobspec on stdout and exit for
    ``run``, ``submit``, ``alloc``, and ``batch``. For ``bulksubmit``,
