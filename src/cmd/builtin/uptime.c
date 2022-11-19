@@ -53,10 +53,9 @@ static bool sched_disabled (flux_t *h)
                              "job-manager.alloc-admin",
                              0,
                              0,
-                             "{s:b s:b s:s}",
+                             "{s:b s:b}",
                              "query_only", 1,
-                             "enable", 0,
-                             "reason", ""))
+                             "enable", 0))
         || flux_rpc_get_unpack (f, "{s:b}", "enable", &enable) < 0)
         log_err_exit ("Error fetching alloc status");
     flux_future_destroy (f);
