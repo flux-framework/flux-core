@@ -34,6 +34,10 @@ void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job);
  */
 int alloc_cancel_alloc_request (struct alloc *alloc, struct job *job);
 
+/* Accessor for the count of queued alloc requests.
+ */
+int alloc_queue_count (struct alloc *alloc);
+
 /* Accessor for the count of pending alloc requests.
  */
 int alloc_pending_count (struct alloc *alloc);

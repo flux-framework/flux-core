@@ -66,9 +66,11 @@ static void requeue_pending (struct alloc *alloc, struct job *job)
         job->handle = NULL;
     }
     job->alloc_pending = 0;
-    if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
-        flux_log (ctx->h, LOG_ERR, "failed to enqueue job for scheduling");
-    job->alloc_queued = 1;
+    if (queue_started (alloc->ctx->queue, job)) {
+        if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
+            flux_log (ctx->h, LOG_ERR, "failed to enqueue job for scheduling");
+        job->alloc_queued = 1;
+    }
     annotations_sched_clear (job, &cleared);
     if (cleared) {
         if (event_job_post_pack (ctx->event, job, "annotations",
@@ -311,11 +313,13 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                 "%s: event_job_post_pack: id=%ju",
                                 __FUNCTION__, (uintmax_t)id);
         }
-        if (event_job_action (ctx->event, job) < 0) {
-            flux_log_error (h,
-                            "event_job_action id=%ju on alloc cancel",
-                            (uintmax_t)id);
-            goto teardown;
+        if (queue_started (alloc->ctx->queue, job)) {
+            if (event_job_action (ctx->event, job) < 0) {
+                flux_log_error (h,
+                                "event_job_action id=%ju on alloc cancel",
+                                (uintmax_t)id);
+                goto teardown;
+            }
         }
         drain_check (alloc->ctx->drain);
         break;
@@ -464,8 +468,6 @@ static bool alloc_work_available (struct job_manager *ctx)
 {
     struct job *job;
 
-    if (!queue_started (ctx->queue))
-        return false;
     if (!ctx->alloc->ready) // scheduler protocol is not ready for alloc
         return false;
     if (!(job = zlistx_first (ctx->alloc->queue))) // queue is empty
@@ -562,7 +564,8 @@ int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
     if (!job->alloc_bypass
         && !job->alloc_queued
         && !job->alloc_pending
-        && job->priority != FLUX_JOB_PRIORITY_MIN) {
+        && job->priority != FLUX_JOB_PRIORITY_MIN
+        && queue_started (alloc->ctx->queue, job)) {
         bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
         assert (job->handle == NULL);
         if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
@@ -674,6 +677,11 @@ int alloc_queue_recalc_pending (struct alloc *alloc)
         tail = zlistx_prev (alloc->pending_jobs);
     }
     return 0;
+}
+
+int alloc_queue_count (struct alloc *alloc)
+{
+    return zlistx_size (alloc->queue);
 }
 
 int alloc_pending_count (struct alloc *alloc)

@@ -247,7 +247,7 @@ test_expect_success 'flux-queue: queue status -v shows expected counts' '
 	cat <<-EOT >stat2.exp &&
 	Job submission is enabled
 	Scheduling is stopped
-	2 alloc requests queued
+	0 alloc requests queued
 	0 alloc requests pending to scheduler
 	0 free requests pending to scheduler
 	0 running jobs

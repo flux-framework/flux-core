@@ -311,16 +311,19 @@ int queue_submit_check (struct queue *queue,
     return 0;
 }
 
-bool queue_started (struct queue *queue)
+bool queue_started (struct queue *queue, struct job *job)
 {
     if (queue->have_named_queues) {
-        struct jobq *q = zhashx_first (queue->named);
-        while (q) {
-            if (q->start)
-                return true;
-            q = zhashx_next (queue->named);
+        struct jobq *q;
+        if (!job->queue)
+            return false;
+        if (!(q = zhashx_lookup (queue->named, job->queue))) {
+            flux_log (queue->ctx->h, LOG_ERR,
+                      "%s: job %ju invalid queue: %s",
+                      __FUNCTION__, (uintmax_t)job->id, job->queue);
+            return false;
         }
-        return false;
+        return q->start;
     }
 
     return queue->anon->start;
@@ -550,13 +553,37 @@ error:
         flux_log_error (h, "error responding to job-manager.queue-enable");
 }
 
-static void queue_stop (struct queue *queue)
+static int queue_start (struct queue *queue, const char *name)
 {
-    if (alloc_pending_count (queue->ctx->alloc) > 0) {
+    struct job *job = zhashx_first (queue->ctx->active_jobs);
+    while (job) {
+        if (!name || (job->queue && !strcmp (job->queue, name))) {
+            if (!job->alloc_queued
+                && !job->alloc_pending
+                && job->state == FLUX_JOB_STATE_SCHED) {
+                if (alloc_enqueue_alloc_request (queue->ctx->alloc, job) < 0)
+                    return -1;
+                if (alloc_queue_recalc_pending (queue->ctx->alloc) < 0)
+                    return -1;
+            }
+        }
+        job = zhashx_next (queue->ctx->active_jobs);
+    }
+    return 0;
+}
+
+static void queue_stop (struct queue *queue, const char *name)
+{
+    if (alloc_queue_count (queue->ctx->alloc) > 0
+        || alloc_pending_count (queue->ctx->alloc) > 0) {
         struct job *job = zhashx_first (queue->ctx->active_jobs);
         while (job) {
-            if (job->alloc_pending)
-                alloc_cancel_alloc_request (queue->ctx->alloc, job);
+            if (!name || (job->queue && !strcmp (job->queue, name))) {
+                if (job->alloc_queued)
+                    alloc_dequeue_alloc_request (queue->ctx->alloc, job);
+                else if (job->alloc_pending)
+                    alloc_cancel_alloc_request (queue->ctx->alloc, job);
+            }
             job = zhashx_next (queue->ctx->active_jobs);
         }
     }
@@ -568,20 +595,52 @@ static void queue_start_cb (flux_t *h,
                             void *arg)
 {
     struct queue *queue = arg;
+    flux_error_t error;
     const char *errmsg = NULL;
+    const char *name = NULL;
     int start;
     const char *stop_reason = NULL;
+    int all;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:b s?s}",
+                             "{s?s s:b s?s s:b}",
+                             "name", &name,
                              "start", &start,
-                             "reason", &stop_reason) < 0)
+                             "reason", &stop_reason,
+                             "all", &all) < 0)
         goto error;
-    if (jobq_start_all (queue, start, stop_reason))
-        goto error;
-    if (!start)
-        queue_stop (queue);
+    if (!name) {
+        if (queue->have_named_queues && !all) {
+            errmsg = "Use --all to apply this command to all queues";
+            errno = EINVAL;
+            goto error;
+        }
+        if (jobq_start_all (queue, start, stop_reason))
+            goto error;
+        if (start) {
+            if (queue_start (queue, NULL) < 0)
+                goto error;
+        }
+        else
+            queue_stop (queue, NULL);
+    }
+    else {
+        struct jobq *q;
+        if (!(q = queue_lookup (queue, name, &error))) {
+            errmsg = error.text;
+            errno = EINVAL;
+            goto error;
+        }
+        if (jobq_start (q, start, stop_reason) < 0)
+            goto error;
+        if (start) {
+            if (queue_start (queue, name) < 0)
+                goto error;
+        }
+        else
+            queue_stop (queue, name);
+    }
     if (restart_save_state (queue->ctx) < 0)
         flux_log_error (h, "problem saving checkpoint after queue change");
     if (flux_respond (h, msg, NULL) < 0)
