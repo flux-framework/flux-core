@@ -672,7 +672,41 @@ class TestJob(unittest.TestCase):
         # synchronous job.result() test
         self.assertEqual(job.result(self.fh, ids[3]), result[ids[3]].get_info())
 
+    def test_33_get_job(self):
+        self.sleep_jobspec = JobspecV1.from_command(["sleep", "5"])
+        jobid = job.submit(self.fh, self.sleep_jobspec)
+        meta = job.get_job(self.fh, jobid)
+        self.assertIsInstance(meta, dict)
+        for key in ['id',
+                    'userid',
+                    'urgency',
+                    'priority',
+                    't_submit',
+                    't_depend',
+                    'state',
+                    'name',
+                    'ntasks',
+                    'ncores',
+                    'duration',
+                    'nnodes',
+                    'result',
+                    'runtime',
+                    'returncode',
+                    'waitstatus',
+                    'nodelist',
+                    'exception']:
+            self.assertIn(key, meta)
 
+        self.assertEqual(meta['id'], jobid)
+        self.assertEqual(meta['name'], "sleep")
+        self.assertTrue(meta['state'] in ["SCHED", "DEPEND", "RUN"])
+        self.assertEqual(meta['ntasks'], 1)
+        self.assertEqual(meta['ncores'], 1)
+
+        # Test a job that does not exist
+        meta = job.get_job(self.fh, 123456)
+        self.assertIsNone(meta)
+        
 if __name__ == "__main__":
     from subflux import rerun_under_flux
 

@@ -81,6 +81,49 @@ of the asynchronous interfaces.
 
 .. autofunction:: flux.job.wait
 
+.. autofunction:: flux.job.get_job
+
+
+``get_job``
+~~~~~~~~~~~
+
+After submitting a job, if you quickly want to see information for it,
+you can use ``flux.job.get_job``. Here is an example:
+
+.. code:: python
+
+    import flux
+    import flux.job
+
+    # It's encouraged to create a handle to use across commands
+    handle = flux.Flux()
+
+    jobspec = flux.job.JobspecV1.from_command(["sleep", "60"])
+    jobid = flux.job.submit(handle, jobspec)
+    job_meta = flux.job.get_job(handle, jobid)
+
+    {
+        "job": {
+            "id": 676292747853824,
+            "userid": 0,
+            "urgency": 16,
+            "priority": 16,
+            "t_submit": 1667760398.4034982,
+            "t_depend": 1667760398.4034982,
+            "state": "SCHED",
+            "name": "sleep",
+            "ntasks": 1,
+            "ncores": 1,
+            "duration": 0.0
+        }
+    }
+
+If the jobid you are asking for does not exist, ``None`` will be returned.
+For the interested user, this is a courtesy function that wraps using the identifier
+to create an RPC object, serializing that to string, and loading as JSON. 
+Since it is likely you, as the user, will be interacting with ``flux.job``, it
+is also logical you would look for this function to retrieve the job on the same
+module.
 
 ``result`` vs ``wait``
 ~~~~~~~~~~~~~~~~~~~~~~

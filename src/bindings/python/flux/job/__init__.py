@@ -14,7 +14,7 @@ from flux.job.kvs import job_kvs, job_kvs_guest
 from flux.job.kill import kill_async, kill, cancel_async, cancel
 from flux.job.submit import submit_async, submit, submit_get_id
 from flux.job.info import JobInfo, JobInfoFormat, job_fields_to_attrs
-from flux.job.list import job_list, job_list_inactive, job_list_id, JobList
+from flux.job.list import job_list, job_list_inactive, job_list_id, JobList, get_job
 from flux.job.wait import wait_async, wait, wait_get_status, result_async, result
 from flux.job.event import (
     event_watch_async,

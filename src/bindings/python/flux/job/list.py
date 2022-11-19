@@ -13,7 +13,7 @@ import pwd
 
 import flux.constants
 from flux.future import WaitAllFuture
-from flux.job.info import JobInfo
+from flux.job.info import JobInfo, statetostr
 from flux.rpc import RPC
 
 
@@ -95,6 +95,47 @@ def job_list_id(flux_handle, jobid, attrs=["all"]):
     #  save original JobId argument for error reporting
     rpc.jobid = jobid
     return rpc
+
+
+# get_job is the single variant of job_list_id, and returns the
+# expected data structure (dict) to describe one job (or None)
+def get_job(flux_handle, jobid):
+    """Get job information dictionary based on a jobid
+
+    This is a courtesy, blocking function for users looking for
+    details about a job after submission. The dictionary includes
+    the job identifier, userid that submit it, urgency, priority,
+    t_submit, t_depend, (and others when finished), state, name,
+    ntasks, ncores, duration, nnodes, result, runtime, returncode,
+    waitstatus, nodelist, and exception type, severity, and note.
+    """
+    payload = {"id": int(jobid), "attrs": ["all"]}
+    rpc = JobListIdRPC(flux_handle, "job-list.list-id", payload)
+    try:
+        jobinfo = rpc.get()
+
+    # The job does not exist!
+    except FileNotFoundError:
+        return None
+
+    jobinfo = jobinfo["job"]
+
+    # User friendly string from integer
+    state = jobinfo["state"]
+    jobinfo["state"] = statetostr(state)
+
+    # Get job info to add to result
+    info = rpc.get_jobinfo()
+    jobinfo["nnodes"] = info._nnodes
+    jobinfo["result"] = info.result
+    jobinfo["returncode"] = info.returncode
+    jobinfo["runtime"] = info.runtime
+    jobinfo["priority"] = info._priority
+    jobinfo["waitstatus"] = info._waitstatus
+    jobinfo["nodelist"] = info._nodelist
+    jobinfo["nodelist"] = info._nodelist
+    jobinfo["exception"] = info._exception.__dict__
+    return jobinfo
 
 
 class JobListIdsFuture(WaitAllFuture):
