@@ -232,7 +232,7 @@ static char *parse_arg_message (char **argv, const char *name)
     return argz;
 }
 
-void alloc_admin_query (flux_t *h)
+void alloc_query (flux_t *h)
 {
     flux_future_t *f;
     int free_pending;
@@ -240,16 +240,12 @@ void alloc_admin_query (flux_t *h)
     int queue_length;
     int running;
 
-    if (!(f = flux_rpc_pack (h,
-                             "job-manager.alloc-admin",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:b s:b}",
-                             "query_only",
-                             1,
-                             "start",
-                             0)))
-        log_err_exit ("error sending alloc-admin request");
+    if (!(f = flux_rpc (h,
+                        "job-manager.alloc-query",
+                        NULL,
+                        FLUX_NODEID_ANY,
+                        0)))
+        log_err_exit ("error sending alloc-query request");
     if (flux_rpc_get_unpack (f,
                              "{s:i s:i s:i s:i}",
                              "queue_length",
@@ -260,7 +256,7 @@ void alloc_admin_query (flux_t *h)
                              &free_pending,
                              "running",
                              &running) < 0)
-        log_msg_exit ("alloc-admin: %s", future_strerror (f, errno));
+        log_msg_exit ("alloc-query: %s", future_strerror (f, errno));
     printf ("%d alloc requests queued\n", queue_length);
     printf ("%d alloc requests pending to scheduler\n", alloc_pending);
     printf ("%d free requests pending to scheduler\n", free_pending);
@@ -443,7 +439,7 @@ int cmd_start (optparse_t *p, int argc, char **argv)
     if (!optparse_hasopt (p, "quiet"))
         queue_status (h, NULL, print_start_status);
     if (optparse_hasopt (p, "verbose"))
-        alloc_admin_query (h);
+        alloc_query (h);
     flux_close (h);
     return (0);
 }
@@ -462,7 +458,7 @@ int cmd_stop (optparse_t *p, int argc, char **argv)
     if (!optparse_hasopt (p, "quiet"))
         queue_status (h, NULL, print_start_status);
     if (optparse_hasopt (p, "verbose"))
-        alloc_admin_query (h);
+        alloc_query (h);
     flux_close (h);
     free (reason);
     return (0);
@@ -508,7 +504,7 @@ int cmd_status (optparse_t *p, int argc, char **argv)
     queue_status (h, name, print_enable_status);
 
     if (optparse_hasopt (p, "verbose"))
-        alloc_admin_query (h);
+        alloc_query (h);
     flux_close (h);
     return (0);
 }

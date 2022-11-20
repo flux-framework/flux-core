@@ -686,94 +686,17 @@ bool alloc_sched_ready (struct alloc *alloc)
     return alloc->ready;
 }
 
-/* Cancel all pending alloc requests in preparation for stopping
- * resource allocation.
- */
-static void cancel_all_pending (struct alloc *alloc)
-{
-    if (alloc->alloc_pending_count > 0) {
-        struct job *job;
-
-        job = zhashx_first (alloc->ctx->active_jobs);
-        while (job) {
-            if (job->alloc_pending)
-                cancel_request (alloc, job);
-            job = zhashx_next (alloc->ctx->active_jobs);
-        }
-    }
-}
-
-/* Control resource allocation (query/start/stop).
- * If 'query_only' is true, report allocation status without altering it.
- * Otherwise update the alloc->stopped flag, and for stopped only,
- * optionally set alloc->stopped_reason.
- *
- * What it means to be administratively stopped:
- * While allocation is stopped, the scheduler can remain loaded and handle
- * requests, but the job manager won't send any more allocation requests.
- * Pending alloc requests are canceled (jobs remain in SCHED state and
- * return to alloc->queue).  The job manager continues to send free requests
- * to the scheduler as jobs relinquish resources.
- *
- * If allocation is adminstratively started, but the scheduler is not loaded,
- * the current state is reported as stopped with reason "Scheduler is offline".
- */
-static void alloc_admin_cb (flux_t *h,
+static void alloc_query_cb (flux_t *h,
                             flux_msg_handler_t *mh,
                             const flux_msg_t *msg,
                             void *arg)
 {
     struct job_manager *ctx = arg;
     struct alloc *alloc = ctx->alloc;
-    const char *errmsg = NULL;
-    int query_only;
-    int start;
-    const char *reason = NULL;
 
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{s:b s:b s?:s}",
-                             "query_only",
-                             &query_only,
-                             "start",
-                             &start,
-                             "reason",
-                             &reason) < 0)
-        goto error;
-    if (!query_only) {
-        if (flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0) {
-            errmsg = "Request requires owner credentials";
-            goto error;
-        }
-        if (!start) {
-            char *cpy = NULL;
-            if (reason && strlen (reason) > 0 && !(cpy = strdup (reason)))
-                goto error;
-            free (alloc->stopped_reason);
-            alloc->stopped_reason = cpy;
-            cancel_all_pending (alloc);
-        }
-        alloc->stopped = start ? false : true;
-    }
-    if (alloc->stopped) { // administratively stoppedd
-        start = 0;
-        reason  = alloc->stopped_reason;
-    }
-    else if (!alloc->ready) { // scheduler not loaded (waiting for hello)
-        start = 0;
-        reason = "Scheduler is offline";
-    }
-    else { // condtion normal
-        start = 1;
-        reason = NULL;
-    }
     if (flux_respond_pack (h,
                            msg,
-                           "{s:b s:s s:i s:i s:i s:i}",
-                           "start",
-                           start,
-                           "reason",
-                           reason ? reason : "",
+                           "{s:i s:i s:i s:i}",
                            "queue_length",
                            zlistx_size (alloc->queue),
                            "alloc_pending",
@@ -784,9 +707,6 @@ static void alloc_admin_cb (flux_t *h,
                            alloc->ctx->running_jobs) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
-error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 void alloc_disconnect_rpc (flux_t *h,
@@ -834,8 +754,8 @@ static const struct flux_msg_handler_spec htab[] = {
         0
     },
     {   FLUX_MSGTYPE_REQUEST,
-        "job-manager.alloc-admin",
-        alloc_admin_cb,
+        "job-manager.alloc-query",
+        alloc_query_cb,
         FLUX_ROLE_USER,
     },
     {   FLUX_MSGTYPE_RESPONSE,
