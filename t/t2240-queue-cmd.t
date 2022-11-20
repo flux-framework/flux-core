@@ -101,7 +101,7 @@ test_expect_success 'flux-queue: status reports reason for stop' '
 	flux queue status >status.out &&
 	cat <<-EOT >status.exp &&
 	Job submission is enabled
-	Scheduling is disabled: my unique message
+	Scheduling is stopped: my unique message
 	EOT
 	test_cmp status.exp status.out
 '
@@ -156,16 +156,16 @@ wait_for_sched_offline() {
 	local n=$1
 	for try in $(seq 1 $n); do
 		echo Check queue status for offline, try ${try} of $n 2>&1
-		flux queue status 2>&1 | grep disabled && return
+		flux queue status 2>&1 | grep stopped && return
 	done
 }
 
-test_expect_success 'flux-queue: queue says scheduling disabled' '
+test_expect_success 'flux-queue: queue says scheduling stopped' '
 	wait_for_sched_offline 10 &&
 	flux queue status >sched_stat.out &&
 	cat <<-EOT >sched_stat.exp &&
 	Job submission is enabled
-	Scheduling is disabled: Scheduler is offline
+	Scheduling is stopped: Scheduler is offline
 	EOT
 	test_cmp sched_stat.exp sched_stat.out
 '
@@ -183,7 +183,7 @@ test_expect_success 'flux-queue: queue says scheduling is enabled' '
 	flux queue status >sched_stat2.out &&
 	cat <<-EOT >sched_stat2.exp &&
 	Job submission is enabled
-	Scheduling is enabled
+	Scheduling is started
 	EOT
 	test_cmp sched_stat2.exp sched_stat2.out
 '
@@ -211,7 +211,7 @@ test_expect_success 'flux-queue: queue status -v shows expected counts' '
 	flux queue status -v >stat.out &&
 	cat <<-EOT >stat.exp &&
 	Job submission is enabled
-	Scheduling is enabled
+	Scheduling is started
 	1 alloc requests queued
 	1 alloc requests pending to scheduler
 	0 free requests pending to scheduler
@@ -233,7 +233,7 @@ test_expect_success 'flux-queue: queue status -v shows expected counts' '
 	flux queue status -v >stat2.out &&
 	cat <<-EOT >stat2.exp &&
 	Job submission is enabled
-	Scheduling is disabled
+	Scheduling is stopped
 	2 alloc requests queued
 	0 alloc requests pending to scheduler
 	0 free requests pending to scheduler
