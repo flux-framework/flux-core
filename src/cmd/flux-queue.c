@@ -298,11 +298,11 @@ static void add_string_if_set (json_t *o, const char *key, const char *val)
     }
 }
 
-static void queue_admin (flux_t *h,
-                         const char *name,
-                         bool enable,
-                         const char *reason,
-                         bool all)
+static void queue_enable (flux_t *h,
+                          const char *name,
+                          bool enable,
+                          const char *reason,
+                          bool all)
 {
     json_t *payload;
     flux_future_t *f;
@@ -313,7 +313,7 @@ static void queue_admin (flux_t *h,
         log_msg_exit ("out of memory");
     add_string_if_set (payload, "name", name);
     add_string_if_set (payload, "reason", reason);
-    f = flux_rpc_pack (h, "job-manager.queue-admin", 0, 0, "O", payload);
+    f = flux_rpc_pack (h, "job-manager.queue-enable", 0, 0, "O", payload);
     if (!f || flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("%s", future_strerror (f, errno));
     flux_future_destroy (f);
@@ -388,7 +388,7 @@ int cmd_enable (optparse_t *p, int argc, char **argv)
     }
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    queue_admin (h, name, true, NULL, all);
+    queue_enable (h, name, true, NULL, all);
     flux_close (h);
     return (0);
 }
@@ -405,7 +405,7 @@ int cmd_disable (optparse_t *p, int argc, char **argv)
         reason = parse_arg_message (argv + optindex, "reason");
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    queue_admin (h, name, false, reason, all);
+    queue_enable (h, name, false, reason, all);
     flux_close (h);
     free (reason);
     return (0);

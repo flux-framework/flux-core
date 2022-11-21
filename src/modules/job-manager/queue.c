@@ -391,10 +391,10 @@ error:
         flux_log_error (h, "error responding to job-manager.queue-status");
 }
 
-static void queue_admin_cb (flux_t *h,
-                            flux_msg_handler_t *mh,
-                            const flux_msg_t *msg,
-                            void *arg)
+static void queue_enable_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     struct queue *queue = arg;
     flux_error_t error;
@@ -439,11 +439,11 @@ static void queue_admin_cb (flux_t *h,
     if (restart_save_state (queue->ctx) < 0)
         flux_log_error (h, "problem saving checkpoint after queue change");
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to job-manager.queue-admin");
+        flux_log_error (h, "error responding to job-manager.queue-enable");
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "error responding to job-manager.queue-admin");
+        flux_log_error (h, "error responding to job-manager.queue-enable");
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -461,8 +461,8 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "job-manager.queue-admin",
-        queue_admin_cb,
+        "job-manager.queue-enable",
+        queue_enable_cb,
         0,
     },
     FLUX_MSGHANDLER_TABLE_END,
