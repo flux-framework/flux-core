@@ -30,7 +30,7 @@
 struct jobq {
     char *name;
     bool enable;    // jobs may be submitted to this queue
-    char *reason;   // reason if disabled
+    char *disable_reason;   // reason if disabled
 };
 
 struct queue {
@@ -48,7 +48,7 @@ static void jobq_destroy (struct jobq *q)
     if (q) {
         int saved_errno = errno;
         free (q->name);
-        free (q->reason);
+        free (q->disable_reason);
         free (q);
         errno = saved_errno;
     }
@@ -78,19 +78,21 @@ error:
     return NULL;
 }
 
-static int jobq_enable (struct jobq *q, bool enable, const char *reason)
+static int jobq_enable (struct jobq *q,
+                        bool enable,
+                        const char *disable_reason)
 {
     if (enable) {
         q->enable = true;
-        free (q->reason);
-        q->reason = NULL;
+        free (q->disable_reason);
+        q->disable_reason = NULL;
     }
     else {
         char *cpy;
-        if (!(cpy = strdup (reason)))
+        if (!(cpy = strdup (disable_reason)))
             return -1;
-        free (q->reason);
-        q->reason = cpy;
+        free (q->disable_reason);
+        q->disable_reason = cpy;
         q->enable = false;
     }
     return 0;
@@ -98,18 +100,18 @@ static int jobq_enable (struct jobq *q, bool enable, const char *reason)
 
 static int queue_enable_all (struct queue *queue,
                              bool enable,
-                             const char *reason)
+                             const char *disable_reason)
 {
     if (queue->have_named_queues) {
         struct jobq *q = zhashx_first (queue->named);
         while (q) {
-            if (jobq_enable (q, enable, reason) < 0)
+            if (jobq_enable (q, enable, disable_reason) < 0)
                 return -1;
             q = zhashx_next (queue->named);
         }
     }
     else {
-        if (jobq_enable (queue->anon, enable, reason) < 0)
+        if (jobq_enable (queue->anon, enable, disable_reason) < 0)
             return -1;
     }
     return 0;
@@ -148,10 +150,10 @@ static int queue_save_jobq_append (json_t *a, struct jobq *q)
     if (!entry)
         goto nomem;
     if (!q->enable) {
-        json_t *o = json_string (q->reason);
+        json_t *o = json_string (q->disable_reason);
         if (!o)
             goto nomem;
-        if (json_object_set_new (entry, "reason", o) < 0) {
+        if (json_object_set_new (entry, "disable_reason", o) < 0) {
             json_decref (o);
             goto nomem;
         }
@@ -204,23 +206,28 @@ int queue_restore_state (struct queue *queue, int version, json_t *o)
     json_array_foreach (o, index, entry) {
         const char *name = NULL;
         const char *reason = NULL;
+        const char *disable_reason = NULL;
         int enable;
         struct jobq *q = NULL;
 
         if (json_unpack (entry,
-                         "{s?s s:b s?s}",
+                         "{s?s s:b s?s s?s}",
                          "name", &name,
                          "enable", &enable,
-                         "reason", &reason) < 0) {
+                         "reason", &reason,
+                         "disable_reason", &disable_reason) < 0) {
             errno = EINVAL;
             return -1;
         }
+        /* "reason" is backwards compatible field name for "disable_reason" */
+        if (!disable_reason && reason)
+            disable_reason = reason;
         if (name && queue->have_named_queues)
             q = zhashx_lookup (queue->named, name);
         else if (!name && !queue->have_named_queues)
             q = queue->anon;
         if (q) {
-            if (jobq_enable (q, enable, reason) < 0)
+            if (jobq_enable (q, enable, disable_reason) < 0)
                 return -1;
         }
     }
@@ -246,7 +253,7 @@ int queue_submit_check (struct queue *queue,
         errprintf (error, "job submission%s%s is disabled: %s",
                    name ? " to " : "",
                    name ? name : "",
-                   q->reason);
+                   q->disable_reason);
         errno = EINVAL;
         return -1;
     }
@@ -381,7 +388,7 @@ static void queue_status_cb (flux_t *h,
                                 msg,
                                 "{s:b s:s}",
                                 "enable", 0,
-                                "reason", q->reason);
+                                "disable_reason", q->disable_reason);
     }
     if (rc < 0)
         flux_log_error (h, "error responding to job-manager.queue-status");
@@ -401,7 +408,7 @@ static void queue_enable_cb (flux_t *h,
     const char *errmsg = NULL;
     const char *name = NULL;
     int enable;
-    const char *reason = NULL;
+    const char *disable_reason = NULL;
     int all;
 
     if (flux_request_unpack (msg,
@@ -409,10 +416,10 @@ static void queue_enable_cb (flux_t *h,
                              "{s?s s:b s?s s:b}",
                              "name", &name,
                              "enable", &enable,
-                             "reason", &reason,
+                             "reason", &disable_reason,
                              "all", &all) < 0)
         goto error;
-    if (!enable && !reason) {
+    if (!enable && !disable_reason) {
         errmsg = "reason is required for disable";
         errno = EINVAL;
         goto error;
@@ -423,7 +430,7 @@ static void queue_enable_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (queue_enable_all (queue, enable, reason))
+        if (queue_enable_all (queue, enable, disable_reason))
             goto error;
     }
     else {
@@ -433,7 +440,7 @@ static void queue_enable_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (jobq_enable (q, enable, reason) < 0)
+        if (jobq_enable (q, enable, disable_reason) < 0)
             goto error;
     }
     if (restart_save_state (queue->ctx) < 0)

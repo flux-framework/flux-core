@@ -322,7 +322,7 @@ static void queue_enable (flux_t *h,
 
 typedef void (*queue_status_output_f) (const char *name,
                                        bool enable,
-                                       const char *reason);
+                                       const char *disable_reason);
 
 static void queue_status_one (flux_t *h,
                               const char *name,
@@ -331,7 +331,7 @@ static void queue_status_one (flux_t *h,
     json_t *payload;
     flux_future_t *f;
     int enable;
-    const char *reason = NULL;
+    const char *disable_reason = NULL;
 
     if (!(payload = json_object ()))
         log_msg_exit ("out of memory");
@@ -340,9 +340,9 @@ static void queue_status_one (flux_t *h,
     if (!f || flux_rpc_get_unpack (f,
                                    "{s:b s?s}",
                                    "enable", &enable,
-                                   "reason", &reason))
+                                   "disable_reason", &disable_reason))
         log_msg_exit ("%s", future_strerror (f, errno));
-    out_cb (name, enable, reason);
+    out_cb (name, enable, disable_reason);
     flux_future_destroy (f);
     json_decref (payload);
 }
@@ -455,7 +455,7 @@ int cmd_stop (optparse_t *p, int argc, char **argv)
 
 static void print_enable_status (const char *name,
                                  bool enable,
-                                 const char *reason)
+                                 const char *disable_reason)
 {
     if (enable) {
         printf ("%s%sJob submission is enabled\n",
@@ -466,7 +466,7 @@ static void print_enable_status (const char *name,
         printf ("%s%sJob submission is disabled: %s\n",
                 name ? name : "",
                 name ? ": " : "",
-                reason);
+                disable_reason);
     }
 }
 
