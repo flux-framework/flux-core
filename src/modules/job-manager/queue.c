@@ -402,7 +402,6 @@ static void queue_admin_cb (flux_t *h,
     const char *name = NULL;
     int enable;
     const char *reason = NULL;
-    struct jobq *q;
     int all;
 
     if (flux_request_unpack (msg,
@@ -428,6 +427,7 @@ static void queue_admin_cb (flux_t *h,
             goto error;
     }
     else {
+        struct jobq *q;
         if (!(q = queue_lookup (queue, name, &error))) {
             errmsg = error.text;
             errno = EINVAL;
