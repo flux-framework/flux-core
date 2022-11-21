@@ -65,19 +65,19 @@ test_expect_success 'flux-queue: idle with bad broker connection fails' '
 '
 
 test_expect_success 'flux-queue: disable works' '
-        flux queue disable system is fubar
+	flux queue disable system is fubar
 '
 
 test_expect_success 'flux-queue: job submit fails with queue disabled' '
-        test_must_fail flux mini run /bin/true
+	test_must_fail flux mini run /bin/true
 '
 
 test_expect_success 'flux-queue: enable works' '
-        flux queue enable
+	flux queue enable
 '
 
 test_expect_success 'flux-queue: flux mini run works after enable' '
-        run_timeout 60 flux mini run /bin/true
+	run_timeout 60 flux mini run /bin/true
 '
 
 test_expect_success 'flux-queue: stop with bad broker connection fails' '
@@ -249,8 +249,8 @@ test_expect_success 'flux-queue: start queue and drain' '
 
 
 runas_guest() {
-        local userid=$(($(id -u)+1))
-        FLUX_HANDLE_USERID=$userid FLUX_HANDLE_ROLEMASK=0x2 "$@"
+	local userid=$(($(id -u)+1))
+	FLUX_HANDLE_USERID=$userid FLUX_HANDLE_ROLEMASK=0x2 "$@"
 }
 
 test_expect_success 'flux-queue: status allowed for guest' '
