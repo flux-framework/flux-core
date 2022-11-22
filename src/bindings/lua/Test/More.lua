@@ -1,4 +1,4 @@
-
+--- @diagnostic disable
 --
 -- lua-TestMore : <http://fperrad.github.com/lua-TestMore/>
 --
@@ -15,7 +15,7 @@ local _G = _G
 
 local tb = require 'Test.Builder'.new()
 
-_ENV = nil
+-- _ENV = nil
 local m = {}
 
 function m.plan (arg)
@@ -373,9 +373,38 @@ function m.cleanup (func)
     tb:cleanup(func)
 end
 
-for k, v in pairs(m) do  -- injection
-    _G[k] = v
-end
+-- replaced by explicit below to fix test warnings
+-- for k, v in pairs(m) do  -- injection
+--     _G[k] = v
+-- end
+plan = m.plan
+done_testing = m.done_testing
+skip_all = m.skip_all
+BAIL_OUT = m.BAIL_OUT
+ok = m.ok
+nok = m.nok
+is = m.is
+isnt = m.isnt
+like = m.like
+unlike = m.unlike
+cmp_ok = m.cmp_ok
+type_ok = m.type_ok
+subtest = m.subtest
+pass = m.pass
+fail = m.fail
+require_ok = m.require_ok
+eq_array = m.eq_array
+is_deeply = m.is_deeply
+error_is = m.error_is
+error_like = m.error_like
+lives_ok = m.lives_ok
+diag = m.diag
+note = m.note
+skip = m.skip
+todo_skip = m.todo_skip
+skip_rest = m.skip_rest
+todo = m.todo
+cleanup = m.cleanup
 
 m._VERSION = "0.3.1"
 m._DESCRIPTION = "lua-TestMore : an Unit Testing Framework"

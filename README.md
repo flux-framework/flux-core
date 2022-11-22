@@ -99,16 +99,30 @@ make check
 
 If you use VSCode we have a [Dev Container](https://code.visualstudio.com/docs/remote/containers)
 provided via the assets in [.devcontainer](https://code.visualstudio.com/docs/remote/containers#_create-a-devcontainerjson-file).
+
+<details>
+  <summary>Click to expand for more information</summary>
 You can follow the [tutorial](https://code.visualstudio.com/docs/remote/containers-tutorial) where you'll basically
 need to:
 
-1. Install Docker
+1. Install Docker, or compatible engine
 2. Install the [Development Containers](vscode:extension/ms-vscode-remote.remote-containers) extension
 
 Then you can go to the command palette (View -> Command Palette) and select `Dev Containers: Open Workspace in Container.`
 and select your cloned Flux repository root. This will build a development environment from [fluxrm/testenv](https://hub.docker.com/r/fluxrm/testenv/tags)
-that are built from [src/test/docker](src/test/docker) (the focal tag) with a few tweaks to add linting tools. 
-You are free to change the base image and rebuild if you need to test on another operating system! 
+that are built from [src/test/docker](src/test/docker) (the focal tag) with a few tweaks to add linting and dev tools.
+
+In addition to the usual flux dev requirements, you get:
+
+* bear
+* fd
+* gdb
+* GitHub CLI
+* ripgrep
+* and several useful vscode extensions in the vscode server instance, pre-configured for lua, c and python in flux-core
+
+
+You are free to change the base image and rebuild if you need to test on another operating system!
 When your container is built, when you open `Terminal -> New Terminal`, surprise! You're
 in the container! The dependencies for building Flux are installed. Try building Flux - it will work without a hitch!
 
@@ -118,6 +132,11 @@ in the container! The dependencies for building Flux are installed. Try building
 make
 # This will install in the container!
 make install
+# This will test in the container!
+make check
+# If you want a compilation database
+make clean
+./scripts/generate_compile_commands # this runs `bear make check` by default to generate for all tests as well
 ```
 
 And try starting flux
@@ -143,6 +162,7 @@ $ sudo chown -R $USER .git/
 
 Hopefully we will find a workaround for this so everything works from inside of a VSCode terminal.
 For the time being, make sure you fix permissions and commit from outside the container on your local machine!
+</details>
 
 
 #### Bootstrapping a Flux instance

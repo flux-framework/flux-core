@@ -1,0 +1,24 @@
+#!/bin/sh
+
+: ${OUTPUT:=$(pwd)/compile_commands.json}
+: ${APPEND:=--append}
+: ${TARGET:=all}
+while test $# -gt 0 ; do
+    case $1 in
+    -f)
+    # overwrite existing, do not append
+    APPEND=''
+    shift
+    ;;
+    -t)
+    # include tests, this means running all of check, prepare to wait
+    TARGET=check
+    shift
+    ;;
+    *)
+    break
+    ;;
+    esac
+done
+
+bear -o "${OUTPUT}" $APPEND make "$TARGET" "$@"

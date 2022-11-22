@@ -1,0 +1,29 @@
+{
+    "configurations": [
+        {
+            "name": "Linux arm64",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c99",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-gcc-arm64",
+            "compileCommands": "",
+            "mergeConfigurations": false
+        },
+        {
+            "name": "Linux amd64",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c99",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-gcc-x64",
+        }
+    ],
+    "version": 4
+}
