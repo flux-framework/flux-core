@@ -98,9 +98,9 @@ static int jobq_enable (struct jobq *q,
     return 0;
 }
 
-static int queue_enable_all (struct queue *queue,
-                             bool enable,
-                             const char *disable_reason)
+static int jobq_enable_all (struct queue *queue,
+                            bool enable,
+                            const char *disable_reason)
 {
     if (queue->have_named_queues) {
         struct jobq *q = zhashx_first (queue->named);
@@ -430,7 +430,7 @@ static void queue_enable_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (queue_enable_all (queue, enable, disable_reason))
+        if (jobq_enable_all (queue, enable, disable_reason))
             goto error;
     }
     else {
