@@ -151,6 +151,11 @@ test_expect_success 'flux mini batch: user can set broker.critical-ranks' '
 	EOF
 	test_cmp critical-ranks2.expected critical-ranks2.out
 '
+test_expect_success 'flux mini batch: flux can bootstrap without broker.mapping' '
+	id=$(flux mini batch -N4 -o pmi.clique=none \
+		--wrap flux resource info) &&
+	flux job status $id
+'
 test_expect_success HAVE_JQ 'flux mini batch: sets mpi=none by default' '
 	flux mini batch -N1 --dry-run --wrap hostname | \
 		jq -e ".attributes.system.shell.options.mpi = \"none\""

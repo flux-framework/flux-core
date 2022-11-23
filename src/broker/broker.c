@@ -1100,16 +1100,21 @@ static int execute_parental_notifications (struct broker *ctx)
     }
 
     /*  Perform any RPCs to parent in parallel */
-    if (!(f = set_uri_job_memo (h, id, ctx->attrs))
-        || !(f2 = set_critical_ranks (h, id, ctx->attrs)))
+    if (!(f = set_uri_job_memo (h, id, ctx->attrs)))
         goto out;
+
+    /*  Note: not an error if rpc to set critical ranks fails, but
+     *  issue an error notifying user that no criitcal ranks are set.
+     */
+    if (!(f2 = set_critical_ranks (h, id, ctx->attrs)))
+        log_msg ("Unable to get critical ranks, all ranks will be critical");
 
     /*  Wait for RPC results */
     if (flux_future_get (f, NULL) < 0) {
         log_err ("job-manager.memo uri");
         goto out;
     }
-    if (flux_future_get (f2, NULL) < 0 && errno != ENOSYS) {
+    if (f2 && flux_future_get (f2, NULL) < 0 && errno != ENOSYS) {
         log_err ("job-exec.critical-ranks");
         goto out;
     }
