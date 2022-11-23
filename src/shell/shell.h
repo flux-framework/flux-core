@@ -12,6 +12,7 @@
 #define FLUX_SHELL_H
 
 #include <flux/core.h>
+#include <flux/taskmap.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -96,6 +97,10 @@ int flux_shell_unsetenv (flux_shell_t *shell, const char *name);
 /*  Return the job shell's cached copy of hwloc XML.
  */
 int flux_shell_get_hwloc_xml (flux_shell_t *shell, const char **xmlp);
+
+/*  Return the current shell taskmap
+ */
+const struct taskmap *flux_shell_get_taskmap (flux_shell_t *shell);
 
 /*  Return shell info as a JSON string.
  *  {

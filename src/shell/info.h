@@ -13,6 +13,7 @@
 
 #include <flux/core.h>
 #include <flux/shell.h>
+#include <flux/taskmap.h>
 
 #include <jansson.h>
 #include <stdbool.h>
@@ -30,6 +31,8 @@ struct shell_info {
     struct jobspec *jobspec;
     rcalc_t *rcalc;
     struct rcalc_rankinfo rankinfo;
+    struct taskmap *taskmap;
+    struct idset *taskids;
     char *hwloc_xml;
 };
 
@@ -40,6 +43,11 @@ struct shell_info {
 struct shell_info *shell_info_create (flux_shell_t *shell);
 
 void shell_info_destroy (struct shell_info *info);
+
+/*  Set or replace current shell taskmap and taskids idset
+ *  Reference to `map` is stolen on success.
+ */
+int shell_info_set_taskmap (struct shell_info *info, struct taskmap *map);
 
 #endif /* !_SHELL_INFO_H */
 

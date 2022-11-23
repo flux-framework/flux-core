@@ -91,6 +91,12 @@ LIBFLUX_HOSTLIST_AGE=0
 LIBFLUX_HOSTLIST_VERSION_INFO=$LIBFLUX_HOSTLIST_CURRENT:$LIBFLUX_HOSTLIST_REVISION:$LIBFLUX_HOSTLIST_AGE
 AC_SUBST([LIBFLUX_HOSTLIST_VERSION_INFO])
 
+LIBFLUX_TASKMAP_CURRENT=1
+LIBFLUX_TASKMAP_REVISION=0
+LIBFLUX_TASKMAP_AGE=0
+LIBFLUX_TASKMAP_VERSION_INFO=$LIBFLUX_TASKMAP_CURRENT:$LIBFLUX_TASKMAP_REVISION:$LIBFLUX_TASKMAP_AGE
+AC_SUBST([LIBFLUX_TASKMAP_VERSION_INFO])
+
 ##
 # Checks for programs
 ##
@@ -533,6 +539,7 @@ AC_CONFIG_FILES( \
   src/common/libczmqcontainers/Makefile \
   src/common/libccan/Makefile \
   src/common/libzmqutil/Makefile \
+  src/common/libtaskmap/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \

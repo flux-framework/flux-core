@@ -46,6 +46,7 @@ extern struct shell_builtin builtin_batch;
 extern struct shell_builtin builtin_doom;
 extern struct shell_builtin builtin_exception;
 extern struct shell_builtin builtin_rlimit;
+extern struct shell_builtin builtin_cyclic;
 
 static struct shell_builtin * builtins [] = {
     &builtin_tmpdir,
@@ -64,6 +65,7 @@ static struct shell_builtin * builtins [] = {
     &builtin_doom,
     &builtin_exception,
     &builtin_rlimit,
+    &builtin_cyclic,
     &builtin_list_end,
 };
 
@@ -89,6 +91,8 @@ static int shell_load_builtin (flux_shell_t *shell,
         return -1;
 
     shell_debug ("loading builtin plugin \"%s\"", sb->name);
+    if (sb->plugin_init && (*sb->plugin_init) (p) < 0)
+        return -1;
     if (plugstack_push (shell->plugstack, p) < 0)
         return -1;
     return (0);

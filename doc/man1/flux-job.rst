@@ -20,6 +20,8 @@ SYNOPSIS
 
 **flux** **job** **raiseall** [*OPTIONS*] *type* [*message...*]
 
+**flux** **job** **taskmap** [*OPTIONS*] *id*|*taskmap*
+
 **flux** **job** **purge** [*OPTIONS*]
 
 DESCRIPTION
@@ -107,6 +109,40 @@ type (positional argument) and accepts the following options:
 **-f, --force**
    Confirm the command.
 
+TASKMAP
+=======
+
+The mapping between job task ranks to node IDs is encoded in the RFC 34
+Flux Task Map format and posted to the job's ``shell.start`` event in the
+exec eventlog. The ``flux job taskmap`` utility is provided to assist in
+working with these task maps.
+
+When executed with a jobid argument and no options, the taskmap for the job
+is printed after the ``shell.start`` event has been posted.
+
+With one of the following arguments, the job taskmap may be used to convert
+a nodeid to a list of tasks, or to query on which node or host a given
+taskid ran. The command may also be used to convert between different
+support task mapping formats:
+
+**--taskids=NODEID**
+   Print an idset of tasks which ran on node  *NODEID*
+
+**--ntasks=NODEID**
+   Print the number of tasks  which ran on node *NODEID*
+
+**--nodeid=TASKID**
+   Print the node ID that ran task *TASKID*
+
+**--hostname=TASKID**
+   Print the hostname of the node that rank task *TASKID*
+
+**--to=raw|pmi|multiline**
+   Convert the taskmap to *raw* or *pmi* formats (described in RFC 34), or
+   *multiline* which prints the node ID of each task, one per line.
+
+One one of the above options may be used per call.
+
 PURGE
 =====
 
@@ -130,4 +166,6 @@ RESOURCES
 =========
 
 Flux: http://flux-framework.org
+
+RFC 34: Flux Task Map: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_34.html
 

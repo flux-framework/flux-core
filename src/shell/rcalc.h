@@ -21,9 +21,7 @@ struct rcalc_rankinfo {
     int nodeid;               /* This rank's nodeid within the job       */
     int rank;                 /* The current broker rank                 */
     int ntasks;               /* Number of tasks assigned to this rank   */
-    int global_basis;         /* Task id of the first task on this rank  */
     int ncores;               /* Number of cores allocated on this rank  */
-    cpu_set_t cpuset;         /* cpu_set_t representation of cores list  */
     char cores [128];         /* String core list (directly from R_lite) */
     char gpus [128];          /* String gpu list (directly from R)       */
 };

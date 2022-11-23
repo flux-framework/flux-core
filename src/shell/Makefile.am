@@ -87,7 +87,8 @@ flux_shell_SOURCES = \
 	mustache.c \
 	doom.c \
 	exception.c \
-	rlimit.c
+	rlimit.c \
+	cyclic.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \
@@ -96,6 +97,7 @@ flux_shell_LDADD = \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/bindings/lua/libfluxlua.la \
 	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-taskmap.la \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
 	$(top_builddir)/src/common/libflux-internal.la \

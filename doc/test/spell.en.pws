@@ -664,3 +664,5 @@ rtprio
 rttime
 sigpending
 chunksize
+taskmap
+multiline

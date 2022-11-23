@@ -19,6 +19,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libidset/idset.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "rcalc.h"
 
@@ -29,17 +30,19 @@ struct rankinfo {
     int ngpus;
     const char *cores;
     const char *gpus;
-    cpu_set_t cpuset;
+    struct idset *cpuset;
+    struct idset *gpuset;
 };
 
 struct allocinfo {
     int ncores_avail;
     int ntasks;
-    int basis;
 };
 
 struct rcalc {
     json_t *json;
+    json_t *R_lite;
+    struct idset *orig_ranks;
     int nranks;
     int ncores;
     int ngpus;
@@ -48,219 +51,151 @@ struct rcalc {
     struct allocinfo *alloc;
 };
 
-
-static const char * nexttoken (const char *p, int sep)
-{
-    if (p)
-        p = strchr (p, sep);
-    if (p)
-        p++;
-    return (p);
-}
-
-/*
- *  Temporarily copied from src/bindings/lua/lua-affinity
- */
-static int cstr_to_cpuset(cpu_set_t *mask, const char* str)
-{
-    const char *p, *q;
-    char *endptr;
-    q = str;
-    CPU_ZERO(mask);
-
-    if (strlen (str) == 0)
-        return 0;
-
-    while (p = q, q = nexttoken(q, ','), p) {
-        unsigned long a; /* beginning of range */
-        unsigned long b; /* end of range */
-        unsigned long s; /* stride */
-        const char *c1, *c2;
-
-        a = strtoul(p, &endptr, 10);
-        if (endptr == p)
-            return EINVAL;
-        if (a >= CPU_SETSIZE)
-            return E2BIG;
-        /*
-         *  Leading zeros are an error:
-         */
-        if ((a != 0 && *p == '0') || (a == 0 && memcmp (p, "00", 2L) == 0))
-            return 1;
-
-        b = a;
-        s = 1;
-
-        c1 = nexttoken(p, '-');
-        c2 = nexttoken(p, ',');
-        if (c1 != NULL && (c2 == NULL || c1 < c2)) {
-
-            /*
-             *  Previous conversion should have used up all characters
-             *     up to next '-'
-             */
-            if (endptr != (c1-1)) {
-                return 1;
-            }
-
-            b = strtoul (c1, &endptr, 10);
-            if (endptr == c1)
-                return EINVAL;
-            if (b >= CPU_SETSIZE)
-                return E2BIG;
-
-            c1 = nexttoken(c1, ':');
-            if (c1 != NULL && (c2 == NULL || c1 < c2)) {
-                s = strtoul (c1, &endptr, 10);
-                if (endptr == c1)
-                    return EINVAL;
-                if (b >= CPU_SETSIZE)
-                    return E2BIG;
-            }
-        }
-
-        if (!(a <= b))
-            return EINVAL;
-        while (a <= b) {
-            CPU_SET(a, mask);
-            a += s;
-        }
-    }
-
-    /*  Error if there are left over characters */
-    if (endptr && *endptr != '\0')
-        return EINVAL;
-
-    return 0;
-}
-
-static int cstr_count (const char *str)
-{
-    cpu_set_t set;
-    if (str == NULL)
-        return 0;
-    if (cstr_to_cpuset (&set, str))
-        return -1;
-    return CPU_COUNT (&set);
-}
-
-static int rankinfo_get (json_t *o, struct rankinfo *ri)
-{
-    json_error_t error;
-    int rc = json_unpack_ex (o, &error, 0, "{s:i, s:{s:s,s?:s}}",
-                "rank", &ri->rank,
-                "children",
-                "core", &ri->cores,
-                "gpu",  &ri->gpus);
-    if (rc < 0) {
-        fprintf (stderr, "json_unpack: %s\n", error.text);
-        return -1;
-    }
-
-    if (!ri->cores || cstr_to_cpuset (&ri->cpuset, ri->cores))
-        return -1;
-
-    ri->ncores = CPU_COUNT (&ri->cpuset);
-    ri->ngpus = cstr_count (ri->gpus);
-    return (0);
-}
-
-static int expand_rank_ranges_one (json_t *out, json_t *entry)
-{
-    const char *rank;
-    json_t *children;
-    struct idset *ids;
-    unsigned int id;
-    json_t *n;
-
-    if (json_unpack_ex (entry, NULL, 0,
-                        "{s:s s:o}",
-                        "rank", &rank,
-                        "children", &children) < 0)
-        return -1;
-    if (!(ids = idset_decode (rank)))
-        return -1;
-    id = idset_first (ids);
-    while (id != IDSET_INVALID_ID) {
-        if (!(n = json_pack ("{s:i s:O}",
-                             "rank", id,
-                             "children", children)))
-            return -1;
-        if (json_array_append_new (out, n) < 0) {
-            json_decref (n);
-            return -1;
-        }
-        id = idset_next (ids, id);
-    }
-    idset_destroy (ids);
-    return 0;
-}
-
-/* Convert from R version 1 internal R_lite object to the earlier wreck R_lite
- * object understood by this module.  They are the same except Rv1 specifies
- * ranks as an idset rather than integer, allowing for compact representation.
- */
-static json_t *expand_rank_ranges (json_t *R_lite)
-{
-    json_t *out;
-    json_t *entry;
-    size_t index;
-
-    if (!(out = json_array ())) // accumulate new array
-        return NULL;
-    json_array_foreach (R_lite, index, entry) {
-        if (expand_rank_ranges_one (out, entry) < 0)
-            goto error;
-    }
-    return out;
-error:
-    json_decref (out);
-    return NULL;
-}
-
 void rcalc_destroy (rcalc_t *r)
 {
     if (r == NULL)
         return;
     json_decref (r->json);
+    idset_destroy (r->orig_ranks);
+    for (int i = 0; i < r->nranks; i++) {
+        idset_destroy (r->ranks[i].cpuset);
+        idset_destroy (r->ranks[i].gpuset);
+    }
     free (r->ranks);
     free (r->alloc);
     memset (r, 0, sizeof (*r));
     free (r);
 }
 
+static struct idset * rcalc_ranks (rcalc_t *r, flux_error_t *errp)
+{
+    json_t *entry;
+    size_t index;
+    json_error_t error;
+    struct idset *ranks;
+
+    if (!(ranks = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        return NULL;
+
+    json_array_foreach (r->R_lite, index, entry) {
+        struct idset *ids;
+        const char *rank;
+        if (json_unpack_ex (entry, &error, 0,
+                            "{s:s}",
+                            "rank", &rank) < 0) {
+            errprintf (errp, "%s", error.text);
+            goto err;
+        }
+        if (!(ids = idset_decode (rank))) {
+            errprintf (errp, "invalid idset %s", rank);
+            goto err;
+        }
+        if (idset_add (ranks, ids) < 0) {
+            idset_destroy (ids);
+            errprintf (errp, "idset_add (%s): %s", rank, strerror (errno));
+            goto err;
+        }
+        idset_destroy (ids);
+    }
+    return ranks;
+err:
+    idset_destroy (ranks);
+    return NULL;
+}
+
+static int rankinfo_get_children (struct rankinfo *ri,
+                                  json_t *children,
+                                  flux_error_t *errp)
+{
+    json_error_t error;
+
+    if (json_unpack_ex (children, &error, 0,
+                        "{s:s s?s}",
+                        "core", &ri->cores,
+                        "gpu", &ri->gpus) < 0)
+        return errprintf (errp, "%s", error.text);
+
+    if (!(ri->cpuset = idset_decode (ri->cores))
+        || !(ri->gpuset = idset_decode (ri->gpus ? ri->gpus : "")))
+        return errprintf (errp, "Failed to decode cpu or gpu sets");
+
+    ri->ncores = idset_count (ri->cpuset);
+    ri->ngpus = idset_count (ri->gpuset);
+
+    return 0;
+}
+
+static int rcalc_process_all_ranks (rcalc_t *r, flux_error_t *errp)
+{
+    json_t *entry;
+    size_t index;
+    json_error_t error;
+    int n = 0;
+
+    json_array_foreach (r->R_lite, index, entry) {
+        const char *rank;
+        json_t *children;
+        unsigned int i;
+        struct idset *ids;
+
+        if (json_unpack_ex (entry, &error, 0,
+                            "{s:s s:o}",
+                            "rank", &rank,
+                            "children", &children) < 0)
+            return errprintf (errp, "%s", error.text);
+
+        if (!(ids = idset_decode (rank)))
+            return errprintf (errp,
+                              "idset_decode (%s): %s",
+                              rank,
+                              strerror (errno));
+
+        i = idset_first (ids);
+        while (i != IDSET_INVALID_ID) {
+            struct rankinfo *ri = &r->ranks[n];
+            ri->id = n;
+            ri->rank = i;
+            if (rankinfo_get_children (ri, children, errp) < 0) {
+                idset_destroy (ids);
+                return -1;
+            }
+            r->ncores += ri->ncores;
+            r->ngpus += ri->ngpus;
+            n++;
+            i = idset_next (ids, i);
+        }
+        idset_destroy (ids);
+    }
+    return 0;
+}
+
 rcalc_t * rcalc_create_json (json_t *o)
 {
-    int i;
     int version;
-    json_t *R_lite;
+    flux_error_t error;
     rcalc_t *r = calloc (1, sizeof (*r));
     if (!r)
         return (NULL);
+    r->json = json_incref (o);
     if (json_unpack_ex (o, NULL, 0,
                         "{s:i s:{s:o}}",
                         "version", &version,
                         "execution",
-                        "R_lite", &R_lite) < 0)
+                        "R_lite", &r->R_lite) < 0)
         goto fail;
     if (version != 1) {
         errno = EINVAL;
         goto fail;
     }
-    if (!(r->json = expand_rank_ranges (R_lite))) {
-        errno = EINVAL;
+    if (!(r->orig_ranks = rcalc_ranks (r, &error)))
         goto fail;
-    }
-    r->nranks = json_array_size (r->json);
+    r->nranks = idset_count (r->orig_ranks);
     r->ranks = calloc (r->nranks, sizeof (struct rankinfo));
     r->alloc = calloc (r->nranks, sizeof (struct allocinfo));
-    for (i = 0; i < r->nranks; i++) {
-        r->ranks[i].id = i;
-        if (rankinfo_get (json_array_get (r->json, i), &r->ranks[i]) < 0)
-            goto fail;
-        r->ncores += r->ranks[i].ncores;
-        r->ngpus += r->ranks[i].ngpus;
-    }
+
+    if (rcalc_process_all_ranks (r, &error) < 0)
+        goto fail;
+
     return (r);
 fail:
     rcalc_destroy (r);
@@ -360,16 +295,6 @@ static bool allocinfo_add_task (struct allocinfo *ai, int size)
     return (false);
 }
 
-static void rcalc_compute_taskids (rcalc_t *r)
-{
-    int i;
-    int taskid = 0;
-    for (i = 0; i < r->nranks; i++) {
-        r->alloc[i].basis = taskid;
-        taskid += r->alloc[i].ntasks;
-    }
-}
-
 /*
  *  Distribute ntasks over the ranks in `r` "evenly" by a heuristic
  *   that first assigns a number of cores per task, then distributes
@@ -406,16 +331,17 @@ int rcalc_distribute (rcalc_t *r, int ntasks, int cores_per_task)
      *  and leaving "full" ranks off the list.
      */
     while (assigned < ntasks) {
-        ai = zlist_pop (l);
+        if (!(ai = zlist_pop (l))) {
+            zlist_destroy (&l);
+            errno = ENOSPC;
+            return -1;
+        }
         if (allocinfo_add_task (ai, cores_per_task)) {
             zlist_append (l, ai);
             assigned++;
         }
     }
     zlist_destroy (&l);
-
-    /*  Assign taskid basis to each rank in block allocation order */
-    rcalc_compute_taskids (r);
     return (0);
 }
 
@@ -451,8 +377,6 @@ int rcalc_distribute_per_resource (rcalc_t *r, const char *name, int ntasks)
             r->ntasks += n;
         }
     }
-
-    rcalc_compute_taskids (r);
     return 0;
 }
 
@@ -490,8 +414,6 @@ static void rcalc_rankinfo_set (rcalc_t *r, int id,
     rli->rank =   ri->rank;
     rli->ncores = ri->ncores;
     rli->ntasks = ai->ntasks;
-    rli->global_basis =  ai->basis;
-    memcpy (&rli->cpuset, &ri->cpuset, sizeof (cpu_set_t));
     /*  Copy cores string to rli, in the very unlikely event that
      *   we get a huge cores string, indicate truncation.
      */

@@ -243,6 +243,51 @@ static int get_per_resource_option (struct jobspec *jobspec,
     return 0;
 }
 
+struct taskmap *create_taskmap (struct shell_info *info)
+{
+    struct taskmap *map = taskmap_create ();
+    if (!map)
+        return NULL;
+    for (int i = 0; i < info->shell_size; i++) {
+        struct rcalc_rankinfo ri;
+        if (rcalc_get_nth (info->rcalc, i, &ri) < 0
+            || taskmap_append (map, i, 1, ri.ntasks) < 0) {
+            shell_log_errno ("taskmap: failed to process rank=%d", i);
+            goto error;
+        }
+    }
+    return map;
+error:
+    taskmap_destroy (map);
+    return NULL;
+}
+
+int shell_info_set_taskmap (struct shell_info *info,
+                            struct taskmap *map)
+{
+    flux_error_t error;
+    const struct idset *taskids;
+    struct idset *copy;
+
+    if (!info || !map) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (info->taskmap
+        && taskmap_check (info->taskmap, map, &error) < 0) {
+        shell_log_error ("invalid taskmap: %s", error.text);
+        return -1;
+    }
+    if (!(taskids = taskmap_taskids (map, info->shell_rank))
+        || !(copy = idset_copy (taskids)))
+        return -1;
+    idset_destroy (info->taskids);
+    info->taskids = copy;
+    taskmap_destroy (info->taskmap);
+    info->taskmap = map;
+    return 0;
+}
+
 struct shell_info *shell_info_create (flux_shell_t *shell)
 {
     struct shell_info *info;
@@ -251,6 +296,7 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
     const char *per_resource = NULL;
     int per_resource_count = -1;
     int broker_rank = shell->broker_rank;
+    struct taskmap *map = NULL;
 
     if (!(info = calloc (1, sizeof (*info)))) {
         shell_log_errno ("shell_info_create");
@@ -298,6 +344,13 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
     info->shell_size = rcalc_total_nodes (info->rcalc);
     info->shell_rank = info->rankinfo.nodeid;
     info->total_ntasks = rcalc_total_ntasks (info->rcalc);
+
+    if (!(map = create_taskmap (info))
+        || shell_info_set_taskmap (info, map) < 0) {
+        taskmap_destroy (map);
+        shell_log_error ("error creating taskmap");
+        goto error;
+    }
     return info;
 error:
     shell_info_destroy (info);
@@ -311,6 +364,8 @@ void shell_info_destroy (struct shell_info *info)
         json_decref (info->R);
         jobspec_destroy (info->jobspec);
         rcalc_destroy (info->rcalc);
+        taskmap_destroy (info->taskmap);
+        idset_destroy (info->taskids);
         free (info->hwloc_xml);
         free (info);
         errno = saved_errno;

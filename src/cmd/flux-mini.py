@@ -33,20 +33,25 @@ from flux.progress import ProgressBar
 from flux.uri import JobURI
 
 
-class Dependency:
+class URIArg:
     """Convenience class for handling dependencies
 
     Splits a dependency URI into fields and returns an RFC 26 dependency
     entry via the entry attribute.
     """
 
-    def __init__(self, uri):
+    def __init__(self, uri, name):
+        # append `:` if missing in uri so that a plain string is treated as
+        # a scheme with no path.
+        if ":" not in uri:
+            uri += ":"
+
         # replace first ':' with ':FXX' to work around urlparse refusal
         # to treat integer only path as a scheme:path.
         self.uri = urlparse(uri.replace(":", ":FXX", 1))
 
         if not self.uri.scheme or not self.uri.path:
-            raise ValueError(f'Invalid dependency URI "{uri}"')
+            raise ValueError(f'Invalid {name} URI "{uri}"')
 
         self.path = self.uri.path.replace("FXX", "", 1)
         self.scheme = self.uri.scheme
@@ -81,7 +86,7 @@ class Dependency:
 def dependency_array_create(uris):
     dependencies = []
     for uri in uris:
-        dependencies.append(Dependency(uri).entry)
+        dependencies.append(URIArg(uri, "dependency").entry)
     return dependencies
 
 
@@ -309,6 +314,7 @@ class Xcmd:
         "log": "--log=",
         "log_stderr": "--log-stderr=",
         "dependency": "--dependency=",
+        "taskmap": "--taskmap=",
         "requires": "--requires=",
         "wait": "--wait-event=",
     }
@@ -690,6 +696,13 @@ class MiniCmd:
         if rlimits:
             jobspec.setattr_shell_option("rlimit", rlimits)
 
+        # --taskmap is only defined for run/submit, but we check
+        # for it in the base jobspec_create() for convenience
+        if hasattr(args, "taskmap") and args.taskmap is not None:
+            jobspec.setattr_shell_option(
+                "taskmap", URIArg(args.taskmap, "taskmap").entry
+            )
+
         if args.dependency is not None:
             jobspec.setattr(
                 "system.dependencies", dependency_array_create(args.dependency)
@@ -821,6 +834,14 @@ class SubmitBaseCmd(MiniCmd):
 
     def __init__(self):
         super().__init__()
+        self.parser.add_argument(
+            "--taskmap",
+            type=str,
+            help="Select the scheme for mapping task ids to nodes as a URI "
+            + "(i.e. SCHEME[:VALUE]). Value options include block, cyclic, "
+            + "cyclic:N, or manual:TASKMAP (default: block)",
+            metavar="URI",
+        )
         group = self.parser.add_argument_group("Common resource options")
         group.add_argument(
             "-N", "--nodes", metavar="N", help="Number of nodes to allocate"
