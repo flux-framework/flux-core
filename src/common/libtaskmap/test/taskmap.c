@@ -97,11 +97,38 @@ struct test_vector pmi_tests[] = {
     { NULL, NULL },
 };
 
+struct test_vector pmi_decode_tests[] = {
+    { "", "[]" },
+    { "(vector,(0,1,4))", "[[0,1,4,1]]" },
+    { "(vector,(0,2,2))", "[[0,2,2,1]]" },
+    { "(vector,(0,16,16))", "[[0,16,16,1]]" },
+    { "(vector,(0,8,16),(0,4,32))", "[[0,8,16,1],[0,4,32,1]]" },
+    { "(vector,(0,4,2),(1,3,1))", "[[0,4,2,1],[1,3,1,1]]" },
+    { "(vector,(0,4,1),(0,4,1),(0,4,1),(0,4,1))", "[[0,4,1,4]]" },
+    { "(vector,(0,4,4),(0,4,1))", "[[0,4,4,1],[0,4,1,1]]" },
+    { "    (vector, (0,4,4), (0,4,1), )", "[[0,4,4,1],[0,4,1,1]]" },
+    { "(vector, (1,1,1), (0,2,2))", "[[1,1,1,1],[0,2,2,1]]" },
+    { "(vector, (1,1,1), (0,2,2),)", "[[1,1,1,1],[0,2,2,1]]" },
+    { "(vector, (0,1,1), (1,5,3), (6,2, 5))",
+      "[[0,1,1,1],[1,5,3,1],[6,2,5,1]]" },
+    { NULL, NULL },
+};
+
+struct test_vector pmi_invalid[] = {
+    { "vector, (1,1))", "unable to parse block: (1,1))" },
+    { "(vector, (1.11, 2.2))", "unable to parse block: (1.11, 2.2))" },
+    { "(vector, (1,1,0))", "invalid number in block: (1,1,0))" },
+    { "((1,1,1))", "invalid token near '('" },
+    { "((1,1,1), vector,)", "vector prefix must preceed blocklist" },
+    { NULL, NULL },
+};
+
 static void pmi_mapping_tests ()
 {
     struct test_vector *t;
     for (t = &pmi_tests[0]; t->taskmap != NULL; t++) {
         char *s;
+        struct taskmap *map2;
         struct taskmap *map = taskmap_decode (t->taskmap, NULL);
         if (!map)
             BAIL_OUT("taskmap_decode failed!");
@@ -113,8 +140,45 @@ static void pmi_mapping_tests ()
         is (s, t->expected,
             "taskmap pmi=%s",
             s);
+        ok ((map2 = taskmap_decode (s, NULL)) != NULL,
+            "taskmap_decode (%s)",
+            s);
+        free (s);
+        ok ((s = taskmap_encode (map, 0)) != NULL,
+            "taskmap_encode works");
+        is (s, t->taskmap,
+            "taskmap=%s",
+            s);
+        taskmap_destroy (map);
+        taskmap_destroy (map2);
+        free (s);
+    }
+
+    for (t = &pmi_decode_tests[0]; t->taskmap != NULL; t++) {
+        char *s;
+        struct taskmap *map = taskmap_decode (t->taskmap, NULL);
+        if (!map)
+            BAIL_OUT ("taskmap_decode failed!");
+        ok (map != NULL,
+            "taskmap_decode (%s)",
+            t->taskmap);
+        ok ((s = taskmap_encode (map, 0)) != NULL,
+            "taskmap_encode works");
+        is (s, t->expected,
+            "taskmap map=%s",
+            s);
         taskmap_destroy (map);
         free (s);
+    }
+
+    for (t = &pmi_invalid[0]; t->taskmap != NULL; t++) {
+        flux_error_t error;
+        ok (taskmap_decode (t->taskmap, &error) == NULL,
+            "taskmap_decode (%s) fails",
+            t->taskmap);
+        is (error.text, t->expected,
+            "got error %s",
+            error.text);
     }
 }
 
@@ -285,12 +349,6 @@ static void error_tests ()
         "taskmap_decode_json (NULL) fails");
     is (error.text, "Invalid argument",
         "taskmape_decode_json (NULL) sets error.text=%s",
-        error.text);
-
-    ok (taskmap_decode ("", &error) == NULL,
-        "taskmap_decode (\"\") fails");
-    is (error.text, "Invalid argument",
-        "taskmap_decode (\"\") sets error.text=%s",
         error.text);
 
     /* Do not try to match jansson errors exactly */
