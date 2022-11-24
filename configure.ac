@@ -579,6 +579,7 @@ AC_CONFIG_FILES( \
   etc/flux-idset.pc \
   etc/flux-schedutil.pc \
   etc/flux-hostlist.pc \
+  etc/flux-taskmap.pc \
   etc/flux.service \
   doc/Makefile \
   doc/test/Makefile \
