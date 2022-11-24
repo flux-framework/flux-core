@@ -26,6 +26,7 @@
 #include <jansson.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
+#include <flux/taskmap.h>
 
 #include "ccan/str/str.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -36,7 +37,6 @@
 #include "src/common/libutil/setenvf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libpmi/simple_server.h"
-#include "src/common/libpmi/clique.h"
 #include "src/common/libpmi/dgetline.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/librouter/usock_service.h"
@@ -674,6 +674,7 @@ void client_dumpargs (struct client *cli)
 
 void pmi_server_initialize (int flags)
 {
+    struct taskmap *map;
     const char *mode = optparse_get_str (ctx.opts, "test-pmi-clique", "single");
     struct pmi_simple_ops ops = {
         .kvs_put = pmi_kvs_put,
@@ -685,38 +686,32 @@ void pmi_server_initialize (int flags)
     int appnum = 0;
 
 
-    if (!(ctx.pmi.kvs = zhash_new()))
+    if (!(ctx.pmi.kvs = zhash_new ())
+        || !(map = taskmap_create ()))
         oom ();
 
     if (!strcmp (mode, "single")) {
-        struct pmi_map_block mapblock = {
-            .nodeid = 0,
-            .nodes = 1,
-            .procs = ctx.test_size,
-        };
-        char buf[256];
-        if (pmi_process_mapping_encode (&mapblock, 1, buf, sizeof (buf)) < 0)
-            log_msg_exit ("error encoding PMI_process_mapping");
-        zhash_update (ctx.pmi.kvs, "PMI_process_mapping", xstrdup (buf));
+        if (taskmap_append (map, 0, 1, ctx.test_size) < 0)
+            log_err_exit ("error encoding PMI_process_mapping");
     }
     else if (!strcmp (mode, "per-broker")) {
-        struct pmi_map_block mapblock = {
-            .nodeid = 0,
-            .nodes = ctx.test_size,
-            .procs = 1,
-        };
-        char buf[256];
-        if (pmi_process_mapping_encode (&mapblock, 1, buf, sizeof (buf)) < 0)
-            log_msg_exit ("error encoding PMI_process_mapping");
-        zhash_update (ctx.pmi.kvs, "PMI_process_mapping", xstrdup (buf));
+        if (taskmap_append (map, 0, ctx.test_size, 1) < 0)
+            log_err_exit ("error encoding PMI_process_mapping");
     }
     else if (strcmp (mode, "none") != 0)
         log_msg_exit ("unsupported test-pmi-clique mode: %s", mode);
 
+    if (taskmap_nnodes (map) > 0) {
+        char *s;
+        if (!(s = taskmap_encode (map, TASKMAP_ENCODE_PMI)))
+            log_msg_exit ("error encoding PMI_process_mapping");
+        zhash_update (ctx.pmi.kvs, "PMI_process_mapping", s);
+    }
     ctx.pmi.srv = pmi_simple_server_create (ops, appnum, ctx.test_size,
                                             ctx.test_size, "-", flags, NULL);
     if (!ctx.pmi.srv)
         log_err_exit ("pmi_simple_server_create");
+    taskmap_destroy (map);
 }
 
 void pmi_server_finalize (void)
