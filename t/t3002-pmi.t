@@ -19,19 +19,13 @@ test_expect_success 'pmi_info works' '
 '
 
 test_expect_success 'pmi_info --clique shows each node with own clique' '
-	flux mini run -opmi.clique=pershell -n${SIZE} -N${SIZE} \
+	flux mini run -n${SIZE} -N${SIZE} \
 		${pmi_info} --clique >clique.out &&
 	count=$(cut -f2 -d: clique.out | sort | uniq | wc -l) &&
 	test $count -eq ${SIZE}
 '
-test_expect_success 'pmi_info --clique single shows everything in one clique' '
-	flux mini run -opmi.clique=single -n${SIZE} -N${SIZE} \
-		${pmi_info} --clique >clique.out &&
-	count=$(cut -f2 -d: clique.out | sort | uniq | wc -l) &&
-	test $count -eq 1
-'
 test_expect_success 'pmi_info --clique none shows each task in its own clique' '
-	flux mini run -opmi.clique=none -n${SIZE} -N${SIZE} \
+	flux mini run -opmi.nomap -n${SIZE} -N${SIZE} \
 		${pmi_info} --clique >clique.none.out &&
 	count=$(cut -f2 -d: clique.none.out | sort | uniq | wc -l) &&
 	test $count -eq ${SIZE}

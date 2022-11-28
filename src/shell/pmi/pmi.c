@@ -389,60 +389,11 @@ static void pmi_fd_cb (flux_shell_task_t *task,
  * - OpenMPI might select conflicting shmem names if the mapping indicates
  *   that ranks are not co-located when they really are
  *   (flux-framework/flux-core#3551)
- *
- * Unless overridden, "pershell" mode is assumed.  When multiple brokers
- * are launched per node (e.g. in test), each job shell remains in an isolated
- * clique as though the brokers represent independent nodes.  The OpenMPI shell
- * plugin avoids the above problem by setting MCA environment variables to
- * locate shmem paths within FLUX_JOB_TMPDIR, which includes the jobid and
- * the shell rank in its path, and thus works as a unique path prefix.
  */
-static int init_clique (struct shell_pmi *pmi, const char *opt)
+static int init_clique (struct shell_pmi *pmi)
 {
-    struct taskmap *tmpmap = NULL;
-    struct taskmap *taskmap;
     char *s = NULL;
-    int saved_errno;
-    int rc = -1;
-
-    if (!opt)
-        opt = "pershell";
-
-     /* pmi.clique=pershell (default): one clique per shell.
-      * Use shell-generated taskmap to create PMI_process_mapping
-      */
-    if (!strcmp (opt, "pershell")) {
-        taskmap = pmi->shell->info->taskmap;
-    }
-    /* pmi.clique=single: all procs are on the same node.
-     */
-    else if (!strcmp (opt, "single")) {
-        tmpmap = taskmap_create ();
-        if (!(tmpmap = taskmap_create ())
-            || taskmap_append (tmpmap,
-                               0,
-                               1,
-                               pmi->shell->info->total_ntasks) < 0)
-            goto out;
-        taskmap = tmpmap;
-    }
-    /* pmi.clique=none: disable PMI_process_mapping generation.
-     */
-    else if (!strcmp (opt, "none")) {
-        rc = 0;
-        goto out;
-    }
-    else {
-        shell_log_error ("pmi.clique=%s is invalid", opt);
-        goto out;
-    }
-
-    /*
-     * This function always succeeds after this point, so update rc
-     */
-    rc = 0;
-
-    if (!(s = taskmap_encode (taskmap, TASKMAP_ENCODE_PMI))
+    if (!(s = taskmap_encode (pmi->shell->info->taskmap, TASKMAP_ENCODE_PMI))
         || strlen (s) > SIMPLE_KVS_VAL_MAX) {
         /* If value exceeds SIMPLE_KVS_VAL_MAX, skip setting the key
          * without generating an error. The client side will not treat
@@ -454,11 +405,8 @@ static int init_clique (struct shell_pmi *pmi, const char *opt)
     }
     put_dict (pmi->locals, "PMI_process_mapping", s);
 out:
-    saved_errno = errno;
-    taskmap_destroy (tmpmap);
     free (s);
-    errno = saved_errno;
-    return rc;
+    return 0;
 }
 
 static int set_flux_instance_level (struct shell_pmi *pmi)
@@ -513,17 +461,17 @@ static struct pmi_simple_ops shell_pmi_ops = {
 static int parse_args (flux_shell_t *shell,
                        int *exchange_k,
                        const char **kvs,
-                       const char **clique)
+                       int *nomap)
 {
     if (flux_shell_getopt_unpack (shell,
                                   "pmi",
-                                  "{s?s s?{s?i} s?s}",
+                                  "{s?s s?{s?i} s?i}",
                                   "kvs",
                                   kvs,
                                   "exchange",
                                     "k", exchange_k,
-                                  "clique",
-                                  clique) < 0)
+                                  "nomap",
+                                  nomap) < 0)
         return -1;
     return 0;
 }
@@ -536,13 +484,13 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
     char kvsname[32];
     const char *kvs = "exchange";
     int exchange_k = 0; // 0=use default tree fanout
-    const char *clique = NULL;
+    int nomap = 0;      // avoid generation of PMI_process_mapping
 
     if (!(pmi = calloc (1, sizeof (*pmi))))
         return NULL;
     pmi->shell = shell;
 
-    if (parse_args (shell, &exchange_k, &kvs, &clique) < 0)
+    if (parse_args (shell, &exchange_k, &kvs, &nomap) < 0)
         goto error;
     if (!strcmp (kvs, "native")) {
         shell_pmi_ops.kvs_put = native_kvs_put;
@@ -588,7 +536,7 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
         errno = ENOMEM;
         goto error;
     }
-    if (init_clique (pmi, clique) < 0)
+    if (!nomap && init_clique (pmi) < 0)
         goto error;
     if (!shell->standalone) {
         if (set_flux_instance_level (pmi) < 0)

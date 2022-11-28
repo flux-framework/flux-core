@@ -152,7 +152,7 @@ test_expect_success 'flux mini batch: user can set broker.critical-ranks' '
 	test_cmp critical-ranks2.expected critical-ranks2.out
 '
 test_expect_success 'flux mini batch: flux can bootstrap without broker.mapping' '
-	id=$(flux mini batch -N4 -o pmi.clique=none \
+	id=$(flux mini batch -N4 -o pmi.nomap \
 		--wrap flux resource info) &&
 	flux job status $id
 '
