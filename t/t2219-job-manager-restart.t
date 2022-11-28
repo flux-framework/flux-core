@@ -84,14 +84,44 @@ test_expect_success 'verify that instance can restart after config change' '
 	grep "^Job submission is enabled" dump_queue_reconf.out
 '
 
+mkdir -p restart_dump_conf.d
+
+restart_flux_dump() {
+	flux start \
+		-o,--config-path=$(pwd)/restart_dump_conf.d \
+		-o,-Scontent.restore=$1 \
+		flux module stats job-manager
+}
+
 for dump in ${DUMPS}/valid/*.tar.bz2; do
     testname=$(basename $dump)
-    test_expect_success 'successfully started from '$testname "restart_flux $dump"
+    test_expect_success 'anon: successfully started from '$testname "restart_flux_dump $dump"
 done
 
 for dump in ${DUMPS}/invalid/*.tar.bz2; do
     testname=$(basename $dump)
-    test_expect_success 'failed on '$testname "test_must_fail restart_flux $dump"
+    test_expect_success 'anon: failed on '$testname "test_must_fail restart_flux_dump $dump"
+done
+
+cat >restart_dump_conf.d/queues.toml << EOF
+[queues.debug]
+[queues.batch]
+EOF
+
+for dump in ${DUMPS}/valid/*.tar.bz2; do
+    testname=$(basename $dump)
+    test_expect_success 'named queues: successfully started from '$testname "restart_flux_dump $dump"
+done
+
+rm -f restart_dump_conf.d/queues.toml
+cat >restart_dump_conf.d/queues.toml << EOF
+[queues.foobar]
+[queues.boobaz]
+EOF
+
+for dump in ${DUMPS}/valid/*.tar.bz2; do
+    testname=$(basename $dump)
+    test_expect_success 'new named queues: successfully started from '$testname "restart_flux_dump $dump"
 done
 
 test_done
