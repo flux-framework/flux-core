@@ -253,18 +253,25 @@ static int restart_restore_state (struct job_manager *ctx)
     flux_future_t *f;
     flux_jobid_t id;
     json_t *queue = NULL;
+    int version = 0;
 
     if (!(f = flux_kvs_lookup (ctx->h, NULL, 0, checkpoint_key)))
         return -1;
+
     if (flux_kvs_lookup_get_unpack (f,
-                                    "{s:I s?o}",
+                                    "{s?i s:I s?o}",
+                                    "version", &version,
                                     "max_jobid", &id,
                                     "queue", &queue) < 0)
         goto error;
+    if (version != 0) {
+        errno = EINVAL;
+        return -1;
+    }
     if (ctx->max_jobid < id)
         ctx->max_jobid = id;
     if (queue) {
-        if (queue_restore_state (ctx->queue, queue) < 0)
+        if (queue_restore_state (ctx->queue, version, queue) < 0)
             goto error;
     }
     flux_future_destroy (f);

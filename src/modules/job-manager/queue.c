@@ -192,12 +192,12 @@ error:
     return NULL;
 }
 
-int queue_restore_state (struct queue *queue, json_t *o)
+int queue_restore_state (struct queue *queue, int version, json_t *o)
 {
     size_t index;
     json_t *entry;
 
-    if (!o || !json_is_array (o)) {
+    if (version != 0 || !o || !json_is_array (o)) {
         errno = EINVAL;
         return -1;
     }

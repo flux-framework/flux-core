@@ -19,7 +19,7 @@ struct queue *queue_create (struct job_manager *ctx);
 void queue_destroy (struct queue *queue);
 
 json_t *queue_save_state (struct queue *queue);
-int queue_restore_state (struct queue *queue, json_t *o);
+int queue_restore_state (struct queue *queue, int version, json_t *o);
 
 int queue_submit_check (struct queue *queue,
                         json_t *jobspec,
