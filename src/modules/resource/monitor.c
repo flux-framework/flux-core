@@ -57,6 +57,7 @@ struct monitor {
     struct idset *down; // cached result of monitor_get_down()
     flux_msg_handler_t **handlers;
     struct flux_msglist *waitup_requests;
+    int size;
 };
 
 static void notify_waitup (struct monitor *monitor);
@@ -68,14 +69,13 @@ const struct idset *monitor_get_up (struct monitor *monitor)
 
 const struct idset *monitor_get_down (struct monitor *monitor)
 {
-    uint32_t size = monitor->ctx->size;
     unsigned int id;
 
     if (!monitor->down) {
-        if (!(monitor->down = idset_create (size, 0)))
+        if (!(monitor->down = idset_create (monitor->size, 0)))
             return NULL;
     }
-    for (id = 0; id < size; id++) {
+    for (id = 0; id < monitor->size; id++) {
         if (idset_test (monitor->up, id))
             (void)idset_clear (monitor->down, id);
         else
@@ -186,7 +186,7 @@ static void waitup_cb (flux_t *h,
         errstr = "this RPC only works on rank 0";
         goto error;
     }
-    if (up > monitor->ctx->size || up < 0) {
+    if (up > monitor->size || up < 0) {
         errno = EPROTO;
         errstr = "up value is out of range";
         goto error;
@@ -224,6 +224,7 @@ void monitor_destroy (struct monitor *monitor)
 }
 
 struct monitor *monitor_create (struct resource_ctx *ctx,
+                                int inventory_size,
                                 bool monitor_force_up)
 {
     struct monitor *monitor;
@@ -231,6 +232,16 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
     if (!(monitor = calloc (1, sizeof (*monitor))))
         return NULL;
     monitor->ctx = ctx;
+    /* In recovery mode, if the instance was started by PMI, the size of
+     * the recovery instance will be 1 but the resource inventory size may be
+     * larger.  Up/down sets should be built with the inventory size in this
+     * case.  However, we cannot unconditionally use the inventory size, since
+     * it will be zero at this point if resources are being dynamically
+     * discovered, e.g. when Flux is launched by a foreign resource manager.
+     */
+    monitor->size = ctx->size;
+    if (monitor->size < inventory_size)
+        monitor->size = inventory_size;
     if (flux_msg_handler_addvec (ctx->h, htab, monitor, &monitor->handlers) < 0)
         goto error;
     if (!(monitor->waitup_requests = flux_msglist_create ()))
@@ -240,10 +251,10 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
          * N.B. Initial up value will appear in 'restart' event posted
          * to resource.eventlog.
          */
-        if (!(monitor->up = idset_create (ctx->size, 0)))
+        if (!(monitor->up = idset_create (monitor->size, 0)))
             goto error;
         if (monitor_force_up) {
-            if (idset_range_set (monitor->up, 0, ctx->size - 1) < 0)
+            if (idset_range_set (monitor->up, 0, monitor->size - 1) < 0)
                 goto error;
         }
         else if (!flux_attr_get (ctx->h, "broker.recovery-mode")) {

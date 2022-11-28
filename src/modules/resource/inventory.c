@@ -571,6 +571,23 @@ done:
     return rc;
 }
 
+int inventory_get_size (struct inventory *inv)
+{
+    struct rlist *rl = NULL;
+    struct idset *ids = NULL;
+    int count = 0;
+
+    if (inv != NULL
+        && inv->R != NULL
+        && (rl = rlist_from_json (inv->R, NULL))
+        && (ids = rlist_ranks (rl))) {
+        count = idset_count (ids);
+    }
+    idset_destroy (ids);
+    rlist_destroy (rl);
+    return count;
+}
+
 static void resource_reload (flux_t *h,
                              flux_msg_handler_t *mh,
                              const flux_msg_t *msg,
