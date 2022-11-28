@@ -78,6 +78,10 @@ bool runat_is_defined (struct runat *r, const char *name);
  */
 bool runat_is_completed (struct runat *r, const char *name);
 
+/* Test whether named list contains interactive commands.
+ */
+bool runat_is_interactive (struct runat *r, const char *name);
+
 #endif /* !_BROKER_RUNAT_H */
 
 /*

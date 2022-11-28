@@ -45,6 +45,7 @@ struct runat_entry {
     int count;
     bool aborted;
     bool completed;
+    bool interactive;
     runat_completion_f cb;
     void *cb_arg;
 };
@@ -406,7 +407,8 @@ static void runat_entry_destroy_wrapper (void **arg)
  */
 static int runat_push (struct runat *r,
                        const char *name,
-                       struct runat_command *cmd)
+                       struct runat_command *cmd,
+                       bool interactive)
 {
     struct runat_entry *entry;
 
@@ -425,6 +427,8 @@ static int runat_push (struct runat *r,
         return -1;
     }
     entry->count++;
+    if (!entry->interactive)
+        entry->interactive = interactive;
     return 0;
 }
 
@@ -454,7 +458,7 @@ int runat_push_shell_command (struct runat *r,
         goto error;
     if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
         goto error;
-    if (runat_push (r, name, cmd) < 0)
+    if (runat_push (r, name, cmd, false) < 0)
         goto error;
     return 0;
 error:
@@ -476,7 +480,7 @@ int runat_push_shell (struct runat *r, const char *name, int flags)
         goto error;
     if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
         goto error;
-    if (runat_push (r, name, cmd) < 0)
+    if (runat_push (r, name, cmd, true) < 0)
         goto error;
     return 0;
 error:
@@ -502,7 +506,7 @@ int runat_push_command (struct runat *r,
         goto error;
     if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
         goto error;
-    if (runat_push (r, name, cmd) < 0)
+    if (runat_push (r, name, cmd, false) < 0)
         goto error;
     return 0;
 error:
@@ -561,6 +565,15 @@ bool runat_is_completed (struct runat *r, const char *name)
     if (!r || !name || !(entry = zhashx_lookup (r->entries, name)))
         return false;
     return entry->completed;
+}
+
+bool runat_is_interactive (struct runat *r, const char *name)
+{
+    struct runat_entry *entry;
+
+    if (!r || !name || !(entry = zhashx_lookup (r->entries, name)))
+        return false;
+    return entry->interactive;
 }
 
 int runat_abort (struct runat *r, const char *name)
