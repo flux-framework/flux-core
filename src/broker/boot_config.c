@@ -553,7 +553,8 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
      * attribute to the URI peers will connect to.  If broker has no
      * downstream peers, set tbon.endpoint to NULL.
      */
-    if (topology_get_child_ranks (topo, NULL, 0) > 0) {
+    if (topology_get_child_ranks (topo, NULL, 0) > 0
+        && attr_get (attrs, "broker.recovery-mode", NULL, NULL) < 0) {
         char bind_uri[MAX_URI + 1];
         char my_uri[MAX_URI + 1];
 
