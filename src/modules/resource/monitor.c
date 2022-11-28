@@ -246,7 +246,7 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
             if (idset_range_set (monitor->up, 0, ctx->size - 1) < 0)
                 goto error;
         }
-        else {
+        else if (!flux_attr_get (ctx->h, "broker.recovery-mode")) {
             if (!(monitor->f = flux_rpc_pack (ctx->h,
                                               "groups.get",
                                                FLUX_NODEID_ANY,
