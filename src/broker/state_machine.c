@@ -124,6 +124,7 @@ static struct state_next nexttab[] = {
     { "parent-fail",        STATE_JOIN,         STATE_SHUTDOWN },
     { "rc1-success",        STATE_INIT,         STATE_QUORUM },
     { "rc1-none",           STATE_INIT,         STATE_QUORUM },
+    { "rc1-ignorefail",     STATE_INIT,         STATE_QUORUM },
     { "rc1-fail",           STATE_INIT,         STATE_SHUTDOWN},
     { "quorum-full",        STATE_QUORUM,       STATE_RUN },
     { "quorum-fail",        STATE_QUORUM,       STATE_SHUTDOWN},
@@ -485,16 +486,23 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
         log_err ("runat_get_exit_code %s", name);
 
     if (!strcmp (name, "rc1")) {
+        if (rc == 0)
+            state_machine_post (s, "rc1-success");
+        else if (attr_get (s->ctx->attrs,
+                           "broker.recovery-mode",
+                           NULL,
+                           NULL) == 0)
+            state_machine_post (s, "rc1-ignorefail");
         /* If rc1 fails, it most likely will fail again on restart, so if
          * running under systemd, exit with the broker.exit-norestart value.
          */
-        if (rc != 0) {
+        else {
             if (s->exit_norestart != 0)
                 s->ctx->exit_rc = s->exit_norestart;
             else
                 s->ctx->exit_rc = rc;
+            state_machine_post (s, "rc1-fail");
         }
-        state_machine_post (s, rc == 0 ? "rc1-success" : "rc1-fail");
     }
     else if (!strcmp (name, "rc2")) {
         if (s->ctx->exit_rc == 0 && rc != 0)
