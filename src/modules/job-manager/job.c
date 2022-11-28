@@ -154,6 +154,24 @@ void job_aux_destroy (struct job *job)
     aux_destroy (&job->aux);
 }
 
+static int jobspec_redacted_parse_queue (struct job *job)
+{
+    if (job->jobspec_redacted) {
+        /* unit tests assume empty jobspec legal, so all fields
+         * optional
+         */
+        if (json_unpack (job->jobspec_redacted,
+                         "{s?{s?{s?s}}}",
+                         "attributes",
+                         "system",
+                         "queue", &job->queue) < 0) {
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    return 0;
+}
+
 struct job *job_create_from_eventlog (flux_jobid_t id,
                                       const char *eventlog,
                                       const char *jobspec,
@@ -174,6 +192,11 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
         goto inval;
     }
     jpath_del (job->jobspec_redacted, "attributes.system.environment");
+
+    if (jobspec_redacted_parse_queue (job) < 0) {
+        errprintf (error, "failed to decode jobspec queue");
+        goto inval;
+    }
 
     if (!(a = eventlog_decode (eventlog))) {
         errprintf (error, "failed to decode eventlog");
@@ -251,6 +274,10 @@ struct job *job_create_from_json (json_t *o)
                         "flags", &job->flags,
                         "jobspec", &job->jobspec_redacted) < 0) {
         errno = EPROTO;
+        job_decref (job);
+        return NULL;
+    }
+    if (jobspec_redacted_parse_queue (job) < 0) {
         job_decref (job);
         return NULL;
     }
