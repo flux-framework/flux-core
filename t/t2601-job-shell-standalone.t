@@ -137,7 +137,7 @@ test_expect_success 'flux-shell: shell PMI works' '
 		>pmi_info.out 2>pmi_info.err
 '
 test_expect_success 'flux-shell: shell PMI exports clique info' '
-	flux mini run -opmi.clique=pershell --dry-run -N1 -n8 \
+	flux mini run --dry-run -N1 -n8 \
 		${PMI_INFO} -c >j8pmi_clique &&
 	${FLUX_SHELL} -v -s -r 0 -j j8pmi_clique -R R8 51 \
 		>pmi_clique.out 2>pmi_clique.err &&
