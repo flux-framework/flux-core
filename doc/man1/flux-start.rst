@@ -96,6 +96,20 @@ OPTIONS
    ``per-broker``, each broker is placed in its own clique.
    Default: ``single``.
 
+**-r, --recovery**\ =\ *[TARGET]*
+   Start the rank 0 broker of an instance in recovery mode.  If *TARGET*
+   is a directory, treat it as a *statedir* from a previous instance.
+   If *TARGET* is a file, treat it as an archive file from :man1:`flux-dump`.
+   If *TARGET* is unspecified, assume the system instance is to be recovered.
+   In recovery mode, any rc1 errors are ignored, broker peers are not allowed
+   to connect, and resources are offline.
+
+**--sysconfig**
+   Run the broker with ``--config-path`` set to the default system instance
+   configuration directory.  This option is unnecessary if ``--recovery``
+   is specified without its optional argument.  It may be required if
+   recovering a dump from a system instance.
+
 VERBOSITY LEVELS
 ================
 
@@ -122,6 +136,18 @@ shell as the initial program:
 ::
 
    srun --pty -N8 flux start
+
+Start the system instance rank 0 broker in recovery mode:
+
+::
+
+   sudo -u flux flux start --recovery
+
+Start a non-system instance in recovery mode:
+
+::
+
+   flux start --recovery=/tmp/statedir
 
 
 RESOURCES
