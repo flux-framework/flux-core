@@ -296,7 +296,40 @@ static void action_quorum (struct state_machine *s)
 
 static void action_run (struct state_machine *s)
 {
+    struct broker_attr *attrs = s->ctx->attrs;
+
     if (runat_is_defined (s->ctx->runat, "rc2")) {
+        if (attr_get (attrs, "broker.recovery-mode", NULL, NULL) == 0
+            && runat_is_interactive (s->ctx->runat, "rc2")) {
+            const char *confdir = "unknown";
+            const char *rc1_path = "unknown";
+            const char *rc3_path = "unknown";
+            const char *statedir = "unknown";
+
+            (void)attr_get (attrs, "config.path", &confdir, NULL);
+            (void)attr_get (attrs, "broker.rc1_path", &rc1_path, NULL);
+            (void)attr_get (attrs, "broker.rc3_path", &rc3_path, NULL);
+            (void)attr_get (attrs, "statedir", &statedir, NULL);
+
+            printf ("+-----------------------------------------------------\n"
+                    "| Entering Flux recovery mode.\n"
+                    "| All resources will be offline during recovery.\n"
+                    "| Any rc1 failures noted above may result in\n"
+                    "|  reduced functionality until manually corrected.\n"
+                    "|\n"
+                    "| broker.rc1_path    %s\n"
+                    "| broker.rc3_path    %s\n"
+                    "| config.path        %s\n"
+                    "| statedir           %s\n"
+                    "|\n"
+                    "| Exit this shell when finished.\n"
+                    "+-----------------------------------------------------\n",
+                    rc1_path ? rc1_path : "-",
+                    rc3_path ? rc3_path : "-",
+                    confdir ? confdir : "-",
+                    statedir ? statedir
+                        : "changes will not be preserved");
+        }
         if (runat_start (s->ctx->runat, "rc2", runat_completion_cb, s) < 0) {
             flux_log_error (s->ctx->h, "runat_start rc2");
             state_machine_post (s, "rc2-fail");
