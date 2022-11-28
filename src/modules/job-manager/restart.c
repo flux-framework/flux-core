@@ -34,6 +34,8 @@ typedef int (*restart_map_f)(struct job *job, void *arg, flux_error_t *error);
 
 const char *checkpoint_key = "checkpoint.job-manager";
 
+#define CHECKPOINT_VERSION 0
+
 int restart_count_char (const char *s, char c)
 {
     int count = 0;
@@ -220,7 +222,8 @@ int restart_save_state_to_txn (struct job_manager *ctx, flux_kvs_txn_t *txn)
     if (flux_kvs_txn_pack (txn,
                            0,
                            checkpoint_key,
-                           "{s:I s:O}",
+                           "{s:i s:I s:O}",
+                           "version", CHECKPOINT_VERSION,
                            "max_jobid", ctx->max_jobid,
                            "queue", queue) < 0) {
         json_decref (queue);
@@ -253,18 +256,26 @@ static int restart_restore_state (struct job_manager *ctx)
     flux_future_t *f;
     flux_jobid_t id;
     json_t *queue = NULL;
-
+    int version = -1;
     if (!(f = flux_kvs_lookup (ctx->h, NULL, 0, checkpoint_key)))
         return -1;
+    /* assume version 0 if not in checkpoint */
     if (flux_kvs_lookup_get_unpack (f,
-                                    "{s:I s?o}",
+                                    "{s?i s:I s?o}",
+                                    "version", &version,
                                     "max_jobid", &id,
                                     "queue", &queue) < 0)
         goto error;
+    if (version < 0)
+        version = 0;
+    if (version != 0) {
+        errno = EINVAL;
+        return -1;
+    }
     if (ctx->max_jobid < id)
         ctx->max_jobid = id;
     if (queue) {
-        if (queue_restore_state (ctx->queue, queue) < 0)
+        if (queue_restore_state (ctx->queue, version, queue) < 0)
             goto error;
     }
     flux_future_destroy (f);
