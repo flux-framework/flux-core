@@ -81,14 +81,8 @@ test_expect_success 'job-shell: PMI works' '
 	flux job attach $id >pmi_info.out 2>pmi_info.err &&
 	grep size=4 pmi_info.out
 '
-test_expect_success 'pmi-shell: bad pmi.clique option fails' '
-	test_must_fail flux mini run -opmi.clique=badopt \
-		/bin/true 2>badopt.err &&
-	grep "pmi.clique=badopt is invalid" badopt.err
-'
-
 test_expect_success 'pmi-shell: PMI cliques are correct for 1 ppn' '
-	flux mini run -opmi.clique=pershell -N4 -n4 \
+	flux mini run -N4 -n4 \
 		${PMI_INFO} -c >pmi_clique1.raw &&
 	sort -snk1 <pmi_clique1.raw >pmi_clique1.out &&
 	sort >pmi_clique1.exp <<-EOT &&
@@ -100,7 +94,7 @@ test_expect_success 'pmi-shell: PMI cliques are correct for 1 ppn' '
 	test_cmp pmi_clique1.exp pmi_clique1.out
 '
 test_expect_success 'pmi-shell: PMI cliques are correct for 2 ppn' '
-	flux mini run -opmi.clique=pershell \
+	flux mini run \
 		-N2 -n4 ${PMI_INFO} -c >pmi_clique2.raw &&
 	sort -snk1 <pmi_clique2.raw >pmi_clique2.out &&
 	sort >pmi_clique2.exp <<-EOT &&
@@ -112,7 +106,7 @@ test_expect_success 'pmi-shell: PMI cliques are correct for 2 ppn' '
 	test_cmp pmi_clique2.exp pmi_clique2.out
 '
 test_expect_success 'pmi-shell: PMI cliques are correct for irregular ppn' '
-	flux mini run -opmi.clique=pershell -N4 -n5 \
+	flux mini run -N4 -n5 \
 		${PMI_INFO} -c >pmi_cliquex.raw &&
 	sort -snk1 <pmi_cliquex.raw >pmi_cliquex.out &&
 	sort >pmi_cliquex.exp <<-EOT &&
