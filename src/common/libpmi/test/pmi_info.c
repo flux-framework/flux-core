@@ -21,7 +21,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
-#include "src/common/libpmi/clique.h"
 
 #define OPTIONS "ca:"
 static const struct option longopts[] = {
@@ -29,6 +28,24 @@ static const struct option longopts[] = {
     {"abort",        required_argument,  0, 'a'},
     {0, 0, 0, 0},
 };
+
+static char *pmi_cliquetostr (char *buf, int bufsz, int *ranks, int length)
+{
+    int n, i, count;
+
+    buf[0] = '\0';
+    for (i = 0, count  = 0; i < length; i++) {
+        n = snprintf (buf + count,
+                      bufsz - count,
+                      "%s%d",
+                      i > 0 ? "," : "",
+                      ranks[i]);
+        if (n >= bufsz - count)
+            return "overflow";
+        count += n;
+    }
+    return buf;
+}
 
 int main(int argc, char *argv[])
 {
