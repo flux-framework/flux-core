@@ -15,15 +15,38 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <flux/taskmap.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libpmi/pmi2.h"
 #include "src/common/libpmi/pmi_strerror.h"
-#include "src/common/libpmi/clique.h"
 
 /* We don't have a pmi2_strerror() but the codes are mostly the same as PMI-1
  */
 #define pmi2_strerror pmi_strerror
+
+static int find_id (const struct idset *ids, unsigned int id)
+{
+    unsigned int i;
+    int index = 0;
+
+    i = idset_first (ids);
+    while (i != IDSET_INVALID_ID) {
+        if (i == id)
+            return index;
+        i = idset_next (ids, i);
+        index++;
+    }
+    return -1;
+}
+
+static int get_neighbor (const struct idset *ids, unsigned int id)
+{
+    int i = idset_next (ids, id);
+    if (i == IDSET_INVALID_ID)
+        return idset_first (ids);
+    return i;
+}
 
 int main(int argc, char *argv[])
 {
@@ -31,18 +54,16 @@ int main(int argc, char *argv[])
     char jobid[PMI2_MAX_VALLEN];
     char key[PMI2_MAX_KEYLEN];
     char val[PMI2_MAX_VALLEN];
-    char map[PMI2_MAX_ATTRVALUE];
     char attr[PMI2_MAX_ATTRVALUE];
     char expected_attr[PMI2_MAX_ATTRVALUE];
     char expected_val[PMI2_MAX_VALLEN];
     const int keycount = 10;
-    struct pmi_map_block *blocks;
-    int nblocks;
-    int nranks;
-    int *ranks;
+    struct taskmap *map;
+    const struct idset *taskids;
+    flux_error_t error;
     int e;
     int length;
-    int clique_nodeid;
+    int nodeid;
     int clique_rank;
     int clique_neighbor;
 
@@ -55,48 +76,26 @@ int main(int argc, char *argv[])
     if (e != PMI2_SUCCESS)
         log_msg_exit ("%d: PMI2_Job_Getid: %s", rank, pmi2_strerror (e));
 
-    /* Parse PMI_process_mapping, setting nranks (number of ranks in clique),
-     * and ranks[] (array of ranks in clique).
+    /* Parse PMI_process_mapping, get this rank's nodeid and clique size
      */
-    e = PMI2_Info_GetJobAttr ("PMI_process_mapping", map, sizeof (map), NULL);
+    e = PMI2_Info_GetJobAttr ("PMI_process_mapping", val, sizeof (val), NULL);
     if (e != PMI2_SUCCESS)
         log_msg_exit ("%d: PMI2_Info_GetJobAttr PMI_process_mapping: %s",
                       rank, pmi2_strerror (e));
-    e = pmi_process_mapping_parse (map, &blocks, &nblocks);
-    if (e != PMI2_SUCCESS)
-        log_msg_exit ("%d: error parsing PMI_process_mapping: %s",
-                      rank, pmi2_strerror (e));
-    e = pmi_process_mapping_find_nodeid (blocks, nblocks, rank, &clique_nodeid);
-    if (e != PMI2_SUCCESS)
-        log_msg_exit ("%d: error finding my clique nodeid: %s",
-                      rank, pmi2_strerror (e));
-    e = pmi_process_mapping_find_nranks (blocks,
-                                         nblocks,
-                                         clique_nodeid,
-                                         size,
-                                         &nranks);
-    if (e != PMI2_SUCCESS)
-        log_msg_exit ("%d: error finding size of clique: %s",
-                      rank, pmi2_strerror (e));
-    if (!(ranks = calloc (nranks, sizeof (ranks[0]))))
-        log_err_exit ("calloc");
-    e = pmi_process_mapping_find_ranks (blocks,
-                                        nblocks,
-                                        clique_nodeid,
-                                        size,
-                                        ranks,
-                                        nranks);
-    if (e != PMI2_SUCCESS)
-        log_msg_exit ("%d: error finding members of clique: %s",
-                      rank, pmi2_strerror (e));
 
-    /* Set clique_rank to this rank's index in ranks[]
+    if (!(map = taskmap_decode (val, &error)))
+        log_msg_exit ("%d: error parsing PMI_process_mapping: %s",
+                      rank, error.text);
+    if ((nodeid = taskmap_nodeid (map, rank)) < 0)
+        log_msg_exit ("%d: failed to get this rank's nodeid: %s",
+                      rank, strerror (errno));
+    if (!(taskids = taskmap_taskids (map, nodeid)))
+        log_msg_exit ("%d: failed to get taskids for node %d: %s",
+                      rank, nodeid, strerror (errno));
+
+    /* Set clique_rank to this rank's position in taskids
      */
-    clique_rank = -1;
-    for (int i = 0; i < nranks; i++) {
-        if (ranks[i] == rank)
-            clique_rank = i;
-    }
+    clique_rank = find_id (taskids, rank);
     if (clique_rank == -1)
         log_msg_exit ("%d: unable to determine clique rank", rank);
 
@@ -110,10 +109,10 @@ int main(int argc, char *argv[])
     if (e != PMI2_SUCCESS)
         log_msg_exit ("%d: PMI2_Info_PutNodeAttr: %s", rank, pmi2_strerror (e));
 
-    clique_neighbor = clique_rank > 0 ? clique_rank - 1 : nranks - 1;
+    clique_neighbor = get_neighbor (taskids, rank);
     snprintf (key, sizeof (key), "key-%d", clique_neighbor);
     snprintf (expected_attr, sizeof (expected_attr), "val-%d",
-              ranks[clique_neighbor]);
+              clique_neighbor);
     e = PMI2_Info_GetNodeAttr (key, attr, sizeof (attr), NULL, 1);
     if (e != PMI2_SUCCESS)
         log_msg_exit ("%d: PMI2_Info_GetNodeAttr %s: %s",
@@ -156,9 +155,8 @@ int main(int argc, char *argv[])
     if (e != PMI2_SUCCESS)
         log_msg_exit ("%d: PMI2_Finalize: %s", rank, pmi2_strerror (e));
 
-    free (ranks);
-    free (blocks);
 
+    taskmap_destroy (map);
     return 0;
 }
 
