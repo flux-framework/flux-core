@@ -51,6 +51,7 @@ LONGTESTSCRIPTS = \
 	t3100-flux-in-flux.t \
 	t3200-instance-restart.t \
 	t3202-instance-restart-testexec.t \
+	t3203-instance-recovery.t \
 	t4000-issues-test-driver.t
 
 # This list is included in both TESTS and dist_check_SCRIPTS.
