@@ -148,6 +148,8 @@ libflux_taskmap_la_LDFLAGS = \
 
 libpmi_la_SOURCES =
 libpmi_la_LIBADD = \
+	libflux-taskmap.la \
+	libflux-idset.la \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libutil/aux.lo
 libpmi_la_LDFLAGS = \
@@ -159,6 +161,8 @@ libpmi_la_LDFLAGS = \
 
 libpmi2_la_SOURCES =
 libpmi2_la_LIBADD = \
+	libflux-taskmap.la \
+	libflux-idset.la \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libutil/aux.lo
 libpmi2_la_LDFLAGS = \
