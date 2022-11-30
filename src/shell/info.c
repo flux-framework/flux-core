@@ -273,6 +273,10 @@ int shell_info_set_taskmap (struct shell_info *info,
         errno = EINVAL;
         return -1;
     }
+    if (taskmap_unknown (map)) {
+        shell_log_error ("invalid taskmap: mapping is unknown");
+        return -1;
+    }
     if (info->taskmap
         && taskmap_check (info->taskmap, map, &error) < 0) {
         shell_log_error ("invalid taskmap: %s", error.text);
