@@ -55,6 +55,10 @@ struct taskmap *taskmap_decode (const char *map, flux_error_t *errp);
  */
 char *taskmap_encode (const struct taskmap *map, int flags);
 
+/*  Return true if the task mapping is uknown.
+ */
+bool taskmap_unknown (const struct taskmap *map);
+
 /*  Return an idset of taskids encoded in 'map' for nodeid 'nodeid'.
  *  Returns an idset on success, which may only be vaild until the next
  *   call to taskmap_taskids(), caller should use idset_copy() if necessary.

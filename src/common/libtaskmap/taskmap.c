@@ -135,6 +135,12 @@ error:
     return NULL;
 }
 
+bool taskmap_unknown (const struct taskmap *map)
+{
+    /*  A zero-length mapping indicates that the task map is unknown */
+    return zlistx_size (map->blocklist) == 0;
+}
+
 static char *to_string (int n, char *buf, int len)
 {
     (void) snprintf (buf, len, "%d", n);
@@ -350,7 +356,7 @@ const struct idset *taskmap_taskids (const struct taskmap *map, int nodeid)
     struct taskmap_block *block;
     struct idset *taskids;
 
-    if (!map || nodeid < 0) {
+    if (!map || nodeid < 0 || taskmap_unknown (map)) {
         errno = EINVAL;
         return NULL;
     }
@@ -391,7 +397,7 @@ int taskmap_nodeid (const struct taskmap *map, int taskid)
     struct taskmap_block *block;
     int current = 0;
 
-    if (!map || taskid < 0) {
+    if (!map || taskid < 0 || taskmap_unknown (map)) {
         errno = EINVAL;
         return -1;
     }
@@ -425,7 +431,7 @@ int taskmap_nnodes (const struct taskmap *map)
     struct taskmap_block *block;
     int n;
 
-    if (!map) {
+    if (!map || taskmap_unknown (map)) {
         errno = EINVAL;
         return -1;
     }
@@ -446,7 +452,7 @@ int taskmap_total_ntasks (const struct taskmap *map)
     struct taskmap_block *block;
     int n;
 
-    if (!map) {
+    if (!map || taskmap_unknown (map)) {
         errno = EINVAL;
         return -1;
     }

@@ -80,6 +80,9 @@ static void rfc34_tests ()
         is (s, t->expected,
             "taskmap raw=%s",
             s);
+        if (strlen (s))
+            ok (taskmap_unknown (map) == false,
+                "taskmap is known");
         taskmap_destroy (map);
         free (s);
     }
@@ -224,6 +227,22 @@ static void error_tests ()
 
     if (!(map = taskmap_create ()))
         BAIL_OUT ("taskmap_create");
+
+    /* Test "unknown" task map errors */
+    ok (taskmap_unknown (map),
+        "taskmap_unknown returns true for empty task map");
+    ok (taskmap_nnodes (map) < 0 && errno == EINVAL,
+        "taskmap_nnodes on unknown taskmap returns EINVAL");
+    ok (taskmap_total_ntasks (map) < 0 && errno == EINVAL,
+        "taskmap_nnodes on unknown taskmap returns EINVAL");
+    ok (taskmap_nodeid (map, 0) < 0 && errno == EINVAL,
+        "taskmap_nodeid on unknown taskmap returns EINVAL");
+    ok (taskmap_taskids (map, 0) == NULL && errno == EINVAL,
+        "taskmap_taskids on unknown taskmap returns EINVAL");
+
+    /* Add one task to taskmap so it is no longer unknown */
+    ok (taskmap_append (map, 0, 1, 1) == 0,
+        "add one task to taskmap so it is no longer unknown");
 
     ok (taskmap_encode (NULL, 0) == NULL && errno == EINVAL,
         "taskmap_encode (NULL) returns EINVAL");
