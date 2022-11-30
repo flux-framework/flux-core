@@ -84,6 +84,48 @@ test_expect_success 'verify that instance can restart after config change' '
 	grep "^Job submission is enabled" dump_queue_reconf.out
 '
 
+test_expect_success 'checkpointed queue no longer configured on restart is ignored' '
+	mkdir -p conf.d &&
+	cat >conf.d/queues.toml <<-EOT &&
+	[queues.debug]
+	[queues.batch]
+	EOT
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.dump=dump_queue_missing.tar \
+	    flux queue disable --queue batch xyzzy &&
+	cat >conf.d/queues.toml <<-EOT &&
+	[queues.debug]
+	EOT
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.restore=dump_queue_missing.tar \
+	    flux queue status >dump_queue_missing.out &&
+	grep "^debug: Job submission is enabled" dump_queue_missing.out &&
+	grep "^debug: Scheduling is started" dump_queue_missing.out &&
+	test_must_fail grep "batch" dump_queue_missing.out
+'
+
+test_expect_success 'new queue configured on restart uses defaults' '
+	mkdir -p conf.d &&
+	cat >conf.d/queues.toml <<-EOT &&
+	[queues.debug]
+	[queues.batch]
+	EOT
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.dump=dump_queue_ignored.tar \
+	    flux queue disable --queue batch xyzzy &&
+	cat >conf.d/queues.toml <<-EOT &&
+	[queues.debug]
+	[queues.newqueue]
+	EOT
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.restore=dump_queue_ignored.tar \
+	    flux queue status >dump_queue_ignored.out &&
+	grep "^debug: Job submission is enabled" dump_queue_ignored.out &&
+	grep "^debug: Scheduling is started" dump_queue_ignored.out &&
+	grep "^newqueue: Job submission is enabled" dump_queue_ignored.out &&
+	grep "^newqueue: Scheduling is started" dump_queue_ignored.out
+'
+
 for dump in ${DUMPS}/valid/*.tar.bz2; do
     testname=$(basename $dump)
     test_expect_success 'successfully started from '$testname "restart_flux $dump"
