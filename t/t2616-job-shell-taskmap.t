@@ -122,6 +122,10 @@ test_expect_success 'taskmap=manual works' '
 		| jq -e ".context.taskmap.map == [[1,3,4,1],[0,1,4,1]]" &&
 	test_check_taskmap $id
 '
+test_expect_success 'taskmap=manual with unknown taskmap fails' '
+	test_must_fail_or_be_terminated \
+		flux mini run --taskmap="manual:[]" true
+'
 test_expect_success 'invalid taskmap causes job failure' '
 	test_must_fail_or_be_terminated \
 		flux mini run -vvv --taskmap=foo true
