@@ -618,6 +618,9 @@ static char *taskmap_encode_pmi (const struct taskmap *map)
     zlistx_t *l;
     int saved_errno;
 
+    if (taskmap_unknown (map))
+        return strdup ("");
+
     if (!(l = zlistx_new ())) {
         errno = ENOMEM;
         return NULL;
