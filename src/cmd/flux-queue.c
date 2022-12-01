@@ -49,7 +49,7 @@ static struct optparse_option stop_opts[] = {
     { .name = "all", .key = 'a', .has_arg = 0,
       .usage = "Force command to apply to all queues if none specified",
     },
-    { .name = "nocheckpoint", .key = 'N', .has_arg = 0,
+    { .name = "nocheckpoint", .has_arg = 0,
       .usage = "Do not checkpoint that the queue has been stopped",
     },
     OPTPARSE_TABLE_END

@@ -67,7 +67,7 @@ then
 fi
 
 test $RANK -ne 0 || flux admin cleanup-push <<-EOT
-	flux queue stop --all
+	flux queue stop --all --nocheckpoint
 	flux job cancelall -f --states RUN
 	flux queue idle
 EOT
