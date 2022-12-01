@@ -63,7 +63,6 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libpmi/simple_server.h"
-#include "src/common/libpmi/clique.h"
 #include "src/common/libutil/errno_safe.h"
 
 #include "builtins.h"

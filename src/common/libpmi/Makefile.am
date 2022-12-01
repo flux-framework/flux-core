@@ -19,9 +19,7 @@ libpmi_common_sources = \
 	pmi_strerror.c \
 	pmi_strerror.h \
 	keyval.c \
-	keyval.h \
-	clique.c \
-	clique.h
+	keyval.h
 
 libpmi_client_la_SOURCES = \
 	simple_client.c \
@@ -44,8 +42,7 @@ fluxinclude_HEADERS = \
 TESTS = test_keyval.t \
 	test_simple.t \
 	test_canonical.t \
-	test_canonical2.t \
-	test_clique.t
+	test_canonical2.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -97,11 +94,6 @@ test_canonical2_t_SOURCES = \
 	test/server_thread.h
 test_canonical2_t_CPPFLAGS = $(test_cppflags)
 test_canonical2_t_LDADD = $(test_ldadd)
-
-
-test_clique_t_SOURCES = test/clique.c
-test_clique_t_CPPFLAGS = $(test_cppflags)
-test_clique_t_LDADD = $(test_ldadd)
 
 test_pmi_info_SOURCES = test/pmi_info.c
 test_pmi_info_CPPFLAGS = $(test_cppflags)

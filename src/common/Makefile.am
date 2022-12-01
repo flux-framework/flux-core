@@ -72,6 +72,20 @@ lib_LTLIBRARIES = libflux-core.la \
 
 fluxlib_LTLIBRARIES = libpmi.la libpmi2.la
 
+#  With make -j, libpmi*.so will be installed in parallel with dependencies
+#  (libflux-taskmap.so and libflux-idset.so), so one or both .la files may
+#  not be created by the time they are needed for the libpmi*.so relink,
+#  resulting in an error like
+#
+#    /usr/bin/ld: cannot find -lflux-taskmap
+#
+#  This workaround forces the install of fluxlib_LTLIBRARIES after all
+#  lib_LTLIBRARIES.
+#
+#  ref: https://debbugs.gnu.org/cgi/bugreport.cgi?bug=7328
+#
+install-fluxlibLTLIBRARIES: $(install-libLTLIBRARIES)
+
 libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
 	$(builddir)/libflux/libflux.la \
@@ -148,6 +162,8 @@ libflux_taskmap_la_LDFLAGS = \
 
 libpmi_la_SOURCES =
 libpmi_la_LIBADD = \
+	libflux-taskmap.la \
+	libflux-idset.la \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libutil/aux.lo
 libpmi_la_LDFLAGS = \
@@ -159,6 +175,8 @@ libpmi_la_LDFLAGS = \
 
 libpmi2_la_SOURCES =
 libpmi2_la_LIBADD = \
+	libflux-taskmap.la \
+	libflux-idset.la \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libutil/aux.lo
 libpmi2_la_LDFLAGS = \

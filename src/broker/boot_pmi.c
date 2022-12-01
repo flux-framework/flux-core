@@ -16,6 +16,7 @@
 #include <jansson.h>
 #include <assert.h>
 #include <flux/hostlist.h>
+#include <flux/taskmap.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/cleanup.h"
@@ -23,7 +24,6 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
-#include "src/common/libpmi/clique.h"
 
 #include "attr.h"
 #include "overlay.h"
@@ -66,29 +66,46 @@ static int set_instance_level_attr (struct pmi_handle *pmi,
     return 0;
 }
 
-/* Set broker.mapping attribute from enclosing instance PMI_process_mapping.
+static char *pmi_mapping_to_taskmap (const char *s)
+{
+    char *result;
+    flux_error_t error;
+    struct taskmap *map = taskmap_decode (s, &error);
+    if (!map) {
+        log_err ("failed to decode PMI_process_mapping: %s",
+                 error.text);
+        return NULL;
+    }
+    result = taskmap_encode (map, 0);
+    taskmap_destroy (map);
+    return result;
+}
+
+/* Set broker.mapping attribute from enclosing instance taskmap.
  */
 static int set_broker_mapping_attr (struct pmi_handle *pmi,
                                     struct pmi_params *pmi_params,
                                     attr_t *attrs)
 {
-    char buf[1024];
+    char buf[2048];
     char *val = NULL;
+    int rc;
 
     if (pmi_params->size == 1)
-        val = "(vector,(0,1,1))";
+        val = strdup ("{\"version\":1,\"map\":[[0,1,1,1]]}");
     else {
         if (broker_pmi_kvs_get (pmi,
                                 pmi_params->kvsname,
                                 "PMI_process_mapping",
                                 buf,
                                 sizeof (buf),
-                                -1) == PMI_SUCCESS)
-            val = buf;
+                                -1) == PMI_SUCCESS) {
+            val = pmi_mapping_to_taskmap (buf);
+        }
     }
-    if (attr_add (attrs, "broker.mapping", val, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        return -1;
-    return 0;
+    rc = attr_add (attrs, "broker.mapping", val, FLUX_ATTRFLAG_IMMUTABLE);
+    free (val);
+    return rc;
 }
 
 /* Check if IPC can be used to communicate.
@@ -100,8 +117,7 @@ static int set_broker_mapping_attr (struct pmi_handle *pmi,
 static bool use_ipc (attr_t *attrs)
 {
     bool result = false;
-    struct pmi_map_block *blocks = NULL;
-    int nblocks;
+    struct taskmap *map = NULL;
     const char *val;
 
     if (attr_get (attrs, "tbon.prefertcp", &val, NULL) == 0
@@ -109,12 +125,12 @@ static bool use_ipc (attr_t *attrs)
         goto done;
     if (attr_get (attrs, "broker.mapping", &val, NULL) < 0 || !val)
         goto done;
-    if (pmi_process_mapping_parse (val, &blocks, &nblocks) < 0)
+    if (!(map = taskmap_decode (val, NULL)))
         goto done;
-    if (nblocks == 1 && blocks[0].nodes == 1) // one node
+    if (taskmap_nnodes (map) == 1)
         result = true;
 done:
-    free (blocks);
+    taskmap_destroy (map);
     return result;
 }
 

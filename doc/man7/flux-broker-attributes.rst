@@ -84,9 +84,9 @@ hostlist
    translate between broker ranks and hostnames.
 
 broker.mapping
-   A string representing the process mapping of broker ranks in the Argonne
-   format described in RFC 13.  For example, ``(vector,(0,16,1))`` means
-   the instance has one broker per node on 16 nodes, and ``(vector,(0,1,16))``
+   A string representing the process mapping of broker ranks in the Flux
+   Task Map format described in RFC 34.  For example, ``[[0,16,1,1]]`` means
+   the instance has one broker per node on 16 nodes, and ``[[0,1,16,1]]``
    means it has 16 brokers on one node.
 
 broker.critical-ranks [Updates: C]

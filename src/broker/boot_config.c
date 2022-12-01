@@ -20,10 +20,10 @@
 #include <sys/param.h>
 #include <flux/core.h>
 #include <flux/hostlist.h>
+#include <flux/taskmap.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
-#include "src/common/libpmi/clique.h"
 
 #include "attr.h"
 #include "overlay.h"
@@ -286,10 +286,10 @@ int boot_config_parse (const flux_conf_t *cf,
 int boot_config_attr (attr_t *attrs, json_t *hosts)
 {
     struct hostlist *hl = NULL;
+    struct taskmap *map = NULL;
     char *s = NULL;
     size_t index;
     json_t *value;
-    char buf[1024];
     char *val;
     int rv = -1;
 
@@ -331,6 +331,8 @@ int boot_config_attr (attr_t *attrs, json_t *hosts)
         log_err ("failed to set hostlist attribute to config derived value");
         goto error;
     }
+    free (s);
+    s = NULL;
 
     /* Generate broker.mapping.
      * For now, set it to NULL if there are multiple brokers per node.
@@ -339,17 +341,15 @@ int boot_config_attr (attr_t *attrs, json_t *hosts)
     if (hostlist_count (hl) < json_array_size (hosts))
         val = NULL;
     else {
-        struct pmi_map_block mapblock = {
-            .nodeid = 0,
-            .nodes = json_array_size (hosts),
-            .procs = 1
-        };
-        if (pmi_process_mapping_encode (&mapblock, 1, buf, sizeof (buf)) < 0) {
+        if (!(map = taskmap_create ())
+            || taskmap_append (map, 0, json_array_size (hosts), 1) < 0)
+            goto error;
+        if (!(s = taskmap_encode (map, 0))) {
             log_msg ("encoding broker.mapping");
             errno = EOVERFLOW;
             goto error;
         }
-        val = buf;
+        val = s;
     }
     if (attr_add (attrs, "broker.mapping", val, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
         log_err ("setattr broker.mapping");
@@ -358,6 +358,7 @@ int boot_config_attr (attr_t *attrs, json_t *hosts)
 
     rv = 0;
 error:
+    taskmap_destroy (map);
     hostlist_destroy (hl);
     free (s);
     return rv;

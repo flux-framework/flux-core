@@ -21,7 +21,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libpmi/pmi2.h"
 #include "src/common/libpmi/pmi_strerror.h"
-#include "src/common/libpmi/clique.h"
 
 /* We don't have a pmi2_strerror() but the codes are mostly the same as PMI-1
  */

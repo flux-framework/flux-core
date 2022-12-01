@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 
+#include <ctype.h>
 #include <jansson.h>
 
 #include <flux/core.h>
@@ -320,6 +321,99 @@ error:
     return map;
 }
 
+static int parse_pmi_block (const char *s, int *nodeid, int *count, int *ppn)
+{
+    char *endptr;
+    errno = 0;
+    *nodeid = strtoul (s, &endptr, 10);
+    if (errno != 0 || *endptr != ',')
+        return -1;
+    s = endptr + 1;
+    *count = strtoul (s, &endptr, 10);
+    if (errno != 0 || *endptr != ',')
+        return -1;
+    s = endptr + 1;
+    *ppn = strtoul (s, &endptr, 10);
+    if (errno != 0 || *endptr != ')')
+        return -1;
+    return 0;
+}
+
+static bool is_empty (const char *s)
+{
+    while (isspace(*s))
+        s++;
+    return *s == '\0';
+}
+
+static struct taskmap *taskmap_decode_pmi (const char *s, flux_error_t *errp)
+{
+    char *tok;
+    char *p;
+    char *q;
+    char *cpy = NULL;
+    struct taskmap *map = NULL;
+    bool got_sentinel = false;
+
+    if (!s) {
+        errprintf (errp, "Invalid argument");
+        return NULL;
+    }
+
+    /* Empty PMI_process_mapping is allowed: return empty taskmap
+     */
+    if (strlen (s) == 0)
+        return taskmap_create ();
+
+    if (!(map = taskmap_create ())
+        || !(cpy = strdup (s))) {
+        errprintf (errp, "Out of memory");
+        goto error;
+    }
+
+    p = cpy;
+    while ((tok = strtok_r (p, "(", &q))) {
+        int nodeid = -1;
+        int count = -1;
+        int ppn = -1;
+
+        while (isspace (*tok))
+            tok++;
+
+        if (strncmp (tok, "vector,", 7) == 0)
+            got_sentinel = true;
+        else if (!is_empty (tok)) {
+            if (!got_sentinel) {
+                errprintf (errp, "vector prefix must preceed blocklist");
+                goto error;
+            }
+            if (parse_pmi_block (tok, &nodeid, &count, &ppn) < 0) {
+                errprintf (errp, "unable to parse block: (%s", tok);
+                goto error;
+            }
+            if (nodeid < 0 || count <= 0 || ppn <= 0) {
+                errprintf (errp, "invalid number in block: (%s", tok);
+                goto error;
+            }
+            if (taskmap_append (map, nodeid, count, ppn) < 0) {
+                errprintf (errp, "taskmap_append: %s", strerror (errno));
+                goto error;
+            }
+        }
+        p = NULL;
+    }
+    if (taskmap_total_ntasks (map) == 0) {
+        errprintf (errp, "no tasks found in PMI_process_mapping");
+        goto error;
+    }
+    free (cpy);
+    return map;
+error:
+    taskmap_destroy (map);
+    free (cpy);
+    return NULL;
+}
+
 struct taskmap *taskmap_decode (const char *s, flux_error_t *errp)
 {
     struct taskmap *map = NULL;
@@ -328,10 +422,17 @@ struct taskmap *taskmap_decode (const char *s, flux_error_t *errp)
 
     err_init (errp);
 
-    if (s == NULL || strlen (s) == 0) {
+    if (s == NULL) {
         errprintf (errp, "Invalid argument");
         goto out;
     }
+
+    /*  Empty string or string containing "vector," may be a valid
+     *  PMI_process_mapping. Pass to taskmap_decode_pmi().
+     */
+    if (strlen (s) == 0
+        || strstr (s, "vector,"))
+        return taskmap_decode_pmi (s, errp);
 
     if (!(o = json_loads (s, JSON_DECODE_ANY, &error))) {
         errprintf (errp, "%s", error.text);

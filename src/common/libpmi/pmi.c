@@ -36,7 +36,6 @@
 #include "pmi.h"
 #include "pmi_strerror.h"
 #include "simple_client.h"
-#include "clique.h"
 
 static struct pmi_simple_client *pmi_global_ctx;
 

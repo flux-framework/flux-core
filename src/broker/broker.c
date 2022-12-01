@@ -31,15 +31,13 @@
 #  include <valgrind/valgrind.h>
 # endif
 #endif
+#include <flux/taskmap.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/ipaddr.h"
-#include "src/common/libpmi/pmi.h"
-#include "src/common/libpmi/clique.h"
-#include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
 #include "ccan/array_size/array_size.h"
@@ -1008,17 +1006,17 @@ static char *encode_critical_nodes (attr_t *attrs)
 {
     struct idset *ranks = NULL;
     struct idset *nodeids = NULL;
-    struct pmi_map_block *blocks = NULL;
+    struct taskmap *map = NULL;
     char *s = NULL;
-    int nblocks;
     int nodeid;
     const char *mapping;
     const char *ranks_attr;
     unsigned int i;
 
+
     if (attr_get (attrs, "broker.mapping", &mapping, NULL) < 0
         || mapping == NULL
-        || pmi_process_mapping_parse (mapping, &blocks, &nblocks) < 0
+        || !(map = taskmap_decode (mapping, NULL))
         || attr_get (attrs, "broker.critical-ranks", &ranks_attr, NULL) < 0
         || !(ranks = idset_decode (ranks_attr))
         || !(nodeids = idset_create (0, IDSET_FLAG_AUTOGROW)))
@@ -1030,19 +1028,16 @@ static char *encode_critical_nodes (attr_t *attrs)
      */
     i = idset_first (ranks);
     while (i != IDSET_INVALID_ID) {
-        if (pmi_process_mapping_find_nodeid (blocks,
-                                             nblocks,
-                                             i,
-                                             &nodeid) < 0
+        if ((nodeid = taskmap_nodeid (map, i)) < 0
             || idset_set (nodeids, nodeid) < 0)
             goto done;
         i = idset_next (ranks, i);
     }
     s = idset_encode (nodeids, IDSET_FLAG_RANGE);
 done:
+    taskmap_destroy (map);
     idset_destroy (ranks);
     idset_destroy (nodeids);
-    free (blocks);
     return s;
 }
 
