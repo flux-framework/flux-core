@@ -41,6 +41,8 @@ struct jobq {
     bool enable;    // jobs may be submitted to this queue
     char *disable_reason;   // reason if disabled
     bool start;
+    bool checkpoint_start;  // may be different that actual start due
+                            // to nocheckpoint flag
     char *stop_reason; // reason if stopped (optionally set)
 };
 
@@ -84,6 +86,7 @@ static struct jobq *jobq_create (const char *name)
         goto error;
     q->enable = true;
     q->start = true;
+    q->checkpoint_start = true;
     return q;
 error:
     jobq_destroy (q);
@@ -110,10 +113,15 @@ static int jobq_enable (struct jobq *q,
     return 0;
 }
 
-static int jobq_start (struct jobq *q, bool start, const char *stop_reason)
+static int jobq_start (struct jobq *q,
+                       bool start,
+                       const char *stop_reason,
+                       bool nocheckpoint)
 {
     if (start) {
         q->start = true;
+        if (!nocheckpoint)
+            q->checkpoint_start = true;
         free (q->stop_reason);
         q->stop_reason = NULL;
     }
@@ -126,6 +134,8 @@ static int jobq_start (struct jobq *q, bool start, const char *stop_reason)
         free (q->stop_reason);
         q->stop_reason = cpy;
         q->start = false;
+        if (!nocheckpoint)
+            q->checkpoint_start = false;
     }
     return 0;
 }
@@ -151,18 +161,19 @@ static int jobq_enable_all (struct queue *queue,
 
 static int jobq_start_all (struct queue *queue,
                            bool start,
-                           const char *stop_reason)
+                           const char *stop_reason,
+                           bool nocheckpoint)
 {
     if (queue->have_named_queues) {
         struct jobq *q = zhashx_first (queue->named);
         while (q) {
-            if (jobq_start (q, start, stop_reason) < 0)
+            if (jobq_start (q, start, stop_reason, nocheckpoint) < 0)
                 return -1;
             q = zhashx_next (queue->named);
         }
     }
     else {
-        if (jobq_start (queue->anon, start, stop_reason) < 0)
+        if (jobq_start (queue->anon, start, stop_reason, nocheckpoint) < 0)
             return -1;
     }
     return 0;
@@ -209,19 +220,19 @@ static int queue_save_jobq_append (json_t *a, struct jobq *q)
     if (!q->name)
         entry = json_pack ("{s:b s:b}",
                            "enable", q->enable,
-                           "start", q->start);
+                           "start", q->checkpoint_start);
     else
         entry = json_pack ("{s:s s:b s:b}",
                            "name", q->name,
                            "enable", q->enable,
-                           "start", q->start);
+                           "start", q->checkpoint_start);
     if (!entry)
         goto nomem;
     if (!q->enable) {
         if (set_string (entry, "disable_reason", q->disable_reason) < 0)
             goto error;
     }
-    if (!q->start && q->stop_reason) {
+    if (!q->checkpoint_start && q->stop_reason) {
         if (set_string (entry, "stop_reason", q->stop_reason) < 0)
             goto error;
     }
@@ -322,7 +333,7 @@ static int restore_state_v1 (struct queue *queue, json_t *entry)
     if (q) {
         if (jobq_enable (q, enable, disable_reason) < 0)
             return -1;
-        if (jobq_start (q, start, stop_reason) < 0)
+        if (jobq_start (q, start, stop_reason, false) < 0)
             return -1;
     }
     return 0;
@@ -657,14 +668,16 @@ static void queue_start_cb (flux_t *h,
     int start;
     const char *stop_reason = NULL;
     int all;
+    int nocheckpoint = 0;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s?s s:b s?s s:b}",
+                             "{s?s s:b s?s s:b s?b}",
                              "name", &name,
                              "start", &start,
                              "reason", &stop_reason,
-                             "all", &all) < 0)
+                             "all", &all,
+                             "nocheckpoint", &nocheckpoint) < 0)
         goto error;
     if (!name) {
         if (queue->have_named_queues && !all) {
@@ -672,7 +685,7 @@ static void queue_start_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (jobq_start_all (queue, start, stop_reason))
+        if (jobq_start_all (queue, start, stop_reason, nocheckpoint))
             goto error;
         if (start) {
             if (queue_start (queue, NULL) < 0)
@@ -688,7 +701,7 @@ static void queue_start_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (jobq_start (q, start, stop_reason) < 0)
+        if (jobq_start (q, start, stop_reason, nocheckpoint) < 0)
             goto error;
         if (start) {
             if (queue_start (queue, name) < 0)
