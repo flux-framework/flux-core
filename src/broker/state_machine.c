@@ -124,6 +124,7 @@ static struct state_next nexttab[] = {
     { "parent-fail",        STATE_JOIN,         STATE_SHUTDOWN },
     { "rc1-success",        STATE_INIT,         STATE_QUORUM },
     { "rc1-none",           STATE_INIT,         STATE_QUORUM },
+    { "rc1-ignorefail",     STATE_INIT,         STATE_QUORUM },
     { "rc1-fail",           STATE_INIT,         STATE_SHUTDOWN},
     { "quorum-full",        STATE_QUORUM,       STATE_RUN },
     { "quorum-fail",        STATE_QUORUM,       STATE_SHUTDOWN},
@@ -295,7 +296,40 @@ static void action_quorum (struct state_machine *s)
 
 static void action_run (struct state_machine *s)
 {
+    struct broker_attr *attrs = s->ctx->attrs;
+
     if (runat_is_defined (s->ctx->runat, "rc2")) {
+        if (attr_get (attrs, "broker.recovery-mode", NULL, NULL) == 0
+            && runat_is_interactive (s->ctx->runat, "rc2")) {
+            const char *confdir = "unknown";
+            const char *rc1_path = "unknown";
+            const char *rc3_path = "unknown";
+            const char *statedir = "unknown";
+
+            (void)attr_get (attrs, "config.path", &confdir, NULL);
+            (void)attr_get (attrs, "broker.rc1_path", &rc1_path, NULL);
+            (void)attr_get (attrs, "broker.rc3_path", &rc3_path, NULL);
+            (void)attr_get (attrs, "statedir", &statedir, NULL);
+
+            printf ("+-----------------------------------------------------\n"
+                    "| Entering Flux recovery mode.\n"
+                    "| All resources will be offline during recovery.\n"
+                    "| Any rc1 failures noted above may result in\n"
+                    "|  reduced functionality until manually corrected.\n"
+                    "|\n"
+                    "| broker.rc1_path    %s\n"
+                    "| broker.rc3_path    %s\n"
+                    "| config.path        %s\n"
+                    "| statedir           %s\n"
+                    "|\n"
+                    "| Exit this shell when finished.\n"
+                    "+-----------------------------------------------------\n",
+                    rc1_path ? rc1_path : "-",
+                    rc3_path ? rc3_path : "-",
+                    confdir ? confdir : "-",
+                    statedir ? statedir
+                        : "changes will not be preserved");
+        }
         if (runat_start (s->ctx->runat, "rc2", runat_completion_cb, s) < 0) {
             flux_log_error (s->ctx->h, "runat_start rc2");
             state_machine_post (s, "rc2-fail");
@@ -485,16 +519,23 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
         log_err ("runat_get_exit_code %s", name);
 
     if (!strcmp (name, "rc1")) {
+        if (rc == 0)
+            state_machine_post (s, "rc1-success");
+        else if (attr_get (s->ctx->attrs,
+                           "broker.recovery-mode",
+                           NULL,
+                           NULL) == 0)
+            state_machine_post (s, "rc1-ignorefail");
         /* If rc1 fails, it most likely will fail again on restart, so if
          * running under systemd, exit with the broker.exit-norestart value.
          */
-        if (rc != 0) {
+        else {
             if (s->exit_norestart != 0)
                 s->ctx->exit_rc = s->exit_norestart;
             else
                 s->ctx->exit_rc = rc;
+            state_machine_post (s, "rc1-fail");
         }
-        state_machine_post (s, rc == 0 ? "rc1-success" : "rc1-fail");
     }
     else if (!strcmp (name, "rc2")) {
         if (s->ctx->exit_rc == 0 && rc != 0)

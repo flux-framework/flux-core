@@ -12,6 +12,7 @@
 #define _FLUX_RESOURCE_MONITOR_H
 
 struct monitor *monitor_create (struct resource_ctx *ctx,
+                                int inventory_size,
                                 bool monitor_force_up);
 void monitor_destroy (struct monitor *monitor);
 

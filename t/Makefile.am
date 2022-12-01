@@ -51,6 +51,7 @@ LONGTESTSCRIPTS = \
 	t3100-flux-in-flux.t \
 	t3200-instance-restart.t \
 	t3202-instance-restart-testexec.t \
+	t3203-instance-recovery.t \
 	t4000-issues-test-driver.t
 
 # This list is included in both TESTS and dist_check_SCRIPTS.
@@ -285,6 +286,7 @@ dist_check_SCRIPTS = \
 	system/0001-basic.t \
 	system/0002-job-exec-sdexec-basic.t \
 	system/0003-instance-restart.t \
+	system/0004-recovery.t \
 	issues/t0441-kvs-put-get.sh \
 	issues/t0505-msg-handler-reg.lua \
 	issues/t0821-kvs-segfault.sh \

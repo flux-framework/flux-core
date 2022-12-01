@@ -666,3 +666,5 @@ sigpending
 chunksize
 taskmap
 multiline
+sudo
+sysconfig

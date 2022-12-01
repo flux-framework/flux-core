@@ -444,6 +444,8 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (parse_args (h, argc, argv, &monitor_force_up, &noverify) < 0)
         goto error;
+    if (flux_attr_get (ctx->h, "broker.recovery-mode"))
+        noverify = true;
     if (ctx->rank == 0) {
         if (!(ctx->reslog = reslog_create (h)))
             goto error;
@@ -459,7 +461,9 @@ int mod_main (flux_t *h, int argc, char **argv)
     json_decref (R_from_config);
     if (!(ctx->topology = topo_create (ctx, noverify, norestrict)))
         goto error;
-    if (!(ctx->monitor = monitor_create (ctx, monitor_force_up)))
+    if (!(ctx->monitor = monitor_create (ctx,
+                                         inventory_get_size (ctx->inventory),
+                                         monitor_force_up)))
         goto error;
     if (ctx->rank == 0) {
         if (!(ctx->acquire = acquire_create (ctx)))

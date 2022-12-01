@@ -27,6 +27,7 @@
 #include <flux/core.h>
 #include <flux/optparse.h>
 
+#include "ccan/str/str.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
@@ -87,8 +88,16 @@ static void setup_profiling_env (void);
 static void client_wait_respond (struct client *cli);
 static void client_run_respond (struct client *cli, int errnum);
 
+const char *default_config_path = X_SYSCONFDIR "/flux/system/conf.d";
+const char *default_statedir = "/var/lib/flux";
+
 const char *usage_msg = "[OPTIONS] command ...";
 static struct optparse_option opts[] = {
+    { .name = "recovery",   .key = 'r', .has_arg = 2, .arginfo = "[TARGET]",
+      .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
+      .usage = "Start instance in recovery mode with dump file or statedir", },
+    { .name = "sysconfig",  .has_arg = 0,
+      .usage = "Load system configuration", },
     { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
       .usage = "Be annoyingly informative by degrees", },
     { .name = "noexec",     .key = 'X', .has_arg = 0,
@@ -430,6 +439,18 @@ void add_args_list (char **argz, size_t *argz_len, optparse_t *opt, const char *
             log_err_exit ("argz_add");
 }
 
+void add_argzf (char **argz, size_t *argz_len, const char *fmt, ...)
+{
+    va_list ap;
+    char arg[1024];
+
+    va_start (ap, fmt);
+    (void)vsnprintf (arg, sizeof (arg), fmt, ap);
+    va_end (ap);
+    if (argz_add (argz, argz_len, arg) != 0)
+        log_err_exit ("argz_add");
+}
+
 char *create_rundir (void)
 {
     char *tmpdir = getenv ("TMPDIR");
@@ -482,6 +503,19 @@ int execvp_argz (char *argz, size_t argz_len)
     return -1;
 }
 
+bool system_instance_is_running (void)
+{
+    flux_t *h;
+    bool running = false;
+
+    unsetenv ("FLUX_URI");
+    if ((h = flux_open (NULL, 0))) {
+        running = true;
+        flux_close (h);
+    }
+    return running;
+}
+
 /* Directly exec() a single flux broker.  It is assumed that we
  * are running in an environment with an external PMI service, and the
  * broker will figure out how to bootstrap without any further aid from
@@ -492,12 +526,52 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
 {
     char *argz = NULL;
     size_t argz_len = 0;
+    bool system_recovery = false;
 
     add_args_list (&argz, &argz_len, ctx.opts, "wrap");
     if (argz_add (&argz, &argz_len, broker_path) != 0)
         goto nomem;
-
     add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
+    if (optparse_hasopt (ctx.opts, "recovery")) {
+        char path[1024];
+        const char *optarg;
+        struct stat sb;
+
+        add_argzf (&argz, &argz_len, "-Sbroker.recovery-mode=1");
+        add_argzf (&argz, &argz_len, "-Sbroker.quorum=0");
+        add_argzf (&argz, &argz_len, "-Slog-stderr-level=5");
+
+        // if --recovery has no optional argument, assume this is the system
+        // instance and make sure it is not running.
+        if (!(optarg = optparse_get_str (ctx.opts, "recovery", NULL))) {
+            optarg = default_statedir;
+            if (system_instance_is_running ())
+                log_msg_exit ("system instance is already running");
+            system_recovery = true;
+        }
+
+        // if argument is a dir, assume statedir; if file, assume dump archive
+        if (stat (optarg, &sb) < 0)
+            log_err_exit ("%s", optarg);
+        if (S_ISDIR (sb.st_mode)) {
+            if (sb.st_uid != getuid ())
+                log_msg_exit ("%s: not owned by you", optarg);
+            if ((sb.st_mode & S_IRWXU) != S_IRWXU)
+                log_msg_exit ("%s: no access", optarg);
+            snprintf (path, sizeof (path), "%s/content.sqlite", optarg);
+            if (access (path, F_OK) < 0)
+                log_err_exit ("%s", path);
+            if (access (path, R_OK) < 0)
+                log_msg_exit ("%s: no read permission", path);
+            if (access (path, W_OK) < 0)
+                log_msg_exit ("%s: no write permission", path);
+            add_argzf (&argz, &argz_len, "-Sstatedir=%s", optarg);
+        }
+        else
+            add_argzf (&argz, &argz_len, "-Scontent.restore=%s", optarg);
+    }
+    if (system_recovery || optparse_hasopt (ctx.opts, "sysconfig"))
+        add_argzf (&argz, &argz_len, "-c%s", default_config_path);
     if (cmd_argz) {
         if (argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len) != 0)
             goto nomem;

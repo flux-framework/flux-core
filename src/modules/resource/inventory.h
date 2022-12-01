@@ -47,6 +47,10 @@ struct idset *inventory_targets_to_ranks (struct inventory *inv,
                                           const char *targets,
                                           flux_error_t *errp);
 
+/* Get the number of execution targets in R
+ */
+int inventory_get_size (struct inventory *inv);
+
 #endif /* !_FLUX_RESOURCE_INVENTORY_H */
 
 
