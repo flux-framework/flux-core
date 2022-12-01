@@ -9,7 +9,7 @@
 \************************************************************/
 
 #if HAVE_CONFIG_H
-# include "config.h"
+#include "config.h"
 #endif
 
 #include <sys/types.h>
@@ -37,8 +37,8 @@
 static const char *auxkey = "flux::rexec";
 
 struct rexec {
-    const flux_msg_t *msg;          // rexec request message
-    flux_subprocess_server_t *s;    // server context
+    const flux_msg_t *msg;        // rexec request message
+    flux_subprocess_server_t *s;  // server context
 };
 
 static void rexec_destroy (struct rexec *rex)
@@ -49,8 +49,7 @@ static void rexec_destroy (struct rexec *rex)
     }
 }
 
-static struct rexec *rexec_create (const flux_msg_t *msg,
-                                   flux_subprocess_server_t *s)
+static struct rexec *rexec_create (const flux_msg_t *msg, flux_subprocess_server_t *s)
 {
     struct rexec *rex;
 
@@ -155,7 +154,8 @@ static void rexec_completion_cb (flux_subprocess_t *p)
         /* no fallback if this fails */
         if (flux_respond_pack (rex->s->h, rex->msg, "{s:s s:i}",
                                "type", "complete",
-                               "rank", rex->s->rank) < 0)
+                               "rank", rex->s->rank)
+                               < 0)
             flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
     }
 
@@ -182,8 +182,7 @@ static void internal_fatal (flux_subprocess_server_t *s, flux_subprocess_t *p)
     }
 }
 
-static void rexec_state_change_cb (flux_subprocess_t *p,
-                                   flux_subprocess_state_t state)
+static void rexec_state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 {
     struct rexec *rex = flux_subprocess_aux_get (p, auxkey);
 
@@ -199,24 +198,29 @@ static void rexec_state_change_cb (flux_subprocess_t *p,
                                "state", state) < 0) {
             flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
         }
-    } else if (state == FLUX_SUBPROCESS_EXITED) {
+    }
+    else if (state == FLUX_SUBPROCESS_EXITED) {
         if (flux_respond_pack (rex->s->h, rex->msg, "{s:s s:i s:i s:i}",
                                "type", "state",
                                "rank", rex->s->rank,
                                "state", state,
-                               "status", flux_subprocess_status (p)) < 0) {
+                               "status", flux_subprocess_status (p))
+                               < 0) {
             flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
         }
-    } else if (state == FLUX_SUBPROCESS_FAILED) {
+    }
+    else if (state == FLUX_SUBPROCESS_FAILED) {
         if (flux_respond_pack (rex->s->h, rex->msg, "{s:s s:i s:i s:i}",
                                "type", "state",
                                "rank", rex->s->rank,
                                "state", FLUX_SUBPROCESS_FAILED,
-                               "errno", p->failed_errno) < 0) {
+                               "errno", p->failed_errno)
+                               < 0) {
             flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
         }
         subprocess_cleanup (p);
-    } else {
+    }
+    else {
         errno = EPROTO;
         flux_log_error (rex->s->h, "%s: illegal state", __FUNCTION__);
         goto error;
@@ -289,8 +293,10 @@ error:
     internal_fatal (rex->s, p);
 }
 
-static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void server_exec_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     flux_subprocess_server_t *s = arg;
     const char *cmd_str;
@@ -353,17 +359,14 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(p = flux_exec (s->h,
-                         FLUX_SUBPROCESS_FLAGS_SETPGRP,
-                         cmd,
-                         &ops,
-                         NULL))) {
+    if (!(p = flux_exec (s->h, FLUX_SUBPROCESS_FLAGS_SETPGRP, cmd, &ops, NULL))) {
         /* error here, generate FLUX_SUBPROCESS_EXEC_FAILED state */
         if (flux_respond_pack (h, msg, "{s:s s:i s:i s:i}",
                                "type", "state",
                                "rank", s->rank,
                                "state", FLUX_SUBPROCESS_EXEC_FAILED,
-                               "errno", errno) < 0) {
+                               "errno", errno)
+                               < 0) {
             flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
@@ -372,10 +375,7 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (!(rex = rexec_create (msg, s)))
         goto error;
-    if (flux_subprocess_aux_set (p,
-                                auxkey,
-                                rex,
-                                (flux_free_f)rexec_destroy) < 0) {
+    if (flux_subprocess_aux_set (p, auxkey, rex, (flux_free_f)rexec_destroy) < 0) {
         rexec_destroy (rex);
         goto error;
     }
@@ -393,8 +393,11 @@ cleanup:
     flux_subprocess_unref (p);
 }
 
-static int write_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
-                             const char *stream, const char *data, int len)
+static int write_subprocess (flux_subprocess_server_t *s,
+                             flux_subprocess_t *p,
+                             const char *stream,
+                             const char *data,
+                             int len)
 {
     int tmp;
 
@@ -420,7 +423,8 @@ static int write_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
     return 0;
 }
 
-static int close_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
+static int close_subprocess (flux_subprocess_server_t *s,
+                             flux_subprocess_t *p,
                              const char *stream)
 {
     if (flux_subprocess_close (p, stream) < 0) {
@@ -431,8 +435,10 @@ static int close_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
     return 0;
 }
 
-static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void server_write_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     flux_subprocess_t *p;
     flux_subprocess_server_t *s = arg;
@@ -494,8 +500,10 @@ error:
     internal_fatal (s, p);
 }
 
-static void server_signal_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void server_signal_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
     flux_subprocess_server_t *s = arg;
     pid_t pid;
@@ -568,8 +576,10 @@ cleanup:
     return info;
 }
 
-static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
-                                 const flux_msg_t *msg, void *arg)
+static void server_processes_cb (flux_t *h,
+                                 flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg,
+                                 void *arg)
 {
     flux_subprocess_server_t *s = arg;
     flux_subprocess_t *p;
@@ -583,8 +593,7 @@ static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
     p = zhash_first (s->subprocesses);
     while (p) {
         json_t *o = NULL;
-        if (!(o = process_info (p))
-            || json_array_append_new (procs, o) < 0) {
+        if (!(o = process_info (p)) || json_array_append_new (procs, o) < 0) {
             json_decref (o);
             errno = ENOMEM;
             goto error;
@@ -607,26 +616,10 @@ int server_start (flux_subprocess_server_t *s)
 {
     /* rexec.processes is primarily for testing */
     struct flux_msg_handler_spec htab[] = {
-        { FLUX_MSGTYPE_REQUEST,
-          "broker.rexec",
-          server_exec_cb,
-          0
-        },
-        { FLUX_MSGTYPE_REQUEST,
-          "broker.rexec.write",
-          server_write_cb,
-          0
-        },
-        { FLUX_MSGTYPE_REQUEST,
-          "broker.rexec.signal",
-          server_signal_cb,
-          0
-        },
-        { FLUX_MSGTYPE_REQUEST,
-          "broker.rexec.processes",
-          server_processes_cb,
-          0
-        },
+        {FLUX_MSGTYPE_REQUEST, "broker.rexec", server_exec_cb, 0},
+        {FLUX_MSGTYPE_REQUEST, "broker.rexec.write", server_write_cb, 0},
+        {FLUX_MSGTYPE_REQUEST, "broker.rexec.signal", server_signal_cb, 0},
+        {FLUX_MSGTYPE_REQUEST, "broker.rexec.processes", server_processes_cb, 0},
         FLUX_MSGHANDLER_TABLE_END,
     };
 
@@ -683,8 +676,7 @@ static void terminate_uuid (flux_subprocess_t *p, const char *id)
         server_signal_subprocess (p, SIGKILL);
 }
 
-int server_terminate_by_uuid (flux_subprocess_server_t *s,
-                              const char *id)
+int server_terminate_by_uuid (flux_subprocess_server_t *s, const char *id)
 {
     flux_subprocess_t *p;
 
@@ -706,10 +698,7 @@ static void terminate_prep_cb (flux_reactor_t *r,
     flux_watcher_start (s->terminate_idle_w);
 }
 
-static void terminate_cb (flux_reactor_t *r,
-                          flux_watcher_t *w,
-                          int revents,
-                          void *arg)
+static void terminate_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     flux_subprocess_server_t *s = arg;
     flux_watcher_stop (s->terminate_timer_w);
@@ -731,13 +720,10 @@ void server_terminate_cleanup (flux_subprocess_server_t *s)
     s->terminate_check_w = NULL;
 }
 
-int server_terminate_setup (flux_subprocess_server_t *s,
-                            double wait_time)
+int server_terminate_setup (flux_subprocess_server_t *s, double wait_time)
 {
-    s->terminate_timer_w = flux_timer_watcher_create (s->r,
-                                                      wait_time, 0.,
-                                                      terminate_cb,
-                                                      s);
+    s->terminate_timer_w =
+        flux_timer_watcher_create (s->r, wait_time, 0., terminate_cb, s);
     if (!s->terminate_timer_w) {
         flux_log_error (s->h, "flux_timer_watcher_create");
         goto error;
@@ -746,25 +732,19 @@ int server_terminate_setup (flux_subprocess_server_t *s,
     if (s->terminate_prep_w)
         return 0;
 
-    s->terminate_prep_w = flux_prepare_watcher_create (s->r,
-                                                       terminate_prep_cb,
-                                                       s);
+    s->terminate_prep_w = flux_prepare_watcher_create (s->r, terminate_prep_cb, s);
     if (!s->terminate_prep_w) {
         flux_log_error (s->h, "flux_prepare_watcher_create");
         goto error;
     }
 
-    s->terminate_idle_w = flux_idle_watcher_create (s->r,
-                                                    NULL,
-                                                    s);
+    s->terminate_idle_w = flux_idle_watcher_create (s->r, NULL, s);
     if (!s->terminate_idle_w) {
         flux_log_error (s->h, "flux_idle_watcher_create");
         goto error;
     }
 
-    s->terminate_check_w = flux_check_watcher_create (s->r,
-                                                      terminate_cb,
-                                                      s);
+    s->terminate_check_w = flux_check_watcher_create (s->r, terminate_cb, s);
     if (!s->terminate_check_w) {
         flux_log_error (s->h, "flux_check_watcher_create");
         goto error;
