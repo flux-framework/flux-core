@@ -49,6 +49,9 @@ static struct optparse_option stop_opts[] = {
     { .name = "all", .key = 'a', .has_arg = 0,
       .usage = "Force command to apply to all queues if none specified",
     },
+    { .name = "nocheckpoint", .key = 'N', .has_arg = 0,
+      .usage = "Do not checkpoint that the queue has been stopped",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -313,14 +316,16 @@ static void queue_start (flux_t *h,
                          const char *name,
                          bool start,
                          const char *reason,
-                         bool all)
+                         bool all,
+                         bool nocheckpoint)
 {
     json_t *payload;
     flux_future_t *f;
 
-    if (!(payload = json_pack ("{s:b s:b}",
+    if (!(payload = json_pack ("{s:b s:b s:b}",
                                "start", start ? 1 : 0,
-                               "all", all ? 1 : 0)))
+                               "all", all ? 1 : 0,
+                               "nocheckpoint", nocheckpoint ? 1 : 0)))
         log_msg_exit ("out of memory");
     add_string_if_set (payload, "name", name);
     add_string_if_set (payload, "reason", reason);
@@ -477,7 +482,7 @@ int cmd_start (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     check_legacy_all (h, name, &all, optparse_hasopt (p, "quiet"));
-    queue_start (h, name, true, NULL, all);
+    queue_start (h, name, true, NULL, all, false);
     if (!optparse_hasopt (p, "quiet"))
         queue_status (h, name, print_start_status);
     if (optparse_hasopt (p, "verbose"))
@@ -492,6 +497,7 @@ int cmd_stop (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     const char *name = optparse_get_str (p, "queue", NULL);
     bool all = optparse_hasopt (p, "all");
+    bool nocheckpoint = optparse_hasopt (p, "nocheckpoint");
     char *reason = NULL;
 
     if (argc - optindex > 0)
@@ -499,7 +505,7 @@ int cmd_stop (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     check_legacy_all (h, name, &all, optparse_hasopt (p, "quiet"));
-    queue_start (h, name, false, reason, all);
+    queue_start (h, name, false, reason, all, nocheckpoint);
     if (!optparse_hasopt (p, "quiet"))
         queue_status (h, name, print_start_status);
     if (optparse_hasopt (p, "verbose"))
