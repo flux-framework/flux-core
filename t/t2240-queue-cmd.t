@@ -119,6 +119,19 @@ test_expect_success 'flux-queue: status reports no reason for stop' '
 	test_cmp status2.exp status2.out
 '
 
+test_expect_success HAVE_JQ 'flux-queue: stop with --nocheckpoint works' '
+	flux queue start &&
+	flux kvs get checkpoint.job-manager | jq -e ".queue[0].start == true" &&
+	flux queue stop --nocheckpoint &&
+	flux kvs get checkpoint.job-manager | jq -e ".queue[0].start == true" &&
+	flux queue status >status3.out &&
+	cat <<-EOT >status3.exp &&
+	Job submission is enabled
+	Scheduling is stopped
+	EOT
+	test_cmp status3.exp status3.out
+'
+
 test_expect_success 'flux-queue: submit some jobs' '
 	flux mini submit --cc 1-3 --wait-event=priority /bin/true
 '
@@ -473,6 +486,21 @@ test_expect_success 'flux-queue start can do one queue' '
 test_expect_success 'previously submitted job run to completion' '
 	wait_state $(cat job_batch2.id) INACTIVE &&
 	flux jobs -n -o "{state}" $(cat job_batch2.id) | grep INACTIVE
+'
+
+# for this test we pick one the first queue's name to stop, but we don't care
+# which one it is
+test_expect_success HAVE_JQ 'flux-queue: stop with one queue and --nocheckpoint works' '
+	flux queue start --all &&
+	flux kvs get checkpoint.job-manager | jq -e ".queue[0].start == true" &&
+	flux kvs get checkpoint.job-manager | jq -e ".queue[1].start == true" &&
+	flux kvs get checkpoint.job-manager | jq -r ".queue[0].name" > name.out &&
+	flux queue stop -q $(cat name.out) --nocheckpoint nocheckpoint &&
+	flux queue status >mqstatus_nocheckpoint.out &&
+	test $(grep -c "Scheduling is started" mqstatus_nocheckpoint.out) -eq 1 &&
+	test $(grep -c "Scheduling is stopped: nocheckpoint" mqstatus_nocheckpoint.out) -eq 1 &&
+	flux kvs get checkpoint.job-manager | jq -e ".queue[0].start == true" &&
+	flux kvs get checkpoint.job-manager | jq -e ".queue[1].start == true"
 '
 
 test_expect_success 'flux-queue start fails on unknown queue' '
