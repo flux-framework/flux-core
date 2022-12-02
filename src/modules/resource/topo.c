@@ -13,7 +13,7 @@
  * If resources are known at module load time, verify the topology against
  * this rank's portion of the resource object (unless noverify is set).
  *
- * Reduce r_local + xml from each rank, leaving the result in topo->reduce->rl
+ * Reduce r_local from each rank, leaving the result in topo->reduce->rl
  * on rank 0.  If resources are not known, then this R is set in inventory.
  */
 
