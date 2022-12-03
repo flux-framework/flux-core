@@ -19,6 +19,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
 #include <signal.h>
 #include <assert.h>
 #include <argz.h>
@@ -199,6 +200,19 @@ static void state_change_cb (flux_subprocess_t *p,
         case FLUX_SUBPROCESS_EXEC_FAILED:
         case FLUX_SUBPROCESS_EXITED:
         case FLUX_SUBPROCESS_FAILED:
+            break;
+        case FLUX_SUBPROCESS_STOPPED:
+            /*  If this process is non-interactive, and stdin was a tty,
+             *  then likely the subprocess was stopped due to SIGTTIN/TTOU.
+             *  To avoid what would be a permanent hang, log an error and
+             *  kill the child process.
+             */
+            if (!entry->interactive && isatty (STDIN_FILENO)) {
+                flux_log (r->h, LOG_ERR,
+                          "%s: Killing stopped non-interactive process",
+                          entry->name);
+                flux_subprocess_kill (p, SIGKILL);
+            }
             break;
         case FLUX_SUBPROCESS_RUNNING:
             if (entry->aborted) {
