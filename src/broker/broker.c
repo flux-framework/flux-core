@@ -661,9 +661,35 @@ static void set_proctitle (uint32_t rank)
     (void)prctl (PR_SET_NAME, proctitle, 0, 0, 0);
 }
 
+static bool is_interactive_shell (const char *argz, size_t argz_len)
+{
+    bool result = false;
+    /*  If no command is specified, then an interactive shell will be run
+     */
+    if (argz == NULL)
+        return true;
+
+    /*  O/w, if command is plain "$SHELL", e.g. bash, zsh, csh, etc.
+     *   then assume interactive shell.
+     */
+    if (argz_count (argz, argz_len) == 1) {
+        char *shell;
+        char *cmd = argz_next (argz, argz_len, NULL);
+        while ((shell = getusershell ())) {
+            if (strcmp (cmd, shell) == 0
+                || strcmp (cmd, basename (shell)) == 0) {
+                result = true;
+                break;
+            }
+        }
+        endusershell ();
+    }
+    return result;
+}
+
 static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
 {
-    if (argz == NULL) { // run interactive shell
+    if (is_interactive_shell (argz, argz_len)) { // run interactive shell
         /*  Check if stdin is a tty and error out if not to avoid
          *   confusing users with what appears to be a hang.
          */
