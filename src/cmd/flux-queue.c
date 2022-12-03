@@ -82,6 +82,12 @@ static struct optparse_option status_opts[] = {
 };
 
 static struct optparse_option enable_opts[] = {
+    { .name = "verbose", .key = 'v',
+      .usage = "Display details about all job manager queues",
+    },
+    { .name = "quiet", .has_arg = 0,
+      .usage = "Display only errors",
+    },
     { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
       .usage = "Specify queue to enable",
     },
@@ -92,6 +98,12 @@ static struct optparse_option enable_opts[] = {
 };
 
 static struct optparse_option disable_opts[] = {
+    { .name = "verbose", .key = 'v',
+      .usage = "Display details about all job manager queues",
+    },
+    { .name = "quiet", .has_arg = 0,
+      .usage = "Display only errors",
+    },
     { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
       .usage = "Specify queue to disable",
     },
@@ -370,9 +382,10 @@ static void queue_status_one (flux_t *h,
 
 static void queue_status (flux_t *h,
                           const char *name,
+                          bool verbose,
                           queue_status_output_f out_cb)
 {
-    if (!name) {
+    if (!name || verbose) {
         json_t *queues;
         flux_future_t *f;
 
@@ -396,6 +409,25 @@ static void queue_status (flux_t *h,
         queue_status_one (h, name, out_cb);
 }
 
+static void print_enable_status (const char *name,
+                                 bool enable,
+                                 const char *disable_reason,
+                                 bool start,
+                                 const char *stop_reason)
+{
+    if (enable) {
+        printf ("%s%sJob submission is enabled\n",
+                name ? name : "",
+                name ? ": " : "");
+    }
+    else {
+        printf ("%s%sJob submission is disabled: %s\n",
+                name ? name : "",
+                name ? ": " : "",
+                disable_reason);
+    }
+}
+
 int cmd_enable (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
@@ -410,6 +442,11 @@ int cmd_enable (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     queue_enable (h, name, true, NULL, all);
+    if (!optparse_hasopt (p, "quiet"))
+        queue_status (h,
+                      name,
+                      optparse_hasopt (p, "verbose"),
+                      print_enable_status);
     flux_close (h);
     return (0);
 }
@@ -427,6 +464,11 @@ int cmd_disable (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     queue_enable (h, name, false, reason, all);
+    if (!optparse_hasopt (p, "quiet"))
+        queue_status (h,
+                      name,
+                      optparse_hasopt (p, "verbose"),
+                      print_enable_status);
     flux_close (h);
     free (reason);
     return (0);
@@ -483,10 +525,14 @@ int cmd_start (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     check_legacy_all (h, name, &all, optparse_hasopt (p, "quiet"));
     queue_start (h, name, true, NULL, all, false);
-    if (!optparse_hasopt (p, "quiet"))
-        queue_status (h, name, print_start_status);
-    if (optparse_hasopt (p, "verbose"))
-        alloc_query (h);
+    if (!optparse_hasopt (p, "quiet")) {
+        queue_status (h,
+                      name,
+                      optparse_hasopt (p, "verbose"),
+                      print_start_status);
+        if (optparse_hasopt (p, "verbose"))
+            alloc_query (h);
+    }
     flux_close (h);
     return (0);
 }
@@ -506,32 +552,30 @@ int cmd_stop (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     check_legacy_all (h, name, &all, optparse_hasopt (p, "quiet"));
     queue_start (h, name, false, reason, all, nocheckpoint);
-    if (!optparse_hasopt (p, "quiet"))
-        queue_status (h, name, print_start_status);
-    if (optparse_hasopt (p, "verbose"))
-        alloc_query (h);
+    if (!optparse_hasopt (p, "quiet")) {
+        queue_status (h,
+                      name,
+                      optparse_hasopt (p, "verbose"),
+                      print_start_status);
+        if (optparse_hasopt (p, "verbose"))
+            alloc_query (h);
+    }
     flux_close (h);
     free (reason);
     return (0);
 }
 
-static void print_enable_status (const char *name,
-                                 bool enable,
-                                 const char *disable_reason,
-                                 bool start,
-                                 const char *stop_reason)
+static void print_queue_status (const char *name,
+                                bool enable,
+                                const char *disable_reason,
+                                bool start,
+                                const char *stop_reason)
 {
-    if (enable) {
-        printf ("%s%sJob submission is enabled\n",
-                name ? name : "",
-                name ? ": " : "");
-    }
-    else {
-        printf ("%s%sJob submission is disabled: %s\n",
-                name ? name : "",
-                name ? ": " : "",
-                disable_reason);
-    }
+    print_enable_status (name,
+                         enable,
+                         disable_reason,
+                         start,
+                         stop_reason);
 
     print_start_status (name,
                         enable,
@@ -552,7 +596,7 @@ int cmd_status (optparse_t *p, int argc, char **argv)
     }
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    queue_status (h, name, print_enable_status);
+    queue_status (h, name, optparse_hasopt (p, "verbose"), print_queue_status);
 
     if (optparse_hasopt (p, "verbose"))
         alloc_query (h);
