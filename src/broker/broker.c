@@ -695,7 +695,7 @@ static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
          */
         if (!isatty (STDIN_FILENO))
             log_msg_exit ("stdin is not a tty - can't run interactive shell");
-        if (runat_push_shell (r, "rc2", 0) < 0)
+        if (runat_push_shell (r, "rc2", argz, 0) < 0)
             return -1;
     }
     else if (argz_count (argz, argz_len) == 1) { // run shell -c "command"

@@ -40,7 +40,10 @@ int runat_push_shell_command (struct runat *r,
 /* Push interactive shell onto named list.
  * Note: RUNAT_FLAG_LOG_STDIO flag not allowed
  */
-int runat_push_shell (struct runat *r, const char *name, int flags);
+int runat_push_shell (struct runat *r,
+                      const char *name,
+                      const char *shell,
+                      int flags);
 
 /* Push command, to be run directly, onto named list.
  * The command is specified by argz.

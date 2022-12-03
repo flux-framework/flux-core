@@ -350,9 +350,12 @@ static int runat_command_set_argz (struct runat_command *cmd,
 }
 
 static int runat_command_set_cmdline (struct runat_command *cmd,
+                                      const char *shell,
                                       const char *cmdline)
 {
-    if (flux_cmd_argv_append (cmd->cmd, get_shell ()) < 0)
+    if (shell == NULL)
+        shell = get_shell ();
+    if (flux_cmd_argv_append (cmd->cmd, shell) < 0)
         return -1;
     if (cmdline) {
         if (flux_cmd_argv_append (cmd->cmd, "-c") < 0)
@@ -454,7 +457,7 @@ int runat_push_shell_command (struct runat *r,
      */
     cmd->flags |= FLUX_SUBPROCESS_FLAGS_SETPGRP;
 
-    if (runat_command_set_cmdline (cmd, cmdline) < 0)
+    if (runat_command_set_cmdline (cmd, NULL, cmdline) < 0)
         goto error;
     if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
         goto error;
@@ -466,7 +469,10 @@ error:
     return -1;
 }
 
-int runat_push_shell (struct runat *r, const char *name, int flags)
+int runat_push_shell (struct runat *r,
+                      const char *name,
+                      const char *shell,
+                      int flags)
 {
     struct runat_command *cmd;
 
@@ -476,7 +482,7 @@ int runat_push_shell (struct runat *r, const char *name, int flags)
     }
     if (!(cmd = runat_command_create (environ, flags)))
         return -1;
-    if (runat_command_set_cmdline (cmd, NULL) < 0)
+    if (runat_command_set_cmdline (cmd, shell, NULL) < 0)
         goto error;
     if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
         goto error;
