@@ -375,6 +375,11 @@ static void child_watch_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     p->status = status;
 
+    if (WIFSTOPPED (p->status)) {
+        if (p->ops.on_state_change)
+            (*p->ops.on_state_change) (p, FLUX_SUBPROCESS_STOPPED);
+    }
+
     if (WIFEXITED (p->status) || WIFSIGNALED (p->status)) {
 
         /* remote/server code may have set EXEC_FAILED or

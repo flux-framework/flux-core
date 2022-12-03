@@ -464,6 +464,7 @@ static flux_subprocess_state_t state_change_next (flux_subprocess_t *p)
     case FLUX_SUBPROCESS_EXEC_FAILED:
     case FLUX_SUBPROCESS_EXITED:
     case FLUX_SUBPROCESS_FAILED:
+    case FLUX_SUBPROCESS_STOPPED:
         break;
     }
 
@@ -1226,6 +1227,8 @@ const char *flux_subprocess_state_string (flux_subprocess_state_t state)
         return "Exited";
     case FLUX_SUBPROCESS_FAILED:
         return "Failed";
+    case FLUX_SUBPROCESS_STOPPED:
+        return "Stopped";
     }
     return NULL;
 }

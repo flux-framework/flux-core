@@ -56,6 +56,7 @@ typedef enum {
     FLUX_SUBPROCESS_EXITED,       /* process has exited */
     FLUX_SUBPROCESS_FAILED,       /* internal failure, catch all for
                                    * all other errors */
+    FLUX_SUBPROCESS_STOPPED,      /* process was stopped */
 } flux_subprocess_state_t;
 
 /*
