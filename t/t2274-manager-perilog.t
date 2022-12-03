@@ -129,6 +129,15 @@ test_expect_success 'perilog: job can be canceled while prolog is running' '
 	flux job wait-event -t 15 $jobid exception &&
 	test_must_fail flux job attach -vE $jobid
 '
+test_expect_success 'perilog: job can timeout after prolog' '
+	printf "#!/bin/sh\nsleep 1" > prolog.d/sleep.sh &&
+	chmod +x prolog.d/sleep.sh &&
+	test_when_finished "rm -f prolog.d/sleep.sh" &&
+	jobid=$(flux mini submit --job-name=timeout -t 0.5s sleep 10) &&
+	flux job wait-event -t 15 $jobid prolog-start &&
+	flux job wait-event -vt 15 $jobid exception &&
+	flux job wait-event -t 15 $jobid clean
+'
 test_expect_success 'perilog: job can be canceled after prolog is complete' '
 	printf "#!/bin/sh\nsleep 0" > prolog.d/sleep.sh &&
 	chmod +x prolog.d/sleep.sh &&

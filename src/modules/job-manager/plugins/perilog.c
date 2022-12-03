@@ -387,6 +387,11 @@ static void prolog_kill_cb (flux_future_t *f, void *arg)
                                 (uintmax_t) proc->id);
             /* Do not wait for error response */
             flux_future_destroy (fkill);
+            /* Also destroy proc->kill_f future to avoid this callback
+             * being called again.
+             */
+            flux_future_destroy (proc->kill_f);
+            proc->kill_f = NULL;
             return;
         }
         flux_log_error (h, "prolog_kill");
