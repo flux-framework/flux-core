@@ -40,7 +40,7 @@ static struct optparse_option stop_opts[] = {
     { .name = "verbose", .key = 'v',
       .usage = "Display more detail about internal job manager state",
     },
-    { .name = "quiet",
+    { .name = "quiet", .has_arg = 0,
       .usage = "Display only errors",
     },
     OPTPARSE_TABLE_END
@@ -50,7 +50,7 @@ static struct optparse_option start_opts[] = {
     { .name = "verbose", .key = 'v',
       .usage = "Display more detail about internal job manager state",
     },
-    { .name = "quiet",
+    { .name = "quiet", .has_arg = 0,
       .usage = "Display only errors",
     },
     OPTPARSE_TABLE_END
