@@ -65,7 +65,9 @@ test_expect_success 'flux-queue: idle with bad broker connection fails' '
 '
 
 test_expect_success 'flux-queue: disable works' '
-	flux queue disable system is fubar
+	flux queue disable system is fubar > disable.out &&
+	grep "^Job submission is disabled" disable.out &&
+	grep "system is fubar" disable.out
 '
 
 test_expect_success 'flux-queue: job submit fails with queue disabled' '
@@ -73,7 +75,8 @@ test_expect_success 'flux-queue: job submit fails with queue disabled' '
 '
 
 test_expect_success 'flux-queue: enable works' '
-	flux queue enable
+	flux queue enable > enable.out &&
+	grep "^Job submission is enabled" enable.out
 '
 
 test_expect_success 'flux-queue: flux mini run works after enable' '
@@ -94,7 +97,9 @@ test_expect_success 'flux-queue: start with extra free args fails' '
 '
 
 test_expect_success 'flux-queue: stop works' '
-	flux queue stop my unique message
+	flux queue stop my unique message > stop.out &&
+	grep "^Scheduling is stopped" stop.out &&
+	grep "my unique message" stop.out
 '
 
 test_expect_success 'flux-queue: status reports reason for stop' '
@@ -107,7 +112,8 @@ test_expect_success 'flux-queue: status reports reason for stop' '
 '
 
 test_expect_success 'flux-queue: stop works without message' '
-	flux queue stop
+	flux queue stop > stop2.out &&
+	grep "^Scheduling is stopped" stop2.out
 '
 
 test_expect_success 'flux-queue: status reports no reason for stop' '
@@ -137,7 +143,8 @@ test_expect_success 'flux-queue: submit some jobs' '
 '
 
 test_expect_success 'flux-queue: start scheduling' '
-	flux queue start
+	flux queue start > start.out &&
+	grep "^Scheduling is started" start.out
 '
 
 test_expect_success 'flux-queue: queue empties out' '
@@ -286,6 +293,27 @@ test_expect_success 'flux-queue: start queue and drain' '
 	run_timeout 30 flux queue drain
 '
 
+test_expect_success 'flux-queue: quiet option works' '
+	flux queue disable --quiet foof > disable_quiet.out &&
+	test_must_fail grep submission disable_quiet.out &&
+	flux queue enable --quiet > enable_quiet.out &&
+	test_must_fail grep submission enable_quiet.out &&
+	flux queue stop --quiet > stop_quiet.out &&
+	test_must_fail grep Scheduling stop_quiet.out &&
+	flux queue start --quiet > start_quiet.out &&
+	test_must_fail grep Scheduling start_quiet.out
+'
+
+test_expect_success 'flux-queue: verbose option works' '
+	flux queue disable --verbose foof > disable_verbose.out &&
+	test $(grep -c "submission is disabled" disable_verbose.out) -eq 1 &&
+	flux queue enable --verbose > enable_verbose.out &&
+	test $(grep -c "submission is enabled" enable_verbose.out) -eq 1 &&
+	flux queue stop --verbose > stop_verbose.out &&
+	test $(grep -c "Scheduling is stopped" stop_verbose.out) -eq 1 &&
+	flux queue start --verbose > start_verbose.out &&
+	test $(grep -c "Scheduling is started" start_verbose.out) -eq 1
+'
 
 runas_guest() {
 	local userid=$(($(id -u)+1))
@@ -372,7 +400,8 @@ test_expect_success 'flux-queue disable without --queue or --all fails' '
 	test_must_fail flux queue disable test reasons
 '
 test_expect_success 'flux-queue disable --all affects all queues' '
-	flux queue disable --all test reasons &&
+	flux queue disable --all test reasons > mqdisable.out &&
+	test $(grep -c "submission is disabled: test reason" mqdisable.out) -eq 2 &&
 	flux queue status >mqstatus_dis.out &&
 	test $(grep -c "submission is disabled: test reason" mqstatus_dis.out) -eq 2
 '
@@ -384,12 +413,15 @@ test_expect_success 'flux-queue enable without --queue or --all fails' '
 	test_must_fail flux queue enable
 '
 test_expect_success 'flux-queue enable --all affects all queues' '
-	flux queue enable -a &&
+	flux queue enable -a > mqenable.out &&
+	test $(grep -c "submission is enabled" mqenable.out) -eq 2 &&
 	flux queue status >mqstatus_ena.out &&
 	test $(grep -c "submission is enabled" mqstatus_ena.out) -eq 2
 '
 test_expect_success 'flux-queue disable can do one queue' '
-	flux queue disable -q batch nobatch &&
+	flux queue disable -q batch nobatch > mqdisable_batch.out &&
+	test $(grep -c "submission is" mqdisable_batch.out) -eq 1 &&
+	test $(grep -c "submission is disabled: nobatch" mqdisable_batch.out) -eq 1 &&
 	flux queue status >mqstatus_batchdis.out &&
 	test $(grep -c "submission is enabled" mqstatus_batchdis.out) -eq 1 &&
 	test $(grep -c "submission is disabled: nobatch" mqstatus_batchdis.out) -eq 1 &&
@@ -397,7 +429,9 @@ test_expect_success 'flux-queue disable can do one queue' '
 	flux mini submit -q debug /bin/true
 '
 test_expect_success 'flux-queue enable can do one queue' '
-	flux queue enable -q batch &&
+	flux queue enable -q batch > mqenable_batch.out &&
+	test $(grep -c "submission is" mqenable_batch.out) -eq 1 &&
+	test $(grep -c "submission is enabled" mqenable_batch.out) -eq 1 &&
 	flux queue status >mqstatus_batchena.out &&
 	test $(grep -c "submission is enabled" mqstatus_batchena.out) -eq 2 &&
 	flux mini submit -q batch /bin/true &&
@@ -406,7 +440,8 @@ test_expect_success 'flux-queue enable can do one queue' '
 
 
 test_expect_success 'flux-queue stop --all affects all queues' '
-	flux queue stop --all test reasons &&
+	flux queue stop --all test reasons > mqstop.out &&
+	test $(grep -c "Scheduling is stopped: test reasons" mqstop.out) -eq 2 &&
 	flux queue status >mqstatus_stop.out &&
 	test $(grep -c "Scheduling is stopped: test reasons" mqstatus_stop.out) -eq 2
 '
@@ -446,7 +481,8 @@ test_expect_success 'submitted jobs are not running' '
 	flux jobs -n -o "{state}" $(cat job_debug1.id) | grep SCHED
 '
 test_expect_success 'flux-queue start --all affects all queues' '
-	flux queue start -a &&
+	flux queue start -a > mqstart.out &&
+	test $(grep -c "Scheduling is started" mqstatus.out) -eq 2 &&
 	flux queue status >mqstatus_start.out &&
 	test $(grep -c "Scheduling is started" mqstatus_start.out) -eq 2
 '
@@ -465,7 +501,9 @@ test_expect_success 'flux-queue start w/o --all affects all queues but outputs w
 '
 
 test_expect_success 'flux-queue stop can do one queue' '
-	flux queue stop -q batch nobatch &&
+	flux queue stop -q batch nobatch > mqstop_batch.out &&
+	test $(grep -c "Scheduling is" mqstop_batch.out) -eq 1 &&
+	test $(grep -c "Scheduling is stopped: nobatch" mqstop_batch.out) -eq 1 &&
 	flux queue status >mqstatus_batchstop.out &&
 	test $(grep -c "Scheduling is started" mqstatus_batchstop.out) -eq 1 &&
 	test $(grep -c "Scheduling is stopped: nobatch" mqstatus_batchstop.out) -eq 1 &&
@@ -479,7 +517,9 @@ test_expect_success 'check one job ran, other job didnt' '
 	flux jobs -n -o "{state}" $(cat job_batch2.id) | grep SCHED
 '
 test_expect_success 'flux-queue start can do one queue' '
-	flux queue start -q batch &&
+	flux queue start -q batch > mqstart_batch.out &&
+	test $(grep -c "Scheduling is" mqstart_batch.out) -eq 1 &&
+	test $(grep -c "Scheduling is started" mqstart_batch.out) -eq 1 &&
 	flux queue status >mqstatus_batchstart.out &&
 	test $(grep -c "Scheduling is started" mqstatus_batchstart.out) -eq 2
 '
@@ -501,6 +541,30 @@ test_expect_success HAVE_JQ 'flux-queue: stop with one queue and --nocheckpoint 
 	test $(grep -c "Scheduling is stopped: nocheckpoint" mqstatus_nocheckpoint.out) -eq 1 &&
 	flux kvs get checkpoint.job-manager | jq -e ".queue[0].start == true" &&
 	flux kvs get checkpoint.job-manager | jq -e ".queue[1].start == true"
+'
+
+test_expect_success 'flux-queue: quiet option works with one queue' '
+	flux queue disable -q batch --quiet foof > mqdisable_quiet.out &&
+	test_must_fail grep submission mqdisable_quiet.out &&
+	flux queue enable -q batch --quiet > mqenable_quiet.out &&
+	test_must_fail grep submission mqenable_quiet.out &&
+	flux queue stop -q batch --quiet > mqstop_quiet.out &&
+	test_must_fail grep Scheduling mqstop_quiet.out &&
+	flux queue start -q batch --quiet > mqstart_quiet.out &&
+	test_must_fail grep Scheduling mqstart_quiet.out
+'
+
+test_expect_success 'flux-queue: verbose option works with one queue' '
+	flux queue disable -q batch --verbose foof > mqdisable_verbose.out &&
+	test $(grep -c "submission is disabled" mqdisable_verbose.out) -eq 1 &&
+	test $(grep -c "submission is enabled" mqdisable_verbose.out) -eq 1 &&
+	flux queue enable -q batch --verbose > mqenable_verbose.out &&
+	test $(grep -c "submission is enabled" mqenable_verbose.out) -eq 2 &&
+	flux queue stop -q batch --verbose > mqstop_verbose.out &&
+	test $(grep -c "Scheduling is stopped" mqstop_verbose.out) -eq 1 &&
+	test $(grep -c "Scheduling is started" mqstop_verbose.out) -eq 1 &&
+	flux queue start -q batch --verbose > mqstart_verbose.out &&
+	test $(grep -c "Scheduling is started" mqstart_verbose.out) -eq 2
 '
 
 test_expect_success 'flux-queue start fails on unknown queue' '
