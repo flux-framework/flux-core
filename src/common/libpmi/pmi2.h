@@ -33,8 +33,8 @@ extern "C" {
 #define PMI2_ERR_OTHER              14
 
 #define PMI2_MAX_KEYLEN             64
-#define PMI2_MAX_VALLEN             1024
-#define PMI2_MAX_ATTRVALUE          1024
+#define PMI2_MAX_VALLEN             2048
+#define PMI2_MAX_ATTRVALUE          2048
 #define PMI2_ID_NULL                -1
 
 

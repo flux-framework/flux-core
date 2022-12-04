@@ -14,7 +14,7 @@
 struct pmi_simple_server;
 
 #define SIMPLE_KVS_KEY_MAX         64
-#define SIMPLE_KVS_VAL_MAX         1024
+#define SIMPLE_KVS_VAL_MAX         2048
 #define SIMPLE_KVS_NAME_MAX        64
 
 #define SIMPLE_MAX_PROTO_OVERHEAD  64
