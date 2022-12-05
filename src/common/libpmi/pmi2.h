@@ -33,6 +33,11 @@ extern "C" {
 #define PMI2_ERR_OTHER              14
 
 #define PMI2_MAX_KEYLEN             64
+
+/* PMI2_MAX_VALLEN of 1024 is a de-facto standard and should not be
+ * increased. Experimentally increasing to 2048 was shown to cause
+ * crashes with mpich and mvapich2 MPI implementations.
+ */
 #define PMI2_MAX_VALLEN             1024
 #define PMI2_MAX_ATTRVALUE          1024
 #define PMI2_ID_NULL                -1
