@@ -670,3 +670,12 @@ sudo
 sysconfig
 destdir
 filemap
+dataset
+fileref
+mmap
+unmap
+unmaps
+ds
+rf
+ACLs
+SIGBUS
