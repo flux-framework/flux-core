@@ -270,7 +270,6 @@ done:
  */
 static struct taskmap *fetch_taskmap (struct pmi_simple_client *pmi)
 {
-    const char *key = "PMI_process_mapping";
     struct taskmap *map = NULL;
     int result;
     char *nom;
@@ -291,9 +290,23 @@ static struct taskmap *fetch_taskmap (struct pmi_simple_client *pmi)
     result = pmi_simple_client_kvs_get_my_name (pmi, nom, pmi->kvsname_max);
     if (result != PMI_SUCCESS)
         goto done;
-    result = pmi_simple_client_kvs_get (pmi, nom, key, val, pmi->vallen_max);
-    if (result != PMI_SUCCESS)
-        goto done;
+    /*  First try flux.taskmap, falling back to PMI_process_mapping if it
+     *  does not exist (e.g. if process manager is not Flux).
+     */
+    result = pmi_simple_client_kvs_get (pmi,
+                                        nom,
+                                        "flux.taskmap",
+                                        val,
+                                        pmi->vallen_max);
+    if (result != PMI_SUCCESS) {
+        result = pmi_simple_client_kvs_get (pmi,
+                                            nom,
+                                            "PMI_process_mapping",
+                                            val,
+                                            pmi->vallen_max);
+        if (result != PMI_SUCCESS)
+            goto done;
+    }
     if (!(map = taskmap_decode (val, NULL))) {
         result = PMI_FAIL;
         goto done;
