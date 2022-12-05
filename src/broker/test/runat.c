@@ -313,13 +313,14 @@ void badinput (flux_t *h)
         "runat_get_exit_code rc=NULL fails with ENOENT");
 
     errno = 0;
-    ok (runat_push_shell (NULL, "foo", 0) < 0 && errno == EINVAL,
+    ok (runat_push_shell (NULL, "foo", NULL, 0) < 0 && errno == EINVAL,
         "runat_push_shell r=NULL fails with EINVAL");
     errno = 0;
-    ok (runat_push_shell (r, NULL, 0) < 0 && errno == EINVAL,
+    ok (runat_push_shell (r, NULL, NULL, 0) < 0 && errno == EINVAL,
         "runat_push_shell name=NULL fails with EINVAL");
     errno = 0;
-    ok (runat_push_shell (r, "foo", RUNAT_FLAG_LOG_STDIO) < 0 && errno == EINVAL,
+    ok (runat_push_shell (r, "foo", NULL, RUNAT_FLAG_LOG_STDIO) < 0
+        && errno == EINVAL,
         "runat_push_shell flags=RUNAT_FLAG_LOG_STDIO fails with EINVAL");
 
     errno = 0;
