@@ -320,6 +320,24 @@ options are supported by the builtin plugins of ``flux-shell``:
   this will also be passed to the invoked plugin. Normally, this option will
   be set by the ``flux mini --taskmap`` option.
 
+**stage-in**
+  Copy files to $FLUX_JOB_TMPDIR that were previously mapped using
+  :man1:`flux-filemap`.
+
+**stage-in.tags**
+  Select files to copy by specifying their tags.  By default the ``main``
+  tag is used.
+
+**stage-in.pattern**
+  Further filter the selected files to copy using a :man7:`glob` pattern.
+
+**stage-in.destdir**
+  Copy files to the specified directory instead of $FLUX_JOB_TMPDIR.  Careful!
+  The $FLUX_JOB_TMPDIR is cleaned up when the job exits, is guaranteed to
+  be unique, and is generally on fast local storage.  Make sure ``destdir``
+  does not specify a network file system or a shared directory without
+  considering the ramifications.
+
 SHELL INITRC
 ============
 
