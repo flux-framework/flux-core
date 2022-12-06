@@ -340,6 +340,7 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
     struct content_cache *cache = arg;
     struct cache_entry *e = flux_future_aux_get (f, "entry");
     const flux_msg_t *msg;
+    const char *errmsg = NULL;
 
     e->load_pending = 0;
     if (flux_future_get (f, (const void **)&msg) < 0) {
@@ -347,6 +348,7 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
             errno = ENOENT;
         if (errno != ENOENT)
             flux_log_error (cache->h, "content load");
+        errmsg = flux_future_error_string (f);
         goto error;
     }
     /* N.B. the entry may already be valid if a store filled it while
@@ -381,7 +383,7 @@ error:
     request_list_respond_error (&e->load_requests,
                                 cache->h,
                                 errno,
-                                NULL,
+                                errmsg,
                                 "load");
     cache_entry_remove (cache, e);
     flux_future_destroy (f);
