@@ -440,66 +440,6 @@ struct tostring_test {
     const char *numstr;
 };
 
-struct tostring_test tostring_tests[] = {
-    { .prefix = "foo", .singlehost = true, .rc = 3, .tostring = "foo" },
-    { "foo", false, 0, 3, 0, 19, "foo0,foo1,foo2,foo3",
-      3, "0-3",  },
-    { "", false, 0, 3, 0, 7, "0,1,2,3",
-      3, "0-3" },
-    { "foo", false, 1, 4, 2, 23, "foo01,foo02,foo03,foo04",
-      5, "01-04" },
-    { "foo", false, 10, 10, 0, 5, "foo10",
-      2, "10" },
-    { 0 }
-};
-
-void test_to_string ()
-{
-    ssize_t rc;
-    char buf [4096];
-    struct tostring_test *t;
-    struct hostrange *hr;
-
-    ok (hostrange_to_string (NULL, 0, buf, NULL) == 0,
-        "hostrange_to_string (NULL) == 0");
-
-    hr = hostrange_create ("foo", 0, 100, 0);
-    if (!hr)
-        BAIL_OUT ("hostrange_create failed!");
-
-    rc = hostrange_to_string (hr, 20, buf, NULL);
-    ok (rc < 0,
-        "hostrange_to_string fails with truncation");
-    hostrange_destroy (hr);
-
-    t = tostring_tests;
-    while (t && t->prefix) {
-        if (t->singlehost)
-            hr = hostrange_create_single (t->prefix);
-        else
-            hr = hostrange_create (t->prefix, t->lo, t->hi, t->width);
-        if (!hr)
-            BAIL_OUT ("hostrannge_create failed!");
-        rc = hostrange_to_string (hr, sizeof (buf), buf, ",");
-        ok (rc == t->rc,
-            "hostrange_to_string (%s[%lu-%lu]) returned %ld",
-            hr->prefix, hr->lo, hr->hi, rc);
-        is (buf, t->tostring,
-            "hostrange_to_string () result is %s", buf);
-
-        rc = hostrange_numstr (hr, sizeof (buf), buf);
-        ok (rc == t->numstr_rc,
-            "hostrange_numstr(%s[%lu-%lu]) = %ld",
-            hr->prefix, hr->lo, hr->hi, rc);
-        if (rc > 0)
-            is (buf, t->numstr,
-                "hostrange_numstr () result is %s", buf);
-
-        hostrange_destroy (hr);
-        t++;
-    }
-}
-
 void test_host_tostring ()
 {
     char *host;
@@ -552,7 +492,6 @@ int main (int argc, char *argv[])
     test_join ();
     test_intersect ();
     test_within ();
-    test_to_string ();
     test_host_tostring ();
 
     done_testing ();
