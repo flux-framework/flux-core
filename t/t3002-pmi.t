@@ -94,4 +94,16 @@ test_expect_success 'PMI2 application abort is handled properly' '
 		${pmi2_info} --abort 0
 '
 
+# Ensure tha pmi_info can get clique ranks with a large enough
+# number of tasks per node that PMI_process_mapping likely
+# overflowed the max value length for the PMI-1 KVS. This ensures
+# that the PMI client picked up flux.taskmap instead:
+
+test_expect_success 'PMI1 can calculate clique ranks with 128 tasks per node' '
+	flux mini run -t 1m -N2 --taskmap=cyclic --tasks-per-node=128 \
+		${pmi_info} --clique >tpn.128.out &&
+	test_debug "cat tpn.128.out" &&
+	grep "0: clique=0,2,4,6,8,10,12,14,16,18,20" tpn.128.out
+'
+
 test_done

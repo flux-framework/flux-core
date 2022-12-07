@@ -14,6 +14,15 @@
 struct pmi_simple_server;
 
 #define SIMPLE_KVS_KEY_MAX         64
+
+/* Maximum size of a PMI KVS value. One might be tempted to increase
+ * this number to hold larger values, for example to hold an encoded
+ * PMI_process_mapping with a large count of tasks per node. However,
+ * experimentally, mpich and mvapich2 do not handle a larger max value
+ * correctly, and in many cases this causes a segfault in MPI. Therefore,
+ * it is suggested to leave SIMPLE_KVS_MAX at the de-facto standard of
+ * 1024 for now.
+ */
 #define SIMPLE_KVS_VAL_MAX         1024
 #define SIMPLE_KVS_NAME_MAX        64
 

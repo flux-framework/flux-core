@@ -437,6 +437,22 @@ out:
     return rc;
 }
 
+static int set_flux_taskmap (struct shell_pmi *pmi)
+{
+    struct taskmap *map = pmi->shell->info->taskmap;
+    char *val = NULL;
+    int rc = -1;
+
+    if (!(val = taskmap_encode (map, TASKMAP_ENCODE_WRAPPED))
+        || strlen (val) > SIMPLE_KVS_VAL_MAX)
+        goto out;
+    put_dict (pmi->locals, "flux.taskmap", val);
+    rc = 0;
+out:
+    free (val);
+    return rc;
+}
+
 static void pmi_destroy (struct shell_pmi *pmi)
 {
     if (pmi) {
@@ -538,7 +554,8 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
     if (!nomap && init_clique (pmi) < 0)
         goto error;
     if (!shell->standalone) {
-        if (set_flux_instance_level (pmi) < 0)
+        if (set_flux_instance_level (pmi) < 0
+            || (!nomap && set_flux_taskmap (pmi) < 0))
             goto error;
     }
     return pmi;

@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
         int clen;
         int *clique;
         char *s;
-        char buf[256];
+        char buf[4096];
 
         e = PMI_Get_clique_size (&clen);
         if (e != PMI_SUCCESS)

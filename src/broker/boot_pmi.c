@@ -94,12 +94,22 @@ static int set_broker_mapping_attr (struct pmi_handle *pmi,
     if (pmi_params->size == 1)
         val = strdup ("{\"version\":1,\"map\":[[0,1,1,1]]}");
     else {
+        /* First attempt to get flux.taskmap, falling back to
+         * PMI_process_mapping if this key is not available.
+         * This should be replaced when #4800 is fixed.
+         */
         if (broker_pmi_kvs_get (pmi,
                                 pmi_params->kvsname,
-                                "PMI_process_mapping",
+                                "flux.taskmap",
                                 buf,
                                 sizeof (buf),
-                                -1) == PMI_SUCCESS) {
+                                -1) == PMI_SUCCESS
+            || broker_pmi_kvs_get (pmi,
+                                   pmi_params->kvsname,
+                                   "PMI_process_mapping",
+                                   buf,
+                                   sizeof (buf),
+                                   -1) == PMI_SUCCESS) {
             val = pmi_mapping_to_taskmap (buf);
         }
     }
