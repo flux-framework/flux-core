@@ -58,9 +58,6 @@ struct hostrange * hostrange_intersect (struct hostrange *,
 
 int hostrange_hn_within (struct hostrange *, struct hostname *);
 
-ssize_t hostrange_to_string (struct hostrange * hr,
-                             size_t, char *, char *);
-
 size_t hostrange_numstr(struct hostrange *, size_t, char *);
 
 /*  Return the string representation of the nth string in 'hr'.

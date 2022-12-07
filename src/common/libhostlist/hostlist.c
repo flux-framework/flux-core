@@ -974,90 +974,77 @@ static int is_bracket_needed (struct hostlist *hl, int i)
  */
 static int get_bracketed_list (struct hostlist *hl,
                               int *start,
-                              const size_t n,
-                              char *buf)
+                              FILE *fp)
 {
     struct hostrange * *hr = hl->hr;
     int i = *start;
-    int m, len = 0;
     int bracket_needed = is_bracket_needed (hl, i);
 
-    len = snprintf (buf, n, "%s", hr[i]->prefix);
+    if (fprintf (fp, "%s", hr[i]->prefix) < 0
+        || (bracket_needed && fputc ('[', fp) == EOF))
+        return -1;
 
-    if ((len < 0) || (len > n))
-        return n; /* truncated, buffer filled */
-
-    if (bracket_needed && len < n)
-        buf[len++] = '[';
-
-    do {
-        m = (n - len) <= n ? n - len : 0;
-        len += hostrange_numstr (hr[i], m, buf + len);
-        if (len >= n)
+    while (1) {
+        if (!hr[i]->singlehost) {
+            if (fprintf (fp, "%0*lu", hr[i]->width, hr[i]->lo) < 0)
+                return -1;
+            if (hr[i]->lo < hr[i]->hi)
+                if (fprintf (fp, "-%0*lu", hr[i]->width, hr[i]->hi) < 0)
+                    return -1;
+        }
+        if (++i >= hl->nranges
+            || !hostrange_within_range (hr[i], hr[i-1]))
             break;
-        if (bracket_needed) /* Only need commas inside brackets */
-            buf[len++] = ',';
-    } while (++i < hl->nranges && hostrange_within_range (hr[i], hr[i-1]));
-
-    if (bracket_needed && len < n && len > 0) {
-
-        /* Add trailing bracket (change trailing "," from above to "]" */
-        buf[len - 1] = ']';
-
-        /* NUL terminate for safety, but do not add terminator to len */
-        buf[len]   = '\0';
-
-    } else if (len >= n) {
-        if (n > 0)
-            buf[n-1] = '\0';
-
-    } else {
-        /* If len is > 0, NUL terminate (but do not add to len) */
-        buf[len > 0 ? len : 0] = '\0';
+        /* Only need comma inside brackets */
+        if (bracket_needed && fputc (',', fp) == EOF)
+            return -1;
     }
+
+    if (bracket_needed && fputc (']', fp) == EOF)
+        return -1;
 
     *start = i;
-    return len;
+    return 0;
 }
 
-static ssize_t hostlist_ranged_string (struct hostlist *hl,
-                                       size_t n,
-                                       char *buf)
+static int hostlist_ranged_string (struct hostlist *hl, FILE *fp)
 {
     int i = 0;
-    int len = 0;
-    int truncated = 0;
-
-    while (i < hl->nranges && len < n) {
-        len += get_bracketed_list (hl, &i, n - len, buf + len);
-        if ((len > 0) && (len < n) && (i < hl->nranges))
-            buf[len++] = ',';
+    while (i < hl->nranges) {
+        if (get_bracketed_list (hl, &i, fp) < 0)
+            return -1;
+        if (i < hl->nranges && fputc (',', fp) == EOF)
+            return -1;
     }
-
-    /* NUL terminate */
-    if (len >= n) {
-        truncated = 1;
-        if (n > 0)
-            buf[n-1] = '\0';
-    } else
-        buf[len > 0 ? len : 0] = '\0';
-
-    return truncated ? -1 : len;
+    return 0;
 }
 
 char * hostlist_encode (struct hostlist *hl)
 {
-    char buf [8192];
+    int saved_errno;
+    char *result = NULL;
+    size_t len;
+    FILE *fp;
 
     if (hl == NULL) {
         errno = EINVAL;
         return NULL;
     }
-
-    if (hostlist_ranged_string (hl, sizeof (buf), buf) < 0)
-        return NULL;
-
-    return strdup (buf);
+    if (!(fp = open_memstream (&result, &len))
+        || hostlist_ranged_string (hl, fp) < 0)
+        goto fail;
+    if (fclose (fp) < 0) {
+        fp = NULL;
+        goto fail;
+    }
+    return result;
+fail:
+    saved_errno = errno;
+    if (fp)
+        fclose (fp);
+    free (result);
+    errno = saved_errno;
+    return NULL;
 }
 
 static struct hostrange * hr_current (struct hostlist *hl)

@@ -583,6 +583,27 @@ void test_iteration_with_delete ()
     }
 }
 
+/*  Ensure a very large host list can be encoded without error
+ */
+static void test_encode_large ()
+{
+    struct hostlist *hl = hostlist_create ();
+    if (hl == NULL)
+        BAIL_OUT ("hostlist_create");
+    for (int i = 0; i < 8192; i++)
+        hostlist_append (hl, "host");
+    ok (hostlist_count (hl) == 8192,
+        "created hostlist with 8K hosts");
+    char *s = hostlist_encode (hl);
+    ok (s != NULL,
+        "hostlist_encode works");
+    ok (strlen (s) > 0,
+        "string length of result is %ld",
+        strlen (s));
+    free (s);
+    hostlist_destroy (hl);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -599,6 +620,7 @@ int main (int argc, char *argv[])
     test_sortuniq ();
     test_iteration ();
     test_iteration_with_delete ();
+    test_encode_large ();
 
     done_testing ();
 }

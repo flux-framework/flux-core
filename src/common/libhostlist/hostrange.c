@@ -427,53 +427,6 @@ int hostrange_hn_within (struct hostrange * hr, struct hostname * hn)
     return -1;
 }
 
-
-/* copy a string representation of the hostrange hr into buffer buf,
- * writing at most n chars including NUL termination
- */
-ssize_t hostrange_to_string (struct hostrange * hr,
-                             size_t n,
-                             char *buf,
-                             char *separator)
-{
-    unsigned long i;
-    int truncated = 0;
-    int len = 0;
-    char sep = separator == NULL ? ',' : separator[0];
-
-    if (hr == NULL || n == 0)
-        return 0;
-
-    if (hr->singlehost)
-        return snprintf (buf, n, "%s", hr->prefix);
-
-    for (i = hr->lo; i <= hr->hi; i++) {
-        size_t m = (n - len) <= n ? n - len : 0; /* check for < 0 */
-        int ret = snprintf (buf + len,
-                            m,
-                            "%s%0*lu",
-                            hr->prefix,
-                            hr->width,
-                            i);
-        if (ret < 0 || ret >= m) {
-            len = n;
-            truncated = 1;
-            break;
-        }
-        len+=ret;
-        buf[len++] = sep;
-    }
-
-    if (truncated) {
-        buf[n-1] = '\0';
-        return -1;
-    } else {
-        /* back up over final separator */
-        buf[--len] = '\0';
-        return len;
-    }
-}
-
 /* Place the string representation of the numeric part of hostrange into buf
  * writing at most n chars including NUL termination.
  */
