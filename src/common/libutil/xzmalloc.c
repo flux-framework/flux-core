@@ -29,14 +29,6 @@ void *xzmalloc (size_t size)
     return new;
 }
 
-void *xrealloc (void *ptr, size_t size)
-{
-    void *new = realloc (ptr, size);
-    if (!new)
-        oom ();
-    return new;
-}
-
 char *xstrdup (const char *s)
 {
     char *cpy = strdup (s);
@@ -64,18 +56,6 @@ char *xasprintf (const char *fmt, ...)
     s = xvasprintf (fmt, ap);
     va_end (ap);
     return s;
-}
-
-char *xstrsub (const char *str, char a, char b)
-{
-    char *cpy = xstrdup (str);
-    char *s = cpy;
-    while (*s) {
-        if (*s == a)
-            *s = b;
-        s++;
-    }
-    return cpy;
 }
 
 /*

@@ -268,22 +268,6 @@ fail:
     return NULL;
 }
 
-struct rnode *rnode_create_count (const char *name,
-                                  uint32_t rank,
-                                  int count)
-{
-    struct rnode *n = NULL;
-    struct idset *ids = NULL;
-
-    if (!(ids = idset_create (0, IDSET_FLAG_AUTOGROW))
-        || (idset_range_set (ids, 0, count-1) < 0))
-        goto out;
-    n = rnode_create_idset (name, rank, ids);
-out:
-    idset_destroy (ids);
-    return n;
-}
-
 int rnode_set_property (struct rnode *n, const char *name)
 {
     if (!n->properties && !(n->properties = zhashx_new ())) {
