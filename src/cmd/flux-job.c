@@ -2031,14 +2031,6 @@ static void setup_mpir_interface (struct attach_ctx *ctx, json_t *context)
     }
 }
 
-static void finish_mpir_interface ()
-{
-    MPIR_debug_state = MPIR_DEBUG_ABORTING;
-
-    /* Signal the parallel debugger */
-    MPIR_Breakpoint ();
-}
-
 static void attach_setup_stdin (struct attach_ctx *ctx)
 {
     flux_watcher_t *w;
@@ -2239,9 +2231,6 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     } else if (streq (name, "shell.start")) {
         if (MPIR_being_debugged)
             setup_mpir_interface (ctx, context);
-    } else if (streq (name, "complete")) {
-        if (MPIR_being_debugged)
-            finish_mpir_interface ();
     }
     else if (streq (name, "log")) {
         handle_exec_log_msg (ctx, timestamp, context);
