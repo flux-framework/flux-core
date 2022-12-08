@@ -312,15 +312,6 @@ int main (int ac, char *av[])
 
     rnode_destroy (n);
 
-    n = rnode_create_count ("foo", 1, 8);
-    if (n == NULL)
-        BAIL_OUT ("rnode_create_count failed");
-    is (n->hostname, "foo",
-        "rnode_create_count set hostname correctly");
-    ok (n->rank == 1, "rnode rank set correctly");
-    rnode_avail_check (n, "0-7");
-    rnode_destroy (n);
-
     struct idset *idset = idset_decode ("0-3");
     n = rnode_create_idset ("foo", 3, idset);
     idset_destroy (idset);
