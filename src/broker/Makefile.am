@@ -42,6 +42,8 @@ libbroker_la_SOURCES = \
 	content-cache.c \
 	content-checkpoint.h \
 	content-checkpoint.c \
+	content-mmap.h \
+	content-mmap.c \
 	runat.h \
 	runat.c \
 	state_machine.h \

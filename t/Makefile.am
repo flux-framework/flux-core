@@ -72,6 +72,7 @@ TESTSCRIPTS = \
 	t0012-content-sqlite.t \
 	t0024-content-s3.t \
 	t0028-content-backing-none.t \
+	t0029-filemap-cmd.t \
 	t0025-broker-state-machine.t \
 	t0027-broker-groups.t \
 	t0013-config-file.t \
@@ -187,6 +188,7 @@ TESTSCRIPTS = \
 	t2614-job-shell-doom.t \
 	t2615-job-shell-rlimit.t \
 	t2616-job-shell-taskmap.t \
+	t2617-job-shell-stage-in.t \
 	t2700-mini-cmd.t \
 	t2701-mini-batch.t \
 	t2702-mini-alloc.t \

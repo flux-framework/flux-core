@@ -758,6 +758,9 @@ overridden in some cases:
    Configure the PMI plugin's built-in key exchange algorithm to use a
    virtual tree fanout of ``N`` for key gather/broadcast.  The default is 2.
 
+**stage-in**
+   Copy files previously mapped with :man1:`flux-filemap` to $FLUX_JOB_TMPDIR.
+   See :man1:`flux-shell` for more *stage-in* options.
 
 RESOURCES
 =========

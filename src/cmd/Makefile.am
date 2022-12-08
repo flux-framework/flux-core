@@ -61,7 +61,8 @@ flux_SOURCES = \
 	builtin/startlog.c \
 	builtin/dump.c \
 	builtin/restore.c \
-	builtin/shutdown.c
+	builtin/shutdown.c \
+	builtin/filemap.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
 

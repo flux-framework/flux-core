@@ -41,6 +41,7 @@ enum {
     FLUX_MSGFLAG_UPSTREAM   = 0x10, /* request nodeid is sender (route away) */
     FLUX_MSGFLAG_PRIVATE    = 0x20, /* private to instance owner and sender */
     FLUX_MSGFLAG_STREAMING  = 0x40, /* request/response is streaming RPC */
+    FLUX_MSGFLAG_USER1      = 0x80, /* user-defined message flag */
 };
 
 /* N.B. FLUX_NODEID_UPSTREAM should be used in the RPC interface only.
@@ -156,6 +157,11 @@ bool flux_msg_is_streaming (const flux_msg_t *msg);
  */
 int flux_msg_set_noresponse (flux_msg_t *msg);
 bool flux_msg_is_noresponse (const flux_msg_t *msg);
+
+/* Get/set USER1 flag.
+ */
+int flux_msg_set_user1 (flux_msg_t *msg);
+bool flux_msg_is_user1 (const flux_msg_t *msg);
 
 /* Get/set/compare message topic string.
  * set adds/deletes/replaces topic frame as needed.

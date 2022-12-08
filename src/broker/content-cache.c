@@ -28,6 +28,7 @@
 #include "attr.h"
 #include "content-cache.h"
 #include "content-checkpoint.h"
+#include "content-mmap.h"
 
 /* A periodic callback purges the cache of least recently used entries.
  * The callback is synchronized with the instance heartbeat, with a
@@ -67,8 +68,10 @@ struct cache_entry {
     uint8_t valid:1;                // entry contains valid data
     uint8_t dirty:1;                // entry needs to be stored upstream
                                     //   or to backing store (rank 0)
+    uint8_t ephemeral:1;            // clean entry is not on backing store
     uint8_t load_pending:1;
     uint8_t store_pending:1;
+    uint8_t mmapped:1;
     struct msgstack *load_requests;
     struct msgstack *store_requests;
     double lastused;
@@ -103,6 +106,7 @@ struct content_cache {
     uint32_t acct_dirty;            // count of dirty cache entries
 
     struct content_checkpoint *checkpoint;
+    struct content_mmap *mmap;
 };
 
 static void flush_respond (struct content_cache *cache);
@@ -146,14 +150,20 @@ static void msgstack_destroy (struct msgstack **msp)
  */
 static void request_list_respond_raw (struct msgstack **l,
                                       flux_t *h,
+                                      bool user1_flag,
                                       const void *data,
                                       int len,
                                       const char *type)
 {
     const flux_msg_t *msg;
     while ((msg = msgstack_pop (l))) {
-        if (flux_respond_raw (h, msg, data, len) < 0)
+        flux_msg_t *response;
+        if (!(response = flux_response_derive (msg, 0))
+            || flux_msg_set_payload (response, data, len) < 0
+            || (user1_flag && flux_msg_set_user1 (response) < 0)
+            || flux_send (h, response, 0) < 0)
             flux_log_error (h, "%s (%s):", __FUNCTION__, type);
+        flux_msg_decref (response);
         flux_msg_decref (msg);
     }
 }
@@ -182,7 +192,10 @@ static void cache_entry_destroy (struct cache_entry *e)
         int saved_errno = errno;
         assert (e->load_requests == NULL);
         assert (e->store_requests == NULL);
-        flux_msg_decref (e->data_container);
+        if (e->mmapped)
+            content_mmap_region_decref (e->data_container);
+        else
+            flux_msg_decref (e->data_container);
         free (e);
         errno = saved_errno;
     }
@@ -239,6 +252,7 @@ static void cache_entry_dirty_clear (struct content_cache *cache,
 
         request_list_respond_raw (&e->store_requests,
                                   cache->h,
+                                  false,
                                   e->hash,
                                   content_hash_size,
                                   "store");
@@ -326,6 +340,7 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
     struct content_cache *cache = arg;
     struct cache_entry *e = flux_future_aux_get (f, "entry");
     const flux_msg_t *msg;
+    const char *errmsg = NULL;
 
     e->load_pending = 0;
     if (flux_future_get (f, (const void **)&msg) < 0) {
@@ -333,6 +348,7 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
             errno = ENOENT;
         if (errno != ENOENT)
             flux_log_error (cache->h, "content load");
+        errmsg = flux_future_error_string (f);
         goto error;
     }
     /* N.B. the entry may already be valid if a store filled it while
@@ -348,12 +364,15 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
         }
         e->data_container = (void *)flux_msg_incref (msg);
         e->valid = 1;
+        if (flux_msg_is_user1 (msg))
+            e->ephemeral = 1;
         cache->acct_valid++;
         cache->acct_size += e->len;
         list_add (&cache->lru, &e->list);
         e->lastused = flux_reactor_now (cache->reactor);
         request_list_respond_raw (&e->load_requests,
                                   cache->h,
+                                  e->ephemeral ? true : 0, // FLUX_MSGFLAG_USER1
                                   e->data,
                                   e->len,
                                   "load");
@@ -364,7 +383,7 @@ error:
     request_list_respond_error (&e->load_requests,
                                 cache->h,
                                 errno,
-                                NULL,
+                                errmsg,
                                 "load");
     cache_entry_remove (cache, e);
     flux_future_destroy (f);
@@ -397,6 +416,7 @@ static void content_load_request (flux_t *h, flux_msg_handler_t *mh,
     const void *hash;
     int hash_size;
     struct cache_entry *e;
+    const char *errmsg = NULL;
 
     if (flux_request_decode_raw (msg, NULL, &hash, &hash_size) < 0)
         goto error;
@@ -405,13 +425,36 @@ static void content_load_request (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (!(e = cache_entry_lookup (cache, hash, hash_size))) {
-        if (cache->rank == 0 && !cache->backing) {
-            errno = ENOENT;
-            goto error;
+        struct content_region *region = NULL;
+        const void *data = NULL;
+        int len = 0;
+
+        if (cache->rank == 0) {
+            region = content_mmap_region_lookup (cache->mmap,
+                                                 hash,
+                                                 hash_size,
+                                                 &data,
+                                                 &len);
+            if (!region && !cache->backing) {
+                errno = ENOENT;
+                goto error;
+            }
         }
         if (!(e = cache_entry_insert (cache, hash, hash_size))) {
             flux_log_error (h, "content load");
             goto error;
+        }
+        if (region) {
+            e->data_container = content_mmap_region_incref (region);
+            e->data = data;
+            e->len = len;
+            e->valid = 1;
+            e->ephemeral = 1;
+            e->mmapped = 1;
+            cache->acct_valid++;
+            cache->acct_size += e->len;
+            list_add (&cache->lru, &e->list);
+            e->lastused = flux_reactor_now (cache->reactor);
         }
     }
     if (!e->valid) {
@@ -423,11 +466,32 @@ static void content_load_request (flux_t *h, flux_msg_handler_t *mh,
         }
         return; /* RPC continuation will respond to msg */
     }
-    if (flux_respond_raw (h, msg, e->data, e->len) < 0)
-        flux_log_error (h, "content load: flux_respond_raw");
+    if (e->valid && e->mmapped) { // rank 0 only
+        if (!content_mmap_validate (e->data_container,
+                                    e->hash,
+                                    content_hash_size,
+                                    e->data,
+                                    e->len)) {
+            errmsg = "mapped file content has changed";
+            errno = EINVAL;
+            goto error;
+        }
+    }
+
+    /* Send load response with FLUX_MSGFLAG_USER1 representing the
+     * ephemeral flag, if set.
+     */
+    flux_msg_t *response;
+    if (!(response = flux_response_derive (msg, 0))
+        || flux_msg_set_payload (response, e->data, e->len) < 0
+        || (e->ephemeral && flux_msg_set_user1 (response) < 0)
+        || flux_send (h, response, 0) < 0) {
+        flux_log_error (h, "content load: error sending response");
+    }
+    flux_msg_decref (response);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "content load: flux_respond_error");
 }
 
@@ -562,7 +626,16 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
                                        hash,
                                        sizeof (hash))) < 0)
         goto error;
-    if (!(e = cache_entry_lookup (cache, hash, hash_size))) {
+    /* If existing entry has the ephemeral bit set, remove it and let it be
+     * replaced with a new entry.  N.B. it can be assumed that an entry with
+     * the ephemeral bit set is valid and not dirty.
+     */
+    if ((e = cache_entry_lookup (cache, hash, hash_size))
+        && e->ephemeral) {
+        cache_entry_remove (cache, e);
+        e = NULL;
+    }
+    if (!e) {
         if (!(e = cache_entry_insert (cache, hash, hash_size)))
             goto error;
     }
@@ -583,6 +656,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
         cache->acct_dirty++;
         request_list_respond_raw (&e->load_requests,
                                   cache->h,
+                                  false,
                                   e->data,
                                   e->len,
                                   "load");
@@ -781,6 +855,7 @@ static void flush_respond (struct content_cache *cache)
     if (!cache->acct_dirty) {
         request_list_respond_raw (&cache->flush_requests,
                                   cache->h,
+                                  false,
                                   NULL,
                                   0,
                                   "flush");
@@ -999,6 +1074,7 @@ void content_cache_destroy (struct content_cache *cache)
         zhashx_destroy (&cache->entries);
         msgstack_destroy (&cache->flush_requests);
         content_checkpoint_destroy (cache->checkpoint);
+        content_mmap_destroy (cache->mmap);
         free (cache);
         errno = saved_errno;
     }
@@ -1041,7 +1117,12 @@ struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
 
     if (!(cache->checkpoint = content_checkpoint_create (h, cache->rank, cache)))
         goto error;
-
+    if (cache->rank == 0) {
+        if (!(cache->mmap = content_mmap_create (h,
+                                                 cache->hash_name,
+                                                 content_hash_size)))
+            goto error;
+    }
     if (flux_msg_handler_addvec (h, htab, cache, &cache->handlers) < 0)
         goto error;
     if (!(cache->f_sync = flux_sync_create (h, 0))

@@ -219,6 +219,7 @@ Common commands from flux-core:
    dump               Write KVS snapshot to portable archive
    env                Print the flux environment or execute a command inside it
    exec               Execute processes across flux ranks
+   filemap            Map files into a Flux instance
    {get,set,ls}attr   Access, modify, and list broker attributes
    jobs               list jobs submitted to Flux
    pstree             display job hierarchies

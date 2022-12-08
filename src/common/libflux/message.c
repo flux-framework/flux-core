@@ -353,7 +353,7 @@ int flux_msg_set_flags (flux_msg_t *msg, uint8_t flags)
     const uint8_t valid_flags = FLUX_MSGFLAG_TOPIC | FLUX_MSGFLAG_PAYLOAD
                               | FLUX_MSGFLAG_ROUTE | FLUX_MSGFLAG_UPSTREAM
                               | FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING
-                              | FLUX_MSGFLAG_NORESPONSE;
+                              | FLUX_MSGFLAG_NORESPONSE | FLUX_MSGFLAG_USER1;
 
     if (msg_validate (msg) < 0)
         return -1;
@@ -427,6 +427,23 @@ bool flux_msg_is_noresponse (const flux_msg_t *msg)
         return true;
     return (msg->flags & FLUX_MSGFLAG_NORESPONSE) ? true : false;
 }
+
+int flux_msg_set_user1 (flux_msg_t *msg)
+{
+    if (msg_validate (msg) < 0)
+        return -1;
+    if (flux_msg_set_flags (msg, msg->flags | FLUX_MSGFLAG_USER1) < 0)
+        return -1;
+    return 0;
+}
+
+bool flux_msg_is_user1 (const flux_msg_t *msg)
+{
+    if (msg_validate (msg) < 0)
+        return false;
+    return (msg->flags & FLUX_MSGFLAG_USER1) ? true : false;
+}
+
 
 int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 {

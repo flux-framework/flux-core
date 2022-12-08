@@ -14,6 +14,7 @@ man1
    flux-env
    flux-event
    flux-exec
+   flux-filemap
    flux-getattr
    flux-job
    flux-jobs
