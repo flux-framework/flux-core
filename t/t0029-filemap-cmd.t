@@ -19,6 +19,11 @@ fi
 
 test_under_flux 2 minimal
 
+# after test_under_flux is launched, cannot assume what umask is.  An
+# unexpected umask could affect tests below.  Hard code to 022 for
+# these tests.
+umask 022
+
 test_expect_success 'create copy directory' '
 	mkdir -p copydir
 '
