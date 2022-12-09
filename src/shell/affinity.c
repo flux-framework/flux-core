@@ -32,6 +32,31 @@ struct shell_affinity {
     hwloc_cpuset_t *pertask;
 };
 
+static void cpuset_array_destroy (hwloc_cpuset_t *set, int size)
+{
+    if (set) {
+        for (int i = 0; i < size; i++) {
+            if (set[i] != NULL)
+                hwloc_bitmap_free (set[i]);
+        }
+        free (set);
+    }
+}
+
+static hwloc_cpuset_t *cpuset_array_create (int size)
+{
+    hwloc_cpuset_t *set = calloc (size, sizeof (hwloc_cpuset_t));
+    if (!set)
+        return NULL;
+    for (int i = 0; i < size; i++)
+        if (!(set[i] = hwloc_bitmap_alloc ()))
+            goto error;
+    return set;
+error:
+    cpuset_array_destroy (set, size);
+    return NULL;
+}
+
 /*  Run hwloc_topology_restrict() with common flags for this module.
  */
 static int topology_restrict (hwloc_topology_t topo, hwloc_cpuset_t set)
@@ -39,6 +64,89 @@ static int topology_restrict (hwloc_topology_t topo, hwloc_cpuset_t set)
     if (hwloc_topology_restrict (topo, set, 0) < 0)
         return (-1);
     return (0);
+}
+
+
+/*  Parse a list of hwloc bitmap strings in list, bitmask, or taskset
+ *  form and return an allocated hwloc_cpuset_t array of size ntasks,
+ *  filled with the resulting bitmasks. If ntasks is greater than the number
+ *  of provided cpusets, then cpusets are reused as necessary.
+ *
+ *  It is an error if any cpuset does not fall within job_cpuset.
+ */
+static hwloc_cpuset_t *parse_cpuset_list (const char *setlist,
+                                          hwloc_cpuset_t job_cpuset,
+                                          int ntasks)
+{
+    char *copy = NULL;
+    char *s, *arg, *sptr = NULL;
+    int index, i = 0;
+    hwloc_cpuset_t *cpusets = NULL;
+
+    if (!(cpusets = cpuset_array_create (ntasks))
+        || !(copy = strdup (setlist))) {
+        shell_log_errno ("out of memory");
+        goto err;
+    }
+
+    s = copy;
+    while ((arg = strtok_r (s, ";", &sptr)) && i < ntasks) {
+        int rc;
+        if (strstarts (arg, "0x")) {
+            /*  If string starts with 0x then parse as a bitmask. If a
+             *  comma is present in the string, then this is likely a
+             *  hwloc-style bitmap string, otherwise, try the taskset
+             *  style bitmaps, which are simpler.
+             */
+            if (strchr (arg, ','))
+                rc = hwloc_bitmap_sscanf (cpusets[i], arg);
+            else
+                rc = hwloc_bitmap_taskset_sscanf (cpusets[i], arg);
+        }
+        else {
+            /*  O/w, attempt parse string as a hwloc list-style bitmap:
+             */
+            rc = hwloc_bitmap_list_sscanf (cpusets[i], arg);
+        }
+
+        if (rc < 0 || hwloc_bitmap_weight (cpusets[i]) <= 0) {
+            shell_log_error ("cpuset %s contains no cores or is invalid",
+                             arg);
+            goto err;
+        }
+        if (!hwloc_bitmap_isincluded (cpusets[i], job_cpuset)) {
+            char buf[1024] = "";
+            (void) hwloc_bitmap_list_snprintf (buf,
+                                               sizeof (buf),
+                                               job_cpuset);
+            shell_log_error ("cpuset %s is not included in job cpuset %s",
+                             arg,
+                             buf);
+            goto err;
+        }
+        s = NULL;
+        i++;
+    }
+    if (i == 0) {
+        shell_log_error ("no cpusets found in affinity list %s", setlist);
+        goto err;
+    }
+
+    /*  If not all tasks were assigned cpusets, then continue, reusing
+     *  cpusets as necessary.
+     */
+    index = 0;
+    for (; i < ntasks; i++) {
+        (void) hwloc_bitmap_copy (cpusets[i], cpusets[index]);
+        if (++index > ntasks)
+            index = 0;
+    }
+    free (copy);
+    return cpusets;
+err:
+    cpuset_array_destroy (cpusets, ntasks);
+    free (copy);
+    return NULL;
 }
 
 /*  Distribute ntasks over the topology 'topo', restricted to the
@@ -150,13 +258,7 @@ static void shell_affinity_destroy (void *arg)
         hwloc_topology_destroy (sa->topo);
     if (sa->cpuset)
         hwloc_bitmap_free (sa->cpuset);
-    if (sa->pertask) {
-        for (int i = 0; i < sa->ntasks; i++) {
-            if (sa->pertask[i] != NULL)
-                hwloc_bitmap_free (sa->pertask[i]);
-        }
-        free (sa->pertask);
-    }
+    cpuset_array_destroy (sa->pertask, sa->ntasks);
     free (sa);
 }
 
@@ -328,11 +430,18 @@ static int affinity_init (flux_plugin_t *p,
                                               sa->cpuset,
                                               sa->ntasks)))
             shell_log_errno ("distribute_tasks failed");
-        if (flux_plugin_add_handler (p, "task.exec",
-                                     task_affinity,
-                                     sa) < 0)
-            shell_log_errno ("failed to add task.exec handler");
     }
+    else if (strstarts (option, "map:")) {
+        if (!(sa->pertask = parse_cpuset_list (option+4,
+                                               sa->cpuset,
+                                               sa->ntasks)))
+            return -1;
+    }
+    if (sa->pertask
+        && flux_plugin_add_handler (p, "task.exec",
+                                    task_affinity,
+                                    sa) < 0)
+            shell_log_errno ("failed to add task.exec handler");
 
     return 0;
 }
