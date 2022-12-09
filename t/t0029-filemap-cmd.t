@@ -8,9 +8,25 @@ test_description='Test flux-filemap'
 
 LPTEST=${FLUX_BUILD_DIR}/t/shell/lptest
 
+# SEEK_DATA support was added to the linux NFS client in kernel 3.18.
+# In el7 based distros, it is defined but doesn't work on NFS.  So
+# ensure SEEK_DATA returns ENXIO on file that is 100% empty.
 havesparse() {
+	cat >lseek.py <<-EOT &&
+	#!/usr/bin/env python3
+	import sys, os, errno
+	fd = os.open("$1", os.O_RDONLY)
+	try:
+	    os.lseek(fd, 0, os.SEEK_DATA)
+	except OSError as e:
+	    if e.errno == errno.ENXIO:
+	        sys.exit(0)
+	sys.exit(1)
+	EOT
+	chmod +x lseek.py &&
 	truncate --size 8192 $1 &&
-	test $(stat --format "%b" $1) -eq 0
+	test $(stat --format "%b" $1) -eq 0 &&
+	./lseek.py
 }
 
 if havesparse testholes; then
@@ -18,6 +34,11 @@ if havesparse testholes; then
 fi
 
 test_under_flux 2 minimal
+
+# after test_under_flux is launched, cannot assume what umask is.  An
+# unexpected umask could affect tests below.  Hard code to 022 for
+# these tests.
+umask 022
 
 test_expect_success 'create copy directory' '
 	mkdir -p copydir
