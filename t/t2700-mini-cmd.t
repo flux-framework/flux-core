@@ -221,6 +221,15 @@ test_expect_success HAVE_JQ 'flux mini submit --output id mustache passes throug
 	flux mini submit --dry-run --output=foo.{{id}} hostname >musid.out &&
 	test $(jq ".attributes.system.shell.options.output.stdout.path" musid.out) = "\"foo.{{id}}\""
 '
+test_expect_success HAVE_JQ 'flux mini submit --cwd passes through to jobspec' '
+	flux mini submit --cwd=/foo/bar/baz hostname > cwd.out &&
+	jq -e ".attributes.system.cwd == \"/foo/bar/baz\""
+'
+test_expect_success HAVE_JQ 'flux mini submit --cwd works' '
+	mkdir cwd_test &&
+	flux mini run --cwd=$(realpath cwd_test) pwd > cwd.out &&
+	test $(cat cwd.out) = $(realpath cwd_test)
+'
 test_expect_success HAVE_JQ 'flux mini submit command arguments work' '
 	flux mini submit --dry-run a b c >args.out &&
 	test $(jq ".tasks[0].command[0]" args.out) = "\"a\"" &&
