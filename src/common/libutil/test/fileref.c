@@ -60,7 +60,7 @@ bool test_sparse (void)
         BAIL_OUT ("error creating test file: %s", strerror (errno));
     if (ftruncate (fd, 8192) < 0)
         BAIL_OUT ("error truncating test file: %s", strerror (errno));
-     if (fstat (fd, &sb) < 0)
+    if (fstat (fd, &sb) < 0)
         BAIL_OUT ("error stating test file: %s", strerror (errno));
     if (sb.st_blocks == 0)
         result = true;
