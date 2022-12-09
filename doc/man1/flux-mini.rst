@@ -183,6 +183,9 @@ KVS, where they may be accessed with the ``flux job attach`` command.
 In addition, ``flux-mini run`` processes standard I/O in real time,
 emitting the job's I/O to its stdout and stderr.
 
+**--input=FILENAME**
+   Redirect stdin to the specified filename, bypassing the KVS.
+
 **--output=TEMPLATE**
    Specify the filename *TEMPLATE* for stdout redirection, bypassing
    the KVS.  *TEMPLATE* may be a mustache template which supports the
