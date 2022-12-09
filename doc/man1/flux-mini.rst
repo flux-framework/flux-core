@@ -455,6 +455,9 @@ with the job exit status.
 OTHER OPTIONS
 =============
 
+**--cwd=DIRECTORY**
+   Set job working directory.
+
 **--urgency=N**
    Specify job urgency, which affects queue order. Numerically higher urgency
    jobs are considered by the scheduler first. Guests may submit jobs with

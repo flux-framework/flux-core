@@ -661,6 +661,9 @@ class MiniCmd:
             else argparse.SUPPRESS,
         )
         parser.add_argument(
+            "--cwd", help="Set job working directory", metavar="DIRECTORY"
+        )
+        parser.add_argument(
             "--flags",
             action="append",
             help="Set comma separated list of job submission flags. Possible "
@@ -690,8 +693,8 @@ class MiniCmd:
         Create a jobspec from args and return it to caller
         """
         jobspec = self.init_jobspec(args)
-        jobspec.cwd = os.getcwd()
         jobspec.environment = get_filtered_environment(args.env)
+        jobspec.cwd = args.cwd if args.cwd is not None else os.getcwd()
         rlimits = get_filtered_rlimits(args.rlimit)
         if rlimits:
             jobspec.setattr_shell_option("rlimit", rlimits)

@@ -156,6 +156,7 @@ _flux_mini()
         --flags= \
         --dry-run \
         -h --help \
+        --cwd= \
     "
     local SUBMIT_OPTIONS="\
         -N --nodes= \
