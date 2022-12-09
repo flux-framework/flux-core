@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -49,6 +52,10 @@ void rmfile (const char *name)
         BAIL_OUT ("error unlinking %s", mkpath (name));
 }
 
+/* SEEK_DATA support was added to the linux NFS client in kernel 3.18.
+ * In el7 based distros, it is defined but doesn't work on NFS.  So ensure
+ * SEEK_DATA returns ENXIO on file that is 100% empty.
+ */
 bool test_sparse (void)
 {
     int fd;
@@ -62,7 +69,9 @@ bool test_sparse (void)
         BAIL_OUT ("error truncating test file: %s", strerror (errno));
     if (fstat (fd, &sb) < 0)
         BAIL_OUT ("error stating test file: %s", strerror (errno));
-    if (sb.st_blocks == 0)
+    if (sb.st_blocks == 0
+        && lseek (fd, 0, SEEK_DATA) == (off_t)-1
+        && errno == ENXIO)
         result = true;
     close (fd);
     rmfile ("testhole");
