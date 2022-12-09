@@ -106,4 +106,41 @@ test_expect_success 'PMI1 can calculate clique ranks with 128 tasks per node' '
 	grep "0: clique=0,2,4,6,8,10,12,14,16,18,20" tpn.128.out
 '
 
+test_expect_success 'flux-pmi barrier works' '
+	flux mini run --label-io -n2 \
+	    flux pmi barrier
+'
+test_expect_success 'flux-pmi barrier --count works' '
+	flux mini run --label-io -n2 \
+	    flux pmi barrier --count=2
+'
+test_expect_success 'flux-pmi get PMI_process_mapping works' '
+	flux mini run --label-io -n2 \
+	    flux pmi get PMI_process_mapping
+'
+test_expect_success 'flux-pmi get --ranks=1 flux.taskmap works' '
+	flux mini run --label-io -n2 \
+	    flux pmi get --ranks=1 flux.taskmap
+'
+test_expect_success 'flux-pmi get --ranks=all flux.instance-level works' '
+	flux mini run --label-io -n2 \
+	    flux pmi get --ranks=all flux.instance-level
+'
+test_expect_success 'flux-pmi get works with multiple keys' '
+	flux mini run --label-io -n2 \
+	    flux pmi get flux.instance-level PMI_process_mapping
+'
+test_expect_success 'flux-pmi barrier fails outside of the job environment' '
+	test_must_fail flux pmi barrier
+'
+test_expect_success 'flux-pmi fails with bad subcommand' '
+	test_must_fail flux mini run flux pmi notacmd
+'
+test_expect_success 'flux-pmi get fails with bad option' '
+	test_must_fail flux mini run flux pmi get --badopt foo
+'
+test_expect_success 'flux-pmi get fails with bad ranks option' '
+	test_must_fail flux mini run flux pmi get --ranks=1.2 flux.taskmap
+'
+
 test_done
