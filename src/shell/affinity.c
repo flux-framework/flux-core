@@ -20,6 +20,8 @@
 #include <flux/core.h>
 #include <flux/shell.h>
 
+#include "ccan/str/str.h"
+
 #include "builtins.h"
 
 struct shell_affinity {
@@ -232,7 +234,7 @@ static bool affinity_getopt (flux_shell_t *shell, const char **resultp)
         shell_warn ("cpu-affinity: invalid option: %s", *resultp);
         return true;
     }
-    else if (strcmp (*resultp, "off") == 0)
+    else if (streq (*resultp, "off"))
         return false;
     return true;
 }
@@ -321,7 +323,7 @@ static int affinity_init (flux_plugin_t *p,
      *   resources to which the shell is now bound (from above)
      *  Set a 'task.exec' callback to actually make the per-task binding.
      */
-    if (strcmp (option, "per-task") == 0) {
+    if (streq (option, "per-task")) {
         if (!(sa->pertask = distribute_tasks (sa->topo,
                                               sa->cpuset,
                                               sa->ntasks)))
