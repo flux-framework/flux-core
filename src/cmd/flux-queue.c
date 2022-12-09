@@ -354,8 +354,6 @@ static void queue_status (flux_t *h, const char *name)
 {
     if (!name) {
         json_t *queues;
-        size_t index;
-        json_t *value;
         flux_future_t *f;
 
         f = flux_rpc (h, "job-manager.queue-list", NULL, 0, 0);
@@ -364,6 +362,8 @@ static void queue_status (flux_t *h, const char *name)
                                        "queues", &queues))
             log_msg_exit ("%s", future_strerror (f, errno));
         if (json_array_size (queues) > 0) {
+            size_t index;
+            json_t *value;
             json_array_foreach (queues, index, value) {
                 queue_status_one (h, json_string_value (value));
             }
