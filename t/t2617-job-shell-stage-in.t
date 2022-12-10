@@ -67,16 +67,16 @@ test_expect_success 'files that did not match pattern were not copied' '
 	grep red/small pattern.err &&
 	test_must_fail grep blue/a pattern.err
 '
-test_expect_success 'verify that stage-in.destdir works' '
+test_expect_success 'verify that stage-in.destination works' '
 	mkdir testdest &&
 	flux mini run -N1 \
-	    -o stage-in.destdir=$(pwd)/testdest \
+	    -o stage-in.destination=$(pwd)/testdest \
 	    /bin/true &&
 	test -f testdest/main/hello
 '
-test_expect_success 'verify that stage-in.destdir fails on bad dir' '
+test_expect_success 'verify that stage-in.destination fails on bad dir' '
 	test_must_fail flux mini run -N1 \
-	    -o stage-in.destdir=/noexist \
+	    -o stage-in.destination=/noexist \
 	    /bin/true
 '
 test_expect_success 'unmap all' '
