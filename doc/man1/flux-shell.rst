@@ -263,7 +263,11 @@ options are supported by the builtin plugins of ``flux-shell``:
 **cpu-affinity**\ =\ *OPT*
   Adjust the operation of the builtin shell ``affinity`` plugin.
   *OPT* may be set to ``off`` to disable the affinity plugin, or
-  ``per-task`` to have CPU affinity applied on a per task basis.
+  ``per-task`` to have available CPUs distributed to tasks.
+  If *OPT* starts with ``map:``, then the rest of the option is taken
+  as a semicolon-delimited list of cpus to allocate to each task. Each
+  entry in the list can be in one of the :linux:man7:`hwloc` list,
+  bitmask, or taskset formats (See :linux:man3:`hwloc_cpuset_t`).
   The default is ``on``, which binds all tasks to the assigned set
   of cores in the job.
 

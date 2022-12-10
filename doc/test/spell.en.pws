@@ -681,3 +681,6 @@ ACLs
 SIGBUS
 tmpfs
 nocheckpoint
+CPUs
+cpuset
+taskset
