@@ -51,6 +51,46 @@ test_expect_success 'flux-shell: per-task affinity sanity check' '
     flux mini run --label-io -ocpu-affinity=per-task -n1 -c1 \
 		hwloc-bind --get
 '
+test_expect_success MULTICORE 'flux-shell: map affinity works' '
+    flux mini run --label-io -o cpu-affinity="map:1;0" -n 2 \
+	hwloc-bind --get > map1.out &&
+    task0set=$(sed -n "s/^0: //p" map1.out) &&
+    task1set=$(sed -n "s/^1: //p" map1.out) &&
+    test_debug "echo checking ${task0set}=0x2 ${task1set}=0x1" &&
+    test "$(hwloc-calc --taskset $task0set)" = "0x2" &&
+    test "$(hwloc-calc --taskset $task1set)" = "0x1"
+'
+test_expect_success MULTICORE 'flux-shell: map affinity reuses underspecified sets' '
+    flux mini run --label-io -o cpu-affinity=map:1 -n 2 \
+	hwloc-bind --get > map2.out &&
+    task0set=$(sed -n "s/^0: //p" map2.out) &&
+    task1set=$(sed -n "s/^1: //p" map2.out) &&
+    test_debug "echo checking ${task0set}=0x2 ${task1set}=0x2" &&
+    test "$(hwloc-calc --taskset $task0set)" = "0x2" &&
+    test "$(hwloc-calc --taskset $task1set)" = "0x2"
+'
+test_expect_success MULTICORE 'flux-shell: map affinity can use hex bitmasks' '
+    flux mini run --label-io -o cpu-affinity="map:0x1;0x2" -n 2 \
+	hwloc-bind --get > map3.out &&
+    task0set=$(sed -n "s/^0: //p" map3.out) &&
+    task1set=$(sed -n "s/^1: //p" map3.out) &&
+    test_debug "echo checking ${task0set}=0x1 ${task1set}=0x2" &&
+    test "$(hwloc-calc --taskset $task0set)" = "0x1" &&
+    test "$(hwloc-calc --taskset $task1set)" = "0x2"
+'
+# Expected to fail since 0xf,0xf won't be in the job cpuset, we're just
+# testing the parsing of args now
+test_expect_success 'flux-shell: map affinity can use a mix of inputs' '
+    id=$(flux mini submit --label-io -o cpu-affinity="map:0xf,0xf;0-3" -n 2 \
+	hwloc-bind --get) &&
+    test_must_fail flux job attach $id >map4.out 2>&1 &&
+    test_debug "cat map4.out" &&
+    grep "cpuset 0xf,0xf is not included in job cpuset" map4.out
+'
+test_expect_success 'flux-shell: invalid cpuset is detected' '
+    test_must_fail flux mini run -o cpu-affinity="map:0x0;1" -n 2 \
+        hwloc-bind --get
+'
 test_expect_success 'flux-shell: affinity can be disabled' '
     hwloc-bind --get > affinity-off.expected &&
     flux mini run -ocpu-affinity=off -n1 hwloc-bind --get >affinity-off.out &&
