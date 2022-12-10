@@ -360,8 +360,30 @@ void test_create_from_json (void)
         && job->urgency == 10
         && job->userid == 42
         && job->t_submit == 1.0
+        && job->queue == NULL
         && job->flags == 0,
         "job json object was properly decoded");
+    json_decref (o);
+    job_decref (job);
+
+    if (!(o = json_pack ("{s:I s:i s:i s:f s:i s:{s:{s:{s:s}}}}",
+                         "id", 1LL,
+                         "urgency", 10,
+                         "userid", 42,
+                         "t_submit", 1.0,
+                         "flags", 0,
+                         "jobspec",
+                         "attributes", "system", "queue", "foo")))
+        BAIL_OUT ("json_pack failed");
+    ok ((job = job_create_from_json (o)) != NULL,
+        "job_create_from_json works");
+    ok (job->id == 1
+        && job->urgency == 10
+        && job->userid == 42
+        && job->t_submit == 1.0
+        && job->queue && !strcmp (job->queue, "foo")
+        && job->flags == 0,
+        "job json object was properly decoded w/ queue");
     json_decref (o);
     job_decref (job);
 }

@@ -26,6 +26,7 @@ struct job {
     int urgency;
     int64_t priority;
     double t_submit;
+    const char *queue;
     int flags;
     json_t *jobspec_redacted;
     int eventlog_seq;           // eventlog count / sequence number

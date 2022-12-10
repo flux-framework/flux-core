@@ -40,8 +40,17 @@ static struct optparse_option stop_opts[] = {
     { .name = "verbose", .key = 'v',
       .usage = "Display more detail about internal job manager state",
     },
-    { .name = "quiet",
+    { .name = "quiet", .has_arg = 0,
       .usage = "Display only errors",
+    },
+    { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Specify queue to stop",
+    },
+    { .name = "all", .key = 'a', .has_arg = 0,
+      .usage = "Force command to apply to all queues if none specified",
+    },
+    { .name = "nocheckpoint", .has_arg = 0,
+      .usage = "Do not checkpoint that the queue has been stopped",
     },
     OPTPARSE_TABLE_END
 };
@@ -50,8 +59,14 @@ static struct optparse_option start_opts[] = {
     { .name = "verbose", .key = 'v',
       .usage = "Display more detail about internal job manager state",
     },
-    { .name = "quiet",
+    { .name = "quiet", .has_arg = 0,
       .usage = "Display only errors",
+    },
+    { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Specify queue to start",
+    },
+    { .name = "all", .key = 'a', .has_arg = 0,
+      .usage = "Force command to apply to all queues if none specified",
     },
     OPTPARSE_TABLE_END
 };
@@ -67,6 +82,12 @@ static struct optparse_option status_opts[] = {
 };
 
 static struct optparse_option enable_opts[] = {
+    { .name = "verbose", .key = 'v',
+      .usage = "Display details about all job manager queues",
+    },
+    { .name = "quiet", .has_arg = 0,
+      .usage = "Display only errors",
+    },
     { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
       .usage = "Specify queue to enable",
     },
@@ -77,6 +98,12 @@ static struct optparse_option enable_opts[] = {
 };
 
 static struct optparse_option disable_opts[] = {
+    { .name = "verbose", .key = 'v',
+      .usage = "Display details about all job manager queues",
+    },
+    { .name = "quiet", .has_arg = 0,
+      .usage = "Display only errors",
+    },
     { .name = "queue", .key = 'q', .has_arg = 1, .arginfo = "NAME",
       .usage = "Specify queue to disable",
     },
@@ -232,12 +259,7 @@ static char *parse_arg_message (char **argv, const char *name)
     return argz;
 }
 
-void alloc_admin (flux_t *h,
-                  bool verbose,
-                  bool quiet,
-                  int query_only,
-                  int start,
-                  const char *reason)
+void alloc_query (flux_t *h)
 {
     flux_future_t *f;
     int free_pending;
@@ -245,24 +267,14 @@ void alloc_admin (flux_t *h,
     int queue_length;
     int running;
 
-    if (!(f = flux_rpc_pack (h,
-                             "job-manager.alloc-admin",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:b s:b s:s}",
-                             "query_only",
-                             query_only,
-                             "start",
-                             start,
-                             "reason",
-                             reason ? reason : "")))
-        log_err_exit ("error sending alloc-admin request");
+    if (!(f = flux_rpc (h,
+                        "job-manager.alloc-query",
+                        NULL,
+                        FLUX_NODEID_ANY,
+                        0)))
+        log_err_exit ("error sending alloc-query request");
     if (flux_rpc_get_unpack (f,
-                             "{s:b s:s s:i s:i s:i s:i}",
-                             "start",
-                             &start,
-                             "reason",
-                             &reason,
+                             "{s:i s:i s:i s:i}",
                              "queue_length",
                              &queue_length,
                              "alloc_pending",
@@ -271,19 +283,11 @@ void alloc_admin (flux_t *h,
                              &free_pending,
                              "running",
                              &running) < 0)
-        log_msg_exit ("alloc-admin: %s", future_strerror (f, errno));
-    if (!quiet) {
-        printf ("Scheduling is %s%s%s\n",
-                start ? "started" : "stopped",
-                reason && strlen (reason) > 0 ? ": " : "",
-                reason ? reason : "");
-    }
-    if (verbose) {
-        printf ("%d alloc requests queued\n", queue_length);
-        printf ("%d alloc requests pending to scheduler\n", alloc_pending);
-        printf ("%d free requests pending to scheduler\n", free_pending);
-        printf ("%d running jobs\n", running);
-    }
+        log_msg_exit ("alloc-query: %s", future_strerror (f, errno));
+    printf ("%d alloc requests queued\n", queue_length);
+    printf ("%d alloc requests pending to scheduler\n", alloc_pending);
+    printf ("%d free requests pending to scheduler\n", free_pending);
+    printf ("%d running jobs\n", running);
     flux_future_destroy (f);
 }
 
@@ -298,11 +302,11 @@ static void add_string_if_set (json_t *o, const char *key, const char *val)
     }
 }
 
-static void queue_admin (flux_t *h,
-                         const char *name,
-                         bool enable,
-                         const char *reason,
-                         bool all)
+static void queue_enable (flux_t *h,
+                          const char *name,
+                          bool enable,
+                          const char *reason,
+                          bool all)
 {
     json_t *payload;
     flux_future_t *f;
@@ -313,49 +317,76 @@ static void queue_admin (flux_t *h,
         log_msg_exit ("out of memory");
     add_string_if_set (payload, "name", name);
     add_string_if_set (payload, "reason", reason);
-    f = flux_rpc_pack (h, "job-manager.queue-admin", 0, 0, "O", payload);
+    f = flux_rpc_pack (h, "job-manager.queue-enable", 0, 0, "O", payload);
     if (!f || flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("%s", future_strerror (f, errno));
     flux_future_destroy (f);
     json_decref (payload);
 }
 
-static void queue_status_one (flux_t *h, const char *name)
+static void queue_start (flux_t *h,
+                         const char *name,
+                         bool start,
+                         const char *reason,
+                         bool all,
+                         bool nocheckpoint)
 {
     json_t *payload;
     flux_future_t *f;
-    int enable;
-    const char *reason;
+
+    if (!(payload = json_pack ("{s:b s:b s:b}",
+                               "start", start ? 1 : 0,
+                               "all", all ? 1 : 0,
+                               "nocheckpoint", nocheckpoint ? 1 : 0)))
+        log_msg_exit ("out of memory");
+    add_string_if_set (payload, "name", name);
+    add_string_if_set (payload, "reason", reason);
+    f = flux_rpc_pack (h, "job-manager.queue-start", 0, 0, "O", payload);
+    if (!f || flux_rpc_get (f, NULL) < 0)
+        log_msg_exit ("%s", future_strerror (f, errno));
+    flux_future_destroy (f);
+    json_decref (payload);
+}
+
+typedef void (*queue_status_output_f) (const char *name,
+                                       bool enable,
+                                       const char *disable_reason,
+                                       bool start,
+                                       const char *stop_reason);
+
+static void queue_status_one (flux_t *h,
+                              const char *name,
+                              queue_status_output_f out_cb)
+{
+    json_t *payload;
+    flux_future_t *f;
+    int enable, start;
+    const char *disable_reason = NULL;
+    const char *stop_reason = NULL;
 
     if (!(payload = json_object ()))
         log_msg_exit ("out of memory");
     add_string_if_set (payload, "name", name);
     f = flux_rpc_pack (h, "job-manager.queue-status", 0, 0, "O", payload);
     if (!f || flux_rpc_get_unpack (f,
-                                   "{s:b s?s}",
+                                   "{s:b s?s s:b s?s}",
                                    "enable", &enable,
-                                   "reason", &reason))
+                                   "disable_reason", &disable_reason,
+                                   "start", &start,
+                                   "stop_reason", &stop_reason) < 0)
         log_msg_exit ("%s", future_strerror (f, errno));
-    if (enable) {
-        printf ("%s%sJob submission is enabled\n",
-                name ? name : "",
-                name ? ": " : "");
-    }
-    else {
-        printf ("%s%sJob submission is disabled: %s\n",
-                name ? name : "",
-                name ? ": " : "", reason);
-    }
+    out_cb (name, enable, disable_reason, start, stop_reason);
     flux_future_destroy (f);
     json_decref (payload);
 }
 
-static void queue_status (flux_t *h, const char *name)
+static void queue_status (flux_t *h,
+                          const char *name,
+                          bool verbose,
+                          queue_status_output_f out_cb)
 {
-    if (!name) {
+    if (!name || verbose) {
         json_t *queues;
-        size_t index;
-        json_t *value;
         flux_future_t *f;
 
         f = flux_rpc (h, "job-manager.queue-list", NULL, 0, 0);
@@ -364,16 +395,37 @@ static void queue_status (flux_t *h, const char *name)
                                        "queues", &queues))
             log_msg_exit ("%s", future_strerror (f, errno));
         if (json_array_size (queues) > 0) {
+            size_t index;
+            json_t *value;
             json_array_foreach (queues, index, value) {
-                queue_status_one (h, json_string_value (value));
+                queue_status_one (h, json_string_value (value), out_cb);
             }
         }
         else
-            queue_status_one (h, NULL);
+            queue_status_one (h, NULL, out_cb);
         flux_future_destroy (f);
     }
     else
-        queue_status_one (h, name);
+        queue_status_one (h, name, out_cb);
+}
+
+static void print_enable_status (const char *name,
+                                 bool enable,
+                                 const char *disable_reason,
+                                 bool start,
+                                 const char *stop_reason)
+{
+    if (enable) {
+        printf ("%s%sJob submission is enabled\n",
+                name ? name : "",
+                name ? ": " : "");
+    }
+    else {
+        printf ("%s%sJob submission is disabled: %s\n",
+                name ? name : "",
+                name ? ": " : "",
+                disable_reason);
+    }
 }
 
 int cmd_enable (optparse_t *p, int argc, char **argv)
@@ -389,7 +441,12 @@ int cmd_enable (optparse_t *p, int argc, char **argv)
     }
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    queue_admin (h, name, true, NULL, all);
+    queue_enable (h, name, true, NULL, all);
+    if (!optparse_hasopt (p, "quiet"))
+        queue_status (h,
+                      name,
+                      optparse_hasopt (p, "verbose"),
+                      print_enable_status);
     flux_close (h);
     return (0);
 }
@@ -406,16 +463,59 @@ int cmd_disable (optparse_t *p, int argc, char **argv)
         reason = parse_arg_message (argv + optindex, "reason");
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    queue_admin (h, name, false, reason, all);
+    queue_enable (h, name, false, reason, all);
+    if (!optparse_hasopt (p, "quiet"))
+        queue_status (h,
+                      name,
+                      optparse_hasopt (p, "verbose"),
+                      print_enable_status);
     flux_close (h);
     free (reason);
     return (0);
+}
+
+static void print_start_status (const char *name,
+                                bool enable,
+                                const char *disable_reason,
+                                bool start,
+                                const char *stop_reason)
+{
+    printf ("%s%sScheduling is %s%s%s\n",
+            name ? name : "",
+            name ? ": " : "",
+            start ? "started" : "stopped",
+            stop_reason && strlen (stop_reason) > 0 ? ": " : "",
+            stop_reason ? stop_reason : "");
+}
+
+void check_legacy_all (flux_t *h, const char *name, bool *allp, bool quiet)
+{
+    /* to ensure backwards compatibility, we assume --all if neither
+     * --name or --all are specified.  However, only output warning
+     * if multiple queues are configured.
+     */
+    if (!name && !(*allp)) {
+        json_t *queues;
+        flux_future_t *f;
+
+        if (!quiet
+            && (f = flux_rpc (h, "job-manager.queue-list", NULL, 0, 0))
+            && flux_rpc_get_unpack (f,
+                                    "{s:o}",
+                                    "queues", &queues) == 0
+            && json_array_size (queues) > 0)
+            fprintf (stderr,
+                     "warning: --queue/--all not specified, assuming --all\n");
+        (*allp) = true;
+    }
 }
 
 int cmd_start (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
     int optindex = optparse_option_index (p);
+    const char *name = optparse_get_str (p, "queue", NULL);
+    bool all = optparse_hasopt (p, "all");
 
     if (argc - optindex > 0) {
         optparse_print_usage (p);
@@ -423,12 +523,16 @@ int cmd_start (optparse_t *p, int argc, char **argv)
     }
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    alloc_admin (h,
-                 optparse_hasopt (p, "verbose"),
-                 optparse_hasopt (p, "quiet"),
-                 0,
-                 1,
-                 NULL);
+    check_legacy_all (h, name, &all, optparse_hasopt (p, "quiet"));
+    queue_start (h, name, true, NULL, all, false);
+    if (!optparse_hasopt (p, "quiet")) {
+        queue_status (h,
+                      name,
+                      optparse_hasopt (p, "verbose"),
+                      print_start_status);
+        if (optparse_hasopt (p, "verbose"))
+            alloc_query (h);
+    }
     flux_close (h);
     return (0);
 }
@@ -437,21 +541,47 @@ int cmd_stop (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
     int optindex = optparse_option_index (p);
+    const char *name = optparse_get_str (p, "queue", NULL);
+    bool all = optparse_hasopt (p, "all");
+    bool nocheckpoint = optparse_hasopt (p, "nocheckpoint");
     char *reason = NULL;
 
     if (argc - optindex > 0)
         reason = parse_arg_message (argv + optindex, "reason");
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    alloc_admin (h,
-                 optparse_hasopt (p, "verbose"),
-                 optparse_hasopt (p, "quiet"),
-                 0,
-                 0,
-                 reason);
+    check_legacy_all (h, name, &all, optparse_hasopt (p, "quiet"));
+    queue_start (h, name, false, reason, all, nocheckpoint);
+    if (!optparse_hasopt (p, "quiet")) {
+        queue_status (h,
+                      name,
+                      optparse_hasopt (p, "verbose"),
+                      print_start_status);
+        if (optparse_hasopt (p, "verbose"))
+            alloc_query (h);
+    }
     flux_close (h);
     free (reason);
     return (0);
+}
+
+static void print_queue_status (const char *name,
+                                bool enable,
+                                const char *disable_reason,
+                                bool start,
+                                const char *stop_reason)
+{
+    print_enable_status (name,
+                         enable,
+                         disable_reason,
+                         start,
+                         stop_reason);
+
+    print_start_status (name,
+                        enable,
+                        disable_reason,
+                        start,
+                        stop_reason);
 }
 
 int cmd_status (optparse_t *p, int argc, char **argv)
@@ -466,14 +596,10 @@ int cmd_status (optparse_t *p, int argc, char **argv)
     }
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    queue_status (h, name);
+    queue_status (h, name, optparse_hasopt (p, "verbose"), print_queue_status);
 
-    alloc_admin (h,
-                 optparse_hasopt (p, "verbose"),
-                 false,
-                 1,
-                 0,
-                 NULL);
+    if (optparse_hasopt (p, "verbose"))
+        alloc_query (h);
     flux_close (h);
     return (0);
 }

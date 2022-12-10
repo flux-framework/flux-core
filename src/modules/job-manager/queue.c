@@ -22,15 +22,28 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
+#include "alloc.h"
 #include "job-manager.h"
 #include "conf.h"
 #include "restart.h"
 #include "queue.h"
 
+/* What it means to be administratively stopped:
+ *
+ * While allocation is stopped, the scheduler can remain loaded and
+ * handle requests, but the job manager won't send any more allocation
+ * requests.  Pending alloc requests are canceled.  The job manager
+ * continues to send free requests to the scheduler as jobs relinquish
+ * resources.
+ */
 struct jobq {
     char *name;
     bool enable;    // jobs may be submitted to this queue
-    char *reason;   // reason if disabled
+    char *disable_reason;   // reason if disabled
+    bool start;
+    bool checkpoint_start;  // may be different that actual start due
+                            // to nocheckpoint flag
+    char *stop_reason; // reason if stopped (optionally set)
 };
 
 struct queue {
@@ -48,7 +61,7 @@ static void jobq_destroy (struct jobq *q)
     if (q) {
         int saved_errno = errno;
         free (q->name);
-        free (q->reason);
+        free (q->disable_reason);
         free (q);
         errno = saved_errno;
     }
@@ -72,44 +85,95 @@ static struct jobq *jobq_create (const char *name)
     if (name && !(q->name = strdup (name)))
         goto error;
     q->enable = true;
+    q->start = true;
+    q->checkpoint_start = true;
     return q;
 error:
     jobq_destroy (q);
     return NULL;
 }
 
-static int jobq_enable (struct jobq *q, bool enable, const char *reason)
+static int jobq_enable (struct jobq *q,
+                        bool enable,
+                        const char *disable_reason)
 {
     if (enable) {
         q->enable = true;
-        free (q->reason);
-        q->reason = NULL;
+        free (q->disable_reason);
+        q->disable_reason = NULL;
     }
     else {
         char *cpy;
-        if (!(cpy = strdup (reason)))
+        if (!(cpy = strdup (disable_reason)))
             return -1;
-        free (q->reason);
-        q->reason = cpy;
+        free (q->disable_reason);
+        q->disable_reason = cpy;
         q->enable = false;
     }
     return 0;
 }
 
-static int queue_enable_all (struct queue *queue,
-                             bool enable,
-                             const char *reason)
+static int jobq_start (struct jobq *q,
+                       bool start,
+                       const char *stop_reason,
+                       bool nocheckpoint)
+{
+    if (start) {
+        q->start = true;
+        if (!nocheckpoint)
+            q->checkpoint_start = true;
+        free (q->stop_reason);
+        q->stop_reason = NULL;
+    }
+    else {
+        char *cpy = NULL;
+        if (stop_reason) {
+            if (!(cpy = strdup (stop_reason)))
+                return -1;
+        }
+        free (q->stop_reason);
+        q->stop_reason = cpy;
+        q->start = false;
+        if (!nocheckpoint)
+            q->checkpoint_start = false;
+    }
+    return 0;
+}
+
+static int jobq_enable_all (struct queue *queue,
+                            bool enable,
+                            const char *disable_reason)
 {
     if (queue->have_named_queues) {
         struct jobq *q = zhashx_first (queue->named);
         while (q) {
-            if (jobq_enable (q, enable, reason) < 0)
+            if (jobq_enable (q, enable, disable_reason) < 0)
                 return -1;
             q = zhashx_next (queue->named);
         }
     }
     else {
-        if (jobq_enable (queue->anon, enable, reason) < 0)
+        if (jobq_enable (queue->anon, enable, disable_reason) < 0)
+            return -1;
+    }
+    return 0;
+}
+
+static int jobq_start_all (struct queue *queue,
+                           bool start,
+                           const char *stop_reason,
+                           bool nocheckpoint)
+{
+    if (queue->have_named_queues) {
+        struct jobq *q = zhashx_first (queue->named);
+        while (q) {
+            if (jobq_start (q, start, stop_reason, nocheckpoint) < 0)
+                return -1;
+            q = zhashx_next (queue->named);
+        }
+    }
+    else {
+        if (jobq_start (queue->anon, start, stop_reason, nocheckpoint) < 0)
             return -1;
     }
     return 0;
@@ -138,30 +202,49 @@ struct jobq *queue_lookup (struct queue *queue,
     }
 }
 
+static int set_string (json_t *o, const char *key, const char *val)
+{
+    json_t *s = json_string (val);
+    if (!s || json_object_set_new (o, key, s) < 0) {
+        json_decref (s);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
 static int queue_save_jobq_append (json_t *a, struct jobq *q)
 {
     json_t *entry;
+    int save_errno;
     if (!q->name)
-        entry = json_pack ("{s:b}", "enable", q->enable);
+        entry = json_pack ("{s:b s:b}",
+                           "enable", q->enable,
+                           "start", q->checkpoint_start);
     else
-        entry = json_pack ("{s:s s:b}", "name", q->name, "enable", q->enable);
+        entry = json_pack ("{s:s s:b s:b}",
+                           "name", q->name,
+                           "enable", q->enable,
+                           "start", q->checkpoint_start);
     if (!entry)
         goto nomem;
     if (!q->enable) {
-        json_t *o = json_string (q->reason);
-        if (!o)
-            goto nomem;
-        if (json_object_set_new (entry, "reason", o) < 0) {
-            json_decref (o);
-            goto nomem;
-        }
+        if (set_string (entry, "disable_reason", q->disable_reason) < 0)
+            goto error;
+    }
+    if (!q->checkpoint_start && q->stop_reason) {
+        if (set_string (entry, "stop_reason", q->stop_reason) < 0)
+            goto error;
     }
     if (json_array_append_new (a, entry) < 0)
         goto nomem;
     return 0;
 nomem:
-    json_decref (entry);
     errno = ENOMEM;
+error:
+    save_errno = errno;
+    json_decref (entry);
+    errno = save_errno;
     return -1;
 }
 
@@ -192,35 +275,88 @@ error:
     return NULL;
 }
 
-int queue_restore_state (struct queue *queue, json_t *o)
+static int restore_state_v0 (struct queue *queue, json_t *entry)
+{
+    const char *name = NULL;
+    const char *reason = NULL;
+    const char *disable_reason = NULL;
+    int enable;
+    struct jobq *q = NULL;
+
+    if (json_unpack (entry,
+                     "{s?s s:b s?s s?s}",
+                     "name", &name,
+                     "enable", &enable,
+                     "reason", &reason,
+                     "disable_reason", &disable_reason) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /* "reason" is backwards compatible field name for "disable_reason" */
+    if (!disable_reason && reason)
+        disable_reason = reason;
+    if (name && queue->have_named_queues)
+        q = zhashx_lookup (queue->named, name);
+    else if (!name && !queue->have_named_queues)
+        q = queue->anon;
+    if (q) {
+        if (jobq_enable (q, enable, disable_reason) < 0)
+            return -1;
+    }
+    return 0;
+}
+
+static int restore_state_v1 (struct queue *queue, json_t *entry)
+{
+    const char *name = NULL;
+    const char *disable_reason = NULL;
+    const char *stop_reason = NULL;
+    int enable;
+    int start;
+    struct jobq *q = NULL;
+
+    if (json_unpack (entry,
+                     "{s?s s:b s?s s:b s?s}",
+                     "name", &name,
+                     "enable", &enable,
+                     "disable_reason", &disable_reason,
+                     "start", &start,
+                     "stop_reason", &stop_reason) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (name && queue->have_named_queues)
+        q = zhashx_lookup (queue->named, name);
+    else if (!name && !queue->have_named_queues)
+        q = queue->anon;
+    if (q) {
+        if (jobq_enable (q, enable, disable_reason) < 0)
+            return -1;
+        if (jobq_start (q, start, stop_reason, false) < 0)
+            return -1;
+    }
+    return 0;
+}
+
+int queue_restore_state (struct queue *queue, int version, json_t *o)
 {
     size_t index;
     json_t *entry;
 
-    if (!o || !json_is_array (o)) {
+    if ((version != 0 && version != 1)
+        || !o
+        || !json_is_array (o)) {
         errno = EINVAL;
         return -1;
     }
     json_array_foreach (o, index, entry) {
-        const char *name = NULL;
-        const char *reason = NULL;
-        int enable;
-        struct jobq *q = NULL;
-
-        if (json_unpack (entry,
-                         "{s?s s:b s?s}",
-                         "name", &name,
-                         "enable", &enable,
-                         "reason", &reason) < 0) {
-            errno = EINVAL;
-            return -1;
+        if (version == 0) {
+            if (restore_state_v0 (queue, entry) < 0)
+                return -1;
         }
-        if (name && queue->have_named_queues)
-            q = zhashx_lookup (queue->named, name);
-        else if (!name && !queue->have_named_queues)
-            q = queue->anon;
-        if (q) {
-            if (jobq_enable (q, enable, reason) < 0)
+        else { /* version == 1 */
+            if (restore_state_v1 (queue, entry) < 0)
                 return -1;
         }
     }
@@ -246,11 +382,29 @@ int queue_submit_check (struct queue *queue,
         errprintf (error, "job submission%s%s is disabled: %s",
                    name ? " to " : "",
                    name ? name : "",
-                   q->reason);
+                   q->disable_reason);
         errno = EINVAL;
         return -1;
     }
     return 0;
+}
+
+bool queue_started (struct queue *queue, struct job *job)
+{
+    if (queue->have_named_queues) {
+        struct jobq *q;
+        if (!job->queue)
+            return false;
+        if (!(q = zhashx_lookup (queue->named, job->queue))) {
+            flux_log (queue->ctx->h, LOG_ERR,
+                      "%s: job %ju invalid queue: %s",
+                      __FUNCTION__, (uintmax_t)job->id, job->queue);
+            return false;
+        }
+        return q->start;
+    }
+
+    return queue->anon->start;
 }
 
 /* N.B. the broker will have already validated the basic queue configuration so
@@ -365,7 +519,9 @@ static void queue_status_cb (flux_t *h,
     const char *errmsg = NULL;
     const char *name = NULL;
     struct jobq *q;
-    int rc;
+    json_t *o = NULL;
+    bool start;
+    const char *stop_reason = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s?s}", "name", &name) < 0)
         goto error;
@@ -374,35 +530,52 @@ static void queue_status_cb (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (q->enable)
-        rc = flux_respond_pack (h, msg, "{s:b}", "enable", 1);
-    else {
-        rc = flux_respond_pack (h,
-                                msg,
-                                "{s:b s:s}",
-                                "enable", 0,
-                                "reason", q->reason);
+    /* If the scheduler is not loaded the queue is considered stopped
+     * with special reason "Scheduler is offline".
+     */
+    if (!alloc_sched_ready (queue->ctx->alloc)) {
+        start = false;
+        stop_reason = "Scheduler is offline";
     }
-    if (rc < 0)
+    else {
+        start = q->start;
+        stop_reason = q->stop_reason;
+    }
+    if (!(o = json_pack ("{s:b s:b}",
+                         "enable", q->enable,
+                         "start", start))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (!q->enable) {
+        if (set_string (o, "disable_reason", q->disable_reason) < 0)
+            goto error;
+    }
+    if (!start && stop_reason) {
+        if (set_string (o, "stop_reason", stop_reason) < 0)
+            goto error;
+    }
+    if (flux_respond_pack (h, msg, "O", o) < 0)
         flux_log_error (h, "error responding to job-manager.queue-status");
+    json_decref (o);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "error responding to job-manager.queue-status");
+    json_decref (o);
 }
 
-static void queue_admin_cb (flux_t *h,
-                            flux_msg_handler_t *mh,
-                            const flux_msg_t *msg,
-                            void *arg)
+static void queue_enable_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     struct queue *queue = arg;
     flux_error_t error;
     const char *errmsg = NULL;
     const char *name = NULL;
     int enable;
-    const char *reason = NULL;
-    struct jobq *q;
+    const char *disable_reason = NULL;
     int all;
 
     if (flux_request_unpack (msg,
@@ -410,10 +583,10 @@ static void queue_admin_cb (flux_t *h,
                              "{s?s s:b s?s s:b}",
                              "name", &name,
                              "enable", &enable,
-                             "reason", &reason,
+                             "reason", &disable_reason,
                              "all", &all) < 0)
         goto error;
-    if (!enable && !reason) {
+    if (!enable && !disable_reason) {
         errmsg = "reason is required for disable";
         errno = EINVAL;
         goto error;
@@ -424,26 +597,127 @@ static void queue_admin_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (queue_enable_all (queue, enable, reason))
+        if (jobq_enable_all (queue, enable, disable_reason))
             goto error;
     }
     else {
+        struct jobq *q;
         if (!(q = queue_lookup (queue, name, &error))) {
             errmsg = error.text;
             errno = EINVAL;
             goto error;
         }
-        if (jobq_enable (q, enable, reason) < 0)
+        if (jobq_enable (q, enable, disable_reason) < 0)
             goto error;
     }
     if (restart_save_state (queue->ctx) < 0)
         flux_log_error (h, "problem saving checkpoint after queue change");
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to job-manager.queue-admin");
+        flux_log_error (h, "error responding to job-manager.queue-enable");
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "error responding to job-manager.queue-admin");
+        flux_log_error (h, "error responding to job-manager.queue-enable");
+}
+
+static int queue_start (struct queue *queue, const char *name)
+{
+    struct job *job = zhashx_first (queue->ctx->active_jobs);
+    while (job) {
+        if (!name || (job->queue && !strcmp (job->queue, name))) {
+            if (!job->alloc_queued
+                && !job->alloc_pending
+                && job->state == FLUX_JOB_STATE_SCHED) {
+                if (alloc_enqueue_alloc_request (queue->ctx->alloc, job) < 0)
+                    return -1;
+                if (alloc_queue_recalc_pending (queue->ctx->alloc) < 0)
+                    return -1;
+            }
+        }
+        job = zhashx_next (queue->ctx->active_jobs);
+    }
+    return 0;
+}
+
+static void queue_stop (struct queue *queue, const char *name)
+{
+    if (alloc_queue_count (queue->ctx->alloc) > 0
+        || alloc_pending_count (queue->ctx->alloc) > 0) {
+        struct job *job = zhashx_first (queue->ctx->active_jobs);
+        while (job) {
+            if (!name || (job->queue && !strcmp (job->queue, name))) {
+                if (job->alloc_queued)
+                    alloc_dequeue_alloc_request (queue->ctx->alloc, job);
+                else if (job->alloc_pending)
+                    alloc_cancel_alloc_request (queue->ctx->alloc, job);
+            }
+            job = zhashx_next (queue->ctx->active_jobs);
+        }
+    }
+}
+
+static void queue_start_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
+{
+    struct queue *queue = arg;
+    flux_error_t error;
+    const char *errmsg = NULL;
+    const char *name = NULL;
+    int start;
+    const char *stop_reason = NULL;
+    int all;
+    int nocheckpoint = 0;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s?s s:b s?s s:b s?b}",
+                             "name", &name,
+                             "start", &start,
+                             "reason", &stop_reason,
+                             "all", &all,
+                             "nocheckpoint", &nocheckpoint) < 0)
+        goto error;
+    if (!name) {
+        if (queue->have_named_queues && !all) {
+            errmsg = "Use --all to apply this command to all queues";
+            errno = EINVAL;
+            goto error;
+        }
+        if (jobq_start_all (queue, start, stop_reason, nocheckpoint))
+            goto error;
+        if (start) {
+            if (queue_start (queue, NULL) < 0)
+                goto error;
+        }
+        else
+            queue_stop (queue, NULL);
+    }
+    else {
+        struct jobq *q;
+        if (!(q = queue_lookup (queue, name, &error))) {
+            errmsg = error.text;
+            errno = EINVAL;
+            goto error;
+        }
+        if (jobq_start (q, start, stop_reason, nocheckpoint) < 0)
+            goto error;
+        if (start) {
+            if (queue_start (queue, name) < 0)
+                goto error;
+        }
+        else
+            queue_stop (queue, name);
+    }
+    if (restart_save_state (queue->ctx) < 0)
+        flux_log_error (h, "problem saving checkpoint after queue change");
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to job-manager.queue-start");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to job-manager.queue-start");
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -461,8 +735,14 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "job-manager.queue-admin",
-        queue_admin_cb,
+        "job-manager.queue-enable",
+        queue_enable_cb,
+        0,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.queue-start",
+        queue_start_cb,
         0,
     },
     FLUX_MSGHANDLER_TABLE_END,

@@ -34,6 +34,10 @@ void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job);
  */
 int alloc_cancel_alloc_request (struct alloc *alloc, struct job *job);
 
+/* Accessor for the count of queued alloc requests.
+ */
+int alloc_queue_count (struct alloc *alloc);
+
 /* Accessor for the count of pending alloc requests.
  */
 int alloc_pending_count (struct alloc *alloc);
@@ -68,6 +72,8 @@ void alloc_disconnect_rpc (flux_t *h,
                            flux_msg_handler_t *mh,
                            const flux_msg_t *msg,
                            void *arg);
+
+bool alloc_sched_ready (struct alloc *alloc);
 
 #endif /* ! _FLUX_JOB_MANAGER_ALLOC_H */
 

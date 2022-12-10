@@ -680,3 +680,4 @@ rf
 ACLs
 SIGBUS
 tmpfs
+nocheckpoint

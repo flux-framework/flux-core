@@ -42,72 +42,67 @@ static int groups_get_count (flux_t *h, const char *name)
     return count;
 }
 
-/* Return true if scheduling is stopped.
- */
-static bool sched_stopped (flux_t *h)
+static void get_queue_status (flux_t *h,
+                              const char *name,
+                              bool *enablep,
+                              bool *startp)
 {
     flux_future_t *f;
-    int start;
-
-    if (!(f = flux_rpc_pack (h,
-                             "job-manager.alloc-admin",
-                             0,
-                             0,
-                             "{s:b s:b}",
-                             "query_only", 1,
-                             "start", 0))
-        || flux_rpc_get_unpack (f, "{s:b}", "start", &start) < 0)
-        log_err_exit ("Error fetching alloc status");
-    flux_future_destroy (f);
-    return start ? false : true;
-}
-
-static bool queue_is_enabled (flux_t *h, const char *name)
-{
-    flux_future_t *f;
-    int enable;
     const char *topic = "job-manager.queue-status";
+    int enable, start;
 
     if (name)
         f = flux_rpc_pack (h, topic, 0, 0, "{s:s}", "name", name);
     else
         f = flux_rpc_pack (h, topic, 0, 0, "{}");
-    if (!f || flux_rpc_get_unpack (f, "{s:b}", "enable", &enable) < 0)
+    if (!f || flux_rpc_get_unpack (f, "{s:b s:b}",
+                                   "enable", &enable,
+                                   "start", &start) < 0)
         log_err_exit ("Error fetching queue status: %s",
                       future_strerror (f, errno));
+    (*enablep) = enable ? true : false;
+    (*startp) = start ? true : false;
     flux_future_destroy (f);
-    return enable ? true : false;
 }
 
-/* Return true if job submission is disabled.
- * If there are multiple queues, return true only if ALL queues are disabled.
+/* Return state of job submission and queue allocation
+ * If there are multiple queues, return true only if ALL queues are
+ * disabled / stopped.
  */
-static bool submit_disabled (flux_t *h)
+static void queue_status (flux_t *h, bool *disabledp, bool *stoppedp)
 {
     flux_future_t *f;
     bool disabled = true;
+    bool stopped = true;
     json_t *queues;
     size_t index;
     json_t *value;
+    bool enable, start;
 
     f = flux_rpc (h, "job-manager.queue-list", NULL, 0, 0);
     if (!f || flux_rpc_get_unpack (f, "{s:o}", "queues", &queues))
         log_msg_exit ("queue-list: %s", future_strerror (f, errno));
     if (json_array_size (queues) > 0) {
         json_array_foreach (queues, index, value) {
-            if (queue_is_enabled (h, json_string_value (value))) {
+            get_queue_status (h, json_string_value (value), &enable, &start);
+            if (enable)
                 disabled = false;
+            if (start)
+                stopped = false;
+            if (!disabled && !stopped)
                 break;
-            }
         }
     }
     else {
-        if (queue_is_enabled (h, NULL))
+        get_queue_status (h, NULL, &enable, &start);
+        if (enable)
             disabled = false;
+        if (start)
+            stopped = false;
     }
     flux_future_destroy (f);
-
-    return disabled;
+    (*disabledp) = disabled;
+    (*stoppedp) = stopped;
 }
 
 /* Each key in the drain object is an idset representing a group
@@ -290,8 +285,7 @@ static void default_summary (flux_t *h)
         duration = t_now - attr_get_starttime (h);
         drained = resource_status_drained (h);
         offline = size - groups_get_count (h, "broker.online");
-        submit_is_disabled = submit_disabled (h);
-        sched_is_stopped = sched_stopped (h);
+        queue_status (h, &submit_is_disabled, &sched_is_stopped);
     }
     if (fsd_format_duration_ex (fsd, sizeof (fsd), duration, 2) < 0)
         log_err_exit ("Error formatting uptime duration");
