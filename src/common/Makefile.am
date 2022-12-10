@@ -84,7 +84,8 @@ fluxlib_LTLIBRARIES = libpmi.la libpmi2.la
 #
 #  ref: https://debbugs.gnu.org/cgi/bugreport.cgi?bug=7328
 #
-install-fluxlibLTLIBRARIES: $(install-libLTLIBRARIES)
+install_fluxlibLTLIBRARIES = install-fluxlibLTLIBRARIES
+$(install_fluxlibLTLIBRARIES): install-libLTLIBRARIES
 
 libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
