@@ -263,11 +263,11 @@ int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size)
             return -1;
         total += n;
     }
-    msg_proto_setup (msg, proto, PROTO_SIZE);
-    if ((n = encode_frame (buf + total,
-                           size - total,
-                           proto,
-                           PROTO_SIZE)) < 0)
+    if (proto_encode (&msg->proto, proto, PROTO_SIZE) < 0
+        || (n = encode_frame (buf + total,
+                              size - total,
+                              proto,
+                              PROTO_SIZE)) < 0)
         return -1;
     total += n;
     return 0;

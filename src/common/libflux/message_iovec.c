@@ -29,32 +29,24 @@ int iovec_to_msg (flux_msg_t *msg,
                   int iovcnt)
 {
     unsigned int index = 0;
-    const uint8_t *proto_data;
-    size_t proto_size;
 
     assert (msg);
     assert (iov);
 
-    if (!iovcnt) {
+    if (iovcnt < 1) {
         errno = EPROTO;
         return -1;
     }
 
     /* proto frame is last frame */
-    proto_data = iov[iovcnt - 1].data;
-    proto_size = iov[iovcnt - 1].size;
-    if (proto_size < PROTO_SIZE
-        || proto_data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-        || proto_data[PROTO_OFF_VERSION] != PROTO_VERSION) {
-        errno = EPROTO;
+    if (proto_decode (&msg->proto,
+                      iov[iovcnt - 1].data,
+                      iov[iovcnt - 1].size) < 0)
         return -1;
-    msg->proto.type = proto_data[PROTO_OFF_TYPE];
     if (!msg_type_is_valid (msg)) {
         errno = EPROTO;
         return -1;
     }
-    msg->proto.flags = proto_data[PROTO_OFF_FLAGS];
-
     if (msg_has_route (msg)) {
         /* On first access index == 0 && iovcnt > 0 guaranteed
          * Re-add check if code changes. */
@@ -100,10 +92,6 @@ int iovec_to_msg (flux_msg_t *msg,
         errno = EPROTO;
         return -1;
     }
-    proto_get_u32 (proto_data, PROTO_IND_USERID, &msg->proto.userid);
-    proto_get_u32 (proto_data, PROTO_IND_ROLEMASK, &msg->proto.rolemask);
-    proto_get_u32 (proto_data, PROTO_IND_AUX1, &msg->proto.aux1);
-    proto_get_u32 (proto_data, PROTO_IND_AUX2, &msg->proto.aux2);
     return 0;
 }
 
@@ -122,6 +110,8 @@ int msg_to_iovec (const flux_msg_t *msg,
         errno = EPROTO;
         return -1;
     }
+    if (proto_encode (&msg->proto, proto, proto_len) < 0)
+        return -1;
 
     if ((frame_count = flux_msg_frames (msg)) < 0)
         return -1;
@@ -133,8 +123,6 @@ int msg_to_iovec (const flux_msg_t *msg,
 
     index = frame_count - 1;
 
-    assert (proto_len >= PROTO_SIZE);
-    msg_proto_setup (msg, proto, proto_len);
     iov[index].data = proto;
     iov[index].size = PROTO_SIZE;
     if (msg_has_payload (msg)) {
