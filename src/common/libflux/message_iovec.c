@@ -49,17 +49,17 @@ int iovec_to_msg (flux_msg_t *msg,
         errno = EPROTO;
         return -1;
     }
-    msg->type = proto_data[PROTO_OFF_TYPE];
-    if (msg->type != FLUX_MSGTYPE_REQUEST
-        && msg->type != FLUX_MSGTYPE_RESPONSE
-        && msg->type != FLUX_MSGTYPE_EVENT
-        && msg->type != FLUX_MSGTYPE_CONTROL) {
+    msg->proto.type = proto_data[PROTO_OFF_TYPE];
+    if (msg->proto.type != FLUX_MSGTYPE_REQUEST
+        && msg->proto.type != FLUX_MSGTYPE_RESPONSE
+        && msg->proto.type != FLUX_MSGTYPE_EVENT
+        && msg->proto.type != FLUX_MSGTYPE_CONTROL) {
         errno = EPROTO;
         return -1;
     }
-    msg->flags = proto_data[PROTO_OFF_FLAGS];
+    msg->proto.flags = proto_data[PROTO_OFF_FLAGS];
 
-    if ((msg->flags & FLUX_MSGFLAG_ROUTE)) {
+    if ((msg->proto.flags & FLUX_MSGFLAG_ROUTE)) {
         /* On first access index == 0 && iovcnt > 0 guaranteed
          * Re-add check if code changes. */
         /* if (index == iovcnt) { */
@@ -76,7 +76,7 @@ int iovec_to_msg (flux_msg_t *msg,
         if (index < iovcnt)
             index++;
     }
-    if ((msg->flags & FLUX_MSGFLAG_TOPIC)) {
+    if ((msg->proto.flags & FLUX_MSGFLAG_TOPIC)) {
         if (index == iovcnt) {
             errno = EPROTO;
             return -1;
@@ -87,7 +87,7 @@ int iovec_to_msg (flux_msg_t *msg,
         if (index < iovcnt)
             index++;
     }
-    if ((msg->flags & FLUX_MSGFLAG_PAYLOAD)) {
+    if ((msg->proto.flags & FLUX_MSGFLAG_PAYLOAD)) {
         if (index == iovcnt) {
             errno = EPROTO;
             return -1;
@@ -104,10 +104,10 @@ int iovec_to_msg (flux_msg_t *msg,
         errno = EPROTO;
         return -1;
     }
-    proto_get_u32 (proto_data, PROTO_IND_USERID, &msg->userid);
-    proto_get_u32 (proto_data, PROTO_IND_ROLEMASK, &msg->rolemask);
-    proto_get_u32 (proto_data, PROTO_IND_AUX1, &msg->aux1);
-    proto_get_u32 (proto_data, PROTO_IND_AUX2, &msg->aux2);
+    proto_get_u32 (proto_data, PROTO_IND_USERID, &msg->proto.userid);
+    proto_get_u32 (proto_data, PROTO_IND_ROLEMASK, &msg->proto.rolemask);
+    proto_get_u32 (proto_data, PROTO_IND_AUX1, &msg->proto.aux1);
+    proto_get_u32 (proto_data, PROTO_IND_AUX2, &msg->proto.aux2);
     return 0;
 }
 
@@ -122,7 +122,7 @@ int msg_to_iovec (const flux_msg_t *msg,
     int frame_count;
 
     /* msg never completed initial setup */
-    if (msg->type == FLUX_MSGTYPE_ANY) {
+    if (msg->proto.type == FLUX_MSGTYPE_ANY) {
         errno = EPROTO;
         return -1;
     }
@@ -141,19 +141,19 @@ int msg_to_iovec (const flux_msg_t *msg,
     msg_proto_setup (msg, proto, proto_len);
     iov[index].data = proto;
     iov[index].size = PROTO_SIZE;
-    if (msg->flags & FLUX_MSGFLAG_PAYLOAD) {
+    if (msg->proto.flags & FLUX_MSGFLAG_PAYLOAD) {
         index--;
         assert (index >= 0);
         iov[index].data = msg->payload;
         iov[index].size = msg->payload_size;
     }
-    if (msg->flags & FLUX_MSGFLAG_TOPIC) {
+    if (msg->proto.flags & FLUX_MSGFLAG_TOPIC) {
         index--;
         assert (index >= 0);
         iov[index].data = msg->topic;
         iov[index].size = strlen (msg->topic);
     }
-    if (msg->flags & FLUX_MSGFLAG_ROUTE) {
+    if (msg->proto.flags & FLUX_MSGFLAG_ROUTE) {
         struct route_id *r = NULL;
         /* delimeter */
         index--;

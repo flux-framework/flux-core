@@ -45,6 +45,25 @@
 #define PROTO_U32_COUNT     4
 #define PROTO_SIZE          4 + (PROTO_U32_COUNT * 4)
 
+struct proto {
+    uint8_t type;
+    uint8_t flags;
+    uint32_t userid;
+    uint32_t rolemask;
+    union {
+        uint32_t nodeid;  // request
+        uint32_t sequence; // event
+        uint32_t errnum; // response
+        uint32_t control_type; // control
+        uint32_t aux1; // common accessor
+    };
+    union {
+        uint32_t matchtag; // request, response
+        uint32_t control_status; // control
+        uint32_t aux2; // common accessor
+    };
+};
+
 void msg_proto_setup (const flux_msg_t *msg, uint8_t *data, int len);
 
 void proto_get_u32 (const uint8_t *data, int index, uint32_t *val);

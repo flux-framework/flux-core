@@ -32,16 +32,16 @@ static void proto_set_u32 (uint8_t *data, int index, uint32_t val)
 void msg_proto_setup (const flux_msg_t *msg, uint8_t *data, int len)
 {
     assert (len >= PROTO_SIZE);
-    assert (msg->type != FLUX_MSGTYPE_ANY);
+    assert (msg->proto.type != FLUX_MSGTYPE_ANY);
     memset (data, 0, len);
     data[PROTO_OFF_MAGIC] = PROTO_MAGIC;
     data[PROTO_OFF_VERSION] = PROTO_VERSION;
-    data[PROTO_OFF_TYPE] = msg->type;
-    data[PROTO_OFF_FLAGS] = msg->flags;
-    proto_set_u32 (data, PROTO_IND_USERID, msg->userid);
-    proto_set_u32 (data, PROTO_IND_ROLEMASK, msg->rolemask);
-    proto_set_u32 (data, PROTO_IND_AUX1, msg->aux1);
-    proto_set_u32 (data, PROTO_IND_AUX2, msg->aux2);
+    data[PROTO_OFF_TYPE] = msg->proto.type;
+    data[PROTO_OFF_FLAGS] = msg->proto.flags;
+    proto_set_u32 (data, PROTO_IND_USERID, msg->proto.userid);
+    proto_set_u32 (data, PROTO_IND_ROLEMASK, msg->proto.rolemask);
+    proto_set_u32 (data, PROTO_IND_AUX1, msg->proto.aux1);
+    proto_set_u32 (data, PROTO_IND_AUX2, msg->proto.aux2);
 }
 
 void proto_get_u32 (const uint8_t *data, int index, uint32_t *val)

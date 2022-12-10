@@ -20,6 +20,8 @@
 #endif
 #include "src/common/libccan/ccan/list/list.h"
 
+#include "message_proto.h"
+
 struct flux_msg {
     // optional route list, if FLUX_MSGFLAG_ROUTE
     struct list_head routes;
@@ -33,22 +35,7 @@ struct flux_msg {
     size_t payload_size;
 
     // required proto frame data
-    uint8_t type;
-    uint8_t flags;
-    uint32_t userid;
-    uint32_t rolemask;
-    union {
-        uint32_t nodeid;  // request
-        uint32_t sequence; // event
-        uint32_t errnum; // response
-        uint32_t control_type; // control
-        uint32_t aux1; // common accessor
-    };
-    union {
-        uint32_t matchtag; // request, response
-        uint32_t control_status; // control
-        uint32_t aux2; // common accessor
-    };
+    struct proto proto;
 
     json_t *json;
     char *lasterr;

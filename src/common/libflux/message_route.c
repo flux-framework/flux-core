@@ -60,7 +60,7 @@ int msg_route_append (flux_msg_t *msg,
 {
     struct route_id *r;
     assert (msg);
-    assert ((msg->flags & FLUX_MSGFLAG_ROUTE));
+    assert ((msg->proto.flags & FLUX_MSGFLAG_ROUTE));
     assert (id);
     if (!(r = route_id_create (id, id_len)))
         return -1;
@@ -73,7 +73,7 @@ void msg_route_clear (flux_msg_t *msg)
 {
     struct route_id *r;
     assert (msg);
-    assert ((msg->flags & FLUX_MSGFLAG_ROUTE));
+    assert ((msg->proto.flags & FLUX_MSGFLAG_ROUTE));
     while ((r = list_pop (&msg->routes, struct route_id, route_id_node)))
         route_id_destroy (r);
     list_head_init (&msg->routes);
@@ -84,7 +84,7 @@ int msg_route_delete_last (flux_msg_t *msg)
 {
     struct route_id *r;
     assert (msg);
-    assert ((msg->flags & FLUX_MSGFLAG_ROUTE));
+    assert ((msg->proto.flags & FLUX_MSGFLAG_ROUTE));
     if ((r = list_pop (&msg->routes, struct route_id, route_id_node))) {
         route_id_destroy (r);
         msg->routes_len--;
