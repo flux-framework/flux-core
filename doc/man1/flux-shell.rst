@@ -324,19 +324,27 @@ options are supported by the builtin plugins of ``flux-shell``:
   Copy files to $FLUX_JOB_TMPDIR that were previously mapped using
   :man1:`flux-filemap`.
 
-**stage-in.tags**
-  Select files to copy by specifying their tags.  By default the ``main``
-  tag is used.
+**stage-in.tags**\ =\ *LIST*
+  Select files to copy by specifying a comma-separated list of tags.
+  If no tags are specified, the ``main`` tag is assumed.
 
-**stage-in.pattern**
+**stage-in.pattern**\ =\ *PATTERN*
   Further filter the selected files to copy using a :man7:`glob` pattern.
 
-**stage-in.destdir**
-  Copy files to the specified directory instead of $FLUX_JOB_TMPDIR.  Careful!
-  The $FLUX_JOB_TMPDIR is cleaned up when the job exits, is guaranteed to
-  be unique, and is generally on fast local storage.  Make sure ``destdir``
-  does not specify a network file system or a shared directory without
-  considering the ramifications.
+**stage-in.destination**\ =\ *[SCOPE:]PATH*
+  Copy files to the specified destination instead of $FLUX_JOB_TMPDIR.
+  The argument is a directory with optional *scope* prefix.  A scope of
+  ``local`` denotes a local file system (the default), and a scope of
+  ``global`` denotes a global file system.  The copy takes place on all the
+  job's nodes if the scope is local, versus only the first node of the
+  job if the scope is global.
+
+.. warning::
+  The $FLUX_JOB_TMPDIR is cleaned up when the job ends, is guaranteed to
+  be unique, and is generally on fast local storage such as a *tmpfs*.
+  If a destination is explicitly specified, use the ``global:`` prefix
+  where appropriate to avoid overwhelming a shared file system, and be sure
+  to clean up.
 
 SHELL INITRC
 ============
