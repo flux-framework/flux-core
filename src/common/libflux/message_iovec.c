@@ -55,7 +55,7 @@ int iovec_to_msg (flux_msg_t *msg,
     }
     msg->proto.flags = proto_data[PROTO_OFF_FLAGS];
 
-    if ((msg->proto.flags & FLUX_MSGFLAG_ROUTE)) {
+    if (msg_has_route (msg)) {
         /* On first access index == 0 && iovcnt > 0 guaranteed
          * Re-add check if code changes. */
         /* if (index == iovcnt) { */
@@ -72,7 +72,7 @@ int iovec_to_msg (flux_msg_t *msg,
         if (index < iovcnt)
             index++;
     }
-    if ((msg->proto.flags & FLUX_MSGFLAG_TOPIC)) {
+    if (msg_has_topic (msg)) {
         if (index == iovcnt) {
             errno = EPROTO;
             return -1;
@@ -83,7 +83,7 @@ int iovec_to_msg (flux_msg_t *msg,
         if (index < iovcnt)
             index++;
     }
-    if ((msg->proto.flags & FLUX_MSGFLAG_PAYLOAD)) {
+    if (msg_has_payload (msg)) {
         if (index == iovcnt) {
             errno = EPROTO;
             return -1;
@@ -137,19 +137,19 @@ int msg_to_iovec (const flux_msg_t *msg,
     msg_proto_setup (msg, proto, proto_len);
     iov[index].data = proto;
     iov[index].size = PROTO_SIZE;
-    if (msg->proto.flags & FLUX_MSGFLAG_PAYLOAD) {
+    if (msg_has_payload (msg)) {
         index--;
         assert (index >= 0);
         iov[index].data = msg->payload;
         iov[index].size = msg->payload_size;
     }
-    if (msg->proto.flags & FLUX_MSGFLAG_TOPIC) {
+    if (msg_has_topic (msg)) {
         index--;
         assert (index >= 0);
         iov[index].data = msg->topic;
         iov[index].size = strlen (msg->topic);
     }
-    if (msg->proto.flags & FLUX_MSGFLAG_ROUTE) {
+    if (msg_has_route (msg)) {
         struct route_id *r = NULL;
         /* delimeter */
         index--;

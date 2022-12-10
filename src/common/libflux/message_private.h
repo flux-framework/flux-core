@@ -54,6 +54,26 @@ struct flux_msg {
 #define msg_is_event(msg)       (msg_typeof(msg) == FLUX_MSGTYPE_EVENT)
 #define msg_is_control(msg)     (msg_typeof(msg) == FLUX_MSGTYPE_CONTROL)
 
+#define msg_has_flag(msg,flag)  ((msg)->proto.flags & (flag))
+#define msg_set_flag(msg,flag)  ((msg)->proto.flags |= (flag))
+#define msg_clear_flag(msg,flag) \
+                                ((msg)->proto.flags &= ~(flag))
+#define msg_has_topic(msg)      (msg_has_flag(msg, FLUX_MSGFLAG_TOPIC))
+#define msg_has_payload(msg)    (msg_has_flag(msg, FLUX_MSGFLAG_PAYLOAD))
+#define msg_has_noresponse(msg) (msg_has_flag(msg, FLUX_MSGFLAG_NORESPONSE))
+#define msg_has_route(msg)      (msg_has_flag(msg, FLUX_MSGFLAG_ROUTE))
+#define msg_has_upstream(msg)   (msg_has_flag(msg, FLUX_MSGFLAG_UPSTREAM))
+#define msg_has_private(msg)    (msg_has_flag(msg, FLUX_MSGFLAG_PRIVATE))
+#define msg_has_streaming(msg)  (msg_has_flag(msg, FLUX_MSGFLAG_STREAMING))
+#define msg_has_user1(msg)      (msg_has_flag(msg, FLUX_MSGFLAG_USER1))
+
+#define msgflags_is_valid(fl) \
+    (((fl) & ~(FLUX_MSGFLAG_TOPIC | FLUX_MSGFLAG_PAYLOAD | FLUX_MSGFLAG_ROUTE \
+     | FLUX_MSGFLAG_UPSTREAM | FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING \
+     | FLUX_MSGFLAG_NORESPONSE | FLUX_MSGFLAG_USER1)) == 0 \
+     && !(((fl) & FLUX_MSGFLAG_NORESPONSE) && ((fl) & FLUX_MSGFLAG_STREAMING)))
+#define msg_flags_is_valid(msg) (msgflags_is_valid ((msg)->proto.flags))
+
 #endif /* !_FLUX_CORE_MESSAGE_PRIVATE_H */
 
 /*
