@@ -74,9 +74,29 @@ test_expect_success 'verify that stage-in.destination works' '
 	    /bin/true &&
 	test -f testdest/main/hello
 '
+test_expect_success 'verify that stage-in.destination=local:path works' '
+	rm -rf testdest/main &&
+	flux mini run -N1 \
+	    -o stage-in.destination=local:$(pwd)/testdest \
+	    /bin/true &&
+	test -f testdest/main/hello
+'
+test_expect_success 'verify that stage-in.destination=global:path works' '
+	rm -rf testdest/main &&
+	flux mini run -N2 \
+	    -o stage-in.destination=global:$(pwd)/testdest \
+	    /bin/true &&
+	test -f testdest/main/hello
+'
 test_expect_success 'verify that stage-in.destination fails on bad dir' '
 	test_must_fail flux mini run -N1 \
 	    -o stage-in.destination=/noexist \
+	    /bin/true
+'
+test_expect_success 'verify that stage-in.destination fails on bad prefix' '
+	rm -rf testdest/main &&
+	test_must_fail flux mini run -N1 \
+	    -o stage-in.destination=wrong:$(pwd)/testdest \
 	    /bin/true
 '
 test_expect_success 'unmap all' '
