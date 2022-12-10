@@ -414,6 +414,8 @@ static int stage_in (flux_shell_t *shell, json_t *config)
 {
     struct stage_in ctx;
     const char *tags = NULL;
+    const char *destination = NULL;
+    bool leader_only = false;
 
     memset (&ctx, 0, sizeof (ctx));
     ctx.h = shell->h;
@@ -423,7 +425,7 @@ static int stage_in (flux_shell_t *shell, json_t *config)
                          "{s?s s?s s?s s?i}",
                          "tags", &tags,
                          "pattern", &ctx.pattern,
-                         "destdir", &ctx.destdir,
+                         "destination", &destination,
                          "direct", &ctx.direct)) {
             shell_log_error ("Error parsing stage_in shell option");
             goto error;
@@ -433,6 +435,20 @@ static int stage_in (flux_shell_t *shell, json_t *config)
         shell_log_error ("Error parsing stage_in.tags shell option");
         goto error;
     }
+    if (destination) {
+        if (strncmp (destination, "local:", 6) == 0)
+            ctx.destdir = destination + 6;
+        else if (strncmp (destination, "global:", 7) == 0) {
+            ctx.destdir = destination + 7;
+            leader_only = true;
+        }
+        else if (strchr (destination, ':') == NULL)
+            ctx.destdir = destination;
+        else {
+            shell_log_error ("destination prefix must be local: or global:");
+            goto error;
+        }
+    }
     if (!ctx.destdir) {
         ctx.destdir = flux_shell_getenv (shell, "FLUX_JOB_TMPDIR");
         if (!ctx.destdir) {
@@ -440,8 +456,10 @@ static int stage_in (flux_shell_t *shell, json_t *config)
             goto error;
         }
     }
-    if (extract_files (&ctx) < 0)
-        goto error;
+    if (shell->info->shell_rank == 0 || leader_only == false) {
+        if (extract_files (&ctx) < 0)
+            goto error;
+    }
 
     json_decref (ctx.tags);
     return 0;
