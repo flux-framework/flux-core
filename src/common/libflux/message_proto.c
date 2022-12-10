@@ -32,7 +32,7 @@ static void proto_set_u32 (uint8_t *data, int index, uint32_t val)
 void msg_proto_setup (const flux_msg_t *msg, uint8_t *data, int len)
 {
     assert (len >= PROTO_SIZE);
-    assert (msg->proto.type != FLUX_MSGTYPE_ANY);
+    assert (msg_type_is_valid (msg));
     memset (data, 0, len);
     data[PROTO_OFF_MAGIC] = PROTO_MAGIC;
     data[PROTO_OFF_VERSION] = PROTO_VERSION;

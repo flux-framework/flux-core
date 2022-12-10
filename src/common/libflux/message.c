@@ -59,7 +59,7 @@ static int msg_validate (const flux_msg_t *msg)
 
 static void msg_setup_type (flux_msg_t *msg)
 {
-    switch (msg->proto.type) {
+    switch (msg_typeof (msg)) {
         case FLUX_MSGTYPE_REQUEST:
             msg->proto.nodeid = FLUX_NODEID_ANY;
             msg->proto.matchtag = FLUX_MATCHTAG_NONE;
@@ -83,11 +83,7 @@ flux_msg_t *flux_msg_create (int type)
 {
     flux_msg_t *msg;
 
-    if (type != FLUX_MSGTYPE_REQUEST
-        && type != FLUX_MSGTYPE_RESPONSE
-        && type != FLUX_MSGTYPE_EVENT
-        && type != FLUX_MSGTYPE_CONTROL
-        && type != FLUX_MSGTYPE_ANY) {
+    if (!msgtype_is_valid (type) && type != FLUX_MSGTYPE_ANY) {
         errno = EINVAL;
         return NULL;
     }
@@ -96,7 +92,7 @@ flux_msg_t *flux_msg_create (int type)
         return NULL;
     list_head_init (&msg->routes);
     msg->proto.type = type;
-    if (msg->proto.type != FLUX_MSGTYPE_ANY)
+    if (msg_type_is_valid (msg))
         msg_setup_type (msg);
     msg->proto.userid = FLUX_USERID_UNKNOWN;
     msg->proto.rolemask = FLUX_ROLE_NONE;
@@ -229,7 +225,7 @@ int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size)
     if (msg_validate (msg) < 0)
         return -1;
     /* msg never completed initial setup */
-    if (msg->proto.type == FLUX_MSGTYPE_ANY) {
+    if (!msg_type_is_valid (msg)) {
         errno = EPROTO;
         return -1;
     }
@@ -327,10 +323,7 @@ int flux_msg_set_type (flux_msg_t *msg, int type)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (type != FLUX_MSGTYPE_REQUEST
-        && type != FLUX_MSGTYPE_RESPONSE
-        && type != FLUX_MSGTYPE_EVENT
-        && type != FLUX_MSGTYPE_CONTROL) {
+    if (!msgtype_is_valid (type)) {
         errno = EINVAL;
         return -1;
     }
@@ -344,7 +337,7 @@ int flux_msg_get_type (const flux_msg_t *msg, int *type)
     if (msg_validate (msg) < 0)
         return -1;
     if (type)
-        *type = msg->proto.type;
+        *type = msg_typeof (msg);
     return 0;
 }
 
@@ -533,7 +526,7 @@ int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid)
         return -1;
     if (nodeid == FLUX_NODEID_UPSTREAM) /* should have been resolved earlier */
         goto error;
-    if (msg->proto.type != FLUX_MSGTYPE_REQUEST)
+    if (!msg_is_request (msg))
         goto error;
     msg->proto.nodeid = nodeid;
     return 0;
@@ -546,7 +539,7 @@ int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->proto.type != FLUX_MSGTYPE_REQUEST) {
+    if (!msg_is_request (msg)) {
         errno = EPROTO;
         return -1;
     }
@@ -559,7 +552,7 @@ int flux_msg_set_errnum (flux_msg_t *msg, int errnum)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->proto.type != FLUX_MSGTYPE_RESPONSE) {
+    if (!msg_is_response (msg)) {
         errno = EINVAL;
         return -1;
     }
@@ -571,7 +564,7 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *errnum)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->proto.type != FLUX_MSGTYPE_RESPONSE) {
+    if (!msg_is_response (msg)) {
         errno = EPROTO;
         return -1;
     }
@@ -584,7 +577,7 @@ int flux_msg_set_seq (flux_msg_t *msg, uint32_t seq)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->proto.type != FLUX_MSGTYPE_EVENT) {
+    if (!msg_is_event (msg)) {
         errno = EINVAL;
         return -1;
     }
@@ -596,7 +589,7 @@ int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->proto.type != FLUX_MSGTYPE_EVENT) {
+    if (!(msg_is_event (msg))) {
         errno = EPROTO;
         return -1;
     }
@@ -609,8 +602,7 @@ int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t matchtag)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->proto.type != FLUX_MSGTYPE_REQUEST
-        && msg->proto.type != FLUX_MSGTYPE_RESPONSE) {
+    if (!msg_is_request (msg) && !msg_is_response (msg)) {
         errno = EINVAL;
         return -1;
     }
@@ -622,8 +614,7 @@ int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *matchtag)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->proto.type != FLUX_MSGTYPE_REQUEST
-        && msg->proto.type != FLUX_MSGTYPE_RESPONSE) {
+    if (!msg_is_request (msg) && !msg_is_response (msg)) {
         errno = EPROTO;
         return -1;
     }
@@ -636,7 +627,7 @@ int flux_msg_set_control (flux_msg_t *msg, int type, int status)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->proto.type != FLUX_MSGTYPE_CONTROL) {
+    if (!msg_is_control (msg)) {
         errno = EINVAL;
         return -1;
     }
@@ -649,7 +640,7 @@ int flux_msg_get_control (const flux_msg_t *msg, int *type, int *status)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->proto.type != FLUX_MSGTYPE_CONTROL) {
+    if (!msg_is_control (msg)) {
         errno = EPROTO;
         return -1;
     }
@@ -1321,7 +1312,7 @@ void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp)
         fprintf (f, "unref");
         return;
     }
-    prefix = type2prefix (msg->proto.type);
+    prefix = type2prefix (msg_typeof (msg));
     /* Timestamp
      */
     if (timestamp >= 0.)
@@ -1337,7 +1328,7 @@ void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp)
     rolemask2str (msg->proto.rolemask, rolemaskstr, sizeof (rolemaskstr));
     fprintf (f, "%s flags=%s userid=%s rolemask=%s ",
              prefix, flagsstr, useridstr, rolemaskstr);
-    switch (msg->proto.type) {
+    switch (msg_typeof (msg)) {
         case FLUX_MSGTYPE_REQUEST:
             nodeid2str (msg->proto.nodeid, nodeidstr, sizeof (nodeidstr));
             fprintf (f, "nodeid=%s matchtag=%u\n",

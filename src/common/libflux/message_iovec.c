@@ -48,12 +48,8 @@ int iovec_to_msg (flux_msg_t *msg,
         || proto_data[PROTO_OFF_VERSION] != PROTO_VERSION) {
         errno = EPROTO;
         return -1;
-    }
     msg->proto.type = proto_data[PROTO_OFF_TYPE];
-    if (msg->proto.type != FLUX_MSGTYPE_REQUEST
-        && msg->proto.type != FLUX_MSGTYPE_RESPONSE
-        && msg->proto.type != FLUX_MSGTYPE_EVENT
-        && msg->proto.type != FLUX_MSGTYPE_CONTROL) {
+    if (!msg_type_is_valid (msg)) {
         errno = EPROTO;
         return -1;
     }
@@ -122,7 +118,7 @@ int msg_to_iovec (const flux_msg_t *msg,
     int frame_count;
 
     /* msg never completed initial setup */
-    if (msg->proto.type == FLUX_MSGTYPE_ANY) {
+    if (!msg_type_is_valid (msg)) {
         errno = EPROTO;
         return -1;
     }

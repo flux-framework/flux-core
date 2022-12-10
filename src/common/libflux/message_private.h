@@ -43,6 +43,17 @@ struct flux_msg {
     int refcount;
 };
 
+#define msgtype_is_valid(tp) \
+    ((tp) == FLUX_MSGTYPE_REQUEST || (tp) == FLUX_MSGTYPE_RESPONSE \
+     || (tp) == FLUX_MSGTYPE_EVENT || (tp) == FLUX_MSGTYPE_CONTROL)
+
+#define msg_typeof(msg)         ((msg)->proto.type)
+#define msg_type_is_valid(msg)  (msgtype_is_valid (msg_typeof (msg)))
+#define msg_is_request(msg)     (msg_typeof(msg) == FLUX_MSGTYPE_REQUEST)
+#define msg_is_response(msg)    (msg_typeof(msg) == FLUX_MSGTYPE_RESPONSE)
+#define msg_is_event(msg)       (msg_typeof(msg) == FLUX_MSGTYPE_EVENT)
+#define msg_is_control(msg)     (msg_typeof(msg) == FLUX_MSGTYPE_CONTROL)
+
 #endif /* !_FLUX_CORE_MESSAGE_PRIVATE_H */
 
 /*
