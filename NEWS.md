@@ -1,3 +1,52 @@
+flux-core version 0.46.0 - 2022-12-10
+-------------------------------------
+
+## New Features
+ * job-manager: support start / stop of individual queues (#4776)
+ * add file broadcast toolset (#4789, #4818)
+ * flux-pmi: add installed PMI test tool (#4817)
+ * flux-mini: add --cwd option (#4811)
+ * add flux start --recovery (#4783)
+ * support cyclic, manual job taskmaps and `flux job taskmap` command (#4772)
+ * shell: remove `pmi.clique` option, add `pmi.nomap` (#4785)
+ * libtaskmap: support RFC 34 unknown task maps (#4788)
+ * python: add `flux.job.get_job` (#4761)
+ * allow guests to access flux configuration (#4766)
+ * job-list: add inactive purge count to job-list stats (#4756)
+ * shell: allow users to map specific cpus to tasks with `map` cpu-affinity
+   option (#4819)
+
+## Fixes
+ * broker: fix startup failure when broker.mapping is not set (#4781)
+ * encode broker.mapping as RFC 34 taskmap, drop unused pmi clique helper
+   code (#4787)
+ * add missing taskmap pkg-config file (#4782)
+ * broker: fix potential crash after sending SIGKILL to job-manager prolog
+   (#4793)
+ * broker: improve detection of interactive shells (#4795)
+ * flux-job: remove `finish_mpir_interface()` (#4808)
+ * libhostlist: fix 8K limit on encoded hostlists (#4803)
+ * add flux.taskmap to PMI kvs for better cyclic task distribution
+   scalability (#4798)
+ * job-manager: fix memory corruption due to json reference counting bug
+   (#4773)
+ * python: by default return all attrs in job listing functions (#4762)
+ * shell: rlimit: improve handling of limits over hard limit (#4752)
+
+## Cleanup
+ * cleanup: remove some unused functions (#4806)
+ * job-manager: use allocation terms consistently (#4775)
+ * content: cleanup and minor tooling updates (#4770)
+
+## Testsuite/CI/Development
+ * testsuite: add flux job raise/cancel/kill tests (#4747)
+ * github: fix automated tag release action (#4755)
+ * Vscode setup (#4683)
+ * ci: revert to ubuntu-20.04 for workflow jobs that fail on ubuntu-latest
+   (#4794)
+ * testsuite: fix several corner cases in t0029-filemap-cmd (#4812)
+
+
 flux-core version 0.45.0 - 2022-11-01
 -------------------------------------
 
