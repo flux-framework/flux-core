@@ -1,3 +1,13 @@
+flux-core version 0.46.1 - 2022-12-11
+-------------------------------------
+
+## Fixes
+ * build: fix installation of libpmi.so (#4824)
+ * testsuite: fix failure on a system with fully-qualified hostname (#4825)
+
+## Cleanup
+ * libflux/message: cleanup with macros and CCAN pushpull class (#4823)
+
 flux-core version 0.46.0 - 2022-12-10
 -------------------------------------
 
