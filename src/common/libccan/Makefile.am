@@ -10,6 +10,11 @@ AM_CPPFLAGS =
 noinst_LTLIBRARIES = libccan.la
 libccan_la_SOURCES = \
 	ccan/check_type/check_type.h \
+	ccan/pushpull/pull.c \
+	ccan/pushpull/pull.h \
+	ccan/pushpull/push.c \
+	ccan/pushpull/push.h \
+	ccan/pushpull/pushpull.h \
 	ccan/str/str.c \
 	ccan/str/debug.c \
 	ccan/str/str.h \

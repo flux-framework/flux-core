@@ -8,51 +8,72 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* message_proto.c - marshal RFC 3 PROTO frame */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
 #include <errno.h>
-#include <stdbool.h>
-#include <string.h>
-#include <arpa/inet.h>
-#include <assert.h>
-#include <inttypes.h>
 
-#include "message.h"
-#include "message_private.h"
+#include "ccan/pushpull/pushpull.h"
+
 #include "message_proto.h"
 
-static void proto_set_u32 (uint8_t *data, int index, uint32_t val)
-{
-    uint32_t x = htonl (val);
-    int offset = PROTO_OFF_U32_ARRAY + index * 4;
-    memcpy (&data[offset], &x, sizeof (x));
-}
-
-void msg_proto_setup (const flux_msg_t *msg, uint8_t *data, int len)
-{
-    assert (len >= PROTO_SIZE);
-    assert (msg->type != FLUX_MSGTYPE_ANY);
-    memset (data, 0, len);
-    data[PROTO_OFF_MAGIC] = PROTO_MAGIC;
-    data[PROTO_OFF_VERSION] = PROTO_VERSION;
-    data[PROTO_OFF_TYPE] = msg->type;
-    data[PROTO_OFF_FLAGS] = msg->flags;
-    proto_set_u32 (data, PROTO_IND_USERID, msg->userid);
-    proto_set_u32 (data, PROTO_IND_ROLEMASK, msg->rolemask);
-    proto_set_u32 (data, PROTO_IND_AUX1, msg->aux1);
-    proto_set_u32 (data, PROTO_IND_AUX2, msg->aux2);
-}
-
-void proto_get_u32 (const uint8_t *data, int index, uint32_t *val)
-{
-    uint32_t x;
-    int offset = PROTO_OFF_U32_ARRAY + index * 4;
-    memcpy (&x, &data[offset], sizeof (x));
-    *val = ntohl (x);
-}
-
-/*
- * vi:tabstop=4 shiftwidth=4 expandtab
+/* Realloc(3) replacement for push() that simply returns the pointer, unless
+ * the requested length exceeds the fixed size of an encoded proto frame.
+ * It assumes proto_encode() has received a static buffer >= PROTO_SIZE.
  */
+static void *proto_realloc (void *ptr, size_t len)
+{
+    if (len > PROTO_SIZE)
+        return NULL;
+    return ptr;
+}
 
+int proto_encode (const struct proto *proto, void *buf, size_t size)
+{
+    char *cp = buf;
+    size_t len = 0;
+
+    push_set_realloc (proto_realloc);
+
+    if (size < PROTO_SIZE
+        || !push_u8 (&cp, &len, PROTO_MAGIC)
+        || !push_u8 (&cp, &len, PROTO_VERSION)
+        || !push_u8 (&cp, &len, proto->type)
+        || !push_u8 (&cp, &len, proto->flags)
+        || !push_u32 (&cp, &len, proto->userid)
+        || !push_u32 (&cp, &len, proto->rolemask)
+        || !push_u32 (&cp, &len, proto->aux1)
+        || !push_u32 (&cp, &len, proto->aux2)
+        || len < size) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int proto_decode (struct proto *proto, const void *buf, size_t size)
+{
+    const char *cp = buf;
+    size_t len = size;
+    uint8_t magic, version;
+
+    if (!pull_u8 (&cp, &len, &magic)
+        || magic != PROTO_MAGIC
+        || !pull_u8 (&cp, &len, &version)
+        || version != PROTO_VERSION
+        || !pull_u8 (&cp, &len, &proto->type)
+        || !pull_u8 (&cp, &len, &proto->flags)
+        || !pull_u32 (&cp, &len, &proto->userid)
+        || !pull_u32 (&cp, &len, &proto->rolemask)
+        || !pull_u32 (&cp, &len, &proto->aux1)
+        || !pull_u32 (&cp, &len, &proto->aux2)
+        || len > 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+// vi:ts=4 sw=4 expandtab
