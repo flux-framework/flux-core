@@ -31,7 +31,7 @@ test_expect_success 'flux job taskmap works' '
 	test "$(flux job taskmap --taskids=0 $id)" = "0-3" &&
 	test "$(flux job taskmap --ntasks=0 $id)" = "4" &&
 	test "$(flux job taskmap --nodeid=15 $id)" = "3" &&
-	test "$(flux job taskmap --hostname=0 $id)" = "$(hostname -s)" &&
+	test "$(flux job taskmap --hostname=0 $id)" = "$(hostname)" &&
 	test "$(flux job taskmap --to=pmi $id)" = "(vector,(0,4,4))"
 '
 test_expect_success 'flux job taskmap works with taskmap on cmdline' '
