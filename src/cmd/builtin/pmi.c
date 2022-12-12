@@ -17,95 +17,39 @@
 #include <time.h>
 #include <flux/idset.h>
 
-#include "src/common/libpmi/simple_client.h"
-#include "src/common/libpmi/pmi_strerror.h"
-#include "src/common/libpmi/pmi.h"
+#include "src/common/libpmi/upmi.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/log.h"
-#include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 
-static struct pmi_simple_client *client;
-static char kvsname[1024];
-
-static void client_init (void)
-{
-    int result;
-    const char *vars[] = { "PMI_FD", "PMI_RANK", "PMI_SIZE" }; // required
-
-    for (int i = 0; i < ARRAY_SIZE (vars); i++) {
-        if (!getenv (vars[i]))
-            log_msg_exit ("%s is missing from the environment", vars[i]);
-    }
-    client = pmi_simple_client_create_fd (getenv ("PMI_FD"),
-                                          getenv ("PMI_RANK"),
-                                          getenv ("PMI_SIZE"),
-                                          getenv ("PMI_SPAWNED"));
-    if (!client)
-        log_err_exit ("could not create PMI client");
-
-    result = pmi_simple_client_init (client);
-    if (result != PMI_SUCCESS)
-        log_msg_exit ("pmi init failed: %s", pmi_strerror (result));
-
-    result = pmi_simple_client_kvs_get_my_name (client,
-                                                kvsname,
-                                                sizeof (kvsname));
-    if (result != PMI_SUCCESS)
-        log_msg_exit ("could not fetch kvsname: %s", pmi_strerror (result));
-}
-
-static void client_finalize (void)
-{
-    int result;
-
-    result = pmi_simple_client_finalize (client);
-    if (result != PMI_SUCCESS)
-        log_msg_exit ("pmi finalize failed: %s", pmi_strerror (result));
-    pmi_simple_client_destroy (client);
-}
-
-static void client_barrier (void)
-{
-    int result;
-
-    result = pmi_simple_client_barrier (client);
-    if (result != PMI_SUCCESS)
-        log_msg_exit ("pmi barrier failed: %s", pmi_strerror (result));
-}
-
-static void client_kvs_get (const char *key, char *buf, int size)
-{
-    int result;
-
-    result = pmi_simple_client_kvs_get (client,
-                                        kvsname,
-                                        key,
-                                        buf,
-                                        size);
-    if (result != PMI_SUCCESS)
-        log_msg_exit ("could not fetch %s: %s", key, pmi_strerror (result));
-}
+static struct upmi *upmi;
 
 static int internal_cmd_get (optparse_t *p, int argc, char *argv[])
 {
     int n = optparse_option_index (p);
     const char *arg = optparse_get_str (p, "ranks", "0");
     struct idset *ranks = NULL;
+    flux_error_t error;
+    struct upmi_info info;
 
     if (!streq (arg, "all")) {
         if (!(ranks = idset_decode (arg)))
             log_msg_exit ("could not decode --ranks argument");
     }
-    client_init ();
-    if (!ranks || idset_test (ranks, client->rank)) {
+    if (upmi_initialize (upmi, &info, &error) < 0)
+        log_msg_exit ("%s", error.text);
+    if (!ranks || idset_test (ranks, info.rank)) {
         while (n < argc) {
-            char val[1024];
-            client_kvs_get (argv[n++], val, sizeof (val));
+            const char *key = argv[n++];
+            char *val;
+            if (upmi_get (upmi, key, -1, &val, &error) < 0)
+                log_msg_exit ("get %s: %s", key, error.text);
             printf ("%s\n", val);
+            free (val);
         }
     }
-    client_finalize ();
+    if (upmi_finalize (upmi, &error) < 0)
+        log_msg_exit ("finalize: %s", error.text);
     idset_destroy (ranks);
 
     return 0;
@@ -117,6 +61,8 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
     int count = optparse_get_int (p, "count", 1);
     struct timespec t;
     const char *label;
+    flux_error_t error;
+    struct upmi_info info;
 
     if (n != argc) {
         optparse_print_usage (p);
@@ -125,30 +71,142 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
     if (!(label = getenv ("FLUX_JOB_CC")))
         if (!(label = getenv ("FLUX_JOB_ID")))
             label = "0";
-    client_init ();
-    client_barrier (); // don't let task launch stragglers skew timing
+    if (upmi_initialize (upmi, &info, &error) < 0)
+        log_msg_exit ("%s", error.text);
+
+    // don't let task launch stragglers skew timing
+    if (upmi_barrier (upmi, &error) < 0)
+        log_msg_exit ("barrier: %s", error.text);
+
     while (count-- > 0) {
         monotime (&t);
-        client_barrier ();
-        if (client->rank == 0) {
+        if (upmi_barrier (upmi, &error) < 0)
+            log_msg_exit ("barrier: %s", error.text);
+        if (info.rank == 0) {
             printf ("%s: completed pmi barrier on %d tasks in %0.3fs.\n",
                     label,
-                    client->size,
+                    info.size,
                     monotime_since (t) / 1000);
             fflush (stdout);
         }
     }
-    client_finalize ();
+
+    if (upmi_finalize (upmi, &error) < 0)
+        log_msg_exit ("finalize: %s", error.text);
 
     return 0;
 }
 
+static int internal_cmd_exchange (optparse_t *p, int argc, char *argv[])
+{
+    int n = optparse_option_index (p);
+    int count = optparse_get_int (p, "count", 1);
+    struct timespec t;
+    const char *label;
+    flux_error_t error;
+    struct upmi_info info;
+
+    if (n != argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(label = getenv ("FLUX_JOB_CC")))
+        if (!(label = getenv ("FLUX_JOB_ID")))
+            label = "0";
+    if (upmi_initialize (upmi, &info, &error) < 0)
+        log_msg_exit ("%s", error.text);
+
+    // don't let task launch stragglers skew timing
+    if (upmi_barrier (upmi, &error) < 0)
+        log_msg_exit ("barrier: %s", error.text);
+
+    while (count-- > 0) {
+        char key[64];
+        char val[64];
+
+        monotime (&t);
+
+        /* Put data from this rank
+         */
+        snprintf (key, sizeof (key), "key.%d", info.rank);
+        snprintf (val,
+                  sizeof (val),
+                  "%s-%d-%d",
+                  info.name,
+                  info.rank,
+                  info.size);
+        if (upmi_put (upmi, key, val, &error) < 0)
+            log_msg_exit ("put %s: %s", key, error.text);
+
+        /* Synchronize
+         */
+        if (upmi_barrier (upmi, &error) < 0)
+            log_msg_exit ("barrier: %s", error.text);
+
+        /* Get data from all ranks (and verify).
+         */
+        for (int rank = 0; rank < info.size; rank++) {
+            char *cp;
+
+            snprintf (key, sizeof (key), "key.%d", rank);
+            snprintf (val,
+                      sizeof (val),
+                      "%s-%d-%d",
+                      info.name,
+                      rank,
+                      info.size);
+            if (upmi_get (upmi, key, rank, &cp, &error) < 0)
+                log_msg_exit ("get %s: %s", key, error.text);
+            if (!streq (val, cp))
+                log_msg_exit ("get %s: returned unexpected value", key);
+            free (cp);
+        }
+
+        // timing must reflect completion of gets by all ranks
+        if (upmi_barrier (upmi, &error) < 0)
+            log_msg_exit ("barrier: %s", error.text);
+
+        if (info.rank == 0) {
+            printf ("%s: completed pmi exchange on %d tasks in %0.3fs.\n",
+                    label,
+                    info.size,
+                    monotime_since (t) / 1000);
+            fflush (stdout);
+        }
+    }
+
+    if (upmi_finalize (upmi, &error) < 0)
+        log_msg_exit ("finalize: %s", error.text);
+
+    return 0;
+}
+
+
+static void trace (void *arg, const char *text)
+{
+    fprintf (stderr, "%s\n", text);
+}
+
 static int cmd_pmi (optparse_t *p, int argc, char *argv[])
 {
+    const char *method = optparse_get_str (p, "method", NULL);
+    int verbose = optparse_get_int (p, "verbose", 0);
+    flux_error_t error;
+    int flags = 0;
+
     log_init ("flux-pmi");
+
+    if (verbose > 0)
+        flags |= UPMI_TRACE;
+    if (optparse_hasopt (p, "libpmi-noflux"))
+        flags |= UPMI_LIBPMI_NOFLUX;
+    if (!(upmi = upmi_create (method, flags, trace, NULL, &error)))
+        log_msg_exit ("%s", error.text);
 
     if (optparse_run_subcommand (p, argc, argv) != OPTPARSE_SUCCESS)
         exit (1);
+
+    upmi_destroy (upmi);
 
     return 0;
 }
@@ -161,6 +219,20 @@ static struct optparse_option barrier_opts[] = {
 static struct optparse_option get_opts[] = {
     { .name = "ranks",      .has_arg = 1, .arginfo = "{IDSET|all}",
        .usage = "Print value on specified ranks (default: 0)", },
+    OPTPARSE_TABLE_END,
+};
+static struct optparse_option exchange_opts[] = {
+    { .name = "count",      .has_arg = 1, .arginfo = "N",
+       .usage = "Execute N exchange operations (default 1)", },
+    OPTPARSE_TABLE_END,
+};
+static struct optparse_option general_opts[] = {
+    { .name = "method",      .has_arg = 1, .arginfo = "URI",
+      .usage = "Specify PMI method to use", },
+    { .name = "libpmi-noflux", .has_arg = 0,
+      .usage = "Fail if libpmi method finds the Flux libpmi.so", },
+    { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
+      .usage = "Trace PMI operations", },
     OPTPARSE_TABLE_END,
 };
 
@@ -179,6 +251,13 @@ static struct optparse_subcommand pmi_subcmds[] = {
       0,
       get_opts,
     },
+    { "exchange",
+      "[OPTIONS]",
+      "Perform an allgather style exchange",
+      internal_cmd_exchange,
+      0,
+      exchange_opts,
+    },
     OPTPARSE_SUBCMD_END
 };
 
@@ -187,7 +266,12 @@ int subcommand_pmi_register (optparse_t *p)
     optparse_err_t e;
 
     e = optparse_reg_subcommand (p,
-            "pmi", cmd_pmi, NULL, "Simple PMI test client", 0, NULL);
+                                 "pmi",
+                                 cmd_pmi,
+                                 NULL,
+                                 "Simple PMI test client",
+                                 0,
+                                 general_opts);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 
