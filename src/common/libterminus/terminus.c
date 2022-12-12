@@ -282,18 +282,20 @@ static int terminus_session_kill (struct terminus_session *s, int signum)
 }
 
 #if CODE_COVERAGE_ENABLED
-extern void __gcov_flush ();
+extern void __gcov_dump ();
+extern void __gcov_reset ();
 #endif
 static void terminus_pty_attach (flux_subprocess_t *p, void *arg)
 {
     struct terminus_session *s = arg;
     if (flux_pty_attach (s->pty) < 0) {
         llog_fatal (s->server, "terminus: pty attach: %s\n", strerror (errno));
+#if CODE_COVERAGE_ENABLED
+        __gcov_dump ();
+        __gcov_reset ();
+#endif
         _exit (1);
     }
-#if CODE_COVERAGE_ENABLED
-    __gcov_flush ();
-#endif
 }
 
 int flux_terminus_server_session_close (struct flux_terminus_server *ts,

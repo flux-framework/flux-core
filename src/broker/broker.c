@@ -1433,7 +1433,8 @@ static void broker_module_status_cb (flux_t *h,
 }
 
 #if CODE_COVERAGE_ENABLED
-void __gcov_flush (void);
+void __gcov_dump (void);
+void __gcov_reset (void);
 #endif
 
 static void broker_panic_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -1450,7 +1451,8 @@ static void broker_panic_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     fprintf (stderr, "PANIC: %s\n", reason);
 #if CODE_COVERAGE_ENABLED
-    __gcov_flush ();
+    __gcov_dump ();
+    __gcov_reset ();
 #endif
     _exit (1);
     /*NOTREACHED*/
