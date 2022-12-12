@@ -7,4 +7,6 @@ AC_DEFUN([X_AC_PMIX], [
         PKG_CHECK_MODULES([PMIX], [pmix])
         AC_DEFINE([HAVE_LIBPMIX], [1], [Enable PMIx bootstrap])
     ])
+    AM_CONDITIONAL([HAVE_LIBPMIX], [test "x$enable_pmix_bootstrap" = "xyes"])
+
 ])

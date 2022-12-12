@@ -29,7 +29,8 @@ fluxcmd_ldadd = \
 	$(LIBPTHREAD) \
 	$(HWLOC_LIBS) \
 	$(JANSSON_LIBS) \
-	$(LIBARCHIVE_LIBS)
+	$(LIBARCHIVE_LIBS) \
+	$(PMIX_LIBS)
 
 LDADD = $(fluxcmd_ldadd)
 

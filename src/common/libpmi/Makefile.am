@@ -9,11 +9,13 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
-	-I$(top_builddir)/src/common/libflux
+	-I$(top_builddir)/src/common/libflux \
+	$(PMIX_CFLAGS)
 
 noinst_LTLIBRARIES = \
 	libpmi_client.la \
-	libpmi_server.la
+	libpmi_server.la \
+	libupmi.la
 
 libpmi_common_sources = \
 	pmi_strerror.c \
@@ -34,6 +36,23 @@ libpmi_server_la_SOURCES = \
 	simple_server.h \
 	simple_server.c \
 	$(libpmi_common_sources)
+
+libupmi_la_SOURCES = \
+	upmi.h \
+	upmi.c \
+	upmi_plugin.h \
+	upmi_simple.c \
+	upmi_libpmi.c \
+	upmi_single.c \
+	simple_client.c \
+	simple_client.h \
+	dgetline.c \
+	dgetline.h \
+	$(libpmi_common_sources)
+
+if HAVE_LIBPMIX
+libupmi_la_SOURCES += upmi_pmix.c
+endif
 
 fluxinclude_HEADERS = \
 	pmi.h \
