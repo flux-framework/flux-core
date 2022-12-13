@@ -70,7 +70,9 @@ lib_LTLIBRARIES = libflux-core.la \
 	libflux-hostlist.la \
 	libflux-taskmap.la
 
-fluxlib_LTLIBRARIES = libpmi.la libpmi2.la
+fluxlib_LTLIBRARIES = \
+	flux/libpmi.la \
+	flux/libpmi2.la
 
 #  With make -j, libpmi*.so will be installed in parallel with dependencies
 #  (libflux-taskmap.so and libflux-idset.so), so one or both .la files may
@@ -161,26 +163,26 @@ libflux_taskmap_la_LDFLAGS = \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
-libpmi_la_SOURCES =
-libpmi_la_LIBADD = \
+flux_libpmi_la_SOURCES =
+flux_libpmi_la_LIBADD = \
 	libflux-taskmap.la \
 	libflux-idset.la \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libutil/aux.lo
-libpmi_la_LDFLAGS = \
+flux_libpmi_la_LDFLAGS = \
 	-Wl,--version-script=$(srcdir)/libpmi.map \
 	-version-info 0:0:0 \
 	-Wl,--defsym=flux_pmi_library=1 \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
-libpmi2_la_SOURCES =
-libpmi2_la_LIBADD = \
+flux_libpmi2_la_SOURCES =
+flux_libpmi2_la_LIBADD = \
 	libflux-taskmap.la \
 	libflux-idset.la \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libutil/aux.lo
-libpmi2_la_LDFLAGS = \
+flux_libpmi2_la_LDFLAGS = \
 	-Wl,--version-script=$(srcdir)/libpmi2.map \
 	-version-info 0:0:0 \
 	-Wl,--defsym=flux_pmi_library=1 \
