@@ -395,7 +395,7 @@ static void stats_continuation (flux_future_t *f, void *arg)
                                "run", &sum->stats.run,
                                "cleanup", &sum->stats.cleanup,
                                "inactive", &sum->stats.inactive,
-                               "total", &sum->stats.total)) {
+                               "total", &sum->stats.total) < 0) {
         if (errno != ENOSYS)
             fatal (errno, "error decoding job-list.job-stats RPC response");
     }
