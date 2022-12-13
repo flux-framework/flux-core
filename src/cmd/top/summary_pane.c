@@ -19,6 +19,7 @@
 
 #include "src/common/libutil/fsd.h"
 #include "src/common/librlist/rlist.h"
+#include "ccan/str/str.h"
 
 #include "top.h"
 
@@ -362,9 +363,12 @@ static int resource_count (json_t *o,
                            const char *name,
                            int *nnodes,
                            int *ncores,
-                           int *ngpus)
+                           int *ngpus,
+                           json_t *queue_constraint)
 {
     json_t *R;
+    struct rlist *rl_all = NULL;
+    struct rlist *rl_constraint = NULL;
     struct rlist *rl;
 
     if (!(R = json_object_get (o, name)))
@@ -373,12 +377,24 @@ static int resource_count (json_t *o,
         *nnodes = *ncores = *ngpus = 0;
         return 0;
     }
-    if (!(rl = rlist_from_json (R, NULL)))
+    if (!(rl_all = rlist_from_json (R, NULL)))
         return -1;
+    if (queue_constraint) {
+        flux_error_t error;
+        rl_constraint = rlist_copy_constraint (rl_all,
+                                               queue_constraint,
+                                               &error);
+        if (!rl_constraint)
+            fatal (errno, "failed to create constrained rlist: %s", error.text);
+        rl = rl_constraint;
+    }
+    else
+        rl = rl_all;
     *nnodes = rlist_nnodes (rl);
     *ncores = rlist_count (rl, "core");
     *ngpus = rlist_count (rl, "gpu");
-    rlist_destroy (rl);
+    rlist_destroy (rl_all);
+    rlist_destroy (rl_constraint);
     return 0;
 }
 
@@ -396,17 +412,20 @@ static void resource_continuation (flux_future_t *f, void *arg)
                             "all",
                             &sum->node.total,
                             &sum->core.total,
-                            &sum->gpu.total) < 0
+                            &sum->gpu.total,
+                            sum->top->queue_constraint) < 0
             || resource_count (o,
                                "allocated",
                                &sum->node.used,
                                &sum->core.used,
-                               &sum->gpu.used) < 0
+                               &sum->gpu.used,
+                               sum->top->queue_constraint) < 0
             || resource_count (o,
                                "down",
                                &sum->node.down,
                                &sum->core.down,
-                               &sum->gpu.down) < 0)
+                               &sum->gpu.down,
+                               sum->top->queue_constraint) < 0)
             fatal (0, "error decoding sched.resource-status RPC response");
     }
     flux_future_destroy (f);
@@ -419,6 +438,29 @@ static void resource_continuation (flux_future_t *f, void *arg)
     }
 }
 
+static int get_queue_stats (json_t *o, const char *queue_name, json_t **qstats)
+{
+    json_t *queues = NULL;
+    json_t *q = NULL;
+    size_t index;
+    json_t *value;
+    if (json_unpack (o, "{s:o}", "queues", &queues) < 0)
+        return -1;
+    if (json_is_array (queues) == 0)
+        return -1;
+    json_array_foreach (queues, index, value) {
+        const char *name;
+        if (json_unpack (value, "{s:s}", "name", &name) < 0)
+            return -1;
+        if (streq (queue_name, name)) {
+            q = value;
+            break;
+        }
+    }
+    (*qstats) = q;
+    return 0;
+}
+
 static void stats_continuation (flux_future_t *f, void *arg)
 {
     struct summary_pane *sum = arg;
@@ -427,6 +469,16 @@ static void stats_continuation (flux_future_t *f, void *arg)
     if (flux_rpc_get_unpack (f, "o", &o) < 0) {
         if (errno != ENOSYS)
             fatal (errno, "error getting job-list.job-stats RPC response");
+    }
+
+    if (sum->top->queue) {
+        json_t *qstats = NULL;
+        if (get_queue_stats (o, sum->top->queue, &qstats) < 0)
+            fatal (EPROTO, "error parsing queue stats");
+        /* stats may not yet exist if no jobs submitted to the queue */
+        if (!qstats)
+            goto out;
+        o = qstats;
     }
 
     if (json_unpack (o,
@@ -445,6 +497,7 @@ static void stats_continuation (flux_future_t *f, void *arg)
                        "total", &sum->stats.total) < 0)
         fatal (0, "error decoding job-list.job-stats object");
 
+out:
     flux_future_destroy (f);
     sum->f_stats = NULL;
     draw_stats (sum);

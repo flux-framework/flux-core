@@ -18,6 +18,7 @@
 #include <jansson.h>
 
 #include "src/common/libutil/fsd.h"
+#include "ccan/str/str.h"
 
 #include "top.h"
 
@@ -146,6 +147,10 @@ void joblist_pane_draw (struct joblist_pane *joblist)
                            "user",
                              "uri", &uri) < 0)
             fatal (0, "error decoding a job record from job-list RPC");
+
+        if (joblist->top->queue && !streq (joblist->top->queue, queue))
+            continue;
+
         if (flux_job_id_encode (id, "f58", idstr, sizeof (idstr)) < 0)
             fatal (errno, "error encoding jobid as F58");
         (void)fsd_format_duration_ex (run, sizeof (run), fabs (now - t_run), 2);
@@ -311,7 +316,7 @@ void joblist_pane_enter (struct joblist_pane *joblist)
     /*  Lazily attempt to run top on jobid, but for now simply return to the
      *   original top window on failure.
      */
-    if ((top = top_create (uri, title, &error)))
+    if ((top = top_create (uri, title, NULL, &error)))
         top_run (top, 0);
     else
         error_popup (joblist, error.text);
