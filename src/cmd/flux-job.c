@@ -395,6 +395,7 @@ static struct optparse_option taskmap_opts[] = {
       .usage = "Convert an RFC 34 taskmap to another format "
                "(FORMAT can be raw, pmi, or multiline)",
     },
+    OPTPARSE_TABLE_END
 };
 
 static struct optparse_subcommand subcommands[] = {
