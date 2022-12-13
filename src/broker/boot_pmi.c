@@ -22,14 +22,12 @@
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/errno_safe.h"
-#include "src/common/libpmi/pmi.h"
-#include "src/common/libpmi/pmi_strerror.h"
+#include "src/common/libpmi/upmi.h"
 
 #include "attr.h"
 #include "overlay.h"
 #include "topology.h"
 #include "boot_pmi.h"
-#include "pmiutil.h"
 
 
 /*  If the broker is launched via flux-shell, then the shell may opt
@@ -40,27 +38,22 @@
  *  Additonally, if level > 0, the shell will have put the instance's
  *  jobid in the PMI kvsname for us as well, so populate the 'jobid' attr.
  */
-static int set_instance_level_attr (struct pmi_handle *pmi,
-                                    const char *kvsname,
+static int set_instance_level_attr (struct upmi *upmi,
+                                    const char *name,
                                     attr_t *attrs)
 {
-    int result;
-    char val[32];
+    int rc;
+    char *val;
     const char *level = "0";
     const char *jobid = NULL;
 
-    result = broker_pmi_kvs_get (pmi,
-                                 kvsname,
-                                 "flux.instance-level",
-                                 val,
-                                 sizeof (val),
-                                 -1);
-    if (result == PMI_SUCCESS)
+    rc = upmi_get (upmi, "flux.instance-level", -1, &val, NULL);
+    if (rc == 0)
         level = val;
     if (attr_add (attrs, "instance-level", level, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    if (result == PMI_SUCCESS)
-        jobid = kvsname;
+    if (rc == 0)
+        jobid = name;
     if (attr_add (attrs, "jobid", jobid, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
     return 0;
@@ -83,34 +76,25 @@ static char *pmi_mapping_to_taskmap (const char *s)
 
 /* Set broker.mapping attribute from enclosing instance taskmap.
  */
-static int set_broker_mapping_attr (struct pmi_handle *pmi,
-                                    struct pmi_params *pmi_params,
+static int set_broker_mapping_attr (struct upmi *upmi,
+                                    int size,
                                     attr_t *attrs)
 {
-    char buf[2048];
     char *val = NULL;
     int rc;
 
-    if (pmi_params->size == 1)
+    if (size == 1)
         val = strdup ("{\"version\":1,\"map\":[[0,1,1,1]]}");
     else {
         /* First attempt to get flux.taskmap, falling back to
          * PMI_process_mapping if this key is not available.
          * This should be replaced when #4800 is fixed.
          */
-        if (broker_pmi_kvs_get (pmi,
-                                pmi_params->kvsname,
-                                "flux.taskmap",
-                                buf,
-                                sizeof (buf),
-                                -1) == PMI_SUCCESS
-            || broker_pmi_kvs_get (pmi,
-                                   pmi_params->kvsname,
-                                   "PMI_process_mapping",
-                                   buf,
-                                   sizeof (buf),
-                                   -1) == PMI_SUCCESS) {
-            val = pmi_mapping_to_taskmap (buf);
+        char *s;
+        if (upmi_get (upmi, "flux.taskmap", -1, &s, NULL) == 0
+            || upmi_get (upmi, "PMI_process_mapping", -1, &s, NULL) == 0) {
+            val = pmi_mapping_to_taskmap (s);
+            free (s);
         }
     }
     rc = attr_add (attrs, "broker.mapping", val, FLUX_ATTRFLAG_IMMUTABLE);
@@ -202,58 +186,62 @@ static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
     return rc;
 }
 
+static void trace_upmi (void *arg, const char *text)
+{
+    fprintf (stderr, "boot_pmi: %s\n", text);
+}
+
 int boot_pmi (struct overlay *overlay, attr_t *attrs)
 {
     const char *topo_uri;
     flux_error_t error;
     char key[64];
-    char val[1024];
+    char *val;
     char hostname[MAXHOSTNAMELEN + 1];
     char *bizcard = NULL;
     struct hostlist *hl = NULL;
     json_t *o;
-    struct pmi_handle *pmi;
-    struct pmi_params pmi_params;
+    struct upmi *upmi;
+    struct upmi_info info;
     struct topology *topo = NULL;
     int child_count;
     int *child_ranks = NULL;
-    int result;
     const char *uri;
     int i;
+    int upmi_flags = UPMI_LIBPMI_NOFLUX;
 
     // N.B. overlay_create() sets the tbon.topo attribute
     if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
         log_msg ("error fetching tbon.topo attribute");
         return -1;
     }
-    memset (&pmi_params, 0, sizeof (pmi_params));
-    if (!(pmi = broker_pmi_create ())) {
-        log_err ("broker_pmi_create");
+    if (getenv ("FLUX_PMI_DEBUG"))
+        upmi_flags |= UPMI_TRACE;
+    if (!(upmi = upmi_create (NULL,
+                              upmi_flags,
+                              trace_upmi,
+                              NULL,
+                              &error))) {
+        log_msg ("boot_pmi: %s", error.text);
+        return -1;
+    }
+    if (upmi_initialize (upmi, &info, &error) < 0) {
+        log_msg ("%s: initialize: %s", upmi_describe (upmi), error.text);
         goto error;
     }
-    result = broker_pmi_init (pmi);
-    if (result != PMI_SUCCESS) {
-        log_msg ("broker_pmi_init: %s", pmi_strerror (result));
-        goto error;
-    }
-    result = broker_pmi_get_params (pmi, &pmi_params);
-    if (result != PMI_SUCCESS) {
-        log_msg ("broker_pmi_get_params: %s", pmi_strerror (result));
-        goto error;
-    }
-    if (set_instance_level_attr (pmi, pmi_params.kvsname, attrs) < 0) {
+    if (set_instance_level_attr (upmi, info.name, attrs) < 0) {
         log_err ("set_instance_level_attr");
         goto error;
     }
-    if (set_broker_mapping_attr (pmi, &pmi_params, attrs) < 0) {
+    if (set_broker_mapping_attr (upmi, info.size, attrs) < 0) {
         log_err ("error setting broker.mapping attribute");
         goto error;
     }
-    if (!(topo = topology_create (topo_uri, pmi_params.size, &error))) {
+    if (!(topo = topology_create (topo_uri, info.size, &error))) {
         log_msg ("error creating '%s' topology: %s", topo_uri, error.text);
         goto error;
     }
-    if (topology_set_rank (topo, pmi_params.rank) < 0
+    if (topology_set_rank (topo, info.rank) < 0
         || overlay_set_topology (overlay, topo) < 0)
         goto error;
     if (gethostname (hostname, sizeof (hostname)) < 0) {
@@ -267,7 +255,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
 
     /* A size=1 instance has no peers, so skip the PMI exchange.
      */
-    if (pmi_params.size == 1) {
+    if (info.size == 1) {
         if (hostlist_append (hl, hostname) < 0) {
             log_err ("hostlist_append");
             goto error;
@@ -292,7 +280,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     if (child_count > 0) {
         char buf[1024];
 
-        if (format_bind_uri (buf, sizeof (buf), attrs, pmi_params.rank) < 0)
+        if (format_bind_uri (buf, sizeof (buf), attrs, info.rank) < 0)
             goto error;
         if (overlay_bind (overlay, buf) < 0)
             goto error;
@@ -309,7 +297,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     /* Each broker writes a "business card" consisting of hostname,
      * public key, and URI (empty string for leaf node).
      */
-    if (snprintf (key, sizeof (key), "%d", pmi_params.rank) >= sizeof (key)) {
+    if (snprintf (key, sizeof (key), "%d", info.rank) >= sizeof (key)) {
         log_msg ("pmi key string overflow");
         goto error;
     }
@@ -323,38 +311,29 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
         goto error;
     }
     json_decref (o);
-    result = broker_pmi_kvs_put (pmi, pmi_params.kvsname, key, bizcard);
-    if (result != PMI_SUCCESS) {
-        log_msg ("broker_pmi_kvs_put: %s", pmi_strerror (result));
+    if (upmi_put (upmi, key, bizcard, &error) < 0) {
+        log_msg ("%s: put %s: %s", upmi_describe (upmi), key, error.text);
         goto error;
     }
-    result = broker_pmi_kvs_commit (pmi, pmi_params.kvsname);
-    if (result != PMI_SUCCESS) {
-        log_msg ("broker_pmi_kvs_commit: %s", pmi_strerror (result));
-        goto error;
-    }
-    result = broker_pmi_barrier (pmi);
-    if (result != PMI_SUCCESS) {
-        log_msg ("broker_pmi_barrier: %s", pmi_strerror (result));
+    if (upmi_barrier (upmi, &error) < 0) {
+        log_msg ("%s: barrier: %s", upmi_describe (upmi), error.text);
         goto error;
     }
 
     /* Fetch the business card of parent and inform overlay of URI
      * and public key.
      */
-    if (pmi_params.rank > 0) {
+    if (info.rank > 0) {
         const char *peer_pubkey;
         const char *peer_uri;
-        int rank = topology_get_parent (topo);
+        int parent_rank = topology_get_parent (topo);
 
-        if (snprintf (key, sizeof (key), "%d", rank) >= sizeof (key)) {
+        if (snprintf (key, sizeof (key), "%d", parent_rank) >= sizeof (key)) {
             log_msg ("pmi key string overflow");
             goto error;
         }
-        result = broker_pmi_kvs_get (pmi, pmi_params.kvsname,
-                                     key, val, sizeof (val), rank);
-        if (result != PMI_SUCCESS) {
-            log_msg ("broker_pmi_kvs_get %s: %s", key, pmi_strerror (result));
+        if (upmi_get (upmi, key, parent_rank, &val, &error) < 0) {
+            log_msg ("%s: get %s: %s", upmi_describe (upmi), key, error.text);
             goto error;
         }
         if (!(o = json_loads (val, 0, NULL))
@@ -363,98 +342,100 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
                             "pubkey", &peer_pubkey,
                             "uri", &peer_uri) < 0
             || strlen (peer_uri) == 0) {
-            log_msg ("error decoding rank %d business card", rank);
+            log_msg ("error decoding rank %d business card", parent_rank);
             json_decref (o);
+            free (val);
             goto error;
         }
         if (overlay_set_parent_uri (overlay, peer_uri) < 0) {
             log_err ("overlay_set_parent_uri");
             json_decref (o);
+            free (val);
             goto error;
         }
         if (overlay_set_parent_pubkey (overlay, peer_pubkey) < 0) {
             log_err ("overlay_set_parent_pubkey");
             json_decref (o);
+            free (val);
             goto error;
         }
         json_decref (o);
+        free (val);
     }
 
     /* Fetch the business card of children and inform overlay of public keys.
      */
     for (i = 0; i < child_count; i++) {
         const char *peer_pubkey;
-        int rank = child_ranks[i];
+        int child_rank = child_ranks[i];
 
-        if (snprintf (key, sizeof (key), "%d", rank) >= sizeof (key)) {
+        if (snprintf (key, sizeof (key), "%d", child_rank) >= sizeof (key)) {
             log_msg ("pmi key string overflow");
             goto error;
         }
-        result = broker_pmi_kvs_get (pmi, pmi_params.kvsname,
-                                     key, val, sizeof (val), rank);
-
-        if (result != PMI_SUCCESS) {
-            log_msg ("broker_pmi_kvs_get %s: %s", key, pmi_strerror (result));
+        if (upmi_get (upmi, key, child_rank, &val, &error) < 0) {
+            log_msg ("%s: get %s: %s", upmi_describe (upmi), key, error.text);
             goto error;
         }
         if (!(o = json_loads (val, 0, NULL))
             || json_unpack (o, "{s:s}", "pubkey", &peer_pubkey) < 0) {
-            log_msg ("error decoding rank %d business card", rank);
+            log_msg ("error decoding rank %d business card", child_rank);
             json_decref (o);
+            free (val);
             goto error;
         }
         if (overlay_authorize (overlay, key, peer_pubkey) < 0) {
             log_err ("overlay_authorize %s=%s", key, peer_pubkey);
             json_decref (o);
+            free (val);
             goto error;
         }
         json_decref (o);
+        free (val);
     }
 
     /* Fetch the business card of all ranks and build hostlist.
      * The hostlist is built indepenedently (and in parallel) on all ranks.
      */
-    for (i = 0; i < pmi_params.size; i++) {
+    for (i = 0; i < info.size; i++) {
         const char *peer_hostname;
 
         if (snprintf (key, sizeof (key), "%d", i) >= sizeof (key)) {
             log_msg ("pmi key string overflow");
             goto error;
         }
-        result = broker_pmi_kvs_get (pmi, pmi_params.kvsname,
-                                     key, val, sizeof (val), i);
-
-        if (result != PMI_SUCCESS) {
-            log_msg ("broker_pmi_kvs_get %s: %s", key, pmi_strerror (result));
+        if (upmi_get (upmi, key, i, &val, &error) < 0) {
+            log_msg ("%s: get %s: %s", upmi_describe (upmi), key, error.text);
             goto error;
         }
         if (!(o = json_loads (val, 0, NULL))
             || json_unpack (o, "{s:s}", "hostname", &peer_hostname) < 0) {
             log_msg ("error decoding rank %d pmi business card", i);
             json_decref (o);
+            free (val);
             goto error;
         }
         if (hostlist_append (hl, peer_hostname) < 0) {
             log_err ("hostlist_append");
             json_decref (o);
+            free (val);
             goto error;
         }
         json_decref (o);
+        free (val);
     }
 
     /* One more barrier before allowing connects to commence.
      * Need to ensure that all clients are "allowed".
      */
-    result = broker_pmi_barrier (pmi);
-    if (result != PMI_SUCCESS) {
-        log_msg ("broker_pmi_barrier: %s", pmi_strerror (result));
+    if (upmi_barrier (upmi, &error) < 0) {
+        log_msg ("%s: barrier: %s", upmi_describe (upmi), error.text);
         goto error;
     }
 
 done:
-    result = broker_pmi_finalize (pmi);
-    if (result != PMI_SUCCESS) {
-        log_msg ("broker_pmi_finalize: %s", pmi_strerror (result));
+    if (upmi_finalize (upmi, &error) < 0) {
+        log_msg ("%s: finalize: %s", upmi_describe (upmi), error.text);
         goto error;
     }
     if (set_hostlist_attr (attrs, hl) < 0) {
@@ -462,14 +443,14 @@ done:
         goto error;
     }
     free (bizcard);
-    broker_pmi_destroy (pmi);
+    upmi_destroy (upmi);
     hostlist_destroy (hl);
     free (child_ranks);
     topology_decref (topo);
     return 0;
 error:
     free (bizcard);
-    broker_pmi_destroy (pmi);
+    upmi_destroy (upmi);
     hostlist_destroy (hl);
     free (child_ranks);
     topology_decref (topo);
