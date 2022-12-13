@@ -24,6 +24,7 @@ RUN yum -y update \
 	patch \
 	diffutils \
 	hostname \
+	flex \
 #  Compilers, autotools
 	pkgconfig \
 	libtool \
@@ -59,6 +60,7 @@ RUN yum -y update \
 	libs3-devel \
 	libarchive-devel \
 	pam-devel \
+	libevent-devel \
 #  Other deps
 	perl-Time-HiRes \
 	lua-posix \
@@ -68,6 +70,8 @@ RUN yum -y update \
 	aspell \
 	aspell-en \
 	glibc-langpack-en \
+	lcov \
+	hwloc \
  && yum clean all
 
 #  Add /usr/bin/mpicc link so MPI tests are built
@@ -84,6 +88,26 @@ RUN mkdir caliper \
  && make install \
  && cd ../.. \
  && rm -rf caliper
+
+# Install openpmix, prrte
+RUN mkdir prrte \
+ && cd prrte \
+ && git clone https://github.com/openpmix/openpmix.git \
+ && git clone https://github.com/openpmix/prrte.git \
+ && ls -l \
+ && set -x \
+ && cd openpmix \
+ && git checkout fefaed568f33bf86f28afb6e45237f1ec5e4de93 \
+ && ./autogen.pl \
+ && ./configure --prefix=/usr --disable-static && make -j 4 install \
+ && ldconfig \
+ && cd .. \
+ && cd prrte \
+ && git checkout 477894f4720d822b15cab56eee7665107832921c \
+ && ./autogen.pl \
+ && ./configure --prefix=/usr && make -j 4 install \
+ && cd ../.. \
+ && rm -rf prrte
 
 ENV LANG=C.UTF-8
 RUN printf "LANG=C.UTF-8" > /etc/locale.conf
