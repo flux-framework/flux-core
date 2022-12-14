@@ -88,8 +88,6 @@ static void *op_create (struct upmi *upmi,
     }
     ctx->upmi = upmi;
     if (!path)
-        path = getenv ("PMI_LIBRARY");
-    if (!path)
         path = "libpmi.so";
     // Use RTLD_GLOBAL due to flux-framework/flux-core#432
     if (dlopen_wrap (path,
