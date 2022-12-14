@@ -46,6 +46,7 @@ struct stats {
     int run;
     int cleanup;
     int inactive;
+    int successful;
     int failed;
     int canceled;
     int timeout;
@@ -138,7 +139,7 @@ static void draw_stats (struct summary_pane *sum)
 
     if (sum->show_details) {
         int failed = sum->stats.failed;
-        int complete = sum->stats.inactive - failed;
+        int complete = sum->stats.successful;
 
         if (complete)
             wattron (sum->win, COLOR_PAIR(TOP_COLOR_GREEN) | A_BOLD);
@@ -384,7 +385,8 @@ static void stats_continuation (flux_future_t *f, void *arg)
     struct summary_pane *sum = arg;
 
     if (flux_rpc_get_unpack (f,
-                             "{s:i s:i s:i s:{s:i s:i s:i s:i s:i s:i s:i}}",
+                             "{s:i s:i s:i s:i s:{s:i s:i s:i s:i s:i s:i s:i}}",
+                             "successful", &sum->stats.successful,
                              "failed", &sum->stats.failed,
                              "canceled", &sum->stats.canceled,
                              "timeout", &sum->stats.timeout,
