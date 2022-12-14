@@ -570,7 +570,7 @@ static void status_cb (flux_t *h, flux_msg_handler_t *mh,
      */
     if (!(rl = rlist_copy_allocated (ss->rlist))
         || !(alloc = rlist_to_R (rl))) {
-        flux_log_error (h, "faile to create list of allocated resources");
+        flux_log_error (h, "failed to create list of allocated resources");
         goto err;
     }
     rlist_destroy (rl);
