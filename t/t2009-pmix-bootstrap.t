@@ -41,15 +41,28 @@ if ! flux version | grep -q +pmix-bootstrap; then
 	test_done
 fi
 
-if ! prterun=$(find_prterun) && ! prterun=$(find_mpirun); then
-	skip_all='skipping: could not find pmix-enabled launcher'
-	test_done
+if prterun=$(find_prterun) || prterun=$(find_mpirun); then
+	test_set_prereq HAVE_PRTERUN
 fi
 
-test_expect_success 'prterun can launch Flux' '
+test_expect_success 'flux pmi --method=pmix fails outside of PMIX environment' '
+	test_must_fail flux pmi --method=pmix barrier
+'
+test_expect_success 'flux pmi falls through to singleton method' '
+	flux pmi barrier
+'
+test_expect_success HAVE_PRTERUN 'flux pmi --method=pmix barrier works' '
+	FLUX_PMI_DEBUG=1 $prterun --map-by :OVERSUBSCRIBE --n 4 \
+	    flux pmi --method=pmix -v barrier
+'
+test_expect_success HAVE_PRTERUN 'flux pmi --method=pmix exchange works' '
+	FLUX_PMI_DEBUG=1 $prterun --map-by :OVERSUBSCRIBE --n 4 \
+	    flux pmi --method=pmix -v exchange
+'
+test_expect_success HAVE_PRTERUN 'prterun can launch Flux' '
 	echo 4 >size.exp &&
 	FLUX_PMI_DEBUG=1 $prterun --map-by :OVERSUBSCRIBE --n 4 \
-		flux start ${ARGS} flux getattr size >size.out &&
+	    flux start ${ARGS} flux getattr size >size.out &&
 	test_cmp size.exp size.out
 '
 
