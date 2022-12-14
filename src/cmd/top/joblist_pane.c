@@ -210,7 +210,7 @@ static void joblist_continuation (flux_future_t *f, void *arg)
     if (joblist->top->test_exit) {
         /* Ensure joblist window is refreshed before exiting */
         wrefresh (joblist->win);
-        flux_reactor_stop (flux_future_get_reactor (f));
+        test_exit_check (joblist->top);
     }
     flux_future_destroy (f);
 }

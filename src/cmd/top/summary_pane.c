@@ -378,6 +378,11 @@ static void resource_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
     sum->f_resource = NULL;
     draw_resource (sum);
+    if (sum->top->test_exit) {
+        /* Ensure resources are refreshed before exiting */
+        wnoutrefresh (sum->win);
+        test_exit_check (sum->top);
+    }
 }
 
 static void stats_continuation (flux_future_t *f, void *arg)
@@ -404,6 +409,11 @@ static void stats_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
     sum->f_stats = NULL;
     draw_stats (sum);
+    if (sum->top->test_exit) {
+        /* Ensure stats is refreshed before exiting */
+        wnoutrefresh (sum->win);
+        test_exit_check (sum->top);
+    }
 }
 
 static void heartblink_cb (flux_reactor_t *r,

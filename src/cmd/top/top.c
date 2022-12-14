@@ -164,6 +164,17 @@ int top_run (struct top *top, int reactor_flags)
     return flux_reactor_run (flux_get_reactor (top->h), reactor_flags);
 }
 
+void test_exit_check (struct top *top)
+{
+    /* 3 exit counts for
+     * - joblist output
+     * - summary stats output
+     * - summary resource output
+     */
+    if (top->test_exit && ++top->test_exit_count == 3)
+        flux_reactor_stop (flux_get_reactor (top->h));
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_EVENT, "job-state", job_state_cb, 0 },
     { FLUX_MSGTYPE_EVENT, "heartbeat.pulse", heartbeat_cb, 0 },
