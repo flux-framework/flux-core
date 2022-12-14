@@ -128,6 +128,11 @@ test_expect_success NO_CHAIN_LINT 'flux-top does not exit on recursive failure' 
 	        --input=recurse-fail.in flux top &&
 	grep -qi "error connecting to Flux" recurse-fail.log
 '
+test_expect_success 'cleanup running jobs' '
+	flux job cancel $(cat jobid2) $(cat jobid3) &&
+	flux job wait-event $(cat jobid2) clean &&
+	flux job wait-event $(cat jobid3) clean
+'
 test_expect_success 'configure a test queue' '
 	flux config load <<-EOT
 	[queues.testq]
