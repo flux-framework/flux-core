@@ -61,7 +61,8 @@ fluxinclude_HEADERS = \
 TESTS = test_keyval.t \
 	test_simple.t \
 	test_canonical.t \
-	test_canonical2.t
+	test_canonical2.t \
+	test_upmi.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -113,6 +114,13 @@ test_canonical2_t_SOURCES = \
 	test/server_thread.h
 test_canonical2_t_CPPFLAGS = $(test_cppflags)
 test_canonical2_t_LDADD = $(test_ldadd)
+
+test_upmi_t_SOURCES = test/upmi.c
+test_upmi_t_CPPFLAGS = $(test_cppflags)
+test_upmi_t_LDADD = \
+	$(top_builddir)/src/common/libpmi/libupmi.la \
+	$(test_ldadd) \
+	$(PMIX_LIBS)
 
 test_pmi_info_SOURCES = test/pmi_info.c
 test_pmi_info_CPPFLAGS = $(test_cppflags)
