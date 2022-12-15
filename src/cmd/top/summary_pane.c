@@ -96,7 +96,11 @@ static void draw_timeleft (struct summary_pane *sum)
 static void draw_f (struct summary_pane *sum)
 {
     wattron (sum->win, COLOR_PAIR (TOP_COLOR_YELLOW));
-    mvwprintw (sum->win, level_dim.y_begin, level_dim.x_begin, "ƒ");
+    mvwprintw (sum->win,
+               level_dim.y_begin,
+               level_dim.x_begin,
+               "%s",
+               sum->top->f_char);
     wattroff (sum->win, COLOR_PAIR (TOP_COLOR_YELLOW));
 }
 

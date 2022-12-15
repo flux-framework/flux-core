@@ -34,6 +34,7 @@ struct top {
     unsigned int test_exit:1;    /*  Exit after first joblist pane update */
     unsigned int test_exit_count;
     FILE *testf;
+    const char *f_char;
 
     uint32_t size;
     struct summary_pane *summary_pane;
