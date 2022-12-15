@@ -17,6 +17,7 @@
 
 #include "src/common/libutil/uri.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/str/str.h"
 #include "top.h"
 
 static const double job_activity_rate_limit = 2;
@@ -135,7 +136,7 @@ static flux_t *open_flux_instance (const char *target, flux_error_t *errp)
  * with its internal buffer by calling refresh() below to prevent unwanted
  * screen updates on the first keypress.
  */
-static void initialize_curses (void)
+static void initialize_curses (int color)
 {
     char *cap;
     initscr ();
@@ -146,11 +147,20 @@ static void initialize_curses (void)
 
     use_default_colors ();
     start_color ();
-    init_pair (TOP_COLOR_YELLOW, COLOR_YELLOW, -1);
-    init_pair (TOP_COLOR_RED, COLOR_RED, -1);
-    init_pair (TOP_COLOR_GREEN, COLOR_GREEN, -1);
-    init_pair (TOP_COLOR_BLUE, COLOR_BLUE, -1);
-    init_pair (TOP_COLOR_BLUE_HIGHLIGHT, COLOR_BLACK, COLOR_BLUE);
+    if (color) {
+        init_pair (TOP_COLOR_YELLOW, COLOR_YELLOW, -1);
+        init_pair (TOP_COLOR_RED, COLOR_RED, -1);
+        init_pair (TOP_COLOR_GREEN, COLOR_GREEN, -1);
+        init_pair (TOP_COLOR_BLUE, COLOR_BLUE, -1);
+        init_pair (TOP_COLOR_BLUE_HIGHLIGHT, COLOR_BLACK, COLOR_BLUE);
+    }
+    else {
+        init_pair (TOP_COLOR_YELLOW, -1, -1);
+        init_pair (TOP_COLOR_RED, -1, -1);
+        init_pair (TOP_COLOR_GREEN, -1, -1);
+        init_pair (TOP_COLOR_BLUE, -1, -1);
+        init_pair (TOP_COLOR_BLUE_HIGHLIGHT, -1, -1);
+    }
     clear ();
     refresh ();
 }
@@ -273,6 +283,24 @@ fail:
     return NULL;
 }
 
+static int color_optparse (optparse_t *opts)
+{
+    const char *when;
+    int color = 0;
+
+    if (!(when = optparse_get_str (opts, "color", "auto")))
+        when = "always";
+    if (streq (when, "always"))
+        color = 1;
+    else if (streq (when, "never"))
+        color = 0;
+    else if (streq (when, "auto"))
+        color = isatty (STDOUT_FILENO) ? 1 : 0;
+    else
+        fatal (0, "Invalid argument to --color: '%s'", when);
+    return color;
+}
+
 static struct optparse_option cmdopts[] = {
     { .name = "test-exit", .has_arg = 0, .flags = OPTPARSE_OPT_HIDDEN,
       .usage = "Exit after screen initialization, for testing",
@@ -281,6 +309,9 @@ static struct optparse_option cmdopts[] = {
       .flags = OPTPARSE_OPT_HIDDEN,
       .usage = "Dump joblist/summary data to file for testing",
     },
+    { .name = "color", .has_arg = 2, .arginfo = "WHEN",
+      .usage = "Colorize output when supported; WHEN can be 'always' "
+               "(default if omitted), 'never', or 'auto' (default)." },
     OPTPARSE_TABLE_END,
 };
 
@@ -314,7 +345,7 @@ int main (int argc, char *argv[])
     }
     if (!isatty (STDIN_FILENO))
         fatal (0, "stdin is not a terminal");
-    initialize_curses ();
+    initialize_curses (color_optparse (opts));
 
     if (!(top = top_create (target, NULL, &error)))
         fatal (0, "%s", error.text);
