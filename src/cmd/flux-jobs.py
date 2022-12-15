@@ -298,6 +298,8 @@ def parse_args():
         type=str,
         metavar="WHEN",
         choices=["never", "always", "auto"],
+        nargs="?",
+        const="always",
         default="auto",
         help="Colorize output; WHEN can be 'never', 'always', or 'auto' (default)",
     )
