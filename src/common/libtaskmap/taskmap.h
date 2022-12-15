@@ -22,6 +22,7 @@ enum taskmap_flags {
     TASKMAP_ENCODE_WRAPPED = 1,      /* Encode as RFC 34 wrapped object      */
     TASKMAP_ENCODE_PMI =     1 << 1, /* Encode as PMI-1 PMI_process_mapping  */
     TASKMAP_ENCODE_RAW =     1 << 2, /* Encode as semicolon-delimited taskids*/
+    TASKMAP_ENCODE_RAW_DERANGED = 1 << 3, /* Encode as raw without ranges    */
 };
 
 /*  Create an empty taskmap

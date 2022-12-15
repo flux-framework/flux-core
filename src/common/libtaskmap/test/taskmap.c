@@ -537,6 +537,22 @@ static void test_check ()
     }
 }
 
+void test_deranged (void)
+{
+    struct taskmap *map;
+    flux_error_t error;
+    char *s;
+
+    if (!(map = taskmap_decode ("[[0,4,4,1]]", &error)))
+        BAIL_OUT ("taskmap_decode: %s", error.text);
+    ok ((s = taskmap_encode (map, TASKMAP_ENCODE_RAW_DERANGED)) != NULL,
+        "taskmap_encode RAW_DERANGED works");
+    is (s, "0,1,2,3;4,5,6,7;8,9,10,11;12,13,14,15",
+        "and result is deranged");
+    free (s);
+    taskmap_destroy (map);
+}
+
 int main (int ac, char **av)
 {
     plan (NO_PLAN);
@@ -548,6 +564,7 @@ int main (int ac, char **av)
     append_cyclic_test ();
     append_cyclic_one ();
     test_check ();
+    test_deranged ();
     done_testing ();
 }
 

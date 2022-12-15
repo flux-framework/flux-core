@@ -618,7 +618,8 @@ static bool valid_encode_flags (int flags)
     int count = 0;
     int possible_flags = TASKMAP_ENCODE_WRAPPED
                          | TASKMAP_ENCODE_PMI
-                         | TASKMAP_ENCODE_RAW;
+                         | TASKMAP_ENCODE_RAW
+                         | TASKMAP_ENCODE_RAW_DERANGED;
     if ((flags & possible_flags) != flags)
         return false;
     while (flags) {
@@ -681,7 +682,7 @@ static void item_destructor (void **item)
     }
 }
 
-static char *taskmap_encode_raw (const struct taskmap *map)
+static char *taskmap_encode_raw (const struct taskmap *map, int flags)
 {
     char *result = NULL;
     zlistx_t *l;
@@ -699,7 +700,7 @@ static char *taskmap_encode_raw (const struct taskmap *map)
         const struct idset *ids = NULL;
         char *s = NULL;
         if (!(ids = taskmap_taskids (map, i))
-            || !(s = idset_encode (ids, IDSET_FLAG_RANGE))
+            || !(s = idset_encode (ids, flags))
             || append_to_zlistx (l, s) < 0) {
             ERRNO_SAFE_WRAP (free, s);
             goto error;
@@ -761,7 +762,9 @@ char *taskmap_encode (const struct taskmap *map, int flags)
         return NULL;
     }
     if (flags & TASKMAP_ENCODE_RAW)
-        return taskmap_encode_raw (map);
+        return taskmap_encode_raw (map, IDSET_FLAG_RANGE);
+    if (flags & TASKMAP_ENCODE_RAW_DERANGED)
+        return taskmap_encode_raw (map, 0);
     if (flags & TASKMAP_ENCODE_PMI)
         return taskmap_encode_pmi (map);
     return taskmap_encode_map (map, flags);
