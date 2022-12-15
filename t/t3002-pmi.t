@@ -114,6 +114,14 @@ test_expect_success 'flux-pmi barrier --count works' '
 	flux mini run --label-io -n2 \
 	    flux pmi barrier --count=2
 '
+test_expect_success 'flux-pmi exchange works' '
+	flux mini run --label-io -n2 \
+	    flux pmi exchange
+'
+test_expect_success 'flux-pmi exchange --count works' '
+	flux mini run --label-io -n2 \
+	    flux pmi exchange --count=2
+'
 test_expect_success 'flux-pmi get PMI_process_mapping works' '
 	flux mini run --label-io -n2 \
 	    flux pmi get PMI_process_mapping
@@ -130,8 +138,8 @@ test_expect_success 'flux-pmi get works with multiple keys' '
 	flux mini run --label-io -n2 \
 	    flux pmi get flux.instance-level PMI_process_mapping
 '
-test_expect_success 'flux-pmi barrier fails outside of the job environment' '
-	test_must_fail flux pmi barrier
+test_expect_success 'flux-pmi works outside of job' '
+	flux pmi barrier
 '
 test_expect_success 'flux-pmi fails with bad subcommand' '
 	test_must_fail flux mini run flux pmi notacmd
@@ -141,6 +149,63 @@ test_expect_success 'flux-pmi get fails with bad option' '
 '
 test_expect_success 'flux-pmi get fails with bad ranks option' '
 	test_must_fail flux mini run flux pmi get --ranks=1.2 flux.taskmap
+'
+test_expect_success 'flux-pmi fails with bad ranks option' '
+	test_must_fail flux mini run \
+	    flux pmi --method=badmethod barrier
+'
+# method=simple (covered above also)
+test_expect_success 'flux-pmi --method=simple fails outside of job' '
+	test_must_fail flux pmi --method=simple barrier
+'
+test_expect_success 'flux-pmi -v --method=simple works within job' '
+	flux mini run --label-io -n2 flux pmi -v --method=simple barrier
+'
+# method=libpmi
+test_expect_success 'flux-pmi --method=libpmi:/bad/path fails' '
+	test_must_fail flux mini run \
+	    flux pmi --method=libpmi:/bad/path barrier
+'
+test_expect_success 'flux-pmi --method=libpmi barrier works w/ flux libpmi.so' '
+	flux mini run -n2 bash -c "\
+	    flux pmi -v \
+	        --method=libpmi:\$(flux getattr conf.pmi_library_path) \
+	        barrier"
+'
+test_expect_success 'flux-pmi --method=libpmi exchange works w/ flux libpmi.so' '
+	flux mini run -n2 bash -c "\
+	    flux pmi -v \
+	        --method=libpmi:\$(flux getattr conf.pmi_library_path) \
+	        exchange"
+'
+test_expect_success 'flux-pmi --method=libpmi get works w/ flux libpmi.so' '
+	flux mini run -n2 bash -c "\
+	    flux pmi -v \
+	        --method=libpmi:\$(flux getattr conf.pmi_library_path) \
+	        get flux.taskmap"
+'
+test_expect_success 'flux-pmi --libpmi-noflux fails w/ flux libpmi.so' '
+	test_must_fail flux mini run bash -c "\
+	    flux pmi \
+	        --method=libpmi:\$(flux getattr conf.pmi_library_path) \
+		--libpmi-noflux \
+	        barrier"
+'
+test_expect_success 'flux broker refuses the Flux libpmi.so and goes single' '
+	FLUX_PMI_DEBUG=1 \
+	    LD_LIBRARY_PATH=$(dirname $(flux getattr conf.pmi_library_path)) \
+            flux start /bin/true 2>debug.err &&
+	grep single debug.err
+'
+# method=single
+test_expect_success 'flux-pmi --method=single barrier works' '
+	flux pmi -v --method=single barrier
+'
+test_expect_success 'flux-pmi --method=single exchange works' '
+	flux pmi -v --method=single exchange
+'
+test_expect_success 'flux-pmi --method=single get notakey fails' '
+	test_must_fail flux pmi --method=single get notakey
 '
 
 test_done

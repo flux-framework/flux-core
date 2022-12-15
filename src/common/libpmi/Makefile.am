@@ -9,11 +9,13 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
-	-I$(top_builddir)/src/common/libflux
+	-I$(top_builddir)/src/common/libflux \
+	$(PMIX_CFLAGS)
 
 noinst_LTLIBRARIES = \
 	libpmi_client.la \
-	libpmi_server.la
+	libpmi_server.la \
+	libupmi.la
 
 libpmi_common_sources = \
 	pmi_strerror.c \
@@ -35,6 +37,23 @@ libpmi_server_la_SOURCES = \
 	simple_server.c \
 	$(libpmi_common_sources)
 
+libupmi_la_SOURCES = \
+	upmi.h \
+	upmi.c \
+	upmi_plugin.h \
+	upmi_simple.c \
+	upmi_libpmi.c \
+	upmi_single.c \
+	simple_client.c \
+	simple_client.h \
+	dgetline.c \
+	dgetline.h \
+	$(libpmi_common_sources)
+
+if HAVE_LIBPMIX
+libupmi_la_SOURCES += upmi_pmix.c
+endif
+
 fluxinclude_HEADERS = \
 	pmi.h \
 	pmi2.h
@@ -42,7 +61,8 @@ fluxinclude_HEADERS = \
 TESTS = test_keyval.t \
 	test_simple.t \
 	test_canonical.t \
-	test_canonical2.t
+	test_canonical2.t \
+	test_upmi.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
@@ -94,6 +114,13 @@ test_canonical2_t_SOURCES = \
 	test/server_thread.h
 test_canonical2_t_CPPFLAGS = $(test_cppflags)
 test_canonical2_t_LDADD = $(test_ldadd)
+
+test_upmi_t_SOURCES = test/upmi.c
+test_upmi_t_CPPFLAGS = $(test_cppflags)
+test_upmi_t_LDADD = \
+	$(top_builddir)/src/common/libpmi/libupmi.la \
+	$(test_ldadd) \
+	$(PMIX_LIBS)
 
 test_pmi_info_SOURCES = test/pmi_info.c
 test_pmi_info_CPPFLAGS = $(test_cppflags)
