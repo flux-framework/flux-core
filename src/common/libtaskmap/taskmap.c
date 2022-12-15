@@ -700,8 +700,10 @@ static char *taskmap_encode_raw (const struct taskmap *map)
         char *s = NULL;
         if (!(ids = taskmap_taskids (map, i))
             || !(s = idset_encode (ids, IDSET_FLAG_RANGE))
-            || append_to_zlistx (l, s) < 0)
+            || append_to_zlistx (l, s) < 0) {
+            ERRNO_SAFE_WRAP (free, s);
             goto error;
+        }
     }
     result = list_join (l, ";");
 error:
