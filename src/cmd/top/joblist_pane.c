@@ -159,7 +159,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
             wattron (joblist->win, A_REVERSE);
         if (uri != NULL)
             wattron (joblist->win, COLOR_PAIR(TOP_COLOR_BLUE) | A_BOLD);
-        if (joblist->show_queue)
+        if (joblist->show_queue) {
             mvwprintw (joblist->win,
                        1 + index,
                        0,
@@ -174,7 +174,19 @@ void joblist_pane_draw (struct joblist_pane *joblist)
                        name_width,
                        name_width,
                        name);
-        else
+            if (joblist->top->testf)
+                fprintf (joblist->top->testf,
+                         "%s %s %s %s %d %d %s %s\n",
+                         idstr,
+                         queue,
+                         username,
+                         flux_job_statetostr (state, "S"),
+                         ntasks,
+                         nnodes,
+                         run,
+                         name);
+        }
+        else {
             mvwprintw (joblist->win,
                        1 + index,
                        0,
@@ -188,6 +200,17 @@ void joblist_pane_draw (struct joblist_pane *joblist)
                        name_width,
                        name_width,
                        name);
+            if (joblist->top->testf)
+                fprintf (joblist->top->testf,
+                         "%s %s %s %d %d %s %s\n",
+                         idstr,
+                         username,
+                         flux_job_statetostr (state, "S"),
+                         ntasks,
+                         nnodes,
+                         run,
+                         name);
+        }
         wattroff (joblist->win, A_REVERSE);
         wattroff (joblist->win, COLOR_PAIR(TOP_COLOR_BLUE) | A_BOLD);
     }

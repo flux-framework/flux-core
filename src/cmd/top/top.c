@@ -190,6 +190,8 @@ void top_destroy (struct top *top)
         joblist_pane_destroy (top->joblist_pane);
         summary_pane_destroy (top->summary_pane);
         keys_destroy (top->keys);
+        if (top->testf)
+            fclose (top->testf);
         flux_close (top->h);
         free (top->title);
         free (top);
@@ -270,6 +272,10 @@ static struct optparse_option cmdopts[] = {
     { .name = "test-exit", .has_arg = 0, .flags = OPTPARSE_OPT_HIDDEN,
       .usage = "Exit after screen initialization, for testing",
     },
+    { .name = "test-exit-dump", .has_arg = 1, .arginfo = "FILE",
+      .flags = OPTPARSE_OPT_HIDDEN,
+      .usage = "Dump joblist/summary data to file for testing",
+    },
     OPTPARSE_TABLE_END,
 };
 
@@ -307,8 +313,16 @@ int main (int argc, char *argv[])
 
     if (!(top = top_create (target, NULL, &error)))
         fatal (0, "%s", error.text);
-    if (optparse_hasopt (opts, "test-exit"))
+    if (optparse_hasopt (opts, "test-exit")) {
+        const char *file;
         top->test_exit = 1;
+        if ((file = optparse_get_str (opts, "test-exit-dump", NULL))) {
+            mode_t umask_orig = umask (022);
+            if (!(top->testf = fopen (file, "w+")))
+                fatal (errno, "failed to open test dump file");
+            umask (umask_orig);
+        }
+    }
     if (top_run (top, reactor_flags) < 0)
         fatal (errno, "reactor loop unexpectedly terminated");
 
