@@ -14,6 +14,22 @@ kvstest2=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest2
 pmi_info=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 pmi2_info=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi2_info
 
+test_expect_success 'flux mini run -o pmi=badopt fails' '
+	test_must_fail flux mini run -o pmi=badopt /bin/true
+'
+test_expect_success 'flux mini run -o pmi.badopt fails' '
+	test_must_fail flux mini run -o pmi.badopt /bin/true
+'
+test_expect_success 'flux mini run -o pmi.exchange.badopt fails' '
+	test_must_fail flux mini run -o pmi.exchange.badopt /bin/true
+'
+test_expect_success 'flux mini run -o pmi.exchange.k=foo fails' '
+	test_must_fail flux mini run -o pmi.exchange.k=foo /bin/true
+'
+test_expect_success 'flux mini run -o pmi.nomap=foo fails' '
+	test_must_fail flux mini run -o pmi.nomap=foo /bin/true
+'
+
 test_expect_success 'pmi_info works' '
 	flux mini run -n${SIZE} -N${SIZE} ${pmi_info}
 '
@@ -161,6 +177,10 @@ test_expect_success 'flux-pmi --method=simple fails outside of job' '
 test_expect_success 'flux-pmi -v --method=simple works within job' '
 	flux mini run --label-io -n2 flux pmi -v --method=simple barrier
 '
+test_expect_success 'flux-pmi -opmi=off --method=simple fails' '
+	test_must_fail flux mini run -o pmi=off \
+	    flux pmi --method=simple barrier
+'
 # method=libpmi
 test_expect_success 'flux-pmi --method=libpmi:/bad/path fails' '
 	test_must_fail flux mini run \
@@ -207,5 +227,8 @@ test_expect_success 'flux-pmi --method=single exchange works' '
 test_expect_success 'flux-pmi --method=single get notakey fails' '
 	test_must_fail flux pmi --method=single get notakey
 '
-
+test_expect_success 'flux-pmi -opmi=off --method=single works' '
+	flux mini run -o pmi=off \
+	    flux pmi --method=single barrier
+'
 test_done
