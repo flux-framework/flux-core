@@ -33,8 +33,33 @@ test_expect_success 'flux-top fails if job argument is unknown' '
 	test_must_fail $runpty -n --stderr=unkjobid.err flux top 12345 &&
 	grep "jobid 12345 not found" unkjobid.err
 '
+test_expect_success 'flux-top --test-exit works with a pty' '
+	$runpty flux top --test-exit >/dev/null
+'
+test_expect_success 'flux-top summary shows no jobs initially' '
+	nnodes=$(flux resource list --format="{nnodes}") &&
+	ncores=$(flux resource list --format="{ncores}") &&
+	$runpty flux top --test-exit --test-exit-dump=nojobs.out > /dev/null &&
+	grep "nodes 0/${nnodes}" nojobs.out &&
+	grep "cores 0/${ncores}" nojobs.out &&
+	grep "0 complete" nojobs.out &&
+	grep "0 pending" nojobs.out &&
+	grep "0 running" nojobs.out &&
+	grep "0 failed" nojobs.out
+'
 test_expect_success 'run a test job to completion' '
 	flux mini submit --wait -n1 flux start /bin/true >jobid
+'
+test_expect_success 'flux-top summary shows one completed job' '
+	nnodes=$(flux resource list --format="{nnodes}") &&
+	ncores=$(flux resource list --format="{ncores}") &&
+	$runpty flux top --test-exit --test-exit-dump=onejob.out >/dev/null &&
+	grep "nodes 0/${nnodes}" onejob.out &&
+	grep "cores 0/${ncores}" onejob.out &&
+	grep "1 complete" onejob.out &&
+	grep "0 pending" onejob.out &&
+	grep "0 running" onejob.out &&
+	grep "0 failed" onejob.out
 '
 test_expect_success 'flux-top fails if job is not running' '
 	test_must_fail \
@@ -50,9 +75,6 @@ test_expect_success 'flux-top fails if TERM is not supported' '
 	test_must_fail $runpty --term=dumb --stderr=dumb.err flux top &&
 	grep "terminal does not support required capabilities" dumb.err
 '
-test_expect_success 'flux-top --test-exit works with a pty' '
-	$runpty flux top --test-exit >/dev/null
-'
 test_expect_success 'submit batch script and wait for it to start' '
 	cat >batch.sh <<-EOT &&
 	#!/bin/sh
@@ -63,14 +85,48 @@ test_expect_success 'submit batch script and wait for it to start' '
 	flux mini batch -t30m -n1 batch.sh >jobid2 &&
 	$waitfile job2-has-started
 '
+test_expect_success 'flux-top shows 1 job running' '
+	nnodes=$(flux resource list --format="{nnodes}") &&
+	ncores=$(flux resource list --format="{ncores}") &&
+	$runpty flux top --test-exit --test-exit-dump=runningjob.out >/dev/null &&
+	grep "nodes 1/${nnodes}" runningjob.out &&
+	grep "cores 1/${ncores}" runningjob.out &&
+	grep "1 complete" runningjob.out &&
+	grep "0 pending" runningjob.out &&
+	grep "1 running" runningjob.out &&
+	grep "0 failed" runningjob.out &&
+	grep "batch.sh" runningjob.out &&
+	test_must_fail grep sleep runningjob.out
+'
 test_expect_success 'flux-top JOBID works' '
-	FLUX_SSH=$testssh $runpty --format=asciicast -o topjob.log \
-		flux top --test-exit $(cat jobid2)
+	FLUX_SSH=$testssh $runpty flux top --test-exit \
+		--test-exit-dump=topjob.out $(cat jobid2) >/dev/null &&
+	grep "nodes 1/1" topjob.out &&
+	grep "cores 1/1" topjob.out &&
+	grep "0 complete" topjob.out &&
+	grep "0 pending" topjob.out &&
+	grep "1 running" topjob.out &&
+	grep "0 failed" topjob.out &&
+	grep "sleep" topjob.out &&
+	test_must_fail grep "batch.sh" topjob.out
 '
 test_expect_success 'submit non-batch job and wait for it to start' '
 	flux mini submit -n1 \
 		bash -c "touch job3-has-started && sleep 300" >jobid3 &&
 	$waitfile job3-has-started
+'
+test_expect_success 'flux-top shows 2 jobs running' '
+	nnodes=$(flux resource list --format="{nnodes}") &&
+	ncores=$(flux resource list --format="{ncores}") &&
+	$runpty flux top --test-exit --test-exit-dump=tworunningjobs.out >/dev/null &&
+	grep "nodes 2/${nnodes}" tworunningjobs.out &&
+	grep "cores 2/${ncores}" tworunningjobs.out &&
+	grep "1 complete" tworunningjobs.out &&
+	grep "0 pending" tworunningjobs.out &&
+	grep "2 running" tworunningjobs.out &&
+	grep "0 failed" tworunningjobs.out &&
+	grep "batch.sh" tworunningjobs.out &&
+	grep "bash" tworunningjobs.out
 '
 test_expect_success 'flux-top JOBID fails when JOBID is not a flux instance' '
 	FLUX_SSH=$testssh test_must_fail \
@@ -132,6 +188,19 @@ test_expect_success 'cleanup running jobs' '
 	flux job cancel $(cat jobid2) $(cat jobid3) &&
 	flux job wait-event $(cat jobid2) clean &&
 	flux job wait-event $(cat jobid3) clean
+'
+test_expect_success 'flux-top shows jobs canceled' '
+	nnodes=$(flux resource list --format="{nnodes}") &&
+	ncores=$(flux resource list --format="{ncores}") &&
+	$runpty flux top --test-exit --test-exit-dump=canceledjobs.out >/dev/null &&
+	grep "nodes 0/${nnodes}" canceledjobs.out &&
+	grep "cores 0/${ncores}" canceledjobs.out &&
+	grep "1 complete" canceledjobs.out &&
+	grep "0 pending" canceledjobs.out &&
+	grep "0 running" canceledjobs.out &&
+	grep "2 failed" canceledjobs.out &&
+	test_must_fail grep "batch.sh" canceledjobs.out &&
+	test_must_fail grep "bash" canceledjobs.out
 '
 test_expect_success 'configure a test queue' '
 	flux config load <<-EOT
