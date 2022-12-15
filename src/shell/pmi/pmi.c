@@ -64,6 +64,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "builtins.h"
 #include "internal.h"
@@ -473,25 +474,30 @@ static struct pmi_simple_ops shell_pmi_ops = {
     .abort          = shell_pmi_abort,
 };
 
-static int parse_args (flux_shell_t *shell,
+static int parse_args (json_t *config,
                        int *exchange_k,
                        const char **kvs,
                        int *nomap)
 {
-    if (flux_shell_getopt_unpack (shell,
-                                  "pmi",
-                                  "{s?s s?{s?i} s?i}",
-                                  "kvs",
-                                  kvs,
-                                  "exchange",
-                                    "k", exchange_k,
-                                  "nomap",
-                                  nomap) < 0)
-        return -1;
+    json_error_t error;
+
+    if (config) {
+        if (json_unpack_ex (config,
+                            &error,
+                            0,
+                            "{s?s s?{s?i !} s?i !}",
+                            "kvs", kvs,
+                            "exchange",
+                              "k", exchange_k,
+                            "nomap", nomap) < 0) {
+            shell_log_error ("option error: %s", error.text);
+            return -1;
+        }
+    }
     return 0;
 }
 
-static struct shell_pmi *pmi_create (flux_shell_t *shell)
+static struct shell_pmi *pmi_create (flux_shell_t *shell, json_t *config)
 {
     struct shell_pmi *pmi;
     struct shell_info *info = shell->info;
@@ -505,7 +511,7 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
         return NULL;
     pmi->shell = shell;
 
-    if (parse_args (shell, &exchange_k, &kvs, &nomap) < 0)
+    if (parse_args (config, &exchange_k, &kvs, &nomap) < 0)
         goto error;
     if (!strcmp (kvs, "native")) {
         shell_pmi_ops.kvs_put = native_kvs_put;
@@ -571,7 +577,18 @@ static int shell_pmi_init (flux_plugin_t *p,
 {
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct shell_pmi *pmi;
-    if (!shell || !(pmi = pmi_create (shell)))
+    json_t *config = NULL;
+
+    if (flux_shell_getopt_unpack (shell, "pmi", "o", &config) < 0)
+        return -1;
+    if (config && json_is_string (config)) {
+        if (streq (json_string_value (config), "off"))
+            return 0; // plugin disabled
+        shell_log_error ("unknown option: '%s'", json_string_value (config));
+        return -1;
+    }
+
+    if (!(pmi = pmi_create (shell, config)))
         return -1;
     if (flux_plugin_aux_set (p, "pmi", pmi, (flux_free_f) pmi_destroy) < 0) {
         pmi_destroy (pmi);
@@ -590,8 +607,9 @@ static int shell_pmi_task_init (flux_plugin_t *p,
     flux_shell_task_t *task;
     flux_cmd_t *cmd;
 
+    if (!(pmi = flux_plugin_aux_get (p, "pmi")))
+        return 0; // plugin disabled
     if (!(shell = flux_plugin_get_shell (p))
-        || !(pmi = flux_plugin_aux_get (p, "pmi"))
         || !(task = flux_shell_current_task (shell))
         || !(cmd = flux_shell_task_cmd (task)))
         return -1;
