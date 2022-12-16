@@ -226,6 +226,10 @@ class CLIMain(object):
 
 
 def parse_fsd(fsd_string):
+    # Special case for RFC 23 "infinity"
+    if fsd_string in ["inf", "infinity", "INF", "INFINITY"]:
+        return float("inf")
+
     match = re.match(r"(.*?)(s|m|h|d|ms)$", fsd_string)
     try:
         value = float(match.group(1) if match else fsd_string)
