@@ -253,6 +253,20 @@ int flux_job_result_get (flux_future_t *f,
  */
 int flux_job_result_get_unpack (flux_future_t *f, const char *fmt, ...);
 
+
+/*  Get remaining time in floating point seconds for the current job or
+ *  enclosing instancce (i.e., if the current process is associated with
+ *  a flux instance, but is not part of a parallel job).
+ *
+ *  Returns 0 on success with timeleft assigned to the remaining time.
+ *  If there is no expiration in the current context (e.g. the job has
+ *  no timelimit), then timeleft is set to infinity. If the job is not
+ *  in RUN state, or the job has expired, then timeleft is set to 0.
+ *
+ *  Returns -1 with error string assinged to 'errp' on failure.
+ */
+int flux_job_timeleft (flux_t *h, flux_error_t *errp, double *timeleft);
+
 #ifdef __cplusplus
 }
 #endif
