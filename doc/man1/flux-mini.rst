@@ -756,13 +756,10 @@ overridden in some cases:
    each task will run in the process group of the shell. This will cause
    signals to be delivered only to direct children of the shell.
 
-**pmi.kvs=native**
-   Use the native Flux KVS instead of the PMI plugin's built-in key exchange
-   algorithm.
-
-**pmi.exchange.k=N**
-   Configure the PMI plugin's built-in key exchange algorithm to use a
-   virtual tree fanout of ``N`` for key gather/broadcast.  The default is 2.
+**pmi=off**
+   Disable the process management interface (PMI-1) which is required for
+   bootstrapping most parallel program environments.  See :man1:`flux-shell`
+   for more pmi options.
 
 **stage-in**
    Copy files previously mapped with :man1:`flux-filemap` to $FLUX_JOB_TMPDIR.

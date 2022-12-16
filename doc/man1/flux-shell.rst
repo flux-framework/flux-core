@@ -324,6 +324,21 @@ options are supported by the builtin plugins of ``flux-shell``:
   this will also be passed to the invoked plugin. Normally, this option will
   be set by the ``flux mini --taskmap`` option.
 
+**pmi=off**
+  Disable the process management interface (PMI-1) which is required for
+  bootstrapping most parallel program environments.
+
+**pmi.nomap**
+  Skip populating the PMI ``flux.taskmap`` and ``PMI_process_mapping`` keys.
+
+**pmi.kvs=native**
+  Use the native Flux KVS instead of the PMI plugin's built-in key exchange
+  algorithm.
+
+**pmi.exchange.k=N**
+  Configure the PMI plugin's built-in key exchange algorithm to use a
+  virtual tree fanout of ``N`` for key gather/broadcast.  The default is 2.
+
 **stage-in**
   Copy files to $FLUX_JOB_TMPDIR that were previously mapped using
   :man1:`flux-filemap`.
