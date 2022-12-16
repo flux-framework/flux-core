@@ -366,10 +366,6 @@ static int get_taskid (flux_plugin_t *p)
     return flux_shell_task_getid (task);
 }
 
-#if CODE_COVERAGE_ENABLED
-void __gcov_flush (void);
-#endif
-
 static int task_affinity (flux_plugin_t *p,
                           const char *topic,
                           flux_plugin_arg_t *args,
@@ -380,9 +376,6 @@ static int task_affinity (flux_plugin_t *p,
     if (sa->pertask)
         hwloc_set_cpubind (sa->topo, sa->pertask[i], 0);
     shell_affinity_destroy (sa);
-#if CODE_COVERAGE_ENABLED
-    __gcov_flush ();
-#endif
     return 0;
 }
 

@@ -1297,7 +1297,8 @@ static int shell_task_init (flux_shell_t *shell)
 }
 
 #if CODE_COVERAGE_ENABLED
-extern void __gcov_flush ();
+extern void __gcov_dump ();
+extern void __gcov_reset ();
 #endif
 static void shell_task_exec (flux_shell_task_t *task, void *arg)
 {
@@ -1312,7 +1313,8 @@ static void shell_task_exec (flux_shell_task_t *task, void *arg)
     if (plugstack_call (shell->plugstack, "task.exec", NULL) < 0)
         shell_log_errno ("task.exec plugin(s) failed");
 #if CODE_COVERAGE_ENABLED
-    __gcov_flush ();
+    __gcov_dump ();
+    __gcov_reset ();
 #endif
 }
 

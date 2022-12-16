@@ -72,6 +72,7 @@ class BuildMatrix:
         docker_tag=False,
         test_s3=False,
         coverage=False,
+        coverage_flags=None,
         recheck=True,
         platform=None,
         command_args="",
@@ -118,6 +119,7 @@ class BuildMatrix:
                 "tag": self.tag,
                 "branch": self.branch,
                 "coverage": coverage,
+                "coverage_flags": coverage_flags,
                 "test_s3": test_s3,
                 "docker_tag": docker_tag,
                 "needs_buildx": needs_buildx,
@@ -169,12 +171,14 @@ matrix.add_build(
     command_args="--workdir=/usr/src/" + "workdir/" * 15,
 )
 
-# Ubuntu: coverage
+# coverage
 matrix.add_build(
     name="coverage",
+    coverage_flags="ci-basic",
+    image="fedora35",
     coverage=True,
     jobs=2,
-    args="--with-flux-security --enable-pmix-bootstrap",
+    args="--with-flux-security --enable-pmix-bootstrap --enable-caliper",
 )
 
 # Ubuntu: TEST_INSTALL
@@ -212,6 +216,7 @@ matrix.add_build(
 # RHEL8 clone, system, coverage
 matrix.add_build(
     name="el8 - system,coverage",
+    coverage_flags="ci-system",
     image="el8",
     coverage=True,
     jobs=2,

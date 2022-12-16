@@ -20,6 +20,7 @@
 #  POISON        Install poison libflux and flux(1) in image
 #  INCEPTION     Run tests under a flux instance
 #  chain_lint    Run sharness with --chain-lint if chain_lint=t
+#  SYSTEM        Run only the system sharness tests
 #
 #  And, obviously, some crucial variables that configure itself cares about:
 #
@@ -96,6 +97,11 @@ fi
 # Enable coverage for $CC-coverage build
 # We can't use distcheck here, it doesn't play well with coverage testing:
 if test "$COVERAGE" = "t"; then
+	export PATH=~/.local/bin/:$PATH
+
+	# install coverage via pip if necessaary
+	coverage -h >/dev/null 2>&1 || python3 -m pip install coverage
+
 	# usercustomize.py must go under USER_SITE, so determine that path:
 	USER_SITE=$(python3 -c 'import site; print(site.USER_SITE)')
 	mkdir -p ${USER_SITE}
@@ -127,17 +133,22 @@ if test "$COVERAGE" = "t"; then
 
 	rm -f .coverage .coverage*
 
+	#  Tests to run during system testing have "ci=system" in test file
+	SYSTEM_TESTS=$(cd t && grep -l ci=system *.t)
+
 	ARGS="$ARGS --enable-code-coverage"
 	CHECKCMDS="\
-	ENABLE_USER_SITE=1 \
-	COVERAGE_PROCESS_START=$(pwd)/coverage.rc \
-	${MAKE} -j $JOBS check-code-coverage && \
-	(lcov -l flux*-coverage.info || :) && \
-	rm -f coverage.xml && \
-	coverage combine .coverage* && \
-	coverage html && coverage xml &&
-	chmod 444 coverage.xml &&
-	coverage report"
+	export ENABLE_USER_SITE=1; \
+	export COVERAGE_PROCESS_START=$(pwd)/coverage.rc; \
+	${MAKE} -j $JOBS check-prep && \
+	(cd t && ${MAKE} -j $JOBS check ${SYSTEM:+TESTS=\"$SYSTEM_TESTS\"}) && \
+	${MAKE} code-coverage-capture &&
+	lcov -l flux*-coverage.info; \
+	rm -f coverage.xml; \
+	coverage combine .coverage*; \
+	coverage html; coverage xml; \
+	chmod 444 coverage.xml; \
+	(coverage report || :)"
 
 # Use make install for T_INSTALL:
 elif test "$TEST_INSTALL" = "t"; then

@@ -1,5 +1,5 @@
 #!/bin/sh
-#
+# ci=system
 
 test_description='Run tests against a system instance of Flux'
 

@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=system
 
 test_description='Test simulated job exection with system instance'
 

@@ -88,7 +88,8 @@ static void local_child_report_exec_failed_errno (flux_subprocess_t *p, int e)
 }
 
 #if CODE_COVERAGE_ENABLED
-void __gcov_flush (void);
+void __gcov_dump (void);
+void __gcov_reset (void);
 #endif
 static int local_child (flux_subprocess_t *p)
 {
@@ -179,7 +180,8 @@ static int local_child (flux_subprocess_t *p)
         _exit (1);
     }
 #if CODE_COVERAGE_ENABLED
-    __gcov_flush ();
+    __gcov_dump ();
+    __gcov_reset ();
 #endif
     execvp (argv[0], argv);
 
@@ -193,7 +195,8 @@ static int local_child (flux_subprocess_t *p)
     local_child_report_exec_failed_errno (p, errnum);
     close (STDERR_FILENO);
 #if CODE_COVERAGE_ENABLED
-    __gcov_flush ();
+    __gcov_dump ();
+    __gcov_reset ();
 #endif
     /* exit code doesn't matter, can't be returned to user */
     _exit (1);
