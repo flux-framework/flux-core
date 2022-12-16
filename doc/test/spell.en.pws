@@ -684,3 +684,4 @@ nocheckpoint
 CPUs
 cpuset
 taskset
+nomap
