@@ -69,9 +69,10 @@ OPTIONS
    section for more details. A configuration snippet for an existing
    named format may be generated with ``--format=get-config=NAME``.
 
-**--color**\ *=WHEN*
-   Control output coloring. WHEN can be *never*, *always*, or *auto*.
-   Defaults to *auto*.
+**--color**\ *[=WHEN]*
+   Control output coloring.  The optional argument *WHEN* can be
+   *auto*, *never*, or *always*.  If *WHEN* is omitted, it defaults to
+   *always*.  Otherwise the default is *auto*.
 
 **--stats**
    Output a summary of job statistics before the header.  By default

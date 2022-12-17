@@ -8,7 +8,7 @@ flux-top(1)
 SYNOPSIS
 ========
 
-**flux** **top** [*TARGET*]
+**flux** **top** [*OPTIONS*] [*TARGET*]
 
 
 DESCRIPTION
@@ -21,6 +21,18 @@ as described in :man1:`flux-uri`.
 
 The ``flux-top`` display window is divided into two parts:  the summary pane,
 and the job listing pane, which are described in detail below.
+
+
+OPTIONS
+=======
+
+**-h, --help**
+   Summarize available options.
+
+**--color**\ *[=WHEN]*
+   Colorize output.  The optional argument *WHEN* can be *auto*, *never*,
+   or *always*.  If *WHEN* is omitted, it defaults to *always*. The default
+   value when the **--color** option is not used is *auto*.
 
 
 KEYS

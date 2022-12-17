@@ -75,6 +75,15 @@ test_expect_success 'flux-top fails if TERM is not supported' '
 	test_must_fail $runpty --term=dumb --stderr=dumb.err flux top &&
 	grep "terminal does not support required capabilities" dumb.err
 '
+test_expect_success 'flux-top --color options work' '
+	$runpty flux top --color --test-exit >/dev/null &&
+	$runpty flux top --color=auto --test-exit >/dev/null &&
+	$runpty flux top --color=always --test-exit >/dev/null &&
+	$runpty flux top --color=never --test-exit >/dev/null
+'
+test_expect_success 'flux-top --color fails with bad input' '
+	test_must_fail $runpty flux top --color=foo --test-exit >/dev/null
+'
 test_expect_success 'submit batch script and wait for it to start' '
 	cat >batch.sh <<-EOT &&
 	#!/bin/sh

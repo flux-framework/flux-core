@@ -1108,7 +1108,7 @@ grey_line_count() {
 	grep -c -o "\\u001b\[37m" $1 || true
 }
 
-for opt in "" "--color=always" "--color=auto"; do
+for opt in "" "--color" "--color=always" "--color=auto"; do
 	test_expect_success "flux-jobs $opt color works (pty)" '
 		name=${opt##--color=} &&
 		outfile=color-${name:-default}.out &&
