@@ -730,5 +730,66 @@ test_expect_success 'flux job: kill can operate on multiple jobs' '
 		grep status=$((15+128<<8)) killmulti.out
 	done
 '
+test_expect_success 'flux job: timeleft reports error outside of a job' '
+	test_expect_code 1 flux job timeleft
+'
 
+test_expect_success 'flux job: timeleft reports large int with no time limit' '
+	flux mini run flux job timeleft > timeleft1 &&
+	test $(cat timeleft1) -gt 9999999
+'
+test_expect_success 'flux job: timeleft -H reports infinity with no time limit' '
+	flux mini run flux job timeleft -H > timeleft1H &&
+	grep infinity timeleft1H
+'
+test_expect_success 'flux job: timeleft works with time limit' '
+	flux mini run -t 1m flux job timeleft >timeleft2 &&
+	test_debug "cat timeleft2" &&
+	test $(cat timeleft2) -lt 60
+'
+test_expect_success 'flux job: timeleft -H works with time limit' '
+	flux mini run -t 1m flux job timeleft -H >timeleft2H &&
+	grep "[0-9]s$" timeleft2H
+'
+test_expect_success 'flux job: timeleft works under mini alloc (and job)' '
+	cat <<-EOF >test.sh &&
+	flux job timeleft > timeleft3
+	flux mini run flux job timeleft > timeleft4
+	EOF
+	chmod +x test.sh &&
+	flux mini alloc -n1 -t 1m ./test.sh &&
+	test_debug "cat timeleft3" &&
+	test $(cat timeleft3) -lt 60 &&
+	test_debug "cat timeleft4" &&
+	test $(cat timeleft4) -lt 60
+'
+test_expect_success 'flux job: timeleft works for a jobid' '
+	id=$(flux mini submit --wait-event=start -t 1m sleep 60) &&
+	flux job timeleft $id > timeleft5 &&
+	test_debug "cat timeleft5" &&
+	test $(cat timeleft5) -lt 60
+'
+test_expect_success 'flux job: timeleft reports 0s for expired job' '
+	id=$(flux mini submit --wait -t0.01s hostname || true) &&
+	flux job timeleft $id > timeleft6 &&
+	test_debug "cat timeleft6" &&
+	test $(cat timeleft6) -eq 0
+'
+test_expect_success 'flux job: timeleft returns 0 for completed job' '
+	id=$(flux mini submit --wait -t 5d true) &&
+	flux job timeleft $id > timeleft7 &&
+	test_debug "cat timeleft7" &&
+	test $(cat timeleft7) -eq 0
+'
+test_expect_success 'flux job: timeleft fails for pending job' '
+	flux queue stop &&
+	id=$(flux mini submit -t 10m true) &&
+	test_expect_code 1 flux job timeleft $id > timeleft8 2>&1 &&
+	flux queue start &&
+	grep "has not started" timeleft8
+'
+test_expect_success 'flux job: timeleft fails for invalid jobids' '
+	test_expect_code 1 flux job timeleft f1234 &&
+	test_expect_code 1 flux job timeleft x1234
+'
 test_done

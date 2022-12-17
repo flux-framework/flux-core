@@ -706,6 +706,19 @@ class TestJob(unittest.TestCase):
         # Test a job that does not exist
         meta = job.get_job(self.fh, 123456)
         self.assertIsNone(meta)
+
+    def test_34_timeleft(self):
+        spec = JobspecV1.from_command(
+            ["python3", "-c", "import flux; print(flux.job.timeleft())"]
+        )
+        spec.duration = "1m"
+        jobid = job.submit(self.fh, spec, waitable=True)
+        job.wait(self.fh, jobid=jobid)
+        try:
+            dt = job.timeleft()
+            dt = job.timeleft(self.fh)
+        except OSError:
+            pass
         
 if __name__ == "__main__":
     from subflux import rerun_under_flux
