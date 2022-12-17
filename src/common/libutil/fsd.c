@@ -26,8 +26,8 @@ static int is_invalid_duration (double d)
         case FP_NORMAL:     // [[fallthrough]]
         case FP_SUBNORMAL:  // [[fallthrough]]
         case FP_ZERO:       // [[fallthrough]]
-            break;          // OK
         case FP_INFINITE:   // [[fallthrough]]
+            break;          // OK
         case FP_NAN:        // [[fallthrough]]
         default:            // something else, bad
             errno = EINVAL;
@@ -57,6 +57,14 @@ int fsd_parse_duration (const char *s, double *dp)
 
     if (*p != '\0') {
         double multiplier = 0.;
+
+        /*  units not allowed for inf/infinity
+         */
+        if (isinf (d)) {
+            errno = EINVAL;
+            return -1;
+        }
+
         if (streq (p, "ms"))
             multiplier = .001;
         else if (streq (p, "s"))
@@ -82,10 +90,21 @@ int fsd_format_duration_ex (char *buf,
                             double duration,
                             int precision)
 {
-    if (buf == NULL || len <= 0 || is_invalid_duration(duration)) {
+    if (buf == NULL || len <= 0) {
         errno = EINVAL;
         return -1;
     }
+
+    /*  First check for infinity special case
+     */
+    if (isinf (duration))
+        return snprintf (buf, len, "%s", "infinity");
+
+    if (is_invalid_duration (duration)) {
+        errno = EINVAL;
+        return -1;
+    }
+
     /*  We'd rather present a result in seconds if possible, since that
      *  is the base unit of FSD. However, if the duration is very small,
      *  present in milliseconds since the result will be easier for a

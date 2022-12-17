@@ -15,6 +15,40 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/fsd.h"
 
+struct test_vector {
+    const char *input;
+    double result;
+};
+
+struct test_vector rfc23_tests[] = {
+    { "2ms",          0.002    },
+    { "0.1s",         0.1      },
+    { "30",           30.      },
+    { "1.2h",         4320.    },
+    { "5m",           300.     },
+    { "0s",           0.       },
+    { "5d",           432000.  },
+    { "inf",          INFINITY },
+    { "INF",          INFINITY },
+    { "infinity",     INFINITY },
+    { NULL,           0.       },
+};
+
+static void run_rfc23_tests ()
+{
+    struct test_vector *tp = rfc23_tests;
+    while (tp->input != NULL) {
+        double d;
+        ok (fsd_parse_duration (tp->input, &d) == 0,
+            "rfc23: fsd_parse_duration (%s)",
+            tp->input);
+        ok (d == tp->result,
+            "rfc23: result is %.3f",
+            d);
+        tp++;
+    }
+}
+
 int main(int argc, char** argv)
 {
     double d;
@@ -37,6 +71,13 @@ int main(int argc, char** argv)
         "fsd_parse_duration (NaNs) is an error");
     ok (fsd_parse_duration ("infinites", &d) < 0 && errno == EINVAL,
         "fsd_parse_duration (infinites) is an error");
+    ok (fsd_parse_duration ("infd", &d) < 0 && errno == EINVAL,
+        "fsd_parse_duration (infd) is an error");
+
+    ok (fsd_parse_duration ("infinity", &d) == 0,
+        "fsd_parse_duration (\"infinity\") returns success");
+    ok (isinf (d),
+        "isinf (result) is true");
 
     ok (fsd_parse_duration ("0", &d) == 0,
         "fsd_parse_duration (0) returns success");
@@ -93,10 +134,7 @@ int main(int argc, char** argv)
     ok (fsd_format_duration (buf, sizeof (buf), NAN) < 0 && errno == EINVAL,
         "fsd_format_duration with NaN duration. returns EINVAL");
 
-    ok (fsd_format_duration (buf, sizeof (buf), INFINITY) < 0 && errno == EINVAL,
-        "fsd_format_duration with INF duration. returns EINVAL");
-
-    ok (fsd_format_duration (buf, sizeof (buf), -1.) < 0 && errno == EINVAL,
+   ok (fsd_format_duration (buf, sizeof (buf), -1.) < 0 && errno == EINVAL,
         "fsd_format_duration with duration < 0. returns EINVAL");
 
     ok (fsd_format_duration (buf, 0, 1.) < 0 && errno == EINVAL,
@@ -104,6 +142,10 @@ int main(int argc, char** argv)
 
     ok (fsd_format_duration (NULL, 1024, 1000.) < 0 && errno == EINVAL,
         "fsd_format_duration with buf == NULL returns EINVAL");
+
+    ok (fsd_format_duration (buf, sizeof (buf), INFINITY) > 0,
+        "fsd_format_duration (INFINITY) works");
+    is (buf, "infinity", "returns expected string = %s", buf);
 
     ok (fsd_format_duration (buf, sizeof (buf), .001),
         "fsd_format_duration (.001) works");
@@ -144,6 +186,8 @@ int main(int argc, char** argv)
     ok (fsd_format_duration_ex (buf, sizeof (buf), 62.0, 1),
         "fsd_format_duration_ex (62., 1) works");
     is (buf, "1m", "returns expected string = %s", buf);
+
+    run_rfc23_tests ();
 
     done_testing();
 }
