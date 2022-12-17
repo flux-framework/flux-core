@@ -29,4 +29,5 @@ from flux.job.executor import (
     FluxExecutor,
     FluxExecutorFuture,
 )
+from flux.job.timeleft import timeleft
 from flux.core.inner import ffi
