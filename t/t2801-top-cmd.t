@@ -203,6 +203,10 @@ test_expect_success 'flux-top shows jobs canceled' '
 	test_must_fail grep "batch.sh" canceledjobs.out &&
 	test_must_fail grep "bash" canceledjobs.out
 '
+test_expect_success NO_CHAIN_LINT 'flux-top works with FLUX_F58_FORCE_ASCII' '
+       FLUX_F58_FORCE_ASCII=1 $runpty -f asciicast -o normalf.log \
+			      flux top --test-exit
+'
 test_expect_success 'configure a test queue' '
 	flux config load <<-EOT
 	[queues.testq]
