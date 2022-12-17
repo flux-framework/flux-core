@@ -32,6 +32,8 @@ struct top {
     flux_jobid_t id;
 
     unsigned int test_exit:1;    /*  Exit after first joblist pane update */
+    unsigned int test_exit_count;
+    FILE *testf;
 
     uint32_t size;
     struct summary_pane *summary_pane;
@@ -55,6 +57,7 @@ struct top *top_create (const char *uri,
                         flux_error_t *errp);
 void top_destroy (struct top *top);
 int top_run (struct top *top, int reactor_flags);
+void test_exit_check (struct top *top);
 
 struct summary_pane *summary_pane_create (struct top *top);
 void summary_pane_destroy (struct summary_pane *sum);

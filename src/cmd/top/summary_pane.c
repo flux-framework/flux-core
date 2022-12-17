@@ -46,6 +46,7 @@ struct stats {
     int run;
     int cleanup;
     int inactive;
+    int successful;
     int failed;
     int canceled;
     int timeout;
@@ -136,9 +137,18 @@ static void draw_stats (struct summary_pane *sum)
                stats_dim.x_length - 10,
                sum->stats.run + sum->stats.cleanup);
 
+    if (sum->top->testf) {
+        fprintf (sum->top->testf,
+                 "%d pending\n",
+                 sum->stats.depend + sum->stats.priority + sum->stats.sched);
+        fprintf (sum->top->testf,
+                 "%d running\n",
+                 sum->stats.run + sum->stats.cleanup);
+    }
+
     if (sum->show_details) {
         int failed = sum->stats.failed;
-        int complete = sum->stats.inactive - failed;
+        int complete = sum->stats.successful;
 
         if (complete)
             wattron (sum->win, COLOR_PAIR(TOP_COLOR_GREEN) | A_BOLD);
@@ -166,6 +176,15 @@ static void draw_stats (struct summary_pane *sum)
                    stats_dim.y_begin + 2,
                    stats_dim.x_begin + 5,
                    " failed");
+
+        if (sum->top->testf) {
+            fprintf (sum->top->testf,
+                     "%d complete\n",
+                     complete);
+            fprintf (sum->top->testf,
+                     "%d failed\n",
+                     failed);
+        }
     }
     else {
         mvwprintw (sum->win,
@@ -174,6 +193,11 @@ static void draw_stats (struct summary_pane *sum)
                    "%*d inactive",
                    stats_dim.x_length - 10,
                    sum->stats.inactive);
+        if (sum->top->testf) {
+            fprintf (sum->top->testf,
+                     "%d inactive\n",
+                     sum->stats.inactive);
+        }
     }
 }
 
@@ -182,7 +206,7 @@ static void draw_stats (struct summary_pane *sum)
  * "used" grows from the left in yellow; "down" grows from the right in red.
  * Fraction is used/total.
  */
-static void draw_bargraph (WINDOW *win, int y, int x, int x_length,
+static void draw_bargraph (struct summary_pane *sum, int y, int x, int x_length,
                            const char *name, struct resource_count res)
 {
     char prefix[16];
@@ -197,7 +221,7 @@ static void draw_bargraph (WINDOW *win, int y, int x, int x_length,
     snprintf (suffix, sizeof (suffix), "%d/%d]", res.used, res.total);
 
     int slots = x_length - strlen (prefix) - strlen (suffix) - 1;
-    mvwprintw (win,
+    mvwprintw (sum->win,
                y,
                x,
                "%s%*s%s",
@@ -205,35 +229,42 @@ static void draw_bargraph (WINDOW *win, int y, int x, int x_length,
                slots, "",
                suffix);
     /* Graph used */
-    wattron (win, COLOR_PAIR (TOP_COLOR_YELLOW));
+    wattron (sum->win, COLOR_PAIR (TOP_COLOR_YELLOW));
     for (int i = 0; i < ceil (((double)res.used / res.total) * slots); i++)
-        mvwaddch (win, y, x + strlen (prefix) + i, '|');
-    wattroff (win, COLOR_PAIR (TOP_COLOR_YELLOW));
+        mvwaddch (sum->win, y, x + strlen (prefix) + i, '|');
+    wattroff (sum->win, COLOR_PAIR (TOP_COLOR_YELLOW));
 
     /* Graph down */
-    wattron (win, COLOR_PAIR (TOP_COLOR_RED));
+    wattron (sum->win, COLOR_PAIR (TOP_COLOR_RED));
     for (int i = slots - 1;
          i >= slots - ceil (((double)res.down / res.total) * slots); i--) {
-        mvwaddch (win, y, x + strlen (prefix) + i, '|');
+        mvwaddch (sum->win, y, x + strlen (prefix) + i, '|');
     }
-    wattroff (win, COLOR_PAIR (TOP_COLOR_RED));
+    wattroff (sum->win, COLOR_PAIR (TOP_COLOR_RED));
+
+    if (sum->top->testf)
+        fprintf (sum->top->testf,
+                 "%s %d/%d\n",
+                 name,
+                 res.used,
+                 res.total);
 }
 
 static void draw_resource (struct summary_pane *sum)
 {
-    draw_bargraph (sum->win,
+    draw_bargraph (sum,
                    resource_dim.y_begin,
                    resource_dim.x_begin,
                    resource_dim.x_length,
                    "nodes",
                    sum->node);
-    draw_bargraph (sum->win,
+    draw_bargraph (sum,
                    resource_dim.y_begin + 1,
                    resource_dim.x_begin,
                    resource_dim.x_length,
                    "cores",
                    sum->core);
-    draw_bargraph (sum->win,
+    draw_bargraph (sum,
                    resource_dim.y_begin + 2,
                    resource_dim.x_begin,
                    resource_dim.x_length,
@@ -377,6 +408,11 @@ static void resource_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
     sum->f_resource = NULL;
     draw_resource (sum);
+    if (sum->top->test_exit) {
+        /* Ensure resources are refreshed before exiting */
+        wnoutrefresh (sum->win);
+        test_exit_check (sum->top);
+    }
 }
 
 static void stats_continuation (flux_future_t *f, void *arg)
@@ -384,7 +420,8 @@ static void stats_continuation (flux_future_t *f, void *arg)
     struct summary_pane *sum = arg;
 
     if (flux_rpc_get_unpack (f,
-                             "{s:i s:i s:i s:{s:i s:i s:i s:i s:i s:i s:i}}",
+                             "{s:i s:i s:i s:i s:{s:i s:i s:i s:i s:i s:i s:i}}",
+                             "successful", &sum->stats.successful,
                              "failed", &sum->stats.failed,
                              "canceled", &sum->stats.canceled,
                              "timeout", &sum->stats.timeout,
@@ -395,13 +432,18 @@ static void stats_continuation (flux_future_t *f, void *arg)
                                "run", &sum->stats.run,
                                "cleanup", &sum->stats.cleanup,
                                "inactive", &sum->stats.inactive,
-                               "total", &sum->stats.total)) {
+                               "total", &sum->stats.total) < 0) {
         if (errno != ENOSYS)
             fatal (errno, "error decoding job-list.job-stats RPC response");
     }
     flux_future_destroy (f);
     sum->f_stats = NULL;
     draw_stats (sum);
+    if (sum->top->test_exit) {
+        /* Ensure stats is refreshed before exiting */
+        wnoutrefresh (sum->win);
+        test_exit_check (sum->top);
+    }
 }
 
 static void heartblink_cb (flux_reactor_t *r,
