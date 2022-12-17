@@ -78,8 +78,9 @@ test_expect_success 'flux-top fails if TERM is not supported' '
 test_expect_success 'submit batch script and wait for it to start' '
 	cat >batch.sh <<-EOT &&
 	#!/bin/sh
+	flux mini submit --wait-event=start sleep 300
 	touch job2-has-started
-	flux mini run sleep 300
+	flux queue drain
 	EOT
 	chmod +x batch.sh &&
 	flux mini batch -t30m -n1 batch.sh >jobid2 &&
