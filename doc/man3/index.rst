@@ -76,6 +76,7 @@ man3
    idset_encode
    idset_add
    flux_jobtap_get_flux
+   flux_job_timeleft
 
 .. toctree::
    :hidden:
