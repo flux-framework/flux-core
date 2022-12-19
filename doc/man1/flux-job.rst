@@ -22,6 +22,8 @@ SYNOPSIS
 
 **flux** **job** **taskmap** [*OPTIONS*] *id*|*taskmap*
 
+**flux** **job** **timeleft** [*OPTIONS*] [*id*]
+
 **flux** **job** **purge** [*OPTIONS*]
 
 DESCRIPTION
@@ -142,6 +144,23 @@ support task mapping formats:
    *multiline* which prints the node ID of each task, one per line.
 
 One one of the above options may be used per call.
+
+TIMELEFT
+========
+
+The ``flux job timeleft`` utility reports the number of whole seconds left
+in the current or specified job time limit. If the job has expired or is
+complete, then this command reports ``0``. If the job does not have a time
+limit, then a large number (``UINT_MAX``) is reported.
+
+If ``flux job timeleft`` is called outside the context of a Flux job, or
+an invalid or pending job is targeted, then this command will exit with
+an error and diagnostic message.
+
+Options:
+
+**-H, --human**
+  Generate human readable output. Report results in Flux Standard Duration.
 
 PURGE
 =====
