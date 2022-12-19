@@ -278,6 +278,7 @@ man_pages = [
     ('man3/flux_jobtap_get_flux','flux_jobtap_priority_unavail', 'Flux jobtap plugin interfaces', [author], 3),
     ('man3/flux_jobtap_get_flux','flux_jobtap_reject_job', 'Flux jobtap plugin interfaces', [author], 3),
     ('man3/flux_sync_create','flux_sync_create', 'Synchronize on system heartbeat', [author], 3),
+    ('man3/flux_job_timeleft','flux_job_timeleft', 'Get remaining time for a job', [author], 3),
     ('man5/flux-config', 'flux-config', 'Flux configuration files', [author], 5),
     ('man5/flux-config-access', 'flux-config-access', 'configure Flux instance access', [author], 5),
     ('man5/flux-config-bootstrap', 'flux-config-bootstrap', 'configure Flux instance bootstrap', [author], 5),

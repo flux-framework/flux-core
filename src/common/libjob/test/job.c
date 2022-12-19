@@ -437,6 +437,17 @@ void check_jobid_parse_encode (void)
         "flux_job_id_encode with unknown encode type returns EPROTO");
 }
 
+static void check_job_timeleft (void)
+{
+    flux_t *h = (flux_t *)(uintptr_t)42; // fake but non-NULL
+    flux_error_t error;
+    double timeleft;
+
+    ok (flux_job_timeleft (NULL, &error, &timeleft) < 0 && errno == EINVAL,
+        "flux_job_timeleft (NULL, ...) returns EINVAL");
+    ok (flux_job_timeleft (h, &error, NULL) < 0 && errno == EINVAL,
+        "flux_job_timeleft (h, error, NULL) returns EINVAL");
+}
 
 int main (int argc, char *argv[])
 {
@@ -456,6 +467,8 @@ int main (int argc, char *argv[])
     check_kvs_namespace ();
 
     check_jobid_parse_encode ();
+
+    check_job_timeleft ();
 
     done_testing ();
     return 0;
