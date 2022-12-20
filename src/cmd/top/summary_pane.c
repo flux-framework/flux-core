@@ -422,24 +422,29 @@ static void resource_continuation (flux_future_t *f, void *arg)
 static void stats_continuation (flux_future_t *f, void *arg)
 {
     struct summary_pane *sum = arg;
+    json_t *o = NULL;
 
-    if (flux_rpc_get_unpack (f,
-                             "{s:i s:i s:i s:i s:{s:i s:i s:i s:i s:i s:i s:i}}",
-                             "successful", &sum->stats.successful,
-                             "failed", &sum->stats.failed,
-                             "canceled", &sum->stats.canceled,
-                             "timeout", &sum->stats.timeout,
-                             "job_states",
-                               "depend", &sum->stats.depend,
-                               "priority", &sum->stats.priority,
-                               "sched", &sum->stats.sched,
-                               "run", &sum->stats.run,
-                               "cleanup", &sum->stats.cleanup,
-                               "inactive", &sum->stats.inactive,
-                               "total", &sum->stats.total) < 0) {
+    if (flux_rpc_get_unpack (f, "o", &o) < 0) {
         if (errno != ENOSYS)
-            fatal (errno, "error decoding job-list.job-stats RPC response");
+            fatal (errno, "error getting job-list.job-stats RPC response");
     }
+
+    if (json_unpack (o,
+                     "{s:i s:i s:i s:i s:{s:i s:i s:i s:i s:i s:i s:i}}",
+                     "successful", &sum->stats.successful,
+                     "failed", &sum->stats.failed,
+                     "canceled", &sum->stats.canceled,
+                     "timeout", &sum->stats.timeout,
+                     "job_states",
+                       "depend", &sum->stats.depend,
+                       "priority", &sum->stats.priority,
+                       "sched", &sum->stats.sched,
+                       "run", &sum->stats.run,
+                       "cleanup", &sum->stats.cleanup,
+                       "inactive", &sum->stats.inactive,
+                       "total", &sum->stats.total) < 0)
+        fatal (0, "error decoding job-list.job-stats object");
+
     flux_future_destroy (f);
     sum->f_stats = NULL;
     draw_stats (sum);
