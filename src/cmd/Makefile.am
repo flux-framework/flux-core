@@ -85,7 +85,9 @@ dist_fluxcmd_SCRIPTS = \
 	flux-job-exec-override.py \
 	flux-perilog-run.py \
 	flux-uri.py \
-	flux-pstree.py
+	flux-pstree.py \
+	flux-pgrep.py \
+	flux-pkill.py
 
 fluxcmd_PROGRAMS = \
 	flux-terminus \
