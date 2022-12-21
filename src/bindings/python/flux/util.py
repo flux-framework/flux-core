@@ -331,7 +331,7 @@ def parse_fsd(fsd_string):
     return seconds
 
 
-def parse_datetime(string, now=None):
+def parse_datetime(string, now=None, assumeFuture=True):
     """Parse a possibly human readable datetime string or offset
 
     If string starts with `+` or `-`, then the remainder of the string
@@ -369,6 +369,9 @@ def parse_datetime(string, now=None):
 
     cal = Calendar()
     cal.ptc.StartHour = 0
+    if not assumeFuture:
+        cal.ptc.DOWParseStyle = 0
+        cal.ptc.YearParseStyle = 0
     time_struct, status = cal.parse(string, sourceTime=now.timetuple())
     if status == 0:
         raise ValueError(f'Invalid datetime: "{string}"')
