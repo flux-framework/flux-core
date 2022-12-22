@@ -12,6 +12,10 @@ SYNOPSIS
 
 **flux** **job** **cancelall** [*OPTIONS*] [*message...*]
 
+**flux** **job** **status** [*OPTIONS*] *id [*id...*]
+
+**flux** **job** **wait** [*OPTIONS*] [*id*]
+
 **flux** **job** **kill** [*--signal=SIG*] *id* [*id...*]
 
 **flux** **job** **killall** [*OPTIONS*]
@@ -58,6 +62,47 @@ selected with:
 
 **-q, --quiet**
    Suppress output if no jobs match
+
+STATUS
+======
+
+Wait for job(s) to complete and exit with the largest exit code.
+
+**-e, --exception-exit-code=N**
+   Set the exit code for any jobs that terminate with an exception
+   (e.g. canceled jobs) to ``N``.
+
+**-j, --json**
+   Dump job result information from job eventlog.
+
+**-v, --verbose**
+   Increase verbosity of output.
+
+WAIT
+====
+
+A waitable job may be waited on with ``flux job wait``.  A specific job
+can be waited on by specifying a jobid.  If no jobid is specified, the
+command will wait for any waitable user job to complete, outputting that
+jobid before exiting.  This command will exit with error if the job is not
+successful.
+
+Compared to ``flux job status``, there are several advantages /
+disadvantages of using ``flux job wait``.  For a large number of jobs,
+``flux job wait`` is far more efficient, especially when used with the
+``--all`` option below.  In addition, job ids do not have to be specified
+to ``flux job wait``.
+
+The two major limitations are that jobs must be submitted with the
+waitable flag, which can only be done in user instances.  In addition,
+``flux job wait`` can only be called once per job.
+
+**-a, --all**
+   Wait for all waitable jobs.  Will exit with error if any jobs are
+   not successful.
+
+**-v, --verbose**
+   Emit a line of output for all jobs, not just failing ones.
 
 SIGNAL
 ======
