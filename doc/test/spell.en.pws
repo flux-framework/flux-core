@@ -686,3 +686,5 @@ cpuset
 taskset
 nomap
 timeleft
+waitable
+novalidate
