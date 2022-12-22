@@ -174,6 +174,16 @@ following additional job parameters:
    option is minutes when no units are otherwise specified. If the time
    limit is unspecified, the job is subject to the system default time limit.
 
+**--flags=FLAGS**
+   Set comma separated list of job submission flags.  The possible flags are
+   ``waitable``, ``novalidate``, and ``debug``.  The ``waitable`` flag will
+   allow the job to be waited on via ``flux job wait`` and similar API calls.
+   The ``novalidate`` flag will inform flux to skip validation of a job's
+   specification.  This may be useful for high throughput ingest of a large
+   number of jobs.  Both ``waitable`` and ``novalidate`` require instance
+   owner privileges.  ``debug`` will output additional debugging into the job
+   eventlog.
+
 STANDARD I/O
 ============
 
