@@ -141,7 +141,7 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
         if ((val = strchr (attr, '=')))
             *val++ = '\0';
         if (attr_add (ctx->attrs, attr, val, 0) < 0)
-            if (attr_set (ctx->attrs, attr, val, true) < 0)
+            if (attr_set (ctx->attrs, attr, val) < 0)
                 log_err_exit ("setattr %s=%s", attr, val);
         free (attr);
     }

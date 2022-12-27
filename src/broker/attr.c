@@ -73,8 +73,7 @@ int attr_delete (attr_t *attrs, const char *name, bool force)
             errno = EPERM;
             goto done;
         }
-        if (((e->flags & ATTR_READONLY)
-                            || (e->flags & ATTR_ACTIVE)) && !force) {
+        if ((e->flags & ATTR_ACTIVE) && !force) {
             errno = EPERM;
             goto done;
         }
@@ -172,7 +171,7 @@ done:
     return rc;
 }
 
-int attr_set (attr_t *attrs, const char *name, const char *val, bool force)
+int attr_set (attr_t *attrs, const char *name, const char *val)
 {
     struct entry *e;
     int rc = -1;
@@ -182,10 +181,6 @@ int attr_set (attr_t *attrs, const char *name, const char *val, bool force)
         goto done;
     }
     if ((e->flags & ATTR_IMMUTABLE)) {
-        errno = EPERM;
-        goto done;
-    }
-    if ((e->flags & ATTR_READONLY) && !force) {
         errno = EPERM;
         goto done;
     }
@@ -400,7 +395,7 @@ void setattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_unpack (msg, NULL, "{s:s s:s}", "name", &name,
                                                      "value", &val) < 0)
         goto error;
-    if (attr_set (attrs, name, val, false) < 0) {
+    if (attr_set (attrs, name, val) < 0) {
         if (errno != ENOENT)
             goto error;
         if (attr_add (attrs, name, val, 0) < 0)

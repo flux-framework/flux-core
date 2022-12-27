@@ -1057,7 +1057,7 @@ static int register_attrs (struct content_cache *cache, attr_t *attr)
     if (attr_add_active_uint32 (attr, "content.blob-size-limit",
                 &cache->blob_size_limit, ATTR_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_active (attr, "content.backing-module",ATTR_READONLY,
+    if (attr_add_active (attr, "content.backing-module", 0,
                  content_cache_getattr, NULL, cache) < 0)
         return -1;
 

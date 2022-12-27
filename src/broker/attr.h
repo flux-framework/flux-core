@@ -16,8 +16,6 @@
 
 enum {
     ATTR_IMMUTABLE = 1,    /* attribute is cacheable */
-    ATTR_READONLY = 2,     /* attribute cannot be written */
-                                    /*   but may change on broker */
     ATTR_ACTIVE = 4,       /* attribute has get and/or set callbacks */
 };
 
@@ -57,7 +55,7 @@ int attr_add_uint32 (attr_t *attrs, const char *name, uint32_t val,
  */
 int attr_get (attr_t *attrs, const char *name, const char **val, int *flags);
 
-int attr_set (attr_t *attrs, const char *name, const char *val, bool force);
+int attr_set (attr_t *attrs, const char *name, const char *val);
 
 /* Set an attribute's flags.
  */

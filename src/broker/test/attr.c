@@ -26,7 +26,7 @@ int main (int argc, char **argv)
     int a, c;
     uint32_t b;
 
-    plan (53);
+    plan (NO_PLAN);
 
     ok ((attrs = attr_create ()) != NULL,
         "attr_create works");
@@ -37,7 +37,7 @@ int main (int argc, char **argv)
     ok (attr_get (attrs, "foo", NULL, NULL) < 0 && errno == ENOENT,
         "attr_get on unknown attr fails with errno == ENOENT");
     errno = 0;
-    ok (attr_set (attrs, "foo", "bar", false) < 0 && errno == ENOENT,
+    ok (attr_set (attrs, "foo", "bar") < 0 && errno == ENOENT,
         "attr_set on unknown attr fails with errno == ENOENT");
 
     /* attr_add, attr_get works
@@ -63,30 +63,6 @@ int main (int argc, char **argv)
     ok (attr_get (attrs, "foo", NULL, NULL) < 0 && errno == ENOENT,
         "attr_get on deleted attr fails with errno == ENOENT");
 
-    /* ATTR_READONLY protects against update/delete from users;
-     * update/delete can be forced on broker.
-     */
-    ok (attr_add (attrs, "foo", "baz", ATTR_READONLY) == 0,
-        "attr_add ATTR_READONLY works");
-    flags = 0;
-    val = NULL;
-    ok (attr_get (attrs, "foo", &val, &flags) == 0 && !strcmp (val, "baz")
-        && flags == ATTR_READONLY,
-        "attr_get returns correct value and flags");
-    errno = 0;
-    ok (attr_set (attrs, "foo", "bar", false) < 0 && errno == EPERM,
-        "attr_set on readonly attr fails with EPERM");
-    ok (attr_set (attrs, "foo", "baz", true) == 0,
-        "attr_set (force) on readonly attr works");
-    errno = 0;
-    ok (attr_delete (attrs, "foo", false) < 0 && errno == EPERM,
-        "attr_delete on readonly attr fails with EPERM");
-    ok (attr_delete (attrs, "foo", true) == 0,
-        "attr_delete (force) works on readonly attr");
-    errno = 0;
-    ok (attr_get (attrs, "foo", NULL, NULL) < 0 && errno == ENOENT,
-        "attr_get on deleted attr fails with errno == ENOENT");
-
     /* ATTR_IMMUTABLE protects against update/delete from user;
      * update/delete can NOT be forced on broker.
      */
@@ -98,10 +74,10 @@ int main (int argc, char **argv)
         && flags == ATTR_IMMUTABLE,
         "attr_get returns correct value and flags");
     errno = 0;
-    ok (attr_set (attrs, "foo", "bar", false) < 0 && errno == EPERM,
+    ok (attr_set (attrs, "foo", "bar") < 0 && errno == EPERM,
         "attr_set on immutable attr fails with EPERM");
     errno = 0;
-    ok (attr_set (attrs, "foo", "baz", true)  < 0 && errno == EPERM,
+    ok (attr_set (attrs, "foo", "baz")  < 0 && errno == EPERM,
         "attr_set (force) on immutable fails with EPERM");
     errno = 0;
     ok (attr_delete (attrs, "foo", false) < 0 && errno == EPERM,
@@ -163,11 +139,11 @@ int main (int argc, char **argv)
         && strtol (val, NULL, 10) == INT_MIN + 1,
         "attr_get on active int tracks val=INT_MIN+1");
 
-    ok (attr_set (attrs, "a", "0", false) == 0 && a == 0,
+    ok (attr_set (attrs, "a", "0") == 0 && a == 0,
         "attr_set on active int sets val=0");
-    ok (attr_set (attrs, "a", "1", false) == 0 && a == 1,
+    ok (attr_set (attrs, "a", "1") == 0 && a == 1,
         "attr_set on active int sets val=1");
-    ok (attr_set (attrs, "a", "-1", false) == 0 && a == -1,
+    ok (attr_set (attrs, "a", "-1") == 0 && a == -1,
         "attr_set on active int sets val=-1");
     errno = 0;
     ok (attr_delete (attrs, "a", false) < 0 && errno == EPERM,
@@ -190,9 +166,9 @@ int main (int argc, char **argv)
         && strtoul (val, NULL, 10) == UINT_MAX - 1,
         "attr_get on active uint32_t tracks val=UINT_MAX-1");
 
-    ok (attr_set (attrs, "b", "0", false) == 0 && b == 0,
+    ok (attr_set (attrs, "b", "0") == 0 && b == 0,
         "attr_set on active uint32_t sets val=0");
-    ok (attr_set (attrs, "b", "1", false) == 0 && b == 1,
+    ok (attr_set (attrs, "b", "1") == 0 && b == 1,
         "attr_set on active uint32_t sets val=1");
     ok (attr_delete (attrs, "b", true) == 0,
         "attr_delete (force) works on active attr");
