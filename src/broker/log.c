@@ -338,7 +338,7 @@ static int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
             goto done;
     } else {
         (void)attr_delete (attrs, "log-filename", true);
-        if (attr_add (attrs, "log-filename", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add (attrs, "log-filename", NULL, ATTR_IMMUTABLE) < 0)
             goto done;
     }
 

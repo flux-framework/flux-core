@@ -63,15 +63,15 @@ int main (int argc, char **argv)
     ok (attr_get (attrs, "foo", NULL, NULL) < 0 && errno == ENOENT,
         "attr_get on deleted attr fails with errno == ENOENT");
 
-    /* FLUX_ATTRFLAG_READONLY protects against update/delete from users;
+    /* ATTR_READONLY protects against update/delete from users;
      * update/delete can be forced on broker.
      */
-    ok (attr_add (attrs, "foo", "baz", FLUX_ATTRFLAG_READONLY) == 0,
-        "attr_add FLUX_ATTRFLAG_READONLY works");
+    ok (attr_add (attrs, "foo", "baz", ATTR_READONLY) == 0,
+        "attr_add ATTR_READONLY works");
     flags = 0;
     val = NULL;
     ok (attr_get (attrs, "foo", &val, &flags) == 0 && !strcmp (val, "baz")
-        && flags == FLUX_ATTRFLAG_READONLY,
+        && flags == ATTR_READONLY,
         "attr_get returns correct value and flags");
     errno = 0;
     ok (attr_set (attrs, "foo", "bar", false) < 0 && errno == EPERM,
@@ -87,15 +87,15 @@ int main (int argc, char **argv)
     ok (attr_get (attrs, "foo", NULL, NULL) < 0 && errno == ENOENT,
         "attr_get on deleted attr fails with errno == ENOENT");
 
-    /* FLUX_ATTRFLAG_IMMUTABLE protects against update/delete from user;
+    /* ATTR_IMMUTABLE protects against update/delete from user;
      * update/delete can NOT be forced on broker.
      */
-    ok (attr_add (attrs, "foo", "baz", FLUX_ATTRFLAG_IMMUTABLE) == 0,
-        "attr_add FLUX_ATTRFLAG_IMMUTABLE works");
+    ok (attr_add (attrs, "foo", "baz", ATTR_IMMUTABLE) == 0,
+        "attr_add ATTR_IMMUTABLE works");
     flags = 0;
     val = NULL;
     ok (attr_get (attrs, "foo", &val, &flags) == 0 && !strcmp (val, "baz")
-        && flags == FLUX_ATTRFLAG_IMMUTABLE,
+        && flags == ATTR_IMMUTABLE,
         "attr_get returns correct value and flags");
     errno = 0;
     ok (attr_set (attrs, "foo", "bar", false) < 0 && errno == EPERM,
@@ -199,8 +199,8 @@ int main (int argc, char **argv)
 
     /* immutable active int works as expected
      */
-    ok (attr_add_active_int (attrs, "c", &c, FLUX_ATTRFLAG_IMMUTABLE) == 0,
-        "attr_add_active_int FLUX_ATTRFLAG_IMMUTABLE works");
+    ok (attr_add_active_int (attrs, "c", &c, ATTR_IMMUTABLE) == 0,
+        "attr_add_active_int ATTR_IMMUTABLE works");
     c = 42;
     ok (attr_get (attrs, "c", &val, NULL) == 0 && val && !strcmp (val, "42"),
         "attr_get returns initial val=42");

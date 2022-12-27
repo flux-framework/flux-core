@@ -375,11 +375,11 @@ int main (int argc, char *argv[])
     }
     int flags;
     assert (attr_get (ctx.attrs, "rank", NULL, &flags) == 0
-            && (flags & FLUX_ATTRFLAG_IMMUTABLE));
+            && (flags & ATTR_IMMUTABLE));
     assert (attr_get (ctx.attrs, "size", NULL, &flags) == 0
-            && (flags & FLUX_ATTRFLAG_IMMUTABLE));
+            && (flags & ATTR_IMMUTABLE));
     assert (attr_get (ctx.attrs, "hostlist", NULL, &flags) == 0
-            && (flags & FLUX_ATTRFLAG_IMMUTABLE));
+            && (flags & ATTR_IMMUTABLE));
 
     if (!(ctx.groups = groups_create (&ctx))) {
         log_err ("groups_create");
@@ -589,7 +589,7 @@ static void init_attrs_broker_pid (attr_t *attrs, pid_t pid)
     if (attr_add (attrs,
                   attrname,
                   pidval,
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                  ATTR_IMMUTABLE) < 0)
         log_err_exit ("attr_add %s", attrname);
 }
 
@@ -627,7 +627,7 @@ static void init_attrs_starttime (attr_t *attrs, double starttime)
     char buf[32];
 
     snprintf (buf, sizeof (buf), "%.2f", starttime);
-    if (attr_add (attrs, "broker.starttime", buf, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add (attrs, "broker.starttime", buf, ATTR_IMMUTABLE) < 0)
         log_err_exit ("error setting broker.starttime attribute");
 }
 
@@ -650,7 +650,7 @@ static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
 
     char tmp[32];
     snprintf (tmp, sizeof (tmp), "%ju", (uintmax_t)cred->userid);
-    if (attr_add (attrs, "security.owner", tmp, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add (attrs, "security.owner", tmp, ATTR_IMMUTABLE) < 0)
         log_err_exit ("attr_add owner");
 }
 
@@ -804,7 +804,7 @@ static int check_statedir (attr_t *attrs)
     const char *statedir;
 
     if (attr_get (attrs, "statedir", &statedir, NULL) < 0) {
-        if (attr_add (attrs, "statedir", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        if (attr_add (attrs, "statedir", NULL, ATTR_IMMUTABLE) < 0) {
             log_err ("error creating statedir broker attribute");
             return -1;
         }
@@ -812,7 +812,7 @@ static int check_statedir (attr_t *attrs)
     else {
         if (checkdir ("statedir", statedir) < 0)
             return -1;
-        if (attr_set_flags (attrs, "statedir", FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        if (attr_set_flags (attrs, "statedir", ATTR_IMMUTABLE) < 0) {
             log_err ("error setting statedir broker attribute flags");
             return -1;
         }
@@ -884,7 +884,7 @@ static int create_rundir (attr_t *attrs)
     /*  rundir is now fixed, so make the attribute immutable, and
      *   schedule the dir for cleanup at exit if we created it here.
      */
-    if (attr_set_flags (attrs, "rundir", FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+    if (attr_set_flags (attrs, "rundir", ATTR_IMMUTABLE) < 0) {
         log_err ("error setting rundir broker attribute flags");
         goto done;
     }
@@ -913,7 +913,7 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
             log_msg ("buffer overflow while building local-uri");
             return -1;
         }
-        if (attr_add (attrs, "local-uri", buf, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        if (attr_add (attrs, "local-uri", buf, ATTR_IMMUTABLE) < 0) {
             log_err ("setattr local-uri");
             return -1;
         }
@@ -963,7 +963,7 @@ static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs)
         if (attr_add (attrs,
                       "broker.critical-ranks",
                       ranks,
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+                      ATTR_IMMUTABLE) < 0) {
             log_err ("attr_add critical_ranks");
             goto out;
         }
@@ -978,7 +978,7 @@ static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs)
          */
         if (attr_set_flags (attrs,
                             "broker.critical-ranks",
-                            FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+                            ATTR_IMMUTABLE) < 0) {
             log_err ("failed to make broker.criitcal-ranks attr immutable");
             goto out;
         }

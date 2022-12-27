@@ -69,12 +69,12 @@ int attr_delete (attr_t *attrs, const char *name, bool force)
     int rc = -1;
 
     if ((e = zhash_lookup (attrs->hash, name))) {
-        if ((e->flags & FLUX_ATTRFLAG_IMMUTABLE)) {
+        if ((e->flags & ATTR_IMMUTABLE)) {
             errno = EPERM;
             goto done;
         }
-        if (((e->flags & FLUX_ATTRFLAG_READONLY)
-                            || (e->flags & FLUX_ATTRFLAG_ACTIVE)) && !force) {
+        if (((e->flags & ATTR_READONLY)
+                            || (e->flags & ATTR_ACTIVE)) && !force) {
             errno = EPERM;
             goto done;
         }
@@ -89,7 +89,7 @@ int attr_add (attr_t *attrs, const char *name, const char *val, int flags)
 {
     struct entry *e;
 
-    if (attrs == NULL || name == NULL || (flags & FLUX_ATTRFLAG_ACTIVE)) {
+    if (attrs == NULL || name == NULL || (flags & ATTR_ACTIVE)) {
         errno = EINVAL;
         return -1;
     }
@@ -127,7 +127,7 @@ int attr_add_active (attr_t *attrs, const char *name, int flags,
     e->set = set;
     e->get = get;
     e->arg = arg;
-    e->flags |= FLUX_ATTRFLAG_ACTIVE;
+    e->flags |= ATTR_ACTIVE;
     zhash_update (attrs->hash, name, e);
     zhash_freefn (attrs->hash, name, entry_destroy);
     rc = 0;
@@ -149,7 +149,7 @@ int attr_get (attr_t *attrs, const char *name, const char **val, int *flags)
         goto done;
     }
     if (e->get) {
-        if (!e->val || !(e->flags & FLUX_ATTRFLAG_IMMUTABLE)) {
+        if (!e->val || !(e->flags & ATTR_IMMUTABLE)) {
             const char *tmp;
             if (e->get (name, &tmp, e->arg) < 0)
                 goto done;
@@ -181,11 +181,11 @@ int attr_set (attr_t *attrs, const char *name, const char *val, bool force)
         errno = ENOENT;
         goto done;
     }
-    if ((e->flags & FLUX_ATTRFLAG_IMMUTABLE)) {
+    if ((e->flags & ATTR_IMMUTABLE)) {
         errno = EPERM;
         goto done;
     }
-    if ((e->flags & FLUX_ATTRFLAG_READONLY) && !force) {
+    if ((e->flags & ATTR_READONLY) && !force) {
         errno = EPERM;
         goto done;
     }
@@ -351,7 +351,7 @@ int attr_cache_immutables (attr_t *attrs, flux_t *h)
 
     e = zhash_first (attrs->hash);
     while (e) {
-        if ((e->flags & FLUX_ATTRFLAG_IMMUTABLE)) {
+        if ((e->flags & ATTR_IMMUTABLE)) {
             if (flux_attr_set_cacheonly (h, e->name, e->val) < 0)
                 return -1;
         }

@@ -15,10 +15,10 @@
 #include <flux/core.h>
 
 enum {
-    FLUX_ATTRFLAG_IMMUTABLE = 1,    /* attribute is cacheable */
-    FLUX_ATTRFLAG_READONLY = 2,     /* attribute cannot be written */
+    ATTR_IMMUTABLE = 1,    /* attribute is cacheable */
+    ATTR_READONLY = 2,     /* attribute cannot be written */
                                     /*   but may change on broker */
-    FLUX_ATTRFLAG_ACTIVE = 4,       /* attribute has get and/or set callbacks */
+    ATTR_ACTIVE = 4,       /* attribute has get and/or set callbacks */
 };
 
 /* Callbacks for active values.  Return 0 on succes, -1 on eror with

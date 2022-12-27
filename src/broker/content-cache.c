@@ -1026,7 +1026,7 @@ static int register_attrs (struct content_cache *cache, attr_t *attr)
         if (attr_add (attr,
                       "content.hash",
                       cache->hash_name,
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                      ATTR_IMMUTABLE) < 0)
             return -1;
     }
     else {
@@ -1035,7 +1035,7 @@ static int register_attrs (struct content_cache *cache, attr_t *attr)
             log_msg ("%s: unknown hash type", s);
             return -1;
         }
-        if (attr_set_flags (attr, "content.hash", FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_set_flags (attr, "content.hash", ATTR_IMMUTABLE) < 0)
             return -1;
         cache->hash_name = s;
         content_hash_size = hash_size;
@@ -1055,9 +1055,9 @@ static int register_attrs (struct content_cache *cache, attr_t *attr)
                 &cache->flush_batch_limit, 0) < 0)
         return -1;
     if (attr_add_active_uint32 (attr, "content.blob-size-limit",
-                &cache->blob_size_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                &cache->blob_size_limit, ATTR_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_active (attr, "content.backing-module",FLUX_ATTRFLAG_READONLY,
+    if (attr_add_active (attr, "content.backing-module",ATTR_READONLY,
                  content_cache_getattr, NULL, cache) < 0)
         return -1;
 

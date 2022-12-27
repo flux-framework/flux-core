@@ -708,7 +708,7 @@ static int quorum_configure (struct state_machine *s)
     if (attr_add (s->ctx->attrs,
                   "broker.quorum",
                   tmp,
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+                  ATTR_IMMUTABLE) < 0) {
         ERRNO_SAFE_WRAP (free, tmp);
         return -1;
     }
@@ -742,7 +742,7 @@ static int quorum_timeout_configure (struct state_machine *s)
         if (fsd_format_duration (fsd, sizeof (fsd), s->quorum.timeout) < 0)
             return -1;
     }
-    if (attr_add (s->ctx->attrs, name, fsd, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add (s->ctx->attrs, name, fsd, ATTR_IMMUTABLE) < 0)
         return -1;
     return 0;
 }

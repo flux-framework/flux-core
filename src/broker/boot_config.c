@@ -300,7 +300,7 @@ int boot_config_attr (attr_t *attrs, json_t *hosts)
             || attr_add (attrs,
                          "hostlist",
                          hostname,
-                         FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+                         ATTR_IMMUTABLE) < 0) {
             log_err ("failed to set hostlist attribute to localhost");
             goto error;
         }
@@ -327,7 +327,7 @@ int boot_config_attr (attr_t *attrs, json_t *hosts)
     if (attr_add (attrs,
                   "hostlist",
                   s,
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+                  ATTR_IMMUTABLE) < 0) {
         log_err ("failed to set hostlist attribute to config derived value");
         goto error;
     }
@@ -351,7 +351,7 @@ int boot_config_attr (attr_t *attrs, json_t *hosts)
         }
         val = s;
     }
-    if (attr_add (attrs, "broker.mapping", val, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+    if (attr_add (attrs, "broker.mapping", val, ATTR_IMMUTABLE) < 0) {
         log_err ("setattr broker.mapping");
         goto error;
     }
@@ -584,7 +584,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
         if (attr_add (attrs,
                       "tbon.endpoint",
                       my_uri,
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+                      ATTR_IMMUTABLE) < 0) {
             log_err ("setattr tbon.endpoint %s", my_uri);
             goto error;
         }
@@ -593,7 +593,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
         if (attr_add (attrs,
                       "tbon.endpoint",
                       NULL,
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+                      ATTR_IMMUTABLE) < 0) {
             log_err ("setattr tbon.endpoint NULL");
             goto error;
         }
@@ -625,7 +625,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
     if (attr_add (attrs,
                   "instance-level",
                   "0",
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+                  ATTR_IMMUTABLE) < 0) {
         log_err ("setattr instance-level 0");
         goto error;
     }
