@@ -18,15 +18,11 @@
 
 #include "src/common/libtap/tap.h"
 
-int main (int argc, char **argv)
+void basic (void)
 {
     attr_t *attrs;
     const char *val;
     int flags;
-    int a, c;
-    uint32_t b;
-
-    plan (NO_PLAN);
 
     ok ((attrs = attr_create ()) != NULL,
         "attr_create works");
@@ -117,6 +113,19 @@ int main (int argc, char **argv)
     ok (attr_next (attrs) == NULL,
         "attr_next returned NULL");
 
+    attr_destroy (attrs);
+}
+
+void active (void)
+{
+    attr_t *attrs;
+    const char *val;
+    int a, c;
+    uint32_t b;
+
+    if (!(attrs = attr_create ()))
+        BAIL_OUT ("attr_create failed");
+
     /* attr_add_active (int helper)
      */
     ok (attr_add_active_int (attrs, "a", &a, 0) == 0,
@@ -185,6 +194,14 @@ int main (int argc, char **argv)
         "attr_delete (force) fails with EPERM");
 
     attr_destroy (attrs);
+}
+
+int main (int argc, char **argv)
+{
+    plan (NO_PLAN);
+
+    basic ();
+    active ();
 
     done_testing ();
     return 0;
