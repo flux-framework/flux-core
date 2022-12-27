@@ -17,9 +17,6 @@ test_expect_success 'flux getattr rank works' '
 test_expect_success 'flux setattr rank fails (immutable)' '
 	! flux setattr rank 42
 '
-test_expect_success 'flux setattr --expunge rank fails (immutable)' '
-	test_must_fail flux setattr --expunge rank
-'
 test_expect_success 'flux getattr attrtest.nonexist fails' '
 	! flux getattr nonexist
 '
@@ -28,21 +25,14 @@ test_expect_success 'flux setattr works' '
 	ATTR_VAL=`flux getattr attrtest.foo` &&
 	test "${ATTR_VAL}" = "bar"
 '
-test_expect_success 'flux setattr -e works' '
-	flux setattr -e attrtest.foo &&
-	! flux getattr attrtest.foo
-'
 test_expect_success 'flux lsattr works' '
 	flux lsattr >lsattr_out &&
 	grep -q rank lsattr_out &&
-	! grep -q attrtest.foo lsattr_out
+	grep -q attrtest.foo lsattr_out
 '
 test_expect_success 'flux lsattr -v works' '
 	ATTR_VAL=$(flux lsattr -v | awk "/^rank / { print \$2 }") &&
 	test "${ATTR_VAL}" -eq 0
-'
-test_expect_success 'flux setattr --expunge missing optarg fails' '
-	test_must_fail flux setattr --expunge
 '
 test_expect_success 'flux lsattr with extra argument fails' '
 	test_must_fail flux lsattr badarg
@@ -55,9 +45,6 @@ test_expect_success 'get request with empty payload fails with EPROTO(71)' '
 '
 test_expect_success 'set request with empty payload fails with EPROTO(71)' '
 	${RPC} attr.set 71 </dev/null
-'
-test_expect_success 'rm request with empty payload fails with EPROTO(71)' '
-	${RPC} attr.rm 71 </dev/null
 '
 
 test_done
