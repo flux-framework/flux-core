@@ -16,7 +16,6 @@
 
 enum {
     ATTR_IMMUTABLE = 1,    /* attribute is cacheable */
-    ATTR_ACTIVE = 4,       /* attribute has get and/or set callbacks */
 };
 
 /* Callbacks for active values.  Return 0 on succes, -1 on eror with

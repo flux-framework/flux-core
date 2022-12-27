@@ -73,10 +73,6 @@ int attr_delete (attr_t *attrs, const char *name, bool force)
             errno = EPERM;
             goto done;
         }
-        if ((e->flags & ATTR_ACTIVE) && !force) {
-            errno = EPERM;
-            goto done;
-        }
         zhash_delete (attrs->hash, name);
     }
     rc = 0;
@@ -88,7 +84,7 @@ int attr_add (attr_t *attrs, const char *name, const char *val, int flags)
 {
     struct entry *e;
 
-    if (attrs == NULL || name == NULL || (flags & ATTR_ACTIVE)) {
+    if (attrs == NULL || name == NULL) {
         errno = EINVAL;
         return -1;
     }
@@ -126,7 +122,6 @@ int attr_add_active (attr_t *attrs, const char *name, int flags,
     e->set = set;
     e->get = get;
     e->arg = arg;
-    e->flags |= ATTR_ACTIVE;
     zhash_update (attrs->hash, name, e);
     zhash_freefn (attrs->hash, name, entry_destroy);
     rc = 0;

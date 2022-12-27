@@ -145,9 +145,6 @@ int main (int argc, char **argv)
         "attr_set on active int sets val=1");
     ok (attr_set (attrs, "a", "-1") == 0 && a == -1,
         "attr_set on active int sets val=-1");
-    errno = 0;
-    ok (attr_delete (attrs, "a", false) < 0 && errno == EPERM,
-        "attr_delete on active attr fails with EPERM");
     ok (attr_delete (attrs, "a", true) == 0,
         "attr_delete (force) works on active attr");
 
