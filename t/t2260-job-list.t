@@ -601,6 +601,7 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job i
         jobid=$(flux mini submit --wait hostname | flux job id) &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".t_submit < .t_depend" &&
         echo $obj | jq -e ".t_depend < .t_run" &&
         echo $obj | jq -e ".t_run < .t_cleanup" &&
         echo $obj | jq -e ".t_cleanup < .t_inactive"
@@ -612,6 +613,7 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job r
         fj_wait_event $jobid start >/dev/null &&
         wait_jobid_state $jobid running &&
         obj=$(flux job list -s running | grep $jobid) &&
+        echo $obj | jq -e ".t_submit < .t_depend" &&
         echo $obj | jq -e ".t_depend < .t_run" &&
         echo $obj | jq -e ".t_cleanup == null" &&
         echo $obj | jq -e ".t_inactive == null" &&
