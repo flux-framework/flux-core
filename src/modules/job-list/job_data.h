@@ -21,7 +21,8 @@
  *
  * associated eventlog entries when restarting
  *
- * t_depend - "submit"
+ * t_submit = "submit"
+ * t_depend - "validate"
  * t_priority - "priority" (not saved, can be entered multiple times)
  * t_sched - "depend" (not saved, can be entered multiple times)
  * t_run - "alloc"
@@ -36,8 +37,7 @@ struct job {
     int urgency;
     int64_t priority;
     double t_submit;
-    // t_depend is identical to t_submit
-    // double t_depend;
+    double t_depend;
     double t_run;
     double t_cleanup;
     double t_inactive;
@@ -85,6 +85,7 @@ struct job {
     void *list_handle;
 
     int eventlog_seq;           /* last event seq read */
+    int submit_version;         /* version number in submit context */
 };
 
 void job_destroy (void *data);
