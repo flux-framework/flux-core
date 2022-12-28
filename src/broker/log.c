@@ -264,10 +264,6 @@ static int attr_get_log (const char *name, const char **val, void *arg)
         *val = logbuf->stderr_mode == MODE_LEADER ? "leader" : "local";
     else if (!strcmp (name, "log-ring-size"))
         *val = int_to_string (logbuf->ring_size);
-    else if (!strcmp (name, "log-ring-used"))
-        *val = int_to_string (zlist_size (logbuf->buf));
-    else if (!strcmp (name, "log-count"))
-        *val = int_to_string (logbuf->seq);
     else if (!strcmp (name, "log-filename"))
         *val = logbuf->filename;
     else if (!strcmp (name, "log-level"))
@@ -359,12 +355,6 @@ static int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
         goto done;
     if (attr_add_active (attrs, "log-ring-size", 0,
                          attr_get_log, attr_set_log, logbuf) < 0)
-        goto done;
-    if (attr_add_active (attrs, "log-ring-used", 0,
-                         attr_get_log, NULL, logbuf) < 0)
-        goto done;
-    if (attr_add_active (attrs, "log-count", 0,
-                         attr_get_log, NULL, logbuf) < 0)
         goto done;
     rc = 0;
 done:
@@ -571,12 +561,29 @@ static void cancel_request_cb (flux_t *h,
     flux_msglist_cancel (h, logbuf->followers, msg);
 }
 
+static void stats_request_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
+{
+    logbuf_t *logbuf = arg;
+
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:i}",
+                           "ring-used", (int)zlist_size (logbuf->buf),
+                           "count", logbuf->seq) < 0)
+        flux_log_error (h, "error responding to log.stats.get");
+}
+
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "log.append",         append_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.clear",          clear_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.dmesg",          dmesg_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.disconnect",     disconnect_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.cancel",         cancel_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "log.stats.get",      stats_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

@@ -211,15 +211,9 @@ tbon.tcp_user_timeout
 LOGGING
 =======
 
-log-ring-used
-   The number of log entries currently stored in the ring buffer.
-
 log-ring-size [Updates: C, R]
    The maximum number of log entries that can be stored in the ring buffer.
    Default: ``1024``.
-
-log-count
-   The number of log entries ever stored in the ring buffer.
 
 log-forward-level [Updates: C, R]
    Log entries at :linux:man3:`syslog` level at or below this value
