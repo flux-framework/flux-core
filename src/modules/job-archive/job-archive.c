@@ -499,12 +499,26 @@ void job_archive_cb (flux_reactor_t *r,
                      void *arg)
 {
     struct job_archive_ctx *ctx = arg;
-    char *attrs = "[\"userid\", \"ranks\", \"t_submit\", " \
-                   "\"t_run\", \"t_cleanup\", \"t_inactive\"]";
     flux_future_t *f;
 
-    if (!(f = flux_job_list_inactive (ctx->h, 0, ctx->since, attrs))) {
-        flux_log_error (ctx->h, "%s: flux_job_list_inactive", __FUNCTION__);
+    if (!(f = flux_rpc_pack (ctx->h,
+                             "job-list.list",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:i s:f s:i s:i s:i s:[ssssss]}",
+                             "max_entries", 0,
+                             "since", ctx->since,
+                             "userid", FLUX_USERID_UNKNOWN,
+                             "states", FLUX_JOB_STATE_INACTIVE,
+                             "results", 0,
+                             "attrs",
+                               "userid",
+                               "ranks",
+                               "t_submit",
+                               "t_run",
+                               "t_cleanup",
+                               "t_inactive"))) {
+        flux_log_error (ctx->h, "%s: flux_rpc_pack", __FUNCTION__);
         return;
     }
     if (flux_future_then (f, -1, job_list_inactive_continuation, ctx) < 0) {
