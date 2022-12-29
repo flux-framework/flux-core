@@ -226,6 +226,11 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
+    if (since < 0.) {
+        seterror (&err, "invalid payload: since < 0.0 not allowed");
+        errno = EPROTO;
+        goto error;
+    }
     if (!json_is_array (attrs)) {
         seterror (&err, "invalid payload: attrs must be an array");
         errno = EPROTO;
