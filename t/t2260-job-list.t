@@ -6,9 +6,7 @@ test_description='Test flux job list services'
 
 . $(dirname $0)/sharness.sh
 
-mkdir -p conf.d
-
-test_under_flux 4 job -o,--config-path=$(pwd)/conf.d
+test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-list/list-rpc.py"
@@ -680,10 +678,9 @@ test_expect_success HAVE_JQ 'flux job list output no queue if queue not set' '
 '
 
 test_expect_success 'reconfigure with one queue' '
-	cat >conf.d/config.toml <<-EOT &&
+	flux config load <<-EOT
 	[queues.foo]
 	EOT
-	flux config reload
 '
 
 test_expect_success HAVE_JQ 'flux job list outputs queue' '
@@ -694,8 +691,7 @@ test_expect_success HAVE_JQ 'flux job list outputs queue' '
 '
 
 test_expect_success 'reconfigure with no queues' '
-	cp /dev/null conf.d/config.toml &&
-	flux config reload
+	flux config load < /dev/null
 '
 
 test_expect_success 'reload the job-list module' '
@@ -1680,11 +1676,10 @@ test_expect_success LONGTEST 'stress job-list.list-id' '
 '
 
 test_expect_success 'configure batch,debug queues' '
-        cat >conf.d/config.toml <<-EOF &&
-[queues.batch]
-[queues.debug]
-EOF
-        flux config reload
+	flux config load <<-EOT
+	[queues.batch]
+	[queues.debug]
+	EOT
 '
 
 wait_id_inactive() {
@@ -1821,8 +1816,7 @@ test_expect_success HAVE_JQ 'job-stats correct after purge' '
 '
 
 test_expect_success 'remove queues' '
-        rm -f conf.d/config.toml &&
-        flux config reload
+        flux config load < /dev/null
 '
 
 # invalid job data tests
