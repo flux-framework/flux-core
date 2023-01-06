@@ -482,7 +482,7 @@ test_expect_success 'submitted jobs are not running' '
 '
 test_expect_success 'flux-queue start --all affects all queues' '
 	flux queue start -a > mqstart.out &&
-	test $(grep -c "Scheduling is started" mqstatus.out) -eq 2 &&
+	test $(grep -c "Scheduling is started" mqstart.out) -eq 2 &&
 	flux queue status >mqstatus_start.out &&
 	test $(grep -c "Scheduling is started" mqstatus_start.out) -eq 2
 '
