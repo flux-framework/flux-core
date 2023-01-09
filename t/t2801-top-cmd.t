@@ -217,9 +217,10 @@ test_expect_success NO_CHAIN_LINT 'flux-top works with FLUX_F58_FORCE_ASCII' '
 			      flux top --test-exit
 '
 test_expect_success 'configure a test queue' '
-	flux config load <<-EOT
+	flux config load <<-EOT &&
 	[queues.testq]
 	EOT
+	flux queue start --queue=testq
 '
 test_expect_success 'flux-top displays job queues when present' '
 	$runpty -f asciicast -o no-queue.log flux top --test-exit &&

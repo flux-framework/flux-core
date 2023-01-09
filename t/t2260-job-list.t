@@ -678,9 +678,10 @@ test_expect_success HAVE_JQ 'flux job list output no queue if queue not set' '
 '
 
 test_expect_success 'reconfigure with one queue' '
-	flux config load <<-EOT
+	flux config load <<-EOT &&
 	[queues.foo]
 	EOT
+	flux queue start --queue=foo
 '
 
 test_expect_success HAVE_JQ 'flux job list outputs queue' '
@@ -1676,10 +1677,11 @@ test_expect_success LONGTEST 'stress job-list.list-id' '
 '
 
 test_expect_success 'configure batch,debug queues' '
-	flux config load <<-EOT
+	flux config load <<-EOT &&
 	[queues.batch]
 	[queues.debug]
 	EOT
+	flux queue start --all'
 '
 
 wait_id_inactive() {

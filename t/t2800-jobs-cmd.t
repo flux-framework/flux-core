@@ -77,13 +77,14 @@ listjobs() {
 }
 
 test_expect_success 'configure testing queues' '
-	flux config load <<-EOT
+	flux config load <<-EOT &&
 	[policy]
 	jobspec.defaults.system.queue = "defaultqueue"
 	[queues.defaultqueue]
 	[queues.queue1]
 	[queues.queue2]
 	EOT
+	flux queue start --all
 '
 
 test_expect_success HAVE_JQ 'submit jobs for job list testing' '

@@ -126,7 +126,7 @@ test_expect_success 'verify that named queue start/stop persists across restart'
 	flux start -o,--config-path=$(pwd)/conf.d \
 	    -o,-Scontent.restore=dump_queue_start1.tar \
 	    -o,-Scontent.dump=dump_queue_start2.tar \
-	    flux queue stop --queue=batch xyzzy &&
+	    flux queue start --queue=batch &&
 	flux start -o,--config-path=$(pwd)/conf.d \
 	    -o,-Scontent.restore=dump_queue_start2.tar \
 	    -o,-Scontent.dump=dump_queue_start3.tar \
@@ -134,17 +134,17 @@ test_expect_success 'verify that named queue start/stop persists across restart'
 	flux start -o,--config-path=$(pwd)/conf.d \
 	    -o,-Scontent.restore=dump_queue_start3.tar \
 	    -o,-Scontent.dump=dump_queue_start4.tar \
-	    flux queue start --queue=batch &&
+	    flux queue stop --queue=batch xyzzy &&
 	flux start -o,--config-path=$(pwd)/conf.d \
 	    -o,-Scontent.restore=dump_queue_start4.tar \
 	    -o,-Scontent.dump=dump_queue_start5.tar \
 	    flux queue status >dump_queue_start_3.out &&
-	grep "^debug: Scheduling is started" dump_queue_start_1.out &&
-	grep "^batch: Scheduling is started" dump_queue_start_1.out &&
-	grep "^debug: Scheduling is started" dump_queue_start_2.out &&
-	grep "^batch: Scheduling is stopped: xyzzy" dump_queue_start_2.out &&
-	grep "^debug: Scheduling is started" dump_queue_start_3.out &&
-	grep "^batch: Scheduling is started" dump_queue_start_3.out
+	grep "^debug: Scheduling is stopped" dump_queue_start_1.out &&
+	grep "^batch: Scheduling is stopped" dump_queue_start_1.out &&
+	grep "^debug: Scheduling is stopped" dump_queue_start_2.out &&
+	grep "^batch: Scheduling is started" dump_queue_start_2.out &&
+	grep "^debug: Scheduling is stopped" dump_queue_start_3.out &&
+	grep "^batch: Scheduling is stopped: xyzzy" dump_queue_start_3.out
 '
 
 test_expect_success 'checkpointed queue no longer configured on restart is ignored' '
@@ -163,7 +163,7 @@ test_expect_success 'checkpointed queue no longer configured on restart is ignor
 	    -o,-Scontent.restore=dump_queue_missing.tar \
 	    flux queue status >dump_queue_missing.out &&
 	grep "^debug: Job submission is enabled" dump_queue_missing.out &&
-	grep "^debug: Scheduling is started" dump_queue_missing.out &&
+	grep "^debug: Scheduling is stopped" dump_queue_missing.out &&
 	test_must_fail grep "batch" dump_queue_missing.out
 '
 
@@ -184,9 +184,9 @@ test_expect_success 'new queue configured on restart uses defaults' '
 	    -o,-Scontent.restore=dump_queue_ignored.tar \
 	    flux queue status >dump_queue_ignored.out &&
 	grep "^debug: Job submission is enabled" dump_queue_ignored.out &&
-	grep "^debug: Scheduling is started" dump_queue_ignored.out &&
+	grep "^debug: Scheduling is stopped" dump_queue_ignored.out &&
 	grep "^newqueue: Job submission is enabled" dump_queue_ignored.out &&
-	grep "^newqueue: Scheduling is started" dump_queue_ignored.out
+	grep "^newqueue: Scheduling is stopped" dump_queue_ignored.out
 '
 
 for dump in ${DUMPS}/valid/*.tar.bz2; do
