@@ -53,11 +53,22 @@ static int store_attr (struct job *job,
             return 0;
         val = json_integer (job->priority);
     }
-    else if (!strcmp (attr, "t_submit")
-             || !strcmp (attr, "t_depend")) {
+    else if (!strcmp (attr, "t_submit")) {
+        val = json_real (job->t_submit);
+    }
+    else if (!strcmp (attr, "t_depend")) {
+        /* if submit_version < 1, it means it was not set.  This is
+         * before the introduction of event `validate` after 0.41.1.
+         * Before the introduction of this event, t_submit and
+         * t_depend are the same.  So return the value of t_submit
+         */
+        if (job->submit_version < 1) {
+            val = json_real (job->t_submit);
+            goto out;
+        }
         if (!(job->states_mask & FLUX_JOB_STATE_DEPEND))
             return 0;
-        val = json_real (job->t_submit);
+        val = json_real (job->t_depend);
     }
     else if (!strcmp (attr, "t_run")) {
         if (!(job->states_mask & FLUX_JOB_STATE_RUN))
@@ -192,6 +203,7 @@ static int store_attr (struct job *job,
         errno = EINVAL;
         return -1;
     }
+out:
     if (val == NULL) {
         errno = ENOMEM;
         return -1;

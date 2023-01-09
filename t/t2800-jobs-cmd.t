@@ -689,7 +689,7 @@ test_expect_success 'flux-jobs --format={nodelist},{nodelist:h} works' '
 '
 
 # test just make sure numbers are zero or non-zero given state of job
-test_expect_success 'flux-jobs --format={t_submit/depend/sched} works' '
+test_expect_success 'flux-jobs --format={t_submit/depend} works' '
 	flux jobs -ano "{t_submit},{t_depend}" >t_SD.out &&
 	count=`cut -d, -f1 t_SD.out | grep -v "^0.0$" | wc -l` &&
 	test $count -eq $(state_count all) &&
