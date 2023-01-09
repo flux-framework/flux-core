@@ -72,42 +72,79 @@ test_expect_success 'verify that anon queue stopped persists across restart' '
 	grep "stopped: stop-restart-test" dump_stopped.out
 '
 
-test_expect_success 'verify that named queue disable persists across restart' '
+test_expect_success 'verify that named queue enable/disable persists across restart' '
 	mkdir -p conf.d &&
 	cat >conf.d/queues.toml <<-EOT &&
 	[queues.debug]
 	[queues.batch]
 	EOT
 	flux start -o,--config-path=$(pwd)/conf.d \
-	    -o,-Scontent.dump=dump_queue_dis.tar \
-	    flux queue disable --queue batch xyzzy &&
+	    -o,-Scontent.dump=dump_queue_enable1.tar \
+	    flux queue status >dump_queue_enable_1.out &&
 	flux start -o,--config-path=$(pwd)/conf.d \
-	    -o,-Scontent.restore=dump_queue_dis.tar \
-	    flux queue status >dump_queue_dis.out &&
-	grep "^debug: Job submission is enabled" dump_queue_dis.out &&
-	grep "^batch: Job submission is disabled: xyzzy" dump_queue_dis.out
+	    -o,-Scontent.restore=dump_queue_enable1.tar \
+	    -o,-Scontent.dump=dump_queue_enable2.tar \
+	    flux queue disable --queue=batch xyzzy &&
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.restore=dump_queue_enable2.tar \
+	    -o,-Scontent.dump=dump_queue_enable3.tar \
+	    flux queue status >dump_queue_enable_2.out &&
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.restore=dump_queue_enable3.tar \
+	    -o,-Scontent.dump=dump_queue_enable4.tar \
+	    flux queue enable --queue=batch &&
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.restore=dump_queue_enable4.tar \
+	    -o,-Scontent.dump=dump_queue_enable5.tar \
+	    flux queue status >dump_queue_enable_3.out &&
+	grep "^debug: Job submission is enabled" dump_queue_enable_1.out &&
+	grep "^batch: Job submission is enabled" dump_queue_enable_1.out &&
+	grep "^debug: Job submission is enabled" dump_queue_enable_2.out &&
+	grep "^batch: Job submission is disabled: xyzzy" dump_queue_enable_2.out &&
+	grep "^debug: Job submission is enabled" dump_queue_enable_3.out &&
+	grep "^batch: Job submission is enabled" dump_queue_enable_3.out
 '
 
+# N.B. no named queues configured in this test, so anon queue is what
+# is tested
 test_expect_success 'verify that instance can restart after config change' '
-	flux start -o,-Scontent.restore=dump_queue_dis.tar \
+	flux start -o,-Scontent.restore=dump_queue_enable5.tar \
 	    flux queue status >dump_queue_reconf.out &&
 	grep "^Job submission is enabled" dump_queue_reconf.out
 '
 
-test_expect_success 'verify that named queue stopped persists across restart' '
+test_expect_success 'verify that named queue start/stop persists across restart' '
+	rm -rf /tmp/achu/mylog &&
 	mkdir -p conf.d &&
 	cat >conf.d/queues.toml <<-EOT &&
 	[queues.debug]
 	[queues.batch]
 	EOT
 	flux start -o,--config-path=$(pwd)/conf.d \
-	    -o,-Scontent.dump=dump_queue_stopped.tar \
-	    flux queue stop --queue batch xyzzy &&
+	    -o,-Scontent.dump=dump_queue_start1.tar \
+	    flux queue status >dump_queue_start_1.out &&
 	flux start -o,--config-path=$(pwd)/conf.d \
-	    -o,-Scontent.restore=dump_queue_stopped.tar \
-	    flux queue status >dump_queue_stopped.out &&
-	grep "^debug: Scheduling is started" dump_queue_stopped.out &&
-	grep "^batch: Scheduling is stopped: xyzzy" dump_queue_stopped.out
+	    -o,-Scontent.restore=dump_queue_start1.tar \
+	    -o,-Scontent.dump=dump_queue_start2.tar \
+	    flux queue stop --queue=batch xyzzy &&
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.restore=dump_queue_start2.tar \
+	    -o,-Scontent.dump=dump_queue_start3.tar \
+	    flux queue status >dump_queue_start_2.out &&
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.restore=dump_queue_start3.tar \
+	    -o,-Scontent.dump=dump_queue_start4.tar \
+	    flux queue start --queue=batch &&
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.restore=dump_queue_start4.tar \
+	    -o,-Scontent.dump=dump_queue_start5.tar \
+	    flux queue status >dump_queue_start_3.out &&
+	grep "^debug: Scheduling is started" dump_queue_start_1.out &&
+	grep "^batch: Scheduling is started" dump_queue_start_1.out &&
+	grep "^debug: Scheduling is started" dump_queue_start_2.out &&
+	grep "^batch: Scheduling is stopped: xyzzy" dump_queue_start_2.out &&
+	grep "^debug: Scheduling is started" dump_queue_start_3.out &&
+	grep "^batch: Scheduling is started" dump_queue_start_3.out
 '
 
 test_expect_success 'checkpointed queue no longer configured on restart is ignored' '
