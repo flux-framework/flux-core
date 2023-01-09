@@ -103,9 +103,74 @@ OUTPUT FORMAT
 =============
 
 The *--format* option can be used to specify an output format using Python's
-string format syntax or a defined format by name. For a list of built-in
-and configured formats use ``-o help``. See :man1:`flux-jobs` *OUTPUT FORMAT*
-section for a detailed description of this syntax.
+string format syntax or a defined format by name. For a list of built-in and
+configured formats use ``-o help``.  A configuration snippet for an existing
+named format may be generated with ``--format=get-config=NAME``.  See
+:man1:`flux-jobs` *OUTPUT FORMAT* section for a detailed description of this
+syntax.
+
+Resources are combined into a single line of output when possible depending on
+the supplied output format.  Resource counts are not included in the
+determination of uniqueness.  Therefore, certain output formats will alter the
+number of lines of output.  For example:
+
+::
+
+   $ flux resource list -no {nnodes}
+
+Would simply output a single of output containing the total number of nodes.
+The actual state of the nodes would not matter in the output.
+
+The following field names can be specified for the **status** and **drain**
+subcommands:
+
+**state**
+   State of node(s): "online", "offline", "avail", "exclude", "drain",
+   "draining", "drained", "all"
+
+**nnodes**
+   number of nodes
+
+**ranks**
+   ranks of nodes
+
+**nodelist**
+   node names
+
+**timestamp**
+   If node(s) in drain/draining/drained state, timestamp of node(s)
+   set to drain.
+
+**reason**
+   If node(s) in drain/draining/drained state, reason node(s) set to
+   drain.
+
+The following field names can be specified for the **list** subcommand:
+
+**state**
+   State of node(s): "up", "down", "allocated", "free", "all"
+
+**properties**
+   Properties associated with resources.
+
+**nnodes**
+   number of nodes
+
+**ncores**
+   number of cores
+
+**ngpus**
+   number of gpus
+
+**ranks**
+   ranks of nodes
+
+**nodelist**
+   node names
+
+**rlist**
+   Short form string of all resources.
+
 
 CONFIGURATION
 =============
