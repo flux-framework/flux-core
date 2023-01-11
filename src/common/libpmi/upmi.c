@@ -34,14 +34,10 @@ struct upmi {
 
 extern struct upmi_plugin upmi_simple;
 extern struct upmi_plugin upmi_libpmi;
-extern struct upmi_plugin upmi_pmix;
 extern struct upmi_plugin upmi_single;
 
 static const struct upmi_plugin *plugins[] = {
     &upmi_simple,
-#ifdef HAVE_LIBPMIX
-    &upmi_pmix,
-#endif
     &upmi_libpmi,
     &upmi_single,
 };

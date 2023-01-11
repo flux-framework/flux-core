@@ -9,7 +9,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux \
-	$(PMIX_CFLAGS) \
 	$(ZMQ_CFLAGS) \
 	$(LIBUUID_CFLAGS) \
 	$(JANSSON_CFLAGS) \
@@ -79,7 +78,6 @@ flux_broker_LDADD = \
 	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(JANSSON_LIBS) \
-	$(PMIX_LIBS) \
 	$(LIBDL)
 
 flux_broker_LDFLAGS =
@@ -100,8 +98,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(ZMQ_LIBS) \
-	$(JANSSON_LIBS) \
-	$(PMIX_LIBS)
+	$(JANSSON_LIBS)
 
 test_ldflags = \
 	-no-install

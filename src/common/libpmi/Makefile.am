@@ -9,8 +9,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
-	-I$(top_builddir)/src/common/libflux \
-	$(PMIX_CFLAGS)
+	-I$(top_builddir)/src/common/libflux
 
 noinst_LTLIBRARIES = \
 	libpmi_client.la \
@@ -49,10 +48,6 @@ libupmi_la_SOURCES = \
 	dgetline.c \
 	dgetline.h \
 	$(libpmi_common_sources)
-
-if HAVE_LIBPMIX
-libupmi_la_SOURCES += upmi_pmix.c
-endif
 
 fluxinclude_HEADERS = \
 	pmi.h \
@@ -119,8 +114,7 @@ test_upmi_t_SOURCES = test/upmi.c
 test_upmi_t_CPPFLAGS = $(test_cppflags)
 test_upmi_t_LDADD = \
 	$(top_builddir)/src/common/libpmi/libupmi.la \
-	$(test_ldadd) \
-	$(PMIX_LIBS)
+	$(test_ldadd)
 
 test_pmi_info_SOURCES = test/pmi_info.c
 test_pmi_info_CPPFLAGS = $(test_cppflags)

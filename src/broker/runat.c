@@ -75,24 +75,6 @@ static const char *env_blocklist[] = {
     "PMI_FD",
     "PMI_RANK",
     "PMI_SIZE",
-#ifdef HAVE_LIBPMIX
-    "PMIX_NAMESPACE",
-    "PMIX_VERSION",
-    "PMIX_SERVER_URI41",
-    "PMIX_RANK",
-    "PMIX_SERVER_URI21",
-    "PMIX_GDS_MODULE",
-    "PMIX_SECURITY_MODE",
-    "PMIX_HOSTNAME",
-    "PMIX_BFROP_BUFFER_TYPE",
-    "PMIX_SERVER_TMPDIR",
-    "PMIX_SYSTEM_TMPDIR",
-    "PMIX_SERVER_URI4",
-    "PMIX_MCA_psec",
-    "PMIX_SERVER_URI3",
-    "PMIX_SERVER_URI2",
-    "PMIX_SERVER_URI",
-#endif
     NULL,
 };
 
