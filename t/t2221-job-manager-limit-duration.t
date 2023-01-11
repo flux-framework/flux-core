@@ -31,7 +31,7 @@ test_expect_success 'a job that is under policy.limits.duration is accepted' '
 	flux mini submit -t 30s /bin/true
 '
 test_expect_success 'configure policy.limits.duration and queue duration' '
-	flux config load <<-EOT
+	flux config load <<-EOT &&
 	[policy.limits]
 	duration = "1h"
 	[queues.debug]
@@ -40,6 +40,7 @@ test_expect_success 'configure policy.limits.duration and queue duration' '
 	[queues.short.policy.limits]
 	duration = "1m"
 	EOT
+	flux queue start --all
 '
 test_expect_success 'a job that exceeds policy.limits.duration is rejected' '
 	test_must_fail flux mini submit --queue=debug -t 2h /bin/true

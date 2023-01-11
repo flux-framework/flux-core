@@ -106,10 +106,11 @@ test_expect_success 'job-manager: cancel all jobs' '
 #
 
 test_expect_success 'configure batch,debug queues' '
-	flux config load <<-EOT
+	flux config load <<-EOT &&
 	[queues.batch]
 	[queues.debug]
 	EOT
+	flux queue start --all
 '
 
 test_expect_success 'job-manager: submit 5 jobs to each queue (differing urgencies)' '

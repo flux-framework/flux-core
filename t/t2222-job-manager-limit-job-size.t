@@ -69,13 +69,14 @@ test_expect_success 'a job that is between both of those is accepted' '
 	flux mini submit -g 2 /bin/true
 '
 test_expect_success 'configure job-size.max.ngpus and queue with unlimited' '
-	flux config load <<-EOT
+	flux config load <<-EOT &&
 	[policy.limits]
 	job-size.max.ngpus = 0
 	[queues.debug]
 	[queues.batch.policy.limits]
 	job-size.max.ngpus = -1
 	EOT
+	flux queue start --all
 '
 test_expect_success 'a job is accepted if under general gpu limit' '
 	flux mini submit --queue=debug -n1 /bin/true

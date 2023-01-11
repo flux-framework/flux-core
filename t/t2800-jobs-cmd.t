@@ -4,17 +4,7 @@ test_description='Test flux jobs command'
 
 . $(dirname $0)/sharness.sh
 
-mkdir -p conf.d
-cat >conf.d/config.toml <<-EOT
-[policy]
-jobspec.defaults.system.queue = "defaultqueue"
-
-[queues.defaultqueue]
-[queues.queue1]
-[queues.queue2]
-EOT
-
-test_under_flux 4 job -o,--config-path=$(pwd)/conf.d
+test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer -f asciicast"
@@ -85,6 +75,17 @@ listjobs() {
 	    | $jq .id \
 	    | flux job id --to=f58
 }
+
+test_expect_success 'configure testing queues' '
+	flux config load <<-EOT &&
+	[policy]
+	jobspec.defaults.system.queue = "defaultqueue"
+	[queues.defaultqueue]
+	[queues.queue1]
+	[queues.queue2]
+	EOT
+	flux queue start --all
+'
 
 test_expect_success HAVE_JQ 'submit jobs for job list testing' '
 	#  Create `hostname` and `sleep` jobspec

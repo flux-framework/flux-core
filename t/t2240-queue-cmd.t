@@ -383,14 +383,19 @@ test_expect_success 'configure batch,debug queues' '
 	[queues.debug]
 	EOT
 '
+test_expect_success 'queues enabled and stopped by default' '
+	flux queue status >mqstatus_default.out &&
+	test $(grep -c "submission is enabled" mqstatus_default.out) -eq 2 &&
+	test $(grep -c "Scheduling is stopped" mqstatus_default.out) -eq 2
+'
+test_expect_success 'start queues' '
+	flux queue start --all &&
+	flux queue status >mqstatus_initial.out &&
+	test $(grep -c "Scheduling is started" mqstatus_initial.out) -eq 2
+'
 test_expect_success 'jobs may be submitted to either queue' '
 	flux mini submit -q batch /bin/true &&
 	flux mini submit -q debug /bin/true
-'
-test_expect_success 'flux-queue status reports all queues' '
-	flux queue status >mqstatus.out &&
-	grep batch mqstatus.out &&
-	grep debug mqstatus.out
 '
 test_expect_success 'flux-queue status can show one queue' '
 	flux queue status -q debug >mqstatus_debug.out &&
@@ -482,7 +487,7 @@ test_expect_success 'submitted jobs are not running' '
 '
 test_expect_success 'flux-queue start --all affects all queues' '
 	flux queue start -a > mqstart.out &&
-	test $(grep -c "Scheduling is started" mqstatus.out) -eq 2 &&
+	test $(grep -c "Scheduling is started" mqstart.out) -eq 2 &&
 	flux queue status >mqstatus_start.out &&
 	test $(grep -c "Scheduling is started" mqstatus_start.out) -eq 2
 '
