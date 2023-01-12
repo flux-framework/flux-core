@@ -261,4 +261,31 @@ bool upmi_has_flag (struct upmi *upmi, int flag)
     return (upmi->flags & flag) ? true : false;
 }
 
+static void upmi_setverror (flux_plugin_t *p,
+                            flux_plugin_arg_t *args,
+                            const char *fmt,
+                            va_list ap)
+{
+    char buf[128];
+
+    (void)vsnprintf (buf, sizeof (buf), fmt, ap);
+    (void)flux_plugin_arg_pack (args,
+                                FLUX_PLUGIN_ARG_OUT,
+                                "{s:s}",
+                                "errmsg", buf);
+}
+
+int upmi_seterror (flux_plugin_t *p,
+                   flux_plugin_arg_t *args,
+                   const char *fmt,
+                   ...)
+{
+    va_list ap;
+
+    va_start (ap, fmt);
+    upmi_setverror (p, args, fmt, ap);
+    va_end (ap);
+    return -1;
+}
+
 // vi:ts=4 sw=4 expandtab

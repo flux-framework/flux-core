@@ -11,7 +11,8 @@
 #ifndef _LIBPMI_UPMI_PLUGIN_H
 #define _LIBPMI_UPMI_PLUGIN_H 1
 
-#include "src/common/libflux/types.h"
+#include <stdarg.h>
+#include <flux/core.h>
 
 /* Plugins must populate all of the following callbacks.
  */
@@ -39,6 +40,13 @@ struct upmi_plugin {
 
 void upmi_trace (struct upmi *upmi, const char *fmt, ...);
 bool upmi_has_flag (struct upmi *upmi, int flag);
+
+int upmi_seterror (flux_plugin_t *p,
+                   flux_plugin_arg_t *args,
+                   const char *fmt,
+                   ...)
+__attribute__ ((format (printf, 3, 4)));
+
 
 #endif /* !_LIBPMI_UPMI_PLUGIN_H */
 
