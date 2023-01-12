@@ -14,33 +14,6 @@
 #include <stdarg.h>
 #include <flux/core.h>
 
-/* Plugins must populate all of the following callbacks.
- */
-struct upmi_plugin {
-    const char *(*getname) (void);
-    void *(*create) (struct upmi *upmi,
-                     const char *path,
-                     flux_error_t *error);
-    void (*destroy) (void *data);
-    int (*initialize) (void *data,
-                       struct upmi_info *info,
-                       flux_error_t *error);
-    int (*finalize) (void *data, flux_error_t *error);
-    int (*put) (void *data,
-                const char *key,
-                const char *value,
-                flux_error_t *error);
-    int (*get) (void *data,
-                const char *key,
-                int rank, // -1 if target rank is unknown
-                char **value, // caller must free
-                flux_error_t *error);
-    int (*barrier) (void *data, flux_error_t *error);
-};
-
-void upmi_trace (struct upmi *upmi, const char *fmt, ...);
-bool upmi_has_flag (struct upmi *upmi, int flag);
-
 int upmi_seterror (flux_plugin_t *p,
                    flux_plugin_arg_t *args,
                    const char *fmt,

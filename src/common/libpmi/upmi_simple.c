@@ -23,51 +23,15 @@
 #include "upmi.h"
 #include "upmi_plugin.h"
 
-struct upmi_simple {
-    struct upmi *upmi;
+struct plugin_ctx {
     struct pmi_simple_client *client;
     char kvsname[1024];
 };
 
-static const char *op_getname (void)
+static const char *plugin_name = "simple";
+
+static void plugin_ctx_destroy (struct plugin_ctx *ctx)
 {
-    return "simple";
-}
-
-static void *op_create (struct upmi *upmi,
-                        const char *path,
-                        flux_error_t *error)
-{
-    struct upmi_simple *ctx;
-    const char *vars[] = { "PMI_FD", "PMI_RANK", "PMI_SIZE" }; // required
-
-    for (int i = 0; i < ARRAY_SIZE (vars); i++) {
-        if (!getenv (vars[i])) {
-            errprintf (error, "%s is missing from the environment", vars[i]);
-            return NULL;
-        }
-    }
-    if (!(ctx = calloc (1, sizeof (*ctx)))) {
-        errprintf (error, "out of memory");
-        return NULL;
-    }
-    ctx->upmi = upmi;
-    ctx->client = pmi_simple_client_create_fd (getenv ("PMI_FD"),
-                                               getenv ("PMI_RANK"),
-                                               getenv ("PMI_SIZE"),
-                                               getenv ("PMI_SPAWNED"));
-    if (!ctx->client) {
-        errprintf (error, "%s", strerror (errno));
-        free (ctx);
-        return NULL;
-    }
-    return ctx;
-}
-
-static void op_destroy (void *data)
-{
-    struct upmi_simple *ctx = data;
-
     if (ctx) {
         int saved_errno = errno;
         pmi_simple_client_destroy (ctx->client);
@@ -76,111 +40,174 @@ static void op_destroy (void *data)
     }
 }
 
-static int op_initialize (void *data,
-                          struct upmi_info *info,
-                          flux_error_t *error)
+static struct plugin_ctx *plugin_ctx_create (void)
 {
-    struct upmi_simple *ctx = data;
+    struct plugin_ctx *ctx;
+
+    if (!(ctx = calloc (1, sizeof (*ctx))))
+        return NULL;
+    if (!(ctx->client = pmi_simple_client_create_fd (getenv ("PMI_FD"),
+                                                     getenv ("PMI_RANK"),
+                                                     getenv ("PMI_SIZE"),
+                                                     getenv ("PMI_SPAWNED")))) {
+        plugin_ctx_destroy (ctx);
+        return NULL;
+    }
+    return ctx;
+}
+
+static int op_put (flux_plugin_t *p,
+                   const char *topic,
+                   flux_plugin_arg_t *args,
+                   void *data)
+{
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    const char *key;
+    const char *value;
     int result;
 
-    result = pmi_simple_client_init (ctx->client);
-    if (result != PMI_SUCCESS) {
-        errprintf (error, "%s", pmi_strerror (result));
-        return -1;
-    }
-    result = pmi_simple_client_kvs_get_my_name (ctx->client,
-                                                ctx->kvsname,
-                                                sizeof (ctx->kvsname));
-    if (result != PMI_SUCCESS) {
-        errprintf (error, "fetch KVS name: %s", pmi_strerror (result));
-        return -1;
-    }
-    info->rank = ctx->client->rank;
-    info->size = ctx->client->size;
-    info->name = ctx->kvsname;
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s s:s}",
+                                "key", &key,
+                                "value", &value) < 0)
+        return upmi_seterror (p, args, "error unpacking put arguments");
+
+    result = pmi_simple_client_kvs_put (ctx->client, ctx->kvsname, key, value);
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+
     return 0;
 }
 
-static int op_finalize (void *data, flux_error_t *error)
+static int op_get (flux_plugin_t *p,
+                   const char *topic,
+                   flux_plugin_arg_t *args,
+                   void *data)
 {
-    struct upmi_simple *ctx = data;
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
     int result;
+    const char *key;
+    char value[1024];
 
-    result = pmi_simple_client_finalize (ctx->client);
-    if (result != PMI_SUCCESS) {
-        errprintf (error, "%s", pmi_strerror (result));
-        return -1;
-    }
-    return 0;
-}
-
-static int op_put (void *data,
-                   const char *key,
-                   const char *val,
-                   flux_error_t *error)
-{
-    struct upmi_simple *ctx = data;
-    int result;
-
-    result = pmi_simple_client_kvs_put (ctx->client, ctx->kvsname, key, val);
-    if (result != PMI_SUCCESS) {
-        errprintf (error, "%s", pmi_strerror (result));
-        return -1;
-    }
-    return 0;
-}
-
-static int op_get (void *data,
-                   const char *key,
-                   int rank, // ignored here
-                   char **value,
-                   flux_error_t *error)
-{
-    char buf[1024];
-    char *cpy;
-
-    struct upmi_simple *ctx = data;
-    int result;
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s}",
+                                "key", &key) < 0)
+        return upmi_seterror (p, args, "error unpacking get arguments");
 
     result = pmi_simple_client_kvs_get (ctx->client,
                                         ctx->kvsname,
                                         key,
-                                        buf,
-                                        sizeof (buf));
-    if (result != PMI_SUCCESS) {
-        errprintf (error, "%s", pmi_strerror (result));
+                                        value,
+                                        sizeof (value));
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+
+    if (flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_OUT,
+                              "{s:s}",
+                              "value", value) < 0)
         return -1;
-    }
-    if (!(cpy = strdup (buf))) {
-        errprintf (error, "out of memory");
-        return -1;
-    }
-    *value = cpy;
     return 0;
 }
 
-static int op_barrier (void *data, flux_error_t *error)
+static int op_barrier (flux_plugin_t *p,
+                       const char *topic,
+                       flux_plugin_arg_t *args,
+                       void *data)
 {
-    struct upmi_simple *ctx = data;
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
     int result;
 
     result = pmi_simple_client_barrier (ctx->client);
-    if (result != PMI_SUCCESS) {
-        errprintf (error, "%s", pmi_strerror (result));
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+    return 0;
+}
+
+static int op_initialize (flux_plugin_t *p,
+                          const char *topic,
+                          flux_plugin_arg_t *args,
+                          void *data)
+{
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    int result;
+
+    result = pmi_simple_client_init (ctx->client);
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+
+    result = pmi_simple_client_kvs_get_my_name (ctx->client,
+                                                ctx->kvsname,
+                                                sizeof (ctx->kvsname));
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+
+    if (flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_OUT,
+                              "{s:i s:s s:i}",
+                              "rank", ctx->client->rank,
+                              "name", ctx->kvsname,
+                              "size", ctx->client->size) < 0)
         return -1;
+    return 0;
+}
+
+static int op_finalize (flux_plugin_t *p,
+                        const char *topic,
+                        flux_plugin_arg_t *args,
+                        void *data)
+{
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    int result;
+
+    result = pmi_simple_client_finalize (ctx->client);
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+    return 0;
+}
+
+static int op_preinit (flux_plugin_t *p,
+                       const char *topic,
+                       flux_plugin_arg_t *args,
+                       void *data)
+{
+    struct plugin_ctx *ctx;
+    const char *vars[] = { "PMI_FD", "PMI_RANK", "PMI_SIZE" }; // required
+
+    for (int i = 0; i < ARRAY_SIZE (vars); i++) {
+        if (!getenv (vars[i]))
+            return upmi_seterror (p, args, "%s not found in environ", vars[i]);
+    }
+    if (!(ctx = plugin_ctx_create ())
+        || flux_plugin_aux_set (p,
+                                plugin_name,
+                                ctx,
+                                (flux_free_f)plugin_ctx_destroy) < 0) {
+        plugin_ctx_destroy (ctx);
+        return upmi_seterror (p, args, "create context: %s", strerror (errno));
     }
     return 0;
 }
 
-const struct upmi_plugin upmi_simple = {
-    .getname = op_getname,
-    .create = op_create,
-    .destroy = op_destroy,
-    .initialize = op_initialize,
-    .finalize = op_finalize,
-    .put = op_put,
-    .get = op_get,
-    .barrier = op_barrier,
+static const struct flux_plugin_handler optab[] = {
+    { "upmi.put",           op_put,         NULL },
+    { "upmi.get",           op_get,         NULL },
+    { "upmi.barrier",       op_barrier,     NULL },
+    { "upmi.initialize",    op_initialize,  NULL },
+    { "upmi.finalize",      op_finalize,    NULL },
+    { "upmi.preinit",       op_preinit,     NULL },
+    { 0 },
 };
+
+
+
+int upmi_simple_init (flux_plugin_t *p)
+{
+    if (flux_plugin_register (p, plugin_name, optab) < 0)
+        return -1;
+    return 0;
+}
 
 // vi:ts=4 sw=4 expandtab

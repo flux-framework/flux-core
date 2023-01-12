@@ -15,43 +15,28 @@
 #include <errno.h>
 #include <jansson.h>
 
-#include "src/common/libutil/errprintf.h"
-#include "ccan/array_size/array_size.h"
-
-#include "simple_client.h"
-#include "pmi_strerror.h"
-#include "pmi.h"
 #include "upmi.h"
 #include "upmi_plugin.h"
 
-struct upmi_single {
-    struct upmi *upmi;
+struct plugin_ctx {
     json_t *kvs;
 };
 
-static const char *op_getname (void)
-{
-    return "single";
-}
+static const char *plugin_name = "single";
 
-static void *op_create (struct upmi *upmi,
-                        const char *path,
-                        flux_error_t *error)
+static void *plugin_ctx_create (void)
 {
-    struct upmi_single *ctx;
+    struct plugin_ctx *ctx;
 
-    if (!(ctx = calloc (1, sizeof (*ctx)))) {
-        errprintf (error, "out of memory");
+    if (!(ctx = calloc (1, sizeof (*ctx)))
+        || !(ctx->kvs = json_object ())) {
         return NULL;
     }
-    ctx->upmi = upmi;
     return ctx;
 }
 
-static void op_destroy (void *data)
+static void plugin_ctx_destroy (struct plugin_ctx *ctx)
 {
-    struct upmi_single *ctx = data;
-
     if (ctx) {
         int saved_errno = errno;
         json_decref (ctx->kvs);
@@ -60,80 +45,120 @@ static void op_destroy (void *data)
     }
 }
 
-static int op_initialize (void *data,
-                          struct upmi_info *info,
-                          flux_error_t *error)
+static int op_put (flux_plugin_t *p,
+                   const char *topic,
+                   flux_plugin_arg_t *args,
+                   void *data)
 {
-    info->rank = 0;
-    info->size = 1;
-    info->name = "single";
-    return 0;
-}
-
-static int op_finalize (void *data, flux_error_t *error)
-{
-    return 0;
-}
-
-static int op_put (void *data,
-                   const char *key,
-                   const char *val,
-                   flux_error_t *error)
-{
-    struct upmi_single *ctx = data;
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    const char *key;
+    const char *value;
     json_t *o;
 
-    if (!ctx->kvs) {
-        if (!(ctx->kvs = json_object ())) {
-            errprintf (error, "out of memory");
-            return -1;
-        }
-    }
-    if (!(o = json_string (val))
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s s:s}",
+                                "key", &key,
+                                "value", &value) < 0)
+        return upmi_seterror (p, args, "error unpacking put arguments");
+    if (!(o = json_string (value))
         || json_object_set_new (ctx->kvs, key, o) < 0) {
         json_decref (o);
-        errprintf (error, "out of memory");
-        return -1;
+        return upmi_seterror (p, args, "dictionary update error");
     }
     return 0;
 }
 
-static int op_get (void *data,
-                   const char *key,
-                   int rank, // ignored here
-                   char **value,
-                   flux_error_t *error)
+static int op_get (flux_plugin_t *p,
+                   const char *topic,
+                   flux_plugin_arg_t *args,
+                   void *data)
 {
-    struct upmi_single *ctx = data;
-    const char *val;
-    char *cpy;
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    const char *key;
+    const char *value;
 
-    if (!ctx->kvs || json_unpack (ctx->kvs, "{s:s}", key, &val) < 0) {
-        errprintf (error, "key not found");
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s}",
+                                "key", &key) < 0)
+        return upmi_seterror (p, args, "error unpacking get arguments");
+
+    if (json_unpack (ctx->kvs, "{s:s}", key, &value) < 0)
+        return upmi_seterror (p, args, "key not found");
+
+    if (flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_OUT,
+                              "{s:s}",
+                              "value", value) < 0)
         return -1;
-    }
-    if (!(cpy = strdup (val))) {
-        errprintf (error, "out of memory");
-        return -1;
-    }
-    *value = cpy;
     return 0;
 }
 
-static int op_barrier (void *data, flux_error_t *error)
+static int op_barrier (flux_plugin_t *p,
+                       const char *topic,
+                       flux_plugin_arg_t *args,
+                       void *data)
 {
     return 0;
 }
 
-const struct upmi_plugin upmi_single = {
-    .getname = op_getname,
-    .create = op_create,
-    .destroy = op_destroy,
-    .initialize = op_initialize,
-    .finalize = op_finalize,
-    .put = op_put,
-    .get = op_get,
-    .barrier = op_barrier,
+static int op_initialize (flux_plugin_t *p,
+                          const char *topic,
+                          flux_plugin_arg_t *args,
+                          void *data)
+{
+    if (flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_OUT,
+                              "{s:i s:s s:i}",
+                              "rank", 0,
+                              "name", plugin_name,
+                              "size", 1) < 0)
+        return -1;
+    return 0;
+}
+
+static int op_finalize (flux_plugin_t *p,
+                        const char *topic,
+                        flux_plugin_arg_t *args,
+                        void *data)
+{
+    return 0;
+}
+
+static int op_preinit (flux_plugin_t *p,
+                       const char *topic,
+                       flux_plugin_arg_t *args,
+                       void *data)
+{
+    struct plugin_ctx *ctx;
+
+    if (!(ctx = plugin_ctx_create ())
+        || flux_plugin_aux_set (p,
+                                plugin_name,
+                                ctx,
+                                (flux_free_f)plugin_ctx_destroy) < 0) {
+        plugin_ctx_destroy (ctx);
+        return upmi_seterror (p, args, "could not create upmi plugin context");
+    }
+    return 0;
+}
+
+static const struct flux_plugin_handler optab[] = {
+    { "upmi.put",           op_put,         NULL },
+    { "upmi.get",           op_get,         NULL },
+    { "upmi.barrier",       op_barrier,     NULL },
+    { "upmi.initialize",    op_initialize,  NULL },
+    { "upmi.finalize",      op_finalize,    NULL },
+    { "upmi.preinit",       op_preinit,     NULL },
+    { 0 },
 };
+
+int upmi_single_init (flux_plugin_t *p)
+{
+    if (flux_plugin_register (p, plugin_name, optab) < 0)
+        return -1;
+    return 0;
+}
 
 // vi:ts=4 sw=4 expandtab
