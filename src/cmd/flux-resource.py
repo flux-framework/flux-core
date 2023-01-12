@@ -56,14 +56,14 @@ class FluxResourceConfig(UtilConfig):
         "default": {
             "description": "Default flux-resource list format string",
             "format": (
-                "{state:>10} ?:{properties:<10.10+} {nnodes:>6} "
+                "{state:>10} ?:{queue:<8.8} ?:{properties:<10.10+} {nnodes:>6} "
                 "{ncores:>8} {ngpus:>8} {nodelist}"
             ),
         },
         "rlist": {
             "description": "Format including resource list details",
             "format": (
-                "{state:>10} ?:{properties:<10.10+} {nnodes:>6} "
+                "{state:>10} ?:{queue:<8.8} ?:{properties:<10.10+} {nnodes:>6} "
                 "{ncores:>8} {ngpus:>8} {rlist}"
             ),
         },
@@ -432,7 +432,7 @@ class ResourceSetExtra(ResourceSet):
     @property
     def queue(self):
         queues = ""
-        if self.flux_config and self.flux_config["queues"]:
+        if self.flux_config and "queues" in self.flux_config:
             properties = json.loads(self.get_properties())
             for key, value in self.flux_config["queues"].items():
                 if value["requires"] and set(value["requires"]).issubset(
