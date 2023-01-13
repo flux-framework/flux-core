@@ -430,6 +430,17 @@ class ResourceSetExtra(ResourceSet):
             super().__init__(arg, version)
 
     @property
+    def propertiesx(self):
+        properties = json.loads(self.get_properties())
+        queues = self.queue
+        if self.queue:
+            queues = queues.split(",")
+            for q in queues:
+                if q in properties:
+                    properties.pop(q)
+        return ",".join(properties.keys())
+
+    @property
     def queue(self):
         queues = ""
         if self.flux_config and "queues" in self.flux_config:
@@ -448,7 +459,7 @@ def resources_uniq_lines(resources, states, formatter, config):
     the ResourceSet formatter argument. Include only the provided states
     """
     #  uniq_fields are the fields on which to combine like results
-    uniq_fields = ["state", "properties", "queue"]
+    uniq_fields = ["state", "properties", "propertiesx", "queue"]
 
     #
     #  Create the uniq format by combining all provided uniq fields:
@@ -504,6 +515,7 @@ def list_handler(args):
         "state": "STATE",
         "queue": "QUEUE",
         "properties": "PROPERTIES",
+        "propertiesx": "PROPERTIES",
         "nnodes": "NNODES",
         "ncores": "NCORES",
         "ngpus": "NGPUS",
