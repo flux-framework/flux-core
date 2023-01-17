@@ -197,6 +197,7 @@ int main (int argc, char *argv[])
     struct sigaction old_sigact_term;
     flux_msg_handler_t **handlers = NULL;
     const flux_conf_t *conf;
+    const char *method;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -325,14 +326,20 @@ int main (int argc, char *argv[])
      * Default method is pmi.
      * If [bootstrap] is defined in configuration, use static configuration.
      */
-    if (flux_conf_unpack (conf, NULL, "{s:{}}", "bootstrap") == 0) {
-        if (boot_config (ctx.h, ctx.overlay, ctx.attrs) < 0) {
+    if (attr_get (ctx.attrs, "broker.boot-method", &method, NULL) < 0) {
+        if (flux_conf_unpack (conf, NULL, "{s:{}}", "bootstrap") == 0)
+            method = "config";
+        else
+            method = NULL;
+    }
+    if (!method || !streq (method, "config")) {
+        if (boot_pmi (ctx.overlay, ctx.attrs) < 0) {
             log_msg ("bootstrap failed");
             goto cleanup;
         }
     }
-    else { // PMI
-        if (boot_pmi (ctx.overlay, ctx.attrs) < 0) {
+    else {
+        if (boot_config (ctx.h, ctx.overlay, ctx.attrs) < 0) {
             log_msg ("bootstrap failed");
             goto cleanup;
         }
