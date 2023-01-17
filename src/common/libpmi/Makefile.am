@@ -68,7 +68,11 @@ test_ldadd = \
 
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
+	-DUPMI_TEST_SEARCHPATH=\"$(builddir)/test/plugin/.libs\" \
 	$(AM_CPPFLAGS)
+
+test_ldflags = \
+	-no-install
 
 check_PROGRAMS = \
 	$(TESTS) \
@@ -76,6 +80,9 @@ check_PROGRAMS = \
 	test_pmi2_info \
 	test_kvstest \
 	test_kvstest2
+
+check_LTLIBRARIES = \
+        test/plugin/singlex.la
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
@@ -127,6 +134,13 @@ test_kvstest_LDADD = $(test_ldadd)
 test_kvstest2_SOURCES = test/kvstest2.c
 test_kvstest2_CPPFLAGS = $(test_cppflags)
 test_kvstest2_LDADD = $(test_ldadd)
+
+test_plugin_singlex_la_SOURCES = test/plugin/singlex.c
+test_plugin_singlex_la_CPPFLAGS = $(test_cppflags)
+test_plugin_singlex_la_LIBADD = \
+	$(top_builddir)/src/common/libpmi/libupmi.la \
+	$(test_ldadd)
+test_plugin_singlex_la_LDFLAGS = -module -rpath /nowhere $(test_ldflags)
 
 EXTRA_DIST = \
     ltrace.conf
