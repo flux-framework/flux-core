@@ -165,12 +165,13 @@ test_expect_success 'resources can be configured in TOML' '
 	EOF
 	flux start -s 1 \
 		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
-		flux resource list -s all > ${name}/output &&
+		flux resource list -s all -n \
+		   -o "{state} {properties} {nnodes} {ncores} {ngpus} {nodelist}" \
+		   > ${name}/output &&
 	test_debug "cat ${name}/output" &&
 	cat <<-EOF >${name}/expected &&
-	     STATE PROPERTIES NNODES   NCORES    NGPUS NODELIST
-	       all debug           3       12        0 foo[0-2]
-	       all batch           8       32        4 foo[3-10]
+	all debug 3 12 0 foo[0-2]
+	all batch 8 32 4 foo[3-10]
 	EOF
 	test_cmp ${name}/expected ${name}/output
 '

@@ -150,8 +150,14 @@ The following field names can be specified for the **list** subcommand:
 **state**
    State of node(s): "up", "down", "allocated", "free", "all"
 
+**queue**
+   queue(s) associated with resources.
+
 **properties**
    Properties associated with resources.
+
+**propertiesx**
+   Properties associated with resources, but with queue names removed.
 
 **nnodes**
    number of nodes

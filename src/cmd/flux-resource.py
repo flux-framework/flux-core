@@ -56,14 +56,14 @@ class FluxResourceConfig(UtilConfig):
         "default": {
             "description": "Default flux-resource list format string",
             "format": (
-                "{state:>10} ?:{properties:<10.10+} {nnodes:>6} "
+                "{state:>10} ?:{queue:<8.8} ?:{propertiesx:<10.10+} {nnodes:>6} "
                 "{ncores:>8} {ngpus:>8} {nodelist}"
             ),
         },
         "rlist": {
             "description": "Format including resource list details",
             "format": (
-                "{state:>10} ?:{properties:<10.10+} {nnodes:>6} "
+                "{state:>10} ?:{queue:<8.8} ?:{propertiesx:<10.10+} {nnodes:>6} "
                 "{ncores:>8} {ngpus:>8} {rlist}"
             ),
         },
@@ -419,13 +419,47 @@ def drain_list(args):
     status(args)
 
 
-def resources_uniq_lines(resources, states, formatter):
+class ResourceSetExtra(ResourceSet):
+    def __init__(self, arg=None, version=1, flux_config=None):
+        self.flux_config = flux_config
+        if isinstance(arg, ResourceSet):
+            super().__init__(arg.encode(), version)
+            if arg.state:
+                self.state = arg.state
+        else:
+            super().__init__(arg, version)
+
+    @property
+    def propertiesx(self):
+        properties = json.loads(self.get_properties())
+        queues = self.queue
+        if self.queue:
+            queues = queues.split(",")
+            for q in queues:
+                if q in properties:
+                    properties.pop(q)
+        return ",".join(properties.keys())
+
+    @property
+    def queue(self):
+        queues = ""
+        if self.flux_config and "queues" in self.flux_config:
+            properties = json.loads(self.get_properties())
+            for key, value in self.flux_config["queues"].items():
+                if value["requires"] and set(value["requires"]).issubset(
+                    set(properties)
+                ):
+                    queues = queues + "," + key if queues else key
+        return queues
+
+
+def resources_uniq_lines(resources, states, formatter, config):
     """
     Generate a set of resource sets that would produce unique lines given
     the ResourceSet formatter argument. Include only the provided states
     """
     #  uniq_fields are the fields on which to combine like results
-    uniq_fields = ["state", "properties"]
+    uniq_fields = ["state", "properties", "propertiesx", "queue"]
 
     #
     #  Create the uniq format by combining all provided uniq fields:
@@ -453,7 +487,7 @@ def resources_uniq_lines(resources, states, formatter):
             #   resource set for output purposes. O/w the output for this
             #   state would be suppressed.
             #
-            rset = ResourceSet()
+            rset = ResourceSetExtra(flux_config=config)
             rset.state = state
             key = fmt.format(rset)
             if key not in lines:
@@ -464,6 +498,7 @@ def resources_uniq_lines(resources, states, formatter):
 
         for rank in resources[state].ranks:
             rset = resources[state].copy_ranks(rank)
+            rset = ResourceSetExtra(rset, flux_config=config)
             key = fmt.format(rset)
 
             if key not in lines:
@@ -478,7 +513,9 @@ def list_handler(args):
     valid_states = ["up", "down", "allocated", "free", "all"]
     headings = {
         "state": "STATE",
+        "queue": "QUEUE",
         "properties": "PROPERTIES",
+        "propertiesx": "PROPERTIES",
         "nnodes": "NNODES",
         "ncores": "NCORES",
         "ngpus": "NGPUS",
@@ -486,6 +523,7 @@ def list_handler(args):
         "nodelist": "NODELIST",
         "rlist": "LIST",
     }
+    config = None
 
     states = args.states.split(",")
     for state in states:
@@ -496,12 +534,18 @@ def list_handler(args):
     if args.from_stdin:
         resources = SchedResourceList(json.load(sys.stdin))
     else:
-        resources = resource_list(flux.Flux()).get()
+        handle = flux.Flux()
+        rpcs = [resource_list(handle), handle.rpc("config.get")]
+        resources = rpcs[0].get()
+        try:
+            config = rpcs[1].get()
+        except Exception as e:
+            LOGGER.warning("Could not get flux config: " + str(e))
 
     fmt = FluxResourceConfig("list").load().get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
-    lines = resources_uniq_lines(resources, states, formatter)
+    lines = resources_uniq_lines(resources, states, formatter, config)
     formatter.print_items(lines.values(), no_header=args.no_header)
 
 
