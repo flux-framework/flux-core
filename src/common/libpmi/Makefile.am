@@ -14,27 +14,26 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = \
 	libpmi_client.la \
 	libpmi_server.la \
+	libpmi_common.la \
 	libupmi.la
 
-libpmi_common_sources = \
+libpmi_common_la_SOURCES = \
 	pmi_strerror.c \
 	pmi_strerror.h \
 	keyval.c \
-	keyval.h
+	keyval.h \
+	dgetline.c \
+	dgetline.h
 
 libpmi_client_la_SOURCES = \
 	simple_client.c \
 	simple_client.h \
 	pmi.c \
-	pmi2.c \
-	dgetline.c \
-	dgetline.h \
-	$(libpmi_common_sources)
+	pmi2.c
 
 libpmi_server_la_SOURCES = \
 	simple_server.h \
-	simple_server.c \
-	$(libpmi_common_sources)
+	simple_server.c
 
 libupmi_la_SOURCES = \
 	upmi.h \
@@ -42,12 +41,7 @@ libupmi_la_SOURCES = \
 	upmi_plugin.h \
 	upmi_simple.c \
 	upmi_libpmi.c \
-	upmi_single.c \
-	simple_client.c \
-	simple_client.h \
-	dgetline.c \
-	dgetline.h \
-	$(libpmi_common_sources)
+	upmi_single.c
 
 fluxinclude_HEADERS = \
 	pmi.h \
@@ -61,8 +55,10 @@ TESTS = test_keyval.t \
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
+	$(top_builddir)/src/common/libkvs/libkvs.la \
 	$(top_builddir)/src/common/libpmi/libpmi_client.la \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
+	$(top_builddir)/src/common/libpmi/libpmi_common.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(JANSSON_LIBS) \
