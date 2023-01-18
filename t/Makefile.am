@@ -250,6 +250,7 @@ TESTSCRIPTS = \
 	python/t0024-util.py \
 	python/t0025-uri.py \
 	python/t0026-tree.py \
+	python/t0027-constraint-parser.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY
