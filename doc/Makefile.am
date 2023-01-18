@@ -45,13 +45,15 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-shutdown.1 \
 	man1/flux-uptime.1 \
 	man1/flux-uri.1 \
-	man1/flux-resource.1
+	man1/flux-resource.1 \
+	man1/flux-pgrep.1
 
 # These files are generated as clones of a primary page.
 # Sphinx handles this automatically if declared in the conf.py
 MAN1_FILES_SECONDARY = \
 	man1/flux-setattr.1 \
-	man1/flux-lsattr.1
+	man1/flux-lsattr.1 \
+	man1/flux-pkill.1
 
 
 MAN3_FILES = $(MAN3_FILES_PRIMARY) $(MAN3_FILES_SECONDARY)

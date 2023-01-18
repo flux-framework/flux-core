@@ -691,3 +691,6 @@ novalidate
 ngpus
 rlist
 propertiesx
+pgrep
+pkill
+deps
