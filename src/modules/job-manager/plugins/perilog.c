@@ -72,6 +72,7 @@ struct perilog_proc {
     bool prolog;
     flux_subprocess_t *sp;
     flux_future_t *kill_f;
+    flux_watcher_t *kill_timer;
 };
 
 static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
@@ -98,6 +99,7 @@ static void perilog_proc_destroy (struct perilog_proc *proc)
     if (proc) {
         flux_subprocess_destroy (proc->sp);
         flux_future_destroy (proc->kill_f);
+        flux_watcher_destroy (proc->kill_timer);
         free (proc);
     }
 }
@@ -379,50 +381,72 @@ static void prolog_kill_cb (flux_future_t *f, void *arg)
     flux_t *h = flux_future_get_flux (f);
 
     if (flux_future_get (f, NULL) < 0) {
-        if (errno == ETIMEDOUT) {
-            flux_future_t *fkill;
-            if (!(fkill = flux_subprocess_kill (proc->sp, SIGKILL)))
-                flux_log_error (h,
-                                "failed to send SIGKILL to prolog for %ju",
-                                (uintmax_t) proc->id);
-            /* Do not wait for error response */
-            flux_future_destroy (fkill);
-            /* Also destroy proc->kill_f future to avoid this callback
-             * being called again.
-             */
-            flux_future_destroy (proc->kill_f);
-            proc->kill_f = NULL;
-            return;
-        }
-        flux_log_error (h, "prolog_kill");
+        flux_log_error (h,
+                        "%ju: Failed to signal job prolog",
+                        (uintmax_t) proc->id);
     }
-    /*
-     *  N.B.: We use flux_future_reset() on fulfilled future so that the
-     *  next fulfillment will be the timeout set by the original call to
-     *  flux_future_then() below. If the process is destroyed before the
-     *  timer expires, then the future will also be destroyed so the
-     *  timeout above won't occur.
-     */
-    flux_future_reset (f);
 }
-
 
 static int prolog_kill (struct perilog_proc *proc)
 {
     flux_t *h = flux_jobtap_get_flux (proc->p);
 
+    if (proc->kill_timer)
+        return 0;
+
     if (!(proc->kill_f = flux_subprocess_kill (proc->sp, SIGTERM)))
         return -1;
 
-    if (flux_future_then (proc->kill_f,
-                          perilog_config.prolog_kill_timeout,
-                          prolog_kill_cb, proc) < 0) {
+    if (flux_future_then (proc->kill_f, -1., prolog_kill_cb, proc) < 0) {
         flux_log_error (h, "prolog_kill: flux_future_then");
         flux_future_destroy (proc->kill_f);
         proc->kill_f = NULL;
         return -1;
     }
 
+    return 0;
+}
+
+static void prolog_kill_timer_cb (flux_reactor_t *r,
+                                  flux_watcher_t *w,
+                                  int revents,
+                                  void *arg)
+{
+    flux_t *h;
+    flux_future_t *f;
+    struct perilog_proc *proc = arg;
+
+    if (!proc || !(h = flux_jobtap_get_flux (proc->p)))
+        return;
+
+    if (!(f = flux_subprocess_kill (proc->sp, SIGKILL))) {
+        flux_log_error (h,
+                        "%ju: failed to send SIGKILL to prolog",
+                        (uintmax_t) proc->id);
+        return;
+    }
+    /* Do not wait for any response */
+    flux_future_destroy (f);
+}
+
+static int prolog_kill_timer_start (struct perilog_proc *proc, double timeout)
+{
+    if (proc->kill_timer == NULL) {
+        flux_t *h = flux_jobtap_get_flux (proc->p);
+        flux_reactor_t *r = flux_get_reactor (h);
+        proc->kill_timer = flux_timer_watcher_create (r,
+                                                      timeout,
+                                                      0.,
+                                                      prolog_kill_timer_cb,
+                                                      proc);
+        if (!proc->kill_timer) {
+            flux_log_error (h,
+                            "%ju: failed to start prolog kill timer",
+                            (uintmax_t) proc->id);
+            return -1;
+        }
+        flux_watcher_start (proc->kill_timer);
+    }
     return 0;
 }
 
@@ -438,8 +462,12 @@ static int exception_cb (flux_plugin_t *p,
     if ((proc = flux_jobtap_job_aux_get (p,
                                         FLUX_JOBTAP_CURRENT_JOB,
                                         "perilog_proc"))
-        && flux_subprocess_state (proc->sp) == FLUX_SUBPROCESS_RUNNING)
-        return prolog_kill (proc);
+        && flux_subprocess_state (proc->sp) == FLUX_SUBPROCESS_RUNNING) {
+        if (prolog_kill (proc) < 0
+            || prolog_kill_timer_start (proc,
+                                        perilog_config.prolog_kill_timeout) < 0)
+            return -1;
+    }
     return 0;
 }
 
