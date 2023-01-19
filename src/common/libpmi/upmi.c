@@ -540,11 +540,6 @@ void upmi_trace (struct upmi *upmi, const char *fmt, ...)
     va_end (ap);
 }
 
-bool upmi_has_flag (struct upmi *upmi, int flag)
-{
-    return (upmi->flags & flag) ? true : false;
-}
-
 static void upmi_setverror (flux_plugin_t *p,
                             flux_plugin_arg_t *args,
                             const char *fmt,
