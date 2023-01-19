@@ -1,0 +1,29 @@
+{
+  "resources": [
+    {
+      "type": "slot",
+      "count": 1,
+      "with": [
+        {
+          "type": "core",
+          "count": 1
+        }
+      ],
+      "label": "task"
+    }
+  ],
+  "tasks": [
+    {
+      "command": [
+        "hostname"
+      ],
+      "slot": "task",
+      "count": {
+        "per_slot": 1
+      }
+    }
+  ],
+  "attributes": {
+  },
+  "version": 1
+}
