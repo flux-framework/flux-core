@@ -155,7 +155,7 @@ test_expect_success 'flux-pmi get works with multiple keys' '
 	    flux pmi get flux.instance-level PMI_process_mapping
 '
 test_expect_success 'flux-pmi works outside of job' '
-	flux pmi barrier
+	flux pmi -v --libpmi-noflux barrier
 '
 test_expect_success 'flux-pmi fails with bad subcommand' '
 	test_must_fail flux mini run flux pmi notacmd
