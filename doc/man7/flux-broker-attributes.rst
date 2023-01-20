@@ -96,6 +96,13 @@ broker.critical-ranks [Updates: C]
    is raised when a failing node or other error occurs affecting any rank
    in this set. Default: rank 0 plus any other overlay network routers.
 
+broker.boot-method [Updates: C]
+   A URI representing the method used to bootstrap Flux.  Valid values are
+   ``config`` (boot via TOML config file), ``simple`` (use the PMI-1 simple
+   wire protocol), ``libpmi[:path]`` (use a PMI-1 shared library), or
+   ``single`` (standalone size=1).  Additional boot methods may be provided
+   by plugins.
+
 broker.pid
    The process id of the local broker.
 
