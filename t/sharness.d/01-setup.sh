@@ -7,6 +7,8 @@
 #
 unset FLUX_CONFIG
 unset FLUX_MODULE_PATH
+unset FLUX_PMI_CLIENT_SEARCHPATH
+unset FLUX_PMI_CLIENT_METHODS
 
 #
 #  FLUX_BUILD_DIR and FLUX_SOURCE_DIR are set to build and source paths

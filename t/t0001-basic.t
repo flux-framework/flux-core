@@ -82,8 +82,27 @@ ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 test_expect_success 'flux-start in exec mode works' "
 	flux start ${ARGS} flux getattr size | grep -x 1
 "
+test_expect_success 'and broker.boot-method=single' "
+	test $(flux start ${ARGS} flux getattr broker.boot-method) = "single"
+"
 test_expect_success 'flux-start in subprocess/pmi mode works (size 1)' "
 	flux start ${ARGS} -s1 flux getattr size | grep -x 1
+"
+test_expect_success 'and broker.boot-method=simple' "
+	test $(flux start ${ARGS} -s1 \
+		flux getattr broker.boot-method) = "simple"
+"
+test_expect_success 'although method can be forced to single with attribute' "
+	test $(flux start ${ARGS} -s1 -o,-Sbroker.boot-method=single \
+		flux getattr broker.boot-method) = "single"
+"
+test_expect_success 'or forced by setting FLUX_PMI_CLIENT_METHODS' "
+	test $(FLUX_PMI_CLIENT_METHODS="single" flux start ${ARGS} -s1 \
+		flux getattr broker.boot-method) = "single"
+"
+test_expect_success 'start fails when broker.boot-method=unknown' "
+	test_must_fail flux start ${ARGS} -o,-Sbroker.boot-method=unknown \
+		/bin/true
 "
 test_expect_success 'flux-start in subprocess/pmi mode works (size 2)' "
 	flux start ${ARGS} -s2 flux getattr size | grep -x 2

@@ -153,7 +153,7 @@ matrix.add_build(
         CXX="g++8",
         DISTCHECK="t",
     ),
-    args="--with-flux-security --enable-caliper --enable-pmix-bootstrap",
+    args="--with-flux-security --enable-caliper",
     test_s3=True,
 )
 
@@ -178,7 +178,7 @@ matrix.add_build(
     image="fedora35",
     coverage=True,
     jobs=2,
-    args="--with-flux-security --enable-pmix-bootstrap --enable-caliper",
+    args="--with-flux-security --enable-caliper",
 )
 
 # Ubuntu: TEST_INSTALL

@@ -68,22 +68,12 @@ trace on stderr from the start command.
 
 #### Booting Flux as a job in a foreign resource manager
 
-The code in `pmiutil.c` attempts to adapt the broker's PMI client to different
-situations if the PMI-1 wire protocol is not available.  Its logic is roughly:
-1. if `PMI_FD` is set, use the PMI-1 wire protocol (for bootstrap under Flux)
-2. if configured with `--enable-pmix-bootstrap`, and `PMIX_SERVER_URI`
-or `PMIX_SERVER_URI2` is set, use PMIx
-3. if `libpmi.so` can be dynamically loaded, use PMI-1 (a specific library
-name/path may be forced by setting `PMI_LIBRARY`)
-4. assume singleton (rank = 0, size = 1)
-
-The following symbols must be defined in the PMI library for option 3 to be
-successful:
-* `PMI_Init()`, `PMI_Finalize()`
-* `PMI_Get_size()`, `PMI_Get_rank()`
-* `PMI_Barrier()`
-* `PMI_KVS_Get_my_name()`,
-* `PMI_KVS_Put()`, `PMI_KVS_Commit()`, `PMI_KVS_Get()`
+The code in `boot_pmi.c` (using libpmi/upmi.c) attempts to adapt the broker's
+PMI client to different situations if the PMI-1 wire protocol is not available.
+It tries the following in order (unless configured otherwise):
+1. simple PMI wire protocol
+2. find a PMI-1 library
+3. assume singleton (rank = 0, size = 1)
 
 ### Config File
 

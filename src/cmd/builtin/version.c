@@ -11,9 +11,6 @@
 #if HAVE_CONFIG_H
 # include <config.h>
 #endif
-#if HAVE_LIBPMIX
-# include <pmix.h>
-#endif
 #include <hwloc.h>
 #include <zmq.h>
 
@@ -66,12 +63,6 @@ static int cmd_version (optparse_t *p, int ac, char *av[])
 #endif
 #if HAVE_LIBSYSTEMD
     printf ("+systemd");
-#endif
-#if HAVE_LIBPMIX
-    printf ("+pmix-bootstrap==%ld.%ld.%ld",
-            PMIX_VERSION_MAJOR,
-            PMIX_VERSION_MINOR,
-            PMIX_VERSION_RELEASE);
 #endif
     printf ("+hwloc==%d.%d.%d",
             HWLOC_API_VERSION >> 16 & 0x000000ff,

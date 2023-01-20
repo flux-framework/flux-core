@@ -107,7 +107,6 @@ TESTSCRIPTS = \
 	t2004-hydra.t \
 	t2007-caliper.t \
 	t2008-althash.t \
-	t2009-pmix-bootstrap.t \
 	t2010-kvs-snapshot-restore.t \
 	t2100-job-ingest.t \
 	t2110-job-ingest-validator.t \

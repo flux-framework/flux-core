@@ -8,8 +8,6 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* upmi.c - universal pmi client for internal use */
-
 #ifndef _LIBPMI_UPMI_H
 #define _LIBPMI_UPMI_H 1
 

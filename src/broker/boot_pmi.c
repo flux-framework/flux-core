@@ -186,6 +186,19 @@ static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
     return rc;
 }
 
+static int set_broker_boot_method_attr (attr_t *attrs, const char *value)
+{
+    (void)attr_delete (attrs, "broker.boot-method", true);
+    if (attr_add (attrs,
+                  "broker.boot-method",
+                  value,
+                  ATTR_IMMUTABLE) < 0) {
+        log_err ("setattr broker.boot-method");
+        return -1;
+    }
+    return 0;
+}
+
 static void trace_upmi (void *arg, const char *text)
 {
     fprintf (stderr, "boot_pmi: %s\n", text);
@@ -209,15 +222,18 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     const char *uri;
     int i;
     int upmi_flags = UPMI_LIBPMI_NOFLUX;
+    const char *upmi_method;
 
     // N.B. overlay_create() sets the tbon.topo attribute
     if (attr_get (attrs, "tbon.topo", &topo_uri, NULL) < 0) {
         log_msg ("error fetching tbon.topo attribute");
         return -1;
     }
+    if (attr_get (attrs, "broker.boot-method", &upmi_method, NULL) < 0)
+        upmi_method = NULL;
     if (getenv ("FLUX_PMI_DEBUG"))
         upmi_flags |= UPMI_TRACE;
-    if (!(upmi = upmi_create (NULL,
+    if (!(upmi = upmi_create (upmi_method,
                               upmi_flags,
                               trace_upmi,
                               NULL,
@@ -434,12 +450,14 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     }
 
 done:
-    if (upmi_finalize (upmi, &error) < 0) {
-        log_msg ("%s: finalize: %s", upmi_describe (upmi), error.text);
+    if (set_hostlist_attr (attrs, hl) < 0) {
+        log_err ("setattr hostlist");
         goto error;
     }
-    if (set_hostlist_attr (attrs, hl) < 0) {
-        log_err ("failed to set hostlist attribute to PMI-derived value");
+    if (set_broker_boot_method_attr (attrs, upmi_describe (upmi)) < 0)
+        goto error;
+    if (upmi_finalize (upmi, &error) < 0) {
+        log_msg ("%s: finalize: %s", upmi_describe (upmi), error.text);
         goto error;
     }
     free (bizcard);

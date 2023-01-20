@@ -481,6 +481,19 @@ int boot_config_geturibyrank (json_t *hosts,
     return 0;
 }
 
+static int set_broker_boot_method_attr (attr_t *attrs, const char *value)
+{
+    (void)attr_delete (attrs, "broker.boot-method", true);
+    if (attr_add (attrs,
+                  "broker.boot-method",
+                  value,
+                  ATTR_IMMUTABLE) < 0) {
+        log_err ("setattr broker.boot-method");
+        return -1;
+    }
+    return 0;
+}
+
 int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
 {
     struct boot_conf conf;
@@ -629,6 +642,8 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
         log_err ("setattr instance-level 0");
         goto error;
     }
+    if (set_broker_boot_method_attr (attrs, "config") < 0)
+        goto error;
     json_decref (hosts);
     topology_decref (topo);
     return 0;

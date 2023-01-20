@@ -99,12 +99,83 @@ void test_inval (void)
     upmi_destroy (upmi);
 }
 
+/* The "singlex" dso (a clone of "single" with a different name) is
+ * built as a dso in UPMI_TEST_SEARCHPATH
+ */
+void test_dso (void)
+{
+    if (setenv ("FLUX_PMI_CLIENT_SEARCHPATH", UPMI_TEST_SEARCHPATH, true) < 0)
+        BAIL_OUT ("setenv failed");
+
+    struct upmi *upmi;
+    flux_error_t error;
+
+    upmi = upmi_create ("singlex",
+                        UPMI_TRACE,
+                        diag_trace,
+                        NULL,
+                        &error);
+    if (!upmi)
+        diag ("%s", error.text);
+    ok (upmi != NULL,
+        "upmi_create spec=singlex works");
+
+    upmi_destroy (upmi);
+
+    (void)unsetenv ("FLUX_PMI_CLIENT_SEARCHPATH");
+}
+
+/* Ensure the environment can alter the methods search path
+ */
+void test_env (void)
+{
+    if (setenv ("FLUX_PMI_CLIENT_METHODS", "unknown", true) < 0)
+        BAIL_OUT ("setenv failed");
+
+    struct upmi *upmi;
+    flux_error_t error;
+
+    upmi = upmi_create (NULL,
+                        UPMI_TRACE,
+                        diag_trace,
+                        NULL,
+                        &error);
+    if (!upmi)
+        diag ("%s", error.text);
+    ok (upmi == NULL,
+        "upmi_create tries only FLUX_PMI_CLIENT_METHODS");
+
+    if (setenv ("FLUX_PMI_CLIENT_SEARCHPATH", UPMI_TEST_SEARCHPATH, true) < 0)
+        BAIL_OUT ("setenv failed");
+    if (setenv ("FLUX_PMI_CLIENT_METHODS", "unknown singlex simple", true) < 0)
+        BAIL_OUT ("setenv failed");
+
+    upmi = upmi_create (NULL,
+                        UPMI_TRACE,
+                        diag_trace,
+                        NULL,
+                        &error);
+    if (!upmi)
+        diag ("%s", error.text);
+    ok (upmi != NULL && !strcmp (upmi_describe (upmi), "singlex"),
+        "upmi_create respects FLUX_PMI_CLIENT_METHODS order");
+    upmi_destroy (upmi);
+
+    (void)unsetenv ("FLUX_PMI_CLIENT_METHODS");
+    (void)unsetenv ("FLUX_PMI_CLIENT_SEARCHPATH");
+}
+
 int main (int argc, char **argv)
 {
     plan (NO_PLAN);
 
+    (void)unsetenv ("FLUX_PMI_CLIENT_SEARCHPATH");
+    (void)unsetenv ("FLUX_PMI_CLIENT_METHODS");
+
     test_single ();
     test_inval ();
+    test_dso ();
+    test_env ();
 
     done_testing ();
     return 0;
