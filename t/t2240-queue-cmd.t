@@ -126,16 +126,16 @@ test_expect_success 'flux-queue: status reports no reason for stop' '
 '
 
 test_expect_success HAVE_JQ 'flux-queue: stop with --nocheckpoint works' '
-	flux queue start &&
-	flux kvs get checkpoint.job-manager | jq -e ".queue[0].start == true" &&
-	flux queue stop --nocheckpoint &&
-	flux kvs get checkpoint.job-manager | jq -e ".queue[0].start == true" &&
-	flux queue status >status3.out &&
-	cat <<-EOT >status3.exp &&
-	Job submission is enabled
-	Scheduling is stopped
-	EOT
-	test_cmp status3.exp status3.out
+	flux start \
+	    -o,-Scontent.dump=dump_queue_nocheckpoint1.tar \
+	    flux queue stop &&
+	tar -xvf dump_queue_nocheckpoint1.tar &&
+	cat checkpoint/job-manager | jq -e ".queue[0].start == false" &&
+	flux start \
+	    -o,-Scontent.dump=dump_queue_nocheckpoint2.tar \
+	    flux queue stop --nocheckpoint &&
+	tar -xvf dump_queue_nocheckpoint2.tar &&
+	cat checkpoint/job-manager | jq -e ".queue[0].start == true"
 '
 
 test_expect_success 'flux-queue: submit some jobs' '
@@ -533,19 +533,34 @@ test_expect_success 'previously submitted job run to completion' '
 	flux jobs -n -o "{state}" $(cat job_batch2.id) | grep INACTIVE
 '
 
-# for this test we pick one the first queue's name to stop, but we don't care
-# which one it is
-test_expect_success HAVE_JQ 'flux-queue: stop with one queue and --nocheckpoint works' '
-	flux queue start --all &&
-	flux kvs get checkpoint.job-manager | jq -e ".queue[0].start == true" &&
-	flux kvs get checkpoint.job-manager | jq -e ".queue[1].start == true" &&
-	flux kvs get checkpoint.job-manager | jq -r ".queue[0].name" > name.out &&
-	flux queue stop -q $(cat name.out) --nocheckpoint nocheckpoint &&
-	flux queue status >mqstatus_nocheckpoint.out &&
-	test $(grep -c "Scheduling is started" mqstatus_nocheckpoint.out) -eq 1 &&
-	test $(grep -c "Scheduling is stopped: nocheckpoint" mqstatus_nocheckpoint.out) -eq 1 &&
-	flux kvs get checkpoint.job-manager | jq -e ".queue[0].start == true" &&
-	flux kvs get checkpoint.job-manager | jq -e ".queue[1].start == true"
+test_expect_success HAVE_JQ 'flux-queue: stop with named queues and --nocheckpoint works' '
+	mkdir -p conf.d &&
+	cat >conf.d/queues.toml <<-EOT &&
+	[queues.debug]
+	[queues.batch]
+	EOT
+	cat >stopqueues.sh <<-EOT &&
+	flux queue start --all
+	flux queue stop --all
+	EOT
+	cat >stopqueuesnocheckpoint.sh <<-EOT &&
+	flux queue start --all
+	flux queue stop --all --nocheckpoint
+	EOT
+	chmod +x ./stopqueues.sh &&
+	chmod +x ./stopqueuesnocheckpoint.sh &&
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.dump=dump_queue_named_nocheckpoint1.tar \
+	    ./stopqueues.sh &&
+	tar -xvf dump_queue_named_nocheckpoint1.tar &&
+	cat checkpoint/job-manager | jq -e ".queue[0].start == false" &&
+	cat checkpoint/job-manager | jq -e ".queue[1].start == false" &&
+	flux start -o,--config-path=$(pwd)/conf.d \
+	    -o,-Scontent.dump=dump_queue_named_nocheckpoint2.tar \
+	    ./stopqueuesnocheckpoint.sh &&
+	tar -xvf dump_queue_named_nocheckpoint2.tar &&
+	cat checkpoint/job-manager | jq -e ".queue[0].start == true" &&
+	cat checkpoint/job-manager | jq -e ".queue[1].start == true"
 '
 
 test_expect_success 'flux-queue: quiet option works with one queue' '

@@ -619,8 +619,6 @@ static void queue_enable_cb (flux_t *h,
         if (jobq_enable (q, enable, disable_reason) < 0)
             goto error;
     }
-    if (restart_save_state (queue->ctx) < 0)
-        flux_log_error (h, "problem saving checkpoint after queue change");
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to job-manager.queue-enable");
     return;
@@ -719,8 +717,6 @@ static void queue_start_cb (flux_t *h,
         else
             queue_stop (queue, name);
     }
-    if (restart_save_state (queue->ctx) < 0)
-        flux_log_error (h, "problem saving checkpoint after queue change");
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to job-manager.queue-start");
     return;

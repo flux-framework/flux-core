@@ -114,7 +114,6 @@ test_expect_success 'verify that instance can restart after config change' '
 '
 
 test_expect_success 'verify that named queue start/stop persists across restart' '
-	rm -rf /tmp/achu/mylog &&
 	mkdir -p conf.d &&
 	cat >conf.d/queues.toml <<-EOT &&
 	[queues.debug]

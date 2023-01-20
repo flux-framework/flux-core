@@ -84,7 +84,7 @@ OPTIONS
    Be taciturn.
 
 **-a, --all**
-   Use with *enable*, *disable*, *stop, or *start* subcommands to
+   Use with *enable*, *disable*, *stop*, or *start* subcommands to
    signify intent to affect all queues, when queues are configured but
    *--queue* is missing.
 
