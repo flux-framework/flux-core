@@ -1372,31 +1372,31 @@ int overlay_register_attrs (struct overlay *overlay)
     if (attr_add (overlay->attrs,
                   "tbon.parent-endpoint",
                   overlay->parent.uri,
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                  ATTR_IMMUTABLE) < 0)
         return -1;
     if (attr_add_uint32 (overlay->attrs,
                          "rank",
                          overlay->rank,
-                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                         ATTR_IMMUTABLE) < 0)
         return -1;
     if (attr_add_uint32 (overlay->attrs,
                          "size", overlay->size,
-                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                         ATTR_IMMUTABLE) < 0)
         return -1;
     if (attr_add_int (overlay->attrs,
                       "tbon.level",
                       topology_get_level (overlay->topo),
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                      ATTR_IMMUTABLE) < 0)
         return -1;
     if (attr_add_int (overlay->attrs,
                       "tbon.maxlevel",
                       topology_get_maxlevel (overlay->topo),
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                      ATTR_IMMUTABLE) < 0)
         return -1;
     if (attr_add_int (overlay->attrs,
                       "tbon.descendants",
                       topology_get_descendant_count (overlay->topo),
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                      ATTR_IMMUTABLE) < 0)
         return -1;
 
     return 0;
@@ -1714,15 +1714,15 @@ static int overlay_configure_attr (attr_t *attrs,
     int flags;
 
     if (attr_get (attrs, name, &val, &flags) == 0) {
-        if (!(flags & FLUX_ATTRFLAG_IMMUTABLE)) {
-            flags |= FLUX_ATTRFLAG_IMMUTABLE;
+        if (!(flags & ATTR_IMMUTABLE)) {
+            flags |= ATTR_IMMUTABLE;
             if (attr_set_flags (attrs, name, flags) < 0)
                 return -1;
         }
     }
     else {
         val = default_value;
-        if (attr_add (attrs, name, val, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        if (attr_add (attrs, name, val, ATTR_IMMUTABLE) < 0)
             return -1;
     }
     if (valuep)
@@ -1750,7 +1750,7 @@ static int overlay_configure_attr_int (attr_t *attrs,
         if (attr_delete (attrs, name, true) < 0)
             return -1;
     }
-    if (attr_add_int (attrs, name, value, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add_int (attrs, name, value, ATTR_IMMUTABLE) < 0)
         return -1;
     if (valuep)
         *valuep = value;
@@ -1913,7 +1913,7 @@ static int overlay_configure_tcp_user_timeout (struct overlay *ov)
         if (attr_add (ov->attrs,
                       "tbon.tcp_user_timeout",
                       buf,
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+                      ATTR_IMMUTABLE) < 0)
             return -1;
     }
     else {

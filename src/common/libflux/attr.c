@@ -124,17 +124,17 @@ int flux_attr_set (flux_t *h, const char *name, const char *val)
 {
     flux_future_t *f;
 
-    if (!h || !name) {
+    if (!h || !name || !val) {
         errno = EINVAL;
         return -1;
     }
-    if (val)
-        f = flux_rpc_pack (h, "attr.set", FLUX_NODEID_ANY, 0, "{s:s s:s}",
-                                                              "name", name,
-                                                              "value", val);
-    else
-        f = flux_rpc_pack (h, "attr.rm", FLUX_NODEID_ANY, 0, "{s:s}",
-                                                             "name", name);
+    f = flux_rpc_pack (h,
+                       "attr.set",
+                       FLUX_NODEID_ANY,
+                       0,
+                       "{s:s s:s}",
+                       "name", name,
+                       "value", val);
     if (!f)
         return -1;
     if (flux_future_get (f, NULL) < 0) {

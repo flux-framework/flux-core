@@ -231,18 +231,6 @@ int main (int argc, char *argv[])
     ok (value && !strcmp (value, "peep") && get_count == 0,
         "flux_attr_get chick=peep (cached)");
 
-    /* rm (set val=NULL) */
-
-    errno = 0;
-    ok (flux_attr_set (h, "notakey", NULL) < 0 && errno == ENOENT,
-        "flux_attr_set notakey=NULL fails with ENOENT");
-
-    ok (flux_attr_set (h, "foo", NULL) == 0,
-        "flux_attr_set foo=NULL works");
-    errno = 0;
-    ok (flux_attr_get (h, "foo") == NULL && errno == ENOENT,
-        "flux_attr_get foo fails with ENOENT");
-
     /* cacheonly */
 
     ok (flux_attr_set_cacheonly (h, "fake", "42") == 0,

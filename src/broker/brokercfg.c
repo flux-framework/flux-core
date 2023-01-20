@@ -646,7 +646,7 @@ struct brokercfg *brokercfg_create (flux_t *h,
     }
     if (flux_msg_handler_addvec (h, htab, cfg, &cfg->handlers) < 0)
         goto error;
-    if (attr_add (attrs, "config.path", path, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add (attrs, "config.path", path, ATTR_IMMUTABLE) < 0)
         goto error;
     return cfg;
 error:

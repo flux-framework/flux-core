@@ -50,11 +50,11 @@ static int set_instance_level_attr (struct upmi *upmi,
     rc = upmi_get (upmi, "flux.instance-level", -1, &val, NULL);
     if (rc == 0)
         level = val;
-    if (attr_add (attrs, "instance-level", level, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add (attrs, "instance-level", level, ATTR_IMMUTABLE) < 0)
         return -1;
     if (rc == 0)
         jobid = name;
-    if (attr_add (attrs, "jobid", jobid, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add (attrs, "jobid", jobid, ATTR_IMMUTABLE) < 0)
         return -1;
     return 0;
 }
@@ -97,7 +97,7 @@ static int set_broker_mapping_attr (struct upmi *upmi,
             free (s);
         }
     }
-    rc = attr_add (attrs, "broker.mapping", val, FLUX_ATTRFLAG_IMMUTABLE);
+    rc = attr_add (attrs, "broker.mapping", val, ATTR_IMMUTABLE);
     free (val);
     return rc;
 }
@@ -180,7 +180,7 @@ static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
     }
     else
         s = hostlist_encode (hl);
-    if (s && attr_add (attrs, "hostlist", s, FLUX_ATTRFLAG_IMMUTABLE) == 0)
+    if (s && attr_add (attrs, "hostlist", s, ATTR_IMMUTABLE) == 0)
         rc = 0;
     ERRNO_SAFE_WRAP (free, s);
     return rc;
@@ -289,7 +289,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     else {
         uri = NULL;
     }
-    if (attr_add (attrs, "tbon.endpoint", uri, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+    if (attr_add (attrs, "tbon.endpoint", uri, ATTR_IMMUTABLE) < 0) {
         log_err ("setattr tbon.endpoint");
         goto error;
     }

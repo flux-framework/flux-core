@@ -17,13 +17,6 @@
 
 #include "builtin.h"
 
-static struct optparse_option setattr_opts[] = {
-    { .name = "expunge", .key = 'e', .has_arg = 0,
-      .usage = "Unset the specified attribute",
-    },
-    OPTPARSE_TABLE_END
-};
-
 static int cmd_setattr (optparse_t *p, int ac, char *av[])
 {
     int n = optparse_option_index (p);
@@ -33,25 +26,14 @@ static int cmd_setattr (optparse_t *p, int ac, char *av[])
 
     log_init ("flux-setattr");
 
-    if (optparse_hasopt (p, "expunge")) {
-        if (n != ac - 1) {
-            optparse_print_usage (p);
-            exit (1);
-        }
-        name = av[n];
-        if (flux_attr_set (h, name, NULL) < 0)
-            log_err_exit ("flux_attr_set");
+    if (n != ac - 2) {
+        optparse_print_usage (p);
+        exit (1);
     }
-    else {
-        if (n != ac - 2) {
-            optparse_print_usage (p);
-            exit (1);
-        }
-        name = av[n];
-        val = av[n + 1];
-        if (flux_attr_set (h, name, val) < 0)
-            log_err_exit ("flux_attr_set");
-    }
+    name = av[n];
+    val = av[n + 1];
+    if (flux_attr_set (h, name, val) < 0)
+        log_err_exit ("flux_attr_set");
 
     flux_close (h);
     return (0);
@@ -165,7 +147,7 @@ int subcommand_attr_register (optparse_t *p)
         "name value",
         "Set broker attribute",
         0,
-        setattr_opts);
+        NULL);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 

@@ -69,12 +69,7 @@ int attr_delete (attr_t *attrs, const char *name, bool force)
     int rc = -1;
 
     if ((e = zhash_lookup (attrs->hash, name))) {
-        if ((e->flags & FLUX_ATTRFLAG_IMMUTABLE)) {
-            errno = EPERM;
-            goto done;
-        }
-        if (((e->flags & FLUX_ATTRFLAG_READONLY)
-                            || (e->flags & FLUX_ATTRFLAG_ACTIVE)) && !force) {
+        if ((e->flags & ATTR_IMMUTABLE)) {
             errno = EPERM;
             goto done;
         }
@@ -89,7 +84,7 @@ int attr_add (attr_t *attrs, const char *name, const char *val, int flags)
 {
     struct entry *e;
 
-    if (attrs == NULL || name == NULL || (flags & FLUX_ATTRFLAG_ACTIVE)) {
+    if (attrs == NULL || name == NULL) {
         errno = EINVAL;
         return -1;
     }
@@ -127,7 +122,6 @@ int attr_add_active (attr_t *attrs, const char *name, int flags,
     e->set = set;
     e->get = get;
     e->arg = arg;
-    e->flags |= FLUX_ATTRFLAG_ACTIVE;
     zhash_update (attrs->hash, name, e);
     zhash_freefn (attrs->hash, name, entry_destroy);
     rc = 0;
@@ -149,7 +143,7 @@ int attr_get (attr_t *attrs, const char *name, const char **val, int *flags)
         goto done;
     }
     if (e->get) {
-        if (!e->val || !(e->flags & FLUX_ATTRFLAG_IMMUTABLE)) {
+        if (!e->val || !(e->flags & ATTR_IMMUTABLE)) {
             const char *tmp;
             if (e->get (name, &tmp, e->arg) < 0)
                 goto done;
@@ -172,7 +166,7 @@ done:
     return rc;
 }
 
-int attr_set (attr_t *attrs, const char *name, const char *val, bool force)
+int attr_set (attr_t *attrs, const char *name, const char *val)
 {
     struct entry *e;
     int rc = -1;
@@ -181,11 +175,7 @@ int attr_set (attr_t *attrs, const char *name, const char *val, bool force)
         errno = ENOENT;
         goto done;
     }
-    if ((e->flags & FLUX_ATTRFLAG_IMMUTABLE)) {
-        errno = EPERM;
-        goto done;
-    }
-    if ((e->flags & FLUX_ATTRFLAG_READONLY) && !force) {
+    if ((e->flags & ATTR_IMMUTABLE)) {
         errno = EPERM;
         goto done;
     }
@@ -351,7 +341,7 @@ int attr_cache_immutables (attr_t *attrs, flux_t *h)
 
     e = zhash_first (attrs->hash);
     while (e) {
-        if ((e->flags & FLUX_ATTRFLAG_IMMUTABLE)) {
+        if ((e->flags & ATTR_IMMUTABLE)) {
             if (flux_attr_set_cacheonly (h, e->name, e->val) < 0)
                 return -1;
         }
@@ -400,30 +390,12 @@ void setattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_unpack (msg, NULL, "{s:s s:s}", "name", &name,
                                                      "value", &val) < 0)
         goto error;
-    if (attr_set (attrs, name, val, false) < 0) {
+    if (attr_set (attrs, name, val) < 0) {
         if (errno != ENOENT)
             goto error;
         if (attr_add (attrs, name, val, 0) < 0)
             goto error;
     }
-    if (flux_respond (h, msg, NULL) < 0)
-        FLUX_LOG_ERROR (h);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        FLUX_LOG_ERROR (h);
-}
-
-void rmattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                        const flux_msg_t *msg, void *arg)
-{
-    attr_t *attrs = arg;
-    const char *name;
-
-    if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
-        goto error;
-    if (attr_delete (attrs, name, false) < 0)
-        goto error;
     if (flux_respond (h, msg, NULL) < 0)
         FLUX_LOG_ERROR (h);
     return;
@@ -475,7 +447,6 @@ static const struct flux_msg_handler_spec handlers[] = {
     { FLUX_MSGTYPE_REQUEST, "attr.get",    getattr_request_cb, FLUX_ROLE_ALL },
     { FLUX_MSGTYPE_REQUEST, "attr.list",   lsattr_request_cb, FLUX_ROLE_ALL },
     { FLUX_MSGTYPE_REQUEST, "attr.set",    setattr_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "attr.rm",     rmattr_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

@@ -9,16 +9,16 @@ waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
 test_under_flux 4 minimal
 
-test_expect_success 'flux getattr log-count counts log messages' '
-	OLD_VAL=`flux getattr log-count` &&
+test_expect_success 'module stats --parse count log counts log messages' '
+	OLD_VAL=$(flux module stats --parse count log) &&
 	flux logger hello &&
-	NEW_VAL=`flux getattr log-count` &&
+	NEW_VAL=$(flux module stats --parse count log) &&
 	test "${OLD_VAL}" -lt "${NEW_VAL}"
 '
-test_expect_success 'flux getattr log-ring-used counts log messages' '
-	OLD_VAL=`flux getattr log-ring-used` &&
+test_expect_success 'module stats --parse ring-used log counts log messages' '
+	OLD_VAL=$(flux module stats --parse ring-used log) &&
 	flux logger hello &&
-	NEW_VAL=`flux getattr log-ring-used` &&
+	NEW_VAL=$(flux module stats --parse ring-used log) &&
 	test "${OLD_VAL}" -lt "${NEW_VAL}"
 '
 test_expect_success 'flux dmesg -C clears ring buffer' '

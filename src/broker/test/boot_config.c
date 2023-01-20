@@ -516,7 +516,7 @@ void test_attr (const char *dir)
         "boot_config_attr works on input hosts");
     ok (attr_get (attrs, "hostlist", &val, &flags) == 0
         && !strcmp (val, "foo[0,4,1-3,5,14,6-9]")
-        && flags == FLUX_ATTRFLAG_IMMUTABLE,
+        && flags == ATTR_IMMUTABLE,
         "attr_get returns correct value and flags");
 
     json_decref (hosts);

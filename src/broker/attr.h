@@ -15,10 +15,7 @@
 #include <flux/core.h>
 
 enum {
-    FLUX_ATTRFLAG_IMMUTABLE = 1,    /* attribute is cacheable */
-    FLUX_ATTRFLAG_READONLY = 2,     /* attribute cannot be written */
-                                    /*   but may change on broker */
-    FLUX_ATTRFLAG_ACTIVE = 4,       /* attribute has get and/or set callbacks */
+    ATTR_IMMUTABLE = 1,    /* attribute is cacheable */
 };
 
 /* Callbacks for active values.  Return 0 on succes, -1 on eror with
@@ -57,7 +54,7 @@ int attr_add_uint32 (attr_t *attrs, const char *name, uint32_t val,
  */
 int attr_get (attr_t *attrs, const char *name, const char **val, int *flags);
 
-int attr_set (attr_t *attrs, const char *name, const char *val, bool force);
+int attr_set (attr_t *attrs, const char *name, const char *val);
 
 /* Set an attribute's flags.
  */

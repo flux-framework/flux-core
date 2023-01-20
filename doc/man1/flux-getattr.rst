@@ -13,7 +13,7 @@ SYNOPSIS
 
 **flux** **setattr** *name* *value*
 
-**flux** **setattr** [*--expunge*] *name*
+**flux** **setattr** *name*
 
 **flux** **lsattr** [*--values*]
 
