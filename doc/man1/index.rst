@@ -28,6 +28,7 @@ man1
    flux-ping
    flux-proxy
    flux-pstree
+   flux-pgrep
    flux-queue
    flux-resource
    flux-restore

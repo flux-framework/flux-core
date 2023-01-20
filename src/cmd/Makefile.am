@@ -37,9 +37,25 @@ LDADD = $(fluxcmd_ldadd)
 EXTRA_DIST = \
 	builtin-cmds-list.sh
 CLEANFILES = \
-	builtin-cmds.c
+	builtin-cmds.c \
+	flux-pkill.py
+
 BUILT_SOURCES = \
-	builtin-cmds.c
+	builtin-cmds.c \
+	flux-pkill.py
+
+flux-pkill.py:
+	$(AM_V_GEN)$(LN_S) $(srcdir)/flux-pgrep.py flux-pkill.py
+
+install-exec-hook:
+	$(AM_V_at)echo Linking flux-pkill to flux-pgrep && \
+	 (cd $(DESTDIR)$(fluxcmddir) && \
+	  rm -f flux-pkill.py && \
+	  $(LN_S) flux-pgrep.py flux-pkill.py)
+
+uninstall-local:
+	$(AM_V_at)echo Removing $(fluxcmddir)/flux-pkill.py && \
+	  rm -f $(fluxcmddir)/flux-pkill.py
 
 bin_PROGRAMS = flux
 flux_SOURCES = \
@@ -85,7 +101,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-job-exec-override.py \
 	flux-perilog-run.py \
 	flux-uri.py \
-	flux-pstree.py
+	flux-pstree.py \
+	flux-pgrep.py
 
 fluxcmd_PROGRAMS = \
 	flux-terminus \
