@@ -168,29 +168,23 @@ static int errorcat (int errnum, int start, char *buf, size_t len)
     return n;
 }
 
-/*  Format message, printing an error to stderr on failure
+/*  Format message, appending a '+' if the buffer isn't large enough.
  *  If errnum > 0, then append result of strerror (errnum).
  */
-static int msgfmt (char *buf,
-                   size_t len,
-                   int errnum,
-                   const char *fmt,
-                   va_list ap)
+static void msgfmt (char *buf,
+                    size_t len,
+                    int errnum,
+                    const char *fmt,
+                    va_list ap)
 {
-    int rc = vsnprintf (buf, len, fmt, ap);
-    if ((rc < 0 || rc >= len) || errorcat (errnum, rc, buf, len) < 0) {
-        fprintf (stderr,
-                 "%s: unable to format log msg (%s): %s\n",
-                 logger.prog,
-                 fmt,
-                 strerror (errno));
-        return -1;
-    }
+    int rc;
+    if ((rc = vsnprintf (buf, len, fmt, ap)) >= len
+        || errorcat (errnum, rc, buf, len) < 0)
+        buf[len - 2] = '+';
     /*  Clean up trailing newline, pointless here
      */
-    if (buf[rc-1] == '\n')
-        buf[rc-1] = '\0';
-    return 0;
+    else if (rc > 0 && buf[rc - 1] == '\n')
+        buf[rc - 1] = '\0';
 }
 
 void flux_shell_log (const char *component,
@@ -202,8 +196,8 @@ void flux_shell_log (const char *component,
     char buf [4096];
     va_list ap;
     va_start (ap, fmt);
-    if (msgfmt (buf, sizeof (buf), 0, fmt, ap) == 0)
-        send_logmsg (buf, level, component, file, line);
+    msgfmt (buf, sizeof (buf), 0, fmt, ap);
+    send_logmsg (buf, level, component, file, line);
     va_end (ap);
 }
 
@@ -237,8 +231,8 @@ int flux_shell_err (const char *component,
     char buf [4096];
     va_list ap;
     va_start (ap, fmt);
-    if (msgfmt (buf, sizeof (buf), errnum, fmt, ap) == 0)
-        send_logmsg (buf, FLUX_SHELL_ERROR, component, file, line);
+    msgfmt (buf, sizeof (buf), errnum, fmt, ap);
+    send_logmsg (buf, FLUX_SHELL_ERROR, component, file, line);
     va_end (ap);
     errno = errnum;
     return -1;
@@ -257,8 +251,7 @@ void flux_shell_raise (const char *type,
         return;
 
     va_start (ap, fmt);
-    if (msgfmt (buf, sizeof (buf), 0, fmt, ap) < 0)
-        sprintf (buf, "flux-shell: fatal error");
+    msgfmt (buf, sizeof (buf), 0, fmt, ap);
     va_end (ap);
 
     if (!(f = flux_job_raise (shell->h,
@@ -288,10 +281,8 @@ void flux_shell_fatal (const char *component,
     va_list ap;
 
     va_start (ap, fmt);
-    if (msgfmt (buf, sizeof (buf), errnum, fmt, ap) < 0)
-        sprintf (buf, "flux-shell: fatal error");
-    else
-        send_logmsg (buf, FLUX_SHELL_FATAL, component, file, line);
+    msgfmt (buf, sizeof (buf), errnum, fmt, ap);
+    send_logmsg (buf, FLUX_SHELL_FATAL, component, file, line);
     va_end (ap);
 
     /*  Attempt to kill any running tasks
