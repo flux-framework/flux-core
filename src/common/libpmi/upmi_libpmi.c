@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <dlfcn.h>
+#include <link.h>
 
 #include "src/common/libutil/errprintf.h"
 #include "ccan/array_size/array_size.h"
@@ -40,6 +41,14 @@ struct plugin_ctx {
 
 const char *plugin_name = "libpmi";
 
+static const char *dlinfo_name (void *dso)
+{
+    struct link_map *p;
+    if (dlinfo (dso, RTLD_DI_LINKMAP, &p) < 0)
+        return NULL;
+    return p->l_name;
+}
+
 static int dlopen_wrap (const char *path,
                         int flags,
                         bool noflux,
@@ -59,7 +68,10 @@ static int dlopen_wrap (const char *path,
     }
     if (noflux) {
         if (dlsym (dso, "flux_pmi_library") != NULL) {
-            errprintf (error, "%s: dlopen found Flux library", path);
+            errprintf (error,
+                       "%s: dlopen found Flux library (%s)",
+                       path,
+                       dlinfo_name (dso));
             goto error;
         }
     }
