@@ -430,7 +430,7 @@ int upmi_finalize (struct upmi *upmi, flux_error_t *errp)
         upmi_trace (upmi, "finalize: %s", error.text);
         return -1;
     }
-    upmi_trace (upmi, "finalize: successs");
+    upmi_trace (upmi, "finalize: success");
     return 0;
 }
 
