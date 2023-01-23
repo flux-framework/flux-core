@@ -234,7 +234,7 @@ struct upmi *upmi_create (const char *uri,
                           int flags,
                           upmi_trace_f trace_fun,
                           void *trace_arg,
-                          flux_error_t *error)
+                          flux_error_t *errp)
 {
     struct upmi *upmi;
     const char *searchpath;
@@ -250,26 +250,30 @@ struct upmi *upmi_create (const char *uri,
                                      flags,
                                      trace_fun,
                                      trace_arg,
-                                     error)))
+                                     errp)))
         return NULL;
 
     if (uri) {
         const char *path;
-        if (!(upmi->plugin = lookup_plugin (upmi, uri, error)))
+        if (!(upmi->plugin = lookup_plugin (upmi, uri, errp)))
             goto error;
         if ((path = strchr (uri, ':')))
             path++;
-        if (upmi_preinit (upmi, upmi->flags, path, error) < 0)
+        if (upmi_preinit (upmi, upmi->flags, path, errp) < 0)
             goto error;
     }
     else {
+        flux_error_t error;
         uri = argz_next (upmi->methods, upmi->methods_len, NULL);
         while (uri) {
             upmi_trace (upmi, "trying '%s'", uri);
-            if ((upmi->plugin = lookup_plugin (upmi, uri, error))
-                && upmi_preinit (upmi, upmi->flags, NULL, error) == 0) {
+            if ((upmi->plugin = lookup_plugin (upmi, uri, &error))
+                && upmi_preinit (upmi, upmi->flags, NULL, &error) == 0) {
+                upmi_trace (upmi, "selected");
                 break;
             }
+            upmi_trace (upmi, "%s", error.text);
+            errprintf (errp, "%s", error.text);
             upmi->plugin = NULL;
             uri = argz_next (upmi->methods, upmi->methods_len, uri);
         }
