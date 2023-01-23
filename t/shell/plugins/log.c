@@ -61,6 +61,7 @@ static int check_shell_log (flux_plugin_t *p,
     }
 
     shell_trace ("%s: trace message", topic);
+    shell_trace ("%s: long message: %.8192d", topic, 0);
     shell_debug ("%s: debug message", topic);
     shell_log ("%s: log message", topic);
     shell_warn ("%s: warn message", topic);
