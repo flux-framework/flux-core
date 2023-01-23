@@ -174,6 +174,10 @@ following additional job parameters:
    option is minutes when no units are otherwise specified. If the time
    limit is unspecified, the job is subject to the system default time limit.
 
+**--job-name=NAME**
+   Set an alternate job name for the job.  If not specified, the job name
+   will default to the command or script executed for the job.
+
 **--flags=FLAGS**
    Set comma separated list of job submission flags.  The possible flags are
    ``waitable``, ``novalidate``, and ``debug``.  The ``waitable`` flag will
