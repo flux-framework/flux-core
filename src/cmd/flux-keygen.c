@@ -100,9 +100,9 @@ int main (int argc, char *argv[])
 
     // name is used in overlay logging
     zcert_set_meta (cert, "name", "%s", hostname);
-    zcert_set_meta (cert, "hostname", "%s", hostname);
-    zcert_set_meta (cert, "time", "%s", now);
-    zcert_set_meta (cert, "userid", "%d", getuid ());
+    zcert_set_meta (cert, "keygen.hostname", "%s", hostname);
+    zcert_set_meta (cert, "keygen.time", "%s", now);
+    zcert_set_meta (cert, "keygen.userid", "%d", getuid ());
 
     if (path && zcert_save_secret (cert, path) < 0)
         log_msg_exit ("zcert_save_secret %s: %s", path, strerror (errno));
