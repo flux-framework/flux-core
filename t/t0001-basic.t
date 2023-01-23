@@ -82,9 +82,6 @@ ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 test_expect_success 'flux-start in exec mode works' "
 	flux start ${ARGS} flux getattr size | grep -x 1
 "
-test_expect_success 'and broker.boot-method=single' "
-	test $(flux start ${ARGS} flux getattr broker.boot-method) = "single"
-"
 test_expect_success 'flux-start in subprocess/pmi mode works (size 1)' "
 	flux start ${ARGS} -s1 flux getattr size | grep -x 1
 "
