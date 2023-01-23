@@ -38,6 +38,9 @@ for topic in "shell.init" "shell.exit" \
     test_expect_success "$topic: got TRACE level message" "
         grep \"TRACE: log: .*: $topic: trace message\" log.log
     "
+    test_expect_success "$topic: got truncated long TRACE level message" "
+        grep -q \"TRACE: log: .*: $topic: long message.*0000+$\" log.log
+    "
     test_expect_success "$topic: got DEBUG level message" "
         grep \"DEBUG: log: .*: $topic: debug message\" log.log
     "
