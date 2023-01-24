@@ -71,6 +71,9 @@ RUN apt-get update \
 # Sphinx packages for docs
 RUN python3 -m pip install sphinx sphinx-rtd-theme sphinxcontrib-spelling
 
+RUN mkdir -p /usr/lib/python3.8/dist-packages \
+ && echo ../site-packages >/usr/lib/python3.8/dist-packages/site-packages.pth
+
 # Other deps
 RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
