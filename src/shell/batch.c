@@ -53,10 +53,8 @@ batch_info_create (flux_shell_t *shell, json_t *batch)
 
     if (flux_shell_info_unpack (shell,
                                "{s:i s:I}",
-                               "rank",
-                               &b->shell_rank,
-                               "jobid",
-                               &b->id) < 0) {
+                               "rank", &b->shell_rank,
+                               "jobid", &b->id) < 0) {
         shell_log_errno ("failed to unpack shell info");
         goto error;
     }
@@ -155,13 +153,15 @@ static int task_batchify (flux_plugin_t *p,
          *  with path to our script
          */
         if (flux_cmd_argv_delete (cmd, 0) < 0
-            || flux_cmd_argv_insert (cmd, 0, b->script) < 0)
-        return shell_log_errno ("failed to replace command with batch script");
+            || flux_cmd_argv_insert (cmd, 0, b->script) < 0) {
+            return shell_log_errno ("failed to replace command"
+                                    " with batch script");
+        }
     }
     else {
         /* Other ranks, delete all args, they are unused */
         while (flux_cmd_argv_delete (cmd, 0) == 0)
-           ; 
+           ;
     }
 
     /*  All broker ranks, add broker options */
@@ -190,15 +190,14 @@ static int batch_init (flux_plugin_t *p,
 
     if (flux_shell_info_unpack (shell,
                                "{s:o}",
-                               "jobspec",
-                               &jobspec) < 0)
+                               "jobspec", &jobspec) < 0)
         return shell_log_errno ("failed to unpack jobspec");
     json_error_t err;
     if (json_unpack_ex (jobspec, &err, 0,
-                     "{s:{s:{s?o}}}",
-                     "attributes",
-                       "system",
-                         "batch", &batch) < 0) {
+                        "{s:{s:{s?o}}}",
+                        "attributes",
+                          "system",
+                            "batch", &batch) < 0) {
         shell_log_error ("failed to unpack batch object from jobspec: %s",
                         err.text);
         return -1;
