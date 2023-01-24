@@ -15,12 +15,16 @@
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <czmq.h>
+#include <sodium.h>
 
 #include "src/common/libutil/log.h"
 
 static struct optparse_option opts[] = {
     { .name = "name", .key = 'n', .has_arg = 1, .arginfo = "NAME",
       .usage = "Set certificate name (default: hostname)", },
+    { .name = "meta", .has_arg = 1, .arginfo = "KEYVALS",
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
+      .usage = "Add/update comma-separated key=value metadata", },
     OPTPARSE_TABLE_END,
 };
 
@@ -44,7 +48,9 @@ int main (int argc, char *argv[])
     optparse_t *p;
     int optindex;
     zcert_t *cert;
-    char buf[64];
+    const char *name;
+    char now[64];
+    char hostname[64];
     char *path = NULL;
 
     log_init ("flux-keygen");
@@ -65,14 +71,59 @@ int main (int argc, char *argv[])
 
     if (!(cert = zcert_new ()))
         log_msg_exit ("zcert_new: %s", zmq_strerror (errno));
-
-    if (gethostname (buf, sizeof (buf)) < 0)
+    if (gethostname (hostname, sizeof (hostname)) < 0)
         log_err_exit ("gethostname");
-    zcert_set_meta (cert, "hostname", "%s", buf);
+    if (ctime_iso8601_now (now, sizeof (now)) == NULL)
+        log_err_exit ("localtime");
+
+    /* N.B. zcert_set_meta() silently ignores attempts to set the same
+     * value twice so the default settings come later and are ignored
+     * if values were provided on the command line.
+     */
+    if ((name = optparse_get_str (p, "name", NULL))) {
+        zcert_set_meta (cert, "name", "%s", name);
+    }
+    if (optparse_hasopt (p, "meta")) {
+        const char *arg;
+
+        optparse_getopt_iterator_reset (p, "meta");
+        while ((arg = optparse_getopt_next (p, "meta"))) {
+            char *key;
+            char *val;
+            if (!(key = strdup (arg)))
+                log_msg_exit ("out of memory");
+            if ((val = strchr (key, '=')))
+                *val++ = '\0';
+            zcert_set_meta (cert, key, "%s", val ? val : "");
+            free (key);
+        }
+    }
+
     // name is used in overlay logging
-    zcert_set_meta (cert, "name", "%s", optparse_get_str (p, "name", buf));
-    zcert_set_meta (cert, "time", "%s", ctime_iso8601_now (buf, sizeof (buf)));
-    zcert_set_meta (cert, "userid", "%d", getuid ());
+    zcert_set_meta (cert, "name", "%s", hostname);
+    zcert_set_meta (cert, "keygen.hostname", "%s", hostname);
+    zcert_set_meta (cert, "keygen.time", "%s", now);
+    zcert_set_meta (cert, "keygen.userid", "%d", getuid ());
+    zcert_set_meta (cert,
+                    "keygen.flux-core-version",
+                    "%s",
+                    FLUX_CORE_VERSION_STRING);
+    zcert_set_meta (cert,
+                    "keygen.zmq-version",
+                    "%d.%d.%d",
+                    ZMQ_VERSION_MAJOR,
+                    ZMQ_VERSION_MINOR,
+                    ZMQ_VERSION_PATCH);
+    zcert_set_meta (cert,
+                    "keygen.czmq-version",
+                    "%d.%d.%d",
+                    CZMQ_VERSION_MAJOR,
+                    CZMQ_VERSION_MINOR,
+                    CZMQ_VERSION_PATCH);
+    zcert_set_meta (cert,
+                    "keygen.sodium-version",
+                    "%s",
+                    SODIUM_VERSION_STRING);
 
     if (path && zcert_save_secret (cert, path) < 0)
         log_msg_exit ("zcert_save_secret %s: %s", path, strerror (errno));

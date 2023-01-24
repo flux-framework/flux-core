@@ -42,6 +42,27 @@ test_expect_success 'flux-keygen --name=test works' '
 	test -f cert2 &&
 	grep testcert cert2
 '
+test_expect_success 'flux-keygen --meta works' '
+	flux keygen --meta mammal=chinchilla,reptile=chamelion cert3 &&
+	test -f cert3 &&
+	grep mammal cert3 &&
+	grep reptile cert3
+'
+test_expect_success 'flux-keygen --meta can update keygen.hostname' '
+	flux keygen --meta=keygen.hostname=myhost cert4 &&
+	test -f cert4 &&
+	grep myhost cert4
+'
+test_expect_success 'flux-keygen --meta value can be an empty string' '
+	flux keygen --meta smurf= cert5 &&
+	test -f cert5 &&
+	grep smurf cert5
+'
+test_expect_success 'flux-keygen --meta equal sign can be missing' '
+	flux keygen --meta smurf cert6 &&
+	test -f cert6 &&
+	grep smurf cert6
+'
 test_expect_success 'flux-keygen fails with extra positional argument' '
 	test_must_fail flux keygen cert xyz
 '
