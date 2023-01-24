@@ -170,4 +170,22 @@ test_expect_success 'flux mini batch: MPI env vars are not set in batch script' 
 	flux job status $id &&
 	test_must_fail grep OMPI_MCA_pmix envtest.out
 '
+test_expect_success 'flux mini batch: --dump works' '
+	id=$(flux mini batch -N1 --dump \
+		--flags=waitable --wrap true) &&
+	run_timeout 60 flux job wait $id &&
+	tar tvf flux-${id}-dump.tgz
+'
+test_expect_success 'flux mini batch: --dump=FILE works' '
+	id=$(flux mini batch -N1 --dump=testdump.tgz \
+		--flags=waitable --wrap true) &&
+	run_timeout 60 flux job wait $id &&
+	tar tvf testdump.tgz
+'
+test_expect_success 'flux mini batch: --dump=FILE works with mustache' '
+	id=$(flux mini batch -N1 --dump=testdump-{{id}}.tgz \
+		--flags=waitable --wrap true) &&
+	run_timeout 60 flux job wait $id &&
+	tar tvf testdump-${id}.tgz
+'
 test_done

@@ -139,5 +139,24 @@ test_expect_success 'flux mini alloc: MPI vars are not set in initial program' '
 	flux mini alloc -N1 printenv >envtest.out &&
 	test_must_fail grep OMPI_MCA_pmix envtest.out
 '
+test_expect_success 'flux mini alloc: --dump works' '
+        jobid=$(flux mini alloc -N1 --bg --dump) &&
+	flux shutdown $jobid &&
+	flux job wait-event $jobid clean &&
+        tar tvf flux-${jobid}-dump.tgz
+'
+test_expect_success 'flux mini alloc: --dump=FILE works' '
+        jobid=$(flux mini alloc -N1 --bg --dump=testdump.tgz) &&
+	flux shutdown $jobid &&
+	flux job wait-event $jobid clean &&
+        tar tvf testdump.tgz
+'
+test_expect_success 'flux mini alloc: --dump=FILE works with mustache' '
+        jobid=$(flux mini alloc -N1 --bg --dump=testdump-{{id}}.tgz) &&
+	flux shutdown $jobid &&
+	flux job wait-event $jobid clean &&
+        tar tvf testdump-${jobid}.tgz
+'
+
 
 test_done
