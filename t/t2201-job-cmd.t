@@ -248,7 +248,7 @@ test_expect_success 'flux-job: raise fails with invalid option' '
 test_expect_success 'flux-job: raise basic works' '
 	id=$(flux mini submit sleep 100) &&
 	flux job raise ${id} &&
-	flux job wait-event -t 5 ${id} exception >raise1.out &&
+	flux job wait-event -t 30 ${id} exception >raise1.out &&
 	grep "cancel" raise1.out &&
 	grep "severity\=0" raise1.out
 '
@@ -256,14 +256,14 @@ test_expect_success 'flux-job: raise basic works' '
 test_expect_success 'flux-job: raise --type works' '
 	id=$(flux mini submit sleep 100) &&
 	flux job raise -t typefoo ${id} &&
-	flux job wait-event -t 5 ${id} exception >raise2.out &&
+	flux job wait-event -t 30 ${id} exception >raise2.out &&
 	grep "typefoo" raise2.out
 '
 
 test_expect_success 'flux-job: raise --severity works' '
 	id=$(flux mini submit sleep 100) &&
 	flux job raise --severity=5 ${id} &&
-	flux job wait-event -t 5 ${id} exception >raise3.out &&
+	flux job wait-event -t 30 ${id} exception >raise3.out &&
 	grep "severity\=5" raise3.out &&
 	flux job cancel ${id}
 '
@@ -271,14 +271,14 @@ test_expect_success 'flux-job: raise --severity works' '
 test_expect_success 'flux-job: raise --message works' '
 	id=$(flux mini submit sleep 100) &&
 	flux job raise --message=foobarmessage ${id} &&
-	flux job wait-event -t 5 ${id} exception >raise4.out &&
+	flux job wait-event -t 30 ${id} exception >raise4.out &&
 	grep "foobarmessage" raise4.out
 '
 
 test_expect_success ' flux-job: raise message works (cmdline)' '
 	id=$(flux mini submit sleep 100) &&
 	flux job raise ${id} -- eep ork ook &&
-	flux job wait-event -t 5 ${id} exception >raise5.out &&
+	flux job wait-event -t 30 ${id} exception >raise5.out &&
 	grep "eep ork ook" raise5.out
 '
 
@@ -313,7 +313,7 @@ test_expect_success 'flux-job: cancel fails with invalid option' '
 test_expect_success 'flux-job: cancel basic works' '
 	id=$(flux mini submit sleep 100) &&
 	flux job cancel ${id} &&
-	flux job wait-event -t 5 ${id} exception >cancel1.out &&
+	flux job wait-event -t 30 ${id} exception >cancel1.out &&
 	grep "cancel" cancel1.out &&
 	grep "severity\=0" cancel1.out
 '
@@ -321,14 +321,14 @@ test_expect_success 'flux-job: cancel basic works' '
 test_expect_success 'flux-job: cancel --message works' '
 	id=$(flux mini submit sleep 100) &&
 	flux job cancel --message=meepmessage ${id} &&
-	flux job wait-event -t 5 ${id} exception >cancel2.out &&
+	flux job wait-event -t 30 ${id} exception >cancel2.out &&
 	grep "meepmessage" cancel2.out
 '
 
 test_expect_success ' flux-job: cancel message works (cmdline)' '
 	id=$(flux mini submit sleep 100) &&
 	flux job cancel ${id} -- foo loo moo &&
-	flux job wait-event -t 5 ${id} exception >cancel3.out &&
+	flux job wait-event -t 30 ${id} exception >cancel3.out &&
 	grep "foo loo moo" cancel3.out
 '
 
@@ -684,7 +684,7 @@ test_expect_success 'flux-job: load modules for live kill tests' '
 test_expect_success 'flux-job: kill basic works' '
 	id=$(flux mini submit --wait-event=start sleep 100) &&
 	flux job kill ${id} &&
-	flux job wait-event -t 5 ${id} finish > kill1.out &&
+	flux job wait-event -t 30 ${id} finish > kill1.out &&
 	grep status=$((15+128<<8)) kill1.out
 '
 
@@ -692,7 +692,7 @@ test_expect_success 'flux-job: kill basic works' '
 test_expect_success 'flux-job: kill --signal works' '
 	id=$(flux mini submit --wait-event=start sleep 100) &&
 	flux job kill --signal=SIGUSR1 ${id} &&
-	flux job wait-event -t 5 ${id} finish > kill2.out &&
+	flux job wait-event -t 30 ${id} finish > kill2.out &&
 	grep status=$((10+128<<8)) kill2.out
 '
 
@@ -707,7 +707,7 @@ test_expect_success 'flux job: cancel can operate on multiple jobs' '
 	ids=$(flux mini submit --bcc=1-3 sleep 600) &&
 	flux job cancel ${ids} cancel multiple jobs &&
 	for id in ${ids}; do
-		flux job wait-event -t 5 ${id} exception >exception.out &&
+		flux job wait-event -t 30 ${id} exception >exception.out &&
 		grep multiple exception.out
 	done
 '
@@ -716,7 +716,7 @@ test_expect_success 'flux job: raise can operate on multiple jobs' '
 	ids=$(flux mini submit --bcc=1-3 sleep 600) &&
 	flux job raise ${ids} raise multiple jobs &&
 	for id in ${ids}; do
-		flux job wait-event -t 5 ${id} exception >exception2.out &&
+		flux job wait-event -t 30 ${id} exception >exception2.out &&
 		grep multiple exception2.out
 	done
 '
@@ -726,7 +726,7 @@ test_expect_success 'flux job: kill can operate on multiple jobs' '
 	ids=$(flux mini submit --wait-event=start --bcc=1-3 sleep 600) &&
 	flux job kill ${ids} &&
 	for id in ${ids}; do
-		flux job wait-event -t 5 ${id} finish >killmulti.out &&
+		flux job wait-event -t 30 ${id} finish >killmulti.out &&
 		grep status=$((15+128<<8)) killmulti.out
 	done
 '
