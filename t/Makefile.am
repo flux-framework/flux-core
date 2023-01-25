@@ -281,6 +281,7 @@ EXTRA_DIST= \
 	scripts/startctl.py \
 	scripts/groups.py \
 	jobspec \
+	marshall \
 	job-manager/dumps \
 	flux-resource \
 	resource/get-xml-test.py
@@ -403,7 +404,8 @@ check_PROGRAMS = \
 	hwloc/hwloc-convert \
 	hwloc/hwloc-version \
 	util/jobspec1-validate \
-	util/handle
+	util/handle \
+	util/marshall
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -983,6 +985,11 @@ util_handle_SOURCES = util/handle.c
 util_handle_CPPFLAGS = $(test_cppflags)
 util_handle_LDADD = $(test_ldadd)
 util_handle_LDFLAGS = $(test_ldflags)
+
+util_marshall_SOURCES = util/marshall.c
+util_marshall_CPPFLAGS = $(test_cppflags)
+util_marshall_LDADD = $(test_ldadd)
+util_marshall_LDFLAGS = $(test_ldflags)
 
 stats_stats_basic_la_SOURCES = stats/stats-basic.c
 stats_stats_basic_la_CPPFLAGS = $(test_cppflags)
