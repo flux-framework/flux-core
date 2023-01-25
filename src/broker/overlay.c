@@ -1084,9 +1084,23 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
                              "rank", &rank,
                              "version", &version,
                              "uuid", &uuid,
-                             "status", &status) < 0
-        || flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0)
-        goto error; // EPROTO or EPERM (unlikely)
+                             "status", &status) < 0)
+        goto error; // EPROTO (unlikely)
+
+    if (flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0) {
+        /* special handling for v0.46.1 flux-framework/flux-core#4886.
+         * The rolemask/userid are sent in the wrong byte order, so
+         * authorization silently fails. Log something helpful.
+         */
+        if (version == 0x002e01) {
+            flux_log (ov->h, LOG_ERR,
+                      "rejecting connection from %s (rank %lu): %s",
+                      flux_get_hostbyrank (ov->h, rank),
+                      (unsigned long)rank,
+                      "v0.46.1 has a message encoding bug, please upgrade");
+        }
+        goto error; // EPERM
+    }
     if (!(child = child_lookup_byrank (ov, rank))) {
         errprintf (&error,
                   "rank %lu is not a peer of parent %lu: mismatched config?",
