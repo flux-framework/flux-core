@@ -19,7 +19,9 @@
 #include <assert.h>
 
 #include "src/common/libflux/message.h"
+#include "src/common/libflux/message_proto.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/array_size/array_size.h"
 
 static bool verbose = false;
 
@@ -1251,6 +1253,126 @@ void check_refcount (void)
     flux_msg_decref (p);
 }
 
+struct pvec {
+    const char *desc;
+    struct proto p;
+    uint8_t buf[PROTO_SIZE];
+};
+
+// N.B. RFC 3 describes this encoding
+// 4-byte integers are encoded in network order (big endian = MSB first)
+static struct pvec testvec[] = {
+    { "fake test message",
+      { .type = 0xab, .flags = 0xcd,
+        .userid = 0x00010203, .rolemask = 0x04050607,
+        .aux1 = 0x08090a0b, .aux2 = 0x0c0d0e0f },
+      { PROTO_MAGIC, PROTO_VERSION, 0xab, 0xcd,
+        0x00, 0x01, 0x02, 0x03,
+        0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0a, 0x0b,
+        0x0c, 0x0d, 0x0e, 0x0f }
+    },
+    { "overlay control disconnect",
+      { .type = FLUX_MSGTYPE_CONTROL, .flags = 0,
+        .userid = 100, .rolemask = FLUX_ROLE_OWNER,
+        .control_type = 2, .control_status = 0 },
+      { PROTO_MAGIC, PROTO_VERSION, 0x08, 0,
+        0, 0, 0, 100,
+        0, 0, 0, 1,
+        0, 0, 0, 2,
+        0, 0, 0, 0 }
+    },
+    { "hello request",
+      { .type = FLUX_MSGTYPE_REQUEST,
+        .flags = FLUX_MSGFLAG_TOPIC | FLUX_MSGFLAG_PAYLOAD | FLUX_MSGFLAG_ROUTE,
+        .userid = 100, .rolemask = FLUX_ROLE_OWNER,
+        .nodeid = FLUX_NODEID_ANY, .matchtag = 0 },
+      { PROTO_MAGIC, PROTO_VERSION, 0x01, 0x0b,
+        0, 0, 0, 100,
+        0, 0, 0, 1,
+        0xff, 0xff, 0xff, 0xff,
+        0, 0, 0, 0 }
+    },
+    { "hello response",
+      { .type = FLUX_MSGTYPE_RESPONSE,
+        .flags = FLUX_MSGFLAG_TOPIC | FLUX_MSGFLAG_PAYLOAD | FLUX_MSGFLAG_ROUTE,
+        .userid = 100, .rolemask = FLUX_ROLE_OWNER,
+        .nodeid = FLUX_NODEID_ANY, .matchtag = 0 },
+      { PROTO_MAGIC, PROTO_VERSION, 0x02, 0x0b,
+        0, 0, 0, 100,
+        0, 0, 0, 1,
+        0xff, 0xff, 0xff, 0xff,
+        0, 0, 0, 0 }
+    },
+};
+
+int check_proto_encode (const struct pvec *pvec)
+{
+    uint8_t buf[PROTO_SIZE];
+
+    if (proto_encode (&pvec->p, buf, sizeof (buf)) < 0) {
+        diag ("proto_encode returned -1");
+        return -1;
+    }
+    int errors = 0;
+    for (int i = 0; i < sizeof (buf); i++) {
+        if (buf[i] != pvec->buf[i]) {
+            diag ("buf[%d]=0x%x != 0x%x", i, buf[i], pvec->buf[i]);
+            errors++;
+        }
+    }
+    if (errors > 0)
+        return -1;
+    return 0;
+}
+int check_proto_decode (const struct pvec *pvec)
+{
+    struct proto p;
+    memset (&p, 0, sizeof (p));
+    if (proto_decode (&p, pvec->buf, PROTO_SIZE) < 0) {
+        diag ("proto_decode returned -1");
+        return -1;
+    }
+    int errors = 0;
+    if (p.type != pvec->p.type) {
+        diag ("proto->type=0x%x != 0x%x", p.type, pvec->p.type);
+        errors++;
+    }
+    if (p.flags != pvec->p.flags) {
+        diag ("proto->flags=0x%x != 0x%x", p.flags, pvec->p.flags);
+        errors++;
+    }
+    if (p.userid != pvec->p.userid) {
+        diag ("proto->userid=0x%x != 0x%x", p.userid, pvec->p.userid);
+        errors++;
+    }
+    if (p.rolemask != pvec->p.rolemask) {
+        diag ("proto->rolemask=0x%x != 0x%x", p.rolemask, pvec->p.rolemask);
+        errors++;
+    }
+    if (p.aux1 != pvec->p.aux1) {
+        diag ("proto->aux1=0x%x != 0x%x", p.aux1, pvec->p.aux1);
+        errors++;
+    }
+    if (p.aux2 != pvec->p.aux2) {
+        diag ("proto->aux2=0x%x != 0x%x", p.aux2, pvec->p.aux2);
+        errors++;
+    }
+    if (errors > 0)
+        return -1;
+    return 0;
+}
+
+void check_proto_internal (void)
+{
+    for (int i = 0; i < ARRAY_SIZE (testvec); i++) {
+        ok (check_proto_encode (&testvec[i]) == 0,
+           "proto encode worked on %s", testvec[i].desc);
+        ok (check_proto_decode (&testvec[i]) == 0,
+           "proto decode worked on %s", testvec[i].desc);
+    }
+}
+
 int main (int argc, char *argv[])
 {
     int opt;
@@ -1282,6 +1404,8 @@ int main (int argc, char *argv[])
     check_refcount();
 
     check_print ();
+
+    check_proto_internal ();
 
     done_testing();
     return (0);
