@@ -34,6 +34,9 @@ OPTIONS
    or *always*.  If *WHEN* is omitted, it defaults to *always*. The default
    value when the **--color** option is not used is *auto*.
 
+**-q, --queue**\ =\ *NAME*
+   Limit status and jobs to specific queue.
+
 
 KEYS
 ====
