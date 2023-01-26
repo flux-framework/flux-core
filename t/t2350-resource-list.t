@@ -168,7 +168,7 @@ test_expect_success 'flux resource lists expected queues in states (single)' '
 test_expect_success 'cleanup jobs' '
 	flux job cancel $(cat job1A.id) $(cat job1B.id)
 '
-test_expect_success 'configure queues and resource split amongst queues' '
+test_expect_success 'configure queues and resource split amongst queues w/ all' '
 	flux R encode -r 0-3 -p all:0-3 -p batch:0-1 -p debug:2-3 \
 	   | tr -d "\n" \
 	   | flux kvs put -r resource.R=- &&
