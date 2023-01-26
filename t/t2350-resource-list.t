@@ -260,7 +260,24 @@ test_expect_success 'flux resource lists expected queues (every)' '
 	test $(grep "free 2" listqueue_every.out | grep -c batch) -eq 1 &&
 	test $(grep "free 2" listqueue_every.out | grep -c debug) -eq 1 &&
 	test $(grep "free 2" listqueue_every.out | grep -c every) -eq 2 &&
-	test $(grep "allocated 0" listqueue_every.out | grep -c every) -eq 1 &&
-	test $(grep "down 0" listqueue_every.out | grep -c every) -eq 1
+	test $(grep "allocated 0" listqueue_every.out | grep -c every) -eq 0 &&
+	test $(grep "down 0" listqueue_every.out | grep -c every) -eq 0
+'
+test_expect_success 'run a few jobs (every)' '
+	flux mini submit -q batch sleep 30 > job2A.id &&
+	flux mini submit -q debug sleep 30 > job2B.id
+'
+test_expect_success 'flux resource lists expected queues in states (every)' '
+	flux resource list -o "{state} {nnodes} {queue}" > listqueue_every2.out &&
+	test $(grep "free 1" listqueue_every2.out | grep -c batch) -eq 1 &&
+	test $(grep "free 1" listqueue_every2.out | grep -c debug) -eq 1 &&
+	test $(grep "free 1" listqueue_every2.out | grep -c every) -eq 2 &&
+	test $(grep "allocated 1" listqueue_every2.out | grep -c batch) -eq 1 &&
+	test $(grep "allocated 1" listqueue_every2.out | grep -c debug) -eq 1 &&
+	test $(grep "allocated 1" listqueue_every2.out | grep -c every) -eq 2 &&
+	test $(grep "down 0" listqueue_every2.out | grep -c every) -eq 0
+'
+test_expect_success 'cleanup jobs' '
+	flux job cancel $(cat job2A.id) $(cat job2B.id)
 '
 test_done
