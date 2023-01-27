@@ -489,13 +489,20 @@ static int event_urgency_context_decode (json_t *context,
 }
 
 static int event_exception_context_decode (json_t *context,
-                                           int *severity)
+                                           int *severity,
+                                           const char **typep)
 {
-    if (json_unpack (context, "{ s:i }", "severity", severity) < 0) {
+    const char *type;
+
+    if (json_unpack (context,
+                     "{ s:i s:s }",
+                     "severity", severity,
+                     "type", &type) < 0) {
         errno = EPROTO;
         return -1;
     }
-
+    if (typep)
+        *typep = type;
     return 0;
 }
 
@@ -702,11 +709,17 @@ int event_job_update (struct job *job, json_t *event)
     }
     else if (streq (name, "exception")) {
         int severity;
+        const char *type;
         if (job->state != FLUX_JOB_STATE_INACTIVE
             && job->state != FLUX_JOB_STATE_NEW) {
-            if (event_exception_context_decode (context, &severity) < 0)
+            if (event_exception_context_decode (context, &severity, &type) < 0)
                 goto error;
             if (severity == 0) {
+                // resource allocation could not be reinstiated
+                if (streq (type, "scheduler-restart")) {
+                    if (job->has_resources)
+                        job->has_resources = 0;
+                }
                 if (!job->end_event)
                     job->end_event = json_incref (event);
                 job->state = FLUX_JOB_STATE_CLEANUP;
@@ -833,7 +846,7 @@ int event_job_process_entry (struct event *event,
      */
     if (job->state == FLUX_JOB_STATE_NEW && streq (name, "exception")) {
         int severity;
-        if (event_exception_context_decode (context, &severity))
+        if (event_exception_context_decode (context, &severity, NULL))
             return -1;
         if (severity == 0) {
             flux_log (event->ctx->h,
