@@ -18,6 +18,26 @@
 #include "init.h"
 #include "hello.h"
 
+
+static void raise_exception (flux_t *h, flux_jobid_t id, const char *note)
+{
+    flux_future_t *f;
+
+    flux_log (h,
+              LOG_INFO,
+              "raising fatal exception on running job id=%ju",
+              (uintmax_t)id);
+
+    if (!(f = flux_job_raise (h, id, "scheduler-restart", 0, note))
+        || flux_future_get (f, NULL) < 0) {
+        flux_log_error (h,
+                        "error raising fatal exception on %ju: %s",
+                        (uintmax_t)id,
+                        future_strerror (f, errno));
+    }
+    flux_future_destroy (f);
+}
+
 static int schedutil_hello_job (schedutil_t *util,
                                 const flux_msg_t *msg)
 {
@@ -40,7 +60,7 @@ static int schedutil_hello_job (schedutil_t *util,
                           msg,
                           R,
                           util->cb_arg) < 0)
-        goto error;
+        raise_exception (util->h, id, "failed to reallocate R for running job");
     flux_future_destroy (f);
     return 0;
 error:
