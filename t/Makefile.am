@@ -74,6 +74,7 @@ TESTSCRIPTS = \
 	t0028-content-backing-none.t \
 	t0029-filemap-cmd.t \
 	t0030-marshall.t \
+	t0031-constraint-parser.t \
 	t0025-broker-state-machine.t \
 	t0027-broker-groups.t \
 	t0013-config-file.t \
