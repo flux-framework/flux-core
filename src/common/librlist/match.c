@@ -16,6 +16,7 @@
 #include <string.h>
 #include <errno.h>
 #include <jansson.h>
+#include <flux/hostlist.h>
 
 #include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
@@ -44,6 +45,67 @@ static struct job_constraint *job_constraint_new (flux_error_t *errp)
         return NULL;
     }
     c->match = match_empty;
+    return c;
+}
+
+static struct hostlist * array_to_hostlist (json_t *hostlists,
+                                            flux_error_t *errp)
+{
+    json_t *entry;
+    size_t index;
+    struct hostlist *hl = hostlist_create ();
+
+    if (!hl)
+        return NULL;
+
+    json_array_foreach (hostlists, index, entry) {
+        if (hostlist_append (hl, json_string_value (entry)) < 0) {
+            char *s = json_dumps (hostlists, 0);
+            errprintf (errp,
+                       "invalid hostlist '%s' in %s",
+                       json_string_value (entry),
+                       s);
+            free (s);
+            goto error;
+        }
+    }
+    return hl;
+error:
+    hostlist_destroy (hl);
+    return NULL;
+}
+
+static void hostlist_destructor (void **item)
+{
+    if (item) {
+        hostlist_destroy (*item);
+        *item = NULL;
+    }
+}
+
+static bool match_hostlist (struct job_constraint *c,
+                            const struct rnode *n)
+{
+    struct hostlist *hl = zlistx_first (c->values);
+    if (!hl || hostlist_find (hl, n->hostname) < 0)
+        return false;
+    return true;
+}
+
+static struct job_constraint * hostlist_constraint (json_t *values,
+                                                    flux_error_t *errp)
+{
+    struct job_constraint *c;
+    struct hostlist * hl = array_to_hostlist (values, errp);
+    if (!hl)
+        return NULL;
+    if (!(c = job_constraint_new (errp))
+        || !zlistx_add_end (c->values, hl)) {
+        hostlist_destroy (hl);
+        return NULL;
+    }
+    zlistx_set_destructor (c->values, hostlist_destructor);
+    c->match = match_hostlist;
     return c;
 }
 
@@ -248,6 +310,8 @@ struct job_constraint *job_constraint_create (json_t *constraint,
     json_object_foreach (constraint, op, values) {
         if (streq (op, "properties"))
             return property_constraint (values, errp);
+        else if (streq (op, "hostlist"))
+            return hostlist_constraint (values, errp);
         else if (streq (op, "or") || streq (op, "and") || streq (op, "not"))
             return conditional_constraint (op, values, errp);
         else {
