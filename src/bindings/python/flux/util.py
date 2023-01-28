@@ -319,6 +319,11 @@ class UtilDatetime(datetime):
 
 
 def fsd(secs):
+    # Special case for RFC 23 "infinity"
+    # N.B. We return lower case "inf" to match Python's "math.inf".
+    if math.isinf(secs):
+        return "inf"
+
     #  Round <1ms down to 0s for now
     if secs < 1.0e-3:
         strtmp = "0s"
