@@ -357,13 +357,18 @@ struct rlist *rlist_copy_constraint (const struct rlist *orig,
                                      json_t *constraint,
                                      flux_error_t *errp)
 {
-    if (rnode_match_validate (constraint, errp) < 0) {
+    struct rlist *rl;
+    struct job_constraint *jc;
+
+    if (!(jc = job_constraint_create (constraint, errp))) {
         errno = EINVAL;
         return NULL;
     }
-    return rlist_copy_internal (orig,
-                                (rnode_copy_f) rnode_copy_match,
-                                (void *) constraint);
+    rl = rlist_copy_internal (orig,
+                              (rnode_copy_f) rnode_copy_match,
+                              (void *) jc);
+    job_constraint_destroy (jc);
+    return rl;
 }
 
 struct rlist *rlist_copy_constraint_string (const struct rlist *orig,
