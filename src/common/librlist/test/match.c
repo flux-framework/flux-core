@@ -22,7 +22,7 @@ struct match_test {
 struct validate_test {
     const char *desc;
     const char *json;
-    int rc;
+    bool rc;
     const char *err;
 };
 
@@ -107,57 +107,57 @@ struct match_test match_tests[] = {
 struct validate_test validate_tests[] = {
     { "non-object fails",
       "[]",
-      -1,
+      false,
       "constraint must be JSON object",
     },
     { "Unknown operation fails",
       "{ \"foo\": [] }",
-      -1,
+      false,
       "unknown constraint operator: foo",
     },
     { "non-array argument to 'and' fails",
       "{ \"and\": \"foo\" }",
-      -1,
+      false,
       "and operator value must be an array",
     },
     { "non-array argument to 'or' fails",
       "{ \"or\": \"foo\" }",
-      -1,
+      false,
       "or operator value must be an array",
     },
     { "non-array argument to 'properties' fails",
       "{ \"properties\": \"foo\" }",
-      -1,
+      false,
       "properties value must be an array",
     },
     { "non-string property fails",
       "{ \"properties\": [ \"foo\", 42 ] }",
-      -1,
+      false,
       "non-string property specified",
     },
     { "invalid property string fails",
       "{ \"properties\": [ \"foo\", \"bar&\" ] }",
-      -1,
+      false,
       "invalid character '&' in property \"bar&\"",
     },
     { "empty object is valid constraint",
       "{}",
-      0,
+      true,
       NULL
     },
     { "empty and object is valid constraint",
       "{ \"and\": [] }",
-      0,
+      true,
       NULL
     },
     { "empty or object is valid constraint",
       "{ \"or\": [] }",
-      0,
+      true,
       NULL
     },
     { "empty properties object is valid constraint",
       "{ \"properties\": [] }",
-      0,
+      true,
       NULL
     },
     { "complex conditional works",
@@ -174,7 +174,7 @@ struct validate_test validate_tests[] = {
            } \
          ] \
       }",
-      0,
+      true,
       NULL
     },
     { NULL, NULL, 0, NULL }
@@ -193,11 +193,16 @@ void test_match ()
 
     struct match_test *t = match_tests;
     while (t->desc) {
+        flux_error_t error;
+        struct job_constraint *c;
         json_t *o = json_loads (t->json, 0, NULL);
         if (!o)
             BAIL_OUT ("failed to parse json logic for '%s'", t->desc);
-        ok (rnode_match (n, o) == t->result, "%s", t->desc);
+        if (!(c = job_constraint_create (o, &error)))
+            BAIL_OUT ("%s: job_constraint_create: %s", t->desc, error.text);
+        ok (rnode_match (n, c) == t->result, "%s", t->desc);
         json_decref (o);
+        job_constraint_destroy (c);
         t++;
     }
     rnode_destroy (n);
@@ -208,16 +213,18 @@ void test_validate ()
     flux_error_t error;
     struct validate_test *t = validate_tests;
     while (t->desc) {
+        struct job_constraint *c;
         json_t *o = json_loads (t->json, 0, NULL);
         if (!o)
             BAIL_OUT ("failed to parse json logic for '%s'", t->desc);
-        int rc = rnode_match_validate (o, &error);
-        ok (rc == t->rc, "%s", t->desc);
-        if (rc != t->rc)
+        bool result = ((c = job_constraint_create (o, &error)) != NULL);
+        ok (result == t->rc, "%s", t->desc);
+        if (result != t->rc)
             diag ("%s", error.text);
         if (t->err)
             is (error.text, t->err, "got expected error: %s", error.text);
         json_decref (o);
+        job_constraint_destroy (c);
         t++;
     }
 }
@@ -225,19 +232,17 @@ void test_validate ()
 void test_invalid ()
 {
     json_t *o = json_object ();
-    if (!o)
+    struct job_constraint *c = job_constraint_create (o, NULL);
+    if (!o || !c)
         BAIL_OUT ("test_invalid: json_object() failed");
     ok (!rnode_match (NULL, NULL),
         "rnode_match (NULL, NULL) returns false");
-    ok (!rnode_match (NULL, o),
-        "rnode_match (NULL, o) returns false");
-    ok (rnode_match_validate (NULL, NULL) == -1,
-        "rnode_match_validate (NULL, NULL) == -1");
-    lives_ok ({rnode_match_validate (o, NULL); },
-        "rnode_match_validate (o, NULL) doesn't crash");
+    ok (!rnode_match (NULL, c),
+        "rnode_match (NULL, c) returns false");
     ok (rnode_copy_match (NULL, NULL) == NULL,
         "rnode_copy_match (NULL, NULL) returns NULL");
     json_decref (o);
+    job_constraint_destroy (c);
 }
 
 int main (int ac, char *av[])

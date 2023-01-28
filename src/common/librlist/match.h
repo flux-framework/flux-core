@@ -19,20 +19,23 @@
 
 #include "rnode.h"
 
+/*  Load and validate RFC 31 constraint spec 'constraint'
+ *
+ *  Returns a job constraint object if constraint is valid spec,
+ *  Returns NULL with error in errp if errp != NULL.
+ */
+struct job_constraint * job_constraint_create (json_t *constraint,
+                                               flux_error_t *errp);
+
+void job_constraint_destroy (struct job_constraint *c);
+
 /*  Return true if rnode 'n' matches constraints in RFC 31 constraint
  *   specification 'constraint'.
  */
-bool rnode_match (const struct rnode *n, json_t *constraint);
-
-/*  Validate RFC 31 constraint spec 'constraint'
- *
- *  Returns 0 if constraint is valid spec,
- *         -1 if not and sets error in errp if errp != NULL.
- *
- */
-int rnode_match_validate (json_t *constraint, flux_error_t *errp);
+bool rnode_match (const struct rnode *n, struct job_constraint *c);
 
 /*  Copy an rnode only if it matches the RFC 31 constraints in `constraint` */
-struct rnode *rnode_copy_match (const struct rnode *n, json_t *constraint);
+struct rnode *rnode_copy_match (const struct rnode *n,
+                                struct job_constraint *c);
 
 #endif /* !HAVE_SCHED_RLIST_MATCH */
