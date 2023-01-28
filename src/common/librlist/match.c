@@ -16,6 +16,8 @@
 #include <string.h>
 #include <errno.h>
 #include <jansson.h>
+#include <flux/hostlist.h>
+#include <flux/idset.h>
 
 #include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
@@ -44,6 +46,138 @@ static struct job_constraint *job_constraint_new (flux_error_t *errp)
         return NULL;
     }
     c->match = match_empty;
+    return c;
+}
+
+static int add_idset_string (struct idset *idset, const char *s)
+{
+    int rc;
+    struct idset *ids;
+
+    if (!(ids = idset_decode (s)))
+        return -1;
+    rc = idset_add (idset, ids);
+    idset_destroy (ids);
+    return rc;
+}
+
+static struct idset *array_to_idset (json_t *idsets,
+                                     flux_error_t *errp)
+{
+    json_t *entry;
+    size_t index;
+    struct idset *idset = idset_create (0, IDSET_FLAG_AUTOGROW);
+
+    if (!idset)
+        return NULL;
+
+    json_array_foreach (idsets, index, entry) {
+        if (add_idset_string (idset, json_string_value (entry)) < 0) {
+            char *s = json_dumps (idsets, 0);
+            errprintf (errp,
+                       "invalid idset '%s' in %s",
+                       json_string_value (entry),
+                       s);
+            free (s);
+            goto error;
+        }
+    }
+    return idset;
+error:
+    idset_destroy (idset);
+    return NULL;
+}
+
+static void destruct_idset (void **item)
+{
+    if (item) {
+        idset_destroy (*item);
+        *item = NULL;
+    }
+}
+
+static bool match_idset (struct job_constraint *c,
+                         const struct rnode *n)
+{
+    struct idset *idset = zlistx_first (c->values);
+    return idset_test (idset, n->rank);
+}
+
+static struct job_constraint *create_idset_constraint (json_t *values,
+                                                      flux_error_t *errp)
+{
+    struct job_constraint *c;
+    struct idset *idset = array_to_idset (values, errp);
+    if (!idset)
+        return NULL;
+    if (!(c = job_constraint_new (errp))
+        || !zlistx_add_end (c->values, idset)) {
+        idset_destroy (idset);
+        return NULL;
+    }
+    zlistx_set_destructor (c->values, destruct_idset);
+    c->match = match_idset;
+    return c;
+}
+
+static struct hostlist *array_to_hostlist (json_t *hostlists,
+                                           flux_error_t *errp)
+{
+    json_t *entry;
+    size_t index;
+    struct hostlist *hl = hostlist_create ();
+
+    if (!hl)
+        return NULL;
+
+    json_array_foreach (hostlists, index, entry) {
+        if (hostlist_append (hl, json_string_value (entry)) < 0) {
+            char *s = json_dumps (hostlists, 0);
+            errprintf (errp,
+                       "invalid hostlist '%s' in %s",
+                       json_string_value (entry),
+                       s);
+            free (s);
+            goto error;
+        }
+    }
+    return hl;
+error:
+    hostlist_destroy (hl);
+    return NULL;
+}
+
+static void destruct_hostlist (void **item)
+{
+    if (item) {
+        hostlist_destroy (*item);
+        *item = NULL;
+    }
+}
+
+static bool match_hostlist (struct job_constraint *c,
+                            const struct rnode *n)
+{
+    struct hostlist *hl = zlistx_first (c->values);
+    if (!hl || hostlist_find (hl, n->hostname) < 0)
+        return false;
+    return true;
+}
+
+static struct job_constraint *create_hostlist_constraint (json_t *values,
+                                                         flux_error_t *errp)
+{
+    struct job_constraint *c;
+    struct hostlist *hl = array_to_hostlist (values, errp);
+    if (!hl)
+        return NULL;
+    if (!(c = job_constraint_new (errp))
+        || !zlistx_add_end (c->values, hl)) {
+        hostlist_destroy (hl);
+        return NULL;
+    }
+    zlistx_set_destructor (c->values, destruct_hostlist);
+    c->match = match_hostlist;
     return c;
 }
 
@@ -249,6 +383,10 @@ struct job_constraint *job_constraint_create (json_t *constraint,
     json_object_foreach (constraint, op, values) {
         if (streq (op, "properties"))
             return property_constraint (values, errp);
+        else if (streq (op, "hostlist"))
+            return create_hostlist_constraint (values, errp);
+        else if (streq (op, "ranks"))
+            return create_idset_constraint (values, errp);
         else if (streq (op, "or") || streq (op, "and") || streq (op, "not"))
             return conditional_constraint (op, values, errp);
         else {
