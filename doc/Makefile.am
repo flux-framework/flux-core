@@ -322,6 +322,7 @@ RST_FILES  = \
 if ENABLE_DOCS
 man_MANS = $(MAN1_FILES) $(MAN3_FILES) $(MAN5_FILES) $(MAN7_FILES)
 $(RST_FILES): man1/NODESET.rst \
+	man1/CONSTRAINTS.rst \
 	man3/JSON_PACK.rst \
 	man3/JSON_UNPACK.rst
 endif
@@ -373,6 +374,7 @@ EXTRA_DIST = \
 	index.rst \
 	$(RST_FILES) \
 	man1/NODESET.rst \
+	man1/CONSTRAINTS.rst \
 	man3/JSON_PACK.rst \
 	man3/JSON_UNPACK.rst \
 	man7/flux-undocumented.rst

@@ -221,18 +221,56 @@ emitting the job's I/O to its stdout and stderr.
 CONSTRAINTS
 ===========
 
-.. note::
-   Flux supports an advanced constraint specification detailed in RFC 31.
-   However, the interface currently exported via the **flux mini** commands
-   is purposefully limited.
+**--requires=CONSTRAINT**
+   Specify a set of allowable properties and other attributes to consider
+   when matching resources for a job. The **CONSTRAINT** is expressed in
+   a simple syntax described in RFC 35 (Constraint Query Syntax) which is
+   then converted into a JSON object compliant with RFC 31 (Job Constraints
+   Specification).
 
-**--requires=LIST**
-   Specify a *LIST* of resource property constraints for this job. *LIST*
-   is a single property or comma-separated list of properties which are
-   required for this job. The ``--requires`` option may be specified
-   multiple times. Currently, all properties are required (logical and).
-   If a property name starts with ``^``, then the job requires that property
-   *not* be present on assigned resources.
+   .. include:: CONSTRAINTS.rst
+
+   Currently, **--requires** supports the following operators:
+
+   properties
+     Require the set of specified properties. Properties may be
+     comma-separated, in which case all specified properties are required.
+     As a convenience, if a property starts with ``^`` then a matching
+     resource must not have the specified property.  In ``flux-mini``, the
+     ``properties`` operator is the default, so that ``a,b`` is equivalent
+     to ``properties:a,b``.
+
+   hostlist
+     Require matching resources to  be in the specified hostlist (in RFC
+     29 format). ``host`` or ``hosts`` is also accepted.
+
+   ranks
+     Require matching resources to be on the specified broker ranks in
+     RFC 22 Idset String Representation.
+
+   Examples:
+
+   ``a b c``, ``a&b&c``, or ``a,b,c``
+      Require properties a and b and c.
+
+   ``a|b|c``, or ``a or b or c``
+      Require property a or b or c.
+
+   ``(a and b) or (b and c)``
+      Require properties a and b or b and c.
+
+   ``b|-c``, ``b or not c``
+      Require property b or not c.
+
+   ``host:fluke[1-5]``
+      Require host in fluke1 through fluke5.
+
+   ``-host:fluke7``
+      Exclude host fluke7.
+
+   ``rank:0``
+      Require broker rank 0.
+
 
 DEPENDENCIES
 ============
