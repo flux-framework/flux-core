@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <jansson.h>
 #include <flux/hostlist.h>
+#include <flux/idset.h>
 
 #include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
@@ -45,6 +46,77 @@ static struct job_constraint *job_constraint_new (flux_error_t *errp)
         return NULL;
     }
     c->match = match_empty;
+    return c;
+}
+
+static int add_idset_string (struct idset *idset, const char *s)
+{
+    int rc;
+    struct idset *ids;
+
+    if (!(ids = idset_decode (s)))
+        return -1;
+    rc = idset_add (idset, ids);
+    idset_destroy (ids);
+    return rc;
+}
+
+static struct idset * array_to_idset (json_t *idsets,
+                                      flux_error_t *errp)
+{
+    json_t *entry;
+    size_t index;
+    struct idset *idset = idset_create (0, IDSET_FLAG_AUTOGROW);
+
+    if (!idset)
+        return NULL;
+
+    json_array_foreach (idsets, index, entry) {
+        if (add_idset_string (idset, json_string_value (entry)) < 0) {
+            char *s = json_dumps (idsets, 0);
+            errprintf (errp,
+                       "invalid idset '%s' in %s",
+                       json_string_value (entry),
+                       s);
+            free (s);
+            goto error;
+        }
+    }
+    return idset;
+error:
+    idset_destroy (idset);
+    return NULL;
+}
+
+static void idset_destructor (void **item)
+{
+    if (item) {
+        idset_destroy (*item);
+        *item = NULL;
+    }
+}
+
+static bool match_idset (struct job_constraint *c,
+                         const struct rnode *n)
+{
+    struct idset *idset = zlistx_first (c->values);
+    return idset_test (idset, n->rank);
+}
+
+static struct job_constraint * idset_constraint (json_t *values,
+                                                 flux_error_t *errp)
+{
+    struct job_constraint *c;
+    struct idset * idset = array_to_idset (values, errp);
+    if (!idset)
+        return NULL;
+    if (!(c = job_constraint_new (errp))
+        || !zlistx_add_end (c->values, idset)) {
+        idset_destroy (idset);
+        return NULL;
+    }
+    zlistx_set_destructor (c->values, idset_destructor);
+    c->match = match_idset;
     return c;
 }
 
@@ -312,6 +384,8 @@ struct job_constraint *job_constraint_create (json_t *constraint,
             return property_constraint (values, errp);
         else if (streq (op, "hostlist"))
             return hostlist_constraint (values, errp);
+        else if (streq (op, "ranks"))
+            return idset_constraint (values, errp);
         else if (streq (op, "or") || streq (op, "and") || streq (op, "not"))
             return conditional_constraint (op, values, errp);
         else {
