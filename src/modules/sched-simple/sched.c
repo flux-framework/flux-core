@@ -529,7 +529,7 @@ static int hello_cb (flux_t *h,
         flux_log (h, LOG_DEBUG, "hello: alloc %s", s);
     free (s);
     rlist_destroy (alloc);
-    return 0;
+    return rc;
 }
 
 static void status_cb (flux_t *h, flux_msg_handler_t *mh,
