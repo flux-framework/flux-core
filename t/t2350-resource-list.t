@@ -168,7 +168,7 @@ test_expect_success 'flux resource lists expected queues in states (single)' '
 test_expect_success 'cleanup jobs' '
 	flux job cancel $(cat job1A.id) $(cat job1B.id)
 '
-test_expect_success 'configure queues and resource split amongst queues' '
+test_expect_success 'configure queues and resource split amongst queues w/ all' '
 	flux R encode -r 0-3 -p all:0-3 -p batch:0-1 -p debug:2-3 \
 	   | tr -d "\n" \
 	   | flux kvs put -r resource.R=- &&
@@ -235,5 +235,49 @@ test_expect_success 'flux resource lists expected properties (extraprop)' '
 test_expect_success 'flux resource lists no properties in propertiesx (extraprop)' '
 	flux resource list -o "{state} {nnodes} {propertiesx}" > listpropx_extraprop.out &&
 	grep "free 4 foo" listpropx_extraprop.out
+'
+# N.B. we use the queue "every" b/c the word "all" happens to be in
+# the word "allocated", annoyingly messing up greps
+test_expect_success 'configure queues and resource split amongst queues, add every queue' '
+	flux R encode -r 0-3 -p batch:0-1 -p debug:2-3 \
+	   | tr -d "\n" \
+	   | flux kvs put -r resource.R=- &&
+	flux config load <<-EOT &&
+	[queues.every]
+	[queues.batch]
+	requires = [ "batch" ]
+	[queues.debug]
+	requires = [ "debug" ]
+	EOT
+	flux queue start --all &&
+	flux module unload sched-simple &&
+	flux module reload resource &&
+	flux module load sched-simple
+'
+# we can't predict listing order of queues/properties, so we grep counts
+test_expect_success 'flux resource lists expected queues (every)' '
+	flux resource list -o "{state} {nnodes} {queue}" > listqueue_every.out &&
+	test $(grep "free 2" listqueue_every.out | grep -c batch) -eq 1 &&
+	test $(grep "free 2" listqueue_every.out | grep -c debug) -eq 1 &&
+	test $(grep "free 2" listqueue_every.out | grep -c every) -eq 2 &&
+	test $(grep "allocated 0" listqueue_every.out | grep -c every) -eq 0 &&
+	test $(grep "down 0" listqueue_every.out | grep -c every) -eq 0
+'
+test_expect_success 'run a few jobs (every)' '
+	flux mini submit -q batch sleep 30 > job2A.id &&
+	flux mini submit -q debug sleep 30 > job2B.id
+'
+test_expect_success 'flux resource lists expected queues in states (every)' '
+	flux resource list -o "{state} {nnodes} {queue}" > listqueue_every2.out &&
+	test $(grep "free 1" listqueue_every2.out | grep -c batch) -eq 1 &&
+	test $(grep "free 1" listqueue_every2.out | grep -c debug) -eq 1 &&
+	test $(grep "free 1" listqueue_every2.out | grep -c every) -eq 2 &&
+	test $(grep "allocated 1" listqueue_every2.out | grep -c batch) -eq 1 &&
+	test $(grep "allocated 1" listqueue_every2.out | grep -c debug) -eq 1 &&
+	test $(grep "allocated 1" listqueue_every2.out | grep -c every) -eq 2 &&
+	test $(grep "down 0" listqueue_every2.out | grep -c every) -eq 0
+'
+test_expect_success 'cleanup jobs' '
+	flux job cancel $(cat job2A.id) $(cat job2B.id)
 '
 test_done
