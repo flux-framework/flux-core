@@ -173,11 +173,13 @@ has a queue assigned in the default format shown above).
 The special presentation type *h* can be used to convert an empty
 string, "0s", "0.0", or "0:00:00" to a hyphen. For example, normally
 "{nodelist}" would output an empty string if the job has not yet run.
-By specifying, "{nodelist:h}", a hyphen would be presented instead.
+By specifying, "{nodelist:h}", a hyphen would be presented instead.  The
+special presentation type *i* is similar to *h*, but can convert
+"inf" (infinity) to a hyphen.
 
 The special suffix *+* can be used to indicate if a string was truncated
-by including a ``+`` character when truncation occurs. If both *h* and
-*+* are being used, then the *+* must appear after the *h*.
+by including a ``+`` character when truncation occurs. If *+* is used in
+conjunction with *h* or *i*, then the *+* must appear after the *h* or *i*.
 
 Additionally, the custom job formatter supports a set of special
 conversion flags. Conversion flags follow the format field and are
