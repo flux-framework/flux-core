@@ -1885,6 +1885,38 @@ struct property_test property_tests[] = {
         "{\"properties\": [\"^foo5\"]}",
         "rank[1-4,6-10]/core[0-1]",
     },
+    {
+        "constraint: by hostname: ^foo5",
+        "1-10", "0-1", "foo[1-10]",
+        "{\"foo\": \"1-3\", \"bar\": \"7\"}",
+        NULL,
+        "{\"properties\": [\"^foo5\"]}",
+        "rank[1-4,6-10]/core[0-1]",
+    },
+    {
+        "constraint: by hostlist: foo[2,3,7]",
+        "1-10", "0-1", "foo[1-10]",
+        "{\"foo\": \"1-3\", \"bar\": \"7\"}",
+        NULL,
+        "{\"hostlist\": [\"foo[2,3,7]\"]}",
+        "rank[2-3,7]/core[0-1]",
+    },
+    {
+        "constraint: by hostlist: not foo[2,3,7]",
+        "1-10", "0-1", "foo[1-10]",
+        "{\"foo\": \"1-3\", \"bar\": \"7\"}",
+        NULL,
+        "{ \"not\": [{\"hostlist\": [\"foo[2,3,7]\"]}] }",
+        "rank[1,4-6,8-10]/core[0-1]",
+    },
+    {
+        "constraint: by rank: not 0-4",
+        "1-10", "0-1", "foo[1-10]",
+        "{\"foo\": \"1-3\", \"bar\": \"7\"}",
+        NULL,
+        "{ \"not\": [{\"ranks\": [\"0-4\"]}] }",
+        "rank[5-10]/core[0-1]",
+    },
     { 0 }
 };
 
