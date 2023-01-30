@@ -11,37 +11,37 @@ LIST_JOBS=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
 
 test_expect_success 'flux-queue: unknown sub-command fails with usage message' '
 	test_must_fail flux queue wrongsubcmd 2>usage.out &&
-	grep Usage: usage.out
+	grep -i usage: usage.out
 '
 
 test_expect_success 'flux-queue: missing sub-command fails with usage message' '
 	test_must_fail flux queue 2>usage2.out &&
-	grep Usage: usage2.out
+	grep -i usage: usage2.out
 '
 
 test_expect_success 'flux-queue: disable with no reason fails' '
 	test_must_fail flux queue submit disable 2>usage3.out &&
-	grep Usage: usage3.out
+	grep -i usage: usage3.out
 '
 
 test_expect_success 'flux-queue: enable with extra free args fails' '
 	test_must_fail flux queue enable xyz 2>usage4.out &&
-	grep Usage: usage4.out
+	grep -i usage: usage4.out
 '
 
 test_expect_success 'flux-queue: status with extra free args fails' '
 	test_must_fail flux queue status xyz 2>usage5.out &&
-	grep Usage: usage5.out
+	grep -i usage: usage5.out
 '
 
 test_expect_success 'flux-queue: drain with extra free args fails' '
 	test_must_fail flux queue drain xyz 2>usage6.out &&
-	grep Usage: usage6.out
+	grep -i usage: usage6.out
 '
 
 test_expect_success 'flux-queue: idle with extra free args fails' '
 	test_must_fail flux queue idle xyz 2>usage7.out &&
-	grep Usage: usage7.out
+	grep -i usage: usage7.out
 '
 
 test_expect_success 'flux-queue: status with bad broker connection fails' '
@@ -93,7 +93,7 @@ test_expect_success 'flux-queue: start with bad broker connection fails' '
 
 test_expect_success 'flux-queue: start with extra free args fails' '
 	test_must_fail flux queue start xyz 2>start_xargs.err &&
-	grep Usage: start_xargs.err
+	grep -i usage: start_xargs.err
 '
 
 test_expect_success 'flux-queue: stop works' '

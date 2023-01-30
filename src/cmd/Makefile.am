@@ -104,7 +104,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-perilog-run.py \
 	flux-uri.py \
 	flux-pstree.py \
-	flux-pgrep.py
+	flux-pgrep.py \
+	flux-queue.py
 
 fluxcmd_PROGRAMS = \
 	flux-terminus \
@@ -116,7 +117,6 @@ fluxcmd_PROGRAMS = \
 	flux-kvs \
 	flux-start \
 	flux-job \
-	flux-queue \
 	flux-exec \
 	flux-R \
 	flux-top
