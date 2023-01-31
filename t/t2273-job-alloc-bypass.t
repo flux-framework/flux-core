@@ -22,7 +22,7 @@ submit_as_alternate_user()
 }
 
 test_expect_success 'alloc-bypass: start a job using all resources' '
-	SLEEPID=$(flux mini submit \
+	SLEEPID=$(flux mini submit --wait-event=start \
 	            -n $(flux resource list -s up -no {ncores}) \
 	            sleep 300)
 '
@@ -73,5 +73,18 @@ test_expect_success 'alloc-bypass: handles exception before alloc event' '
 test_expect_success 'alloc-bypass: kill sleep job' '
 	flux job cancelall -f &&
 	flux job wait-event $SLEEPID clean
+'
+test_expect_success 'alloc-bypass: submit an alloc-bypass job' '
+	flux mini submit -vvv --wait-event=start --job-name=bypass \
+		--setattr=alloc-bypass.R="$(flux R encode -r 0)" \
+		-n 1 \
+		sleep 300
+'
+test_expect_success 'alloc-bypass: a full system job can still be run' '
+	run_timeout 15 \
+	  flux mini run -n $(flux resource list -s up -no {ncores}) hostname
+'
+test_expect_success 'kill bypass job' '
+	flux pkill bypass
 '
 test_done
