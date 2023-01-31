@@ -67,7 +67,7 @@ OPTIONS
    *default*, *full*, *long*, and *deps*. The default format emits the matched
    jobids only. (pgrep only)
 
-**-n, --suppress-header**
+**-n, --no-header**
    Suppress printing of the header line. (pgrep only)
 
 **-w, --wait**
