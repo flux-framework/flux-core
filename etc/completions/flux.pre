@@ -877,7 +877,7 @@ _flux_jobs()
         -c --count=N \
         -f --filter= \
         --since=WHEN \
-        -n --suppress-header \
+        -n --no-header \
         -u --user= \
         --name= \
         --queue= \

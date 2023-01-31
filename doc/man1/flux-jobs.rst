@@ -30,7 +30,7 @@ OPTIONS
 **-A**
    List jobs of all users. This is shorthand for *--user=all*.
 
-**-n, --suppress-header**
+**-n, --no-header**
    For default output, do not output column headers.
 
 **-u, --user**\ *=[USERNAME|UID]*
