@@ -25,7 +25,7 @@ class QueueConfig:
         except KeyError:
             pass
 
-    def queue_constraints(self, name):
+    def queue_properties(self, name):
         try:
             return self.queues[name]["requires"]
         except KeyError:
@@ -37,19 +37,35 @@ class QueueConfig:
         if jobspec.queue:
             if jobspec.queue not in self.queues:
                 raise ValueError(f"Invalid queue '{jobspec.queue}' specified")
-            queue_constraints = self.queue_constraints(jobspec.queue)
-            if queue_constraints is None:
+            queue_properties = self.queue_properties(jobspec.queue)
+            if queue_properties is None:
                 return
-            prop = []
-            try:
-                prop = jobspec.attributes["system"]["constraints"]["properties"]
-            except KeyError:
-                pass
 
-            for value in queue_constraints:
-                if value not in prop:
-                    prop.append(value)
-            jobspec.setattr("system.constraints.properties", prop)
+            # First try appending to existing constraints
+            try:
+                spec = jobspec.attributes["system"]["constraints"]["properties"]
+                for prop in queue_properties:
+                    if prop not in spec:
+                        spec.append(prop)
+                return
+            except KeyError:
+                #  No "properties" operator at top level, try combining
+                #  existing constraints with logical AND
+                pass
+            try:
+                jobspec.setattr(
+                    "system.constraints",
+                    {
+                        "and": [
+                            jobspec.attributes["system"]["constraints"],
+                            {"properties": queue_properties},
+                        ]
+                    },
+                )
+            except KeyError:
+                #  No existing "constraints" - set constraints to queue
+                #  constraints
+                jobspec.setattr("system.constraints", {"properties": queue_properties})
 
 
 class Frobnicator(FrobnicatorPlugin):

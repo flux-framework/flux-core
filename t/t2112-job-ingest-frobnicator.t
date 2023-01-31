@@ -109,13 +109,14 @@ test_expect_success HAVE_JQ 'constraints plugin sets queue constraint' '
 	jq -e ".data.attributes.system.constraints.properties \
 	    == [ \"debug\" ]" < constraint-setqueue.out
 '
-test_expect_success HAVE_JQ 'constraints plugin appends queue constraint' '
+test_expect_success HAVE_JQ 'constraints plugin adds queue constraint' '
 	flux mini run --env=-* --dry-run --requires=foo \
 	  --queue=debug hostname \
 	   | flux job-frobnicator --jobspec-only --plugins=constraints \
 	   > constraint-addqueue.out &&
-	jq -e ".data.attributes.system.constraints.properties \
-	   == [ \"foo\", \"debug\" ]" \
+	jq -e ".data.attributes.system.constraints.properties|any(.==\"debug\")"\
+	   < constraint-addqueue.out &&
+	jq -e ".data.attributes.system.constraints.properties|any(.==\"foo\")"\
 	   < constraint-addqueue.out
 '
 test_expect_success HAVE_JQ 'constraints plugin works with no configured queues' '
