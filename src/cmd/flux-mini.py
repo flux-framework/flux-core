@@ -1705,6 +1705,13 @@ def add_batch_alloc_args(parser):
         help="Pass options to flux brokers",
     )
     parser.add_argument(
+        "--dump",
+        nargs="?",
+        const="flux-{{jobid}}-dump.tgz",
+        metavar="FILE",
+        help="Archive KVS on exit",
+    )
+    parser.add_argument(
         "-n",
         "--nslots",
         type=int,
@@ -1804,6 +1811,10 @@ class BatchCmd(MiniCmd):
             args.nslots = args.nodes
             args.exclusive = True
 
+        if args.dump:
+            args.broker_opts = args.broker_opts or []
+            args.broker_opts.append("-Scontent.dump=" + args.dump)
+
         jobspec = JobspecV1.from_batch_command(
             script=self.read_script(args),
             jobname=args.SCRIPT[0] if args.SCRIPT else "batchscript",
@@ -1868,6 +1879,10 @@ class AllocCmd(MiniCmd):
         if args.bg and not args.COMMAND:
             args.broker_opts = args.broker_opts or []
             args.broker_opts.append("-Sbroker.rc2_none=1")
+
+        if args.dump:
+            args.broker_opts = args.broker_opts or []
+            args.broker_opts.append("-Scontent.dump=" + args.dump)
 
         jobspec = JobspecV1.from_nest_command(
             command=args.COMMAND,
