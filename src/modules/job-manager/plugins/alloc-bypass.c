@@ -142,16 +142,6 @@ static int sched_cb (flux_plugin_t *p,
     if (alloc_start (p, id, R) < 0)
         flux_jobtap_raise_exception (p, id, "alloc", 0,
                                      "failed to commit R to kvs");
-
-    if (flux_jobtap_job_set_flag (p,
-                                  FLUX_JOBTAP_CURRENT_JOB,
-                                  "alloc-bypass") < 0) {
-        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
-                                     "alloc", 0,
-                                     "Failed to set alloc-bypass: %s",
-                                     strerror (errno));
-        return -1;
-    }
     return 0;
 }
 
@@ -237,6 +227,17 @@ static int validate_cb (flux_plugin_t *p,
                                        "failed to capture alloc-bypass R: %s",
                                        strerror (saved_errno));
     }
+
+    if (flux_jobtap_job_set_flag (p,
+                                  FLUX_JOBTAP_CURRENT_JOB,
+                                  "alloc-bypass") < 0) {
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "alloc", 0,
+                                     "Failed to set alloc-bypass: %s",
+                                     strerror (errno));
+        return -1;
+    }
+
     return 0;
 }
 
