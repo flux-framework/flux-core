@@ -25,8 +25,7 @@ in Flux Standard Duration format.
 If the current ``start`` event is not immediately preceded by a ``finish``
 event (unless it is the first entry in the eventlog), then the Flux instance
 may have crashed and data may have been lost.  If this is detected on instance
-startup, Flux is placed into a safe mode where scheduling and job submission
-are disabled, to avoid further damage pending recovery.
+startup, it is logged by the broker's ``rc1`` script on the next reboot.
 
 This command is not available to guest users.
 

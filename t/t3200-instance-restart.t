@@ -61,12 +61,13 @@ test_expect_success 'doctor startlog to look like a crash' '
 		-o,-Sbroker.rc3_path=$SHARNESS_TEST_SRCDIR/rc/rc3-kvs \
 		flux startlog --post-start-event
 '
-test_expect_success 'check queue status' '
+test_expect_success 'run flux and capture logs on stderr' '
 	flux start -o,--setattr=statedir=$(pwd) \
-		flux queue status >queue_status.out 2>&1
+		-o,--setattr=log-stderr-level=6 \
+		/bin/true 2>improper.err
 '
-test_expect_success 'safe mode is entered' '
-	grep "Flux is in safe mode" queue_status.out
+test_expect_success 'improper shutdown was logged' '
+	grep "Flux was not shut down properly" improper.err
 '
 
 test_expect_success 'run a job in persistent instance (content-files)' '
