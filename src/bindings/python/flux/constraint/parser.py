@@ -283,7 +283,7 @@ class ConstraintParser:
     # Combined terms
     combined_terms = set()
 
-    def __init__(self, lexer=None, optimize=1, debug=0, **kw_args):
+    def __init__(self, lexer=None, optimize=True, debug=False, **kw_args):
         super().__init__()
         self.lexer = ConstraintLexer() if lexer is None else lexer
         self.tokens = self.lexer.tokens
@@ -438,7 +438,7 @@ if __name__ == "__main__":
         if args.default_op:
             operator_map = {None: args.default_op}
 
-    parser = TConstraintParser(optimize=0, debug=1, outputdir=args.outputdir)
+    parser = TConstraintParser(optimize=False, debug=True, outputdir=args.outputdir)
     if args.expression:
 
         s = " ".join(args.expression)
