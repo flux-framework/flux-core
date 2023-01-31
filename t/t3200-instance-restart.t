@@ -29,7 +29,7 @@ test_expect_success 'restart instance and run another job' '
 
 test_expect_success 'restart instance and list inactive jobs' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux jobs --suppress-header --format={id} \
+	           flux jobs --no-header --format={id} \
 		   	--filter=INACTIVE >list.out
 '
 
@@ -80,7 +80,7 @@ test_expect_success 'restart instance and list inactive jobs' '
 	flux start \
 	    -o,-Scontent.backing-module=content-files \
 	    -o,-Sstatedir=$(pwd) \
-	    flux jobs --suppress-header --format={id} \
+	    flux jobs --no-header --format={id} \
 	        --filter=INACTIVE >files_list.out
 '
 
@@ -114,7 +114,7 @@ test_expect_success S3 'run a job in persistent instance (content-s3)' '
 test_expect_success S3 'restart instance and list inactive jobs' '
 	flux start \
 	    -o,-Scontent.backing-module=content-s3 \
-	    flux jobs --suppress-header --format={id} \
+	    flux jobs --no-header --format={id} \
 	        --filter=INACTIVE >files_list2.out
 '
 

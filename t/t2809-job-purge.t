@@ -13,7 +13,7 @@ inactive_count() {
 	if test $how = "job-manager"; then
 		flux module stats --parse=inactive_jobs job-manager
 	elif test $how = "job-list"; then
-		flux jobs --suppress-header --filter=inactive|wc -l
+		flux jobs --no-header --filter=inactive|wc -l
 	elif test $how = "job-list-stats"; then
 		flux job stats | jq .job_states.inactive
 	else
