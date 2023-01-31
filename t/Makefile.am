@@ -142,7 +142,7 @@ TESTSCRIPTS = \
 	t2231-job-info-eventlog-watch.t \
 	t2232-job-info-security.t \
 	t2240-queue-cmd.t \
-	t2241-policy-config.t \
+	t2245-policy-config.t \
 	t2250-job-archive.t \
 	t2260-job-list.t \
 	t2261-job-list-update.t \
