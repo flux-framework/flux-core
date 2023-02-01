@@ -191,7 +191,7 @@ def parse_args():
     if PROGRAM == "flux-pgrep":
         parser.add_argument(
             "-n",
-            "--suppress-header",
+            "--no-header",
             action="store_true",
             help="Suppress printing of header line",
         )
@@ -276,6 +276,6 @@ def main():
     sformatter = JobInfoFormat(formatter.filter_empty(jobs))
 
     if args.format == "default":
-        args.suppress_header = True
+        args.no_header = True
 
-    sformatter.print_items(jobs, no_header=args.suppress_header)
+    sformatter.print_items(jobs, no_header=args.no_header)

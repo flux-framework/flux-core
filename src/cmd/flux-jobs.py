@@ -256,9 +256,16 @@ def parse_args():
     )
     parser.add_argument(
         "-n",
-        "--suppress-header",
+        "--no-header",
         action="store_true",
         help="Suppress printing of header line",
+    )
+    # --suppress-header, older legacy name
+    parser.add_argument(
+        "--suppress-header",
+        action="store_true",
+        dest="no_header",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "-u",
@@ -482,7 +489,7 @@ def main():
     jobs = fetch_jobs(args, formatter.fields)
     sformatter = JobInfoFormat(formatter.filter_empty(jobs))
 
-    if not args.suppress_header:
+    if not args.no_header:
         print(sformatter.header())
 
     print_jobs(jobs, args, sformatter)
