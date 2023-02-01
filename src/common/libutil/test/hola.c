@@ -131,6 +131,11 @@ void test_hash (void)
     hola_destroy (h);
 }
 
+int item_comparator (const void *item1, const void *item2)
+{
+    return strcmp (item1, item2);
+}
+
 void test_auto (void)
 {
     struct hola *h;
@@ -140,6 +145,7 @@ void test_auto (void)
 
     ok ((h = hola_create (HOLA_AUTOCREATE | HOLA_AUTODESTROY)) != NULL,
         "hola_create AUTOCREATE | AUTODDESTROY works");
+    hola_set_list_comparator (h, item_comparator);
 
     item1 = hola_list_add_end (h, "blue", "item1");
     ok (item1 != NULL,
@@ -169,6 +175,24 @@ void test_auto (void)
         "hola_list_delete key=blue item1 works");
     ok (hola_hash_size (h) == 0,
         "hola_hash_size is 0");
+    ok (hola_list_insert (h, "blue", "item1", false) != NULL,
+        "hola_list_insert key=blue value=item1 works");
+    ok (hola_list_insert (h, "blue", "item0", false) != NULL,
+        "hola_list_insert key=blue value=item0 works");
+    ok (hola_list_insert (h, "blue", "item2", false) != NULL,
+        "hola_list_insert key=blue value=item2 works");
+    ok (hola_list_size (h, "blue") == 3,
+        "hola_list_size key=blue is 3");
+    const char *val;
+    ok ((val = hola_list_first (h, "blue")) != NULL
+        && streq (val, "item0"),
+        "first item is item0");
+    ok ((val = hola_list_next (h, "blue")) != NULL
+        && streq (val, "item1"),
+        "first item is item1");
+    ok ((val = hola_list_next (h, "blue")) != NULL
+        && streq (val, "item2"),
+        "first item is item2");
 
     hola_destroy (h);
 }
@@ -305,6 +329,16 @@ void test_inval (void)
     errno = 0;
     ok (hola_list_add_end (h, "noexist", "bar") == NULL && errno == ENOENT,
         "hola_list_add_end key=nonexistent list fails with ENOENT");
+
+    errno = 0;
+    ok (hola_list_insert (NULL, "foo", "bar", false) == NULL && errno == EINVAL,
+        "hola_list_insert h=NULL fails with EINVAL");
+    errno = 0;
+    ok (hola_list_insert (h, NULL, "bar", false) == NULL && errno == EINVAL,
+        "hola_list_insert key=NULL fails with EINVAL");
+    errno = 0;
+    ok (hola_list_insert (h, "foo", NULL, true) == NULL && errno == EINVAL,
+        "hola_list_insert item=NULL fails with EINVAL");
 
     errno = 0;
     ok (hola_list_delete (NULL, "foo", "bar") < 0 && errno == EINVAL,

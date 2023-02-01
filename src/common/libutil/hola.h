@@ -27,6 +27,7 @@ void hola_destroy (struct hola *hola);
 
 void hola_set_list_destructor (struct hola *hola, zlistx_destructor_fn fun);
 void hola_set_list_duplicator (struct hola *hola, zlistx_duplicator_fn fun);
+void hola_set_list_comparator (struct hola *hola, zlistx_comparator_fn fun);
 
 void hola_set_hash_key_destructor (struct hola *hola, zhashx_destructor_fn fun);
 void hola_set_hash_key_duplicator (struct hola *hola, zhashx_duplicator_fn fun);
@@ -47,6 +48,10 @@ void *hola_list_next (struct hola *hola, const void *key);
 // returns list handle
 void *hola_list_add_end (struct hola *hola, const void *key, void *item);
 void *hola_list_cursor (struct hola *hola, const void *key);
+void *hola_list_insert (struct hola *hola,
+                        const void *key,
+                        void *item,
+                        bool low_value);
 
 int hola_list_delete (struct hola *hola, const void *key, void *handle);
 size_t hola_list_size (struct hola *hola, const void *key);
