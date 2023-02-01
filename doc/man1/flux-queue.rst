@@ -22,6 +22,8 @@ SYNOPSIS
 
 **flux** **queue** **idle** [*--timeout=DURATION*]
 
+**flux** **queue** **list** [-n] [-o FORMAT]
+
 DESCRIPTION
 ===========
 
@@ -68,6 +70,10 @@ idle
   after ``flux queue stop`` to wait until the scheduler and execution system
   are quiescent before maintenance involving them.
 
+list
+  Show queue defaults and limits. The *-n,--no-header* option suppresses header
+  from output, *-o,--format=FORMAT*, customizes output formatting (see below).
+
 OPTIONS
 =======
 
@@ -95,6 +101,65 @@ OPTIONS
 
 **--timeout** \ =\ *FSD*
    Limit the time that ``drain`` or ``idle`` will block.
+
+**-n, --no-header**
+   Do not output column headers in ``list`` output.
+
+**-o, --format** \ =\ *FORMAT*
+   Specify output format in ``list`` using Python's string format syntax.
+   See OUTPUT FORMAT below for field names.
+
+
+OUTPUT FORMAT
+=============
+
+The *--format* option can be used to specify an output format using Python's
+string format syntax or a defined format by name. For a list of built-in and
+configured formats use ``-o help``.  A configuration snippet for an existing
+named format may be generated with ``--format=get-config=NAME``.  See
+:man1:`flux-jobs` *OUTPUT FORMAT* section for a detailed description of this
+syntax.
+
+The following field names can be specified:
+
+**queue**
+   queue name
+
+**queuem**
+   queue name, but default queue is marked up with an asterisk
+
+**defaults.timelimit**
+   default timelimit for jobs submitted to the queue
+
+**limits.timelimit**
+   max timelimit for jobs submitted to the queue
+
+**limits.range.nnodes**
+   range of nodes that can be requested for this queue
+
+**limits.range.ncores**
+   range of cores that can be requested for this queue
+
+**limits.range.ngpus**
+   range of gpus that can be requested for this queue
+
+**limits.min.nnodes**
+   minimum number of nodes that must be requested for this queue
+
+**limits.max.nnodes**
+   maximum number of nodes that can be requested for this queue
+
+**limits.min.ncores**
+   minimum number of cores that must be requested for this queue
+
+**limits.max.ncores**
+   maximum number of cores that can be requested for this queue
+
+**limits.min.ngpus**
+   minimum number of gpus that must be requested for this queue
+
+**limits.max.ngpus**
+   maximum number of gpus that can be requested for this queue
 
 
 RESOURCES

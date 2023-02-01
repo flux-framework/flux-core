@@ -10,11 +10,13 @@
 
 import argparse
 import errno
+import json
 import logging
+import math
 import sys
 
 import flux
-from flux.util import parse_fsd
+from flux.util import UtilConfig, parse_fsd
 
 
 def print_enable_status(name, status):
@@ -99,6 +101,220 @@ def status(args):
     queue_status(handle, args.queue, args.verbose, print_queue_status)
     if args.verbose:
         alloc_query(handle)
+
+
+class FluxQueueConfig(UtilConfig):
+    """flux-queue specific user configuration class"""
+
+    builtin_formats = {}
+    builtin_formats["list"] = {
+        "default": {
+            "description": "Default flux-queue list format string",
+            "format": (
+                "?:{queuem:<8.8} {defaults.timelimit!F:>11i} {limits.timelimit!F:>10i} {limits.range.nnodes:>10i} "
+                "{limits.range.ncores:>10i} {limits.range.ngpus:>10i}"
+            ),
+        },
+    }
+
+    def __init__(self, subcommand):
+        initial_dict = {}
+        for key, value in self.builtin_formats.items():
+            initial_dict[key] = {"formats": value}
+        super().__init__(
+            name="flux-queue", subcommand=subcommand, initial_dict=initial_dict
+        )
+
+    def validate(self, path, conf):
+        """Validate a loaded flux-queue config file as dictionary"""
+
+        for key, value in conf.items():
+            if key in ["list"]:
+                for key2, val2 in value.items():
+                    if key2 == "formats":
+                        self.validate_formats(path, val2)
+                    else:
+                        raise ValueError(f"{path}: invalid key {key}.{key2}")
+            else:
+                raise ValueError(f"{path}: invalid key {key}")
+
+
+class QueueLimitsJobSizeInfo:
+    def __init__(self, name, config, minormax):
+        self.name = name
+        self.config = config
+        self.minormax = minormax
+
+    def get_limit(self, key):
+        try:
+            val = self.config["queues"][self.name]["policy"]["limits"]["job-size"][
+                self.minormax
+            ][key]
+        except KeyError:
+            try:
+                val = self.config["policy"]["limits"]["job-size"][self.minormax][key]
+            except KeyError:
+                val = math.inf
+        if val < 0:
+            val = math.inf
+        return val
+
+    @property
+    def nnodes(self):
+        return self.get_limit("nnodes")
+
+    @property
+    def ncores(self):
+        return self.get_limit("ncores")
+
+    @property
+    def ngpus(self):
+        return self.get_limit("ngpus")
+
+
+class QueueLimitsRangeInfo:
+    def __init__(self, name, config, min, max):
+        self.name = name
+        self.config = config
+        self.min = min
+        self.max = max
+
+    def get_range(self, min, max):
+        # Special case, do not output "inf-inf", return "inf"
+        # if nothing was set.
+        if math.isinf(min) and math.isinf(max):
+            return "inf"
+        return f"{min}-{max}"
+
+    @property
+    def nnodes(self):
+        min = self.min.nnodes
+        max = self.max.nnodes
+        return self.get_range(min, max)
+
+    @property
+    def ncores(self):
+        min = self.min.ncores
+        max = self.max.ncores
+        return self.get_range(min, max)
+
+    @property
+    def ngpus(self):
+        min = self.min.ngpus
+        max = self.max.ngpus
+        return self.get_range(min, max)
+
+
+class QueueLimitsInfo:
+    def __init__(self, name, config):
+        self.name = name
+        self.config = config
+        self.min = QueueLimitsJobSizeInfo(name, config, "min")
+        self.max = QueueLimitsJobSizeInfo(name, config, "max")
+        self.range = QueueLimitsRangeInfo(name, config, self.min, self.max)
+
+    @property
+    def timelimit(self):
+        try:
+            duration = self.config["queues"][self.name]["policy"]["limits"]["duration"]
+        except KeyError:
+            try:
+                duration = self.config["policy"]["limits"]["duration"]
+            except KeyError:
+                duration = "inf"
+        t = parse_fsd(duration)
+        return t
+
+
+class QueueDefaultsInfo:
+    def __init__(self, name, config):
+        self.name = name
+        self.config = config
+
+    @property
+    def timelimit(self):
+        try:
+            duration = self.config["queues"][self.name]["policy"]["jobspec"][
+                "defaults"
+            ]["system"]["duration"]
+        except KeyError:
+            try:
+                duration = self.config["policy"]["jobspec"]["defaults"]["system"][
+                    "duration"
+                ]
+            except KeyError:
+                duration = "inf"
+        t = parse_fsd(duration)
+        return t
+
+
+class QueueInfo:
+    def __init__(self, name, config):
+        self.name = name
+        self.config = config
+        self.limits = QueueLimitsInfo(name, config)
+        self.defaults = QueueDefaultsInfo(name, config)
+
+    def __getattr__(self, attr):
+        try:
+            return getattr(self, attr)
+        except (KeyError, AttributeError):
+            raise AttributeError("invalid QueueInfo attribute '{}'".format(attr))
+
+    @property
+    def queue(self):
+        return self.name if self.name else ""
+
+    @property
+    def queuem(self):
+        try:
+            defaultq = self.config["policy"]["jobspec"]["defaults"]["system"]["queue"]
+        except KeyError:
+            defaultq = ""
+        q = self.queue + ("*" if defaultq and self.queue == defaultq else "")
+        return q
+
+
+def list(args):
+    headings = {
+        "queue": "QUEUE",
+        "queuem": "QUEUE",
+        "defaults.timelimit": "DEFAULTTIME",
+        "limits.timelimit": "TIMELIMIT",
+        "limits.range.nnodes": "NNODES",
+        "limits.range.ncores": "NCORES",
+        "limits.range.ngpus": "NGPUS",
+        "limits.min.nnodes": "MINNODES",
+        "limits.max.nnodes": "MAXNODES",
+        "limits.min.ncores": "MINCORES",
+        "limits.max.ncores": "MAXCORES",
+        "limits.min.ngpus": "MINGPUS",
+        "limits.max.ngpus": "MAXGPUS",
+    }
+    config = None
+
+    if args.from_stdin:
+        config = json.loads(sys.stdin.read())
+    else:
+        handle = flux.Flux()
+        future = handle.rpc("config.get")
+        try:
+            config = future.get()
+        except Exception as e:
+            LOGGER.warning("Could not get flux config: " + str(e))
+
+    fmt = FluxQueueConfig("list").load().get_format_string(args.format)
+    formatter = flux.util.OutputFormat(fmt, headings=headings)
+
+    queues = []
+    if config and "queues" in config:
+        for key, value in config["queues"].items():
+            queues.append(QueueInfo(key, config))
+    else:
+        # single anonymous queue
+        queues.append(QueueInfo(None, config))
+
+    formatter.print_items(queues, no_header=args.no_header)
 
 
 def queue_enable(handle, enable, name, all, reason=None):
@@ -247,6 +463,24 @@ def main():
         help="Display more detail about internal job manager state",
     )
     status_parser.set_defaults(func=status)
+
+    list_parser = subparsers.add_parser(
+        "list", formatter_class=flux.util.help_formatter()
+    )
+    list_parser.add_argument(
+        "-o",
+        "--format",
+        default="default",
+        help="Specify output format using Python's string format syntax "
+        + "or a defined format by name (use 'help' to get a list of names)",
+    )
+    list_parser.add_argument(
+        "-n", "--no-header", action="store_true", help="Suppress header output"
+    )
+    list_parser.add_argument(
+        "--from-stdin", action="store_true", help=argparse.SUPPRESS
+    )
+    list_parser.set_defaults(func=list)
 
     enable_parser = subparsers.add_parser(
         "enable", formatter_class=flux.util.help_formatter()
