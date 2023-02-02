@@ -1534,6 +1534,8 @@ static int build_jobtap_topic (flux_plugin_t *p,
         errno = EINVAL;
         return -1;
     }
+    if (*name == '.') // skip conventional "." prefix used in hidden plugins
+        name++;
     if (snprintf (buf,
                   len,
                   "job-manager.%s%s%s",
