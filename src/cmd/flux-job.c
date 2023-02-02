@@ -103,6 +103,7 @@ int cmd_memo (optparse_t *p, int argc, char **argv);
 int cmd_purge (optparse_t *p, int argc, char **argv);
 int cmd_taskmap (optparse_t *p, int argc, char **argv);
 int cmd_timeleft (optparse_t *p, int argc, char **argv);
+int cmd_last (optparse_t *p, int argc, char **argv);
 
 int stdin_flags;
 
@@ -575,6 +576,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_timeleft,
       0,
       timeleft_opts,
+    },
+    { "last",
+      "SLICE",
+      "List my most recently submitted job id(s)",
+      cmd_last,
+      0,
+      NULL,
     },
     { "purge",
       "[--age-limit=FSD] [--num-limit=N]",
@@ -3723,6 +3731,61 @@ int cmd_timeleft (optparse_t *p, int argc, char **argv)
             sec = 1;
         printf ("%lu\n", sec);
     }
+    flux_close (h);
+    return 0;
+}
+
+int cmd_last (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    flux_future_t *f;
+    flux_t *h;
+    char buf[32];
+    json_t *jobs;
+    size_t index;
+    json_t *entry;
+    const char *slice = "[:1]";
+    char sbuf[16];
+
+    if (optindex < argc) {
+        slice = argv[optindex++];
+        // if slice doesn't contain '[', assume 'flux job last N' form
+        if (!strchr (slice, '[')) {
+            errno = 0;
+            char *endptr;
+            int n = strtol (slice, &endptr, 10);
+            if (errno != 0 || *endptr != '\0') {
+                optparse_print_usage (p);
+                exit (1);
+            }
+            snprintf (sbuf, sizeof (sbuf), "[:%d]", n);
+            slice = sbuf;
+        }
+    }
+    if (optindex < argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.history.get",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s}",
+                             "slice", slice))
+        || flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0) {
+        log_msg_exit ("%s", future_strerror (f, errno));
+    }
+    if (json_array_size (jobs) == 0)
+        log_msg_exit ("job history is empty");
+    json_array_foreach (jobs, index, entry) {
+        flux_jobid_t id = json_integer_value (entry);
+        if (flux_job_id_encode (id, "f58", buf, sizeof (buf)) < 0)
+            log_err_exit ("error encoding job ID");
+        printf ("%s\n", buf);
+    }
+    flux_future_destroy (f);
     flux_close (h);
     return 0;
 }
