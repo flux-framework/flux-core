@@ -44,6 +44,8 @@ zlistx_t *hola_hash_lookup (struct hola *hola, const void *key);
 // returns list item
 void *hola_list_first (struct hola *hola, const void *key);
 void *hola_list_next (struct hola *hola, const void *key);
+void *hola_list_prev (struct hola *hola, const void *key);
+void *hola_list_last (struct hola *hola, const void *key);
 
 // returns list handle
 void *hola_list_add_end (struct hola *hola, const void *key, void *item);

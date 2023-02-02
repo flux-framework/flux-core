@@ -244,6 +244,7 @@ bool test_iter_one (struct test_input *t, size_t len)
     }
     key = hola_hash_first (h);
     while (key) {
+        size_t count = 0;
         val = hola_list_first (h, key);
         while (val) {
             int index = find_entry (t, len, key, val);
@@ -251,17 +252,27 @@ bool test_iter_one (struct test_input *t, size_t len)
                 break;
             if (index != -1)
                 checklist[index] = true;
+            count++;
             val = hola_list_next (h, key);
         }
         if (hola_list_cursor (h, key) != NULL) // cursor must be NULL
             break;
+        /* iterate backwards for fun */
+        val = hola_list_last (h, key);
+        while (val) {
+            count--;
+            val = hola_list_prev (h, key);
+        }
+        if (count > 0) {
+            diag ("reverse iteration failed");
+            result = false;
+        }
 
         key = hola_hash_next (h);
     }
     for (int i = 0; i < len; i++)
         if (!checklist[i])
             result = false;
-
     hola_destroy (h);
     free (checklist);
     return result;
@@ -361,6 +372,14 @@ void test_inval (void)
     ok (hola_list_next (NULL, "foo") == NULL,
         "hola_list_next h=NULL returns NULL");
     ok (hola_list_next (h, NULL) == NULL,
+        "hola_list_next key=NULL returns NULL");
+    ok (hola_list_last (NULL, "foo") == NULL,
+        "hola_list_last h=NULL returns NULL");
+    ok (hola_list_last (h, NULL) == NULL,
+        "hola_list_last key=NULL returns NULL");
+    ok (hola_list_prev (NULL, "foo") == NULL,
+        "hola_list_prev h=NULL returns NULL");
+    ok (hola_list_prev (h, NULL) == NULL,
         "hola_list_next key=NULL returns NULL");
     ok (hola_list_cursor (NULL, "foo") == NULL,
         "hola_list_cursor h=NULL returns NULL");

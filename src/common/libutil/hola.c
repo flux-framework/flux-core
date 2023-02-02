@@ -287,6 +287,31 @@ void *hola_list_next (struct hola *hola, const void *key)
     return item;
 }
 
+void *hola_list_prev (struct hola *hola, const void *key)
+{
+    void *item = NULL;
+
+    if (hola && key) {
+        zlistx_t *l;
+        if ((l = zhashx_lookup (hola->hash, key)))
+            item = zlistx_prev (l);
+    }
+    return item;
+}
+
+void *hola_list_last (struct hola *hola, const void *key)
+{
+    void *item = NULL;
+
+    if (hola && key) {
+        zlistx_t *l;
+        if ((l = zhashx_lookup (hola->hash, key)))
+            item = zlistx_last (l);
+    }
+    return item;
+}
+
+
 void *hola_list_cursor (struct hola *hola, const void *key)
 {
     void *handle = NULL;
