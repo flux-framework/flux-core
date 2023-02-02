@@ -602,15 +602,10 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
             /* context not required if no annotations */
             if (context) {
                 json_t *annotations;
-                if (!(annotations = json_object_get (context, "annotations"))) {
-                    flux_log (jsctx->h, LOG_ERR,
-                              "%s: alloc context for %ju invalid",
-                              __FUNCTION__, (uintmax_t)job->id);
-                    errno = EPROTO;
-                    goto error;
+                if ((annotations = json_object_get (context, "annotations"))) {
+                    if (!json_is_null (annotations))
+                        job->annotations = json_incref (annotations);
                 }
-                if (!json_is_null (annotations))
-                    job->annotations = json_incref (annotations);
             }
 
             if (job->state == FLUX_JOB_STATE_SCHED)
