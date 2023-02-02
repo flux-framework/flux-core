@@ -1546,10 +1546,11 @@ static int build_jobtap_topic (flux_plugin_t *p,
     return 0;
 }
 
-int flux_jobtap_service_register (flux_plugin_t *p,
-                                  const char *method,
-                                  flux_msg_handler_f cb,
-                                  void *arg)
+int flux_jobtap_service_register_ex (flux_plugin_t *p,
+                                     const char *method,
+                                     uint32_t rolemask,
+                                     flux_msg_handler_f cb,
+                                     void *arg)
 {
     struct flux_match match = FLUX_MATCH_REQUEST;
     flux_msg_handler_t *mh;
@@ -1571,11 +1572,20 @@ int flux_jobtap_service_register (flux_plugin_t *p,
         flux_msg_handler_destroy (mh);
         return -1;
     }
+    flux_msg_handler_allow_rolemask (mh, rolemask);
     flux_msg_handler_start (mh);
     flux_log (h, LOG_DEBUG, "jobtap plugin %s registered method %s",
               jobtap_plugin_name (p),
               topic);
     return 0;
+}
+
+int flux_jobtap_service_register (flux_plugin_t *p,
+                                  const char *method,
+                                  flux_msg_handler_f cb,
+                                  void *arg)
+{
+    return flux_jobtap_service_register_ex (p, method, 0, cb, arg);
 }
 
 int flux_jobtap_reprioritize_all (flux_plugin_t *p)
