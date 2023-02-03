@@ -2,4 +2,5 @@
      avail      2 2-3             foo[3-4]
    offline      1 1               foo2
    exclude      1 0               foo1
-   drained      2 0-1             foo[1-2]
+   drained      1 0               foo1
+  drained*      1 1               foo2

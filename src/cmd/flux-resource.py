@@ -172,17 +172,21 @@ class StatusLine:
         return len(self.hostlist)
 
 
-def split_draining(drain_ranks, allocated_ranks):
+def split_draining(drain_ranks, allocated_ranks, offline_ranks=None):
     """
     Given drain_ranks and allocated_ranks, return "drained" vs "draining"
     idsets as (IDset, state) tuples in a list of 1 or 2 elements.
     """
+    if offline_ranks is None:
+        offline_ranks = IDset()
     draining = drain_ranks.intersect(allocated_ranks)
-    drained = drain_ranks.difference(draining)
+    drowned = drain_ranks.intersect(offline_ranks)
+    drained = drain_ranks.difference(draining).subtract(drowned)
     return [
         (drain_ranks.copy(), "drain"),
         (draining, "draining"),
         (drained, "drained"),
+        (drowned, "drained*"),
     ]
 
 
@@ -248,6 +252,10 @@ class ResourceStatus:
         avail.subtract(self.idsets["exclude"])
         return avail
 
+    @property
+    def offline(self):
+        return self.idsets["offline"]
+
     def _idset_update(self, state, idset):
         if state not in self.idsets:
             self.idsets[state] = IDset()
@@ -305,7 +313,9 @@ class ResourceStatus:
         #
         drained = 0
         for drain_ranks, entry in resp["drain"].items():
-            for ranks, state in split_draining(IDset(drain_ranks), allocated):
+            for ranks, state in split_draining(
+                IDset(drain_ranks), allocated, rstat.offline
+            ):
                 #  Only include reason if it will be displayed in format
                 reason, timestamp = "", ""
                 if ranks:
@@ -362,8 +372,9 @@ def status(args):
         "drain",
         "draining",
         "drained",
+        "drained*",
     ]
-    default_states = "avail,offline,exclude,draining,drained"
+    default_states = "avail,offline,exclude,draining,drained,drained*"
 
     headings = {
         "state": "STATUS",
@@ -414,7 +425,7 @@ def drain_list(args):
     fmt = FluxResourceConfig("drain").load().get_format_string(args.format)
     args.from_stdin = False
     args.format = fmt
-    args.states = "drained,draining"
+    args.states = "drained,drained*,draining"
     args.skip_empty = True
     status(args)
 
