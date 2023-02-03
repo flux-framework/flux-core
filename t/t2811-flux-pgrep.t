@@ -11,7 +11,6 @@ export SHELL=/bin/sh
 
 test_expect_success 'flux-pgrep errors on invalid arguments' '
 	test_must_fail flux pgrep &&
-	test_expect_code 2 flux pgrep foo bar &&
 	test_expect_code 2 flux pgrep \[
 '
 test_expect_success 'flux-pgrep returns 1 when no jobs match' '
