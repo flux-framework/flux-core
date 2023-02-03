@@ -1455,6 +1455,26 @@ static int shell_export_environment_from_job (flux_shell_t *shell)
     return 0;
 }
 
+/*  Render any mustache templates that appear in command arguments.
+ */
+static int frob_command (flux_shell_t *shell, flux_cmd_t *cmd)
+{
+    for (int i = 0; i < flux_cmd_argc (cmd); i++) {
+        if (strstr (flux_cmd_arg (cmd, i), "{{")) { // possibly mustachioed
+            char *narg;
+            if (!(narg = shell_mustache_render (shell, flux_cmd_arg (cmd, i)))
+                || flux_cmd_argv_insert (cmd, i, narg) < 0) {
+                free (narg);
+                return -1;
+            }
+            free (narg);
+            if (flux_cmd_argv_delete (cmd, i + 1) < 0)
+                return -1;
+        }
+    }
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     flux_shell_t shell;
@@ -1575,6 +1595,11 @@ int main (int argc, char *argv[])
          */
         if (shell_task_init (&shell) < 0)
             shell_die (1, "failed to initialize taskid=%d", i);
+
+        /*  Render any mustache templates in command args
+         */
+        if (frob_command (&shell, task->cmd))
+            shell_die (1, "failed rendering of mustachioed command args");
 
         if (shell_task_start (&shell, task, task_completion_cb, &shell) < 0) {
             int ec = 1;
