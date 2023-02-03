@@ -179,7 +179,8 @@ static int store_attr (struct job *job,
     }
     else if (!strcmp (attr, "exception_note")) {
         if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE)
-            || !job->exception_occurred)
+            || !job->exception_occurred
+            || !job->exception_note)
             return 0;
         val = json_string (job->exception_note);
     }
