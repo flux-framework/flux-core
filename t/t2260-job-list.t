@@ -1652,6 +1652,89 @@ test_expect_success HAVE_JQ 'list-id request with invalid input fails with EINVA
 	EOF
 	test_cmp ${name}.expected ${name}.out
 '
+# N.B. we remove annotations from the alloc event in this test, but it could
+# be cached and replayed via the job-manager, so we need to reload it
+# and associated modules too
+test_expect_success HAVE_JQ 'job-list can handle events missing optional data (alloc)' '
+	userid=`id -u` &&
+	cat <<EOF >eventlog_empty_alloc.out &&
+{"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":16,"flags":0,"version":1}}
+{"timestamp":1001.0,"name":"validate"}
+{"timestamp":1002.0,"name":"depend"}
+{"timestamp":1003.0,"name":"priority","context":{"priority":8}}
+{"timestamp":1004.0,"name":"alloc","context":{}}
+{"timestamp":1005.0,"name":"start"}
+{"timestamp":1006.0,"name":"finish","context":{"status":0}}
+{"timestamp":1007.0,"name":"release","context":{"ranks":"all","final":true}}
+{"timestamp":1008.0,"name":"free"}
+{"timestamp":1009.0,"name":"clean"}
+EOF
+	jobid=`flux mini submit --wait hostname` &&
+	kvspath=`flux job id --to=kvs ${jobid}` &&
+	flux kvs put -r ${kvspath}.eventlog=- < eventlog_empty_alloc.out &&
+	flux module remove job-list &&
+	flux module reload job-manager &&
+	flux module reload -f sched-simple &&
+	flux module reload -f job-exec &&
+	flux module load job-list &&
+	flux job list-ids ${jobid} > empty_alloc.out &&
+	cat empty_alloc.out | jq -e ".annotations == null"
+'
+test_expect_success HAVE_JQ 'job-list can handle events missing optional data (exception)' '
+	userid=`id -u` &&
+	cat <<EOF >eventlog_no_exception_note.out &&
+{"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":16,"flags":0,"version":1}}
+{"timestamp":1001.0,"name":"validate"}
+{"timestamp":1002.0,"name":"depend"}
+{"timestamp":1003.0,"name":"priority","context":{"priority":8}}
+{"timestamp":1004.0,"name":"alloc","context":{"annotations":{"sched":{"resource_summary":"rank0/core0"}}}}
+{"timestamp":1005.0,"name":"start"}
+{"timestamp":1006.0,"name":"exception","context":{"type":"exec","severity":0}}
+{"timestamp":1007.0,"name":"finish","context":{"status":0}}
+{"timestamp":1008.0,"name":"release","context":{"ranks":"all","final":true}}
+{"timestamp":1009.0,"name":"free"}
+{"timestamp":1010.0,"name":"clean"}
+EOF
+	jobid=`flux mini submit notacommand` &&
+	kvspath=`flux job id --to=kvs ${jobid}` &&
+	flux kvs put -r ${kvspath}.eventlog=- < eventlog_no_exception_note.out &&
+	flux module reload job-list &&
+	flux job list-ids ${jobid} > no_exception_note.out &&
+	cat no_exception_note.out | jq -e ".exception_note == null"
+'
+# N.B. Note the original job was submitted with urgency 16, but we
+# hard code 8 in the fake eventlog.  This is just to make sure the fake
+# eventlog was loaded correctly at the end of the test.
+#
+# N.B. We add extra events into this fake eventlog for testing
+test_expect_success HAVE_JQ 'job-list can handle events with superfluous context data' '
+	userid=`id -u` &&
+	cat <<EOF >eventlog_superfluous_context.out &&
+{"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":8,"flags":0,"version":1,"etc":1}}
+{"timestamp":1001.0,"name":"dependency-add","context":{"description":"begin-time=1234.000","etc":1}}
+{"timestamp":1002.0,"name":"validate","context":{"etc":1}}
+{"timestamp":1003.0,"name":"dependency-remove","context":{"description":"begin-time=1234.000","etc":1}}
+{"timestamp":1004.0,"name":"depend","context":{"etc":1}}
+{"timestamp":1005.0,"name":"priority","context":{"priority":8,"etc":1}}
+{"timestamp":1006.0,"name":"alloc","context":{"annotations":{"sched":{"resource_summary":"rank0/core0"}},"etc":1}}
+{"timestamp":1007.0,"name":"prolog-start","context":{"description":"job-manager.prolog","etc":1}}
+{"timestamp":1008.0,"name":"prolog-finish","context":{"description":"job-manager.prolog","status":0,"etc":1}}
+{"timestamp":1009.0,"name":"start","context":{"etc":1}}
+{"timestamp":1010.0,"name":"finish","context":{"status":0,"etc":1}}
+{"timestamp":1011.0,"name":"epilog-start","context":{"description":"job-manager.epilog","etc":1}}
+{"timestamp":1012.0,"name":"release","context":{"ranks":"all","final":true,"etc":1}}
+{"timestamp":1013.0,"name":"epilog-finish","context":{"description":"job-manager.epilog","status":0,"etc":1}}
+{"timestamp":1014.0,"name":"free","context":{"etc":1}}
+{"timestamp":1015.0,"name":"clean","context":{"etc":1}}
+EOF
+	jobid=`flux mini submit --wait --urgency 16 hostname` &&
+	kvspath=`flux job id --to=kvs ${jobid}` &&
+	flux kvs put -r ${kvspath}.eventlog=- < eventlog_superfluous_context.out &&
+	flux module reload job-list &&
+	flux job list-ids ${jobid} > superfluous_context.out &&
+	cat superfluous_context.out | jq -e ".urgency == 8"
+'
+
 #
 # stress test
 #
