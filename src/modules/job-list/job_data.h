@@ -99,12 +99,22 @@ struct job *job_create (flux_t *h, flux_jobid_t id);
  */
 int job_parse_jobspec (struct job *job, const char *s);
 
+/* identical to above, but all nonfatal errors will return error.
+ * Primarily used for testing.
+ */
+int job_parse_jobspec_fatal (struct job *job, const char *s);
+
 /* Parse and internally cache R.  Set values for:
  * - expiration
  * - nnodes
  * - nodelist
  */
 int job_parse_R (struct job *job, const char *s);
+
+/* identical to above, but all nonfatal errors will return error.
+ * Primarily used for testing.
+ */
+int job_parse_R_fatal (struct job *job, const char *s);
 
 #endif /* ! _FLUX_JOB_LIST_JOB_DATA_H */
 

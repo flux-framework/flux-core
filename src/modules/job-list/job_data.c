@@ -259,7 +259,7 @@ static int parse_jobspec_ncores (struct job *job, struct jj_counts *jj)
     return 0;
 }
 
-int job_parse_jobspec (struct job *job, const char *s)
+static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
 {
     struct jj_counts jj;
     json_error_t error;
@@ -337,15 +337,27 @@ int job_parse_jobspec (struct job *job, const char *s)
     if (parse_jobspec_duration (job, &jj) < 0)
         goto nonfatal_error;
 
+    return 0;
+
     /* nonfatal error - jobspec illegal, but we'll continue on.  job
      * listing will return whatever data is available */
 nonfatal_error:
-    rc = 0;
+    rc = allow_nonfatal ? 0 : -1;
 error:
     return rc;
 }
 
-int job_parse_R (struct job *job, const char *s)
+int job_parse_jobspec (struct job *job, const char *s)
+{
+    return parse_jobspec (job, s, true);
+}
+
+int job_parse_jobspec_fatal (struct job *job, const char *s)
+{
+    return parse_jobspec (job, s, false);
+}
+
+static int parse_R (struct job *job, const char *s, bool allow_nonfatal)
 {
     struct rlist *rl = NULL;
     struct idset *idset = NULL;
@@ -398,16 +410,30 @@ int job_parse_R (struct job *job, const char *s)
     if (job->ntasks_per_core_on_node_count > 0)
         job->ntasks = core_count * job->ntasks_per_core_on_node_count;
 
+    rc = 0;
+    goto cleanup;
+
     /* nonfatal error - invalid R, but we'll continue on.  job listing
      * will get initialized data */
 nonfatal_error:
-    rc = 0;
+    rc = allow_nonfatal ? 0 : -1;
+cleanup:
     saved_errno = errno;
     hostlist_destroy (hl);
     idset_destroy (idset);
     rlist_destroy (rl);
     errno = saved_errno;
     return rc;
+}
+
+int job_parse_R (struct job *job, const char *s)
+{
+    return parse_R (job, s, true);
+}
+
+int job_parse_R_fatal (struct job *job, const char *s)
+{
+    return parse_R (job, s, false);
 }
 
 /*

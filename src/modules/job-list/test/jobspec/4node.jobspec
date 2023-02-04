@@ -1,0 +1,40 @@
+{
+  "resources": [
+    {
+      "type": "node",
+      "count": 4,
+      "exclusive": true,
+      "with": [
+        {
+          "type": "slot",
+          "count": 1,
+          "with": [
+            {
+              "type": "core",
+              "count": 1
+            }
+          ],
+          "label": "task"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "command": [
+        "hostname"
+      ],
+      "slot": "task",
+      "count": {
+        "per_slot": 1
+      }
+    }
+  ],
+  "attributes": {
+    "system": {
+      "duration": 0,
+      "cwd": "/tmp/job"
+    }
+  },
+  "version": 1
+}
