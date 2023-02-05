@@ -2292,7 +2292,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
     const char *entry;
-    json_t *o;
+    json_t *o = NULL;
     double timestamp;
     const char *name;
     json_t *context;
@@ -2390,6 +2390,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     flux_future_reset (f);
     return;
 done:
+    json_decref (o);
     flux_future_destroy (f);
     ctx->eventlog_f = NULL;
     ctx->eventlog_watch_count--;
