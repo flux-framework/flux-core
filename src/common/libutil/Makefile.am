@@ -97,6 +97,8 @@ libutil_la_SOURCES = \
 	fileref.h \
 	hola.c \
 	hola.h \
+	slice.c \
+	slice.h \
 	strstrip.c \
 	strstrip.h
 
@@ -130,7 +132,8 @@ TESTS = test_sha1.t \
 	test_errprintf.t \
 	test_fileref.t \
 	test_hola.t \
-	test_strstrip.t
+	test_strstrip.t \
+	test_slice.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -273,3 +276,7 @@ test_fileref_t_LDADD = $(test_ldadd)
 test_hola_t_SOURCES = test/hola.c
 test_hola_t_CPPFLAGS = $(test_cppflags)
 test_hola_t_LDADD = $(test_ldadd)
+
+test_slice_t_SOURCES = test/slice.c
+test_slice_t_CPPFLAGS = $(test_cppflags)
+test_slice_t_LDADD = $(test_ldadd)
