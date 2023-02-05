@@ -356,10 +356,6 @@ test_expect_success 'flux-job: attach fails without jobid argument' '
 	test_must_fail flux job attach
 '
 
-test_expect_success 'flux-job: attach fails without jobid argument' '
-	test_must_fail flux job attach
-'
-
 test_expect_success 'flux-job: attach fails on invalid jobid' '
 	test_must_fail flux job attach $(($(flux job id ${validjob})+1))
 '
