@@ -30,7 +30,14 @@ test_expect_success 'attach: --show-events shows done event' '
 		--show-exec $(cat jobid1) 2>jobid1.exec &&
 	grep done jobid1.exec
 '
-
+test_expect_success 'attach: --show-status shows job status line' '
+	run_timeout 5 flux job attach \
+		--show-status $(cat jobid1) 2>jobid1.status &&
+	grep "resolving dependencies" jobid1.status &&
+	grep "waiting for resources" jobid1.status &&
+	grep "starting" jobid1.status &&
+	grep "started" jobid1.status
+'
 test_expect_success 'attach: shows output from job' '
 	run_timeout 5 flux job attach $(cat jobid1) | grep foo
 '
