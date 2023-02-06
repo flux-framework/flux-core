@@ -18,6 +18,7 @@ import os
 
 import yaml
 from _flux._core import ffi
+from flux import hostlist, idset
 from flux.util import parse_fsd, set_treedict
 
 
@@ -82,6 +83,14 @@ def _validate_constraint_op(operator, args):
     elif operator in ["properties"]:
         for name in args:
             _validate_property_query(name)
+    elif operator in ["hostlist"]:
+        for hosts in args:
+            hostlist.decode(hosts)
+    elif operator in ["ranks"]:
+        for ranks in args:
+            idset.decode(ranks)
+    else:
+        raise TypeError(f"uknown constraint operator '{operator}'")
 
 
 def _validate_constraint(constraints):
