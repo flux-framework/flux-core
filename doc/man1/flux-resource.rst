@@ -37,6 +37,7 @@ A few notes on drained nodes:
 - In ``flux resource status`` and ``flux resource drain``, the drain state
   of a node will be presented as "drained" if the node has no job allocations,
   and "draining" if there are still jobs running on the node.
+- If a node is drained and offline, then "drained*" will be displayed.
 
 Some further background on resource service operation may be found in the
 RESOURCE INVENTORY section below.
@@ -61,15 +62,15 @@ COMMANDS
    by ``flux resource info`` is "all".
 
 **status**  [-n] [-o FORMAT] [-s STATE,...] [--skip-empty]
-   Show system view of resources.  The *-n,--no-header* suppresses header
-   from output, *-o,--format=FORMAT* customizes output formatting (see
-   below), and *-s,--states=STATE,...* limits output to specified resource
-   states, where valid states are "online", "offline", "avail", "exclude",
-   "draining", "drained", and "all". The special "drain" state is also
-   supported, and selects both draining and drained resources. Normally,
-   ``flux resource status`` skips lines with no resources, unless the
-   ``-s, --states`` option is used. Suppression of empty lines can always
-   be forced with the ``--skip-empty`` option.
+   Show system view of resources.  The *-n,--no-header* suppresses
+   header from output, *-o,--format=FORMAT* customizes output formatting
+   (see below), and *-s,--states=STATE,...* limits output to specified
+   resource states, where valid states are "online", "offline", "avail",
+   "exclude", "draining", "drained", "drained*", and "all". The special
+   "drain" state is also supported, and selects both draining and drained
+   resources. Normally, ``flux resource status`` skips lines with no
+   resources, unless the ``-s, --states`` option is used. Suppression of
+   empty lines can always be forced with the ``--skip-empty`` option.
 
 **drain** [-n] [-o FORMAT] [-f] [-u] [targets] [reason ...]
    If specified without arguments, list drained nodes. In this mode,
