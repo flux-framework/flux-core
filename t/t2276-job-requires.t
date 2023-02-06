@@ -27,8 +27,8 @@ test_expect_success 'reload scheduler with properties set' '
 	flux module reload resource noverify &&
 	flux module load sched-simple
 '
-test_expect_success 'reload ingest with feasibility validator' '
-	flux module reload -f job-ingest validator-plugins=jobspec,feasibility
+test_expect_success 'reload ingest with only feasibility validator' '
+	flux module reload -f job-ingest validator-plugins=feasibility
 '
 test_expect_success 'scheduler rejects jobs with invalid requires' '
 	test_must_fail flux mini submit --requires=x hostname &&
@@ -40,8 +40,18 @@ test_expect_success 'scheduler rejects jobs with invalid constraints' '
 	test_must_fail flux mini submit --setattr=system.constraints.and={} \
 		 hostname
 '
+test_expect_success 'reload ingest with feasibility,jobspec validators' '
+	flux module reload -f job-ingest validator-plugins=jobspec,feasibility
+'
 test_expect_success 'scheduler rejects jobs with unsatisfiable constraints' '
 	test_must_fail flux mini submit -N4 --requires=yy hostname
+'
+test_expect_success 'jobspec validator rejects invalid hostlist/ranks' '
+	test_must_fail flux mini submit -n1 --requires=host:f[ hostname &&
+	test_must_fail flux mini submit -n1 --requires=ranks:1-0 hostname
+'
+test_expect_success 'jobspec validator rejects invalid constraint operation' '
+	test_must_fail flux mini submit -n1 --requires=foo:bar hostname
 '
 test_expect_success 'flux-mini: --requires works with scheduler' '
 	flux mini bulksubmit --wait --log=job.{}.id -n1 --requires={} \
