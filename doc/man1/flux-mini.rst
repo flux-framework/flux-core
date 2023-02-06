@@ -672,6 +672,14 @@ OTHER OPTIONS
    to separate files (including stdin) by newline. To separate by
    consecutive whitespace, specify ``--sep=none``.
 
+**--dump=[FILE]**
+   *(batch,alloc)* When the job script is complete, archive the Flux
+   instance's KVS content to ``FILE``, which should have a suffix known
+   to :linux:man3:`libarchive`, and may be a mustache template as described
+   above for ``--output``.  The content may be unarchived directly or examined
+   within a test instance started with the :man1:`flux-start` ``--recovery``
+   option.  If ``FILE`` is unspecified, ``flux-{{jobid}}-dump.tgz`` is used.
+
 .. _bulksubmit:
 
 BULKSUBMIT

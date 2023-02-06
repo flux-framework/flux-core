@@ -401,6 +401,11 @@ void flux_shell_raise (const char *type, int severity, const char *fmt, ...);
  */
 int flux_shell_log_setlevel (int level, const char *dest);
 
+/*  Expand mustache template.  Caller must free the result.
+ */
+char *shell_mustache_render (flux_shell_t *shell, const char *fmt);
+
+
 #ifdef __cplusplus
 }
 #endif

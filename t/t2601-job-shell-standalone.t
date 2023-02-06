@@ -171,4 +171,11 @@ test_expect_success 'flux-shell: shell forwards signals to tasks' '
 	grep "forwarding signal 15" sigterm.err
 '
 
+test_expect_success 'flux-shell: mustachioed command line args are rendered' '
+	flux mini run --dry-run -n1 -o cpu-affinity=off \
+		bash -c "echo test-{{id.dec}}-{{id.dec}} >j10.out" > j10 &&
+	${FLUX_SHELL} -s -r 0 -j j10 -R R8 42 &&
+	grep test-42-42 j10.out
+'
+
 test_done

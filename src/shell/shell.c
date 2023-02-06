@@ -40,6 +40,7 @@
 #include "task.h"
 #include "rc.h"
 #include "log.h"
+#include "mustache.h"
 
 static char *shell_name = "flux-shell";
 static const char *shell_usage = "[OPTIONS] JOBID";
@@ -927,6 +928,7 @@ static void shell_finalize (flux_shell_t *shell)
     shell->plugstack = NULL;
     plugstack_destroy (plugstack);
 
+    mustache_renderer_destroy (shell->mr);
     shell_eventlogger_destroy (shell->ev);
     shell_svc_destroy (shell->svc);
     shell_info_destroy (shell->info);
@@ -975,6 +977,51 @@ static int get_protocol_fd (int *pfd)
     return 0;
 }
 
+char *shell_mustache_render (flux_shell_t *shell, const char *fmt)
+{
+    return mustache_render (shell->mr, fmt);
+}
+
+static int mustache_cb (FILE *fp, const char *name, void *arg)
+{
+    flux_shell_t *shell = arg;
+    char value[128];
+
+    /*  "jobid" is a synonym for "id" */
+    if (strncmp (name, "jobid", 5) == 0)
+        name += 3;
+    if (strncmp (name, "id", 2) == 0) {
+        const char *type = "f58";
+        if (strlen (name) > 2) {
+            if (name[2] != '.') {
+                shell_log_error ("Unknown mustache tag '%s'", name);
+                return -1;
+            }
+            type = name+3;
+        }
+        if (flux_job_id_encode (shell->info->jobid,
+                                type,
+                                value,
+                                sizeof (value)) < 0) {
+            if (errno == EPROTO)
+                shell_log_error ("Invalid jobid encoding '%s' specified", name);
+            else
+                shell_log_errno ("flux_job_id_encode failed for %s", name);
+            return -1;
+        }
+    }
+    else {
+        shell_log_error ("Unknown mustache tag '%s'", name);
+        return -1;
+    }
+    if (fputs (value, fp) < 0) {
+        shell_log_error ("memstream write failed for %s: %s",
+                         name,
+                         strerror (errno));
+    }
+    return 0;
+}
+
 static void shell_initialize (flux_shell_t *shell)
 {
     const char *pluginpath = shell_conf_get ("shell_pluginpath");
@@ -990,6 +1037,10 @@ static void shell_initialize (flux_shell_t *shell)
     if (!(shell->completion_refs = zhashx_new ()))
         shell_die_errno (1, "zhashx_new");
     zhashx_set_destructor (shell->completion_refs, item_free);
+
+    if (!(shell->mr = mustache_renderer_create (mustache_cb, shell)))
+        shell_die_errno (1, "mustache_renderer_create");
+    mustache_renderer_set_log (shell->mr, shell_llog, NULL);
 
     if (!(shell->plugstack = plugstack_create ()))
         shell_die_errno (1, "plugstack_create");
@@ -1404,6 +1455,26 @@ static int shell_export_environment_from_job (flux_shell_t *shell)
     return 0;
 }
 
+/*  Render any mustache templates that appear in command arguments.
+ */
+static int frob_command (flux_shell_t *shell, flux_cmd_t *cmd)
+{
+    for (int i = 0; i < flux_cmd_argc (cmd); i++) {
+        if (strstr (flux_cmd_arg (cmd, i), "{{")) { // possibly mustachioed
+            char *narg;
+            if (!(narg = shell_mustache_render (shell, flux_cmd_arg (cmd, i)))
+                || flux_cmd_argv_insert (cmd, i, narg) < 0) {
+                free (narg);
+                return -1;
+            }
+            free (narg);
+            if (flux_cmd_argv_delete (cmd, i + 1) < 0)
+                return -1;
+        }
+    }
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     flux_shell_t shell;
@@ -1524,6 +1595,11 @@ int main (int argc, char *argv[])
          */
         if (shell_task_init (&shell) < 0)
             shell_die (1, "failed to initialize taskid=%d", i);
+
+        /*  Render any mustache templates in command args
+         */
+        if (frob_command (&shell, task->cmd))
+            shell_die (1, "failed rendering of mustachioed command args");
 
         if (shell_task_start (&shell, task, task_completion_cb, &shell) < 0) {
             int ec = 1;
