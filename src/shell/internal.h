@@ -21,6 +21,7 @@
 
 #include "plugstack.h"
 #include "events.h"
+#include "mustache.h"
 
 struct flux_shell {
     flux_jobid_t jobid;
@@ -36,6 +37,7 @@ struct flux_shell {
     struct shell_svc *svc;
     zlist_t *tasks;
     flux_shell_task_t *current_task;
+    struct mustache_renderer *mr;
 
     struct plugstack *plugstack;
     struct shell_eventlogger *ev;
