@@ -61,7 +61,6 @@
 #include "internal.h"
 #include "builtins.h"
 #include "log.h"
-#include "mustache.h"
 
 enum {
     FLUX_OUTPUT_TYPE_TERM = 1,
@@ -736,58 +735,6 @@ static int shell_output_parse_type (struct shell_output *out,
     return 0;
 }
 
-static int mustache_cb (FILE *fp, const char *name, void *arg)
-{
-    flux_shell_t *shell = arg;
-    char value[128];
-
-    /*  "jobid" is a synonym for "id" */
-    if (strncmp (name, "jobid", 5) == 0)
-        name += 3;
-    if (strncmp (name, "id", 2) == 0) {
-        const char *type = "f58";
-        if (strlen (name) > 2) {
-            if (name[2] != '.') {
-                shell_log_error ("Unknown mustache tag '%s'", name);
-                return -1;
-            }
-            type = name+3;
-        }
-        if (flux_job_id_encode (shell->info->jobid,
-                                type,
-                                value,
-                                sizeof (value)) < 0) {
-            if (errno == EPROTO)
-                shell_log_error ("Invalid jobid encoding '%s' specified", name);
-            else
-                shell_log_errno ("flux_job_id_encode failed for %s", name);
-            return -1;
-        }
-    }
-    else {
-        shell_log_error ("Unknown mustache tag '%s'", name);
-        return -1;
-    }
-    return fputs (value, fp);
-}
-
-static char * shell_output_mustache_render (struct shell_output *out,
-                                            const char *path)
-{
-    struct mustache_renderer *mr;
-    char *result = NULL;
-
-    mr = mustache_renderer_create (mustache_cb, out->shell);
-    if (!mr) {
-        shell_log_errno ("mustache_renderer_create");
-        return NULL;
-    }
-    mustache_renderer_set_log (mr, shell_llog, NULL);
-    result = mustache_render (mr, path);
-    mustache_renderer_destroy (mr);
-    return result;
-}
-
 static int
 shell_output_setup_type_file (struct shell_output *out,
                               const char *stream,
@@ -806,7 +753,7 @@ shell_output_setup_type_file (struct shell_output *out,
         return -1;
     }
 
-    if (!(ofp->path = shell_output_mustache_render (out, path)))
+    if (!(ofp->path = shell_mustache_render (out->shell, path)))
         return -1;
 
     if (flux_shell_getopt_unpack (out->shell, "output",
