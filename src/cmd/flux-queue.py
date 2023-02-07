@@ -111,8 +111,8 @@ class FluxQueueConfig(UtilConfig):
         "default": {
             "description": "Default flux-queue list format string",
             "format": (
-                "?:{queuem:<8.8} {defaults.timelimit!F:>11i} {limits.timelimit!F:>10i} {limits.range.nnodes:>10i} "
-                "{limits.range.ncores:>10i} {limits.range.ngpus:>10i}"
+                "?:{queuem:<8.8} {defaults.timelimit!F:>11} {limits.timelimit!F:>10} {limits.range.nnodes:>10} "
+                "{limits.range.ncores:>10} {limits.range.ngpus:>10}"
             ),
         },
     }
