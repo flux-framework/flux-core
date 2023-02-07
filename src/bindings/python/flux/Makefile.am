@@ -101,8 +101,9 @@ stderr_devnull_0 = >/dev/null 2>&1
 #  should be removed. That is done below in clean-local.
 #
 constraint/parsetab.py: constraint/parser.py
-	$(AM_V_GEN)$(MKDIR_P) constraint && $(PYTHON) $< \
-	  --outputdir $(builddir)/constraint $(STDERR_DEVNULL)
+	$(AM_V_GEN)$(MKDIR_P) constraint && \
+	  $(PYTHON) $< --outputdir $(builddir)/constraint $(STDERR_DEVNULL) && \
+	  touch $@
 
 clean-local:
 	-rmdir constraint 2>/dev/null || :
