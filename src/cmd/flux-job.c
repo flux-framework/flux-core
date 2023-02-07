@@ -28,6 +28,7 @@
 #include <locale.h>
 #include <jansson.h>
 #include <argz.h>
+#include <sys/ioctl.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <flux/hostlist.h>
@@ -247,6 +248,10 @@ static struct optparse_option attach_opts[] =  {
     },
     { .name = "show-exec", .key = 'X', .has_arg = 0,
       .usage = "Show exec events on stderr",
+    },
+    {
+      .name = "show-status", .has_arg = 0,
+      .usage = "Show job status line while pending",
     },
     { .name = "wait-event", .key = 'w', .has_arg = 1, .arginfo = "NAME",
       .usage = "Wait for event NAME before detaching from eventlog "
@@ -1575,6 +1580,7 @@ struct attach_ctx {
     flux_future_t *output_f;
     flux_watcher_t *sigint_w;
     flux_watcher_t *sigtstp_w;
+    flux_watcher_t *notify_timer;
     struct flux_pty_client *pty_client;
     struct timespec t_sigint;
     flux_watcher_t *stdin_w;
@@ -1586,6 +1592,8 @@ struct attach_ctx {
     char *service;
     double timestamp_zero;
     int eventlog_watch_count;
+    bool statusline;
+    char *last_event;
 };
 
 void attach_completed_check (struct attach_ctx *ctx)
@@ -2280,6 +2288,101 @@ done:
     attach_completed_check (ctx);
 }
 
+struct job_event_notifications {
+    const char *event;
+    const char *msg;
+};
+
+static struct job_event_notifications attach_notifications[] = {
+    { "validate",
+      "resolving dependencies",
+    },
+    { "depend",
+      "waiting for priority assignment",
+    },
+    { "priority",
+      "waiting for resources",
+    },
+    { "alloc",
+      "starting",
+    },
+    { "prolog-start",
+      "waiting for job prolog",
+    },
+    { "prolog-finish",
+      "starting",
+    },
+    { "start",
+      "started"
+    },
+    { "exception",
+      "canceling due to exception",
+    },
+    { NULL, NULL},
+};
+
+static const char *job_event_notify_string (const char *name)
+{
+    struct job_event_notifications *t = attach_notifications;
+    while (t->event) {
+        if (streq (t->event, name))
+            return t->msg;
+        t++;
+    }
+    return NULL;
+}
+
+static void attach_notify (struct attach_ctx *ctx,
+                           const char *event_name,
+                           double ts)
+{
+    const char *msg;
+    if (!event_name)
+        return;
+    if (ctx->statusline
+        && (msg = job_event_notify_string (event_name))) {
+        int dt = ts - ctx->timestamp_zero;
+        int width = 80;
+        struct winsize w;
+
+        /* Adjust width of status so timer is right justified:
+         */
+        if (ioctl(0, TIOCGWINSZ, &w) == 0)
+            width = w.ws_col;
+        width -= 10 + strlen (ctx->jobid) + 10;
+
+        fprintf (stderr,
+                 "\rflux-job: %s %-*s %02d:%02d:%02d\r",
+                 ctx->jobid,
+                 width,
+                 msg,
+                 dt/3600,
+                 (dt/60) % 60,
+                 dt % 60);
+    }
+    if (streq (event_name, "start")
+        || streq (event_name, "clean")) {
+        if (ctx->statusline) {
+            fprintf (stderr, "\n");
+            ctx->statusline = false;
+        }
+        flux_watcher_stop (ctx->notify_timer);
+    }
+    if (!ctx->last_event || !streq (event_name, ctx->last_event)) {
+        free (ctx->last_event);
+        ctx->last_event = strdup (event_name);
+    }
+}
+
+void attach_notify_cb (flux_reactor_t *r, flux_watcher_t *w,
+                       int revents, void *arg)
+{
+    struct attach_ctx *ctx = arg;
+    ctx->statusline = true;
+    attach_notify (ctx, ctx->last_event, flux_reactor_time ());
+}
+
+
 /* Handle an event in the main job eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
@@ -2292,7 +2395,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
     const char *entry;
-    json_t *o;
+    json_t *o = NULL;
     double timestamp;
     const char *name;
     json_t *context;
@@ -2313,6 +2416,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
 
     if (ctx->timestamp_zero == 0.)
         ctx->timestamp_zero = timestamp;
+
+    attach_notify (ctx, name, timestamp);
 
     if (streq (name, "exception")) {
         const char *type;
@@ -2390,6 +2495,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     flux_future_reset (f);
     return;
 done:
+    json_decref (o);
     flux_future_destroy (f);
     ctx->eventlog_f = NULL;
     ctx->eventlog_watch_count--;
@@ -2484,6 +2590,29 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
         flux_watcher_start (ctx.sigint_w);
     }
 
+    ctx.statusline = optparse_hasopt (ctx.p, "show-status");
+    if ((isatty (STDIN_FILENO) || ctx.statusline)
+        && !optparse_hasopt (ctx.p, "show-events")) {
+        /*
+         * If flux-job is running interactively, and the job has not
+         * started within 2s, then display a status line notifying the
+         * user of the job's status. The timer repeats every second after
+         * the initial callback to update a clock displayed on the rhs of
+         * the status line.
+         *
+         * The timer is automatically stopped after the 'start' or 'clean'
+         * event.
+         */
+        ctx.notify_timer = flux_timer_watcher_create (r,
+                                                      ctx.statusline ? 0.:2.,
+                                                      1.,
+                                                      attach_notify_cb,
+                                                      &ctx);
+        if (!ctx.notify_timer)
+            log_err ("Failed to start notification timer");
+        flux_watcher_start (ctx.notify_timer);
+    }
+
     if (flux_reactor_run (r, 0) < 0)
         log_err_exit ("flux_reactor_run");
 
@@ -2491,10 +2620,12 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     flux_watcher_destroy (ctx.sigint_w);
     flux_watcher_destroy (ctx.sigtstp_w);
     flux_watcher_destroy (ctx.stdin_w);
+    flux_watcher_destroy (ctx.notify_timer);
     flux_pty_client_destroy (ctx.pty_client);
     flux_close (ctx.h);
     free (ctx.service);
     free (totalview_jobid);
+    free (ctx.last_event);
     return ctx.exit_code;
 }
 
