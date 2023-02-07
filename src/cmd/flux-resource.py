@@ -9,6 +9,7 @@
 ##############################################################
 
 import argparse
+import errno
 import json
 import logging
 import os.path
@@ -123,12 +124,18 @@ def drain(args):
         payload["mode"] = "overwrite"
     if args.reason:
         payload["reason"] = " ".join(args.reason)
-    RPC(
-        flux.Flux(),
-        "resource.drain",
-        payload,
-        nodeid=0,
-    ).get()
+    try:
+        RPC(
+            flux.Flux(),
+            "resource.drain",
+            payload,
+            nodeid=0,
+        ).get()
+    except OSError as exc:
+        LOGGER.error(exc)
+        if exc.errno == errno.EEXIST:
+            LOGGER.info("Use --force to overwrite existing drain reason")
+        sys.exit(1)
 
 
 def undrain(args):
