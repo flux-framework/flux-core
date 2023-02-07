@@ -338,6 +338,7 @@ _flux_job()
         wait \
         memo \
         taskmap \
+        timeleft \
     "
     local nojob_subcmds="\
         cancelall \
@@ -439,6 +440,9 @@ _flux_job()
         --num-limit= \
         -f --force \
         --batch= \
+    "
+    local timeleft_OPTS="\
+        -H --human
     "
     if [[ $cmd != "job" ]]; then
         if [[ $cur != -* ]]; then
@@ -904,6 +908,59 @@ _flux_jobs()
     return 0
 }
 
+# flux-pgrep(1) completions
+_flux_pgrep()
+{
+    local cmd=$1
+    local OPTS="\
+        -a \
+        -A \
+        -c --count= \
+        --max-entries= \
+        -f --filter= \
+        -n --no-header \
+        -u --user= \
+        --queue= \
+        -o --format= \
+    "
+    if _flux_complete_queue; then
+        return 0
+    fi
+    # flux-pgrep uses flux-jobs config
+    if _flux_complete_format_name flux jobs; then
+        return 0
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
+# flux-pkill(1) completions
+_flux_pkill()
+{
+    local cmd=$1
+    local OPTS="\
+        -A \
+        -c --count= \
+        --max-entries= \
+        -f --filter= \
+        -u --user= \
+        --queue= \
+    "
+    if _flux_complete_queue; then
+        return 0
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
 # flux-pstree(1) completions
 _flux_pstree()
 {
@@ -1274,6 +1331,12 @@ _flux_core()
         ;;
     jobs)
         _flux_jobs $subcmd
+        ;;
+    pgrep)
+        _flux_pgrep $subcmd
+        ;;
+    pkill)
+        _flux_pkill $subcmd
         ;;
     pstree)
         _flux_pstree $subcmd
