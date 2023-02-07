@@ -590,10 +590,8 @@ class MiniCmd:
         parser.add_argument(
             "--requires",
             action="append",
-            help="Set one or more required resource properties for this job. "
-            + "Currently this option supports only a list of property names, "
-            + "optionally prefixed by ^ to indicate negation.",
-            metavar="LIST",
+            help="Specify job constraints in RFC 35 syntax",
+            metavar="CONSTRAINT",
         )
         parser.add_argument(
             "--begin-time",

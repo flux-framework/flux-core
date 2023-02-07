@@ -70,7 +70,7 @@ VALID = [
     },
 ]
 
-INVALID = ["a|", "a:' ", "(a", "(a))", "-(a|b)", "foo and a:"]
+INVALID = ["a|", "a:' ", "(a", "(a))", "-(a|b)", "4g,host:foo", "foo and a:"]
 
 
 class TestConstraintParser(ConstraintParser):

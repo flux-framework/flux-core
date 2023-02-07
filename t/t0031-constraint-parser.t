@@ -20,12 +20,12 @@ test_expect_success 'flux.constraint.parser parses cmdline' '
 	grep and basic.out
 '
 test_expect_success 'flux.constraint.parser --default-op works' '
-	$parser --default=op=test a b >default-op.out &&
+	$parser --default-op=test a b >default-op.out &&
 	test_debug "cat default-op.out" &&
 	grep test default-op.out
 '
 test_expect_success 'flux.constraint.parser --debug works' '
-	$parser --debug --default=op=test "a|(b&-c)" >debug.out 2>&1 &&
+	$parser --debug --default-op=test "a|(b&-c)" >debug.out 2>&1 &&
 	test_debug "cat debug.out" &&
 	grep TOKEN debug.out
 '

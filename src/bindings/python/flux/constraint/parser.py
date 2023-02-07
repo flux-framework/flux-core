@@ -10,6 +10,7 @@
 
 import argparse
 import json
+import re
 
 import ply.yacc as yacc
 from ply import lex
@@ -339,6 +340,13 @@ class ConstraintParser:
         else:
             return {"and": terms}
 
+    @staticmethod
+    def invalid_operator(op):
+        match = re.search(r"[^\w.+@-]", op)
+        if not match:
+            return None
+        return match[0]
+
     def p_expression_space(self, p):
         """
         expression : expression expression %prec AND
@@ -393,6 +401,12 @@ class ConstraintParser:
             value = p[1]
         elif op in self.operator_map:
             op = self.operator_map[op]
+
+        invalid = self.invalid_operator(op)
+        if invalid:
+            raise ConstraintSyntaxError(
+                f"invalid character '{invalid}' in operator '{op}:'"
+            )
 
         if op in self.split_values:
             p[0] = {op: value.split(self.split_values[op])}
