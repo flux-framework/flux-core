@@ -42,7 +42,7 @@ class MiniConstraintParser(ConstraintParser):
         "rank": "ranks",
     }
     split_values = {"properties": ","}
-    combined_terms = {"properties", "hostlist", "ranks"}
+    combined_terms = {"properties"}
 
 
 class URIArg:
