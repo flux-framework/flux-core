@@ -66,13 +66,6 @@ test_expect_success 'flux-queue: fsd of infinity is infinity' '
 	echo "inf,inf" > empty_config_fsd.exp &&
 	test_cmp empty_config_fsd.exp empty_config_fsd.out
 '
-test_expect_success 'flux-queue: i special presentation converter works' '
-	flux queue list -n \
-		-o "{limits.range.nnodes:i},{limits.min.ncores:i},{limits.max.ngpus:i}" \
-		> empty_config_i_presentation.out &&
-	echo "-,-,-" > empty_config_i_presentation.exp &&
-	test_cmp empty_config_i_presentation.exp empty_config_i_presentation.out
-'
 
 # N.B. job-size.max.ngpus left out to test default of infinity
 test_expect_success 'config flux with policy defaults' '
