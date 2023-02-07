@@ -173,9 +173,8 @@ class QueueLimitsJobSizeInfo:
 
 
 class QueueLimitsRangeInfo:
-    def __init__(self, name, config, min, max):
+    def __init__(self, name, min, max):
         self.name = name
-        self.config = config
         self.min = min
         self.max = max
 
@@ -211,7 +210,7 @@ class QueueLimitsInfo:
         self.config = config
         self.min = QueueLimitsJobSizeInfo(name, config, "min")
         self.max = QueueLimitsJobSizeInfo(name, config, "max")
-        self.range = QueueLimitsRangeInfo(name, config, self.min, self.max)
+        self.range = QueueLimitsRangeInfo(name, self.min, self.max)
 
     @property
     def timelimit(self):
