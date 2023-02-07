@@ -53,10 +53,10 @@ test_expect_success 'flux-queue: empty config has no queues' '
 	echo "," > empty_config_queue.exp &&
 	test_cmp empty_config_queue.exp empty_config_queue.out
 '
-test_expect_success 'flux-queue: empty config limits are infinity' '
+test_expect_success 'flux-queue: empty config limits are 0/infinity' '
 	flux queue list -n \
 		-o "${ALL_LIMITS_FMT}" > empty_config_all.out &&
-	echo "inf,inf,inf,inf,inf,inf,inf,inf,inf,inf,inf" > empty_config_all.exp &&
+	echo "inf,inf,0-inf,0-inf,0-inf,0,0,0,inf,inf,inf" > empty_config_all.exp &&
 	test_cmp empty_config_all.exp empty_config_all.out
 '
 test_expect_success 'flux-queue: fsd of infinity is infinity' '

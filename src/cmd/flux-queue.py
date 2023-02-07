@@ -154,7 +154,7 @@ class QueueLimitsJobSizeInfo:
             try:
                 val = self.config["policy"]["limits"]["job-size"][self.minormax][key]
             except KeyError:
-                val = math.inf
+                val = math.inf if self.minormax == "max" else 0
         if val < 0:
             val = math.inf
         return val
@@ -178,30 +178,17 @@ class QueueLimitsRangeInfo:
         self.min = min
         self.max = max
 
-    def get_range(self, min, max):
-        # Special case, do not output "inf-inf", return "inf"
-        # if nothing was set.
-        if math.isinf(min) and math.isinf(max):
-            return "inf"
-        return f"{min}-{max}"
-
     @property
     def nnodes(self):
-        min = self.min.nnodes
-        max = self.max.nnodes
-        return self.get_range(min, max)
+        return f"{self.min.nnodes}-{self.max.nnodes}"
 
     @property
     def ncores(self):
-        min = self.min.ncores
-        max = self.max.ncores
-        return self.get_range(min, max)
+        return f"{self.min.ncores}-{self.max.ncores}"
 
     @property
     def ngpus(self):
-        min = self.min.ngpus
-        max = self.max.ngpus
-        return self.get_range(min, max)
+        return f"{self.min.ngpus}-{self.max.ngpus}"
 
 
 class QueueLimitsInfo:
