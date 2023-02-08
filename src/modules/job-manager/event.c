@@ -435,6 +435,7 @@ int event_job_action (struct event *event, struct job *job)
              * not be indicative of a problem.
              */
             if (zhashx_insert (ctx->inactive_jobs, &job->id, job) == 0) {
+                (void)jobtap_call (ctx->jobtap, job, "job.inactive-add", NULL);
                 if (purge_enqueue_job (ctx->purge, job) < 0) {
                     flux_log (event->ctx->h,
                               LOG_ERR,

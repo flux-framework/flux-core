@@ -26,6 +26,7 @@
 #include "job.h"
 #include "purge.h"
 #include "conf.h"
+#include "jobtap-internal.h"
 #include "restart.h"
 
 #define INACTIVE_NUM_UNLIMITED  (-1)
@@ -158,6 +159,12 @@ static flux_future_t *purge_inactive_jobs (struct purge *purge,
             errno = ENOMEM;
             goto error;
         }
+
+        (void)jobtap_call (purge->ctx->jobtap,
+                           job,
+                           "job.inactive-remove",
+                           NULL);
+
         (void)zlistx_delete (purge->queue, job->handle);
         job->handle = NULL;
         zhashx_delete (purge->ctx->inactive_jobs, &job->id);

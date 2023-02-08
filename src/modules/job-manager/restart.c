@@ -379,6 +379,12 @@ int restart_from_kvs (struct job_manager *ctx)
     }
     flux_log (ctx->h, LOG_INFO, "restart: %d running jobs", ctx->running_jobs);
 
+    job = zhashx_first (ctx->inactive_jobs);
+    while (job) {
+        (void)jobtap_call (ctx->jobtap, job, "job.inactive-add", NULL);
+        job = zhashx_next (ctx->active_jobs);
+    }
+
     /* Restore misc state.
      */
     if (restart_restore_state (ctx) < 0) {

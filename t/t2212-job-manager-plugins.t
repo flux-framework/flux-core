@@ -189,7 +189,7 @@ test_expect_success 'job-manager: run args test plugin' '
 	flux mini run hostname &&
 	flux dmesg | grep args-check > args-check.log &&
 	test_debug "cat args-check.log" &&
-	test $(grep -c OK args-check.log) = 20
+	test $(grep -c OK args-check.log) = 21
 '
 test_expect_success 'job-manager: run subscribe test plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/subscribe.so &&
@@ -514,6 +514,19 @@ test_expect_success 'reloading invalid configuration fails' '
 '
 test_expect_success 'job-manager: and produces reasonable error for humans' '
 	grep "Error parsing" reload.err
+'
+test_expect_success 'job-manager: run a job then purge all inactives' '
+	flux jobtap load --remove=all ${PLUGINPATH}/args.so &&
+	flux dmesg -C &&
+	flux mini run hostname &&
+	flux job purge --force --num-limit=0 &&
+	flux dmesg | grep args-check | grep OK >argsok.out
+'
+test_expect_success 'job-manager: job.inactive-add was called' '
+	grep -q job.inactive-add argsok.out
+'
+test_expect_success 'job-manager: job.inactive-remove was called' '
+	grep -q job.inactive-remove argsok.out
 '
 
 test_done
