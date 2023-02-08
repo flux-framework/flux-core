@@ -131,6 +131,11 @@ void test_hash (void)
     hola_destroy (h);
 }
 
+int item_comparator (const void *item1, const void *item2)
+{
+    return strcmp (item1, item2);
+}
+
 void test_auto (void)
 {
     struct hola *h;
@@ -140,6 +145,7 @@ void test_auto (void)
 
     ok ((h = hola_create (HOLA_AUTOCREATE | HOLA_AUTODESTROY)) != NULL,
         "hola_create AUTOCREATE | AUTODDESTROY works");
+    hola_set_list_comparator (h, item_comparator);
 
     item1 = hola_list_add_end (h, "blue", "item1");
     ok (item1 != NULL,
@@ -169,6 +175,24 @@ void test_auto (void)
         "hola_list_delete key=blue item1 works");
     ok (hola_hash_size (h) == 0,
         "hola_hash_size is 0");
+    ok (hola_list_insert (h, "blue", "item1", false) != NULL,
+        "hola_list_insert key=blue value=item1 works");
+    ok (hola_list_insert (h, "blue", "item0", false) != NULL,
+        "hola_list_insert key=blue value=item0 works");
+    ok (hola_list_insert (h, "blue", "item2", false) != NULL,
+        "hola_list_insert key=blue value=item2 works");
+    ok (hola_list_size (h, "blue") == 3,
+        "hola_list_size key=blue is 3");
+    const char *val;
+    ok ((val = hola_list_first (h, "blue")) != NULL
+        && streq (val, "item0"),
+        "first item is item0");
+    ok ((val = hola_list_next (h, "blue")) != NULL
+        && streq (val, "item1"),
+        "first item is item1");
+    ok ((val = hola_list_next (h, "blue")) != NULL
+        && streq (val, "item2"),
+        "first item is item2");
 
     hola_destroy (h);
 }
@@ -220,6 +244,7 @@ bool test_iter_one (struct test_input *t, size_t len)
     }
     key = hola_hash_first (h);
     while (key) {
+        size_t count = 0;
         val = hola_list_first (h, key);
         while (val) {
             int index = find_entry (t, len, key, val);
@@ -227,17 +252,27 @@ bool test_iter_one (struct test_input *t, size_t len)
                 break;
             if (index != -1)
                 checklist[index] = true;
+            count++;
             val = hola_list_next (h, key);
         }
         if (hola_list_cursor (h, key) != NULL) // cursor must be NULL
             break;
+        /* iterate backwards for fun */
+        val = hola_list_last (h, key);
+        while (val) {
+            count--;
+            val = hola_list_prev (h, key);
+        }
+        if (count > 0) {
+            diag ("reverse iteration failed");
+            result = false;
+        }
 
         key = hola_hash_next (h);
     }
     for (int i = 0; i < len; i++)
         if (!checklist[i])
             result = false;
-
     hola_destroy (h);
     free (checklist);
     return result;
@@ -307,6 +342,16 @@ void test_inval (void)
         "hola_list_add_end key=nonexistent list fails with ENOENT");
 
     errno = 0;
+    ok (hola_list_insert (NULL, "foo", "bar", false) == NULL && errno == EINVAL,
+        "hola_list_insert h=NULL fails with EINVAL");
+    errno = 0;
+    ok (hola_list_insert (h, NULL, "bar", false) == NULL && errno == EINVAL,
+        "hola_list_insert key=NULL fails with EINVAL");
+    errno = 0;
+    ok (hola_list_insert (h, "foo", NULL, true) == NULL && errno == EINVAL,
+        "hola_list_insert item=NULL fails with EINVAL");
+
+    errno = 0;
     ok (hola_list_delete (NULL, "foo", "bar") < 0 && errno == EINVAL,
         "hola_list_delete h=NULL fails with EINVAL");
 
@@ -327,6 +372,14 @@ void test_inval (void)
     ok (hola_list_next (NULL, "foo") == NULL,
         "hola_list_next h=NULL returns NULL");
     ok (hola_list_next (h, NULL) == NULL,
+        "hola_list_next key=NULL returns NULL");
+    ok (hola_list_last (NULL, "foo") == NULL,
+        "hola_list_last h=NULL returns NULL");
+    ok (hola_list_last (h, NULL) == NULL,
+        "hola_list_last key=NULL returns NULL");
+    ok (hola_list_prev (NULL, "foo") == NULL,
+        "hola_list_prev h=NULL returns NULL");
+    ok (hola_list_prev (h, NULL) == NULL,
         "hola_list_next key=NULL returns NULL");
     ok (hola_list_cursor (NULL, "foo") == NULL,
         "hola_list_cursor h=NULL returns NULL");

@@ -35,6 +35,15 @@ int flux_jobtap_service_register (flux_plugin_t *p,
                                   flux_msg_handler_f cb,
                                   void *arg);
 
+/*  Extended version of above with capability of registering a service that
+ *   guests can access.
+ */
+int flux_jobtap_service_register_ex (flux_plugin_t *p,
+                                     const char *method,
+                                     uint32_t rolemask,
+                                     flux_msg_handler_f cb,
+                                     void *arg);
+
 /*  Start a loop to re-prioritize all jobs. The plugin "priority.get"
  *   callback will be called for each job currently in SCHED or
  *   PRIORITY states.

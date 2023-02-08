@@ -213,6 +213,7 @@ TESTSCRIPTS = \
 	t2809-job-purge.t \
 	t2810-kvs-garbage-collect.t \
 	t2811-flux-pgrep.t \
+	t2812-flux-job-last.t \
 	t2900-job-timelimits.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \

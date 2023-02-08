@@ -24,6 +24,7 @@ struct hola {
     zlistx_t *keys; // for iteration
     zlistx_destructor_fn *list_destructor;
     zlistx_duplicator_fn *list_duplicator;
+    zlistx_comparator_fn *list_comparator;
     unsigned int keys_valid:1;
     unsigned int flags;
 };
@@ -68,6 +69,11 @@ void hola_set_list_duplicator (struct hola *hola, zlistx_duplicator_fn fun)
 {
     if (hola)
         hola->list_duplicator = fun;
+}
+void hola_set_list_comparator (struct hola *hola, zlistx_comparator_fn fun)
+{
+    if (hola)
+        hola->list_comparator = fun;
 }
 void hola_set_hash_key_destructor (struct hola *hola, zhashx_destructor_fn fun)
 {
@@ -115,6 +121,7 @@ static zlistx_t *hash_add (struct hola *hola, const void *key)
     }
     zlistx_set_destructor (l, hola->list_destructor);
     zlistx_set_duplicator (l, hola->list_duplicator);
+    zlistx_set_comparator (l, hola->list_comparator);
     if (zhashx_insert (hola->hash, key, l) < 0) {
         zlistx_destroy (&l);
         errno = EEXIST;
@@ -205,6 +212,35 @@ void *hola_list_add_end (struct hola *hola, const void *key, void *item)
     return handle;
 }
 
+void *hola_list_insert (struct hola *hola,
+                        const void *key,
+                        void *item,
+                        bool low_value)
+{
+    zlistx_t *l;
+    void *handle;
+
+    if (!hola || !key || !item) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(l = zhashx_lookup (hola->hash, key))) {
+        if ((hola->flags & HOLA_AUTOCREATE)) {
+            if (!(l = hash_add (hola, key)))
+                return NULL;
+        }
+        else {
+            errno = ENOENT;
+            return NULL;
+        }
+    }
+    if ((handle = zlistx_insert (l, item, low_value)) == NULL) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    return handle;
+}
+
 int hola_list_delete (struct hola *hola, const void *key, void *handle)
 {
     zlistx_t *l;
@@ -250,6 +286,31 @@ void *hola_list_next (struct hola *hola, const void *key)
     }
     return item;
 }
+
+void *hola_list_prev (struct hola *hola, const void *key)
+{
+    void *item = NULL;
+
+    if (hola && key) {
+        zlistx_t *l;
+        if ((l = zhashx_lookup (hola->hash, key)))
+            item = zlistx_prev (l);
+    }
+    return item;
+}
+
+void *hola_list_last (struct hola *hola, const void *key)
+{
+    void *item = NULL;
+
+    if (hola && key) {
+        zlistx_t *l;
+        if ((l = zhashx_lookup (hola->hash, key)))
+            item = zlistx_last (l);
+    }
+    return item;
+}
+
 
 void *hola_list_cursor (struct hola *hola, const void *key)
 {
