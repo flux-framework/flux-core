@@ -343,13 +343,6 @@ def fsd(secs):
 class UtilFormatter(Formatter):
     # pylint: disable=too-many-branches
 
-    # supported presentation characters which turn a base case
-    # value, e.g. '0' or an empty string, into a single hyphen.
-    hyphenators = {
-        "h": ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00"),
-        "i": ("inf"),
-    }
-
     def convert_field(self, value, conv):
         """
         Flux utility-specific field conversions. Avoids the need
@@ -422,8 +415,8 @@ class UtilFormatter(Formatter):
             denote_truncation = True
             spec = spec[:-1]
 
-        if spec and spec[-1] in self.hyphenators:
-            basecases = self.hyphenators[spec[-1]]
+        if spec.endswith("h"):
+            basecases = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00")
             value = "-" if str(value) in basecases else str(value)
             spec = spec[:-1] + "s"
         retval = super().format_field(value, spec)
