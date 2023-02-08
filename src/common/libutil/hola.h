@@ -54,6 +54,9 @@ void *hola_list_insert (struct hola *hola,
                         const void *key,
                         void *item,
                         bool low_value);
+void *hola_list_find (struct hola *hola,
+                      const void *key,
+                      void *item);
 
 int hola_list_delete (struct hola *hola, const void *key, void *handle);
 size_t hola_list_size (struct hola *hola, const void *key);
