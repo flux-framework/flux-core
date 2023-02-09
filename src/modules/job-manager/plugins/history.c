@@ -20,6 +20,7 @@
 #include <flux/jobtap.h>
 
 #include "ccan/ptrint/ptrint.h"
+#include "ccan/str/str.h"
 #include "src/common/libutil/hola.h"
 #include "src/common/libutil/slice.h"
 #include "src/common/libutil/errprintf.h"
@@ -115,10 +116,10 @@ error:
     return NULL;
 }
 
-static int job_new_cb (flux_plugin_t *p,
-                       const char *topic,
-                       flux_plugin_arg_t *args,
-                       void *arg)
+static int jobtap_cb (flux_plugin_t *p,
+                      const char *topic,
+                      flux_plugin_arg_t *args,
+                      void *arg)
 {
     struct history *hist = arg;
     struct job_entry *entry;
@@ -131,10 +132,19 @@ static int job_new_cb (flux_plugin_t *p,
                                 "{s:I s:f s:i}",
                                 "id", &entry->id,
                                 "t_submit", &entry->t_submit,
-                                "userid", &userid) < 0
-        || !hola_list_insert (hist->users, int2ptr (userid), entry, false)) {
-        job_entry_destroy (entry);
+                                "userid", &userid) < 0)
         return -1;
+    if (streq (topic, "job.inactive-remove")) {
+        void *handle;
+        if ((handle = hola_list_find (hist->users, int2ptr (userid), entry)))
+            hola_list_delete (hist->users, int2ptr (userid), handle);
+        job_entry_destroy (entry);
+    }
+    else { // job.new
+        if (!hola_list_insert (hist->users, int2ptr (userid), entry, false)) {
+            job_entry_destroy (entry);
+            return -1;
+        }
     }
     return 0;
 }
@@ -272,7 +282,17 @@ int history_plugin_init (flux_plugin_t *p)
                                          hist) < 0)
         return -1;
 
-    return flux_plugin_add_handler (p, "job.new", job_new_cb, hist);
+    if (flux_plugin_add_handler (p,
+                                 "job.new",
+                                 jobtap_cb,
+                                 hist) < 0
+        || flux_plugin_add_handler (p,
+                                    "job.inactive-remove",
+                                    jobtap_cb,
+                                    hist) < 0)
+        return -1;
+
+    return 0;
 }
 
 // vi:ts=4 sw=4 expandtab

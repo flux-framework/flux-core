@@ -35,5 +35,11 @@ test_expect_success 'flux job last N lists the last N jobs' '
 	flux job last 4 >last4.out &&
 	test_cmp last4.exp last4.out
 '
+# issue #4931
+test_expect_success 'flux-job last does not list purged jobs' '
+	flux job purge --force --num-limit=0 &&
+	test_must_fail flux job last 2>nojob2.err &&
+	grep "job history is empty" nojob2.err
+'
 
 test_done
