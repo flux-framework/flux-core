@@ -140,7 +140,17 @@ static int jobtap_cb (flux_plugin_t *p,
             hola_list_delete (hist->users, int2ptr (userid), handle);
         job_entry_destroy (entry);
     }
-    else { // job.new
+    else if (streq (topic, "job.inactive-add")) {
+        if (hola_list_find (hist->users, int2ptr (userid), entry)) {
+            job_entry_destroy (entry);
+            return 0;
+        }
+        if (!hola_list_insert (hist->users, int2ptr (userid), entry, false)) {
+            job_entry_destroy (entry);
+            return -1;
+        }
+    }
+    else if (streq (topic, "job.new")) {
         if (!hola_list_insert (hist->users, int2ptr (userid), entry, false)) {
             job_entry_destroy (entry);
             return -1;
@@ -286,6 +296,10 @@ int history_plugin_init (flux_plugin_t *p)
                                  "job.new",
                                  jobtap_cb,
                                  hist) < 0
+        || flux_plugin_add_handler (p,
+                                    "job.inactive-add",
+                                    jobtap_cb,
+                                    hist) < 0
         || flux_plugin_add_handler (p,
                                     "job.inactive-remove",
                                     jobtap_cb,
