@@ -220,6 +220,13 @@ job.priority.get
   :ref:`priority` section for more information about plugin management
   of job priority.
 
+job.inactive-add
+  The job has transitioned to INACTIVE state and has been added to the
+  inactive hash.
+
+job.inactive-remove
+  The job has been purged from the inactive hash.
+
 CONFIGURATION CALLBACK TOPIC
 ============================
 

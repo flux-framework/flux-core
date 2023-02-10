@@ -241,6 +241,25 @@ void *hola_list_insert (struct hola *hola,
     return handle;
 }
 
+void *hola_list_find (struct hola *hola,
+                      const void *key,
+                      void *item)
+{
+    zlistx_t *l;
+    void *handle;
+
+    if (!hola || !key || !item) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(l = zhashx_lookup (hola->hash, key))
+        || !(handle = zlistx_find (l, item))) {
+        errno = ENOENT;
+        return NULL;
+    }
+    return handle;
+}
+
 int hola_list_delete (struct hola *hola, const void *key, void *handle)
 {
     zlistx_t *l;
