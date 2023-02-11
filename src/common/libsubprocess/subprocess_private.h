@@ -110,23 +110,6 @@ struct flux_subprocess {
     int signal_pending;         /* signal sent while starting */
 };
 
-struct flux_subprocess_server {
-    flux_t *h;
-    flux_reactor_t *r;
-    char *local_uri;
-    uint32_t rank;
-    zhash_t *subprocesses;
-    flux_msg_handler_t **handlers;
-    flux_subprocess_server_auth_f auth_cb;
-    void *arg;
-
-    /* for teardown / termination */
-    flux_watcher_t *terminate_timer_w;
-    flux_watcher_t *terminate_prep_w;
-    flux_watcher_t *terminate_idle_w;
-    flux_watcher_t *terminate_check_w;
-};
-
 void subprocess_check_completed (flux_subprocess_t *p);
 
 void state_change_start (flux_subprocess_t *p);

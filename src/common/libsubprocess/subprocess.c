@@ -31,7 +31,6 @@
 #include "command.h"
 #include "local.h"
 #include "remote.h"
-#include "server.h"
 #include "util.h"
 
 /*
@@ -221,53 +220,6 @@ error:
     return NULL;
 }
 
-static void subprocess_server_destroy (void *arg)
-{
-    flux_subprocess_server_t *s = arg;
-    if (s) {
-        /* s->handlers handled in server_stop, this is for destroying
-         * things only
-         */
-        zhash_destroy (&s->subprocesses);
-        free (s->local_uri);
-
-        flux_watcher_destroy (s->terminate_timer_w);
-        flux_watcher_destroy (s->terminate_prep_w);
-        flux_watcher_destroy (s->terminate_idle_w);
-        flux_watcher_destroy (s->terminate_check_w);
-
-        free (s);
-    }
-}
-
-static flux_subprocess_server_t *subprocess_server_create (flux_t *h,
-                                                           const char *local_uri,
-                                                           int rank)
-{
-    flux_subprocess_server_t *s = calloc (1, sizeof (*s));
-    int save_errno;
-
-    if (!s)
-        return NULL;
-
-    s->h = h;
-    if (!(s->r = flux_get_reactor (h)))
-        goto error;
-    if (!(s->subprocesses = zhash_new ()))
-        goto error;
-    if (!(s->local_uri = strdup (local_uri)))
-        goto error;
-    s->rank = rank;
-
-    return s;
-
-error:
-    save_errno = errno;
-    subprocess_server_destroy (s);
-    errno = save_errno;
-    return NULL;
-}
-
 /*
  * Accessors
  */
@@ -276,94 +228,6 @@ int subprocess_status (flux_subprocess_t *p)
 {
     assert (p);
     return p->status;
-}
-
-/*
- *  General support:
- */
-
-flux_subprocess_server_t *flux_subprocess_server_start (flux_t *h,
-                                                        const char *local_uri,
-                                                        uint32_t rank)
-{
-    flux_subprocess_server_t *s = NULL;
-    int save_errno;
-
-    if (!h || !local_uri) {
-        errno = EINVAL;
-        goto error;
-    }
-
-    if (!(s = subprocess_server_create (h, local_uri, rank)))
-        goto error;
-
-    if (server_start (s) < 0)
-        goto error;
-
-    return s;
-
-error:
-    save_errno = errno;
-    subprocess_server_destroy (s);
-    errno = save_errno;
-    return NULL;
-}
-
-void flux_subprocess_server_set_auth_cb (flux_subprocess_server_t *s,
-                                         flux_subprocess_server_auth_f fn,
-                                         void *arg)
-{
-    s->auth_cb = fn;
-    s->arg = arg;
-}
-
-void flux_subprocess_server_stop (flux_subprocess_server_t *s)
-{
-    if (s) {
-        server_stop (s);
-        server_terminate_subprocesses (s);
-        subprocess_server_destroy (s);
-    }
-}
-
-int flux_subprocess_server_subprocesses_kill (flux_subprocess_server_t *s,
-                                              int signum,
-                                              double wait_time)
-{
-    int rv = -1;
-
-    if (!s) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (!zhash_size (s->subprocesses))
-        return 0;
-
-    if (server_terminate_setup (s, wait_time) < 0)
-        goto error;
-
-    if (server_signal_subprocesses (s, signum) < 0)
-        goto error;
-
-    if (server_terminate_wait (s) < 0)
-        goto error;
-
-    rv = 0;
-error:
-    server_terminate_cleanup (s);
-    return rv;
-}
-
-int flux_subprocess_server_terminate_by_uuid (flux_subprocess_server_t *s,
-                                              const char *id)
-{
-    if (!s || !id) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    return server_terminate_by_uuid (s, id);
 }
 
 /*

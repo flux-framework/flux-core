@@ -19,6 +19,7 @@
 #include <flux/core.h>
 
 #include "src/common/libsubprocess/command.h"
+#include "src/common/libsubprocess/server.h"
 #include "src/common/libutil/log.h"
 
 #include "attr.h"

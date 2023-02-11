@@ -19,6 +19,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libsubprocess/subprocess.h"
+#include "src/common/libsubprocess/server.h"
 
 extern char **environ;
 
