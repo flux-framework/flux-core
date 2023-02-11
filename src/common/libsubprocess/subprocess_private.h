@@ -15,21 +15,13 @@
 
 #include "subprocess.h"
 
-#define SUBPROCESS_MAGIC           0xbeefcafe
-
-#define SUBPROCESS_SERVER_MAGIC    0xbeefbeef
-
 #define SUBPROCESS_DEFAULT_BUFSIZE 4194304
-
-#define CHANNEL_MAGIC    0xcafebeef
 
 #define CHANNEL_READ  0x01
 #define CHANNEL_WRITE 0x02
 #define CHANNEL_FD    0x04
 
 struct subprocess_channel {
-    int magic;
-
     flux_subprocess_t *p;
     flux_subprocess_output_f output_f;
     char *name;
@@ -68,8 +60,6 @@ struct subprocess_channel {
 };
 
 struct flux_subprocess {
-    int magic;
-
     flux_t *h;
     flux_reactor_t *reactor;
     uint32_t rank;
@@ -121,7 +111,6 @@ struct flux_subprocess {
 };
 
 struct flux_subprocess_server {
-    int magic;
     flux_t *h;
     flux_reactor_t *r;
     char *local_uri;
