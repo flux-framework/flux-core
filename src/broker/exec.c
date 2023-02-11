@@ -59,23 +59,6 @@ void exec_terminate_subprocesses (flux_t *h)
         flux_log_error (h, "flux_subprocess_server_subprocesses_kill");
 }
 
-int exec_terminate_subprocesses_by_uuid (flux_t *h, const char *id)
-{
-    flux_subprocess_server_t *s = flux_aux_get (h, "flux::exec");
-
-    if (!s) {
-        flux_log (h, LOG_DEBUG, "no server_ctx found");
-        return -1;
-    }
-
-    if (flux_subprocess_server_terminate_by_uuid (s, id) < 0) {
-        flux_log_error (h, "flux_subprocess_server_terminate_by_uuid");
-        return -1;
-    }
-
-    return 0;
-}
-
 static int reject_nonlocal (const flux_msg_t *msg, void *arg)
 {
     if (!overlay_msg_is_local (msg)) {

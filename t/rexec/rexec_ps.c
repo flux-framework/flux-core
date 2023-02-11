@@ -85,7 +85,7 @@ int main (int argc, char *argv[])
     if (!(reactor = flux_get_reactor (h)))
         log_err_exit ("flux_get_reactor");
 
-    if (!(f = flux_rpc (h, "broker.rexec.processes", NULL, rank, 0)))
+    if (!(f = flux_rpc (h, "rexec.processes", NULL, rank, 0)))
         log_err_exit ("flux_rpc");
 
     if (flux_rpc_get_unpack (f, "{ s:i s:o }",

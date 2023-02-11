@@ -603,28 +603,45 @@ error:
     json_decref (procs);
 }
 
+static void server_disconnect_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
+{
+    flux_subprocess_server_t *s = arg;
+    const char *sender;
+
+    if ((sender = flux_msg_route_first (msg)))
+        server_terminate_by_uuid (s, sender);
+}
+
 int server_start (flux_subprocess_server_t *s)
 {
     /* rexec.processes is primarily for testing */
     struct flux_msg_handler_spec htab[] = {
         { FLUX_MSGTYPE_REQUEST,
-          "broker.rexec",
+          "rexec.exec",
           server_exec_cb,
           0
         },
         { FLUX_MSGTYPE_REQUEST,
-          "broker.rexec.write",
+          "rexec.write",
           server_write_cb,
           0
         },
         { FLUX_MSGTYPE_REQUEST,
-          "broker.rexec.signal",
+          "rexec.signal",
           server_signal_cb,
           0
         },
         { FLUX_MSGTYPE_REQUEST,
-          "broker.rexec.processes",
+          "rexec.processes",
           server_processes_cb,
+          0
+        },
+        { FLUX_MSGTYPE_REQUEST,
+          "rexec.disconnect",
+          server_disconnect_cb,
           0
         },
         FLUX_MSGHANDLER_TABLE_END,

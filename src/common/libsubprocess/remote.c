@@ -188,7 +188,7 @@ static int remote_write (struct subprocess_channel *c)
         goto error;
     }
 
-    if (!(f = flux_rpc_pack (c->p->h, "broker.rexec.write", c->p->rank,
+    if (!(f = flux_rpc_pack (c->p->h, "rexec.write", c->p->rank,
                              FLUX_RPC_NORESPONSE,
                              "{ s:i s:O }",
                              "pid", c->p->pid,
@@ -219,7 +219,7 @@ static int remote_close (struct subprocess_channel *c)
         goto error;
     }
 
-    if (!(f = flux_rpc_pack (c->p->h, "broker.rexec.write", c->p->rank,
+    if (!(f = flux_rpc_pack (c->p->h, "rexec.write", c->p->rank,
                              FLUX_RPC_NORESPONSE,
                              "{ s:i s:O }",
                              "pid", c->p->pid,
@@ -779,7 +779,7 @@ int remote_exec (flux_subprocess_t *p)
      * internally in this code.  But output callbacks are optional, we
      * don't care if user doesn't want it.
      */
-    if (!(f = flux_rpc_pack (p->h, "broker.rexec", p->rank, FLUX_RPC_STREAMING,
+    if (!(f = flux_rpc_pack (p->h, "rexec.exec", p->rank, FLUX_RPC_STREAMING,
                              "{s:s s:i s:i s:i}",
                              "cmd", cmd_str,
                              "on_channel_out", p->ops.on_channel_out ? 1 : 0,
@@ -810,7 +810,7 @@ flux_future_t *remote_kill (flux_subprocess_t *p, int signum)
 {
     flux_future_t *f;
 
-    if (!(f = flux_rpc_pack (p->h, "broker.rexec.signal", p->rank, 0,
+    if (!(f = flux_rpc_pack (p->h, "rexec.signal", p->rank, 0,
                              "{s:i s:i}",
                              "pid", p->pid,
                              "signum", signum))) {

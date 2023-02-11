@@ -1468,11 +1468,6 @@ static void broker_panic_cb (flux_t *h, flux_msg_handler_t *mh,
 static void broker_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
-    const char *sender;
-
-    if ((sender = flux_msg_route_first (msg)))
-        exec_terminate_subprocesses_by_uuid (h, sender);
-    /* no response */
 }
 
 static int route_to_handle (const flux_msg_t *msg, void *arg)
@@ -1642,6 +1637,7 @@ static struct internal_service services[] = {
     { "state-machine",      NULL },
     { "groups",             NULL },
     { "shutdown",           NULL },
+    { "rexec",              NULL },
     { NULL, NULL, },
 };
 
