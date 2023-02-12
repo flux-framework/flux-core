@@ -64,7 +64,6 @@ static int proc_save (subprocess_server_t *s, flux_subprocess_t *p)
 
     if (!(handle = zlistx_add_end (s->subprocesses, p))) {
         errno = ENOMEM;
-        flux_log_error (s->h, "%s: zlistx_add_end", __FUNCTION__);
         return -1;
     }
     if (flux_subprocess_aux_set (p, lstkey, handle, NULL) < 0) {
@@ -119,7 +118,7 @@ static void rexec_completion_cb (flux_subprocess_t *p)
         if (flux_respond_pack (s->h, request, "{s:s s:i}",
                                "type", "complete",
                                "rank", s->rank) < 0)
-            flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
+            flux_log_error (s->h, "error responding to rexec.exec request");
     }
 
     subprocess_cleanup (p);
@@ -150,37 +149,36 @@ static void rexec_state_change_cb (flux_subprocess_t *p,
 {
     subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
     const flux_msg_t *request = flux_subprocess_aux_get (p, msgkey);
+    int rc = 0;
 
     if (state == FLUX_SUBPROCESS_RUNNING) {
-        if (flux_respond_pack (s->h, request, "{s:s s:i s:i s:i}",
-                               "type", "state",
-                               "rank", s->rank,
-                               "pid", flux_subprocess_pid (p),
-                               "state", state) < 0) {
-            flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
-        }
-    } else if (state == FLUX_SUBPROCESS_EXITED) {
-        if (flux_respond_pack (s->h, request, "{s:s s:i s:i s:i}",
-                               "type", "state",
-                               "rank", s->rank,
-                               "state", state,
-                               "status", flux_subprocess_status (p)) < 0) {
-            flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
-        }
-    } else if (state == FLUX_SUBPROCESS_FAILED) {
-        if (flux_respond_pack (s->h, request, "{s:s s:i s:i s:i}",
-                               "type", "state",
-                               "rank", s->rank,
-                               "state", FLUX_SUBPROCESS_FAILED,
-                               "errno", p->failed_errno) < 0) {
-            flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
-        }
+        rc = flux_respond_pack (s->h, request, "{s:s s:i s:i s:i}",
+                                "type", "state",
+                                "rank", s->rank,
+                                "pid", flux_subprocess_pid (p),
+                                "state", state);
+    }
+    else if (state == FLUX_SUBPROCESS_EXITED) {
+        rc = flux_respond_pack (s->h, request, "{s:s s:i s:i s:i}",
+                                "type", "state",
+                                "rank", s->rank,
+                                "state", state,
+                                "status", flux_subprocess_status (p));
+    }
+    else if (state == FLUX_SUBPROCESS_FAILED) {
+        rc = flux_respond_pack (s->h, request, "{s:s s:i s:i s:i}",
+                                "type", "state",
+                                "rank", s->rank,
+                                "state", FLUX_SUBPROCESS_FAILED,
+                                "errno", p->failed_errno);
         subprocess_cleanup (p);
     } else {
         errno = EPROTO;
         flux_log_error (s->h, "%s: illegal state", __FUNCTION__);
         goto error;
     }
+    if (rc < 0)
+        flux_log_error (s->h, "error responding to rexec.exec request");
 
     return;
 
@@ -211,7 +209,7 @@ static int rexec_output (flux_subprocess_t *p,
                            "rank", s->rank,
                            "pid", flux_subprocess_pid (p),
                            "io", io) < 0) {
-        flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
+        flux_log_error (s->h, "error responding to rexec.exec request");
         goto error;
     }
 
@@ -264,6 +262,7 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     };
     int on_channel_out, on_stdout, on_stderr;
     char **env = NULL;
+    const char *errmsg = NULL;
 
     if (s->auth_cb && (*s->auth_cb) (msg, s->arg) < 0)
         goto error;
@@ -282,33 +281,30 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!on_stderr)
         ops.on_stderr = NULL;
 
-    if (!(cmd = flux_cmd_fromjson (cmd_str, NULL)))
+    if (!(cmd = flux_cmd_fromjson (cmd_str, NULL))) {
+        errmsg = "error parsing command string";
         goto error;
+    }
 
     if (!flux_cmd_argc (cmd)) {
         errno = EPROTO;
+        errmsg = "command string is empty";
         goto error;
     }
-
-    if (!(env = flux_cmd_env_expand (cmd)))
-        goto error;
 
     /* if no environment sent, use local server environment */
-    if (env[0] == NULL) {
-        if (flux_cmd_set_env (cmd, environ) < 0) {
-            flux_log_error (s->h, "%s: flux_cmd_set_env", __FUNCTION__);
-            goto error;
-        }
-    }
-
-    if (flux_cmd_setenvf (cmd, 1, "FLUX_URI", "%s", s->local_uri) < 0)
+    if (!(env = flux_cmd_env_expand (cmd))
+        || (env[0] == NULL && flux_cmd_set_env (cmd, environ))
+        || flux_cmd_setenvf (cmd, 1, "FLUX_URI", "%s", s->local_uri) < 0) {
+        errmsg = "error setting up command environment";
         goto error;
+    }
 
     if (flux_respond_pack (s->h, msg, "{s:s s:i}",
                            "type", "start",
                            "rank", s->rank) < 0) {
-        flux_log_error (s->h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
+        flux_log_error (s->h, "error responding to rexec.exec request");
+        goto cleanup;
     }
 
     if (!(p = flux_exec (s->h,
@@ -322,8 +318,7 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
                                "rank", s->rank,
                                "state", FLUX_SUBPROCESS_EXEC_FAILED,
                                "errno", errno) < 0) {
-            flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-            goto error;
+            flux_log_error (s->h, "error responding to rexec.exec request");
         }
         goto cleanup;
     }
@@ -345,8 +340,8 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (s->h, "error responding to rexec.exec request");
 cleanup:
     flux_cmd_destroy (cmd);
     free (env);
