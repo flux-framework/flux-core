@@ -827,6 +827,7 @@ static void subprocess_server_destroy (void *arg)
 {
     subprocess_server_t *s = arg;
     if (s) {
+        int saved_errno = errno;
         /* s->handlers handled in server_stop, this is for destroying
          * things only
          */
@@ -839,6 +840,7 @@ static void subprocess_server_destroy (void *arg)
         flux_watcher_destroy (s->terminate_check_w);
 
         free (s);
+        errno = saved_errno;
     }
 }
 
@@ -847,7 +849,6 @@ static subprocess_server_t *subprocess_server_create (flux_t *h,
                                                       int rank)
 {
     subprocess_server_t *s = calloc (1, sizeof (*s));
-    int save_errno;
 
     if (!s)
         return NULL;
@@ -864,9 +865,7 @@ static subprocess_server_t *subprocess_server_create (flux_t *h,
     return s;
 
 error:
-    save_errno = errno;
     subprocess_server_destroy (s);
-    errno = save_errno;
     return NULL;
 }
 
@@ -876,7 +875,6 @@ subprocess_server_t *subprocess_server_start (flux_t *h,
                                               uint32_t rank)
 {
     subprocess_server_t *s = NULL;
-    int save_errno;
 
     if (!h || !local_uri) {
         errno = EINVAL;
@@ -892,9 +890,7 @@ subprocess_server_t *subprocess_server_start (flux_t *h,
     return s;
 
 error:
-    save_errno = errno;
     subprocess_server_destroy (s);
-    errno = save_errno;
     return NULL;
 }
 
