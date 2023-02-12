@@ -30,34 +30,34 @@
 
 static void exec_finalize (void *arg)
 {
-    flux_subprocess_server_t *s = arg;
-    flux_subprocess_server_stop (s);
+    subprocess_server_t *s = arg;
+    subprocess_server_stop (s);
 }
 
 void exec_terminate_subprocesses (flux_t *h)
 {
-    flux_subprocess_server_t *s = flux_aux_get (h, "flux::exec");
+    subprocess_server_t *s = flux_aux_get (h, "flux::exec");
 
     /* exec_initialize() never called */
     if (!s)
         return;
 
-    if (flux_subprocess_server_subprocesses_kill (s,
+    if (subprocess_server_subprocesses_kill (s,
                                                   SIGTERM,
                                                   EXEC_TERMINATE_TIMEOUT) < 0)
-        flux_log_error (h, "flux_subprocess_server_subprocesses_kill");
+        flux_log_error (h, "subprocess_server_subprocesses_kill");
 
     /* SIGKILL is also sent in final teardown via
-     * flux_subprocess_server_stop(), but we wish to avoid any
+     * subprocess_server_stop(), but we wish to avoid any
      * subprocesses continuing to run and potential send broker
      * messages while we begin teardown, so we will SIGKILL the
      * subprocesses as well.
      */
 
-    if (flux_subprocess_server_subprocesses_kill (s,
+    if (subprocess_server_subprocesses_kill (s,
                                                   SIGKILL,
                                                   EXEC_TERMINATE_TIMEOUT) < 0)
-        flux_log_error (h, "flux_subprocess_server_subprocesses_kill");
+        flux_log_error (h, "subprocess_server_subprocesses_kill");
 }
 
 static int reject_nonlocal (const flux_msg_t *msg, void *arg)
@@ -71,19 +71,19 @@ static int reject_nonlocal (const flux_msg_t *msg, void *arg)
 
 int exec_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
 {
-    flux_subprocess_server_t *s = NULL;
+    subprocess_server_t *s = NULL;
     const char *local_uri;
 
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0)
         goto cleanup;
-    if (!(s = flux_subprocess_server_start (h, local_uri, rank)))
+    if (!(s = subprocess_server_start (h, local_uri, rank)))
         goto cleanup;
     if (rank == 0)
-        flux_subprocess_server_set_auth_cb (s, reject_nonlocal, NULL);
+        subprocess_server_set_auth_cb (s, reject_nonlocal, NULL);
     flux_aux_set (h, "flux::exec", s, exec_finalize);
     return 0;
 cleanup:
-    flux_subprocess_server_stop (s);
+    subprocess_server_stop (s);
     return -1;
 }
 

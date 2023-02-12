@@ -38,17 +38,17 @@ static const char *auxkey = "flux::rexec";
 
 struct rexec {
     const flux_msg_t *msg;          // rexec request message
-    flux_subprocess_server_t *s;    // server context
+    subprocess_server_t *s;         // server context
 };
 
-struct flux_subprocess_server {
+struct subprocess_server {
     flux_t *h;
     flux_reactor_t *r;
     char *local_uri;
     uint32_t rank;
     zhash_t *subprocesses;
     flux_msg_handler_t **handlers;
-    flux_subprocess_server_auth_f auth_cb;
+    subprocess_server_auth_f auth_cb;
     void *arg;
 
     /* for teardown / termination */
@@ -67,7 +67,7 @@ static void rexec_destroy (struct rexec *rex)
 }
 
 static struct rexec *rexec_create (const flux_msg_t *msg,
-                                   flux_subprocess_server_t *s)
+                                   subprocess_server_t *s)
 {
     struct rexec *rex;
 
@@ -85,7 +85,7 @@ static void subprocesses_free_fn (void *arg)
     flux_subprocess_unref (p);
 }
 
-static int store_pid (flux_subprocess_server_t *s, flux_subprocess_t *p)
+static int store_pid (subprocess_server_t *s, flux_subprocess_t *p)
 {
     pid_t pid = flux_subprocess_pid (p);
     char *str = NULL;
@@ -111,7 +111,7 @@ cleanup:
     return rv;
 }
 
-static void remove_pid (flux_subprocess_server_t *s, flux_subprocess_t *p)
+static void remove_pid (subprocess_server_t *s, flux_subprocess_t *p)
 {
     pid_t pid = flux_subprocess_pid (p);
     char *str = NULL;
@@ -132,7 +132,7 @@ cleanup:
     free (str);
 }
 
-static flux_subprocess_t *lookup_pid (flux_subprocess_server_t *s, pid_t pid)
+static flux_subprocess_t *lookup_pid (subprocess_server_t *s, pid_t pid)
 {
     flux_subprocess_t *p = NULL;
     char *str = NULL;
@@ -179,7 +179,7 @@ static void rexec_completion_cb (flux_subprocess_t *p)
     subprocess_cleanup (p);
 }
 
-static void internal_fatal (flux_subprocess_server_t *s, flux_subprocess_t *p)
+static void internal_fatal (subprocess_server_t *s, flux_subprocess_t *p)
 {
     if (p->state == FLUX_SUBPROCESS_FAILED)
         return;
@@ -247,7 +247,7 @@ error:
 
 static int rexec_output (flux_subprocess_t *p,
                          const char *stream,
-                         flux_subprocess_server_t *s,
+                         subprocess_server_t *s,
                          const flux_msg_t *msg,
                          const char *data,
                          int len,
@@ -309,7 +309,7 @@ error:
 static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
-    flux_subprocess_server_t *s = arg;
+    subprocess_server_t *s = arg;
     const char *cmd_str;
     flux_cmd_t *cmd = NULL;
     struct rexec *rex;
@@ -410,7 +410,7 @@ cleanup:
     flux_subprocess_unref (p);
 }
 
-static int write_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
+static int write_subprocess (subprocess_server_t *s, flux_subprocess_t *p,
                              const char *stream, const char *data, int len)
 {
     int tmp;
@@ -437,7 +437,7 @@ static int write_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
     return 0;
 }
 
-static int close_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
+static int close_subprocess (subprocess_server_t *s, flux_subprocess_t *p,
                              const char *stream)
 {
     if (flux_subprocess_close (p, stream) < 0) {
@@ -452,7 +452,7 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
                              const flux_msg_t *msg, void *arg)
 {
     flux_subprocess_t *p;
-    flux_subprocess_server_t *s = arg;
+    subprocess_server_t *s = arg;
     const char *stream = NULL;
     char *data = NULL;
     int len = 0;
@@ -514,7 +514,7 @@ error:
 static void server_signal_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
-    flux_subprocess_server_t *s = arg;
+    subprocess_server_t *s = arg;
     pid_t pid;
     int signum;
 
@@ -588,7 +588,7 @@ cleanup:
 static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
                                  const flux_msg_t *msg, void *arg)
 {
-    flux_subprocess_server_t *s = arg;
+    subprocess_server_t *s = arg;
     flux_subprocess_t *p;
     json_t *procs = NULL;
 
@@ -625,14 +625,14 @@ static void server_disconnect_cb (flux_t *h,
                                   const flux_msg_t *msg,
                                   void *arg)
 {
-    flux_subprocess_server_t *s = arg;
+    subprocess_server_t *s = arg;
     const char *sender;
 
     if ((sender = flux_msg_route_first (msg)))
         server_terminate_by_uuid (s, sender);
 }
 
-int server_start (flux_subprocess_server_t *s)
+int server_start (subprocess_server_t *s)
 {
     /* rexec.processes is primarily for testing */
     struct flux_msg_handler_spec htab[] = {
@@ -670,7 +670,7 @@ int server_start (flux_subprocess_server_t *s)
     return 0;
 }
 
-void server_stop (flux_subprocess_server_t *s)
+void server_stop (subprocess_server_t *s)
 {
     flux_msg_handler_delvec (s->handlers);
 }
@@ -687,7 +687,7 @@ static void server_signal_subprocess (flux_subprocess_t *p, int signum)
     flux_future_destroy (f);
 }
 
-int server_signal_subprocesses (flux_subprocess_server_t *s, int signum)
+int server_signal_subprocesses (subprocess_server_t *s, int signum)
 {
     flux_subprocess_t *p;
 
@@ -700,7 +700,7 @@ int server_signal_subprocesses (flux_subprocess_server_t *s, int signum)
     return 0;
 }
 
-int server_terminate_subprocesses (flux_subprocess_server_t *s)
+int server_terminate_subprocesses (subprocess_server_t *s)
 {
     server_signal_subprocesses (s, SIGKILL);
     return 0;
@@ -717,7 +717,7 @@ static void terminate_uuid (flux_subprocess_t *p, const char *id)
         server_signal_subprocess (p, SIGKILL);
 }
 
-int server_terminate_by_uuid (flux_subprocess_server_t *s,
+int server_terminate_by_uuid (subprocess_server_t *s,
                               const char *id)
 {
     flux_subprocess_t *p;
@@ -736,7 +736,7 @@ static void terminate_prep_cb (flux_reactor_t *r,
                                int revents,
                                void *arg)
 {
-    flux_subprocess_server_t *s = arg;
+    subprocess_server_t *s = arg;
     flux_watcher_start (s->terminate_idle_w);
 }
 
@@ -745,7 +745,7 @@ static void terminate_cb (flux_reactor_t *r,
                           int revents,
                           void *arg)
 {
-    flux_subprocess_server_t *s = arg;
+    subprocess_server_t *s = arg;
     flux_watcher_stop (s->terminate_timer_w);
     flux_watcher_stop (s->terminate_prep_w);
     flux_watcher_stop (s->terminate_idle_w);
@@ -753,7 +753,7 @@ static void terminate_cb (flux_reactor_t *r,
     flux_reactor_stop (s->r);
 }
 
-void server_terminate_cleanup (flux_subprocess_server_t *s)
+void server_terminate_cleanup (subprocess_server_t *s)
 {
     flux_watcher_destroy (s->terminate_timer_w);
     flux_watcher_destroy (s->terminate_prep_w);
@@ -765,7 +765,7 @@ void server_terminate_cleanup (flux_subprocess_server_t *s)
     s->terminate_check_w = NULL;
 }
 
-int server_terminate_setup (flux_subprocess_server_t *s,
+int server_terminate_setup (subprocess_server_t *s,
                             double wait_time)
 {
     s->terminate_timer_w = flux_timer_watcher_create (s->r,
@@ -811,7 +811,7 @@ error:
     return -1;
 }
 
-int server_terminate_wait (flux_subprocess_server_t *s)
+int server_terminate_wait (subprocess_server_t *s)
 {
     flux_watcher_start (s->terminate_timer_w);
 
@@ -825,7 +825,7 @@ int server_terminate_wait (flux_subprocess_server_t *s)
 
 static void subprocess_server_destroy (void *arg)
 {
-    flux_subprocess_server_t *s = arg;
+    subprocess_server_t *s = arg;
     if (s) {
         /* s->handlers handled in server_stop, this is for destroying
          * things only
@@ -842,11 +842,11 @@ static void subprocess_server_destroy (void *arg)
     }
 }
 
-static flux_subprocess_server_t *subprocess_server_create (flux_t *h,
-                                                           const char *local_uri,
-                                                           int rank)
+static subprocess_server_t *subprocess_server_create (flux_t *h,
+                                                      const char *local_uri,
+                                                      int rank)
 {
-    flux_subprocess_server_t *s = calloc (1, sizeof (*s));
+    subprocess_server_t *s = calloc (1, sizeof (*s));
     int save_errno;
 
     if (!s)
@@ -871,11 +871,11 @@ error:
 }
 
 
-flux_subprocess_server_t *flux_subprocess_server_start (flux_t *h,
-                                                        const char *local_uri,
-                                                        uint32_t rank)
+subprocess_server_t *subprocess_server_start (flux_t *h,
+                                              const char *local_uri,
+                                              uint32_t rank)
 {
-    flux_subprocess_server_t *s = NULL;
+    subprocess_server_t *s = NULL;
     int save_errno;
 
     if (!h || !local_uri) {
@@ -898,15 +898,15 @@ error:
     return NULL;
 }
 
-void flux_subprocess_server_set_auth_cb (flux_subprocess_server_t *s,
-                                         flux_subprocess_server_auth_f fn,
-                                         void *arg)
+void subprocess_server_set_auth_cb (subprocess_server_t *s,
+                                    subprocess_server_auth_f fn,
+                                    void *arg)
 {
     s->auth_cb = fn;
     s->arg = arg;
 }
 
-void flux_subprocess_server_stop (flux_subprocess_server_t *s)
+void subprocess_server_stop (subprocess_server_t *s)
 {
     if (s) {
         server_stop (s);
@@ -915,9 +915,9 @@ void flux_subprocess_server_stop (flux_subprocess_server_t *s)
     }
 }
 
-int flux_subprocess_server_subprocesses_kill (flux_subprocess_server_t *s,
-                                              int signum,
-                                              double wait_time)
+int subprocess_server_subprocesses_kill (subprocess_server_t *s,
+                                         int signum,
+                                         double wait_time)
 {
     int rv = -1;
 
@@ -944,8 +944,8 @@ error:
     return rv;
 }
 
-int flux_subprocess_server_terminate_by_uuid (flux_subprocess_server_t *s,
-                                              const char *id)
+int subprocess_server_terminate_by_uuid (subprocess_server_t *s,
+                                         const char *id)
 {
     if (!s || !id) {
         errno = EINVAL;
