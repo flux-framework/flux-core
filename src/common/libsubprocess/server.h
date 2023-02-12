@@ -18,24 +18,6 @@ typedef struct subprocess_server subprocess_server_t;
 
 typedef int (*subprocess_server_auth_f) (const flux_msg_t *msg, void *arg);
 
-
-int server_start (subprocess_server_t *s);
-
-void server_stop (subprocess_server_t *s);
-
-int server_signal_subprocesses (subprocess_server_t *s, int signum);
-
-int server_terminate_subprocesses (subprocess_server_t *s);
-
-int server_terminate_by_uuid (subprocess_server_t *s, const char *id);
-
-int server_terminate_setup (subprocess_server_t *s, double wait_time);
-
-void server_terminate_cleanup (subprocess_server_t *s);
-
-int server_terminate_wait (subprocess_server_t *s);
-
-
 /*  Start a subprocess server on the handle `h`. Registers message
  *   handlers, etc for remote execution.
  */

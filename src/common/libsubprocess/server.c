@@ -543,7 +543,7 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-const char *subprocess_sender (flux_subprocess_t *p)
+static const char *subprocess_sender (flux_subprocess_t *p)
 {
     struct rexec *rex = flux_subprocess_aux_get (p, auxkey);
     const char *sender;
@@ -629,10 +629,10 @@ static void server_disconnect_cb (flux_t *h,
     const char *sender;
 
     if ((sender = flux_msg_route_first (msg)))
-        server_terminate_by_uuid (s, sender);
+        subprocess_server_terminate_by_uuid (s, sender);
 }
 
-int server_start (subprocess_server_t *s)
+static int server_start (subprocess_server_t *s)
 {
     /* rexec.processes is primarily for testing */
     struct flux_msg_handler_spec htab[] = {
@@ -670,7 +670,7 @@ int server_start (subprocess_server_t *s)
     return 0;
 }
 
-void server_stop (subprocess_server_t *s)
+static void server_stop (subprocess_server_t *s)
 {
     flux_msg_handler_delvec (s->handlers);
 }
@@ -687,7 +687,7 @@ static void server_signal_subprocess (flux_subprocess_t *p, int signum)
     flux_future_destroy (f);
 }
 
-int server_signal_subprocesses (subprocess_server_t *s, int signum)
+static int server_signal_subprocesses (subprocess_server_t *s, int signum)
 {
     flux_subprocess_t *p;
 
@@ -700,7 +700,7 @@ int server_signal_subprocesses (subprocess_server_t *s, int signum)
     return 0;
 }
 
-int server_terminate_subprocesses (subprocess_server_t *s)
+static int server_terminate_subprocesses (subprocess_server_t *s)
 {
     server_signal_subprocesses (s, SIGKILL);
     return 0;
@@ -717,8 +717,8 @@ static void terminate_uuid (flux_subprocess_t *p, const char *id)
         server_signal_subprocess (p, SIGKILL);
 }
 
-int server_terminate_by_uuid (subprocess_server_t *s,
-                              const char *id)
+static int server_terminate_by_uuid (subprocess_server_t *s,
+                                     const char *id)
 {
     flux_subprocess_t *p;
 
@@ -753,7 +753,7 @@ static void terminate_cb (flux_reactor_t *r,
     flux_reactor_stop (s->r);
 }
 
-void server_terminate_cleanup (subprocess_server_t *s)
+static void server_terminate_cleanup (subprocess_server_t *s)
 {
     flux_watcher_destroy (s->terminate_timer_w);
     flux_watcher_destroy (s->terminate_prep_w);
@@ -765,7 +765,7 @@ void server_terminate_cleanup (subprocess_server_t *s)
     s->terminate_check_w = NULL;
 }
 
-int server_terminate_setup (subprocess_server_t *s,
+static int server_terminate_setup (subprocess_server_t *s,
                             double wait_time)
 {
     s->terminate_timer_w = flux_timer_watcher_create (s->r,
@@ -811,7 +811,7 @@ error:
     return -1;
 }
 
-int server_terminate_wait (subprocess_server_t *s)
+static int server_terminate_wait (subprocess_server_t *s)
 {
     flux_watcher_start (s->terminate_timer_w);
 
