@@ -12,27 +12,18 @@
 # include "config.h"
 #endif
 
-#include <sys/types.h>
-#include <wait.h>
-#include <unistd.h>
+#include <unistd.h> // defines environ
 #include <errno.h>
-#include <assert.h>
-
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
-#include "src/common/libutil/log.h"
-#include "src/common/libutil/fdwalk.h"
-#include "src/common/libutil/macros.h"
 #include "src/common/libioencode/ioencode.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
 #include "command.h"
-#include "remote.h"
 #include "server.h"
-#include "util.h"
 
 /* Keys used to store subprocess server, rexec.exec request, and
  * 'subprocesses' zlistx handle in the subprocess object.
