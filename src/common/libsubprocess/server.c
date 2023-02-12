@@ -34,18 +34,19 @@
 #include "server.h"
 #include "util.h"
 
-/* Keys used to store subprocess server and rexec.exec request in
- * subprocess object.
+/* Keys used to store subprocess server, rexec.exec request, and
+ * 'subprocesses' zlistx handle in the subprocess object.
  */
 static const char *srvkey = "flux::server";
 static const char *msgkey = "flux::request";
+static const char *lstkey = "flux::handle";
 
 struct subprocess_server {
     flux_t *h;
     flux_reactor_t *r;
     char *local_uri;
     uint32_t rank;
-    zhash_t *subprocesses;
+    zlistx_t *subprocesses;
     flux_msg_handler_t **handlers;
     subprocess_server_auth_f auth_cb;
     void *arg;
@@ -57,86 +58,64 @@ struct subprocess_server {
     flux_watcher_t *terminate_check_w;
 };
 
-static void subprocesses_free_fn (void *arg)
+// zlistx_destructor_fn footprint
+static void proc_destructor (void **item)
 {
-    flux_subprocess_t *p = arg;
-
-    flux_subprocess_unref (p);
+    if (item) {
+        flux_subprocess_unref (*item);
+        *item = NULL;
+    }
 }
 
-static int store_pid (subprocess_server_t *s, flux_subprocess_t *p)
+static int proc_save (subprocess_server_t *s, flux_subprocess_t *p)
 {
-    pid_t pid = flux_subprocess_pid (p);
-    char *str = NULL;
-    int rv = -1;
-    void *ret = NULL;
+    void *handle;
 
-    if (asprintf (&str, "%d", pid) < 0) {
-        flux_log_error (s->h, "%s: asprintf", __FUNCTION__);
-        goto cleanup;
+    if (!(handle = zlistx_add_end (s->subprocesses, p))) {
+        errno = ENOMEM;
+        flux_log_error (s->h, "%s: zlistx_add_end", __FUNCTION__);
+        return -1;
     }
-
-    if (zhash_insert (s->subprocesses, str, p) < 0) {
-        flux_log_error (s->h, "%s: zhash_insert", __FUNCTION__);
-        goto cleanup;
+    if (flux_subprocess_aux_set (p, lstkey, handle, NULL) < 0) {
+        int saved_errno = errno;
+        zlistx_detach (s->subprocesses, handle);
+        errno = saved_errno;
+        return -1;
     }
-
-    ret = zhash_freefn (s->subprocesses, str, subprocesses_free_fn);
-    assert (ret);
-
-    rv = 0;
-cleanup:
-    free (str);
-    return rv;
+    return 0;
 }
 
-static void remove_pid (subprocess_server_t *s, flux_subprocess_t *p)
+static void proc_delete (subprocess_server_t *s, flux_subprocess_t *p)
 {
-    pid_t pid = flux_subprocess_pid (p);
-    char *str = NULL;
+    void *handle = flux_subprocess_aux_get (p, lstkey);
 
-    if (asprintf (&str, "%d", pid) < 0) {
-        flux_log_error (s->h, "%s: asprintf", __FUNCTION__);
-        goto cleanup;
-    }
+    zlistx_delete (s->subprocesses, handle);
 
-    zhash_delete (s->subprocesses, str);
-
-    if (!zhash_size (s->subprocesses) && s->terminate_prep_w) {
+    if (!zlistx_size (s->subprocesses) && s->terminate_prep_w) {
         flux_watcher_start (s->terminate_prep_w);
         flux_watcher_start (s->terminate_check_w);
     }
-
-cleanup:
-    free (str);
 }
 
-static flux_subprocess_t *lookup_pid (subprocess_server_t *s, pid_t pid)
+static flux_subprocess_t *proc_find_bypid (subprocess_server_t *s, pid_t pid)
 {
-    flux_subprocess_t *p = NULL;
-    char *str = NULL;
-    int save_errno;
+    flux_subprocess_t *p;
 
-    if (asprintf (&str, "%d", pid) < 0)
-        goto cleanup;
-
-    if (!(p = zhash_lookup (s->subprocesses, str))) {
-        errno = ENOENT;
-        goto cleanup;
+    p = zlistx_first (s->subprocesses);
+    while (p) {
+        if (flux_subprocess_pid (p) == pid)
+            return p;
+        p = zlistx_next (s->subprocesses);
     }
-
-cleanup:
-    save_errno = errno;
-    free (str);
-    errno = save_errno;
-    return p;
+    errno = ENOENT;
+    return NULL;
 }
 
 static void subprocess_cleanup (flux_subprocess_t *p)
 {
     subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
 
-    remove_pid (s, p);
+    proc_delete (s, p);
 }
 
 static void rexec_completion_cb (flux_subprocess_t *p)
@@ -182,8 +161,6 @@ static void rexec_state_change_cb (flux_subprocess_t *p,
     const flux_msg_t *request = flux_subprocess_aux_get (p, msgkey);
 
     if (state == FLUX_SUBPROCESS_RUNNING) {
-        if (store_pid (s, p) < 0)
-            goto error;
         if (flux_respond_pack (s->h, request, "{s:s s:i s:i s:i}",
                                "type", "state",
                                "rank", s->rank,
@@ -369,6 +346,8 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (flux_subprocess_aux_set (p, srvkey, s, NULL) < 0)
         goto error;
+    if (proc_save (s, p) < 0)
+        goto error;
 
     flux_cmd_destroy (cmd);
     free (env);
@@ -447,7 +426,7 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
 
-    if (!(p = lookup_pid (s, pid))) {
+    if (!(p = proc_find_bypid (s, pid))) {
         /* can't handle error, no pid to send errno back to, so just
          * return
          *
@@ -456,7 +435,7 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
          * case.
          */
         if (!(errno == ENOENT && eof))
-            flux_log_error (s->h, "%s: lookup_pid", __FUNCTION__);
+            flux_log_error (s->h, "%s: proc_find_bypid", __FUNCTION__);
         goto out;
     }
 
@@ -501,7 +480,7 @@ static void server_signal_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!lookup_pid (s, pid))
+    if (!proc_find_bypid (s, pid))
         goto error;
 
     if (killpg (pid, signum) < 0) {
@@ -565,7 +544,7 @@ static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    p = zhash_first (s->subprocesses);
+    p = zlistx_first (s->subprocesses);
     while (p) {
         json_t *o = NULL;
         if (!(o = process_info (p))
@@ -574,7 +553,7 @@ static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = ENOMEM;
             goto error;
         }
-        p = zhash_next (s->subprocesses);
+        p = zlistx_next (s->subprocesses);
     }
 
     if (flux_respond_pack (h, msg, "{s:i s:o}", "rank", s->rank,
@@ -659,10 +638,10 @@ static int server_signal_subprocesses (subprocess_server_t *s, int signum)
 {
     flux_subprocess_t *p;
 
-    p = zhash_first (s->subprocesses);
+    p = zlistx_first (s->subprocesses);
     while (p) {
         server_signal_subprocess (p, signum);
-        p = zhash_next (s->subprocesses);
+        p = zlistx_next (s->subprocesses);
     }
 
     return 0;
@@ -690,10 +669,10 @@ static int server_terminate_by_uuid (subprocess_server_t *s,
 {
     flux_subprocess_t *p;
 
-    p = zhash_first (s->subprocesses);
+    p = zlistx_first (s->subprocesses);
     while (p) {
         terminate_uuid (p, id);
-        p = zhash_next (s->subprocesses);
+        p = zlistx_next (s->subprocesses);
     }
 
     return 0;
@@ -799,7 +778,7 @@ static void subprocess_server_destroy (void *arg)
         /* s->handlers handled in server_stop, this is for destroying
          * things only
          */
-        zhash_destroy (&s->subprocesses);
+        zlistx_destroy (&s->subprocesses);
         free (s->local_uri);
 
         flux_watcher_destroy (s->terminate_timer_w);
@@ -824,8 +803,9 @@ static subprocess_server_t *subprocess_server_create (flux_t *h,
     s->h = h;
     if (!(s->r = flux_get_reactor (h)))
         goto error;
-    if (!(s->subprocesses = zhash_new ()))
+    if (!(s->subprocesses = zlistx_new ()))
         goto error;
+    zlistx_set_destructor (s->subprocesses, proc_destructor);
     if (!(s->local_uri = strdup (local_uri)))
         goto error;
     s->rank = rank;
@@ -890,7 +870,7 @@ int subprocess_server_subprocesses_kill (subprocess_server_t *s,
         return -1;
     }
 
-    if (!zhash_size (s->subprocesses))
+    if (!zlistx_size (s->subprocesses))
         return 0;
 
     if (server_terminate_setup (s, wait_time) < 0)
