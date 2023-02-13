@@ -8,6 +8,8 @@ flux-job(1)
 SYNOPSIS
 ========
 
+**flux** **job** **attach** [*OPTIONS*] *id*
+
 **flux** **job** **cancel** [*OPTIONS*] *ids...* [*--*] [*message...*]
 
 **flux** **job** **cancelall** [*OPTIONS*] [*message...*]
@@ -34,6 +36,16 @@ DESCRIPTION
 ===========
 
 flux-job(1) performs various job related housekeeping functions.
+
+ATTACH
+======
+
+A job can be interactively attached to via ``flux job attach``.  This is
+typically used to watch stdout/stderr while a job is running or after it has
+completed.  It can also be used to feed stdin to a job.
+
+**-l, --label-io**
+   Label output by rank
 
 CANCEL
 ======
