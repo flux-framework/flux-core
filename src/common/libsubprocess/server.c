@@ -102,7 +102,7 @@ static flux_subprocess_t *proc_find_bypid (subprocess_server_t *s, pid_t pid)
     return NULL;
 }
 
-static void rexec_completion_cb (flux_subprocess_t *p)
+static void proc_completion_cb (flux_subprocess_t *p)
 {
     subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
     const flux_msg_t *request = flux_subprocess_aux_get (p, msgkey);
@@ -138,8 +138,8 @@ static void internal_fatal (subprocess_server_t *s, flux_subprocess_t *p)
     }
 }
 
-static void rexec_state_change_cb (flux_subprocess_t *p,
-                                   flux_subprocess_state_t state)
+static void proc_state_change_cb (flux_subprocess_t *p,
+                                  flux_subprocess_state_t state)
 {
     subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
     const flux_msg_t *request = flux_subprocess_aux_get (p, msgkey);
@@ -180,13 +180,13 @@ error:
     internal_fatal (s, p);
 }
 
-static int rexec_output (flux_subprocess_t *p,
-                         const char *stream,
-                         subprocess_server_t *s,
-                         const flux_msg_t *msg,
-                         const char *data,
-                         int len,
-                         bool eof)
+static int proc_output (flux_subprocess_t *p,
+                        const char *stream,
+                        subprocess_server_t *s,
+                        const flux_msg_t *msg,
+                        const char *data,
+                        int len,
+                        bool eof)
 {
     json_t *io = NULL;
     char rankstr[64];
@@ -213,7 +213,7 @@ error:
     return rv;
 }
 
-static void rexec_output_cb (flux_subprocess_t *p, const char *stream)
+static void proc_output_cb (flux_subprocess_t *p, const char *stream)
 {
     subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
     const flux_msg_t *request = flux_subprocess_aux_get (p, msgkey);
@@ -226,11 +226,11 @@ static void rexec_output_cb (flux_subprocess_t *p, const char *stream)
     }
 
     if (lenp) {
-        if (rexec_output (p, stream, s, request, ptr, lenp, false) < 0)
+        if (proc_output (p, stream, s, request, ptr, lenp, false) < 0)
             goto error;
     }
     else {
-        if (rexec_output (p, stream, s, request, NULL, 0, true) < 0)
+        if (proc_output (p, stream, s, request, NULL, 0, true) < 0)
             goto error;
     }
 
@@ -248,11 +248,11 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_cmd_t *cmd = NULL;
     flux_subprocess_t *p = NULL;
     flux_subprocess_ops_t ops = {
-        .on_completion = rexec_completion_cb,
-        .on_state_change = rexec_state_change_cb,
-        .on_channel_out = rexec_output_cb,
-        .on_stdout = rexec_output_cb,
-        .on_stderr = rexec_output_cb,
+        .on_completion = proc_completion_cb,
+        .on_state_change = proc_state_change_cb,
+        .on_channel_out = proc_output_cb,
+        .on_stdout = proc_output_cb,
+        .on_stderr = proc_output_cb,
     };
     int on_channel_out, on_stdout, on_stderr;
     char **env = NULL;
