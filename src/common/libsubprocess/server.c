@@ -259,9 +259,7 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     int on_channel_out, on_stdout, on_stderr;
     char **env = NULL;
     const char *errmsg = NULL;
-
-    if (s->auth_cb && (*s->auth_cb) (msg, s->arg) < 0)
-        goto error;
+    flux_error_t error;
 
     if (flux_request_unpack (msg, NULL, "{s:s s:i s:i s:i}",
                              "cmd", &cmd_str,
@@ -269,7 +267,11 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
                              "on_stdout", &on_stdout,
                              "on_stderr", &on_stderr))
         goto error;
-
+    if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
+        errmsg = error.text;
+        errno = EPERM;
+        goto error;
+    }
     if (!on_channel_out)
         ops.on_channel_out = NULL;
     if (!on_stdout)

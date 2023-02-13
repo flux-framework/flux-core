@@ -16,7 +16,9 @@
 /*  flux_subprocess_server_t: Handler for a subprocess remote server */
 typedef struct subprocess_server subprocess_server_t;
 
-typedef int (*subprocess_server_auth_f) (const flux_msg_t *msg, void *arg);
+typedef int (*subprocess_server_auth_f) (const flux_msg_t *msg,
+		                         void *arg,
+					 flux_error_t *error);
 
 /*  Start a subprocess server on the handle `h`. Registers message
  *   handlers, etc for remote execution.

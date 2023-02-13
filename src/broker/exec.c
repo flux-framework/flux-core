@@ -20,7 +20,7 @@
 
 #include "src/common/libsubprocess/command.h"
 #include "src/common/libsubprocess/server.h"
-#include "src/common/libutil/log.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "attr.h"
 #include "exec.h"
@@ -60,10 +60,13 @@ void exec_terminate_subprocesses (flux_t *h)
         flux_log_error (h, "subprocess_server_subprocesses_kill");
 }
 
-static int reject_nonlocal (const flux_msg_t *msg, void *arg)
+static int reject_nonlocal (const flux_msg_t *msg,
+                            void *arg,
+                            flux_error_t *error)
 {
     if (!overlay_msg_is_local (msg)) {
-        errno = EPERM;
+        errprintf (error,
+               "Remote rexec requests are not allowed on rank 0");
         return -1;
     }
     return 0;
