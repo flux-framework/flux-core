@@ -118,8 +118,10 @@ static void proc_completion_cb (flux_subprocess_t *p)
     proc_delete (s, p);
 }
 
-static void internal_fatal (subprocess_server_t *s, flux_subprocess_t *p)
+static void proc_internal_fatal (flux_subprocess_t *p)
 {
+    subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
+
     if (p->state == FLUX_SUBPROCESS_FAILED)
         return;
 
@@ -177,7 +179,7 @@ static void proc_state_change_cb (flux_subprocess_t *p,
     return;
 
 error:
-    internal_fatal (s, p);
+    proc_internal_fatal (p);
 }
 
 static int proc_output (flux_subprocess_t *p,
@@ -237,7 +239,7 @@ static void proc_output_cb (flux_subprocess_t *p, const char *stream)
     return;
 
 error:
-    internal_fatal (s, p);
+    proc_internal_fatal (p);
 }
 
 static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -440,7 +442,7 @@ out:
 
 error:
     free (data);
-    internal_fatal (s, p);
+    proc_internal_fatal (p);
 }
 
 static void server_signal_cb (flux_t *h, flux_msg_handler_t *mh,
