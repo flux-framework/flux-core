@@ -19,6 +19,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libioencode/ioencode.h"
+#include "ccan/str/str.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
@@ -101,13 +102,6 @@ static flux_subprocess_t *proc_find_bypid (subprocess_server_t *s, pid_t pid)
     return NULL;
 }
 
-static void subprocess_cleanup (flux_subprocess_t *p)
-{
-    subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
-
-    proc_delete (s, p);
-}
-
 static void rexec_completion_cb (flux_subprocess_t *p)
 {
     subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
@@ -121,7 +115,7 @@ static void rexec_completion_cb (flux_subprocess_t *p)
             flux_log_error (s->h, "error responding to rexec.exec request");
     }
 
-    subprocess_cleanup (p);
+    proc_delete (s, p);
 }
 
 static void internal_fatal (subprocess_server_t *s, flux_subprocess_t *p)
@@ -171,7 +165,7 @@ static void rexec_state_change_cb (flux_subprocess_t *p,
                                 "rank", s->rank,
                                 "state", FLUX_SUBPROCESS_FAILED,
                                 "errno", p->failed_errno);
-        subprocess_cleanup (p);
+        proc_delete (s, p);
     } else {
         errno = EPROTO;
         flux_log_error (s->h, "%s: illegal state", __FUNCTION__);
@@ -633,34 +627,22 @@ static int server_signal_subprocesses (subprocess_server_t *s, int signum)
     return 0;
 }
 
-static int server_terminate_subprocesses (subprocess_server_t *s)
-{
-    server_signal_subprocesses (s, SIGKILL);
-    return 0;
-}
-
-static void terminate_uuid (flux_subprocess_t *p, const char *id)
-{
-    const char *sender;
-
-    if (!(sender = subprocess_sender (p)))
-        return;
-
-    if (!strcmp (id, sender))
-        server_signal_subprocess (p, SIGKILL);
-}
-
-static int server_terminate_by_uuid (subprocess_server_t *s,
-                                     const char *id)
+int subprocess_server_terminate_by_uuid (subprocess_server_t *s,
+                                         const char *id)
 {
     flux_subprocess_t *p;
 
+    if (!s || !id) {
+        errno = EINVAL;
+        return -1;
+    }
     p = zlistx_first (s->subprocesses);
     while (p) {
-        terminate_uuid (p, id);
+        const char *sender = subprocess_sender (p);
+        if (sender && streq (id, sender))
+            server_signal_subprocess (p, SIGKILL);
         p = zlistx_next (s->subprocesses);
     }
-
     return 0;
 }
 
@@ -840,7 +822,7 @@ void subprocess_server_stop (subprocess_server_t *s)
 {
     if (s) {
         server_stop (s);
-        server_terminate_subprocesses (s);
+        server_signal_subprocesses (s, SIGKILL);
         subprocess_server_destroy (s);
     }
 }
@@ -872,17 +854,6 @@ int subprocess_server_subprocesses_kill (subprocess_server_t *s,
 error:
     server_terminate_cleanup (s);
     return rv;
-}
-
-int subprocess_server_terminate_by_uuid (subprocess_server_t *s,
-                                         const char *id)
-{
-    if (!s || !id) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    return server_terminate_by_uuid (s, id);
 }
 
 /*
