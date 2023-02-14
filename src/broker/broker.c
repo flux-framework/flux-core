@@ -510,12 +510,6 @@ int main (int argc, char *argv[])
     if (ctx.verbose > 1)
         log_msg ("exited event loop");
 
-    /* inform all lingering subprocesses we are tearing down.  Do this
-     * before any cleanup/teardown below, as this call will re-enter
-     * the reactor.
-     */
-    exec_terminate_subprocesses (ctx.h);
-
 cleanup:
     if (ctx.verbose > 1)
         log_msg ("cleaning up");

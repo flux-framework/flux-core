@@ -41,18 +41,13 @@ void subprocess_server_set_auth_cb (subprocess_server_t *s,
  */
 void subprocess_server_destroy (subprocess_server_t *s);
 
-/* Send all subprocesses signal and wait up to wait_time seconds for
- * all subprocesses to complete.  This is typically called to send
- * SIGTERM before calling subprocess_server_stop(), allowing
- * users to send a signal to inform subprocesses to complete / cleanup
- * before they are sent SIGKILL.
- *
- * This function will enter the reactor to wait for subprocesses to
- * complete, should only be called on cleanup path when primary
- * reactor has exited.
+/* Send all subprocesses a signal and return a future that is fulfilled
+ * when all subprocesses have exited.  New rexec.exec requests will fail.
+ * This future is fulfilled immediately if there are no subprocesses, but if
+ * there are some, the orig. reactor must be allowed to run in order for the
+ * shutdown to make progress.  Therefore this future should be tracked with
+ * flux_future_then(), not flux_future_get() which would deadlock.
  */
-int subprocess_server_subprocesses_kill (subprocess_server_t *s,
-                                         int signum,
-                                         double wait_time);
+flux_future_t *subprocess_server_shutdown (subprocess_server_t *s, int signum);
 
 #endif /* !_SUBPROCESS_SERVER_H */

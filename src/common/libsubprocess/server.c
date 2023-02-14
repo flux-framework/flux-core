@@ -35,19 +35,15 @@ static const char *lstkey = "flux::handle";
 
 struct subprocess_server {
     flux_t *h;
-    flux_reactor_t *r;
     char *local_uri;
     uint32_t rank;
     zlistx_t *subprocesses;
     flux_msg_handler_t **handlers;
     subprocess_server_auth_f auth_cb;
     void *arg;
-
-    /* for teardown / termination */
-    flux_watcher_t *terminate_timer_w;
-    flux_watcher_t *terminate_prep_w;
-    flux_watcher_t *terminate_idle_w;
-    flux_watcher_t *terminate_check_w;
+    // The shutdown future is created when user calls shutdown,
+    //  and fulfilled once subprocesses list becomes empty.
+    flux_future_t *shutdown;
 };
 
 static void server_signal_subprocess (flux_subprocess_t *p, int signum);
@@ -85,10 +81,8 @@ static void proc_delete (subprocess_server_t *s, flux_subprocess_t *p)
 
     zlistx_delete (s->subprocesses, handle);
 
-    if (!zlistx_size (s->subprocesses) && s->terminate_prep_w) {
-        flux_watcher_start (s->terminate_prep_w);
-        flux_watcher_start (s->terminate_check_w);
-    }
+    if (zlistx_size (s->subprocesses) == 0 && s->shutdown)
+        flux_future_fulfill (s->shutdown, NULL, NULL);
 
     errno = saved_errno;
 }
@@ -266,6 +260,11 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
                              "on_stdout", &on_stdout,
                              "on_stderr", &on_stderr))
         goto error;
+    if (s->shutdown) {
+        errmsg = "subprocess server is shutting down";
+        errno = ENOSYS;
+        goto error;
+    }
     if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
         errmsg = error.text;
         errno = EPERM;
@@ -629,98 +628,6 @@ static int server_signal_subprocesses (subprocess_server_t *s, int signum)
     return 0;
 }
 
-static void terminate_prep_cb (flux_reactor_t *r,
-                               flux_watcher_t *w,
-                               int revents,
-                               void *arg)
-{
-    subprocess_server_t *s = arg;
-    flux_watcher_start (s->terminate_idle_w);
-}
-
-static void terminate_cb (flux_reactor_t *r,
-                          flux_watcher_t *w,
-                          int revents,
-                          void *arg)
-{
-    subprocess_server_t *s = arg;
-    flux_watcher_stop (s->terminate_timer_w);
-    flux_watcher_stop (s->terminate_prep_w);
-    flux_watcher_stop (s->terminate_idle_w);
-    flux_watcher_stop (s->terminate_check_w);
-    flux_reactor_stop (s->r);
-}
-
-static void server_terminate_cleanup (subprocess_server_t *s)
-{
-    flux_watcher_destroy (s->terminate_timer_w);
-    flux_watcher_destroy (s->terminate_prep_w);
-    flux_watcher_destroy (s->terminate_idle_w);
-    flux_watcher_destroy (s->terminate_check_w);
-    s->terminate_timer_w = NULL;
-    s->terminate_prep_w = NULL;
-    s->terminate_idle_w = NULL;
-    s->terminate_check_w = NULL;
-}
-
-static int server_terminate_setup (subprocess_server_t *s,
-                            double wait_time)
-{
-    s->terminate_timer_w = flux_timer_watcher_create (s->r,
-                                                      wait_time, 0.,
-                                                      terminate_cb,
-                                                      s);
-    if (!s->terminate_timer_w) {
-        flux_log_error (s->h, "flux_timer_watcher_create");
-        goto error;
-    }
-
-    if (s->terminate_prep_w)
-        return 0;
-
-    s->terminate_prep_w = flux_prepare_watcher_create (s->r,
-                                                       terminate_prep_cb,
-                                                       s);
-    if (!s->terminate_prep_w) {
-        flux_log_error (s->h, "flux_prepare_watcher_create");
-        goto error;
-    }
-
-    s->terminate_idle_w = flux_idle_watcher_create (s->r,
-                                                    NULL,
-                                                    s);
-    if (!s->terminate_idle_w) {
-        flux_log_error (s->h, "flux_idle_watcher_create");
-        goto error;
-    }
-
-    s->terminate_check_w = flux_check_watcher_create (s->r,
-                                                      terminate_cb,
-                                                      s);
-    if (!s->terminate_check_w) {
-        flux_log_error (s->h, "flux_check_watcher_create");
-        goto error;
-    }
-
-    return 0;
-
-error:
-    server_terminate_cleanup (s);
-    return -1;
-}
-
-static int server_terminate_wait (subprocess_server_t *s)
-{
-    flux_watcher_start (s->terminate_timer_w);
-
-    if (flux_reactor_run (s->r, 0) < 0) {
-        flux_log_error (s->h, "flux_reactor_run");
-        return -1;
-    }
-
-    return 0;
-}
-
 void subprocess_server_destroy (subprocess_server_t *s)
 {
     if (s) {
@@ -728,13 +635,8 @@ void subprocess_server_destroy (subprocess_server_t *s)
         flux_msg_handler_delvec (s->handlers);
         server_signal_subprocesses (s, SIGKILL);
         zlistx_destroy (&s->subprocesses);
+        flux_future_destroy (s->shutdown);
         free (s->local_uri);
-
-        flux_watcher_destroy (s->terminate_timer_w);
-        flux_watcher_destroy (s->terminate_prep_w);
-        flux_watcher_destroy (s->terminate_idle_w);
-        flux_watcher_destroy (s->terminate_check_w);
-
         free (s);
         errno = saved_errno;
     }
@@ -754,8 +656,6 @@ subprocess_server_t *subprocess_server_create (flux_t *h,
         return NULL;
 
     s->h = h;
-    if (!(s->r = flux_get_reactor (h)))
-        goto error;
     if (!(s->subprocesses = zlistx_new ()))
         goto error;
     zlistx_set_destructor (s->subprocesses, proc_destructor);
@@ -780,33 +680,25 @@ void subprocess_server_set_auth_cb (subprocess_server_t *s,
     s->arg = arg;
 }
 
-int subprocess_server_subprocesses_kill (subprocess_server_t *s,
-                                         int signum,
-                                         double wait_time)
+flux_future_t *subprocess_server_shutdown (subprocess_server_t *s, int signum)
 {
-    int rv = -1;
+    flux_future_t *f;
 
-    if (!s) {
+    if (!s || s->shutdown != NULL) {
         errno = EINVAL;
-        return -1;
+        return NULL;
     }
-
-    if (!zlistx_size (s->subprocesses))
-        return 0;
-
-    if (server_terminate_setup (s, wait_time) < 0)
-        goto error;
-
-    if (server_signal_subprocesses (s, signum) < 0)
-        goto error;
-
-    if (server_terminate_wait (s) < 0)
-        goto error;
-
-    rv = 0;
-error:
-    server_terminate_cleanup (s);
-    return rv;
+    if (!(f = flux_future_create (NULL, NULL)))
+        return NULL;
+    flux_future_set_reactor (f, flux_get_reactor (s->h));
+    flux_future_set_flux (f, s->h);
+    flux_future_incref (f);
+    s->shutdown = f;
+    if (zlistx_size (s->subprocesses) == 0)
+        flux_future_fulfill (f, NULL, NULL);
+    else
+        server_signal_subprocesses (s, signum);
+    return f;
 }
 
 /*

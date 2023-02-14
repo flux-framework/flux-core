@@ -155,9 +155,9 @@ void test_basic_errors (flux_reactor_t *r)
     ok (!subprocess_server_create (NULL, NULL, 0)
         && errno == EINVAL,
         "subprocess_server_create fails with NULL pointer inputs");
-    ok (subprocess_server_subprocesses_kill (NULL, 0, 0.) < 0
+    ok (subprocess_server_shutdown (NULL, 0) == NULL
         && errno == EINVAL,
-        "subprocess_server_subprocesses_kill fails with NULL pointer inputs");
+        "subprocess_server_shutdown fails with NULL pointer inputs");
 
     ok (flux_exec (NULL, 0, NULL, NULL, NULL) == NULL
         && errno == EINVAL,
