@@ -109,9 +109,7 @@ static void proc_completion_cb (flux_subprocess_t *p)
 
     if (p->state != FLUX_SUBPROCESS_FAILED) {
         /* no fallback if this fails */
-        if (flux_respond_pack (s->h, request, "{s:s s:i}",
-                               "type", "complete",
-                               "rank", s->rank) < 0)
+        if (flux_respond_error (s->h, request, ENODATA, NULL) < 0)
             flux_log_error (s->h, "error responding to rexec.exec request");
     }
 

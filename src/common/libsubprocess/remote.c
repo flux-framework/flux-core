@@ -655,10 +655,17 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
     const char *type;
     int rank;
     pid_t pid;
+    int rc;
 
-    if (flux_rpc_get_unpack (f, "{ s:s s:i }",
-                             "type", &type,
-                             "rank", &rank) < 0) {
+    rc = flux_rpc_get_unpack (f, "{ s:s s:i }",
+                              "type", &type,
+                              "rank", &rank);
+    if (rc < 0 && errno == ENODATA) {
+        remote_completion (p);
+        flux_future_destroy (f);
+        p->f = NULL;
+    }
+    else if (rc < 0) {
         if (errno != EHOSTUNREACH) // broker is down, don't log
             flux_log (p->h,
                       LOG_DEBUG,
@@ -667,8 +674,7 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
                       flux_rpc_get_nodeid (f));
         goto error;
     }
-
-    if (!strcmp (type, "state")) {
+    else if (!strcmp (type, "state")) {
         if (remote_state (p, f, rank) < 0)
             goto error;
         if (p->state == FLUX_SUBPROCESS_EXEC_FAILED
@@ -687,11 +693,6 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
         if (remote_output (p, f, rank, pid) < 0)
             goto error;
         flux_future_reset (f);
-    }
-    else if (!strcmp (type, "complete")) {
-        remote_completion (p);
-        flux_future_destroy (f);
-        p->f = NULL;
     }
     else {
         flux_log (p->h, LOG_DEBUG, "%s: EPROTO", __FUNCTION__);
