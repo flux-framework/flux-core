@@ -55,8 +55,4 @@ int subprocess_server_subprocesses_kill (subprocess_server_t *s,
                                          int signum,
                                          double wait_time);
 
-/* Terminate all subprocesses started by a sender id */
-int subprocess_server_terminate_by_uuid (subprocess_server_t *s,
-                                         const char *id);
-
 #endif /* !_SUBPROCESS_SERVER_H */

@@ -50,6 +50,8 @@ struct subprocess_server {
     flux_watcher_t *terminate_check_w;
 };
 
+static void server_signal_subprocess (flux_subprocess_t *p, int signum);
+
 // zlistx_destructor_fn footprint
 static void proc_destructor (void **item)
 {
@@ -560,8 +562,16 @@ static void server_disconnect_cb (flux_t *h,
     subprocess_server_t *s = arg;
     const char *sender;
 
-    if ((sender = flux_msg_route_first (msg)))
-        subprocess_server_terminate_by_uuid (s, sender);
+    if ((sender = flux_msg_route_first (msg))) {
+        flux_subprocess_t *p;
+        p = zlistx_first (s->subprocesses);
+        while (p) {
+            const char *uuid = subprocess_sender (p);
+            if (sender && streq (uuid, sender))
+                server_signal_subprocess (p, SIGKILL);
+            p = zlistx_next (s->subprocesses);
+        }
+    }
 }
 
 static int server_start (subprocess_server_t *s)
@@ -629,25 +639,6 @@ static int server_signal_subprocesses (subprocess_server_t *s, int signum)
         p = zlistx_next (s->subprocesses);
     }
 
-    return 0;
-}
-
-int subprocess_server_terminate_by_uuid (subprocess_server_t *s,
-                                         const char *id)
-{
-    flux_subprocess_t *p;
-
-    if (!s || !id) {
-        errno = EINVAL;
-        return -1;
-    }
-    p = zlistx_first (s->subprocesses);
-    while (p) {
-        const char *sender = subprocess_sender (p);
-        if (sender && streq (id, sender))
-            server_signal_subprocess (p, SIGKILL);
-        p = zlistx_next (s->subprocesses);
-    }
     return 0;
 }
 
