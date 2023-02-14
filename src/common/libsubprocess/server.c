@@ -78,6 +78,7 @@ static int proc_save (subprocess_server_t *s, flux_subprocess_t *p)
 
 static void proc_delete (subprocess_server_t *s, flux_subprocess_t *p)
 {
+    int saved_errno = errno;
     void *handle = flux_subprocess_aux_get (p, lstkey);
 
     zlistx_delete (s->subprocesses, handle);
@@ -86,6 +87,8 @@ static void proc_delete (subprocess_server_t *s, flux_subprocess_t *p)
         flux_watcher_start (s->terminate_prep_w);
         flux_watcher_start (s->terminate_check_w);
     }
+
+    errno = saved_errno;
 }
 
 static flux_subprocess_t *proc_find_bypid (subprocess_server_t *s, pid_t pid)
@@ -160,12 +163,8 @@ static void proc_state_change_cb (flux_subprocess_t *p,
                                 "status", flux_subprocess_status (p));
     }
     else if (state == FLUX_SUBPROCESS_FAILED) {
-        rc = flux_respond_pack (s->h, request, "{s:s s:i s:i s:i}",
-                                "type", "state",
-                                "rank", s->rank,
-                                "state", FLUX_SUBPROCESS_FAILED,
-                                "errno", p->failed_errno);
-        proc_delete (s, p);
+        rc = flux_respond_error (s->h, request, p->failed_errno, NULL);
+        proc_delete (s, p); // N.B. proc_delete preserves errno
     } else {
         errno = EPROTO;
         flux_log_error (s->h, "%s: illegal state", __FUNCTION__);
@@ -301,15 +300,8 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
                          cmd,
                          &ops,
                          NULL))) {
-        /* error here, generate FLUX_SUBPROCESS_EXEC_FAILED state */
-        if (flux_respond_pack (h, msg, "{s:s s:i s:i s:i}",
-                               "type", "state",
-                               "rank", s->rank,
-                               "state", FLUX_SUBPROCESS_EXEC_FAILED,
-                               "errno", errno) < 0) {
-            flux_log_error (s->h, "error responding to rexec.exec request");
-        }
-        goto cleanup;
+        errmsg = "exec failed";
+        goto error;
     }
 
     if (flux_subprocess_aux_set (p,
@@ -331,7 +323,6 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (s->h, "error responding to rexec.exec request");
-cleanup:
     flux_cmd_destroy (cmd);
     free (env);
     flux_subprocess_unref (p);

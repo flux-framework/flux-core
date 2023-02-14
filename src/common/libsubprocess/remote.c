@@ -20,6 +20,7 @@
 
 #include <flux/core.h>
 
+#include "ccan/str/str.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
@@ -649,6 +650,16 @@ static void remote_completion (flux_subprocess_t *p)
     subprocess_check_completed (p);
 }
 
+static bool is_exec_failed_error (flux_future_t *f)
+{
+    const char *errmsg;
+    if (flux_future_has_error (f)
+        && (errmsg = flux_future_error_string (f))
+        && streq (errmsg, "exec failed"))
+        return true;
+    return false;
+}
+
 static void remote_exec_cb (flux_future_t *f, void *arg)
 {
     flux_subprocess_t *p = arg;
@@ -665,25 +676,27 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
         flux_future_destroy (f);
         p->f = NULL;
     }
+    else if (rc < 0 && is_exec_failed_error (f)) {
+        process_new_state (p,
+                           FLUX_SUBPROCESS_EXEC_FAILED,
+                           p->rank,
+                           -1,
+                           errno,
+                           0);
+        flux_future_destroy (f);
+        p->f = NULL;
+    }
     else if (rc < 0) {
-        if (errno != EHOSTUNREACH) // broker is down, don't log
-            flux_log (p->h,
-                      LOG_DEBUG,
-                      "%s: flux_rpc_get_unpack: rank %u",
-                      __FUNCTION__,
-                      flux_rpc_get_nodeid (f));
         goto error;
     }
     else if (!strcmp (type, "state")) {
+        /* N.B. EXEC_FAILED and FAILED states are not communicated as state
+         * changes via rexec protocol.  They are communicated as RPC error
+         * responses, handled in the two cases above.
+         */
         if (remote_state (p, f, rank) < 0)
             goto error;
-        if (p->state == FLUX_SUBPROCESS_EXEC_FAILED
-            || p->state == FLUX_SUBPROCESS_FAILED) {
-            flux_future_destroy (f);
-            p->f = NULL;
-        }
-        else
-            flux_future_reset (f);
+        flux_future_reset (f);
     }
     else if (!strcmp (type, "output")) {
         if (flux_rpc_get_unpack (f, "{ s:i }", "pid", &pid) < 0) {
