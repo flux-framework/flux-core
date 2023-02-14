@@ -574,48 +574,35 @@ static void server_disconnect_cb (flux_t *h,
     }
 }
 
-static int server_start (subprocess_server_t *s)
-{
-    /* rexec.processes is primarily for testing */
-    struct flux_msg_handler_spec htab[] = {
-        { FLUX_MSGTYPE_REQUEST,
-          "rexec.exec",
-          server_exec_cb,
-          0
-        },
-        { FLUX_MSGTYPE_REQUEST,
-          "rexec.write",
-          server_write_cb,
-          0
-        },
-        { FLUX_MSGTYPE_REQUEST,
-          "rexec.signal",
-          server_signal_cb,
-          0
-        },
-        { FLUX_MSGTYPE_REQUEST,
-          "rexec.processes",
-          server_processes_cb,
-          0
-        },
-        { FLUX_MSGTYPE_REQUEST,
-          "rexec.disconnect",
-          server_disconnect_cb,
-          0
-        },
-        FLUX_MSGHANDLER_TABLE_END,
-    };
-
-    if (flux_msg_handler_addvec (s->h, htab, s, &s->handlers) < 0)
-        return -1;
-
-    return 0;
-}
-
-static void server_stop (subprocess_server_t *s)
-{
-    flux_msg_handler_delvec (s->handlers);
-}
+/* rexec.processes is primarily for testing */
+static struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,
+      "rexec.exec",
+      server_exec_cb,
+      0
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "rexec.write",
+      server_write_cb,
+      0
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "rexec.signal",
+      server_signal_cb,
+      0
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "rexec.processes",
+      server_processes_cb,
+      0
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "rexec.disconnect",
+      server_disconnect_cb,
+      0
+    },
+    FLUX_MSGHANDLER_TABLE_END,
+};
 
 static void server_signal_subprocess (flux_subprocess_t *p, int signum)
 {
@@ -734,14 +721,12 @@ static int server_terminate_wait (subprocess_server_t *s)
     return 0;
 }
 
-static void subprocess_server_destroy (void *arg)
+void subprocess_server_destroy (subprocess_server_t *s)
 {
-    subprocess_server_t *s = arg;
     if (s) {
         int saved_errno = errno;
-        /* s->handlers handled in server_stop, this is for destroying
-         * things only
-         */
+        flux_msg_handler_delvec (s->handlers);
+        server_signal_subprocesses (s, SIGKILL);
         zlistx_destroy (&s->subprocesses);
         free (s->local_uri);
 
@@ -755,13 +740,17 @@ static void subprocess_server_destroy (void *arg)
     }
 }
 
-static subprocess_server_t *subprocess_server_create (flux_t *h,
-                                                      const char *local_uri,
-                                                      int rank)
+subprocess_server_t *subprocess_server_create (flux_t *h,
+                                               const char *local_uri,
+                                               uint32_t rank)
 {
-    subprocess_server_t *s = calloc (1, sizeof (*s));
+    subprocess_server_t *s;
 
-    if (!s)
+    if (!h || !local_uri) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(s = calloc (1, sizeof (*s))))
         return NULL;
 
     s->h = h;
@@ -773,30 +762,7 @@ static subprocess_server_t *subprocess_server_create (flux_t *h,
     if (!(s->local_uri = strdup (local_uri)))
         goto error;
     s->rank = rank;
-
-    return s;
-
-error:
-    subprocess_server_destroy (s);
-    return NULL;
-}
-
-
-subprocess_server_t *subprocess_server_start (flux_t *h,
-                                              const char *local_uri,
-                                              uint32_t rank)
-{
-    subprocess_server_t *s = NULL;
-
-    if (!h || !local_uri) {
-        errno = EINVAL;
-        goto error;
-    }
-
-    if (!(s = subprocess_server_create (h, local_uri, rank)))
-        goto error;
-
-    if (server_start (s) < 0)
+    if (flux_msg_handler_addvec (s->h, htab, s, &s->handlers) < 0)
         goto error;
 
     return s;
@@ -812,15 +778,6 @@ void subprocess_server_set_auth_cb (subprocess_server_t *s,
 {
     s->auth_cb = fn;
     s->arg = arg;
-}
-
-void subprocess_server_stop (subprocess_server_t *s)
-{
-    if (s) {
-        server_stop (s);
-        server_signal_subprocesses (s, SIGKILL);
-        subprocess_server_destroy (s);
-    }
 }
 
 int subprocess_server_subprocesses_kill (subprocess_server_t *s,

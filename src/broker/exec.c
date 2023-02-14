@@ -31,7 +31,7 @@
 static void exec_finalize (void *arg)
 {
     subprocess_server_t *s = arg;
-    subprocess_server_stop (s);
+    subprocess_server_destroy (s);
 }
 
 void exec_terminate_subprocesses (flux_t *h)
@@ -79,14 +79,14 @@ int exec_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
 
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0)
         goto cleanup;
-    if (!(s = subprocess_server_start (h, local_uri, rank)))
+    if (!(s = subprocess_server_create (h, local_uri, rank)))
         goto cleanup;
     if (rank == 0)
         subprocess_server_set_auth_cb (s, reject_nonlocal, NULL);
     flux_aux_set (h, "flux::exec", s, exec_finalize);
     return 0;
 cleanup:
-    subprocess_server_stop (s);
+    subprocess_server_destroy (s);
     return -1;
 }
 

@@ -20,12 +20,12 @@ typedef int (*subprocess_server_auth_f) (const flux_msg_t *msg,
 		                         void *arg,
 					 flux_error_t *error);
 
-/*  Start a subprocess server on the handle `h`. Registers message
+/*  Create a subprocess server on the handle `h`. Registers message
  *   handlers, etc for remote execution.
  */
-subprocess_server_t *subprocess_server_start (flux_t *h,
-                                              const char *local_uri,
-                                              uint32_t rank);
+subprocess_server_t *subprocess_server_create (flux_t *h,
+                                               const char *local_uri,
+                                               uint32_t rank);
 
 /*   Register an authorization function to the subprocess server
  *
@@ -36,10 +36,10 @@ void subprocess_server_set_auth_cb (subprocess_server_t *s,
                                     subprocess_server_auth_f fn,
                                     void *arg);
 
-/*  Stop a subprocess server / cleanup subprocess_server_t.  Will
+/*  Destroy a subprocess server / cleanup subprocess_server_t.  Will
  *  send a SIGKILL to all remaining subprocesses.
  */
-void subprocess_server_stop (subprocess_server_t *s);
+void subprocess_server_destroy (subprocess_server_t *s);
 
 /* Send all subprocesses signal and wait up to wait_time seconds for
  * all subprocesses to complete.  This is typically called to send
