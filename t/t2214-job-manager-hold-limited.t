@@ -34,6 +34,14 @@ test_expect_success HAVE_JQ 'job-manager: job annotations correct (RSSSS)' '
         jmgr_check_no_annotations $(cat job5.id)
 '
 
+test_expect_success 'job-manager: hold job 3, 5 again (issue #4940)' '
+        flux job urgency $(cat job3.id) hold &&
+        flux job urgency $(cat job3.id) hold &&
+        flux job urgency $(cat job3.id) hold &&
+        flux job urgency $(cat job3.id) hold &&
+        flux job urgency $(cat job5.id) hold
+'
+
 test_expect_success 'job-manager: remove hold on job 3, 4, 5' '
         flux job urgency $(cat job3.id) 16 &&
         flux job urgency $(cat job4.id) 16 &&

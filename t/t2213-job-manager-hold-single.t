@@ -59,6 +59,13 @@ test_expect_success HAVE_JQ 'job-manager: annotations job 5 pending (job 2/4 hel
         jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\""
 '
 
+test_expect_success HAVE_JQ 'job-manager: job 2, 4 hold again (issue #4940)' '
+        flux job urgency $(cat job2.id) hold &&
+        flux job urgency $(cat job4.id) hold &&
+        jmgr_check_state $(cat job2.id) S &&
+        jmgr_check_state $(cat job4.id) S
+'
+
 test_expect_success 'job-manager: job 4 release (higher urgency)' '
         flux job urgency $(cat job4.id) 20
 '
