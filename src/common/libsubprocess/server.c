@@ -298,13 +298,6 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (flux_respond_pack (s->h, msg, "{s:s s:i}",
-                           "type", "start",
-                           "rank", s->rank) < 0) {
-        flux_log_error (s->h, "error responding to rexec.exec request");
-        goto cleanup;
-    }
-
     if (!(p = flux_exec (s->h,
                          FLUX_SUBPROCESS_FLAGS_SETPGRP,
                          cmd,

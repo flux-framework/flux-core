@@ -718,52 +718,6 @@ error:
     p->f = NULL;
 }
 
-static void remote_continuation_cb (flux_future_t *f, void *arg)
-{
-    flux_subprocess_t *p = arg;
-    const char *type;
-    int rank;
-    int save_errno;
-
-    if (flux_rpc_get_unpack (f, "{ s:s s:i }",
-                             "type", &type,
-                             "rank", &rank) < 0) {
-        if (errno != EHOSTUNREACH) // broker is down, don't log
-            flux_log (p->h,
-                      LOG_DEBUG,
-                      "%s: flux_rpc_get_unpack: rank %u",
-                      __FUNCTION__,
-                      flux_rpc_get_nodeid (f));
-        goto error;
-    }
-
-    if (!strcmp (type, "start")) {
-        flux_future_reset (f);
-        if (flux_future_then (f, -1., remote_exec_cb, p) < 0) {
-            flux_log (p->h, LOG_DEBUG, "flux_future_then");
-            goto error;
-        }
-    }
-    else {
-        flux_log (p->h, LOG_DEBUG, "%s: EPROTO", __FUNCTION__);
-        errno = EPROTO;
-        goto error;
-    }
-
-    return;
-
-error:
-    /* error here is fatal, we can't do anything else b/c we lack a
-     * PID or anything similar.
-     */
-    process_new_state (p, FLUX_SUBPROCESS_FAILED, p->rank, -1, errno, 0);
-    save_errno = errno;
-    flux_future_destroy (p->f);
-    p->f = NULL;
-    errno = save_errno;
-    return;
-}
-
 int remote_exec (flux_subprocess_t *p)
 {
     flux_future_t *f = NULL;
@@ -789,7 +743,7 @@ int remote_exec (flux_subprocess_t *p)
         goto error;
     }
 
-    if (flux_future_then (f, -1., remote_continuation_cb, p) < 0) {
+    if (flux_future_then (f, -1., remote_exec_cb, p) < 0) {
         flux_log (p->h, LOG_DEBUG, "flux_future_then");
         goto error;
     }
