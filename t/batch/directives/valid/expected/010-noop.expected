@@ -1,0 +1,3 @@
+SETARGS(['-n', '32'])
+NOOP([])
+SETARGS(['--env=-*', '--env=PATH', '--env=PYTHONPATH'])

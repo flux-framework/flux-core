@@ -1,0 +1,2 @@
+SETARGS(['-N1', '--exclusive'])
+SETARGS(['--output=job.out'])

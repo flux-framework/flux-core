@@ -1,0 +1,2 @@
+SETARGS(['--nodes=4'])
+SETARGS(['--setattr=user.foo=hello, earth'])

@@ -1,0 +1,2 @@
+SETARGS(['-N4', '--exclusive'])
+SETARGS(['--job-name=foo', '--setattr=user.conf=[config]\n  item = "foo"  # an inline comment\n# another comment\n[tab2]\n  b = \'bar\'\n'])

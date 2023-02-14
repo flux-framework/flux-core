@@ -75,6 +75,7 @@ TESTSCRIPTS = \
 	t0029-filemap-cmd.t \
 	t0030-marshall.t \
 	t0031-constraint-parser.t \
+	t0032-directives-parser.t \
 	t0025-broker-state-machine.t \
 	t0027-broker-groups.t \
 	t0013-config-file.t \
@@ -289,6 +290,7 @@ EXTRA_DIST= \
 	scripts/rexec.py \
 	jobspec \
 	marshall \
+	batch \
 	job-manager/dumps \
 	flux-resource \
 	resource/get-xml-test.py
