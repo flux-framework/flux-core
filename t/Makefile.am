@@ -286,6 +286,7 @@ EXTRA_DIST= \
 	scripts/run_timeout.py \
 	scripts/startctl.py \
 	scripts/groups.py \
+	scripts/rexec.py \
 	jobspec \
 	marshall \
 	job-manager/dumps \
@@ -395,7 +396,6 @@ check_PROGRAMS = \
 	barrier/tbarrier \
 	reactor/reactorcat \
 	rexec/rexec \
-	rexec/rexec_ps \
 	rexec/rexec_count_stdout \
 	rexec/rexec_getline \
 	job-manager/list-jobs \
@@ -717,11 +717,6 @@ rexec_rexec_SOURCES = rexec/rexec.c
 rexec_rexec_CPPFLAGS = $(test_cppflags)
 rexec_rexec_LDADD = $(test_ldadd)
 rexec_rexec_LDFLAGS = $(test_ldflags)
-
-rexec_rexec_ps_SOURCES = rexec/rexec_ps.c
-rexec_rexec_ps_CPPFLAGS = $(test_cppflags)
-rexec_rexec_ps_LDADD = $(test_ldadd)
-rexec_rexec_ps_LDFLAGS = $(test_ldflags)
 
 rexec_rexec_count_stdout_SOURCES = rexec/rexec_count_stdout.c
 rexec_rexec_count_stdout_CPPFLAGS = $(test_cppflags)
