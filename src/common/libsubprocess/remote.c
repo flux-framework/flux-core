@@ -778,7 +778,7 @@ flux_future_t *remote_kill (flux_subprocess_t *p, int signum)
 {
     flux_future_t *f;
 
-    if (!(f = flux_rpc_pack (p->h, "rexec.signal", p->rank, 0,
+    if (!(f = flux_rpc_pack (p->h, "rexec.kill", p->rank, 0,
                              "{s:i s:i}",
                              "pid", p->pid,
                              "signum", signum))) {

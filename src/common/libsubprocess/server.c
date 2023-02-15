@@ -46,7 +46,7 @@ struct subprocess_server {
     flux_future_t *shutdown;
 };
 
-static void server_signal_subprocess (flux_subprocess_t *p, int signum);
+static void server_kill (flux_subprocess_t *p, int signum);
 
 // zlistx_destructor_fn footprint
 static void proc_destructor (void **item)
@@ -436,8 +436,8 @@ error:
     proc_internal_fatal (p);
 }
 
-static void server_signal_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void server_kill_cb (flux_t *h, flux_msg_handler_t *mh,
+                            const flux_msg_t *msg, void *arg)
 {
     subprocess_server_t *s = arg;
     pid_t pid;
@@ -445,33 +445,24 @@ static void server_signal_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_error_t error;
     const char *errmsg = NULL;
 
-    errno = 0;
-
     if (flux_request_unpack (msg, NULL, "{ s:i s:i }",
                              "pid", &pid,
-                             "signum", &signum) < 0) {
-        flux_log_error (s->h, "%s: flux_request_unpack", __FUNCTION__);
-        errno = EPROTO;
+                             "signum", &signum) < 0)
         goto error;
-    }
     if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
         errmsg = error.text;
         errno = EPERM;
         goto error;
     }
-    if (!proc_find_bypid (s, pid))
+    if (!proc_find_bypid (s, pid)
+        || killpg (pid, signum) < 0)
         goto error;
-
-    if (killpg (pid, signum) < 0) {
-        flux_log_error (s->h, "kill");
-        goto error;
-    }
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+        flux_log_error (h, "error responding to rexec.kill request");
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+        flux_log_error (h, "error responding to rexec.kill request");
 }
 
 static const char *subprocess_sender (flux_subprocess_t *p)
@@ -567,7 +558,7 @@ static void server_disconnect_cb (flux_t *h,
         while (p) {
             const char *uuid = subprocess_sender (p);
             if (sender && streq (uuid, sender))
-                server_signal_subprocess (p, SIGKILL);
+                server_kill (p, SIGKILL);
             p = zlistx_next (s->subprocesses);
         }
     }
@@ -586,8 +577,8 @@ static struct flux_msg_handler_spec htab[] = {
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "rexec.signal",
-      server_signal_cb,
+      "rexec.kill",
+      server_kill_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
@@ -603,7 +594,7 @@ static struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-static void server_signal_subprocess (flux_subprocess_t *p, int signum)
+static void server_kill (flux_subprocess_t *p, int signum)
 {
     flux_future_t *f;
     if (!(f = flux_subprocess_kill (p, signum))) {
@@ -615,13 +606,13 @@ static void server_signal_subprocess (flux_subprocess_t *p, int signum)
     flux_future_destroy (f);
 }
 
-static int server_signal_subprocesses (subprocess_server_t *s, int signum)
+static int server_killall (subprocess_server_t *s, int signum)
 {
     flux_subprocess_t *p;
 
     p = zlistx_first (s->subprocesses);
     while (p) {
-        server_signal_subprocess (p, signum);
+        server_kill (p, signum);
         p = zlistx_next (s->subprocesses);
     }
 
@@ -633,7 +624,7 @@ void subprocess_server_destroy (subprocess_server_t *s)
     if (s) {
         int saved_errno = errno;
         flux_msg_handler_delvec (s->handlers);
-        server_signal_subprocesses (s, SIGKILL);
+        server_killall (s, SIGKILL);
         zlistx_destroy (&s->subprocesses);
         flux_future_destroy (s->shutdown);
         free (s->local_uri);
@@ -697,7 +688,7 @@ flux_future_t *subprocess_server_shutdown (subprocess_server_t *s, int signum)
     if (zlistx_size (s->subprocesses) == 0)
         flux_future_fulfill (f, NULL, NULL);
     else
-        server_signal_subprocesses (s, signum);
+        server_killall (s, signum);
     return f;
 }
 
