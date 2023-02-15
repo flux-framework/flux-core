@@ -474,36 +474,25 @@ static const char *subprocess_sender (flux_subprocess_t *p)
 static json_t *process_info (flux_subprocess_t *p)
 {
     flux_cmd_t *cmd;
-    char *cmd_str = NULL;
-    const char *sender;
     json_t *info = NULL;
+    char *s;
 
-    if (!(cmd = flux_subprocess_get_cmd (p)))
-        goto cleanup;
-
-    if (!(cmd_str = flux_cmd_tojson (cmd)))
-        goto cleanup;
-
-    if (!(sender = subprocess_sender (p))) {
-        errno = ENOENT;
-        goto cleanup;
-    }
-
-    /* very limited returned, just for testing */
+    if (!(cmd = flux_subprocess_get_cmd (p))
+            || !(s = flux_cmd_stringify (cmd)))
+        return NULL;
     if (!(info = json_pack ("{s:i s:s}",
                             "pid", flux_subprocess_pid (p),
-                            "sender", sender))) {
+                            "cmd", flux_cmd_arg (cmd, 0)))) {
+        free (s);
         errno = ENOMEM;
-        goto cleanup;
+        return NULL;
     }
-
-cleanup:
-    free (cmd_str);
+    free (s);
     return info;
 }
 
-static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
-                                 const flux_msg_t *msg, void *arg)
+static void server_list_cb (flux_t *h, flux_msg_handler_t *mh,
+                            const flux_msg_t *msg, void *arg)
 {
     subprocess_server_t *s = arg;
     flux_subprocess_t *p;
@@ -516,31 +505,27 @@ static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPERM;
         goto error;
     }
-    if (!(procs = json_array ())) {
-        errno = ENOMEM;
-        goto error;
-    }
-
+    if (!(procs = json_array ()))
+        goto nomem;
     p = zlistx_first (s->subprocesses);
     while (p) {
         json_t *o = NULL;
         if (!(o = process_info (p))
             || json_array_append_new (procs, o) < 0) {
             json_decref (o);
-            errno = ENOMEM;
-            goto error;
+            goto nomem;
         }
         p = zlistx_next (s->subprocesses);
     }
-
     if (flux_respond_pack (h, msg, "{s:i s:o}", "rank", s->rank,
                            "procs", procs) < 0)
-        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        flux_log_error (h, "error responding to rexec.list request");
     return;
-
+nomem:
+    errno = ENOMEM;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+        flux_log_error (h, "error responding to rexec.list request");
     json_decref (procs);
 }
 
@@ -564,7 +549,6 @@ static void server_disconnect_cb (flux_t *h,
     }
 }
 
-/* rexec.processes is primarily for testing */
 static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,
       "rexec.exec",
@@ -582,8 +566,8 @@ static struct flux_msg_handler_spec htab[] = {
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "rexec.processes",
-      server_processes_cb,
+      "rexec.list",
+      server_list_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
