@@ -491,17 +491,11 @@ static int remote_setup_stdio (flux_subprocess_t *p)
 
 static int remote_setup_channels (flux_subprocess_t *p)
 {
-    zlist_t *channels;
+    zlist_t *channels = cmd_channel_list (p->cmd);
     const char *name;
     int channel_flags = CHANNEL_READ | CHANNEL_WRITE | CHANNEL_FD;
-    int len;
 
-    if (!(channels = flux_cmd_channel_list (p->cmd))) {
-        flux_log (p->h, LOG_DEBUG, "flux_cmd_channel_list");
-        return -1;
-    }
-
-    if (!(len = zlist_size (channels)))
+    if (zlist_size (channels) == 0)
         return 0;
 
     if (!p->ops.on_channel_out)

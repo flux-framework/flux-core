@@ -752,17 +752,17 @@ err:
     return NULL;
 }
 
-char **flux_cmd_env_expand (flux_cmd_t *cmd)
+char **cmd_env_expand (flux_cmd_t *cmd)
 {
     return expand_argz (cmd->envz, cmd->envz_len);
 }
 
-char **flux_cmd_argv_expand (flux_cmd_t *cmd)
+char **cmd_argv_expand (flux_cmd_t *cmd)
 {
     return expand_argz (cmd->argz, cmd->argz_len);
 }
 
-int flux_cmd_set_env (flux_cmd_t *cmd, char **env)
+int cmd_set_env (flux_cmd_t *cmd, char **env)
 {
     size_t new_envz_len = 0;
     char *new_envz = NULL;
@@ -778,12 +778,12 @@ int flux_cmd_set_env (flux_cmd_t *cmd, char **env)
     return 0;
 }
 
-zlist_t *flux_cmd_channel_list (flux_cmd_t *cmd)
+zlist_t *cmd_channel_list (flux_cmd_t *cmd)
 {
     return cmd->channels;
 }
 
-int flux_cmd_find_opts (const flux_cmd_t *cmd, const char **substrings)
+int cmd_find_opts (const flux_cmd_t *cmd, const char **substrings)
 {
     void *iter;
     int rv = 0;

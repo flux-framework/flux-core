@@ -38,8 +38,8 @@ void check_basic_create ()
     diag ("simple flux_cmd_create (argc, argv, env)");
     cmd = flux_cmd_create (argc, argv, env);
     ok (cmd != NULL, "flux_cmd_create ()");
-    av = flux_cmd_argv_expand (cmd);
-    ok (av != NULL, "flux_cmd_argv_expand ()");
+    av = cmd_argv_expand (cmd);
+    ok (av != NULL, "cmd_argv_expand ()");
     is (av[0], "test", "av[0] == test");
     is (av[1], "--option=foo", "av[1] == --option=foo");
     is (av[2], "bar", "av[2] == bar");
@@ -58,14 +58,14 @@ void check_empty_cmd_attributes (flux_cmd_t *cmd)
 
     ok (flux_cmd_argc (cmd) == 0, "flux_cmd_argc");
 
-    argv = flux_cmd_argv_expand (cmd);
-    ok (argv != NULL, "flux_cmd_argv_expand returned an argv");
+    argv = cmd_argv_expand (cmd);
+    ok (argv != NULL, "cmd_argv_expand returned an argv");
     ok (argv[0] == NULL, "argv is properly NULL terminated");
     free (argv);
 
-    env = flux_cmd_env_expand (cmd);
-    ok (env != NULL, "flux_cmd_env_expand works");
-    ok (env[0] == NULL, "flux_cmd_env_expand properly terminates env");
+    env = cmd_env_expand (cmd);
+    ok (env != NULL, "cmd_env_expand works");
+    ok (env[0] == NULL, "cmd_env_expand properly terminates env");
     free (env);
 
     ok (flux_cmd_getcwd (cmd) == NULL,
@@ -104,8 +104,8 @@ void set_cmd_attributes2 (flux_cmd_t *cmd)
 {
     char *env[] = { "PATH=/bin:/usr/bin", NULL };
 
-    ok (flux_cmd_set_env (cmd, env) == 0,
-        "flux_cmd_set_env");
+    ok (cmd_set_env (cmd, env) == 0,
+        "cmd_set_env");
 }
 
 void check_cmd_attributes (flux_cmd_t *cmd)
@@ -115,8 +115,8 @@ void check_cmd_attributes (flux_cmd_t *cmd)
 
     ok (flux_cmd_argc (cmd) == 3, "flux_cmd_argc");
 
-    argv = flux_cmd_argv_expand (cmd);
-    ok (argv != NULL, "flux_cmd_argv_expand returned an argv");
+    argv = cmd_argv_expand (cmd);
+    ok (argv != NULL, "cmd_argv_expand returned an argv");
     ok (argv[3] == NULL, "argv is properly NULL terminated");
     is (argv[0], "command", "argv[0] is correct");
     is (argv[1], "foo", "argv[1] is correct");
@@ -142,9 +142,9 @@ void check_cmd_attributes (flux_cmd_t *cmd)
     is (flux_cmd_getenv (cmd, "PATH"), "/bin:/usr/bin",
         "flux_cmd_getenv");
 
-    env = flux_cmd_env_expand (cmd);
-    ok (env != NULL, "flux_cmd_env_expand works");
-    ok (env[1] == NULL, "flux_cmd_env_expand properly terminates env");
+    env = cmd_env_expand (cmd);
+    ok (env != NULL, "cmd_env_expand works");
+    ok (env[1] == NULL, "cmd_env_expand properly terminates env");
     is (env[0], "PATH=/bin:/usr/bin",
         "first entry of env is as expected");
     free (env);
@@ -178,17 +178,17 @@ void test_find_opts (void)
     ok (flux_cmd_setopt (cmd, "b_BAZ", "val") == 0,
         "flux_cmd_setopt works");
 
-    ok (flux_cmd_find_opts (cmd, substrings1) == 1,
-        "flux_cmd_find_opts finds substrings");
+    ok (cmd_find_opts (cmd, substrings1) == 1,
+        "cmd_find_opts finds substrings");
 
-    ok (flux_cmd_find_opts (cmd, substrings2) == 1,
-        "flux_cmd_find_opts finds substrings");
+    ok (cmd_find_opts (cmd, substrings2) == 1,
+        "cmd_find_opts finds substrings");
 
-    ok (flux_cmd_find_opts (cmd, substrings3) == 0,
-        "flux_cmd_find_opts doesn't find substrings");
+    ok (cmd_find_opts (cmd, substrings3) == 0,
+        "cmd_find_opts doesn't find substrings");
 
-    ok (flux_cmd_find_opts (cmd, substrings4) == 0,
-        "flux_cmd_find_opts doesn't find substrings");
+    ok (cmd_find_opts (cmd, substrings4) == 0,
+        "cmd_find_opts doesn't find substrings");
 
     flux_cmd_destroy (cmd);
 }
@@ -304,8 +304,8 @@ void test_arg_insert_delete (void)
     is (flux_cmd_arg (cmd, 2), "-d",
         "arg 3 is now `-d`");
 
-    av = flux_cmd_argv_expand (cmd);
-    ok (av != NULL, "flux_cmd_argv_expand ()");
+    av = cmd_argv_expand (cmd);
+    ok (av != NULL, "cmd_argv_expand ()");
     is (av[0], "inserted", "av[0] == inserted");
     is (av[1], "--option=foo", "av[1] == --option=foo");
     is (av[2], "-d", "av[2] == -d");

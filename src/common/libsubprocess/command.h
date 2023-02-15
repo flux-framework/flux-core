@@ -36,27 +36,27 @@ flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp);
 /*
  *  Return environment for flux_cmd_t as a NULL terminated string array.
  */
-char **flux_cmd_env_expand (flux_cmd_t *cmd);
+char **cmd_env_expand (flux_cmd_t *cmd);
 
 /*
  *  Return argument vector for flux_cmd_t as NULL terminated string array.
  */
-char **flux_cmd_argv_expand (flux_cmd_t *cmd);
+char **cmd_argv_expand (flux_cmd_t *cmd);
 
 /*
  *  Set an entirely new environment, discarding internal one.
  */
-int flux_cmd_set_env (flux_cmd_t *cmd, char **env);
+int cmd_set_env (flux_cmd_t *cmd, char **env);
 
 /*
  *  Return list of channels.  Should not be destryed by caller.
  */
-zlist_t *flux_cmd_channel_list (flux_cmd_t *cmd);
+zlist_t *cmd_channel_list (flux_cmd_t *cmd);
 
 /*
  * Find opts that contain a specific substring.  Returns 1 if
  * substrings found, 0 if not.
  */
-int flux_cmd_find_opts (const flux_cmd_t *cmd, const char **substrings);
+int cmd_find_opts (const flux_cmd_t *cmd, const char **substrings);
 
 #endif /* !_SUBPROCESS_CMD_H */

@@ -289,8 +289,8 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     /* if no environment sent, use local server environment */
-    if (!(env = flux_cmd_env_expand (cmd))
-        || (env[0] == NULL && flux_cmd_set_env (cmd, environ))
+    if (!(env = cmd_env_expand (cmd))
+        || (env[0] == NULL && cmd_set_env (cmd, environ))
         || flux_cmd_setenvf (cmd, 1, "FLUX_URI", "%s", s->local_uri) < 0) {
         errmsg = "error setting up command environment";
         goto error;

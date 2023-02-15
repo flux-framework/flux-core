@@ -559,7 +559,7 @@ static int check_local_only_cmd_options (const flux_cmd_t *cmd)
     /* check for options that do not apply to remote subprocesses */
     const char *substrings[] = { "STREAM_STOP", NULL };
 
-    return flux_cmd_find_opts (cmd, substrings);
+    return cmd_find_opts (cmd, substrings);
 }
 
 flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
