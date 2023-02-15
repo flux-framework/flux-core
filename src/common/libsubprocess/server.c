@@ -239,7 +239,7 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     subprocess_server_t *s = arg;
-    const char *cmd_str;
+    json_t *cmd_obj;
     flux_cmd_t *cmd = NULL;
     flux_subprocess_t *p = NULL;
     flux_subprocess_ops_t ops = {
@@ -254,8 +254,8 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *errmsg = NULL;
     flux_error_t error;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i s:i s:i}",
-                             "cmd", &cmd_str,
+    if (flux_request_unpack (msg, NULL, "{s:o s:i s:i s:i}",
+                             "cmd", &cmd_obj,
                              "on_channel_out", &on_channel_out,
                              "on_stdout", &on_stdout,
                              "on_stderr", &on_stderr))
@@ -277,7 +277,7 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!on_stderr)
         ops.on_stderr = NULL;
 
-    if (!(cmd = flux_cmd_fromjson (cmd_str, NULL))) {
+    if (!(cmd = cmd_fromjson (cmd_obj, NULL))) {
         errmsg = "error parsing command string";
         goto error;
     }

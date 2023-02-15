@@ -735,12 +735,13 @@ error:
 int remote_exec (flux_subprocess_t *p)
 {
     flux_future_t *f = NULL;
-    char *cmd_str = NULL;
+    json_t *cmd_obj = NULL;
     int save_errno;
 
-    if (!(cmd_str = flux_cmd_tojson (p->cmd))) {
-        flux_log (p->h, LOG_DEBUG, "flux_cmd_tojson");
-        goto error;
+    if (!(cmd_obj = cmd_tojson (p->cmd))) {
+        flux_log (p->h, LOG_DEBUG, "cmd_tojson");
+        errno = ENOMEM;
+        return -1;
     }
 
     /* completion & state_change cbs always required b/c we use it
@@ -748,8 +749,8 @@ int remote_exec (flux_subprocess_t *p)
      * don't care if user doesn't want it.
      */
     if (!(f = flux_rpc_pack (p->h, "rexec.exec", p->rank, FLUX_RPC_STREAMING,
-                             "{s:s s:i s:i s:i}",
-                             "cmd", cmd_str,
+                             "{s:O s:i s:i s:i}",
+                             "cmd", cmd_obj,
                              "on_channel_out", p->ops.on_channel_out ? 1 : 0,
                              "on_stdout", p->ops.on_stdout ? 1 : 0,
                              "on_stderr", p->ops.on_stderr ? 1 : 0))) {
@@ -763,13 +764,13 @@ int remote_exec (flux_subprocess_t *p)
     }
 
     p->f = f;
-    free (cmd_str);
+    json_decref (cmd_obj);
     return 0;
 
  error:
     save_errno = errno;
     flux_future_destroy (f);
-    free (cmd_str);
+    json_decref (cmd_obj);
     errno = save_errno;
     return -1;
 }

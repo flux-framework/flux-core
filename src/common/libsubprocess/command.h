@@ -22,16 +22,16 @@
  */
 
 /*
- *  Return JSON string representation of command object `cmd`
+ *  Return JSON representation of command object `cmd`
  */
-char * flux_cmd_tojson (const flux_cmd_t *cmd);
+json_t *cmd_tojson (const flux_cmd_t *cmd);
 
 /*
- *  Return a newly allocated flux_cmd_t from a JSON string representation.
+ *  Return a newly allocated flux_cmd_t from a JSON representation.
  *   Returns NULL on failure.
  *   If non-NULL, any jansson decode errors are returned in *errp.
  */
-flux_cmd_t *flux_cmd_fromjson (const char *json_str, json_error_t *errp);
+flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp);
 
 /*
  *  Return environment for flux_cmd_t as a NULL terminated string array.

@@ -319,7 +319,7 @@ void test_arg_insert_delete (void)
 
 int main (int argc, char *argv[])
 {
-    char *s;
+    json_t *o;
     flux_cmd_t *cmd, *copy;
 
     plan (NO_PLAN);
@@ -385,14 +385,13 @@ int main (int argc, char *argv[])
     flux_cmd_destroy (copy);
 
     diag ("Convert flux_cmd_t to/from JSON");
-    s = flux_cmd_tojson (cmd);
-    ok (s != NULL, "flux_cmd_tojson (%d bytes)", strlen (s));
-    if (s) {
+    o = cmd_tojson (cmd);
+    ok (o != NULL, "cmd_tojson works");
+    if (o) {
         json_error_t error;
-        diag (s);
-        copy = flux_cmd_fromjson (s, &error);
-        free (s);
-        ok (copy != NULL, "flux_cmd_fromjson returned a new cmd");
+        copy = cmd_fromjson (o, &error);
+        json_decref (o);
+        ok (copy != NULL, "cmd_fromjson returned a new cmd");
         if (copy) {
             check_cmd_attributes (copy);
             flux_cmd_destroy (copy);
