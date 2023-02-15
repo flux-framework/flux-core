@@ -45,13 +45,25 @@ const char *tab3 = \
 "[tab3]\n" \
 "id = 3\n";
 
+const char *tab3_json = \
+"{\"tab3\": {\"id\": 4}}";
+
 
 static void
-create_test_file (const char *dir, char *prefix, char *path, size_t pathlen,
+create_test_file (const char *dir,
+                  char *prefix,
+                  char *ext,
+                  char *path,
+                  size_t pathlen,
                   const char *contents)
 {
     int fd;
-    snprintf (path, pathlen, "%s/%s.XXXXXX.toml", dir ? dir : "/tmp", prefix);
+    snprintf (path,
+              pathlen,
+              "%s/%s.XXXXXX.%s",
+              dir ? dir : "/tmp",
+              prefix,
+              ext);
     fd = mkstemps (path, 5);
     if (fd < 0)
         BAIL_OUT ("mkstemp %s: %s", path, strerror (errno));
@@ -97,6 +109,7 @@ void test_basic (void)
     char path1[PATH_MAX + 1];
     char path2[PATH_MAX + 1];
     char path3[PATH_MAX + 1];
+    char pathj[PATH_MAX + 1];
     char invalid[PATH_MAX + 1];
     flux_error_t error;
     flux_conf_t *conf;
@@ -120,9 +133,10 @@ void test_basic (void)
 
     /* Add files
      */
-    create_test_file (dir, "01", path1, sizeof (path1), t1);
-    create_test_file (dir, "02", path2, sizeof (path2), tab2);
-    create_test_file (dir, "03", path3, sizeof (path3), tab3);
+    create_test_file (dir, "01", "toml", path1, sizeof (path1), t1);
+    create_test_file (dir, "02", "toml", path2, sizeof (path2), tab2);
+    create_test_file (dir, "03", "toml", path3, sizeof (path3), tab3);
+    create_test_file (NULL, "03", "json", pathj, sizeof (pathj), tab3_json);
 
     /* Parse of one file works
      */
@@ -143,6 +157,21 @@ void test_basic (void)
     ok (rc == 0 && i == 3,
         "unpacked integer from [tab3] and got expected value");
 
+    flux_conf_decref (conf);
+
+    /* Parse one file JSON edition
+     */
+    conf = flux_conf_parse (pathj, &error);
+    ok (conf != NULL,
+        "flux_conf_parse works for just one file (JSON)");
+    i = 0;
+    rc = flux_conf_unpack (conf,
+                           &error,
+                           "{s:{s:i}}",
+                           "tab3",
+                           "id", &i);
+    ok (rc == 0 && i == 4,
+        "unpacked integer from [tab3] and got expected value");
     flux_conf_decref (conf);
 
     /* Parse it
@@ -257,7 +286,7 @@ void test_basic (void)
     /* Now make an invalid file and ensure cf_update_glob() aborts
      * all updates after any one failure
      */
-    create_test_file (dir, "99", invalid, sizeof (invalid), "key = \n");
+    create_test_file (dir, "99", "toml", invalid, sizeof (invalid), "key = \n");
 
     conf = flux_conf_parse (invalid, &error);
     ok (conf == NULL,
@@ -271,6 +300,18 @@ void test_basic (void)
 
     diag ("%s", error.text);
     like (error.text, "99.*\\.toml",
+          "Failed file contained in error.text");
+
+    /* Parse invalid JSON file
+     */
+    unlink (invalid);
+    create_test_file (dir, "foo", "json", invalid, sizeof (invalid), "{");
+    conf = flux_conf_parse (invalid, &error);
+    ok (conf == NULL,
+        "flux_conf_parse choked on bad file");
+
+    diag ("%s", error.text);
+    like (error.text, "foo.*\\.json",
           "Failed file contained in error.text");
 
     /* Invalid pattern arg
@@ -290,6 +331,7 @@ void test_basic (void)
     if (   (unlink (path1) < 0)
         || (unlink (path2) < 0)
         || (unlink (path3) < 0)
+        || (unlink (pathj) < 0)
         || (unlink (invalid) < 0) )
         BAIL_OUT ("unlink: %s", strerror (errno));
     if (rmdir (dir) < 0)
@@ -316,7 +358,7 @@ void test_in_handle (void)
     snprintf (dir, sizeof (dir), "%s/cf.XXXXXXX", tmpdir ? tmpdir : "/tmp");
     if (!mkdtemp (dir))
         BAIL_OUT ("mkdtemp %s: %s", dir, strerror (errno));
-    create_test_file (dir, "foo", path, sizeof (path), t1);
+    create_test_file (dir, "foo", "toml", path, sizeof (path), t1);
     if (!(conf = flux_conf_parse (dir, NULL)))
         BAIL_OUT ("flux_conf_parse failure: %s", strerror (errno));
     ok (flux_set_conf (h, conf) == 0,
