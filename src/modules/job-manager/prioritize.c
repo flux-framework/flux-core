@@ -75,11 +75,14 @@ static int reprioritize_one (struct job_manager *ctx,
     else if (job->urgency == FLUX_JOB_URGENCY_EXPEDITE)
         priority = FLUX_JOB_PRIORITY_MAX;
 
-    /*  If priority did not change, then do not post a priority
-     *   event, reorder queues, etc. (a change of priority to the
-     *   current value is not an "event")
+    /*
+     *  If priority did not change, _and_ the job is in SCHED state,
+     *   then do not post a priority event, since this would be useless
+     *   noise in the eventlog. However, be sure to post a priority event
+     *   in PRIORITY state, since this is what transitions a job to the
+     *   SCHED state.
      */
-    if (priority == job->priority)
+    if (priority == job->priority && job->state == FLUX_JOB_STATE_SCHED)
         return 0;
 
     /*  Priority event is only posted to job eventlog in

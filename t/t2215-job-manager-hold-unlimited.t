@@ -40,6 +40,10 @@ test_expect_success 'job-manager: put hold on job 3' '
         flux job urgency $(cat job3.id) hold
 '
 
+test_expect_success 'job-manager: hold job 4 again (issue #4940)' '
+        flux job urgency $(cat job4.id) hold
+'
+
 test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
         jmgr_check_state $(cat job1.id) R &&
         jmgr_check_state $(cat job2.id) R &&
