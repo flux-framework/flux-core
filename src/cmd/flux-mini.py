@@ -2057,7 +2057,7 @@ def main():
     a Flux instance.  If no batch script is provided, one will be read
     from stdin.
     """
-    mini_batch_parser_sub = subparsers.add_parser(
+    batch.parser = subparsers.add_parser(
         "batch",
         parents=[batch.get_parser()],
         help="enqueue a batch script",
@@ -2065,7 +2065,7 @@ def main():
         description=description,
         formatter_class=flux.util.help_formatter(),
     )
-    mini_batch_parser_sub.set_defaults(func=batch.main)
+    batch.parser.set_defaults(func=batch.main)
 
     # alloc
     alloc = AllocCmd()
@@ -2073,7 +2073,7 @@ def main():
     Allocate resources and start a new Flux instance. Once the instance
     has started, attach to it interactively.
     """
-    mini_alloc_parser_sub = subparsers.add_parser(
+    alloc.parser = subparsers.add_parser(
         "alloc",
         parents=[alloc.get_parser()],
         help="allocate a new instance for interactive use",
@@ -2081,7 +2081,7 @@ def main():
         description=description,
         formatter_class=flux.util.help_formatter(),
     )
-    mini_alloc_parser_sub.set_defaults(func=alloc.main)
+    alloc.parser.set_defaults(func=alloc.main)
 
     args = parser.parse_args()
     args.func(args)
