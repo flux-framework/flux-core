@@ -395,6 +395,7 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
     bool eof = false;
     pid_t pid;
     json_t *io = NULL;
+    flux_error_t error;
 
     if (flux_request_unpack (msg, NULL, "{ s:i s:o }",
                              "pid", &pid,
@@ -402,6 +403,11 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
         /* can't handle error, no pid to sent errno back to, so just
          * return */
         flux_log_error (s->h, "%s: flux_request_unpack", __FUNCTION__);
+        return;
+    }
+    if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
+        errno = EPERM;
+        flux_log_error (s->h, "rexec.write: %s", error.text);
         return;
     }
 
@@ -453,6 +459,8 @@ static void server_signal_cb (flux_t *h, flux_msg_handler_t *mh,
     subprocess_server_t *s = arg;
     pid_t pid;
     int signum;
+    flux_error_t error;
+    const char *errmsg = NULL;
 
     errno = 0;
 
@@ -463,7 +471,11 @@ static void server_signal_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-
+    if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
+        errmsg = error.text;
+        errno = EPERM;
+        goto error;
+    }
     if (!proc_find_bypid (s, pid))
         goto error;
 
@@ -475,7 +487,7 @@ static void server_signal_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
@@ -522,7 +534,14 @@ static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
     subprocess_server_t *s = arg;
     flux_subprocess_t *p;
     json_t *procs = NULL;
+    flux_error_t error;
+    const char *errmsg = NULL;
 
+    if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
+        errmsg = error.text;
+        errno = EPERM;
+        goto error;
+    }
     if (!(procs = json_array ())) {
         errno = ENOMEM;
         goto error;
@@ -546,7 +565,7 @@ static void server_processes_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (procs);
 }
