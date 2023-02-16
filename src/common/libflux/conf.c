@@ -209,6 +209,44 @@ error:
     return -1;
 }
 
+static int conf_update_json (flux_conf_t *conf,
+                             const char *filename,
+                             flux_error_t *error)
+{
+    json_error_t err;
+    json_t *obj = NULL;
+
+    if (!(obj = json_load_file (filename, 0, &err))) {
+        errprintf (error, "%s:%d: %s", filename, err.line, err.text);
+        goto error;
+    }
+    if (conf_update_obj (conf, filename, obj, error) < 0)
+        goto error;
+    json_decref (obj);
+    return 0;
+error:
+    ERRNO_SAFE_WRAP (json_decref, obj);
+    return -1;
+}
+
+static const char *file_extension (const char *path)
+{
+    const char *p;
+    if (path && (p = strrchr (path,  '.')))
+        return p + 1;
+    return "";
+}
+
+static int conf_update (flux_conf_t *conf,
+                        const char *filename,
+                        flux_error_t *error)
+{
+    const char *ext = file_extension (filename);
+    if (streq (ext, "json"))
+        return conf_update_json (conf, filename, error);
+    return conf_update_toml (conf, filename, error);
+}
+
 struct globerr {
     int rc;
     const char *msg;
@@ -286,7 +324,7 @@ static flux_conf_t *conf_parse_file (const char *path, flux_error_t *error)
         errprintf (error, "%s: %s", path, strerror (errno));
         return NULL;
     }
-    if (conf_update_toml (conf, path, error) < 0) {
+    if (conf_update (conf, path, error) < 0) {
         flux_conf_decref (conf);
         return NULL;
     }
