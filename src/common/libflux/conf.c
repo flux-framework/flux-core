@@ -151,9 +151,24 @@ flux_conf_t *flux_conf_copy (const flux_conf_t *conf)
     return cpy;
 }
 
-static int conf_update (flux_conf_t *conf,
-                        const char *filename,
-                        flux_error_t *error)
+static int conf_update_obj (flux_conf_t *conf,
+                            const char *filename,
+                            json_t *obj,
+                            flux_error_t *error)
+{
+    if (json_object_update (conf->obj, obj) < 0) {
+        errprintf (error,
+                   "%s: updating JSON object: out of memory",
+                   filename);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
+static int conf_update_toml (flux_conf_t *conf,
+                             const char *filename,
+                             flux_error_t *error)
 {
     struct tomltk_error toml_error;
     toml_table_t *tab;
@@ -182,13 +197,8 @@ static int conf_update (flux_conf_t *conf,
                    strerror (errno));
         goto error;
     }
-    if (json_object_update (conf->obj, obj) < 0) {
-        errprintf (error,
-                   "%s: updating JSON object: out of memory",
-                   filename);
-        errno = ENOMEM;
+    if (conf_update_obj (conf, filename, obj, error) < 0)
         goto error;
-    }
     json_decref (obj);
     toml_free (tab);
     return 0;
@@ -224,7 +234,7 @@ void conf_globerr (flux_error_t *error, const char *pattern, int rc)
     errno = entry->errnum;
 }
 
-flux_conf_t *flux_conf_parse (const char *path, flux_error_t *error)
+static flux_conf_t *conf_parse_dir (const char *path, flux_error_t *error)
 {
     flux_conf_t *conf;
     glob_t gl;
@@ -232,11 +242,6 @@ flux_conf_t *flux_conf_parse (const char *path, flux_error_t *error)
     size_t i;
     char pattern[4096];
 
-    if (!path) {
-        errno = EINVAL;
-        errprintf (error, "%s", strerror (errno));
-        return NULL;
-    }
     if (access (path, R_OK | X_OK) < 0) {
         errprintf (error, "%s: %s", path, strerror (errno));
         return NULL;
@@ -254,7 +259,7 @@ flux_conf_t *flux_conf_parse (const char *path, flux_error_t *error)
     rc = glob (pattern, GLOB_ERR, NULL, &gl);
     if (rc == 0) {
         for (i = 0; i < gl.gl_pathc; i++) {
-            if (conf_update (conf, gl.gl_pathv[i], error) < 0)
+            if (conf_update_toml (conf, gl.gl_pathv[i], error) < 0)
                 goto error_glob;
         }
         globfree (&gl);
@@ -270,6 +275,39 @@ error_glob:
 error:
     flux_conf_decref (conf);
     return NULL;
+}
+
+static flux_conf_t *conf_parse_file (const char *path, flux_error_t *error)
+{
+    flux_conf_t *conf;
+
+    if (!(conf = flux_conf_create ())) {
+        errprintf (error, "%s: %s", path, strerror (errno));
+        return NULL;
+    }
+    if (conf_update_toml (conf, path, error) < 0) {
+        flux_conf_decref (conf);
+        return NULL;
+    }
+    return conf;
+}
+
+flux_conf_t *flux_conf_parse (const char *path, flux_error_t *error)
+{
+    struct stat st;
+
+    if (!path) {
+        errno = EINVAL;
+        errprintf (error, "%s", strerror (errno));
+        return NULL;
+    }
+    if (stat (path, &st) < 0) {
+        errprintf (error, "stat: %s: %s", path, strerror (errno));
+        return NULL;
+    }
+    if (S_ISDIR(st.st_mode))
+        return conf_parse_dir (path, error);
+    return conf_parse_file (path, error);
 }
 
 int flux_set_conf (flux_t *h, const flux_conf_t *conf)
