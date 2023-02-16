@@ -13,31 +13,30 @@
 
 #include "subprocess.h"
 
-/*  flux_subprocess_server_t: Handler for a subprocess remote server */
 typedef struct subprocess_server subprocess_server_t;
 
 typedef int (*subprocess_server_auth_f) (const flux_msg_t *msg,
 		                         void *arg,
 					 flux_error_t *error);
 
-/*  Create a subprocess server on the handle `h`. Registers message
- *   handlers, etc for remote execution.
+/* Create a subprocess server.  The handle 'h' must contain a reactor
+ * created with the FLUX_REACTOR_SIGCHLD flag.  Note that there can be
+ * only one reactor per process with this flag set.
  */
 subprocess_server_t *subprocess_server_create (flux_t *h,
                                                const char *local_uri,
                                                uint32_t rank);
 
-/*   Register an authorization function to the subprocess server
- *
- *   The registered function should return 0 to allow the request to
- *    proceed, and -1 with errno set to deny the request.
+/* Register a callback to allow/deny each rexec request.
+ * The callback should return 0 to allow.  It should return -1 with a
+ * message in 'error' to deny.
  */
 void subprocess_server_set_auth_cb (subprocess_server_t *s,
                                     subprocess_server_auth_f fn,
                                     void *arg);
 
-/*  Destroy a subprocess server / cleanup subprocess_server_t.  Will
- *  send a SIGKILL to all remaining subprocesses.
+/* Destroy a subprocess server.  This sends a SIGKILL to any remaining
+ * subprocesses, then destroys them.
  */
 void subprocess_server_destroy (subprocess_server_t *s);
 
