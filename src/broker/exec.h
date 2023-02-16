@@ -19,10 +19,6 @@
  * beginning of teardown of broker */
 void exec_terminate_subprocesses (flux_t *h);
 
-/* Kill any processes started by disconnecting client.
- */
-int exec_terminate_subprocesses_by_uuid (flux_t *h, const char *id);
-
 int exec_initialize (flux_t *h, uint32_t rank, attr_t *attrs);
 
 #endif /* BROKER_EXEC_H */

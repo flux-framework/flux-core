@@ -20,6 +20,7 @@
 
 #include <flux/core.h>
 
+#include "ccan/str/str.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
@@ -188,7 +189,7 @@ static int remote_write (struct subprocess_channel *c)
         goto error;
     }
 
-    if (!(f = flux_rpc_pack (c->p->h, "broker.rexec.write", c->p->rank,
+    if (!(f = flux_rpc_pack (c->p->h, "rexec.write", c->p->rank,
                              FLUX_RPC_NORESPONSE,
                              "{ s:i s:O }",
                              "pid", c->p->pid,
@@ -219,7 +220,7 @@ static int remote_close (struct subprocess_channel *c)
         goto error;
     }
 
-    if (!(f = flux_rpc_pack (c->p->h, "broker.rexec.write", c->p->rank,
+    if (!(f = flux_rpc_pack (c->p->h, "rexec.write", c->p->rank,
                              FLUX_RPC_NORESPONSE,
                              "{ s:i s:O }",
                              "pid", c->p->pid,
@@ -490,17 +491,11 @@ static int remote_setup_stdio (flux_subprocess_t *p)
 
 static int remote_setup_channels (flux_subprocess_t *p)
 {
-    zlist_t *channels;
+    zlist_t *channels = cmd_channel_list (p->cmd);
     const char *name;
     int channel_flags = CHANNEL_READ | CHANNEL_WRITE | CHANNEL_FD;
-    int len;
 
-    if (!(channels = flux_cmd_channel_list (p->cmd))) {
-        flux_log (p->h, LOG_DEBUG, "flux_cmd_channel_list");
-        return -1;
-    }
-
-    if (!(len = zlist_size (channels)))
+    if (zlist_size (channels) == 0)
         return 0;
 
     if (!p->ops.on_channel_out)
@@ -649,35 +644,53 @@ static void remote_completion (flux_subprocess_t *p)
     subprocess_check_completed (p);
 }
 
+static bool is_exec_failed_error (flux_future_t *f)
+{
+    const char *errmsg;
+    if (flux_future_has_error (f)
+        && (errmsg = flux_future_error_string (f))
+        && streq (errmsg, "exec failed"))
+        return true;
+    return false;
+}
+
 static void remote_exec_cb (flux_future_t *f, void *arg)
 {
     flux_subprocess_t *p = arg;
     const char *type;
     int rank;
     pid_t pid;
+    int rc;
 
-    if (flux_rpc_get_unpack (f, "{ s:s s:i }",
-                             "type", &type,
-                             "rank", &rank) < 0) {
-        if (errno != EHOSTUNREACH) // broker is down, don't log
-            flux_log (p->h,
-                      LOG_DEBUG,
-                      "%s: flux_rpc_get_unpack: rank %u",
-                      __FUNCTION__,
-                      flux_rpc_get_nodeid (f));
+    rc = flux_rpc_get_unpack (f, "{ s:s s:i }",
+                              "type", &type,
+                              "rank", &rank);
+    if (rc < 0 && errno == ENODATA) {
+        remote_completion (p);
+        flux_future_destroy (f);
+        p->f = NULL;
+    }
+    else if (rc < 0 && is_exec_failed_error (f)) {
+        process_new_state (p,
+                           FLUX_SUBPROCESS_EXEC_FAILED,
+                           p->rank,
+                           -1,
+                           errno,
+                           0);
+        flux_future_destroy (f);
+        p->f = NULL;
+    }
+    else if (rc < 0) {
         goto error;
     }
-
-    if (!strcmp (type, "state")) {
+    else if (!strcmp (type, "state")) {
+        /* N.B. EXEC_FAILED and FAILED states are not communicated as state
+         * changes via rexec protocol.  They are communicated as RPC error
+         * responses, handled in the two cases above.
+         */
         if (remote_state (p, f, rank) < 0)
             goto error;
-        if (p->state == FLUX_SUBPROCESS_EXEC_FAILED
-            || p->state == FLUX_SUBPROCESS_FAILED) {
-            flux_future_destroy (f);
-            p->f = NULL;
-        }
-        else
-            flux_future_reset (f);
+        flux_future_reset (f);
     }
     else if (!strcmp (type, "output")) {
         if (flux_rpc_get_unpack (f, "{ s:i }", "pid", &pid) < 0) {
@@ -687,11 +700,6 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
         if (remote_output (p, f, rank, pid) < 0)
             goto error;
         flux_future_reset (f);
-    }
-    else if (!strcmp (type, "complete")) {
-        remote_completion (p);
-        flux_future_destroy (f);
-        p->f = NULL;
     }
     else {
         flux_log (p->h, LOG_DEBUG, "%s: EPROTO", __FUNCTION__);
@@ -718,70 +726,25 @@ error:
     p->f = NULL;
 }
 
-static void remote_continuation_cb (flux_future_t *f, void *arg)
-{
-    flux_subprocess_t *p = arg;
-    const char *type;
-    int rank;
-    int save_errno;
-
-    if (flux_rpc_get_unpack (f, "{ s:s s:i }",
-                             "type", &type,
-                             "rank", &rank) < 0) {
-        if (errno != EHOSTUNREACH) // broker is down, don't log
-            flux_log (p->h,
-                      LOG_DEBUG,
-                      "%s: flux_rpc_get_unpack: rank %u",
-                      __FUNCTION__,
-                      flux_rpc_get_nodeid (f));
-        goto error;
-    }
-
-    if (!strcmp (type, "start")) {
-        flux_future_reset (f);
-        if (flux_future_then (f, -1., remote_exec_cb, p) < 0) {
-            flux_log (p->h, LOG_DEBUG, "flux_future_then");
-            goto error;
-        }
-    }
-    else {
-        flux_log (p->h, LOG_DEBUG, "%s: EPROTO", __FUNCTION__);
-        errno = EPROTO;
-        goto error;
-    }
-
-    return;
-
-error:
-    /* error here is fatal, we can't do anything else b/c we lack a
-     * PID or anything similar.
-     */
-    process_new_state (p, FLUX_SUBPROCESS_FAILED, p->rank, -1, errno, 0);
-    save_errno = errno;
-    flux_future_destroy (p->f);
-    p->f = NULL;
-    errno = save_errno;
-    return;
-}
-
 int remote_exec (flux_subprocess_t *p)
 {
     flux_future_t *f = NULL;
-    char *cmd_str = NULL;
+    json_t *cmd_obj = NULL;
     int save_errno;
 
-    if (!(cmd_str = flux_cmd_tojson (p->cmd))) {
-        flux_log (p->h, LOG_DEBUG, "flux_cmd_tojson");
-        goto error;
+    if (!(cmd_obj = cmd_tojson (p->cmd))) {
+        flux_log (p->h, LOG_DEBUG, "cmd_tojson");
+        errno = ENOMEM;
+        return -1;
     }
 
     /* completion & state_change cbs always required b/c we use it
      * internally in this code.  But output callbacks are optional, we
      * don't care if user doesn't want it.
      */
-    if (!(f = flux_rpc_pack (p->h, "broker.rexec", p->rank, FLUX_RPC_STREAMING,
-                             "{s:s s:i s:i s:i}",
-                             "cmd", cmd_str,
+    if (!(f = flux_rpc_pack (p->h, "rexec.exec", p->rank, FLUX_RPC_STREAMING,
+                             "{s:O s:i s:i s:i}",
+                             "cmd", cmd_obj,
                              "on_channel_out", p->ops.on_channel_out ? 1 : 0,
                              "on_stdout", p->ops.on_stdout ? 1 : 0,
                              "on_stderr", p->ops.on_stderr ? 1 : 0))) {
@@ -789,19 +752,19 @@ int remote_exec (flux_subprocess_t *p)
         goto error;
     }
 
-    if (flux_future_then (f, -1., remote_continuation_cb, p) < 0) {
+    if (flux_future_then (f, -1., remote_exec_cb, p) < 0) {
         flux_log (p->h, LOG_DEBUG, "flux_future_then");
         goto error;
     }
 
     p->f = f;
-    free (cmd_str);
+    json_decref (cmd_obj);
     return 0;
 
  error:
     save_errno = errno;
     flux_future_destroy (f);
-    free (cmd_str);
+    json_decref (cmd_obj);
     errno = save_errno;
     return -1;
 }
@@ -810,7 +773,7 @@ flux_future_t *remote_kill (flux_subprocess_t *p, int signum)
 {
     flux_future_t *f;
 
-    if (!(f = flux_rpc_pack (p->h, "broker.rexec.signal", p->rank, 0,
+    if (!(f = flux_rpc_pack (p->h, "rexec.kill", p->rank, 0,
                              "{s:i s:i}",
                              "pid", p->pid,
                              "signum", signum))) {

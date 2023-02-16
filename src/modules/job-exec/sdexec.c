@@ -486,8 +486,8 @@ static int sdexec_launch (struct sdexec *se,
         }
     }
 
-    cmdv = flux_cmd_argv_expand (se->cmd);
-    envv = flux_cmd_env_expand (se->cmd);
+    cmdv = cmd_argv_expand (se->cmd);
+    envv = cmd_env_expand (se->cmd);
 
     if (se->test_exec_fail) {
         /* we select a somewhat random errno for this test exec fail */

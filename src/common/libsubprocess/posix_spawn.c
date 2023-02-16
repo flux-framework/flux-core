@@ -124,8 +124,8 @@ int create_process_spawn (flux_subprocess_t *p)
     posix_spawn_file_actions_t file_actions;
     posix_spawnattr_t attr;
     short flags = POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK;
-    char **env = flux_cmd_env_expand (p->cmd);
-    char **argv = flux_cmd_argv_expand (p->cmd);
+    char **env = cmd_env_expand (p->cmd);
+    char **argv = cmd_argv_expand (p->cmd);
 
     posix_spawnattr_init (&attr);
     posix_spawn_file_actions_init (&file_actions);

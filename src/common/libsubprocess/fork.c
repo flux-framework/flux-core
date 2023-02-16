@@ -173,8 +173,8 @@ static int local_child (flux_subprocess_t *p)
         }
     }
 
-    environ = flux_cmd_env_expand (p->cmd);
-    argv = flux_cmd_argv_expand (p->cmd);
+    environ = cmd_env_expand (p->cmd);
+    argv = cmd_argv_expand (p->cmd);
     if (!environ || !argv) {
         fprintf (stderr, "out of memory\n");
         _exit (1);

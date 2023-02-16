@@ -13,22 +13,40 @@
 
 #include "subprocess.h"
 
-int server_start (flux_subprocess_server_t *s);
+typedef struct subprocess_server subprocess_server_t;
 
-void server_stop (flux_subprocess_server_t *s);
+typedef int (*subprocess_server_auth_f) (const flux_msg_t *msg,
+		                         void *arg,
+					 flux_error_t *error);
 
-int server_signal_subprocesses (flux_subprocess_server_t *s, int signum);
+/* Create a subprocess server.  The handle 'h' must contain a reactor
+ * created with the FLUX_REACTOR_SIGCHLD flag.  Note that there can be
+ * only one reactor per process with this flag set.
+ */
+subprocess_server_t *subprocess_server_create (flux_t *h,
+                                               const char *local_uri,
+                                               uint32_t rank);
 
-int server_terminate_subprocesses (flux_subprocess_server_t *s);
+/* Register a callback to allow/deny each rexec request.
+ * The callback should return 0 to allow.  It should return -1 with a
+ * message in 'error' to deny.
+ */
+void subprocess_server_set_auth_cb (subprocess_server_t *s,
+                                    subprocess_server_auth_f fn,
+                                    void *arg);
 
-int server_terminate_by_uuid (flux_subprocess_server_t *s,
-                              const char *id);
+/* Destroy a subprocess server.  This sends a SIGKILL to any remaining
+ * subprocesses, then destroys them.
+ */
+void subprocess_server_destroy (subprocess_server_t *s);
 
-int server_terminate_setup (flux_subprocess_server_t *s,
-                            double wait_time);
-
-void server_terminate_cleanup (flux_subprocess_server_t *s);
-
-int server_terminate_wait (flux_subprocess_server_t *s);
+/* Send all subprocesses a signal and return a future that is fulfilled
+ * when all subprocesses have exited.  New rexec.exec requests will fail.
+ * This future is fulfilled immediately if there are no subprocesses, but if
+ * there are some, the orig. reactor must be allowed to run in order for the
+ * shutdown to make progress.  Therefore this future should be tracked with
+ * flux_future_then(), not flux_future_get() which would deadlock.
+ */
+flux_future_t *subprocess_server_shutdown (subprocess_server_t *s, int signum);
 
 #endif /* !_SUBPROCESS_SERVER_H */

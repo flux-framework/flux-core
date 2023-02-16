@@ -654,10 +654,9 @@ err:
     return NULL;
 }
 
-flux_cmd_t * flux_cmd_fromjson (const char *json_str, json_error_t *errp)
+flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp)
 {
     int errnum;
-    json_t *o = NULL;
     json_t *jenv = NULL;
     json_t *jargv = NULL;
     json_t *jopts = NULL;
@@ -665,10 +664,6 @@ flux_cmd_t * flux_cmd_fromjson (const char *json_str, json_error_t *errp)
     const char *cwd = NULL;
     flux_cmd_t *cmd = NULL;;
 
-    if (!(o = json_loads (json_str, 0, errp))) {
-        errnum = EPROTO;
-        goto fail;
-    }
     if (!(cmd = calloc (1, sizeof (*cmd)))) {
         errnum = ENOMEM;
         goto fail;
@@ -693,19 +688,16 @@ flux_cmd_t * flux_cmd_fromjson (const char *json_str, json_error_t *errp)
     /* All sub-objects of `o` inherit reference from root object so
      *  this decref should free jenv, jargv, ... etc.
      */
-    json_decref (o);
     return cmd;
 
 fail:
-    json_decref (o);
     flux_cmd_destroy (cmd);
     errno = errnum;
     return NULL;
 }
 
-char * flux_cmd_tojson (const flux_cmd_t *cmd)
+json_t *cmd_tojson (const flux_cmd_t *cmd)
 {
-    char *str = NULL;
     json_t *o = json_object ();
     json_t *a;
 
@@ -754,25 +746,23 @@ char * flux_cmd_tojson (const flux_cmd_t *cmd)
         json_decref (a);
         goto err;
     }
-    str = json_dumps (o, JSON_COMPACT);
-    json_decref (o);
-    return str;
+    return o;
 err:
     json_decref (o);
     return NULL;
 }
 
-char **flux_cmd_env_expand (flux_cmd_t *cmd)
+char **cmd_env_expand (flux_cmd_t *cmd)
 {
     return expand_argz (cmd->envz, cmd->envz_len);
 }
 
-char **flux_cmd_argv_expand (flux_cmd_t *cmd)
+char **cmd_argv_expand (flux_cmd_t *cmd)
 {
     return expand_argz (cmd->argz, cmd->argz_len);
 }
 
-int flux_cmd_set_env (flux_cmd_t *cmd, char **env)
+int cmd_set_env (flux_cmd_t *cmd, char **env)
 {
     size_t new_envz_len = 0;
     char *new_envz = NULL;
@@ -788,12 +778,12 @@ int flux_cmd_set_env (flux_cmd_t *cmd, char **env)
     return 0;
 }
 
-zlist_t *flux_cmd_channel_list (flux_cmd_t *cmd)
+zlist_t *cmd_channel_list (flux_cmd_t *cmd)
 {
     return cmd->channels;
 }
 
-int flux_cmd_find_opts (const flux_cmd_t *cmd, const char **substrings)
+int cmd_find_opts (const flux_cmd_t *cmd, const char **substrings)
 {
     void *iter;
     int rv = 0;
