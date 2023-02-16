@@ -170,6 +170,9 @@ would eliminate the EXCEPTION-TYPE column if no jobs in the list received
 an exception. (Thus the job queue is only displayed if at least one job
 has a queue assigned in the default format shown above).
 
+As a reminder to the reader, some shells will interpret braces
+(``{`` and ``}``) in the format string.  They may need to be quoted.
+
 The special presentation type *h* can be used to convert an empty
 string, "0s", "0.0", or "0:00:00" to a hyphen. For example, normally
 "{nodelist}" would output an empty string if the job has not yet run.
@@ -210,6 +213,10 @@ the following conversion flags are supported by *flux-jobs*:
    including the "%" character. E.g. 0.5 becomes "50%" 0.015 becomes 1.5%,
    and 0.0005 becomes 0.05% etc.
 
+As a reminder to the reader, some shells will interpret the exclamation
+point (``!``) when using a conversion flag.  The exclamation point may
+need to be escaped (``\!``).
+
 Annotations can be retrieved via the *annotations* field name.
 Specific keys and sub-object keys can be retrieved separated by a
 period (".").  For example, if the scheduler has annotated the job
@@ -220,10 +227,6 @@ As a convenience, the field names *sched* and *user* can be used as
 substitutions for *annotations.sched* and *annotations.user*.  For
 example, a reason pending status can be retrieved via
 "{sched.reason_pending}".
-
-As a reminder to the reader, some shells may interpret special
-characters in Python's string format syntax.  The format may need to
-be quoted or escaped to work under certain shells.
 
 The field names that can be specified are:
 
