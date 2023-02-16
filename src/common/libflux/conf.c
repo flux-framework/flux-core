@@ -26,6 +26,7 @@
 #include "src/common/libtomlc99/toml.h"
 #include "src/common/libutil/tomltk.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/str/str.h"
 
 #include "conf.h"
 #include "conf_private.h"
@@ -91,7 +92,7 @@ const char *flux_conf_builtin_get (const char *name,
             break;
     }
     for (entry = &builtin_tab[0]; entry->key != NULL; entry++) {
-        if (name && !strcmp (entry->key, name)) {
+        if (name && streq (entry->key, name)) {
             val = intree ? entry->val_intree : entry->val_installed;
             break;
         }
