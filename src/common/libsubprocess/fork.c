@@ -257,8 +257,6 @@ static int local_exec (flux_subprocess_t *p)
             return -1;
         p->status = status;
 
-        /* spiritually FLUX_SUBPROCESS_EXEC_FAILED state at this
-         * point */
         errno = p->exec_failed_errno;
         return -1;
     }

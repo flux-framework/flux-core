@@ -308,16 +308,11 @@ static flux_subprocess_state_t state_change_next (flux_subprocess_t *p)
 
     switch (p->state_reported) {
     case FLUX_SUBPROCESS_INIT:
-        /* next state must be RUNNING or EXEC_FAILED */
-        if (p->state == FLUX_SUBPROCESS_EXEC_FAILED)
-            return FLUX_SUBPROCESS_EXEC_FAILED;
-        else /* p->state == FLUX_SUBPROCESS_RUNNING
-                || p->state == FLUX_SUBPROCESS_EXITED */
-            return FLUX_SUBPROCESS_RUNNING;
+        /* next state must be RUNNING */
+        return FLUX_SUBPROCESS_RUNNING;
     case FLUX_SUBPROCESS_RUNNING:
         /* next state is EXITED */
         return FLUX_SUBPROCESS_EXITED;
-    case FLUX_SUBPROCESS_EXEC_FAILED:
     case FLUX_SUBPROCESS_EXITED:
     case FLUX_SUBPROCESS_FAILED:
     case FLUX_SUBPROCESS_STOPPED:
@@ -356,8 +351,7 @@ static void state_change_check_cb (flux_reactor_t *r,
     }
 
     /* once we hit one of these states, no more state changes */
-    if (p->state_reported == FLUX_SUBPROCESS_EXEC_FAILED
-        || p->state_reported == FLUX_SUBPROCESS_EXITED
+    if (p->state_reported == FLUX_SUBPROCESS_EXITED
         || p->state_reported == FLUX_SUBPROCESS_FAILED) {
         flux_watcher_stop (p->state_prep_w);
         flux_watcher_stop (p->state_check_w);
@@ -821,8 +815,7 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
                 return -1;
             }
         }
-        /* else p->state == FLUX_SUBPROCESS_EXEC_FAILED
-           || p->state == FLUX_SUBPROCESS_EXITED
+        /* else p->state == FLUX_SUBPROCESS_EXITED
            || p->state == FLUX_SUBPROCESS_FAILED
         */
         c->closed = true;
@@ -1068,8 +1061,6 @@ const char *flux_subprocess_state_string (flux_subprocess_state_t state)
     {
     case FLUX_SUBPROCESS_INIT:
         return "Init";
-    case FLUX_SUBPROCESS_EXEC_FAILED:
-        return "Exec Failed";
     case FLUX_SUBPROCESS_RUNNING:
         return "Running";
     case FLUX_SUBPROCESS_EXITED:
@@ -1101,15 +1092,11 @@ int flux_subprocess_fail_errno (flux_subprocess_t *p)
         errno = EINVAL;
         return -1;
     }
-    if (p->state != FLUX_SUBPROCESS_EXEC_FAILED
-        && p->state != FLUX_SUBPROCESS_FAILED) {
+    if (p->state != FLUX_SUBPROCESS_FAILED) {
         errno = EINVAL;
         return -1;
     }
-    if (p->state == FLUX_SUBPROCESS_EXEC_FAILED)
-        return p->exec_failed_errno;
-    else
-        return p->failed_errno;
+    return p->failed_errno;
 }
 
 int flux_subprocess_status (flux_subprocess_t *p)

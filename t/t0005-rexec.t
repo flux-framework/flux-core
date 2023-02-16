@@ -92,7 +92,7 @@ test_expect_success 'basic rexec functionality (check state changes)' '
 
 test_expect_success 'basic rexec fail exec() (check state changes)' '
 	! $rexec -s / > output &&
-	echo "Exec Failed" > expected &&
+	echo "Failed" > expected &&
 	test_cmp expected output
 '
 

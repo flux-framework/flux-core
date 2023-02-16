@@ -115,8 +115,7 @@ static void process_new_state (flux_subprocess_t *p,
                                flux_subprocess_state_t state,
                                int rank, pid_t pid, int errnum, int status)
 {
-    if (p->state == FLUX_SUBPROCESS_EXEC_FAILED
-        || p->state == FLUX_SUBPROCESS_FAILED)
+    if (p->state == FLUX_SUBPROCESS_FAILED)
         return;
 
     p->state = state;
@@ -125,10 +124,6 @@ static void process_new_state (flux_subprocess_t *p,
         p->pid = pid;
         p->pid_set = true;
         start_channel_watchers (p);
-    }
-    else if (state == FLUX_SUBPROCESS_EXEC_FAILED) {
-        p->exec_failed_errno = errnum;
-        stop_io_watchers (p);
     }
     else if (state == FLUX_SUBPROCESS_EXITED) {
         p->status = status;
@@ -547,14 +542,6 @@ static int remote_state (flux_subprocess_t *p, flux_future_t *f,
         }
     }
 
-    if (state == FLUX_SUBPROCESS_EXEC_FAILED
-        || state == FLUX_SUBPROCESS_FAILED) {
-        if (flux_rpc_get_unpack (f, "{ s:i }", "errno", &errnum) < 0) {
-            flux_log (p->h, LOG_DEBUG, "%s: flux_rpc_get_unpack", __FUNCTION__);
-            return -1;
-        }
-    }
-
     if (state == FLUX_SUBPROCESS_EXITED) {
         if (flux_rpc_get_unpack (f, "{ s:i }", "status", &status) < 0) {
             flux_log (p->h, LOG_DEBUG, "%s: flux_rpc_get_unpack", __FUNCTION__);
@@ -639,16 +626,6 @@ static void remote_completion (flux_subprocess_t *p)
     subprocess_check_completed (p);
 }
 
-static bool is_exec_failed_error (flux_future_t *f)
-{
-    const char *errmsg;
-    if (flux_future_has_error (f)
-        && (errmsg = flux_future_error_string (f))
-        && streq (errmsg, "exec failed"))
-        return true;
-    return false;
-}
-
 static void remote_exec_cb (flux_future_t *f, void *arg)
 {
     flux_subprocess_t *p = arg;
@@ -665,23 +642,12 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
         flux_future_destroy (f);
         p->f = NULL;
     }
-    else if (rc < 0 && is_exec_failed_error (f)) {
-        process_new_state (p,
-                           FLUX_SUBPROCESS_EXEC_FAILED,
-                           p->rank,
-                           -1,
-                           errno,
-                           0);
-        flux_future_destroy (f);
-        p->f = NULL;
-    }
     else if (rc < 0) {
         goto error;
     }
     else if (!strcmp (type, "state")) {
-        /* N.B. EXEC_FAILED and FAILED states are not communicated as state
-         * changes via rexec protocol.  They are communicated as RPC error
-         * responses, handled in the two cases above.
+        /* N.B. FAILED state is not communicated as a state change response.
+         * They are communicated as RPC errors, handled above.
          */
         if (remote_state (p, f, rank) < 0)
             goto error;

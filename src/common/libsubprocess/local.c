@@ -376,8 +376,7 @@ static void child_watch_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     if (WIFEXITED (p->status) || WIFSIGNALED (p->status)) {
 
-        /* remote/server code may have set EXEC_FAILED or
-         * FAILED on fatal errors.
+        /* remote/server code may have set FAILED on fatal errors.
          */
         if (p->state == FLUX_SUBPROCESS_RUNNING) {
             p->state = FLUX_SUBPROCESS_EXITED;

@@ -76,8 +76,7 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
     if (optparse_getopt (opts, "outputstates", NULL) > 0)
         printf ("%s\n", flux_subprocess_state_string (state));
 
-    if (state == FLUX_SUBPROCESS_EXEC_FAILED
-        || state == FLUX_SUBPROCESS_FAILED) {
+    if (state == FLUX_SUBPROCESS_FAILED) {
         fprintf (stderr, "rank %d: %s: %s\n",
                  flux_subprocess_rank (p),
                  flux_subprocess_state_string (state),

@@ -42,17 +42,14 @@ typedef struct flux_subprocess flux_subprocess_t;
  * Possible state changes:
  *
  * init -> running
- * init -> exec failed
  * running -> exited
  * any state -> failed
  */
 typedef enum {
     FLUX_SUBPROCESS_INIT,         /* initial state */
-    FLUX_SUBPROCESS_EXEC_FAILED,  /* exec(2) has failed, only for rexec() */
     FLUX_SUBPROCESS_RUNNING,      /* exec(2) has been called */
     FLUX_SUBPROCESS_EXITED,       /* process has exited */
-    FLUX_SUBPROCESS_FAILED,       /* internal failure, catch all for
-                                   * all other errors */
+    FLUX_SUBPROCESS_FAILED,       /* exec failure or other non-child error */
     FLUX_SUBPROCESS_STOPPED,      /* process was stopped */
 } flux_subprocess_state_t;
 
@@ -90,8 +87,7 @@ typedef void (*flux_subprocess_hook_f) (flux_subprocess_t *p, void *arg);
 typedef struct {
     flux_subprocess_f on_completion;    /* Process exited and all I/O
                                          * complete, will not be
-                                         * called if EXEC_FAILED or
-                                         * FAILED states reached.
+                                         * called if FAILED state reached.
                                          */
     flux_subprocess_state_f on_state_change;  /* Process state change        */
     flux_subprocess_output_f on_channel_out; /* Read from channel when ready */
@@ -430,8 +426,7 @@ const char *flux_subprocess_state_string (flux_subprocess_state_t state);
 
 int flux_subprocess_rank (flux_subprocess_t *p);
 
-/* Returns the errno causing the FLUX_SUBPROCESS_EXEC_FAILED or
- * FLUX_SUBPROCESS_FAILED states to be reached.
+/* Returns the errno causing the FLUX_SUBPROCESS_FAILED states to be reached.
  */
 int flux_subprocess_fail_errno (flux_subprocess_t *p);
 

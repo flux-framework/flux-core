@@ -111,7 +111,6 @@ static void iostress_state_cb (flux_subprocess_t *p,
             break;
         }
         case FLUX_SUBPROCESS_FAILED:
-        case FLUX_SUBPROCESS_EXEC_FAILED:
             diag ("%s: %s",
                   ctx->name,
                   strerror (flux_subprocess_fail_errno (p)));

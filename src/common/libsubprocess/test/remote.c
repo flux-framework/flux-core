@@ -100,7 +100,6 @@ static void simple_state_cb (flux_subprocess_t *p,
             ctx->scorecard.exited = 1;
             break;
         case FLUX_SUBPROCESS_FAILED:
-        case FLUX_SUBPROCESS_EXEC_FAILED:
             ctx->scorecard.failed = 1;
             diag ("stopping reactor");
             flux_reactor_stop (flux_get_reactor (ctx->h));
