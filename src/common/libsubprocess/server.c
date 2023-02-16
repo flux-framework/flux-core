@@ -329,44 +329,6 @@ error:
     flux_subprocess_unref (p);
 }
 
-static int write_subprocess (subprocess_server_t *s, flux_subprocess_t *p,
-                             const char *stream, const char *data, int len)
-{
-    int tmp;
-
-    if ((tmp = flux_subprocess_write (p, stream, data, len)) < 0) {
-        flux_log_error (s->h, "%s: flux_subprocess_write", __FUNCTION__);
-        return -1;
-    }
-
-    /* add list of msgs if there is overflow? */
-
-    if (tmp != len) {
-        flux_log_error (s->h,
-                        "channel buffer error: "
-                        "rank = %d pid = %d, stream = %s, len = %d",
-                        s->rank,
-                        flux_subprocess_pid (p),
-                        stream,
-                        len);
-        errno = EOVERFLOW;
-        return -1;
-    }
-
-    return 0;
-}
-
-static int close_subprocess (subprocess_server_t *s, flux_subprocess_t *p,
-                             const char *stream)
-{
-    if (flux_subprocess_close (p, stream) < 0) {
-        flux_log_error (s->h, "%s: flux_subprocess_close", __FUNCTION__);
-        return -1;
-    }
-
-    return 0;
-}
-
 static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
                              const flux_msg_t *msg, void *arg)
 {
@@ -382,49 +344,53 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_unpack (msg, NULL, "{ s:i s:o }",
                              "pid", &pid,
-                             "io", &io) < 0) {
-        /* can't handle error, no pid to sent errno back to, so just
-         * return */
-        flux_log_error (s->h, "%s: flux_request_unpack", __FUNCTION__);
-        return;
+                             "io", &io) < 0
+        || iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
+        flux_log_error (s->h, "Error decoding rexec.write request");
+        goto out;
     }
     if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
-        errno = EPERM;
         flux_log_error (s->h, "rexec.write: %s", error.text);
-        return;
-    }
-
-    if (iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
-        flux_log_error (s->h, "%s: iodecode", __FUNCTION__);
-        return;
-    }
-
-    if (!(p = proc_find_bypid (s, pid))) {
-        /* can't handle error, no pid to send errno back to, so just
-         * return
-         *
-         * It's common on EOF to be sent and server has already
-         * removed process from hash.  Don't output error in that
-         * case.
-         */
-        if (!(errno == ENOENT && eof))
-            flux_log_error (s->h, "%s: proc_find_bypid", __FUNCTION__);
         goto out;
     }
 
-    /* Chance subprocess exited/killed/etc. since user write request
-     * was sent.
-     */
-    if (p->state != FLUX_SUBPROCESS_RUNNING)
+    if (!(p = proc_find_bypid (s, pid))
+        || p->state != FLUX_SUBPROCESS_RUNNING) {
+        if (len > 0) { // skip logging if no data is being dropped (e.g. eof)
+            flux_log (s->h,
+                      LOG_DEBUG,
+                      "Error writing %d bytes to subprocess pid %d %s: %s",
+                      len,
+                      (int)pid,
+                      stream,
+                      p ? "not running" : "unknown pid");
+        }
         goto out;
+    }
 
     if (data && len) {
-        if (write_subprocess (s, p, stream, data, len) < 0)
+        int rc = flux_subprocess_write (p, stream, data, len);
+        if (rc >= 0 && rc < len) { // short write is promoted to fatal error
+            errno = ENOSPC;
+            rc = -1;
+        }
+        if (rc < 0) {
+            flux_log_error (s->h,
+                            "Error writing %d bytes to subprocess pid %d %s",
+                            len,
+                            (int)pid,
+                            stream);
             goto error;
+        }
     }
     if (eof) {
-        if (close_subprocess (s, p, stream) < 0)
+        if (flux_subprocess_close (p, stream) < 0) {
+            flux_log_error (s->h,
+                            "Error writing EOF to subprocess pid %d %s",
+                            (int)pid,
+                            stream);
             goto error;
+        }
     }
 
 out:
