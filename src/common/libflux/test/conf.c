@@ -124,6 +124,27 @@ void test_basic (void)
     create_test_file (dir, "02", path2, sizeof (path2), tab2);
     create_test_file (dir, "03", path3, sizeof (path3), tab3);
 
+    /* Parse of one file works
+     */
+    conf = flux_conf_parse (path3, &error);
+    ok (conf != NULL,
+        "flux_conf_parse successfully parsed a single file");
+    if (!conf)
+        BAIL_OUT ("cannot continue without config object");
+
+    /* Check table from path3 toml file
+     */
+    i = 0;
+    rc = flux_conf_unpack (conf,
+                           &error,
+                           "{s:{s:i}}",
+                           "tab3",
+                           "id", &i);
+    ok (rc == 0 && i == 3,
+        "unpacked integer from [tab3] and got expected value");
+
+    flux_conf_decref (conf);
+
     /* Parse it
      */
     conf = flux_conf_parse (dir, &error);
@@ -237,6 +258,12 @@ void test_basic (void)
      * all updates after any one failure
      */
     create_test_file (dir, "99", invalid, sizeof (invalid), "key = \n");
+
+    conf = flux_conf_parse (invalid, &error);
+    ok (conf == NULL,
+        "flux_conf_parse failed on bad individual file");
+    like (error.text, "99.*\\.toml",
+          "Failed file contained in error.text");
 
     conf = flux_conf_parse (dir, &error);
     ok (conf == NULL,
