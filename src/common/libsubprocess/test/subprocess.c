@@ -1491,7 +1491,7 @@ void test_state_change_stopped (flux_reactor_t *r)
 
     flux_future_t *f = flux_subprocess_kill (p, SIGSTOP);
     ok (f != NULL,
-        "flux_subprocess_kill SIGStOP");
+        "flux_subprocess_kill SIGSTOP");
     flux_future_destroy (f);
 
     int rc = flux_reactor_run (r, 0);
