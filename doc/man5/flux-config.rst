@@ -6,21 +6,27 @@ DESCRIPTION
 ===========
 
 Flux normally operates without configuration files.  If configuration is
-needed, the :man1:`flux-broker` **--config-path=DIR** option may be used
-to instruct Flux to parse all files matching the glob **DIR/*.toml**.
-Alternatively, the FLUX_CONF_DIR environment variable may be set the config
-directory path.  If both are set, the command line argument takes precedence.
-The option value must be a directory, not a file.
+needed, the :man1:`flux-broker` **--config-path=PATH** option may be used
+to instruct Flux to parse a config file or, if **PATH** is a directory, all
+files matching the glob **PATH/*.toml**.  Alternatively, the FLUX_CONF_DIR
+environment variable may be used to set the configuration file or directory
+path. If both are set, the command line argument takes precedence.
 
 The Flux systemd unit file starts the system instance broker with
 ``--config-path=${sysconfdir}/flux/system/conf.d``.  Further discussion of the
 system instance configuration as a whole may be found in the Flux
 Administrator's Guide.
 
-Flux configuration files follow the TOML file format, with configuration
-subdivided by function into separate TOML tables.  The tables may all appear
-in a single ``.toml`` file or be fragmented in multiple files.  For example,
-the Flux Administrator's Guide suggests one file per top level TOML table.
+Flux configuration files typically follow the TOML file format,
+with configuration subdivided by function into separate TOML tables.
+The tables may all appear in a single ``.toml`` file or be fragmented in
+multiple files.  For example, the Flux Administrator's Guide suggests one
+file per top level TOML table.
+
+If the **PATH** value is a regular file, the configuration may optionally be
+provided as JSON. This allows the output of ``flux config get`` to be read
+by another Flux instance. A JSON config file must have the file extension
+``.json``, otherwise it is assumed to be TOML.
 
 Each Flux broker parses configuration files independently, however it is
 assumed that config files are identical across the brokers of a given instance.
