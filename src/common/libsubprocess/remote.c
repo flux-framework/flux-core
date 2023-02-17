@@ -578,23 +578,21 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
     json_t *io = NULL;
     int rv = -1;
 
-    if (flux_rpc_get_unpack (f, "{ s:o }", "io", &io)) {
-        flux_log (p->h, LOG_DEBUG, "flux_rpc_get_unpack EPROTO io");
+    if (flux_rpc_get_unpack (f, "{ s:o }", "io", &io)
+        || iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
+        flux_log (p->h,
+                  LOG_DEBUG,
+                  "Error decoding output received from remote subprocess: %s",
+                  strerror (errno));
         goto cleanup;
     }
-
-    if (iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
-        flux_log (p->h, LOG_DEBUG, "iodecode");
-        goto cleanup;
-    }
-
     if (!(c = zhash_lookup (p->channels, stream))) {
         flux_log (p->h,
                   LOG_DEBUG,
-                  "invalid channel received: "
-                  "rank = %d, pid = %d, stream = %s",
-                  rank,
-                  pid,
+                  "Error buffering %d bytes received from remote"
+                  " subprocess pid %d %s: unknown channel name",
+                  len,
+                  (int)pid,
                   stream);
         errno = EPROTO;
         goto cleanup;
@@ -603,23 +601,20 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
     if (data && len) {
         int tmp;
 
-        if ((tmp = flux_buffer_write (c->read_buffer, data, len)) < 0) {
-            flux_log (p->h, LOG_DEBUG, "flux_buffer_write");
-            goto cleanup;
+        tmp = flux_buffer_write (c->read_buffer, data, len);
+        if (tmp >= 0 && tmp < len) {
+            errno = ENOSPC; // short write is promoted to fatal error
+            tmp = -1;
         }
-
-        /* add list of msgs if there is overflow? */
-
-        if (tmp != len) {
+        if (tmp < 0) {
             flux_log (p->h,
                       LOG_DEBUG,
-                      "channel buffer error: "
-                      "rank = %d pid = %d, stream = %s, len = %d",
-                      rank,
-                      pid,
+                      "Error buffering %d bytes received from remote"
+                      " subprocess pid %d %s: %s",
+                      len,
+                      (int)pid,
                       stream,
-                      len);
-            errno = EOVERFLOW;
+                      strerror (errno));
             goto cleanup;
         }
     }
