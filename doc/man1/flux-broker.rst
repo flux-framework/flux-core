@@ -45,6 +45,12 @@ OPTIONS
 **-S, --setattr**\ =\ *ATTR=VAL*
    Set initial value for broker attribute.
 
+**-c, --conf-path=**\ =\ *PATH*
+   Set the PATH to broker configuration. If PATH is a directory, then
+   read all TOML files from that directory. If PATH is a file, then load
+   configuration as JSON if the file extension is ``.json``, otherwise
+   load the file as TOML.
+
 
 RESOURCES
 =========

@@ -277,7 +277,7 @@ static struct optparse_option get_opts[] = {
 static struct optparse_subcommand config_subcmds[] = {
     { "load",
       "[PATH]",
-      "Load broker configuration from stdin or TOML directory PATH",
+      "Load broker configuration from stdin or PATH",
       config_load,
       0,
       NULL,

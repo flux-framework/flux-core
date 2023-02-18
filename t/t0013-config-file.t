@@ -32,7 +32,25 @@ test_expect_success 'flux broker works with empty config directory' '
 	flux broker ${ARGS} -c empty flux getattr config.path >empty.out &&
 	test_cmp empty.exp empty.out
 '
-
+test_expect_success 'flux broker works with empty config file' '
+	touch null.toml &&
+	cat <<-EOT >null.exp &&
+	null.toml
+	EOT
+	flux broker ${ARGS} -c null.toml flux getattr config.path >null.out &&
+	test_cmp null.exp null.out
+'
+test_expect_success 'flux broker works with empty object config file (json)' '
+	cat <<-EOF >empty.json &&
+	{}
+	EOF
+	cat <<-EOT >empty-json.exp &&
+	empty.json
+	EOT
+	flux broker ${ARGS} -c empty.json \
+		flux getattr config.path >empty-json.out &&
+	test_cmp empty-json.exp empty-json.out
+'
 test_expect_success 'FLUX_CONF_DIR also works to specify config dir' '
 	FLUX_CONF_DIR=empty flux broker ${ARGS} \
 		      flux getattr config.path >empty2.out &&
@@ -52,6 +70,13 @@ test_expect_success 'broker fails with invalid TOML' '
 	test_must_fail flux broker ${ARGS} -c conf1 /bin/true
 '
 
+test_expect_success 'broker fails with invalid TOML file' '
+	cat <<-EOT >invalid.toml &&
+	[bootstrap]
+	bad-toml
+	EOT
+	test_must_fail flux broker ${ARGS} -c invalid.toml /bin/true
+'
 #
 # [bootstrap] tests
 #

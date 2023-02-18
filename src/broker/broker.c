@@ -115,7 +115,7 @@ static struct optparse_option opts[] = {
     { .name = "setattr",    .key = 'S', .has_arg = 1, .arginfo = "ATTR=VAL",
       .usage = "Set broker attribute", },
     { .name = "config-path",.key = 'c', .has_arg = 1, .arginfo = "PATH",
-      .usage = "Set broker config directory (default: none)", },
+      .usage = "Set broker config from PATH (default: none)", },
     OPTPARSE_TABLE_END,
 };
 

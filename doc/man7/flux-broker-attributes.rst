@@ -150,10 +150,10 @@ conf.shell_pluginpath [Updates: C, R]
    for shell plugins.  Default: ``${prefix}/lib/flux/shell/plugins``.
 
 config.path [Updates: see below]
-   A directory containing ``*.toml`` config files for this Flux instance.
-   This attribute may be set via the FLUX_CONF_DIR environment variable,
-   or the :man1:`flux-broker` ``--config-path`` command line argument.
-   Default: none.  See also :man5:`flux-config`.
+   A config file or directory (containing ``*.toml`` config files) for
+   this Flux instance. This attribute may be set via the FLUX_CONF_DIR
+   environment variable, or the :man1:`flux-broker` ``--config-path``
+   command line argument.  Default: none.  See also :man5:`flux-config`.
 
 
 TREE BASED OVERLAY NETWORK
