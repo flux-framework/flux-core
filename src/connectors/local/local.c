@@ -15,6 +15,7 @@
 #include <flux/core.h>
 
 #include "src/common/librouter/usock.h"
+#include "src/common/libutil/errprintf.h"
 
 struct local_connector {
     struct usock_client *uclient;
@@ -192,8 +193,13 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
 
     if (!(ctx->path = strdup (path)))
         goto error;
-    if (local_connect (ctx) < 0)
+    if (local_connect (ctx) < 0) {
+        if (errno == ENOENT)
+            errprintf (errp,
+                       "broker socket %s was not found",
+                       path);
         goto error;
+    }
     if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))
         goto error;
     return ctx->h;
