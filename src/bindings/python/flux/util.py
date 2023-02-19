@@ -218,7 +218,7 @@ class CLIMain(object):
             exit_code = ex
         except Exception as ex:  # pylint: disable=broad-except
             exit_code = 1
-            # Prefer '{strerror}[: {filename}' error message over default
+            # Prefer '{strerror}: {filename}' error message over default
             # OSError string representation which includes useless
             # `[Error N]` prefix in output.
             errmsg = getattr(ex, "strerror", None) or str(ex)
