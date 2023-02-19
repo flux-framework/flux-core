@@ -9,16 +9,17 @@
 ##############################################################
 
 import argparse
+import json
 import logging
 import os
-import re
 import sre_constants
 import sys
 from itertools import islice
 from pathlib import PurePath
 
 import flux
-from flux.job import JobID, JobInfoFormat, JobList
+from flux.job import JobInfoFormat, JobList
+from flux.job.pgrep import PgrepConstraint, PgrepConstraintParser
 from flux.util import UtilConfig
 
 PROGRAM = PurePath(sys.argv[0]).stem
@@ -70,35 +71,6 @@ class FluxPgrepConfig(UtilConfig):
                 self.validate_formats(path, value)
             else:
                 raise ValueError(f"{path}: invalid key {key}")
-
-
-class JobPgrep:
-    def __init__(self, args):
-        self.regex = None
-        self.jobids = []
-        for arg in args:
-            if ":" not in arg and ".." in arg:
-                #  X..Y with no : is translated to a range of jobids
-                try:
-                    self.jobids = list(map(JobID, arg.split("..")))
-                    continue
-                except ValueError:
-                    # If terms cannot be translated to JobID, then fall
-                    # back to trying as a pattern
-                    pass
-            if self.regex:
-                raise ValueError("Only one pattern can be provided")
-            if arg.startswith("name:"):
-                arg = arg[5:]
-            self.regex = re.compile(arg)
-
-    def match(self, job):
-        if self.regex and not self.regex.search(job.name):
-            return False
-        if self.jobids:
-            if job.id > self.jobids[1] or job.id < self.jobids[0]:
-                return False
-        return True
 
 
 def fetch_jobs(args, flux_handle=None):
@@ -188,6 +160,16 @@ def parse_args():
         default=1000,
         help="Limit number of searched jobs to N entries (default: 1000)",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print constraint JSON object and exit",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print extra debugging information from syntax parser",
+    )
     if PROGRAM == "flux-pgrep":
         parser.add_argument(
             "-n",
@@ -259,8 +241,15 @@ def main():
 
     fh = flux.Flux()
     try:
-        pgrep = JobPgrep(args.expression)
+        # join expression quoting terms with whitespace:
+        s = " ".join(f"'{w}'" if " " in w else w for w in args.expression)
+        constraint = PgrepConstraintParser().parse(s, debug=args.debug)
+        pgrep = PgrepConstraint(constraint)
+        if args.dry_run:
+            print(json.dumps(pgrep.dict()))
+            sys.exit(0)
     except (ValueError, SyntaxError, TypeError, sre_constants.error) as exc:
+        raise (exc)
         LOGGER.error(f"expression error: {exc}")
         sys.exit(2)
 
