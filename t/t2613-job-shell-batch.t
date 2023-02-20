@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-test_description='Test flux-shell per-reosurce and batch support'
+test_description='Test flux-shell per-resource and batch support'
 
 . `dirname $0`/sharness.sh
 
