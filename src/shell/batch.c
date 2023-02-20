@@ -16,6 +16,9 @@
 #include "config.h"
 #endif
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <jansson.h>
 #include <flux/core.h>
@@ -74,16 +77,19 @@ batch_info_create (flux_shell_t *shell, json_t *batch)
 
     if (data && b->shell_rank == 0) {
         int fd = -1;
-        const char *tmpdir = getenv ("TMPDIR");
+        const char *tmpdir = flux_shell_getenv (shell, "FLUX_JOB_TMPDIR");
 
-        if (asprintf (&b->script, "%s/flux-script-%ju-XXXXXX",
-                      tmpdir ? tmpdir : "/tmp",
-                      b->id) < 0) {
+        if (!tmpdir) {
+            shell_log_error ("FLUX_JOB_TMPDIR not set");
+            goto error;
+        }
+
+        if (asprintf (&b->script, "%s/script", tmpdir) < 0) {
             shell_log_error ("asprintf script templated failed");
             goto error;
         }
-        if ((fd = mkstemp (b->script)) < 0) {
-            shell_log_error ("mkstemp");
+        if ((fd = open (b->script, O_CREAT|O_EXCL|O_WRONLY, 0700)) < 0) {
+            shell_log_errno ("%s", b->script);
             goto error;
         }
         shell_debug ("Copying batch script size=%zu for job to %s",
@@ -91,10 +97,6 @@ batch_info_create (flux_shell_t *shell, json_t *batch)
                      b->script);
         if (write_all (fd, data, len) < 0) {
             shell_log_error ("failed to write batch script");
-            goto error;
-        }
-        if (fchmod (fd, 0700) < 0) {
-            shell_log_error ("chmod(%s)", b->script);
             goto error;
         }
         close (fd);
