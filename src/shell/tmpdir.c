@@ -72,6 +72,19 @@ static int mkjobtmp_tmpdir (flux_shell_t *shell,
     return 0;
 }
 
+static int mustache_render_tmpdir (flux_plugin_t *p,
+                                   const char *topic,
+                                   flux_plugin_arg_t *args,
+                                   void *data)
+{
+    flux_shell_t *shell = data;
+    const char *jobtmp = flux_shell_getenv (shell, "FLUX_JOB_TMPDIR");
+    return flux_plugin_arg_pack (args,
+                                 FLUX_PLUGIN_ARG_OUT,
+                                "{s:s}",
+                                "result", jobtmp);
+}
+
 static int tmpdir_init (flux_plugin_t *p,
                         const char *topic,
                         flux_plugin_arg_t *args,
@@ -103,6 +116,12 @@ static int tmpdir_init (flux_plugin_t *p,
      */
     if (flux_shell_setenvf (shell, 1, "FLUX_JOB_TMPDIR", "%s", jobtmp) < 0)
         shell_die_errno (1, "error updating job environment");
+
+    if (flux_plugin_add_handler (p,
+                                 "mustache.render.tmpdir",
+                                 mustache_render_tmpdir,
+                                 shell) < 0)
+        shell_die_errno (1, "unable to register mustache template callback");
 
     return 0;
 }
