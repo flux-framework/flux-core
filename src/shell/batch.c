@@ -21,10 +21,12 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <jansson.h>
+
 #include <flux/core.h>
 #include <flux/shell.h>
 
 #include "src/common/libutil/read_all.h"
+#include "ccan/str/str.h"
 
 #include "builtins.h"
 
@@ -131,6 +133,16 @@ static void log_task_commandline (flux_cmd_t *cmd, int taskid)
     free (s);
 }
 
+static bool is_batch_command (flux_cmd_t *cmd)
+{
+    const char *argv0 = flux_cmd_arg (cmd, 0);
+    const char *argv1 = flux_cmd_arg (cmd, 1);
+
+    return  (argv0
+             && streq (basename (argv0), "flux")
+             && (streq (argv1, "broker") || streq (argv1, "start")));
+}
+
 static int task_batchify (flux_plugin_t *p,
                           const char *topic,
                           flux_plugin_arg_t *args,
@@ -146,6 +158,11 @@ static int task_batchify (flux_plugin_t *p,
         || !(task = flux_shell_current_task (shell))
         || !(cmd = flux_shell_task_cmd (task)))
         return shell_log_errno ("failed to get task cmd");
+
+    /* Nothing to do if task is already constructed as a batch command
+     */
+    if (is_batch_command (cmd))
+        return 0;
 
     if (flux_shell_task_info_unpack (task, "{s:i}", "rank", &taskid) < 0)
         return shell_log_errno ("failed to unpack task rank");
