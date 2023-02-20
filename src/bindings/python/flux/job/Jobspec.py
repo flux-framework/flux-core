@@ -902,20 +902,18 @@ class JobspecV1(Jobspec):
         if not script.startswith("#!"):
             raise ValueError(f"{jobname} does not appear to start with '#!'")
         args = () if args is None else args
-        jobspec = cls.from_command(
-            command=[jobname, *args],  # argv[0] will be replaced with the script
-            num_tasks=num_slots,
-            cores_per_task=cores_per_slot,
-            gpus_per_task=gpus_per_slot,
+        jobspec = cls.from_nest_command(
+            command=["{{tmpdir}}/script", *args],
+            num_slots=num_slots,
+            cores_per_slot=cores_per_slot,
+            gpus_per_slot=gpus_per_slot,
             num_nodes=num_nodes,
+            broker_opts=broker_opts,
             exclusive=exclusive,
         )
-        jobspec.setattr_shell_option("per-resource.type", "node")
-        jobspec.setattr_shell_option("mpi", "none")
         #  Copy script contents into jobspec
         jobspec.setattr("system.batch.script", script)
-        if broker_opts is not None:
-            jobspec.setattr("system.batch.broker-opts", broker_opts)
+        jobspec.setattr("system.job.name", jobname)
         return jobspec
 
     @classmethod
