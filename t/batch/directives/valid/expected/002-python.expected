@@ -1,0 +1,4 @@
+SETARGS(['-N4'])
+SETARGS(['--queue=batch'])
+SETARGS(['--job-name=my python job'])
+SETARGS(['--setattr=user.data=x, y, z\na, b, c\n'])

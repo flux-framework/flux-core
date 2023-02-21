@@ -30,6 +30,7 @@ from flux import debugged, job, util
 from flux.constraint.parser import ConstraintParser, ConstraintSyntaxError
 from flux.idset import IDset
 from flux.job import JobspecV1
+from flux.job.directives import DirectiveParser
 from flux.progress import ProgressBar
 from flux.uri import JobURI
 
@@ -1773,12 +1774,34 @@ class BatchCmd(MiniCmd):
             help="Batch script and arguments to submit",
         )
 
-    @staticmethod
-    def read_script(args):
+    def parse_directive_args(self, name, batchscript):
+        """
+        Parse any directives in batchscript.directives, then apply
+        command line arguments in self.argv. This allows command line
+        to override file directives
+        """
+        args = None
+        for item in batchscript.directives:
+            try:
+                if item.action == "SETARGS":
+                    args = self.parser.parse_args(item.args, namespace=args)
+            except SystemExit:
+                #  Argparse exits on error. Give the user a clue
+                #  about which line failed in the source file:
+                LOGGER.error(f"argument parsing failed at {name} line {item.lineno}")
+                sys.exit(2)
+        args = self.parser.parse_args(self.argv, namespace=args)
+        return batchscript.script, args
+
+    def process_script(self, args):
+        """
+        Process a batch script that may contain RFC 36 directives.
+        Returns the ingested script and new argparse args Namespace.
+        """
         if args.SCRIPT:
             if args.wrap:
-                #  Wrap args in /bin/sh script
-                return "#!/bin/sh\n" + " ".join(args.SCRIPT) + "\n"
+                #  Return script which will be wrapped by caller
+                return " ".join(args.SCRIPT) + "\n", args
 
             # O/w, open script for reading
             name = open_arg = args.SCRIPT[0]
@@ -1787,19 +1810,19 @@ class BatchCmd(MiniCmd):
             open_arg = 0  # when passed to `open`, 0 gives the `stdin` stream
         with open(open_arg, "r", encoding="utf-8") as filep:
             try:
-                #  Read script
-                script = filep.read()
-                if args.wrap:
-                    script = "#!/bin/sh\n" + script
+                batchscript = DirectiveParser(filep)
             except UnicodeError:
                 raise ValueError(
                     f"{name} does not appear to be a script, "
                     "or failed to encode as utf-8"
                 )
-            return script
+            except ValueError as exc:
+                raise ValueError(f"{name}: {exc}") from None
+        return self.parse_directive_args(name, batchscript)
 
     def init_jobspec(self, args):
-        # If no script (reading from stdin), then use "flux" as arg[0]
+        if args.wrap:
+            self.script = f"#!/bin/sh\n{self.script}"
 
         #  If number of slots not specified, then set it to node count
         #   if set, otherwise raise an error.
@@ -1813,9 +1836,18 @@ class BatchCmd(MiniCmd):
             args.broker_opts = args.broker_opts or []
             args.broker_opts.append("-Scontent.dump=" + args.dump)
 
+        #  If job name is not explicitly set in args, use the script name
+        #   if a script was provided, else the string "mini-batch" to
+        #   indicate the script was set on flux mini batch stdin.
+        if args.job_name is None:
+            if args.SCRIPT:
+                args.job_name = args.SCRIPT[0]
+            else:
+                args.job_name = "mini-batch"
+
         jobspec = JobspecV1.from_batch_command(
-            script=self.read_script(args),
-            jobname=args.SCRIPT[0] if args.SCRIPT else "batchscript",
+            script=self.script,
+            jobname=args.job_name,
             args=args.SCRIPT[1:],
             num_slots=args.nslots,
             cores_per_slot=args.cores_per_slot,
@@ -1832,6 +1864,17 @@ class BatchCmd(MiniCmd):
         return jobspec
 
     def main(self, args):
+        #  Save cmdline argv to mini batch in case it must be reprocessed
+        #  after applying directive options.
+        #  self.argv is sys.argv without first two args ["mini", "batch"]
+        self.argv = sys.argv[2:]
+
+        #  Process file with possible submission directives, returning
+        #  script and new argparse args Namespace as a result.
+        #  This must be done before calling self.submit() so that SETARGS
+        #  directives are available in jobspec_create():
+        self.script, args = self.process_script(args)
+
         jobid = self.submit(args)
         print(jobid, file=sys.stdout)
 
@@ -2057,7 +2100,7 @@ def main():
     a Flux instance.  If no batch script is provided, one will be read
     from stdin.
     """
-    mini_batch_parser_sub = subparsers.add_parser(
+    batch.parser = subparsers.add_parser(
         "batch",
         parents=[batch.get_parser()],
         help="enqueue a batch script",
@@ -2065,7 +2108,7 @@ def main():
         description=description,
         formatter_class=flux.util.help_formatter(),
     )
-    mini_batch_parser_sub.set_defaults(func=batch.main)
+    batch.parser.set_defaults(func=batch.main)
 
     # alloc
     alloc = AllocCmd()
@@ -2073,7 +2116,7 @@ def main():
     Allocate resources and start a new Flux instance. Once the instance
     has started, attach to it interactively.
     """
-    mini_alloc_parser_sub = subparsers.add_parser(
+    alloc.parser = subparsers.add_parser(
         "alloc",
         parents=[alloc.get_parser()],
         help="allocate a new instance for interactive use",
@@ -2081,7 +2124,7 @@ def main():
         description=description,
         formatter_class=flux.util.help_formatter(),
     )
-    mini_alloc_parser_sub.set_defaults(func=alloc.main)
+    alloc.parser.set_defaults(func=alloc.main)
 
     args = parser.parse_args()
     args.func(args)

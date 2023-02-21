@@ -1,0 +1,2 @@
+SETARGS(['-N4', '--exclusive'])
+SETARGS(['--setattr=user.conf=[config]\n  item = "foo"\n'])
