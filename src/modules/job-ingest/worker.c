@@ -69,6 +69,24 @@ struct worker {
 static int worker_start (struct worker *w);
 static void worker_stop (struct worker *w);
 
+
+static void worker_cleanup_process (struct worker *w, flux_subprocess_t *p)
+{
+    flux_subprocess_destroy (p);
+    zlist_remove (w->trash, p);
+
+    /*  Be sure to nullify w->p if this worker unexpectedly exited
+     *  (i.e., worker_stop() wasn't called on it)
+     */
+    if (w->p == p)
+        w->p = NULL;
+
+    /*  Call worker_stop_notify() callback, if any
+     */
+    if (w->exit_cb)
+        w->exit_cb (w->exit_arg);
+}
+
 /* Subprocess completed.
  * Destroy the subprocess, but don't use w->p since that may be a diferent
  * one, if worker_stop() was followed immediately by worker_start().
@@ -87,19 +105,7 @@ static void worker_completion_cb (flux_subprocess_t *p)
         flux_log (w->h, LOG_ERR, "%s: killed by %s", w->name, strsignal (rc));
     else
         flux_log (w->h, LOG_ERR, "%s: completed (not signal or exit)", w->name);
-    flux_subprocess_destroy (p);
-    zlist_remove (w->trash, p);
-
-    /*  Be sure to nullify w->p if this worker unexpectedly exited
-     *  (i.e., worker_stop() wasn't called on it)
-     */
-    if (w->p == p)
-        w->p = NULL;
-
-    /*  Call worker_stop_notify() callback, if any
-     */
-    if (w->exit_cb)
-        w->exit_cb (w->exit_arg);
+    worker_cleanup_process (w, p);
 }
 
 /* Subprocess state change.
@@ -114,8 +120,10 @@ static void worker_state_cb (flux_subprocess_t *p,
             break;
         case FLUX_SUBPROCESS_EXEC_FAILED:
         case FLUX_SUBPROCESS_FAILED:
-            flux_log (w->h, LOG_ERR, "%s: %s", w->name,
-                      flux_subprocess_state_string (state));
+            flux_log (w->h, LOG_ERR, "%s: %s: %s", w->name,
+                      flux_subprocess_state_string (state),
+                      strerror (flux_subprocess_fail_errno (p)));
+            worker_cleanup_process (w, p);
             break;
         case FLUX_SUBPROCESS_EXITED:
         case FLUX_SUBPROCESS_INIT:

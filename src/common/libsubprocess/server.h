@@ -21,7 +21,9 @@ typedef int (*subprocess_server_auth_f) (const flux_msg_t *msg,
 
 /* Create a subprocess server.  The handle 'h' must contain a reactor
  * created with the FLUX_REACTOR_SIGCHLD flag.  Note that there can be
- * only one reactor per process with this flag set.
+ * only one reactor per process with this flag set.  Also, it may be wise
+ * to block SIGPIPE to avoid termination when writing to stdin of a subprocess
+ * that has terminated.
  */
 subprocess_server_t *subprocess_server_create (flux_t *h,
                                                const char *local_uri,
