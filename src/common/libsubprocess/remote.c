@@ -33,6 +33,7 @@
 #include "command.h"
 #include "remote.h"
 #include "util.h"
+#include "client.h"
 
 static void remote_kill_nowait (flux_subprocess_t *p, int signum);
 
@@ -115,8 +116,7 @@ static void fwd_pending_signal (flux_subprocess_t *p)
 }
 
 static void process_new_state (flux_subprocess_t *p,
-                               flux_subprocess_state_t state,
-                               int rank, pid_t pid, int errnum, int status)
+                               flux_subprocess_state_t state)
 {
     if (p->state == FLUX_SUBPROCESS_FAILED)
         return;
@@ -130,16 +130,12 @@ static void process_new_state (flux_subprocess_t *p,
     p->state = state;
 
     if (p->state == FLUX_SUBPROCESS_RUNNING) {
-        p->pid = pid;
-        p->pid_set = true;
         start_channel_watchers (p);
     }
     else if (state == FLUX_SUBPROCESS_EXITED) {
-        p->status = status;
         stop_in_watchers (p);
     }
     else if (state == FLUX_SUBPROCESS_FAILED) {
-        p->failed_errno = errnum;
         stop_io_watchers (p);
     }
 
@@ -166,8 +162,6 @@ static void remote_in_prep_cb (flux_reactor_t *r,
 
 static int remote_write (struct subprocess_channel *c)
 {
-    flux_future_t *f = NULL;
-    json_t *io = NULL;
     const void *ptr;
     int lenp;
     bool eof = false;
@@ -187,18 +181,17 @@ static int remote_write (struct subprocess_channel *c)
         && !c->write_eof_sent)
         eof = true;
 
-    /* rank not needed, set to 0 */
-    if (!(io = ioencode (c->name, "0", ptr, lenp, eof))) {
-        llog_debug (c->p, "ioencode %s: %s", c->name, strerror (errno));
-        goto error;
-    }
-
-    if (!(f = flux_rpc_pack (c->p->h, "rexec.write", c->p->rank,
-                             FLUX_RPC_NORESPONSE,
-                             "{ s:i s:O }",
-                             "pid", c->p->pid,
-                             "io", io))) {
-        llog_debug (c->p, "flux_rpc_pack: %s", strerror (errno));
+    if (subprocess_write (c->p->h,
+                          "rexec",
+                          c->p->rank,
+                          c->p->pid,
+                          c->name,
+                          ptr,
+                          lenp,
+                          eof) < 0) {
+        llog_debug (c->p,
+                    "error sending rexec.write request: %s",
+                    strerror (errno));
         goto error;
     }
 
@@ -206,42 +199,27 @@ static int remote_write (struct subprocess_channel *c)
         c->write_eof_sent = true;
     rv = 0;
 error:
-    /* no response */
-    flux_future_destroy (f);
-    json_decref (io);
     return rv;
 }
 
 static int remote_close (struct subprocess_channel *c)
 {
-    flux_future_t *f = NULL;
-    json_t *io = NULL;
-    int rv = -1;
-
-    /* rank not needed, set to 0 */
-    if (!(io = ioencode (c->name, "0", NULL, 0, true))) {
-        llog_debug (c->p, "ioencode: %s", strerror (errno));
-        goto error;
+    if (subprocess_write (c->p->h,
+                          "rexec",
+                          c->p->rank,
+                          c->p->pid,
+                          c->name,
+                          NULL,
+                          0,
+                          true) < 0) {
+        llog_debug (c->p,
+                    "error sending rexec.write request: %s",
+                    strerror (errno));
+        return -1;
     }
-
-    if (!(f = flux_rpc_pack (c->p->h, "rexec.write", c->p->rank,
-                             FLUX_RPC_NORESPONSE,
-                             "{ s:i s:O }",
-                             "pid", c->p->pid,
-                             "io", io))) {
-        llog_debug (c->p, "flux_rpc_pack: %s", strerror (errno));
-        goto error;
-    }
-
-    rv = 0;
-error:
-    /* no response */
-    flux_future_destroy (f);
-    json_decref (io);
-
     /* No need to do a "channel_flush", normal io reactor will handle
      * flush of any data in read buffer */
-    return rv;
+    return 0;
 }
 
 static void remote_in_check_cb (flux_reactor_t *r,
@@ -276,8 +254,8 @@ static void remote_in_check_cb (flux_reactor_t *r,
     return;
 
 error:
-    process_new_state (c->p, FLUX_SUBPROCESS_FAILED,
-                       c->p->rank, -1, errno, 0);
+    c->p->failed_errno = errno;
+    process_new_state (c->p, FLUX_SUBPROCESS_FAILED);
     remote_kill_nowait (c->p, SIGKILL);
     flux_future_destroy (c->p->f);
     c->p->f = NULL;
@@ -523,75 +501,23 @@ int subprocess_remote_setup (flux_subprocess_t *p)
     return 0;
 }
 
-static int remote_state (flux_subprocess_t *p, flux_future_t *f,
-                         int rank)
-{
-    flux_subprocess_state_t state;
-    pid_t pid = -1;
-    int errnum = 0;
-    int status = 0;
-
-    if (flux_rpc_get_unpack (f, "{ s:i }", "state", &state) < 0) {
-        llog_debug (p,
-                    "%s: flux_rpc_get_unpack: rank %u: %s",
-                    __FUNCTION__,
-                    flux_rpc_get_nodeid (f),
-                    future_strerror (f, errno));
-        return -1;
-    }
-
-    if (state == FLUX_SUBPROCESS_RUNNING) {
-        if (flux_rpc_get_unpack (f, "{ s:i }", "pid", &pid) < 0) {
-            llog_debug (p,
-                        "%s: flux_rpc_get_unpack: %s",
-                        __FUNCTION__,
-                        future_strerror (f, errno));
-            return -1;
-        }
-    }
-
-    if (state == FLUX_SUBPROCESS_EXITED) {
-        if (flux_rpc_get_unpack (f, "{ s:i }", "status", &status) < 0) {
-            llog_debug (p,
-                        "%s: flux_rpc_get_unpack: %s",
-                        __FUNCTION__,
-                        future_strerror (f, errno));
-            return -1;
-        }
-    }
-
-    process_new_state (p, state, rank, pid, errnum, status);
-
-    return 0;
-}
-
-static int remote_output (flux_subprocess_t *p, flux_future_t *f,
-                          int rank, pid_t pid)
+static int remote_output (flux_subprocess_t *p,
+                          const char *stream,
+                          const char *data,
+                          int len,
+                          bool eof)
 {
     struct subprocess_channel *c;
-    const char *stream = NULL;
-    char *data = NULL;
-    int len = 0;
-    bool eof = false;
-    json_t *io = NULL;
-    int rv = -1;
 
-    if (flux_rpc_get_unpack (f, "{ s:o }", "io", &io)
-        || iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
-        llog_debug (p,
-                    "Error decoding output received from remote subprocess: %s",
-                    strerror (errno));
-        goto cleanup;
-    }
     if (!(c = zhash_lookup (p->channels, stream))) {
         llog_debug (p,
                     "Error buffering %d bytes received from remote"
                     " subprocess pid %d %s: unknown channel name",
                     len,
-                    (int)pid,
+                    (int)flux_subprocess_pid (p),
                     stream);
         errno = EPROTO;
-        goto cleanup;
+        return -1;
     }
 
     if (data && len) {
@@ -607,10 +533,10 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
                         "Error buffering %d bytes received from remote"
                         " subprocess pid %d %s: %s",
                         len,
-                        (int)pid,
+                        (int)flux_subprocess_pid (p),
                         stream,
                         strerror (errno));
-            goto cleanup;
+            return -1;
         }
     }
     if (eof) {
@@ -618,11 +544,7 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
         if (flux_buffer_readonly (c->read_buffer) < 0)
             llog_debug (p, "flux_buffer_readonly: %s", strerror (errno));
     }
-
-    rv = 0;
-cleanup:
-    free (data);
-    return rv;
+    return 0;
 }
 
 static void remote_completion (flux_subprocess_t *p)
@@ -634,114 +556,73 @@ static void remote_completion (flux_subprocess_t *p)
     subprocess_check_completed (p);
 }
 
-static void remote_exec_cb (flux_future_t *f, void *arg)
+static void rexec_continuation (flux_future_t *f, void *arg)
 {
     flux_subprocess_t *p = arg;
-    const char *type;
-    int rank;
-    pid_t pid;
-    int rc;
+    const char *stream;
+    const char *data;
+    int len;
+    bool eof;
 
-    rc = flux_rpc_get_unpack (f, "{ s:s s:i }",
-                              "type", &type,
-                              "rank", &rank);
-    if (rc < 0 && errno == ENODATA) {
-        remote_completion (p);
-        flux_future_destroy (f);
-        p->f = NULL;
-    }
-    else if (rc < 0) {
-        goto error;
-    }
-    else if (!strcmp (type, "state")) {
-        /* N.B. FAILED state is not communicated as a state change response.
-         * They are communicated as RPC errors, handled above.
-         */
-        if (remote_state (p, f, rank) < 0)
-            goto error;
-        flux_future_reset (f);
-    }
-    else if (!strcmp (type, "output")) {
-        if (flux_rpc_get_unpack (f, "{ s:i }", "pid", &pid) < 0) {
-            llog_debug (p,
-                        "%s: flux_rpc_get_unpack: %s",
-                        __FUNCTION__,
-                        future_strerror (f, errno));
-            goto error;
+    if (subprocess_rexec_get (f) < 0) {
+        if (errno == ENODATA) {
+            remote_completion (p);
+            goto complete;
         }
-        if (remote_output (p, f, rank, pid) < 0)
-            goto error;
-        flux_future_reset (f);
-    }
-    else {
-        llog_debug (p, "%s: protocol error", __FUNCTION__);
-        errno = EPROTO;
         goto error;
     }
-
+    if (subprocess_rexec_is_started (f, &p->pid)) {
+        p->pid_set = true;
+        process_new_state (p, FLUX_SUBPROCESS_RUNNING);
+    }
+    else if (subprocess_rexec_is_stopped (f)) {
+        process_new_state (p, FLUX_SUBPROCESS_STOPPED);
+    }
+    else if (subprocess_rexec_is_finished (f, &p->status)) {
+        process_new_state (p, FLUX_SUBPROCESS_EXITED);
+    }
+    else if (subprocess_rexec_is_output (f, &stream, &data, &len, &eof)) {
+        if (remote_output (p, stream, data, len, eof) < 0)
+            goto error;
+    }
+    flux_future_reset (f);
     return;
 
 error:
-    process_new_state (p, FLUX_SUBPROCESS_FAILED,
-                       p->rank, -1, errno, 0);
+    p->failed_errno = errno;
+    process_new_state (p, FLUX_SUBPROCESS_FAILED);
     remote_kill_nowait (p, SIGKILL);
+complete:
     flux_future_destroy (f);
     p->f = NULL;
 }
 
 int remote_exec (flux_subprocess_t *p)
 {
-    flux_future_t *f = NULL;
-    json_t *cmd_obj = NULL;
-    int save_errno;
+    flux_future_t *f;
+    int flags = 0;
 
-    if (!(cmd_obj = cmd_tojson (p->cmd))) {
-        llog_debug (p, "cmd_tojson failed");
-        errno = ENOMEM;
+    if (p->ops.on_channel_out)
+        flags |= SUBPROCESS_REXEC_CHANNEL;
+    if (p->ops.on_stdout)
+        flags |= SUBPROCESS_REXEC_STDOUT;
+    if (p->ops.on_stderr)
+        flags |= SUBPROCESS_REXEC_STDERR;
+
+    if (!(f = subprocess_rexec (p->h, "rexec", p->rank, p->cmd, flags))
+        || flux_future_then (f, -1., rexec_continuation, p) < 0) {
+        llog_debug (p,
+                    "error sending rexec.exec request: %s",
+                    strerror (errno));
+        flux_future_destroy (f);
         return -1;
     }
-
-    /* completion & state_change cbs always required b/c we use it
-     * internally in this code.  But output callbacks are optional, we
-     * don't care if user doesn't want it.
-     */
-    if (!(f = flux_rpc_pack (p->h, "rexec.exec", p->rank, FLUX_RPC_STREAMING,
-                             "{s:O s:i s:i s:i}",
-                             "cmd", cmd_obj,
-                             "on_channel_out", p->ops.on_channel_out ? 1 : 0,
-                             "on_stdout", p->ops.on_stdout ? 1 : 0,
-                             "on_stderr", p->ops.on_stderr ? 1 : 0))) {
-        llog_debug (p, "flux_rpc: %s", strerror (errno));
-        goto error;
-    }
-
-    if (flux_future_then (f, -1., remote_exec_cb, p) < 0) {
-        llog_debug (p, "flux_future_then: %s", strerror (errno));
-        goto error;
-    }
-
-    p->f = f;
-    json_decref (cmd_obj);
     return 0;
-
- error:
-    save_errno = errno;
-    flux_future_destroy (f);
-    json_decref (cmd_obj);
-    errno = save_errno;
-    return -1;
 }
 
 flux_future_t *remote_kill (flux_subprocess_t *p, int signum)
 {
-    flux_future_t *f;
-
-    if (!(f = flux_rpc_pack (p->h, "rexec.kill", p->rank, 0,
-                             "{s:i s:i}",
-                             "pid", p->pid,
-                             "signum", signum)))
-        return NULL;
-    return f;
+    return subprocess_kill (p->h, "rexec", p->rank, p->pid, signum);
 }
 
 static void remote_kill_nowait (flux_subprocess_t *p, int signum)
