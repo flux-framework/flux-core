@@ -33,6 +33,8 @@
 #include "remote.h"
 #include "util.h"
 
+static void remote_kill_nowait (flux_subprocess_t *p, int signum);
+
 static void start_channel_watchers (flux_subprocess_t *p)
 {
     struct subprocess_channel *c;
@@ -241,7 +243,6 @@ static void remote_in_check_cb (flux_reactor_t *r,
                                 void *arg)
 {
     struct subprocess_channel *c = arg;
-    flux_future_t *fkill;
 
     flux_watcher_stop (c->in_idle_w);
 
@@ -270,10 +271,7 @@ static void remote_in_check_cb (flux_reactor_t *r,
 error:
     process_new_state (c->p, FLUX_SUBPROCESS_FAILED,
                        c->p->rank, -1, errno, 0);
-    if (!(fkill = remote_kill (c->p, SIGKILL)))
-        flux_log_error (c->p->h, "%s: remote_kill", __FUNCTION__);
-    else
-        flux_future_destroy (fkill);
+    remote_kill_nowait (c->p, SIGKILL);
     flux_future_destroy (c->p->f);
     c->p->f = NULL;
 }
@@ -673,16 +671,7 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
 error:
     process_new_state (p, FLUX_SUBPROCESS_FAILED,
                        p->rank, -1, errno, 0);
-    if (p->state == FLUX_SUBPROCESS_RUNNING) {
-        flux_future_t *fkill;
-        if (!(fkill = remote_kill (p, SIGKILL)))
-            flux_log_error (p->h,
-                            "%s: remote_kill: rank %u",
-                            __FUNCTION__,
-                            flux_rpc_get_nodeid (fkill));
-        else
-            flux_future_destroy (fkill);
-    }
+    remote_kill_nowait (p, SIGKILL);
     flux_future_destroy (f);
     p->f = NULL;
 }
@@ -737,11 +726,18 @@ flux_future_t *remote_kill (flux_subprocess_t *p, int signum)
     if (!(f = flux_rpc_pack (p->h, "rexec.kill", p->rank, 0,
                              "{s:i s:i}",
                              "pid", p->pid,
-                             "signum", signum))) {
-        flux_log (p->h, LOG_DEBUG, "%s: flux_rpc_pack", __FUNCTION__);
+                             "signum", signum)))
         return NULL;
-    }
     return f;
+}
+
+static void remote_kill_nowait (flux_subprocess_t *p, int signum)
+{
+    if (p->pid_set) {
+        flux_future_t *f;
+        f = remote_kill (p, signum);
+        flux_future_destroy (f);
+    }
 }
 
 /*
