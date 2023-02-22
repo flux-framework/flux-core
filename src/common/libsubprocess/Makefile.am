@@ -39,13 +39,15 @@ TESTS = \
 	test_cmd.t \
 	test_subprocess.t \
 	test_remote.t \
-	test_iostress.t
+	test_iostress.t \
+	test_iochan.t
 
 check_PROGRAMS = \
 	$(TESTS) \
 	test_echo \
 	test_multi_echo \
-	test_fork_sleep
+	test_fork_sleep \
+	test_fdcopy
 
 check_LTLIBRARIES = test/libutil.la
 
@@ -97,7 +99,16 @@ test_iostress_t_CPPFLAGS = $(test_cppflags)
 test_iostress_t_LDADD = $(test_ldadd)
 test_iostress_t_LDFLAGS = $(test_ldflags)
 
+test_iochan_t_SOURCES = test/iochan.c
+test_iochan_t_CPPFLAGS = \
+	-DTEST_SUBPROCESS_DIR=\"$(top_builddir)/src/common/libsubprocess/\" \
+	$(test_cppflags)
+test_iochan_t_LDADD = $(test_ldadd)
+test_iochan_t_LDFLAGS = $(test_ldflags)
+
 test_echo_SOURCES = test/test_echo.c
+
+test_fdcopy_SOURCES = test/fdcopy.c
 
 test_multi_echo_SOURCES = test/test_multi_echo.c
 
