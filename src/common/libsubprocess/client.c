@@ -135,7 +135,6 @@ error:
 int subprocess_rexec_get (flux_future_t *f)
 {
     struct rexec_ctx *ctx;
-    int rank; // not used
 
     if (!(ctx = flux_future_aux_get (f, "flux::rexec"))) {
         errno = EINVAL;
@@ -143,9 +142,8 @@ int subprocess_rexec_get (flux_future_t *f)
     }
     rexec_response_clear (&ctx->response);
     if (flux_rpc_get_unpack (f,
-                             "{s:s s:i s?i s?i s?i s?O}",
+                             "{s:s s?i s?i s?i s?O}",
                              "type", &ctx->response.type,
-                             "rank", &rank,
                              "state", &ctx->response.state,
                              "pid", &ctx->response.pid,
                              "status", &ctx->response.status,

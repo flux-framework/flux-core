@@ -156,23 +156,24 @@ static void proc_state_change_cb (flux_subprocess_t *p,
     int rc = 0;
 
     if (state == FLUX_SUBPROCESS_RUNNING) {
-        rc = flux_respond_pack (s->h, request, "{s:s s:i s:i s:i}",
+        rc = flux_respond_pack (s->h,
+                                request,
+                                "{s:s s:i s:i}",
                                 "type", "state",
-                                "rank", s->rank,
                                 "pid", flux_subprocess_pid (p),
                                 "state", state);
     }
     else if (state == FLUX_SUBPROCESS_EXITED) {
-        rc = flux_respond_pack (s->h, request, "{s:s s:i s:i s:i}",
+        rc = flux_respond_pack (s->h,
+                                request,
+                                "{s:s s:i s:i}",
                                 "type", "state",
-                                "rank", s->rank,
                                 "state", state,
                                 "status", flux_subprocess_status (p));
     }
     else if (state == FLUX_SUBPROCESS_STOPPED) {
-        rc = flux_respond_pack (s->h, request, "{s:s s:i s:i}",
+        rc = flux_respond_pack (s->h, request, "{s:s s:i}",
                                 "type", "state",
-                                "rank", s->rank,
                                 "state", state);
     }
     else if (state == FLUX_SUBPROCESS_FAILED) {
@@ -212,9 +213,10 @@ static int proc_output (flux_subprocess_t *p,
         goto error;
     }
 
-    if (flux_respond_pack (s->h, msg, "{s:s s:i s:i s:O}",
+    if (flux_respond_pack (s->h,
+                           msg,
+                           "{s:s s:i s:O}",
                            "type", "output",
-                           "rank", s->rank,
                            "pid", flux_subprocess_pid (p),
                            "io", io) < 0) {
         llog_error (s,
