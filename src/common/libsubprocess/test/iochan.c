@@ -233,6 +233,10 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     h = rcmdsrv_create ();
+
+    if (flux_set_default_subprocess_log (h, tap_logger, NULL) < 0)
+        BAIL_OUT ("could not set logger");
+
     ok (iochan_run_check (h, "simple", linesize * 100),
         "simple check worked");
     ok (iochan_run_check (h, "simple", linesize * 1000),

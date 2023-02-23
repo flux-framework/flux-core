@@ -20,6 +20,17 @@
  */
 flux_t *rcmdsrv_create (void);
 
+/* llog-compatible logger
+ */
+void tap_logger (void *arg,
+                 const char *file,
+                 int line,
+                 const char *func,
+                 const char *subsys,
+                 int level,
+                 const char *fmt,
+                 va_list ap);
+
 #endif // !_SUBPROCESS_TEST_RCMDSRV_H
 
 // vi: ts=4 sw=4 expandtab
