@@ -9,7 +9,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
-	-I$(top_builddir)/src/common/libflux
+	-I$(top_builddir)/src/common/libflux \
+	-DLLOG_ENABLE_DEBUG=1
 
 noinst_LTLIBRARIES = \
 	libsubprocess.la
