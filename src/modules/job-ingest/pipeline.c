@@ -413,6 +413,8 @@ struct pipeline *pipeline_create (flux_t *h)
 
     if (!(pl = calloc (1, sizeof (*pl))))
         return NULL;
+    if (flux_set_default_subprocess_log (h, flux_llog, h) < 0)
+        goto error;
     pl->h = h;
     if (!(pl->shutdown_timer = flux_timer_watcher_create (r,
                                                           0.,

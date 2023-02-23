@@ -409,6 +409,11 @@ int main (int argc, char *argv[])
     if (ctx.rank == 0 && execute_parental_notifications (&ctx) < 0)
         goto cleanup;
 
+    /* Set up internal logging for libsubprocesses.
+     */
+    if (flux_set_default_subprocess_log (ctx.h, flux_llog, ctx.h) < 0)
+        goto cleanup;
+
     if (create_runat_phases (&ctx) < 0)
         goto cleanup;
 

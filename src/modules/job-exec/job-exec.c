@@ -1388,6 +1388,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto out;
     }
 
+    if (flux_set_default_subprocess_log (h, flux_llog, h) < 0)
+        goto out;
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
         goto out;

@@ -164,6 +164,10 @@ int mod_main (flux_t *h, int argc, char **argv)
     zhashx_set_duplicator (ctx.active_jobs, job_duplicator);
     zhashx_set_destructor (ctx.inactive_jobs, job_destructor);
     zhashx_set_duplicator (ctx.inactive_jobs, job_duplicator);
+    if (flux_set_default_subprocess_log (h, flux_llog, h) < 0) {
+        flux_log_error (h, "error initializing subprocess logging");
+        goto done;
+    }
     if (!(ctx.conf = conf_create (&ctx))) {
         flux_log_error (h, "error creating conf context");
         goto done;
