@@ -158,23 +158,22 @@ static void proc_state_change_cb (flux_subprocess_t *p,
     if (state == FLUX_SUBPROCESS_RUNNING) {
         rc = flux_respond_pack (s->h,
                                 request,
-                                "{s:s s:i s:i}",
-                                "type", "state",
-                                "pid", flux_subprocess_pid (p),
-                                "state", state);
+                                "{s:s s:i}",
+                                "type", "started",
+                                "pid", flux_subprocess_pid (p));
     }
     else if (state == FLUX_SUBPROCESS_EXITED) {
         rc = flux_respond_pack (s->h,
                                 request,
-                                "{s:s s:i s:i}",
-                                "type", "state",
-                                "state", state,
+                                "{s:s s:i}",
+                                "type", "finished",
                                 "status", flux_subprocess_status (p));
     }
     else if (state == FLUX_SUBPROCESS_STOPPED) {
-        rc = flux_respond_pack (s->h, request, "{s:s s:i}",
-                                "type", "state",
-                                "state", state);
+        rc = flux_respond_pack (s->h,
+                                request,
+                                "{s:s}",
+                                "type", "stopped");
     }
     else if (state == FLUX_SUBPROCESS_FAILED) {
         rc = flux_respond_error (s->h, request, p->failed_errno, NULL);
