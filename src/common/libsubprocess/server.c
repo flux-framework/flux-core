@@ -26,6 +26,7 @@
 #include "subprocess_private.h"
 #include "command.h"
 #include "server.h"
+#include "client.h"
 
 /* Keys used to store subprocess server, rexec.exec request, and
  * 'subprocesses' zlistx handle in the subprocess object.
@@ -272,16 +273,16 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
         .on_stdout = proc_output_cb,
         .on_stderr = proc_output_cb,
     };
-    int on_channel_out, on_stdout, on_stderr;
     char **env = NULL;
     const char *errmsg = NULL;
     flux_error_t error;
+    int flags;
 
-    if (flux_request_unpack (msg, NULL, "{s:o s:i s:i s:i}",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:o s:i}",
                              "cmd", &cmd_obj,
-                             "on_channel_out", &on_channel_out,
-                             "on_stdout", &on_stdout,
-                             "on_stderr", &on_stderr))
+                             "flags", &flags) < 0)
         goto error;
     if (s->shutdown) {
         errmsg = "subprocess server is shutting down";
@@ -293,11 +294,11 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPERM;
         goto error;
     }
-    if (!on_channel_out)
+    if (!(flags & SUBPROCESS_REXEC_CHANNEL))
         ops.on_channel_out = NULL;
-    if (!on_stdout)
+    if (!(flags & SUBPROCESS_REXEC_STDOUT))
         ops.on_stdout = NULL;
-    if (!on_stderr)
+    if (!(flags & SUBPROCESS_REXEC_STDERR))
         ops.on_stderr = NULL;
 
     if (!(cmd = cmd_fromjson (cmd_obj, NULL))) {

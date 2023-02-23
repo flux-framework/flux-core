@@ -92,19 +92,6 @@ error:
     return NULL;
 }
 
-static int has_stdout_flag (struct rexec_ctx *ctx)
-{
-    return ctx->flags & SUBPROCESS_REXEC_STDOUT ? 1 : 0;
-}
-static int has_stderr_flag (struct rexec_ctx *ctx)
-{
-    return ctx->flags & SUBPROCESS_REXEC_STDERR ? 1 : 0;
-}
-static int has_channel_flag (struct rexec_ctx *ctx)
-{
-    return ctx->flags & SUBPROCESS_REXEC_CHANNEL ? 1 : 0;
-}
-
 flux_future_t *subprocess_rexec (flux_t *h,
                                  const char *service_name,
                                  uint32_t rank,
@@ -127,11 +114,9 @@ flux_future_t *subprocess_rexec (flux_t *h,
                              topic,
                              rank,
                              FLUX_RPC_STREAMING,
-                             "{s:O s:i s:i s:i}",
+                             "{s:O s:i}",
                              "cmd", ctx->cmd,
-                             "on_channel_out", has_channel_flag (ctx),
-                             "on_stdout", has_stdout_flag (ctx),
-                             "on_stderr", has_stderr_flag (ctx)))
+                             "flags", ctx->flags))
         || flux_future_aux_set (f,
                                 "flux::rexec",
                                 ctx,
