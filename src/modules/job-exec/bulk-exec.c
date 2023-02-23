@@ -179,8 +179,7 @@ static void exec_state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
                 (*exec->handlers->on_start) (exec, exec->arg);
         }
     }
-    else if (state == FLUX_SUBPROCESS_FAILED
-            || state == FLUX_SUBPROCESS_EXEC_FAILED) {
+    else if (state == FLUX_SUBPROCESS_FAILED) {
         int errnum = flux_subprocess_fail_errno (p);
         int code = EXIT_CODE(1);
 

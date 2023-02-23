@@ -138,11 +138,6 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
     }
     else if (state == FLUX_SUBPROCESS_EXITED)
         exited++;
-    else if (state == FLUX_SUBPROCESS_EXEC_FAILED) {
-        /* EXEC_FAILED means RUNNING never reached, so must increment started */
-        started++;
-        exited++;
-    }
     else if (state == FLUX_SUBPROCESS_FAILED) {
         /* FLUX_SUBPROCESS_FAILED is a catch all error case, no way to
          * know if process started or not.  So we cheat with a
@@ -160,8 +155,7 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
             flux_watcher_stop (stdin_w);
     }
 
-    if (state == FLUX_SUBPROCESS_EXEC_FAILED
-        || state == FLUX_SUBPROCESS_FAILED) {
+    if (state == FLUX_SUBPROCESS_FAILED) {
         flux_cmd_t *cmd = flux_subprocess_get_cmd (p);
         int errnum = flux_subprocess_fail_errno (p);
         int ec = 1;

@@ -33,6 +33,8 @@
 #include "remote.h"
 #include "util.h"
 
+static void remote_kill_nowait (flux_subprocess_t *p, int signum);
+
 static void start_channel_watchers (flux_subprocess_t *p)
 {
     struct subprocess_channel *c;
@@ -115,8 +117,7 @@ static void process_new_state (flux_subprocess_t *p,
                                flux_subprocess_state_t state,
                                int rank, pid_t pid, int errnum, int status)
 {
-    if (p->state == FLUX_SUBPROCESS_EXEC_FAILED
-        || p->state == FLUX_SUBPROCESS_FAILED)
+    if (p->state == FLUX_SUBPROCESS_FAILED)
         return;
 
     p->state = state;
@@ -125,10 +126,6 @@ static void process_new_state (flux_subprocess_t *p,
         p->pid = pid;
         p->pid_set = true;
         start_channel_watchers (p);
-    }
-    else if (state == FLUX_SUBPROCESS_EXEC_FAILED) {
-        p->exec_failed_errno = errnum;
-        stop_io_watchers (p);
     }
     else if (state == FLUX_SUBPROCESS_EXITED) {
         p->status = status;
@@ -246,7 +243,6 @@ static void remote_in_check_cb (flux_reactor_t *r,
                                 void *arg)
 {
     struct subprocess_channel *c = arg;
-    flux_future_t *fkill;
 
     flux_watcher_stop (c->in_idle_w);
 
@@ -275,10 +271,7 @@ static void remote_in_check_cb (flux_reactor_t *r,
 error:
     process_new_state (c->p, FLUX_SUBPROCESS_FAILED,
                        c->p->rank, -1, errno, 0);
-    if (!(fkill = remote_kill (c->p, SIGKILL)))
-        flux_log_error (c->p->h, "%s: remote_kill", __FUNCTION__);
-    else
-        flux_future_destroy (fkill);
+    remote_kill_nowait (c->p, SIGKILL);
     flux_future_destroy (c->p->f);
     c->p->f = NULL;
 }
@@ -547,14 +540,6 @@ static int remote_state (flux_subprocess_t *p, flux_future_t *f,
         }
     }
 
-    if (state == FLUX_SUBPROCESS_EXEC_FAILED
-        || state == FLUX_SUBPROCESS_FAILED) {
-        if (flux_rpc_get_unpack (f, "{ s:i }", "errno", &errnum) < 0) {
-            flux_log (p->h, LOG_DEBUG, "%s: flux_rpc_get_unpack", __FUNCTION__);
-            return -1;
-        }
-    }
-
     if (state == FLUX_SUBPROCESS_EXITED) {
         if (flux_rpc_get_unpack (f, "{ s:i }", "status", &status) < 0) {
             flux_log (p->h, LOG_DEBUG, "%s: flux_rpc_get_unpack", __FUNCTION__);
@@ -639,16 +624,6 @@ static void remote_completion (flux_subprocess_t *p)
     subprocess_check_completed (p);
 }
 
-static bool is_exec_failed_error (flux_future_t *f)
-{
-    const char *errmsg;
-    if (flux_future_has_error (f)
-        && (errmsg = flux_future_error_string (f))
-        && streq (errmsg, "exec failed"))
-        return true;
-    return false;
-}
-
 static void remote_exec_cb (flux_future_t *f, void *arg)
 {
     flux_subprocess_t *p = arg;
@@ -665,23 +640,12 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
         flux_future_destroy (f);
         p->f = NULL;
     }
-    else if (rc < 0 && is_exec_failed_error (f)) {
-        process_new_state (p,
-                           FLUX_SUBPROCESS_EXEC_FAILED,
-                           p->rank,
-                           -1,
-                           errno,
-                           0);
-        flux_future_destroy (f);
-        p->f = NULL;
-    }
     else if (rc < 0) {
         goto error;
     }
     else if (!strcmp (type, "state")) {
-        /* N.B. EXEC_FAILED and FAILED states are not communicated as state
-         * changes via rexec protocol.  They are communicated as RPC error
-         * responses, handled in the two cases above.
+        /* N.B. FAILED state is not communicated as a state change response.
+         * They are communicated as RPC errors, handled above.
          */
         if (remote_state (p, f, rank) < 0)
             goto error;
@@ -707,16 +671,7 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
 error:
     process_new_state (p, FLUX_SUBPROCESS_FAILED,
                        p->rank, -1, errno, 0);
-    if (p->state == FLUX_SUBPROCESS_RUNNING) {
-        flux_future_t *fkill;
-        if (!(fkill = remote_kill (p, SIGKILL)))
-            flux_log_error (p->h,
-                            "%s: remote_kill: rank %u",
-                            __FUNCTION__,
-                            flux_rpc_get_nodeid (fkill));
-        else
-            flux_future_destroy (fkill);
-    }
+    remote_kill_nowait (p, SIGKILL);
     flux_future_destroy (f);
     p->f = NULL;
 }
@@ -771,11 +726,18 @@ flux_future_t *remote_kill (flux_subprocess_t *p, int signum)
     if (!(f = flux_rpc_pack (p->h, "rexec.kill", p->rank, 0,
                              "{s:i s:i}",
                              "pid", p->pid,
-                             "signum", signum))) {
-        flux_log (p->h, LOG_DEBUG, "%s: flux_rpc_pack", __FUNCTION__);
+                             "signum", signum)))
         return NULL;
-    }
     return f;
+}
+
+static void remote_kill_nowait (flux_subprocess_t *p, int signum)
+{
+    if (p->pid_set) {
+        flux_future_t *f;
+        f = remote_kill (p, signum);
+        flux_future_destroy (f);
+    }
 }
 
 /*

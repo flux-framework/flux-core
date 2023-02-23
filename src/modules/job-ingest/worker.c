@@ -118,7 +118,6 @@ static void worker_state_cb (flux_subprocess_t *p,
     switch (state) {
         case FLUX_SUBPROCESS_RUNNING:
             break;
-        case FLUX_SUBPROCESS_EXEC_FAILED:
         case FLUX_SUBPROCESS_FAILED:
             flux_log (w->h, LOG_ERR, "%s: %s: %s", w->name,
                       flux_subprocess_state_string (state),

@@ -381,7 +381,6 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 
     switch (state) {
         case FLUX_SUBPROCESS_INIT:
-        case FLUX_SUBPROCESS_EXEC_FAILED: // can't happen here - rexec only
             break;
         case FLUX_SUBPROCESS_RUNNING:
             client_run_respond (cli, 0);

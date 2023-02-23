@@ -300,10 +300,8 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
                          FLUX_SUBPROCESS_FLAGS_SETPGRP,
                          cmd,
                          &ops,
-                         NULL))) {
-        errmsg = "exec failed";
+                         NULL)))
         goto error;
-    }
 
     if (flux_subprocess_aux_set (p,
                                 msgkey,

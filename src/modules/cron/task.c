@@ -36,7 +36,6 @@ struct cron_task {
 
     int                   status; /* exit status if state is Exited         */
     int              rexec_errno; /* any errno returned by rexec service    */
-    int               exec_errno; /* any errno returned by remote exec(2)   */
 
     struct timespec   createtime; /* Time at which task was created         */
     struct timespec    starttime; /* Time at which exec request was sent    */
@@ -151,13 +150,6 @@ void cron_task_set_timeout (cron_task_t *t, double to, cron_task_state_f cb)
         cron_task_timeout_start (t);
 }
 
-static void cron_task_exec_failed (cron_task_t *t, int errnum)
-{
-    t->exec_failed = 1;
-    t->exec_errno = errnum;
-    cron_task_state_update (t, "Exec Failure");
-}
-
 static void cron_task_rexec_failed (cron_task_t *t, int errnum)
 {
     t->rexec_failed = 1;
@@ -202,11 +194,6 @@ static void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state
         t->pid = flux_subprocess_pid (p);
         t->rank = flux_subprocess_rank (p);
         cron_task_timeout_start (t);
-    }
-    else if (state == FLUX_SUBPROCESS_EXEC_FAILED) {
-        cron_task_exec_failed (t, flux_subprocess_fail_errno (p));
-        cron_task_handle_finished (p, t);
-        errno = t->exec_errno;
     }
     else if (state == FLUX_SUBPROCESS_FAILED) {
         cron_task_rexec_failed (t, flux_subprocess_fail_errno (p));
@@ -345,7 +332,7 @@ int cron_task_run (cron_task_t *t,
         goto done;
 
     if (!(p = flux_rexec (h, rank, 0, cmd, &ops))) {
-        cron_task_exec_failed (t, errno);
+        cron_task_rexec_failed (t, errno);
         goto done;
     }
 
@@ -399,8 +386,6 @@ static const char * cron_task_state_string (cron_task_t *t)
 {
     if (t->rexec_errno)
         return ("Rexec Failure");
-    if (t->exec_errno)
-        return ("Exec Failure");
     if (!t->started)
         return ("Deferred");
     if (!t->exited)
@@ -440,8 +425,6 @@ json_t *cron_task_to_json (struct cron_task *t)
 
     if (t->rexec_errno)
         json_object_set_new (o, "rexec_errno", json_integer (t->rexec_errno));
-    if (t->exec_errno)
-        json_object_set_new (o, "exec_errno", json_integer (t->exec_errno));
     if (t->timedout)
         json_object_set_new (o, "timedout", json_boolean (true));
     if (cron_task_finished (t)) {

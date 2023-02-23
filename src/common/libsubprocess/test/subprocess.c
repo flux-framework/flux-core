@@ -1509,8 +1509,6 @@ void test_state_strings (void)
         "flux_subprocess_state_string returns correct string");
     ok (!strcasecmp (flux_subprocess_state_string (FLUX_SUBPROCESS_EXITED), "Exited"),
         "flux_subprocess_state_string returns correct string");
-    ok (!strcasecmp (flux_subprocess_state_string (FLUX_SUBPROCESS_EXEC_FAILED), "Exec Failed"),
-        "flux_subprocess_state_string returns correct string");
     ok (!flux_subprocess_state_string (100),
         "flux_subprocess_state_string returns NULL on bad state");
     is (flux_subprocess_state_string (FLUX_SUBPROCESS_STOPPED),
