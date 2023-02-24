@@ -29,9 +29,9 @@ test_expect_success 'flux-mini bulksubmit submits each arg as a job' '
 test_expect_success 'flux-mini bulksubmit uses default command of {}' '
 	flux mini bulksubmit --dry-run ::: foo bar baz >default-cmd.out &&
 	cat <<-EOF >default-cmd.expected &&
-	flux-mini: submit foo
-	flux-mini: submit bar
-	flux-mini: submit baz
+	bulksubmit: submit foo
+	bulksubmit: submit bar
+	bulksubmit: submit baz
 	EOF
 	test_cmp default-cmd.expected default-cmd.out
 '
@@ -139,9 +139,9 @@ test_expect_success 'flux-mini bulksubmit replacement format strings work' '
 	        {seq} {seq1} {} {.%} {./} {.//} {./%} \
 	        >repl.out &&
 	cat <<-EOF >repl.expected &&
-	flux-mini: submit 0 1 /a/b/c/d.txt /a/b/c/d d.txt /a/b/c d
-	flux-mini: submit 1 2 /a/b/c/d /a/b/c/d d /a/b/c d
-	flux-mini: submit 2 3 c.txt c c.txt  c
+	bulksubmit: submit 0 1 /a/b/c/d.txt /a/b/c/d d.txt /a/b/c d
+	bulksubmit: submit 1 2 /a/b/c/d /a/b/c/d d /a/b/c d
+	bulksubmit: submit 2 3 c.txt c c.txt  c
 	EOF
 	test_debug "cat repl.out" &&
 	test_cmp repl.expected repl.out
@@ -151,10 +151,10 @@ test_expect_success 'flux-mini bulksubmit can use replacement string in opts' '
 	    ::: 1 2 3 4 >repl2.out &&
 	test_debug "cat -v repl2.out" &&
 	cat <<-EOF >repl2.expected &&
-	flux-mini: submit -n1 -N1 -c1 -g1 hostname
-	flux-mini: submit -n2 -N2 -c2 -g2 hostname
-	flux-mini: submit -n3 -N3 -c3 -g3 hostname
-	flux-mini: submit -n4 -N4 -c4 -g4 hostname
+	bulksubmit: submit -n1 -N1 -c1 -g1 hostname
+	bulksubmit: submit -n2 -N2 -c2 -g2 hostname
+	bulksubmit: submit -n3 -N3 -c3 -g3 hostname
+	bulksubmit: submit -n4 -N4 -c4 -g4 hostname
 	EOF
 	test_cmp repl2.expected repl2.out
 '
@@ -163,21 +163,21 @@ test_expect_success 'flux-mini bulksubmit combines all inputs by default' '
 	    ::: 0 1 2 3 4 ::: 0 5 9 >repl3.out &&
 	test_debug "cat repl3.out" &&
 	cat <<-EOF >repl3.expected &&
-	flux-mini: submit sleep 0.0
-	flux-mini: submit sleep 0.5
-	flux-mini: submit sleep 0.9
-	flux-mini: submit sleep 1.0
-	flux-mini: submit sleep 1.5
-	flux-mini: submit sleep 1.9
-	flux-mini: submit sleep 2.0
-	flux-mini: submit sleep 2.5
-	flux-mini: submit sleep 2.9
-	flux-mini: submit sleep 3.0
-	flux-mini: submit sleep 3.5
-	flux-mini: submit sleep 3.9
-	flux-mini: submit sleep 4.0
-	flux-mini: submit sleep 4.5
-	flux-mini: submit sleep 4.9
+	bulksubmit: submit sleep 0.0
+	bulksubmit: submit sleep 0.5
+	bulksubmit: submit sleep 0.9
+	bulksubmit: submit sleep 1.0
+	bulksubmit: submit sleep 1.5
+	bulksubmit: submit sleep 1.9
+	bulksubmit: submit sleep 2.0
+	bulksubmit: submit sleep 2.5
+	bulksubmit: submit sleep 2.9
+	bulksubmit: submit sleep 3.0
+	bulksubmit: submit sleep 3.5
+	bulksubmit: submit sleep 3.9
+	bulksubmit: submit sleep 4.0
+	bulksubmit: submit sleep 4.5
+	bulksubmit: submit sleep 4.9
 	EOF
 	test_cmp repl3.expected repl3.out
 '
@@ -186,12 +186,12 @@ test_expect_success 'flux-mini bulksubmit links inputs with :::+' '
 	    ::: 0 1 2 3 4 4 :::+ a b c >linked.out &&
 	test_debug "cat linked.out" &&
 	cat <<-EOF >linked.expected &&
-	flux-mini: submit 0:a
-	flux-mini: submit 1:b
-	flux-mini: submit 2:c
-	flux-mini: submit 3:a
-	flux-mini: submit 4:b
-	flux-mini: submit 4:c
+	bulksubmit: submit 0:a
+	bulksubmit: submit 1:b
+	bulksubmit: submit 2:c
+	bulksubmit: submit 3:a
+	bulksubmit: submit 4:b
+	bulksubmit: submit 4:c
 	EOF
 	test_cmp linked.expected linked.out
 '
@@ -199,9 +199,9 @@ test_expect_success 'flux-mini bulksubmit reads from files with ::::' '
 	seq 1 3 >input &&
 	flux mini bulksubmit --dry-run :::: input >fileinput.out &&
 	cat <<-EOF >fileinput.expected &&
-	flux-mini: submit 1
-	flux-mini: submit 2
-	flux-mini: submit 3
+	bulksubmit: submit 1
+	bulksubmit: submit 2
+	bulksubmit: submit 3
 	EOF
 	test_cmp fileinput.expected fileinput.out
 '
@@ -212,8 +212,8 @@ test_expect_success 'flux-mini bulksubmit splits files on newline only' '
 	EOF
 	flux mini bulksubmit --dry-run echo {} :::: inputs2 >whitespace.out &&
 	cat <<-EOT >whitespace.expected &&
-	flux-mini: submit echo this is a line
-	flux-mini: submit echo another line
+	bulksubmit: submit echo this is a line
+	bulksubmit: submit echo another line
 	EOT
 	test_cmp whitespace.expected whitespace.out
 '
@@ -222,9 +222,9 @@ test_expect_success 'flux-mini bulksubmit can substitute in list options' "
 	    >envsub.out &&
 	test_debug 'cat envsub.out' &&
 	cat <<-EOF >envsub.expected &&
-	flux-mini: submit --env=['-*', 'SEQ=0'] a
-	flux-mini: submit --env=['-*', 'SEQ=1'] b
-	flux-mini: submit --env=['-*', 'SEQ=2'] c
+	bulksubmit: submit --env=['-*', 'SEQ=0'] a
+	bulksubmit: submit --env=['-*', 'SEQ=1'] b
+	bulksubmit: submit --env=['-*', 'SEQ=2'] c
 	EOF
 	test_cmp envsub.expected envsub.out
 "
@@ -235,14 +235,14 @@ test_expect_success 'flux-mini bulksubmit --define works' '
 	    >define.out &&
 	test_debug "cat define.out" &&
 	cat <<-EOF >define.expected &&
-	flux-mini: submit -n2 --job-name=1 hostname
-	flux-mini: submit -n4 --job-name=2 hostname
-	flux-mini: submit -n8 --job-name=3 hostname
-	flux-mini: submit -n16 --job-name=4 hostname
-	flux-mini: submit -n32 --job-name=5 hostname
-	flux-mini: submit -n64 --job-name=6 hostname
-	flux-mini: submit -n128 --job-name=7 hostname
-	flux-mini: submit -n256 --job-name=8 hostname
+	bulksubmit: submit -n2 --job-name=1 hostname
+	bulksubmit: submit -n4 --job-name=2 hostname
+	bulksubmit: submit -n8 --job-name=3 hostname
+	bulksubmit: submit -n16 --job-name=4 hostname
+	bulksubmit: submit -n32 --job-name=5 hostname
+	bulksubmit: submit -n64 --job-name=6 hostname
+	bulksubmit: submit -n128 --job-name=7 hostname
+	bulksubmit: submit -n256 --job-name=8 hostname
 	EOF
 	test_cmp define.expected define.out
 '
@@ -275,8 +275,8 @@ test_expect_success 'flux-mini bulksubmit: preserves mustache templates' '
 	    hostname ::: 0 1 >mustache.out &&
 	test_debug "cat mustache.out" &&
 	cat <<-EOF > mustache.expected  &&
-	flux-mini: submit --output=flux-0.{{id}}.out hostname
-	flux-mini: submit --output=flux-1.{{id}}.out hostname
+	bulksubmit: submit --output=flux-0.{{id}}.out hostname
+	bulksubmit: submit --output=flux-1.{{id}}.out hostname
 	EOF
 	test_cmp mustache.expected mustache.out
 '
@@ -316,9 +316,9 @@ test_expect_success 'flux-mini bulksubmit --dry-run works with --cc' '
 	flux mini bulksubmit --dry-run --cc=1-2 echo {} ::: 1 2 3 \
 	  >dry-run-cc.out 2>&1 &&
 	cat <<-EOF >dry-run-cc.expected &&
-	flux-mini: submit --cc=1-2 echo 1
-	flux-mini: submit --cc=1-2 echo 2
-	flux-mini: submit --cc=1-2 echo 3
+	bulksubmit: submit --cc=1-2 echo 1
+	bulksubmit: submit --cc=1-2 echo 2
+	bulksubmit: submit --cc=1-2 echo 3
 	EOF
 	test_cmp dry-run-cc.expected dry-run-cc.out
 '
