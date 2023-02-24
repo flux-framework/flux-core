@@ -93,6 +93,11 @@ The available OPTIONS are detailed below.
 
 .. include:: common/submit-other-options.rst
 
+.. _bulksubmit:
+
+BULKSUBMIT
+==========
+
 .. include:: common/submit-bulksubmit.rst
 
 .. include:: common/submit-shell-options.rst
