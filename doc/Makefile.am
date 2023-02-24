@@ -330,6 +330,7 @@ $(RST_FILES): \
 	man1/common/submit-environment.rst \
 	man1/common/submit-process-resource-limits.rst \
 	man1/common/submit-exit-status.rst \
+	man1/common/submit-other-options.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst
 endif
@@ -388,6 +389,7 @@ EXTRA_DIST = \
 	man1/common/submit-environment.rst \
 	man1/common/submit-process-resource-limits.rst \
 	man1/common/submit-exit-status.rst \
+	man1/common/submit-other-options.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst \
 	man7/flux-undocumented.rst
