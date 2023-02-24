@@ -20,6 +20,7 @@ ENV LD_LIBRARY_PATH=/usr/local/lib
 RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
     bear \
-    ripgrep \
     fd-find \
-    gdb
+    gdb \
+    less \
+    ripgrep
