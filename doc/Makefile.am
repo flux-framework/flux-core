@@ -333,6 +333,7 @@ $(RST_FILES): \
 	man1/common/submit-other-options.rst \
 	man1/common/submit-bulksubmit.rst \
 	man1/common/submit-shell-options.rst \
+	man1/common/submit-submission-directives.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst
 endif
@@ -394,6 +395,7 @@ EXTRA_DIST = \
 	man1/common/submit-other-options.rst \
 	man1/common/submit-bulksubmit.rst \
 	man1/common/submit-shell-options.rst \
+	man1/common/submit-submission-directives.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst \
 	man7/flux-undocumented.rst
