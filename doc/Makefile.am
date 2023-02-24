@@ -324,6 +324,7 @@ man_MANS = $(MAN1_FILES) $(MAN3_FILES) $(MAN5_FILES) $(MAN7_FILES)
 $(RST_FILES): \
 	man1/common/nodeset.rst \
 	man1/common/submit-constraints.rst \
+	man1/common/submit-dependencies.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst
 endif
@@ -376,6 +377,7 @@ EXTRA_DIST = \
 	$(RST_FILES) \
 	man1/common/nodeset.rst \
 	man1/common/submit-constraints.rst \
+	man1/common/submit-dependencies.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst \
 	man7/flux-undocumented.rst
