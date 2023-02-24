@@ -45,6 +45,7 @@ man_pages = [
     ('man1/flux-logger', 'flux-logger', 'create a Flux log entry', [author], 1),
     ('man1/flux-mini', 'flux-mini', 'Minimal Job Submission Tool', [author], 1),
     ('man1/flux-submit', 'flux-submit', 'submit a job to a Flux instance', [author], 1),
+    ('man1/flux-run', 'flux-run', 'run a Flux job interactively', [author], 1),
     ('man1/flux-job', 'flux-job', 'Job Housekeeping Tool', [author], 1),
     ('man1/flux-module', 'flux-module', 'manage Flux extension modules', [author], 1),
     ('man1/flux-overlay', 'flux-overlay', 'Show flux overlay network status', [author], 1),

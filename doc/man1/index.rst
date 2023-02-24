@@ -32,6 +32,7 @@ man1
    flux-queue
    flux-resource
    flux-restore
+   flux-run
    flux-start
    flux-startlog
    flux-shell
