@@ -323,6 +323,8 @@ if ENABLE_DOCS
 man_MANS = $(MAN1_FILES) $(MAN3_FILES) $(MAN5_FILES) $(MAN7_FILES)
 $(RST_FILES): \
 	man1/common/nodeset.rst \
+	man1/common/submit-job-parameters.rst \
+	man1/common/submit-standard-io.rst \
 	man1/common/submit-constraints.rst \
 	man1/common/submit-dependencies.rst \
 	man3/common/json_pack.rst \
@@ -376,6 +378,8 @@ EXTRA_DIST = \
 	index.rst \
 	$(RST_FILES) \
 	man1/common/nodeset.rst \
+	man1/common/submit-job-parameters.rst \
+	man1/common/submit-standard-io.rst \
 	man1/common/submit-constraints.rst \
 	man1/common/submit-dependencies.rst \
 	man3/common/json_pack.rst \
