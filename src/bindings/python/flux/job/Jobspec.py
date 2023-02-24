@@ -868,52 +868,52 @@ class JobspecV1(Jobspec):
         broker_opts=None,
         exclusive=False,
     ):
-        """Create a Jobspec describing a nested Flux instance controlled by a script.
+        """
+        Create a Jobspec describing a nested Flux instance controlled by
+        a script.
 
         The nested Flux instance will execute the script with the given
-        command-line arguments after copying it and setting the executable bit.
-        Conceptually, this differs from the `from_nest_command`, which also creates a
-        nested Flux instance, in that it a) requires the initial program of the new
-        instance to be an executable text file and b) creates the initial program
-        from a string rather than using an executable existing somewhere on the
-        filesystem.
+        command-line arguments after copying it and setting the executable
+        bit.  Conceptually, this differs from the `from_nest_command`,
+        which also creates a nested Flux instance, in that it a) requires
+        the initial program of the new instance to be an executable text
+        file and b) creates the initial program from a string rather than
+        using an executable existing somewhere on the filesystem.
 
         Use setters to assign additional properties.
 
-        :param script: contents of the script to execute, as a string. The
-            script should have a shebang (e.g. `#!/bin/sh`) at the top.
-        :param jobname: name to use as the argv[0] for this job.
-            This will be the default job name reported by Flux.
-            (Note the actual argv is overridden by the job shell when executed.)
-        :type jobname: str
-        :param args: arguments to pass to `script`
-        :type args: iterable of `str`
-        :param num_slots: number of resource slots to create. Slots are an abstraction,
-            and are only used (along with `cores_per_slot` and `gpus_per_slot`) to
-            determine the nested instance's allocation size and layout.
-        :param cores_per_slot: number of cores to allocate per slot
-        :param gpus_per_slot: number of GPUs to allocate per slot
-        :param num_nodes: distribute allocated resource slots across N individual nodes
-        :param broker_opts: options to pass to the new Flux broker
-        :type broker_opts: iterable of str
+        Args:
+            script (str): contents of the script to execute, as a string. The
+                script should have a shebang (e.g. `#!/bin/sh`) at the top.
+            jobname (str): name to use for system.job.name attribute This will
+                be the default job name reported by Flux.
+            args (iterable of `str`): arguments to pass to `script`
+            num_slots (int): number of resource slots to create. Slots are an
+                abstraction, and are only used (along with `cores_per_slot`
+                and `gpus_per_slot`) to determine the nested instance's
+                allocation size and layout.
+            cores_per_slot (int): number of cores to allocate per slot
+            gpus_per_slot (int): number of GPUs to allocate per slot
+            num_nodes (int): distribute allocated resource slots across N
+                individual nodes
+            broker_opts (iterable of `str`): options to pass to the new Flux
+                broker
         """
         if not script.startswith("#!"):
             raise ValueError(f"{jobname} does not appear to start with '#!'")
         args = () if args is None else args
-        jobspec = cls.from_command(
-            command=[jobname, *args],  # argv[0] will be replaced with the script
-            num_tasks=num_slots,
-            cores_per_task=cores_per_slot,
-            gpus_per_task=gpus_per_slot,
+        jobspec = cls.from_nest_command(
+            command=["{{tmpdir}}/script", *args],
+            num_slots=num_slots,
+            cores_per_slot=cores_per_slot,
+            gpus_per_slot=gpus_per_slot,
             num_nodes=num_nodes,
+            broker_opts=broker_opts,
             exclusive=exclusive,
         )
-        jobspec.setattr_shell_option("per-resource.type", "node")
-        jobspec.setattr_shell_option("mpi", "none")
         #  Copy script contents into jobspec
         jobspec.setattr("system.batch.script", script)
-        if broker_opts is not None:
-            jobspec.setattr("system.batch.broker-opts", broker_opts)
+        jobspec.setattr("system.job.name", jobname)
         return jobspec
 
     @classmethod
@@ -927,25 +927,30 @@ class JobspecV1(Jobspec):
         broker_opts=None,
         exclusive=False,
     ):
-        """Create a Jobspec describing a nested Flux instance controlled by `command`.
+        """
+        Create a Jobspec describing a nested Flux instance controlled by
+        `command`.
 
-        Conceptually, this differs from the `from_batch_command` method in that a)
-        the initial program of the nested Flux instance can be any executable
-        on the file system, not just a text file and b) the executable is not
-        copied at submission time.
+        Conceptually, this differs from the `from_batch_command` method
+        in that a) the initial program of the nested Flux instance can
+        be any executable on the file system, not just a text file and b)
+        the executable is not copied at submission time.
 
         Use setters to assign additional properties.
 
-        :param command: initial program for the nested Flux instance
-        :type command: iterable of str
-        :param num_slots: number of resource slots to create. Slots are an abstraction,
-            and are only used (along with `cores_per_slot` and `gpus_per_slot`) to
-            determine the nested instance's allocation size and layout.
-        :param cores_per_slot: number of cores to allocate per slot
-        :param gpus_per_slot: number of GPUs to allocate per slot
-        :param num_nodes: distribute allocated resource slots across N individual nodes
-        :param broker_opts: options to pass to the new Flux broker
-        :type broker_opts: iterable of str
+        Args:
+            command (iterable of `str`): initial program for the nested Flux
+            instance
+            num_slots (int): number of resource slots to create. Slots are
+                an abstraction, and are only used (along with `cores_per_slot`
+                and `gpus_per_slot`) to determine the nested instance's
+                allocation size and layout.
+            cores_per_slot (int): number of cores to allocate per slot
+            gpus_per_slot (int): number of GPUs to allocate per slot
+            num_nodes (int): distribute allocated resource slots across N
+                individual nodes
+            broker_opts (iterable of `str`): options to pass to the new Flux
+                broker
         """
         broker_opts = () if broker_opts is None else broker_opts
         jobspec = cls.from_command(

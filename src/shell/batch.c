@@ -16,12 +16,17 @@
 #include "config.h"
 #endif
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <jansson.h>
+
 #include <flux/core.h>
 #include <flux/shell.h>
 
 #include "src/common/libutil/read_all.h"
+#include "ccan/str/str.h"
 
 #include "builtins.h"
 
@@ -74,16 +79,19 @@ batch_info_create (flux_shell_t *shell, json_t *batch)
 
     if (data && b->shell_rank == 0) {
         int fd = -1;
-        const char *tmpdir = getenv ("TMPDIR");
+        const char *tmpdir = flux_shell_getenv (shell, "FLUX_JOB_TMPDIR");
 
-        if (asprintf (&b->script, "%s/flux-script-%ju-XXXXXX",
-                      tmpdir ? tmpdir : "/tmp",
-                      b->id) < 0) {
+        if (!tmpdir) {
+            shell_log_error ("FLUX_JOB_TMPDIR not set");
+            goto error;
+        }
+
+        if (asprintf (&b->script, "%s/script", tmpdir) < 0) {
             shell_log_error ("asprintf script templated failed");
             goto error;
         }
-        if ((fd = mkstemp (b->script)) < 0) {
-            shell_log_error ("mkstemp");
+        if ((fd = open (b->script, O_CREAT|O_EXCL|O_WRONLY, 0700)) < 0) {
+            shell_log_errno ("%s", b->script);
             goto error;
         }
         shell_debug ("Copying batch script size=%zu for job to %s",
@@ -91,10 +99,6 @@ batch_info_create (flux_shell_t *shell, json_t *batch)
                      b->script);
         if (write_all (fd, data, len) < 0) {
             shell_log_error ("failed to write batch script");
-            goto error;
-        }
-        if (fchmod (fd, 0700) < 0) {
-            shell_log_error ("chmod(%s)", b->script);
             goto error;
         }
         close (fd);
@@ -129,6 +133,16 @@ static void log_task_commandline (flux_cmd_t *cmd, int taskid)
     free (s);
 }
 
+static bool is_batch_command (flux_cmd_t *cmd)
+{
+    const char *argv0 = flux_cmd_arg (cmd, 0);
+    const char *argv1 = flux_cmd_arg (cmd, 1);
+
+    return  (argv0
+             && streq (basename (argv0), "flux")
+             && (streq (argv1, "broker") || streq (argv1, "start")));
+}
+
 static int task_batchify (flux_plugin_t *p,
                           const char *topic,
                           flux_plugin_arg_t *args,
@@ -144,6 +158,11 @@ static int task_batchify (flux_plugin_t *p,
         || !(task = flux_shell_current_task (shell))
         || !(cmd = flux_shell_task_cmd (task)))
         return shell_log_errno ("failed to get task cmd");
+
+    /* Nothing to do if task is already constructed as a batch command
+     */
+    if (is_batch_command (cmd))
+        return 0;
 
     if (flux_shell_task_info_unpack (task, "{s:i}", "rank", &taskid) < 0)
         return shell_log_errno ("failed to unpack task rank");

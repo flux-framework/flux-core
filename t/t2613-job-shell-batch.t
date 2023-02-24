@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-test_description='Test flux-shell per-reosurce and batch support'
+test_description='Test flux-shell per-resource and batch support'
 
 . `dirname $0`/sharness.sh
 
@@ -46,5 +46,16 @@ test_expect_success 'flux-shell: per-resource type=node works' '
 	foo
 	EOF
 	test_cmp per-node.expected per-node.out
+'
+test_expect_success HAVE_JQ 'flux-shell: historical batch jobspec still work' '
+	for spec in $SHARNESS_TEST_SRCDIR/batch/jobspec/*.json; do
+		input=$(basename $spec) &&
+		cat $spec |
+		    jq -S ".attributes.system.environment.PATH=\"$PATH\"" \
+		    >$input &&
+		flux job submit --flags=waitable $input
+	done &&
+	flux job attach $(flux job last) &&
+	flux job wait --all --verbose
 '
 test_done

@@ -1,0 +1,55 @@
+{
+  "attributes": {
+    "system": {
+      "batch": {
+        "broker-opts": [
+          "-Stestattr=foo"
+        ],
+        "script": "#!/bin/sh\ntest $(flux getattr testattr) = \"foo\"\n"
+      },
+      "cwd": "/tmp",
+      "duration": 0,
+      "environment": {
+        "PATH": "/bin:/usr/bin"
+      },
+      "shell": {
+        "options": {
+          "output": {
+            "stdout": {
+              "path": "flux-{{id}}.out",
+              "type": "file"
+            }
+          },
+          "per-resource": {
+            "type": "node"
+          }
+        }
+      }
+    }
+  },
+  "resources": [
+    {
+      "count": 1,
+      "label": "task",
+      "type": "slot",
+      "with": [
+        {
+          "count": 1,
+          "type": "core"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "command": [
+        "hostname"
+      ],
+      "count": {
+        "per_slot": 1
+      },
+      "slot": "task"
+    }
+  ],
+  "version": 1
+}

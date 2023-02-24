@@ -982,36 +982,28 @@ char *shell_mustache_render (flux_shell_t *shell, const char *fmt)
     return mustache_render (shell->mr, fmt);
 }
 
-static int mustache_cb (FILE *fp, const char *name, void *arg)
+static int mustache_render_jobid (flux_shell_t *shell,
+                                  const char *name,
+                                  FILE *fp)
 {
-    flux_shell_t *shell = arg;
     char value[128];
+    const char *type = "f58";
 
-    /*  "jobid" is a synonym for "id" */
-    if (strncmp (name, "jobid", 5) == 0)
-        name += 3;
-    if (strncmp (name, "id", 2) == 0) {
-        const char *type = "f58";
-        if (strlen (name) > 2) {
-            if (name[2] != '.') {
-                shell_log_error ("Unknown mustache tag '%s'", name);
-                return -1;
-            }
-            type = name+3;
-        }
-        if (flux_job_id_encode (shell->info->jobid,
-                                type,
-                                value,
-                                sizeof (value)) < 0) {
-            if (errno == EPROTO)
-                shell_log_error ("Invalid jobid encoding '%s' specified", name);
-            else
-                shell_log_errno ("flux_job_id_encode failed for %s", name);
+    if (strlen (name) > 2) {
+        if (name[2] != '.') {
+            shell_log_error ("Unknown mustache tag '%s'", name);
             return -1;
         }
+        type = name+3;
     }
-    else {
-        shell_log_error ("Unknown mustache tag '%s'", name);
+    if (flux_job_id_encode (shell->info->jobid,
+                            type,
+                            value,
+                            sizeof (value)) < 0) {
+        if (errno == EPROTO)
+            shell_log_error ("Invalid jobid encoding '%s' specified", name);
+        else
+            shell_log_errno ("flux_job_id_encode failed for %s", name);
         return -1;
     }
     if (fputs (value, fp) < 0) {
@@ -1020,6 +1012,54 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
                          strerror (errno));
     }
     return 0;
+}
+
+static int mustache_cb (FILE *fp, const char *name, void *arg)
+{
+    int rc = -1;
+    flux_plugin_arg_t *args;
+    flux_shell_t *shell = arg;
+    const char *result = NULL;
+    char topic[128];
+
+    /*  "jobid" is a synonym for "id" */
+    if (strncmp (name, "jobid", 5) == 0)
+        name += 3;
+    if (strncmp (name, "id", 2) == 0)
+        return mustache_render_jobid (shell, name, fp);
+
+    if (snprintf (topic,
+                  sizeof (topic),
+                  "mustache.render.%s",
+                  name) >= sizeof (topic)) {
+        shell_log_error ("mustache template name '%s' too long", name);
+        return -1;
+    }
+    if (!(args = flux_plugin_arg_create ())) {
+        shell_log_error ("mustache_cb: failed to create plugin args");
+        return -1;
+    }
+    if (plugstack_call (shell->plugstack, topic, args) < 0) {
+        shell_log_errno ("%s", topic);
+        goto out;
+    }
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_OUT,
+                                "{s:s}",
+                                "result", &result) < 0
+        || result == NULL) {
+        shell_log_error ("Unknown mustache tag '%s'", name);
+        goto out;
+    }
+    if (fputs (result, fp) < 0) {
+        shell_log_error ("memstream write failed for %s: %s",
+                         name,
+                         strerror (errno));
+    }
+    rc = 0;
+out:
+    flux_plugin_arg_destroy (args);
+    return rc;
 }
 
 static void shell_initialize (flux_shell_t *shell)
