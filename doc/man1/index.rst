@@ -36,6 +36,7 @@ man1
    flux-startlog
    flux-shell
    flux-shutdown
+   flux-submit
    flux-top
    flux-uptime
    flux-uri
