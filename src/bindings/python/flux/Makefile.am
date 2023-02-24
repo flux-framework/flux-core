@@ -10,6 +10,13 @@ nobase_fluxpy_PYTHON = \
 	memoized_property.py \
 	debugged.py \
 	importer.py \
+	cli/__init__.py \
+	cli/base.py \
+	cli/alloc.py \
+	cli/batch.py \
+	cli/bulksubmit.py \
+	cli/run.py \
+	cli/submit.py \
 	core/__init__.py \
 	core/watchers.py \
 	core/inner.py \
