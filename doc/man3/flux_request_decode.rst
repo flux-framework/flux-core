@@ -50,7 +50,7 @@ if the message doesn't have a JSON payload.
 setting *data* and *len* to the payload data and length. The storage for
 the raw payload belongs to *msg* and should not be freed.
 
-.. include:: JSON_UNPACK.rst
+.. include:: common/json_unpack.rst
 
 
 RETURN VALUE

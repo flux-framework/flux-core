@@ -69,7 +69,7 @@ OPTIONS
 NODESET FORMAT
 ==============
 
-.. include:: NODESET.rst
+.. include:: common/nodeset.rst
 
 
 RESOURCES

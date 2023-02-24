@@ -321,10 +321,11 @@ RST_FILES  = \
 
 if ENABLE_DOCS
 man_MANS = $(MAN1_FILES) $(MAN3_FILES) $(MAN5_FILES) $(MAN7_FILES)
-$(RST_FILES): man1/NODESET.rst \
-	man1/CONSTRAINTS.rst \
-	man3/JSON_PACK.rst \
-	man3/JSON_UNPACK.rst
+$(RST_FILES): \
+	man1/common/nodeset.rst \
+	man1/common/submit-constraints.rst \
+	man3/common/json_pack.rst \
+	man3/common/json_unpack.rst
 endif
 
 SUFFIXES = .rst .1 .3 .5 .7
@@ -373,10 +374,10 @@ EXTRA_DIST = \
 	domainrefs.py \
 	index.rst \
 	$(RST_FILES) \
-	man1/NODESET.rst \
-	man1/CONSTRAINTS.rst \
-	man3/JSON_PACK.rst \
-	man3/JSON_UNPACK.rst \
+	man1/common/nodeset.rst \
+	man1/common/submit-constraints.rst \
+	man3/common/json_pack.rst \
+	man3/common/json_unpack.rst \
 	man7/flux-undocumented.rst
 
 CLEANFILES = \

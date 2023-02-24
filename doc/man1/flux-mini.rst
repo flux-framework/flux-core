@@ -237,7 +237,7 @@ CONSTRAINTS
    then converted into a JSON object compliant with RFC 31 (Job Constraints
    Specification).
 
-   .. include:: CONSTRAINTS.rst
+   .. include:: common/submit-constraints.rst
 
    Currently, **--requires** supports the following operators:
 
