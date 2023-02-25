@@ -40,7 +40,7 @@ test_expect_success 'sched-simple: reload ingest module with lax validator' '
 		validator-plugins=schema
 '
 test_expect_success 'sched-simple: generate jobspec for simple test job' '
-	flux mini run --dry-run hostname >basic.json
+	flux run --dry-run hostname >basic.json
 '
 
 test_expect_success 'job-manager: load sched-simple w/ an illegal mode' '
@@ -59,13 +59,13 @@ test_expect_success 'sched-simple: reload sched-simple with default resource.R' 
 	test "$($query)" = "rank[0-1]/core[0-1]"
 '
 test_expect_success 'sched-simple: unsatisfiable request is canceled' '
-	flux mini submit -n1 -c 3 hostname >job0.id &&
+	flux submit -n1 -c 3 hostname >job0.id &&
 	job0id=$(cat job0.id) &&
 	flux job wait-event --timeout=5.0 $job0id exception &&
 	flux job eventlog $job0id | grep "unsatisfiable request"
 '
 test_expect_success 'sched-simple: gpu request is canceled' '
-	jobid=$(flux mini run -n1 -g1 --dry-run hostname | flux job submit) &&
+	jobid=$(flux run -n1 -g1 --dry-run hostname | flux job submit) &&
 	flux job wait-event --timeout=5.0 $jobid exception &&
 	flux job eventlog $jobid | grep  "Unsupported resource type .gpu."
 '

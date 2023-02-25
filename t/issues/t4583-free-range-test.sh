@@ -36,7 +36,7 @@ fi
 
 #  Start a job with tbon.topo=kary:0
 log "Starting a child instance with flat topology\n"
-jobid=$(flux mini alloc -N4 --bg --broker-opts=-Stbon.topo=kary:0)
+jobid=$(flux alloc -N4 --bg --broker-opts=-Stbon.topo=kary:0)
 
 log "Started job $jobid\n"
 
@@ -45,7 +45,7 @@ log "Current overlay status of $jobid:\n"
 flux proxy $jobid flux overlay status 
 
 log "Launch a sleep job within $jobid:\n"
-flux proxy $jobid flux mini submit -N4 sleep inf
+flux proxy $jobid flux submit -N4 sleep inf
 
 flux pstree -x --skip-root=no
 
@@ -60,7 +60,7 @@ log "Wait for exception event in $jobid\n"
 flux job wait-event -t 5 $jobid exception
 
 log "But running a 3 node job in $jobid still works:\n"
-flux proxy $jobid flux mini run -t 5s -N3 hostname
+flux proxy $jobid flux run -t 5s -N3 hostname
 
 log "Overlay status of $jobid should show rank offline:\n"
 flux proxy $jobid flux overlay status 

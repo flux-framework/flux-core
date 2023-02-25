@@ -2,5 +2,5 @@
 
 NJOBS=${NJOBS:-10}
 
-flux mini submit --cc="1-$NJOBS" --wait \
+flux submit --cc="1-$NJOBS" --wait \
 	${SHARNESS_TEST_DIRECTORY}/shell/lptest 78 2

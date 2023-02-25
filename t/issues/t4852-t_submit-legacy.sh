@@ -9,7 +9,7 @@
 cat <<-EOF >t4852setup.sh
 #!/bin/sh -e
 
-jobid=\$(flux mini submit --wait /bin/true)
+jobid=\$(flux submit --wait /bin/true)
 
 kvspath=\$(flux job id --to=kvs \$jobid)
 

@@ -14,9 +14,9 @@ unset FLUX_URI
 TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
 
 test_expect_success 'flux-shell: generate 1-task echo jobspecs and matching R' '
-	flux mini run --dry-run -N1 -n1 ${TEST_SUBPROCESS_DIR}/test_echo -P -O foo > j1echostdout &&
-	flux mini run --dry-run -N1 -n1 ${TEST_SUBPROCESS_DIR}/test_echo -P -E bar > j1echostderr &&
-	flux mini run --dry-run -N1 -n1 ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz > j1echoboth &&
+	flux run --dry-run -N1 -n1 ${TEST_SUBPROCESS_DIR}/test_echo -P -O foo > j1echostdout &&
+	flux run --dry-run -N1 -n1 ${TEST_SUBPROCESS_DIR}/test_echo -P -E bar > j1echostderr &&
+	flux run --dry-run -N1 -n1 ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz > j1echoboth &&
 	cat >R1 <<-EOT
 	{"version": 1, "execution":{ "R_lite":[
 		{ "children": { "core": "0" }, "rank": "0" }
@@ -25,9 +25,9 @@ test_expect_success 'flux-shell: generate 1-task echo jobspecs and matching R' '
 '
 
 test_expect_success 'flux-shell: generate 2-task echo jobspecs and matching R' '
-	flux mini run --dry-run -N1 -n2 ${TEST_SUBPROCESS_DIR}/test_echo -P -O foo > j2echostdout &&
-	flux mini run --dry-run -N1 -n2 ${TEST_SUBPROCESS_DIR}/test_echo -P -E bar > j2echostderr &&
-	flux mini run --dry-run -N1 -n2 ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz > j2echoboth &&
+	flux run --dry-run -N1 -n2 ${TEST_SUBPROCESS_DIR}/test_echo -P -O foo > j2echostdout &&
+	flux run --dry-run -N1 -n2 ${TEST_SUBPROCESS_DIR}/test_echo -P -E bar > j2echostderr &&
+	flux run --dry-run -N1 -n2 ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz > j2echoboth &&
 	cat >R2 <<-EOT
 	{"version": 1, "execution":{ "R_lite":[
 		{ "children": { "core": "0-1" }, "rank": "0" }

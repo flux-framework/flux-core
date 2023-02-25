@@ -15,6 +15,7 @@
 # their command names/descriptions
 #
 
+import os
 import sys
 import json
 from os import path
@@ -23,9 +24,11 @@ if len(sys.argv) < 2:
     print(f"Usage: {sys.argv[0]} sphinxconf.py", file=sys.stderr)
 
 sphinxconf = sys.argv[1]
-docsdir = path.dirname(sphinxconf)
+docsdir = os.path.abspath(path.dirname(sphinxconf))
 
-exec(open(sphinxconf).read())
+# Don't exec the sphinxconf, instead import what we need
+sys.path.insert(0, docsdir)
+from manpages import man_pages
 
 entries = []
 visited = dict()
@@ -34,7 +37,8 @@ for (path, cmd, descr, author, section) in man_pages:
     if section != 1 or path in visited:
         continue
     visited[path] = True
-    with open(f"{docsdir}/{path}.rst", "r", encoding='utf-8') as f:
+    rst_file = os.path.join(docsdir, f"{path}.rst")
+    with open(rst_file, "r", encoding='utf-8') as f:
         include_flag = False
         for line in f:
             line = line.rstrip("\n")
@@ -46,8 +50,12 @@ for (path, cmd, descr, author, section) in man_pages:
                     descr = " ".join(line.split(" ")[2:])
                 if ".. flux-help-command: " in line:
                     cmd = " ".join(line.split(" ")[2:])
+
         if include_flag:
             entry = dict(category="core", command=cmd, description=descr)
             entries.append(entry)
 
+# Sort entries by the command name
+entries = sorted(entries, key=lambda d: d['command'])
 print(json.dumps(entries, indent=2, sort_keys=True), file=sys.stdout)
+sys.path.pop(0)

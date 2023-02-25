@@ -23,7 +23,7 @@ EVENTS_JOURNAL_STREAM=${FLUX_BUILD_DIR}/t/job-manager/events_journal_stream
 flux setattr log-stderr-level 1
 
 test_expect_success 'flux-job: generate jobspec for simple test job' '
-	flux mini run --dry-run -n1 hostname >basic.json
+	flux run --dry-run -n1 hostname >basic.json
 '
 
 check_event() {

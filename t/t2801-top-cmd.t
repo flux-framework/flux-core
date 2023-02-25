@@ -48,7 +48,7 @@ test_expect_success 'flux-top summary shows no jobs initially' '
 	grep "0 failed" nojobs.out
 '
 test_expect_success 'run a test job to completion' '
-	flux mini submit --wait -n1 flux start /bin/true >jobid
+	flux submit --wait -n1 flux start /bin/true >jobid
 '
 test_expect_success 'flux-top summary shows one completed job' '
 	nnodes=$(flux resource list --format="{nnodes}") &&
@@ -87,12 +87,12 @@ test_expect_success 'flux-top --color fails with bad input' '
 test_expect_success 'submit batch script and wait for it to start' '
 	cat >batch.sh <<-EOT &&
 	#!/bin/sh
-	flux mini submit --wait-event=start sleep 300
+	flux submit --wait-event=start sleep 300
 	touch job2-has-started
 	flux queue drain
 	EOT
 	chmod +x batch.sh &&
-	flux mini batch -t30m -n1 batch.sh >jobid2 &&
+	flux batch -t30m -n1 batch.sh >jobid2 &&
 	$waitfile job2-has-started
 '
 test_expect_success 'flux-top shows 1 job running' '
@@ -121,7 +121,7 @@ test_expect_success 'flux-top JOBID works' '
 	test_must_fail grep "batch.sh" topjob.out
 '
 test_expect_success 'submit non-batch job and wait for it to start' '
-	flux mini submit -n1 \
+	flux submit -n1 \
 		bash -c "touch job3-has-started && sleep 300" >jobid3 &&
 	$waitfile job3-has-started
 '
@@ -236,8 +236,8 @@ test_expect_success 'flux-top doesnt display job queues when no jobs in queues' 
 	grep -v QUEUE no-queue.log
 '
 test_expect_success 'submit a bunch of jobs' '
-	flux mini submit --cc=0-1 --queue=batch bash -c "sleep 300" &&
-	flux mini submit --queue=debug sleep 300
+	flux submit --cc=0-1 --queue=batch bash -c "sleep 300" &&
+	flux submit --queue=debug sleep 300
 '
 test_expect_success 'flux-top displays job queues when present' '
 	$runpty -f asciicast -o queue.log flux top --test-exit &&

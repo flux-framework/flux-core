@@ -24,11 +24,11 @@ flux dmesg | grep 'sched-simple.*ready'  | tail -1
 flux resource list
 
 #  ensure R rerank failure is ignored (i.e. job completes successfully)
-flux mini run -o per-resource.type=node -o cpu-affinity=off -n 11 \
+flux run -o per-resource.type=node -o cpu-affinity=off -n 11 \
         flux start flux getattr hostlist
 
 #  ensure R is reranked based on hostlist attribute:
-flux mini run -o per-resource.type=node -o cpu-affinity=off -n 11 \
+flux run -o per-resource.type=node -o cpu-affinity=off -n 11 \
         flux broker --setattr hostlist="foo[3,2,1,0]" \
 	sh -c 'flux kvs get resource.R' >t4182-test.out
 

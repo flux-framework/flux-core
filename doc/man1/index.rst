@@ -5,7 +5,10 @@ man1
    :caption: General Commands
    :maxdepth: 1
 
+   flux-alloc
+   flux-batch
    flux-broker
+   flux-bulksubmit
    flux-config
    flux-content
    flux-cron
@@ -32,10 +35,12 @@ man1
    flux-queue
    flux-resource
    flux-restore
+   flux-run
    flux-start
    flux-startlog
    flux-shell
    flux-shutdown
+   flux-submit
    flux-top
    flux-uptime
    flux-uri

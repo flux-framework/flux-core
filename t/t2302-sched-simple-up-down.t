@@ -58,7 +58,7 @@ test_expect_success 'sched-simple: flux-resource drain works' '
 	check_rlist "down" "rank0/core[0-3]"
 '
 test_expect_success 'sched-simple: job not allocated drained resources' '
-	id=$(flux mini submit -n1 hostname) &&
+	id=$(flux submit -n1 hostname) &&
 	flux job wait-event $id alloc &&
 	check_rlist "allocated" "rank1/core0" &&
 	check_rlist "free" "rank1/core[1-3]" &&
@@ -74,7 +74,7 @@ test_expect_success 'sched-simple: down+alloc resources listed as allocated' '
 	check_rlist "allocated" "rank1/core0"
 '
 test_expect_success 'sched-simple: submitted job blocks with no up resources' '
-	id=$(flux mini submit -n1 hostname) &&
+	id=$(flux submit -n1 hostname) &&
 	test_expect_code 1 flux job wait-event -t 0.25 $id alloc &&
 	check_ncores "allocated" 1
 '

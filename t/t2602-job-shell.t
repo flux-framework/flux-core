@@ -14,7 +14,7 @@ LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 
 test_expect_success HAVE_JQ 'job-shell: reads J not jobspec' '
-	id=$(flux mini submit --wait-event=priority \
+	id=$(flux submit --wait-event=priority \
 		-n1 --urgency=hold /bin/true) &&
 	flux job info ${id} jobspec \
 		| jq ".tasks[0].command[0] = \"false\"" >jobspec.new &&
@@ -25,7 +25,7 @@ test_expect_success HAVE_JQ 'job-shell: reads J not jobspec' '
 '
 
 test_expect_success HAVE_JQ 'job-shell: fails on modified J' '
-	id=$(flux mini submit --wait-event=priority \
+	id=$(flux submit --wait-event=priority \
 		-n1 --urgency=hold /bin/true) &&
 	flux job info ${id} J | sed s/./%/85 > J.new &&
 	flux kvs put \
@@ -35,7 +35,7 @@ test_expect_success HAVE_JQ 'job-shell: fails on modified J' '
 '
 
 test_expect_success 'job-shell: execute across all ranks' '
-	id=$(flux mini submit -n4 -N4 bash -c \
+	id=$(flux submit -n4 -N4 bash -c \
 		"flux kvs put test1.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID") &&
 	flux job attach --show-events $id &&
 	kvsdir=$(flux job id --to=kvs $id) &&
@@ -49,7 +49,7 @@ test_expect_success 'job-shell: execute across all ranks' '
 	test_cmp test1.exp test1.out
 '
 test_expect_success 'job-shell: execute 2 tasks per rank' '
-	id=$(flux mini submit -N4 -n8 bash -c \
+	id=$(flux submit -N4 -n8 bash -c \
 		"flux kvs put test2.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID") &&
 	flux job attach --show-events $id &&
 	kvsdir=$(flux job id --to=kvs $id) &&
@@ -67,22 +67,22 @@ test_expect_success 'job-shell: execute 2 tasks per rank' '
 	test_cmp test2.exp test2.out
 '
 test_expect_success 'job-shell: /bin/true exit code propagated' '
-	id=$(flux mini submit /bin/true) &&
+	id=$(flux submit /bin/true) &&
 	flux job wait-event $id finish >true.finish.out &&
 	grep status=0 true.finish.out
 '
 test_expect_success 'job-shell: /bin/false exit code propagated' '
-	id=$(flux mini submit /bin/false) &&
+	id=$(flux submit /bin/false) &&
 	flux job wait-event $id finish >false.finish.out &&
 	grep status=256 false.finish.out
 '
 test_expect_success 'job-shell: PMI works' '
-	id=$(flux mini submit -n4 -N4 ${PMI_INFO}) &&
+	id=$(flux submit -n4 -N4 ${PMI_INFO}) &&
 	flux job attach $id >pmi_info.out 2>pmi_info.err &&
 	grep size=4 pmi_info.out
 '
 test_expect_success 'pmi-shell: PMI cliques are correct for 1 ppn' '
-	flux mini run -N4 -n4 \
+	flux run -N4 -n4 \
 		${PMI_INFO} -c >pmi_clique1.raw &&
 	sort -snk1 <pmi_clique1.raw >pmi_clique1.out &&
 	sort >pmi_clique1.exp <<-EOT &&
@@ -94,7 +94,7 @@ test_expect_success 'pmi-shell: PMI cliques are correct for 1 ppn' '
 	test_cmp pmi_clique1.exp pmi_clique1.out
 '
 test_expect_success 'pmi-shell: PMI cliques are correct for 2 ppn' '
-	flux mini run \
+	flux run \
 		-N2 -n4 ${PMI_INFO} -c >pmi_clique2.raw &&
 	sort -snk1 <pmi_clique2.raw >pmi_clique2.out &&
 	sort >pmi_clique2.exp <<-EOT &&
@@ -106,7 +106,7 @@ test_expect_success 'pmi-shell: PMI cliques are correct for 2 ppn' '
 	test_cmp pmi_clique2.exp pmi_clique2.out
 '
 test_expect_success 'pmi-shell: PMI cliques are correct for irregular ppn' '
-	flux mini run -N4 -n5 \
+	flux run -N4 -n5 \
 		${PMI_INFO} -c >pmi_cliquex.raw &&
 	sort -snk1 <pmi_cliquex.raw >pmi_cliquex.out &&
 	sort >pmi_cliquex.exp <<-EOT &&
@@ -119,7 +119,7 @@ test_expect_success 'pmi-shell: PMI cliques are correct for irregular ppn' '
 	test_cmp pmi_cliquex.exp pmi_cliquex.out
 '
 test_expect_success 'job-shell: PMI KVS works' '
-	id=$(flux mini submit -n4 -N4 ${KVSTEST}) &&
+	id=$(flux submit -n4 -N4 ${KVSTEST}) &&
 	flux job attach $id >kvstest.out &&
 	grep "t phase" kvstest.out
 '
@@ -130,7 +130,7 @@ test_expect_success 'job-exec: decrease kill timeout for tests' '
 #   may exit with 143, killed by signal
 #
 test_expect_success 'job-shell: PMI_Abort works' '
-	! flux mini run -N4 -n4 ${PMI_INFO} --abort=1 >abort.log 2>&1 &&
+	! flux run -N4 -n4 ${PMI_INFO} --abort=1 >abort.log 2>&1 &&
 	test_debug "cat abort.log" &&
 	grep "job.exception.*MPI_Abort: Test abort error." abort.log
 '
@@ -141,7 +141,7 @@ test_expect_success 'job-shell: create expected I/O output' '
 	done) >lptest4.exp
 '
 test_expect_success 'job-shell: verify output of 1-task lptest job' '
-	id=$(flux mini submit ${LPTEST}) &&
+	id=$(flux submit ${LPTEST}) &&
 	flux job wait-event $id finish &&
 	flux job attach -l $id >lptest.out &&
 	test_cmp lptest.exp lptest.out
@@ -154,7 +154,7 @@ test_expect_success 'job-shell: verify output of 1-task lptest job' '
 #
 
 test_expect_success HAVE_JQ 'job-shell: verify output of 1-task lptest job on stderr' '
-	flux mini run --dry-run bash -c "${LPTEST} >&2" \
+	flux run --dry-run bash -c "${LPTEST} >&2" \
 		| $jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
 		> 1task_lptest.json &&
 	id=$(cat 1task_lptest.json | flux job submit) &&
@@ -163,13 +163,13 @@ test_expect_success HAVE_JQ 'job-shell: verify output of 1-task lptest job on st
 	test_cmp lptest.exp lptest.err
 '
 test_expect_success 'job-shell: verify output of 4-task lptest job' '
-	id=$(flux mini submit -n4 -N4 ${LPTEST}) &&
+	id=$(flux submit -n4 -N4 ${LPTEST}) &&
 	flux job attach -l $id >lptest4_raw.out &&
 	sort -snk1 <lptest4_raw.out >lptest4.out &&
 	test_cmp lptest4.exp lptest4.out
 '
 test_expect_success HAVE_JQ 'job-shell: verify output of 4-task lptest job on stderr' '
-	flux mini run --dry-run -n4 -N4 bash -c "${LPTEST} 1>&2" \
+	flux run --dry-run -n4 -N4 bash -c "${LPTEST} 1>&2" \
 		| $jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
 		> 4task_lptest.json &&
 	id=$(cat 4task_lptest.json | flux job submit) &&
@@ -180,33 +180,33 @@ test_expect_success HAVE_JQ 'job-shell: verify output of 4-task lptest job on st
 '
 test_expect_success LONGTEST 'job-shell: verify 10K line lptest output works' '
 	${LPTEST} 79 10000 | sed -e "s/^/0: /" >lptestXXL.exp &&
-	id=$(flux mini submit ${LPTEST} 79 10000) &&
+	id=$(flux submit ${LPTEST} 79 10000) &&
 	flux job attach -l $id >lptestXXL.out &&
 	test_cmp lptestXXL.exp lptestXXL.out
 '
 test_expect_success 'job-shell: test shell kill event handling' '
-	id=$(flux mini submit -n4 -N4 sleep 60) &&
+	id=$(flux submit -n4 -N4 sleep 60) &&
 	flux job wait-event $id start &&
 	flux job kill $id &&
 	flux job wait-event $id finish >kill1.finish.out &&
 	grep status=$((15+128<<8)) kill1.finish.out
 '
 test_expect_success 'job-shell: test shell kill event handling: SIGKILL' '
-	id=$(flux mini submit -n4 -N4 sleep 60) &&
+	id=$(flux submit -n4 -N4 sleep 60) &&
 	flux job wait-event $id start &&
 	flux job kill -s SIGKILL $id &&
 	flux job wait-event $id finish >kill2.finish.out &&
 	grep status=$((9+128<<8)) kill2.finish.out
 '
 test_expect_success 'job-shell: test shell kill event handling: numeric signal' '
-	id=$(flux mini submit -n4 -N4 sleep 60) &&
+	id=$(flux submit -n4 -N4 sleep 60) &&
 	flux job wait-event $id start &&
 	flux job kill -s 2 $id &&
 	flux job wait-event $id finish >kill3.finish.out &&
 	grep status=$((2+128<<8)) kill3.finish.out
 '
 test_expect_success 'job-shell: mangled shell kill event logged' '
-	id=$(flux mini submit -n4 -N4 sleep 60 | flux job id) &&
+	id=$(flux submit -n4 -N4 sleep 60 | flux job id) &&
 	flux job wait-event $id start &&
 	flux event pub shell-${id}.kill "{}" &&
 	flux job kill ${id} &&
@@ -216,7 +216,7 @@ test_expect_success 'job-shell: mangled shell kill event logged' '
 	grep "ignoring malformed event" kill4.log
 '
 test_expect_success 'job-shell: shell kill event: kill(2) failure logged' '
-	id=$(flux mini submit -n4 -N4 sleep 60 | flux job id) &&
+	id=$(flux submit -n4 -N4 sleep 60 | flux job id) &&
 	flux job wait-event $id start &&
 	flux event pub shell-${id}.kill "{\"signum\":199}" &&
 	flux job kill ${id} &&
@@ -233,7 +233,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: cover stdout unbuffered output' '
 	sleep 60
 	EOF
 	chmod +x stdout-unbuffered.sh &&
-	id=$(flux mini submit \
+	id=$(flux submit \
 		--setopt "output.stdout.buffer.type=\"none\"" \
 		./stdout-unbuffered.sh)
 	flux job attach $id > stdout-unbuffered.out &
@@ -247,7 +247,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: cover stderr unbuffered output' '
 	sleep 60
 	EOF
 	chmod +x stderr-unbuffered.sh &&
-	id=$(flux mini submit \
+	id=$(flux submit \
 		--setopt "output.stderr.buffer.type=\"none\"" \
 		./stderr-unbuffered.sh)
 	flux job attach $id 1> stdout.out 2> stderr-unbuffered.out &
@@ -261,7 +261,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: cover stdout line output' '
 	sleep 60
 	EOF
 	chmod +x stdout-line.sh &&
-	id=$(flux mini submit \
+	id=$(flux submit \
 		--setopt "output.stdout.buffer.type=\"line\"" \
 		./stdout-line.sh)
 	flux job attach $id > stdout-line.out &
@@ -275,7 +275,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: cover stderr line output' '
 	sleep 60
 	EOF
 	chmod +x stderr-line.sh &&
-	id=$(flux mini submit \
+	id=$(flux submit \
 		--setopt "output.stderr.buffer.type=\"line\"" \
 		./stderr-line.sh)
 	flux job attach $id 1> stdout.out 2> stderr-line.out &
@@ -283,7 +283,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: cover stderr line output' '
 	flux job cancel $id
 '
 test_expect_success 'job-shell: cover invalid buffer type' '
-	id=$(flux mini submit \
+	id=$(flux submit \
 		--setopt "output.stderr.buffer.type=\"foobar\"" \
 		hostname) &&
 	flux job wait-event $id clean &&
@@ -291,23 +291,23 @@ test_expect_success 'job-shell: cover invalid buffer type' '
 	grep "invalid buffer type" stderr-invalid-buffering.out
 '
 test_expect_success 'job-shell: creates missing TMPDIR by default' '
-	TMPDIR=$(pwd)/mytmpdir flux mini run true &&
+	TMPDIR=$(pwd)/mytmpdir flux run true &&
 	test -d mytmpdir
 '
 test_expect_success 'job-shell: uses /tmp if TMPDIR cannot be created' '
-	TMPDIR=/baddir flux mini run printenv TMPDIR >badtmp.out 2>badtmp.err &&
+	TMPDIR=/baddir flux run printenv TMPDIR >badtmp.out 2>badtmp.err &&
 	test_debug "cat badtmp.out badtmp.err" &&
 	grep /tmp badtmp.out
 '
 test_expect_success 'job-shell: unset TMPDIR stays unset' '
-	flux mini run --env=-TMPDIR sh -c "test -z \$TMPDIR"
+	flux run --env=-TMPDIR sh -c "test -z \$TMPDIR"
 '
 test_expect_success 'job-shell: FLUX_JOB_TMPDIR is set and is a directory' '
-	flux mini run sh -c "test -d \$FLUX_JOB_TMPDIR"
+	flux run sh -c "test -d \$FLUX_JOB_TMPDIR"
 '
 
 test_expect_success 'job-shell: FLUX_JOB_TMPDIR is cleaned up after job' '
-	jobtmp=$(flux mini run printenv FLUX_JOB_TMPDIR) &&
+	jobtmp=$(flux run printenv FLUX_JOB_TMPDIR) &&
 	test_must_fail test -d $jobtmp
 '
 
@@ -317,14 +317,14 @@ test_expect_success 'job-shell: make rundir temporarily unwritable' '
 
 test_expect_success 'job-shell: FLUX_JOB_TMPDIR is created in TMPDIR' '
 	TMPDIR=$(pwd)/mytmpdir \
-		flux mini run printenv FLUX_JOB_TMPDIR >tmpdir.out &&
+		flux run printenv FLUX_JOB_TMPDIR >tmpdir.out &&
 	grep $(pwd)/mytmpdir tmpdir.out
 '
 
 test_expect_success 'job-shell: job fails if FLUX_JOB_TMPDIR cannot be created' '
 	chmod u-w mytmpdir &&
 	! TMPDIR=$(pwd)/mytmpdir \
-		flux mini run /bin/true 2>badjobtmp.err &&
+		flux run /bin/true 2>badjobtmp.err &&
 	grep exception badjobtmp.err
 '
 
@@ -339,7 +339,7 @@ test_expect_success 'job-shell: fails if FLUX_EXEC_PROTOCOL_FD not set' '
 	exec ${FLUX_BUILD_DIR}/src/shell/flux-shell "\$@"
 	EOF
 	chmod +x shell.sh &&
-	test_must_fail flux mini run \
+	test_must_fail flux run \
 		--setattr=system.exec.job_shell=$(pwd)/shell.sh \
 		-n2 -N2 hostname 2>protocol_fd_missing.err &&
 	grep FLUX_EXEC_PROTOCOL_FD protocol_fd_missing.err
@@ -352,7 +352,7 @@ test_expect_success 'job-shell: fails if FLUX_EXEC_PROTOCOL_FD incorrect' '
 	exec ${FLUX_BUILD_DIR}/src/shell/flux-shell "\$@"
 	EOF
 	chmod +x shell2.sh &&
-	test_must_fail flux mini run \
+	test_must_fail flux run \
 		--setattr=system.exec.job_shell=$(pwd)/shell2.sh \
 		-n2 -N2 hostname 2>protocol_fd_invalid.err &&
 	grep FLUX_EXEC_PROTOCOL_FD protocol_fd_invalid.err
@@ -363,12 +363,12 @@ test_expect_success 'job-shell: fails if FLUX_EXEC_PROTOCOL_FD incorrect' '
 #   code for success.
 #
 test_expect_success 'job-shell: runs tasks in process group by default' '
-	flux mini run -n2 \
+	flux run -n2 \
 	    flux python -c "import os,sys; sys.exit(os.getpid() != os.getpgrp())"
 '
 
 test_expect_success 'job-shell: -o nosetpgrp works' '
-	flux mini run -n2 -o nosetpgrp \
+	flux run -n2 -o nosetpgrp \
 	    flux python -c "import os,sys; sys.exit(os.getpid() == os.getpgrp())"
 '
 
@@ -377,7 +377,7 @@ test_expect_success 'job-shell: -o nosetpgrp works' '
 #  since one will be in UTF-8 and the other in ascii.
 test_expect_success 'job-shell: shell inherits FLUX_F58_FORCE_ASCII from job' '
 	FLUX_F58_FORCE_ASCII=t \
-		id=$(flux mini submit --wait --output={{id}}.out hostname) &&
+		id=$(flux submit --wait --output={{id}}.out hostname) &&
 	test -f ${id}.out
 '
 test_done

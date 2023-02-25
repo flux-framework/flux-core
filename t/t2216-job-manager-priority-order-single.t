@@ -14,7 +14,7 @@ flux setattr log-stderr-level 1
 
 # N.B. resources = 1 rank, 2 cores/rank
 test_expect_success 'job-manager: submit 4 jobs' '
-        flux mini submit --log=job{cc}.id --cc="1-4" --flags=debug -n1 \
+        flux submit --log=job{cc}.id --cc="1-4" --flags=debug -n1 \
            hostname
 '
 
@@ -69,7 +69,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations in job id 3-4 updated (RIS
 '
 
 test_expect_success 'job-manager: submit high urgency job' '
-        flux mini submit --flags=debug --urgency=20 -n1 hostname >job5.id
+        flux submit --flags=debug --urgency=20 -n1 hostname >job5.id
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state RISRS' '

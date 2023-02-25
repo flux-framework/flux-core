@@ -42,22 +42,22 @@ test_expect_success 'create file tree checker script' '
 	chmod 755 check.sh
 '
 test_expect_success 'verify that stage-in works with default tag (main)' '
-	flux mini run -N4 -ostage-in ./check.sh main
+	flux run -N4 -ostage-in ./check.sh main
 '
 test_expect_success 'verify that stage-in works with tags=red' '
-	flux mini run -N2 -ostage-in.tags=red ./check.sh red
+	flux run -N2 -ostage-in.tags=red ./check.sh red
 '
 test_expect_success 'verify that stage-in works with tags=red,blue' '
-	flux mini run -N1 -ostage-in.tags=red,blue ./check.sh red blue
+	flux run -N1 -ostage-in.tags=red,blue ./check.sh red blue
 '
 test_expect_success 'verify that stage-in.direct works' '
-	flux mini run -N1 \
+	flux run -N1 \
 	    -ostage-in.tags=red \
 	    -ostage-in.direct \
 	    ./check.sh red
 '
 test_expect_success 'verify that stage-in.pattern works' '
-	flux mini run -N1 \
+	flux run -N1 \
 	    -ostage-in.tags=red,blue \
 	    -ostage-in.pattern=red/* \
 	    -overbose=2 \
@@ -69,33 +69,33 @@ test_expect_success 'files that did not match pattern were not copied' '
 '
 test_expect_success 'verify that stage-in.destination works' '
 	mkdir testdest &&
-	flux mini run -N1 \
+	flux run -N1 \
 	    -o stage-in.destination=$(pwd)/testdest \
 	    /bin/true &&
 	test -f testdest/main/hello
 '
 test_expect_success 'verify that stage-in.destination=local:path works' '
 	rm -rf testdest/main &&
-	flux mini run -N1 \
+	flux run -N1 \
 	    -o stage-in.destination=local:$(pwd)/testdest \
 	    /bin/true &&
 	test -f testdest/main/hello
 '
 test_expect_success 'verify that stage-in.destination=global:path works' '
 	rm -rf testdest/main &&
-	flux mini run -N2 \
+	flux run -N2 \
 	    -o stage-in.destination=global:$(pwd)/testdest \
 	    /bin/true &&
 	test -f testdest/main/hello
 '
 test_expect_success 'verify that stage-in.destination fails on bad dir' '
-	test_must_fail flux mini run -N1 \
+	test_must_fail flux run -N1 \
 	    -o stage-in.destination=/noexist \
 	    /bin/true
 '
 test_expect_success 'verify that stage-in.destination fails on bad prefix' '
 	rm -rf testdest/main &&
-	test_must_fail flux mini run -N1 \
+	test_must_fail flux run -N1 \
 	    -o stage-in.destination=wrong:$(pwd)/testdest \
 	    /bin/true
 '
@@ -112,7 +112,7 @@ test_expect_success 'modify mapped test file without reducing its size' '
         dd if=/dev/zero of=red/lptest bs=4096 count=1 conv=notrunc
 '
 test_expect_success 'content change should cause an error' '
-        test_must_fail flux mini run -N1 -o stage-in /bin/true 2>changed.err &&
+        test_must_fail flux run -N1 -o stage-in /bin/true 2>changed.err &&
 	grep changed changed.err
 '
 

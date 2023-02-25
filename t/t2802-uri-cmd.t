@@ -72,7 +72,7 @@ test_expect_success NO_CHAIN_LINT 'flux-uri pid scheme fails for non-flux pid' '
 	kill $pid
 '
 test_expect_success 'flux uri fails for completed job' '
-	complete_id=$(flux mini submit --wait flux start /bin/true) &&
+	complete_id=$(flux submit --wait flux start /bin/true) &&
 	test_expect_code 1 flux uri ${complete_id} 2>jobid-notrunning.log &&
 	test_debug "cat jobid-notrunning.log" &&
 	grep "not running" jobid-notrunning.log
@@ -80,12 +80,12 @@ test_expect_success 'flux uri fails for completed job' '
 test_expect_success 'start a small hierarchy of Flux instances' '
 	cat <<-EOF >batch.sh &&
 	#!/bin/sh
-	jobid=\$(flux mini submit -n1 flux start flux mini run sleep 300) &&
+	jobid=\$(flux submit -n1 flux start flux run sleep 300) &&
 	flux --parent job memo \$(flux getattr jobid) jobid=\$jobid &&
 	flux job attach \$jobid
 	EOF
 	chmod +x batch.sh &&
-	jobid=$(flux mini batch -n1 batch.sh) &&
+	jobid=$(flux batch -n1 batch.sh) &&
 	flux job wait-event -T offset -vt 30 -c 2 $jobid memo
 '
 test_expect_success 'flux uri resolves jobid argument' '
@@ -109,7 +109,7 @@ test_expect_success 'flux uri resolves hierarchical jobids with ?local' '
 
 '
 test_expect_success 'flux uri jobid returns error for non-instance job' '
-	id=$(flux mini submit sleep 600) &&
+	id=$(flux submit sleep 600) &&
 	test_expect_code 1 flux uri $id
 '
 test_expect_success 'flux uri jobid scheme returns error for invalid jobid' '

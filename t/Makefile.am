@@ -199,6 +199,11 @@ TESTSCRIPTS = \
 	t2701-mini-batch.t \
 	t2702-mini-alloc.t \
 	t2703-mini-bulksubmit.t \
+	t2710-python-cli-submit.t \
+	t2711-python-cli-run.t \
+	t2712-python-cli-alloc.t \
+	t2713-python-cli-bulksubmit.t \
+	t2714-python-cli-batch.t \
 	t2800-jobs-cmd.t \
 	t2800-jobs-recursive.t \
 	t2800-jobs-instance-info.t \

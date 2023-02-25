@@ -13,7 +13,7 @@ test_expect_success HAVE_JQ 'no workers are running at the start' '
 	jq -e ".pipeline.validator.running == 0" <stats.out
 '
 test_expect_success 'run a job with no ingest configuration' '
-	flux mini run /bin/true
+	flux run /bin/true
 '
 test_expect_success HAVE_JQ 'one validator, no frobnicator started' '
 	flux module stats job-ingest >stats2.out &&
@@ -29,7 +29,7 @@ test_expect_success 'configure frobnicator' '
 	EOT
 '
 test_expect_success 'run a job with unspecified duration' '
-	flux mini submit /bin/true >jobid1
+	flux submit /bin/true >jobid1
 '
 test_expect_success HAVE_JQ 'one validator, one frobnicator started' '
 	flux module stats job-ingest >stats3.out &&
@@ -47,7 +47,7 @@ test_expect_success HAVE_JQ 'force module config update' '
 	flux config get | flux config load
 '
 test_expect_success 'run a job to trigger work crew with new config' '
-	flux mini submit /bin/true
+	flux submit /bin/true
 '
 test_expect_success HAVE_JQ 'workers were restarted' '
 	flux module stats job-ingest >stats5.out &&
@@ -59,7 +59,7 @@ test_expect_success HAVE_JQ 'workers were restarted' '
 test_expect_success HAVE_JQ 'run a job with novalidate flag' '
 	jq -r ".pipeline.frobnicator.requests" <stats5.out >frob.count &&
 	jq -r ".pipeline.validator.requests" <stats5.out >val.count &&
-	flux mini run --flags novalidate /bin/true
+	flux run --flags novalidate /bin/true
 '
 test_expect_success HAVE_JQ 'job was frobbed but not validated' '
 	flux module stats job-ingest >stats6.out &&
@@ -72,7 +72,7 @@ test_expect_success 'reconfig with null config' '
 	flux config load </dev/null
 '
 test_expect_success HAVE_JQ 'run a job with novalidate flag' '
-	flux mini run --flags novalidate /bin/true
+	flux run --flags novalidate /bin/true
 '
 test_expect_success HAVE_JQ 'job was neither frobbed nor validated' '
 	flux module stats job-ingest >stats7.out &&
@@ -82,7 +82,7 @@ test_expect_success HAVE_JQ 'job was neither frobbed nor validated' '
 	test_cmp val2.count val3.count
 '
 test_expect_success HAVE_JQ 'run a job' '
-	flux mini run /bin/true
+	flux run /bin/true
 '
 test_expect_success HAVE_JQ 'job was validated but not frobbed' '
 	flux module stats job-ingest >stats8.out &&

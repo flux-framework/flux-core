@@ -94,6 +94,11 @@ nodist_flux_SOURCES = \
 dist_fluxcmd_SCRIPTS = \
 	flux-cron \
 	flux-mini.py \
+	flux-alloc.py \
+	flux-batch.py \
+	flux-run.py \
+	flux-submit.py \
+	flux-bulksubmit.py \
 	flux-jobs.py \
 	flux-resource.py \
 	flux-admin.py \

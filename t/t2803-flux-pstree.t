@@ -67,11 +67,11 @@ test_expect_success 'flux-pstree -x --skip-root=no works in empty instance' '
 #   the sleep job to finish.
 #
 test_expect_success 'start a recursive job' '
-	id=$(flux mini submit flux start /bin/true) &&
-	rid=$(flux mini submit -n2 \
+	id=$(flux submit flux start /bin/true) &&
+	rid=$(flux submit -n2 \
 		flux start \
-		flux mini submit --wait --cc=1-2 flux start \
-			"flux mini submit sleep 300 && \
+		flux submit --wait --cc=1-2 flux start \
+			"flux submit sleep 300 && \
 			 touch ready.\$FLUX_JOB_CC && \
 			 flux queue idle") &&
 	flux job wait-event $id clean
@@ -223,7 +223,7 @@ test_expect_success 'flux-pstree -x' '
 	head -n 1 ${name}.output | grep NNODES
 '
 test_expect_success 'flux-pstree --details=NAME works' '
-	flux mini bulksubmit --watch \
+	flux bulksubmit --watch \
 		--job-name=details-{} \
 		--output=details-{}.output \
 		flux pstree --details={} \

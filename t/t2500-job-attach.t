@@ -9,7 +9,7 @@ test_under_flux 4
 flux setattr log-stderr-level 1
 
 test_expect_success 'attach: submit one job' '
-	flux mini submit echo foo >jobid1
+	flux submit echo foo >jobid1
 '
 
 test_expect_success 'attach: job ran successfully' '
@@ -43,7 +43,7 @@ test_expect_success 'attach: shows output from job' '
 '
 
 test_expect_success 'attach: submit a job and cancel it' '
-	flux mini submit sleep 30 >jobid2 &&
+	flux submit sleep 30 >jobid2 &&
 	flux job cancel $(cat jobid2)
 '
 
@@ -59,7 +59,7 @@ test_expect_success 'attach: exit code reflects cancellation' '
 run_attach() {
 	local seq=$1
 
-	flux mini submit sleep 30 >jobid${seq}
+	flux submit sleep 30 >jobid${seq}
 	flux job attach -E $(cat jobid${seq}) 2>attach${seq}.err &
 	echo $! >pid${seq}
 	while ! test -s attach${seq}.err; do sleep 0.1; done
@@ -96,7 +96,7 @@ test_expect_success 'attach: detached job was not canceled' '
 # wait on
 test_expect_success NO_CHAIN_LINT 'attach: output appears before cancel' '
 	script=$SHARNESS_TEST_SRCDIR/job-attach/outputsleep.sh &&
-	jobid=$(flux mini submit ${script})
+	jobid=$(flux submit ${script})
 	flux job attach -E ${jobid} 1>attach5.out 2>attach5.err &
 	waitpid=$! &&
 	flux job wait-event --timeout=10.0 -p guest.exec.eventlog ${jobid} test-output-ready &&
@@ -107,7 +107,7 @@ test_expect_success NO_CHAIN_LINT 'attach: output appears before cancel' '
 '
 
 test_expect_success 'attach: output events processed after shell.init failure' '
-	jobid=$(flux mini submit -o initrc=noinitrc hostname) &&
+	jobid=$(flux submit -o initrc=noinitrc hostname) &&
 	flux job wait-event -v ${jobid} clean &&
 	flux job eventlog -p guest.output ${jobid} &&
 	(flux job attach ${jobid} >init-failure.output 2>&1 || true) &&
@@ -121,7 +121,7 @@ filter_log_context() {
 }
 
 test_expect_success HAVE_JQ 'attach: -v option displays file and line info in logs' '
-	jobid=$(flux mini submit -o verbose=2 hostname) &&
+	jobid=$(flux submit -o verbose=2 hostname) &&
 	flux job wait-event ${jobid} clean &&
 	flux job eventlog --format=json -p guest.output ${jobid} \
 		| filter_log_context >verbose.json &&
@@ -133,7 +133,7 @@ test_expect_success HAVE_JQ 'attach: -v option displays file and line info in lo
 '
 
 test_expect_success 'attach: cannot attach to interactive pty when --read-only specified' '
-	jobid=$(flux mini submit -o pty.interactive bash) &&
+	jobid=$(flux submit -o pty.interactive bash) &&
 	test_must_fail flux job attach --read-only $jobid &&
 	flux job cancel $jobid
 '

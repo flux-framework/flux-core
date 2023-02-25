@@ -96,8 +96,8 @@ by multiple jobs.
   flux exec -r all flux filemap get -C /tmp/project
 
   # app1 and app2 have access to local copy of dataset1
-  flux mini run -N1024 app1 --input /tmp/project/dataset1
-  flux mini run -N1024 app2 --input /tmp/project/dataset1
+  flux run -N1024 app1 --input /tmp/project/dataset1
+  flux run -N1024 app2 --input /tmp/project/dataset1
 
   # clean up
   flux exec -r all rm -rf /tmp/project
@@ -115,13 +115,13 @@ which is automatically cleaned up after each job.
   flux filemap map --tags=ds2 -C /project dataset2
 
   # App0 uses $FLUX_JOB_TMPDIR/dataset1 and $FLUX_JOB_TMPDIR/dataset2
-  flux mini run -N1024 -o stage-in.tags=ds1,ds2 App0
+  flux run -N1024 -o stage-in.tags=ds1,ds2 App0
 
   # App1 uses only $FLUX_JOB_TMPDIR/dataset1
-  flux mini run -N1024 -o stage-in.tags=ds1 App1
+  flux run -N1024 -o stage-in.tags=ds1 App1
 
   # App2 uses only $FLUX_JOB_TMPDIR/dataset2
-  flux mini run -N1024 -o stage-in.tags=ds2 App2
+  flux run -N1024 -o stage-in.tags=ds2 App2
 
   # clean up
   flux filemap unmap --tags=ds1,ds2

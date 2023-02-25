@@ -202,7 +202,7 @@ test_expect_success 'resource.undrain RPC fails on rank > 0' '
 
 test_expect_success 'drain works on allocated rank' '
 	flux resource undrain $(flux resource status -s drain -no {ranks}) &&
-	id=$(flux mini submit --wait-event=start sleep 300) &&
+	id=$(flux submit --wait-event=start sleep 300) &&
 	rank=$(flux jobs -no {ranks} $id) &&
 	flux resource drain $rank &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 1 &&
@@ -214,7 +214,7 @@ test_expect_success 'drain works on allocated rank' '
 
 test_expect_success 'flux resource drain differentiates drain/draining' '
 	flux resource undrain $(flux resource status -s drain -no {ranks}) &&
-	id=$(flux mini submit --wait-event=start sleep 300) &&
+	id=$(flux submit --wait-event=start sleep 300) &&
 	rank=$(flux jobs -no {ranks} $id) &&
 	flux resource drain $(hostname) &&
 	test_debug "flux resource drain" &&

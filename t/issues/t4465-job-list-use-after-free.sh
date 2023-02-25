@@ -23,7 +23,7 @@ mkdir ${STATEDIR}
 # number of broker ranks.
 #
 flux start --test-size=8 -o,-Sstatedir=${STATEDIR} \
-    bash -c "flux mini submit --cc 1-8 --quiet /bin/true && flux queue drain"
+    bash -c "flux submit --cc 1-8 --quiet /bin/true && flux queue drain"
 
 flux start --test-size=1 -o,-Sstatedir=${STATEDIR} \
     --wrap=libtool,e,${VALGRIND} \

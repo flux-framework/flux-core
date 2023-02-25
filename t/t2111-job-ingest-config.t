@@ -43,7 +43,7 @@ test_expect_success 'job-ingest: configuration can be reloaded' '
 	"configuring validator with plugins=feasibility,jobspec, args=--require-version=1 \(enabled\)"
 '
 test_expect_success 'job-ingest: verify that feasibility plugin is in effect' '
-	test_must_fail flux mini submit -n 1024 hostname
+	test_must_fail flux submit -n 1024 hostname
 '
 test_expect_success 'job-ingest: invalid config detected on reload' '
 	cat <<-EOF >conf.d/ingest.toml &&
@@ -55,7 +55,7 @@ test_expect_success 'job-ingest: invalid config detected on reload' '
 	flux dmesg | grep ingest
 '
 test_expect_success 'job-ingest: job still runs after failed config reload' '
-	flux mini run true
+	flux run true
 '
 test_expect_success 'job-ingest: invalid ingest.validator.plugins' '
 	cat <<-EOF >conf.d/ingest.toml &&
@@ -65,7 +65,7 @@ test_expect_success 'job-ingest: invalid ingest.validator.plugins' '
 	test_must_fail flux config reload
 '
 test_expect_success 'job-ingest: job still runs after failed config reload' '
-	flux mini run true
+	flux run true
 '
 test_expect_success 'job-ingest: invalid ingest.validator.plugins' '
 	cat <<-EOF >conf.d/ingest.toml &&
@@ -76,6 +76,6 @@ test_expect_success 'job-ingest: invalid ingest.validator.plugins' '
 	test_must_fail flux config reload
 '
 test_expect_success 'job-ingest: job still runs after failed config reload' '
-	flux mini run true
+	flux run true
 '
 test_done

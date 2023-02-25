@@ -15,7 +15,7 @@ test_expect_success 'job-manager: initially run without scheduler' '
         flux module unload sched-simple
 '
 test_expect_success 'job-manager: submit 5 jobs' '
-        flux mini submit --log=job{cc}.id --cc="1-5" --flags=debug -n1 \
+        flux submit --log=job{cc}.id --cc="1-5" --flags=debug -n1 \
            hostname
 '
 

@@ -15,7 +15,7 @@ INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
 export LUA_PATH="$LUA_PATH;${SHARNESS_TEST_DIRECTORY}/?.lua"
 
 test_expect_success 'flux-shell: log: generate 1-task jobspec and matching R' '
-	flux mini run --dry-run -N1 -n1 echo Hi >j1 &&
+	flux run --dry-run -N1 -n1 echo Hi >j1 &&
 	cat >R1 <<-EOT
 	{"version": 1, "execution":{ "R_lite":[
 		{ "children": { "core": "0,1" }, "rank": "0" }
@@ -62,7 +62,7 @@ for topic in "shell.init" "shell.exit" \
 done
 
 test_expect_success 'flux-shell: run job with verbose logging to output' '
-	flux mini run -o verbose=2 -o initrc=log.lua -n2 -N2 hostname \
+	flux run -o verbose=2 -o initrc=log.lua -n2 -N2 hostname \
 		>log-test.output 2>log-test.err
 '
 
@@ -100,7 +100,7 @@ for topic in "shell.init" "shell.exit" \
 done
 
 test_expect_success 'flux-shell: run job with normal logging level' '
-	flux mini run -o initrc=log.lua -n2 -N2 hostname \
+	flux run -o initrc=log.lua -n2 -N2 hostname \
 		>log-test.output 2>log-test.err
 '
 
@@ -136,7 +136,7 @@ for topic in "shell.init" "shell.exit" \
 done
 
 test_expect_success 'flux-shell: missing command logs fatal error' '
-	test_expect_code 127 flux mini run nosuchcommand 2>missing.err &&
+	test_expect_code 127 flux run nosuchcommand 2>missing.err &&
 	grep "flux-shell\[0\]: FATAL: task 0.*: start failed" missing.err &&
 	grep "job.exception type=exec severity=0 task 0.*: start failed" missing.err &&
         grep "No such file or directory" missing.err
@@ -144,14 +144,14 @@ test_expect_success 'flux-shell: missing command logs fatal error' '
 
 test_expect_success 'flux-shell: illegal command logs fatal error' '
 	mkdir adirectory &&
-	test_expect_code 126 flux mini run ./adirectory 2>illegal.err &&
+	test_expect_code 126 flux run ./adirectory 2>illegal.err &&
 	grep "flux-shell\[0\]: FATAL: task 0.*: start failed" illegal.err &&
 	grep "job.exception type=exec severity=0 task 0.*: start failed" illegal.err &&
 	grep "Permission denied" illegal.err
 '
 
 test_expect_success 'flux-shell: bad cwd emits message, but completes' '
-	flux mini run --setattr="system.cwd=/foo" pwd 2>badcwd.err &&
+	flux run --setattr="system.cwd=/foo" pwd 2>badcwd.err &&
         grep "Could not change dir to /foo: No such file or directory" badcwd.err
 '
 
@@ -167,7 +167,7 @@ test_expect_success 'flux-shell: fatal error in shell.init works' '
 	site=shell.init &&
 	test_when_finished "test_debug \"dump_job_output_eventlog $site\"" &&
 	test_must_fail_or_be_terminated \
-		flux mini run -vvv -o verbose=2 -n2 -N2 \
+		flux run -vvv -o verbose=2 -n2 -N2 \
 			-o initrc=log.lua \
 			-o log-fatal-error=$site hostname \
 		>fatal-${site}.out 2>&1 &&
@@ -183,7 +183,7 @@ test_expect_success 'flux-shell: fatal error in shell.exit works' '
 	site=shell.exit &&
 	echo "running mini run" &&
 	test_must_fail_or_be_terminated \
-		flux mini run -vvv -n2 -N2 \
+		flux run -vvv -n2 -N2 \
 			-o verbose=2 \
 			-o initrc=log.lua \
                 	-o log-fatal-error=$site hostname &&
@@ -194,7 +194,7 @@ test_expect_success 'flux-shell: fatal error in task.init works' '
 	site=task.init &&
 	test_when_finished "test_debug \"dump_job_output_eventlog $site\"" &&
 	test_must_fail_or_be_terminated \
-		flux mini run -vvv -n2 -N2 \
+		flux run -vvv -n2 -N2 \
                         -o verbose=2 \
 			-o initrc=log.lua \
                 	-o log-fatal-error=$site hostname \
@@ -211,7 +211,7 @@ test_expect_success 'flux-shell: fatal error in task.fork works' '
 	site=task.fork &&
 	test_when_finished "test_debug \"dump_job_output_eventlog $site\"" &&
 	test_must_fail_or_be_terminated \
-		flux mini run -v -n2 -N2 \
+		flux run -v -n2 -N2 \
 			-o initrc=log.lua \
                 	-o log-fatal-error=$site hostname \
 		>fatal-${site}.out 2>&1 &&
@@ -227,7 +227,7 @@ test_expect_success 'flux-shell: fatal error in task.exec works' '
 	site=task.exec &&
 	test_when_finished "test_debug \"dump_job_output_eventlog $site\"" &&
 	test_must_fail_or_be_terminated \
-		flux mini run -v -n2 -N2 \
+		flux run -v -n2 -N2 \
 			-o initrc=log.lua \
                 	-o log-fatal-error=$site hostname \
 		>fatal-${site}.out 2>&1 &&
@@ -254,7 +254,7 @@ test_expect_success 'flux-shell: stdout/err from task.exec works' '
 	  }
 	}
 	EOF
-	flux mini run -o initrc=task.exec.print.lua hostname \
+	flux run -o initrc=task.exec.print.lua hostname \
 	  >print.out 2>print.err &&
 	grep "^this is stderr" print.err &&
 	grep "^this is stdout" print.out

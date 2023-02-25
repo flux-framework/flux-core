@@ -16,7 +16,7 @@ flux setattr log-stderr-level 1
 # flux queue stop/start to ensure no scheduling until after all jobs submitted
 test_expect_success 'job-manager: submit 5 jobs (differing urgencies)' '
         flux queue stop &&
-        flux mini bulksubmit --log=job{seq1}.id --urgency={} --flags=debug -n1 \
+        flux bulksubmit --log=job{seq1}.id --urgency={} --flags=debug -n1 \
            hostname ::: $(seq 10 2 18) &&
         flux queue start
 '
@@ -106,7 +106,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSSRR)' '
 '
 
 test_expect_success 'job-manager: submit new job with higher urgency' '
-        flux mini submit --flags=debug --urgency=20 -n1 hostname >job6.id
+        flux submit --flags=debug --urgency=20 -n1 hostname >job6.id
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state SSSRRS' '

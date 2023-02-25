@@ -81,5 +81,5 @@ man3
 .. toctree::
    :hidden:
 
-   JSON_PACK
-   JSON_UNPACK
+   common/json_pack
+   common/json_unpack

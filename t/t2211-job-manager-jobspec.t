@@ -19,7 +19,7 @@ test_expect_success 'stop the queue for this test' '
 '
 
 test_expect_success 'create simple jobspec' '
-	flux mini submit --dry-run hostname >simple.json
+	flux submit --dry-run hostname >simple.json
 '
 
 test_expect_success HAVE_JQ 'jobspec contains environment' '

@@ -8,7 +8,7 @@ jj=${FLUX_BUILD_DIR}/t/sched-simple/jj-reader
 y2j="flux python ${SHARNESS_TEST_SRCDIR}/jobspec/y2j.py"
 
 test_expect_success HAVE_JQ 'jj-reader: unexpected version throws error' '
-	flux mini run --dry-run hostname \
+	flux run --dry-run hostname \
 		| jq ".version = 2" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
@@ -17,7 +17,7 @@ test_expect_success HAVE_JQ 'jj-reader: unexpected version throws error' '
 	test_cmp expected.$test_count out.$test_count
 '
 test_expect_success HAVE_JQ 'jj-reader: no version throws error' '
-	flux mini run --dry-run hostname \
+	flux run --dry-run hostname \
 		| jq "del(.version)" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
@@ -26,7 +26,7 @@ test_expect_success HAVE_JQ 'jj-reader: no version throws error' '
 	test_cmp expected.$test_count out.$test_count
 '
 test_expect_success HAVE_JQ 'jj-reader: bad count throws error' '
-	flux mini run --dry-run hostname | \
+	flux run --dry-run hostname | \
 		jq ".resources[0].with[0].count = -1" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
@@ -35,7 +35,7 @@ test_expect_success HAVE_JQ 'jj-reader: bad count throws error' '
 	test_cmp expected.$test_count out.$test_count
 '
 test_expect_success HAVE_JQ 'jj-reader: bad type throws error' '
-	flux mini run --dry-run hostname | \
+	flux run --dry-run hostname | \
 		jq --arg f beans ".resources[0].type = \$f" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
@@ -44,7 +44,7 @@ test_expect_success HAVE_JQ 'jj-reader: bad type throws error' '
 	test_cmp expected.$test_count out.$test_count
 '
 test_expect_success HAVE_JQ 'jj-reader: missing count throws error' '
-	flux mini run --dry-run hostname | \
+	flux run --dry-run hostname | \
 		jq "del(.resources[0].with[0].count)" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
@@ -53,7 +53,7 @@ test_expect_success HAVE_JQ 'jj-reader: missing count throws error' '
 	test_cmp expected.$test_count out.$test_count
 '
 test_expect_success HAVE_JQ 'jj-reader: wrong count type throws error' '
-	flux mini run --dry-run hostname | \
+	flux run --dry-run hostname | \
 		jq ".resources[0].with[0].count = 1.5" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
@@ -125,7 +125,7 @@ while read line; do
 
 	test_expect_success "jj-reader: $args returns $expected" '
 		echo $expected >expected.$test_count &&
-		flux mini $args --dry-run hostname | $jj > output.$test_count &&
+		flux $args --dry-run hostname | $jj > output.$test_count &&
 		test_cmp expected.$test_count output.$test_count
 	'
 done < inputs.txt

@@ -65,7 +65,7 @@ test_expect_success 'perilog: perilog-run fails if any local script fails' '
 	rm -f prolog.d/fail.sh
 '
 test_expect_success 'perilog: perilog-run --exec-per-rank works' '
-	jobid=$(flux mini submit -n4 -N4 true) &&
+	jobid=$(flux submit -n4 -N4 true) &&
 	flux job wait-event $jobid alloc &&
 	FLUX_JOB_ID=${jobid} \
 	  flux perilog-run prolog -veflux,getattr,rank \
@@ -110,7 +110,7 @@ test_expect_success 'perilog: load perilog.so plugin' '
 '
 test_expect_success 'perilog: configured prolog/epilog works for jobs' '
 	undrain_all &&
-	jobid=$(flux mini submit --job-name=works hostname) &&
+	jobid=$(flux submit --job-name=works hostname) &&
 	flux job attach -vE -w clean $jobid > submit1.log 2>&1 &&
 	test_debug "cat submit1.log" &&
 	grep prolog-start submit1.log &&
@@ -122,7 +122,7 @@ test_expect_success 'perilog: job can be canceled while prolog is running' '
 	printf "#!/bin/sh\nsleep 60" > prolog.d/sleep.sh &&
 	chmod +x prolog.d/sleep.sh &&
 	test_when_finished "rm -f prolog.d/sleep.sh" &&
-	jobid=$(flux mini submit --job-name=cancel hostname) &&
+	jobid=$(flux submit --job-name=cancel hostname) &&
 	flux job wait-event -t 15 $jobid prolog-start &&
 	flux job cancel $jobid &&
 	flux job wait-event -t 15 $jobid prolog-finish &&
@@ -133,7 +133,7 @@ test_expect_success 'perilog: job can timeout after prolog' '
 	printf "#!/bin/sh\nsleep 1" > prolog.d/sleep.sh &&
 	chmod +x prolog.d/sleep.sh &&
 	test_when_finished "rm -f prolog.d/sleep.sh" &&
-	jobid=$(flux mini submit --job-name=timeout -t 0.5s sleep 10) &&
+	jobid=$(flux submit --job-name=timeout -t 0.5s sleep 10) &&
 	flux job wait-event -t 15 $jobid prolog-start &&
 	flux job wait-event -vt 15 $jobid exception &&
 	flux job wait-event -t 15 $jobid clean
@@ -142,7 +142,7 @@ test_expect_success 'perilog: job can be canceled after prolog is complete' '
 	printf "#!/bin/sh\nsleep 0" > prolog.d/sleep.sh &&
 	chmod +x prolog.d/sleep.sh &&
 	test_when_finished "rm -f prolog.d/sleep.sh" &&
-	jobid=$(flux mini submit --job-name=cancel2 sleep 300) &&
+	jobid=$(flux submit --job-name=cancel2 sleep 300) &&
 	flux job wait-event -t 15 $jobid prolog-finish &&
 	flux job cancel $jobid &&
 	flux job wait-event -t 15 $jobid exception &&
@@ -152,7 +152,7 @@ test_expect_success HAVE_JQ 'perilog: prolog failure raises job exception' '
 	printf "#!/bin/sh\n/bin/false" > prolog.d/fail.sh &&
 	chmod +x prolog.d/fail.sh &&
 	test_when_finished "rm -f prolog.d/fail.sh" &&
-	jobid=$(flux mini submit --job-name=prolog-failure hostname) &&
+	jobid=$(flux submit --job-name=prolog-failure hostname) &&
 	flux job wait-event -t 15 $jobid prolog-start &&
 	flux job wait-event -m type=prolog -t 15 $jobid exception &&
 	flux job eventlog -f json $jobid | jq -r -S .name \
@@ -163,7 +163,7 @@ test_expect_success 'perilog: prolog/epilog output is logged' '
 	printf "#!/bin/sh\necho this is the prolog" > prolog.d/log.sh &&
 	chmod +x prolog.d/log.sh &&
 	test_when_finished "rm -f prolog.d/log.sh" &&
-	jobid=$(flux mini submit --job-name=output-test hostname) &&
+	jobid=$(flux submit --job-name=output-test hostname) &&
 	flux job wait-event -t 15 $jobid prolog-finish &&
 	flux dmesg | grep "prolog: stdout: this is the prolog" &&
 	flux job wait-event -vt 15 $jobid clean
@@ -197,7 +197,7 @@ test_expect_success 'perilog: fails if command not found' '
 	EOF
 	flux config reload &&
 	flux jobtap load perilog.so &&
-	jobid=$(flux mini submit --job-name=prolog-failure hostname) &&
+	jobid=$(flux submit --job-name=prolog-failure hostname) &&
 	test_must_fail flux job attach -vEX $jobid
 '
 test_expect_success 'perilog: prolog is killed even if it ignores SIGTERM' '
@@ -218,7 +218,7 @@ test_expect_success 'perilog: prolog is killed even if it ignores SIGTERM' '
 	EOT
 	flux config reload &&
 	flux jobtap load --remove=*.so perilog.so &&
-	jobid=$(flux mini submit --job-name=prolog-sigkill hostname) &&
+	jobid=$(flux submit --job-name=prolog-sigkill hostname) &&
 	flux job wait-event -t 15 $jobid prolog-start &&
 	flux job cancel $jobid &&
 	flux job wait-event -t 15 -m status=9 $jobid prolog-finish &&
@@ -232,7 +232,7 @@ test_expect_success 'perilog: epilog can be specified without a prolog' '
 	EOF
 	flux config reload &&
 	flux jobtap load --remove=*.so perilog.so &&
-	jobid=$(flux mini submit hostname) &&
+	jobid=$(flux submit hostname) &&
 	test_must_fail flux job wait-event -t 15 $jobid prolog-start &&
 	flux job wait-event -t 15 $jobid epilog-start &&
 	flux job wait-event -t 15 $jobid epilog-finish

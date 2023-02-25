@@ -24,7 +24,7 @@ test_expect_success 'flux-shell: initrc: conf.shell_initrc can be set' '
 	EOF
 	initrc_old=$(flux getattr conf.shell_initrc) &&
 	flux setattr conf.shell_initrc $(pwd)/test-initrc.lua &&
-	flux mini run /bin/true > test-initrc.output 2>&1 &&
+	flux run /bin/true > test-initrc.output 2>&1 &&
 	test_debug "cat test-initrc.output" &&
 	grep "loaded test-initrc" test-initrc.output &&
 	flux setattr conf.shell_initrc "${initrc_old}"
@@ -35,7 +35,7 @@ test_expect_success 'flux-shell: initrc: plugin.searchpath set via broker attr' 
 	EOF
 	old_pluginpath=$(flux getattr conf.shell_pluginpath) &&
 	flux setattr conf.shell_pluginpath /test/foo &&
-	flux mini run -o initrc=$(pwd)/print-searchpath.lua /bin/true \
+	flux run -o initrc=$(pwd)/print-searchpath.lua /bin/true \
 		>print-searchpath.out 2>&1 &&
 	test_debug "cat print-searchpath.out" &&
 	grep "plugin.searchpath = /test/foo" print-searchpath.out &&
@@ -48,11 +48,11 @@ test_expect_success 'flux-shell: default initrc obeys FLUX_SHELL_RC_PATH' '
 	shell.log ("plugin loaded from test-dir.d")
 	EOF
 	FLUX_SHELL_RC_PATH=$(pwd)/test-dir.d \
-	  flux mini run hostname >rcpath.log 2>&1 &&
+	  flux run hostname >rcpath.log 2>&1 &&
 	grep "plugin loaded from test-dir.d" rcpath.log
 '
 test_expect_success 'flux-shell: initrc: generate 1-task jobspec and matching R' '
-	flux mini run --dry-run -N1 -n1 echo Hi >j1 &&
+	flux run --dry-run -N1 -n1 echo Hi >j1 &&
 	cat >R1 <<-EOT
 	{"version": 1, "execution":{ "R_lite":[
 		{ "children": { "core": "0,1" }, "rank": "0" }
@@ -71,7 +71,7 @@ test_expect_success 'flux-shell: initrc: specifying initrc of /dev/null works' '
 	grep "Loading /dev/null" devnull.log
 '
 test_expect_success HAVE_JQ 'flux-shell: initrc: bad initrc in jobspec fails' '
-	flux mini run --dry-run -N1 -n1 echo Hi \
+	flux run --dry-run -N1 -n1 echo Hi \
 	    | jq ".attributes.system.shell.options.initrc = \"nosuchfile\"" \
 	    > j2 &&
 	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j2 -R R1 0
@@ -81,7 +81,7 @@ test_expect_success HAVE_JQ 'flux-shell: initrc: in jobspec works' '
 	cat >${name}.lua <<-EOT &&
 	    print ("jobspec initrc OK")
 	EOT
-	flux mini run --dry-run -N1 -n1 echo Hi \
+	flux run --dry-run -N1 -n1 echo Hi \
 	    | jq ".attributes.system.shell.options.initrc = \"${name}.lua\"" \
 	    > j3 &&
 	${FLUX_SHELL} -v -s -r 0 -j j3 -R R1 0 > ${name}.log 2>&1 &&

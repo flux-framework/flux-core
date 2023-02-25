@@ -34,10 +34,10 @@ fj_wait_event() {
 test_expect_success 'submit jobs for job list testing' '
         #  Create `hostname` and `sleep` jobspec
         #  N.B. Used w/ `flux job submit` for serial job submission
-        #  for efficiency (vs serial `flux mini submit`.
+        #  for efficiency (vs serial `flux submit`.
         #
-        flux mini submit --dry-run hostname >hostname.json &&
-        flux mini submit --dry-run --time-limit=5m sleep 600 > sleeplong.json &&
+        flux submit --dry-run hostname >hostname.json &&
+        flux submit --dry-run --time-limit=5m sleep 600 > sleeplong.json &&
         #
         # submit jobs that will complete
         #

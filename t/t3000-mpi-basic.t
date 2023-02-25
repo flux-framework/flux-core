@@ -28,7 +28,7 @@ test_expect_success 'show MPI version under test' '
 '
 
 test_expect_success 'mpi hello various sizes' '
-	run_timeout 30 flux mini submit --cc=1-$MAX_MPI_SIZE $OPTS \
+	run_timeout 30 flux submit --cc=1-$MAX_MPI_SIZE $OPTS \
 		--watch -n{cc} ${HELLO} >hello.out &&
 	for i in $(seq 1 $MAX_MPI_SIZE); do \
 		grep "There are $i tasks" hello.out; \
@@ -37,42 +37,42 @@ test_expect_success 'mpi hello various sizes' '
 
 # issue 3649 - try to get two size=2 jobs running concurrently on one broker
 test_expect_success 'mpi hello size=2 concurrent submit of 8 jobs' '
-	run_timeout 30 flux mini submit --cc=1-8 $OPTS \
+	run_timeout 30 flux submit --cc=1-8 $OPTS \
 		--watch -n2 ${HELLO} >hello2.out &&
 	test $(grep "There are 2 tasks" hello2.out | wc -l) -eq 8
 '
 
 # Run some basic tests pulled from MPICH as a sanity check
 test_expect_success 'ANL self works' '
-	run_timeout 30 flux mini run $OPTS \
+	run_timeout 30 flux run $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/self
 '
 test_expect_success 'ANL simple works' '
-	run_timeout 30 flux mini run -n 2 $OPTS \
+	run_timeout 30 flux run -n 2 $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/simple
 '
 test_expect_success 'ANL sendrecv works on 1 node' '
-	run_timeout 30 flux mini run -n 2 -N1 $OPTS \
+	run_timeout 30 flux run -n 2 -N1 $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/sendrecv
 '
 test_expect_success 'ANL sendrecv works on 2 nodes' '
-	run_timeout 30 flux mini run -n 2 -N2 $OPTS \
+	run_timeout 30 flux run -n 2 -N2 $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/sendrecv
 '
 test_expect_success LONGTEST 'ANL netpipe works' '
-	flux mini run -n 2 $OPTS \
+	flux run -n 2 $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/netpipe
 '
 test_expect_success 'ANL patterns works 1 node' '
-	run_timeout 30 flux mini run -n 2 -N1 $OPTS \
+	run_timeout 30 flux run -n 2 -N1 $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/patterns
 '
 test_expect_success 'ANL patterns works 2 nodes' '
-	run_timeout 30 flux mini run -n 2 -N2 $OPTS \
+	run_timeout 30 flux run -n 2 -N2 $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/patterns
 '
 test_expect_success LONGTEST 'ANL adapt works' '
-	flux mini run -n 3 $OPTS \
+	flux run -n 3 $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/adapt
 '
 

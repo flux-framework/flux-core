@@ -7,20 +7,20 @@ test_description='Test flux-shell per-resource and batch support'
 test_under_flux 2 job
 
 test_expect_success 'flux-shell: bails on invalid per-resource' '
-	test_expect_code 1 flux mini run -o per-resource.type=foo hostname
+	test_expect_code 1 flux run -o per-resource.type=foo hostname
 '
 test_expect_success 'flux-shell: bails on invalid per-resource count' '
-	test_expect_code 1 flux mini run -o per-resource.count=0 hostname
+	test_expect_code 1 flux run -o per-resource.count=0 hostname
 '
 test_expect_success 'flux-shell: bails on invalid per-resource object' '
-	test_expect_code 1 flux mini run -o per-resource.blah hostname
+	test_expect_code 1 flux run -o per-resource.blah hostname
 '
 test_expect_success 'flux-shell: bails on invalid batch object' '
-	test_expect_code 1 flux mini run --setattr system.batch.broker-opts=5 \
+	test_expect_code 1 flux run --setattr system.batch.broker-opts=5 \
 		hostname
 '
 test_expect_success 'flux-shell: per-resource with count works' '
-	flux mini run \
+	flux run \
 	        -o per-resource.type=core \
 	        -o per-resource.count=4 \
 	        echo foo > 4-per-core.out 2>4-per-core.err &&
@@ -36,7 +36,7 @@ test_expect_success 'flux-shell: per-resource with count works' '
 '
 test_expect_success 'flux-shell: per-resource type=node works' '
 	ncores=$(flux resource list -s up -no {ncores}) &&
-	flux mini run -n ${ncores} \
+	flux run -n ${ncores} \
 	        -o per-resource.type=node \
 	        -o per-resource.count=1 \
 	        echo foo > per-node.out 2>per-node.err &&

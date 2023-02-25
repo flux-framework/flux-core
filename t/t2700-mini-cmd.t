@@ -41,10 +41,10 @@ test_expect_success HAVE_MULTICORE 'flux mini submit --ntasks=2 --cores-per-task
 	jobid=$(flux mini submit --ntasks=2 --cores-per-task=2 hostname) &&
 	flux job attach $jobid
 '
-test_expect_success 'flux mini submit --ntasks=2 --nodes=2 works' '
+test_expect_success 'flux mini run --ntasks=2 --nodes=2 works' '
 	flux mini run --ntasks=2 --nodes=2 hostname
 '
-test_expect_success 'flux mini run --nodes=2 allocates 2 nodes exclusively' '
+test_expect_success 'flux mini submit --nodes=2 allocates 2 nodes exclusively' '
 	id=$(flux mini submit --wait-event=start --nodes=2 hostname) &&
 	test $(flux job info ${id} R | flux R decode --count=node) = 2
 '
@@ -225,7 +225,7 @@ test_expect_success HAVE_JQ 'flux mini submit --cwd passes through to jobspec' '
 	flux mini submit --cwd=/foo/bar/baz hostname > cwd.out &&
 	jq -e ".attributes.system.cwd == \"/foo/bar/baz\""
 '
-test_expect_success HAVE_JQ 'flux mini submit --cwd works' '
+test_expect_success HAVE_JQ 'flux mini run --cwd works' '
 	mkdir cwd_test &&
 	flux mini run --cwd=$(realpath cwd_test) pwd > cwd.out &&
 	test $(cat cwd.out) = $(realpath cwd_test)

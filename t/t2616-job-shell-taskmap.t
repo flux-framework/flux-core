@@ -25,7 +25,7 @@ test_expect_success 'create script for testing task mapping' '
 	chmod +x map.sh
 '
 test_expect_success 'flux job taskmap works' '
-	id=$(flux mini submit -N4 --tasks-per-node=4 ./map.sh) &&
+	id=$(flux submit -N4 --tasks-per-node=4 ./map.sh) &&
 	test_must_fail flux job taskmap &&
 	test "$(flux job taskmap $id)" = "[[0,4,4,1]]" &&
 	test "$(flux job taskmap --taskids=0 $id)" = "0-3" &&
@@ -43,7 +43,7 @@ test_expect_success 'flux job taskmap fails with invalid taskmap on cmdline' '
 '
 test_expect_success 'flux job taskmap fails for canceled job' '
 	flux queue stop &&
-	id=$(flux mini submit -N4 true) &&
+	id=$(flux submit -N4 true) &&
 	flux job cancel $id &&
 	flux queue start &&
 	test_must_fail flux job taskmap $id
@@ -52,7 +52,7 @@ test_expect_success 'flux job taskmap fails for invalid job' '
 	test_must_fail flux job taskmap f1
 '
 test_expect_success 'flux job taskmap fails with invalid arguments' '
-	id=$(flux mini submit -N4 --tasks-per-node=4 ./map.sh) &&
+	id=$(flux submit -N4 --tasks-per-node=4 ./map.sh) &&
 	flux job taskmap $id &&
 	test_must_fail flux job taskmap --taskids=4 $id 2>no-taskids.err &&
 	test_debug "cat no-taskids.err" &&
@@ -68,54 +68,54 @@ test_expect_success 'flux job taskmap fails with invalid arguments' '
 	grep "invalid value" bad-to.err
 '
 test_expect_success 'taskmap is posted in shell.start event' '
-	id=$(flux mini submit ./map.sh) &&
+	id=$(flux submit ./map.sh) &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,1,1,1]]" &&
 	test_check_taskmap $id
 '
 test_expect_success 'taskmap is correct for --tasks-per-node=4' '
-	id=$(flux mini submit -N4 --tasks-per-node=4 ./map.sh) &&
+	id=$(flux submit -N4 --tasks-per-node=4 ./map.sh) &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,4,4,1]]" &&
 	test_check_taskmap $id
 '
 test_expect_success 'taskmap is unchanged with --taskmap=block' '
-	id=$(flux mini submit -N4 --tasks-per-node=4 \
+	id=$(flux submit -N4 --tasks-per-node=4 \
 		--taskmap=block ./map.sh) &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,4,4,1]]" &&
 	test_check_taskmap $id
 '
 test_expect_success 'taskmap is correct for --tasks-per-node=2' '
-	id=$(flux mini submit -N4 --tasks-per-node=2 ./map.sh) &&
+	id=$(flux submit -N4 --tasks-per-node=2 ./map.sh) &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,4,2,1]]" &&
 	test_check_taskmap $id
 '
 test_expect_success 'taskmap=cyclic works with valid args' '
-	id=$(flux mini submit --taskmap=cyclic -N4 --tasks-per-node=4 ./map.sh) &&
+	id=$(flux submit --taskmap=cyclic -N4 --tasks-per-node=4 ./map.sh) &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,4,1,4]]" &&
 	test_check_taskmap $id
 '
 test_expect_success 'taskmap=cyclic:2 works' '
-	id=$(flux mini submit --taskmap=cyclic:2 -N4 --tasks-per-node=4 ./map.sh) &&
+	id=$(flux submit --taskmap=cyclic:2 -N4 --tasks-per-node=4 ./map.sh) &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,4,2,2]]" &&
 	test_check_taskmap $id
 '
 test_expect_success 'taskmap=cyclic:3 works' '
-	id=$(flux mini submit --taskmap=cyclic:3 -N4 --tasks-per-node=4 ./map.sh) &&
+	id=$(flux submit --taskmap=cyclic:3 -N4 --tasks-per-node=4 ./map.sh) &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,4,3,1],[0,4,1,1]]" &&
 	test_check_taskmap $id
 '
 test_expect_success 'taskmap=manual works' '
-	id=$(flux mini submit \
+	id=$(flux submit \
 	     --taskmap=manual:"[[1,3,4,1],[0,1,4,1]]" \
 	     -N4 --tasks-per-node=4 ./map.sh) &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
@@ -124,14 +124,14 @@ test_expect_success 'taskmap=manual works' '
 '
 test_expect_success 'taskmap=manual with unknown taskmap fails' '
 	test_must_fail_or_be_terminated \
-		flux mini run --taskmap="manual:[]" true
+		flux run --taskmap="manual:[]" true
 '
 test_expect_success 'invalid taskmap causes job failure' '
 	test_must_fail_or_be_terminated \
-		flux mini run -vvv --taskmap=foo true
+		flux run -vvv --taskmap=foo true
 '
 test_expect_success 'invalid manual taskmaps fail predictably' '
-	ids=$(flux mini bulksubmit --taskmap=manual:{} \
+	ids=$(flux bulksubmit --taskmap=manual:{} \
 		-N4 --tasks-per-node=4 true ::: \
 		"{}" \
 		"[[1,3,4,1]]" \
@@ -143,19 +143,19 @@ test_expect_success 'invalid manual taskmaps fail predictably' '
 '
 test_expect_success 'invalid taskmap shell option fails' '
 	test_must_fail_or_be_terminated \
-		flux mini run -o taskmap.foo=bar true
+		flux run -o taskmap.foo=bar true
 '
 test_expect_success 'invalid taskmap scheme causes job failure' '
 	test_must_fail_or_be_terminated \
-		flux mini run -vvv --taskmap=foo true
+		flux run -vvv --taskmap=foo true
 '
 test_expect_success 'invalid cyclic value causes job failure' '
 	test_must_fail_or_be_terminated \
-		flux mini run -vvv --taskmap=cyclic:0 true
+		flux run -vvv --taskmap=cyclic:0 true
 '
 test_expect_success 'invalid cyclic value causes job failure' '
 	test_must_fail_or_be_terminated \
-		flux mini run -vvv --taskmap=cyclic:foo true
+		flux run -vvv --taskmap=cyclic:foo true
 '
 
 INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
@@ -164,7 +164,7 @@ test_expect_success 'shell supports dynamically loaded taskmap plugin' '
 	plugin.searchpath = "${INITRC_PLUGINPATH}"
 	plugin.load { file = "taskmap-reverse.so" }
 	EOF
-	id=$(flux mini submit -o userrc=taskmap-initrc.lua \
+	id=$(flux submit -o userrc=taskmap-initrc.lua \
 		-N4 --tasks-per-node=4 \
 		--taskmap=reverse ./map.sh) &&
 	flux job taskmap $id  &&

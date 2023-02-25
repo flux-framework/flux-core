@@ -224,7 +224,7 @@ test_expect_success 'perform offline garbage collection with dump/restore' '
 
 test_expect_success 'restart flux instance and try to run a job' '
 	flux start -o,-Sstatedir=test \
-		flux mini run /bin/true
+		flux run /bin/true
 '
 
 test_done

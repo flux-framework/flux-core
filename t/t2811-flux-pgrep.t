@@ -18,7 +18,7 @@ test_expect_success 'flux-pgrep returns 1 when no jobs match' '
 	test_expect_code 1 flux pgrep foo
 '
 test_expect_success 'flux-pgrep works for job nanes' '
-	flux mini bulksubmit --job-name={} sleep 60 \
+	flux bulksubmit --job-name={} sleep 60 \
 		::: testA testB foo &&
 	flux pgrep ^test > pgrep.out &&
 	test $(wc -l <pgrep.out) -eq 2
@@ -42,8 +42,8 @@ test_expect_success 'flux-pkill works' '
 	flux pkill foo
 '
 test_expect_success 'flux-pgrep works with jobid ranges' '
-	flux mini submit --bcc=1-6 sleep 60 >ids &&
-	flux mini submit --bcc=1-6 sleep 60 >ids2 &&
+	flux submit --bcc=1-6 sleep 60 >ids &&
+	flux submit --bcc=1-6 sleep 60 >ids2 &&
 	flux pgrep $(head -n 1 ids)..$(tail -n1 ids) >pgrep.ids &&
 	test $(wc -l <pgrep.ids) -eq 6 &&
 	flux pgrep $(head -n 1 ids)..$(tail -n1 ids2) >pgrep2.ids &&
@@ -62,13 +62,13 @@ test_expect_success 'flux-pkill --wait option works' '
 	test_expect_code 1 flux pgrep .
 '
 test_expect_success 'flux-pkill reports errors' '
-	flux mini submit sleep 60 &&
+	flux submit sleep 60 &&
 	test_expect_code 1 flux pkill -ac 2 sleep >pkill.out 2>&1 &&
 	test_debug "cat pkill.out" &&
 	grep ERROR.*inactive pkill.out
 '
 test_expect_success 'flux-pgrep accepts jobid range and pattern' '
-	flux mini bulksubmit --job-name={} sleep 60 ::: foo bar foo >ids3 &&
+	flux bulksubmit --job-name={} sleep 60 ::: foo bar foo >ids3 &&
 	id1=$(sed -n 1p ids3) &&
 	id2=$(sed -n 2p ids3) &&
 	id3=$(sed -n 3p ids3) &&
@@ -79,7 +79,7 @@ test_expect_success 'flux-pgrep accepts jobid range and pattern' '
 	flux pkill --wait $id1..$id3
 '
 test_expect_success 'flux-pgrep forces regex with name: prefix' '
-	flux mini submit --job-name=f123f234 sleep 60 &&
+	flux submit --job-name=f123f234 sleep 60 &&
 	flux pgrep name:f1..f2 &&
 	flux pkill --wait ^f123f234
 '
@@ -94,7 +94,7 @@ test_expect_success 'flux-pgrep reads flux-jobs formats configuration' '
 		flux pgrep --format=help foo >myformat.out&&
 	test_debug "cat myformat.out" &&
 	grep "my format" myformat.out  &&
-	flux mini submit --job-name=test sleep 30 &&
+	flux submit --job-name=test sleep 30 &&
 	XDG_CONFIG_HOME="$(pwd)/dir" \
 		flux pgrep -o myformat test &&
 	flux pkill test

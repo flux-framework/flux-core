@@ -173,4 +173,4 @@ RFC 23: Flux Standard Duration: https://flux-framework.readthedocs.io/projects/f
 SEE ALSO
 ========
 
-:man1:`flux-jobs`, :man1:`flux-mini`
+:man1:`flux-jobs`, :man1:`flux-submit`

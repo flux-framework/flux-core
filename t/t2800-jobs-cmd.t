@@ -90,12 +90,12 @@ test_expect_success 'configure testing queues' '
 test_expect_success HAVE_JQ 'submit jobs for job list testing' '
 	#  Create `hostname` and `sleep` jobspec
 	#  N.B. Used w/ `flux job submit` for serial job submission
-	#  for efficiency (vs serial `flux mini submit`.
+	#  for efficiency (vs serial `flux submit`.
 	#
-	flux mini submit --dry-run \
+	flux submit --dry-run \
 		--queue=queue1 \
 		hostname >hostname.json &&
-	flux mini submit --dry-run \
+	flux submit --dry-run \
 		--time-limit=5m \
 		--queue=queue2 \
 		sleep 600 > sleeplong.json &&
@@ -114,14 +114,14 @@ test_expect_success HAVE_JQ 'submit jobs for job list testing' '
 	#  Run a job that will fail, copy its JOBID to both inactive and
 	#   failed lists.
 	#
-	! jobid=`flux mini submit --wait nosuchcommand` &&
+	! jobid=`flux submit --wait nosuchcommand` &&
 	echo $jobid >> inactiveids &&
 	echo $jobid > failed.ids &&
 	#
 	#  Run a job that will timeout, copy its JOBID to both inactive and
 	#   timeout lists.
 	#
-	jobid=`flux mini submit --time-limit=0.5s sleep 30` &&
+	jobid=`flux submit --time-limit=0.5s sleep 30` &&
 	echo $jobid >> inactiveids &&
 	echo $jobid > timeout.ids &&
 	fj_wait_event ${jobid} clean &&
@@ -142,7 +142,7 @@ test_expect_success HAVE_JQ 'submit jobs for job list testing' '
 	#
 	#  Submit a job and cancel it
 	#
-	jobid=`flux mini submit --job-name=canceledjob sleep 30` &&
+	jobid=`flux submit --job-name=canceledjob sleep 30` &&
 	fj_wait_event $jobid depend &&
 	flux job cancel $jobid &&
 	fj_wait_event $jobid clean &&

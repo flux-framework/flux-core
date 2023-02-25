@@ -18,7 +18,7 @@ JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 Y2J="flux python ${JOBSPEC}/y2j.py"
 
 test_expect_success 'flux job-frobnicator works' '
-	flux mini run --env=-* --dry-run hostname \
+	flux run --env=-* --dry-run hostname \
 		| flux job-frobnicator --jobspec-only
 '
 test_expect_success 'flux job-frobnicator --list-plugins works' '
@@ -61,12 +61,12 @@ test_expect_success 'job-frobnicator: all valid jobspecs accepted' '
 	done
 '
 test_expect_success HAVE_JQ 'job-frobnicator: defaults plugin does things' '
-	flux mini run --env=-* --dry-run hostname \
+	flux run --env=-* --dry-run hostname \
 		| flux job-frobnicator --jobspec-only --plugins=defaults \
 		| jq  -e ".data.attributes.system.duration == 1800"
 '
 test_expect_success HAVE_JQ 'job-frobnicator: defaults plugin does not do things' '
-	flux mini run --env=-* --dry-run -t 1h hostname \
+	flux run --env=-* --dry-run -t 1h hostname \
 		| flux job-frobnicator --jobspec-only --plugins=defaults \
 		| jq  -e ".data.attributes.system.duration == 3600"
 '
@@ -82,14 +82,14 @@ test_expect_success 'configure queues with default durations' '
 	flux config reload
 '
 test_expect_success HAVE_JQ 'job-frobnicator sets default queue duration' '
-	flux mini run --env=-* --dry-run hostname \
+	flux run --env=-* --dry-run hostname \
 		| flux job-frobnicator --jobspec-only --plugins=defaults \
 		> queue-debug.out &&
 	jq -e ".data.attributes.system.queue == \"debug\"" < queue-debug.out &&
 	jq -e ".data.attributes.system.duration == 3600"   < queue-debug.out
 '
 test_expect_success HAVE_JQ 'job-frobnicator sets specified queue duration' '
-	flux mini run --env=-* --queue=batch --dry-run hostname \
+	flux run --env=-* --queue=batch --dry-run hostname \
 		| flux job-frobnicator --jobspec-only --plugins=defaults \
 		> queue-batch.out &&
 	jq -e ".data.attributes.system.queue == \"batch\"" < queue-batch.out &&
@@ -103,14 +103,14 @@ test_expect_success 'configure queue constraints' '
 	flux config reload
 '
 test_expect_success HAVE_JQ 'constraints plugin sets queue constraint' '
-	flux mini run --env=-* --dry-run --queue=debug hostname \
+	flux run --env=-* --dry-run --queue=debug hostname \
 	   | flux job-frobnicator --jobspec-only --plugins=constraints \
 	   > constraint-setqueue.out &&
 	jq -e ".data.attributes.system.constraints.properties \
 	    == [ \"debug\" ]" < constraint-setqueue.out
 '
 test_expect_success HAVE_JQ 'constraints plugin adds queue constraint' '
-	flux mini run --env=-* --dry-run --requires=foo \
+	flux run --env=-* --dry-run --requires=foo \
 	  --queue=debug hostname \
 	   | flux job-frobnicator --jobspec-only --plugins=constraints \
 	   > constraint-addqueue.out &&
@@ -122,7 +122,7 @@ test_expect_success HAVE_JQ 'constraints plugin adds queue constraint' '
 test_expect_success HAVE_JQ 'constraints plugin works with no configured queues' '
 	cp /dev/null conf.d/conf.toml &&
 	flux config reload &&
-	flux mini run --env=-* --dry-run hostname \
+	flux run --env=-* --dry-run hostname \
 	   | flux job-frobnicator --jobspec-only --plugins=constraints \
 	> constraint-noqueue.out &&
 	jq -e "has(\"data\")" <constraint-noqueue.out
@@ -132,7 +132,7 @@ test_expect_success HAVE_JQ 'constraints plugin works without requires' '
 	[queues.debug]
 	EOT
 	flux config reload &&
-	flux mini run --env=-* --dry-run hostname \
+	flux run --env=-* --dry-run hostname \
            --queue=debug \
 	   | flux job-frobnicator --jobspec-only --plugins=constraints \
 	> constraint-norequires.out &&
@@ -146,7 +146,7 @@ test_expect_success HAVE_JQ 'frobnicator defaults are defaults,constraints' '
 	requires = [ "debug" ]
 	EOF
 	flux config reload &&
-	flux mini run --env=-* --dry-run hostname \
+	flux run --env=-* --dry-run hostname \
 	   | flux job-frobnicator --jobspec-only \
 	> defaultplugins.out &&
 	jq -e ".data.attributes.system.queue == \"debug\"" \
@@ -161,7 +161,7 @@ test_expect_success HAVE_JQ 'defaults plugin allows queues without default' '
 	requires = [ "debug" ]
 	EOF
 	flux config reload &&
-	flux mini run --env=-* --dry-run --queue=debug hostname \
+	flux run --env=-* --dry-run --queue=debug hostname \
 	   | flux job-frobnicator --jobspec-only --plugins=defaults \
 	    > nodefault.out &&
 	jq -e "has(\"data\")" <nodefault.out
@@ -172,7 +172,7 @@ test_expect_success HAVE_JQ 'defaults plugin requires queue if configured' '
 	requires = [ "debug" ]
 	EOF
 	flux config reload &&
-	flux mini run --env=-* --dry-run hostname \
+	flux run --env=-* --dry-run hostname \
 	   | flux job-frobnicator --jobspec-only --plugins=defaults \
 	    > nodefaultnojob.out &&
 	jq -e ".errstr == \"no queue specified\"" <nodefaultnojob.out

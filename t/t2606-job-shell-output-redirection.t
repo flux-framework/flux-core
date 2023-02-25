@@ -15,28 +15,28 @@ TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
 #
 
 test_expect_success 'job-shell: run 1-task echo job (stdout file)' '
-        flux mini run -n1 \
+        flux run -n1 \
              --output=out0 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O foo &&
         grep stdout:foo out0
 '
 
 test_expect_success 'job-shell: run 1-task echo job (stderr file)' '
-        flux mini run -n1 \
+        flux run -n1 \
              --error=err1 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -E bar &&
         grep stderr:bar err1
 '
 
 test_expect_success 'flux-shell: run 1-task echo job (stderr to stdout file)' '
-        flux mini run -n1 \
+        flux run -n1 \
              --output=out2 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -E bar &&
         grep stderr:bar out2
 '
 
 test_expect_success 'job-shell: run 1-task echo job (stdout file/stderr file)' '
-        flux mini run -n1 \
+        flux run -n1 \
              --output=out3 --error=err3 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz &&
         grep stdout:baz out3 &&
@@ -44,7 +44,7 @@ test_expect_success 'job-shell: run 1-task echo job (stdout file/stderr file)' '
 '
 
 test_expect_success 'flux-shell: run 1-task echo job (stdout & stderr to stdout file)' '
-        flux mini run -n1 \
+        flux run -n1 \
              --output=out4 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz &&
         grep stdout:baz out4 &&
@@ -52,7 +52,7 @@ test_expect_success 'flux-shell: run 1-task echo job (stdout & stderr to stdout 
 '
 
 test_expect_success 'job-shell: run 1-task echo job (stdout file/stderr kvs)' '
-        id=$(flux mini submit -n1 \
+        id=$(flux submit -n1 \
              --output=out5 --setopt "output.stderr.type=\"kvs\"" \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -62,7 +62,7 @@ test_expect_success 'job-shell: run 1-task echo job (stdout file/stderr kvs)' '
 '
 
 test_expect_success 'job-shell: run 1-task echo job (stdout kvs/stderr file)' '
-        id=$(flux mini submit -n1 \
+        id=$(flux submit -n1 \
              --error=err6 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -76,7 +76,7 @@ test_expect_success 'job-shell: run 1-task echo job (stdout kvs/stderr file)' '
 #
 
 test_expect_success 'job-shell: run 2-task echo job (stdout file)' '
-        flux mini run -n2 \
+        flux run -n2 \
              --output=out7 --label-io \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O foo &&
         grep "0: stdout:foo" out7 &&
@@ -84,7 +84,7 @@ test_expect_success 'job-shell: run 2-task echo job (stdout file)' '
 '
 
 test_expect_success 'job-shell: run 2-task echo job (stderr file)' '
-        flux mini run -n2 \
+        flux run -n2 \
              --error=err8 --label-io \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -E bar &&
         grep "0: stderr:bar" err8 &&
@@ -92,7 +92,7 @@ test_expect_success 'job-shell: run 2-task echo job (stderr file)' '
 '
 
 test_expect_success 'job-shell: run 2-task echo job (stderr to stdout file)' '
-        flux mini run -n2 \
+        flux run -n2 \
              --output=out9 --label-io \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -E bar &&
         grep "0: stderr:bar" out9 &&
@@ -100,7 +100,7 @@ test_expect_success 'job-shell: run 2-task echo job (stderr to stdout file)' '
 '
 
 test_expect_success 'job-shell: run 2-task echo job (stdout file/stderr file)' '
-        flux mini run -n2 \
+        flux run -n2 \
              --output=out10 --error=err10 --label-io \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz &&
         grep "0: stdout:baz" out10 &&
@@ -110,7 +110,7 @@ test_expect_success 'job-shell: run 2-task echo job (stdout file/stderr file)' '
 '
 
 test_expect_success 'job-shell: run 2-task echo job (stdout & stderr to stdout file)' '
-        flux mini run -n2 \
+        flux run -n2 \
              --output=out11 --label-io \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz &&
         grep "0: stdout:baz" out11 &&
@@ -120,7 +120,7 @@ test_expect_success 'job-shell: run 2-task echo job (stdout & stderr to stdout f
 '
 
 test_expect_success 'job-shell: run 2-task echo job (stdout file/stderr kvs)' '
-        id=$(flux mini submit -n2 \
+        id=$(flux submit -n2 \
              --output=out12 --label-io --setopt "output.stderr.type=\"kvs\"" \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -132,7 +132,7 @@ test_expect_success 'job-shell: run 2-task echo job (stdout file/stderr kvs)' '
 '
 
 test_expect_success 'job-shell: run 2-task echo job (stdout kvs/stderr file)' '
-        id=$(flux mini submit -n2 \
+        id=$(flux submit -n2 \
              --error=err13 --label-io \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -148,7 +148,7 @@ test_expect_success 'job-shell: run 2-task echo job (stdout kvs/stderr file)' '
 #
 
 test_expect_success 'job-shell: run 1-task echo job (mustache id stdout file/stderr file)' '
-        id=$(flux mini submit -n1 \
+        id=$(flux submit -n1 \
              --output="out{{id}}" --error="err{{id}}" \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -157,7 +157,7 @@ test_expect_success 'job-shell: run 1-task echo job (mustache id stdout file/std
 '
 
 test_expect_success 'flux-shell: run 1-task echo job (mustache id stdout & stderr to stdout file)' '
-        id=$(flux mini submit -n1 \
+        id=$(flux submit -n1 \
              --output="out{{id}}" \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -166,7 +166,7 @@ test_expect_success 'flux-shell: run 1-task echo job (mustache id stdout & stder
 '
 
 test_expect_success 'flux-shell: bad mustache template still writes output' '
-        id=$(flux mini submit -n1 \
+        id=$(flux submit -n1 \
              --output="out{{invalid" \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -179,7 +179,7 @@ test_expect_success 'flux-shell: bad mustache template still writes output' '
 #
 
 test_expect_success 'job-shell: redirect events appear in guest.output (1-task)' '
-        id=$(flux mini submit -n1 \
+        id=$(flux submit -n1 \
              --output=out16 --error=err16 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -189,7 +189,7 @@ test_expect_success 'job-shell: redirect events appear in guest.output (1-task)'
 '
 
 test_expect_success 'job-shell: redirect events appear in guest.output (1-task stderr to stdout)' '
-        id=$(flux mini submit -n1 \
+        id=$(flux submit -n1 \
              --output=out17 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -199,7 +199,7 @@ test_expect_success 'job-shell: redirect events appear in guest.output (1-task s
 '
 
 test_expect_success 'job-shell: redirect events appear in guest.output (2-task)' '
-        id=$(flux mini submit -n2 \
+        id=$(flux submit -n2 \
              --output=out18 --error=err18 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -209,7 +209,7 @@ test_expect_success 'job-shell: redirect events appear in guest.output (2-task)'
 '
 
 test_expect_success 'job-shell: redirect events appear in guest.output (2-task stderr to stdout)' '
-        id=$(flux mini submit -n2 \
+        id=$(flux submit -n2 \
              --output=out19 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -219,7 +219,7 @@ test_expect_success 'job-shell: redirect events appear in guest.output (2-task s
 '
 
 test_expect_success 'job-shell: attach shows redirected file (1-task)' '
-        id=$(flux mini submit -n1 \
+        id=$(flux submit -n1 \
              --output=out20 --error=err20 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -229,7 +229,7 @@ test_expect_success 'job-shell: attach shows redirected file (1-task)' '
 '
 
 test_expect_success 'job-shell: attach shows redirected file (1-task stderr to stdout)' '
-        id=$(flux mini submit -n1 \
+        id=$(flux submit -n1 \
              --output=out21 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -239,7 +239,7 @@ test_expect_success 'job-shell: attach shows redirected file (1-task stderr to s
 '
 
 test_expect_success 'job-shell: attach shows redirected file (2-task)' '
-        id=$(flux mini submit -n2 \
+        id=$(flux submit -n2 \
              --output=out22 --error=err22 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -249,7 +249,7 @@ test_expect_success 'job-shell: attach shows redirected file (2-task)' '
 '
 
 test_expect_success 'job-shell: attach shows redirected file (2-task stderr to stdout)' '
-        id=$(flux mini submit -n2 \
+        id=$(flux submit -n2 \
              --output=out23 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -259,7 +259,7 @@ test_expect_success 'job-shell: attach shows redirected file (2-task stderr to s
 '
 
 test_expect_success 'job-shell: attach --quiet suppresses redirected file (1-task)' '
-        id=$(flux mini submit -n1 \
+        id=$(flux submit -n1 \
              --output=out24 --error=err24 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -279,7 +279,7 @@ test_expect_success 'job-shell: attach --quiet suppresses redirected file (1-tas
 #
 
 test_expect_success 'job-shell: job attach exits cleanly if no kvs output (1-task)' '
-        id=$(flux mini submit -n1 \
+        id=$(flux submit -n1 \
              --output=out25 --error=err25 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -292,7 +292,7 @@ test_expect_success 'job-shell: job attach exits cleanly if no kvs output (1-tas
 '
 
 test_expect_success 'job-shell: job attach exits cleanly if no kvs output (2-task)' '
-        id=$(flux mini submit -n2 \
+        id=$(flux submit -n2 \
              --output=out26 --error=err26 \
              ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
@@ -306,7 +306,7 @@ test_expect_success 'job-shell: job attach exits cleanly if no kvs output (2-tas
 '
 
 test_expect_success NO_CHAIN_LINT 'job-shell: job attach waits if no kvs output (1-task, live job)' '
-        id=$(flux mini submit -n1 \
+        id=$(flux submit -n1 \
              --output=out27 --error=err27 \
              sleep 60)
         flux job wait-event $id start &&
@@ -317,7 +317,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: job attach waits if no kvs output 
 '
 
 test_expect_success NO_CHAIN_LINT 'job-shell: job attach waits if no kvs output (2-task, live job)' '
-        id=$(flux mini submit -n2 \
+        id=$(flux submit -n2 \
              --output=out28 --error=err28 \
              sleep 60)
         flux job wait-event $id start &&
@@ -327,11 +327,11 @@ test_expect_success NO_CHAIN_LINT 'job-shell: job attach waits if no kvs output 
         ! wait $pid
 '
 test_expect_success 'job-shell: shell errors are captured in output file' '
-	test_expect_code 127 flux mini run --output=test.out nosuchcommand &&
+	test_expect_code 127 flux run --output=test.out nosuchcommand &&
 	grep "nosuchcommand: No such file or directory" test.out
 '
 test_expect_success 'job-shell: shell errors are captured in error file' '
-	test_expect_code 127  flux mini run --error=test.err nosuchcommand &&
+	test_expect_code 127  flux run --error=test.err nosuchcommand &&
 	grep "nosuchcommand: No such file or directory" test.err
 '
 test_done

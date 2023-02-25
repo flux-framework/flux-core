@@ -140,13 +140,13 @@ By default, flux-shell supports the following plugin callback topics:
 
 **taskmap.SCHEME**
   Called when a taskmap scheme *SCHEME* is requested via the taskmap
-  shell option or corresponding ``--taskmap`` ``flux-mini`` option.
-  Plugins that want to offer a different taskmap scheme than the defaults
-  of ``block``, ``cyclic``, and ``manual`` can register a ``taskmap.*``
-  plugin callback and then users can request this mapping with the
-  appropriate ``--taskmap=name`` option. The default block taskmap is
-  passed to the plugin as "taskmap" in the plugin input arguments, and
-  the plugin should return the new taskmap as a string in the output args.
+  shell option or corresponding ``--taskmap`` option of :man1:`flux-submit`
+  and related commands.  Plugins that want to offer a different taskmap
+  scheme than the defaults of ``block``, ``cyclic``, and ``manual`` can
+  register a ``taskmap.*`` plugin callback and then users can request this
+  mapping with the appropriate ``--taskmap=name`` option. The default block
+  taskmap is passed to the plugin as "taskmap" in the plugin input arguments,
+  and the plugin should return the new taskmap as a string in the output args.
   This callback is called before ``shell.init``.
 
 **shell.connect**
@@ -197,8 +197,8 @@ JOBSPEC OPTIONS
 
 On startup, ``flux-shell`` will examine the jobspec for any shell specific
 options under the ``attributes.system.shell.options`` key.  These options
-may be set by the ``flux-mini`` ``-o, --setopt=OPT`` option, or explicitly
-added to the jobspec by other means.
+may be set by the :man1:`flux-submit` and related commands ``-o, --setopt=OPT``
+option, or explicitly added to the jobspec by other means.
 
 Job shell options may be switches to enable or disable a shell feature or
 plugin, or they may take an argument. Because jobspec is a JSON document,
@@ -206,7 +206,7 @@ job shell options in jobspec may take arguments that are themselves
 JSON objects. This allows maximum flexibility in runtime configuration
 of optional job shell behavior. In the list below, if an option doesn't
 include a ``=``, then it is a simple boolean option or switch and may be
-specified simply with ``-o option`` in commands like ``flux mini run``.
+specified simply with ``-o option`` in commands like :man1:`flux run`.
 
 Options supported by ``flux-shell`` proper include:
 
@@ -254,7 +254,7 @@ options are supported by the builtin plugins of ``flux-shell``:
 
   .. code-block:: console
 
-    $  flux mini run -o pty.interactive -o pty.capture ...
+    $  flux run -o pty.interactive -o pty.capture ...
 
   would allocate an interactive pty on rank 0 and also capture the
   pty session to the KVS (so it can be displayed after the job exits
@@ -289,7 +289,7 @@ options are supported by the builtin plugins of ``flux-shell``:
   ``stdout`` and ``stderr``. If set to ``file``, then ``output.<stream>.path``
   must also be set for the stream. Most users will not need to set
   this option directly, as it will be set automatically by options
-  of higher level commands such as ``flux-mini``.
+  of higher level commands such as :man1:`flux-submit`.
 
 **output.{stdout,stderr}.path**\ =\ *PATH*
   Set job stderr/out file output to PATH.
@@ -297,7 +297,7 @@ options are supported by the builtin plugins of ``flux-shell``:
 **input.stdin.type**\ =\ *TYPE*
   Set job input for **stdin** to *TYPE*. *TYPE* may be either ``service``
   or ``file``. Users should not need to set this option directly as it
-  will be handled by options of higher level commands like ``flux-mini``.
+  will be handled by options of higher level commands like :man1:`flux-submit`.
 
 **exit-timeout**\ =\ *VALUE*
   A fatal exception is raised on the job 30s after the first task exits.
@@ -314,7 +314,7 @@ options are supported by the builtin plugins of ``flux-shell``:
   starting tasks. Resource limits are set to integer values by lowercase
   name without the ``RLIMIT_`` prefix, e.g. ``core`` or ``nofile``. Users
   should not need to set this shell option as it is handled by commands
-  like ``flux-mini``.
+  like :man1:`flux-submit`.
 
 **taskmap**
   Request an alternate job task mapping. This option is an object
@@ -322,7 +322,7 @@ options are supported by the builtin plugins of ``flux-shell``:
   shell will attempt to call a ``taskmap.scheme`` plugin callback in the
   shell to invoke the alternate requested mapping. If ``value`` is set,
   this will also be passed to the invoked plugin. Normally, this option will
-  be set by the ``flux mini --taskmap`` option.
+  be set by the :man1:`flux-submit` and related commands --taskmap`` option.
 
 **pmi=off**
   Disable the process management interface (PMI-1) which is required for
@@ -569,4 +569,4 @@ Flux: http://flux-framework.org
 SEE ALSO
 ========
 
-:man1:`flux-mini`
+:man1:`flux-submit`

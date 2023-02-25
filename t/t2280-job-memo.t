@@ -26,11 +26,11 @@ test_expect_success 'memo: error on invalide jobid' '
 	test_expect_code 1 flux job memo f1 foo=bar
 '
 test_expect_success 'memo: create one inactive job' '
-	flux mini submit /bin/true >inactivejob &&
+	flux submit /bin/true >inactivejob &&
 	flux queue drain
 '
 test_expect_success 'memo: submit a running and pending job' '
-	flux mini bulksubmit --urgency={} sleep 300 ::: 16 16 0 >jobids &&
+	flux bulksubmit --urgency={} sleep 300 ::: 16 16 0 >jobids &&
 	runid=$(head -n 1 jobids) &&
 	pendingid=$(tail -n 1 jobids) &&
 	flux job wait-event $runid start

@@ -13,7 +13,7 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 test_under_flux 1 job
 
 test_expect_success 'start a long-running job' '
-	jobid=$(flux mini submit -n1 -t1h sleep 3600)
+	jobid=$(flux submit -n1 -t1h sleep 3600)
 '
 test_expect_success 'unload scheduler' '
 	flux module remove sched-simple
