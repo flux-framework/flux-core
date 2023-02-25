@@ -48,11 +48,11 @@ test_expect_success 'flux exec -r 1 fails with EHOSTUNREACH' '
 '
 
 test_expect_success 'single node job can run with only rank 0 up' '
-	run_timeout 30 flux mini run -n1 /bin/true
+	run_timeout 30 flux run -n1 /bin/true
 '
 
 test_expect_success 'two node job is accepted although it cannot run yet' '
-	flux mini submit -N2 -n2 echo Hello >jobid
+	flux submit -N2 -n2 echo Hello >jobid
 '
 
 test_expect_success 'start rank 1' '

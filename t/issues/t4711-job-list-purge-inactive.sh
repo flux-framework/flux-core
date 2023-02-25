@@ -4,7 +4,7 @@
 
 prejob=$(flux job stats | jq .job_states.run)
 
-jobid=$(flux mini submit --wait-event=start sleep 100 | flux job id)
+jobid=$(flux submit --wait-event=start sleep 100 | flux job id)
 
 postjob=$(flux job stats | jq .job_states.run)
 

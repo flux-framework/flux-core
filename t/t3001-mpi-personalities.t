@@ -13,7 +13,7 @@ run_program() {
 	local nnodes=$2
 	local ntasks=$3
 	shift 3
-	run_timeout $timeout flux mini run $OPTS -n${ntasks} -N${nnodes} $*
+	run_timeout $timeout flux run $OPTS -n${ntasks} -N${nnodes} $*
 }
 
 CONF_PMI_LIBRARY_PATH=$(flux getattr conf.pmi_library_path | sed 's|/libpmi.so||')
@@ -54,7 +54,7 @@ test_expect_success NO_ASAN "spectrum mpi only enabled with option" '
 	LD_PRELOAD_saved=${LD_PRELOAD} &&
 	unset LD_PRELOAD &&
 	test_when_finished "export LD_PRELOAD=${LD_PRELOAD_saved}" &&
-	flux mini run -n${SIZE} -N${SIZE} \
+	flux run -n${SIZE} -N${SIZE} \
 	  -o mpi=spectrum --dry-run printenv LD_PRELOAD > j.spectrum &&
 	test_expect_code 1 run_program 15 ${SIZE} ${SIZE} printenv LD_PRELOAD &&
 	jobid=$(flux job submit j.spectrum) &&
@@ -66,7 +66,7 @@ test_expect_success NO_ASAN "spectrum mpi also enabled with spectrum@version" '
 	LD_PRELOAD_saved=${LD_PRELOAD} &&
 	unset LD_PRELOAD &&
 	test_when_finished "export LD_PRELOAD=${LD_PRELOAD_saved}" &&
-	flux mini run -n${SIZE} -N${SIZE} \
+	flux run -n${SIZE} -N${SIZE} \
 	  -o mpi=spectrum@10.4 --dry-run printenv LD_PRELOAD > j.spectrum &&
 	test_expect_code 1 run_program 15 ${SIZE} ${SIZE} printenv LD_PRELOAD &&
 	jobid=$(flux job submit j.spectrum) &&
@@ -75,7 +75,7 @@ test_expect_success NO_ASAN "spectrum mpi also enabled with spectrum@version" '
 '
 
 test_expect_success 'spectrum mpi sets OMPI_COMM_WORLD_RANK' '
-	flux mini run -n${SIZE} -N${SIZE} \
+	flux run -n${SIZE} -N${SIZE} \
 	  -o mpi=spectrum --dry-run \
 	  printenv OMPI_COMM_WORLD_RANK > j.spectrum &&
 	jobid=$(flux job submit j.spectrum) &&
@@ -100,7 +100,7 @@ test_expect_success 'create test mpi plugins in $FLUX_SHELL_RC_PATH' '
 '
 test_expect_success '-ompi=name loads path/mpi/name.lua' '
 	name=mpi-test &&
-	flux mini run -o mpi=test env | grep MPI_TEST > ${name}.out &&
+	flux run -o mpi=test env | grep MPI_TEST > ${name}.out &&
 	test_debug "cat ${name}.out" &&
 	cat <<-EOF >${name}.expected &&
 	MPI_TEST_NOVERSION=t
@@ -109,7 +109,7 @@ test_expect_success '-ompi=name loads path/mpi/name.lua' '
 '
 test_expect_success '-ompi=name loads path/mpi/name.lua' '
 	name=mpi-test1 &&
-	flux mini run -o mpi=test@1 env | grep MPI_TEST > ${name}.out &&
+	flux run -o mpi=test@1 env | grep MPI_TEST > ${name}.out &&
 	test_debug "cat ${name}.out" &&
 	cat <<-EOF >${name}.expected &&
 	MPI_TEST_NOVERSION=t
@@ -119,7 +119,7 @@ test_expect_success '-ompi=name loads path/mpi/name.lua' '
 '
 test_expect_success '-ompi=name loads path/mpi/name.lua' '
 	name=mpi-test2 &&
-	flux mini run -o mpi=test@2 env | grep MPI_TEST > ${name}.out &&
+	flux run -o mpi=test@2 env | grep MPI_TEST > ${name}.out &&
 	test_debug "cat ${name}.out" &&
 	cat <<-EOF >${name}.expected &&
 	MPI_TEST_NOVERSION=t

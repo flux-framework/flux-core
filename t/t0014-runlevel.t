@@ -159,7 +159,7 @@ test_expect_success 'job environment is not set in rc scripts' '
 '
 
 test_expect_success 'capture the environment for instance run as a job' '
-	flux start flux mini run flux start \
+	flux start flux run flux start \
 		-o,-Slog-stderr-level=6 \
 		-o,-Sbroker.rc1_path="bash -c printenv >rc1.env2" \
 		-o,-Sbroker.rc3_path="bash -c printenv >rc3.env2" \

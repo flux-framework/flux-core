@@ -172,7 +172,7 @@ test_expect_success 'job-archive: load module' '
 '
 
 test_expect_success 'job-archive: stores inactive job info (job good)' '
-        jobid=`flux mini submit hostname` &&
+        jobid=`flux submit hostname` &&
         fj_wait_event $jobid clean &&
         wait_jobid_state $jobid inactive &&
         wait_db $jobid ${ARCHIVEDB} &&
@@ -181,7 +181,7 @@ test_expect_success 'job-archive: stores inactive job info (job good)' '
 '
 
 test_expect_success 'job-archive: stores inactive job info (job fail)' '
-        jobid=`flux mini submit nosuchcommand` &&
+        jobid=`flux submit nosuchcommand` &&
         fj_wait_event $jobid clean &&
         wait_jobid_state $jobid inactive &&
         wait_db $jobid ${ARCHIVEDB} &&
@@ -192,9 +192,9 @@ test_expect_success 'job-archive: stores inactive job info (job fail)' '
 # to ensure job canceled before we run, we submit a job to eat up all
 # resources first.
 test_expect_success 'job-archive: stores inactive job info (job cancel)' '
-        jobid1=`flux mini submit -N4 -n8 sleep 500` &&
+        jobid1=`flux submit -N4 -n8 sleep 500` &&
         fj_wait_event $jobid1 start &&
-        jobid2=`flux mini submit hostname` &&
+        jobid2=`flux submit hostname` &&
         fj_wait_event $jobid2 submit &&
         flux job cancel $jobid2 &&
         fj_wait_event $jobid2 clean &&
@@ -207,7 +207,7 @@ test_expect_success 'job-archive: stores inactive job info (job cancel)' '
 '
 
 test_expect_success 'job-archive: stores inactive job info (resources)' '
-        jobid=`flux mini submit -N1000 -n1000 hostname` &&
+        jobid=`flux submit -N1000 -n1000 hostname` &&
         fj_wait_event $jobid clean &&
         wait_jobid_state $jobid inactive &&
         wait_db $jobid ${ARCHIVEDB} &&
@@ -230,8 +230,8 @@ test_expect_success 'job-archive: doesnt restore old data' '
 '
 
 test_expect_success 'job-archive: stores more inactive job info' '
-        jobid1=`flux mini submit hostname` &&
-        jobid2=`flux mini submit hostname` &&
+        jobid1=`flux submit hostname` &&
+        jobid2=`flux submit hostname` &&
         fj_wait_event $jobid1 clean &&
         fj_wait_event $jobid2 clean &&
         wait_jobid_state $jobid1 inactive &&

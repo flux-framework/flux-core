@@ -64,7 +64,7 @@ get_timestamp_field() {
 }
 
 test_expect_success 'job-info: generate jobspec for simple test job' '
-	flux mini run --dry-run -n1 -N1 sleep 300 > sleeplong.json
+	flux run --dry-run -n1 -N1 sleep 300 > sleeplong.json
 '
 
 test_expect_success 'flux job wait-event works' '
@@ -302,7 +302,7 @@ test_expect_success 'flux job wait-event --count=2 and invalid context match fai
 # yet. Then we cancel the initial job to get the new one running.
 
 test_expect_success 'job-info: generate jobspec to consume all resources' '
-	flux mini run --dry-run -n4 -c2 sleep 300 > sleeplong-all-rsrc.json
+	flux run --dry-run -n4 -c2 sleep 300 > sleeplong-all-rsrc.json
 '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (wait job)' '

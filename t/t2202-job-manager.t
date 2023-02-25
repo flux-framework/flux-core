@@ -16,7 +16,7 @@ LIST_JOBS=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
 JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 
 test_expect_success 'job-manager: generate jobspec for simple test job' '
-	flux mini run --dry-run -n1 hostname >basic.json
+	flux run --dry-run -n1 hostname >basic.json
 '
 
 test_expect_success 'job-manager: load job-ingest, job-info, job-manager' '

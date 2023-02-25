@@ -9,7 +9,7 @@ test_under_flux 4 job
 flux setattr log-stderr-level 1
 
 test_expect_success HAVE_JQ 'flux-mini: --requires option works' '
-	flux mini run --dry-run \
+	flux run --dry-run \
 		--env=-* \
 		--requires=foo,bar \
 		--requires=^baz \
@@ -31,30 +31,30 @@ test_expect_success 'reload ingest with only feasibility validator' '
 	flux module reload -f job-ingest validator-plugins=feasibility
 '
 test_expect_success 'scheduler rejects jobs with invalid requires' '
-	test_must_fail flux mini submit --requires=x hostname &&
-	test_must_fail flux mini submit --requires="&x" hostname
+	test_must_fail flux submit --requires=x hostname &&
+	test_must_fail flux submit --requires="&x" hostname
 '
 test_expect_success 'scheduler rejects jobs with invalid constraints' '
-	test_must_fail flux mini submit --setattr=system.constraints.foo=[] \
+	test_must_fail flux submit --setattr=system.constraints.foo=[] \
 		 hostname &&
-	test_must_fail flux mini submit --setattr=system.constraints.and={} \
+	test_must_fail flux submit --setattr=system.constraints.and={} \
 		 hostname
 '
 test_expect_success 'reload ingest with feasibility,jobspec validators' '
 	flux module reload -f job-ingest validator-plugins=jobspec,feasibility
 '
 test_expect_success 'scheduler rejects jobs with unsatisfiable constraints' '
-	test_must_fail flux mini submit -N4 --requires=yy hostname
+	test_must_fail flux submit -N4 --requires=yy hostname
 '
 test_expect_success 'jobspec validator rejects invalid hostlist/ranks' '
-	test_must_fail flux mini submit -n1 --requires=host:f[ hostname &&
-	test_must_fail flux mini submit -n1 --requires=ranks:1-0 hostname
+	test_must_fail flux submit -n1 --requires=host:f[ hostname &&
+	test_must_fail flux submit -n1 --requires=ranks:1-0 hostname
 '
 test_expect_success 'jobspec validator rejects invalid constraint operation' '
-	test_must_fail flux mini submit -n1 --requires=foo:bar hostname
+	test_must_fail flux submit -n1 --requires=foo:bar hostname
 '
 test_expect_success 'flux-mini: --requires works with scheduler' '
-	flux mini bulksubmit --wait --log=job.{}.id -n1 --requires={} \
+	flux bulksubmit --wait --log=job.{}.id -n1 --requires={} \
 		flux getattr rank \
 		::: xx yy xx,yy ^xx ^yy \
 		    rank:1 rank:3 -rank:0-2 \
@@ -88,7 +88,7 @@ test_expect_success 'flux-mini: --requires works with scheduler' '
 '
 test_expect_success 'scheduler does not schedule down nodes with constraints' '
 	flux resource drain 2 &&
-	id=$(flux mini submit -N1 --requires xx,yy flux getattr rank) &&
+	id=$(flux submit -N1 --requires xx,yy flux getattr rank) &&
 	flux job wait-event $id priority &&
 	flux jobs &&
 	test $(flux jobs -no {state} $id) = "SCHED" &&
@@ -97,7 +97,7 @@ test_expect_success 'scheduler does not schedule down nodes with constraints' '
 '
 test_expect_success 'scheduler does not schedule down nodes with constraints' '
 	flux resource drain 0 &&
-	id=$(flux mini submit -N3 --requires yy flux getattr rank) &&
+	id=$(flux submit -N3 --requires yy flux getattr rank) &&
 	flux job wait-event $id priority &&
 	flux jobs &&
 	test $(flux jobs -no {state} $id) = "SCHED" &&

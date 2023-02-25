@@ -14,7 +14,7 @@ flux setattr log-stderr-level 1
 
 # N.B. resources = 1 rank, 2 cores/rank
 test_expect_success 'job-manager: submit 5 jobs (job 4 held)' '
-        flux mini bulksubmit --log=job{seq1}.id --urgency={} --flags=debug -n1 \
+        flux bulksubmit --log=job{seq1}.id --urgency={} --flags=debug -n1 \
            hostname ::: default default default hold default
 '
 

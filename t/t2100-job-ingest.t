@@ -89,7 +89,7 @@ test_expect_success HAVE_JQ 'job-ingest: jobspec stored accurately in KVS' '
 '
 
 test_expect_success 'job-ingest: submit a job with environment' '
-	flux mini run --env=-* --env=FOO=bar --dry-run /bin/true \
+	flux run --env=-* --env=FOO=bar --dry-run /bin/true \
 	    >jobspec_env.json &&
 	jobid=$(flux job submit jobspec_env.json) &&
 	kvsdir=$(flux job id --to=kvs $jobid) &&
@@ -161,7 +161,7 @@ test_expect_success 'job-ingest: reload dummy job-manager in fail mode' '
 '
 
 test_expect_success 'job-ingest: handle total batch failure in job-ingest' '
-	test_must_fail flux mini submit --cc=1-4 hostname
+	test_must_fail flux submit --cc=1-4 hostname
 '
 
 test_expect_success 'job-ingest: remove modules' '

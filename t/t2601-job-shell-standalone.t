@@ -13,7 +13,7 @@ KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 unset FLUX_URI
 
 test_expect_success 'flux-shell: generate 1-task jobspec and matching R' '
-	flux mini run --dry-run -N1 -n1 echo Hi >j1 &&
+	flux run --dry-run -N1 -n1 echo Hi >j1 &&
 	cat >R1 <<-EOT
 	{"version": 1, "execution":{ "R_lite":[
 		{ "children": { "core": "0" }, "rank": "0" }
@@ -71,7 +71,7 @@ test_expect_success 'flux-shell: unknown argument fails' '
 	grep -i unrecognized alien.err
 '
 test_expect_success 'flux-shell: generate 2-task jobspec and matching R' '
-	flux mini run -o cpu-affinity=off --dry-run -N1 -n2 printenv >j2 &&
+	flux run -o cpu-affinity=off --dry-run -N1 -n2 printenv >j2 &&
 	cat >R2 <<-EOT
 	{"version": 1, "execution":{ "R_lite":[
 		{ "children": { "core": "0-1" }, "rank": "0" }
@@ -116,7 +116,7 @@ test_expect_success 'flux-shell: PMI_SIZE, PMI_FD set' '
 	grep PMI_FD= printenv.out
 '
 test_expect_success 'flux-shell: generate 8-task bash exit rank job' '
-	flux mini run --dry-run -o cpu-affinity=off \
+	flux run --dry-run -o cpu-affinity=off \
 	   -N1 -n8 bash -c "exit \$FLUX_TASK_RANK" >j8 &&
 	cat >R8 <<-EOT
 	{"version": 1, "execution":{ "R_lite":[
@@ -125,19 +125,19 @@ test_expect_success 'flux-shell: generate 8-task bash exit rank job' '
 	EOT
 '
 test_expect_success 'flux-shell: environ in jobspec is set for task' '
-	flux mini run --dry-run --env=ENVTEST=foo printenv >je &&
+	flux run --dry-run --env=ENVTEST=foo printenv >je &&
 	${FLUX_SHELL} -v -s -r 0 -j je -R R1 42 \
 		>printenv2.out 2>printenv2.err &&
 	grep ENVTEST=foo printenv2.out
 '
 test_expect_success 'flux-shell: shell PMI works' '
-	flux mini run --dry-run -o cpu-affinity=off \
+	flux run --dry-run -o cpu-affinity=off \
 	  -N1 -n8 ${PMI_INFO} >j8pmi &&
 	${FLUX_SHELL} -v -s -r 0 -j j8pmi -R R8 51 \
 		>pmi_info.out 2>pmi_info.err
 '
 test_expect_success 'flux-shell: shell PMI exports clique info' '
-	flux mini run --dry-run -N1 -n8 \
+	flux run --dry-run -N1 -n8 \
 		${PMI_INFO} -c >j8pmi_clique &&
 	${FLUX_SHELL} -v -s -r 0 -j j8pmi_clique -R R8 51 \
 		>pmi_clique.out 2>pmi_clique.err &&
@@ -145,13 +145,13 @@ test_expect_success 'flux-shell: shell PMI exports clique info' '
 	test ${COUNT} -eq 8
 '
 test_expect_success 'flux-shell: shell PMI KVS works' '
-	flux mini run --dry-run -o cpu-affinity=off \
+	flux run --dry-run -o cpu-affinity=off \
 	  -N1 -n8 ${KVSTEST} > j8kvs &&
 	${FLUX_SHELL} -v -s -r 0 -j j8kvs -R R8 52 \
 		>kvstest.out 2>kvstest.err
 '
 test_expect_success NO_ASAN 'flux-shell: shell can launch flux' '
-	flux mini run --dry-run -o cpu-affinity=off \
+	flux run --dry-run -o cpu-affinity=off \
 	    -N1 -n8 flux start flux getattr size >j8flux &&
 	${FLUX_SHELL} -vv -s -r 0 -j j8flux -R R8 39 \
 		>flux.out 2>flux.err &&
@@ -164,7 +164,7 @@ test_expect_success 'flux-shell: shell exits with highest task exit value' '
 '
 
 test_expect_success 'flux-shell: shell forwards signals to tasks' '
-	flux mini run --dry-run -n1 bash -c "kill \$PPID; sleep 10" > j9 &&
+	flux run --dry-run -n1 bash -c "kill \$PPID; sleep 10" > j9 &&
 	test_expect_code  $((128+15)) \
 		${FLUX_SHELL} -v -s -r 0 -j j9 -R R8 69 \
 			>sigterm.out 2>sigterm.err &&
@@ -172,7 +172,7 @@ test_expect_success 'flux-shell: shell forwards signals to tasks' '
 '
 
 test_expect_success 'flux-shell: mustachioed command line args are rendered' '
-	flux mini run --dry-run -n1 -o cpu-affinity=off \
+	flux run --dry-run -n1 -o cpu-affinity=off \
 		bash -c "echo test-{{id.dec}}-{{id.dec}} >j10.out" > j10 &&
 	${FLUX_SHELL} -s -r 0 -j j10 -R R8 42 &&
 	grep test-42-42 j10.out

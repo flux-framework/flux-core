@@ -30,7 +30,7 @@ NJOBS=${NJOBS:-10}
 
 for i in `seq 1 ${NJOBS}`
 do
-    flux mini submit --wait \
+    flux submit --wait \
 	--setattr=system.exec.sd.test=true \
 	${SHARNESS_TEST_DIRECTORY}/shell/lptest 78 2
 done

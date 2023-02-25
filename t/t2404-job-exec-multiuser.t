@@ -41,7 +41,7 @@ test_expect_success 'job-exec: module configured to use IMP' '
 	flux dmesg | grep "using imp path ${IMP}"
 '
 test_expect_success 'job-exec: job as instance owner works' '
-	test "$(id -u)" = "$(flux mini run id -u)"
+	test "$(id -u)" = "$(flux run id -u)"
 '
 
 SIGN_AS=${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py
@@ -53,7 +53,7 @@ SIGN_AS=${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py
 #
 test_expect_success 'job-exec: job as guest tries to run IMP' '
 	FAKE_USERID=42 &&
-	flux mini run --dry-run -n1 id -u | \
+	flux run --dry-run -n1 id -u | \
 		flux python ${SIGN_AS} ${FAKE_USERID} > job.signed &&
 	id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
 		flux job submit --flags=signed job.signed) &&
@@ -67,7 +67,7 @@ test_expect_success 'job-exec: large jobspec does not get truncated' '
 		for i in `seq 0 2048`; \
 			do export ENV${i}=xxxxxyyyyyyyyyzzzzzzz; \
 		done &&
-		flux mini run --dry-run -n1 id -u | \
+		flux run --dry-run -n1 id -u | \
 			flux python ${SIGN_AS} ${FAKE_USERID} > job.signed &&
 		id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
 		flux job submit --flags=signed job.signed) &&
@@ -93,7 +93,7 @@ test_expect_success 'job-exec: reconfig and reload module' '
 '
 test_expect_success NO_ASAN 'job-exec: kill multiuser job uses the IMP' '
 	FAKE_USERID=42 &&
-	flux mini run --dry-run -n2 -N2 sleep 1000 | \
+	flux run --dry-run -n2 -N2 sleep 1000 | \
 		flux python ${SIGN_AS} ${FAKE_USERID} > sleep-job.signed &&
 	id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
 		flux job submit --flags=signed sleep-job.signed) &&

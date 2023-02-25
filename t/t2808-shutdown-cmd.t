@@ -34,7 +34,7 @@ test_expect_success 'flux-shutdown fails if job argument is unknown' '
 '
 
 test_expect_success 'run a test job to completion' '
-	flux mini submit --wait -n1 flux start /bin/true >jobid
+	flux submit --wait -n1 flux start /bin/true >jobid
 '
 test_expect_success 'flux-shutdown fails if job is not running' '
 	test_must_fail flux shutdown $(cat jobid) 2>notrun.err &&
@@ -46,10 +46,10 @@ test_expect_success 'submit batch script and wait for it to start' '
 	cat >batch.sh <<-EOT &&
 	#!/bin/sh
 	touch job2-has-started
-	flux mini run sleep 300
+	flux run sleep 300
 	EOT
 	chmod +x batch.sh &&
-	flux mini batch -t30m -n1 batch.sh >jobid2 &&
+	flux batch -t30m -n1 batch.sh >jobid2 &&
 	$waitfile job2-has-started
 '
 test_expect_success 'flux-shutdown JOBID works' '
@@ -66,7 +66,7 @@ test_expect_success 'job exit code indicates SIGHUP termination' '
 '
 
 test_expect_success 'submit non-batch job and wait for it to start' '
-	flux mini submit -n1 \
+	flux submit -n1 \
 		bash -c "touch job3-has-started && sleep 300" >jobid3 &&
 	$waitfile job3-has-started
 '
@@ -80,7 +80,7 @@ test_expect_success 'cancel that job' '
 '
 
 test_expect_success 'run instance with no initial program and wait for it to start' '
-	flux mini submit --wait-event=start \
+	flux submit --wait-event=start \
 		flux start -o,-Sbroker.rc2_none >jobid3 &&
 	run_timeout 30 bash -c "while ! flux uri $(cat jobid3) >uri3; do \
 		sleep 0.1; \
@@ -103,10 +103,10 @@ test_expect_success 'run batch job and wait for it to start' '
 	cat >batch4.sh <<-EOT &&
 	#!/bin/sh
 	touch job4-has-started
-	flux mini run sleep 300
+	flux run sleep 300
 	EOT
 	chmod +x batch4.sh &&
-	flux mini batch -n1 batch4.sh >jobid4 &&
+	flux batch -n1 batch4.sh >jobid4 &&
 	$waitfile job4-has-started
 '
 test_expect_success 'flux-shutdown --verbose works' '
@@ -120,10 +120,10 @@ test_expect_success 'run multi-node batch job and wait for it to start' '
 	cat >batch5.sh <<-EOT &&
 	#!/bin/sh
 	touch job5-has-started
-	flux mini run sleep 300
+	flux run sleep 300
 	EOT
 	chmod +x batch5.sh &&
-	flux mini batch -N2 batch5.sh >jobid5 &&
+	flux batch -N2 batch5.sh >jobid5 &&
 	$waitfile job5-has-started
 '
 test_expect_success 'flux-shutdown --background works' '
@@ -141,12 +141,12 @@ test_expect_success 'submit batch script and wait for it to start' '
 	rm -f job6-has-started &&
 	cat >batch6.sh <<-EOT &&
 	#!/bin/sh
-	flux mini run /bin/true
+	flux run /bin/true
 	touch job6-has-started
 	sleep 300
 	EOT
 	chmod +x batch6.sh &&
-	flux mini batch -t30m -n1 batch6.sh >jobid6 &&
+	flux batch -t30m -n1 batch6.sh >jobid6 &&
 	$waitfile job6-has-started
 '
 
@@ -165,7 +165,7 @@ test_expect_success 'dump file was created' '
 '
 test_expect_success 'restart batch script from dump and wait for it to start' '
 	rm -f job6-has-started &&
-	flux mini batch -t30m -n1 \
+	flux batch -t30m -n1 \
 	    --broker-opts=-Scontent.restore=dump.tgz \
 	    batch6.sh >jobid6_try2 &&
 	$waitfile job6-has-started
@@ -200,12 +200,12 @@ test_expect_success 'submit batch script and wait for it to start (1)' '
 	rm -f job7-has-started &&
 	cat >batch7.sh <<-EOT &&
 	#!/bin/sh
-	flux mini run /bin/true
+	flux run /bin/true
 	touch job7-has-started
 	sleep 300
 	EOT
 	chmod +x batch7.sh &&
-	FLUX_CONF_DIR=$(pwd) flux mini batch -t30m -n1 batch7.sh >jobid7 &&
+	FLUX_CONF_DIR=$(pwd) flux batch -t30m -n1 batch7.sh >jobid7 &&
 	$waitfile job7-has-started
 '
 test_expect_success 'shutdown batch script' '
@@ -223,7 +223,7 @@ test_expect_success 'create config with small gc-threshold config' '
 '
 test_expect_success 'submit batch script and wait for it to start (2)' '
 	rm -f job7-has-started &&
-	FLUX_CONF_DIR=$(pwd) flux mini batch -t30m -n1 batch7.sh >jobid7_try2 &&
+	FLUX_CONF_DIR=$(pwd) flux batch -t30m -n1 batch7.sh >jobid7_try2 &&
 	$waitfile job7-has-started
 '
 # this test goes into a script, so we can pass to test_must_fail
@@ -245,7 +245,7 @@ test_expect_success 'RESTORE dump not created, user declined' '
 '
 test_expect_success 'submit batch script and wait for it to start (3)' '
 	rm -f job7-has-started &&
-	FLUX_CONF_DIR=$(pwd) flux mini batch -t30m -n1 batch7.sh >jobid7_try3 &&
+	FLUX_CONF_DIR=$(pwd) flux batch -t30m -n1 batch7.sh >jobid7_try3 &&
 	$waitfile job7-has-started
 '
 test_expect_success 'shutdown, gc threshold crossed, user specifies -y' '
@@ -261,7 +261,7 @@ test_expect_success 'clean up dump files from previous tests' '
 '
 test_expect_success 'submit batch script and wait for it to start (4)' '
 	rm -f job7-has-started &&
-	FLUX_CONF_DIR=$(pwd) flux mini batch -t30m -n1 batch7.sh >jobid7_try4 &&
+	FLUX_CONF_DIR=$(pwd) flux batch -t30m -n1 batch7.sh >jobid7_try4 &&
 	$waitfile job7-has-started
 '
 test_expect_success 'shutdown, gc threshold crossed, user input n' '
@@ -277,7 +277,7 @@ test_expect_success 'RESTORE dump not created, user declined' '
 '
 test_expect_success 'submit batch script and wait for it to start (5)' '
 	rm -f job7-has-started &&
-	FLUX_CONF_DIR=$(pwd) flux mini batch -t30m -n1 batch7.sh >jobid7_try5 &&
+	FLUX_CONF_DIR=$(pwd) flux batch -t30m -n1 batch7.sh >jobid7_try5 &&
 	$waitfile job7-has-started
 '
 test_expect_success 'shutdown, gc threshold crossed, user input y' '
@@ -297,7 +297,7 @@ test_expect_success 'clean up dump files from previous tests' '
 '
 test_expect_success 'submit batch script and wait for it to start (6)' '
 	rm -f job7-has-started &&
-	FLUX_CONF_DIR=$(pwd) flux mini batch -t30m -n1 batch7.sh >jobid7_try6 &&
+	FLUX_CONF_DIR=$(pwd) flux batch -t30m -n1 batch7.sh >jobid7_try6 &&
 	$waitfile job7-has-started
 '
 test_expect_success 'shutdown, gc threshold crossed, user input default' '

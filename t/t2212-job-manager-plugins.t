@@ -98,7 +98,7 @@ test_expect_success 'job-manager: bad plugins config is detected' '
 	load = "notfound.so"
 	EOF
 	test_must_fail \
-	    flux mini bulksubmit -n1 --watch --log=badconf.{}.log \
+	    flux bulksubmit -n1 --watch --log=badconf.{}.log \
 	        flux start -o,-c$(pwd)/badconf/{} /bin/true ::: a b c d &&
 	test_debug "echo a:; cat badconf.a.log" &&
 	grep "config must be an array" badconf.a.log &&
@@ -112,15 +112,15 @@ test_expect_success 'job-manager: bad plugins config is detected' '
 test_expect_success 'job-manager: default plugin sets priority to urgency' '
 	flux jobtap remove all &&
 	flux jobtap list -a | grep .priority-default &&
-	jobid=$(flux mini submit --urgency=8 hostname) &&
+	jobid=$(flux submit --urgency=8 hostname) &&
 	flux job wait-event -v $jobid priority &&
 	test $(flux jobs -no {priority} $jobid) = 8 &&
 	flux job wait-event -v $jobid clean
 '
 test_expect_success 'job-manager: default works with sched.prioritize' '
 	ncores=$(flux resource list -s free -no {ncores}) &&
-	allcores=$(flux mini submit -n ${ncores} sleep 1000) &&
-	flux mini submit --cc=1-2 --flags=debug hostname >prio.jobids &&
+	allcores=$(flux submit -n ${ncores} sleep 1000) &&
+	flux submit --cc=1-2 --flags=debug hostname >prio.jobids &&
 	job1=$(cat prio.jobids | head -1) &&
 	job3=$(cat prio.jobids | tail -1) &&
 	flux job wait-event -v $job1 debug.alloc-request &&
@@ -136,7 +136,7 @@ test_expect_success 'job-manager: default works with sched.prioritize' '
 '
 test_expect_success HAVE_JQ 'job-manager: hold plugin holds jobs' '
 	flux jobtap load submit-hold.so &&
-	flux mini bulksubmit --job-name=cc-{0} hostname ::: $(seq 1 4) \
+	flux bulksubmit --job-name=cc-{0} hostname ::: $(seq 1 4) \
 	    >hold.jobids &&
 	flux job wait-event -v $(cat hold.jobids | tail -1) priority &&
 	for id in $(cat hold.jobids); do
@@ -172,9 +172,9 @@ test_expect_success 'job-manager: unload hold plugin' '
 test_expect_success 'job-manager: test with random priority plugin' '
 	flux module reload sched-simple mode=unlimited &&
 	ncores=$(flux resource list -s free -no {ncores}) &&
-	sleepjob=$(flux mini submit -n ${ncores} sleep 3000) &&
+	sleepjob=$(flux submit -n ${ncores} sleep 3000) &&
 	flux jobtap load --remove=all ${PLUGINPATH}/random.so &&
-	flux mini bulksubmit --flags waitable --job-name=random-{} hostname \
+	flux bulksubmit --flags waitable --job-name=random-{} hostname \
 	    ::: $(seq 1 4) &&
 	flux jobs -c4 -no {name}:{priority} | sort > pri-before.out &&
 	sleep 1 &&
@@ -186,14 +186,14 @@ test_expect_success 'job-manager: test with random priority plugin' '
 '
 test_expect_success 'job-manager: run args test plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/args.so &&
-	flux mini run hostname &&
+	flux run hostname &&
 	flux dmesg | grep args-check > args-check.log &&
 	test_debug "cat args-check.log" &&
 	test $(grep -c OK args-check.log) = 21
 '
 test_expect_success 'job-manager: run subscribe test plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/subscribe.so &&
-	flux mini run hostname &&
+	flux run hostname &&
 	flux dmesg | grep subscribe-check > subscribe-check.log &&
 	test_debug "cat subscribe-check.log" &&
 	test $(grep -c OK subscribe-check.log) = 6
@@ -201,7 +201,7 @@ test_expect_success 'job-manager: run subscribe test plugin' '
 test_expect_success 'job-manager: run job_aux test plugin' '
 	flux dmesg --clear &&
 	flux jobtap load --remove=all ${PLUGINPATH}/job_aux.so &&
-	flux mini run hostname
+	flux run hostname
 '
 test_expect_success 'job-manager: job aux cleared on transition to inactive' '
 	flux dmesg >aux-dmesg.out &&
@@ -209,7 +209,7 @@ test_expect_success 'job-manager: job aux cleared on transition to inactive' '
 '
 test_expect_success 'job-manager: start another job and remove plugin' '
 	flux dmesg --clear &&
-	jobid=$(flux mini submit --wait-event=alloc sleep 60) &&
+	jobid=$(flux submit --wait-event=alloc sleep 60) &&
 	flux jobtap remove job_aux.so &&
 	flux job cancel $jobid
 '
@@ -219,28 +219,28 @@ test_expect_success 'job-manager: job aux cleared when plugin removed' '
 '
 test_expect_success 'job-manager: load jobtap_api test plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/jobtap_api.so &&
-	id=$(flux mini submit sleep 1000) &&
-	flux mini run -vvv \
+	id=$(flux submit sleep 1000) &&
+	flux run -vvv \
 		--setattr=system.lookup-id=$(flux job id $id) \
 		/bin/true &&
 	flux job cancel $id &&
-	id=$(flux mini submit \
+	id=$(flux submit \
 		--setattr=system.expected-result=failed \
 		/bin/false) &&
 	test_expect_code 1 flux job attach -vEX $id &&
 	test_must_fail flux job wait-event $id exception &&
-	id=$(flux mini submit -t 0.1s \
+	id=$(flux submit -t 0.1s \
 		--setattr=system.expected-result=timeout \
 		sleep 10) &&
 	test_must_fail flux job wait-event -vm type=test $id exception &&
-	id=$(flux mini submit --urgency=hold \
+	id=$(flux submit --urgency=hold \
 		--setattr=system.expected-result=canceled \
 		/bin/true) &&
 	flux job cancel $id &&
 	test_must_fail flux job wait-event -vm type=test $id exception
 '
 test_expect_success 'job-manager: test that job flags can be set' '
-	id=$(flux mini submit \
+	id=$(flux submit \
 	       --setattr=system.depend.set_flag=debug hostname) &&
 	flux job wait-event -vt 20 $id debug.free-request &&
 	flux job wait-event -vt 20 $id clean
@@ -250,7 +250,7 @@ check_event_post() {
 	local state=$1
 	local id
 
-	id=$(flux mini submit \
+	id=$(flux submit \
 	    --setattr system.${state}.post-event=testevent hostname) &&
 	flux job wait-event -vt 20 $id testevent &&
 	flux job wait-event -t 20 $id clean >/dev/null
@@ -278,7 +278,7 @@ test_expect_success 'job-manager: run all test plugin test modes' '
 	EOF
 	COUNT=$(cat test-modes.txt | wc -l) &&
 	run_timeout 20 \
-	  flux mini bulksubmit --quiet --watch \
+	  flux bulksubmit --quiet --watch \
 	    --setattr=system.jobtap.test-mode={} \
 	    hostname :::: test-modes.txt >test-plugin.out &&
 	test_debug "cat test-plugin.out" &&
@@ -288,7 +288,7 @@ test_expect_success 'job-manager: run all test plugin test modes' '
 	test_cmp test-modes.txt test-annotations.out
 '
 test_expect_success 'job-manager: priority type error generates nonfatal exception' '
-	id=$(flux mini submit \
+	id=$(flux submit \
 		--setattr=system.jobtap.test-mode="priority type error" \
 		hostname) &&
 	flux job wait-event -vm type=job.state.priority ${id} exception &&
@@ -298,7 +298,7 @@ test_expect_success 'job-manager: priority type error generates nonfatal excepti
 	flux job wait-event -v ${id} clean
 '
 test_expect_success 'job-manager: jobtap plugin can raise job exception' '
-	id=$(flux mini submit \
+	id=$(flux submit \
 	     --setattr=system.jobtap.test-mode="sched: exception" \
 	     hostname) &&
 	flux job wait-event -v --match type=test $id exception
@@ -315,7 +315,7 @@ test_expect_success 'job-manager: run test plugin modes for priority.get' '
 	EOT
 	COUNT=$(cat test-modes.priority.get|wc -l) &&
 	flux queue stop &&
-	flux mini bulksubmit \
+	flux bulksubmit \
 	    --flags waitable --setattr=system.jobtap.test-mode={} hostname \
 	    :::: test-modes.priority.get > priority.get.jobids &&
 	flux python ./reprioritize.py &&
@@ -326,19 +326,19 @@ test_expect_success 'job-manager: run test plugin modes for priority.get' '
 '
 test_expect_success 'job-manager: run test plugin modes for job.validate' '
 	test_expect_code 1 \
-	    flux mini submit\
+	    flux submit\
 	        --setattr=system.jobtap.test-mode="validate failure" \
 	        hostname >validate-failure.out 2>&1 &&
 	test_debug "cat validate-failure.out" &&
 	grep "rejected for testing" validate-failure.out &&
 	test_expect_code 1 \
-	    flux mini submit\
+	    flux submit\
 	        --setattr=system.jobtap.test-mode="validate failure nullmsg" \
 	        hostname >validate-failure2.out 2>&1 &&
 	test_debug "cat validate-failure2.out" &&
 	grep "rejected by job-manager plugin" validate-failure2.out &&
 	test_expect_code 1 \
-	    flux mini submit\
+	    flux submit\
 	        --setattr=system.jobtap.test-mode="validate failure nomsg" \
 	        hostname >validate-failure3.out 2>&1 &&
 	test_debug "cat validate-failure3.out" &&
@@ -346,7 +346,7 @@ test_expect_success 'job-manager: run test plugin modes for job.validate' '
 '
 test_expect_success 'job-manager: plugin can keep job in PRIORITY state' '
 	flux jobtap load --remove=all ${PLUGINPATH}/priority-wait.so &&
-	jobid=$(flux mini submit hostname) &&
+	jobid=$(flux submit hostname) &&
 	flux job wait-event -vt 5 $jobid depend &&
 	test $(flux jobs -no {state} $jobid) = "PRIORITY"
 '
@@ -371,7 +371,7 @@ test_expect_success 'job-manager: plugin can reject some jobs in a batch' '
 	flux module reload job-ingest batch-count=6 &&
 	flux jobtap load --remove=all ${PLUGINPATH}/validate.so &&
 	test_expect_code 1 \
-	    flux mini bulksubmit --watch \
+	    flux bulksubmit --watch \
 	        --setattr=system.jobtap.validate-test-id={} \
 	        echo foo ::: 1 1 1 4 4 1 >validate-plugin.out 2>&1 &&
 	test_debug "cat validate-plugin.out" &&
@@ -432,14 +432,14 @@ test_expect_success 'job-manager: plugin can manage dependencies' '
 	EOF
 	flux module reload job-ingest &&
 	flux jobtap load --remove=all ${PLUGINPATH}/dependency-test.so &&
-	jobid=$(flux mini submit --dependency=test:dependency-test hostname) &&
+	jobid=$(flux submit --dependency=test:dependency-test hostname) &&
 	flux job wait-event -vt 15 ${jobid} dependency-add &&
 	test $(flux jobs -no {state} ${jobid}) = DEPEND &&
 	flux python dep-remove.py ${jobid} dependency-test &&
 	flux job wait-event -vt 15 ${jobid} clean
 '
 test_expect_success 'job-manager: dependency-add works from job.state.depend' '
-	jobid=$(flux mini submit --setattr=system.dependency-test=foo true) &&
+	jobid=$(flux submit --setattr=system.dependency-test=foo true) &&
         flux job wait-event -vt 15 ${jobid} dependency-add &&
 	test_debug "flux jobs -no {state} ${jobid}" &&
         test $(flux jobs -no {state} ${jobid}) = DEPEND &&
@@ -447,7 +447,7 @@ test_expect_success 'job-manager: dependency-add works from job.state.depend' '
 	flux job wait-event -vt 15 ${jobid} clean
 '
 test_expect_success 'job-manager: job.state.depend is called on plugin load' '
-	jobid=$(flux mini submit --dependency=test:dependency-test hostname) &&
+	jobid=$(flux submit --dependency=test:dependency-test hostname) &&
 	flux job wait-event -vt 15 ${jobid} dependency-add &&
 	flux jobtap load --remove=all ${PLUGINPATH}/dependency-test.so &&
 	test $(flux jobs -no {state} ${jobid}) = DEPEND &&
@@ -461,7 +461,7 @@ lineno() {
 }
 test_expect_success 'job-manager: job prolog/epilog events work' '
 	flux jobtap load --remove=all ${PLUGINPATH}/perilog-test.so &&
-	jobid=$(flux mini submit hostname) &&
+	jobid=$(flux submit hostname) &&
 	flux job attach --wait-event clean -vE $jobid 2>&1 \
 	    | tee perilog-test.out &&
 	n_prolog=$(lineno job.prolog-finish perilog-test.out) &&
@@ -475,7 +475,7 @@ test_expect_success 'job-manager: job prolog/epilog events work' '
 
 test_expect_success 'job-manager: job.create posts events before validation' '
 	flux jobtap load --remove=all ${PLUGINPATH}/create-event.so &&
-	jobid=$(flux mini submit hostname) &&
+	jobid=$(flux submit hostname) &&
 	flux job wait-event -v $jobid validate >create-event.out &&
 	n_test=$(lineno test-event create-event.out) &&
 	n_create=$(lineno validate create-event.out) &&
@@ -484,7 +484,7 @@ test_expect_success 'job-manager: job.create posts events before validation' '
 
 test_expect_success 'job-manager: job.create can reject a job' '
 	flux jobtap load --remove=all ${PLUGINPATH}/create-reject.so &&
-	test_must_fail flux mini submit hostname 2>submit.err &&
+	test_must_fail flux submit hostname 2>submit.err &&
 	grep nope submit.err
 '
 
@@ -518,7 +518,7 @@ test_expect_success 'job-manager: and produces reasonable error for humans' '
 test_expect_success 'job-manager: run a job then purge all inactives' '
 	flux jobtap load --remove=all ${PLUGINPATH}/args.so &&
 	flux dmesg -C &&
-	flux mini run hostname &&
+	flux run hostname &&
 	flux job purge --force --num-limit=0 &&
 	flux dmesg | grep args-check | grep OK >argsok.out
 '

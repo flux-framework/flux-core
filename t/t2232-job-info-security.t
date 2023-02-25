@@ -64,7 +64,7 @@ unset_userid() {
 }
 
 test_expect_success 'job-info: generate jobspec for simple test job' '
-	flux mini run --dry-run -n1 -N1 sleep 300 > sleeplong.json
+	flux run --dry-run -n1 -N1 sleep 300 > sleeplong.json
 '
 
 #

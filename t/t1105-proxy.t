@@ -105,7 +105,7 @@ test_expect_success 'restore real broker version' '
 '
 
 test_expect_success 'flux-proxy works with jobid argument' '
-	id=$(flux mini submit -n1 flux start flux mini run sleep 30) &&
+	id=$(flux submit -n1 flux start flux run sleep 30) &&
 	flux job wait-event -t 10 $id memo &&
 	uri=$(flux proxy $id?local flux getattr parent-uri) &&
 	test_debug "echo flux proxy $id flux getattr parent-uri = $uri" &&
@@ -125,7 +125,7 @@ test_expect_success NO_CHAIN_LINT 'flux-proxy attempts to restore terminal on er
 	while flux getattr jobid; do sleep 0.1; done
 	EOF
 	chmod +x test.sh
-	id=$(flux mini batch -n1 --wrap flux mini run sleep 600) &&
+	id=$(flux batch -n1 --wrap flux run sleep 600) &&
 	flux job wait-event -vt 60 $id memo &&
 	$RUNPTY -o pty.out -f asciicast \
 		flux proxy --nohup ${id}?local $(pwd)/test.sh &&
@@ -139,7 +139,7 @@ test_expect_success NO_CHAIN_LINT 'flux-proxy sends SIGHUP to children without -
 	while true; do sleep 0.1; done
 	EOF
 	chmod +x test.sh
-	id=$(flux mini batch -n1 --wrap flux mini run sleep 600) &&
+	id=$(flux batch -n1 --wrap flux run sleep 600) &&
 	flux job wait-event -vt 60 $id memo &&
 	test_expect_code 129 $RUNPTY -o pty.out -f asciicast \
 		flux proxy ${id}?local $(pwd)/test.sh &&

@@ -15,27 +15,27 @@ plugin_b=${FLUX_BUILD_DIR}/t/stats/.libs/stats-basic.so
 
 test_expect_success 'prefix set' '
 	$timeout flux python $udp -s flux.job.state.immediate flux start \
-	"flux jobtap load $plugin_i && flux mini run hostname"
+	"flux jobtap load $plugin_i && flux run hostname"
 '
 
 test_expect_success 'multiple packets received' '
 	$timeout flux python $udp -w 3 flux start \
-	"flux jobtap load $plugin_i && flux mini run hostname"
+	"flux jobtap load $plugin_i && flux run hostname"
 '
 
 test_expect_success 'validate packets immediate' '
 	$timeout flux python $udp -V flux start \
-	"flux jobtap load $plugin_i && flux mini run hostname"
+	"flux jobtap load $plugin_i && flux run hostname"
 '
 
 test_expect_success 'timing packets received immediate' '
 	$timeout flux python $udp -s timing flux start \
-	"flux jobtap load $plugin_i && flux mini run hostname"
+	"flux jobtap load $plugin_i && flux run hostname"
 '
 
 test_expect_success 'timing packets received basic' '
 	$timeout flux python $udp -s timing flux start \
-	"flux jobtap load $plugin_b && flux mini run hostname && sleep 1"
+	"flux jobtap load $plugin_b && flux run hostname && sleep 1"
 '
 
 test_expect_success 'valid content-cache packets received' '

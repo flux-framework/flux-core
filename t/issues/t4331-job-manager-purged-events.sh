@@ -25,8 +25,8 @@ wait_jobid_event() {
     return 0
 }
 
-jobid1=`flux mini submit --wait hostname`
-jobid2=`flux mini submit --wait hostname`
+jobid1=`flux submit --wait hostname`
+jobid2=`flux submit --wait hostname`
 
 jq -j -c -n "{}" | $EVENTS_JOURNAL_STREAM > events1.out &
 pid1=$!

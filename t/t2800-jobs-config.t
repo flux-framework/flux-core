@@ -7,7 +7,7 @@ test_description='Test flux jobs command config file support'
 test_under_flux 1 job
 
 test_expect_success 'run a job for job listing purposes' '
-	flux mini submit sleep 300
+	flux submit sleep 300
 '
 test_expect_success 'flux-jobs --format=help works' '
 	flux jobs --format=help >help.out &&

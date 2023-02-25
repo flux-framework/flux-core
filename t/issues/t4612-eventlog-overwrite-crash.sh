@@ -2,7 +2,7 @@
 
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 
-jobid=$(flux mini submit --wait-event=start sh -c "echo foo; sleep 300")
+jobid=$(flux submit --wait-event=start sh -c "echo foo; sleep 300")
 
 kvsdir=$(flux job id --to=kvs $jobid)
 
@@ -20,4 +20,4 @@ flux kvs get --raw ${kvsdir}.eventlog \
 wait
 
 # if flux broker segfaulted, this won't work
-flux mini run hostname
+flux run hostname

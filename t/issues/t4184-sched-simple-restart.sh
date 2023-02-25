@@ -6,7 +6,7 @@ cat <<-EOF >t4184.sh
 which flux
 
 NCORES=\$(flux resource list -s up -no {ncores})
-jobids=\$(flux mini submit --cc=0-1 -n \$NCORES sleep 600)
+jobids=\$(flux submit --cc=0-1 -n \$NCORES sleep 600)
 id=\$(echo \$jobids | cut -d ' ' -f1)
 id2=\$(echo \$jobids | cut -d ' ' -f2)
 flux job wait-event \$id start

@@ -13,7 +13,7 @@ ulimit -n 113
 ulimit -Hn 113
 flux start \
     sh -c '
-flux mini submit --cc=1-12 hostname &&
+flux submit --cc=1-12 hostname &&
 flux queue drain &&
 flux jobs -a
 '

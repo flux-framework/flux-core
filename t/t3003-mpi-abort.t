@@ -57,12 +57,12 @@ test_expect_success 'show MPI version under test' '
 # get a PMI server trace in the CI output in case we need it to debug!
 test_expect_success 'MPI_Abort size=1 with PMI server tracing enabled' '
 	${FLUX_BUILD_DIR}/t/mpi/version | head -1 &&
-	! run_timeout 60 flux mini run $OPTS -overbose=2 \
+	! run_timeout 60 flux run $OPTS -overbose=2 \
 		${FLUX_BUILD_DIR}/t/mpi/abort 0
 '
 
 test_expect_success "MPI_Abort on size=${MAX_MPI_SIZE}, first rank triggers exception" '
-	! run_timeout 60 flux mini run -n${MAX_MPI_SIZE} $OPTS \
+	! run_timeout 60 flux run -n${MAX_MPI_SIZE} $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/abort 0 2>abort0.err &&
 	(grep exception abort0.err || diag abort0.err) &&
 	test_debug "cat abort0.err" &&
@@ -71,7 +71,7 @@ test_expect_success "MPI_Abort on size=${MAX_MPI_SIZE}, first rank triggers exce
 
 test_expect_success "MPI_Abort on size=${MAX_MPI_SIZE}, last rank triggers exception" '
 	rank=$(($MAX_MPI_SIZE-1)) &&
-	! run_timeout 60 flux mini run -n${MAX_MPI_SIZE} $OPTS \
+	! run_timeout 60 flux run -n${MAX_MPI_SIZE} $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/abort $rank \
 		2>abort1.err &&
 	(grep exception abort1.err || diag abort1.err) &&

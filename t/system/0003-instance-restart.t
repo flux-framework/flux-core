@@ -13,13 +13,13 @@ test_expect_success 'job-exec: setup system instance to use systemd' '
                 fi
                 sudo bash -c "echo method = \\\"systemd\\\" >> /etc/flux/system/conf.d/exec.toml"
                 sudo systemctl restart flux
-                until flux mini run hostname 2>/dev/null; do
+                until flux run hostname 2>/dev/null; do
                         sleep 1
                 done
         fi
 '
 test_expect_success 'job-exec: verify system instance using systemd' '
-        jobid=$(flux mini submit sleep 100) &&
+        jobid=$(flux submit sleep 100) &&
         flux job wait-event -v -t 60 $jobid start &&
         jobiddec=`flux job id --to=dec $jobid` &&
         rank=`flux getattr rank` &&
@@ -28,9 +28,9 @@ test_expect_success 'job-exec: verify system instance using systemd' '
 '
 test_expect_success 'job-exec: submit two jobs that consumes all resources' '
         NCORES=$(flux resource list -s up -no "{ncores}") &&
-        flux mini submit -n ${NCORES} sleep 1000 > jobid1 &&
+        flux submit -n ${NCORES} sleep 1000 > jobid1 &&
         flux job wait-event $(cat jobid1) start &&
-        flux mini submit -n ${NCORES} sleep 1000 > jobid2
+        flux submit -n ${NCORES} sleep 1000 > jobid2
 '
 test_expect_success 'job-exec: verify jobs listed and in expected state' '
         flux jobs --filter=running | grep $(cat jobid1) &&
@@ -65,7 +65,7 @@ test_expect_success 'job-exec: cancel jobs' '
 test_expect_success LONGTEST 'job-exec: stress reconnect against many jobs' '
         ncores=`flux resource list -no {ncores}` &&
         count=$((ncores*60)) &&
-        flux mini submit --cc=1-${count} sleep 1 > reconnect_stress.ids &&
+        flux submit --cc=1-${count} sleep 1 > reconnect_stress.ids &&
         sleep 5 &&
         sudo systemctl restart flux &&
         sleep 5 &&

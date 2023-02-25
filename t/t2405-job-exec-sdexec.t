@@ -33,7 +33,7 @@ flux setattr log-stderr-level 1
 TEST_SDPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsdprocess
 
 test_expect_success 'job-exec: basic test sdexec works' '
-        jobid=$(flux mini submit \
+        jobid=$(flux submit \
                 --setattr=system.exec.sd.test=true \
                 sleep 30) &&
         flux job wait-event -t 10 ${jobid} start &&
@@ -54,7 +54,7 @@ EOF
 '
 
 test_expect_success 'job-exec: basic sdexec with exec config works' '
-        jobid=$(flux mini submit sleep 30) &&
+        jobid=$(flux submit sleep 30) &&
         flux job wait-event -t 10 ${jobid} start &&
         jobiddec=`flux job id --to=dec $jobid` &&
         rank=`flux getattr rank` &&
@@ -64,7 +64,7 @@ test_expect_success 'job-exec: basic sdexec with exec config works' '
 '
 
 test_expect_success 'job-exec: generate jobspec for simple test job' '
-        flux mini run --dry-run hostname > basic.json
+        flux run --dry-run hostname > basic.json
 '
 test_expect_success 'job-exec: basic job runs through all states under systemd' '
         jobid=$(flux job submit basic.json) &&
@@ -74,50 +74,50 @@ test_expect_success 'job-exec: basic job runs through all states under systemd' 
         flux job wait-event -t 10 ${jobid} clean
 '
 test_expect_success 'job-exec: simple job outputs stdout under systemd' '
-        jobid=$(flux mini submit ${TEST_SDPROCESS_DIR}/test_echo -O foobar) &&
+        jobid=$(flux submit ${TEST_SDPROCESS_DIR}/test_echo -O foobar) &&
         flux job attach $jobid 1> stdout.out &&
         echo foobar > stdout.expected &&
         test_cmp stdout.expected stdout.out
 '
 test_expect_success 'job-exec: simple job outputs stderr under systemd' '
-        jobid=$(flux mini submit ${TEST_SDPROCESS_DIR}/test_echo -E boobar) &&
+        jobid=$(flux submit ${TEST_SDPROCESS_DIR}/test_echo -E boobar) &&
         flux job attach $jobid 2> stderr.out &&
         echo boobar > stderr.expected &&
         test_cmp stderr.expected stderr.out
 '
 test_expect_success 'job-exec: simple job takes stdin under systemd' '
-        jobid=$(flux mini submit ${TEST_SDPROCESS_DIR}/test_echo -O) &&
+        jobid=$(flux submit ${TEST_SDPROCESS_DIR}/test_echo -O) &&
         echo -n "boobaz" | flux job attach $jobid 1> stdout.out &&
         echo boobaz > stdout.expected &&
         test_cmp stdout.expected stdout.out
 '
 test_expect_success 'job-exec: simple job exits 0 on success' '
-        jobid=$(flux mini submit /bin/true) &&
+        jobid=$(flux submit /bin/true) &&
         test_expect_code 0 flux job status $jobid
 '
 test_expect_success 'job-exec: simple job exits 1 on failure' '
-        jobid=$(flux mini submit /bin/false) &&
+        jobid=$(flux submit /bin/false) &&
         test_expect_code 1 flux job status -vv $jobid
 '
 test_expect_success 'job-exec: simple job exits 127 on bad command' '
-        jobid=$(flux mini submit /bin/foobar) &&
+        jobid=$(flux submit /bin/foobar) &&
         test_expect_code 127 flux job status $jobid
 '
 test_expect_success 'job-exec: simple job exits 138 on signaled job' '
-        jobid=$(flux mini submit sleep 30) &&
+        jobid=$(flux submit sleep 30) &&
         flux job wait-event -t 10 ${jobid} start &&
         flux job kill --signal=SIGUSR1 $jobid &&
         test_expect_code 138 flux job status $jobid
 '
 test_expect_success 'job-exec: simple job can be canceled' '
-        jobid=$(flux mini submit sleep 30) &&
+        jobid=$(flux submit sleep 30) &&
         flux job wait-event -t 10 ${jobid} start &&
         flux job cancel $jobid &&
         flux job wait-event -t 10 ${jobid} clean &&
         test_expect_code 143 flux job status $jobid
 '
 test_expect_success 'job-exec: job fails correctly if user service not setup' '
-        jobid=$(flux mini submit \
+        jobid=$(flux submit \
                 --setattr=system.exec.sd.test_exec_fail=true \
                 hostname) &&
         flux job wait-event -v -t 30 $jobid clean &&
@@ -125,7 +125,7 @@ test_expect_success 'job-exec: job fails correctly if user service not setup' '
              | grep "Operation not permitted"
 '
 test_expect_success 'job-exec: systemd cleaned up after job completes' '
-        jobid=$(flux mini submit sleep 30) &&
+        jobid=$(flux submit sleep 30) &&
         flux job wait-event -v -t 30 $jobid start &&
         jobiddec=`flux job id --to=dec $jobid` &&
         rank=`flux getattr rank` &&
@@ -136,7 +136,7 @@ test_expect_success 'job-exec: systemd cleaned up after job completes' '
         test_must_fail grep "flux-sdexec-${rank}-${jobiddec}" list-units.out
 '
 test_expect_success 'job-exec: no cleanup does not cleanup systemd' '
-        jobid=$(flux mini submit \
+        jobid=$(flux submit \
                 --setattr=system.exec.sd.no_cleanup=true \
                 hostname) &&
         flux job wait-event -v -t 30 $jobid clean &&
@@ -152,7 +152,7 @@ echo "default stdout"
 echo "default stderr" 1>&2
 EOF
         chmod +x testdefaultlog.sh &&
-        jobid=$(flux mini submit --wait \
+        jobid=$(flux submit --wait \
                 --setattr=system.exec.job_shell="$(pwd)/testdefaultlog.sh" \
                 hostname) &&
         flux job eventlog -p guest.exec.eventlog ${jobid} > defaultlog.out &&
@@ -166,7 +166,7 @@ echo "eventlog stdout"
 echo "eventlog stderr" 1>&2
 EOF
         chmod +x testeventloglog.sh &&
-        jobid=$(flux mini submit --wait \
+        jobid=$(flux submit --wait \
                 --setattr=system.exec.job_shell="$(pwd)/testeventloglog.sh" \
                 --setattr=system.exec.sd.stdoutlog="eventlog" \
                 --setattr=system.exec.sd.stderrlog="eventlog" \
@@ -185,7 +185,7 @@ echo "systemd stdout"
 echo "systemd stderr" 1>&2
 EOF
         chmod +x testsystemdlog.sh &&
-        jobid=$(flux mini submit --wait \
+        jobid=$(flux submit --wait \
                 --setattr=system.exec.job_shell="$(pwd)/testsystemdlog.sh" \
                 --setattr=system.exec.sd.stdoutlog="systemd" \
                 --setattr=system.exec.sd.stderrlog="systemd" \
@@ -201,7 +201,7 @@ echo "bad stdout"
 echo "bad stderr" 1>&2
 EOF
         chmod +x testbadlog.sh &&
-        jobid=$(flux mini submit --wait \
+        jobid=$(flux submit --wait \
                 --setattr=system.exec.job_shell="$(pwd)/testbadlog.sh" \
                 --setattr=system.exec.sd.stdoutlog="bad" \
                 --setattr=system.exec.sd.stderrlog="bad" \
@@ -214,11 +214,11 @@ EOF
 # above 30 given the test.
 # N.B. in newer systemds could speed up test by setting SYSTEMD_BUS_TIMEOUT
 test_expect_success LONGTEST 'job-exec: can run job longer than 25 seconds' '
-        jobid=$(flux mini submit sleep 40) &&
+        jobid=$(flux submit sleep 40) &&
         test_expect_code 0 flux job status $jobid
 '
 test_expect_success LONGTEST 'job-exec: can cancel job after 25 seconds' '
-        jobid=$(flux mini submit sleep 60) &&
+        jobid=$(flux submit sleep 60) &&
         sleep 40 &&
         flux job cancel $jobid &&
         test_expect_code 143 flux job status $jobid

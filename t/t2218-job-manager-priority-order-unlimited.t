@@ -16,7 +16,7 @@ flux setattr log-stderr-level 1
 # flux queue stop/start to ensure no scheduling until after all jobs submitted
 test_expect_success 'job-manager: submit 5 jobs (differing urgencies)' '
         flux queue stop &&
-        flux mini bulksubmit --log=job{seq1}.id --urgency={} --flags=debug -n1 \
+        flux bulksubmit --log=job{seq1}.id --urgency={} --flags=debug -n1 \
            hostname ::: 12 10 14 16 18 > jobids.out &&
         flux queue start
 '

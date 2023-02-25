@@ -15,13 +15,13 @@ BAD_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/bad-validate.py
 
 test_valid ()
 {
-	flux mini bulksubmit --quiet --wait --watch \
+	flux bulksubmit --quiet --wait --watch \
 		sh -c "cat {} | $Y2J | $SUBMITBENCH --urgency=0 -" ::: $*
 }
 
 test_invalid ()
 {
-	flux mini bulksubmit --quiet --wait --watch \
+	flux bulksubmit --quiet --wait --watch \
 		sh -c "cat {} | $Y2J | $SUBMITBENCH --urgency=0 -" ::: $*
 	test $? -ne 0
 }
@@ -35,7 +35,7 @@ ingest_module ()
 }
 
 test_expect_success 'flux job-validator works' '
-	flux mini run --dry-run hostname | flux job-validator --jobspec-only
+	flux run --dry-run hostname | flux job-validator --jobspec-only
 '
 test_expect_success 'flux job-validator --list-plugins works' '
 	flux job-validator --list-plugins >list-plugins.output 2>&1 &&
@@ -64,30 +64,30 @@ test_expect_success 'flux job-validator errors on invalid plugin' '
 	test_expect_code 1 flux job-validator --plugin=/tmp </dev/null
 '
 test_expect_success 'flux job-validator --require-version rejects invalid arg' '
-	flux mini run --dry-run hostname | \
+	flux run --dry-run hostname | \
 		test_expect_code 1 \
 		flux job-validator --jobspec-only --require-version=99 &&
-	flux mini run --dry-run hostname | \
+	flux run --dry-run hostname | \
 		test_expect_code 1 \
 		flux job-validator --jobspec-only --require-version=0
 '
 test_expect_success HAVE_JQ 'flux job-validator rejects non-V1 jobspec' '
-	flux mini run --dry-run hostname | jq -c ".version = 2" | \
+	flux run --dry-run hostname | jq -c ".version = 2" | \
 		test_expect_code 1 \
 		flux job-validator --jobspec-only --require-version=1
 '
 test_expect_success 'flux job-validator --schema rejects invalid arg' '
-	flux mini run --dry-run hostname | \
+	flux run --dry-run hostname | \
 		test_expect_code 1 \
 		flux job-validator --jobspec-only \
 			--plugins=schema \
 			--schema=noexist
 '
 test_expect_success HAVE_JQ 'flux job-validator --feasibility-service works ' '
-	flux mini run -n 4888 --dry-run hostname | \
+	flux run -n 4888 --dry-run hostname | \
 		flux job-validator --jobspec-only --plugins=feasibility \
 		| jq -e ".errnum != 0" &&
-	flux mini run -n 4888 --dry-run hostname | \
+	flux run -n 4888 --dry-run hostname | \
 		flux job-validator --jobspec-only \
 			--plugins=feasibility \
 			--feasibility-service=kvs.ping \
@@ -129,29 +129,29 @@ test_expect_success 'job-ingest: load feasibilty validator plugin' '
 '
 test_expect_success 'job-ingest: feasibility check succceeds with ENOSYS' '
 	flux module remove sched-simple &&
-	flux mini submit -g 1 hostname &&
-	flux mini submit -n 10000 hostname &&
+	flux submit -g 1 hostname &&
+	flux submit -n 10000 hostname &&
 	flux module load sched-simple
 '
 test_expect_success 'job-ingest: infeasible jobs are now rejected' '
-	test_must_fail flux mini submit -g 1 hostname 2>infeasible1.err &&
+	test_must_fail flux submit -g 1 hostname 2>infeasible1.err &&
 	test_debug "cat infeasible1.err" &&
 	grep -i "unsupported resource type" infeasible1.err &&
-	test_must_fail flux mini submit -n 10000 hostname 2>infeasible2.err &&
+	test_must_fail flux submit -n 10000 hostname 2>infeasible2.err &&
 	test_debug "cat infeasible2.err" &&
 	grep "unsatisfiable request" infeasible2.err &&
-	test_must_fail flux mini submit -N 12 -n12 hostname 2>infeasible3.err &&
+	test_must_fail flux submit -N 12 -n12 hostname 2>infeasible3.err &&
 	test_debug "cat infeasible3.err" &&
 	grep "unsatisfiable request" infeasible3.err
 '
 test_expect_success 'job-ingest: feasibility validator works with jobs running' '
 	ncores=$(flux resource list -s up -no {ncores}) &&
 	flux queue start &&
-	jobid=$(flux mini submit -n${ncores} sleep inf) &&
+	jobid=$(flux submit -n${ncores} sleep inf) &&
 	flux job wait-event -vt 20 ${jobid} start &&
 	flux queue stop &&
-	flux mini submit -n 2 hostname &&
-	test_must_fail flux mini submit -N 12 -n12 hostname 2>infeasible4.err &&
+	flux submit -n 2 hostname &&
+	test_must_fail flux submit -N 12 -n12 hostname 2>infeasible4.err &&
 	grep "unsatisfiable request" infeasible4.err &&
 	flux job cancel ${jobid} &&
 	flux job wait-event ${jobid} clean
@@ -160,21 +160,21 @@ test_expect_success 'job-ingest: load multiple validators' '
 	ingest_module reload validator-plugins=feasibility,jobspec
 '
 test_expect_success 'job-ingest: jobs that fail either validator are rejected' '
-	test_must_fail flux mini submit --setattr=.foo=bar hostname &&
-	test_must_fail flux mini submit -n 4568 hostname
+	test_must_fail flux submit --setattr=.foo=bar hostname &&
+	test_must_fail flux submit -n 4568 hostname
 '
 test_expect_success 'job-ingest: validator unexpected exit is handled' '
 	ingest_module reload \
 		validator-plugins=${BAD_VALIDATOR} &&
-		test_must_fail flux mini submit hostname 2>badvalidator.out &&
+		test_must_fail flux submit hostname 2>badvalidator.out &&
 	grep "unexpectedly exited" badvalidator.out
 '
 test_expect_success 'job-ingest: require-instance validator plugin works' '
 	ingest_module reload validator-plugins=require-instance &&
-	flux mini batch -n1 --wrap flux resource list &&
-	flux mini submit -n1 flux start flux resource list &&
-	flux mini submit -n1 flux broker flux resource list &&
-	test_must_fail flux mini submit hostname &&
-	test_must_fail flux mini submit flux getattr rank
+	flux batch -n1 --wrap flux resource list &&
+	flux submit -n1 flux start flux resource list &&
+	flux submit -n1 flux broker flux resource list &&
+	test_must_fail flux submit hostname &&
+	test_must_fail flux submit flux getattr rank
 '
 test_done

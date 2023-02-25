@@ -20,7 +20,7 @@ flux module load sched-simple
 
 flux dmesg | grep 'sched-simple.*ready'  | tail -1
 
-flux mini submit --dry-run -o cpu-affinity=off -N2 -n2 sleep 0 \
+flux submit --dry-run -o cpu-affinity=off -N2 -n2 sleep 0 \
     | ${SUBMITBENCH} -r 24 - >jobs.list
 
 cat jobs.list

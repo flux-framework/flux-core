@@ -21,14 +21,14 @@ test_expect_success 'configure a valid duration limit' '
 	EOT
 '
 test_expect_success 'a job that exceeds policy.limits.duration is rejected' '
-	test_must_fail flux mini submit -t 1h /bin/true 2>duration.err &&
+	test_must_fail flux submit -t 1h /bin/true 2>duration.err &&
 	grep "exceeds policy limit of 1m" duration.err
 '
 test_expect_success 'a job that sets no explicit duration is accepted' '
-	flux mini submit /bin/true
+	flux submit /bin/true
 '
 test_expect_success 'a job that is under policy.limits.duration is accepted' '
-	flux mini submit -t 30s /bin/true
+	flux submit -t 30s /bin/true
 '
 test_expect_success 'configure policy.limits.duration and queue duration' '
 	flux config load <<-EOT &&
@@ -43,25 +43,25 @@ test_expect_success 'configure policy.limits.duration and queue duration' '
 	flux queue start --all
 '
 test_expect_success 'a job that exceeds policy.limits.duration is rejected' '
-	test_must_fail flux mini submit --queue=debug -t 2h /bin/true
+	test_must_fail flux submit --queue=debug -t 2h /bin/true
 '
 test_expect_success 'but is accepted by a queue with higher limit' '
-	flux mini submit \
+	flux submit \
 	    --queue=batch \
 	    -t 2h \
 	    /bin/true
 '
 test_expect_success 'and is rejected when it exceeds the queue limit' '
-	test_must_fail flux mini submit \
+	test_must_fail flux submit \
 	    --queue=batch \
 	    -t 16h \
 	    /bin/true
 '
 test_expect_success 'a job that is under policy.limits.duration is accepted' '
-	flux mini submit --queue=debug -t 1h /bin/true
+	flux submit --queue=debug -t 1h /bin/true
 '
 test_expect_success 'but is rejected on a queue with lower limit' '
-	test_must_fail flux mini submit \
+	test_must_fail flux submit \
 	    --queue=short \
 	    -t 1h \
 	    /bin/true
@@ -76,15 +76,15 @@ test_expect_success 'configure policy.limits.duration and an unlimited queue' '
 	EOT
 '
 test_expect_success 'a job that is over policy.limits.duration is rejected' '
-	test_must_fail flux mini submit --queue=debug -t 2h /bin/true
+	test_must_fail flux submit --queue=debug -t 2h /bin/true
 '
 test_expect_success 'but is accepted by the unlimited queue' '
-	flux mini submit \
+	flux submit \
 	    --queue=batch \
 	    -t 2h /bin/true
 '
 test_expect_success 'a job that sets no explicit duration is accepted by the unlimited queue' '
-	flux mini submit \
+	flux submit \
 	    --queue=batch \
 	    /bin/true
 '

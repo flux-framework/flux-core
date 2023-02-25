@@ -3,6 +3,6 @@
 #  to segfault
 
 # test-prereqs: HAVE_JQ
-flux job attach -vEX $(flux mini run --dry-run hostname \
+flux job attach -vEX $(flux run --dry-run hostname \
     | jq .attributes.system.shell.options.foo=null \
     | flux job submit)

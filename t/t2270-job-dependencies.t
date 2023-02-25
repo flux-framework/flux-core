@@ -17,7 +17,7 @@ PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
 
 
 test_expect_success HAVE_JQ 'flux-mini: --dependency option works' '
-	flux mini run --dry-run \
+	flux run --dry-run \
 		--env=-* \
 		--dependency=foo:1234 \
 		--dependency=foo:3.1415 \
@@ -35,22 +35,22 @@ test_expect_success HAVE_JQ 'flux-mini: --dependency option works' '
 	jq -e ".[3].val[1] == \"b\""   < deps.json
 '
 test_expect_success 'submitted job with unknown dependency scheme is rejected' '
-	test_must_fail flux mini submit --dependency=invalid:value hostname
+	test_must_fail flux submit --dependency=invalid:value hostname
 '
 test_expect_success 'job with too long dependency scheme is rejected' '
-	test_must_fail flux mini submit \
+	test_must_fail flux submit \
 		--dependency=$(python -c "print \"x\"*156"):value hostname
 '
 test_expect_success 'reload ingest with disabled validator' '
 	flux module reload -f job-ingest disable-validator
 '
 test_expect_success 'submitted job with invalid dependencies is rejected' '
-	test_must_fail flux mini submit \
+	test_must_fail flux submit \
 		--setattr=system.dependencies={} \
 		hostname > not-an-array.out 2>&1 &&
 	test_debug "cat not-an-array.out" &&
 	grep -q "must be an array" not-an-array.out &&
-	test_must_fail flux mini submit \
+	test_must_fail flux submit \
 		--setattr=system.dependencies="[{\"foo\":1}]" \
 		hostname > empty-object.out 2>&1 &&
 	test_debug "cat empty-object.out" &&
@@ -88,7 +88,7 @@ test_expect_success 'job-manager: load dependency-test plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/dependency-test.so
 '
 test_expect_success 'job-manager: dependency-test plugin is working' '
-	jobid=$(flux mini submit --dependency=test:deptest true) &&
+	jobid=$(flux submit --dependency=test:deptest true) &&
 	flux job wait-event -t 15 -m description=deptest \
 		${jobid} dependency-add &&
 	test $(flux jobs -no {state} ${jobid}) = DEPEND &&
@@ -99,14 +99,14 @@ test_expect_success 'job-manager: dependency-test plugin is working' '
 	flux job wait-event -vt 15 ${jobid} clean
 '
 test_expect_success 'plugin rejects job with malformed dependency spec' '
-	test_must_fail flux mini submit \
+	test_must_fail flux submit \
 		--dependency=test:failure?remove=bad \
 		hostname >baddeps.out 2>&1 &&
 	test_debug "cat baddeps.out" &&
 	grep "failed to unpack dependency" baddeps.out
 '
 test_expect_success 'job dependencies are available in listing tools' '
-	jobid=$(flux mini submit \
+	jobid=$(flux submit \
 		--dependency=test:foo \
 		hostname) &&
 	flux job wait-event -t 15 -m description=foo ${jobid} dependency-add &&
@@ -118,7 +118,7 @@ test_expect_success 'job dependencies are available in listing tools' '
 	flux job wait-event -vt 15 ${jobid} clean
 '
 test_expect_success 'multiple job dependencies works' '
-	jobid=$(flux mini submit \
+	jobid=$(flux submit \
 		--dependency=test:foo \
 		--dependency=test:bar \
 		hostname) &&
@@ -135,7 +135,7 @@ test_expect_success 'multiple job dependencies works' '
 	flux job wait-event -vt 15 ${jobid} clean
 '
 test_expect_success 'multiple dependency-add with same description is ignored' '
-	jobid=$(flux mini submit \
+	jobid=$(flux submit \
 		--dependency=test:bar \
 		--dependency=test:bar \
 		hostname) &&
@@ -147,7 +147,7 @@ test_expect_success 'multiple dependency-add with same description is ignored' '
 	flux job wait-event -vt 15 ${jobid} clean
 '
 test_expect_success 'dependency can be removed in job.dependency callback' '
-	id=$(flux mini submit \
+	id=$(flux submit \
 		--dependency=test:bar?remove=1 \
 		hostname) &&
 	flux job wait-event -t 15 -m description=bar ${id} dependency-add &&
@@ -155,7 +155,7 @@ test_expect_success 'dependency can be removed in job.dependency callback' '
 	flux job wait-event -vt 15 ${id} clean
 '
 test_expect_success 'dependency add/remove in callback does not incorrectly release job' '
-	id=$(flux mini submit \
+	id=$(flux submit \
 		--dependency=test:bar?remove=1 \
 		--dependency=test:foo \
 		hostname) &&
@@ -168,7 +168,7 @@ test_expect_success 'dependency add/remove in callback does not incorrectly rele
 	flux job wait-event -vt 15 ${id} clean
 '
 test_expect_success 'restart: start job with 2 dependencies to test restart' '
-	jobid=$(flux mini submit \
+	jobid=$(flux submit \
 		--dependency=test:foo \
 		--dependency=test:bar \
 		hostname) &&
@@ -218,7 +218,7 @@ test_expect_success 'restart: add plugin to instance config' '
 	flux config reload
 '
 test_expect_success 'restart: restart calls job.dependency.* callbacks' '
-	jobid=$(flux mini submit --dependency=test:foo hostname) &&
+	jobid=$(flux submit --dependency=test:foo hostname) &&
 	flux job wait-event ${jobid} dependency-add &&
 	job_manager_restart &&
 	flux jobtap list | grep dependency &&

@@ -16,8 +16,8 @@ sign_as=${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py
 submit_fake_user_instance()
 {
 	FAKE_USERID=42
-	test_debug "echo running flux mini run $@ as userid $FAKE_USERID"
-	flux mini run --dry-run \
+	test_debug "echo running flux run $@ as userid $FAKE_USERID"
+	flux run --dry-run \
 		--setattr=system.exec.test.run_duration=1d hostname | \
 		flux python $sign_as $FAKE_USERID \
 		>job.signed &&
@@ -36,11 +36,11 @@ submit_fake_user_instance()
 #   the sleep job to finish.
 #
 test_expect_success 'start a recursive job' '
-	id=$(flux mini submit flux start /bin/true) &&
-	rid=$(flux mini submit -n2 \
+	id=$(flux submit flux start /bin/true) &&
+	rid=$(flux submit -n2 \
 		flux start \
-		flux mini submit --wait --cc=1-2 flux start \
-			"flux mini submit sleep 300 && \
+		flux submit --wait --cc=1-2 flux start \
+			"flux submit sleep 300 && \
 			 touch ready.\$FLUX_JOB_CC && \
 			 flux queue idle") &&
 	flux job wait-event $id clean

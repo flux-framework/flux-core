@@ -13,8 +13,8 @@ flux setattr log-stderr-level 1
 submit_as_alternate_user()
 {
 	FAKE_USERID=42
-	test_debug "echo running flux mini run $@ as userid $FAKE_USERID"
-	flux mini run --dry-run "$@" | \
+	test_debug "echo running flux run $@ as userid $FAKE_USERID"
+	flux run --dry-run "$@" | \
 		flux python ${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py $FAKE_USERID \
 		>job.signed
 	FLUX_HANDLE_USERID=$FAKE_USERID \
@@ -22,7 +22,7 @@ submit_as_alternate_user()
 }
 
 test_expect_success 'dependency=after:invalid rejects invalid target jobids' '
-	test_expect_code 1 flux mini bulksubmit \
+	test_expect_code 1 flux bulksubmit \
 		--dependency={} \
 		--log-stderr={}.err \
 		hostname ::: \
@@ -35,7 +35,7 @@ test_expect_success 'dependency=after:invalid rejects invalid target jobids' '
 	grep "job not found" after:1234.err
 '
 test_expect_success FLUX_SECURITY 'dependency=after will not work on another user job' '
-	jobid=$(flux mini submit sleep 300) &&
+	jobid=$(flux submit sleep 300) &&
 	test_debug "echo submitted job $jobid" &&
 	test_expect_code 1 submit_as_alternate_user \
 		--dependency=afterany:$jobid hostname \
@@ -48,7 +48,7 @@ test_expect_success 'disable ingest validator' '
 	flux module reload -f job-ingest disable-validator
 '
 test_expect_success HAVE_JQ 'dependency=after rejects invalid dependency' '
-	flux mini run --dry-run hostname | \
+	flux run --dry-run hostname | \
 	  jq ".attributes.system.dependencies[0] = \
 		{\"scheme\":\"after\", \"value\": 1}" >job.json &&
 	test_expect_code 1 flux job submit job.json
@@ -57,8 +57,8 @@ test_expect_success 'reenable ingest validator' '
 	flux module reload -f job-ingest
 '
 test_expect_success 'dependency=after works' '
-	jobid=$(flux mini submit --urgency=hold hostname) &&
-	depid=$(flux mini submit --dependency=after:$jobid hostname) &&
+	jobid=$(flux submit --urgency=hold hostname) &&
+	depid=$(flux submit --dependency=after:$jobid hostname) &&
 	flux job wait-event -vt 15 $depid dependency-add &&
 	test_debug "echo checking that job ${depid} is in DEPEND state" &&
 	test "$(flux jobs -no {state} $depid)" = "DEPEND" &&
@@ -66,10 +66,10 @@ test_expect_success 'dependency=after works' '
 	flux job wait-event -vt 15 $depid clean 
 '
 test_expect_success 'dependency=after does not release job until start event' '
-	jobid=$(flux mini submit \
+	jobid=$(flux submit \
 		--setattr=system.exec.test.override=1 \
 		--setattr=system.exec.test.run_duration=0.001s true) &&
-	depid=$(flux mini submit --dependency=after:$jobid hostname) &&
+	depid=$(flux submit --dependency=after:$jobid hostname) &&
 	flux job wait-event -t 15 $depid dependency-add &&
 	flux job wait-event -t 15 $jobid alloc &&
 	test_debug "echo antecedent in RUN state, but no start event" &&
@@ -83,15 +83,15 @@ test_expect_success 'dependency=after does not release job until start event' '
 	flux job wait-event -t 15 $jobid clean
 '
 test_expect_success 'dependency=after works when antecedent is running' '
-	jobid=$(flux mini submit sleep 300) &&
+	jobid=$(flux submit sleep 300) &&
 	flux job wait-event -vt 15 $jobid start &&
-	depip=$(flux mini submit --dependency=after:$jobid hostname) &&
+	depip=$(flux submit --dependency=after:$jobid hostname) &&
 	flux job wait-event -vt 15 $depid clean &&
 	flux job cancel $jobid
 '
 test_expect_success 'dependency=after generates exception for failed job' '
-	jobid=$(flux mini submit --urgency=hold hostname) &&
-	depid=$(flux mini submit --dependency=after:$jobid hostname) &&
+	jobid=$(flux submit --urgency=hold hostname) &&
+	depid=$(flux submit --dependency=after:$jobid hostname) &&
 	flux job wait-event -vt 15 $depid dependency-add &&
 	test_debug "echo checking that job ${depid} is in DEPEND state" &&
 	test "$(flux jobs -no {state} $depid)" = "DEPEND" &&
@@ -99,7 +99,7 @@ test_expect_success 'dependency=after generates exception for failed job' '
 	flux job wait-event -m type=dependency -vt 15 $depid exception 
 '
 test_expect_success 'dependency=afterany works' '
-	flux mini bulksubmit \
+	flux bulksubmit \
 		--urgency=hold \
 		--job-name={} \
 		--log=jobids.afterany {} 300 \
@@ -107,7 +107,7 @@ test_expect_success 'dependency=afterany works' '
 	job1=$(sed "1q;d" jobids.afterany) &&
 	job2=$(sed "2q;d" jobids.afterany) &&
 	job3=$(sed "3q;d" jobids.afterany) &&
-	jobid=$(flux mini submit \
+	jobid=$(flux submit \
 		--dependency=afterany:$job1 \
 		--dependency=afterany:$job2 \
 		--dependency=afterany:$job3 \
@@ -124,7 +124,7 @@ test_expect_success 'dependency=afterany works' '
 	flux job wait-event -vt 15 $jobid clean
 '
 test_expect_success 'dependency=afterok works' '
-	flux mini bulksubmit \
+	flux bulksubmit \
 		--urgency=hold \
 		--job-name={} \
 		--log=jobids.afterok {} 300 \
@@ -132,13 +132,13 @@ test_expect_success 'dependency=afterok works' '
 	job1=$(sed "1q;d" jobids.afterok) &&
 	job2=$(sed "2q;d" jobids.afterok) &&
 	job3=$(sed "3q;d" jobids.afterok) &&
-	ok1=$(flux mini submit \
+	ok1=$(flux submit \
 		--dependency=afterok:$job1 \
 		hostname) &&
-	ok2=$(flux mini submit \
+	ok2=$(flux submit \
 		--dependency=afterok:$job2 \
 		hostname) &&
-	ok3=$(flux mini submit \
+	ok3=$(flux submit \
 		--dependency=afterok:$job3 \
 		hostname) &&
 	for id in $(cat jobids.afterok);
@@ -155,7 +155,7 @@ test_expect_success 'dependency=afterok works' '
 		-m type=dependency $ok2 exception
 '
 test_expect_success 'dependency=afternotok works' '
-	flux mini bulksubmit \
+	flux bulksubmit \
 		--urgency=hold \
 		--job-name={} \
 		--log=jobids.afternotok {} 300 \
@@ -163,13 +163,13 @@ test_expect_success 'dependency=afternotok works' '
 	job1=$(sed "1q;d" jobids.afternotok) &&
 	job2=$(sed "2q;d" jobids.afternotok) &&
 	job3=$(sed "3q;d" jobids.afternotok) &&
-	ok1=$(flux mini submit \
+	ok1=$(flux submit \
 		--dependency=afternotok:$job1 \
 		hostname) &&
-	ok2=$(flux mini submit \
+	ok2=$(flux submit \
 		--dependency=afternotok:$job2 \
 		hostname) &&
-	ok3=$(flux mini submit \
+	ok3=$(flux submit \
 		--dependency=afternotok:$job3 \
 		hostname) &&
 	for id in $(cat jobids.afternotok);
@@ -188,41 +188,41 @@ test_expect_success 'dependency=afternotok works' '
 '
 test_expect_success 'dependency=after works for INACTIVE jobs' '
 	run_timeout 15 \
-		flux mini bulksubmit --wait --watch \
+		flux bulksubmit --wait --watch \
 		--job-name=after:{} \
 		--dependency=after:{} \
 		echo after:{} ::: ${job1} ${job2} ${job3}
 '
 test_expect_success 'dependency=afterany works for INACTIVE jobs' '
 	run_timeout 15 \
-		flux mini bulksubmit --wait --watch \
+		flux bulksubmit --wait --watch \
 		--job-name=afterany:{} \
 		--dependency=afterany:{} \
 		echo afterany:{} ::: ${job1} ${job2} ${job3}
 '
 test_expect_success 'dependency=afterok works for INACTIVE job' '
 	run_timeout 15 \
-		flux mini run --dependency=afterok:${job1} \
+		flux run --dependency=afterok:${job1} \
 		echo afterok:${job1} &&
-	test_must_fail flux mini run --dependency=afterok:${job2} hostname &&
-	test_must_fail flux mini run --dependency=afterok:${job3} hostname 
+	test_must_fail flux run --dependency=afterok:${job2} hostname &&
+	test_must_fail flux run --dependency=afterok:${job3} hostname 
 '
 test_expect_success 'dependency=afternotok works for INACTIVE job' '
 	run_timeout 15 \
-		flux mini bulksubmit --wait --watch \
+		flux bulksubmit --wait --watch \
 		--job-name=afternotok:{} \
 		--dependency=afternotok:{} \
 		echo afterany:{} ::: ${job2} ${job3} &&
-	test_must_fail flux mini run --dependency=afternotok:${job1} hostname
+	test_must_fail flux run --dependency=afternotok:${job1} hostname
 '
 test_expect_success 'dependency=after fails for INACTIVE canceled job' '
-	job4=$(flux mini submit --urgency=hold hostname) &&
+	job4=$(flux submit --urgency=hold hostname) &&
 	flux job cancel ${job4} &&
-	test_must_fail flux mini run --dependency=after:${job4} hostname
+	test_must_fail flux run --dependency=after:${job4} hostname
 '
 test_expect_success 'jobs with dependencies can be safely canceled' '
-	jobid=$(flux mini submit --urgency=hold hostname) &&
-	depid=$(flux mini submit --dependency=after:$jobid hostname) &&
+	jobid=$(flux submit --urgency=hold hostname) &&
+	depid=$(flux submit --dependency=after:$jobid hostname) &&
 	flux job cancel $depid &&
 	flux job urgency $jobid default &&
 	flux job wait-event -vt 15 $jobid clean
@@ -231,8 +231,8 @@ test_expect_success HAVE_JQ 'flux jobtap query dependency-after works' '
 	flux jobtap query .dependency-after > query-none.json &&
 	test_debug "jq -S . query-none.json" &&
 	jq -e ".dependencies | length == 0" query-none.json &&
-	jobid=$(flux mini submit --urgency=hold hostname) &&
-	depid=$(flux mini submit --dependency=after:$jobid hostname) &&
+	jobid=$(flux submit --urgency=hold hostname) &&
+	depid=$(flux submit --dependency=after:$jobid hostname) &&
 	flux jobtap query .dependency-after > query.json &&
 	test_debug "jq -S . query.json" &&
 	jq -e ".dependencies | length == 1" query.json &&

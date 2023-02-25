@@ -11,7 +11,7 @@ test_under_flux 1 job
 flux setattr log-stderr-level 1
 
 test_expect_success 'duration: no validation when there is no expiration' '
-	flux mini submit -t 100d true
+	flux submit -t 100d true
 '
 
 wait_duration_update() {
@@ -30,12 +30,12 @@ test_expect_success 'duration: set an expiration on resource.R' '
 	wait_duration_update $expiration
 '
 test_expect_success 'duration: submit a job without duration' '
-	flux mini submit true
+	flux submit true
 '
 test_expect_success 'duration: submit a job with duration below expiration' '
-	flux mini submit -t 5s true
+	flux submit -t 5s true
 '
 test_expect_success 'duration: submit a job with duration after expiration' '
-	test_must_fail flux mini submit -t 1h true
+	test_must_fail flux submit -t 1h true
 '
 test_done

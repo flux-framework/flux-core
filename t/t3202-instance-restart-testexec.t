@@ -10,7 +10,7 @@ export FLUX_DISABLE_JOB_CLEANUP=t
 
 test_expect_success 'run a testexec job in persistent instance (long run)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	     flux mini submit \
+	     flux submit \
 	       --flags=debug \
 	       --setattr=system.exec.test.run_duration=100s \
 	       hostname >id1.out
@@ -39,7 +39,7 @@ test_expect_success 'restart instance, job completed (long run)' '
 # instance restarted
 test_expect_success 'run a testexec job in persistent instance (exit run)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	     flux mini submit \
+	     flux submit \
 	       --flags=debug \
 	       --setattr=system.exec.test.reattach_finish=1 \
 	       --setattr=system.exec.test.run_duration=100s \
