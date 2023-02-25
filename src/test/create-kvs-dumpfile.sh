@@ -10,11 +10,11 @@ WORKLOAD="\
 #
 #  Basic workload used to create a set of varied eventlogs in KVS
 #
-flux mini bulksubmit --quiet --cc=1-4 {} ::: true false nocommand &&
-id=\$(flux mini submit --urgency=hold hostname) &&
+flux bulksubmit --quiet --cc=1-4 {} ::: true false nocommand &&
+id=\$(flux submit --urgency=hold hostname) &&
 flux job cancel \$id &&
-id=\$(flux mini submit --wait-event=start sleep 30) &&
-flux mini submit --quiet --dependency=afternotok:\$id true &&
+id=\$(flux submit --wait-event=start sleep 30) &&
+flux submit --quiet --dependency=afternotok:\$id true &&
 flux job cancel \$id &&
 flux queue drain &&
 flux jobs -a
