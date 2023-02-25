@@ -5,6 +5,13 @@ flux-mini(1)
 ============
 
 
+.. warning::
+
+  This command is deprecated.  Please use :man1:`flux-submit`,
+  :man1:`flux-run`, :man1:`flux-batch`, :man1:`flux-alloc`, and
+  :man1:`flux-bulksubmit` instead.
+
+
 SYNOPSIS
 ========
 
@@ -17,6 +24,7 @@ SYNOPSIS
 **flux** **mini** **batch** [OPTIONS] *--nslots=N* SCRIPT...
 
 **flux** **mini** **alloc** [OPTIONS] *--nslots=N* [COMMAND...]
+
 
 DESCRIPTION
 ===========
@@ -109,3 +117,10 @@ RESOURCES
 =========
 
 Flux: http://flux-framework.org
+
+
+SEE ALSO
+========
+
+:man1:`flux-submit`, :man1:`flux-run`, :man1:`flux-alloc`, :man1:`flux-batch`,
+:man1:`flux-bulksubmit`
