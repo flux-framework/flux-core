@@ -38,6 +38,7 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-run.1 \
 	man1/flux-bulksubmit.1 \
 	man1/flux-alloc.1 \
+	man1/flux-batch.1 \
 	man1/flux-job.1 \
 	man1/flux-version.1 \
 	man1/flux-jobs.1 \

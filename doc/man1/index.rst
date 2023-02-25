@@ -6,6 +6,7 @@ man1
    :maxdepth: 1
 
    flux-alloc
+   flux-batch
    flux-broker
    flux-bulksubmit
    flux-config
