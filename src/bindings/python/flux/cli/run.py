@@ -24,8 +24,8 @@ class RunCmd(base.SubmitBaseCmd):
     Usage: flux run [OPTIONS] cmd ...
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, prog, usage=None, description=None):
+        super().__init__(prog, usage, description)
         self.parser.add_argument(
             "--wait-event",
             metavar="NAME",

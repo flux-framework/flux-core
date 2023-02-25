@@ -33,8 +33,8 @@ def main():
     """
 
     alloc = base.AllocCmd(
-        help="allocate a new instance for interactive use",
-        usage="flux alloc [COMMAND] [ARGS...]",
+        "flux alloc",
+        usage="flux alloc [OPTIONS...] [COMMAND] [ARGS...]",
         description=description,
     )
     parser = alloc.get_parser()

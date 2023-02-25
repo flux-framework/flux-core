@@ -27,7 +27,10 @@ def main():
     )
 
     # Prepare the submit parser
-    submit = base.SubmitCmd(description="enqueue a job")
+    submit = base.SubmitCmd(
+        "flux submit",
+        description="enqueue a job",
+    )
     parser = submit.get_parser()
     parser.set_defaults(func=submit.main)
     args = parser.parse_args()

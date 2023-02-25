@@ -28,6 +28,7 @@ def main():
 
     # Prepare the submit parser
     run = base.RunCmd(
+        "flux run",
         description="run a job interactively",
     )
     parser = run.get_parser()

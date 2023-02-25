@@ -20,8 +20,8 @@ class SubmitCmd(base.SubmitBulkCmd):
     Usage: flux submit [OPTIONS] cmd ...
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, prog, usage=None, description=None):
+        super().__init__(prog, usage, description)
         self.parser.add_argument(
             "command", nargs=argparse.REMAINDER, help="Job command and arguments"
         )

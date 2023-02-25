@@ -36,7 +36,7 @@ def main():
 
     # create the bulksubmit parser
     bulksubmit = base.BulkSubmitCmd(
-        usage="flux bulksubmit [OPTIONS...] COMMAND [ARGS...]",
+        "flux bulksubmit",
         description=description,
     )
     parser = bulksubmit.get_parser()

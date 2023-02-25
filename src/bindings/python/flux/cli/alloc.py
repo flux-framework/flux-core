@@ -20,11 +20,9 @@ from flux.uri import JobURI
 
 
 class AllocCmd(base.MiniCmd):
-    def __init__(self, **kwargs):
+    def __init__(self, prog, usage=None, description=None):
         self.t0 = None
-        if "exclude_io" not in kwargs:
-            kwargs["exclude_io"] = True
-        super().__init__(**kwargs)
+        super().__init__(prog, usage, description, exclude_io=True)
         base.add_batch_alloc_args(self.parser)
         self.parser.add_argument(
             "-v",

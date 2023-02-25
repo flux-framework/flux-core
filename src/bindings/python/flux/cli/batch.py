@@ -21,8 +21,8 @@ LOGGER = logging.getLogger("flux-batch")
 
 
 class BatchCmd(base.MiniCmd):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, prog, usage=None, description=None):
+        super().__init__(prog, usage, description)
         self.parser.add_argument(
             "--wrap",
             action="store_true",
@@ -129,7 +129,7 @@ class BatchCmd(base.MiniCmd):
         #  after applying directive options.
         #  self.argv is sys.argv without flux-batch or flux-mini, batch:
         self.argv = sys.argv[1:]
-        if self.argv[0] == "batch":
+        if self.argv and self.argv[0] == "batch":
             self.argv.pop(0)
 
         #  Process file with possible submission directives, returning

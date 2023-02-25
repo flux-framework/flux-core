@@ -39,27 +39,29 @@ def main():
     subparsers.required = True
 
     # run
-    run = RunCmd(add_help=False)
+    run = RunCmd("flux mini run")
     mini_run_parser_sub = subparsers.add_parser(
         "run",
         parents=[run.get_parser()],
         help="run a job interactively",
         formatter_class=flux.util.help_formatter(),
+        add_help=False,
     )
     mini_run_parser_sub.set_defaults(func=run.main)
 
     # submit
-    submit = SubmitCmd(add_help=False)
+    submit = SubmitCmd("flux mini submit")
     mini_submit_parser_sub = subparsers.add_parser(
         "submit",
         parents=[submit.get_parser()],
         help="enqueue a job",
         formatter_class=flux.util.help_formatter(),
+        add_help=False,
     )
     mini_submit_parser_sub.set_defaults(func=submit.main)
 
     # bulksubmit
-    bulksubmit = BulkSubmitCmd(add_help=False)
+    bulksubmit = BulkSubmitCmd("flux mini bulksubmit")
     description = """
     Submit a series of commands given on the command line or on stdin,
     using an interface similar to GNU parallel or xargs.
@@ -74,11 +76,12 @@ def main():
         usage="flux mini bulksubmit [OPTIONS...] COMMAND [ARGS...]",
         description=description,
         formatter_class=flux.util.help_formatter(),
+        add_help=False,
     )
     bulksubmit_parser_sub.set_defaults(func=bulksubmit.main)
 
     # batch
-    batch = BatchCmd(add_help=False)
+    batch = BatchCmd("flux mini batch")
     description = """
     Submit a batch SCRIPT and ARGS to be run as the initial program of
     a Flux instance.  If no batch script is provided, one will be read
@@ -91,11 +94,12 @@ def main():
         usage="flux mini batch [OPTIONS...] [SCRIPT] [ARGS...]",
         description=description,
         formatter_class=flux.util.help_formatter(),
+        add_help=False,
     )
     batch.parser.set_defaults(func=batch.main)
 
     # alloc
-    alloc = AllocCmd(add_help=False)
+    alloc = AllocCmd("flux mini alloc")
     description = """
     Allocate resources and start a new Flux instance. Once the instance
     has started, attach to it interactively.
@@ -107,6 +111,7 @@ def main():
         usage="flux mini alloc [COMMAND] [ARGS...]",
         description=description,
         formatter_class=flux.util.help_formatter(),
+        add_help=False,
     )
     alloc.parser.set_defaults(func=alloc.main)
 

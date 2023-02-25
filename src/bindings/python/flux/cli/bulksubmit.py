@@ -26,8 +26,8 @@ class BulkSubmitCmd(base.SubmitBulkCmd):
 
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, prog, usage=None, description=None):
+        super().__init__(prog, usage, description)
         self.parser.add_argument(
             "--shuffle",
             action="store_true",

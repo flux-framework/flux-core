@@ -34,7 +34,7 @@ def main():
     from stdin.
     """
     batch = base.BatchCmd(
-        help="enqueue a batch script",
+        "flux batch",
         usage="flux batch [OPTIONS...] [SCRIPT] [ARGS...]",
         description=description,
     )

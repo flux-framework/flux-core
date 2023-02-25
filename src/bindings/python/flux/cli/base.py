@@ -537,23 +537,31 @@ class MiniCmd:
     MiniCmd is the base class for all flux submission subcommands
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, prog, usage=None, description=None, exclude_io=False):
         self.flux_handle = None
         self.exitcode = 0
         self.progress = None
-        self.parser = self.create_parser(**kwargs)
+        self.parser = self.create_parser(prog, usage, description, exclude_io)
 
     @staticmethod
-    def create_parser(**kwargs):
+    def create_parser(
+        prog, usage=None, description=None, exclude_io=False, add_help=True
+    ):
         """
         Create default parser with args for submission subcommands
+        Args:
+            prog (str): program name in usage output
+            usage (str, optional): usage string, by default
+                ``{prog} [OPTIONS...] COMMAND [ARGS...]``
+            description (str, optional): short description of command to
+                follow usage. May be multiple lines.
         """
-        exclude_io = kwargs.get("exclude_io", False) is True
-        add_help = kwargs.get("add_help", True) is True
+        if usage is None:
+            usage = f"{prog} [OPTIONS...] COMMAND [ARGS...]"
         parser = argparse.ArgumentParser(
-            usage=kwargs.get("usage"),
-            add_help=add_help,
-            description=kwargs.get("description"),
+            prog=prog,
+            usage=usage,
+            description=description,
             formatter_class=flux.util.help_formatter(),
         )
         parser.add_argument(
@@ -867,8 +875,8 @@ class SubmitBaseCmd(MiniCmd):
     SubmitBaseCmd is an abstract class with shared code for job submission
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, prog, usage=None, description=None):
+        super().__init__(prog, usage, description)
         self.parser.add_argument(
             "--taskmap",
             type=str,
@@ -1070,12 +1078,12 @@ class SubmitBulkCmd(SubmitBaseCmd):
     to the SubmitBaseCmd class
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, prog, usage=None, description=None):
         #  dictionary of open logfiles for --log, --log-stderr:
         self._logfiles = {}
         self.t0 = None
 
-        super().__init__(**kwargs)
+        super().__init__(prog, usage, description)
         self.parser.add_argument(
             "--quiet",
             action="store_true",
