@@ -29,7 +29,6 @@ def main():
     # Prepare the submit parser
     run = base.RunCmd(
         description="run a job interactively",
-        formatter_class=flux.util.help_formatter(),
     )
     parser = run.get_parser()
     parser.set_defaults(func=run.main)

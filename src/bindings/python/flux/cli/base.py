@@ -554,7 +554,7 @@ class MiniCmd:
             usage=kwargs.get("usage"),
             add_help=add_help,
             description=kwargs.get("description"),
-            formatter_class=kwargs.get("formatter_class") or argparse.HelpFormatter,
+            formatter_class=flux.util.help_formatter(),
         )
         parser.add_argument(
             "-q",

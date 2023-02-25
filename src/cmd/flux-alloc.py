@@ -36,7 +36,6 @@ def main():
         help="allocate a new instance for interactive use",
         usage="flux alloc [COMMAND] [ARGS...]",
         description=description,
-        formatter_class=flux.util.help_formatter(),
     )
     parser = alloc.get_parser()
     parser.set_defaults(func=alloc.main)

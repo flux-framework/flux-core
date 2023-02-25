@@ -37,7 +37,6 @@ def main():
         help="enqueue a batch script",
         usage="flux batch [OPTIONS...] [SCRIPT] [ARGS...]",
         description=description,
-        formatter_class=flux.util.help_formatter(),
     )
     parser = batch.get_parser()
     parser.set_defaults(func=batch.main)
