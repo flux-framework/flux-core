@@ -7,7 +7,7 @@ the size of the parallel program and the geometry of its task slots:
 Common resource options
 -----------------------
 
-All subcommands take the following common resource allocation options:
+These commands take the following common resource allocation options:
 
 **-N, --nodes=N**
    Set the number of nodes to assign to the job. Tasks will be distributed
@@ -27,8 +27,8 @@ All subcommands take the following common resource allocation options:
 Per-task options
 ----------------
 
-The **run**, **submit** and **bulksubmit** commands take two sets
-of mutually exclusive options to specify the size of the job request.
+:man1:`flux-run`, :man1:`flux-submit` and :man1:`flux-bulksubmit` take two
+sets of mutually exclusive options to specify the size of the job request.
 The most common form uses the total number of tasks to run along with
 the amount of resources required per task to specify the resources for
 the entire job:
@@ -70,7 +70,7 @@ listed above:
 Batch job options
 -----------------
 
-The **batch** and **alloc** commands do not launch tasks directly, and
+:man1:`flux-batch` and :man1:`flux-alloc` do not launch tasks directly, and
 therefore job parameters are specified in terms of resource slot size
 and number of slots. A resource slot can be thought of as the minimal
 resources required for a virtual task. The default slot size is 1 core.
@@ -87,8 +87,7 @@ resources required for a virtual task. The default slot size is 1 core.
 Additional job options
 ----------------------
 
-The **run**, **submit**, **batch**, and **alloc** commands also take
-following additional job parameters:
+These commands also take following job parameters:
 
 **-q, --queue=NAME**
    Submit a job to a specific named queue. If a queue is not specified

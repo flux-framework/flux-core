@@ -4,7 +4,7 @@
 SUBMISSION DIRECTIVES
 =====================
 
-The *flux mini batch* command supports submission directives
+The :man1:`flux-batch` command supports submission directives
 mixed within the submission script. The submission directive specification
 is fully detailed in RFC 36, but is summarized here for convenience:
 
@@ -15,7 +15,7 @@ is fully detailed in RFC 36, but is summarized here for convenience:
 
      #!/bin/sh
      # flux: -N4 -n16
-     flux mini run -n16 hostname
+     flux run -n16 hostname
 
  * All directives in a file must use the same sentinel pattern, otherwise
    an error will be raised.
@@ -36,13 +36,13 @@ is fully detailed in RFC 36, but is summarized here for convenience:
      # flux: """
 
 Submission directives may be used to set default command line options for
-*flux mini batch* for a given script. Options given on the *flux mini batch*
-command line override those in the submission script, e.g.: ::
+:man1:`flux-batch` for a given script. Options given on the command line
+override those in the submission script, e.g.: ::
 
-   $ flux mini batch --job-name=test-name --wrap <<-EOF
+   $ flux batch --job-name=test-name --wrap <<-EOF
    > #flux: -N4
    > #flux: --job-name=name
-   > flux mini run -N4 hostname
+   > flux run -N4 hostname
    > EOF
    ƒ112345
    $ flux jobs -no {name} ƒ112345

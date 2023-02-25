@@ -1,7 +1,7 @@
 PROCESS RESOURCE LIMITS
 =======================
 
-By default flux mini propagates some common resource limits (as described
+By default these commands propagate some common resource limits (as described
 in :linux:man2:`getrlimit`) to the job by setting the ``rlimit`` job shell
 option in jobspec.  The set of resource limits propagated can be controlled
 via the ``--rlimit=RULE`` option:
@@ -35,7 +35,7 @@ The ``--rlimit`` rules work similar to the ``--env`` option rules:
    will propagate ``RLIMIT_MEMLOCK`` (which is not in the list of limits
    that are propagated by default).
 
-``flux-mini`` starts with a default list of resource limits to propagate,
+We start with a default list of resource limits to propagate,
 then applies all rules specified via ``--rlimit`` on the command line.
 Therefore, to propagate only one limit, ``-*`` should first be used to
 start with an empty set, e.g. ``--rlimit=-*,core`` will only propagate the

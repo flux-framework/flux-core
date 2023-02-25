@@ -6,8 +6,7 @@ DEPENDENCIES
    See Flux Framework RFC 26 for more detailed information about the generic
    dependency specification.
 
-Dependencies may be specified on the ``flux mini`` command line using the
-following option
+Dependencies may be specified on the command line using the following options:
 
 **--dependency=URI**
    Specify a dependency of the submitted job using RFC 26 dependency URI
@@ -48,9 +47,9 @@ afternotok:JOBID
 
 begin-time:TIMESTAMP
    This dependency is satisfied after TIMESTAMP, which is specified in
-   floating point seconds since the UNIX epoch. See the ``flux-mini``
-   ``--begin-time`` option below for a more user-friendly interface
-   to the ``begin-time`` dependency.
+   floating point seconds since the UNIX epoch. See the ``--begin-time``
+   option below for a more user-friendly interface to the ``begin-time``
+   dependency.
 
 In any of the above ``after*`` cases, if it is determined that the
 dependency cannot be satisfied (e.g. a job fails due to an exception

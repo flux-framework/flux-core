@@ -4,7 +4,7 @@ STANDARD I/O
 By default, task stdout and stderr streams are redirected to the
 KVS, where they may be accessed with the ``flux job attach`` command.
 
-In addition, ``flux-mini run`` processes standard I/O in real time,
+In addition, :man1:`flux-run` processes standard I/O in real time,
 emitting the job's I/O to its stdout and stderr.
 
 **--input=FILENAME**
@@ -17,7 +17,7 @@ emitting the job's I/O to its stdout and stderr.
    in the F58 encoding.  If needed, an alternate encoding can be
    selected by using a subkey with the name of the desired encoding,
    e.g. *{{id.dec}}*. Supported encodings include *f58* (the default),
-   *dec*, *hex*, *dothex*, and *words*. For **flux mini batch** the
+   *dec*, *hex*, *dothex*, and *words*. For :man1:`flux-batch` the
    default *TEMPLATE* is *flux-{{id}}.out*. To force output to KVS so it is
    available with ``flux job attach``, set *TEMPLATE* to *none* or *kvs*.
 

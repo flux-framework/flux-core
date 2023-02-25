@@ -7,6 +7,6 @@ the job exit status is 128+signo.
 
 The ``flux-job attach`` command exits with the job exit status.
 
-In addition, ``flux-mini run`` runs until the job completes and exits
+In addition, :man:`flux-run` runs until the job completes and exits
 with the job exit status.
 

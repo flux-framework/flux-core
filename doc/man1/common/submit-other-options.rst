@@ -14,8 +14,8 @@ OTHER OPTIONS
 
 **-v, --verbose**
    *(run,alloc,submit,bulksubmit)* Increase verbosity on stderr. For example,
-   currently ``flux mini run -v`` displays jobid, ``-vv`` displays job events,
-   and ``-vvv`` displays exec events. ``flux mini alloc -v`` forces the command
+   currently ``flux run -v`` displays jobid, ``-vv`` displays job events,
+   and ``-vvv`` displays exec events. ``flux alloc -v`` forces the command
    to print the submitted jobid on stderr.
    The specific output may change in the future.
 
@@ -113,12 +113,12 @@ OTHER OPTIONS
    *(submit,bulksubmit)* Suppress logging of jobids to stdout.
 
 **--log=FILE**
-   *(submit,bulksubmit)* Log ``flux-mini`` output and stderr to ``FILE``
+   *(submit,bulksubmit)* Log command output and stderr to ``FILE``
    instead of the terminal. If a replacement (e.g. ``{}`` or ``{cc}``)
    appears in ``FILE``, then one or more output files may be opened.
    For example, to save all submitted jobids into separate files, use::
 
-      flux mini submit --cc=1-4 --log=job{cc}.id hostname
+      flux submit --cc=1-4 --log=job{cc}.id hostname
 
 **--log-stderr=FILE**
    *(submit,bulksubmit)* Separate stderr into ``FILE`` instead of sending
@@ -133,7 +133,7 @@ OTHER OPTIONS
    before exiting. E.g. to submit a job and block until the job begins
    running, use ``--wait-event=start``. *(submit,bulksubmit only)* If ``NAME``
    begins with ``exec.``, then wait for an event in the exec eventlog, e.g.
-   ``exec.shell.init``. For ``flux mini run`` the argument to this option
+   ``exec.shell.init``. For ``flux run`` the argument to this option
    when used is passed directly to ``flux job attach``.
 
 **--watch**
@@ -153,7 +153,7 @@ OTHER OPTIONS
    attribute during command and option replacement. The string being
    processed is available as ``x``. For example::
 
-   $ seq 1 8 | flux mini bulksubmit --define=pow="2**int(x)" -n {.pow} ...
+   $ seq 1 8 | flux bulksubmit --define=pow="2**int(x)" -n {.pow} ...
 
 **--shuffle**
    *(bulksubmit)* Shuffle the list of commands before submission.

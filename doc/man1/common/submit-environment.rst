@@ -1,10 +1,9 @@
 ENVIRONMENT
 ===========
 
-By default, ``flux-mini`` duplicates the current environment when
-submitting jobs. However, a set of environment manipulation options are
-provided to give fine control over the requested environment submitted
-with the job.
+By default, these commands duplicate the current environment when submitting
+jobs. However, a set of environment manipulation options are provided to
+give fine control over the requested environment submitted with the job.
 
 **--env=RULE**
    Control how environment variables are exported with *RULE*. See
@@ -26,9 +25,8 @@ with the job.
 ENV RULES
 =========
 
-The ``--env*`` options of ``flux-mini`` allow control of the environment
-exported to jobs via a set of *RULE* expressions. The currently supported
-rules are
+The ``--env*`` options allow control of the environment exported to jobs
+via a set of *RULE* expressions. The currently supported rules are
 
  * If a rule begins with ``-``, then the rest of the rule is a pattern
    which removes matching environment variables. If the pattern starts
@@ -75,7 +73,7 @@ rules are
    Examples:
        ``PATH``, ``FLUX_*_PATH``, ``/^OMP.*/``
 
-Since ``flux-mini`` always starts with a copy of the current environment,
+Since we always starts with a copy of the current environment,
 the default implicit rule is ``*`` (or ``--env=*``). To start with an
 empty environment instead, the ``-*`` rule or ``--env-remove=*`` option
 should be used. For example, the following will only export the current
@@ -83,7 +81,7 @@ should be used. For example, the following will only export the current
 
 ::
 
-    flux mini run --env-remove=* --env=PATH ...
+    flux run --env-remove=* --env=PATH ...
 
 
 Since variables can be expanded from the currently built environment, and
@@ -92,7 +90,7 @@ be composed on the command line by multiple invocations of ``--env``, e.g.:
 
 ::
 
-    flux mini run --env-remove=* \
+    flux run --env-remove=* \
                   --env=PATH=/bin --env='PATH=$PATH:/usr/bin' ...
 
 Note that care must be taken to quote arguments so that ``$PATH`` is not
