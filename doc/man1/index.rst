@@ -5,6 +5,7 @@ man1
    :caption: General Commands
    :maxdepth: 1
 
+   flux-alloc
    flux-broker
    flux-bulksubmit
    flux-config
