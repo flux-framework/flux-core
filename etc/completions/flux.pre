@@ -1302,6 +1302,9 @@ _flux_core()
     mini)
         _flux_mini $subcmd
         ;;
+    submit|run|alloc|batch|bulksubmit)
+        _flux_mini $cmd
+        ;;
     resource)
         _flux_resource $subcmd
         ;;
