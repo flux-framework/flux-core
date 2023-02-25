@@ -132,7 +132,7 @@ in the container! The dependencies for building Flux are installed. Try building
 ./configure --prefix=/usr/local
 make
 # This will install in the container!
-make install
+sudo make install
 # This will test in the container!
 make check
 # If you want a compilation database
@@ -151,18 +151,18 @@ Note that the above assumes installing flux to `/usr/local`. If you install else
 If you ever need to rebuild, you can either restart VSCode and open in the same way (and it will give you the option)
 or you can do on demand in the command palette with `Dev Containers: Rebuild Container` (with or without cache).
 
-**Important** it's recommended that you commit (or otherwise write to the .git folder) from the outside
-of the container. The reason is two-fold - first, if you need to sign your commits, the container doesn't
-have access and won't be able to. Second, if you write to .git it will change permissions of the directory.
-If you accidentally do this and need to fix, you can run this from your terminal outside of VSCode:
+**Important** the development container assumes you are on a system with uid 1000 and gid 1000. If this isn't the case,
+edit the [.devcontainer/Dockerfile](.devcontainer/Dockerfile) to be your user and group id. This will ensure
+changes written inside the container are owned by your user. It's recommended that you commit on your system
+(not inside the container) because if you need to sign your commits, the container doesn't
+have access and won't be able to. If you find that you accidentally muck up permissions
+and need to fix, you can run this from your terminal outside of VSCode:
 
 ```bash
 $ sudo chown -R $USER .git/
 # and then commit
 ```
 
-Hopefully we will find a workaround for this so everything works from inside of a VSCode terminal.
-For the time being, make sure you fix permissions and commit from outside the container on your local machine!
 </details>
 
 
