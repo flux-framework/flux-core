@@ -16,51 +16,9 @@
 #include <argz.h>
 #include <jansson.h>
 
-#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 
 #include "cmdhelp.h"
-
-struct cmdhelp {
-    char *cmd;
-    char *description;
-};
-
-static void cmdhelp_destroy (struct cmdhelp **p)
-{
-    if (*p) {
-        struct cmdhelp *ch = *p;
-        free (ch->cmd);
-        free (ch->description);
-        free (ch);
-        *p = NULL;
-    }
-}
-
-static struct cmdhelp *cmdhelp_create (const char *cmd, const char *desc)
-{
-    struct cmdhelp *ch = calloc (1, sizeof (*ch));
-    if (!ch)
-        return NULL;
-    ch->cmd = strdup (cmd);
-    ch->description = strdup (desc);
-    if (!ch->cmd || !ch->description) {
-        cmdhelp_destroy (&ch);
-        return (NULL);
-    }
-    return (ch);
-}
-
-static void cmd_list_destroy (zlist_t *zl)
-{
-    struct cmdhelp *ch;
-    ch = zlist_first (zl);
-    while (ch) {
-        cmdhelp_destroy (&ch);
-        ch = zlist_next (zl);
-    }
-    zlist_destroy (&zl);
-}
 
 static json_t *command_list_file_read (const char *path)
 {
@@ -80,46 +38,43 @@ static json_t *command_list_file_read (const char *path)
     return (o);
 }
 
-static int command_list_read (zhash_t *h, const char *path)
+static int command_list_print (FILE *fp, const char *path)
 {
-    int i;
-    int rc = -1;
-    int n = 0;
+    int rc = 0;
+    size_t index;
     json_t *o = NULL;
+    json_t *entry;
 
     if (!(o = command_list_file_read (path)))
         goto out;
 
-    n = json_array_size (o);
-    for (i = 0; i < n; i++) {
-        const char *category;
-        const char *command;
+    json_array_foreach (o, index, entry) {
+        size_t i;
         const char *description;
-        json_t *entry;
-        zlist_t *zl;
+        json_t *commands;
+        json_t *cmd;
+        json_error_t error;
 
-        if (!(entry = json_array_get (o, i))) {
-            log_msg ("%s: entry %d is not an object", path, i);
+        if (json_unpack_ex (entry, &error, 0,
+                            "{s:s s:o}",
+                            "description", &description,
+                            "commands", &commands) < 0) {
+            log_msg ("%s:entry %zu: %s", path, index, error.text);
             goto out;
         }
-        if (json_unpack (entry, "{s:s s:s s:s}",
-                                "category", &category,
-                                "command", &command,
-                                "description", &description) < 0) {
-            log_msg ("%s: Missing element in JSON entry %d", path, i);
-            goto out;
-        }
-        if (!(zl = zhash_lookup (h, category))) {
-            char *s = strdup (category);
-            if (s == NULL)
+        fprintf (fp, "\n%s\n", description);
+        json_array_foreach (commands, i, cmd) {
+            const char *name = NULL;
+            const char *desc = NULL;
+            if (json_unpack_ex (cmd, &error, 0,
+                                "{s:s s:s}",
+                                "name", &name,
+                                "description", &desc) < 0) {
+                log_msg ("%s:entry %zu.%zu: %s", path, index, i, error.text);
                 goto out;
-            zl = zlist_new ();
-            //zlist_set_destructor (zl, (czmq_destructor *) cmdhelp_destroy);
-            zhash_insert (h, s, (void *) zl);
-            zhash_freefn (h, s, (zhash_free_fn *) cmd_list_destroy);
-            free (s);
+            }
+            fprintf (fp, "   %-18s %s\n", name, desc);
         }
-        zlist_append (zl, cmdhelp_create (command, description));
     }
     rc = 0;
 
@@ -129,93 +84,31 @@ out:
 
 }
 
-static void emit_command_list_category (zhash_t *zh, const char *cat, FILE *fp)
-{
-    struct cmdhelp *c;
-    zlist_t *zl = zhash_lookup (zh, cat);
-
-    fprintf (fp, "Common commands from flux-%s:\n", cat);
-    c = zlist_first (zl);
-    while (c) {
-        fprintf (fp, "   %-18s %s\n", c->cmd, c->description);
-        c = zlist_next (zl);
-    }
-}
-
-/* strcmp() ensuring "core" is always sorted to front:
- */
-static int categorycmp (const char *s1, const char *s2)
-{
-    if (strcmp (s1, "core") == 0)
-        return (-1);
-    if (strcmp (s2, "core") == 0)
-        return (1);
-    return strcmp (s1, s2);
-}
-
-static int category_cmp (const char *s1, const char *s2)
-{
-    return categorycmp (s1, s2);
-}
-
-zhash_t *get_command_list_hash (const char *pattern)
+static void emit_command_help_from_pattern (FILE *fp, const char *pattern)
 {
     int rc;
     size_t i;
     glob_t gl;
-    zhash_t *zh = NULL;
 
     rc = glob (pattern, GLOB_ERR, NULL, &gl);
     switch (rc) {
         case 0:
             break; /* have results, fall-through. */
         case GLOB_ABORTED:
-            /* No help.d directory? */
-            goto out;
-            break;
         case GLOB_NOMATCH:
-            goto out;
-            break;
+            /* No help.d directory? */
+            return;
         default:
             fprintf (stderr, "glob: unknown error %d\n", rc);
             break;
     }
 
-    zh = zhash_new ();
-    //zhash_set_destructor (zh, (czmq_destructor *) zlist_destroy);
     for (i = 0; i < gl.gl_pathc; i++) {
         const char *file = gl.gl_pathv[i];
-        if (command_list_read (zh, file) < 0)
+        if (command_list_print (fp, file) < 0)
             log_err_exit ("%s: failed to read content\n", file);
     }
     globfree (&gl);
-
-out:
-    return (zh);
-}
-
-static void emit_command_help_from_pattern (const char *pattern, FILE *fp)
-{
-    zhash_t *zh = NULL;
-    zlist_t *keys = NULL;
-    const char *cat;
-
-    zh = get_command_list_hash (pattern);
-    if (zh == NULL)
-        return;
-
-    keys = zhash_keys (zh);
-    zlist_sort (keys, (zlist_compare_fn *) category_cmp);
-
-    cat = zlist_first (keys);
-    while (cat) {
-        emit_command_list_category (zh, cat, fp);
-        if ((cat = zlist_next (keys)))
-            fprintf (fp, "\n");
-    }
-    zlist_destroy (&keys);
-    zhash_destroy (&zh);
-    return;
 }
 
 void emit_command_help (const char *plist, FILE *fp)
@@ -228,7 +121,7 @@ void emit_command_help (const char *plist, FILE *fp)
         return;
 
     while ((entry = argz_next (argz, argz_len, entry)))
-        emit_command_help_from_pattern (entry, fp);
+        emit_command_help_from_pattern (fp, entry);
 
     free (argz);
 }
