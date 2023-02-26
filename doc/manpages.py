@@ -16,8 +16,15 @@ author = 'This page is maintained by the Flux community.'
 # - Man page description
 # - Author (use [author])
 # - Manual section
+#
+# Note: the relative order of commands in this list affects the order
+# in which commands appear within a section in the output of flux help.
+# Therefore, keep these commands in relative order of importance.
+#
 man_pages = [
     ('man1/flux-broker', 'flux-broker', 'Flux message broker daemon', [author], 1),
+    ('man1/flux-start', 'flux-start', 'bootstrap a local Flux instance', [author], 1),
+    ('man1/flux-version', 'flux-version', 'Display flux version information', [author], 1),
     ('man1/flux-config', 'flux-config', 'Manage/query Flux configuration', [author], 1),
     ('man1/flux-content', 'flux-content', 'access content service', [author], 1),
     ('man1/flux-cron', 'flux-cron', 'Cron-like utility for Flux', [author], 1),
@@ -31,14 +38,15 @@ man_pages = [
     ('man1/flux-getattr', 'flux-lsattr', 'access broker attributes', [author], 1),
     ('man1/flux-getattr', 'flux-getattr', 'access broker attributes', [author], 1),
     ('man1/flux-jobs', 'flux-jobs', 'list jobs submitted to Flux', [author], 1),
+    ('man1/flux-top', 'flux-top', 'Display running Flux jobs', [author], 1),
     ('man1/flux-pstree', 'flux-pstree', 'display job hierarchies', [author], 1),
     ('man1/flux-pgrep', 'flux-pgrep', 'search or cancel matching jobs', [author], 1),
     ('man1/flux-pgrep', 'flux-pkill', 'search or cancel matching jobs', [author], 1),
     ('man1/flux-jobtap', 'flux-jobtap', 'List, remove, and load job-manager plugins', [author], 1),
-    ('man1/flux-uptime', 'flux-uptime', 'Tell how long Flux has been up and running', [author], 1),
     ('man1/flux-shutdown', 'flux-shutdown', 'Shut down a Flux instance', [author], 1),
     ('man1/flux-uri', 'flux-uri', 'resolve Flux URIs', [author], 1),
     ('man1/flux-resource', 'flux-resource', 'list/manipulate Flux resource status', [author], 1),
+    ('man1/flux-queue', 'flux-queue', 'manage the job queue', [author], 1),
     ('man1/flux-restore', 'flux-restore', 'Read KVS snapshot from portable archive', [author], 1),
     ('man1/flux-keygen', 'flux-keygen', 'generate keys for Flux security', [author], 1),
     ('man1/flux-kvs', 'flux-kvs', 'Flux key-value store utility', [author], 1),
@@ -52,13 +60,10 @@ man_pages = [
     ('man1/flux-job', 'flux-job', 'Job Housekeeping Tool', [author], 1),
     ('man1/flux-module', 'flux-module', 'manage Flux extension modules', [author], 1),
     ('man1/flux-overlay', 'flux-overlay', 'Show flux overlay network status', [author], 1),
+    ('man1/flux-uptime', 'flux-uptime', 'Tell how long Flux has been up and running', [author], 1),
     ('man1/flux-ping', 'flux-ping', 'measure round-trip latency to Flux services', [author], 1),
     ('man1/flux-proxy', 'flux-proxy', 'create proxy environment for Flux instance', [author], 1),
-    ('man1/flux-queue', 'flux-queue', 'manage the job queue', [author], 1),
-    ('man1/flux-start', 'flux-start', 'bootstrap a local Flux instance', [author], 1),
     ('man1/flux-startlog', 'flux-startlog', 'Show Flux instance start and stop times', [author], 1),
-    ('man1/flux-top', 'flux-top', 'Display running Flux jobs', [author], 1),
-    ('man1/flux-version', 'flux-version', 'Display flux version information', [author], 1),
     ('man1/flux', 'flux', 'the Flux resource management framework', [author], 1),
     ('man1/flux-shell', 'flux-shell', 'the Flux job shell', [author], 1),
     ('man3/flux_attr_get', 'flux_attr_set', 'get/set Flux broker attributes', [author], 3),
