@@ -209,6 +209,21 @@ void flux_log_error (flux_t *h, const char *fmt, ...)
     va_end (ap);
 }
 
+void flux_llog (void *arg,
+                const char *file,
+                int line,
+                const char *func,
+                const char *subsys,
+                int level,
+                const char *fmt,
+                va_list ap)
+{
+    flux_t *h = arg;
+    // ignoring subsys, file, line
+    flux_vlog (h, level, fmt, ap);
+}
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

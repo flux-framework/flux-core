@@ -276,6 +276,9 @@ int main (int argc, char *argv[])
 
     h = rcmdsrv_create ();
 
+    if (flux_set_default_subprocess_log (h, tap_logger, NULL) < 0)
+        BAIL_OUT ("could not set logger");
+
     ok (iostress_run_check (h, "balanced", false, 0, 0, 8, 8, 80),
         "balanced worked");
 

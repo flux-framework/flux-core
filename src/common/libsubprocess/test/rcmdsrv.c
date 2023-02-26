@@ -24,52 +24,37 @@
 #include "src/common/libioencode/ioencode.h"
 #include "src/common/libutil/stdlog.h"
 
-struct rcmdsrv {
-    flux_msg_handler_t **handlers;
-};
-
-/* This allows broker log requests from the libsubprocess code to
- * appear in test output.
- */
-static void log_cb (flux_t *h,
-                    flux_msg_handler_t *mh,
-                    const flux_msg_t *msg,
-                    void *arg)
+void tap_logger (void *arg,
+                 const char *file,
+                 int line,
+                 const char *func,
+                 const char *subsys,
+                 int level,
+                 const char *fmt,
+                 va_list ap)
 {
-    const char *buf;
-    int len;
-    struct stdlog_header hdr;
-    int textlen;
-    const char *text;
-
-    if (flux_request_decode_raw (msg, NULL, (const void **)&buf, &len) == 0
-        && stdlog_decode (buf, len, &hdr, NULL, NULL, &text, &textlen) == 0)
-        diag ("LOG: %.*s\n", textlen, text);
-    else
-        diag ("LOG: could not decode message\n");
+    char buf[4096];
+    int len = sizeof (buf);
+    if (vsnprintf (buf, len, fmt, ap) >= len) {
+        buf[len-1] = '\0';
+        buf[len-2] = '+';
+    }
+    diag ("%s: %s:%d %s(): %s",
+          level == LOG_ERR ? "ERR" : "LOG",
+          file, line, func, buf);
 }
-
-static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "log.append", log_cb, 0 },
-    FLUX_MSGHANDLER_TABLE_END,
-};
 
 static int test_server (flux_t *h, void *arg)
 {
     int rc = -1;
     subprocess_server_t *srv = NULL;
-    flux_msg_handler_t **handlers = NULL;
 
-    if (flux_attr_set_cacheonly (h, "rank", "0") < 0) {
-        diag ("flux_attr_set_cacheonly");
+    if (flux_set_default_subprocess_log (h, tap_logger, NULL) < 0) {
+        diag ("flux_set_default_subprocess_log failed");
         goto done;
     }
     if (!(srv = subprocess_server_create (h, "smurf", 0))) {
         diag ("subprocess_server_create failed");
-        goto done;
-    }
-    if (flux_msg_handler_addvec (h, htab, srv, &handlers) < 0) {
-        diag ("error registering message handler");
         goto done;
     }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
@@ -81,26 +66,12 @@ static int test_server (flux_t *h, void *arg)
     diag ("server reactor exiting");
     rc = 0;
 done:
-    flux_msg_handler_delvec (handlers);
     return rc;
-}
-
-// called on flux_t handle destroy
-static void rcmdsrv_destroy (struct rcmdsrv *ctx)
-{
-    if (ctx) {
-        flux_msg_handler_delvec (ctx->handlers);
-        free (ctx);
-    };
 }
 
 flux_t *rcmdsrv_create (void)
 {
     flux_t *h;
-    struct rcmdsrv *ctx;
-
-    if (!(ctx = calloc (1, sizeof (*ctx))))
-        BAIL_OUT ("out of memory");
 
     // Without this, process may be terminated by SIGPIPE when writing
     // to stdin of subprocess that has terminated
@@ -109,14 +80,6 @@ flux_t *rcmdsrv_create (void)
     // N.B. test reactor is created with FLUX_REACTOR_SIGCHLD flag
     if (!(h = test_server_create (0, test_server, NULL)))
         BAIL_OUT ("test_server_create failed");
-    if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
-        BAIL_OUT ("flux_attr_set_cacheonly failed");
-    // register log handle on this end for server-side logging
-    if (flux_msg_handler_addvec (h, htab, NULL, &ctx->handlers) < 0)
-        BAIL_OUT ("error registering message handlers");
-    flux_reactor_active_decref (flux_get_reactor (h)); // don't count logger
-    if (flux_aux_set (h, "testserver", ctx, (flux_free_f)rcmdsrv_destroy) < 0)
-        BAIL_OUT ("error storing server context in aux container");
     return h;
 };
 

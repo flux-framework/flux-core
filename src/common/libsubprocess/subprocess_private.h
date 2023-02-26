@@ -66,6 +66,9 @@ struct flux_subprocess {
     int flags;
     bool local;                     /* This is a local process, not remote. */
 
+    subprocess_log_f llog;
+    void *llog_data;
+
     int refcount;
     pid_t pid;
     bool pid_set;

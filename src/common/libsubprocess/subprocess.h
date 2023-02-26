@@ -466,6 +466,23 @@ int flux_subprocess_aux_set (flux_subprocess_t *p,
  */
 void *flux_subprocess_aux_get (flux_subprocess_t *p, const char *name);
 
+typedef void (*subprocess_log_f) (void *arg,
+                                  const char *file,
+                                  int line,
+                                  const char *func,
+                                  const char *subsys,
+                                  int level,
+                                  const char *fmt,
+                                  va_list args);
+
+/* Set default internal logging function.
+ */
+int flux_set_default_subprocess_log (flux_t *h,
+                                     subprocess_log_f log_fn,
+                                     void *log_data);
+
+
+
 #ifdef __cplusplus
 }
 #endif

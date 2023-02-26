@@ -25,6 +25,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/macros.h"
+#include "src/common/libutil/llog.h"
 #include "src/common/libioencode/ioencode.h"
 
 #include "subprocess.h"
@@ -167,7 +168,7 @@ static int remote_write (struct subprocess_channel *c)
     int rv = -1;
 
     if (!(ptr = flux_buffer_read (c->write_buffer, -1, &lenp))) {
-        flux_log (c->p->h, LOG_DEBUG, "flux_buffer_read");
+        llog_debug (c->p, "flux_buffer_read: %s", strerror (errno));
         goto error;
     }
 
@@ -182,7 +183,7 @@ static int remote_write (struct subprocess_channel *c)
 
     /* rank not needed, set to 0 */
     if (!(io = ioencode (c->name, "0", ptr, lenp, eof))) {
-        flux_log (c->p->h, LOG_DEBUG, "ioencode");
+        llog_debug (c->p, "ioencode %s: %s", c->name, strerror (errno));
         goto error;
     }
 
@@ -191,7 +192,7 @@ static int remote_write (struct subprocess_channel *c)
                              "{ s:i s:O }",
                              "pid", c->p->pid,
                              "io", io))) {
-        flux_log (c->p->h, LOG_DEBUG, "flux_rpc_pack");
+        llog_debug (c->p, "flux_rpc_pack: %s", strerror (errno));
         goto error;
     }
 
@@ -213,7 +214,7 @@ static int remote_close (struct subprocess_channel *c)
 
     /* rank not needed, set to 0 */
     if (!(io = ioencode (c->name, "0", NULL, 0, true))) {
-        flux_log (c->p->h, LOG_DEBUG, "ioencode");
+        llog_debug (c->p, "ioencode: %s", strerror (errno));
         goto error;
     }
 
@@ -222,7 +223,7 @@ static int remote_close (struct subprocess_channel *c)
                              "{ s:i s:O }",
                              "pid", c->p->pid,
                              "io", io))) {
-        flux_log (c->p->h, LOG_DEBUG, "flux_rpc_pack");
+        llog_debug (c->p, "flux_rpc_pack: %s", strerror (errno));
         goto error;
     }
 
@@ -344,39 +345,39 @@ static int remote_channel_setup (flux_subprocess_t *p,
     int buffer_size;
 
     if (!(c = channel_create (p, output_f, name, channel_flags))) {
-        flux_log (p->h, LOG_DEBUG, "channel_create");
+        llog_debug (p, "channel_create: %s", strerror (errno));
         goto error;
     }
 
     if ((buffer_size = cmd_option_bufsize (p, name)) < 0) {
-        flux_log (p->h, LOG_DEBUG, "cmd_option_bufsize");
+        llog_debug (p, "cmd_option_bufsize: %s", strerror (errno));
         goto error;
     }
 
     if (channel_flags & CHANNEL_WRITE) {
         if (!(c->write_buffer = flux_buffer_create (buffer_size))) {
-            flux_log (p->h, LOG_DEBUG, "flux_buffer_create");
+            llog_debug (p, "flux_buffer_create: %s", strerror (errno));
             goto error;
         }
 
         if (!(c->in_prep_w = flux_prepare_watcher_create (p->reactor,
                                                           remote_in_prep_cb,
                                                           c))) {
-            flux_log (p->h, LOG_DEBUG, "flux_prepare_watcher_create");
+            llog_debug (p, "flux_prepare_watcher_create: %s", strerror (errno));
             goto error;
         }
 
         if (!(c->in_idle_w = flux_idle_watcher_create (p->reactor,
                                                        NULL,
                                                        c))) {
-            flux_log (p->h, LOG_DEBUG, "flux_idle_watcher_create");
+            llog_debug (p, "flux_idle_watcher_create: %s", strerror (errno));
             goto error;
         }
 
         if (!(c->in_check_w = flux_check_watcher_create (p->reactor,
                                                          remote_in_check_cb,
                                                          c))) {
-            flux_log (p->h, LOG_DEBUG, "flux_check_watcher_create");
+            llog_debug (p, "flux_check_watcher_create: %s", strerror (errno));
             goto error;
         }
 
@@ -389,7 +390,7 @@ static int remote_channel_setup (flux_subprocess_t *p,
         int wflag;
 
         if ((wflag = cmd_option_line_buffer (p, name)) < 0) {
-            flux_log (p->h, LOG_DEBUG, "cmd_option_line_buffer");
+            llog_debug (p, "cmd_option_line_buffer: %s", strerror (errno));
             goto error;
         }
 
@@ -397,7 +398,7 @@ static int remote_channel_setup (flux_subprocess_t *p,
             c->line_buffered = true;
 
         if (!(c->read_buffer = flux_buffer_create (buffer_size))) {
-            flux_log (p->h, LOG_DEBUG, "flux_buffer_create");
+            llog_debug (p, "flux_buffer_create: %s", strerror (errno));
             goto error;
         }
         p->channels_eof_expected++;
@@ -405,21 +406,21 @@ static int remote_channel_setup (flux_subprocess_t *p,
         if (!(c->out_prep_w = flux_prepare_watcher_create (p->reactor,
                                                            remote_out_prep_cb,
                                                            c))) {
-            flux_log (p->h, LOG_DEBUG, "flux_prepare_watcher_create");
+            llog_debug (p, "flux_prepare_watcher_create: %s", strerror (errno));
             goto error;
         }
 
         if (!(c->out_idle_w = flux_idle_watcher_create (p->reactor,
                                                         NULL,
                                                         c))) {
-            flux_log (p->h, LOG_DEBUG, "flux_idle_watcher_create");
+            llog_debug (p, "flux_idle_watcher_create: %s", strerror (errno));
             goto error;
         }
 
         if (!(c->out_check_w = flux_check_watcher_create (p->reactor,
                                                           remote_out_check_cb,
                                                           c))) {
-            flux_log (p->h, LOG_DEBUG, "flux_check_watcher_create");
+            llog_debug (p, "flux_check_watcher_create: %s", strerror (errno));
             goto error;
         }
 
@@ -428,11 +429,11 @@ static int remote_channel_setup (flux_subprocess_t *p,
     }
 
     if (zhash_insert (p->channels, name, c) < 0) {
-        flux_log (p->h, LOG_DEBUG, "zhash_insert");
+        llog_debug (p, "zhash_insert failed");
         goto error;
     }
     if (!zhash_freefn (p->channels, name, channel_destroy)) {
-        flux_log (p->h, LOG_DEBUG, "zhash_freefn");
+        llog_debug (p, "zhash_freefn failed");
         goto error;
     }
 
@@ -525,24 +526,30 @@ static int remote_state (flux_subprocess_t *p, flux_future_t *f,
     int status = 0;
 
     if (flux_rpc_get_unpack (f, "{ s:i }", "state", &state) < 0) {
-        flux_log (p->h,
-                  LOG_DEBUG,
-                  "%s: flux_rpc_get_unpack: rank %u",
-                  __FUNCTION__,
-                  flux_rpc_get_nodeid (f));
+        llog_debug (p,
+                    "%s: flux_rpc_get_unpack: rank %u: %s",
+                    __FUNCTION__,
+                    flux_rpc_get_nodeid (f),
+                    future_strerror (f, errno));
         return -1;
     }
 
     if (state == FLUX_SUBPROCESS_RUNNING) {
         if (flux_rpc_get_unpack (f, "{ s:i }", "pid", &pid) < 0) {
-            flux_log (p->h, LOG_DEBUG, "%s: flux_rpc_get_unpack", __FUNCTION__);
+            llog_debug (p,
+                        "%s: flux_rpc_get_unpack: %s",
+                        __FUNCTION__,
+                        future_strerror (f, errno));
             return -1;
         }
     }
 
     if (state == FLUX_SUBPROCESS_EXITED) {
         if (flux_rpc_get_unpack (f, "{ s:i }", "status", &status) < 0) {
-            flux_log (p->h, LOG_DEBUG, "%s: flux_rpc_get_unpack", __FUNCTION__);
+            llog_debug (p,
+                        "%s: flux_rpc_get_unpack: %s",
+                        __FUNCTION__,
+                        future_strerror (f, errno));
             return -1;
         }
     }
@@ -565,20 +572,18 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
 
     if (flux_rpc_get_unpack (f, "{ s:o }", "io", &io)
         || iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
-        flux_log (p->h,
-                  LOG_DEBUG,
-                  "Error decoding output received from remote subprocess: %s",
-                  strerror (errno));
+        llog_debug (p,
+                    "Error decoding output received from remote subprocess: %s",
+                    strerror (errno));
         goto cleanup;
     }
     if (!(c = zhash_lookup (p->channels, stream))) {
-        flux_log (p->h,
-                  LOG_DEBUG,
-                  "Error buffering %d bytes received from remote"
-                  " subprocess pid %d %s: unknown channel name",
-                  len,
-                  (int)pid,
-                  stream);
+        llog_debug (p,
+                    "Error buffering %d bytes received from remote"
+                    " subprocess pid %d %s: unknown channel name",
+                    len,
+                    (int)pid,
+                    stream);
         errno = EPROTO;
         goto cleanup;
     }
@@ -592,21 +597,20 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
             tmp = -1;
         }
         if (tmp < 0) {
-            flux_log (p->h,
-                      LOG_DEBUG,
-                      "Error buffering %d bytes received from remote"
-                      " subprocess pid %d %s: %s",
-                      len,
-                      (int)pid,
-                      stream,
-                      strerror (errno));
+            llog_debug (p,
+                        "Error buffering %d bytes received from remote"
+                        " subprocess pid %d %s: %s",
+                        len,
+                        (int)pid,
+                        stream,
+                        strerror (errno));
             goto cleanup;
         }
     }
     if (eof) {
         c->read_eof_received = true;
         if (flux_buffer_readonly (c->read_buffer) < 0)
-            flux_log (p->h, LOG_DEBUG, "flux_buffer_readonly");
+            llog_debug (p, "flux_buffer_readonly: %s", strerror (errno));
     }
 
     rv = 0;
@@ -653,7 +657,10 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
     }
     else if (!strcmp (type, "output")) {
         if (flux_rpc_get_unpack (f, "{ s:i }", "pid", &pid) < 0) {
-            flux_log (p->h, LOG_DEBUG, "%s: flux_rpc_get_unpack", __FUNCTION__);
+            llog_debug (p,
+                        "%s: flux_rpc_get_unpack: %s",
+                        __FUNCTION__,
+                        future_strerror (f, errno));
             goto error;
         }
         if (remote_output (p, f, rank, pid) < 0)
@@ -661,7 +668,7 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
         flux_future_reset (f);
     }
     else {
-        flux_log (p->h, LOG_DEBUG, "%s: EPROTO", __FUNCTION__);
+        llog_debug (p, "%s: protocol error", __FUNCTION__);
         errno = EPROTO;
         goto error;
     }
@@ -683,7 +690,7 @@ int remote_exec (flux_subprocess_t *p)
     int save_errno;
 
     if (!(cmd_obj = cmd_tojson (p->cmd))) {
-        flux_log (p->h, LOG_DEBUG, "cmd_tojson");
+        llog_debug (p, "cmd_tojson failed");
         errno = ENOMEM;
         return -1;
     }
@@ -698,12 +705,12 @@ int remote_exec (flux_subprocess_t *p)
                              "on_channel_out", p->ops.on_channel_out ? 1 : 0,
                              "on_stdout", p->ops.on_stdout ? 1 : 0,
                              "on_stderr", p->ops.on_stderr ? 1 : 0))) {
-        flux_log (p->h, LOG_DEBUG, "flux_rpc");
+        llog_debug (p, "flux_rpc: %s", strerror (errno));
         goto error;
     }
 
     if (flux_future_then (f, -1., remote_exec_cb, p) < 0) {
-        flux_log (p->h, LOG_DEBUG, "flux_future_then");
+        llog_debug (p, "flux_future_then: %s", strerror (errno));
         goto error;
     }
 

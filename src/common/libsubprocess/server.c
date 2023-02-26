@@ -18,6 +18,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/llog.h"
 #include "src/common/libioencode/ioencode.h"
 #include "ccan/str/str.h"
 
@@ -37,6 +38,8 @@ struct subprocess_server {
     flux_t *h;
     char *local_uri;
     uint32_t rank;
+    subprocess_log_f llog;
+    void *llog_data;
     zlistx_t *subprocesses;
     flux_msg_handler_t **handlers;
     subprocess_server_auth_f auth_cb;
@@ -108,8 +111,11 @@ static void proc_completion_cb (flux_subprocess_t *p)
 
     if (p->state != FLUX_SUBPROCESS_FAILED) {
         /* no fallback if this fails */
-        if (flux_respond_error (s->h, request, ENODATA, NULL) < 0)
-            flux_log_error (s->h, "error responding to rexec.exec request");
+        if (flux_respond_error (s->h, request, ENODATA, NULL) < 0) {
+            llog_error (s,
+                        "error responding to rexec.exec request: %s",
+                        strerror (errno));
+        }
     }
 
     proc_delete (s, p);
@@ -132,8 +138,12 @@ static void proc_internal_fatal (flux_subprocess_t *p)
 
     /* if we fail here, probably not much can be done */
     if (killpg (p->pid, SIGKILL) < 0) {
-        if (errno != ESRCH)
-            flux_log_error (s->h, "%s: kill", __FUNCTION__);
+        if (errno != ESRCH) {
+            llog_error (s,
+                        "killpg %d SIGKILL: %s",
+                        (int)p->pid,
+                        strerror (errno));
+        }
     }
 }
 
@@ -163,12 +173,14 @@ static void proc_state_change_cb (flux_subprocess_t *p,
         proc_delete (s, p); // N.B. proc_delete preserves errno
     } else {
         errno = EPROTO;
-        flux_log_error (s->h, "%s: illegal state", __FUNCTION__);
+        llog_error (s, "subprocess entered illegal state %d", state);
         goto error;
     }
-    if (rc < 0)
-        flux_log_error (s->h, "error responding to rexec.exec request");
-
+    if (rc < 0) {
+        llog_error (s,
+                    "error responding to rexec.exec request: %s",
+                    strerror (errno));
+    }
     return;
 
 error:
@@ -189,7 +201,7 @@ static int proc_output (flux_subprocess_t *p,
 
     snprintf (rankstr, sizeof (rankstr), "%d", s->rank);
     if (!(io = ioencode (stream, rankstr, data, len, eof))) {
-        flux_log_error (s->h, "%s: ioencode", __FUNCTION__);
+        llog_error (s, "ioencode %s: %s", stream, strerror (errno));
         goto error;
     }
 
@@ -198,7 +210,9 @@ static int proc_output (flux_subprocess_t *p,
                            "rank", s->rank,
                            "pid", flux_subprocess_pid (p),
                            "io", io) < 0) {
-        flux_log_error (s->h, "error responding to rexec.exec request");
+        llog_error (s,
+                    "error responding to rexec.exec request: %s",
+                    strerror (errno));
         goto error;
     }
 
@@ -216,7 +230,10 @@ static void proc_output_cb (flux_subprocess_t *p, const char *stream)
     int lenp;
 
     if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
-        flux_log_error (s->h, "%s: flux_subprocess_read", __FUNCTION__);
+        llog_error (s,
+                    "error reading from subprocess stream %s: %s",
+                    stream,
+                    strerror (errno));
         goto error;
     }
 
@@ -320,8 +337,11 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (s->h, "error responding to rexec.exec request");
+    if (flux_respond_error (h, msg, errno, errmsg) < 0) {
+        llog_error (s,
+                    "error responding to rexec.exec request: %s",
+                    strerror (errno));
+    }
     flux_cmd_destroy (cmd);
     free (env);
     flux_subprocess_unref (p);
@@ -344,24 +364,25 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
                              "pid", &pid,
                              "io", &io) < 0
         || iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
-        flux_log_error (s->h, "Error decoding rexec.write request");
+        llog_error (s,
+                    "Error decoding rexec.write request: %s",
+                    strerror (errno));
         goto out;
     }
     if (s->auth_cb && (*s->auth_cb) (msg, s->arg, &error) < 0) {
-        flux_log_error (s->h, "rexec.write: %s", error.text);
+        llog_error (s, "rexec.write: %s", error.text);
         goto out;
     }
 
     if (!(p = proc_find_bypid (s, pid))
         || p->state != FLUX_SUBPROCESS_RUNNING) {
         if (len > 0) { // skip logging if no data is being dropped (e.g. eof)
-            flux_log (s->h,
-                      LOG_DEBUG,
-                      "Error writing %d bytes to subprocess pid %d %s: %s",
-                      len,
-                      (int)pid,
-                      stream,
-                      p ? "not running" : "unknown pid");
+            llog_error (s,
+                        "Error writing %d bytes to subprocess pid %d %s: %s",
+                        len,
+                        (int)pid,
+                        stream,
+                        p ? "not running" : "unknown pid");
         }
         goto out;
     }
@@ -373,20 +394,20 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
             rc = -1;
         }
         if (rc < 0) {
-            flux_log_error (s->h,
-                            "Error writing %d bytes to subprocess pid %d %s",
-                            len,
-                            (int)pid,
-                            stream);
+            llog_error (s,
+                        "Error writing %d bytes to subprocess pid %d %s",
+                        len,
+                        (int)pid,
+                        stream);
             goto error;
         }
     }
     if (eof) {
         if (flux_subprocess_close (p, stream) < 0) {
-            flux_log_error (s->h,
-                            "Error writing EOF to subprocess pid %d %s",
-                            (int)pid,
-                            stream);
+            llog_error (s,
+                        "Error writing EOF to subprocess pid %d %s",
+                        (int)pid,
+                        stream);
             goto error;
         }
     }
@@ -421,12 +442,18 @@ static void server_kill_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!proc_find_bypid (s, pid)
         || killpg (pid, signum) < 0)
         goto error;
-    if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to rexec.kill request");
+    if (flux_respond (h, msg, NULL) < 0) {
+        llog_error (s,
+                    "error responding to rexec.kill request: %s",
+                    strerror (errno));
+    }
     return;
 error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "error responding to rexec.kill request");
+    if (flux_respond_error (h, msg, errno, errmsg) < 0) {
+        llog_error (s,
+                    "error responding to rexec.kill request: %s",
+                    strerror (errno));
+    }
 }
 
 static const char *subprocess_sender (flux_subprocess_t *p)
@@ -482,14 +509,20 @@ static void server_list_cb (flux_t *h, flux_msg_handler_t *mh,
         p = zlistx_next (s->subprocesses);
     }
     if (flux_respond_pack (h, msg, "{s:i s:o}", "rank", s->rank,
-                           "procs", procs) < 0)
-        flux_log_error (h, "error responding to rexec.list request");
+                           "procs", procs) < 0) {
+        llog_error (s,
+                    "error responding to rexec.list request: %s",
+                    strerror (errno));
+    }
     return;
 nomem:
     errno = ENOMEM;
 error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "error responding to rexec.list request");
+    if (flux_respond_error (h, msg, errno, errmsg) < 0) {
+        llog_error (s,
+                    "error responding to rexec.list request: %s",
+                    strerror (errno));
+    }
     json_decref (procs);
 }
 
@@ -547,8 +580,11 @@ static void server_kill (flux_subprocess_t *p, int signum)
     flux_future_t *f;
     if (!(f = flux_subprocess_kill (p, signum))) {
         subprocess_server_t *s = flux_subprocess_aux_get (p, srvkey);
-
-        flux_log_error (s->h, "%s: flux_subprocess_kill", __FUNCTION__);
+        llog_error (s,
+                    "subprocess_kill %d %d: %s",
+                    p->pid,
+                    signum,
+                    strerror (errno));
         return;
     }
     flux_future_destroy (f);
@@ -595,6 +631,10 @@ subprocess_server_t *subprocess_server_create (flux_t *h,
         return NULL;
 
     s->h = h;
+
+    s->llog = flux_aux_get (h, "flux::subprocess_llog_fn");
+    s->llog_data = flux_aux_get (h, "flux::subprocess_llog_data");
+
     if (!(s->subprocesses = zlistx_new ()))
         goto error;
     zlistx_set_destructor (s->subprocesses, proc_destructor);

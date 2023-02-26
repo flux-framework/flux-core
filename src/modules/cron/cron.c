@@ -890,6 +890,11 @@ int mod_main (flux_t *h, int ac, char **av)
     if (ctx == NULL)
         return -1;
 
+    /* Set up internal logging for libsubprocesses.
+     */
+    if (flux_set_default_subprocess_log (h, flux_llog, h) < 0)
+        goto done;
+
     process_args (ctx, ac, av);
 
     if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {

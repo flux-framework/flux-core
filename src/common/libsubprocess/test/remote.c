@@ -255,6 +255,9 @@ int main (int argc, char *argv[])
 
     h = rcmdsrv_create ();
 
+    if (flux_set_default_subprocess_log (h, tap_logger, NULL) < 0)
+        BAIL_OUT ("could not set logger");
+
     simple_test (h);
 
     test_server_stop (h);

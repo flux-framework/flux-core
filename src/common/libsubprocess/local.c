@@ -24,6 +24,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/fdutils.h"
+#include "src/common/libutil/llog.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
@@ -46,7 +47,9 @@ static void local_channel_flush (struct subprocess_channel *c)
         int len;
 
         if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w))) {
-            flux_log_error (c->p->h, "flux_buffer_read_watcher_get_buffer");
+            llog_error (c->p,
+                        "flux_buffer_read_watcher_get_buffer: %s",
+                        strerror (errno));
             return;
         }
 
@@ -73,17 +76,23 @@ static void local_in_cb (flux_reactor_t *r, flux_watcher_t *w,
     int err = 0;
 
     if (flux_buffer_write_watcher_is_closed (w, &err) == 1) {
-        if (err)
-            log_msg ("flux_buffer_write_watcher close error: %s",
-                     strerror (err));
+        if (err) {
+            llog_error (c->p,
+                        "flux_buffer_write_watcher close error: %s",
+                        strerror (err));
+        }
         else
             c->parent_fd = -1;  /* closed by reactor */
         flux_watcher_stop (w);  /* c->buffer_write_w */
         local_channel_flush (c);
     }
-    else
-        flux_log_error (c->p->h, "flux_buffer_write_watcher: stream %s: %d:",
-                        c->name, revents);
+    else {
+        llog_error (c->p,
+                    "flux_buffer_write_watcher: stream %s: %d: %s",
+                    c->name,
+                    revents,
+                    strerror (errno));
+    }
 }
 
 static void local_output (struct subprocess_channel *c,
@@ -96,7 +105,9 @@ static void local_output (struct subprocess_channel *c,
             flux_buffer_t *fb;
 
             if (!(fb = flux_buffer_read_watcher_get_buffer (w))) {
-                flux_log_error (c->p->h, "flux_buffer_read_watcher_get_buffer");
+                llog_error (c->p,
+                            "flux_buffer_read_watcher_get_buffer: %s",
+                            strerror (errno));
                 return;
             }
 
@@ -123,9 +134,12 @@ static void local_output (struct subprocess_channel *c,
             }
         }
     }
-    else
-        flux_log_error (c->p->h, "flux_buffer_read_watcher on %s: 0x%X:",
-                        c->name, revents);
+    else {
+        llog_error (c->p,
+                    "flux_buffer_read_watcher on %s: 0x%X:",
+                    c->name,
+                    revents);
+    }
 
     if (c->p->state == FLUX_SUBPROCESS_EXITED && c->eof_sent_to_caller)
         subprocess_check_completed (c->p);
@@ -167,12 +181,12 @@ static int channel_local_setup (flux_subprocess_t *p,
     int buffer_size;
 
     if (!(c = channel_create (p, output_f, name, channel_flags))) {
-        flux_log (p->h, LOG_DEBUG, "channel_create");
+        llog_debug (p, "channel_create %s: %s", name, strerror (errno));
         goto error;
     }
 
     if (socketpair (PF_LOCAL, SOCK_STREAM, 0, fds) < 0) {
-        flux_log (p->h, LOG_DEBUG, "socketpair");
+        llog_debug (p, "socketpair: %s", strerror (errno));
         goto error;
     }
 
@@ -186,12 +200,12 @@ static int channel_local_setup (flux_subprocess_t *p,
     fds[1] = -1;
 
     if ((fd_flags = fd_set_nonblocking (c->parent_fd)) < 0) {
-        flux_log (p->h, LOG_DEBUG, "fd_set_nonblocking");
+        llog_debug (p, "fd_set_nonblocking: %s", strerror (errno));
         goto error;
     }
 
     if ((buffer_size = cmd_option_bufsize (p, name)) < 0) {
-        flux_log (p->h, LOG_DEBUG, "cmd_option_bufsize");
+        llog_debug (p, "cmd_option_bufsize: %s", strerror (errno));
         goto error;
     }
 
@@ -203,7 +217,9 @@ static int channel_local_setup (flux_subprocess_t *p,
                                                               0,
                                                               c);
         if (!c->buffer_write_w) {
-            flux_log (p->h, LOG_DEBUG, "flux_buffer_write_watcher_create");
+            llog_debug (p,
+                        "flux_buffer_write_watcher_create: %s",
+                        strerror (errno));
             goto error;
         }
     }
@@ -212,7 +228,7 @@ static int channel_local_setup (flux_subprocess_t *p,
         int wflag;
 
         if ((wflag = cmd_option_line_buffer (p, name)) < 0) {
-            flux_log (p->h, LOG_DEBUG, "cmd_option_line_buffer");
+            llog_debug (p, "cmd_option_line_buffer: %s", strerror (errno));
             goto error;
         }
 
@@ -226,7 +242,9 @@ static int channel_local_setup (flux_subprocess_t *p,
                                                             wflag,
                                                             c);
         if (!c->buffer_read_w) {
-            flux_log (p->h, LOG_DEBUG, "flux_buffer_read_watcher_create");
+            llog_debug (p,
+                        "flux_buffer_read_watcher_create: %s",
+                        strerror (errno));
             goto error;
         }
 
@@ -235,7 +253,7 @@ static int channel_local_setup (flux_subprocess_t *p,
 
     if (channel_flags & CHANNEL_FD) {
         if (asprintf (&e, "%s", name) < 0) {
-            flux_log (p->h, LOG_DEBUG, "asprintf");
+            llog_debug (p, "asprintf: %s", strerror (errno));
             goto error;
         }
 
@@ -246,17 +264,17 @@ static int channel_local_setup (flux_subprocess_t *p,
                               e,
                               "%d",
                               c->child_fd) < 0) {
-            flux_log (p->h, LOG_DEBUG, "flux_cmd_setenvf");
+            llog_debug (p, "flux_cmd_setenvf: %s", strerror (errno));
             goto error;
         }
     }
 
     if (zhash_insert (p->channels, name, c) < 0) {
-        flux_log (p->h, LOG_DEBUG, "zhash_insert");
+        llog_debug (p, "zhash_insert failed");
         goto error;
     }
     if (!zhash_freefn (p->channels, name, channel_destroy)) {
-        flux_log (p->h, LOG_DEBUG, "zhash_freefn");
+        llog_debug (p, "zhash_freefn failed");
         goto error;
     }
 
@@ -363,7 +381,9 @@ static void child_watch_cb (flux_reactor_t *r, flux_watcher_t *w,
     int status;
 
     if ((status = flux_child_watcher_get_rstatus (w)) < 0) {
-        flux_log_error (p->h, "flux_child_watcher_get_rstatus");
+        llog_error (p,
+                    "flux_child_watcher_get_rstatus: %s",
+                    strerror (errno));
         return;
     }
 
@@ -411,7 +431,7 @@ static int start_local_watchers (flux_subprocess_t *p)
                                                   true,
                                                   child_watch_cb,
                                                   p))) {
-        flux_log (p->h, LOG_DEBUG, "flux_child_watcher_create");
+        llog_debug (p, "flux_child_watcher_create: %s", strerror (errno));
         return -1;
     }
     flux_watcher_start (p->child_w);

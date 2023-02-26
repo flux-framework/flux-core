@@ -180,6 +180,11 @@ static flux_subprocess_t * subprocess_create (flux_t *h,
     if (!p)
         return NULL;
 
+    if (h) {
+        p->llog = flux_aux_get (h, "flux::subprocess_llog_fn");
+        p->llog_data = flux_aux_get (h, "flux::subprocess_llog_data");
+    }
+
     /* init fds, so on error we don't accidentally close stdin
      * (i.e. fd == 0)
      */
@@ -1198,6 +1203,16 @@ void * flux_subprocess_aux_get (flux_subprocess_t *p, const char *name)
         return NULL;
     }
     return aux_get (p->aux, name);
+}
+
+int flux_set_default_subprocess_log (flux_t *h,
+                                     subprocess_log_f log_fn,
+                                     void *log_data)
+{
+    if (flux_aux_set (h, "flux::subprocess_llog_fn", log_fn, NULL) < 0
+        || flux_aux_set (h, "flux::subprocess_llog_data", log_data, NULL) < 0)
+        return -1;
+    return 0;
 }
 
 /*
