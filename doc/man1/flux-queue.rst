@@ -1,4 +1,5 @@
-.. flux-help-description: Manipulate flux queues
+.. flux-help-description: list and manipulate flux queues
+.. flux-help-section: instance
 
 =============
 flux-queue(1)

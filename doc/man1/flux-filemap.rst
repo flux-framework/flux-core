@@ -1,5 +1,3 @@
-.. flux-help-description: Map files into a Flux instance
-
 ===============
 flux-filemap(1)
 ===============

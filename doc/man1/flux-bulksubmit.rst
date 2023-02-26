@@ -1,4 +1,5 @@
 .. flux-help-include: true
+.. flux-help-section: submission
 
 ==================
 flux-bulksubmit(1)
