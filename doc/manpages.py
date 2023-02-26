@@ -82,7 +82,7 @@ man_pages = [
     ('man3/flux_event_publish', 'flux_event_publish', 'publish events', [author], 3),
     ('man3/flux_event_subscribe', 'flux_event_unsubscribe', 'manage subscriptions', [author], 3),
     ('man3/flux_event_subscribe', 'flux_event_subscribe', 'manage subscriptions', [author], 3),
-    ('man3/flux_comms_error_set', 'flux_comms_error_set', 'register callback for communications erors', [author], 3),
+    ('man3/flux_comms_error_set', 'flux_comms_error_set', 'register callback for communications errors', [author], 3),
     ('man3/flux_fd_watcher_create', 'flux_fd_watcher_get_fd', 'create file descriptor watcher', [author], 3),
     ('man3/flux_fd_watcher_create', 'flux_fd_watcher_create', 'create file descriptor watcher', [author], 3),
     ('man3/flux_flags_set', 'flux_flags_unset', 'manipulate Flux handle flags', [author], 3),

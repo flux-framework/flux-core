@@ -154,7 +154,7 @@ job.validate
 job.dependency.*
   The ``job.dependency.*`` topic allows a dependency plugin to notify the
   job-manager that it handles a given dependency _scheme_. The job-manager
-  will scan the ``attirbutes.system.dependencies`` array, if provided, and
+  will scan the ``attributes.system.dependencies`` array, if provided, and
   issue a ``job.dependency.SCHEME`` callback for each listed dependency.
   If no plugin has registered for ``SCHEME``, then the job is rejected.
   The plugin should then call ``flux_jobtap_dependency_add(3)`` to add

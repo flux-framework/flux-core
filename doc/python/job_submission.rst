@@ -55,7 +55,7 @@ Synchronous interface
 ---------------------
 
 
-The simplest way to interact with Flux is with the syncronous functions listed
+The simplest way to interact with Flux is with the synchronous functions listed
 below.
 However, these functions introduce a lot of overhead (e.g. any function that
 waits for a job to reach a certain state, such as ``result``
