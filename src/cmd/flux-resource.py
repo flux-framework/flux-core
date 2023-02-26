@@ -58,7 +58,7 @@ class FluxResourceConfig(UtilConfig):
             "description": "Default flux-resource list format string",
             "format": (
                 "{state:>10} ?:{queue:<10.10} ?:{propertiesx:<10.10+} {nnodes:>6} "
-                "{ncores:>8} {ngpus:>8} {nodelist}"
+                "{ncores:>8} ?:{ngpus:>8} {nodelist}"
             ),
         },
         "rlist": {

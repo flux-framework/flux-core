@@ -575,7 +575,8 @@ class OutputFormat:
         """
         Check for format fields that are prefixed with `?:` (e.g. "?:{name}")
         and filter them out of the current format string if they result in an
-        empty string for every entry in `items`.
+        empty value (as defined by the `empty` tuple defined below) for every
+        entry in `items`.
         """
         #  Build a list of all format strings that have the collapsible
         #  sentinel '?:' to determine which are subject to the test for
@@ -600,9 +601,10 @@ class OutputFormat:
         formatter = self.formatter()
 
         #  Iterate over all items, rebuilding lst each time to contain
-        #  only those fields that resulted in nonzero strings:
+        #  only those fields that resulted in non-"empty" strings:
+        empty = ("", "0", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00")
         for item in items:
-            lst = [x for x in lst if not formatter.format(x["fmt"], item)]
+            lst = [x for x in lst if formatter.format(x["fmt"], item) in empty]
 
             #  If lst is now empty, that means all fields already returned
             #  nonzero strings, so we can break early

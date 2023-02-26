@@ -162,7 +162,7 @@ following is the format used for the default format:
 
 If a format field is preceded by the special string ``?:`` this will
 cause the field to be removed entirely from output if the result would
-be an empty string for all jobs in the listing. E.g.::
+be an empty string or zero value for all jobs in the listing. E.g.::
 
    {id.f58:>12} ?:{exception.type}
 
