@@ -1,4 +1,7 @@
-[Dev Container](https://code.visualstudio.com/docs/remote/containers)
+
+#### VSCode Dev Containers
+
+We have a [Dev Container](https://code.visualstudio.com/docs/remote/containers)
 provided via the assets in [.devcontainer](https://code.visualstudio.com/docs/remote/containers#_create-a-devcontainerjson-file).
 
 You can follow the [tutorial](https://code.visualstudio.com/docs/remote/containers-tutorial) where you'll basically
