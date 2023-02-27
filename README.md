@@ -1,26 +1,20 @@
 [![ci](https://github.com/flux-framework/flux-core/workflows/ci/badge.svg)](https://github.com/flux-framework/flux-core/actions?query=workflow%3A.github%2Fworkflows%2Fmain.yml)
 [![codecov](https://codecov.io/gh/flux-framework/flux-core/branch/master/graph/badge.svg)](https://codecov.io/gh/flux-framework/flux-core)
 
-_NOTE: The interfaces of flux-core are being actively developed
-and are not yet stable._ The github issue tracker is the primary
-way to communicate with the developers.
+See our [Online Documentation](https://flux-framework.readthedocs.io)!
 
-See also our [Online Documentation](https://flux-framework.readthedocs.io).
+_NOTE: the github issue tracker is the primary way to communicate
+with Flux developers._
+
 
 ### flux-core
 
-flux-core implements the communication layer and lowest level
-services and interfaces for the Flux resource manager framework.
-It consists of a distributed message broker, broker plug-in modules
-that implement various distributed services, and an API and set
-of utilities to utilize these services.
-
-flux-core is intended to be the first building block used in the
-construction of a site-composed Flux resource manager.  Other building
-blocks are also in development under the
+flux-core implements the lowest level services and interfaces for the Flux
+resource manager framework.  It is intended to be the first building block
+used in the construction of a site-composed Flux resource manager.  Other
+building blocks are also in development under the
 [flux-framework github organization](https://github.com/flux-framework),
-including a fully functional workload
-[scheduler](https://github.com/flux-framework/flux-sched).
+including a workload [scheduler](https://github.com/flux-framework/flux-sched).
 
 Framework projects use the C4 development model pioneered in
 the ZeroMQ project and forked as
@@ -113,97 +107,21 @@ $ sudo chown -R $USER .git/
 </details>
 
 
-#### Bootstrapping a Flux instance
+#### Starting Flux
 
-A Flux instance is composed of a set of `flux-broker` processes
-that bootstrap via PMI (e.g. under another resource manager), or locally
-via the `flux start` command.
-
-No administrator privilege is required to start a Flux instance
-as described below.
-
-##### Single node session
-
-To start a Flux instance (size = 8) on the local node for testing:
+A Flux instance is composed of a set of `flux-broker` processes running as
+a parallel job and can be started by most launchers that can start MPI jobs.
+Doing so for a single user does not require administrator privelege.
+To start a Flux instance (size = 8) on the local node for testing, use
+flux's built-in test launcher:
 ```
-src/cmd/flux start --size 8
+src/cmd/flux start --test-size=8
 ```
-A shell is spawned that has its environment set up so that Flux
-commands can find the message broker socket.  When the shell exits,
-the session exits.
+A shell is spawned in which Flux commands can be exexcuted.  When the shell
+exits, Flux exits.
 
-##### SLURM session
-
-To start a Flux instance (size = 64) on a cluster using SLURM:
-```
-srun --pty --mpi=none -N64 src/cmd/flux start
-```
-The srun --pty option is used to connect to the rank 0 shell.
-When you exit this shell, the session terminates.
-
-#### Flux commands
-
-Within a session, the path to the `flux` command associated with the
-session broker will be prepended to `PATH`, so use of a relative or
-absolute path is no longer necessary.
-
-To see a list of commonly used commands run `flux` with no arguments,
-`flux help`, or `flux --help`
-```
-$ flux help
-Usage: flux [OPTIONS] COMMAND ARGS
-  -h, --help             Display this message.
-  -v, --verbose          Be verbose about environment and command search
-  -V, --version          Display command and component versions
-  -p, --parent           Set environment of parent instead of current instance
-
-For general Flux documentation, please visit
-    https://flux-framework.readthedocs.io
-
-Common commands from flux-core:
-   config             Manage/query Flux configuration
-   cron               Schedule tasks on timers and events
-   dmesg              manipulate broker log ring buffer
-   dump               Write KVS snapshot to portable archive
-   env                Print the flux environment or execute a command inside it
-   exec               Execute processes across flux ranks
-   filemap            Map files into a Flux instance
-   {get,set,ls}attr   Access, modify, and list broker attributes
-   jobs               list jobs submitted to Flux
-   pstree             display job hierarchies
-   uptime             Tell how long Flux has been up and running
-   shutdown           Shut down a Flux instance
-   resource           list/manipulate Flux resource status
-   restore            Read KVS snapshot from portable archive
-   kvs                Flux key-value store utility
-   mini               Minimal Job Submission Tool
-   job                Job Housekeeping Tool
-   overlay            Show flux overlay network status
-   ping               measure round-trip latency to Flux services
-   proxy              Create proxy environment for Flux instance
-   queue              Manipulate flux queues
-   start              bootstrap a local Flux instance
-   startlog           Show Flux instance start and stop times
-   top                Display Running Flux Jobs
-   version            Display flux version information
-```
-
-Most of these have UNIX manual pages as `flux-<sub-command>(1)`,
-which can also be accessed using `./flux help <sub-command>`.
-
-#### A note about PMI
-
-During launch, Flux brokers use a PMI server provided by the launcher
-to exchange network endpoints and other information.  Flux also _provides_
-a PMI server embedded in the Flux job shell to support launching parallel
-applications such as MPI or subordinate Flux instances.  In both cases,
-the PMI version 1 wire protocol is Flux's preferred PMI interface, but
-other options are available.
-
-See the [Flux FAQ](https://flux-framework.readthedocs.io/en/latest/faqs.html)
-for more information on debugging and configuring Flux to interoperate with
-foreign launchers and different MPI versions.  Open a flux-core issue if
-you encounter a situation that is not covered in the FAQ.
+For more information on starting Flux in various environments and using it,
+please refer to our [docs](https://flux-framework.readthedocs.io) pages.
 
 #### Release
 
