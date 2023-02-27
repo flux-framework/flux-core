@@ -52,6 +52,9 @@ static int cmd_version (optparse_t *p, int ac, char *av[])
 #endif
     print_broker_version (p);
     printf ("build-options:\t\t");
+#if ASSUME_BROKEN_LOCALE
+    printf("+ascii-only");
+#endif
 #if __SANITIZE_ADDRESS__
     printf ("+asan");
 #endif
