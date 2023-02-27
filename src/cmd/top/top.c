@@ -322,11 +322,14 @@ struct top *top_create (const char *uri,
     top->keys = keys_create (top);
     top->summary_pane = summary_pane_create (top);
     top->joblist_pane = joblist_pane_create (top);
-
+#if ASSUME_BROKEN_LOCALE
+    top->f_char = "f";
+#else
     if (getenv ("FLUX_F58_FORCE_ASCII"))
         top->f_char = "f";
     else
         top->f_char = "ƒ";
+#endif /* ASSUME_BROKEN_LOCALE */
     return top;
 fail:
     top_destroy (top);
