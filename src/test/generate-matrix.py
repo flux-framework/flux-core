@@ -213,6 +213,13 @@ matrix.add_build(
     docker_tag=True,
 )
 
+# RHEL8 clone
+matrix.add_build(
+    name="el8 - ascii",
+    image="el8",
+    args="--enable-broken-locale-mode",
+)
+
 # RHEL8 clone, system, coverage
 matrix.add_build(
     name="el8 - system,coverage",

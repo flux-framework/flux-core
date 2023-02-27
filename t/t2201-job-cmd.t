@@ -170,6 +170,9 @@ test_expect_success 'flux-job: id --to=f58 works' '
 '
 
 UTF8_LOCALE=$(locale -a | grep UTF-8 | head -n1)
+if flux version | grep +ascii-only; then
+	UTF8_LOCALE=""
+fi
 test -n "$UTF8_LOCALE" && test_set_prereq UTF8_LOCALE
 test_expect_success UTF8_LOCALE 'flux-job: f58 can use multibyte prefix' '
 	test_debug "echo UTF8_LOCALE=${UTF8_LOCALE}" &&

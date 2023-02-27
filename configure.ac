@@ -416,6 +416,15 @@ AS_IF([test "x$enable_content_s3" = "xyes"], [
 
 AM_CONDITIONAL([ENABLE_CONTENT_S3], [test "x$enable_content_s3" = "xyes"])
 
+AC_ARG_ENABLE(
+    [broken-locale-mode],
+    AS_HELP_STRING([--enable-broken-locale-mode],
+                   [Assume broken locale config and use ascii only]))
+
+if test "$enable_broken_locale_mode" = "yes"; then
+  AC_DEFINE([ASSUME_BROKEN_LOCALE], [1],
+    [assume broken locale configuration and disable non-ascii characters])
+fi
 
 ##
 # Check for systemd

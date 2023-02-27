@@ -19,6 +19,7 @@ import datetime
 import signal
 import locale
 import pathlib
+import subprocess
 from glob import glob
 
 import yaml
@@ -45,7 +46,10 @@ class TestJob(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.fh = flux.Flux()
-        self.use_ascii = locale.getlocale()[1] != "UTF-8"
+        self.use_ascii = False
+        build_opts = subprocess.check_output(["flux", "version"]).decode()
+        if  locale.getlocale()[1] != "UTF-8" or "ascii-only" in build_opts:
+            self.use_ascii = True
 
         self.jobspec_dir = os.path.abspath(
             os.path.join(os.environ["FLUX_SOURCE_DIR"], "t", "jobspec")
