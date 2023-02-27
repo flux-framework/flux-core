@@ -35,8 +35,13 @@ static const int bits_per_seq = 10;
 /* Max base58 string length for F58 encoding */
 #define MAX_B58_STRLEN 12
 
+#if ASSUME_BROKEN_LOCALE
+static const char f58_prefix[] = "f";
+static const char f58_alt_prefix[] = "ƒ";
+#else
 static const char f58_prefix[] = "ƒ";
 static const char f58_alt_prefix[] = "f";
+#endif /* ASSUME_BROKEN_LOCALE */
 
 /*  b58digits_map courtesy of libbase58:
  *
@@ -194,9 +199,11 @@ static int fluid_f58_encode (char *buf, int bufsz, fluid_t id)
         return -1;
     }
 
+#if !ASSUME_BROKEN_LOCALE
     /* Use alternate "f" prefix if locale is not multibyte */
     if (!is_utf8_locale())
         prefix = f58_alt_prefix;
+#endif
 
     if (bufsz <= strlen (prefix) + 1) {
         errno = EOVERFLOW;
