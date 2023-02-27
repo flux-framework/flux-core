@@ -443,6 +443,26 @@ flux_buffer_t *flux_buffer_read_watcher_get_buffer (flux_watcher_t *w)
     return NULL;
 }
 
+const char *flux_buffer_read_watcher_get_data (flux_watcher_t *w, int *lenp)
+{
+    if (w) {
+        struct ev_buffer_read *eb = w->data;
+        const char *data;
+        if (eb->line) {
+            if (!(data = flux_buffer_read_line (eb->fb, lenp)))
+                return NULL;
+            if (*lenp > 0)
+                return data;
+        }
+        /* Not line-buffered, or reading last bit of data which does
+         * not contain a newline. Read any data:
+         */
+        return flux_buffer_read (eb->fb, -1, lenp);
+    }
+    errno = EINVAL;
+    return NULL;
+}
+
 static void buffer_write_start (flux_watcher_t *w)
 {
     struct ev_buffer_write *ebw = (struct ev_buffer_write *)w->data;

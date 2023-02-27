@@ -109,6 +109,12 @@ flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
 
 flux_buffer_t *flux_buffer_read_watcher_get_buffer (flux_watcher_t *w);
 
+/* Get next chunk of data from a buffered read watcher. Gets the next
+ * line if the watcher is line buffered.
+ */
+const char *flux_buffer_read_watcher_get_data (flux_watcher_t *w,
+                                               int *lenp);
+
 /* 'cb' only called after fd closed (FLUX_POLLOUT) or error (FLUX_POLLERR) */
 flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r, int fd,
                                                   int size, flux_watcher_f cb,
