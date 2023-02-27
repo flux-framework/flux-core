@@ -31,62 +31,9 @@ Protocols and API's used in Flux will be documented as Flux RFC's.
 
 #### Build Requirements
 
-<!-- A collapsible section with markdown -->
-<details>
-  <summary>Click to expand and see our full dependency table</summary>
-
-flux-core requires the following packages to build:
-
-**redhat**        | **ubuntu**        | **version**       | **note**
-----------        | ----------        | -----------       | --------
-autoconf          | autoconf          |                   |
-automake          | automake          |                   |
-libtool           | libtool           |                   |
-make              | make              |                   |
-pkgconfig         | pkg-config        |                   |
-glibc-devel       | libc6-dev         |                   |
-zeromq4-devel     | libzmq3-dev       | >= 4.0.4          |
-czmq-devel        | libczmq-dev       | >= 3.0.1          |
-jansson-devel     | libjansson-dev    | >= 2.6            |
-libuuid-devel     | uuid-dev          |                   |
-lz4-devel         | liblz4-dev        |                   |
-libarchive-devel  | libarchive-dev    |                   |
-ncurses-devel     | libncurses-dev    |                   |
-hwloc-devel       | libhwloc-dev      | >= v1.11.1        |
-sqlite-devel      | libsqlite3-dev    | >= 3.0.0          |
-lua               | lua5.1            | >= 5.1, < 5.5     |
-lua-devel         | liblua5.1-dev     | >= 5.1, < 5.5     |
-lua-posix         | lua-posix         |                   |
-python36-devel    | python3-dev       | >= 3.6            |
-python36-cffi     | python3-cffi      | >= 1.1            |
-python36-ply      | python3-ply       | >= 3.9            |
-python36-yaml     | python3-yaml      | >= 3.10.0         |
-python36-jsonschema | python3-jsonschema | >= 2.3.0, < 4.0 |
-phthon3-sphinx    | python3-sphinx    |                   | *1*
-phthon3-docutils  | python3-docutils  |                   | *1*
-
-*Note 1 - only needed if optional man pages are to be created.
-
-The following optional dependencies enable additional testing:
-
-**redhat**        | **ubuntu**        | **version**
-----------        | ----------        | -----------
-aspell            | aspell            |
-aspell-en         | aspell-en         |
-valgrind-devel    | valgrind          |
-mpich-devel       | libmpich-dev      |
-jq                | jq                |
-</details>
-
-##### Installing RedHat/CentOS Packages
-```
-yum install autoconf automake libtool make pkgconfig glibc-devel zeromq4-devel czmq-devel libuuid-devel jansson-devel lz4-devel libarchive-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python36-devel python36-cffi python36-ply python36-yaml python36-jsonschema python3-sphinx aspell aspell-en valgrind-devel mpich-devel jq
-```
-
-##### Installing Ubuntu Packages
-```
-apt install autoconf automake libtool make pkg-config libc6-dev libzmq3-dev libczmq-dev uuid-dev libjansson-dev liblz4-dev libarchive-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python3-dev python3-cffi python3-ply python3-yaml python3-jsonschema python3-sphinx aspell aspell-en valgrind libmpich-dev jq
-```
+For convenience, scripts that install flux-core's build dependencies
+are available for [redhat](scripts/install-deps-rpm.sh) and
+[debian](scripts/install-deps-deb.sh) distros.
 
 ##### Building from Source
 ```

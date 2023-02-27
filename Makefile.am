@@ -8,7 +8,9 @@ EXTRA_DIST = \
 	NOTICE.LLNS \
 	README.md \
 	NEWS.md \
-	scripts/requirements-dev.txt
+	scripts/requirements-dev.txt \
+	scripts/install-deps-deb.sh \
+	scripts/install-deps-rpm.sh
 
 ACLOCAL_AMFLAGS = -I config
 
