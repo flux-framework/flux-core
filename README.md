@@ -45,13 +45,13 @@ If you use VSCode we have a dev container and [instructions](vscode.md).
 
 A Flux instance is composed of a set of `flux-broker` processes running as
 a parallel job and can be started by most launchers that can start MPI jobs.
-Doing so for a single user does not require administrator privelege.
+Doing so for a single user does not require administrator privilege.
 To start a Flux instance (size = 8) on the local node for testing, use
 flux's built-in test launcher:
 ```
 src/cmd/flux start --test-size=8
 ```
-A shell is spawned in which Flux commands can be exexcuted.  When the shell
+A shell is spawned in which Flux commands can be executed.  When the shell
 exits, Flux exits.
 
 For more information on starting Flux in various environments and using it,
