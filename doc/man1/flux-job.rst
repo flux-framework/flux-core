@@ -1,4 +1,4 @@
-.. flux-help-description: cancel jobs, get job status, etc (see: flux help job) 
+.. flux-help-description: cancel jobs, get job status, etc (see: flux help job)
 .. flux-help-section: jobs
 
 ===========
