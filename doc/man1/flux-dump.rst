@@ -1,5 +1,3 @@
-.. flux-help-description: Write KVS snapshot to portable archive
-
 ============
 flux-dump(1)
 ============

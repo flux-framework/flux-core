@@ -1,4 +1,6 @@
 .. flux-help-include: true
+.. flux-help-section: jobs
+.. flux-help-command: pgrep/pkill
 
 ==============
 flux-pgrep(1)

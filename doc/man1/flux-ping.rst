@@ -1,5 +1,3 @@
-.. flux-help-include: true
-
 ============
 flux-ping(1)
 ============

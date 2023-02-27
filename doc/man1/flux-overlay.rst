@@ -1,4 +1,5 @@
 .. flux-help-description: Show flux overlay network status
+.. flux-help-section: instance
 
 ===============
 flux-overlay(1)

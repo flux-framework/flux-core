@@ -561,29 +561,22 @@ test_expect_success 'broker fails on invalid broker.critical-ranks option' '
 test_expect_success 'broker fails on unknown option' '
 	test_must_fail flux start ${ARGS} -o,--not-an-option /bin/true
 '
-
 test_expect_success 'flux-help command list can be extended' '
 	mkdir help.d &&
 	cat <<-EOF  > help.d/test.json &&
-	[{ "category": "test", "command": "test", "description": "a test" }]
+	[{ "name": "test", "description": "test commands",
+	 "commands": [ {"name": "test", "description": "a test" }]}]
 	EOF
-	flux help 2>&1 | sed "0,/^$/d" >help.expected &&
-	cat <<-EOF  >>help.expected &&
-	Common commands from flux-test:
-	   test               a test
-	EOF
-	FLUX_CMDHELP_PATTERN="help.d/*" flux help 2>&1 | sed "0,/^$/d" > help.out &&
-	test_cmp help.expected help.out &&
+	FLUX_CMDHELP_PATTERN="help.d/*" flux help > help.out 2>&1 &&
+	grep "^test commands" help.out &&
+	grep "a test" help.out &&
 	cat <<-EOF  > help.d/test2.json &&
-	[{ "category": "test2", "command": "test2", "description": "a test two" }]
+	[{ "name": "test", "description": "test two commands",
+	 "commands": [ {"name": "test2", "description": "a test two"}]}]
 	EOF
-	cat <<-EOF  >>help.expected &&
-
-	Common commands from flux-test2:
-	   test2              a test two
-	EOF
-	FLUX_CMDHELP_PATTERN="help.d/*" flux help 2>&1 | sed "0,/^$/d" > help.out &&
-	test_cmp help.expected help.out
+	FLUX_CMDHELP_PATTERN="help.d/*" flux help > help2.out 2>&1 &&
+	grep "^test two commands" help2.out &&
+	grep "a test two" help2.out
 '
 test_expect_success 'flux-help command can display manpages for subcommands' '
 	PWD=$(pwd) &&

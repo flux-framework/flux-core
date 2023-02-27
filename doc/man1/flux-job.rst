@@ -1,4 +1,5 @@
-.. flux-help-include: true
+.. flux-help-description: cancel jobs, get job status, etc (see: flux help job) 
+.. flux-help-section: jobs
 
 ===========
 flux-job(1)

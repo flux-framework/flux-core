@@ -1,4 +1,4 @@
-.. flux-help-include: true
+.. flux-help-section: jobs
 
 ============
 flux-jobs(1)

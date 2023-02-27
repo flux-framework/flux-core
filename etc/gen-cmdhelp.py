@@ -20,6 +20,37 @@ import sys
 import json
 from os import path
 
+
+class HelpEntries:
+    def __init__(self):
+        self.sections = [
+            {
+                "name": "submission",
+                "description": "run and submit jobs, allocate resources",
+            },
+            {
+                "name": "jobs",
+                "description": "list and interact with jobs",
+            },
+            {
+                "name": "instance",
+                "description": "get resource, queue and other instance information",
+            },
+            {
+                "name": "other",
+                "description": "other useful commands",
+            },
+        ]
+        for entry in self.sections:
+            entry["commands"] = []
+
+    def add_entry(self, name, description, section="other"):
+        for entry in self.sections:
+            if entry["name"] == section:
+                info = dict(name=name, description=description)
+                entry["commands"].append(info)
+
+
 if len(sys.argv) < 2:
     print(f"Usage: {sys.argv[0]} sphinxconf.py", file=sys.stderr)
 
@@ -30,16 +61,17 @@ docsdir = os.path.abspath(path.dirname(sphinxconf))
 sys.path.insert(0, docsdir)
 from manpages import man_pages
 
-entries = []
 visited = dict()
 
-for (path, cmd, descr, author, section) in man_pages:
-    if section != 1 or path in visited:
+entries = HelpEntries()
+for (path, cmd, descr, author, sec) in man_pages:
+    if sec != 1 or path in visited:
         continue
     visited[path] = True
     rst_file = os.path.join(docsdir, f"{path}.rst")
-    with open(rst_file, "r", encoding='utf-8') as f:
+    with open(rst_file, "r", encoding="utf-8") as f:
         include_flag = False
+        section = "other"
         for line in f:
             line = line.rstrip("\n")
             if ".. flux-help-" in line:
@@ -50,12 +82,11 @@ for (path, cmd, descr, author, section) in man_pages:
                     descr = " ".join(line.split(" ")[2:])
                 if ".. flux-help-command: " in line:
                     cmd = " ".join(line.split(" ")[2:])
+                if ".. flux-help-section: " in line:
+                    section = " ".join(line.split(" ")[2:])
 
         if include_flag:
-            entry = dict(category="core", command=cmd, description=descr)
-            entries.append(entry)
+            entries.add_entry(cmd, descr, section)
 
-# Sort entries by the command name
-entries = sorted(entries, key=lambda d: d['command'])
-print(json.dumps(entries, indent=2, sort_keys=True), file=sys.stdout)
+print(json.dumps(entries.sections, indent=2, sort_keys=True), file=sys.stdout)
 sys.path.pop(0)
