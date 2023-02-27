@@ -1,8 +1,9 @@
 ##
 # Prologue
 ##
-AC_INIT([flux-core],
-        m4_esyscmd([test -n "$FLUX_VERSION" && printf $FLUX_VERSION || git describe --always | awk '/.*/ {sub(/^v/, ""); printf "%s",$1; exit}']))
+AC_INIT([flux-core], 0.46.0)
+#AC_INIT([flux-core],
+#        m4_esyscmd([test -n "$FLUX_VERSION" && printf $FLUX_VERSION || git describe --always | awk '/.*/ {sub(/^v/, ""); printf "%s",$1; exit}']))
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_MACRO_DIR([config])
 AC_CONFIG_SRCDIR([NEWS.md])

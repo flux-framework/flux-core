@@ -36,6 +36,12 @@ class FortuneCmd(base.MiniCmd):
     Surprise the user with some beautiful, hidden Flux fortunes and art!
 
     Usage: flux fortune
+
+    flux fortune -c all            # this is the default
+    flux fortune -c valentines     # show valentine fortune
+    flux fortune -c art            # show art
+    flux fortune -c facts          # show learning facts / tidbits
+    flux fortune -c fun            # show fun fortune
     """
 
     @staticmethod
@@ -47,14 +53,23 @@ class FortuneCmd(base.MiniCmd):
         """
         if usage is None:
             usage = f"{prog} [OPTIONS...] COMMAND [ARGS...]"
-        return argparse.ArgumentParser(
+
+        parser = argparse.ArgumentParser(
             prog=prog,
             usage=usage,
             description=description,
             formatter_class=flux.util.help_formatter(),
         )
+        parser.add_argument(
+            "-c",
+            "--category",
+            choices=["all", "valentines", "fun", "facts", "art"],
+            default="all",
+            help="Choose the category of fortunes to display.",
+        )
+        return parser
 
-    def generate_fortune(self):
+    def generate_fortune(self, args):
         """
         Generate the fortune, meaning:
 
@@ -62,18 +77,56 @@ class FortuneCmd(base.MiniCmd):
         2. If a, choose a color and print.
         3. If b, print the ascii and exit.
         """
-        # 1% chance to print ascii art
-        if random.uniform(0, 1) <= 0.01:
-            print(random.choice(art))
-            return
+        # Derive fortune based on category
+        if args.category == "all":
+            return self.random_fortune()
 
+        # Request for facts
+        if args.category == "facts":
+            return self.show_fortune(facts)
+
+        # Request for ascii art
+        if args.category == "art":
+            return self.show_art()
+
+        # Request for a valentine
+        if args.category == "valentines":
+            return self.show_fortune(valentines)
+
+        # Otherwise show a fun fortune
+        self.show_fortune(fortunes)
+
+    def show_art(self):
+        """
+        Show ascii art.
+        """
+        print(random.choice(art))
+
+    def random_fortune(self):
+        """
+        A random fortune can be art, fun, valenties, or factoid.
+        """
+        # 1% chance to print ascii art, no matter what
+        if random.uniform(0, 1) <= 0.01:
+            return self.show_art()
+
+        # Beyond that, 80% of the time is fact
+        if random.uniform(0, 1) <= 0.80:
+            return self.show_fortune(facts)
+
+        # Otherwise we show fun or valentines
         # If it's within 3 weeks of Valentines...
         self.check_valentines()
+        self.show_fortune(fortunes)
 
+    def show_fortune(self, listing):
+        """
+        Randomly select a fortune from a list and colorize.
+        """
         # Otherwise, choose a color and a fortune...
         color = random.choice(colors)
         s = random.choice(symbols)
-        fortune = random.choice(fortunes)
+        fortune = random.choice(listing)
         print(color % (s, fortune, s))
 
     def check_valentines(self):
@@ -94,7 +147,7 @@ class FortuneCmd(base.MiniCmd):
         fortunes += valentines
 
     def main(self, args):
-        self.generate_fortune()
+        self.generate_fortune(args)
         sys.exit(self.exitcode)
 
 
@@ -105,7 +158,14 @@ valentines = [
     "Roses are red, violets are blue, you are my favorite job manager queue! <3",
 ]
 
-# Year round fortunes
+# Facts about Flux
+facts = [
+    "Did you know that you can control a Flux instance on a different cluster? Check out flux proxy!",
+    "Uh oh, what is going on with my nodes? 'flux resource list' will tell you the story!",
+    "What's going on in my flux environment? Check out 'flux env' to see!",
+]
+
+# Fun fortunes
 fortunes = [
     "I refuse to have modem speeds without the sweet modem sounds",
     "A yawn is a silent scream for coffee.",
