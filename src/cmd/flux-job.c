@@ -270,6 +270,9 @@ static struct optparse_option attach_opts[] =  {
     { .name = "read-only", .key = 'r', .has_arg = 0,
       .usage = "Disable reading stdin and capturing signals",
     },
+    { .name = "unbuffered", .key = 'u', .has_arg = 0,
+      .usage = "Disable buffering of stdin",
+    },
     { .name = "debug", .has_arg = 0,
       .usage = "Enable parallel debugger to attach to a running job",
     },
@@ -1581,6 +1584,7 @@ struct attach_ctx {
     int exit_code;
     flux_jobid_t id;
     bool readonly;
+    bool unbuffered;
     const char *jobid;
     const char *wait_event;
     flux_future_t *eventlog_f;
@@ -2053,9 +2057,13 @@ static void setup_mpir_interface (struct attach_ctx *ctx, json_t *context)
 static void attach_setup_stdin (struct attach_ctx *ctx)
 {
     flux_watcher_t *w;
+    int flags = 0;
 
     if (ctx->readonly)
         return;
+
+    if (!ctx->unbuffered)
+        flags = FLUX_WATCHER_LINE_BUFFER;
 
     /* flux_buffer_read_watcher_create() requires O_NONBLOCK on
      * stdin */
@@ -2071,7 +2079,7 @@ static void attach_setup_stdin (struct attach_ctx *ctx)
                                          STDIN_FILENO,
                                          1 << 20,
                                          attach_stdin_cb,
-                                         FLUX_WATCHER_LINE_BUFFER,
+                                         flags,
                                          ctx);
     if (!w)
         log_err_exit ("flux_buffer_read_watcher_create");
@@ -2512,6 +2520,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     ctx.id = parse_jobid (ctx.jobid);
     ctx.p = p;
     ctx.readonly = optparse_hasopt (p, "read-only");
+    ctx.unbuffered = optparse_hasopt (p, "unbuffered");
 
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
