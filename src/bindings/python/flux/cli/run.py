@@ -57,6 +57,8 @@ class RunCmd(base.SubmitBaseCmd):
             attach_args.append("--debug-emulate")
         if args.wait_event:
             attach_args.append(f"--wait-event={args.wait_event}")
+        if args.unbuffered:
+            attach_args.append("--unbuffered")
         attach_args.append(jobid.f58.encode("utf-8", errors="surrogateescape"))
 
         # Exec flux-job attach, searching for it in FLUX_EXEC_PATH.
