@@ -203,13 +203,20 @@ static void region_cache_remove (struct content_region *reg)
 {
     if (reg->fileref) {
         int saved_errno = errno;
-        json_t *blobvec = json_object_get (reg->fileref, "blobvec");
+        const char *encoding = NULL;
+        json_t *data = NULL;
 
-        if (blobvec) {
+        if (json_unpack (reg->fileref,
+                         "{s?s s?o}",
+                         "encoding", &encoding,
+                         "data", &data) == 0
+            && data != NULL
+            && encoding != NULL
+            && streq (encoding, "blobvec")) {
             size_t index;
             json_t *entry;
 
-            json_array_foreach (blobvec, index, entry) {
+            json_array_foreach (data, index, entry) {
                 json_int_t offset;
                 json_int_t size;
                 const char *blobref;
@@ -234,27 +241,33 @@ static void region_cache_remove (struct content_region *reg)
 static int region_cache_add (struct content_region *reg)
 {
     size_t index;
+    const char *encoding = NULL;
+    json_t *data = NULL;
     json_t *entry;
-    json_t *blobvec;
 
     if (cache_entry_add (reg,
                          reg->fileref_data,
                          reg->fileref_size,
                          reg->blobref) < 0)
         return -1;
-    if (!(blobvec = json_object_get (reg->fileref, "blobvec")))
+    if (json_unpack (reg->fileref,
+                     "{s?s s?o}",
+                     "encoding", &encoding,
+                     "data", &data) < 0)
         goto inval;
-    json_array_foreach (blobvec, index, entry) {
-        json_int_t offset;
-        json_int_t size;
-        const char *blobref;
-        if (json_unpack (entry, "[I,I,s]", &offset, &size, &blobref) < 0)
-            goto inval;
-        if (cache_entry_add (reg,
-                             reg->data + offset,
-                             size,
-                             blobref) < 0)
-            return -1;
+    if (data && encoding && streq (encoding, "blobvec")) {
+        json_array_foreach (data, index, entry) {
+            json_int_t offset;
+            json_int_t size;
+            const char *blobref;
+            if (json_unpack (entry, "[I,I,s]", &offset, &size, &blobref) < 0)
+                goto inval;
+            if (cache_entry_add (reg,
+                                 reg->data + offset,
+                                 size,
+                                 blobref) < 0)
+                return -1;
+        }
     }
     return 0;
 inval:
