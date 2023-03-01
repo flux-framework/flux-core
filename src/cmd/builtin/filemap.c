@@ -153,8 +153,8 @@ static flux_future_t *mmap_add (flux_t *h,
                        "{s:s s:s s:i s:O}",
                        "path", path,
                        "fullpath", fpath,
-                        "chunksize", chunksize,
-                        "tags", tags);
+                       "chunksize", chunksize,
+                       "tags", tags);
     ERRNO_SAFE_WRAP (free, fpath);
     return f;
 }
