@@ -74,6 +74,10 @@ OPTIONS
 **--disable-mmap**
    Never map a regular file through the distributed content cache.
 
+**--chunksize=N**
+   Limit the content mapped blob size to N bytes.  Set to 0 for unlimited.
+   The default is 1048576 (*map* subcommand only).
+
 **--direct**
    Avoid indirection through the content cache when fetching the top level
    data for each file.  This may be fastest for a single or small number of
