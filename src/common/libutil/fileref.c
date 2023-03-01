@@ -48,8 +48,6 @@
 #include "read_all.h"
 #include "fileref.h"
 
-static const int small_file_threshold = 4096;
-
 static int blobvec_append (json_t *blobvec,
                            const void *mapbuf,
                            off_t offset,
@@ -166,6 +164,7 @@ json_t *fileref_create_ex (const char *path,
                            const char *fullpath,
                            const char *hashtype,
                            int chunksize,
+                           int threshold,
                            void **mapbufp,
                            size_t *mapsizep,
                            flux_error_t *error)
@@ -208,7 +207,7 @@ json_t *fileref_create_ex (const char *path,
      */
     if (S_ISREG (sb.st_mode)) {
         if (sb.st_size > 0) {
-            if (sb.st_size <= small_file_threshold) {
+            if (threshold < 0 || sb.st_size <= threshold) {
                 if ((data_size = read_all (fd, &data)) < 0) {
                     errprintf (error, "%s: %s", path, strerror (errno));
                     goto error;
@@ -313,12 +312,14 @@ error:
 json_t *fileref_create (const char *path,
                         const char *hashtype,
                         int chunksize,
+                        int threshold,
                         flux_error_t *error)
 {
     return fileref_create_ex (path,
                               NULL, // fullpath
                               hashtype,
                               chunksize,
+                              threshold,
                               NULL, // mapbuf
                               NULL, // maplen
                               error);

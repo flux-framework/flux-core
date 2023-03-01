@@ -26,17 +26,20 @@ json_t *fileref_create_ex (const char *path,
                            const char *fullpath,
                            const char *hashtype,
                            int chunksize,
+                           int threshold,
                            void **mapbuf,
                            size_t *mapsize,
                            flux_error_t *error);
 
-/* Create a fileref object for the regular file at 'path'.
+/* Create a fileref object for the file system object at 'path'.
  * The chunksize limits the size of each blob (0=unlimited).
- * Corner cases handled: empty files and sparse files.
+ * 'threshold' is a file size over which a non-empty regular file is
+ *   content mapped (0=always, -1=never).
  */
 json_t *fileref_create (const char *path,
                         const char *hashtype,
                         int chunksize,
+                        int threshold,
                         flux_error_t *error);
 
 /* Build a "directory listing" of a fileref and set it in 'buf'.

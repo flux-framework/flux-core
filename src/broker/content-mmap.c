@@ -445,6 +445,7 @@ static struct content_region *content_mmap_region_create (
                                             fpath,
                                             mm->hash_name,
                                             chunksize,
+                                            4096,
                                             &reg->data,
                                             &reg->data_size,
                                             error)))
