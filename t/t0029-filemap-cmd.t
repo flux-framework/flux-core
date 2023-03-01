@@ -158,6 +158,25 @@ test_expect_success HAVE_SPARSE 'holes were preserved' '
 test_expect_success HAVE_SPARSE 'unmap test file' '
 	flux filemap unmap
 '
+test_expect_success HAVE_SPARSE 'create sparse test file with data' '
+	truncate --size=8192 testfile3b &&
+	echo more-data >>testfile3b
+'
+test_expect_success HAVE_SPARSE 'map test file' '
+	flux filemap map ./testfile3b
+'
+test_expect_success HAVE_SPARSE 'test file can be read through content cache' '
+	flux filemap get -C copydir &&
+	test_cmp testfile3b copydir/testfile3b
+'
+test_expect_success HAVE_SPARSE 'holes were preserved' '
+	stat --format="%b" testfile3b >blocks3b.exp &&
+	stat --format="%b" copydir/testfile3b >blocks3b.out &&
+	test_cmp blocks3b.exp blocks3b.out
+'
+test_expect_success HAVE_SPARSE 'unmap test file' '
+	flux filemap unmap
+'
 test_expect_success 'create test symlink' '
 	ln -s /a/b/c/d testfile4
 '
