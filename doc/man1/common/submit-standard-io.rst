@@ -25,6 +25,24 @@ emitting the job's I/O to its stdout and stderr.
    Redirect stderr to the specified filename *TEMPLATE*, bypassing the KVS.
    *TEMPLATE* is expanded as described above.
 
+**-u, --unbuffered**
+   Disable buffering of standard input and output as much as practical.
+   Normally, stdout from job tasks is line buffered, as is stdin when
+   running a job in the foreground via :man1:`flux-run`. Additionally,
+   job output may experience a delay due to batching of output
+   events by the job shell. With the ``--unbuffered`` option,
+   ``output.*.buffer.type=none`` is set in jobspec to request no buffering
+   of output, and the default output batch period is reduced greatly,
+   to make output appear in the KVS and printed to the standard output
+   of :man1:`flux-run` as soon as possible. The ``--unbuffered`` option
+   is also passed to ``flux job attach``, which makes stdin likewise
+   unbuffered. Note that the application and/or terminal may have
+   additional input and output buffering which this option will not
+   affect. For instance, by default an interactive terminal in canonical
+   input mode will process input by line only. Likewise, stdout of a
+   process run without a terminal may be fully buffered when using
+   libc standard I/O streams (See NOTES in :linux:man3:`stdout`).
+
 **-l, --label-io**
    Add task rank prefixes to each line of output.
 
