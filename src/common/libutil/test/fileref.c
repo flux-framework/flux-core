@@ -34,10 +34,15 @@ static bool have_sparse;
 
 static json_t *xfileref_create (const char *path,
                                 const char *hashtype,
-                                int chunksize,
-                                flux_error_t *error)
+                                int chunksize)
 {
-    return fileref_create (path, hashtype, chunksize, 4096, error);
+    json_t *o;
+    flux_error_t error;
+
+    o = fileref_create (path, hashtype, chunksize, 4096, &error);
+    if (!o)
+        diag ("%s", error.text);
+    return o;
 }
 
 const char *mkpath (const char *name)
@@ -392,7 +397,6 @@ void test_vec (void)
 {
     for (int i = 0; i < ARRAY_SIZE (testvec); i++) {
         json_t *o;
-        flux_error_t error;
         bool rc;
 
         skip (strchr (testvec[i].spec, '-') && !have_sparse,
@@ -401,8 +405,7 @@ void test_vec (void)
         mkfile ("testfile", 4096, testvec[i].spec);
         o = xfileref_create (mkpath ("testfile"),
                              testvec[i].hashtype,
-                             testvec[i].chunksize,
-                             &error);
+                             testvec[i].chunksize);
         rc = check_fileref (o, "testfile", testvec[i].exp_blobs);
         ok (rc == true,
             "fileref_create chunksize=%d '%s' works (%d %s blobrefs)",
@@ -410,8 +413,6 @@ void test_vec (void)
             testvec[i].spec,
             testvec[i].exp_blobs,
             testvec[i].hashtype);
-        if (!rc)
-            diag ("%s", error.text);
         json_decref (o);
         rmfile ("testfile");
 
@@ -422,17 +423,14 @@ void test_vec (void)
 void test_dir (void)
 {
     json_t *o;
-    flux_error_t error;
     bool rc;
 
     if (mkdir (mkpath ("testdir"), 0510) < 0)
         BAIL_OUT ("could not create test directory");
-    o = xfileref_create (mkpath ("testdir"), "sha1", 0, &error);
+    o = xfileref_create (mkpath ("testdir"), "sha1", 0);
     rc = check_fileref (o, "testdir", 0);
     ok (rc == true,
         "fileref_create directory works");
-    if (!rc)
-        diag ("%s", error.text);
     json_decref (o);
     rmdir (mkpath ("testdir"));
 }
@@ -440,18 +438,15 @@ void test_dir (void)
 void test_link (void)
 {
     json_t *o;
-    flux_error_t error;
     const char *target = "/a/b/c/d/e/f/g";
     bool rc;
 
     if (symlink (target, mkpath ("testlink")) < 0)
         BAIL_OUT ("could not create test symlink");
-    o = xfileref_create (mkpath ("testlink"), "sha1", 0, &error);
+    o = xfileref_create (mkpath ("testlink"), "sha1", 0);
     rc = check_fileref (o, "testlink", 0);
     ok (rc == true,
         "fileref_create symlink works");
-    if (!rc)
-        diag ("%s", error.text);
     json_decref (o);
     rmfile ("testlink");
 }
@@ -459,16 +454,13 @@ void test_link (void)
 void test_small (void)
 {
     json_t *o;
-    flux_error_t error;
     bool rc;
 
     mkfile ("testsmall", 512, "a");
-    o = xfileref_create (mkpath ("testsmall"), "sha1", 0, &error);
+    o = xfileref_create (mkpath ("testsmall"), "sha1", 0);
     rc = check_fileref (o, "testsmall", 0);
     ok (rc == true,
         "fileref_create small file works");
-    if (!rc)
-        diag ("%s", error.text);
     diagjson (o);
     json_decref (o);
     rmfile ("testsmall");
@@ -477,37 +469,28 @@ void test_small (void)
 void test_expfail (void)
 {
     json_t *o;
-    flux_error_t error;
 
     mkfile ("test", 4096, "zz");
 
     errno = 0;
-    o = xfileref_create ("/noexist", "sha1", 4096, &error);
+    o = xfileref_create ("/noexist", "sha1", 4096);
     ok (o == NULL && errno == ENOENT,
         "fileref_create path=/noexist fails with ENOENT");
-    if (!o)
-        diag ("%s", error.text);
 
     errno = 0;
-    o = xfileref_create ("/dev/null", "sha1", 4096, &error);
+    o = xfileref_create ("/dev/null", "sha1", 4096);
     ok (o == NULL && errno == EINVAL,
         "fileref_create path=/dev/null fails with EINVAL");
-    if (!o)
-        diag ("%s", error.text);
 
     errno = 0;
-    o = xfileref_create (mkpath ("test"), "smurfette", 4096, &error);
+    o = xfileref_create (mkpath ("test"), "smurfette", 4096);
     ok (o == NULL && errno == EINVAL,
         "fileref_create hashtype=smurfette fails with EINVAL");
-    if (!o)
-        diag ("%s", error.text);
 
     errno = 0;
-    o = xfileref_create (mkpath ("test"), "sha1", -1, &error);
+    o = xfileref_create (mkpath ("test"), "sha1", -1);
     ok (o == NULL && errno == EINVAL,
         "fileref_create chunksize=-1 fails with EINVAL");
-    if (!o)
-        diag ("%s", error.text);
 
     rmfile ("test");
 }
@@ -518,32 +501,32 @@ void test_pretty_print (void)
     json_t *o;
 
     mkfile ("testfile", 4096, "a");
-    if (!(o = xfileref_create (mkpath ("testfile"), "sha1", 0, NULL)))
+    if (!(o = xfileref_create (mkpath ("testfile"), "sha1", 0)))
         BAIL_OUT ("failed to create test object");
 
     buf[0] = '\0';
-    fileref_pretty_print (NULL, false, buf, sizeof (buf));
+    fileref_pretty_print (NULL, NULL, false, buf, sizeof (buf));
     ok (streq (buf, "invalid fileref"),
         "fileref_pretty_print obj=NULL printed an error");
 
     buf[0] = '\0';
-    fileref_pretty_print (NULL, false, buf, 5);
+    fileref_pretty_print (NULL, NULL, false, buf, 5);
     ok (streq (buf, "inv+"),
         "fileref_pretty_print obj=NULL bufsize=5 includes trunc character +");
 
     buf[0] = '\0';
-    fileref_pretty_print (o, false, buf, sizeof (buf));
+    fileref_pretty_print (o, NULL, false, buf, sizeof (buf));
     ok (strlen (buf) > 0,
         "fileref_pretty_print long_form=false works");
     diag (buf);
 
     buf[0] = '\0';
-    fileref_pretty_print (o, true, buf, sizeof (buf));
+    fileref_pretty_print (o, NULL, true, buf, sizeof (buf));
     ok (strlen (buf) > 0,
         "fileref_pretty_print long_form=true works");
     diag (buf);
 
-    lives_ok ({fileref_pretty_print (o, true, NULL, sizeof (buf));},
+    lives_ok ({fileref_pretty_print (o, NULL, true, NULL, sizeof (buf));},
              "fileref_pretty_print buf=NULL doesn't crash");
 
     json_decref (o);
