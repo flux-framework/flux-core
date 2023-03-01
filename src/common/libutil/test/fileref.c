@@ -124,6 +124,16 @@ void mkfile (const char *name, int blocksize, const char *spec)
     free (buf);
 }
 
+void mkfile_string (const char *name, const char *s)
+{
+    int fd;
+    if ((fd = open (mkpath (name), O_WRONLY | O_CREAT | O_TRUNC, 0600)) < 0
+        || write (fd, s, strlen (s)) != strlen (s)
+        || close (fd) < 0)
+        BAIL_OUT ("could not create %s: %s", strerror (errno));
+    close (fd);
+}
+
 /* Check that blobref 'bref' hash matches specified file region.
  * If bref is NULL, check that the region contains all zeroes.
  */
@@ -337,7 +347,8 @@ bool check_fileref (json_t *fileref, const char *name, int blobcount)
         }
         close (fd);
     }
-    else if (S_ISREG (mode) && data != NULL) {
+    else if (S_ISREG (mode) && data != NULL && encoding
+        && streq (encoding, "base64")) {
         const char *str = json_string_value (data);
         int fd;
         char buf[8192];
@@ -359,6 +370,29 @@ bool check_fileref (json_t *fileref, const char *name, int blobcount)
             goto error;
         }
         if (memcmp (buf, buf2, n) != 0) {
+            diag ("%s: data is wrong", path);
+            close (fd);
+            goto error;
+        }
+        close (fd);
+    }
+    else if (S_ISREG (mode) && data != NULL
+        && encoding && streq (encoding, "utf-8")) {
+        const char *str = json_string_value (data);
+        ssize_t n = strlen (str);
+        int fd;
+        char buf[8192];
+
+        if ((fd = open (mkpath (name), O_RDONLY)) < 0) {
+            diag ("open %s: %s", path, strerror (errno));
+            goto error;
+        }
+        if (read (fd, buf, sizeof (buf)) != n) {
+            diag ("read %s: returned wrong size", path);
+            close (fd);
+            goto error;
+        }
+        if (memcmp (str, buf, n) != 0) {
             diag ("%s: data is wrong", path);
             close (fd);
             goto error;
@@ -472,6 +506,7 @@ void test_small (void)
 {
     json_t *o;
     bool rc;
+    const char *encoding;
 
     mkfile ("testsmall", 512, "a");
     o = xfileref_create (mkpath ("testsmall"), "sha1", 0);
@@ -481,6 +516,24 @@ void test_small (void)
     diagjson (o);
     json_decref (o);
     rmfile ("testsmall");
+
+    mkfile_string ("testsmall2", "\xc3\x28");
+    o = xfileref_create (mkpath ("testsmall2"), NULL, 0);
+    ok (o != NULL && json_unpack (o, "{s:s}", "encoding", &encoding) == 0
+        && streq (encoding, "base64"),
+        "small file with invalid utf-8 encodes as base64");
+    diagjson (o);
+    json_decref (o);
+    rmfile ("testsmall2");
+
+    mkfile_string ("testsmall3", "abcd");
+    o = xfileref_create (mkpath ("testsmall3"), NULL, 0);
+    ok (o != NULL && json_unpack (o, "{s:s}", "encoding", &encoding) == 0
+        && streq (encoding, "utf-8"),
+        "small file with valid utf-8 encodes as utf-8");
+    diagjson (o);
+    json_decref (o);
+    rmfile ("testsmall3");
 }
 
 void test_expfail (void)

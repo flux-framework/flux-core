@@ -222,6 +222,28 @@ error:
     return NULL;
 }
 
+static json_t *fileref_create_utf8 (const char *path,
+                                    void *data,
+                                    struct stat *sb,
+                                    flux_error_t *error)
+{
+    json_t *o;
+    json_t *obuf = NULL;
+
+    if (!(obuf = json_stringn (data, sb->st_size))) {
+        errprintf (error, "%s: error creating utf-8 json string", path);
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(o = fileref_create_nonempty (path, "utf-8", obuf, sb, error)))
+        goto error;
+    json_decref (obuf);
+    return o;
+error:
+    ERRNO_SAFE_WRAP (json_decref , obuf);
+    return NULL;
+}
+
 static json_t *fileref_create_empty (const char *path,
                                      struct stat *sb,
                                      flux_error_t *error)
@@ -366,7 +388,8 @@ json_t *fileref_create_ex (const char *path,
         void *data;
         if (!(data = read_whole_file (path, fd, sb.st_size, error)))
             goto error;
-        if (!(o = fileref_create_base64 (relative_path, data, &sb, error))) {
+        if (!(o = fileref_create_utf8 (relative_path, data, &sb, error))
+            && !(o = fileref_create_base64 (relative_path, data, &sb, error))) {
             ERRNO_SAFE_WRAP (free, data);
             goto error;
         }
