@@ -75,8 +75,8 @@ OPTIONS
 **--blobref**
    List blobrefs (*list* subcommand only).
 
-**--fileref**
-   List fileref objects (*list* subcommand only).
+**--raw**
+   List RFC 37 file system objects (*list* subcommand only).
 
 EXAMPLE
 =======

@@ -115,8 +115,8 @@ test_expect_success 'map test file and get its blobref' '
 	flux filemap map ./testfile2 &&
 	flux filemap list --blobref >testfile2.blobref
 '
-test_expect_success HAVE_JQ 'show fileref' '
-	flux filemap list --fileref | jq .
+test_expect_success HAVE_JQ 'show raw object' '
+	flux filemap list --raw | jq .
 '
 test_expect_success 'test file can be read through content cache on rank 1' '
 	flux exec -r 1 flux filemap get -C copydir &&
@@ -164,8 +164,8 @@ test_expect_success 'create test symlink' '
 test_expect_success 'map test file' '
 	flux filemap map ./testfile4
 '
-test_expect_success HAVE_JQ 'show fileref' '
-	flux filemap list --fileref | jq .
+test_expect_success HAVE_JQ 'show raw object' '
+	flux filemap list --raw | jq .
 '
 test_expect_success 'test file can be read through content cache' '
 	flux filemap get -vv -C copydir

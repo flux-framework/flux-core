@@ -322,9 +322,9 @@ static int subcmd_list (optparse_t *p, int ac, char *av[])
             if (optparse_hasopt (p, "blobref")) {
                 printf ("%s\n", json_string_value (entry));
             }
-            else if (optparse_hasopt (p, "fileref")) {
+            else if (optparse_hasopt (p, "raw")) {
                 if (json_dumpf (entry, stdout, JSON_COMPACT) < 0)
-                    log_msg_exit ("error dumping fileref object");
+                    log_msg_exit ("error dumping RFC 37 file system object");
             }
             else {
                 char buf[1024];
@@ -569,8 +569,8 @@ static struct optparse_option list_opts[] = {
       .usage = "Show file type, mode, size", },
     { .name = "blobref", .has_arg = 0,
       .usage = "List blobrefs only, do not dereference them", },
-    { .name = "fileref", .has_arg = 0,
-      .usage = "Show raw fileref without decoding", },
+    { .name = "raw", .has_arg = 0,
+      .usage = "Show raw RFC 37 file system object without decoding", },
     { .name = "tags", .key = 'T', .has_arg = 1, .arginfo = "NAME,...",
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Specify comma-separated tags (default: main)", },
