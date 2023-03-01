@@ -43,10 +43,12 @@ json_t *fileref_create (const char *path,
                         flux_error_t *error);
 
 /* Build a "directory listing" of a fileref and set it in 'buf'.
+ * Set 'path' if provided from archive container (fileref->path overrides).
  * If the fileref is invalid, set "invalid fileref".
  * If output is truncated, '+' is substituted for the last character.
  */
 void fileref_pretty_print (json_t *fileref,
+                           const char *path,
                            bool long_form,
                            char *buf,
                            size_t bufsize);

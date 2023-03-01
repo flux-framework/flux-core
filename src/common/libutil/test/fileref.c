@@ -180,41 +180,31 @@ error:
  */
 bool check_fileref (json_t *fileref, const char *name, int blobcount)
 {
-    int version;
-    const char *type;
     const char *path;
-    json_int_t size;
-    json_int_t mtime;
-    json_int_t ctime;
     int mode;
-    json_t *blobvec;
+    json_int_t size = -1;
+    json_int_t mtime = -1;
+    json_int_t ctime = -1;
+    const char *encoding = NULL;
+    json_t *data = NULL;
     struct stat sb;
-    const char *data = NULL;
+    int myblobcount = 0;
 
     if (!fileref) {
         diag ("fileref is NULL");
         return false;
     }
     if (json_unpack (fileref,
-                     "{s:i s:s s:s s:I s:I s:I s:i s?s s:o}",
-                     "version", &version,
-                     "type", &type,
+                     "{s:s s:i s?I s?I s?I s?s s?o}",
                      "path", &path,
+                     "mode", &mode,
                      "size", &size,
                      "mtime", &mtime,
                      "ctime", &ctime,
-                     "mode", &mode,
-                     "data", &data,
-                     "blobvec", &blobvec) < 0) {
+                     "encoding", &encoding,
+                     "data", &data) < 0) {
+
         diag ("error decoding fileref object");
-        return false;
-    }
-    if (version != 1) {
-        diag ("fileref.version != 1");
-        return false;
-    }
-    if (!streq (type, "fileref")) {
-        diag ("fileref.type != fileref");
         return false;
     }
     if (!streq (path, mkpath_relative (name))) {
@@ -223,15 +213,15 @@ bool check_fileref (json_t *fileref, const char *name, int blobcount)
     }
     if (lstat (mkpath (name), &sb) < 0)
         BAIL_OUT ("could not stat %s", path);
-    if (size != sb.st_size) {
+    if (size != -1 && size != sb.st_size) {
         diag ("fileref.size is %ju not %zu", (uintmax_t)size, sb.st_size);
         goto error;
     }
-    if (mtime != sb.st_mtime) {
+    if (mtime != -1 && mtime != sb.st_mtime) {
         diag ("fileref.mtime is wrong");
         goto error;
     }
-    if (ctime != sb.st_ctime) {
+    if (ctime != -1 && ctime != sb.st_ctime) {
         diag ("fileref.ctime is wrong");
         goto error;
     }
@@ -245,19 +235,44 @@ bool check_fileref (json_t *fileref, const char *name, int blobcount)
     }
     if (S_ISLNK (mode)) {
         char buf[1024];
-        if (!data) {
+        if (!data || !json_is_string (data)) {
             diag ("symlink data is missing");
             goto error;
         }
+        if (encoding || size != -1) {
+            diag ("symlink encoding/size unexpectedly set");
+            goto error;
+        }
         if (readlink (mkpath (name), buf, sizeof (buf)) < 0
-            || !streq (buf, data)) {
+            || !streq (buf, json_string_value (data))) {
             diag ("symlink target is wrong");
             goto error;
         }
     }
     else if (S_ISREG (mode)) {
-        if (data && json_array_size (blobvec) > 0) {
-            diag ("regular file has both data and blobrefs");
+        if (!encoding) { // json encoding
+        }
+        else if (streq (encoding, "utf-8")) {
+            if (!json_is_string (data)) {
+                diag ("regfile utf-8 data is not a string");
+                goto error;
+            }
+        }
+        else if (streq (encoding, "base64")) {
+            if (!json_is_string (data)) {
+                diag ("regfile base64 data is not a string");
+                goto error;
+            }
+        }
+        else if (streq (encoding, "blobvec")) {
+            if (!json_is_array (data)) {
+                diag ("regfile blobvec data is not an array");
+                goto error;
+            }
+            myblobcount = json_array_size (data);
+        }
+        else {
+            diag ("unknown encoding %s", encoding);
             goto error;
         }
     }
@@ -267,9 +282,9 @@ bool check_fileref (json_t *fileref, const char *name, int blobcount)
             goto error;
         }
     }
-    if (json_array_size (blobvec) != blobcount) {
+    if (myblobcount != blobcount) {
         diag ("fileref.blobvec has incorrect length (expected %d got %zu)",
-              blobcount, json_array_size (blobvec));
+              blobcount, myblobcount);
         goto error;
     }
     if (blobcount > 0) {
@@ -283,7 +298,7 @@ bool check_fileref (json_t *fileref, const char *name, int blobcount)
             return false;
         }
         cursor = 0;
-        json_array_foreach (blobvec, index, o) {
+        json_array_foreach (data, index, o) {
             struct {
                 json_int_t offset;
                 json_int_t size;
@@ -323,12 +338,14 @@ bool check_fileref (json_t *fileref, const char *name, int blobcount)
         close (fd);
     }
     else if (S_ISREG (mode) && data != NULL) {
+        const char *str = json_string_value (data);
         int fd;
         char buf[8192];
         char buf2[8192];
         ssize_t n;
 
-        if ((n = base64_decode (buf, sizeof (buf), data, strlen (data))) < 0) {
+        if (!str
+            || (n = base64_decode (buf, sizeof (buf), str, strlen (str))) < 0) {
             diag ("base64_decode failed");
             goto error;
         }
