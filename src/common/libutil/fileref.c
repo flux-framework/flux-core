@@ -114,6 +114,29 @@ error:
     return NULL;
 }
 
+static json_t *fileref_create_nonempty (const char *path,
+                                        const char *encoding,
+                                        json_t *data,
+                                        struct stat *sb,
+                                        flux_error_t *error)
+{
+    json_t *o;
+
+    if (!(o = json_pack ("{s:s s:s s:O s:I s:I s:I s:i}",
+                         "path", path,
+                         "encoding", encoding,
+                         "data", data,
+                         "size", (json_int_t)sb->st_size,
+                         "mtime", (json_int_t)sb->st_mtime,
+                         "ctime", (json_int_t)sb->st_ctime,
+                         "mode", sb->st_mode))) {
+        errprintf (error, "%s: error packing %s file object", path, encoding);
+        errno = ENOMEM;
+        return NULL;
+    }
+    return o;
+}
+
 static json_t *fileref_create_blobvec (const char *path,
                                        int fd,
                                        void *mapbuf,
@@ -133,18 +156,8 @@ static json_t *fileref_create_blobvec (const char *path,
                    strerror (errno));
         goto error;
     }
-    if (!(o = json_pack ("{s:s s:s s:O s:I s:I s:I s:i}",
-                         "path", path,
-                         "encoding", "blobvec",
-                         "data", blobvec,
-                         "size", (json_int_t)sb->st_size,
-                         "mtime", (json_int_t)sb->st_mtime,
-                         "ctime", (json_int_t)sb->st_ctime,
-                         "mode", sb->st_mode))) {
-        errprintf (error, "%s: error packing blobvec file object", path);
-        errno = ENOMEM;
+    if (!(o = fileref_create_nonempty (path, "blobvec", blobvec, sb, error)))
         goto error;
-    }
     json_decref (blobvec);
     return o;
 error:
@@ -152,54 +165,60 @@ error:
     return NULL;
 }
 
+static void *read_whole_file (const char *path,
+                              int fd,
+                              size_t size,
+                              flux_error_t *error)
+{
+    void *data;
+    ssize_t n;
+
+    if ((n = read_all (fd, &data)) < 0) {
+        errprintf (error, "%s: %s", path, strerror (errno));
+        return NULL;
+    }
+    if (n < size) {
+        errprintf (error, "%s: short read", path);
+        free (data);
+        errno = EINVAL;
+    }
+    return data;
+}
+
 static json_t *fileref_create_base64 (const char *path,
-                                      int fd,
+                                      void *data,
                                       struct stat *sb,
                                       flux_error_t *error)
 {
     json_t *o;
-    void *data = NULL;
-    size_t data_size;
     char *buf = NULL;
     size_t bufsize;
+    json_t *obuf = NULL;
 
-    if ((data_size = read_all (fd, &data)) < 0) {
-        errprintf (error, "%s: %s", path, strerror (errno));
-        goto error;
-    }
-    if (data_size < sb->st_size) {
-        errprintf (error, "%s: short read", path);
-        goto inval;
-    }
-    bufsize = base64_encoded_length (data_size) + 1; // +1 NULL
+    bufsize = base64_encoded_length (sb->st_size) + 1; // +1 NULL
     if (!(buf = malloc (bufsize))) {
         errprintf (error, "%s: out of memory while encoding", path);
-        goto error;
+        return NULL;
     }
-    if (base64_encode (buf, bufsize, data, data_size) < 0) {
+    if (base64_encode (buf, bufsize, data, sb->st_size) < 0) {
         errprintf (error, "%s: base64_encode error", path);
         goto inval;
     }
-    if (!(o = json_pack ("{s:s s:s s:s s:I s:I s:I s:i}",
-                         "path", path,
-                         "encoding", "base64",
-                         "data", buf,
-                         "size", (json_int_t)sb->st_size,
-                         "mtime", (json_int_t)sb->st_mtime,
-                         "ctime", (json_int_t)sb->st_ctime,
-                         "mode", sb->st_mode))) {
-        errprintf (error, "%s: error packing base64 file object", path);
-        errno = ENOMEM;
+    if (!(obuf = json_string (buf))) {
+        errprintf (error, "%s: error creating base64 json string", path);
+        errno = EINVAL;
         goto error;
     }
+    if (!(o = fileref_create_nonempty (path, "base64", obuf, sb, error)))
+        goto error;
+    json_decref (obuf);
     free (buf);
-    free (data);
     return o;
 inval:
     errno = EINVAL;
 error:
+    ERRNO_SAFE_WRAP (json_decref , obuf);
     ERRNO_SAFE_WRAP (free, buf);
-    ERRNO_SAFE_WRAP (free, data);
     return NULL;
 }
 
@@ -344,8 +363,14 @@ json_t *fileref_create_ex (const char *path,
     /* Other reg file will be encoded with base64.
      */
     else if (S_ISREG (sb.st_mode)) {
-        if (!(o = fileref_create_base64 (relative_path, fd, &sb, error)))
+        void *data;
+        if (!(data = read_whole_file (path, fd, sb.st_size, error)))
             goto error;
+        if (!(o = fileref_create_base64 (relative_path, data, &sb, error))) {
+            ERRNO_SAFE_WRAP (free, data);
+            goto error;
+        }
+        free (data);
     }
     /* symlink
      */
