@@ -38,8 +38,13 @@ static json_t *xfileref_create (const char *path,
 {
     json_t *o;
     flux_error_t error;
+    struct blobvec_param blobvec_param = {
+        .hashtype = hashtype,
+        .chunksize = chunksize,
+        .small_file_threshold = 4096,
+    };
 
-    o = fileref_create (path, hashtype, chunksize, 4096, &error);
+    o = fileref_create_ex (path, NULL, &blobvec_param, NULL, &error);
     if (!o)
         diag ("%s", error.text);
     return o;
@@ -507,6 +512,7 @@ void test_small (void)
     json_t *o;
     bool rc;
     const char *encoding;
+    flux_error_t error;
 
     mkfile ("testsmall", 512, "a");
     o = xfileref_create (mkpath ("testsmall"), "sha1", 0);
@@ -518,7 +524,9 @@ void test_small (void)
     rmfile ("testsmall");
 
     mkfile_string ("testsmall2", "\xc3\x28");
-    o = xfileref_create (mkpath ("testsmall2"), NULL, 0);
+    o = fileref_create (mkpath ("testsmall2"), &error);
+    if (!o)
+        diag ("%s", error.text);
     ok (o != NULL && json_unpack (o, "{s:s}", "encoding", &encoding) == 0
         && streq (encoding, "base64"),
         "small file with invalid utf-8 encodes as base64");
@@ -527,7 +535,9 @@ void test_small (void)
     rmfile ("testsmall2");
 
     mkfile_string ("testsmall3", "abcd");
-    o = xfileref_create (mkpath ("testsmall3"), NULL, 0);
+    o = fileref_create (mkpath ("testsmall3"), &error);
+    if (!o)
+        diag ("%s", error.text);
     ok (o != NULL && json_unpack (o, "{s:s}", "encoding", &encoding) == 0
         && streq (encoding, "utf-8"),
         "small file with valid utf-8 encodes as utf-8");

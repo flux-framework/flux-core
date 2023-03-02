@@ -313,25 +313,25 @@ error:
 
 json_t *fileref_create_ex (const char *path,
                            const char *fullpath,
-                           const char *hashtype,
-                           int chunksize,
-                           int threshold,
-                           void **mapbufp,
-                           size_t *mapsizep,
+                           struct blobvec_param *param,
+                           struct blobvec_mapinfo *mapinfop,
                            flux_error_t *error)
 {
     const char *relative_path;
     json_t *o;
     int fd = -1;
     struct stat sb;
-    void *mapbuf = MAP_FAILED;
-    size_t mapsize = 0;
+    struct blobvec_mapinfo mapinfo = { .base = MAP_FAILED, .size = 0 };
     int saved_errno;
     int rc;
 
-    if (chunksize < 0) {
-        errprintf (error, "chunksize cannot be negative");
-        goto inval;
+    if (param) {
+        if (param->chunksize < 0
+            || param->hashtype == NULL
+            || param->small_file_threshold < 0) {
+            errprintf (error, "invalid blobvec encoding parameters");
+            goto inval;
+        }
     }
     if (!fullpath)
         fullpath = path;
@@ -362,22 +362,24 @@ json_t *fileref_create_ex (const char *path,
     /* Large reg file will be encoded with blobvec.
      */
     else if (S_ISREG (sb.st_mode)
-        && hashtype != NULL
-        && threshold >= 0
-        && sb.st_size > threshold) {
-        mapsize = sb.st_size;
-        mapbuf = mmap (NULL, mapsize, PROT_READ, MAP_PRIVATE, fd, 0);
-        if (mapbuf == MAP_FAILED) {
+        && param != NULL
+        && sb.st_size > param->small_file_threshold) {
+        int chunksize;
+
+        mapinfo.size = sb.st_size;
+        mapinfo.base = mmap (NULL, mapinfo.size, PROT_READ, MAP_PRIVATE, fd, 0);
+        if (mapinfo.base == MAP_FAILED) {
             errprintf (error, "mmap: %s", strerror (errno));
             goto error;
         }
+        chunksize = param->chunksize;
         if (chunksize == 0)
             chunksize = sb.st_size;
         if (!(o = fileref_create_blobvec (relative_path,
                                           fd,
-                                          mapbuf,
+                                          mapinfo.base,
                                           &sb,
-                                          hashtype,
+                                          param->hashtype,
                                           chunksize,
                                           error)))
             goto error;
@@ -412,12 +414,10 @@ json_t *fileref_create_ex (const char *path,
         goto inval;
     }
 
-    if (mapbufp)
-        *mapbufp = mapbuf;
-    else if (mapbuf != MAP_FAILED)
-        (void)munmap (mapbuf, mapsize);
-    if (mapsizep)
-        *mapsizep = mapsize;
+    if (mapinfop)
+        *mapinfop = mapinfo;
+    else
+        (void)munmap (mapinfo.base, mapinfo.size);
     if (fd >= 0)
         close (fd);
     return o;
@@ -425,28 +425,17 @@ inval:
     errno = EINVAL;
 error:
     saved_errno = errno;
-    if (mapbuf != MAP_FAILED)
-        (void)munmap (mapbuf, mapsize);
+    if (mapinfo.base != MAP_FAILED)
+        (void)munmap (mapinfo.base, mapinfo.size);
     if (fd >= 0)
         close (fd);
     errno = saved_errno;
     return NULL;
 }
 
-json_t *fileref_create (const char *path,
-                        const char *hashtype,
-                        int chunksize,
-                        int threshold,
-                        flux_error_t *error)
+json_t *fileref_create (const char *path, flux_error_t *error)
 {
-    return fileref_create_ex (path,
-                              NULL, // fullpath
-                              hashtype,
-                              chunksize,
-                              threshold,
-                              NULL, // mapbuf
-                              NULL, // maplen
-                              error);
+    return fileref_create_ex (path, NULL, NULL, NULL, error);
 }
 
 void fileref_pretty_print (json_t *fileref,

@@ -94,14 +94,13 @@
 
 struct cache_entry {
     struct content_region *reg;
-    const void *data;                       // pointer into mmapped reg->data
+    const void *data;                       // pointer into reg->mapinfo.base
     size_t size;                            //   or reg->fileref_data
     void *hash;                             // contiguous with struct
 };
 
 struct content_region {
-    void *data;                             // memory-mapped data
-    size_t data_size;                       // memory-mapped size
+    struct blobvec_mapinfo mapinfo;
     int refcount;
     json_t *fileref;
     void *fileref_data;                     // encoded fileref data
@@ -263,7 +262,7 @@ static int region_cache_add (struct content_region *reg)
             if (json_unpack (entry, "[I,I,s]", &offset, &size, &blobref) < 0)
                 goto inval;
             if (cache_entry_add (reg,
-                                 reg->data + offset,
+                                 reg->mapinfo.base + offset,
                                  size,
                                  blobref) < 0)
                 return -1;
@@ -323,8 +322,8 @@ void content_mmap_region_decref (struct content_region *reg)
     if (reg && --reg->refcount == 0) {
         int saved_errno = errno;
         region_cache_remove (reg);
-        if (reg->data != MAP_FAILED)
-            (void)munmap (reg->data, reg->data_size);
+        if (reg->mapinfo.base != MAP_FAILED)
+            (void)munmap (reg->mapinfo.base, reg->mapinfo.size);
         json_decref (reg->fileref);
         free (reg->fullpath);
         free (reg->blobref);
@@ -368,15 +367,15 @@ bool content_mmap_validate (struct content_region *reg,
     if (data == reg->fileref_data)
         return true;
 
-    assert (reg->data != NULL);
-    assert (data >= reg->data);
-    assert (data + data_size <= reg->data + reg->data_size);
+    assert (reg->mapinfo.base != NULL);
+    assert (data >= reg->mapinfo.base);
+    assert (data + data_size <= reg->mapinfo.base + reg->mapinfo.size);
 
     if (monotime_since (reg->last_check)/1000 >= max_check_age) {
         struct stat sb;
 
         if (stat (reg->fullpath, &sb) < 0
-            || sb.st_size < reg->data_size)
+            || sb.st_size < reg->mapinfo.size)
             return false;
 
         monotime (&reg->last_check);
@@ -436,12 +435,11 @@ static int fileref_encode (json_t *fileref,
 }
 
 static struct content_region *content_mmap_region_create (
-                                                     struct content_mmap *mm,
-                                                     const char *path,
-                                                     const char *fpath,
-                                                     int chunksize,
-                                                     int threshold,
-                                                     flux_error_t *error)
+                                                 struct content_mmap *mm,
+                                                 const char *path,
+                                                 const char *fpath,
+                                                 struct blobvec_param *param,
+                                                 flux_error_t *error)
 {
     struct content_region *reg;
 
@@ -451,17 +449,14 @@ static struct content_region *content_mmap_region_create (
     }
     reg->refcount = 1;
     reg->mm = mm;
-    reg->data = MAP_FAILED;
+    reg->mapinfo.base = MAP_FAILED;
     if (!(reg->fullpath = strdup (fpath)))
         goto error;
 
     if (!(reg->fileref = fileref_create_ex (path,
                                             fpath,
-                                            mm->hash_name,
-                                            chunksize,
-                                            threshold,
-                                            &reg->data,
-                                            &reg->data_size,
+                                            param,
+                                            &reg->mapinfo,
                                             error)))
         goto error;
     if (fileref_encode (reg->fileref,
@@ -528,8 +523,7 @@ static void content_mmap_add_cb (flux_t *h,
     const char *path;
     const char *fpath = NULL;
     int disable_mmap;
-    int chunksize;
-    int threshold;
+    struct blobvec_param param;
     json_t *tags;
     struct content_region *reg = NULL;
     flux_error_t error;
@@ -539,12 +533,12 @@ static void content_mmap_add_cb (flux_t *h,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s?s s:s s:i s:i s:o}",
+                             "{s:s s?s s:b s:i s:i s:o}",
                              "path", &path,
                              "fullpath", &fpath,
                              "disable_mmap", &disable_mmap,
-                             "chunksize", &chunksize,
-                             "threshold", &threshold,
+                             "chunksize", &param.chunksize,
+                             "threshold", &param.small_file_threshold,
                              "tags", &tags) < 0
         || check_string_array (tags, 1) < 0)
         goto error;
@@ -552,13 +546,11 @@ static void content_mmap_add_cb (flux_t *h,
         errmsg = "content may only be mmapped on rank 0";
         goto inval;
     }
-    if (disable_mmap)
-        threshold = -1;
+    param.hashtype = mm->hash_name;
     if (!(reg = content_mmap_region_create (mm,
                                             path,
                                             fpath,
-                                            chunksize,
-                                            threshold,
+                                            disable_mmap ? NULL : &param,
                                             &error))) {
         errmsg = error.text;
         goto error;
