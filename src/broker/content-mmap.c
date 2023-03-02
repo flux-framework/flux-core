@@ -427,6 +427,7 @@ static struct content_region *content_mmap_region_create (
                                                      const char *path,
                                                      const char *fpath,
                                                      int chunksize,
+                                                     int threshold,
                                                      flux_error_t *error)
 {
     struct content_region *reg;
@@ -445,7 +446,7 @@ static struct content_region *content_mmap_region_create (
                                             fpath,
                                             mm->hash_name,
                                             chunksize,
-                                            4096,
+                                            threshold,
                                             &reg->data,
                                             &reg->data_size,
                                             error)))
@@ -513,7 +514,9 @@ static void content_mmap_add_cb (flux_t *h,
     struct content_mmap *mm = arg;
     const char *path;
     const char *fpath = NULL;
+    int disable_mmap;
     int chunksize;
+    int threshold;
     json_t *tags;
     struct content_region *reg = NULL;
     flux_error_t error;
@@ -523,10 +526,12 @@ static void content_mmap_add_cb (flux_t *h,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s?s s:i s:o}",
+                             "{s:s s?s s:s s:i s:i s:o}",
                              "path", &path,
                              "fullpath", &fpath,
+                             "disable_mmap", &disable_mmap,
                              "chunksize", &chunksize,
+                             "threshold", &threshold,
                              "tags", &tags) < 0
         || check_string_array (tags, 1) < 0)
         goto error;
@@ -534,10 +539,13 @@ static void content_mmap_add_cb (flux_t *h,
         errmsg = "content may only be mmapped on rank 0";
         goto inval;
     }
+    if (disable_mmap)
+        threshold = -1;
     if (!(reg = content_mmap_region_create (mm,
                                             path,
                                             fpath,
                                             chunksize,
+                                            threshold,
                                             &error))) {
         errmsg = error.text;
         goto error;

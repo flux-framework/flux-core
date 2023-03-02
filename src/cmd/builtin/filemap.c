@@ -28,6 +28,7 @@
 #include "src/common/libutil/fileref.h"
 
 static const int default_chunksize = 1048576;
+static const int default_small_file_threshold = 4096;
 
 static json_t *get_list_option (optparse_t *p,
                                 const char *name,
@@ -125,7 +126,9 @@ static json_t *load_fileref (flux_t *h, const char *blobref)
 
 static flux_future_t *mmap_add (flux_t *h,
                                  const char *path,
+                                 bool disable_mmap,
                                  int chunksize,
+                                 int threshold,
                                  json_t *tags)
 {
     flux_future_t *f;
@@ -150,9 +153,11 @@ static flux_future_t *mmap_add (flux_t *h,
                        "content.mmap-add",
                        FLUX_NODEID_ANY,
                        0,
-                       "{s:s s:s s:i s:O}",
+                       "{s:s s:s s:b s:i s:i s:O}",
                        "path", path,
                        "fullpath", fpath,
+                       "disable_mmap", disable_mmap ? 1 : 0,
+                       "threshold", threshold,
                        "chunksize", chunksize,
                        "tags", tags);
     ERRNO_SAFE_WRAP (free, fpath);
@@ -200,6 +205,8 @@ struct map_ctx {
     flux_t *h;
     int verbose;
     int chunksize;
+    int threshold;
+    bool disable_mmap;
     json_t *tags;
 };
 
@@ -211,7 +218,12 @@ static int map_visitor (dirwalk_t *d, void *arg)
 
     if (ctx->verbose > 0)
         printf ("%s\n", path);
-    if (!(f = mmap_add (ctx->h, path, ctx->chunksize, ctx->tags))
+    if (!(f = mmap_add (ctx->h,
+                        path,
+                        ctx->disable_mmap,
+                        ctx->chunksize,
+                        ctx->threshold,
+                        ctx->tags))
         || flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("%s: %s", path, future_strerror (f, errno));
     flux_future_destroy (f);
@@ -237,6 +249,10 @@ static int subcmd_map (optparse_t *p, int ac, char *av[])
     ctx.p = p;
     ctx.verbose = optparse_get_int (p, "verbose", 0);
     ctx.chunksize = optparse_get_int (p, "chunksize", default_chunksize);
+    ctx.threshold = optparse_get_int (p,
+                                      "small-file-threshold",
+                                      default_small_file_threshold);
+    ctx.disable_mmap = optparse_hasopt (p, "disable-mmap");
     ctx.tags = get_list_option (p, "tags", "main");
     ctx.h = builtin_get_flux_handle (p);
     if (!ctx.h)
@@ -255,7 +271,12 @@ static int subcmd_map (optparse_t *p, int ac, char *av[])
             flux_future_t *f;
             if (ctx.verbose > 0)
                 printf ("%s\n", path);
-            if (!(f = mmap_add (ctx.h, path, ctx.chunksize, ctx.tags))
+            if (!(f = mmap_add (ctx.h,
+                                path,
+                                ctx.disable_mmap,
+                                ctx.chunksize,
+                                ctx.threshold,
+                                ctx.tags))
                 || flux_rpc_get (f, NULL) < 0)
                 log_msg_exit ("%s: %s", path, future_strerror (f, errno));
             flux_future_destroy (f);
@@ -551,6 +572,11 @@ static struct optparse_option map_opts[] = {
     { .name = "chunksize", .has_arg = 1, .arginfo = "N",
       .usage = "Limit blob size to N bytes with 0=unlimited"
                " (default 1048576)", },
+    { .name = "small-file-threshold", .has_arg = 1, .arginfo = "N",
+      .usage = "Adjust the maximum size of a \"small file\" in bytes"
+               " (default 4096)", },
+    { .name = "disable-mmap", .has_arg = 0,
+      .usage = "Never mmap(2) files into the content cache", },
     { .name = "tags", .key = 'T', .has_arg = 1, .arginfo = "NAME,...",
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Specify comma-separated tags (default: main)", },

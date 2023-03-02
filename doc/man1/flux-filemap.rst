@@ -66,6 +66,14 @@ OPTIONS
 **-l, --long**
    Include more detail in file listing (*list* subcommand only).
 
+**--small-file-threshold=N**
+   Set the threshold in bytes over which a regular file is mapped through
+   the distributed content cache.  Set to 0 to always use the content cache.
+   The default is 4096 (*map* subcommand only).
+
+**--disable-mmap**
+   Never map a regular file through the distributed content cache.
+
 **--direct**
    Avoid indirection through the content cache when fetching the top level
    data for each file.  This may be fastest for a single or small number of
