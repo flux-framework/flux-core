@@ -11,6 +11,8 @@ export FLUX_PYCLI_LOGLEVEL=10
 
 flux setattr log-stderr-level 1
 
+waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
+
 test_expect_success 'flux run fails with error message' '
 	test_must_fail flux run 2>usage.err &&
 	grep "job command and arguments are missing" usage.err
@@ -241,4 +243,15 @@ while read line; do
 	'
 done < per-resource-args.txt
 
+test_expect_success NO_CHAIN_LINT 'flux run --unbuffered works for stdin/out' '
+        rm -f fifo &&
+        mkfifo fifo &&
+        (flux run --unbuffered cat >unbuffered.out <fifo &) &&
+        exec 9>fifo &&
+        printf prompt: >&9 &&
+        $waitfile -v --count=1 --timeout=10 --pattern=prompt: unbuffered.out &&
+        exec 9<&- &&
+        rm -f fifo &&
+        flux job wait-event -vt 15 $(flux job last) clean
+'
 test_done

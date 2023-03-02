@@ -690,6 +690,12 @@ class MiniCmd:
             metavar="FILENAME",
         )
         parser.add_argument(
+            "-u",
+            "--unbuffered",
+            action="store_true",
+            help="Disable buffering of input and output",
+        )
+        parser.add_argument(
             "-l",
             "--label-io",
             action="store_true",
@@ -780,6 +786,13 @@ class MiniCmd:
             jobspec.stderr = args.error
             if args.label_io:
                 jobspec.setattr_shell_option("output.stderr.label", True)
+
+        if args.unbuffered:
+            #  For output, set the buffer.type to none and reduce the configured
+            #  event batch-timeout to something very small.
+            jobspec.setattr_shell_option("output.stdout.buffer.type", "none")
+            jobspec.setattr_shell_option("output.stderr.buffer.type", "none")
+            jobspec.setattr_shell_option("output.batch-timeout", 0.05)
 
         if args.setopt is not None:
             for keyval in args.setopt:

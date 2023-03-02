@@ -233,9 +233,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: cover stdout unbuffered output' '
 	sleep 60
 	EOF
 	chmod +x stdout-unbuffered.sh &&
-	id=$(flux submit \
-		--setopt "output.stdout.buffer.type=\"none\"" \
-		./stdout-unbuffered.sh)
+	id=$(flux submit --unbuffered ./stdout-unbuffered.sh)
 	flux job attach $id > stdout-unbuffered.out &
 	$waitfile --count=1 --timeout=10 --pattern=abcd stdout-unbuffered.out &&
 	flux job cancel $id
@@ -247,9 +245,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: cover stderr unbuffered output' '
 	sleep 60
 	EOF
 	chmod +x stderr-unbuffered.sh &&
-	id=$(flux submit \
-		--setopt "output.stderr.buffer.type=\"none\"" \
-		./stderr-unbuffered.sh)
+	id=$(flux submit --unbuffered ./stderr-unbuffered.sh)
 	flux job attach $id 1> stdout.out 2> stderr-unbuffered.out &
 	$waitfile --count=1 --timeout=10 --pattern=efgh stderr-unbuffered.out &&
 	flux job cancel $id

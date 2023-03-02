@@ -146,6 +146,41 @@ static void buffer_read (flux_reactor_t *r, flux_watcher_t *w,
     return;
 }
 
+static void buffer_read_data_unbuffered (flux_reactor_t *r,
+                                         flux_watcher_t *w,
+                                         int revents,
+                                         void *arg)
+{
+    int *count = arg;
+
+    if (revents & FLUX_POLLERR) {
+        ok (false,
+            "buffer: read callback incorrectly called with FLUX_POLLERR");
+    }
+    else if (revents & FLUX_POLLIN) {
+        const void *ptr;
+        int len;
+
+        ok ((ptr = flux_buffer_read_watcher_get_data (w, &len)) != NULL,
+            "buffer: read data from buffer success");
+
+        ok (len == 6,
+            "buffer: read data returned correct length");
+
+        ok (!memcmp (ptr, "foobar", 6),
+            "buffer: read data returned correct data");
+    }
+    else {
+        ok (false,
+            "buffer: read callback failed to return FLUX_POLLIN: %d", revents);
+    }
+
+    (*count)++;
+    flux_watcher_stop (w);
+    return;
+}
+
+
 static void buffer_read_line (flux_reactor_t *r, flux_watcher_t *w,
                               int revents, void *arg)
 {
@@ -185,6 +220,46 @@ static void buffer_read_line (flux_reactor_t *r, flux_watcher_t *w,
         flux_watcher_stop (w);
     return;
 }
+
+static void buffer_read_data (flux_reactor_t *r, flux_watcher_t *w,
+                              int revents, void *arg)
+{
+    int *count = arg;
+
+    if (revents & FLUX_POLLERR) {
+        ok (false,
+            "buffer: read line callback incorrectly called with FLUX_POLLERR");
+    }
+    else if (revents & FLUX_POLLIN) {
+        const void *ptr;
+        int len;
+
+        ok ((ptr = flux_buffer_read_watcher_get_data (w, &len)) != NULL,
+            "buffer: read data from buffer success");
+
+        ok (len == 4,
+            "buffer: read data returned correct length");
+
+        if ((*count) == 0) {
+            ok (!memcmp (ptr, "foo\n", 4),
+                "buffer: read data returned correct data");
+        }
+        else {
+            ok (!memcmp (ptr, "bar\n", 4),
+                "buffer: read data returned correct data");
+        }
+    }
+    else {
+        ok (false,
+            "buffer: read line callback failed to return FLUX_POLLIN: %d", revents);
+    }
+
+    (*count)++;
+    if ((*count) == 2)
+        flux_watcher_stop (w);
+    return;
+}
+
 
 static void buffer_write (flux_reactor_t *r, flux_watcher_t *w,
                           int revents, void *arg)
@@ -317,6 +392,38 @@ static void test_buffer (flux_reactor_t *reactor)
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
 
+    /* read buffer test with flux_buffer_read_watcher_get_data() */
+
+    count = 0;
+    w = flux_buffer_read_watcher_create (reactor,
+                                         fd[0],
+                                         1024,
+                                         buffer_read_data_unbuffered,
+                                         0,
+                                         &count);
+    ok (w != NULL,
+        "buffer: read created");
+
+    fb = flux_buffer_read_watcher_get_buffer (w);
+
+    ok (fb != NULL,
+        "buffer: buffer retrieved");
+
+    ok (write (fd[1], "foobar", 6) == 6,
+        "buffer: write to socketpair success");
+
+    flux_watcher_start (w);
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer: reactor ran to completion");
+
+    ok (count == 1,
+        "buffer: read callback successfully called");
+
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+
     /* read line buffer test */
 
     count = 0;
@@ -347,6 +454,37 @@ static void test_buffer (flux_reactor_t *reactor)
 
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
+
+    /* read line with flux_buffer_read_watcher_get_data() */
+    count = 0;
+    w = flux_buffer_read_watcher_create (reactor,
+                                         fd[0],
+                                         1024,
+                                         buffer_read_data,
+                                         FLUX_WATCHER_LINE_BUFFER,
+                                         &count);
+    ok (w != NULL,
+        "buffer: read line created");
+
+    fb = flux_buffer_read_watcher_get_buffer (w);
+
+    ok (fb != NULL,
+        "buffer: buffer retrieved");
+
+    ok (write (fd[1], "foo\nbar\n", 8) == 8,
+        "buffer: write to socketpair success");
+
+    flux_watcher_start (w);
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer: reactor ran to completion");
+
+    ok (count == 2,
+        "buffer: read line callback successfully called twice");
+
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
 
     /* write buffer test */
 
