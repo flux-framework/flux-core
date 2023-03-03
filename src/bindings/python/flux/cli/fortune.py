@@ -156,6 +156,39 @@ valentines = [
     "Roses are red, violets are blue, if you want graph-based scheduling, Flux is for you! <3",
     "Roses are red, violets are blue, all of my jobs, submit to you! <3",
     "Roses are red, violets are blue, you are my favorite job manager queue! <3",
+    """
+Sung to the tune of Monty Python's "Bruce's Philosopher Song":
+
+Slurm, Slurm, on this I'm firm:
+your interface resembles the excretions of a worm
+Loadleveler took forever-er
+but waiting for P-O-E gave you time to pee
+jsrun is no j-s-fun
+but we paid a lot for a system and so they gave us one
+And of Condor we couldn't be fonder -
+when run right, it kept the professor's office warm all night
+""",
+    """
+Oh Flux, my darling, my heart doth flutter
+With every submit you help me utter
+Your unidirectional flow is so sublime
+It simplifies my code and saves me time
+
+My love for you is like an unchanging store
+Always at the ready, forevermore
+Your Python bindings make me swoon
+Together, we make such a lovely tune
+
+Oh Flux, you make my programming heart sing
+Your architecture is a beautiful thing
+With you by my side, I can conquer all
+Happy Valentine's Day, my sweet, Flux, my all.
+
+Citation:
+OpenAI, 2023, Feb. 13, ChatGPT response to the prompt
+"Write a valentine's day poem about flux framework that rhymes".
+https://chat.openai.com
+""",
 ]
 
 # Facts about Flux
@@ -288,6 +321,7 @@ fortunes = [
     "To err is to human. To really foul things up requires a computer - Paul Ehrlich",
     "Give a scientist a program, frustrate him for a day. Teach a scientist to program, frustrate him for a lifetime!",
     "Why did the Flux instance go to the gym? To beef up its processing power!",
+    "Did you know 'fuzzybunny' is a valid Flux jobid?",
 ]
 
 # This can be appended with new art as desired
