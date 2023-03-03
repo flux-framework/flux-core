@@ -252,6 +252,26 @@ test_expect_success 'unmap tags=blue,green' '
 test_expect_success 'flux filemap list reports no files' '
 	test $(flux filemap list --tags red,blue,green | wc -l) -eq 0
 '
+test_expect_success 'map test file without mmap' '
+	rm -f copydir/testfile &&
+	flux filemap map --disable-mmap ./testfile
+'
+test_expect_success HAVE_JQ 'test file did not use blobvec encoding' '
+	flux filemap list --raw | jq -e ".encoding != \"blobvec\""
+'
+test_expect_success 'unmap test file' '
+	flux filemap unmap
+'
+test_expect_success 'map small test file with reduced small file threshold' '
+	flux filemap map --small-file-threshold=0 ./testfile2
+'
+test_expect_success HAVE_JQ 'test file used blobvec encoding' '
+	flux filemap list --raw | jq -e ".encoding = \"blobvec\""
+'
+test_expect_success 'unmap test file' '
+	flux filemap unmap
+'
+
 test_expect_success 'map test file' '
 	rm -f copydir/testfile &&
 	flux filemap map ./testfile
