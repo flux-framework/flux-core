@@ -179,8 +179,6 @@ static void shell_input_stdin_cb (flux_t *h,
         goto error;
     if (shell_input_put_kvs (in, o) < 0)
         goto error;
-    if (eof)
-        flux_msg_handler_stop (mh);
     if (flux_respond (in->shell->h, msg, NULL) < 0)
         shell_log_errno ("flux_respond");
     return;
