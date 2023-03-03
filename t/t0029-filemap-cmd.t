@@ -115,8 +115,8 @@ test_expect_success 'map test file and get its blobref' '
 	flux filemap map ./testfile2 &&
 	flux filemap list --blobref >testfile2.blobref
 '
-test_expect_success HAVE_JQ 'show fileref' '
-	flux filemap list --fileref | jq .
+test_expect_success HAVE_JQ 'show raw object' '
+	flux filemap list --raw | jq .
 '
 test_expect_success 'test file can be read through content cache on rank 1' '
 	flux exec -r 1 flux filemap get -C copydir &&
@@ -158,14 +158,33 @@ test_expect_success HAVE_SPARSE 'holes were preserved' '
 test_expect_success HAVE_SPARSE 'unmap test file' '
 	flux filemap unmap
 '
+test_expect_success HAVE_SPARSE 'create sparse test file with data' '
+	truncate --size=8192 testfile3b &&
+	echo more-data >>testfile3b
+'
+test_expect_success HAVE_SPARSE 'map test file' '
+	flux filemap map ./testfile3b
+'
+test_expect_success HAVE_SPARSE 'test file can be read through content cache' '
+	flux filemap get -C copydir &&
+	test_cmp testfile3b copydir/testfile3b
+'
+test_expect_success HAVE_SPARSE 'holes were preserved' '
+	stat --format="%b" testfile3b >blocks3b.exp &&
+	stat --format="%b" copydir/testfile3b >blocks3b.out &&
+	test_cmp blocks3b.exp blocks3b.out
+'
+test_expect_success HAVE_SPARSE 'unmap test file' '
+	flux filemap unmap
+'
 test_expect_success 'create test symlink' '
 	ln -s /a/b/c/d testfile4
 '
 test_expect_success 'map test file' '
 	flux filemap map ./testfile4
 '
-test_expect_success HAVE_JQ 'show fileref' '
-	flux filemap list --fileref | jq .
+test_expect_success HAVE_JQ 'show raw object' '
+	flux filemap list --raw | jq .
 '
 test_expect_success 'test file can be read through content cache' '
 	flux filemap get -vv -C copydir
@@ -233,6 +252,26 @@ test_expect_success 'unmap tags=blue,green' '
 test_expect_success 'flux filemap list reports no files' '
 	test $(flux filemap list --tags red,blue,green | wc -l) -eq 0
 '
+test_expect_success 'map test file without mmap' '
+	rm -f copydir/testfile &&
+	flux filemap map --disable-mmap ./testfile
+'
+test_expect_success HAVE_JQ 'test file did not use blobvec encoding' '
+	flux filemap list --raw | jq -e ".encoding != \"blobvec\""
+'
+test_expect_success 'unmap test file' '
+	flux filemap unmap
+'
+test_expect_success 'map small test file with reduced small file threshold' '
+	flux filemap map --small-file-threshold=0 ./testfile2
+'
+test_expect_success HAVE_JQ 'test file used blobvec encoding' '
+	flux filemap list --raw | jq -e ".encoding = \"blobvec\""
+'
+test_expect_success 'unmap test file' '
+	flux filemap unmap
+'
+
 test_expect_success 'map test file' '
 	rm -f copydir/testfile &&
 	flux filemap map ./testfile

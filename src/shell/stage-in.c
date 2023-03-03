@@ -26,6 +26,7 @@
 #include <flux/core.h>
 
 #include "ccan/base64/base64.h"
+#include "ccan/str/str.h"
 #include "src/common/libcontent/content.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/monotime.h"
@@ -223,36 +224,37 @@ static int extract_file (struct stage_in *ctx,
                          json_t *fileref)
 {
     const char *path;
-    json_int_t size;
-    json_int_t ctime;
-    json_int_t mtime;
     int mode;
-    json_t *blobvec;
-    const char *data = NULL;
+    json_int_t size = -1;
+    json_int_t ctime = -1;
+    json_int_t mtime = -1;
+    const char *encoding = NULL;
+    json_t *data = NULL;
     size_t index;
     json_t *o;
     struct archive_entry *entry;
     char tracebuf[1024];
     json_error_t error;
 
-    fileref_pretty_print (fileref, true, tracebuf, sizeof (tracebuf));
+    fileref_pretty_print (fileref, NULL, true, tracebuf, sizeof (tracebuf));
     shell_trace ("%s", tracebuf);
 
     if (json_unpack_ex (fileref,
                         &error,
                         0,
-                        "{s:s s:I s:I s:I s:i s?s s:o}",
+                        "{s:s s:i s?I s?I s?I s?s s?o}",
                         "path", &path,
+                        "mode", &mode,
                         "size", &size,
                         "mtime", &mtime,
                         "ctime", &ctime,
-                        "mode", &mode,
-                        "data", &data,
-                        "blobvec", &blobvec) < 0) {
+                        "encoding", &encoding,
+                        "data", &data) < 0) {
         shell_log_error ("error decoding fileref object: %s", error.text);
         return -1;
     }
-    ctx->total_size += size;
+    if (size != -1)
+        ctx->total_size += size;
 
     /* metadata
      */
@@ -262,17 +264,21 @@ static int extract_file (struct stage_in *ctx,
     }
     archive_entry_set_pathname (entry, path);
     archive_entry_set_mode (entry, mode);
-    archive_entry_set_mtime (entry, mtime, 0);
-    archive_entry_set_ctime (entry, ctime, 0);
+    if (mtime != -1)
+        archive_entry_set_mtime (entry, mtime, 0);
+    if (ctime != -1)
+        archive_entry_set_ctime (entry, ctime, 0);
     if (S_ISREG (mode)) {
-        archive_entry_set_size (entry, size);
+        if (size != -1)
+            archive_entry_set_size (entry, size);
     }
     else if (S_ISLNK (mode)) {
-        if (!data) {
+        const char *target;
+        if (!data || !(target = json_string_value (data))) {
             shell_log_error ("%s: missing symlink data", path);
             goto error;
         }
-        archive_entry_set_symlink (entry, data);
+        archive_entry_set_symlink (entry, target);
     }
     else if (!S_ISDIR (mode)) { // nothing to do for directory
         shell_log_error ("%s: unknown file type (mode=0%o)", path, mode);
@@ -285,14 +291,34 @@ static int extract_file (struct stage_in *ctx,
     }
 
     /* data
+     * N.B. Empty file has null 'data' per RFC 37
      */
-    if (S_ISREG (mode)) {
-        if (data) { // small file is contained in fileref.data
+    if (S_ISREG (mode) && data != NULL) {
+        if (!encoding) {
+            char *str;
+            if (!(str = json_dumps (data, JSON_ENCODE_ANY | JSON_COMPACT))) {
+                shell_log_error ("%s: could not encode JSON file data", path);
+                goto error;
+            }
+            if (archive_write_data_block (archive,
+                                          str,
+                                          strlen (str),
+                                          0) != ARCHIVE_OK) {
+                shell_log_error ("%s: write: %s",
+                                 path,
+                                 archive_error_string (archive));
+                free (str);
+                goto error;
+            }
+            free (str);
+        }
+        else if (streq (encoding, "base64")) {
+            const char *str = json_string_value (data);
             void *buf;
             size_t buf_size;
 
-            if (decode_data (data, &buf, &buf_size) < 0) {
-                shell_log_error ("%s: could not decode file data", path);
+            if (!str || decode_data (str, &buf, &buf_size) < 0) {
+                shell_log_error ("%s: could not decode base64 file data", path);
                 goto error;
             }
             if (archive_write_data_block (archive,
@@ -307,11 +333,32 @@ static int extract_file (struct stage_in *ctx,
             }
             free (buf);
         }
-        else { // large file is spread over multiple blobrefs
-            json_array_foreach (blobvec, index, o) {
+        else if (streq (encoding, "blobvec")) {
+            json_array_foreach (data, index, o) {
                 if (extract_blob (ctx->h, archive, path, o) < 0)
                     goto error;
             }
+        }
+        else if (streq (encoding, "utf-8")) {
+            const char *str = json_string_value (data);
+
+            if (!str) {
+                shell_log_error ("%s: unexpected data type for utf-8", path);
+                goto error;
+            }
+            if (archive_write_data_block (archive,
+                                          str,
+                                          strlen (str),
+                                          0) != ARCHIVE_OK) {
+                shell_log_error ("%s: write: %s",
+                                 path,
+                                 archive_error_string (archive));
+                goto error;
+            }
+        }
+        else {
+            shell_log_error ("%s: unknown RFC 37 encoding %s", path, encoding);
+            goto error;
         }
     }
     archive_entry_free (entry);

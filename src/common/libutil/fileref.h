@@ -17,33 +17,44 @@
 
 #include "src/common/libflux/types.h"
 
-/* Variant of fileref_create() with extra parameters:
- * - If non-NULL, 'mapbuf' and 'mapsize' are assigned mmapped buffer
- *   (if applicable)
+struct blobvec_param {
+    const char *hashtype;
+    int chunksize;              // maximum size of each blob
+    int small_file_threshold;   // no blobvec encoding for regular files of
+};                              //  size <= thresh (0=always blobvec)
+
+struct blobvec_mapinfo {
+    void *base;
+    size_t size;
+};
+
+
+/* Variant of fileref_create() with extra parameters to allow for 'blobvec'
+ * encoding.  This is intended to be called from the broker.
  * - If non-NULL 'fullpath' is used in place of 'path' for open/stat/mmap.
+ * - If 'param' is non-NULL, blobvec encoding is enabled with the specified
+ *   params.
+ * - If 'mapinfo' is non-NULL, and the file meets conditions for blobvec
+ *   encoding, the file remains mapped in memory and its address is returned.
  */
 json_t *fileref_create_ex (const char *path,
                            const char *fullpath,
-                           const char *hashtype,
-                           int chunksize,
-                           void **mapbuf,
-                           size_t *mapsize,
+                           struct blobvec_param *param,
+                           struct blobvec_mapinfo *mapinfo,
                            flux_error_t *error);
 
-/* Create a fileref object for the regular file at 'path'.
- * The chunksize limits the size of each blob (0=unlimited).
- * Corner cases handled: empty files and sparse files.
+/* Create a fileref object for the file system object at 'path'.
+ * The blobvec encoding is never used thus the object is self-contained.
  */
-json_t *fileref_create (const char *path,
-                        const char *hashtype,
-                        int chunksize,
-                        flux_error_t *error);
+json_t *fileref_create (const char *path, flux_error_t *error);
 
 /* Build a "directory listing" of a fileref and set it in 'buf'.
+ * Set 'path' if provided from archive container (fileref->path overrides).
  * If the fileref is invalid, set "invalid fileref".
  * If output is truncated, '+' is substituted for the last character.
  */
 void fileref_pretty_print (json_t *fileref,
+                           const char *path,
                            bool long_form,
                            char *buf,
                            size_t bufsize);

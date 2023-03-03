@@ -66,6 +66,18 @@ OPTIONS
 **-l, --long**
    Include more detail in file listing (*list* subcommand only).
 
+**--small-file-threshold=N**
+   Set the threshold in bytes over which a regular file is mapped through
+   the distributed content cache.  Set to 0 to always use the content cache.
+   The default is 4096 (*map* subcommand only).
+
+**--disable-mmap**
+   Never map a regular file through the distributed content cache.
+
+**--chunksize=N**
+   Limit the content mapped blob size to N bytes.  Set to 0 for unlimited.
+   The default is 1048576 (*map* subcommand only).
+
 **--direct**
    Avoid indirection through the content cache when fetching the top level
    data for each file.  This may be fastest for a single or small number of
@@ -75,8 +87,8 @@ OPTIONS
 **--blobref**
    List blobrefs (*list* subcommand only).
 
-**--fileref**
-   List fileref objects (*list* subcommand only).
+**--raw**
+   List RFC 37 file system objects (*list* subcommand only).
 
 EXAMPLE
 =======
