@@ -160,9 +160,94 @@ valentines = [
 
 # Facts about Flux
 facts = [
-    "Did you know that you can control a Flux instance on a different cluster? Check out flux proxy!",
-    "Uh oh, what is going on with my nodes? 'flux resource list' will tell you the story!",
-    "What's going on in my flux environment? Check out 'flux env' to see!",
+    """
+Flux can be started as a parallel job.  This is how flux-batch(1) and
+flux-alloc(1) work!  Within one of these "sub-instances" of Flux, you
+(or your batch script) have access all the features of Flux without bothering
+the system or parent Flux instance.  Do your worst - it is your personal
+sandbox!
+""",
+    """
+Other resource managers and MPI launchers can start Flux instances the
+same way they launch MPI.  This is why workflows "coded to Flux" are
+portable to many environments.
+""",
+    """
+flux-submit(1) and flux-run(1) both start one parallel program.  The difference
+is flux-submit(1) prints the job ID and exits immediately, while flux-run(1)
+doesn't exit until the job has completed.
+""",
+    """
+All jobs run within a Flux sub-instance started by flux-batch(1) or
+flux-alloc(1) look like *one* job to the Flux accounting system.
+""",
+    """
+The system prolog/epilog do not run between jobs in a Flux sub-instance
+started by flux-batch(1) or flux-alloc(1).
+""",
+    """
+A Flux sub-instance started by flux-batch(1) or flux-alloc(1) has the same
+capabilities as the system level Flux instance.  Unlike legacy systems that
+offer a simpler "step scheduler" in batch jobs, the Flux sub-instance is an
+identical copy of Flux running on a resource subset.  This has been called
+"fractal scheduling".
+""",
+    """
+So Flux can start Flux, and the second Flux is identical to the first Flux,
+so can *that* Flux start Flux?
+
+"It's turtles all the way down." --Dong Ahn
+""",
+    """
+flux-top(1) lets you navigate with arrow keys to your batch jobs or allocations
+and display the jobs running within them.  Since you can nest Flux as deep
+as you like, you can think of flux-top(1) as a browser for the job hieararchy.
+""",
+    """
+Flux commands look for an environment variable FLUX_URI to determine which
+Flux instance to connect to.  If it's not set, they try to connect to the
+system instance of Flux.
+""",
+    """
+flux-proxy(1) establishes a connection to a remote Flux instance, then
+starts a shell in which Flux commands refer to that instance.  The connection
+is dropped when the shell exits.
+""",
+    """
+flux-uri(1) can resolve a jobid to its remote URI.  It can even resolve
+Slurm and LSF job IDs when Flux is running in a non-native environment.
+""",
+    """
+flux-overlay(1) can pretty-print a view of the Flux overlay network in your
+batch job or allocation. Try this:
+
+$ flux alloc -N16 --broker-opts=-Stbon.topo=kary:4
+$ flux overlay status
+$ flux alloc -N16 --broker-opts=-Stbon.topo=binomial
+$ flux overlay status
+$ flux alloc -N16 --broker-opts=-Stbon.topo=kary:1
+$ flux overlay status
+$ exit
+$ exit
+$ exit
+
+You just ran three Flux instances nested like Matryoshka dolls, each with a
+unique overlay network topology!
+""",
+    """
+To get a quick summary of the resources available within a Flux instance:
+   $ flux resource info
+   16 Nodes, 96 Cores, 16 GPUs
+""",
+    """
+To peruse Flux documentation, visit https://flux-framework.readthedocs.io
+""",
+    """
+flux-version(1) reports the version of flux-core that you're running.
+Visit https://flux-framework.org/releases/ for release notes.
+For each release notes item, you'll find a link to the corresponding pull
+request (change proposal) on github.
+""",
 ]
 
 # Fun fortunes
