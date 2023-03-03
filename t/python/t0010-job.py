@@ -45,6 +45,7 @@ def yaml_to_json(s):
 class TestJob(unittest.TestCase):
     @classmethod
     def setUpClass(self):
+        os.unsetenv("FLUX_F58_FORCE_ASCII")
         self.fh = flux.Flux()
         self.use_ascii = False
         build_opts = subprocess.check_output(["flux", "version"]).decode()

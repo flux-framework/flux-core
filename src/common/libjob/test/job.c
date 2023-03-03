@@ -471,6 +471,7 @@ int main (int argc, char *argv[])
 
     /* fluid F58 tests require unicode locale initialization */
     setlocale (LC_ALL, "en_US.UTF-8");
+    unsetenv ("FLUX_F58_FORCE_ASCII");
 
     check_jobkey ();
 
