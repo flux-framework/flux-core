@@ -32,9 +32,9 @@ static char testdir[1024];
 
 static bool have_sparse;
 
-static json_t *xfileref_create (const char *path,
-                                const char *hashtype,
-                                int chunksize)
+static json_t *xfileref_create_vec (const char *path,
+                                    const char *hashtype,
+                                    int chunksize)
 {
     json_t *o;
     flux_error_t error;
@@ -45,6 +45,17 @@ static json_t *xfileref_create (const char *path,
     };
 
     o = fileref_create_ex (path, NULL, &blobvec_param, NULL, &error);
+    if (!o)
+        diag ("%s", error.text);
+    return o;
+}
+
+static json_t *xfileref_create (const char *path)
+{
+    json_t *o;
+    flux_error_t error;
+
+    o = fileref_create (path, &error);
     if (!o)
         diag ("%s", error.text);
     return o;
@@ -134,6 +145,16 @@ void mkfile_string (const char *name, const char *s)
     int fd;
     if ((fd = open (mkpath (name), O_WRONLY | O_CREAT | O_TRUNC, 0600)) < 0
         || write (fd, s, strlen (s)) != strlen (s)
+        || close (fd) < 0)
+        BAIL_OUT ("could not create %s: %s", strerror (errno));
+    close (fd);
+}
+
+void mkfile_empty (const char *name, size_t size)
+{
+    int fd;
+    if ((fd = open (mkpath (name), O_WRONLY | O_CREAT | O_TRUNC, 0600)) < 0
+        || ftruncate (fd, size) < 0
         || close (fd) < 0)
         BAIL_OUT ("could not create %s: %s", strerror (errno));
     close (fd);
@@ -419,10 +440,10 @@ int blobcount (json_t *fileref)
 
 void diagjson (json_t *o)
 {
-    char *s;
-    s = json_dumps (o, JSON_INDENT(2));
-    if (s)
-        diag ("%s", s);
+    char *s = NULL;
+    if (o)
+        s = json_dumps (o, JSON_INDENT(2));
+    diag ("%s", s ? s : "(NULL)");
     free (s);
 }
 
@@ -459,7 +480,7 @@ void test_vec (void)
               1, "test directory does not support sparse files");
 
         mkfile ("testfile", 4096, testvec[i].spec);
-        o = xfileref_create (mkpath ("testfile"),
+        o = xfileref_create_vec (mkpath ("testfile"),
                              testvec[i].hashtype,
                              testvec[i].chunksize);
         rc = check_fileref (o, "testfile", testvec[i].exp_blobs);
@@ -483,7 +504,8 @@ void test_dir (void)
 
     if (mkdir (mkpath ("testdir"), 0510) < 0)
         BAIL_OUT ("could not create test directory");
-    o = xfileref_create (mkpath ("testdir"), "sha1", 0);
+    o = xfileref_create (mkpath ("testdir"));
+    diagjson (o);
     rc = check_fileref (o, "testdir", 0);
     ok (rc == true,
         "fileref_create directory works");
@@ -499,7 +521,7 @@ void test_link (void)
 
     if (symlink (target, mkpath ("testlink")) < 0)
         BAIL_OUT ("could not create test symlink");
-    o = xfileref_create (mkpath ("testlink"), "sha1", 0);
+    o = xfileref_create (mkpath ("testlink"));
     rc = check_fileref (o, "testlink", 0);
     ok (rc == true,
         "fileref_create symlink works");
@@ -512,10 +534,9 @@ void test_small (void)
     json_t *o;
     bool rc;
     const char *encoding;
-    flux_error_t error;
 
     mkfile ("testsmall", 512, "a");
-    o = xfileref_create (mkpath ("testsmall"), "sha1", 0);
+    o = xfileref_create_vec (mkpath ("testsmall"), "sha1", 0);
     rc = check_fileref (o, "testsmall", 0);
     ok (rc == true,
         "fileref_create small file works");
@@ -524,9 +545,7 @@ void test_small (void)
     rmfile ("testsmall");
 
     mkfile_string ("testsmall2", "\xc3\x28");
-    o = fileref_create (mkpath ("testsmall2"), &error);
-    if (!o)
-        diag ("%s", error.text);
+    o = xfileref_create (mkpath ("testsmall2"));
     ok (o != NULL && json_unpack (o, "{s:s}", "encoding", &encoding) == 0
         && streq (encoding, "base64"),
         "small file with invalid utf-8 encodes as base64");
@@ -535,9 +554,7 @@ void test_small (void)
     rmfile ("testsmall2");
 
     mkfile_string ("testsmall3", "abcd");
-    o = fileref_create (mkpath ("testsmall3"), &error);
-    if (!o)
-        diag ("%s", error.text);
+    o = xfileref_create (mkpath ("testsmall3"));
     ok (o != NULL && json_unpack (o, "{s:s}", "encoding", &encoding) == 0
         && streq (encoding, "utf-8"),
         "small file with valid utf-8 encodes as utf-8");
@@ -546,31 +563,89 @@ void test_small (void)
     rmfile ("testsmall3");
 }
 
+void test_empty (void)
+{
+    json_t *o;
+    json_int_t size;
+
+    mkfile_empty ("testempty", 0);
+    o = xfileref_create (mkpath ("testempty"));
+    ok (o != NULL && json_object_get (o, "data") == NULL,
+        "empty file has no data member");
+    ok (o != NULL && json_object_get (o, "encoding") == NULL,
+        "empty file has no encoding member");
+    ok (o != NULL && json_unpack (o, "{s:I}", "size", &size) == 0
+            && size == 0,
+        "empty file has size member set to zero");
+    diagjson (o);
+    json_decref (o);
+    rmfile ("testempty");
+
+    mkfile_empty ("testempty2", 1024);
+    o = xfileref_create (mkpath ("testempty2"));
+    ok (o != NULL && json_object_get (o, "data") == NULL,
+        "sparse,empty file has no data member");
+    ok (o != NULL && json_object_get (o, "encoding") == NULL,
+        "sparse,empty file has no encoding member");
+    ok (o != NULL && json_unpack (o, "{s:I}", "size", &size) == 0
+            && size == 1024,
+        "sparse,empty file has size member set to expected size");
+    diagjson (o);
+    json_decref (o);
+    rmfile ("testempty2");
+}
+
 void test_expfail (void)
 {
     json_t *o;
+    flux_error_t error;
+    struct blobvec_param param;
 
     mkfile ("test", 4096, "zz");
 
     errno = 0;
-    o = xfileref_create ("/noexist", "sha1", 4096);
+    o = fileref_create ("/noexist", &error);
+    if (!o)
+        diag ("%s", error.text);
     ok (o == NULL && errno == ENOENT,
         "fileref_create path=/noexist fails with ENOENT");
 
     errno = 0;
-    o = xfileref_create ("/dev/null", "sha1", 4096);
+    o = fileref_create ("/dev/null", &error);
+    if (!o)
+        diag ("%s", error.text);
     ok (o == NULL && errno == EINVAL,
         "fileref_create path=/dev/null fails with EINVAL");
 
     errno = 0;
-    o = xfileref_create (mkpath ("test"), "smurfette", 4096);
+    param.chunksize = 1024;
+    param.hashtype = "smurfette";
+    param.small_file_threshold = 0;
+    o = fileref_create_ex (mkpath ("test"), NULL, &param, NULL, &error);
+    if (!o)
+        diag ("%s", error.text);
     ok (o == NULL && errno == EINVAL,
-        "fileref_create hashtype=smurfette fails with EINVAL");
+        "fileref_create_ex param.hashtype=smurfette fails with EINVAL");
 
     errno = 0;
-    o = xfileref_create (mkpath ("test"), "sha1", -1);
+    param.chunksize = -1;
+    param.hashtype = "sha1";
+    param.small_file_threshold = 0;
+    o = fileref_create_ex (mkpath ("test"), NULL, &param, NULL, &error);
+    if (!o)
+        diag ("%s", error.text);
     ok (o == NULL && errno == EINVAL,
-        "fileref_create chunksize=-1 fails with EINVAL");
+        "fileref_create_ex param.chunksize=-1 fails with EINVAL");
+
+    errno = 0;
+    param.chunksize = 1024;
+    param.hashtype = "sha1";
+    param.small_file_threshold = -1;
+    o = fileref_create_ex (mkpath ("test"), NULL, &param, NULL, &error);
+    if (!o)
+        diag ("%s", error.text);
+    ok (o == NULL && errno == EINVAL,
+        "fileref_create_ex param.small_file_threshold=-1 fails with EINVAL");
 
     rmfile ("test");
 }
@@ -581,7 +656,7 @@ void test_pretty_print (void)
     json_t *o;
 
     mkfile ("testfile", 4096, "a");
-    if (!(o = xfileref_create (mkpath ("testfile"), "sha1", 0)))
+    if (!(o = xfileref_create_vec (mkpath ("testfile"), "sha1", 0)))
         BAIL_OUT ("failed to create test object");
 
     buf[0] = '\0';
@@ -634,6 +709,7 @@ int main (int argc, char *argv[])
     test_dir ();
     test_link ();
     test_small ();
+    test_empty ();
     test_expfail ();
     test_pretty_print ();
 
