@@ -273,6 +273,9 @@ static struct optparse_option attach_opts[] =  {
     { .name = "unbuffered", .key = 'u', .has_arg = 0,
       .usage = "Disable buffering of stdin",
     },
+    { .name = "stdin-ranks", .key = 'i', .has_arg = 1, .arginfo = "RANKS",
+      .usage = "Send standard input to only RANKS (default: all)"
+    },
     { .name = "debug", .has_arg = 0,
       .usage = "Enable parallel debugger to attach to a running job",
     },
@@ -1585,6 +1588,7 @@ struct attach_ctx {
     flux_jobid_t id;
     bool readonly;
     bool unbuffered;
+    const char *stdin_ranks;
     const char *jobid;
     const char *wait_event;
     flux_future_t *eventlog_f;
@@ -1903,7 +1907,7 @@ static int attach_send_shell (struct attach_ctx *ctx,
     int rc = -1;
 
     snprintf (topic, sizeof (topic), "%s.stdin", ctx->service);
-    if (!(context = ioencode ("stdin", "all", buf, len, eof)))
+    if (!(context = ioencode ("stdin", ctx->stdin_ranks, buf, len, eof)))
         goto error;
     if (!(f = flux_rpc_pack (ctx->h, topic, ctx->leader_rank, 0, "O", context)))
         goto error;
@@ -2521,6 +2525,10 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     ctx.p = p;
     ctx.readonly = optparse_hasopt (p, "read-only");
     ctx.unbuffered = optparse_hasopt (p, "unbuffered");
+
+    if (optparse_hasopt (p, "stdin-ranks") && ctx.readonly)
+        log_msg_exit ("Do not use --stdin-ranks with --read-only");
+    ctx.stdin_ranks = optparse_get_str (p, "stdin-ranks", "all");
 
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
