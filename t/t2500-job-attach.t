@@ -131,12 +131,45 @@ test_expect_success HAVE_JQ 'attach: -v option displays file and line info in lo
 	flux job attach -v $jobid >verbose.output 2>&1 &&
 	grep "$file:$line: $message" verbose.output
 '
-
 test_expect_success 'attach: cannot attach to interactive pty when --read-only specified' '
 	jobid=$(flux submit -o pty.interactive cat) &&
 	test_must_fail flux job attach --read-only $jobid &&
 	$SHARNESS_TEST_SRCDIR/scripts/runpty.py -i none -f asciicast -c q \
 		flux job attach $jobid
 '
-
+test_expect_success 'attach: --stdin-ranks works' '
+	id=$(flux submit -N4 -t20s cat) &&
+	echo hello from 0 \
+		| flux job attach --label-io -i0 $id >stdin-ranks.out 2>&1 &&
+	flux job eventlog -p guest.input $id &&
+	cat <<-EOF >stdin-ranks.expected &&
+	0: hello from 0
+	EOF
+	test_cmp stdin-ranks.expected stdin-ranks.out
+'
+test_expect_success 'attach: --stdin-ranks with invalid idset errors' '
+	id=$(flux submit -t20s cat) &&
+	test_must_fail flux job attach -i 5-0 $id &&
+	flux job cancel $id
+'
+test_expect_success 'attach: --stdin-ranks is adjusted to intersection' '
+	id=$(flux submit -n2 -t20s cat) &&
+	echo foo | flux job attach --label-io -i1-2 $id >adjusted.out 2>&1 &&
+	test_debug "cat adjusted.out" &&
+	grep "warning: adjusting --stdin-ranks" adjusted.out
+'
+test_expect_success 'attach: --stdin-ranks cannot be used with --read-only' '
+	id=$(flux submit -n2 -t20s cat) &&
+	test_must_fail flux job attach -i all --read-only $id &&
+	flux job cancel $id
+'
+jobpipe=$SHARNESS_TEST_SRCDIR/scripts/pipe.py
+test_expect_success 'attach: writing to stdin of closed tasks returns EPIPE' '
+	id=$(flux submit -N4 -t20s cat) &&
+	$jobpipe $id 0 </dev/null &&
+	test_must_fail $jobpipe $id 0 </dev/null >pipe.out 2>&1 &&
+	$jobpipe $id all </dev/null &&
+	test_debug "cat pipe.out" &&
+	grep -i "Broken pipe" pipe.out
+'
 test_done
