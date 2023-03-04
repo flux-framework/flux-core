@@ -96,6 +96,34 @@ test_expect_success 'flux-python command runs the configured python' '
 	test "${expected}" = "${actual}"
 '
 
+test_expect_success 'flux fortune help works' '
+	flux fortune --help | grep category
+'
+
+test_expect_success 'flux fortune works' '
+	flux fortune
+'
+
+test_expect_success 'flux fortune all (default) works' '
+	flux fortune -c all
+'
+
+test_expect_success 'flux fortune with valentine works' '
+	flux fortune -c valentines
+'
+
+test_expect_success 'flux fortune with fun works' '
+	flux fortune -c fun
+'
+
+test_expect_success 'flux fortune with facts works' '
+	flux fortune -c facts
+'
+
+test_expect_success 'flux fortune with art works' '
+	flux fortune -c art
+'
+
 # Minimal is sufficient for these tests, but test_under_flux unavailable
 # clear the RC paths
 ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
