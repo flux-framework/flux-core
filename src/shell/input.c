@@ -31,6 +31,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libioencode/ioencode.h"
+#include "ccan/str/str.h"
 
 #include "task.h"
 #include "svc.h"
@@ -206,9 +207,9 @@ static int shell_input_parse_type (struct shell_input *in)
     if (!ret || !typestr)
         return 0;
 
-    if (!strcmp (typestr, "service"))
+    if (streq (typestr, "service"))
         in->stdin_type = FLUX_INPUT_TYPE_SERVICE;
-    else if (!strcmp (typestr, "file")) {
+    else if (streq (typestr, "file")) {
         struct shell_input_type_file *fp = &(in->stdin_file);
 
         in->stdin_type = FLUX_INPUT_TYPE_FILE;
@@ -446,7 +447,7 @@ static int idset_string_contains (const char *set, uint32_t id)
 {
     int rc;
     struct idset *idset;
-    if (strcmp (set, "all") == 0)
+    if (streq (set, "all"))
         return 1;
     if (!(idset = idset_decode (set)))
         return shell_log_errno ("idset_decode (%s)", set);
@@ -475,11 +476,11 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
     if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
         shell_die_errno (1, "eventlog_entry_parse");
 
-    if (!strcmp (name, "header")) {
+    if (streq (name, "header")) {
         /* Future: per-stream encoding */
         kp->input_header_parsed = true;
     }
-    else if (!strcmp (name, "data")) {
+    else if (streq (name, "data")) {
         flux_shell_task_t *task = task_input->task;
         const char *rank = NULL;
         if (!kp->input_header_parsed)
