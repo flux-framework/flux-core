@@ -133,9 +133,10 @@ test_expect_success HAVE_JQ 'attach: -v option displays file and line info in lo
 '
 
 test_expect_success 'attach: cannot attach to interactive pty when --read-only specified' '
-	jobid=$(flux submit -o pty.interactive bash) &&
+	jobid=$(flux submit -o pty.interactive cat) &&
 	test_must_fail flux job attach --read-only $jobid &&
-	flux job cancel $jobid
+	$SHARNESS_TEST_SRCDIR/scripts/runpty.py -i none -f asciicast -c q \
+		flux job attach $jobid
 '
 
 test_done
