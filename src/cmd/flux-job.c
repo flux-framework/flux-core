@@ -1896,6 +1896,7 @@ static void attach_send_shell_completion (flux_future_t *f, void *arg)
 }
 
 static int attach_send_shell (struct attach_ctx *ctx,
+                              const char *ranks,
                               const void *buf,
                               int len,
                               bool eof)
@@ -1907,7 +1908,7 @@ static int attach_send_shell (struct attach_ctx *ctx,
     int rc = -1;
 
     snprintf (topic, sizeof (topic), "%s.stdin", ctx->service);
-    if (!(context = ioencode ("stdin", ctx->stdin_ranks, buf, len, eof)))
+    if (!(context = ioencode ("stdin", ranks, buf, len, eof)))
         goto error;
     if (!(f = flux_rpc_pack (ctx->h, topic, ctx->leader_rank, 0, "O", context)))
         goto error;
@@ -1937,13 +1938,13 @@ void attach_stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
     if (!(ptr = flux_buffer_read_watcher_get_data (w, &len)))
         log_err_exit ("flux_buffer_read_line on stdin");
     if (len > 0) {
-        if (attach_send_shell (ctx, ptr, len, false) < 0)
+        if (attach_send_shell (ctx, ctx->stdin_ranks, ptr, len, false) < 0)
             log_err_exit ("attach_send_shell");
         ctx->stdin_data_sent = true;
     }
     else {
         /* EOF */
-        if (attach_send_shell (ctx, NULL, 0, true) < 0)
+        if (attach_send_shell (ctx, ctx->stdin_ranks, NULL, 0, true) < 0)
             log_err_exit ("attach_send_shell");
         flux_watcher_stop (ctx->stdin_w);
     }
@@ -2200,6 +2201,50 @@ void handle_exec_log_msg (struct attach_ctx *ctx, double ts, json_t *context)
     fwrite (data, len, 1, stderr);
 }
 
+static struct idset *all_taskids (const struct taskmap *map)
+{
+    struct idset *ids;
+    if (!(ids = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        return NULL;
+    if (idset_range_set (ids, 0, taskmap_total_ntasks (map) - 1) < 0) {
+        idset_destroy (ids);
+        return NULL;
+    }
+    return ids;
+}
+
+static void close_stdin_ranks (struct attach_ctx *ctx, json_t *context)
+{
+    flux_error_t error;
+    json_t *omap;
+    struct taskmap *map = NULL;
+    struct idset *open = NULL;
+    struct idset *to_close = NULL;
+    char *ranks = NULL;
+
+    if (streq (ctx->stdin_ranks, "all"))
+        return;
+    if (!(omap = json_object_get (context, "taskmap"))
+        || !(map = taskmap_decode_json (omap, &error))
+        || !(to_close = all_taskids (map))) {
+        log_msg ("failed to process taskmap in shell.start event");
+        goto out;
+    }
+    if (!(open = idset_decode (ctx->stdin_ranks))
+        || idset_subtract (to_close, open) < 0
+        || !(ranks = idset_encode (to_close, IDSET_FLAG_RANGE))) {
+        log_err ("unable to close stdin on non-targeted ranks");
+        goto out;
+    }
+    if (attach_send_shell (ctx, ranks, NULL, 0, true) < 0)
+        log_err ("failed to close stdin for %s", ranks);
+out:
+    taskmap_destroy (map);
+    idset_destroy (open);
+    idset_destroy (to_close);
+    free (ranks);
+}
+
 /* Handle an event in the guest.exec eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
@@ -2262,6 +2307,7 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     } else if (streq (name, "shell.start")) {
         if (MPIR_being_debugged)
             setup_mpir_interface (ctx, context);
+        close_stdin_ranks (ctx, context);
     }
     else if (streq (name, "log")) {
         handle_exec_log_msg (ctx, timestamp, context);
