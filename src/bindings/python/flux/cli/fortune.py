@@ -195,7 +195,7 @@ https://chat.openai.com
 facts = [
     """
 Flux can be started as a parallel job.  This is how flux-batch(1) and
-flux-alloc(1) work!  Within one of these "sub-instances" of Flux, you
+flux-alloc(1) work!  Within one of these "subinstances" of Flux, you
 (or your batch script) have access all the features of Flux without bothering
 the system or parent Flux instance.  Do your worst - it is your personal
 sandbox!
@@ -211,17 +211,17 @@ is flux-submit(1) prints the job ID and exits immediately, while flux-run(1)
 doesn't exit until the job has completed.
 """,
     """
-All jobs run within a Flux sub-instance started by flux-batch(1) or
+All jobs run within a Flux subinstance started by flux-batch(1) or
 flux-alloc(1) look like *one* job to the Flux accounting system.
 """,
     """
-The system prolog/epilog do not run between jobs in a Flux sub-instance
+The system prolog/epilog do not run between jobs in a Flux subinstance
 started by flux-batch(1) or flux-alloc(1).
 """,
     """
-A Flux sub-instance started by flux-batch(1) or flux-alloc(1) has the same
+A Flux subinstance started by flux-batch(1) or flux-alloc(1) has the same
 capabilities as the system level Flux instance.  Unlike legacy systems that
-offer a simpler "step scheduler" in batch jobs, the Flux sub-instance is an
+offer a simpler "step scheduler" in batch jobs, the Flux subinstance is an
 identical copy of Flux running on a resource subset.  This has been called
 "fractal scheduling".
 """,
