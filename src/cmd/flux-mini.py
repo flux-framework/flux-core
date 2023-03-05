@@ -31,6 +31,8 @@ def main():
     sys.stderr = open(
         sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
     )
+    if sys.stderr.isatty():
+        LOGGER.warning("⚠️ flux-mini is deprecated, use flux-batch, flux-run, etc.⚠️")
 
     parser = argparse.ArgumentParser(prog="flux-mini")
     subparsers = parser.add_subparsers(
@@ -120,9 +122,6 @@ def main():
 
 
 if __name__ == "__main__":
-    LOGGER.warning(
-        "⚠️ WARNING flux mini will be deprecated for a future release. See the equivalent sub-commands now on the top level. ⚠️"
-    )
     main()
 
 # vi: ts=4 sw=4 expandtab
