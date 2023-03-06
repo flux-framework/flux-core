@@ -168,6 +168,12 @@ static void proc_state_change_cb (flux_subprocess_t *p,
                                 "state", state,
                                 "status", flux_subprocess_status (p));
     }
+    else if (state == FLUX_SUBPROCESS_STOPPED) {
+        rc = flux_respond_pack (s->h, request, "{s:s s:i s:i}",
+                                "type", "state",
+                                "rank", s->rank,
+                                "state", state);
+    }
     else if (state == FLUX_SUBPROCESS_FAILED) {
         rc = flux_respond_error (s->h, request, p->failed_errno, NULL);
         proc_delete (s, p); // N.B. proc_delete preserves errno

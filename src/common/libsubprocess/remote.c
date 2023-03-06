@@ -121,6 +121,12 @@ static void process_new_state (flux_subprocess_t *p,
     if (p->state == FLUX_SUBPROCESS_FAILED)
         return;
 
+    if (state == FLUX_SUBPROCESS_STOPPED) {
+        if (p->ops.on_state_change)
+            (*p->ops.on_state_change) (p, FLUX_SUBPROCESS_STOPPED);
+        return;
+    }
+
     p->state = state;
 
     if (p->state == FLUX_SUBPROCESS_RUNNING) {
