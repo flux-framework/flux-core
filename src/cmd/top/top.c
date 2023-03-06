@@ -319,9 +319,6 @@ struct top *top_create (const char *uri,
         || flux_event_subscribe (top->h, "heartbeat.pulse") < 0)
         fatal (errno, "error subscribing to events");
 
-    top->keys = keys_create (top);
-    top->summary_pane = summary_pane_create (top);
-    top->joblist_pane = joblist_pane_create (top);
 #if ASSUME_BROKEN_LOCALE
     top->f_char = "f";
 #else
@@ -330,6 +327,10 @@ struct top *top_create (const char *uri,
     else
         top->f_char = "ƒ";
 #endif /* ASSUME_BROKEN_LOCALE */
+
+    top->keys = keys_create (top);
+    top->summary_pane = summary_pane_create (top);
+    top->joblist_pane = joblist_pane_create (top);
     return top;
 fail:
     top_destroy (top);
