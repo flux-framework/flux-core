@@ -1,3 +1,61 @@
+flux-core version 0.48.0 - 2023-03-07
+-------------------------------------
+
+This release adds submission directives ("see flux help batch") and
+shortens the the job submission commands to "flux batch", "flux run",
+etc.  The flux-mini(1) command is deprecated.
+
+## New Features
+
+ * support RFC 36 submission directives in `flux mini batch` (#4942)
+ * make all flux-mini subcommands available as top level flux commands (#4961)
+ * add flux-cancel(1) (#4983)
+ * add flux-fortune (#4966)
+ * flux-run: allow stdin to be directed to a subset of tasks (#4977)
+ * cmd: add -u, --unbuffered option to submission commands (#4973)
+ * allow flux-core to be configured in ascii-only mode (#4968)
+ * Support {{tmpdir}} in shell mustache templates and simplify batch jobspec
+   construction (#4951)
+ * broker: allow a file argument to `-c, --config-path` in TOML or JSON
+   (#4949)
+
+## Fixes
+
+ * completions: remove flux-mini and other updates (#4984)
+ * flux-top: initialize f character before drawing panes (#4982)
+ * libsubprocess:  don't abort remote processes that receive SIGSTOP (#4981)
+ * shell: fix memory leak in doom plugin (#4979)
+ * flux-resource: suppress NGPUS on systems without GPUs (#4959)
+ * job-ingest: handle worker channel overflow (#4948)
+ * improve error message in Python frontend utilities when broker is not
+   running (#4950)
+ * job-manager: fix for job priority not reset after a duplicate urgency
+   update (#4941)
+ * job-manager/history: track inactive jobs over purge/restart (#4932)
+
+## Cleanup
+
+ * flux-filemap: update to RFC 37 internally (#4974)
+ * libsubprocess: rework internal logging (#4960)
+ * libsubprocess: drop `FLUX_SUBPROCESS_EXEC_FAILED` state (#4955)
+ * libsubprocess: fix bugs and clean up subprocess server (#4944)
+
+## Documentation
+
+ * Fix minor documentation errors and typos (#4934)
+ * flux-batch(1) and flux-alloc(1): improve DESCRIPTION section (#4963)
+ * README: fix a couple typos (#4970)
+ * README: trim it down now that we have readthedocs (#4969)
+ * divide flux(1) help output into sections (#4967)
+ * doc: add shell help on flux-jobs(1) formatting (#4939)
+ * doc: document attach in flux-job(1) (#4936)
+
+## Testsuite/CI/Development
+
+ * testsuite: unset `FLUX_F58_FORCE_ASCII` in some tests (#4976)
+ * .devcontainer permissions fix (#4964)
+ * Add/developer doc on commands (#4965)
+
 flux-core version 0.47.0 - 2023-02-07
 -------------------------------------
 
