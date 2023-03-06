@@ -1,0 +1,309 @@
+/************************************************************\
+ * Copyright 2023 Lawrence Livermore National Security, LLC
+ * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+ *
+ * This file is part of the Flux resource manager framework.
+ * For details, see https://github.com/flux-framework.
+ *
+ * SPDX-License-Identifier: LGPL-3.0
+\************************************************************/
+
+#if HAVE_CONFIG_H
+# include "config.h"
+#endif
+
+#include <unistd.h>
+#include <stdlib.h>
+#include <flux/core.h>
+
+#include "ccan/str/str.h"
+#include "ccan/array_size/array_size.h"
+#include "src/common/libioencode/ioencode.h"
+#include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
+
+#include "command.h"
+#include "client.h"
+
+struct rexec_io {
+    json_t *obj;
+    const char *stream;
+    char *data;
+    int len;
+    bool eof;
+};
+
+struct rexec_response {
+    const char *type;
+    pid_t pid;
+    flux_subprocess_state_t state;
+    int status;
+    struct rexec_io io;
+};
+
+struct rexec_ctx {
+    json_t *cmd;
+    int flags;
+    struct rexec_response response;
+};
+
+static void rexec_response_clear (struct rexec_response *resp)
+{
+    json_decref (resp->io.obj);
+    free (resp->io.data);
+
+    memset (resp, 0, sizeof (*resp));
+
+    resp->state = FLUX_SUBPROCESS_INIT;
+    resp->pid = -1;
+}
+
+static void rexec_ctx_destroy (struct rexec_ctx *ctx)
+{
+    if (ctx) {
+        int saved_errno = errno;
+        rexec_response_clear (&ctx->response);
+        json_decref (ctx->cmd);
+        free (ctx);
+        errno = saved_errno;
+    }
+}
+
+static struct rexec_ctx *rexec_ctx_create (flux_cmd_t *cmd, int flags)
+{
+    struct rexec_ctx *ctx;
+    int valid_flags = SUBPROCESS_REXEC_STDOUT
+        | SUBPROCESS_REXEC_STDERR
+        | SUBPROCESS_REXEC_CHANNEL;
+
+    if ((flags & ~valid_flags)) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(ctx = calloc (1, sizeof (*ctx))))
+        return NULL;
+    if (!(ctx->cmd = cmd_tojson (cmd)))
+        goto error;
+    ctx->flags = flags;
+    ctx->response.pid = -1;
+    return ctx;
+error:
+    rexec_ctx_destroy (ctx);
+    return NULL;
+}
+
+static int has_stdout_flag (struct rexec_ctx *ctx)
+{
+    return ctx->flags & SUBPROCESS_REXEC_STDOUT ? 1 : 0;
+}
+static int has_stderr_flag (struct rexec_ctx *ctx)
+{
+    return ctx->flags & SUBPROCESS_REXEC_STDERR ? 1 : 0;
+}
+static int has_channel_flag (struct rexec_ctx *ctx)
+{
+    return ctx->flags & SUBPROCESS_REXEC_CHANNEL ? 1 : 0;
+}
+
+flux_future_t *subprocess_rexec (flux_t *h,
+                                 const char *service_name,
+                                 uint32_t rank,
+                                 flux_cmd_t *cmd,
+                                 int flags)
+{
+    flux_future_t *f = NULL;
+    struct rexec_ctx *ctx;
+    char *topic;
+
+    if (!h || !cmd || !service_name) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (asprintf (&topic, "%s.exec", service_name) < 0)
+        return NULL;
+    if (!(ctx = rexec_ctx_create (cmd, flags)))
+        goto error;
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             rank,
+                             FLUX_RPC_STREAMING,
+                             "{s:O s:i s:i s:i}",
+                             "cmd", ctx->cmd,
+                             "on_channel_out", has_channel_flag (ctx),
+                             "on_stdout", has_stdout_flag (ctx),
+                             "on_stderr", has_stderr_flag (ctx)))
+        || flux_future_aux_set (f,
+                                "flux::rexec",
+                                ctx,
+                                (flux_free_f)rexec_ctx_destroy) < 0) {
+        rexec_ctx_destroy (ctx);
+        goto error;
+    }
+    free (topic);
+    return f;
+error:
+    ERRNO_SAFE_WRAP (free, topic);
+    flux_future_destroy (f);
+    return NULL;
+}
+
+int subprocess_rexec_get (flux_future_t *f)
+{
+    struct rexec_ctx *ctx;
+    int rank; // not used
+
+    if (!(ctx = flux_future_aux_get (f, "flux::rexec"))) {
+        errno = EINVAL;
+        return -1;
+    }
+    rexec_response_clear (&ctx->response);
+    if (flux_rpc_get_unpack (f,
+                             "{s:s s:i s?i s?i s?i s?O}",
+                             "type", &ctx->response.type,
+                             "rank", &rank,
+                             "state", &ctx->response.state,
+                             "pid", &ctx->response.pid,
+                             "status", &ctx->response.status,
+                             "io", &ctx->response.io.obj) < 0)
+        return -1;
+    if (streq (ctx->response.type, "output")) {
+        if (iodecode (ctx->response.io.obj,
+                      &ctx->response.io.stream,
+                      NULL,
+                      &ctx->response.io.data,
+                      &ctx->response.io.len,
+                      &ctx->response.io.eof) < 0)
+            return -1;
+    }
+    else if (!streq (ctx->response.type, "state")) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+bool subprocess_rexec_is_started (flux_future_t *f, pid_t *pid)
+{
+    struct rexec_ctx *ctx;
+    if ((ctx = flux_future_aux_get (f, "flux::rexec"))
+        && streq (ctx->response.type, "state")
+        && ctx->response.state == FLUX_SUBPROCESS_RUNNING) {
+        if (pid)
+            *pid = ctx->response.pid;
+        return true;
+    }
+    return false;
+}
+
+bool subprocess_rexec_is_stopped (flux_future_t *f)
+{
+    struct rexec_ctx *ctx;
+    if ((ctx = flux_future_aux_get (f, "flux::rexec"))
+        && streq (ctx->response.type, "state")
+        && ctx->response.state == FLUX_SUBPROCESS_STOPPED)
+        return true;
+    return false;
+}
+
+bool subprocess_rexec_is_finished (flux_future_t *f, int *status)
+{
+    struct rexec_ctx *ctx;
+    if ((ctx = flux_future_aux_get (f, "flux::rexec"))
+        && streq (ctx->response.type, "state")
+        && ctx->response.state == FLUX_SUBPROCESS_EXITED) {
+        if (status)
+            *status = ctx->response.status;
+        return true;
+    }
+    return false;
+}
+
+bool subprocess_rexec_is_output (flux_future_t *f,
+                                 const char **stream,
+                                 const char **data,
+                                 int *len,
+                                 bool *eof)
+{
+    struct rexec_ctx *ctx;
+    if ((ctx = flux_future_aux_get (f, "flux::rexec"))
+        && streq (ctx->response.type, "output")) {
+        if (stream)
+            *stream = ctx->response.io.stream;
+        if (data)
+            *data = ctx->response.io.data;
+        if (len)
+            *len = ctx->response.io.len;
+        if (eof)
+            *eof = ctx->response.io.eof;
+        return true;
+    }
+    return false;
+}
+
+int subprocess_write (flux_t *h,
+                      const char *service_name,
+                      uint32_t rank,
+                      pid_t pid,
+                      const char *stream,
+                      const char *data,
+                      int len,
+                      bool eof)
+{
+    flux_future_t *f = NULL;
+    json_t *io;
+    char *topic;
+    int rc = -1;
+
+    if (!h || pid < 0 || !stream || !service_name) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (asprintf (&topic, "%s.write", service_name) < 0)
+        return -1;
+    if (!(io = ioencode (stream, "0", data, len, eof))
+        || !(f = flux_rpc_pack (h,
+                                topic,
+                                rank,
+                                FLUX_RPC_NORESPONSE,
+                                "{s:i s:O}",
+                                "pid", pid,
+                                "io", io)))
+        goto out;
+    rc = 0;
+out:
+    flux_future_destroy (f);
+    ERRNO_SAFE_WRAP (json_decref, io);
+    ERRNO_SAFE_WRAP (free, topic);
+    return rc;
+}
+
+flux_future_t *subprocess_kill (flux_t *h,
+                                const char *service_name,
+                                uint32_t rank,
+                                pid_t pid,
+                                int signum)
+{
+    flux_future_t *f;
+    char *topic;
+
+    if (!h || !service_name) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (asprintf (&topic, "%s.kill", service_name) < 0)
+        return NULL;
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             rank,
+                             0,
+                             "{s:i s:i}",
+                             "pid", pid,
+                             "signum", signum))) {
+        ERRNO_SAFE_WRAP (free, topic);
+        return NULL;
+    }
+    free (topic);
+    return f;
+}
+
+// vi: ts=4 sw=4 expandtab

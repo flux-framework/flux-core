@@ -31,7 +31,9 @@ libsubprocess_la_SOURCES = \
 	util.c \
 	util.h \
 	subprocess.c \
-	subprocess_private.h
+	subprocess_private.h \
+	client.h \
+	client.c
 
 fluxcoreinclude_HEADERS = \
 	subprocess.h
