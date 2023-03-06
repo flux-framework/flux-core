@@ -254,4 +254,11 @@ test_expect_success NO_CHAIN_LINT 'flux run --unbuffered works for stdin/out' '
         rm -f fifo &&
         flux job wait-event -vt 15 $(flux job last) clean
 '
+test_expect_success 'flux run --input=ranks works for stdin' '
+	echo hi | flux run --label-io --input=0 -n4 cat >input-test.out 2>&1 &&
+	cat <<-EOF >input-test.expected &&
+	0: hi
+	EOF
+	test_cmp input-test.expected input-test.out
+'
 test_done

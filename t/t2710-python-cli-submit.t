@@ -273,5 +273,9 @@ test_expect_success HAVE_JQ 'flux submit --tasks-per-node works' '
 	jq -e \
 	 ".attributes.system.shell.options.\"per-resource\".count == 2"
 '
+test_expect_success 'flux submit --input=IDSET fails' '
+	test_must_fail flux submit --input=0 hostname &&
+	test_must_fail flux submit -n2 --input=0-1 hostname
+'
 
 test_done

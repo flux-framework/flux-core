@@ -7,8 +7,10 @@ KVS, where they may be accessed with the ``flux job attach`` command.
 In addition, :man1:`flux-run` processes standard I/O in real time,
 emitting the job's I/O to its stdout and stderr.
 
-**--input=FILENAME**
+**--input=FILENAME|RANKS**
    Redirect stdin to the specified filename, bypassing the KVS.
+   As a special case for ``flux run``, the argument may specify
+   an idset of task ranks in to which to direct standard input.
 
 **--output=TEMPLATE**
    Specify the filename *TEMPLATE* for stdout redirection, bypassing

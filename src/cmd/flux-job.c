@@ -273,6 +273,9 @@ static struct optparse_option attach_opts[] =  {
     { .name = "unbuffered", .key = 'u', .has_arg = 0,
       .usage = "Disable buffering of stdin",
     },
+    { .name = "stdin-ranks", .key = 'i', .has_arg = 1, .arginfo = "RANKS",
+      .usage = "Send standard input to only RANKS (default: all)"
+    },
     { .name = "debug", .has_arg = 0,
       .usage = "Enable parallel debugger to attach to a running job",
     },
@@ -1585,6 +1588,7 @@ struct attach_ctx {
     flux_jobid_t id;
     bool readonly;
     bool unbuffered;
+    char *stdin_ranks;
     const char *jobid;
     const char *wait_event;
     flux_future_t *eventlog_f;
@@ -1892,6 +1896,7 @@ static void attach_send_shell_completion (flux_future_t *f, void *arg)
 }
 
 static int attach_send_shell (struct attach_ctx *ctx,
+                              const char *ranks,
                               const void *buf,
                               int len,
                               bool eof)
@@ -1903,7 +1908,7 @@ static int attach_send_shell (struct attach_ctx *ctx,
     int rc = -1;
 
     snprintf (topic, sizeof (topic), "%s.stdin", ctx->service);
-    if (!(context = ioencode ("stdin", "all", buf, len, eof)))
+    if (!(context = ioencode ("stdin", ranks, buf, len, eof)))
         goto error;
     if (!(f = flux_rpc_pack (ctx->h, topic, ctx->leader_rank, 0, "O", context)))
         goto error;
@@ -1933,13 +1938,13 @@ void attach_stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
     if (!(ptr = flux_buffer_read_watcher_get_data (w, &len)))
         log_err_exit ("flux_buffer_read_line on stdin");
     if (len > 0) {
-        if (attach_send_shell (ctx, ptr, len, false) < 0)
+        if (attach_send_shell (ctx, ctx->stdin_ranks, ptr, len, false) < 0)
             log_err_exit ("attach_send_shell");
         ctx->stdin_data_sent = true;
     }
     else {
         /* EOF */
-        if (attach_send_shell (ctx, NULL, 0, true) < 0)
+        if (attach_send_shell (ctx, ctx->stdin_ranks, NULL, 0, true) < 0)
             log_err_exit ("attach_send_shell");
         flux_watcher_stop (ctx->stdin_w);
     }
@@ -2088,7 +2093,14 @@ static void attach_setup_stdin (struct attach_ctx *ctx)
         log_err_exit ("zlist_new");
 
     ctx->stdin_w = w;
-    flux_watcher_start (ctx->stdin_w);
+
+    /*  Start stdin watcher only if --stdin-ranks=all (the default).
+     *  Otherwise, the watcher will be started in close_stdin_ranks()
+     *  after the idset of targeted ranks is adjusted based on the job
+     *  taskmap.
+     */
+    if (streq (ctx->stdin_ranks, "all"))
+        flux_watcher_start (ctx->stdin_w);
 }
 
 static void pty_client_exit_cb (struct flux_pty_client *c, void *arg)
@@ -2196,6 +2208,89 @@ void handle_exec_log_msg (struct attach_ctx *ctx, double ts, json_t *context)
     fwrite (data, len, 1, stderr);
 }
 
+static struct idset *all_taskids (const struct taskmap *map)
+{
+    struct idset *ids;
+    if (!(ids = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        return NULL;
+    if (idset_range_set (ids, 0, taskmap_total_ntasks (map) - 1) < 0) {
+        idset_destroy (ids);
+        return NULL;
+    }
+    return ids;
+}
+
+static void adjust_stdin_ranks (struct attach_ctx *ctx,
+                                struct idset *stdin_ranks,
+                                struct idset *all_ranks)
+{
+    struct idset *isect = idset_intersect (all_ranks, stdin_ranks);
+    if (!isect) {
+        log_err ("failed to get intersection of stdin ranks and all taskids");
+        return;
+    }
+    if (!idset_equal (stdin_ranks, isect)) {
+        char *new = idset_encode (isect, IDSET_FLAG_RANGE);
+        if (!new) {
+            log_err ("unable to adjust stdin-ranks to job");
+            goto out;
+        }
+        log_msg ("warning: adjusting --stdin-ranks from %s to %s",
+                 ctx->stdin_ranks,
+                 new);
+        free (ctx->stdin_ranks);
+        ctx->stdin_ranks = new;
+    }
+out:
+    idset_destroy (isect);
+}
+
+static void handle_stdin_ranks (struct attach_ctx *ctx, json_t *context)
+{
+    flux_error_t error;
+    json_t *omap;
+    struct taskmap *map = NULL;
+    struct idset *open = NULL;
+    struct idset *to_close = NULL;
+    struct idset *isect = NULL;
+    char *ranks = NULL;
+
+    if (streq (ctx->stdin_ranks, "all"))
+        return;
+    if (!(omap = json_object_get (context, "taskmap"))
+        || !(map = taskmap_decode_json (omap, &error))
+        || !(to_close = all_taskids (map))) {
+        log_msg ("failed to process taskmap in shell.start event");
+        goto out;
+    }
+    if (!(open = idset_decode (ctx->stdin_ranks))) {
+        log_err ("failed to decode stdin ranks (%s)", ctx->stdin_ranks);
+        goto out;
+    }
+    /* Ensure that stdin_ranks is a subset of all ranks
+     */
+    adjust_stdin_ranks (ctx, open, to_close);
+
+    if (idset_subtract (to_close, open) < 0
+        || !(ranks = idset_encode (to_close, IDSET_FLAG_RANGE))) {
+        log_err ("unable to close stdin on non-targeted ranks");
+        goto out;
+    }
+    if (attach_send_shell (ctx, ranks, NULL, 0, true) < 0)
+        log_err ("failed to close stdin for %s", ranks);
+
+    /*  Start watching stdin now that ctx->stdin_ranks has been
+     *  validated.
+     */
+    flux_watcher_start (ctx->stdin_w);
+out:
+    taskmap_destroy (map);
+    idset_destroy (open);
+    idset_destroy (to_close);
+    idset_destroy (isect);
+    free (ranks);
+}
+
 /* Handle an event in the guest.exec eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
@@ -2258,6 +2353,7 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     } else if (streq (name, "shell.start")) {
         if (MPIR_being_debugged)
             setup_mpir_interface (ctx, context);
+        handle_stdin_ranks (ctx, context);
     }
     else if (streq (name, "log")) {
         handle_exec_log_msg (ctx, timestamp, context);
@@ -2503,6 +2599,18 @@ done:
     attach_completed_check (ctx);
 }
 
+static char *get_stdin_ranks (optparse_t *p)
+{
+    const char *value = optparse_get_str (p, "stdin-ranks", "all");
+    if (!streq (value, "all")) {
+        struct idset *ids;
+        if (!(ids = idset_decode (value)))
+            log_err_exit ("Invalid value '%s' for --stdin-ranks", value);
+        idset_destroy (ids);
+    }
+    return strdup (value);
+}
+
 int cmd_attach (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
@@ -2521,6 +2629,10 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     ctx.p = p;
     ctx.readonly = optparse_hasopt (p, "read-only");
     ctx.unbuffered = optparse_hasopt (p, "unbuffered");
+
+    if (optparse_hasopt (p, "stdin-ranks") && ctx.readonly)
+        log_msg_exit ("Do not use --stdin-ranks with --read-only");
+    ctx.stdin_ranks = get_stdin_ranks (p);
 
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -2628,6 +2740,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     free (ctx.service);
     free (totalview_jobid);
     free (ctx.last_event);
+    free (ctx.stdin_ranks);
     return ctx.exit_code;
 }
 

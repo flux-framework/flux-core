@@ -48,6 +48,15 @@ completed.  It can also be used to feed stdin to a job.
 **-l, --label-io**
    Label output by rank
 
+**-u, --unbuffered**
+   Do not buffer stdin. Note that when ``flux job attach`` is used in a
+   terminal, the terminal itself may line buffer stdin.
+
+**-i, --stdin-ranks=RANKS**
+   Send stdin to only those ranks in the **RANKS** idset. The standard input
+   for tasks not in **RANKS** will be closed. The default is to broadcast
+   stdin to all ranks.
+
 CANCEL
 ======
 

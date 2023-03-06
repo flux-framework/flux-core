@@ -31,6 +31,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libioencode/ioencode.h"
+#include "ccan/str/str.h"
 
 #include "task.h"
 #include "svc.h"
@@ -74,6 +75,7 @@ struct shell_input {
     int stdin_type;
     struct shell_task_input *task_inputs;
     int ntasks;
+    struct idset *open_tasks;
     struct shell_input_type_file stdin_file;
 };
 
@@ -103,6 +105,7 @@ void shell_input_destroy (struct shell_input *in)
         shell_input_type_file_cleanup (&(in->stdin_file));
         for (i = 0; i < in->ntasks; i++)
             shell_task_input_cleanup (&(in->task_inputs[i]));
+        idset_destroy (in->open_tasks);
         free (in->task_inputs);
         free (in);
         errno = saved_errno;
@@ -161,6 +164,33 @@ static int shell_input_put_kvs (struct shell_input *in, json_t *context)
     return rc;
 }
 
+/*  Return true if idset b is a strict subset of a
+ */
+static bool is_subset (const struct idset *a, const struct idset *b)
+{
+    struct idset *isect = idset_intersect (a, b);
+    if (isect) {
+        bool result = idset_equal (isect, b);
+        idset_destroy (isect);
+        return result;
+    }
+    return false;
+}
+
+/*  Subtract idset 'b' from 'a', unless 'ranks' is all then clear 'a'.
+ */
+static int subtract_idset (struct idset *a,
+                           const char *ranks,
+                           struct idset *b)
+{
+    /*  Remove all tasks with EOF from open_tasks idset
+     */
+    if (streq (ranks, "all"))
+        return idset_clear_all (a);
+    else
+        return idset_subtract (a, b);
+}
+
 /* Convert 'iodecode' object to an valid RFC 24 data event.
  * N.B. the iodecode object is a valid "context" for the event.
  */
@@ -171,22 +201,41 @@ static void shell_input_stdin_cb (flux_t *h,
 {
     struct shell_input *in = arg;
     bool eof = false;
+    const char *ranks;
+    struct idset *ids = NULL;
     json_t *o;
 
     if (flux_request_unpack (msg, NULL, "o", &o) < 0)
         goto error;
-    if (iodecode (o, NULL, NULL, NULL, NULL, &eof) < 0)
+    if (idset_count (in->open_tasks) == 0) {
+        errno = EPIPE;
         goto error;
+    }
+    if (iodecode (o, NULL, &ranks, NULL, NULL, &eof) < 0)
+        goto error;
+    if (!streq (ranks, "all")) {
+        /* Ensure that targeted tasks are still open.
+         * ("all" is treated as "all open")
+         */
+        if (!(ids = idset_decode (ranks)))
+            goto error;
+        if (!is_subset (in->open_tasks, ids)) {
+            errno = EPIPE;
+            goto error;
+        }
+    }
     if (shell_input_put_kvs (in, o) < 0)
         goto error;
-    if (eof)
-        flux_msg_handler_stop (mh);
+    if (eof && subtract_idset (in->open_tasks, ranks, ids) < 0)
+        shell_log_errno ("failed to remove '%s' from open tasks", ranks);
     if (flux_respond (in->shell->h, msg, NULL) < 0)
         shell_log_errno ("flux_respond");
+    idset_destroy (ids);
     return;
 error:
     if (flux_respond_error (in->shell->h, msg, errno, NULL) < 0)
         shell_log_errno ("flux_respond");
+    idset_destroy (ids);
 }
 
 static void shell_input_type_file_init (struct shell_input *in)
@@ -208,9 +257,9 @@ static int shell_input_parse_type (struct shell_input *in)
     if (!ret || !typestr)
         return 0;
 
-    if (!strcmp (typestr, "service"))
+    if (streq (typestr, "service"))
         in->stdin_type = FLUX_INPUT_TYPE_SERVICE;
-    else if (!strcmp (typestr, "file")) {
+    else if (streq (typestr, "file")) {
         struct shell_input_type_file *fp = &(in->stdin_file);
 
         in->stdin_type = FLUX_INPUT_TYPE_FILE;
@@ -376,6 +425,11 @@ struct shell_input *shell_input_create (flux_shell_t *shell)
     in->shell = shell;
     in->stdin_type = FLUX_INPUT_TYPE_SERVICE;
     in->ntasks = shell->info->rankinfo.ntasks;
+    if (!(in->open_tasks = idset_create (0, IDSET_FLAG_AUTOGROW))
+        || idset_range_set (in->open_tasks,
+                            0,
+                            shell->info->total_ntasks - 1))
+        goto error;
 
     task_inputs_size = sizeof (struct shell_task_input) * in->ntasks;
     if (!(in->task_inputs = calloc (1, task_inputs_size)))
@@ -448,7 +502,7 @@ static int idset_string_contains (const char *set, uint32_t id)
 {
     int rc;
     struct idset *idset;
-    if (strcmp (set, "all") == 0)
+    if (streq (set, "all"))
         return 1;
     if (!(idset = idset_decode (set)))
         return shell_log_errno ("idset_decode (%s)", set);
@@ -477,11 +531,11 @@ static void shell_task_input_kvs_input_cb (flux_future_t *f, void *arg)
     if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
         shell_die_errno (1, "eventlog_entry_parse");
 
-    if (!strcmp (name, "header")) {
+    if (streq (name, "header")) {
         /* Future: per-stream encoding */
         kp->input_header_parsed = true;
     }
-    else if (!strcmp (name, "data")) {
+    else if (streq (name, "data")) {
         flux_shell_task_t *task = task_input->task;
         const char *rank = NULL;
         if (!kp->input_header_parsed)

@@ -775,7 +775,15 @@ class MiniCmd:
             jobspec.setattr("system.job.name", args.job_name)
 
         if args.input is not None:
-            jobspec.stdin = args.input
+            #  Note: temporary stopgap until per-task input is supported
+            #  by the job shell:
+            #  Check if --input specified an IDset. If not, then assume
+            #  a file, otherwise, do not modify jobspec, input will be
+            #  handled by `flux job attach`.
+            try:
+                IDset(args.input)
+            except (ValueError, OSError):
+                jobspec.stdin = args.input
 
         if args.output is not None and args.output not in ["none", "kvs"]:
             jobspec.stdout = args.output
@@ -1446,6 +1454,17 @@ class SubmitBulkCmd(SubmitBaseCmd):
             #  substitute any {cc} in args (only if --cc or --bcc):
             xargs = Xcmd(args, cc=i) if i else args
             jobspec = self.jobspec_create(xargs)
+
+            #  For now, an idset argument to args.input is not supported
+            #  in submit:
+            if xargs.input:
+                try:
+                    IDset(xargs.input)
+                    LOGGER.error("per-task input not supported for submit")
+                    sys.exit(1)
+                except (ValueError, OSError):
+                    # --input was not an idset, just continue:
+                    pass
 
             if args.cc or args.bcc:
                 label = f"cc={i}: "

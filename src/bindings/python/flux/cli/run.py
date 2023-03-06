@@ -13,6 +13,7 @@ import os
 import sys
 
 from flux.cli import base
+from flux.idset import IDset
 
 
 class RunCmd(base.SubmitBaseCmd):
@@ -59,6 +60,15 @@ class RunCmd(base.SubmitBaseCmd):
             attach_args.append(f"--wait-event={args.wait_event}")
         if args.unbuffered:
             attach_args.append("--unbuffered")
+        # If args.input is an idset, then pass along to attach:
+        if args.input:
+            try:
+                in_ranks = IDset(args.input)
+                attach_args.append(f"--stdin-ranks={in_ranks}")
+            except (ValueError, EnvironmentError):
+                #  Do nothing if ranks were not an idset, file input is
+                #  handled in jobspec.
+                pass
         attach_args.append(jobid.f58.encode("utf-8", errors="surrogateescape"))
 
         # Exec flux-job attach, searching for it in FLUX_EXEC_PATH.
