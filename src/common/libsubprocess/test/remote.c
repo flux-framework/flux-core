@@ -247,6 +247,82 @@ void simple_test (flux_t *h)
     simple_run_check (h, ARRAY_SIZE (echo2_av) - 1, echo2_av, &exp);
 }
 
+/* In SIGSTOP test, a 'cat' subprocess is sent SIGSTOP upon starting.
+ * If remote SIGSTOP handling works, the state callback is called again
+ * with state == STOPPED, which triggers closure of stdin and natural
+ * termination of the process, which causes the reactor to exit.
+ */
+
+static void stop_state_cb (flux_subprocess_t *p,
+                           flux_subprocess_state_t state)
+{
+    flux_reactor_t *r = flux_subprocess_aux_get (p, "reactor");
+
+    diag ("state callback state=%s", flux_subprocess_state_string (state));
+    if (state == FLUX_SUBPROCESS_RUNNING) {
+        pid_t pid = flux_subprocess_pid (p);
+        if (pid < 0 || kill (pid, SIGSTOP) < 0) {
+            diag ("could not stop test proc: %s", strerror (errno));
+            flux_reactor_stop_error (r);
+        }
+    }
+    else if (state == FLUX_SUBPROCESS_STOPPED) {
+        pid_t pid = flux_subprocess_pid (p);
+        if (pid < 0 || kill (pid, SIGCONT) < 0) {
+            diag ("could not continue test proc: %s", strerror (errno));
+            flux_reactor_stop_error (r);
+        }
+        if (flux_subprocess_close (p, "stdin") < 0) {
+            diag ("could not close remote stdin");
+            flux_reactor_stop_error (r);
+        }
+    }
+}
+
+static void stop_output_cb (flux_subprocess_t *p, const char *stream)
+{
+    const char *line;
+    int len;
+
+    if (!(line = flux_subprocess_read_line (p, stream, &len)))
+        diag ("%s: %s", stream, strerror (errno));
+    else if (len == 0)
+        diag ("%s: EOF", stream);
+    else
+        diag ("%s: %d bytes", stream, len);
+}
+
+flux_subprocess_ops_t stoptest_ops = {
+    .on_state_change    = stop_state_cb,
+    .on_stdout          = stop_output_cb,
+    .on_stderr          = stop_output_cb,
+};
+
+void sigstop_test (flux_t *h)
+{
+    char *av[] = { "/bin/cat", NULL };
+    flux_subprocess_t *p;
+    flux_cmd_t *cmd;
+    int rc;
+
+    cmd = flux_cmd_create (ARRAY_SIZE (av) - 1, av, environ);
+    if (!cmd)
+        BAIL_OUT ("flux_cmd_create failed");
+
+    p = flux_rexec (h, FLUX_NODEID_ANY, 0, cmd, &stoptest_ops);
+    ok (p != NULL,
+        "stoptest: created subprocess");
+    if (flux_subprocess_aux_set (p, "reactor", flux_get_reactor (h), NULL) < 0)
+        BAIL_OUT ("could not stash reactor in subprocess aux container");
+
+    rc = flux_reactor_run (flux_get_reactor (h), 0);
+    ok (rc >= 0,
+        "stoptest: reactor ran successfully");
+
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
 int main (int argc, char *argv[])
 {
     flux_t *h;
@@ -259,6 +335,7 @@ int main (int argc, char *argv[])
         BAIL_OUT ("could not set logger");
 
     simple_test (h);
+    sigstop_test (h);
 
     test_server_stop (h);
     flux_close (h);
