@@ -113,7 +113,7 @@ static void doom_post (struct shell_doom *doom, json_t *task_info)
 
     flux_future_destroy (f); // fire and forget
     free (entrystr);
-    json_decref (task_info);
+    json_decref (entry);
     flux_kvs_txn_destroy (txn);
 }
 
