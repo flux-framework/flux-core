@@ -129,6 +129,33 @@ __get_flux_subcommands() {
     echo "$subcommands"
 }
 
+#  flux-cancel(1) completions
+_flux_cancel()
+{
+    local cmd=$1
+    OPTS="\
+        --all \
+        -n --dry-run \
+        -q --quiet \
+        -u --user= \
+        -S --states= \
+        -m --message= \
+    "
+    if [[ $cur != -* ]]; then
+        #  Attempt to substitute an active jobid
+        compopt +o filenames
+        active_jobs=$(flux jobs -no {id})
+        COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
+        return 0
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
 #  flux-mini(1) completions
 _flux_mini()
 {
@@ -1304,6 +1331,9 @@ _flux_core()
         ;;
     submit|run|alloc|batch|bulksubmit)
         _flux_mini $cmd
+        ;;
+    cancel)
+        _flux_cancel $subcmd
         ;;
     resource)
         _flux_resource $subcmd
