@@ -9,6 +9,7 @@ man1
    flux-batch
    flux-broker
    flux-bulksubmit
+   flux-cancel
    flux-config
    flux-content
    flux-cron

@@ -40,6 +40,7 @@ man_pages = [
     ('man1/flux-jobs', 'flux-jobs', 'list jobs submitted to Flux', [author], 1),
     ('man1/flux-top', 'flux-top', 'Display running Flux jobs', [author], 1),
     ('man1/flux-pstree', 'flux-pstree', 'display job hierarchies', [author], 1),
+    ('man1/flux-cancel', 'flux-cancel', 'cancel one or more jobs', [author], 1),
     ('man1/flux-pgrep', 'flux-pgrep', 'search or cancel matching jobs', [author], 1),
     ('man1/flux-pgrep', 'flux-pkill', 'search or cancel matching jobs', [author], 1),
     ('man1/flux-jobtap', 'flux-jobtap', 'List, remove, and load job-manager plugins', [author], 1),
