@@ -182,6 +182,7 @@ _flux_mini()
         --input= \
         --output= \
         --error= \
+        -u --unbuffered \
         -l --label-io \
         --flags= \
         --dry-run \
