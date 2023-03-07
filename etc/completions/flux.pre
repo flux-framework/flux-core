@@ -369,6 +369,7 @@ _flux_job()
         memo \
         taskmap \
         timeleft \
+        last \
     "
     local nojob_subcmds="\
         cancelall \
@@ -474,6 +475,7 @@ _flux_job()
     local timeleft_OPTS="\
         -H --human
     "
+    local last_OPTS=""
     if [[ $cmd != "job" ]]; then
         if [[ $cur != -* ]]; then
            if _flux_contains_word ${cmd} ${subcmds}; then
