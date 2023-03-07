@@ -16,7 +16,7 @@ SHELL=/bin/sh flux start -s 4 -o,-Stbon.topo=kary:4 --test-exit-mode=leader '\
    id=$(flux submit -n4 -N4 sleep 300) \
 && flux job wait-event $id start \
 && $startctl kill 3 19 \
-&& flux job cancel $id \
+&& flux cancel $id \
 && flux job wait-event $id exception \
 && $startctl kill 3 9 \
 && flux job attach -vE $id \

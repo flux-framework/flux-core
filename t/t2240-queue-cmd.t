@@ -183,7 +183,7 @@ test_expect_success 'flux-queue: stop canceled alloc request' '
 
 test_expect_success 'flux-queue: start scheduling and cancel long job' '
 	flux queue start &&
-	flux job cancel $(cat longjob)
+	flux cancel $(cat longjob)
 '
 
 test_expect_success 'flux-queue: queue empties out' '

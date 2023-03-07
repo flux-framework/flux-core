@@ -18,7 +18,7 @@ fj_wait_event() {
 submit_job() {
 	local jobid=$(flux job submit sleeplong.json) &&
 	fj_wait_event $jobid start >/dev/null &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	fj_wait_event $jobid clean >/dev/null &&
 	echo $jobid
 }

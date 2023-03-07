@@ -172,7 +172,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSSRRS)' '
 '
 
 test_expect_success 'job-manager: cancel 5' '
-        flux job cancel $(cat job5.id)
+        flux cancel $(cat job5.id)
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state SRSRIS' '

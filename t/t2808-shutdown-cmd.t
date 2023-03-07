@@ -76,7 +76,7 @@ test_expect_success 'flux-shutdown JOBID fails when JOBID is not a flux instance
 	grep "URI not found" notflux.err
 '
 test_expect_success 'cancel that job' '
-	flux job cancel $(cat jobid3)
+	flux cancel $(cat jobid3)
 '
 
 test_expect_success 'run instance with no initial program and wait for it to start' '

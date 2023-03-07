@@ -9,7 +9,7 @@ SHELL=/bin/sh flux start '\
 && flux queue stop \
 && jobid=$(flux submit hostname) \
 && flux job wait-event $jobid depend \
-&& flux job cancel $jobid \
+&& flux cancel $jobid \
 && flux job attach -vE $jobid \
 ; flux queue status -v >t3920.output'
 

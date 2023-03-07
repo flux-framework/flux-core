@@ -65,7 +65,7 @@ test_expect_success HAVE_JQ 'job-manager: queue counts are as expected' '
 '
 
 test_expect_success 'job-manager: cancel a running job' '
-        flux job cancel $(cat job6.id)
+        flux cancel $(cat job6.id)
 '
 
 test_expect_success 'job-manager: start scheduling' '
@@ -104,7 +104,7 @@ test_expect_success 'job-manager: increase urgency job 1' '
 '
 
 test_expect_success 'job-manager: cancel a running job' '
-        flux job cancel $(cat job5.id)
+        flux cancel $(cat job5.id)
 '
 
 test_expect_success 'job-manager: start scheduling' '
@@ -184,8 +184,8 @@ test_expect_success 'job-manager: stop scheduling debug queue' '
 '
 
 test_expect_success 'job-manager: cancel the two running jobs' '
-        flux job cancel $(cat batch5.id) &&
-        flux job cancel $(cat debug5.id)
+        flux cancel $(cat batch5.id) &&
+        flux cancel $(cat debug5.id)
 '
 
 # batch queue jobs should run instead of debug queue
@@ -226,8 +226,8 @@ test_expect_success 'job-manager: start scheduling debug queue' '
 '
 
 test_expect_success 'job-manager: cancel the two running jobs' '
-        flux job cancel $(cat batch3.id) &&
-        flux job cancel $(cat batch4.id)
+        flux cancel $(cat batch3.id) &&
+        flux cancel $(cat batch4.id)
 '
 
 # debug job 2 and 4 should have highest priority now and be running

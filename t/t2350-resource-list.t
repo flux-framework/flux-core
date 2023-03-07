@@ -166,7 +166,7 @@ test_expect_success 'flux resource lists expected queues in states (single)' '
 	test $(grep -c "allocated 1 debug" list2.out) -eq 1
 '
 test_expect_success 'cleanup jobs' '
-	flux job cancel $(cat job1A.id) $(cat job1B.id)
+	flux cancel $(cat job1A.id) $(cat job1B.id)
 '
 test_expect_success 'configure queues and resource split amongst queues w/ all' '
 	flux R encode -r 0-3 -p all:0-3 -p batch:0-1 -p debug:2-3 \
@@ -278,6 +278,6 @@ test_expect_success 'flux resource lists expected queues in states (every)' '
 	test $(grep "down 0" listqueue_every2.out | grep -c every) -eq 0
 '
 test_expect_success 'cleanup jobs' '
-	flux job cancel $(cat job2A.id) $(cat job2B.id)
+	flux cancel $(cat job2A.id) $(cat job2B.id)
 '
 test_done

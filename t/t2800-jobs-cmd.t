@@ -144,7 +144,7 @@ test_expect_success HAVE_JQ 'submit jobs for job list testing' '
 	#
 	jobid=`flux submit --job-name=canceledjob sleep 30` &&
 	fj_wait_event $jobid depend &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	fj_wait_event $jobid clean &&
 	echo $jobid >> inactiveids &&
 	echo $jobid > canceled.ids &&
@@ -1275,7 +1275,7 @@ test_expect_success 'flux-jobs --stats-only works' '
 '
 
 test_expect_success 'cleanup job listing jobs ' '
-	flux job cancel $(cat active.ids) &&
+	flux cancel $(cat active.ids) &&
 	for jobid in `cat active.ids`; do
 		fj_wait_event $jobid clean;
 	done

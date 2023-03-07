@@ -236,7 +236,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: cover stdout unbuffered output' '
 	id=$(flux submit --unbuffered ./stdout-unbuffered.sh)
 	flux job attach $id > stdout-unbuffered.out &
 	$waitfile --count=1 --timeout=10 --pattern=abcd stdout-unbuffered.out &&
-	flux job cancel $id
+	flux cancel $id
 '
 test_expect_success NO_CHAIN_LINT 'job-shell: cover stderr unbuffered output' '
 	cat <<-EOF >stderr-unbuffered.sh &&
@@ -248,7 +248,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: cover stderr unbuffered output' '
 	id=$(flux submit --unbuffered ./stderr-unbuffered.sh)
 	flux job attach $id 1> stdout.out 2> stderr-unbuffered.out &
 	$waitfile --count=1 --timeout=10 --pattern=efgh stderr-unbuffered.out &&
-	flux job cancel $id
+	flux cancel $id
 '
 test_expect_success NO_CHAIN_LINT 'job-shell: cover stdout line output' '
 	cat <<-EOF >stdout-line.sh &&
@@ -262,7 +262,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: cover stdout line output' '
 		./stdout-line.sh)
 	flux job attach $id > stdout-line.out &
 	$waitfile --count=1 --timeout=10 --pattern=ijkl stdout-line.out &&
-	flux job cancel $id
+	flux cancel $id
 '
 test_expect_success NO_CHAIN_LINT 'job-shell: cover stderr line output' '
 	cat <<-EOF >stderr-line.sh &&
@@ -276,7 +276,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: cover stderr line output' '
 		./stderr-line.sh)
 	flux job attach $id 1> stdout.out 2> stderr-line.out &
 	$waitfile --count=1 --timeout=10 --pattern=mnop stderr-line.out &&
-	flux job cancel $id
+	flux cancel $id
 '
 test_expect_success 'job-shell: cover invalid buffer type' '
 	id=$(flux submit \

@@ -153,7 +153,7 @@ test_expect_success 'job-ingest: feasibility validator works with jobs running' 
 	flux submit -n 2 hostname &&
 	test_must_fail flux submit -N 12 -n12 hostname 2>infeasible4.err &&
 	grep "unsatisfiable request" infeasible4.err &&
-	flux job cancel ${jobid} &&
+	flux cancel ${jobid} &&
 	flux job wait-event ${jobid} clean
 '
 test_expect_success 'job-ingest: load multiple validators' '

@@ -196,9 +196,9 @@ test_expect_success 'job-archive: stores inactive job info (job cancel)' '
         fj_wait_event $jobid1 start &&
         jobid2=`flux submit hostname` &&
         fj_wait_event $jobid2 submit &&
-        flux job cancel $jobid2 &&
+        flux cancel $jobid2 &&
         fj_wait_event $jobid2 clean &&
-        flux job cancel $jobid1 &&
+        flux cancel $jobid1 &&
         fj_wait_event $jobid1 clean &&
         wait_jobid_state $jobid2 inactive &&
         wait_db $jobid2 ${ARCHIVEDB} &&

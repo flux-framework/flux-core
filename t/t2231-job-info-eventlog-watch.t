@@ -20,7 +20,7 @@ fj_wait_event() {
 submit_job() {
 	local jobid=$(flux job submit sleeplong.json) &&
 	fj_wait_event $jobid start >/dev/null &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	fj_wait_event $jobid clean >/dev/null &&
 	echo $jobid
 }
@@ -116,7 +116,7 @@ test_expect_success 'flux job wait-event --verbose doesnt show events after wait
 test_expect_success 'flux job wait-event --timeout works' '
 	jobid=$(submit_job_live sleeplong.json) &&
 	test_must_fail flux job wait-event --timeout=0.2 $jobid clean 2> wait_event7.err &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	grep "wait-event timeout" wait_event7.err
 '
 
@@ -245,7 +245,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 	wait_watchers_nonzero "guest_watchers" &&
 	guestns=$(flux job namespace $jobid) &&
 	wait_watcherscount_nonzero $guestns &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	wait $waitpid &&
 	grep done wait_event_path4.out
 '
@@ -253,7 +253,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 test_expect_success 'flux job wait-event -p times out on no event (live job)' '
 	jobid=$(submit_job_live sleeplong.json) &&
 	test_expect_code 142 run_timeout -s ALRM 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
-	flux job cancel $jobid
+	flux cancel $jobid
 '
 
 test_expect_success 'flux job wait-event --count=0 errors' '
@@ -273,7 +273,7 @@ test_expect_success 'flux job wait-event --count=2 works' '
 	test_must_fail flux job wait-event --timeout=0.2 --count=2 ${jobid} foobar &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
 	fj_wait_event --count=2 ${jobid} foobar &&
-	flux job cancel $jobid
+	flux cancel $jobid
 '
 
 test_expect_success 'flux job wait-event --count=2 and context match works' '
@@ -283,7 +283,7 @@ test_expect_success 'flux job wait-event --count=2 and context match works' '
 	test_must_fail flux job wait-event --timeout=0.2 --count=2 --match-context="foo=\"bar\"" ${jobid} foobar &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar "{\"foo\":\"bar\"}" &&
 	fj_wait_event --count=2 --match-context="foo=\"bar\"" ${jobid} foobar &&
-	flux job cancel $jobid
+	flux cancel $jobid
 '
 
 test_expect_success 'flux job wait-event --count=2 and invalid context match fails' '
@@ -293,7 +293,7 @@ test_expect_success 'flux job wait-event --count=2 and invalid context match fai
 	test_must_fail flux job wait-event --timeout=0.2 --count=2 --match-context="foo=\"dar\"" ${jobid} foobar &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar "{\"foo\":\"bar\"}" &&
 	test_must_fail flux job wait-event --timeout=0.2 --count=2 --match-context="foo=\"dar\"" ${jobid} foobar &&
-	flux job cancel $jobid
+	flux cancel $jobid
 '
 
 # In order to test watching a guest event log that does not yet exist,
@@ -312,11 +312,11 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 	waitpid=$! &&
 	wait_watchers_nonzero "watchers" &&
 	wait_watchers_nonzero "guest_watchers" &&
-	flux job cancel ${jobidall} &&
+	flux cancel ${jobidall} &&
 	fj_wait_event ${jobid} start &&
 	guestns=$(flux job namespace ${jobid}) &&
 	wait_watcherscount_nonzero $guestns &&
-	flux job cancel ${jobid} &&
+	flux cancel ${jobid} &&
 	wait $waitpid &&
 	grep done wait_event_path5.out
 '
@@ -325,8 +325,8 @@ test_expect_success 'flux job wait-event -p times out on no event (wait job)' '
 	jobidall=$(submit_job_live sleeplong-all-rsrc.json) &&
 	jobid=$(submit_job_wait) &&
 	test_expect_code 142 run_timeout -s ALRM 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
-	flux job cancel $jobidall &&
-	flux job cancel $jobid
+	flux cancel $jobidall &&
+	flux cancel $jobid
 '
 
 # In order to test watching a guest event log that will never exist,
@@ -341,9 +341,9 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 	waitpid=$! &&
 	wait_watchers_nonzero "watchers" &&
 	wait_watchers_nonzero "guest_watchers" &&
-	flux job cancel ${jobid} &&
+	flux cancel ${jobid} &&
 	! wait $waitpid &&
-	flux job cancel ${jobidall}
+	flux cancel ${jobidall}
 '
 
 #

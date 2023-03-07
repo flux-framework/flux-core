@@ -44,7 +44,7 @@ test_expect_success 'attach: shows output from job' '
 
 test_expect_success 'attach: submit a job and cancel it' '
 	flux submit sleep 30 >jobid2 &&
-	flux job cancel $(cat jobid2)
+	flux cancel $(cat jobid2)
 '
 
 test_expect_success 'attach: exit code reflects cancellation' '
@@ -86,7 +86,7 @@ test_expect_success 'attach: SIGINT+SIGTSTP detaches from job' '
 test_expect_success 'attach: detached job was not canceled' '
 	flux job eventlog $(cat jobid4) >events4 &&
 	test_must_fail grep -q cancel events4 &&
-	flux job cancel $(cat jobid4)
+	flux cancel $(cat jobid4)
 '
 
 # Make sure live output occurs by seeing output "before" sleep, but no
@@ -100,7 +100,7 @@ test_expect_success NO_CHAIN_LINT 'attach: output appears before cancel' '
 	flux job attach -E ${jobid} 1>attach5.out 2>attach5.err &
 	waitpid=$! &&
 	flux job wait-event --timeout=10.0 -p guest.exec.eventlog ${jobid} test-output-ready &&
-	flux job cancel ${jobid} &&
+	flux cancel ${jobid} &&
 	! wait ${waitpid} &&
 	grep before attach5.out &&
 	! grep after attach5.out
@@ -150,7 +150,7 @@ test_expect_success 'attach: --stdin-ranks works' '
 test_expect_success 'attach: --stdin-ranks with invalid idset errors' '
 	id=$(flux submit -t20s cat) &&
 	test_must_fail flux job attach -i 5-0 $id &&
-	flux job cancel $id
+	flux cancel $id
 '
 test_expect_success 'attach: --stdin-ranks is adjusted to intersection' '
 	id=$(flux submit -n2 -t20s cat) &&
@@ -161,7 +161,7 @@ test_expect_success 'attach: --stdin-ranks is adjusted to intersection' '
 test_expect_success 'attach: --stdin-ranks cannot be used with --read-only' '
 	id=$(flux submit -n2 -t20s cat) &&
 	test_must_fail flux job attach -i all --read-only $id &&
-	flux job cancel $id
+	flux cancel $id
 '
 jobpipe=$SHARNESS_TEST_SRCDIR/scripts/pipe.py
 test_expect_success 'attach: writing to stdin of closed tasks returns EPIPE' '

@@ -77,7 +77,7 @@ expired_cancel_test() {
 	id=$(flux submit --time-limit=${1}s bash -c \
             "trap \"echo got SIGALRM>>trap2.out\" SIGALRM;sleep 60;sleep 60" ) &&
 	flux job wait-event --timeout=30 $id exception &&
-	flux job cancel $id &&
+	flux cancel $id &&
 	test_expect_code 143 run_timeout 30 flux job attach $id
 
 }

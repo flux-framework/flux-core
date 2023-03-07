@@ -50,7 +50,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations in job id 3-4 updated (RRS
 '
 
 test_expect_success 'job-manager: cancel 2' '
-        flux job cancel $(cat job2.id)
+        flux cancel $(cat job2.id)
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state RISR (job 4 runs instead of 3)' '
@@ -110,7 +110,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations in job id 3-5 updated (RIS
 '
 
 test_expect_success 'job-manager: cancel 1' '
-        flux job cancel $(cat job1.id)
+        flux cancel $(cat job1.id)
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state IISRR (job 5 runs instead of 3)' '
@@ -130,9 +130,9 @@ test_expect_success HAVE_JQ 'job-manager: annotations in job id 3-5 updated (IIS
 '
 
 test_expect_success 'job-manager: cancel all jobs' '
-        flux job cancel $(cat job5.id) &&
-        flux job cancel $(cat job4.id) &&
-        flux job cancel $(cat job3.id)
+        flux cancel $(cat job5.id) &&
+        flux cancel $(cat job4.id) &&
+        flux cancel $(cat job3.id)
 '
 
 test_done

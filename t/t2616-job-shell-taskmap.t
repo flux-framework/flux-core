@@ -44,7 +44,7 @@ test_expect_success 'flux job taskmap fails with invalid taskmap on cmdline' '
 test_expect_success 'flux job taskmap fails for canceled job' '
 	flux queue stop &&
 	id=$(flux submit -N4 true) &&
-	flux job cancel $id &&
+	flux cancel $id &&
 	flux queue start &&
 	test_must_fail flux job taskmap $id
 '

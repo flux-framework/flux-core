@@ -95,7 +95,7 @@ test_expect_success 'job-manager: queue contains 1 jobs' '
 
 test_expect_success 'job-manager: cancel job' '
 	jobid=$(cat list1_jobid.out) &&
-	flux job cancel ${jobid} &&
+	flux cancel ${jobid} &&
 	flux job wait-event --timeout=5.0 --match-context=type=cancel ${jobid} exception &&
 	flux job eventlog $jobid | grep exception \
 		| grep severity=0 | grep "type=\"cancel\""
@@ -142,7 +142,7 @@ test_expect_success HAVE_JQ 'job-manager: priority listed as priority=4294967295
 '
 
 test_expect_success HAVE_JQ 'job-manager: cancel jobs' '
-	flux job cancel $($jq .id <list3.out)
+	flux cancel $($jq .id <list3.out)
 '
 
 test_expect_success 'job-manager: queue contains 0 jobs' '
@@ -228,7 +228,7 @@ test_expect_success HAVE_JQ 'job-manager: max_jobid has not changed' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: cancel jobs' '
-	flux job cancel $($jq .id <list_reload.out) &&
+	flux cancel $($jq .id <list_reload.out) &&
 	test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
@@ -237,7 +237,7 @@ test_expect_success 'job-manager: flux job urgency fails on invalid urgency' '
 	flux job urgency ${jobid} 31 &&
 	test_must_fail flux job urgency ${jobid} -1 &&
 	test_must_fail flux job urgency ${jobid} 32 &&
-	flux job cancel ${jobid}
+	flux cancel ${jobid}
 '
 
 test_expect_success HAVE_JQ 'job-manager: flux job urgency special args work' '
@@ -254,7 +254,7 @@ test_expect_success HAVE_JQ 'job-manager: flux job urgency special args work' '
 	${LIST_JOBS} > list_default.out &&
 	test $(cat list_default.out | grep ${jobid} | $jq .urgency) -eq 16 &&
 	test $(cat list_default.out | grep ${jobid} | $jq .priority) -eq 16 &&
-	flux job cancel ${jobid}
+	flux cancel ${jobid}
 '
 
 test_expect_success 'job-manager: flux job urgency -v work' '
@@ -263,31 +263,31 @@ test_expect_success 'job-manager: flux job urgency -v work' '
 	flux job urgency -v ${jobid} hold 2>&1 | grep "10" &&
 	flux job urgency -v ${jobid} expedite 2>&1 | grep "held" &&
 	flux job urgency -v ${jobid} 10 2>&1 | grep "expedited" &&
-	flux job cancel ${jobid}
+	flux cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest can reduce urgency from default' '
 	jobid=$(flux job submit  basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job urgency ${jobid} 5 &&
-	flux job cancel ${jobid}
+	flux cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest can increase to default' '
 	jobid=$(flux job submit -u 0 basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job urgency ${jobid} 16 &&
-	flux job cancel ${jobid}
+	flux cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest cannot increase past default' '
 	jobid=$(flux job submit basic.json) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 flux job urgency ${jobid} 17 &&
-	flux job cancel ${jobid}
+	flux cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest can decrease from from >default' '
 	jobid=$(flux job submit -u 31 basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job urgency ${jobid} 17 &&
-	flux job cancel ${jobid}
+	flux cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest cannot set urgency of others jobs' '
@@ -295,15 +295,15 @@ test_expect_success 'job-manager: guest cannot set urgency of others jobs' '
 	newid=$(($(id -u)+1)) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=${newid} \
 		flux job urgency ${jobid} 0 &&
-	flux job cancel ${jobid}
+	flux cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest cannot cancel others jobs' '
 	jobid=$(flux job submit basic.json) &&
 	newid=$(($(id -u)+1)) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=${newid} \
-		flux job cancel ${jobid} &&
-	flux job cancel ${jobid}
+		flux cancel ${jobid} &&
+	flux cancel ${jobid}
 '
 
 test_expect_success 'job-manager: no jobs in the queue' '

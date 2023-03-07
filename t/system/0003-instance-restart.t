@@ -24,7 +24,7 @@ test_expect_success 'job-exec: verify system instance using systemd' '
         jobiddec=`flux job id --to=dec $jobid` &&
         rank=`flux getattr rank` &&
         sudo -u flux systemctl list-units --user | grep "flux-sdexec-${rank}-${jobiddec}" &&
-        flux job cancel ${jobid}
+        flux cancel ${jobid}
 '
 test_expect_success 'job-exec: submit two jobs that consumes all resources' '
         NCORES=$(flux resource list -s up -no "{ncores}") &&
@@ -49,7 +49,7 @@ test_expect_success 'job-exec: verify jobs still listed and in expected state' '
         flux jobs --filter=pending | grep $(cat jobid2)
 '
 test_expect_success 'job-exec: cancel job1 and make sure job2 will run' '
-        flux job cancel $(cat jobid1) &&
+        flux cancel $(cat jobid1) &&
         flux job wait-event -t 60 $(cat jobid1) clean &&
         flux job wait-event -t 60 $(cat jobid2) start
 '
@@ -58,7 +58,7 @@ test_expect_success 'job-exec: verify jobs listed and in new expected state' '
         flux jobs --filter=running | grep $(cat jobid2)
 '
 test_expect_success 'job-exec: cancel jobs' '
-        flux job cancel $(cat jobid2)
+        flux cancel $(cat jobid2)
 '
 # fill up job queue with around 1 minute worth of "sleep 1" jobs,
 # restart flux every 5 seconds for around 30 seconds worth of sleeping

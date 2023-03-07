@@ -57,7 +57,7 @@ test_expect_success NO_CHAIN_LINT 'exec hello: hello now returns error due to ru
 	test_expect_code 1 run_timeout 5 ${execservice} testexecfoo
 '
 test_expect_success NO_CHAIN_LINT 'exec hello: terminate all jobs and servers' '
-	flux job cancel ${id} &&
+	flux cancel ${id} &&
 	test_debug "cat server3.log" &&
 	flux job wait-event -t 2.5 ${id} clean &&
 	kill ${SERVER3}

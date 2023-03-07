@@ -97,6 +97,6 @@ test_expect_success FLUX_SECURITY \
 	grep $(cat altid): recurse-all.out
 '
 test_expect_success FLUX_SECURITY 'cancel alternate user job' '
-	flux job cancel $(cat altid)
+	flux cancel $(cat altid)
 '
 test_done

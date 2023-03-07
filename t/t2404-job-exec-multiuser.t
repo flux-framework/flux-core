@@ -100,7 +100,7 @@ test_expect_success NO_ASAN 'job-exec: kill multiuser job uses the IMP' '
 	flux job list-ids ${id} > ${id}.json &&
 	jq -e ".userid == 42" < ${id}.json &&
 	flux job wait-event -p guest.exec.eventlog -vt 30 ${id} shell.start &&
-	flux job cancel ${id} &&
+	flux cancel ${id} &&
 	test_expect_code 143 run_timeout 30 flux job status -v ${id} &&
 	flux dmesg | grep "test-imp: Kill .*signal 15"
 '

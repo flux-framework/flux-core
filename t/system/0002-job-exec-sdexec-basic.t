@@ -24,7 +24,7 @@ test_expect_success 'job-exec: verify system instance using systemd' '
         jobiddec=`flux job id --to=dec $jobid` &&
         rank=`flux getattr rank` &&
         sudo -u flux systemctl list-units --user | grep "flux-sdexec-${rank}-${jobiddec}" &&
-        flux job cancel ${jobid}
+        flux cancel ${jobid}
 '
 test_expect_success 'job-exec: simple job exits 0 on success' '
         jobid=$(flux submit /bin/true) &&
@@ -57,7 +57,7 @@ test_expect_success 'job-exec: simple job can be canceled' '
         jobid=$(flux submit sleep 30) &&
         flux job wait-event -t 10 ${jobid} start &&
         flux job wait-event -p guest.exec.eventlog -t 10 ${jobid} shell.start &&
-        flux job cancel $jobid &&
+        flux cancel $jobid &&
         flux job wait-event -t 10 ${jobid} clean &&
         test_expect_code 143 flux job status $jobid
 '

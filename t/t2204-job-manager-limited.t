@@ -56,7 +56,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs in flux-jobs (RRSSS)' '
 '
 
 test_expect_success 'job-manager: cancel 2' '
-        flux job cancel $(cat job2.id)
+        flux cancel $(cat job2.id)
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state RIRSS' '

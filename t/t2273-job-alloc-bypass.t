@@ -67,7 +67,7 @@ test_expect_success 'alloc-bypass: handles exception before alloc event' '
 		--dependency=afterok:$SLEEPID \
 		-o per-resource.type=node hostname) &&
 	flux job wait-event -vt 15 $jobid dependency-add &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	test_must_fail flux job attach -vEX $jobid
 '
 test_expect_success 'alloc-bypass: kill sleep job' '

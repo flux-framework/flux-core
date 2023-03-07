@@ -156,7 +156,7 @@ test_expect_success 'job-manager: job is released when urgency set' '
 '
 test_expect_success 'job-manager: cancel of held job works' '
 	jobid=$(id_byname cc-2) &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	flux job wait-event -v -t 5 $jobid clean
 '
 test_expect_success 'job-manager: release held jobs' '
@@ -180,7 +180,7 @@ test_expect_success 'job-manager: test with random priority plugin' '
 	sleep 1 &&
 	flux jobs -c4 -no {name}:{priority} | sort > pri-after.out &&
 	test_must_fail test_cmp pri-before.out pri-after.out &&
-	flux job cancel $sleepjob &&
+	flux cancel $sleepjob &&
 	flux job wait-event -vt 30 $sleepjob clean &&
 	flux job wait --all -v
 '
@@ -211,7 +211,7 @@ test_expect_success 'job-manager: start another job and remove plugin' '
 	flux dmesg --clear &&
 	jobid=$(flux submit --wait-event=alloc sleep 60) &&
 	flux jobtap remove job_aux.so &&
-	flux job cancel $jobid
+	flux cancel $jobid
 '
 test_expect_success 'job-manager: job aux cleared when plugin removed' '
 	flux dmesg >aux-dmesg2.out &&
@@ -223,7 +223,7 @@ test_expect_success 'job-manager: load jobtap_api test plugin' '
 	flux run -vvv \
 		--setattr=system.lookup-id=$(flux job id $id) \
 		/bin/true &&
-	flux job cancel $id &&
+	flux cancel $id &&
 	id=$(flux submit \
 		--setattr=system.expected-result=failed \
 		/bin/false) &&
@@ -236,7 +236,7 @@ test_expect_success 'job-manager: load jobtap_api test plugin' '
 	id=$(flux submit --urgency=hold \
 		--setattr=system.expected-result=canceled \
 		/bin/true) &&
-	flux job cancel $id &&
+	flux cancel $id &&
 	test_must_fail flux job wait-event -vm type=test $id exception
 '
 test_expect_success 'job-manager: test that job flags can be set' '
@@ -294,7 +294,7 @@ test_expect_success 'job-manager: priority type error generates nonfatal excepti
 	flux job wait-event -vm type=job.state.priority ${id} exception &&
 	test "$(flux jobs -no {annotations.test} ${id})" = "priority type error" &&
 	test $(flux jobs -no {state} ${id}) = "PRIORITY" &&
-	flux job cancel ${id} &&
+	flux cancel ${id} &&
 	flux job wait-event -v ${id} clean
 '
 test_expect_success 'job-manager: jobtap plugin can raise job exception' '

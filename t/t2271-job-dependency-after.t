@@ -42,7 +42,7 @@ test_expect_success FLUX_SECURITY 'dependency=after will not work on another use
 		>baduser.log 2>&1 &&
 	test_debug "cat baduser.log" &&
 	grep "Permission denied" baduser.log &&
-	flux job cancel $jobid
+	flux cancel $jobid
 '
 test_expect_success 'disable ingest validator' '
 	flux module reload -f job-ingest disable-validator
@@ -87,7 +87,7 @@ test_expect_success 'dependency=after works when antecedent is running' '
 	flux job wait-event -vt 15 $jobid start &&
 	depip=$(flux submit --dependency=after:$jobid hostname) &&
 	flux job wait-event -vt 15 $depid clean &&
-	flux job cancel $jobid
+	flux cancel $jobid
 '
 test_expect_success 'dependency=after generates exception for failed job' '
 	jobid=$(flux submit --urgency=hold hostname) &&
@@ -95,7 +95,7 @@ test_expect_success 'dependency=after generates exception for failed job' '
 	flux job wait-event -vt 15 $depid dependency-add &&
 	test_debug "echo checking that job ${depid} is in DEPEND state" &&
 	test "$(flux jobs -no {state} $depid)" = "DEPEND" &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	flux job wait-event -m type=dependency -vt 15 $depid exception 
 '
 test_expect_success 'dependency=afterany works' '
@@ -120,7 +120,7 @@ test_expect_success 'dependency=afterany works' '
 		-m description=after-finish=$job2 \
 		$jobid dependency-remove &&
 	flux jobs &&
-	flux job cancel $job3 &&
+	flux cancel $job3 &&
 	flux job wait-event -vt 15 $jobid clean
 '
 test_expect_success 'dependency=afterok works' '
@@ -145,7 +145,7 @@ test_expect_success 'dependency=afterok works' '
 		do flux job urgency $id default;
 	done &&
 	flux job wait-event -vt 15 $job3 start &&
-	flux job cancel $job3 &&
+	flux cancel $job3 &&
 	flux job wait-event -vt 15 \
 		-m description=after-success=$job1 \
 		$ok1 dependency-remove &&
@@ -176,7 +176,7 @@ test_expect_success 'dependency=afternotok works' '
 		do flux job urgency $id default;
 	done &&
 	flux job wait-event -vt 15 $job3 start &&
-	flux job cancel $job3 &&
+	flux cancel $job3 &&
 	flux job wait-event -vt 15 \
 		-m description=after-failure=$job2 \
 		$ok2 dependency-remove &&
@@ -217,13 +217,13 @@ test_expect_success 'dependency=afternotok works for INACTIVE job' '
 '
 test_expect_success 'dependency=after fails for INACTIVE canceled job' '
 	job4=$(flux submit --urgency=hold hostname) &&
-	flux job cancel ${job4} &&
+	flux cancel ${job4} &&
 	test_must_fail flux run --dependency=after:${job4} hostname
 '
 test_expect_success 'jobs with dependencies can be safely canceled' '
 	jobid=$(flux submit --urgency=hold hostname) &&
 	depid=$(flux submit --dependency=after:$jobid hostname) &&
-	flux job cancel $depid &&
+	flux cancel $depid &&
 	flux job urgency $jobid default &&
 	flux job wait-event -vt 15 $jobid clean
 '

@@ -70,7 +70,7 @@ test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
 	flux kvs get --waitcreate \
 		--namespace=$(flux job namespace $id) \
 		trap-ready &&
-	flux job cancel $id &&
+	flux cancel $id &&
 	(flux job attach -vEX $id >kill.output 2>&1 || true) &&
 	test_debug "cat kill.output" &&
 	grep "trap-sigterm got SIGTERM" kill.output &&

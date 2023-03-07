@@ -44,7 +44,7 @@ test_expect_success 'begin-time: job with begin-time=+1h is still in depend' '
 	test $(flux jobs -no {state} $DELAYED) = "DEPEND"
 '
 test_expect_success 'begin-time: job with begin-time can be safely canceled' '
-	flux job cancel $DELAYED &&
+	flux cancel $DELAYED &&
 	flux job wait-event -vt 15 $DELAYED clean
 '
 test_done

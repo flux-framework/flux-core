@@ -20,7 +20,7 @@ test_expect_success 'restart instance, reattach to running job, cancel it (long 
 	flux start -o,--setattr=statedir=$(pwd) \
 	     sh -c "flux job eventlog $(cat id1.out) > eventlog_long1.out; \
 		    flux jobs -n > jobs_long1.out; \
-		    flux job cancel $(cat id1.out)" &&
+		    flux cancel $(cat id1.out)" &&
 	grep "reattach-start" eventlog_long1.out &&
 	grep "reattach-finish" eventlog_long1.out &&
 	grep $(cat id1.out) jobs_long1.out

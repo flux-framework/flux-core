@@ -40,7 +40,7 @@ test_expect_success 'job-exec: basic test sdexec works' '
         jobiddec=`flux job id --to=dec $jobid` &&
         rank=`flux getattr rank` &&
         systemctl list-units --user | grep "flux-sdexec-${rank}-${jobiddec}" &&
-        flux job cancel ${jobid} &&
+        flux cancel ${jobid} &&
         flux job wait-event -t 10 ${jobid} clean
 '
 
@@ -59,7 +59,7 @@ test_expect_success 'job-exec: basic sdexec with exec config works' '
         jobiddec=`flux job id --to=dec $jobid` &&
         rank=`flux getattr rank` &&
         systemctl list-units --user | grep "flux-sdexec-${rank}-${jobiddec}" &&
-        flux job cancel ${jobid} &&
+        flux cancel ${jobid} &&
         flux job wait-event -t 10 ${jobid} clean
 '
 
@@ -112,7 +112,7 @@ test_expect_success 'job-exec: simple job exits 138 on signaled job' '
 test_expect_success 'job-exec: simple job can be canceled' '
         jobid=$(flux submit sleep 30) &&
         flux job wait-event -t 10 ${jobid} start &&
-        flux job cancel $jobid &&
+        flux cancel $jobid &&
         flux job wait-event -t 10 ${jobid} clean &&
         test_expect_code 143 flux job status $jobid
 '
@@ -130,7 +130,7 @@ test_expect_success 'job-exec: systemd cleaned up after job completes' '
         jobiddec=`flux job id --to=dec $jobid` &&
         rank=`flux getattr rank` &&
         systemctl list-units --user | grep "flux-sdexec-${rank}-${jobiddec}" &&
-        flux job cancel ${jobid} &&
+        flux cancel ${jobid} &&
         flux job wait-event -v -t 30 $jobid clean &&
         systemctl list-units --user > list-units.out &&
         test_must_fail grep "flux-sdexec-${rank}-${jobiddec}" list-units.out
@@ -220,7 +220,7 @@ test_expect_success LONGTEST 'job-exec: can run job longer than 25 seconds' '
 test_expect_success LONGTEST 'job-exec: can cancel job after 25 seconds' '
         jobid=$(flux submit sleep 60) &&
         sleep 40 &&
-        flux job cancel $jobid &&
+        flux cancel $jobid &&
         test_expect_code 143 flux job status $jobid
 '
 test_done
