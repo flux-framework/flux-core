@@ -108,6 +108,7 @@ _flux_complete_format_name() {
 #  Get the list of subcommands from FLUX_EXEC_PATH and hard-coded builtins
 __get_flux_subcommands() {
     local subcommands
+    local deprecated="mini.py"
     if [ -z "$FLUX_EXEC_PATH" ]; then
         FLUX_EXEC_PATH=`flux env printenv FLUX_EXEC_PATH`
     fi
@@ -115,9 +116,11 @@ __get_flux_subcommands() {
     local IFS=":"
     for dir in $FLUX_EXEC_PATH; do
         for op in $dir/flux-*; do
-            if [[ -x $op ]]; then
+            if [[ -x $op  ]]; then
                 op="${op##*flux-}"
-                subcommands+="${op%.*} "
+                if ! _flux_contains_word ${op} $deprecated; then
+                    subcommands+="${op%.*} "
+                fi
             fi
         done
     done
@@ -1326,9 +1329,6 @@ _flux_core()
     fi
 
     case "${cmd}" in
-    mini)
-        _flux_mini $subcmd
-        ;;
     submit|run|alloc|batch|bulksubmit)
         _flux_mini $cmd
         ;;
