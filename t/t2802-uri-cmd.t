@@ -166,7 +166,7 @@ test_expect_success 'flux-uri mock testing of lsf resolver works' '
 	test "$result" = "$FLUX_URI"
 '
 test_expect_success 'cleanup jobs' '
-	flux job cancelall -f &&
+	flux cancel --all &&
 	flux queue drain
 '
 test_done

@@ -96,8 +96,8 @@ test_expect_success HAVE_JQ 'job-manager: queue counts are as expected' '
 # cancel non-running jobs first, to ensure they are not accidentally run when
 # running jobs free resources.
 test_expect_success 'job-manager: cancel all jobs' '
-        flux job cancelall --states=SCHED -f &&
-        flux job cancelall -f &&
+        flux cancel --all --states=pending &&
+        flux cancel --all &&
         flux queue drain
 '
 
@@ -233,8 +233,8 @@ test_expect_success HAVE_JQ 'job-manager: queue counts are as expected' '
 # cancel non-running jobs first, to ensure they are not accidentally run when
 # running jobs free resources.
 test_expect_success 'job-manager: cancel all jobs' '
-        flux job cancelall --states=SCHED -f &&
-        flux job cancelall -f &&
+        flux cancel --all --states=pending &&
+        flux cancel --all &&
         flux queue drain
 '
 

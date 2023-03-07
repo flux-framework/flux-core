@@ -131,7 +131,7 @@ test_expect_success 'job-manager: default works with sched.prioritize' '
 	flux job urgency $job3 18 &&
 	flux job wait-event -v $job3 debug.alloc-request &&
 	test_debug "echo cleanup" &&
-	flux job cancelall -f &&
+	flux cancel --all &&
 	flux queue drain
 '
 test_expect_success HAVE_JQ 'job-manager: hold plugin holds jobs' '

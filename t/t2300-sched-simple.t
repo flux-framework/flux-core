@@ -187,7 +187,7 @@ test_expect_success 'sched-simple: verify three jobs are active' '
 
 test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 	flux module remove sched-simple &&
-	flux job cancelall -f
+	flux cancel --all
 '
 test_expect_success 'sched-simple: there are no outstanding sched requests' '
 	flux queue status -v >queue_status.out &&
@@ -237,8 +237,8 @@ test_expect_success 'sched-simple: ensure more urgent job run' '
 # cancel all jobs, to ensure no interference with follow up tests
 # cancel non-running jobs first to ensure they are not accidentally run
 test_expect_success 'sched-simple: cancel jobs' '
-	flux job cancelall --states=SCHED -f &&
-	flux job cancelall -f &&
+	flux cancel --all --states=pending &&
+	flux cancel --all &&
 	flux job wait-event --timeout=5.0 $(cat job18.id) free &&
 	flux job wait-event --timeout=5.0 $(cat job15.id) free &&
 	flux job wait-event --timeout=5.0 $(cat job16.id) free
@@ -254,7 +254,7 @@ test_expect_success 'sched-simple: submit job and cancel it' '
 '
 test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 	flux module remove sched-simple &&
-	flux job cancelall -f
+	flux cancel --all
 '
 test_expect_success 'sched-simple: there are no outstanding sched requests' '
 	flux queue status -v >queue_status.out &&

@@ -71,7 +71,7 @@ test_expect_success 'alloc-bypass: handles exception before alloc event' '
 	test_must_fail flux job attach -vEX $jobid
 '
 test_expect_success 'alloc-bypass: kill sleep job' '
-	flux job cancelall -f &&
+	flux cancel --all &&
 	flux job wait-event $SLEEPID clean
 '
 test_expect_success 'alloc-bypass: submit an alloc-bypass job' '

@@ -31,13 +31,13 @@ test_expect_success HAVE_JQ 'job timelimits are propagated' '
 	flux jobs -no "{id.f58} {expiration}"
 	exp1=\$(flux jobs -no {expiration} \$id1)
 	test "\$(round \$exp1)" = "\$(round \${expiration})"
-	flux job cancelall -f
+	flux cancel --all
 
 	id2=\$(flux submit --wait-event=start -t 1m sleep 300)
 	flux jobs -no "{id.f58} {expiration}"
 	exp2=\$(flux jobs -no {expiration} \$id2)
 	test \$(round \${exp2}) -lt \$(round \${expiration})
-        flux job cancelall -f
+        flux cancel --all
 	EOF
 	chmod +x limit.sh &&
 	flux run --time-limit=10m flux start ./limit.sh

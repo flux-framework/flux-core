@@ -290,7 +290,7 @@ test_expect_success 'flux-top shows expected data in debug queue' '
 	test $(grep debug debugq.out | wc -l) -eq 1
 '
 test_expect_success 'cancel all jobs' '
-	flux job cancelall --force &&
+	flux cancel --all &&
 	flux queue drain
 '
 test_expect_success 'flux-top shows expected data in queues after cancels' '

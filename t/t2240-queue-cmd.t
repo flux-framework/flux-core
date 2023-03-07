@@ -268,7 +268,7 @@ test_expect_success 'flux-queue: queue status -v shows expected counts' '
 
 test_expect_success 'flux-queue: stop queue and cancel long job' '
 	flux queue stop &&
-	flux job cancelall -f -S RUN
+	flux cancel --all -S RUN
 '
 
 test_expect_success 'flux-queue: queue becomes idle' '

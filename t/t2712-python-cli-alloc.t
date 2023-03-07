@@ -106,7 +106,7 @@ test_expect_success NO_CHAIN_LINT 'flux alloc --bg errors when job is canceled' 
 	flux alloc --bg -n1 -v >canceled.log 2>&1 &
 	pid=$! &&
 	$waitfile -t 20 -v -p waiting canceled.log &&
-	flux job cancelall -f &&
+	flux cancel --all &&
 	cat canceled.log &&
 	test_must_fail wait $pid &&
 	grep "unexpectedly exited" canceled.log
