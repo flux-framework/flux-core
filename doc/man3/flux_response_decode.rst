@@ -64,7 +64,7 @@ EINVAL
 
 EPROTO
    Message decoding failed, such as due to incorrect message type,
-   missing topic string, etc..
+   missing topic string, etc.
 
 ENOENT
    ``flux_response_decode_error()`` was called on a message with no
