@@ -204,6 +204,7 @@ TESTSCRIPTS = \
 	t2712-python-cli-alloc.t \
 	t2713-python-cli-bulksubmit.t \
 	t2714-python-cli-batch.t \
+	t2715-python-cli-cancel.t \
 	t2800-jobs-cmd.t \
 	t2800-jobs-recursive.t \
 	t2800-jobs-instance-info.t \
