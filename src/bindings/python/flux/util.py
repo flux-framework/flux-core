@@ -539,13 +539,20 @@ class OutputFormat:
         formatter = self.HeaderFormatter()
         return formatter.format(self.header_format(), **self.headings)
 
-    def get_format_prepended(self, prepend):
+    def get_format_prepended(self, prepend, except_fields=None):
         """
         Return the format string, ensuring that the string in "prepend"
         is prepended to each format field
         """
+        if except_fields is None:
+            except_fields = []
         lst = []
         for (text, field, spec, conv) in self.format_list:
+            # Skip this field if it is in except_fields
+            if field in except_fields:
+                # Preserve any format "prefix" (i.e. the text):
+                lst.append(text)
+                continue
             # If field doesn't have 'prepend' then add it
             if field and not field.startswith(prepend):
                 field = prepend + field
@@ -559,6 +566,18 @@ class OutputFormat:
         if orig:
             return self.fmt_orig
         return self.fmt
+
+    def copy(self, except_fields=None):
+        """
+        Return a copy of the current formatter, optionally with some
+        fields removed
+        """
+        cls = self.__class__
+        return cls(
+            self.get_format_prepended("", except_fields),
+            headings=self.headings,
+            prepend=self.prepend,
+        )
 
     def format(self, obj):
         """
