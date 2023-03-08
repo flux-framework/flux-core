@@ -5,5 +5,5 @@ set -x
 #  Test job cancel
 id=$(flux submit sleep 60)
 flux job wait-event ${id} start
-flux job cancel ${id}
+flux cancel ${id}
 flux job wait-event ${id} clean

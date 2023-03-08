@@ -15,7 +15,7 @@ test_expect_success 'status: submit a series of jobs' '
 	killed=$(flux submit sleep 600) &&
 	flux queue stop &&
 	canceled=$(flux submit -n 1024 hostname) &&
-	flux job cancel ${canceled} &&
+	flux cancel ${canceled} &&
 	flux queue start
 '
 test_expect_success 'status: exits with error with no jobs specified' '
@@ -75,7 +75,7 @@ test_expect_success HAVE_JQ 'status: returns most severe exception' '
 '
 test_expect_success 'status: returns 143 (SIGTERM) for canceled running job' '
 	flux job wait-event -p guest.exec.eventlog ${killed} shell.start &&
-	flux job cancel ${killed} &&
+	flux cancel ${killed} &&
 	test_expect_code 143 flux job status -v ${killed}
 '
 test_expect_success 'status: returns highest status for multiple jobs' '

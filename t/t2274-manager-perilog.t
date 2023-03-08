@@ -124,7 +124,7 @@ test_expect_success 'perilog: job can be canceled while prolog is running' '
 	test_when_finished "rm -f prolog.d/sleep.sh" &&
 	jobid=$(flux submit --job-name=cancel hostname) &&
 	flux job wait-event -t 15 $jobid prolog-start &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	flux job wait-event -t 15 $jobid prolog-finish &&
 	flux job wait-event -t 15 $jobid exception &&
 	test_must_fail flux job attach -vE $jobid
@@ -144,7 +144,7 @@ test_expect_success 'perilog: job can be canceled after prolog is complete' '
 	test_when_finished "rm -f prolog.d/sleep.sh" &&
 	jobid=$(flux submit --job-name=cancel2 sleep 300) &&
 	flux job wait-event -t 15 $jobid prolog-finish &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	flux job wait-event -t 15 $jobid exception &&
 	flux job wait-event -t 15 $jobid clean
 '
@@ -220,7 +220,7 @@ test_expect_success 'perilog: prolog is killed even if it ignores SIGTERM' '
 	flux jobtap load --remove=*.so perilog.so &&
 	jobid=$(flux submit --job-name=prolog-sigkill hostname) &&
 	flux job wait-event -t 15 $jobid prolog-start &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	flux job wait-event -t 15 -m status=9 $jobid prolog-finish &&
 	test_must_fail flux job attach -vEX $jobid
 '

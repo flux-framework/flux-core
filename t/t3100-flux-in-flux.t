@@ -23,7 +23,7 @@ test_expect_success 'flux subinstance sets uri job memo' '
 	flux job wait-event -t 60 ${jobid} memo &&
 	flux jobs -no {user.uri} ${jobid} > uri.memo &&
 	grep ^ssh:// uri.memo &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	flux job wait-event $jobid clean
 '
 

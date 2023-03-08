@@ -97,7 +97,7 @@ test_expect_success HAVE_JQ 'memo: non-volatile memos still available in job-lis
 	jlist_check_memo $pendingid a \"b\"
 '
 test_expect_success 'memo: cancel all jobs' '
-	flux job cancelall -f &&
+	flux cancel --all &&
 	flux job wait-event $runid clean &&
 	flux job wait-event $pendingid clean
 '

@@ -193,7 +193,7 @@ EOT
 '
 
 test_expect_success 'cleanup job listing jobs ' '
-	flux job cancel $(cat active.ids) &&
+	flux cancel $(cat active.ids) &&
         for jobid in `cat active.ids`; do
             fj_wait_event $jobid clean;
         done

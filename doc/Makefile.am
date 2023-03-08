@@ -51,7 +51,8 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-uptime.1 \
 	man1/flux-uri.1 \
 	man1/flux-resource.1 \
-	man1/flux-pgrep.1
+	man1/flux-pgrep.1 \
+	man1/flux-cancel.1
 
 # These files are generated as clones of a primary page.
 # Sphinx handles this automatically if declared in the conf.py

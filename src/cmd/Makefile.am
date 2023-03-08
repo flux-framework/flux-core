@@ -111,7 +111,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-uri.py \
 	flux-pstree.py \
 	flux-pgrep.py \
-	flux-queue.py
+	flux-queue.py \
+	flux-cancel.py
 
 fluxcmd_PROGRAMS = \
 	flux-terminus \

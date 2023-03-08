@@ -65,7 +65,7 @@ test_expect_success 'job-manager: running job has alloc event' '
 '
 
 test_expect_success 'job-manager: cancel 2' '
-        flux job cancel $(cat job2.id)
+        flux cancel $(cat job2.id)
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state RIRSS' '
@@ -174,7 +174,7 @@ test_expect_success 'job-manager: annotate jobs in flux jobs (RIRRR)' '
 '
 
 test_expect_success 'job-manager: cancel 1' '
-        flux job cancel $(cat job1.id)
+        flux cancel $(cat job1.id)
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state IIRRR' '
@@ -186,9 +186,9 @@ test_expect_success HAVE_JQ 'job-manager: job state IIRRR' '
 '
 
 test_expect_success 'job-manager: cancel all jobs' '
-        flux job cancel $(cat job3.id) &&
-        flux job cancel $(cat job4.id) &&
-        flux job cancel $(cat job5.id)
+        flux cancel $(cat job3.id) &&
+        flux cancel $(cat job4.id) &&
+        flux cancel $(cat job5.id)
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state IIIII' '

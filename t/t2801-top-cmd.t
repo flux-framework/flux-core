@@ -195,7 +195,7 @@ test_expect_success NO_CHAIN_LINT 'flux-top does not exit on recursive failure' 
 	grep -qi "error connecting to Flux" recurse-fail.log
 '
 test_expect_success 'cleanup running jobs' '
-	flux job cancel $(cat jobid2) $(cat jobid3) &&
+	flux cancel $(cat jobid2) $(cat jobid3) &&
 	flux job wait-event $(cat jobid2) clean &&
 	flux job wait-event $(cat jobid3) clean
 '
@@ -290,7 +290,7 @@ test_expect_success 'flux-top shows expected data in debug queue' '
 	test $(grep debug debugq.out | wc -l) -eq 1
 '
 test_expect_success 'cancel all jobs' '
-	flux job cancelall --force &&
+	flux cancel --all &&
 	flux queue drain
 '
 test_expect_success 'flux-top shows expected data in queues after cancels' '

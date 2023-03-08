@@ -312,7 +312,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: job attach waits if no kvs output 
         flux job wait-event $id start &&
         flux job attach -E -X ${id} 2> attach27.err &
         pid=$! &&
-        flux job cancel $id &&
+        flux cancel $id &&
         ! wait $pid
 '
 
@@ -323,7 +323,7 @@ test_expect_success NO_CHAIN_LINT 'job-shell: job attach waits if no kvs output 
         flux job wait-event $id start &&
         flux job attach -E -X ${id} 2> attach28.err &
         pid=$! &&
-        flux job cancel $id &&
+        flux cancel $id &&
         ! wait $pid
 '
 test_expect_success 'job-shell: shell errors are captured in output file' '

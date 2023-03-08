@@ -118,7 +118,7 @@ test_expect_success 'submit jobs for job list testing' '
         #
         jobid=`flux submit --job-name=canceledjob sleep 30` &&
         flux job wait-event $jobid depend &&
-        flux job cancel $jobid &&
+        flux cancel $jobid &&
         flux job wait-event $jobid clean &&
         flux job id $jobid >> inactiveids &&
         flux job id $jobid > canceled.ids &&
@@ -361,10 +361,10 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
 '
 
 test_expect_success 'cleanup job listing jobs ' '
-	# NOTE: do not use flux job cancel `cat active.ids` as it races
+	# NOTE: do not use flux cancel `cat active.ids` as it races
 	# with the reconstruction of job-list somehow
         for jobid in `cat active.ids`; do
-	    flux job cancel $jobid &&
+	    flux cancel $jobid &&
             fj_wait_event $jobid clean
         done
 '
@@ -615,7 +615,7 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job r
         echo $obj | jq -e ".t_depend < .t_run" &&
         echo $obj | jq -e ".t_cleanup == null" &&
         echo $obj | jq -e ".t_inactive == null" &&
-        flux job cancel $jobid &&
+        flux cancel $jobid &&
         fj_wait_event $jobid clean >/dev/null
 '
 
@@ -1077,7 +1077,7 @@ test_expect_success HAVE_JQ 'flux job list lists ncores if pending & tasks speci
         id=$(flux submit -n3 hostname | flux job id) &&
         flux job list -s pending | grep ${id} &&
         flux job list-ids ${id} | jq -e ".ncores == 3" &&
-        flux job cancel ${id} &&
+        flux cancel ${id} &&
         flux queue start
 '
 
@@ -1087,7 +1087,7 @@ test_expect_success HAVE_JQ 'flux job list does not list ncores if pending & nod
         id=$(flux submit -N1 --exclusive hostname | flux job id) &&
         flux job list -s pending | grep ${id} &&
         flux job list-ids ${id} | jq -e ".ncores == null" &&
-        flux job cancel ${id} &&
+        flux cancel ${id} &&
         flux queue start
 '
 
@@ -1209,7 +1209,7 @@ test_expect_success HAVE_JQ 'flux job list does not list nnodes if no nodes requ
         id=$(flux submit -n1 hostname | flux job id) &&
         flux job list -s pending | grep ${id} &&
         flux job list-ids ${id} | jq -e ".nnodes == null" &&
-        flux job cancel ${id} &&
+        flux cancel ${id} &&
         flux queue start
 '
 
@@ -1222,7 +1222,7 @@ test_expect_success HAVE_JQ 'flux job list lists nnodes for pending jobs if node
         flux job list -s pending | grep ${id2} &&
         flux job list-ids ${id1} | jq -e ".nnodes == 1" &&
         flux job list-ids ${id2} | jq -e ".nnodes == 3" &&
-        flux job cancel ${id1} ${id2} &&
+        flux cancel ${id1} ${id2} &&
         flux queue start
 '
 
@@ -1372,7 +1372,7 @@ test_expect_success HAVE_JQ 'flux job list outputs expiration time when set' '
 	flux job list | grep $jobid > expiration.json &&
 	test_debug "cat expiration.json" &&
 	jq -e ".expiration > now" < expiration.json &&
-	flux job cancel $jobid
+	flux cancel $jobid
 '
 
 test_expect_success 'reload the job-list module' '
@@ -1394,7 +1394,7 @@ test_expect_success HAVE_JQ 'flux job list outputs duration time when set' '
 	flux job list | grep $jobid > duration.json &&
 	test_debug "cat duration.json" &&
 	jq -e ".duration == 3600.0" < duration.json &&
-	flux job cancel $jobid
+	flux cancel $jobid
 '
 
 test_expect_success 'reload the job-list module' '

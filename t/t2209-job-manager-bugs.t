@@ -25,7 +25,7 @@ test_expect_success 'issue2664: start three jobs ' '
 # canceling job that has not yet sent alloc to scheduler improperly
 # decrements count of outstanding alloc requests
 test_expect_success 'issue2664: cancel job 3' '
-	flux job cancel $(cat job3.out)
+	flux cancel $(cat job3.out)
 '
 # Next job submitted triggers another alloc request when ther are no
 # more slots, which triggers error response from scheduler that is fatal
@@ -35,7 +35,7 @@ test_expect_success 'issue2664: submit job 4' '
 '
 # Hangs here (hitting timeout) when bug is present
 test_expect_success 'issue2664: cancel job 1 and drain (cleanup)' '
-	flux job cancel $(cat job1.out) &&
+	flux cancel $(cat job1.out) &&
 	run_timeout 5 flux queue drain
 '
 
@@ -47,7 +47,7 @@ test_expect_success 'issue3218: urgency change on running job doesnt segfault' '
         id=$(flux submit sleep 600) &&
         flux job wait-event $id start &&
         test_must_fail flux job urgency $id 0 &&
-        flux job cancel $id
+        flux cancel $id
 '
 #
 # Issue 4409: eventlog commit / job start race

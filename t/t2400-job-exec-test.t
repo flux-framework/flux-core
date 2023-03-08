@@ -46,7 +46,7 @@ test_expect_success 'job-exec: canceling job during execution works' '
 	jobid=$(flux submit \
                 --setattr=system.exec.test.run_duration=10s hostname) &&
 	flux job wait-event -vt 2.5 ${jobid} start &&
-	flux job cancel ${jobid} &&
+	flux cancel ${jobid} &&
 	flux job wait-event -t 2.5 ${jobid} exception &&
 	flux job wait-event -t 2.5 ${jobid} finish | grep status=15 &&
 	flux job wait-event -t 2.5 ${jobid} release &&
@@ -110,7 +110,7 @@ test_expect_success 'job-exec: override only works on jobs with flag set' '
 		--setattr=system.exec.test.run_duration=0. /bin/true) &&
 	flux job wait-event -t 5 ${jobid} alloc &&
 	test_must_fail flux job-exec-override start ${jobid} &&
-	flux job cancel ${jobid} &&
+	flux cancel ${jobid} &&
 	flux job wait-event -t 5 -v ${jobid} clean
 '
 test_expect_success 'job-exec: test exec start/finish override works' '
@@ -152,7 +152,7 @@ test_expect_success 'job-exec: job-exec.testoverride invalid request' '
 	{"jobid":"$(flux job id --to=dec ${jobid})", "event":"foo"}
 	EOF
 	test_must_fail flux python override.py < badevent.json &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	flux job wait-event $jobid clean
 '
 test_expect_success 'job-exec: flux job-exec-override fails for invalid userid' '
@@ -164,7 +164,7 @@ test_expect_success 'job-exec: flux job-exec-override fails for invalid userid' 
 	  export FLUX_HANDLE_USERID=$newid &&
 	    test_must_fail flux job-exec-override start ${jobid}
 	) &&
-	flux job cancel ${jobid} &&
+	flux cancel ${jobid} &&
 	flux job wait-event -t 5 -v ${jobid} clean
 '
 test_expect_success 'job-exec: critical-ranks RPC handles unexpected input' '

@@ -115,7 +115,7 @@ test_expect_success 'flux-proxy works with /jobid argument' '
 	uri=$(flux proxy /$id?local flux getattr parent-uri) &&
 	test_debug "echo flux proxy $id flux getattr parent-uri = $uri" &&
 	test "$uri" = "$FLUX_URI" &&
-	flux job cancel $id &&
+	flux cancel $id &&
 	flux job wait-event -vt 10 $id clean
 '
 test_expect_success NO_CHAIN_LINT 'flux-proxy attempts to restore terminal on error' '

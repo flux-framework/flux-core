@@ -40,7 +40,7 @@ test_expect_success 'job-manager: job 4 hold' '
 '
 
 test_expect_success 'job-manager: cancel job 1' '
-        flux job cancel $(cat job1.id)
+        flux cancel $(cat job1.id)
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state ISRSS (job 3 run, job 2 held)' '
@@ -79,7 +79,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations job 4 pending' '
 '
 
 test_expect_success 'job-manager: cancel job 3' '
-        flux job cancel $(cat job3.id)
+        flux cancel $(cat job3.id)
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state ISIRS (job 4 run, job 2 held)' '
@@ -99,7 +99,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations job 5 pending (job 2 held)
 '
 
 test_expect_success 'job-manager: cancel job 4' '
-        flux job cancel $(cat job4.id)
+        flux cancel $(cat job4.id)
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state ISIIR (job 5 run, job 2 held)' '
@@ -131,8 +131,8 @@ test_expect_success HAVE_JQ 'job-manager: annotations job 2 pending' '
 '
 
 test_expect_success 'job-manager: cancel remaining jobs' '
-        flux job cancel $(cat job2.id) &&
-        flux job cancel $(cat job5.id)
+        flux cancel $(cat job2.id) &&
+        flux cancel $(cat job5.id)
 '
 
 test_done

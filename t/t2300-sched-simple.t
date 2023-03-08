@@ -100,7 +100,7 @@ test_expect_success 'sched-simple: no remaining resources' '
 	test "$($query)" = ""
 '
 test_expect_success 'sched-simple: cancel one job' '
-	flux job cancel $(cat job3.id) &&
+	flux cancel $(cat job3.id) &&
 	flux job wait-event --timeout=5.0 $(cat job3.id) exception &&
 	flux job wait-event --timeout=5.0 $(cat job3.id) free
 '
@@ -109,10 +109,10 @@ test_expect_success 'sched-simple: waiting job now has alloc event' '
 	test "$(list_R $(cat job5.id))" = "annotations={\"sched\":{\"resource_summary\":\"rank0/core1\"}}"
 '
 test_expect_success 'sched-simple: cancel all jobs' '
-	flux job cancel $(cat job5.id) &&
-	flux job cancel $(cat job4.id) &&
-	flux job cancel $(cat job2.id) &&
-	flux job cancel $(cat job1.id) &&
+	flux cancel $(cat job5.id) &&
+	flux cancel $(cat job4.id) &&
+	flux cancel $(cat job2.id) &&
+	flux cancel $(cat job1.id) &&
 	flux job wait-event --timeout=5.0 $(cat job1.id) exception &&
 	flux job wait-event --timeout=5.0 $(cat job1.id) free &&
 	test "$($query)" = "rank[0-1]/core[0-1]"
@@ -141,15 +141,15 @@ test_expect_success 'sched-simple: check allocations for running jobs' '
 '
 test_expect_success 'sched-simple: cancel pending & running job' '
 	id=$(cat job10.id) &&
-	flux job cancel $id &&
+	flux cancel $id &&
 	flux job wait-event --timeout=5.0 $id exception &&
-	flux job cancel $(cat job6.id) &&
+	flux cancel $(cat job6.id) &&
 	test_expect_code 1 flux kvs get $(kvs_job_dir $id).R
 '
 test_expect_success 'sched-simple: cancel remaining jobs' '
-	flux job cancel $(cat job7.id) &&
-	flux job cancel $(cat job8.id) &&
-	flux job cancel $(cat job9.id) &&
+	flux cancel $(cat job7.id) &&
+	flux cancel $(cat job8.id) &&
+	flux cancel $(cat job9.id) &&
 	flux job wait-event --timeout=5.0 $(cat job9.id) free
 '
 test_expect_success 'sched-simple: reload in first-fit alloc-mode' '
@@ -187,7 +187,7 @@ test_expect_success 'sched-simple: verify three jobs are active' '
 
 test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 	flux module remove sched-simple &&
-	flux job cancelall -f
+	flux cancel --all
 '
 test_expect_success 'sched-simple: there are no outstanding sched requests' '
 	flux queue status -v >queue_status.out &&
@@ -221,7 +221,7 @@ test_expect_success 'sched-simple: update urgency of job' '
 	flux job urgency $(cat job18.id) 20
 '
 test_expect_success 'sched-simple: cancel running job' '
-	flux job cancel $(cat job14.id) &&
+	flux cancel $(cat job14.id) &&
 	flux job wait-event --timeout=5.0 $(cat job14.id) free
 '
 test_expect_success 'sched-simple: ensure more urgent job run' '
@@ -237,8 +237,8 @@ test_expect_success 'sched-simple: ensure more urgent job run' '
 # cancel all jobs, to ensure no interference with follow up tests
 # cancel non-running jobs first to ensure they are not accidentally run
 test_expect_success 'sched-simple: cancel jobs' '
-	flux job cancelall --states=SCHED -f &&
-	flux job cancelall -f &&
+	flux cancel --all --states=pending &&
+	flux cancel --all &&
 	flux job wait-event --timeout=5.0 $(cat job18.id) free &&
 	flux job wait-event --timeout=5.0 $(cat job15.id) free &&
 	flux job wait-event --timeout=5.0 $(cat job16.id) free
@@ -249,12 +249,12 @@ test_expect_success 'sched-simple: reload sched-simple to cover free flags' '
 test_expect_success 'sched-simple: submit job and cancel it' '
 	flux job submit basic.json >job19.id &&
 	flux job wait-event --timeout=5.0 $(cat job19.id) alloc &&
-	flux job cancel $(cat job19.id) &&
+	flux cancel $(cat job19.id) &&
 	$dmesg_grep -t 10 "free: R is NULL"
 '
 test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 	flux module remove sched-simple &&
-	flux job cancelall -f
+	flux cancel --all
 '
 test_expect_success 'sched-simple: there are no outstanding sched requests' '
 	flux queue status -v >queue_status.out &&

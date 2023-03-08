@@ -31,13 +31,13 @@ test_expect_success HAVE_JQ 'job timelimits are propagated' '
 	flux jobs -no "{id.f58} {expiration}"
 	exp1=\$(flux jobs -no {expiration} \$id1)
 	test "\$(round \$exp1)" = "\$(round \${expiration})"
-	flux job cancelall -f
+	flux cancel --all
 
 	id2=\$(flux submit --wait-event=start -t 1m sleep 300)
 	flux jobs -no "{id.f58} {expiration}"
 	exp2=\$(flux jobs -no {expiration} \$id2)
 	test \$(round \${exp2}) -lt \$(round \${expiration})
-        flux job cancelall -f
+        flux cancel --all
 	EOF
 	chmod +x limit.sh &&
 	flux run --time-limit=10m flux start ./limit.sh
@@ -77,7 +77,7 @@ expired_cancel_test() {
 	id=$(flux submit --time-limit=${1}s bash -c \
             "trap \"echo got SIGALRM>>trap2.out\" SIGALRM;sleep 60;sleep 60" ) &&
 	flux job wait-event --timeout=30 $id exception &&
-	flux job cancel $id &&
+	flux cancel $id &&
 	test_expect_code 143 run_timeout 30 flux job attach $id
 
 }

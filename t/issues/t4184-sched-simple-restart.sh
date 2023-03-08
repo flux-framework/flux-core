@@ -24,7 +24,7 @@ while test \$(flux resource list -s up -no {ncores}) -ne \$NCORES; do
 done
 
 echo "t4184: canceling \$id"
-flux job cancel \${id}
+flux cancel \${id}
 
 echo "t4184: waiting for \$id to end"
 flux job wait-event \$id clean
@@ -34,7 +34,7 @@ echo "t4184: waiting for \$id2 to start..."
 flux job wait-event -t 15 \$id2 start
 
 echo "t4184: canceling \$id2..."
-flux job cancel \$id2
+flux cancel \$id2
 
 echo "t4184: waiting for \$id2 to end..."
 flux job wait-event -t 15 \$id2 clean

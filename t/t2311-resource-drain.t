@@ -207,7 +207,7 @@ test_expect_success 'drain works on allocated rank' '
 	flux resource drain $rank &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 1 &&
 	flux resource drain | grep draining &&
-	flux job cancel $id &&
+	flux cancel $id &&
 	flux job wait-event $id clean &&
 	flux resource drain | grep drained
 '
@@ -221,7 +221,7 @@ test_expect_success 'flux resource drain differentiates drain/draining' '
 	test_debug "flux resource status" &&
 	test $(flux resource status -s draining -no {ranks}) = "$rank" &&
 	flux resource drain | grep draining &&
-	flux job cancel $id &&
+	flux cancel $id &&
 	flux job wait-event $id clean &&
 	test $(flux resource status -s drain -no {nnodes}) -eq ${SIZE}
 '

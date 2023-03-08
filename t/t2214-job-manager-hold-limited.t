@@ -88,8 +88,8 @@ test_expect_success HAVE_JQ 'job-manager: job annotations updated (RRSSS)' '
 '
 
 test_expect_success 'job-manager: cancel job 1 & 2' '
-        flux job cancel $(cat job1.id) &&
-        flux job cancel $(cat job2.id)
+        flux cancel $(cat job1.id) &&
+        flux cancel $(cat job2.id)
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state IISSR' '
@@ -130,8 +130,8 @@ test_expect_success HAVE_JQ 'job-manager: job annotations updated (IIRSR)' '
 '
 
 test_expect_success 'job-manager: cancel all jobs' '
-        flux job cancel $(cat job4.id) &&
-        flux job cancel $(cat job5.id)
+        flux cancel $(cat job4.id) &&
+        flux cancel $(cat job5.id)
 '
 
 test_done

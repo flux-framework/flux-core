@@ -104,7 +104,7 @@ test_expect_success 'debugger: job attach --debug must not continue target' '
 	tv_jobid=$(parse_totalview_jobid jobid.out3) &&
 	test ${tv_jobid} = "${jobid}" &&
 	test_must_fail flux job wait-event -vt ${TIMEOUT} ${jobid} finish &&
-	flux job cancel ${jobid} &&
+	flux cancel ${jobid} &&
 	flux job wait-event -vt ${TIMEOUT} ${jobid} finish
 '
 
