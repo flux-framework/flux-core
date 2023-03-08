@@ -166,7 +166,7 @@ test_expect_success 'capture the environment for instance run as a job' '
 		"bash -c printenv >rc2.env2"
 '
 
-test_expect_success 'job environment is not set in rcs of sub-instance' '
+test_expect_success 'job environment is not set in rcs of subinstance' '
 	var_is_unset FLUX_JOB_ID *.env2 &&
 	var_is_unset FLUX_JOB_SIZE *.env2 &&
 	var_is_unset FLUX_JOB_NNODES *.env2 &&

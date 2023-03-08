@@ -29,8 +29,7 @@ prefixing the pattern with ``name:``, e.g. ``name:fr..123``.
 
 By default, only active jobs for the current user are considered.
 
-*flux-pkill* cancels matching jobs instead of listing them. This is
-equivalent to running *flux-pgrep* with the ``-k`` option.
+*flux-pkill* cancels matching jobs instead of listing them.
 
 OPTIONS
 =======

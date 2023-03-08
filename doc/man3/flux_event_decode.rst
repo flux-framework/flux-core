@@ -107,7 +107,7 @@ ENOMEM
 
 EPROTO
    Message decoding failed, such as due to incorrect message type,
-   missing topic string, etc..
+   missing topic string, etc.
 
 
 RESOURCES
