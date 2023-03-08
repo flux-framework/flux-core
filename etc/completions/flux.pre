@@ -421,6 +421,8 @@ _flux_job()
         -v --verbose \
         -q --quiet \
         -r --read-only \
+        -i --stdin-ranks= \
+        -u --unbuffered \
         --debug \
     "
     local status_OPTS="\
