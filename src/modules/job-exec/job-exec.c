@@ -359,11 +359,19 @@ static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
                            int revents, void *arg)
 {
     struct jobinfo *job = arg;
+    flux_future_t *f;
     flux_log (job->h,
               LOG_DEBUG,
               "Sending SIGKILL to job %ju",
               (uintmax_t) job->id);
-    (*job->impl->kill) (job, SIGKILL);
+    if (!(f = flux_job_kill (job->h, job->id, SIGKILL))) {
+        flux_log_error (job->h,
+                        "flux_job_kill (%ju, SIGKILL)",
+                        job->id);
+        return;
+    }
+    /* Open loop */
+    flux_future_destroy (f);
 }
 
 
