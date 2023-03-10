@@ -32,7 +32,12 @@ def main():
         sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
     )
     if sys.stderr.isatty():
-        LOGGER.warning("⚠️ flux-mini is deprecated, use flux-batch, flux-run, etc.⚠️")
+        cmd = sys.argv[1] if len(sys.argv) > 1 else None
+        if cmd in ["submit", "run", "batch", "alloc", "bulksubmit"]:
+            suggestion = f"flux {sys.argv[1]} "
+        else:
+            suggestion = "flux submit, flux run, etc."
+        LOGGER.warning(f"⚠️ flux-mini is deprecated, use {suggestion}⚠️")
 
     parser = argparse.ArgumentParser(prog="flux-mini")
     subparsers = parser.add_subparsers(
