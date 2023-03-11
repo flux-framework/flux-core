@@ -91,7 +91,7 @@ class TestHostlistMethods(unittest.TestCase):
         self.assertEqual(hl[9], "foo9")
         self.assertEqual(hl[-1], "foo9")
         self.assertEqual(hl[-2], "foo8")
-        self.assertListEqual(hl[1:3], ["foo1", "foo2"])
+        self.assertListEqual(list(hl[1:3]), ["foo1", "foo2"])
 
     def test_index_exceptions(self):
         hl = hostlist.decode("foo[0-9]")
