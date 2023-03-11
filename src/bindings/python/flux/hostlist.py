@@ -107,8 +107,11 @@ class Hostlist(WrapperPimpl):
     def __getitem__(self, index):
         """Index and slice a hostlist
 
-        Works like normal Python list indexing, including slices
-        (a slice returns a new Hostlist object):
+        Works like normal Python list indexing, including slices.
+        Any iterable is also supported as long as the iterable contains
+        only integers.
+
+        Slices and iterables return a new Hostlist object.
 
         >>> hl = Hostlist("foo[0-9]")
         >>> hl[0]
@@ -121,6 +124,8 @@ class Hostlist(WrapperPimpl):
         Hostlist('foo[8-9]']
         >>> hl[1:3]
         Hostlist('foo[1-2]']
+        >>> hl[1,3]
+        Hostlist('foo[1,3]']
 
         """
         if isinstance(index, numbers.Integral):
@@ -134,6 +139,15 @@ class Hostlist(WrapperPimpl):
         if isinstance(index, slice):
             hl = Hostlist()
             for n in range(len(self))[index]:
+                hl.append(self[n])
+            return hl
+
+        if isinstance(index, collections.abc.Iterable):
+            hl = Hostlist()
+            for n in index:
+                # Avoid infinite recursion by catching non-integer indeces
+                if not isinstance(n, numbers.Integral):
+                    raise TypeError(f"Invalid Hostlist index '{n}'")
                 hl.append(self[n])
             return hl
 
