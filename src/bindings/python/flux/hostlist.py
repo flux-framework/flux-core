@@ -107,7 +107,11 @@ class Hostlist(WrapperPimpl):
     def __getitem__(self, index):
         """Index and slice a hostlist
 
-        Works like normal Python list indexing, including slices:
+        Works like normal Python list indexing, including slices.
+        Any iterable is also supported as long as the iterable contains
+        only integers.
+
+        Slices and iterables return a new Hostlist object.
 
         >>> hl = Hostlist("foo[0-9]")
         >>> hl[0]
@@ -117,9 +121,11 @@ class Hostlist(WrapperPimpl):
         >>> hl[-1]
         'foo9'
         >>> hl[8:]
-        ['foo8', 'foo9']
+        Hostlist('foo[8-9]']
         >>> hl[1:3]
-        ['foo1', 'foo2']
+        Hostlist('foo[1-2]']
+        >>> hl[1,3]
+        Hostlist('foo[1,3]']
 
         """
         if isinstance(index, numbers.Integral):
@@ -131,7 +137,19 @@ class Hostlist(WrapperPimpl):
             raise IndexError("Hostlist index out of range")
 
         if isinstance(index, slice):
-            return [self[n] for n in range(len(self))[index]]
+            hl = Hostlist()
+            for n in range(len(self))[index]:
+                hl.append(self[n])
+            return hl
+
+        if isinstance(index, collections.abc.Iterable):
+            hl = Hostlist()
+            for n in index:
+                # Avoid infinite recursion by catching non-integer indeces
+                if not isinstance(n, numbers.Integral):
+                    raise TypeError(f"Invalid Hostlist index '{n}'")
+                hl.append(self[n])
+            return hl
 
         raise TypeError("Hostlist index must be integer or slice")
 
@@ -194,7 +212,7 @@ class Hostlist(WrapperPimpl):
 
     def expand(self):
         """Convert a Hostlist to a Python list"""
-        return self[:]
+        return list(self)
 
     def copy(self):
         """Copy a Hostlist object"""
