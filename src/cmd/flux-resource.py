@@ -17,7 +17,6 @@ import sys
 
 import flux
 from flux.future import WaitAllFuture
-from flux.hostlist import Hostlist
 from flux.idset import IDset
 from flux.resource import ResourceSet, SchedResourceList, resource_list
 from flux.rpc import RPC
@@ -280,7 +279,7 @@ class ResourceStatus:
         #  update instead of appending a new output line:
         #  (mainly useful for "drain" when reasons are not displayed)
         #
-        hosts = Hostlist([self.nodelist[i] for i in ranks])
+        hosts = self.nodelist[ranks]
         rstatus = self.find(state, reason)
         if rstatus:
             rstatus.update(ranks, hosts)
