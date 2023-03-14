@@ -686,6 +686,55 @@ class OutputFormat:
                 post(item)
 
 
+class Deduplicator:
+    """
+    Generic helper to deduplicate a list of formatted items for objects
+    that can be aggregated.
+
+    Args:
+        formatter (OutputFormat): Formatter instance to use for deduplication
+        except_fields (list): List of fields to not consider when merging
+            like lines. These are typically fields that can be combined, such
+            as a node count, node list, ranks, etc.
+        combine (callable): A function that is used to combine matching
+            items, called as combine(existing, new).
+    """
+
+    def __init__(self, formatter, except_fields=None, combine=None):
+        self.formatter = formatter.copy(except_fields=except_fields)
+        self.combine = combine
+        self.hash = {}
+        self.items = []
+        #  Allow class to be iterable https://stackoverflow.com/a/48670014
+        self.__iter = None
+
+    def __iter__(self):
+        if self.__iter is None:
+            self.__iter = iter(self.items)
+        return self
+
+    def __next__(self):
+        try:
+            return next(self.__iter)
+        except StopIteration:  # support repeated iteration
+            self.__iter = None
+            raise
+
+    def append(self, item):
+        """
+        Append a new item to a deduplicator. Combines item with an existing
+        entry if the formatted result is identical to another entry.
+        """
+        key = self.formatter.format(item)
+        try:
+            result = self.hash[key]
+            if self.combine is not None:
+                self.combine(result, item)
+        except KeyError:
+            self.hash[key] = item
+            self.items.append(item)
+
+
 class Tree:
     """Very simple pstree-like display for the console
 
