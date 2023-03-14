@@ -58,7 +58,9 @@ test_ldflags = \
 TESTS =
 
 if HAVE_LIBSYSTEMD
-TESTS +=
+TESTS += \
+	 test_objpath.t \
+	 test_message.t
 endif
 
 check_PROGRAMS = $(TESTS)
@@ -66,3 +68,13 @@ check_PROGRAMS = $(TESTS)
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/config/tap-driver.sh
+
+test_objpath_t_SOURCES = test/objpath.c
+test_objpath_t_CPPFLAGS = $(test_cppflags)
+test_objpath_t_LDADD = $(test_ldadd)
+test_objpath_t_LDFLAGS = $(test_ldflags)
+
+test_message_t_SOURCES = test/message.c
+test_message_t_CPPFLAGS = $(test_cppflags)
+test_message_t_LDADD = $(test_ldadd)
+test_message_t_LDFLAGS = $(test_ldflags)
