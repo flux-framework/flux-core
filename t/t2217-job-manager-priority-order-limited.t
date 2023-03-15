@@ -21,7 +21,7 @@ test_expect_success 'job-manager: submit 5 jobs (differing urgencies)' '
         flux queue start
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state SSSRR' '
+test_expect_success 'job-manager: job state SSSRR' '
         jmgr_check_state $(cat job1.id) S &&
         jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) S &&
@@ -29,7 +29,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SSSRR' '
         jmgr_check_state $(cat job5.id) R
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate jobs (SSSRR)' '
+test_expect_success 'job-manager: annotate jobs (SSSRR)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.jobs_ahead" "1" &&
@@ -43,7 +43,7 @@ test_expect_success 'job-manager: increase urgency job 2' '
         flux job urgency $(cat job2.id) 16
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state SSSRR' '
+test_expect_success 'job-manager: job state SSSRR' '
         jmgr_check_state $(cat job1.id) S &&
         jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) S &&
@@ -51,7 +51,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SSSRR' '
         jmgr_check_state $(cat job5.id) R
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSSRR)' '
+test_expect_success 'job-manager: annotate jobs updated (SSSRR)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.jobs_ahead" "0" &&
@@ -65,7 +65,7 @@ test_expect_success 'job-manager: increase urgency job 1' '
         flux job urgency $(cat job1.id) 18
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state SSSRR' '
+test_expect_success 'job-manager: job state SSSRR' '
         jmgr_check_state $(cat job1.id) S &&
         jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) S &&
@@ -73,7 +73,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SSSRR' '
         jmgr_check_state $(cat job5.id) R
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSSRR)' '
+test_expect_success 'job-manager: annotate jobs updated (SSSRR)' '
         jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "0" &&
         jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"insufficient resources\"" &&
@@ -87,7 +87,7 @@ test_expect_success 'job-manager: decrease urgency job 2' '
         flux job urgency $(cat job2.id) 8
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state SSSRR' '
+test_expect_success 'job-manager: job state SSSRR' '
         jmgr_check_state $(cat job1.id) S &&
         jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) S &&
@@ -95,7 +95,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SSSRR' '
         jmgr_check_state $(cat job5.id) R
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSSRR)' '
+test_expect_success 'job-manager: annotate jobs updated (SSSRR)' '
         jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "0" &&
         jmgr_check_no_annotations $(cat job2.id) &&
@@ -109,7 +109,7 @@ test_expect_success 'job-manager: submit new job with higher urgency' '
         flux submit --flags=debug --urgency=20 -n1 hostname >job6.id
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state SSSRRS' '
+test_expect_success 'job-manager: job state SSSRRS' '
         jmgr_check_state $(cat job1.id) S &&
         jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) S &&
@@ -118,7 +118,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SSSRRS' '
         jmgr_check_state $(cat job6.id) S
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSSRRS)' '
+test_expect_success 'job-manager: annotate jobs updated (SSSRRS)' '
         jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "1" &&
         jmgr_check_no_annotations $(cat job2.id) &&
@@ -151,7 +151,7 @@ test_expect_success 'job-manager: load priority-invert plugin' '
         flux jobtap load --remove=all ${PLUGINPATH}/priority-invert.so
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state SSSRRS' '
+test_expect_success 'job-manager: job state SSSRRS' '
         jmgr_check_state $(cat job1.id) S &&
         jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) S &&
@@ -160,7 +160,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SSSRRS' '
         jmgr_check_state $(cat job6.id) S
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSSRRS)' '
+test_expect_success 'job-manager: annotate jobs updated (SSSRRS)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.jobs_ahead" "0" &&
@@ -175,7 +175,7 @@ test_expect_success 'job-manager: cancel 5' '
         flux cancel $(cat job5.id)
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state SRSRIS' '
+test_expect_success 'job-manager: job state SRSRIS' '
         jmgr_check_state $(cat job1.id) S &&
         jmgr_check_state $(cat job2.id) R &&
         jmgr_check_state $(cat job3.id) S &&
@@ -184,7 +184,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SRSRIS' '
         jmgr_check_state $(cat job6.id) S
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SRSRIS)' '
+test_expect_success 'job-manager: annotate jobs updated (SRSRIS)' '
         jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "1" &&
         jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core0\"" &&

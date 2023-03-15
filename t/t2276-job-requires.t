@@ -8,7 +8,7 @@ test_under_flux 4 job
 
 flux setattr log-stderr-level 1
 
-test_expect_success HAVE_JQ 'flux-mini: --requires option works' '
+test_expect_success 'flux-mini: --requires option works' '
 	flux run --dry-run \
 		--env=-* \
 		--requires=foo,bar \

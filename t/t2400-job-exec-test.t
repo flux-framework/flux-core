@@ -8,8 +8,6 @@ test_under_flux 1 job
 
 flux setattr log-stderr-level 1
 
-skip_all_unless_have jq
-
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 job_kvsdir()    { flux job id --to=kvs $1; }

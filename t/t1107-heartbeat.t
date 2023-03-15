@@ -17,7 +17,7 @@ test_expect_success 'load heartbeat' '
 	flux module load heartbeat
 '
 
-test_expect_success HAVE_JQ 'reload heartbeat with period=10s and verify' '
+test_expect_success 'reload heartbeat with period=10s and verify' '
 	period1=$(get_heartbeat | jq -r -e .period) &&
 	flux module reload heartbeat period=10s &&
 	period2=$(get_heartbeat | jq -r -e .period) &&

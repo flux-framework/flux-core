@@ -148,7 +148,7 @@ test_expect_success 'perilog: job can be canceled after prolog is complete' '
 	flux job wait-event -t 15 $jobid exception &&
 	flux job wait-event -t 15 $jobid clean
 '
-test_expect_success HAVE_JQ 'perilog: prolog failure raises job exception' '
+test_expect_success 'perilog: prolog failure raises job exception' '
 	printf "#!/bin/sh\n/bin/false" > prolog.d/fail.sh &&
 	chmod +x prolog.d/fail.sh &&
 	test_when_finished "rm -f prolog.d/fail.sh" &&

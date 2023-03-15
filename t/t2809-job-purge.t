@@ -155,7 +155,7 @@ test_expect_success 'reconfigure job manager with inactive-age-limit=1ms' '
 test_expect_success 'wait for job-list inactive job count to reach 0' '
 	wait_inactive_count job-list 0 30
 '
-test_expect_success HAVE_JQ 'confirm job-list stats show zero inactive jobs' '
+test_expect_success 'confirm job-list stats show zero inactive jobs' '
 	test $(inactive_count job-list-stats) -eq 0
 '
 test_expect_success 'reconfigure job manager with incorrect type limit' '

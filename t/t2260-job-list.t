@@ -135,7 +135,7 @@ test_expect_success 'submit jobs for job list testing' '
 # since we happen to know all these jobs are in the "run" state given
 # checks above
 
-test_expect_success HAVE_JQ 'flux job list running jobs in started order' '
+test_expect_success 'flux job list running jobs in started order' '
         flux job list -s running | jq .id > list_started1.out &&
         flux job list -s run,cleanup | jq .id > list_started2.out &&
         flux job list -s run | jq .id > list_started3.out &&
@@ -144,7 +144,7 @@ test_expect_success HAVE_JQ 'flux job list running jobs in started order' '
         test_cmp list_started3.out running.ids
 '
 
-test_expect_success HAVE_JQ 'flux job list running jobs with correct state' '
+test_expect_success 'flux job list running jobs with correct state' '
         for count in `seq 1 8`; do \
             echo "RUN" >> list_state_R.exp; \
         done &&
@@ -156,17 +156,17 @@ test_expect_success HAVE_JQ 'flux job list running jobs with correct state' '
         test_cmp list_state_R3.out list_state_R.exp
 '
 
-test_expect_success HAVE_JQ 'flux job list no jobs in cleanup state' '
+test_expect_success 'flux job list no jobs in cleanup state' '
         count=$(flux job list -s cleanup | wc -l) &&
         test $count -eq 0
 '
 
-test_expect_success HAVE_JQ 'flux job list inactive jobs in completed order' '
+test_expect_success 'flux job list inactive jobs in completed order' '
         flux job list -s inactive | jq .id > list_inactive.out &&
         test_cmp list_inactive.out inactive.ids
 '
 
-test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
+test_expect_success 'flux job list inactive jobs with correct state' '
         for count in `seq 1 $(job_list_state_count inactive)`; do \
             echo "INACTIVE" >> list_state_I.exp; \
         done &&
@@ -174,7 +174,7 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
         test_cmp list_state_I.out list_state_I.exp
 '
 
-test_expect_success HAVE_JQ 'flux job list inactive jobs results are correct' '
+test_expect_success 'flux job list inactive jobs results are correct' '
         flux job list -s inactive | jq .result | ${JOB_CONV} resulttostr > list_result_I.out &&
         echo "CANCELED" >> list_result_I.exp &&
         echo "TIMEOUT" >> list_result_I.exp &&
@@ -188,7 +188,7 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs results are correct' '
 # Hard code results values for these tests, as we did not add a results
 # option to flux_job_list() or the flux-job command.
 
-test_expect_success HAVE_JQ 'flux job list only canceled jobs' '
+test_expect_success 'flux job list only canceled jobs' '
         id=$(id -u) &&
         state=`${JOB_CONV} strtostate INACTIVE` &&
         result=`${JOB_CONV} strtoresult CANCELED` &&
@@ -197,7 +197,7 @@ test_expect_success HAVE_JQ 'flux job list only canceled jobs' '
         test_cmp canceled.ids list_result_canceled.out
 '
 
-test_expect_success HAVE_JQ 'flux job list only failed jobs' '
+test_expect_success 'flux job list only failed jobs' '
         id=$(id -u) &&
         state=`${JOB_CONV} strtostate INACTIVE` &&
         result=`${JOB_CONV} strtoresult FAILED` &&
@@ -206,7 +206,7 @@ test_expect_success HAVE_JQ 'flux job list only failed jobs' '
         test_cmp failed.ids list_result_failed.out
 '
 
-test_expect_success HAVE_JQ 'flux job list only timeout jobs' '
+test_expect_success 'flux job list only timeout jobs' '
         id=$(id -u) &&
         state=`${JOB_CONV} strtostate INACTIVE` &&
         result=`${JOB_CONV} strtoresult TIMEOUT` &&
@@ -215,7 +215,7 @@ test_expect_success HAVE_JQ 'flux job list only timeout jobs' '
         test_cmp timeout.ids list_result_timeout.out
 '
 
-test_expect_success HAVE_JQ 'flux job list only completed jobs' '
+test_expect_success 'flux job list only completed jobs' '
         id=$(id -u) &&
         state=`${JOB_CONV} strtostate INACTIVE` &&
         result=`${JOB_CONV} strtoresult COMPLETED` &&
@@ -228,7 +228,7 @@ test_expect_success HAVE_JQ 'flux job list only completed jobs' '
 # state since we happen to know all these jobs are in the "sched"
 # state given checks above
 
-test_expect_success HAVE_JQ 'flux job list pending jobs in priority order' '
+test_expect_success 'flux job list pending jobs in priority order' '
         flux job list -s pending | jq .id > list_pending1.out &&
         flux job list -s depend,priority,sched | jq .id > list_pending2.out &&
         flux job list -s sched | jq .id > list_pending3.out &&
@@ -237,7 +237,7 @@ test_expect_success HAVE_JQ 'flux job list pending jobs in priority order' '
         test_cmp list_pending3.out pending.ids
 '
 
-test_expect_success HAVE_JQ 'flux job list pending jobs with correct urgency' '
+test_expect_success 'flux job list pending jobs with correct urgency' '
         cat >list_urgency.exp <<-EOT &&
 31
 31
@@ -256,7 +256,7 @@ EOT
         test_cmp list_urgency3.out list_urgency.exp
 '
 
-test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
+test_expect_success 'flux job list pending jobs with correct priority' '
         cat >list_priority.exp <<-EOT &&
 4294967295
 4294967295
@@ -275,7 +275,7 @@ EOT
         test_cmp list_priority3.out list_priority.exp
 '
 
-test_expect_success HAVE_JQ 'flux job list pending jobs with correct state' '
+test_expect_success 'flux job list pending jobs with correct state' '
         for count in `seq 1 8`; do \
             echo "SCHED" >> list_state_S.exp; \
         done &&
@@ -283,14 +283,14 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct state' '
         test_cmp list_state_S.out list_state_S.exp
 '
 
-test_expect_success HAVE_JQ 'flux job list no jobs in depend state' '
+test_expect_success 'flux job list no jobs in depend state' '
         count=$(flux job list -s depend | wc -l) &&
         test $count -eq 0
 '
 
 # Note: "active" = "pending" | "running", i.e. depend, priority,
 # sched, run, cleanup
-test_expect_success HAVE_JQ 'flux job list active jobs in correct order' '
+test_expect_success 'flux job list active jobs in correct order' '
         flux job list -s active | jq .id > list_active1.out &&
         flux job list -s depend,priority,sched,run,cleanup | jq .id > list_active2.out &&
         flux job list -s sched,run | jq .id > list_active3.out &&
@@ -299,7 +299,7 @@ test_expect_success HAVE_JQ 'flux job list active jobs in correct order' '
         test_cmp list_active3.out active.ids
 '
 
-test_expect_success HAVE_JQ 'flux job list jobs with correct userid' '
+test_expect_success 'flux job list jobs with correct userid' '
         for count in `seq 1 $(job_list_state_count all)`; do \
             id -u >> list_userid.exp; \
         done &&
@@ -307,7 +307,7 @@ test_expect_success HAVE_JQ 'flux job list jobs with correct userid' '
         test_cmp list_userid.out list_userid.exp
 '
 
-test_expect_success HAVE_JQ 'flux job list defaults to listing pending & running jobs' '
+test_expect_success 'flux job list defaults to listing pending & running jobs' '
         flux job list | jq .id > list_default.out &&
         count=$(wc -l < list_default.out) &&
         test $count = $(job_list_state_count active) &&
@@ -328,7 +328,7 @@ test_expect_success 'flux job list --user=all works' '
 '
 
 # we hard count numbers here b/c its a --count test
-test_expect_success HAVE_JQ 'flux job list --count works' '
+test_expect_success 'flux job list --count works' '
         flux job list -s active,inactive --count=12 | jq .id > list_count.out &&
         count=$(wc -l < list_count.out) &&
         test "$count" = "12" &&
@@ -337,13 +337,13 @@ test_expect_success HAVE_JQ 'flux job list --count works' '
         test_cmp list_count.out list_count.exp
 '
 
-test_expect_success HAVE_JQ 'flux job list all jobs works' '
+test_expect_success 'flux job list all jobs works' '
         flux job list -a | jq .id > list_all_jobids.out &&
         test_cmp all.ids list_all_jobids.out
 '
 
 # with single anonymous queue, queues arrays should be zero length
-test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
+test_expect_success 'job stats lists jobs in correct state (mix)' '
         flux job stats | jq -e ".job_states.depend == 0" &&
         flux job stats | jq -e ".job_states.priority == 0" &&
         flux job stats | jq -e ".job_states.sched == $(job_list_state_count pending)" &&
@@ -390,14 +390,14 @@ test_expect_success 'reload the job-list module' '
         wait_inactive
 '
 
-test_expect_success HAVE_JQ 'job-list: list successfully reconstructed' '
+test_expect_success 'job-list: list successfully reconstructed' '
         flux job list -a > after_reload.out &&
         test_cmp before_reload.out after_reload.out
 '
 
 # the failed and canceled checks may look confusing.  We canceled all active jobs
 # right above here, so all those active jobs became failed / canceled as a result
-test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive)' '
+test_expect_success 'job stats lists jobs in correct state (all inactive)' '
         flux job stats | jq -e ".job_states.depend == 0" &&
         flux job stats | jq -e ".job_states.priority == 0" &&
         flux job stats | jq -e ".job_states.sched == 0" &&
@@ -416,58 +416,58 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
 
 # job list-inactive
 
-test_expect_success HAVE_JQ 'flux job list-inactive lists all inactive jobs' '
+test_expect_success 'flux job list-inactive lists all inactive jobs' '
         flux job list-inactive > list-inactive.out &&
         count=`cat list-inactive.out | wc -l` &&
         test $count -eq $(job_list_state_count all)
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ since 0 lists all inactive jobs' '
+test_expect_success 'flux job list-inactive w/ since 0 lists all inactive jobs' '
         count=`flux job list-inactive --since=0 | wc -l` &&
         test $count -eq $(job_list_state_count all)
 '
 
 # we hard count numbers here b/c its a --count test
-test_expect_success HAVE_JQ 'flux job list-inactive w/ count limits output of inactive jobs' '
+test_expect_success 'flux job list-inactive w/ count limits output of inactive jobs' '
         count=`flux job list-inactive --count=14 | wc -l` &&
         test $count -eq 14
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ since -1 leads to error' '
+test_expect_success 'flux job list-inactive w/ since -1 leads to error' '
         test_must_fail flux job list-inactive --since=-1 > list_inactive_error1.out 2>&1 &&
         grep "Invalid argument" list_inactive_error1.out
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ count -1 leads to error' '
+test_expect_success 'flux job list-inactive w/ count -1 leads to error' '
         test_must_fail flux job list-inactive --count=-1 > list_inactive_error2.out 2>&1 &&
         grep "Invalid argument" list_inactive_error1.out
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ since (most recent timestamp)' '
+test_expect_success 'flux job list-inactive w/ since (most recent timestamp)' '
         timestamp=`cat list-inactive.out | head -n 1 | jq .t_inactive` &&
         count=`flux job list-inactive --since=${timestamp} | wc -l` &&
         test $count -eq 0
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ since (second to most recent timestamp)' '
+test_expect_success 'flux job list-inactive w/ since (second to most recent timestamp)' '
         timestamp=`cat list-inactive.out | head -n 2 | tail -n 1 | jq .t_inactive` &&
         count=`flux job list-inactive --since=${timestamp} | wc -l` &&
         test $count -eq 1
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ since (oldest timestamp)' '
+test_expect_success 'flux job list-inactive w/ since (oldest timestamp)' '
         timestamp=`cat list-inactive.out | tail -n 1 | jq .t_inactive` &&
         count=`flux job list-inactive --since=${timestamp} | wc -l` &&
         test $count -eq 22
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ since (middle timestamp #1)' '
+test_expect_success 'flux job list-inactive w/ since (middle timestamp #1)' '
         timestamp=`cat list-inactive.out | head -n 8 | tail -n 1 | jq .t_inactive` &&
         count=`flux job list-inactive --since=${timestamp} | wc -l` &&
         test $count -eq 7
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ since (middle timestamp #2)' '
+test_expect_success 'flux job list-inactive w/ since (middle timestamp #2)' '
         timestamp=`cat list-inactive.out | head -n 13 | tail -n 1 | jq .t_inactive` &&
         count=`flux job list-inactive --since=${timestamp} | wc -l` &&
         test $count -eq 12
@@ -476,7 +476,7 @@ test_expect_success HAVE_JQ 'flux job list-inactive w/ since (middle timestamp #
 
 # job list-id
 
-test_expect_success HAVE_JQ 'flux job list-ids works with a single ID' '
+test_expect_success 'flux job list-ids works with a single ID' '
         id=`head -n 1 pending.ids` &&
         flux job list-ids $id | jq -e ".id == ${id}" &&
         id=`head -n 1 running.ids` &&
@@ -485,7 +485,7 @@ test_expect_success HAVE_JQ 'flux job list-ids works with a single ID' '
         flux job list-ids $id | jq -e ".id == ${id}"
 '
 
-test_expect_success HAVE_JQ 'flux job list-ids multiple IDs works' '
+test_expect_success 'flux job list-ids multiple IDs works' '
         ids=$(job_list_state_ids pending) &&
         flux job list-ids $ids | jq .id > list_idsP.out &&
         test_cmp list_idsP.out pending.ids &&
@@ -501,22 +501,22 @@ test_expect_success HAVE_JQ 'flux job list-ids multiple IDs works' '
         test_cmp list_idsPRI.exp list_idsPRI.out
 '
 
-test_expect_success HAVE_JQ 'flux job list-ids fails without ID' '
+test_expect_success 'flux job list-ids fails without ID' '
         test_must_fail flux job list-ids > list_ids_error1.out 2>&1 &&
         grep "Usage" list_ids_error1.out
 '
 
-test_expect_success HAVE_JQ 'flux job list-ids fails with bad ID' '
+test_expect_success 'flux job list-ids fails with bad ID' '
         test_must_fail flux job list-ids 1234567890 > list_ids_error2.out 2>&1 &&
         grep "No such file or directory" list_ids_error2.out
 '
 
-test_expect_success HAVE_JQ 'flux job list-ids fails with not an ID' '
+test_expect_success 'flux job list-ids fails with not an ID' '
         test_must_fail flux job list-ids foobar > list_ids_error3.out 2>&1 &&
         grep "No such file or directory" list_ids_error3.out
 '
 
-test_expect_success HAVE_JQ 'flux job list-ids fails with one bad ID out of several' '
+test_expect_success 'flux job list-ids fails with one bad ID out of several' '
         id1=`head -n 1 pending.ids` &&
         id2=`head -n 1 running.ids` &&
         id3=`head -n 1 inactive.ids` &&
@@ -551,7 +551,7 @@ wait_idsync() {
         return 0
 }
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (one id)' '
+test_expect_success NO_CHAIN_LINT 'flux job list-ids waits for job ids (one id)' '
 	${RPC} job-list.job-state-pause 0 </dev/null
         jobid=`flux submit --wait hostname | flux job id`
         flux job list-ids ${jobid} > list_id_wait1.out &
@@ -562,7 +562,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (
         cat list_id_wait1.out | jq -e ".id == ${jobid}"
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (different ids)' '
+test_expect_success NO_CHAIN_LINT 'flux job list-ids waits for job ids (different ids)' '
 	${RPC} job-list.job-state-pause 0 </dev/null
         jobid1=`flux submit --wait hostname | flux job id`
         jobid2=`flux submit --wait hostname | flux job id`
@@ -575,7 +575,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (
         grep ${jobid2} list_id_wait2.out
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (same id)' '
+test_expect_success NO_CHAIN_LINT 'flux job list-ids waits for job ids (same id)' '
 	${RPC} job-list.job-state-pause 0 </dev/null
         jobid=`flux submit --wait hostname | flux job id`
         flux job list-ids ${jobid} > list_id_wait3A.out &
@@ -595,7 +595,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (
 #
 
 # simply test that value in timestamp increases through job states
-test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job inactive)' '
+test_expect_success 'flux job list job state timing outputs valid (job inactive)' '
         jobid=$(flux submit --wait hostname | flux job id) &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
@@ -606,7 +606,7 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job i
 '
 
 # since job is running, make sure latter states don't exist
-test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job running)' '
+test_expect_success 'flux job list job state timing outputs valid (job running)' '
         jobid=$(flux submit sleep 60 | flux job id) &&
         fj_wait_event $jobid start >/dev/null &&
         wait_jobid_state $jobid running &&
@@ -623,28 +623,28 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job r
 # job names
 #
 
-test_expect_success HAVE_JQ 'flux job list outputs user job name' '
+test_expect_success 'flux job list outputs user job name' '
         jobid=`flux submit --wait --setattr system.job.name=foobar A B C | flux job id` &&
         echo $jobid > jobname1.id &&
         wait_jobid_state $jobid inactive &&
         flux job list -s inactive | grep $jobid | jq -e ".name == \"foobar\""
 '
 
-test_expect_success HAVE_JQ 'flux job lists first argument for job name' '
+test_expect_success 'flux job lists first argument for job name' '
         jobid=`flux submit --wait mycmd arg1 arg2 | flux job id` &&
         echo $jobid > jobname2.id &&
         wait_jobid_state $jobid inactive &&
         flux job list -s inactive | grep $jobid | jq -e ".name == \"mycmd\""
 '
 
-test_expect_success HAVE_JQ 'flux job lists basename of first argument for job name' '
+test_expect_success 'flux job lists basename of first argument for job name' '
         jobid=`flux submit --wait /foo/bar arg1 arg2 | flux job id` &&
         echo $jobid > jobname3.id &&
         wait_jobid_state $jobid inactive &&
         flux job list -s inactive | grep $jobid | jq -e ".name == \"bar\""
 '
 
-test_expect_success HAVE_JQ 'flux job lists full path for job name if basename fails on first arg' '
+test_expect_success 'flux job lists full path for job name if basename fails on first arg' '
         jobid=`flux submit --wait /foo/bar/ arg1 arg2 | flux job id` &&
         echo $jobid > jobname4.id &&
         wait_jobid_state $jobid inactive &&
@@ -655,7 +655,7 @@ test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
 
-test_expect_success HAVE_JQ 'verify job names preserved across restart' '
+test_expect_success 'verify job names preserved across restart' '
         jobid1=`cat jobname1.id` &&
         jobid2=`cat jobname2.id` &&
         jobid3=`cat jobname3.id` &&
@@ -670,7 +670,7 @@ test_expect_success HAVE_JQ 'verify job names preserved across restart' '
 # job queue
 #
 
-test_expect_success HAVE_JQ 'flux job list output no queue if queue not set' '
+test_expect_success 'flux job list output no queue if queue not set' '
         jobid=`flux submit --wait /bin/true | flux job id` &&
         echo $jobid > jobqueue1.id &&
         wait_jobid_state $jobid inactive &&
@@ -684,7 +684,7 @@ test_expect_success 'reconfigure with one queue' '
 	flux queue start --queue=foo
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs queue' '
+test_expect_success 'flux job list outputs queue' '
         jobid=`flux submit --wait --queue=foo /bin/true | flux job id` &&
         echo $jobid > jobqueue2.id &&
         wait_jobid_state $jobid inactive &&
@@ -699,7 +699,7 @@ test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
 
-test_expect_success HAVE_JQ 'verify job queue preserved across restart' '
+test_expect_success 'verify job queue preserved across restart' '
         jobid1=`cat jobqueue1.id` &&
         jobid2=`cat jobqueue2.id` &&
         flux job list -s inactive | grep ${jobid1} | jq -e ".queue == null" &&
@@ -710,7 +710,7 @@ test_expect_success HAVE_JQ 'verify job queue preserved across restart' '
 # job task count
 #
 
-test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (1 task)' '
+test_expect_success 'flux job list outputs ntasks correctly (1 task)' '
         jobid=`flux submit --wait hostname | flux job id` &&
         echo $jobid > taskcount1.id &&
         wait_jobid_state $jobid inactive &&
@@ -718,7 +718,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (1 task)' '
         echo $obj | jq -e ".ntasks == 1"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (4 tasks)' '
+test_expect_success 'flux job list outputs ntasks correctly (4 tasks)' '
         jobid=`flux submit --wait -n4 hostname | flux job id` &&
         echo $jobid > taskcount2.id &&
         wait_jobid_state $jobid inactive &&
@@ -726,7 +726,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (4 tasks)' '
         echo $obj | jq -e ".ntasks == 4"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (4 nodes, 4 tasks)' '
+test_expect_success 'flux job list outputs ntasks correctly (4 nodes, 4 tasks)' '
         jobid=`flux submit --wait -N4 -n4 hostname | flux job id` &&
         echo $jobid > taskcount3.id &&
         wait_jobid_state $jobid inactive &&
@@ -735,7 +735,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (4 nodes, 4 
 '
 
 # not-evenly divisible tasks / nodes should force "total" count of tasks in jobspec
-test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (3 nodes, 4 tasks)' '
+test_expect_success 'flux job list outputs ntasks correctly (3 nodes, 4 tasks)' '
         jobid=`flux submit --wait -N3 -n4 hostname | flux job id` &&
         echo $jobid > taskcount4.id &&
         wait_jobid_state $jobid inactive &&
@@ -743,7 +743,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (3 nodes, 4 
         echo $obj | jq -e ".ntasks == 4"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (3 cores)' '
+test_expect_success 'flux job list outputs ntasks correctly (3 cores)' '
         jobid=`flux submit --wait --cores=3 hostname | flux job id` &&
         echo $jobid > taskcount5.id &&
         wait_jobid_state $jobid inactive &&
@@ -751,7 +751,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (3 cores)' '
         echo $obj | jq -e ".ntasks == 3"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (tasks-per-node)' '
+test_expect_success 'flux job list outputs ntasks correctly (tasks-per-node)' '
         jobid=`flux submit --wait -N2 --tasks-per-node=3 hostname | flux job id` &&
         echo $jobid > taskcount6.id &&
         wait_jobid_state $jobid inactive &&
@@ -762,7 +762,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (tasks-per-n
 # N.B. As of this test writing, tasks-per-node uses
 # per-resource.type=node.  But write more direct test in case of
 # future changes.
-test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (per-resource.type=node)' '
+test_expect_success 'flux job list outputs ntasks correctly (per-resource.type=node)' '
         totalnodes=$(flux resource list -s up -no {nnodes}) &&
         totalcores=$(flux resource list -s up -no {ncores}) &&
         extra=$((totalcores / totalnodes + 2)) &&
@@ -778,7 +778,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (per-resourc
         echo $obj | jq -e ".ntasks == ${expected}"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (cores / tasks-per-core)' '
+test_expect_success 'flux job list outputs ntasks correctly (cores / tasks-per-core)' '
         jobid=`flux submit --wait --cores=4 --tasks-per-core=2 hostname | flux job id` &&
         echo $jobid > taskcount8.id &&
         wait_jobid_state $jobid inactive &&
@@ -786,7 +786,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (cores / tas
         echo $obj | jq -e ".ntasks == 8"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (tasks / cores-per-task)' '
+test_expect_success 'flux job list outputs ntasks correctly (tasks / cores-per-task)' '
 	jobid=$(flux submit --wait -n2 --cores-per-task=2 \
 	        -o per-resource.type=core \
 	        -o per-resource.count=2 \
@@ -797,7 +797,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (tasks / cor
         echo $obj | jq -e ".ntasks == 8"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (nodes / tasks-per-core 2)' '
+test_expect_success 'flux job list outputs ntasks correctly (nodes / tasks-per-core 2)' '
         totalnodes=$(flux resource list -s up -no {nnodes}) &&
         totalcores=$(flux resource list -s up -no {ncores}) &&
         jobid=`flux submit --wait -N ${totalnodes} --tasks-per-core=2 hostname | flux job id` &&
@@ -812,7 +812,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (nodes / tas
 # N.B. As of this test writing, tasks-per-core uses
 # per-resource.type=core.  But write direct test in case of future
 # changes.
-test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (cores / per-resource.type=core)' '
+test_expect_success 'flux job list outputs ntasks correctly (cores / per-resource.type=core)' '
 	totalcores=$(flux resource list -s up -no {ncores}) &&
 	jobid=$(flux submit --wait --cores=${totalcores} \
 	        -o per-resource.type=core \
@@ -830,7 +830,7 @@ test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
 
-test_expect_success HAVE_JQ 'verify task count preserved across restart' '
+test_expect_success 'verify task count preserved across restart' '
         jobid1=`cat taskcount1.id` &&
         jobid2=`cat taskcount2.id` &&
         jobid3=`cat taskcount3.id` &&
@@ -873,7 +873,7 @@ test_expect_success HAVE_JQ 'verify task count preserved across restart' '
 # job core count
 #
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 task)' '
+test_expect_success 'flux job list outputs ncores correctly (1 task)' '
         jobid=`flux submit --wait -n1 hostname | flux job id` &&
         echo $jobid > corecount1.id &&
         wait_jobid_state $jobid inactive &&
@@ -881,7 +881,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 task)' '
         echo $obj | jq -e ".ncores == 1"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 tasks)' '
+test_expect_success 'flux job list outputs ncores correctly (2 tasks)' '
         jobid=`flux submit --wait -n2 hostname | flux job id` &&
         echo $jobid > corecount2.id &&
         wait_jobid_state $jobid inactive &&
@@ -889,7 +889,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 tasks)' '
         echo $obj | jq -e ".ncores == 2"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 task, cores-per-task)' '
+test_expect_success 'flux job list outputs ncores correctly (1 task, cores-per-task)' '
         jobid=`flux submit --wait -n1 --cores-per-task=2 hostname | flux job id` &&
         echo $jobid > corecount3.id &&
         wait_jobid_state $jobid inactive &&
@@ -897,7 +897,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 task, cor
         echo $obj | jq -e ".ncores == 2"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 tasks, cores-per-task)' '
+test_expect_success 'flux job list outputs ncores correctly (2 tasks, cores-per-task)' '
         jobid=`flux submit --wait -n2 --cores-per-task=2 hostname | flux job id` &&
         echo $jobid > corecount4.id &&
         wait_jobid_state $jobid inactive &&
@@ -905,7 +905,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 tasks, co
         echo $obj | jq -e ".ncores == 4"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 task)' '
+test_expect_success 'flux job list outputs ncores correctly (1 node, 1 task)' '
         jobid=`flux submit --wait -N1 -n1 hostname | flux job id` &&
         echo $jobid > corecount5.id &&
         wait_jobid_state $jobid inactive &&
@@ -913,7 +913,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 t
         echo $obj | jq -e ".ncores == 1"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 2 tasks)' '
+test_expect_success 'flux job list outputs ncores correctly (1 node, 2 tasks)' '
         jobid=`flux submit --wait -N1 -n2 hostname | flux job id` &&
         echo $jobid > corecount6.id &&
         wait_jobid_state $jobid inactive &&
@@ -921,7 +921,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 2 t
         echo $obj | jq -e ".ncores == 2"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 tasks)' '
+test_expect_success 'flux job list outputs ncores correctly (2 nodes, 2 tasks)' '
         jobid=`flux submit --wait -N2 -n2 hostname | flux job id` &&
         echo $jobid > corecount7.id &&
         wait_jobid_state $jobid inactive &&
@@ -929,7 +929,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 
         echo $obj | jq -e ".ncores == 2"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 task, exclusive)' '
+test_expect_success 'flux job list outputs ncores correctly (1 node, 1 task, exclusive)' '
         totalnodes=$(flux resource list -s up -no {nnodes}) &&
         totalcores=$(flux resource list -s up -no {ncores}) &&
         corespernode=$((totalcores / totalnodes)) &&
@@ -942,7 +942,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 t
         echo $obj | jq -e ".ncores == ${expected}"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 2 tasks, exclusive)' '
+test_expect_success 'flux job list outputs ncores correctly (1 node, 2 tasks, exclusive)' '
         totalnodes=$(flux resource list -s up -no {nnodes}) &&
         totalcores=$(flux resource list -s up -no {ncores}) &&
         corespernode=$((totalcores / totalnodes)) &&
@@ -955,7 +955,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 2 t
         echo $obj | jq -e ".ncores == ${expected}"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 tasks, exclusive)' '
+test_expect_success 'flux job list outputs ncores correctly (2 nodes, 2 tasks, exclusive)' '
         totalnodes=$(flux resource list -s up -no {nnodes}) &&
         totalcores=$(flux resource list -s up -no {ncores}) &&
         corespernode=$((totalcores / totalnodes)) &&
@@ -968,7 +968,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 
         echo $obj | jq -e ".ncores == ${expected}"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 task, cores-per-task)' '
+test_expect_success 'flux job list outputs ncores correctly (1 node, 1 task, cores-per-task)' '
         jobid=`flux submit --wait -N1 -n1 --cores-per-task=2 hostname | flux job id` &&
         echo $jobid > corecount11.id &&
         wait_jobid_state $jobid inactive &&
@@ -976,7 +976,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 t
         echo $obj | jq -e ".ncores == 2"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 task, cores-per-task)' '
+test_expect_success 'flux job list outputs ncores correctly (1 node, 1 task, cores-per-task)' '
         jobid=`flux submit --wait -N1 -n1 --cores-per-task=2 hostname | flux job id` &&
         echo $jobid > corecount12.id &&
         wait_jobid_state $jobid inactive &&
@@ -984,7 +984,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 t
         echo $obj | jq -e ".ncores == 2"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 tasks, cores-per-task)' '
+test_expect_success 'flux job list outputs ncores correctly (2 nodes, 2 tasks, cores-per-task)' '
         jobid=`flux submit --wait -N2 -n2 --cores-per-task=2 hostname | flux job id` &&
         echo $jobid > corecount13.id &&
         wait_jobid_state $jobid inactive &&
@@ -992,7 +992,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 
         echo $obj | jq -e ".ncores == 4"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 core)' '
+test_expect_success 'flux job list outputs ncores correctly (1 core)' '
         jobid=`flux submit --wait --cores=1 hostname | flux job id` &&
         echo $jobid > corecount14.id &&
         wait_jobid_state $jobid inactive &&
@@ -1000,7 +1000,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 core)' '
         echo $obj | jq -e ".ncores == 1"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 cores)' '
+test_expect_success 'flux job list outputs ncores correctly (2 cores)' '
         jobid=`flux submit --wait --cores=2 hostname | flux job id` &&
         echo $jobid > corecount15.id &&
         wait_jobid_state $jobid inactive &&
@@ -1008,7 +1008,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 cores)' '
         echo $obj | jq -e ".ncores == 2"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 core)' '
+test_expect_success 'flux job list outputs ncores correctly (1 node, 1 core)' '
         jobid=`flux submit --wait -N1 --cores=1 hostname | flux job id` &&
         echo $jobid > corecount16.id &&
         wait_jobid_state $jobid inactive &&
@@ -1016,7 +1016,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 c
         echo $obj | jq -e ".ncores == 1"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 2 cores)' '
+test_expect_success 'flux job list outputs ncores correctly (1 node, 2 cores)' '
         jobid=`flux submit --wait -N1 --cores=2 hostname | flux job id` &&
         echo $jobid > corecount17.id &&
         wait_jobid_state $jobid inactive &&
@@ -1024,7 +1024,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 2 c
         echo $obj | jq -e ".ncores == 2"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 cores)' '
+test_expect_success 'flux job list outputs ncores correctly (2 nodes, 2 cores)' '
         jobid=`flux submit --wait -N2 --cores=2 hostname | flux job id` &&
         echo $jobid > corecount18.id &&
         wait_jobid_state $jobid inactive &&
@@ -1032,7 +1032,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 
         echo $obj | jq -e ".ncores == 2"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 task, exclusive)' '
+test_expect_success 'flux job list outputs ncores correctly (1 node, 1 task, exclusive)' '
         totalnodes=$(flux resource list -s up -no {nnodes}) &&
         totalcores=$(flux resource list -s up -no {ncores}) &&
         corespernode=$((totalcores / totalnodes)) &&
@@ -1045,7 +1045,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 1 t
         echo $obj | jq -e ".ncores == ${expected}"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 2 tasks, exclusive)' '
+test_expect_success 'flux job list outputs ncores correctly (1 node, 2 tasks, exclusive)' '
         totalnodes=$(flux resource list -s up -no {nnodes}) &&
         totalcores=$(flux resource list -s up -no {ncores}) &&
         corespernode=$((totalcores / totalnodes)) &&
@@ -1058,7 +1058,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (1 node, 2 t
         echo $obj | jq -e ".ncores == ${expected}"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 tasks, exclusive)' '
+test_expect_success 'flux job list outputs ncores correctly (2 nodes, 2 tasks, exclusive)' '
         totalnodes=$(flux resource list -s up -no {nnodes}) &&
         totalcores=$(flux resource list -s up -no {ncores}) &&
         corespernode=$((totalcores / totalnodes)) &&
@@ -1072,7 +1072,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ncores correctly (2 nodes, 2 
 '
 
 # use flux queue to ensure jobs stay in pending state
-test_expect_success HAVE_JQ 'flux job list lists ncores if pending & tasks specified' '
+test_expect_success 'flux job list lists ncores if pending & tasks specified' '
         flux queue stop &&
         id=$(flux submit -n3 hostname | flux job id) &&
         flux job list -s pending | grep ${id} &&
@@ -1082,7 +1082,7 @@ test_expect_success HAVE_JQ 'flux job list lists ncores if pending & tasks speci
 '
 
 # use flux queue to ensure jobs stay in pending state
-test_expect_success HAVE_JQ 'flux job list does not list ncores if pending & nodes exclusive' '
+test_expect_success 'flux job list does not list ncores if pending & nodes exclusive' '
         flux queue stop &&
         id=$(flux submit -N1 --exclusive hostname | flux job id) &&
         flux job list -s pending | grep ${id} &&
@@ -1095,7 +1095,7 @@ test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
 
-test_expect_success HAVE_JQ 'verify core count preserved across restart' '
+test_expect_success 'verify core count preserved across restart' '
         jobid1=`cat corecount1.id` &&
         jobid2=`cat corecount2.id` &&
         jobid3=`cat corecount3.id` &&
@@ -1171,7 +1171,7 @@ test_expect_success HAVE_JQ 'verify core count preserved across restart' '
 # job node count
 #
 
-test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (1 task / 1 node)' '
+test_expect_success 'flux job list outputs nnodes correctly (1 task / 1 node)' '
         jobid=`flux submit --wait -n1 hostname | flux job id` &&
         echo $jobid > nodecount1.id &&
         wait_jobid_state $jobid inactive &&
@@ -1179,7 +1179,7 @@ test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (1 task / 1 
         echo $obj | jq -e ".nnodes == 1"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (2 tasks, / 1 node)' '
+test_expect_success 'flux job list outputs nnodes correctly (2 tasks, / 1 node)' '
         jobid=`flux submit --wait -n2 hostname | flux job id` &&
         echo $jobid > nodecount2.id &&
         wait_jobid_state $jobid inactive &&
@@ -1187,7 +1187,7 @@ test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (2 tasks, / 
         echo $obj | jq -e ".nnodes == 1"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (3 tasks, / 2 nodes)' '
+test_expect_success 'flux job list outputs nnodes correctly (3 tasks, / 2 nodes)' '
         jobid=`flux submit --wait -n3 hostname | flux job id` &&
         echo $jobid > nodecount3.id &&
         wait_jobid_state $jobid inactive &&
@@ -1195,7 +1195,7 @@ test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (3 tasks, / 
         echo $obj | jq -e ".nnodes == 2"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (5 tasks, / 3 nodes)' '
+test_expect_success 'flux job list outputs nnodes correctly (5 tasks, / 3 nodes)' '
         jobid=`flux submit --wait -n5 hostname | flux job id` &&
         echo $jobid > nodecount4.id &&
         wait_jobid_state $jobid inactive &&
@@ -1204,7 +1204,7 @@ test_expect_success HAVE_JQ 'flux job list outputs nnodes correctly (5 tasks, / 
 '
 
 # use flux queue to ensure jobs stay in pending state
-test_expect_success HAVE_JQ 'flux job list does not list nnodes if no nodes requested' '
+test_expect_success 'flux job list does not list nnodes if no nodes requested' '
         flux queue stop &&
         id=$(flux submit -n1 hostname | flux job id) &&
         flux job list -s pending | grep ${id} &&
@@ -1214,7 +1214,7 @@ test_expect_success HAVE_JQ 'flux job list does not list nnodes if no nodes requ
 '
 
 # use flux queue to ensure jobs stay in pending state
-test_expect_success HAVE_JQ 'flux job list lists nnodes for pending jobs if nodes requested' '
+test_expect_success 'flux job list lists nnodes for pending jobs if nodes requested' '
         flux queue stop &&
         id1=$(flux submit -N1 hostname | flux job id) &&
         id2=$(flux submit -N3 hostname | flux job id) &&
@@ -1230,7 +1230,7 @@ test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
 
-test_expect_success HAVE_JQ 'verify nnodes preserved across restart' '
+test_expect_success 'verify nnodes preserved across restart' '
         jobid1=`cat nodecount1.id` &&
         jobid2=`cat nodecount2.id` &&
         jobid3=`cat nodecount3.id` &&
@@ -1249,7 +1249,7 @@ test_expect_success HAVE_JQ 'verify nnodes preserved across restart' '
 # job rank list / nodelist
 #
 
-test_expect_success HAVE_JQ 'flux job list outputs ranks/nodelist correctly (1 node)' '
+test_expect_success 'flux job list outputs ranks/nodelist correctly (1 node)' '
         jobid=`flux submit --wait -N1 hostname | flux job id` &&
         echo $jobid > nodelist1.id &&
         wait_jobid_state $jobid inactive &&
@@ -1259,7 +1259,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ranks/nodelist correctly (1 n
         echo $obj | jq -e ".nodelist == \"${nodes}\""
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs ranks/nodelist correctly (3 nodes)' '
+test_expect_success 'flux job list outputs ranks/nodelist correctly (3 nodes)' '
         jobid=`flux submit --wait -N3 hostname | flux job id` &&
         echo $jobid > nodelist2.id &&
         wait_jobid_state $jobid inactive &&
@@ -1273,7 +1273,7 @@ test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
 
-test_expect_success HAVE_JQ 'verify ranks/nodelist preserved across restart' '
+test_expect_success 'verify ranks/nodelist preserved across restart' '
         jobid1=`cat nodelist1.id` &&
         jobid2=`cat nodelist2.id` &&
         obj=$(flux job list -s inactive | grep ${jobid1}) &&
@@ -1290,7 +1290,7 @@ test_expect_success HAVE_JQ 'verify ranks/nodelist preserved across restart' '
 # job success
 #
 
-test_expect_success HAVE_JQ 'flux job list outputs success correctly (true)' '
+test_expect_success 'flux job list outputs success correctly (true)' '
         jobid=`flux submit --wait hostname | flux job id` &&
         echo $jobid > success1.id &&
         wait_jobid_state $jobid inactive &&
@@ -1298,7 +1298,7 @@ test_expect_success HAVE_JQ 'flux job list outputs success correctly (true)' '
         echo $obj | jq -e ".success == true"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs success correctly (false)' '
+test_expect_success 'flux job list outputs success correctly (false)' '
         jobid=`flux submit --wait nosuchcommand | flux job id` &&
         echo $jobid > success2.id &&
         wait_jobid_state $jobid inactive &&
@@ -1310,7 +1310,7 @@ test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
 
-test_expect_success HAVE_JQ 'verify task count preserved across restart' '
+test_expect_success 'verify task count preserved across restart' '
         jobid1=`cat success1.id` &&
         jobid2=`cat success2.id` &&
         obj=$(flux job list -s inactive | grep ${jobid1}) &&
@@ -1321,7 +1321,7 @@ test_expect_success HAVE_JQ 'verify task count preserved across restart' '
 
 # job exceptions
 
-test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (no exception)' '
+test_expect_success 'flux job list outputs exceptions correctly (no exception)' '
         jobid=`flux submit --wait hostname | flux job id` &&
         echo $jobid > exceptions1.id &&
         wait_jobid_state $jobid inactive &&
@@ -1332,7 +1332,7 @@ test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (no exce
         echo $obj | jq -e ".exception_note == null"
 '
 
-test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (exception)' '
+test_expect_success 'flux job list outputs exceptions correctly (exception)' '
         jobid=`flux submit --wait nosuchcommand | flux job id` &&
         echo $jobid > exceptions2.id &&
         wait_jobid_state $jobid inactive &&
@@ -1347,7 +1347,7 @@ test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
 
-test_expect_success HAVE_JQ 'verify task count preserved across restart' '
+test_expect_success 'verify task count preserved across restart' '
         jobid1=`cat exceptions1.id` &&
         jobid2=`cat exceptions2.id` &&
         obj=$(flux job list -s inactive | grep ${jobid1}) &&
@@ -1365,7 +1365,7 @@ test_expect_success HAVE_JQ 'verify task count preserved across restart' '
 
 # expiration time
 
-test_expect_success HAVE_JQ 'flux job list outputs expiration time when set' '
+test_expect_success 'flux job list outputs expiration time when set' '
 	jobid=$(flux submit -t 500s sleep 1000 | flux job id) &&
 	echo $jobid > expiration.id &&
 	fj_wait_event $jobid start &&
@@ -1379,7 +1379,7 @@ test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
 
-test_expect_success HAVE_JQ 'verify task count preserved across restart' '
+test_expect_success 'verify task count preserved across restart' '
         jobid=`cat expiration.id` &&
         flux job list -s inactive | grep ${jobid} > expiration2.json &&
         jq -e ".expiration > now" < expiration2.json
@@ -1387,7 +1387,7 @@ test_expect_success HAVE_JQ 'verify task count preserved across restart' '
 
 # duration time
 
-test_expect_success HAVE_JQ 'flux job list outputs duration time when set' '
+test_expect_success 'flux job list outputs duration time when set' '
 	jobid=$(flux submit -t 60m sleep 1000 | flux job id) &&
         echo $jobid > duration.id &&
 	fj_wait_event $jobid start &&
@@ -1401,7 +1401,7 @@ test_expect_success 'reload the job-list module' '
         flux module reload job-list
 '
 
-test_expect_success HAVE_JQ 'verify task count preserved across restart' '
+test_expect_success 'verify task count preserved across restart' '
         jobid=`cat duration.id` &&
         flux job list -s inactive | grep ${jobid} > duration2.json &&
         jq -e ".duration == 3600.0" < duration2.json
@@ -1415,7 +1415,7 @@ test_expect_success HAVE_JQ 'verify task count preserved across restart' '
 #
 # so we check for all the core / expected attributes for the situation
 
-test_expect_success HAVE_JQ 'list request with all attr works (job success)' '
+test_expect_success 'list request with all attr works (job success)' '
         id=$(id -u) &&
         flux run hostname &&
         $jq -j -c -n  "{max_entries:1, userid:${id}, states:0, results:0, attrs:[\"all\"]}" \
@@ -1442,7 +1442,7 @@ test_expect_success HAVE_JQ 'list request with all attr works (job success)' '
         cat all_success.out | jq -e ".expiration"
 '
 
-test_expect_success HAVE_JQ 'list request with all attr works (job fail)' '
+test_expect_success 'list request with all attr works (job fail)' '
         id=$(id -u) &&
         ! flux run -N1000 -n1000 hostname &&
         $jq -j -c -n  "{max_entries:1, userid:${id}, states:0, results:0, attrs:[\"all\"]}" \
@@ -1550,7 +1550,7 @@ waitstatus \
 dependencies
 "
 
-test_expect_success HAVE_JQ 'list request with empty attrs works' '
+test_expect_success 'list request with empty attrs works' '
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[]}" \
           | $RPC job-list.list > list_empty_attrs.out &&
@@ -1558,7 +1558,7 @@ test_expect_success HAVE_JQ 'list request with empty attrs works' '
 	    test_must_fail grep $attr list_empty_attrs.out
 	done
 '
-test_expect_success HAVE_JQ 'list request with excessive max_entries works' '
+test_expect_success 'list request with excessive max_entries works' '
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:100000, userid:${id}, states:0, results:0, attrs:[]}" \
           | $RPC job-list.list
@@ -1567,7 +1567,7 @@ test_expect_success HAVE_JQ 'list request with excessive max_entries works' '
 # list-attrs also lists the special attribute 'all'
 LIST_ATTRIBUTES="${JOB_ATTRIBUTES} all"
 
-test_expect_success HAVE_JQ 'list-attrs works' '
+test_expect_success 'list-attrs works' '
         $RPC job-list.list-attrs < /dev/null > list_attrs.out &&
 	for attr in $LIST_ATTRIBUTES; do
 	    grep $attr list_attrs.out
@@ -1589,7 +1589,7 @@ test_expect_success 'job-list stats works' '
 test_expect_success 'list request with empty payload fails with EPROTO(71)' '
 	${RPC} job-list.list 71 </dev/null
 '
-test_expect_success HAVE_JQ 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
+test_expect_success 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
 	name="attrs-not-array" &&
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:5}" \
@@ -1599,7 +1599,7 @@ test_expect_success HAVE_JQ 'list request with invalid input fails with EPROTO(7
 	EOF
 	test_cmp ${name}.expected ${name}.out
 '
-test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
+test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
 	name="attr-not-string" &&
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[5]}" \
@@ -1609,7 +1609,7 @@ test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(2
 	EOF
 	test_cmp ${name}.expected ${name}.out
 '
-test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
+test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
 	name="field-not-valid" &&
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[\"foo\"]}" \
@@ -1622,7 +1622,7 @@ test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(2
 test_expect_success 'list-id request with empty payload fails with EPROTO(71)' '
 	${RPC} job-list.list-id 71 </dev/null
 '
-test_expect_success HAVE_JQ 'list-id request with invalid input fails with EPROTO(71) (attrs not an array)' '
+test_expect_success 'list-id request with invalid input fails with EPROTO(71) (attrs not an array)' '
 	name="list-id-attrs-not-array" &&
         id=`flux submit hostname | flux job id` &&
         $jq -j -c -n  "{id:${id}, attrs:5}" \
@@ -1632,7 +1632,7 @@ test_expect_success HAVE_JQ 'list-id request with invalid input fails with EPROT
 	EOF
 	test_cmp ${name}.expected ${name}.out
 '
-test_expect_success HAVE_JQ 'list-id request with invalid input fails with EINVAL(22) (attrs non-string)' '
+test_expect_success 'list-id request with invalid input fails with EINVAL(22) (attrs non-string)' '
 	name="list-id-invalid-attrs" &&
 	id=$(flux jobs -c1 -ano {id.dec}) &&
         $jq -j -c -n  "{id:${id}, attrs:[5]}" \
@@ -1642,7 +1642,7 @@ test_expect_success HAVE_JQ 'list-id request with invalid input fails with EINVA
 	EOF
 	test_cmp ${name}.expected ${name}.out
 '
-test_expect_success HAVE_JQ 'list-id request with invalid input fails with EINVAL(22) (attrs illegal field)' '
+test_expect_success 'list-id request with invalid input fails with EINVAL(22) (attrs illegal field)' '
 	name="list-id-invalid-attr" &&
 	id=$(flux jobs -c1 -ano {id.dec}) &&
         $jq -j -c -n  "{id:${id}, attrs:[\"foo\"]}" \
@@ -1655,7 +1655,7 @@ test_expect_success HAVE_JQ 'list-id request with invalid input fails with EINVA
 # N.B. we remove annotations from the alloc event in this test, but it could
 # be cached and replayed via the job-manager, so we need to reload it
 # and associated modules too
-test_expect_success HAVE_JQ 'job-list can handle events missing optional data (alloc)' '
+test_expect_success 'job-list can handle events missing optional data (alloc)' '
 	userid=`id -u` &&
 	cat <<EOF >eventlog_empty_alloc.out &&
 {"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":16,"flags":0,"version":1}}
@@ -1680,7 +1680,7 @@ EOF
 	flux job list-ids ${jobid} > empty_alloc.out &&
 	cat empty_alloc.out | jq -e ".annotations == null"
 '
-test_expect_success HAVE_JQ 'job-list can handle events missing optional data (exception)' '
+test_expect_success 'job-list can handle events missing optional data (exception)' '
 	userid=`id -u` &&
 	cat <<EOF >eventlog_no_exception_note.out &&
 {"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":16,"flags":0,"version":1}}
@@ -1707,7 +1707,7 @@ EOF
 # eventlog was loaded correctly at the end of the test.
 #
 # N.B. We add extra events into this fake eventlog for testing
-test_expect_success HAVE_JQ 'job-list can handle events with superfluous context data' '
+test_expect_success 'job-list can handle events with superfluous context data' '
 	userid=`id -u` &&
 	cat <<EOF >eventlog_superfluous_context.out &&
 {"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":8,"flags":0,"version":1,"etc":1}}
@@ -1794,7 +1794,7 @@ test_expect_success 'run some jobs in the batch,debug queues' '
         wait_id_inactive $(cat stats4.id)
 '
 
-test_expect_success HAVE_JQ 'job stats lists jobs in correct state in each queue' '
+test_expect_success 'job stats lists jobs in correct state in each queue' '
         batchq=`flux job stats | jq ".queues[] | select( .name == \"batch\" )"` &&
         debugq=`flux job stats | jq ".queues[] | select( .name == \"debug\" )"` &&
         echo $batchq | jq -e ".job_states.depend == 0" &&
@@ -1831,7 +1831,7 @@ test_expect_success 'reload the job-list module' '
         wait_id_inactive $(cat stats4.id)
 '
 
-test_expect_success HAVE_JQ 'job stats in each queue correct after reload' '
+test_expect_success 'job stats in each queue correct after reload' '
         batchq=`flux job stats | jq ".queues[] | select( .name == \"batch\" )"` &&
         debugq=`flux job stats | jq ".queues[] | select( .name == \"debug\" )"` &&
         echo $batchq | jq -e ".job_states.depend == 0" &&
@@ -1878,7 +1878,7 @@ wait_total() {
 
 # purge all jobs except two, the remaining two should be the failed
 # jobs submitted to the batch and debug queues.
-test_expect_success HAVE_JQ 'job-stats correct after purge' '
+test_expect_success 'job-stats correct after purge' '
         total=$(flux job stats | jq .job_states.total) &&
         purged=$((total - 2)) &&
         flux job purge --force --num-limit=2 &&
@@ -1932,12 +1932,12 @@ test_expect_success 'reload job-ingest without validator' '
         ingest_module reload disable-validator
 '
 
-test_expect_success HAVE_JQ 'create illegal jobspec with empty command array' '
+test_expect_success 'create illegal jobspec with empty command array' '
         cat hostname.json | $jq ".tasks[0].command = []" > bad_jobspec.json
 '
 
 # note that ntasks will not be set if jobspec invalid
-test_expect_success HAVE_JQ 'flux job list works on job with illegal jobspec' '
+test_expect_success 'flux job list works on job with illegal jobspec' '
         jobid=`flux job submit bad_jobspec.json | flux job id` &&
         fj_wait_event $jobid clean >/dev/null &&
         i=0 &&
@@ -1953,7 +1953,7 @@ test_expect_success HAVE_JQ 'flux job list works on job with illegal jobspec' '
         cat list_illegal_jobspec.out | $jq -e ".ntasks == null"
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with illegal jobspec' '
+test_expect_success NO_CHAIN_LINT 'flux job list-ids works on job with illegal jobspec' '
 	${RPC} job-list.job-state-pause 0 </dev/null
         jobid=`flux job submit bad_jobspec.json | flux job id`
         fj_wait_event $jobid clean >/dev/null
@@ -1971,7 +1971,7 @@ test_expect_success 'reload job-ingest with defaults' '
 
 # we make R invalid by overwriting it in the KVS before job-list will
 # look it up
-test_expect_success HAVE_JQ 'flux job list works on job with illegal R' '
+test_expect_success 'flux job list works on job with illegal R' '
 	${RPC} job-list.job-state-pause 0 </dev/null &&
         jobid=`flux submit --wait hostname | flux job id` &&
         jobkvspath=`flux job id --to kvs $jobid` &&
@@ -1992,7 +1992,7 @@ test_expect_success HAVE_JQ 'flux job list works on job with illegal R' '
         cat list_illegal_R.out | $jq -e ".expiration == null"
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with illegal R' '
+test_expect_success NO_CHAIN_LINT 'flux job list-ids works on job with illegal R' '
 	${RPC} job-list.job-state-pause 0 </dev/null
         jobid=`flux submit --wait hostname | flux job id`
         jobkvspath=`flux job id --to kvs $jobid` &&
@@ -2006,7 +2006,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with i
 '
 
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with illegal eventlog' '
+test_expect_success NO_CHAIN_LINT 'flux job list-ids works on job with illegal eventlog' '
 	${RPC} job-list.job-state-pause 0 </dev/null
         jobid=`flux submit --wait hostname | flux job id`
         jobkvspath=`flux job id --to kvs $jobid` &&
@@ -2019,7 +2019,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with i
         cat list_id_illegal_eventlog.out | $jq -e ".id == ${jobid}"
 '
 
-test_expect_success HAVE_JQ 'flux job list works on racy annotations' '
+test_expect_success 'flux job list works on racy annotations' '
 	${RPC} job-list.job-state-pause 0 </dev/null &&
         jobid=`flux submit --wait hostname | flux job id` &&
 	${RPC} job-list.job-state-unpause 0 </dev/null &&

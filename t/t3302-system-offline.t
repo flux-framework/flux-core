@@ -23,7 +23,7 @@ test_expect_success 'start rank 2 before TBON parent is up' '
 	$startctl run 2
 '
 
-test_expect_success HAVE_JQ 'startctl shows rank 1 pid as -1' '
+test_expect_success 'startctl shows rank 1 pid as -1' '
         test $($startctl status | jq -r ".procs[1].pid") = "-1"
 '
 

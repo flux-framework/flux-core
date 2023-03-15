@@ -34,11 +34,11 @@ test_expect_success 'wait for monitor to declare all ranks are up' '
 	waitdown 0
 '
 
-test_expect_success HAVE_JQ 'unload scheduler' '
+test_expect_success 'unload scheduler' '
 	flux module remove sched-simple
 '
 
-test_expect_success HAVE_JQ 'acquire works and response contains up, resources' '
+test_expect_success 'acquire works and response contains up, resources' '
 	$RPC resource.acquire </dev/null >acquire.out &&
 	jq -c -e -a .resources acquire.out &&
 	jq -c -e -a .up acquire.out
@@ -56,7 +56,7 @@ test_expect_success 'reload config excluding rank 0' '
 	flux config reload
 '
 
-test_expect_success HAVE_JQ 'acquire returns resources excluding rank 0' '
+test_expect_success 'acquire returns resources excluding rank 0' '
 	$RPC resource.acquire </dev/null >acquire2.out &&
 	jq -r .resources.execution.R_lite[0].rank acquire2.out \
 		>acquire2_rank.out &&
@@ -64,12 +64,12 @@ test_expect_success HAVE_JQ 'acquire returns resources excluding rank 0' '
 	test_cmp acquire2_rank.exp acquire2_rank.out
 '
 
-test_expect_success HAVE_JQ 'acquire returns up excluding rank 0' '
+test_expect_success 'acquire returns up excluding rank 0' '
 	jq -e -r .up acquire2.out | $IDSETUTIL expand >acquire2_up.out &&
 	test_must_fail grep "^0" acquire2_up.out
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'drain rank 1 causes down response' '
+test_expect_success NO_CHAIN_LINT 'drain rank 1 causes down response' '
 	acquire_stream 30 acquire3.out down &
 	pid=$! &&
 	$WAITFILE -t 10 -v -p \"resources\" acquire3.out &&
@@ -77,7 +77,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'drain rank 1 causes down response' '
 	wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'undrain/drain rank 1 causes up,down responses' '
+test_expect_success NO_CHAIN_LINT 'undrain/drain rank 1 causes up,down responses' '
 	acquire_stream 30 acquire4.out down &
 	pid=$! &&
 	$WAITFILE -t 10 -v -p \"resources\" acquire4.out &&
@@ -87,7 +87,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'undrain/drain rank 1 causes up,down r
 	wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'add/remove new exclusion causes down/up response' '
+test_expect_success NO_CHAIN_LINT 'add/remove new exclusion causes down/up response' '
 	acquire_stream 30 acquire5.out &
 	pid=$! &&
 	$WAITFILE -t 10 -v -p \"resources\" acquire5.out &&
@@ -106,7 +106,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'add/remove new exclusion causes down/
 	kill -15 $pid && wait $pid || true
 '
 
-test_expect_success HAVE_JQ 'load scheduler' '
+test_expect_success 'load scheduler' '
 	flux module load sched-simple
 '
 

@@ -34,13 +34,13 @@ terminus_jobid() {
         -s $(shell_service $jobid).terminus "$@"
 }
 
-test_expect_success HAVE_JQ 'pty: submit a job with an interactive pty' '
+test_expect_success 'pty: submit a job with an interactive pty' '
 	id=$(flux submit --flags waitable -o pty.interactive tty) &&
 	terminus_jobid $id list &&
 	$runpty flux job attach ${id} &&
 	flux job wait $id
 '
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'pty: run job with pty' '
+test_expect_success NO_CHAIN_LINT 'pty: run job with pty' '
 	printf "PS1=XXX:\n" >ps1.rc
 	id=$(flux submit -o pty.interactive bash --rcfile ps1.rc | flux job id)
 	$runpty -o log.job-pty flux job attach ${id} &
@@ -98,7 +98,7 @@ test_expect_success 'pty: pty.ranks can take an idset' '
 	grep 1: ptyss.out &&
 	test_must_fail grep "not a tty" ptyss.out
 '
-test_expect_success HAVE_JQ 'pty: pty.interactive forces a pty on rank 0' '
+test_expect_success 'pty: pty.interactive forces a pty on rank 0' '
 	id=$(flux submit \
 		-o pty.interactive -o pty.ranks=1 \
 		-n2 \

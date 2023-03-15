@@ -115,7 +115,7 @@ test_expect_success 'wait for rank 0 overlay status to be partial' '
 # Just because rank 0 is partial doesn't mean rank 3 is offline yet
 # (shutdown starts at the leaves, and rank 3 will turn partial as
 # soon as one of its children goes offline)
-test_expect_success HAVE_JQ 'wait for rank 1 to lose connection with rank 3' '
+test_expect_success 'wait for rank 1 to lose connection with rank 3' '
 	wait_connected 1 1 10 0.2
 '
 

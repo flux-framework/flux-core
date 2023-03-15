@@ -22,7 +22,7 @@ restart_flux() {
 test_expect_success 'verify that job manager can restart with current dump' '
 	restart_flux dump.tar >stats.out
 '
-test_expect_success HAVE_JQ 'and max_jobid is greater than zero' '
+test_expect_success 'and max_jobid is greater than zero' '
 	jq -e ".max_jobid > 0" <stats.out
 '
 test_expect_success 'delete checkpoint from dump' '
@@ -34,7 +34,7 @@ test_expect_success 'delete checkpoint from dump' '
 test_expect_success 'verify that job manager can restart with modified dump' '
 	restart_flux dump-nock.tar >stats-nock.out
 '
-test_expect_success HAVE_JQ 'and max_jobid is still greater than zero' '
+test_expect_success 'and max_jobid is still greater than zero' '
 	jq -e ".max_jobid > 0" <stats-nock.out
 '
 test_expect_success 'delete job from dump' '
@@ -46,7 +46,7 @@ test_expect_success 'delete job from dump' '
 test_expect_success 'verify that job manager can restart with modified dump' '
 	restart_flux dump-nojob.tar >stats-nojob.out
 '
-test_expect_success HAVE_JQ 'and max_jobid is still greater than zero' '
+test_expect_success 'and max_jobid is still greater than zero' '
 	jq -e ".max_jobid > 0" <stats-nojob.out
 '
 

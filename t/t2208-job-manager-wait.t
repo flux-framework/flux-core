@@ -47,7 +47,7 @@ test_expect_success "wait works on inactive,waitable job" '
 	flux job wait ${JOBID}
 '
 
-test_expect_success HAVE_JQ "waitable inactive jobs are listed as zombies" '
+test_expect_success "waitable inactive jobs are listed as zombies" '
 	JOBID=$(flux submit --flags waitable /bin/true) &&
 	echo ${JOBID} >id1.out &&
 	flux job wait-event ${JOBID} clean &&

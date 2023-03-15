@@ -18,7 +18,7 @@ test_expect_success 'job-manager: submit 5 jobs (job 4 held)' '
            hostname ::: default default default hold default
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
+test_expect_success 'job-manager: job state RRSSS' '
         jmgr_check_state $(cat job1.id) R &&
         jmgr_check_state $(cat job2.id) R &&
         jmgr_check_state $(cat job3.id) S &&
@@ -26,7 +26,7 @@ test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
         jmgr_check_state $(cat job5.id) S
 '
 
-test_expect_success HAVE_JQ 'job-manager: job annotations correct (RRSSS)' '
+test_expect_success 'job-manager: job annotations correct (RRSSS)' '
         jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
         jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
@@ -44,7 +44,7 @@ test_expect_success 'job-manager: hold job 4 again (issue #4940)' '
         flux job urgency $(cat job4.id) hold
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
+test_expect_success 'job-manager: job state RRSSS' '
         jmgr_check_state $(cat job1.id) R &&
         jmgr_check_state $(cat job2.id) R &&
         jmgr_check_state $(cat job3.id) S &&
@@ -52,7 +52,7 @@ test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
         jmgr_check_state $(cat job5.id) S
 '
 
-test_expect_success HAVE_JQ 'job-manager: job annotations updated (RRSSS)' '
+test_expect_success 'job-manager: job annotations updated (RRSSS)' '
         jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
         jmgr_check_no_annotations $(cat job3.id) &&
@@ -66,7 +66,7 @@ test_expect_success 'job-manager: cancel job 1 & 2' '
         flux cancel $(cat job2.id)
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state IISSR' '
+test_expect_success 'job-manager: job state IISSR' '
         jmgr_check_state $(cat job1.id) I &&
         jmgr_check_state $(cat job2.id) I &&
         jmgr_check_state $(cat job3.id) S &&
@@ -74,7 +74,7 @@ test_expect_success HAVE_JQ 'job-manager: job state IISSR' '
         jmgr_check_state $(cat job5.id) R
 '
 
-test_expect_success HAVE_JQ 'job-manager: job annotations updated (IISSR)' '
+test_expect_success 'job-manager: job annotations updated (IISSR)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_no_annotations $(cat job3.id) &&
@@ -86,7 +86,7 @@ test_expect_success 'job-manager: remove hold on job 3' '
         flux job urgency $(cat job3.id) 16
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state IISSR' '
+test_expect_success 'job-manager: job state IISSR' '
         jmgr_check_state $(cat job1.id) I &&
         jmgr_check_state $(cat job2.id) I &&
         jmgr_check_state $(cat job3.id) R &&
@@ -94,7 +94,7 @@ test_expect_success HAVE_JQ 'job-manager: job state IISSR' '
         jmgr_check_state $(cat job5.id) R
 '
 
-test_expect_success HAVE_JQ 'job-manager: job annotations updated (IIRSR)' '
+test_expect_success 'job-manager: job annotations updated (IIRSR)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
@@ -106,7 +106,7 @@ test_expect_success 'job-manager: remove hold on job 4' '
         flux job urgency $(cat job4.id) 16
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state IIRSR' '
+test_expect_success 'job-manager: job state IIRSR' '
         jmgr_check_state $(cat job1.id) I &&
         jmgr_check_state $(cat job2.id) I &&
         jmgr_check_state $(cat job3.id) R &&
@@ -114,7 +114,7 @@ test_expect_success HAVE_JQ 'job-manager: job state IIRSR' '
         jmgr_check_state $(cat job5.id) R
 '
 
-test_expect_success HAVE_JQ 'job-manager: job annotations updated (IIRSR)' '
+test_expect_success 'job-manager: job annotations updated (IIRSR)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
@@ -127,7 +127,7 @@ test_expect_success 'job-manager: cancel job 3' '
         flux cancel $(cat job3.id)
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state IIIRR' '
+test_expect_success 'job-manager: job state IIIRR' '
         jmgr_check_state $(cat job1.id) I &&
         jmgr_check_state $(cat job2.id) I &&
         jmgr_check_state $(cat job3.id) I &&
@@ -135,7 +135,7 @@ test_expect_success HAVE_JQ 'job-manager: job state IIIRR' '
         jmgr_check_state $(cat job5.id) R
 '
 
-test_expect_success HAVE_JQ 'job-manager: job annotations updated (IISRR)' '
+test_expect_success 'job-manager: job annotations updated (IISRR)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_no_annotations $(cat job3.id) &&

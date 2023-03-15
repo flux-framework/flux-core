@@ -17,22 +17,22 @@ runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast"
 test_expect_success 'flux alloc with no args return error' '
 	test_expect_code 1 flux alloc
 '
-test_expect_success HAVE_JQ 'flux alloc sets command to flux broker' '
+test_expect_success 'flux alloc sets command to flux broker' '
 	flux alloc -n1 --dry-run | \
 	    jq -e ".tasks[0].command == [ \"flux\", \"broker\" ]"
 '
-test_expect_success HAVE_JQ 'flux alloc appends broker options' '
+test_expect_success 'flux alloc appends broker options' '
 	flux alloc -n1 --broker-opts=-v --dry-run | \
 	    jq -e ".tasks[0].command == [ \"flux\", \"broker\", \"-v\" ]"
 '
-test_expect_success HAVE_JQ 'flux alloc can set initial-program' '
+test_expect_success 'flux alloc can set initial-program' '
 	flux alloc -n1 --dry-run myapp --foo | \
 	    jq -e ".tasks[0].command == [ \"flux\", \"broker\", \"myapp\", \"--foo\" ]"
 '
-test_expect_success HAVE_JQ 'flux alloc -N2 requests 2 nodes exclusively' '
+test_expect_success 'flux alloc -N2 requests 2 nodes exclusively' '
 	flux alloc -N2 --dry-run hostname | jq -S ".resources[0]" | jq -e ".type == \"node\" and .exclusive"
 '
-test_expect_success HAVE_JQ 'flux alloc --exclusive works' '
+test_expect_success 'flux alloc --exclusive works' '
 	flux alloc -N1 -n1 --exclusive --dry-run hostname | jq -S ".resources[0]" | jq -e ".type == \"node\" and .exclusive"
 '
 test_expect_success 'flux alloc fails if N > n' '
@@ -111,11 +111,11 @@ test_expect_success NO_CHAIN_LINT 'flux alloc --bg errors when job is canceled' 
 	test_must_fail wait $pid &&
 	grep "unexpectedly exited" canceled.log
 '
-test_expect_success HAVE_JQ 'flux alloc: sets mpi=none by default' '
+test_expect_success 'flux alloc: sets mpi=none by default' '
 	flux alloc -N1 --dry-run hostname | \
 		jq -e ".attributes.system.shell.options.mpi = \"none\""
 '
-test_expect_success HAVE_JQ 'flux alloc: mpi option can be overridden' '
+test_expect_success 'flux alloc: mpi option can be overridden' '
 	flux alloc -o mpi=foo -N1 --dry-run hostname | \
 		jq -e ".attributes.system.shell.options.mpi = \"foo\""
 '

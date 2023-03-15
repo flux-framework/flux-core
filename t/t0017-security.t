@@ -254,13 +254,13 @@ test_expect_success 'dispatcher suppresses guest event to same guest connection'
 	! grep -q test.a ev8.out
 '
 
-test_expect_success HAVE_JQ 'guests may add userid-prefixed services' '
+test_expect_success 'guests may add userid-prefixed services' '
 	USERID=$(id -u) &&
 	${jq} -n "{service: \"${USERID}-sectest\"}" >user_service.json &&
 	FLUX_HANDLE_ROLEMASK=0x2 ${RPC} service.add <user_service.json
 '
 
-test_expect_success HAVE_JQ 'guests may not add other-userid-prefixed services' '
+test_expect_success 'guests may not add other-userid-prefixed services' '
 	USERID=$(($(id -u)+1)) &&
 	${jq} -n "{service: \"${USERID}-sectest\"}" >user2_service.json &&
 	(export FLUX_HANDLE_ROLEMASK=0x2 &&
@@ -270,7 +270,7 @@ test_expect_success HAVE_JQ 'guests may not add other-userid-prefixed services' 
 	grep "Operation not permitted" uservice_add.err
 '
 
-test_expect_success HAVE_JQ 'guests may not add non-userid-prefixed services' '
+test_expect_success 'guests may not add non-userid-prefixed services' '
 	${jq} -n "{service: \"sectest\"}" >service.json &&
 	(export FLUX_HANDLE_ROLEMASK=0x2 &&
 		test_expect_code 1 ${RPC} service.add \

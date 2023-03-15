@@ -71,7 +71,7 @@ test_expect_success 'sched-simple: gpu request is canceled' '
 '
 Y2J="flux python ${SHARNESS_TEST_SRCDIR}/jobspec/y2j.py"
 SPEC=${SHARNESS_TEST_SRCDIR}/jobspec/valid/basic.yaml
-test_expect_success HAVE_JQ 'sched-simple: invalid minimal jobspec is canceled' '
+test_expect_success 'sched-simple: invalid minimal jobspec is canceled' '
 	${Y2J}<${SPEC} | jq ".version = 1" | flux job submit >job00.id &&
 	jobid=$(cat job00.id) &&
 	flux job wait-event --timeout=5.0 $jobid exception &&

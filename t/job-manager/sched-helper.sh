@@ -63,7 +63,6 @@ _jmgr_get_annotation() {
 # arg2 - key in annotation
 # arg3 - value of key in annotation
 #
-# callers should set HAVE_JQ requirement
 jmgr_check_annotation() {
         local id=$1
         local key=$2
@@ -85,7 +84,6 @@ jmgr_check_annotation() {
 # arg2 - key in memo
 # arg3 - value of key
 #
-# callers should set HAVE_JQ requirement
 jmgr_check_memo() {
 	jmgr_check_annotation $1 "user.$2" $3
 	return $?
@@ -96,7 +94,6 @@ jmgr_check_memo() {
 # arg1 - jobid
 # arg2 - key in annotation
 #
-# callers should set HAVE_JQ requirement
 jmgr_check_annotation_exists() {
         local id=$(flux job id $1)
         local key=$2
@@ -141,7 +138,6 @@ _jlist_get_annotation() {
 # arg2 - key in annotation
 # arg3 - value of key in annotation
 #
-# callers should set HAVE_JQ requirement
 jlist_check_annotation() {
         local id=$1
         local key=$2
@@ -162,7 +158,6 @@ jlist_check_memo() {
 #
 # arg1 - jobid
 #
-# callers should set HAVE_JQ requirement
 jlist_check_no_annotations() {
         local id=$(flux job id $1)
         flux job list -A | grep ${id} | jq -e .annotations > /dev/null && return 1
@@ -174,7 +169,6 @@ jlist_check_no_annotations() {
 # arg1 - jobid
 # arg2 - key in annotation
 #
-# callers should set HAVE_JQ requirement
 jlist_check_annotation_exists() {
         local id=$(flux job id $1)
         local key=$2

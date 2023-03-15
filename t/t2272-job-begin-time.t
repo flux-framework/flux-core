@@ -21,13 +21,13 @@ test_expect_success 'begin-time: rejects invalid timestamp' '
 		--dependency=begin-time:-1.0 \
 		hostname
 '
-test_expect_success HAVE_JQ 'begin-time rejects missing timestamp' '
+test_expect_success 'begin-time rejects missing timestamp' '
 	flux run --dry-run hostname | \
 	  jq ".attributes.system.dependencies[0].scheme = \"begin-time\"" \
 	  > invalid.json &&
 	test_expect_code 1 flux job submit invalid.json
 '
-test_expect_success HAVE_JQ '--begin-time sets dependency in jobspec' '
+test_expect_success '--begin-time sets dependency in jobspec' '
 	flux run --dry-run --begin-time=+1h hostname | \
 	    jq -e ".attributes.system.dependencies[0].scheme == \"begin-time\""
 '

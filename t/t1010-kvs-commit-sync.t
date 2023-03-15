@@ -9,8 +9,6 @@ test_description='Test flux-kvs commit sync.'
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
-skip_all_unless_have jq
-
 SIZE=1
 test_under_flux ${SIZE} minimal
 

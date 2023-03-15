@@ -13,7 +13,7 @@ KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 
-test_expect_success HAVE_JQ 'job-shell: reads J not jobspec' '
+test_expect_success 'job-shell: reads J not jobspec' '
 	id=$(flux submit --wait-event=priority \
 		-n1 --urgency=hold /bin/true) &&
 	flux job info ${id} jobspec \
@@ -24,7 +24,7 @@ test_expect_success HAVE_JQ 'job-shell: reads J not jobspec' '
 	flux job attach -vEX ${id}
 '
 
-test_expect_success HAVE_JQ 'job-shell: fails on modified J' '
+test_expect_success 'job-shell: fails on modified J' '
 	id=$(flux submit --wait-event=priority \
 		-n1 --urgency=hold /bin/true) &&
 	flux job info ${id} J | sed s/./%/85 > J.new &&
@@ -153,7 +153,7 @@ test_expect_success 'job-shell: verify output of 1-task lptest job' '
 # output.
 #
 
-test_expect_success HAVE_JQ 'job-shell: verify output of 1-task lptest job on stderr' '
+test_expect_success 'job-shell: verify output of 1-task lptest job on stderr' '
 	flux run --dry-run bash -c "${LPTEST} >&2" \
 		| $jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
 		> 1task_lptest.json &&
@@ -168,7 +168,7 @@ test_expect_success 'job-shell: verify output of 4-task lptest job' '
 	sort -snk1 <lptest4_raw.out >lptest4.out &&
 	test_cmp lptest4.exp lptest4.out
 '
-test_expect_success HAVE_JQ 'job-shell: verify output of 4-task lptest job on stderr' '
+test_expect_success 'job-shell: verify output of 4-task lptest job on stderr' '
 	flux run --dry-run -n4 -N4 bash -c "${LPTEST} 1>&2" \
 		| $jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
 		> 4task_lptest.json &&

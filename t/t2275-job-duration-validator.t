@@ -4,8 +4,6 @@ test_description='Test job duration validator plugin in job-manager'
 
 . $(dirname $0)/sharness.sh
 
-skip_all_unless_have jq
-
 test_under_flux 1 job
 
 flux setattr log-stderr-level 1

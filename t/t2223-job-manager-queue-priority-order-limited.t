@@ -21,7 +21,7 @@ test_expect_success 'job-manager: submit 6 jobs (differing urgencies)' '
         flux queue start
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state SSSSRR' '
+test_expect_success 'job-manager: job state SSSSRR' '
         jmgr_check_state $(cat job1.id) S &&
         jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) S &&
@@ -30,7 +30,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SSSSRR' '
         jmgr_check_state $(cat job6.id) R
 '
 
-test_expect_success HAVE_JQ 'job-manager: queue counts are as expected' '
+test_expect_success 'job-manager: queue counts are as expected' '
 	flux queue status -v >counts_all1.out &&
 	cat <<-EOT >counts_all1.exp &&
 	Job submission is enabled
@@ -51,7 +51,7 @@ test_expect_success 'job-manager: increase urgency job 3' '
         flux job urgency $(cat job3.id) 20
 '
 
-test_expect_success HAVE_JQ 'job-manager: queue counts are as expected' '
+test_expect_success 'job-manager: queue counts are as expected' '
 	flux queue status -v >counts_all2.out &&
 	cat <<-EOT >counts_all2.exp &&
 	Job submission is enabled
@@ -73,7 +73,7 @@ test_expect_success 'job-manager: start scheduling' '
 '
 
 # job 3 should run before over previously higher priority job 4
-test_expect_success HAVE_JQ 'job-manager: job state SSRSRI' '
+test_expect_success 'job-manager: job state SSRSRI' '
         jmgr_check_state $(cat job1.id) S &&
         jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) R &&
@@ -82,7 +82,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SSRSRI' '
         jmgr_check_state $(cat job6.id) I
 '
 
-test_expect_success HAVE_JQ 'job-manager: queue counts are as expected' '
+test_expect_success 'job-manager: queue counts are as expected' '
 	flux queue status -v >counts_all3.out &&
 	cat <<-EOT >counts_all3.exp &&
 	Job submission is enabled
@@ -112,7 +112,7 @@ test_expect_success 'job-manager: start scheduling' '
 '
 
 # job 1 should have highest remaining priority and now run
-test_expect_success HAVE_JQ 'job-manager: job state RSRSII' '
+test_expect_success 'job-manager: job state RSRSII' '
         jmgr_check_state $(cat job1.id) R &&
         jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) R &&
@@ -151,7 +151,7 @@ test_expect_success 'job-manager: submit 5 jobs to each queue (differing urgenci
         flux queue start --all
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state SSSSR / SSSSR' '
+test_expect_success 'job-manager: job state SSSSR / SSSSR' '
         jmgr_check_state $(cat batch1.id) S &&
         jmgr_check_state $(cat batch2.id) S &&
         jmgr_check_state $(cat batch3.id) S &&
@@ -164,7 +164,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SSSSR / SSSSR' '
         jmgr_check_state $(cat debug5.id) R
 '
 
-test_expect_success HAVE_JQ 'job-manager: queue counts are as expected' '
+test_expect_success 'job-manager: queue counts are as expected' '
 	flux queue status -v >counts_named1.out &&
 	cat <<-EOT >counts_named1.exp &&
 	batch: Job submission is enabled
@@ -189,7 +189,7 @@ test_expect_success 'job-manager: cancel the two running jobs' '
 '
 
 # batch queue jobs should run instead of debug queue
-test_expect_success HAVE_JQ 'job-manager: job state SSRRI / SSSSI' '
+test_expect_success 'job-manager: job state SSRRI / SSSSI' '
         jmgr_check_state $(cat batch1.id) S &&
         jmgr_check_state $(cat batch2.id) S &&
         jmgr_check_state $(cat batch3.id) R &&
@@ -202,7 +202,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SSRRI / SSSSI' '
         jmgr_check_state $(cat debug5.id) I
 '
 
-test_expect_success HAVE_JQ 'job-manager: queue counts are as expected' '
+test_expect_success 'job-manager: queue counts are as expected' '
 	flux queue status -v >counts_named2.out &&
 	cat <<-EOT >counts_named2.exp &&
 	batch: Job submission is enabled
@@ -231,7 +231,7 @@ test_expect_success 'job-manager: cancel the two running jobs' '
 '
 
 # debug job 2 and 4 should have highest priority now and be running
-test_expect_success HAVE_JQ 'job-manager: job state SSIII / SSRRI' '
+test_expect_success 'job-manager: job state SSIII / SSRRI' '
         jmgr_check_state $(cat batch1.id) S &&
         jmgr_check_state $(cat batch2.id) S &&
         jmgr_check_state $(cat batch3.id) I &&
@@ -244,7 +244,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SSIII / SSRRI' '
         jmgr_check_state $(cat debug5.id) I
 '
 
-test_expect_success HAVE_JQ 'job-manager: queue counts are as expected' '
+test_expect_success 'job-manager: queue counts are as expected' '
 	flux queue status -v >counts_named3.out &&
 	cat <<-EOT >counts_named3.exp &&
 	batch: Job submission is enabled

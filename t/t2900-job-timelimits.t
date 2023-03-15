@@ -19,7 +19,7 @@ test_expect_success 'job time limits are enforced' '
 		flux run --time-limit=${TIMEOUT}s sleep 30 2>limit1.err &&
 	grep "resource allocation expired" limit1.err
 '
-test_expect_success HAVE_JQ 'job timelimits are propagated' '
+test_expect_success 'job timelimits are propagated' '
 	cat <<-EOF >limit.sh &&
 	#!/bin/sh -e
 	round() { printf "%.0f" \$1; }

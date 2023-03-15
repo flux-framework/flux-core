@@ -22,11 +22,11 @@ test_expect_success 'create simple jobspec' '
 	flux submit --dry-run hostname >simple.json
 '
 
-test_expect_success HAVE_JQ 'jobspec contains environment' '
+test_expect_success 'jobspec contains environment' '
 	jq -e .attributes.system.environment <simple.json >env.json
 '
 
-test_expect_success HAVE_JQ 'jobspec contains duration' '
+test_expect_success 'jobspec contains duration' '
 	jq -e .attributes.system.duration <simple.json
 '
 
@@ -38,16 +38,16 @@ test_expect_success 'job-manager getattr of unknown attr fails' '
 	test_must_fail job_manager_getattr $(cat jobid) noexist
 '
 
-test_expect_success HAVE_JQ 'job-manager getattr of jobspec works' '
+test_expect_success 'job-manager getattr of jobspec works' '
 	job_manager_getattr $(cat jobid) jobspec >getattr.json &&
 	jq -e .jobspec <getattr.json >redacted.json
 '
 
-test_expect_success HAVE_JQ 'redacted jobspec contains duration' '
+test_expect_success 'redacted jobspec contains duration' '
 	jq -e .attributes.system.duration <redacted.json
 '
 
-test_expect_success HAVE_JQ 'redacted jobspec does not contain environment' '
+test_expect_success 'redacted jobspec does not contain environment' '
 	test_must_fail jq -e .attributes.system.environment <redacted.json
 '
 
@@ -57,7 +57,7 @@ test_expect_success 'reload job manager and dependent modules' '
 	flux module load sched-simple
 '
 
-test_expect_success HAVE_JQ 'pending job still exists with same jobspec' '
+test_expect_success 'pending job still exists with same jobspec' '
 	job_manager_getattr $(cat jobid) jobspec >getattr2.json &&
 	jq -e .jobspec <getattr2.json >redacted2.json &&
 	test_cmp redacted.json redacted2.json

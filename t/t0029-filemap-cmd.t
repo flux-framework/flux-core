@@ -115,7 +115,7 @@ test_expect_success 'map test file and get its blobref' '
 	flux filemap map ./testfile2 &&
 	flux filemap list --blobref >testfile2.blobref
 '
-test_expect_success HAVE_JQ 'show raw object' '
+test_expect_success 'show raw object' '
 	flux filemap list --raw | jq .
 '
 test_expect_success 'test file can be read through content cache on rank 1' '
@@ -183,7 +183,7 @@ test_expect_success 'create test symlink' '
 test_expect_success 'map test file' '
 	flux filemap map ./testfile4
 '
-test_expect_success HAVE_JQ 'show raw object' '
+test_expect_success 'show raw object' '
 	flux filemap list --raw | jq .
 '
 test_expect_success 'test file can be read through content cache' '
@@ -256,7 +256,7 @@ test_expect_success 'map test file without mmap' '
 	rm -f copydir/testfile &&
 	flux filemap map --disable-mmap ./testfile
 '
-test_expect_success HAVE_JQ 'test file did not use blobvec encoding' '
+test_expect_success 'test file did not use blobvec encoding' '
 	flux filemap list --raw | jq -e ".encoding != \"blobvec\""
 '
 test_expect_success 'unmap test file' '
@@ -265,7 +265,7 @@ test_expect_success 'unmap test file' '
 test_expect_success 'map small test file with reduced small file threshold' '
 	flux filemap map --small-file-threshold=0 ./testfile2
 '
-test_expect_success HAVE_JQ 'test file used blobvec encoding' '
+test_expect_success 'test file used blobvec encoding' '
 	flux filemap list --raw | jq -e ".encoding = \"blobvec\""
 '
 test_expect_success 'unmap test file' '

@@ -1,7 +1,5 @@
 #!/bin/bash -e
 
-# test-prereqs: HAVE_JQ
-
 # ensure t_submit/t_depend is available from job-list in older
 # versions of flux that did not have the validate event.  To test, we
 # remove the validate in an existing job's eventlog.

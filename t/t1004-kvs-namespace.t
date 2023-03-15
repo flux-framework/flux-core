@@ -344,19 +344,19 @@ test_expect_success 'kvs: put - namespace specified in command line overrides en
 # Namespace rootref initialization
 #
 
-test_expect_success HAVE_JQ 'kvs: namespace rootref setup' '
+test_expect_success 'kvs: namespace rootref setup' '
 	flux kvs namespace create $NAMESPACEROOTREF-1 &&
         flux kvs put --namespace=$NAMESPACEROOTREF-1 $DIR.rootreftest=foobar &&
         test_kvs_key_namespace $NAMESPACEROOTREF-1 $DIR.rootreftest foobar &&
         flux kvs getroot --blobref --namespace=$NAMESPACEROOTREF-1 > rootref1
 '
 
-test_expect_success HAVE_JQ 'kvs: namespace create with init rootref' '
+test_expect_success 'kvs: namespace create with init rootref' '
 	flux kvs namespace create --rootref=$(cat rootref1) $NAMESPACEROOTREF-2 &&
         test_kvs_key_namespace $NAMESPACEROOTREF-1 $DIR.rootreftest foobar
 '
 
-test_expect_success HAVE_JQ 'kvs: namespaces dont clobber each other' '
+test_expect_success 'kvs: namespaces dont clobber each other' '
         flux kvs put --namespace=$NAMESPACEROOTREF-1 $DIR.val=42 &&
         flux kvs put --namespace=$NAMESPACEROOTREF-2 $DIR.val=43 &&
         test_kvs_key_namespace $NAMESPACEROOTREF-1 $DIR.val 42 &&
@@ -364,12 +364,12 @@ test_expect_success HAVE_JQ 'kvs: namespaces dont clobber each other' '
 '
 
 BADROOTREF="sha1-0123456789abcdef0123456789abcdef01234567"
-test_expect_success HAVE_JQ 'kvs: namespace create can take bad blobref' '
+test_expect_success 'kvs: namespace create can take bad blobref' '
 	flux kvs namespace create --rootref=$BADROOTREF $NAMESPACEROOTREF-3 &&
         flux kvs get --namespace=$NAMESPACEROOTREF-3 --treeobj .
 '
 
-test_expect_success HAVE_JQ 'kvs: namespace with bad rootref fails otherwise' '
+test_expect_success 'kvs: namespace with bad rootref fails otherwise' '
         test_must_fail flux kvs ls --namespace=$NAMESPACEROOTREF-3 .
 '
 

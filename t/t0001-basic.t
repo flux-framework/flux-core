@@ -270,7 +270,7 @@ test_expect_success 'flux-start embedded server works from initial program' "
 	flux start -v ${ARGS} -s1 flux python ${startctl} status \
 		>startctl.out 2>startctl.err
 "
-test_expect_success HAVE_JQ 'flux-start embedded server status got JSON' "
+test_expect_success 'flux-start embedded server status got JSON' "
 	jq -c . <startctl.out
 "
 test_expect_success 'flux-start embedded server logs hi/bye from client' "

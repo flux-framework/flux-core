@@ -120,7 +120,7 @@ filter_log_context() {
 	jq -c '. | select(.name == "log") | .context'
 }
 
-test_expect_success HAVE_JQ 'attach: -v option displays file and line info in logs' '
+test_expect_success 'attach: -v option displays file and line info in logs' '
 	jobid=$(flux submit -o verbose=2 hostname) &&
 	flux job wait-event ${jobid} clean &&
 	flux job eventlog --format=json -p guest.output ${jobid} \

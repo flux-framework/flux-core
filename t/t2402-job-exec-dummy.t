@@ -4,8 +4,6 @@ test_description='Test flux job execution service with dummy job shell'
 
 . $(dirname $0)/sharness.sh
 
-skip_all_unless_have jq
-
 #  Configure dummy job shell:
 if ! test -f dummy.toml; then
 	cat <<-EOF >dummy.toml
