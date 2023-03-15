@@ -125,7 +125,7 @@ test_expect_success 'flux-queue: status reports no reason for stop' '
 	test_cmp status2.exp status2.out
 '
 
-test_expect_success HAVE_JQ 'flux-queue: stop with --nocheckpoint works' '
+test_expect_success 'flux-queue: stop with --nocheckpoint works' '
 	flux start \
 	    -o,-Scontent.dump=dump_queue_nocheckpoint1.tar \
 	    flux queue stop &&
@@ -533,7 +533,7 @@ test_expect_success 'previously submitted job run to completion' '
 	flux jobs -n -o "{state}" $(cat job_batch2.id) | grep INACTIVE
 '
 
-test_expect_success HAVE_JQ 'flux-queue: stop with named queues and --nocheckpoint works' '
+test_expect_success 'flux-queue: stop with named queues and --nocheckpoint works' '
 	mkdir -p conf.d &&
 	cat >conf.d/queues.toml <<-EOT &&
 	[queues.debug]

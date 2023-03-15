@@ -47,7 +47,7 @@ test_expect_success FLUX_SECURITY 'dependency=after will not work on another use
 test_expect_success 'disable ingest validator' '
 	flux module reload -f job-ingest disable-validator
 '
-test_expect_success HAVE_JQ 'dependency=after rejects invalid dependency' '
+test_expect_success 'dependency=after rejects invalid dependency' '
 	flux run --dry-run hostname | \
 	  jq ".attributes.system.dependencies[0] = \
 		{\"scheme\":\"after\", \"value\": 1}" >job.json &&
@@ -227,7 +227,7 @@ test_expect_success 'jobs with dependencies can be safely canceled' '
 	flux job urgency $jobid default &&
 	flux job wait-event -vt 15 $jobid clean
 '
-test_expect_success HAVE_JQ 'flux jobtap query dependency-after works' '
+test_expect_success 'flux jobtap query dependency-after works' '
 	flux jobtap query .dependency-after > query-none.json &&
 	test_debug "jq -S . query-none.json" &&
 	jq -e ".dependencies | length == 0" query-none.json &&

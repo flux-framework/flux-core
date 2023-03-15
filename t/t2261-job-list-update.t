@@ -90,12 +90,12 @@ test_expect_success 'submit jobs for job list testing' '
 # since we happen to know all these jobs are in the "run" state given
 # checks above
 
-test_expect_success HAVE_JQ 'flux job list running jobs in started order' '
+test_expect_success 'flux job list running jobs in started order' '
         flux job list -s running | jq .id > list_started.out &&
         test_cmp list_started.out running.ids
 '
 
-test_expect_success HAVE_JQ 'flux job list inactive jobs in completed order' '
+test_expect_success 'flux job list inactive jobs in completed order' '
         flux job list -s inactive | jq .id > list_inactive.out &&
         test_cmp list_inactive.out inactive.ids
 '
@@ -104,12 +104,12 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs in completed order' '
 # state since we happen to know all these jobs are in the "sched"
 # state given checks above
 
-test_expect_success HAVE_JQ 'flux job list pending jobs in priority order' '
+test_expect_success 'flux job list pending jobs in priority order' '
         flux job list -s pending | jq .id > list_pending.out &&
         test_cmp list_pending.out pending.ids
 '
 
-test_expect_success HAVE_JQ 'flux job list pending jobs with correct urgency' '
+test_expect_success 'flux job list pending jobs with correct urgency' '
         cat >list_urgency.exp <<-EOT &&
 31
 31
@@ -124,7 +124,7 @@ EOT
         test_cmp list_urgency.out list_urgency.exp
 '
 
-test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
+test_expect_success 'flux job list pending jobs with correct priority' '
         cat >list_priority.exp <<-EOT &&
 4294967295
 4294967295
@@ -139,12 +139,12 @@ EOT
         test_cmp list_priority.out list_priority.exp
 '
 
-test_expect_success HAVE_JQ 'change a job urgency' '
+test_expect_success 'change a job urgency' '
         jobid=`head -n 3 pending.ids | tail -n 1` &&
         flux job urgency ${jobid} 1
 '
 
-test_expect_success HAVE_JQ 'wait for job-list to see job urgency change' '
+test_expect_success 'wait for job-list to see job urgency change' '
         jobidhead=`head -n 2 pending.ids > pending_after.ids` &&
         jobidhead=`head -n 6 pending.ids | tail -n 3 >> pending_after.ids` &&
         jobidchange=`head -n 3 pending.ids | tail -n 1 >> pending_after.ids` &&
@@ -162,7 +162,7 @@ test_expect_success HAVE_JQ 'wait for job-list to see job urgency change' '
         test_cmp list_pending_after.out pending_after.ids
 '
 
-test_expect_success HAVE_JQ 'flux job list pending jobs with correct urgency' '
+test_expect_success 'flux job list pending jobs with correct urgency' '
         cat >list_urgency_after.exp <<-EOT &&
 31
 31
@@ -177,7 +177,7 @@ EOT
         test_cmp list_urgency_after.out list_urgency_after.exp
 '
 
-test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
+test_expect_success 'flux job list pending jobs with correct priority' '
         cat >list_priority_after.exp <<-EOT &&
 4294967295
 4294967295

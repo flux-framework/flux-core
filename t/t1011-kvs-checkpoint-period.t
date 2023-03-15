@@ -9,8 +9,6 @@ test_description='Test kvs module checkpoint-period config.'
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
-skip_all_unless_have jq
-
 export FLUX_CONF_DIR=$(pwd)
 SIZE=4
 test_under_flux ${SIZE} minimal

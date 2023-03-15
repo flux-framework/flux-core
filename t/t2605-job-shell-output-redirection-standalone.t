@@ -39,7 +39,7 @@ test_expect_success 'flux-shell: generate 2-task echo jobspecs and matching R' '
 # 1 task output file tests
 #
 
-test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stdout file)' '
+test_expect_success 'flux-shell: run 1-task echo job (stdout file)' '
         cat j1echostdout \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"out0\"" \
@@ -48,7 +48,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stdout file)' '
 	grep stdout:foo out0
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stderr file)' '
+test_expect_success 'flux-shell: run 1-task echo job (stderr file)' '
         cat j1echostderr \
             |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stderr.path = \"err1\"" \
@@ -57,7 +57,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stderr file)' '
 	grep stderr:bar err1
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stderr to stdout file)' '
+test_expect_success 'flux-shell: run 1-task echo job (stderr to stdout file)' '
         cat j1echostderr \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"out2\"" \
@@ -66,7 +66,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stderr to stdout f
 	grep stderr:bar out2
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stdout file/stderr file)' '
+test_expect_success 'flux-shell: run 1-task echo job (stdout file/stderr file)' '
         cat j1echoboth \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"out3\"" \
@@ -78,7 +78,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stdout file/stderr
 	grep stderr:baz err3
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stdout & stderr to stdout file)' '
+test_expect_success 'flux-shell: run 1-task echo job (stdout & stderr to stdout file)' '
         cat j1echoboth \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"out4\"" \
@@ -88,7 +88,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stdout & stderr to
 	grep stderr:baz out4
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stdout file/stderr term)' '
+test_expect_success 'flux-shell: run 1-task echo job (stdout file/stderr term)' '
         cat j1echoboth \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"out5\"" \
@@ -99,7 +99,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stdout file/stderr
 	grep stderr:baz err5
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stdout term/stderr file)' '
+test_expect_success 'flux-shell: run 1-task echo job (stdout term/stderr file)' '
         cat j1echoboth \
             |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stderr.path = \"err6\"" \
@@ -113,7 +113,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (stdout term/stderr
 # 2 task output file tests
 #
 
-test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout file)' '
+test_expect_success 'flux-shell: run 2-task echo job (stdout file)' '
         cat j2echostdout \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"out7\"" \
@@ -124,7 +124,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout file)' '
 	grep "1: stdout:foo" out7
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stderr file)' '
+test_expect_success 'flux-shell: run 2-task echo job (stderr file)' '
         cat j2echostderr \
             |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stderr.path = \"err8\"" \
@@ -135,7 +135,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stderr file)' '
 	grep "1: stderr:bar" err8
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stderr to stdout file)' '
+test_expect_success 'flux-shell: run 2-task echo job (stderr to stdout file)' '
         cat j2echostderr \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"out9\"" \
@@ -146,7 +146,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stderr to stdout f
 	grep "1: stderr:bar" out9
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout file/stderr file)' '
+test_expect_success 'flux-shell: run 2-task echo job (stdout file/stderr file)' '
         cat j2echoboth \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"out10\"" \
@@ -162,7 +162,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout file/stderr
 	grep "1: stderr:baz" err10
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout & stderr to stdout file)' '
+test_expect_success 'flux-shell: run 2-task echo job (stdout & stderr to stdout file)' '
         cat j2echoboth \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"out11\"" \
@@ -175,7 +175,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout & stderr to
 	grep "1: stderr:baz" out11
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout file/stderr term)' '
+test_expect_success 'flux-shell: run 2-task echo job (stdout file/stderr term)' '
         cat j2echoboth \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"out12\"" \
@@ -189,7 +189,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout file/stderr
 	grep "1: stderr:baz" err12
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout term/stderr file)' '
+test_expect_success 'flux-shell: run 2-task echo job (stdout term/stderr file)' '
         cat j2echoboth \
             |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stderr.path = \"err13\"" \
@@ -206,7 +206,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout term/stderr
 # output file mustache tests
 #
 
-test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id stdout file/stderr file)' '
+test_expect_success 'flux-shell: run 1-task echo job (mustache id stdout file/stderr file)' '
     id=$(flux job id --to=f58 14) &&
         cat j1echoboth \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
@@ -219,7 +219,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id stdout
 	grep stderr:baz err${id}
 '
 
-test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id stdout & stderr to stdout file)' '
+test_expect_success 'flux-shell: run 1-task echo job (mustache id stdout & stderr to stdout file)' '
     id=$(flux job id --to=f58 15) &&
         cat j1echoboth \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
@@ -231,7 +231,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id stdout
 '
 
 for type in f58 dec hex dothex words; do
-  test_expect_success HAVE_JQ "flux-shell: output template {{id.$type}}" '
+  test_expect_success "flux-shell: output template {{id.$type}}" '
     jobid=123456789 &&
     id=$(flux job id --to=${type} ${jobid}) &&
         cat j1echoboth \
@@ -244,7 +244,7 @@ for type in f58 dec hex dothex words; do
  '
 done
 
-test_expect_success HAVE_JQ "flux-shell: bad output mustache template is not rendered" '
+test_expect_success "flux-shell: bad output mustache template is not rendered" '
 	cat j1echoboth \
 	    |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
 	    |  $jq ".attributes.system.shell.options.output.stdout.path = \"{{idx}}.out\"" \
@@ -253,7 +253,7 @@ test_expect_success HAVE_JQ "flux-shell: bad output mustache template is not ren
 	grep stdout:baz {{idx}}.out &&
 	grep stderr:baz {{idx}}.out
 '
-test_expect_success HAVE_JQ "flux-shell: bad output mustache template is not rendered" '
+test_expect_success "flux-shell: bad output mustache template is not rendered" '
 	cat j1echoboth \
 	    |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
 	    |  $jq ".attributes.system.shell.options.output.stdout.path = \"{{id.x}}.out\"" \
@@ -263,7 +263,7 @@ test_expect_success HAVE_JQ "flux-shell: bad output mustache template is not ren
 	grep stderr:baz {{id.x}}.out
 '
 
-test_expect_success HAVE_JQ "flux-shell: unknown mustache template is not rendered" '
+test_expect_success "flux-shell: unknown mustache template is not rendered" '
 	cat j1echoboth \
 	    |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
 	    |  $jq ".attributes.system.shell.options.output.stdout.path = \"{{foo}}.out\"" \
@@ -273,7 +273,7 @@ test_expect_success HAVE_JQ "flux-shell: unknown mustache template is not render
 	grep stderr:baz {{foo}}.out
 '
 
-test_expect_success HAVE_JQ "flux-shell: too large mustache template is not rendered" '
+test_expect_success "flux-shell: too large mustache template is not rendered" '
 	tmpl=$(printf "%0.sf" $(seq 0 120)) &&
 	cat j1echoboth \
 	    |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
@@ -288,21 +288,21 @@ test_expect_success HAVE_JQ "flux-shell: too large mustache template is not rend
 # output corner case tests
 #
 
-test_expect_success HAVE_JQ 'flux-shell: error on bad output type' '
+test_expect_success 'flux-shell: error on bad output type' '
         cat j1echostdout \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"foobar\"" \
             > j1echostdout-16 &&
         ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-16 -R R1 16
 '
 
-test_expect_success HAVE_JQ 'flux-shell: error on no path with file output' '
+test_expect_success 'flux-shell: error on no path with file output' '
         cat j1echostdout \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             > j1echostdout-17 &&
         ! ${FLUX_SHELL} -v -s -r 0 -j j1echostdout-17 -R R1 17
 '
 
-test_expect_success HAVE_JQ 'flux-shell: error invalid path to file output' '
+test_expect_success 'flux-shell: error invalid path to file output' '
         cat j1echostdout \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"/foo/bar/baz\"" \

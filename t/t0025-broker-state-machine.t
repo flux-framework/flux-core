@@ -12,25 +12,25 @@ SRPC=${FLUX_BUILD_DIR}/t/request/rpc_stream
 ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 GROUPSCMD="flux python ${SHARNESS_TEST_SRCDIR}/scripts/groups.py"
 
-test_expect_success HAVE_JQ 'quorum reached on instance with 1 TBON level' '
+test_expect_success 'quorum reached on instance with 1 TBON level' '
 	echo "0-2" >full1.exp &&
 	flux start -s3 ${ARGS} ${GROUPSCMD} get broker.online >full1.out &&
 	test_cmp full1.exp full1.out
 '
 
-test_expect_success HAVE_JQ 'quorum reached on instance with 2 TBON levels' '
+test_expect_success 'quorum reached on instance with 2 TBON levels' '
 	echo "0-3" >full2.exp &&
 	flux start -s4 ${ARGS} ${GROUPSCMD} get broker.online >full2.out &&
 	test_cmp full2.exp full2.out
 '
 
-test_expect_success HAVE_JQ 'quorum reached on instance with 3 TBON levels' '
+test_expect_success 'quorum reached on instance with 3 TBON levels' '
 	echo "0-7" >full3.exp &&
 	flux start -s8 ${ARGS} ${GROUPSCMD} get broker.online >full3.out &&
 	test_cmp full3.exp full3.out
 '
 
-test_expect_success HAVE_JQ 'broker.quorum can be set on the command line' '
+test_expect_success 'broker.quorum can be set on the command line' '
 	flux start -s3 ${ARGS} -o,-Sbroker.quorum="0-2" \
 		${GROUPSCMD} get broker.online >full1_explicit.out &&
 	test_cmp full1.exp full1_explicit.out
@@ -57,7 +57,7 @@ test_expect_success 'create rc1 that blocks on FIFO for rank != 0' '
 	chmod +x rc1_block
 '
 
-test_expect_success HAVE_JQ 'create rc2 that unblocks FIFO' '
+test_expect_success 'create rc2 that unblocks FIFO' '
 	cat <<-EOT >rc2_unblock &&
 	#!/bin/bash
 	${GROUPSCMD} get broker.online
@@ -68,7 +68,7 @@ test_expect_success HAVE_JQ 'create rc2 that unblocks FIFO' '
 
 # Delay rank 1 so that we can check that initial program ran with only
 # rank 0 in RUN state.
-test_expect_success HAVE_JQ 'instance functions with late-joiner' '
+test_expect_success 'instance functions with late-joiner' '
 	echo "0" >late.exp &&
 	rm -f fifo &&
 	mkfifo fifo &&
@@ -89,7 +89,7 @@ test_expect_success 'quorum-get RPC fails on rank > 0' '
 	grep "only available on rank 0" qm1.err
 '
 
-test_expect_success HAVE_JQ 'monitor streaming RPC works' '
+test_expect_success 'monitor streaming RPC works' '
 	flux start ${ARGS} \
 		$SRPC state-machine.monitor state \
 		</dev/null >state.out &&
@@ -104,7 +104,7 @@ test_expect_success 'create rc script that prints current state' '
 	chmod +x rc_getstate
 '
 
-test_expect_success HAVE_JQ 'monitor reports INIT(2) in rc1' '
+test_expect_success 'monitor reports INIT(2) in rc1' '
 	echo 2 >rc1.exp &&
 	flux start \
 		-o,-Sbroker.rc1_path=$(pwd)/rc_getstate \
@@ -113,7 +113,7 @@ test_expect_success HAVE_JQ 'monitor reports INIT(2) in rc1' '
 	test_cmp rc1.exp rc.out
 '
 
-test_expect_success HAVE_JQ 'monitor reports RUN(4) in rc2' '
+test_expect_success 'monitor reports RUN(4) in rc2' '
 	echo 4 >rc2.exp &&
 	flux start \
 		-o,-Sbroker.rc1_path= \
@@ -122,7 +122,7 @@ test_expect_success HAVE_JQ 'monitor reports RUN(4) in rc2' '
 	test_cmp rc2.exp rc.out
 '
 
-test_expect_success HAVE_JQ 'monitor reports CLEANUP(5) in cleanup script' '
+test_expect_success 'monitor reports CLEANUP(5) in cleanup script' '
 	echo 5 >cleanup.exp &&
 	flux start \
 		-o,-Sbroker.rc1_path= \
@@ -131,7 +131,7 @@ test_expect_success HAVE_JQ 'monitor reports CLEANUP(5) in cleanup script' '
 	test_cmp cleanup.exp rc.out
 '
 
-test_expect_success HAVE_JQ 'monitor reports FINALIZE(7) in rc3' '
+test_expect_success 'monitor reports FINALIZE(7) in rc3' '
 	echo 7 >rc3.exp &&
 	flux start \
 		-o,-Sbroker.rc1_path= \

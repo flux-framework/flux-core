@@ -1,7 +1,5 @@
 #!/bin/bash -e
 
-# test-prereqs: HAVE_JQ
-
 EVENTS_JOURNAL_STREAM=${FLUX_BUILD_DIR}/t/job-manager/events_journal_stream
 
 # wait for jobid in events file to avoid race

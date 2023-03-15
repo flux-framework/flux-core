@@ -117,27 +117,27 @@ test_expect_success LONGTEST 'store/load/verify various size large blobs' '
 '
 
 
-test_expect_success HAVE_JQ 'checkpoint-put foo w/ rootref bar' '
+test_expect_success 'checkpoint-put foo w/ rootref bar' '
 	checkpoint_put foo bar
 '
 
-test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref bar' '
+test_expect_success 'checkpoint-get foo returned rootref bar' '
         echo bar >rootref.exp &&
         checkpoint_get foo | jq -r .value | jq -r .rootref >rootref.out &&
         test_cmp rootref.exp rootref.out
 '
 
 # use grep instead of compare, incase of floating point rounding
-test_expect_success HAVE_JQ 'checkpoint-get foo returned correct timestamp' '
+test_expect_success 'checkpoint-get foo returned correct timestamp' '
         checkpoint_get foo | jq -r .value | jq -r .timestamp >timestamp.out &&
         grep 2.2 timestamp.out
 '
 
-test_expect_success HAVE_JQ 'checkpoint-put updates foo rootref to baz' '
+test_expect_success 'checkpoint-put updates foo rootref to baz' '
         checkpoint_put foo baz
 '
 
-test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref baz' '
+test_expect_success 'checkpoint-get foo returned rootref baz' '
         echo baz >rootref2.exp &&
         checkpoint_get foo | jq -r .value | jq -r .rootref >rootref2.out &&
         test_cmp rootref2.exp rootref2.out
@@ -163,13 +163,13 @@ test_expect_success LONGTEST 'reload/verify various size large blobs' '
 	test $err -eq 0
 '
 
-test_expect_success HAVE_JQ 'checkpoint-get foo still returns rootref baz' '
+test_expect_success 'checkpoint-get foo still returns rootref baz' '
         echo baz >rootref3.exp &&
         checkpoint_get foo | jq -r .value | jq -r .rootref >rootref3.out &&
         test_cmp rootref3.exp rootref3.out
 '
 
-test_expect_success HAVE_JQ 'checkpoint-backing-get foo returns rootref baz' '
+test_expect_success 'checkpoint-backing-get foo returns rootref baz' '
 	echo baz >rootref_backing.exp &&
 	checkpoint_backing_get foo \
 	    | jq -r .value \
@@ -177,11 +177,11 @@ test_expect_success HAVE_JQ 'checkpoint-backing-get foo returns rootref baz' '
 	test_cmp rootref_backing.exp rootref_backing.out
 '
 
-test_expect_success HAVE_JQ 'checkpoint-backing-put foo w/ rootref boof' '
+test_expect_success 'checkpoint-backing-put foo w/ rootref boof' '
 	checkpoint_backing_put foo boof
 '
 
-test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref boof' '
+test_expect_success 'checkpoint-get foo returned rootref boof' '
 	echo boof >rootref4.exp &&
 	checkpoint_get foo | jq -r .value | jq -r .rootref >rootref4.out &&
 	test_cmp rootref4.exp rootref4.out
@@ -222,11 +222,11 @@ test_expect_success 'config: unload module' '
 	flux module remove content-s3
 '
 
-test_expect_success HAVE_JQ 'checkpoint-put foo w/ rootref spoon' '
+test_expect_success 'checkpoint-put foo w/ rootref spoon' '
 	checkpoint_put foo spoon
 '
 
-test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref spoon' '
+test_expect_success 'checkpoint-get foo returned rootref spoon' '
 	echo spoon >rootref5.exp &&
 	checkpoint_get foo | jq -r .value | jq -r .rootref >rootref5.out &&
 	test_cmp rootref5.exp rootref5.out
@@ -259,7 +259,7 @@ wait_checkpoint_flush() {
 	return 1
 }
 
-test_expect_success HAVE_JQ 'checkpoint-backing-get foo returns spoon' '
+test_expect_success 'checkpoint-backing-get foo returns spoon' '
 	wait_checkpoint_flush spoon
 '
 

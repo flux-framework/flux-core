@@ -4,8 +4,6 @@ test_description='Test flux-mini/flux-shell taskmap plugin support'
 
 . `dirname $0`/sharness.sh
 
-skip_all_unless_have jq
-
 test_under_flux 4 job
 
 # Test that actual task ranks match expected ranks.

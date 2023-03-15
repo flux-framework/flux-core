@@ -53,7 +53,7 @@ test_expect_success 'job-manager: loading duplicate plugins fails' '
 	test_must_fail flux jobtap load ${PLUGINPATH}/args.so &&
 	flux jobtap remove args.so
 '
-test_expect_success HAVE_JQ 'job-manager: query of plugin works' '
+test_expect_success 'job-manager: query of plugin works' '
 	flux jobtap load ${PLUGINPATH}/test.so &&
 	flux jobtap query test.so >query.json &&
 	test_debug "jq -S . <query.json" &&
@@ -134,7 +134,7 @@ test_expect_success 'job-manager: default works with sched.prioritize' '
 	flux cancel --all &&
 	flux queue drain
 '
-test_expect_success HAVE_JQ 'job-manager: hold plugin holds jobs' '
+test_expect_success 'job-manager: hold plugin holds jobs' '
 	flux jobtap load submit-hold.so &&
 	flux bulksubmit --job-name=cc-{0} hostname ::: $(seq 1 4) \
 	    >hold.jobids &&

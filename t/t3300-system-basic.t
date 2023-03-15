@@ -28,7 +28,7 @@ test_expect_success 'startctl status works' '
 	$startctl status
 '
 
-test_expect_success HAVE_JQ 'broker overlay shows 2 connected children' '
+test_expect_success 'broker overlay shows 2 connected children' '
 	test $(overlay_connected_children) -eq 2
 '
 test_expect_success 'testcert was used to authenticate' '
@@ -48,12 +48,12 @@ test_expect_success 'broker exits with no error' '
 	run_timeout 30 $startctl wait 2
 '
 
-test_expect_success HAVE_JQ 'startctl shows rank 2 pid is -1' '
+test_expect_success 'startctl shows rank 2 pid is -1' '
 	pid=$($startctl status | jq -r ".procs[2].pid") &&
 	test "$pid" = "-1"
 '
 
-test_expect_success HAVE_JQ 'broker overlay shows 1 connected child' '
+test_expect_success 'broker overlay shows 1 connected child' '
 	test $(overlay_connected_children) -eq 1
 '
 

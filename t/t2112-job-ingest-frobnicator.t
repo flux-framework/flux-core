@@ -60,12 +60,12 @@ test_expect_success 'job-frobnicator: all valid jobspecs accepted' '
 	    $Y2J <$f | flux job-frobnicator --jobspec-only --plugins=defaults
 	done
 '
-test_expect_success HAVE_JQ 'job-frobnicator: defaults plugin does things' '
+test_expect_success 'job-frobnicator: defaults plugin does things' '
 	flux run --env=-* --dry-run hostname \
 		| flux job-frobnicator --jobspec-only --plugins=defaults \
 		| jq  -e ".data.attributes.system.duration == 1800"
 '
-test_expect_success HAVE_JQ 'job-frobnicator: defaults plugin does not do things' '
+test_expect_success 'job-frobnicator: defaults plugin does not do things' '
 	flux run --env=-* --dry-run -t 1h hostname \
 		| flux job-frobnicator --jobspec-only --plugins=defaults \
 		| jq  -e ".data.attributes.system.duration == 3600"
@@ -81,14 +81,14 @@ test_expect_success 'configure queues with default durations' '
 	EOF
 	flux config reload
 '
-test_expect_success HAVE_JQ 'job-frobnicator sets default queue duration' '
+test_expect_success 'job-frobnicator sets default queue duration' '
 	flux run --env=-* --dry-run hostname \
 		| flux job-frobnicator --jobspec-only --plugins=defaults \
 		> queue-debug.out &&
 	jq -e ".data.attributes.system.queue == \"debug\"" < queue-debug.out &&
 	jq -e ".data.attributes.system.duration == 3600"   < queue-debug.out
 '
-test_expect_success HAVE_JQ 'job-frobnicator sets specified queue duration' '
+test_expect_success 'job-frobnicator sets specified queue duration' '
 	flux run --env=-* --queue=batch --dry-run hostname \
 		| flux job-frobnicator --jobspec-only --plugins=defaults \
 		> queue-batch.out &&
@@ -102,14 +102,14 @@ test_expect_success 'configure queue constraints' '
 	EOF
 	flux config reload
 '
-test_expect_success HAVE_JQ 'constraints plugin sets queue constraint' '
+test_expect_success 'constraints plugin sets queue constraint' '
 	flux run --env=-* --dry-run --queue=debug hostname \
 	   | flux job-frobnicator --jobspec-only --plugins=constraints \
 	   > constraint-setqueue.out &&
 	jq -e ".data.attributes.system.constraints.properties \
 	    == [ \"debug\" ]" < constraint-setqueue.out
 '
-test_expect_success HAVE_JQ 'constraints plugin adds queue constraint' '
+test_expect_success 'constraints plugin adds queue constraint' '
 	flux run --env=-* --dry-run --requires=foo \
 	  --queue=debug hostname \
 	   | flux job-frobnicator --jobspec-only --plugins=constraints \
@@ -119,7 +119,7 @@ test_expect_success HAVE_JQ 'constraints plugin adds queue constraint' '
 	jq -e ".data.attributes.system.constraints.properties|any(.==\"foo\")"\
 	   < constraint-addqueue.out
 '
-test_expect_success HAVE_JQ 'constraints plugin works with no configured queues' '
+test_expect_success 'constraints plugin works with no configured queues' '
 	cp /dev/null conf.d/conf.toml &&
 	flux config reload &&
 	flux run --env=-* --dry-run hostname \
@@ -127,7 +127,7 @@ test_expect_success HAVE_JQ 'constraints plugin works with no configured queues'
 	> constraint-noqueue.out &&
 	jq -e "has(\"data\")" <constraint-noqueue.out
 '
-test_expect_success HAVE_JQ 'constraints plugin works without requires' '
+test_expect_success 'constraints plugin works without requires' '
 	cat >conf.d/conf.toml <<-EOT &&
 	[queues.debug]
 	EOT
@@ -138,7 +138,7 @@ test_expect_success HAVE_JQ 'constraints plugin works without requires' '
 	> constraint-norequires.out &&
 	jq -e "has(\"data\")" <constraint-norequires.out
 '
-test_expect_success HAVE_JQ 'frobnicator defaults are defaults,constraints' '
+test_expect_success 'frobnicator defaults are defaults,constraints' '
 	cat <<-EOF >conf.d/conf.toml &&
 	[policy]
 	jobspec.defaults.system.queue = "debug"
@@ -155,7 +155,7 @@ test_expect_success HAVE_JQ 'frobnicator defaults are defaults,constraints' '
 	    == [ \"debug\" ]" \
 	    <defaultplugins.out
 '
-test_expect_success HAVE_JQ 'defaults plugin allows queues without default' '
+test_expect_success 'defaults plugin allows queues without default' '
 	cat <<-EOF >conf.d/conf.toml &&
 	[queues.debug]
 	requires = [ "debug" ]
@@ -166,7 +166,7 @@ test_expect_success HAVE_JQ 'defaults plugin allows queues without default' '
 	    > nodefault.out &&
 	jq -e "has(\"data\")" <nodefault.out
 '
-test_expect_success HAVE_JQ 'defaults plugin requires queue if configured' '
+test_expect_success 'defaults plugin requires queue if configured' '
 	cat <<-EOF >conf.d/conf.toml &&
 	[queues.debug]
 	requires = [ "debug" ]

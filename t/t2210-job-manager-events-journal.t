@@ -90,7 +90,7 @@ wait_event_annotation() {
 	wait_event ${jobid} .entry.context.annotations.user.${key} ${value} ${filename}
 }
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal w/ no filters shows all events' '
+test_expect_success NO_CHAIN_LINT 'job-manager: events-journal w/ no filters shows all events' '
 	$jq -j -c -n "{}" \
 		| $EVENTS_JOURNAL_STREAM > events1.out &
 	pid=$! &&
@@ -108,7 +108,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal w/ no fil
 	wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal allow works' '
+test_expect_success NO_CHAIN_LINT 'job-manager: events-journal allow works' '
 	$jq -j -c -n "{allow:{clean:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events2.out &
 	pid=$! &&
@@ -126,7 +126,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal allow wor
 	wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal allow works (multiple)' '
+test_expect_success NO_CHAIN_LINT 'job-manager: events-journal allow works (multiple)' '
 	$jq -j -c -n "{allow:{depend:1, finish:1, clean:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events3.out &
 	pid=$! &&
@@ -144,7 +144,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal allow wor
 	wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal deny works' '
+test_expect_success NO_CHAIN_LINT 'job-manager: events-journal deny works' '
 	$jq -j -c -n "{deny:{finish:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events4.out &
 	pid=$! &&
@@ -162,7 +162,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal deny work
 	wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal deny works (multiple)' '
+test_expect_success NO_CHAIN_LINT 'job-manager: events-journal deny works (multiple)' '
 	$jq -j -c -n "{deny:{depend:1, finish:1, release:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events5.out &
 	pid=$! &&
@@ -180,7 +180,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal deny work
 	wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal allow & deny works' '
+test_expect_success NO_CHAIN_LINT 'job-manager: events-journal allow & deny works' '
 	$jq -j -c -n "{allow:{depend:1, finish:1, clean:1}, deny:{depend:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events6.out &
 	pid=$! &&
@@ -198,7 +198,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal allow & d
 	wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal contains older jobs' '
+test_expect_success NO_CHAIN_LINT 'job-manager: events-journal contains older jobs' '
 	jobid1=`flux job submit basic.json | flux job id`
 	jobid2=`flux job submit basic.json | flux job id`
 	flux job wait-event ${jobid1} clean
@@ -251,7 +251,7 @@ check_event_name_eventlog_seq() {
 }
 
 # annotations event below comes from sched-simple scheduler
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: eventlog seqs are correct' '
+test_expect_success NO_CHAIN_LINT 'job-manager: eventlog seqs are correct' '
 	$jq -j -c -n "{}" \
 		| $EVENTS_JOURNAL_STREAM > events9.out &
 	pid=$! &&
@@ -275,18 +275,18 @@ test_expect_success 'job-manager: events-journal request fails with EPROTO on em
 	$RPC job-manager.events-journal 71 < /dev/null
 '
 
-test_expect_success HAVE_JQ 'job-manager: events-journal request fails if not streaming RPC' '
+test_expect_success 'job-manager: events-journal request fails if not streaming RPC' '
 	$jq -j -c -n "{}" > cc1.in &&
 	test_must_fail $RPC job-manager.events-journal < cc1.in
 '
 
-test_expect_success HAVE_JQ 'job-manager: events-journal request fails if allow not an object' '
+test_expect_success 'job-manager: events-journal request fails if allow not an object' '
 	$jq -j -c -n "{allow:5}" > cc2.in &&
 	test_must_fail $EVENTS_JOURNAL_STREAM < cc2.in 2> cc2.err &&
 	grep "allow should be an object" cc2.err
 '
 
-test_expect_success HAVE_JQ 'job-manager: events-journal request fails if deny not an object' '
+test_expect_success 'job-manager: events-journal request fails if deny not an object' '
 	$jq -j -c -n "{deny:5}" > cc3.in &&
 	test_must_fail $EVENTS_JOURNAL_STREAM < cc3.in 2> cc3.err &&
 	grep "deny should be an object" cc3.err

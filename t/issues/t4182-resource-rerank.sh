@@ -2,7 +2,6 @@
 #
 #  Ensure resource module resets ranks of R to match hostlist attribute
 #
-# test-prereqs: HAVE_JQ
 
 cat <<EOF >t4182-test.sh
 #!/bin/bash -e

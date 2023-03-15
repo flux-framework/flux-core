@@ -28,7 +28,7 @@ test_expect_success 'start instance with config file and dump R' '
 		flux kvs get resource.R >R.out
 '
 
-test_expect_success HAVE_JQ 'dumped R matches configured R' '
+test_expect_success 'dumped R matches configured R' '
 	jq --sort-keys . <R.test >R.test.normalized &&
 	jq --sort-keys . <R.out >R.out.normalized &&
 	test_cmp R.test.normalized R.out.normalized
@@ -39,7 +39,7 @@ test_expect_success 'both ranks were drained' '
 	grep "draining: rank 1" logfile
 '
 
-test_expect_success HAVE_JQ 'invalid R causes instance to fail with error' '
+test_expect_success 'invalid R causes instance to fail with error' '
 	mkdir bad &&
 	flux R encode -r 0-1 -c 0-1 | jq ".version = 42" > bad/R &&
 	cat >bad/resource.toml <<-EOF &&
@@ -110,7 +110,7 @@ test_expect_success 'invalid exclude hosts cause instance failure' '
     grep "nosuchhost: Invalid argument" ${name}/logfile
 '
 
-test_expect_success HAVE_JQ 'gpu resources in configured R are not verified' '
+test_expect_success 'gpu resources in configured R are not verified' '
 	name=gpu-noverify &&
 	mkdir $name &&
 	flux R encode -r 0 --local | \
@@ -126,7 +126,7 @@ test_expect_success HAVE_JQ 'gpu resources in configured R are not verified' '
 	grep "gpu\[42-43\]" ${name}/rlist
 '
 
-test_expect_success HAVE_JQ,MULTICORE 'resource norestrict option works' '
+test_expect_success MULTICORE 'resource norestrict option works' '
 	name=norestrict &&
 	mkdir $name &&
 	flux R encode -r 0 --local > ${name}/R &&

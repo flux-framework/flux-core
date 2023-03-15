@@ -58,19 +58,19 @@ test_expect_success 'send bad topo-reduce request to rank 0' '
 	bad_reduce 0
 '
 
-test_expect_success HAVE_JQ 'resource.eventlog exists' '
+test_expect_success 'resource.eventlog exists' '
 	flux kvs eventlog get -u resource.eventlog >eventlog.out
 '
 
-test_expect_success HAVE_JQ 'resource-init context says restart=false' '
+test_expect_success 'resource-init context says restart=false' '
 	test "$(grep_event resource-init <eventlog.out|jq .restart)" = "false"
 '
 
-test_expect_success HAVE_JQ 'resource-init context says online is empty set' '
+test_expect_success 'resource-init context says online is empty set' '
 	test "$(grep_event resource-init <eventlog.out|jq .online)" = "\"\""
 '
 
-test_expect_success HAVE_JQ 'wait until resource-define event is posted' '
+test_expect_success 'wait until resource-define event is posted' '
 	flux kvs eventlog wait-event -t 5 resource.eventlog resource-define
 '
 
@@ -88,7 +88,7 @@ test_expect_success 'reload resource module and re-capture eventlog' '
 	tail -$(($post-$pre)) restart.out > post_restart.out
 '
 
-test_expect_success HAVE_JQ 'new resource-init context says restart=true' '
+test_expect_success 'new resource-init context says restart=true' '
 	test "$(grep_event resource-init <post_restart.out \
 		|jq .restart)" = "true"
 '
@@ -127,7 +127,7 @@ sanitize_hwloc_xml() {
     sed 's/pci_link_speed=".*"//g' $1
 }
 
-test_expect_success HAVE_JQ 'get hwloc XML direct from ranks' '
+test_expect_success 'get hwloc XML direct from ranks' '
 	mkdir -p hwloc &&
 	for i in $(seq 0 $(($SIZE-1))); do \
 		get_topo $i | sanitize_hwloc_xml >hwloc/$i.xml || return 1; \
@@ -138,14 +138,14 @@ normalize_json() {
 	jq -cS .
 }
 
-test_expect_success HAVE_JQ 'reloading XML results in same R as before' '
+test_expect_success 'reloading XML results in same R as before' '
 	flux kvs get resource.R | normalize_json >R.orig &&
 	flux resource reload -x hwloc &&
 	flux kvs get resource.R | normalize_json >R.new &&
 	test_cmp R.orig R.new
 '
 
-test_expect_success HAVE_JQ 'reload original R just to do it and verify' '
+test_expect_success 'reload original R just to do it and verify' '
 	flux resource reload R.orig &&
 	flux kvs get resource.R | normalize_json >R.new2 &&
 	test_cmp R.orig R.new2
@@ -177,17 +177,17 @@ test_expect_success 'one rank was was drained' '
 	test $(wc -l <has_drain.out) -eq 1
 '
 
-# Since jq is used in the first bit, HAVE_JQ is required in other bits too
-test_expect_success HAVE_JQ 'change expected cores in resource.R' "
+# Since jq is used in the first bit, is required in other bits too
+test_expect_success 'change expected cores in resource.R' "
 	flux kvs get resource.R &&
 	jq '.execution.R_lite[0].children.core = \"0-1048\"' R.orig >R.Mcore &&
 	flux resource reload R.Mcore
 "
-test_expect_success HAVE_JQ 'reload resource module' '
+test_expect_success 'reload resource module' '
 	flux exec -r all flux module remove resource &&
 	load_resource
 '
-test_expect_success HAVE_JQ 'all ranks were drained' '
+test_expect_success 'all ranks were drained' '
 	has_event drain >has_drain2.out &&
 	test $(wc -l <has_drain2.out) -eq $(($SIZE+1))
 '

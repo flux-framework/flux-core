@@ -18,24 +18,24 @@ runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast"
 test_expect_success 'flux-mini alloc with no args return error' '
 	test_expect_code 1 flux mini alloc
 '
-test_expect_success HAVE_JQ 'flux-mini alloc sets command to flux broker' '
+test_expect_success 'flux-mini alloc sets command to flux broker' '
 	flux mini alloc -n1 --dry-run | \
 	    jq -e ".tasks[0].command == [ \"flux\", \"broker\" ]"
 '
-test_expect_success HAVE_JQ 'flux-mini alloc appends broker options' '
+test_expect_success 'flux-mini alloc appends broker options' '
 	flux mini alloc -n1 --broker-opts=-v --dry-run | \
 	    jq -e ".tasks[0].command == [ \"flux\", \"broker\", \"-v\" ]"
 '
-test_expect_success HAVE_JQ 'flux-mini alloc can set initial-program' '
+test_expect_success 'flux-mini alloc can set initial-program' '
 	flux mini alloc -n1 --dry-run myapp --foo | \
 	    jq -e ".tasks[0].command == [ \"flux\", \"broker\", \"myapp\", \"--foo\" ]"
 '
-test_expect_success HAVE_JQ 'flux-mini alloc -N2 requests 2 nodes exclusively' '
+test_expect_success 'flux-mini alloc -N2 requests 2 nodes exclusively' '
 	flux mini alloc -N2 --dry-run hostname | \
 		jq -S ".resources[0]" | \
 		jq -e ".type == \"node\" and .exclusive"
 '
-test_expect_success HAVE_JQ 'flux-mini alloc --exclusive works' '
+test_expect_success 'flux-mini alloc --exclusive works' '
 	flux mini alloc -N1 -n1 --exclusive --dry-run hostname | \
 		jq -S ".resources[0]" | \
 		jq -e ".type == \"node\" and .exclusive"
@@ -125,11 +125,11 @@ test_expect_success NO_CHAIN_LINT 'flux-mini alloc --bg errors when job is cance
 	test_must_fail wait $pid &&
 	grep "unexpectedly exited" canceled.log
 '
-test_expect_success HAVE_JQ 'flux mini alloc: sets mpi=none by default' '
+test_expect_success 'flux mini alloc: sets mpi=none by default' '
 	flux mini alloc -N1 --dry-run hostname | \
 		jq -e ".attributes.system.shell.options.mpi = \"none\""
 '
-test_expect_success HAVE_JQ 'flux mini alloc: mpi option can be overridden' '
+test_expect_success 'flux mini alloc: mpi option can be overridden' '
 	flux mini alloc -o mpi=foo -N1 --dry-run hostname | \
 		jq -e ".attributes.system.shell.options.mpi = \"foo\""
 '

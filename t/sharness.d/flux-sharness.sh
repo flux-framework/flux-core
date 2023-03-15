@@ -292,73 +292,18 @@ test_on_rank() {
     flux exec --rank=${ranks} "$@"
 }
 
-#
-# Check for a program and skip all tests immediately if not found.
-# Exports the program in SHARNESS_test_skip_all_prereq for later
-# check in TEST_CHECK_PREREQS
-#
-skip_all_unless_have()
-{
-    prog_path=$(which $1 2>/dev/null)
-    if test -z "$prog_path"; then
-        skip_all="$1 not found. Skipping all tests"
-        test_done
-    fi
-    eval "$1=$prog_path"
-    export SHARNESS_test_skip_all_prereq="$SHARNESS_test_skip_all_prereq,$1"
-}
-
-GLOBAL_PROGRAM_PREREQS="HAVE_JQ:jq"
-
-#
-#  Check for programs in GLOBAL_PROGRAM_PREREQS and set prereq and
-#   "<name>=<program_path>" if found. If TEST_CHECK_PREREQS is set, then
-#   create a wrapper script in trash-directory/bin which will ensure the
-#   prereq (or global skip_all above) has been used before each invocation
-#   of program. This will catch places in testsuite where program is used
-#   without testing the prerequisite.
-#
-for prereq in $GLOBAL_PROGRAM_PREREQS; do
-    prog=${prereq#*:}
-    path_prog=$(which ${prog} 2>/dev/null || echo "/bin/false")
-    req=${prereq%:*}
-    test "${path_prog}" = "/bin/false" || test_set_prereq ${req}
-    eval "${prog}=${path_prog}"
-    if test -n "$TEST_CHECK_PREREQS"; then
-		dir=${SHARNESS_TRASH_DIRECTORY}/bin
-		mkdir -p ${dir}
-		cat <<-EOF > ${dir}/$prog
-		#!/bin/sh
-		saved_IFS=\$IFS
-		IFS=,
-		for x in \$test_prereq; do
-		  test "\$x" = "$req" && ok=t
-		done
-		for x in \$SHARNESS_test_skip_all_prereq; do
-		  test "\$x" = "$prog" && ok=t
-		done
-		test -n "\$ok" && exec $path_prog "\$@"
-		echo >&2 "Use of $prog without prereq $req!"
-		exit 1
-		EOF
-		chmod +x ${dir}/$prog
-		# Override $$prog to point to wrapper script:
-		eval "${prog}=${dir}/${prog}"
-    fi
-done
-
-if test -n "$TEST_CHECK_PREREQS"; then
-    export PATH=${SHARNESS_TRASH_DIRECTORY}/bin:${PATH}
-fi
-
 #  Export a shorter name for this test
 TEST_NAME=$SHARNESS_TEST_NAME
 export TEST_NAME
 
 #  Test requirements for testsuite
+if ! command -v jq >/dev/null; then
+    error "jq is required for the flux-core testsuite"
+fi
 if ! run_timeout 10.0 lua -e 'require "posix"'; then
     error "failed to find lua posix module in path"
 fi
+jq=$(command -v jq)
 
 #  Some tests in flux don't work with --chain-lint, add a prereq for
 #   --no-chain-lint:

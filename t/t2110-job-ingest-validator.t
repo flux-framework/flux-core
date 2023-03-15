@@ -71,7 +71,7 @@ test_expect_success 'flux job-validator --require-version rejects invalid arg' '
 		test_expect_code 1 \
 		flux job-validator --jobspec-only --require-version=0
 '
-test_expect_success HAVE_JQ 'flux job-validator rejects non-V1 jobspec' '
+test_expect_success 'flux job-validator rejects non-V1 jobspec' '
 	flux run --dry-run hostname | jq -c ".version = 2" | \
 		test_expect_code 1 \
 		flux job-validator --jobspec-only --require-version=1
@@ -83,7 +83,7 @@ test_expect_success 'flux job-validator --schema rejects invalid arg' '
 			--plugins=schema \
 			--schema=noexist
 '
-test_expect_success HAVE_JQ 'flux job-validator --feasibility-service works ' '
+test_expect_success 'flux job-validator --feasibility-service works ' '
 	flux run -n 4888 --dry-run hostname | \
 		flux job-validator --jobspec-only --plugins=feasibility \
 		| jq -e ".errnum != 0" &&

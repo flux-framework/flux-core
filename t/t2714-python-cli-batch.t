@@ -23,17 +23,17 @@ test_expect_success 'create generic test batch script' '
 	flux run -n \$ncores hostname
 	EOF
 '
-test_expect_success HAVE_JQ 'flux batch copies script into jobspec' '
+test_expect_success 'flux batch copies script into jobspec' '
 	flux batch -n1 --dry-run batch-script.sh | \
 		jq -j .attributes.system.batch.script > script.sh &&
 	test_cmp batch-script.sh script.sh
 '
-test_expect_success HAVE_JQ 'flux batch takes a script on stdin' '
+test_expect_success 'flux batch takes a script on stdin' '
 	flux batch -n1 --dry-run < batch-script.sh | \
 		jq -j .attributes.system.batch.script > script-stdin.sh &&
 	test_cmp batch-script.sh script.sh
 '
-test_expect_success HAVE_JQ 'flux batch --wrap option works' '
+test_expect_success 'flux batch --wrap option works' '
 	flux batch -n1 --dry-run --wrap foo bar baz | \
 		jq -j .attributes.system.batch.script >script-wrap.out &&
 	cat <<-EOF >script-wrap.expected &&
@@ -42,7 +42,7 @@ test_expect_success HAVE_JQ 'flux batch --wrap option works' '
 	EOF
 	test_cmp script-wrap.expected script-wrap.out
 '
-test_expect_success HAVE_JQ 'flux batch --wrap option works on stdin' '
+test_expect_success 'flux batch --wrap option works on stdin' '
 	printf "foo\nbar\nbaz\n" | \
 	    flux batch -n1 --dry-run --wrap | \
 		jq -j .attributes.system.batch.script >stdin-wrap.out &&
@@ -66,12 +66,12 @@ test_expect_success 'flux batch fails for file without she-bang' '
 test_expect_success 'flux batch fails if -N > -n' '
 	test_expect_code 1 flux batch -N4 -n1 --wrap hostname
 '
-test_expect_success HAVE_JQ 'flux batch -N2 requests 2 nodes exclusively' '
+test_expect_success 'flux batch -N2 requests 2 nodes exclusively' '
 	flux batch -N2 --wrap --dry-run hostname | \
 		jq -S ".resources[0]" | \
 		jq -e ".type == \"node\" and .exclusive"
 '
-test_expect_success HAVE_JQ 'flux batch --exclusive works' '
+test_expect_success 'flux batch --exclusive works' '
 	flux batch -N1 -n1 --exclusive --wrap --dry-run hostname | \
 		jq -S ".resources[0]" | \
 		jq -e ".type == \"node\" and .exclusive"
@@ -156,11 +156,11 @@ test_expect_success 'flux batch: flux can bootstrap without broker.mapping' '
 		--wrap flux resource info) &&
 	flux job status $id
 '
-test_expect_success HAVE_JQ 'flux batch: sets mpi=none by default' '
+test_expect_success 'flux batch: sets mpi=none by default' '
 	flux batch -N1 --dry-run --wrap hostname | \
 		jq -e ".attributes.system.shell.options.mpi = \"none\""
 '
-test_expect_success HAVE_JQ 'flux batch: mpi option can be overridden' '
+test_expect_success 'flux batch: mpi option can be overridden' '
 	flux batch -o mpi=foo -N1 --dry-run --wrap hostname | \
 		jq -e ".attributes.system.shell.options.mpi = \"foo\""
 '
@@ -188,7 +188,7 @@ test_expect_success 'flux batch: --dump=FILE works with mustache' '
 	run_timeout 60 flux job wait $id &&
 	tar tvf testdump-${id}.tgz
 '
-test_expect_success HAVE_JQ 'flux batch: supports directives in script' '
+test_expect_success 'flux batch: supports directives in script' '
 	cat <<-EOF >directives.sh &&
 	#!/bin/sh
 	# flux: -n1
@@ -198,7 +198,7 @@ test_expect_success HAVE_JQ 'flux batch: supports directives in script' '
 	flux batch --dry-run directives.sh > directives.json &&
 	jq -e ".attributes.system.job.name == \"test-name\"" < directives.json
 '
-test_expect_success HAVE_JQ 'flux batch: cmdline overrides directives' '
+test_expect_success 'flux batch: cmdline overrides directives' '
 	cat <<-EOF >directives2.sh &&
 	#!/bin/sh
 	# flux: -n1

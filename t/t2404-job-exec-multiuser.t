@@ -4,16 +4,6 @@ test_description='Sanity checks for job-exec multiuser exec'
 
 . $(dirname $0)/sharness.sh
 
-#  Dummy job shell uses jq and will not have access to test_prereqs set
-#   by individual tests, which causes calls to jq to fail when
-#   TEST_CHECK_PREREQS is set in the environment.
-#
-#  Just skip all tests if jq not available, which will export
-#   SHARNESS_test_skip_all_prereq=jq to the test_under_flux instance so that
-#   the prereq validation check test passes in the dummy job shell.
-#
-skip_all_unless_have jq
-
 flux version | grep -q libflux-security && test_set_prereq FLUX_SECURITY
 
 if ! test_have_prereq FLUX_SECURITY; then

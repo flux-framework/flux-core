@@ -1,7 +1,5 @@
 #!/bin/bash -e
 
-# test-prereqs: HAVE_JQ
-
 prejob=$(flux job stats | jq .job_states.run)
 
 jobid=$(flux submit --wait-event=start sleep 100 | flux job id)

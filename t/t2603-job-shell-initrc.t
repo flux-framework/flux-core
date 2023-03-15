@@ -70,13 +70,13 @@ test_expect_success 'flux-shell: initrc: specifying initrc of /dev/null works' '
 	test_debug "cat devnull.log" &&
 	grep "Loading /dev/null" devnull.log
 '
-test_expect_success HAVE_JQ 'flux-shell: initrc: bad initrc in jobspec fails' '
+test_expect_success 'flux-shell: initrc: bad initrc in jobspec fails' '
 	flux run --dry-run -N1 -n1 echo Hi \
 	    | jq ".attributes.system.shell.options.initrc = \"nosuchfile\"" \
 	    > j2 &&
 	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j2 -R R1 0
 '
-test_expect_success HAVE_JQ 'flux-shell: initrc: in jobspec works' '
+test_expect_success 'flux-shell: initrc: in jobspec works' '
 	name=ok &&
 	cat >${name}.lua <<-EOT &&
 	    print ("jobspec initrc OK")
@@ -159,7 +159,7 @@ test_expect_success 'flux-shell: initrc: return false from plugin aborts shell' 
 	test_debug "cat ${name}.log" &&
 	grep "plugin.*: shell.init failed" ${name}.log
 '
-test_expect_success HAVE_JQ 'flux-shell: initrc: add test options to jobspec' "
+test_expect_success 'flux-shell: initrc: add test options to jobspec' "
 	cat j1 | jq '.attributes.system.shell.options.test = \"test\"' \
 		> j.initrc
 "
@@ -261,7 +261,7 @@ test_expect_success 'flux-shell: initrc: load invalid args plugins' '
 	${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
 		--initrc=${name}.lua 0
 '
-test_expect_success HAVE_JQ 'flux-shell: initrc: load getopt plugin' '
+test_expect_success 'flux-shell: initrc: load getopt plugin' '
 	name=getopt &&
 	cat >${name}.lua <<-EOF &&
 	plugin.searchpath = "${INITRC_PLUGINPATH}"
@@ -272,7 +272,7 @@ test_expect_success HAVE_JQ 'flux-shell: initrc: load getopt plugin' '
 		> ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log"
 '
-test_expect_success HAVE_JQ 'flux-shell: plugins can use setopt with empty options' '
+test_expect_success 'flux-shell: plugins can use setopt with empty options' '
 	name=setopt &&
 	cat >${name}.lua <<-EOF &&
 	plugin.searchpath = "${INITRC_PLUGINPATH}"
@@ -284,7 +284,7 @@ test_expect_success HAVE_JQ 'flux-shell: plugins can use setopt with empty optio
 	test_debug "cat ${name}.log"
 '
 
-test_expect_success HAVE_JQ 'flux-shell: initrc: jobspec-info plugin works' '
+test_expect_success 'flux-shell: initrc: jobspec-info plugin works' '
 	name=jobspec-info &&
 	cat >${name}.lua <<-EOF &&
 	plugin.searchpath = "${INITRC_PLUGINPATH}"

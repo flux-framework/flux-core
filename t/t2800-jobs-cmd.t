@@ -87,7 +87,7 @@ test_expect_success 'configure testing queues' '
 	flux queue start --all
 '
 
-test_expect_success HAVE_JQ 'submit jobs for job list testing' '
+test_expect_success 'submit jobs for job list testing' '
 	#  Create `hostname` and `sleep` jobspec
 	#  N.B. Used w/ `flux job submit` for serial job submission
 	#  for efficiency (vs serial `flux submit`.
@@ -1175,7 +1175,7 @@ find_invalid_userid() {
 	                print (next(i for i in range(65536) if not i in ids));'
 }
 
-test_expect_success HAVE_JQ 'flux-jobs reverts username to userid for invalid ids' '
+test_expect_success 'flux-jobs reverts username to userid for invalid ids' '
 	id=$(find_invalid_userid) &&
 	test_debug "echo first invalid userid is ${id}" &&
 	printf "%s\n" $id > invalid_userid.expected &&

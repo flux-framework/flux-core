@@ -58,17 +58,17 @@ test_expect_success 'job-ingest: load job-ingest: require-version=any' '
 		validator-args=--require-version=any
 '
 
-test_expect_success HAVE_JQ 'job-ingest: dummy job-manager has expected max_jobid' '
+test_expect_success 'job-ingest: dummy job-manager has expected max_jobid' '
 	max_jobid=$(${RPC} job-manager.getinfo | jq .max_jobid) &&
 	test ${max_jobid} -eq ${DUMMY_MAX_JOBID}
 '
 
-test_expect_success HAVE_JQ 'job-ingest: max_jobid <= rank 0 FLUID timestamp' '
+test_expect_success 'job-ingest: max_jobid <= rank 0 FLUID timestamp' '
 	ts0=$(${RPC} job-ingest.getinfo | jq .timestamp) &&
 	test ${DUMMY_FLUID_TS} -le ${ts0}
 '
 
-test_expect_success HAVE_JQ 'job-ingest: rank 0 FLUID timestamp <= rank 1' '
+test_expect_success 'job-ingest: rank 0 FLUID timestamp <= rank 1' '
 	ts1=$(flux exec -r1 ${RPC} job-ingest.getinfo | jq .timestamp) &&
 	test ${ts0} -le ${ts1}
 '
@@ -82,7 +82,7 @@ test_expect_success 'job-ingest: fetch jobspec from KVS' '
 	kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs get --raw ${kvsdir}.jobspec >jobspec.out
 '
-test_expect_success HAVE_JQ 'job-ingest: jobspec stored accurately in KVS' '
+test_expect_success 'job-ingest: jobspec stored accurately in KVS' '
 	jq --sort-keys . <basic.json >basic.json.normalized &&
 	jq --sort-keys . <jobspec.out >jobspec.out.normalized &&
 	test_cmp basic.json.normalized jobspec.out.normalized
@@ -95,7 +95,7 @@ test_expect_success 'job-ingest: submit a job with environment' '
 	kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs get --raw ${kvsdir}.jobspec >jobspec_env.out
 '
-test_expect_success HAVE_JQ 'job-ingest: KVS jobspec lacks environment' '
+test_expect_success 'job-ingest: KVS jobspec lacks environment' '
 	jq -e ".attributes.system.environment.FOO == \"bar\"" \
 	    <jobspec_env.json &&
 	test_must_fail jq -e ".attributes.system.environment.FOO == \"bar\"" \

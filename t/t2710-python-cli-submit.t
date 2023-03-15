@@ -54,23 +54,23 @@ test_expect_success 'flux submit --flags=novalidate works' '
 test_expect_success 'flux submit with bad flags fails' '
 	test_must_fail flux submit --flags notaflag /bin/true
 '
-test_expect_success HAVE_JQ 'flux submit --time-limit=5d works' '
+test_expect_success 'flux submit --time-limit=5d works' '
 	flux submit --dry-run --time-limit=5d hostname >t5d.out &&
 	jq -e ".attributes.system.duration == 432000" < t5d.out
 '
-test_expect_success HAVE_JQ 'flux submit --time-limit=4h works' '
+test_expect_success 'flux submit --time-limit=4h works' '
 	flux submit --dry-run --time-limit=4h hostname >t4h.out &&
 	jq -e ".attributes.system.duration == 14400" < t4h.out
 '
-test_expect_success HAVE_JQ 'flux submit --time-limit=1m works' '
+test_expect_success 'flux submit --time-limit=1m works' '
 	flux submit --dry-run --time-limit=5m hostname >t5m.out &&
 	jq -e ".attributes.system.duration == 300" < t5m.out
 '
-test_expect_success HAVE_JQ 'flux submit -t5s works' '
+test_expect_success 'flux submit -t5s works' '
 	flux submit --dry-run -t5s hostname >t5s.out &&
 	jq -e ".attributes.system.duration == 5" < t5s.out
 '
-test_expect_success HAVE_JQ 'flux submit -t5 sets 5m duration' '
+test_expect_success 'flux submit -t5 sets 5m duration' '
 	flux submit --dry-run -t5 hostname >t5.out &&
 	jq -e ".attributes.system.duration == 300" < t5.out
 '
@@ -83,15 +83,15 @@ test_expect_success 'flux submit --time-limit=4-00:30:00 fails' '
 	grep -i "invalid Flux standard duration" st2.err
 '
 
-test_expect_success HAVE_JQ 'flux submit --queue works' '
+test_expect_success 'flux submit --queue works' '
 	flux submit --env=-* --dry-run --queue=batch hostname >queue.out && grep -i "batch" queue.out
 '
 
-test_expect_success HAVE_JQ 'flux submit --queue works' '
+test_expect_success 'flux submit --queue works' '
 	flux submit --env=-* --dry-run -q debug hostname >queue2.out && grep -i "debug" queue2.out
 '
 
-test_expect_success HAVE_JQ 'flux submit --setattr works' '
+test_expect_success 'flux submit --setattr works' '
 	flux submit --env=-* --dry-run \
 		--setattr user.meep=false \
 		--setattr user.foo=\"xxx\" \
@@ -109,7 +109,7 @@ test_expect_success HAVE_JQ 'flux submit --setattr works' '
 	jq -e ".attributes.system.bar == 42" attr.out
 '
 
-test_expect_success HAVE_JQ 'flux submit --setattr=^ATTR=VAL works' '
+test_expect_success 'flux submit --setattr=^ATTR=VAL works' '
 	cat | jq -S . >attr.json <<-EOF &&
 	[
 	  { "foo":"value",
@@ -126,7 +126,7 @@ test_expect_success HAVE_JQ 'flux submit --setattr=^ATTR=VAL works' '
 	    jq -S .attributes.user.foo > attrout.json &&
 	test_cmp attr.json attrout.json
 '
-test_expect_success HAVE_JQ 'flux submit --setattr=^ detects bad JSON' '
+test_expect_success 'flux submit --setattr=^ detects bad JSON' '
 	cat <<-EOF > bad.json &&
 	[ { "foo":"value",
 	    "bar": 42
@@ -149,7 +149,7 @@ test_expect_success HAVE_JQ 'flux submit --setattr=^ detects bad JSON' '
 	test_debug "cat attrbadfile.out" &&
 	grep "ERROR:.*nosuchfile" attrbadfile.out
 '
-test_expect_success HAVE_JQ 'flux submit --setopt works' '
+test_expect_success 'flux submit --setopt works' '
 	flux submit --dry-run \
 		--setopt foo=true \
 		--setopt baz \
@@ -158,57 +158,57 @@ test_expect_success HAVE_JQ 'flux submit --setopt works' '
 	test $(jq ".attributes.system.shell.options.bar.baz" opt.out) = "42" &&
 	test $(jq ".attributes.system.shell.options.baz" opt.out) = "1"
 '
-test_expect_success HAVE_JQ 'flux submit --output passes through to shell' '
+test_expect_success 'flux submit --output passes through to shell' '
 	flux submit --dry-run --output=my/file hostname >output.out &&
 	test $(jq ".attributes.system.shell.options.output.stdout.type" output.out) = "\"file\"" &&
 	test $(jq ".attributes.system.shell.options.output.stdout.path" output.out) = "\"my/file\""
 '
-test_expect_success HAVE_JQ 'flux submit --error passes through to shell' '
+test_expect_success 'flux submit --error passes through to shell' '
 	flux submit --dry-run --error=/my/error hostname >error.out &&
 	test $(jq ".attributes.system.shell.options.output.stderr.type" error.out) = "\"file\"" &&
 	test $(jq ".attributes.system.shell.options.output.stderr.path" error.out) = "\"/my/error\""
 '
-test_expect_success HAVE_JQ 'flux submit --label-io --output passes through to shell' '
+test_expect_success 'flux submit --label-io --output passes through to shell' '
 	flux submit --dry-run \
 		--label-io --output=foo hostname >labout.out &&
 	test $(jq ".attributes.system.shell.options.output.stdout.label" labout.out) = "true" &&
 	test $(jq ".attributes.system.shell.options.output.stdout.path" labout.out) = "\"foo\""
 '
-test_expect_success HAVE_JQ 'flux submit --output id mustache passes through to shell' '
+test_expect_success 'flux submit --output id mustache passes through to shell' '
 	flux submit --dry-run --output=foo.{{id}} hostname >musid.out &&
 	test $(jq ".attributes.system.shell.options.output.stdout.path" musid.out) = "\"foo.{{id}}\""
 '
-test_expect_success HAVE_JQ 'flux submit --cwd passes through to jobspec' '
+test_expect_success 'flux submit --cwd passes through to jobspec' '
 	flux submit --cwd=/foo/bar/baz hostname > cwd.out &&
 	jq -e ".attributes.system.cwd == \"/foo/bar/baz\""
 '
-test_expect_success HAVE_JQ 'flux submit command arguments work' '
+test_expect_success 'flux submit command arguments work' '
 	flux submit --dry-run a b c >args.out &&
 	test $(jq ".tasks[0].command[0]" args.out) = "\"a\"" &&
 	test $(jq ".tasks[0].command[1]" args.out) = "\"b\"" &&
 	test $(jq ".tasks[0].command[2]" args.out) = "\"c\""
 '
-test_expect_success HAVE_JQ 'flux submit --gpus-per-task adds gpus to task slot' '
+test_expect_success 'flux submit --gpus-per-task adds gpus to task slot' '
 	flux submit --dry-run -g2 hostname >gpu.out &&
 	test $(jq ".resources[0].with[1].type" gpu.out) = "\"gpu\"" &&
 	test $(jq ".resources[0].with[1].count" gpu.out) = "2"
 '
-test_expect_success HAVE_JQ 'flux submit --job-name works' '
+test_expect_success 'flux submit --job-name works' '
 	flux submit --dry-run --job-name=foobar hostname >name.out &&
 	test $(jq ".attributes.system.job.name" name.out) = "\"foobar\""
 '
-test_expect_success HAVE_JQ 'flux submit --env=-*/--env-remove=* works' '
+test_expect_success 'flux submit --env=-*/--env-remove=* works' '
 	flux submit --dry-run --env=-* hostname > no-env.out &&
 	jq -e ".attributes.system.environment == {}" < no-env.out &&
 	flux submit --dry-run --env-remove=* hostname > no-env2.out &&
 	jq -e ".attributes.system.environment == {}" < no-env2.out
 '
-test_expect_success HAVE_JQ 'flux submit --env=VAR works' '
+test_expect_success 'flux submit --env=VAR works' '
 	FOO=bar flux submit --dry-run \
 	    --env=-* --env FOO hostname >FOO-env.out &&
 	jq -e ".attributes.system.environment == {\"FOO\": \"bar\"}" FOO-env.out
 '
-test_expect_success HAVE_JQ 'flux submit --env=PATTERN works' '
+test_expect_success 'flux submit --env=PATTERN works' '
 	FOO_ONE=bar FOO_TWO=baz flux submit --dry-run \
 	    --env=-* --env="FOO_*" hostname >FOO-pattern-env.out &&
 	jq -e ".attributes.system.environment == \
@@ -219,7 +219,7 @@ test_expect_success HAVE_JQ 'flux submit --env=PATTERN works' '
 	    {\"FOO_ONE\": \"bar\", \"FOO_TWO\": \"baz\"}" FOO-pattern2-env.out
 
 '
-test_expect_success HAVE_JQ 'flux submit --env=VAR=VAL works' '
+test_expect_success 'flux submit --env=VAR=VAL works' '
 	flux submit --dry-run \
 	    --env=-* --env PATH=/bin hostname >PATH-env.out &&
 	jq -e ".attributes.system.environment == {\"PATH\": \"/bin\"}" PATH-env.out &&
@@ -227,7 +227,7 @@ test_expect_success HAVE_JQ 'flux submit --env=VAR=VAL works' '
 	    --env=-* --env FOO=\$FOO:baz hostname >FOO-append.out &&
 	jq -e ".attributes.system.environment == {\"FOO\": \"bar:baz\"}" FOO-append.out
 '
-test_expect_success HAVE_JQ 'flux submit --env-file works' '
+test_expect_success 'flux submit --env-file works' '
 	cat <<-EOF >envfile &&
 	-*
 	FOO=bar
@@ -255,14 +255,14 @@ test_expect_success 'flux submit --cc works' '
 	EOF
 	test_cmp cc.output.expected cc.output.sorted
 '
-test_expect_success HAVE_JQ 'flux submit does not substitute {} without --cc' '
+test_expect_success 'flux submit does not substitute {} without --cc' '
 	flux submit \
 		--env=-* \
 		--setattr=system.test={} \
 		--dry-run true > nocc.json &&
 	jq -e ".attributes.system.test == {}" < nocc.json
 '
-test_expect_success HAVE_JQ 'flux submit --tasks-per-node works' '
+test_expect_success 'flux submit --tasks-per-node works' '
 	flux submit \
 		--env=-* \
 		-N 2 \

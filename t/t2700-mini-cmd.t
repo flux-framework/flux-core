@@ -96,23 +96,23 @@ test_expect_success 'flux mini run -vvv produces exec events on stderr' '
 	flux mini run -vvv hostname 2>vvv.err &&
 	grep complete vvv.err
 '
-test_expect_success HAVE_JQ 'flux mini submit --time-limit=5d works' '
+test_expect_success 'flux mini submit --time-limit=5d works' '
 	flux mini submit --dry-run --time-limit=5d hostname >t5d.out &&
 	jq -e ".attributes.system.duration == 432000" < t5d.out
 '
-test_expect_success HAVE_JQ 'flux mini submit --time-limit=4h works' '
+test_expect_success 'flux mini submit --time-limit=4h works' '
 	flux mini submit --dry-run --time-limit=4h hostname >t4h.out &&
 	jq -e ".attributes.system.duration == 14400" < t4h.out
 '
-test_expect_success HAVE_JQ 'flux mini submit --time-limit=1m works' '
+test_expect_success 'flux mini submit --time-limit=1m works' '
 	flux mini submit --dry-run --time-limit=5m hostname >t5m.out &&
 	jq -e ".attributes.system.duration == 300" < t5m.out
 '
-test_expect_success HAVE_JQ 'flux mini submit -t5s works' '
+test_expect_success 'flux mini submit -t5s works' '
 	flux mini submit --dry-run -t5s hostname >t5s.out &&
 	jq -e ".attributes.system.duration == 5" < t5s.out
 '
-test_expect_success HAVE_JQ 'flux mini submit -t5 sets 5m duration' '
+test_expect_success 'flux mini submit -t5 sets 5m duration' '
 	flux mini submit --dry-run -t5 hostname >t5.out &&
 	jq -e ".attributes.system.duration == 300" < t5.out
 '
@@ -125,7 +125,7 @@ test_expect_success 'flux mini submit --time-limit=4-00:30:00 fails' '
 	grep -i "invalid Flux standard duration" st2.err
 '
 
-test_expect_success HAVE_JQ 'flux mini submit --queue works' '
+test_expect_success 'flux mini submit --queue works' '
 	flux mini submit --env=-* --dry-run \
 		--queue=batch hostname >queue.out &&
 	jq -e ".attributes.system.queue == \"batch\"" &&
@@ -134,7 +134,7 @@ test_expect_success HAVE_JQ 'flux mini submit --queue works' '
 	jq -e ".attributes.system.queue == \"debug\""
 '
 
-test_expect_success HAVE_JQ 'flux mini submit --setattr works' '
+test_expect_success 'flux mini submit --setattr works' '
 	flux mini submit --env=-* --dry-run \
 		--setattr user.meep=false \
 		--setattr user.foo=\"xxx\" \
@@ -152,7 +152,7 @@ test_expect_success HAVE_JQ 'flux mini submit --setattr works' '
 	jq -e ".attributes.system.bar == 42" attr.out
 '
 
-test_expect_success HAVE_JQ 'flux mini submit --setattr=^ATTR=VAL works' '
+test_expect_success 'flux mini submit --setattr=^ATTR=VAL works' '
 	cat | jq -S . >attr.json <<-EOF &&
 	[
 	  { "foo":"value",
@@ -169,7 +169,7 @@ test_expect_success HAVE_JQ 'flux mini submit --setattr=^ATTR=VAL works' '
 	    jq -S .attributes.user.foo > attrout.json &&
 	test_cmp attr.json attrout.json
 '
-test_expect_success HAVE_JQ 'flux mini submit --setattr=^ detects bad JSON' '
+test_expect_success 'flux mini submit --setattr=^ detects bad JSON' '
 	cat <<-EOF > bad.json &&
 	[ { "foo":"value",
 	    "bar": 42
@@ -192,7 +192,7 @@ test_expect_success HAVE_JQ 'flux mini submit --setattr=^ detects bad JSON' '
 	test_debug "cat attrbadfile.out" &&
 	grep "ERROR:.*nosuchfile" attrbadfile.out
 '
-test_expect_success HAVE_JQ 'flux mini submit --setopt works' '
+test_expect_success 'flux mini submit --setopt works' '
 	flux mini submit --dry-run \
 		--setopt foo=true \
 		--setopt baz \
@@ -201,62 +201,62 @@ test_expect_success HAVE_JQ 'flux mini submit --setopt works' '
 	test $(jq ".attributes.system.shell.options.bar.baz" opt.out) = "42" &&
 	test $(jq ".attributes.system.shell.options.baz" opt.out) = "1"
 '
-test_expect_success HAVE_JQ 'flux mini submit --output passes through to shell' '
+test_expect_success 'flux mini submit --output passes through to shell' '
 	flux mini submit --dry-run --output=my/file hostname >output.out &&
 	test $(jq ".attributes.system.shell.options.output.stdout.type" output.out) = "\"file\"" &&
 	test $(jq ".attributes.system.shell.options.output.stdout.path" output.out) = "\"my/file\""
 '
-test_expect_success HAVE_JQ 'flux mini submit --error passes through to shell' '
+test_expect_success 'flux mini submit --error passes through to shell' '
 	flux mini submit --dry-run --error=/my/error hostname >error.out &&
 	test $(jq ".attributes.system.shell.options.output.stderr.type" error.out) = "\"file\"" &&
 	test $(jq ".attributes.system.shell.options.output.stderr.path" error.out) = "\"/my/error\""
 '
-test_expect_success HAVE_JQ 'flux mini submit --label-io --output passes through to shell' '
+test_expect_success 'flux mini submit --label-io --output passes through to shell' '
 	flux mini submit --dry-run \
 		--label-io --output=foo hostname >labout.out &&
 	test $(jq ".attributes.system.shell.options.output.stdout.label" labout.out) = "true" &&
 	test $(jq ".attributes.system.shell.options.output.stdout.path" labout.out) = "\"foo\""
 '
-test_expect_success HAVE_JQ 'flux mini submit --output id mustache passes through to shell' '
+test_expect_success 'flux mini submit --output id mustache passes through to shell' '
 	flux mini submit --dry-run --output=foo.{{id}} hostname >musid.out &&
 	test $(jq ".attributes.system.shell.options.output.stdout.path" musid.out) = "\"foo.{{id}}\""
 '
-test_expect_success HAVE_JQ 'flux mini submit --cwd passes through to jobspec' '
+test_expect_success 'flux mini submit --cwd passes through to jobspec' '
 	flux mini submit --cwd=/foo/bar/baz hostname > cwd.out &&
 	jq -e ".attributes.system.cwd == \"/foo/bar/baz\""
 '
-test_expect_success HAVE_JQ 'flux mini run --cwd works' '
+test_expect_success 'flux mini run --cwd works' '
 	mkdir cwd_test &&
 	flux mini run --cwd=$(realpath cwd_test) pwd > cwd.out &&
 	test $(cat cwd.out) = $(realpath cwd_test)
 '
-test_expect_success HAVE_JQ 'flux mini submit command arguments work' '
+test_expect_success 'flux mini submit command arguments work' '
 	flux mini submit --dry-run a b c >args.out &&
 	test $(jq ".tasks[0].command[0]" args.out) = "\"a\"" &&
 	test $(jq ".tasks[0].command[1]" args.out) = "\"b\"" &&
 	test $(jq ".tasks[0].command[2]" args.out) = "\"c\""
 '
-test_expect_success HAVE_JQ 'flux mini submit --gpus-per-task adds gpus to task slot' '
+test_expect_success 'flux mini submit --gpus-per-task adds gpus to task slot' '
 	flux mini submit --dry-run -g2 hostname >gpu.out &&
 	test $(jq ".resources[0].with[1].type" gpu.out) = "\"gpu\"" &&
 	test $(jq ".resources[0].with[1].count" gpu.out) = "2"
 '
-test_expect_success HAVE_JQ 'flux mini --job-name works' '
+test_expect_success 'flux mini --job-name works' '
 	flux mini submit --dry-run --job-name=foobar hostname >name.out &&
 	test $(jq ".attributes.system.job.name" name.out) = "\"foobar\""
 '
-test_expect_success HAVE_JQ 'flux-mini --env=-*/--env-remove=* works' '
+test_expect_success 'flux-mini --env=-*/--env-remove=* works' '
 	flux mini submit --dry-run --env=-* hostname > no-env.out &&
 	jq -e ".attributes.system.environment == {}" < no-env.out &&
 	flux mini submit --dry-run --env-remove=* hostname > no-env2.out &&
 	jq -e ".attributes.system.environment == {}" < no-env2.out
 '
-test_expect_success HAVE_JQ 'flux-mini --env=VAR works' '
+test_expect_success 'flux-mini --env=VAR works' '
 	FOO=bar flux mini submit --dry-run \
 	    --env=-* --env FOO hostname >FOO-env.out &&
 	jq -e ".attributes.system.environment == {\"FOO\": \"bar\"}" FOO-env.out
 '
-test_expect_success HAVE_JQ 'flux-mini --env=PATTERN works' '
+test_expect_success 'flux-mini --env=PATTERN works' '
 	FOO_ONE=bar FOO_TWO=baz flux mini submit --dry-run \
 	    --env=-* --env="FOO_*" hostname >FOO-pattern-env.out &&
 	jq -e ".attributes.system.environment == \
@@ -267,7 +267,7 @@ test_expect_success HAVE_JQ 'flux-mini --env=PATTERN works' '
 	    {\"FOO_ONE\": \"bar\", \"FOO_TWO\": \"baz\"}" FOO-pattern2-env.out
 
 '
-test_expect_success HAVE_JQ 'flux-mini --env=VAR=VAL works' '
+test_expect_success 'flux-mini --env=VAR=VAL works' '
 	flux mini submit --dry-run \
 	    --env=-* --env PATH=/bin hostname >PATH-env.out &&
 	jq -e ".attributes.system.environment == {\"PATH\": \"/bin\"}" PATH-env.out &&
@@ -288,7 +288,7 @@ test_expect_success 'flux-mini --env=VAR=$VAL fails when VAL not in env' '
 	test_debug "cat env-notset.err" &&
 	grep "env: Variable .* not found" env-notset.err
 '
-test_expect_success HAVE_JQ 'flux-mini --env-file works' '
+test_expect_success 'flux-mini --env-file works' '
 	cat <<-EOF >envfile &&
 	-*
 	FOO=bar
@@ -300,7 +300,7 @@ test_expect_success HAVE_JQ 'flux-mini --env-file works' '
 	       {\"FOO\":\"bar\", \"BAR\":\"bar/baz\"}" envfile.out
 	done
 '
-test_expect_success HAVE_JQ 'flux-mini propagates some rlimits by default' '
+test_expect_success 'flux-mini propagates some rlimits by default' '
 	flux mini run --dry-run hostname | \
 	    jq .attributes.system.shell.options.rlimit >rlimit-default.out &&
 	# check random sample of rlimits:
@@ -308,29 +308,29 @@ test_expect_success HAVE_JQ 'flux-mini propagates some rlimits by default' '
 	grep stack rlimit-default.out &&
 	grep nofile rlimit-default.out
 '
-test_expect_success HAVE_JQ 'flux-mini --rlimit=-* works' '
+test_expect_success 'flux-mini --rlimit=-* works' '
 	flux mini run --rlimit=-* --dry-run hostname \
 	    | jq -e ".attributes.system.shell.options.rlimit == null"
 '
-test_expect_success HAVE_JQ 'flux-mini --rlimit=name works' '
+test_expect_success 'flux-mini --rlimit=name works' '
 	flux mini run --rlimit=memlock --dry-run hostname \
 	    | jq .attributes.system.shell.options.rlimit >rlimit-memlock.out &&
 	grep memlock rlimit-memlock.out &&
 	grep core rlimit-memlock.out
 '
-test_expect_success HAVE_JQ 'flux-mini --rlimit=name --rlimit=name works' '
+test_expect_success 'flux-mini --rlimit=name --rlimit=name works' '
 	flux mini run --rlimit=memlock --rlimit=ofile --dry-run hostname \
 	    | jq .attributes.system.shell.options.rlimit >rlimit-ofile.out &&
 	grep memlock rlimit-memlock.out &&
 	grep ofile rlimit-memlock.out
 '
-test_expect_success HAVE_JQ 'flux-mini --rlimit=-*,core works' '
+test_expect_success 'flux-mini --rlimit=-*,core works' '
 	flux mini run --rlimit=-*,core --dry-run hostname \
 	    | jq .attributes.system.shell.options.rlimit >rlimit-core.out &&
 	grep core rlimit-core.out &&
 	test_must_fail grep nofile rlimit-core.out
 '
-test_expect_success HAVE_JQ 'flux-mini --rlimit=name=value works' '
+test_expect_success 'flux-mini --rlimit=name=value works' '
 	flux mini run --rlimit=core=16 --dry-run hostname \
 	    | jq -e ".attributes.system.shell.options.rlimit.core == 16" &&
 	inf=$(flux python -c "import resource as r; print(r.RLIM_INFINITY)") &&
@@ -359,14 +359,14 @@ test_expect_success 'flux-mini submit --cc works' '
 	EOF
 	test_cmp cc.output.expected cc.output.sorted
 '
-test_expect_success HAVE_JQ 'flux-mini submit does not substitute {} without --cc' '
+test_expect_success 'flux-mini submit does not substitute {} without --cc' '
 	flux mini submit \
 		--env=-* \
 		--setattr=system.test={} \
 		--dry-run true > nocc.json &&
 	jq -e ".attributes.system.test == {}" < nocc.json
 '
-test_expect_success HAVE_JQ 'flux-mini submit --tasks-per-node works' '
+test_expect_success 'flux-mini submit --tasks-per-node works' '
 	flux mini submit \
 		--env=-* \
 		-N 2 \
@@ -489,7 +489,7 @@ while read line; do
 	args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
 	expected=$(echo $line | awk -F== '{print $2}')
 	per_resource=$(echo $line | awk -F== '{print $3}' | sed 's/  *$//')
-	test_expect_success HAVE_JQ "per-resource: $args" '
+	test_expect_success "per-resource: $args" '
 	    echo $expected >expected.$test_count &&
 	    flux mini run $args --dry-run hostname > jobspec.$test_count &&
 	    $jj < jobspec.$test_count >output.$test_count &&

@@ -180,29 +180,29 @@ test_expect_success 'flux R set-property works' '
 test_expect_success 'flux R set-property fails with unknown ranks' '
 	flux R encode -r 0-1 | test_must_fail flux R set-property foo:1-2
 '
-test_expect_success HAVE_JQ 'scheduling opaque key is preserved' '
+test_expect_success 'scheduling opaque key is preserved' '
 	flux R encode -r 0-3 -c 0-3 -g 0 -H foo[0-3] \
 	    | jq ".scheduling = 42" > R.orig &&
 	flux R decode < R.orig | jq -e ".scheduling == 42" &&
 	flux R decode --include 0 < R.orig | jq -e ".scheduling == 42" &&
 	flux R decode --exclude 0 < R.orig | jq -e ".scheduling == 42"
 '
-test_expect_success HAVE_JQ 'scheduling opaque key is preserved with append' '
+test_expect_success 'scheduling opaque key is preserved with append' '
 	(cat R.orig && flux R encode -r 4 ) | flux R append \
 	    | flux R decode | jq -e ".scheduling == 42"
 '
-test_expect_success HAVE_JQ 'scheduling opaque key is preserved with remap' '
+test_expect_success 'scheduling opaque key is preserved with remap' '
 	flux R remap < R.orig | flux R decode | jq -e ".scheduling == 42"
 '
-test_expect_success HAVE_JQ 'scheduling opaque key is preserved with diff' '
+test_expect_success 'scheduling opaque key is preserved with diff' '
 	(cat R.orig && flux R encode -r 1 ) | flux R diff \
 	    | jq -e ".scheduling == 42"
 '
-test_expect_success HAVE_JQ 'scheduling key is preserved with intersect' '
+test_expect_success 'scheduling key is preserved with intersect' '
 	(cat R.orig && flux R encode -r 1 -H foo1) | flux R intersect \
 	    | jq -e ".scheduling == 42"
 '
-test_expect_success HAVE_JQ 'use of --local,--xml and --hosts is supported' '
+test_expect_success 'use of --local,--xml and --hosts is supported' '
 	ncores=$(flux R encode --local | flux R decode --count cores) &&
 	flux R encode --local --hosts=fluke[0-16] > R.hosts &&
 	test_debug "flux R decode --short < R.hosts" &&

@@ -220,7 +220,6 @@ else
 	-e PROJECT \
         -e CI \
         -e TAP_DRIVER_QUIET \
-        -e TEST_CHECK_PREREQS \
         -e FLUX_TEST_TIMEOUT \
         -e FLUX_TEST_SIZE_MAX \
         -e PYTHON_VERSION \

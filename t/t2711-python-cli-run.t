@@ -56,7 +56,7 @@ test_expect_success 'flux run -vvv produces exec events on stderr' '
 	grep complete vvv.err
 '
 
-test_expect_success HAVE_JQ 'flux run --cwd works' '
+test_expect_success 'flux run --cwd works' '
 	mkdir cwd_test &&
 	flux run --cwd=$(realpath cwd_test) pwd > cwd.out &&
 	test $(cat cwd.out) = $(realpath cwd_test)
@@ -74,7 +74,7 @@ test_expect_success 'flux run --env=VAR=$VAL fails when VAL not in env' '
 	test_debug "cat env-notset.err" &&
 	grep "env: Variable .* not found" env-notset.err
 '
-test_expect_success HAVE_JQ 'flux run propagates some rlimits by default' '
+test_expect_success 'flux run propagates some rlimits by default' '
 	flux run --dry-run hostname | \
 	    jq .attributes.system.shell.options.rlimit >rlimit-default.out &&
 	# check random sample of rlimits:
@@ -82,29 +82,29 @@ test_expect_success HAVE_JQ 'flux run propagates some rlimits by default' '
 	grep stack rlimit-default.out &&
 	grep nofile rlimit-default.out
 '
-test_expect_success HAVE_JQ 'flux run --rlimit=-* works' '
+test_expect_success 'flux run --rlimit=-* works' '
 	flux run --rlimit=-* --dry-run hostname \
 	    | jq -e ".attributes.system.shell.options.rlimit == null"
 '
-test_expect_success HAVE_JQ 'flux run --rlimit=name works' '
+test_expect_success 'flux run --rlimit=name works' '
 	flux run --rlimit=memlock --dry-run hostname \
 	    | jq .attributes.system.shell.options.rlimit >rlimit-memlock.out &&
 	grep memlock rlimit-memlock.out &&
 	grep core rlimit-memlock.out
 '
-test_expect_success HAVE_JQ 'flux run --rlimit=name --rlimit=name works' '
+test_expect_success 'flux run --rlimit=name --rlimit=name works' '
 	flux run --rlimit=memlock --rlimit=ofile --dry-run hostname \
 	    | jq .attributes.system.shell.options.rlimit >rlimit-ofile.out &&
 	grep memlock rlimit-memlock.out &&
 	grep ofile rlimit-memlock.out
 '
-test_expect_success HAVE_JQ 'flux run --rlimit=-*,core works' '
+test_expect_success 'flux run --rlimit=-*,core works' '
 	flux run --rlimit=-*,core --dry-run hostname \
 	    | jq .attributes.system.shell.options.rlimit >rlimit-core.out &&
 	grep core rlimit-core.out &&
 	test_must_fail grep nofile rlimit-core.out
 '
-test_expect_success HAVE_JQ 'flux run --rlimit=name=value works' '
+test_expect_success 'flux run --rlimit=name=value works' '
 	flux run --rlimit=core=16 --dry-run hostname \
 	    | jq -e ".attributes.system.shell.options.rlimit.core == 16" &&
 	inf=$(flux python -c "import resource as r; print(r.RLIM_INFINITY)") &&
@@ -229,7 +229,7 @@ while read line; do
 	args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
 	expected=$(echo $line | awk -F== '{print $2}')
 	per_resource=$(echo $line | awk -F== '{print $3}' | sed 's/  *$//')
-	test_expect_success HAVE_JQ "per-resource: $args" '
+	test_expect_success "per-resource: $args" '
 	    echo $expected >expected.$test_count &&
 	    flux run $args --dry-run hostname > jobspec.$test_count &&
 	    $jj < jobspec.$test_count >output.$test_count &&

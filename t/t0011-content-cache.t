@@ -23,21 +23,21 @@ unregister_backing() {
 	jq -j -c -n  "{name:\"$1\"}" | $RPC content.unregister-backing
 }
 
-test_expect_success HAVE_JQ 'register-backing name=foo works' '
+test_expect_success 'register-backing name=foo works' '
 	register_backing foo
 '
-test_expect_success HAVE_JQ 'register-backing name=bar fails' '
+test_expect_success 'register-backing name=bar fails' '
 	test_must_fail register_backing bar 2>bar.err &&
 	grep "already active" bar.err
 '
-test_expect_success HAVE_JQ 'unregister-backing name=foo works' '
+test_expect_success 'unregister-backing name=foo works' '
 	unregister_backing foo
 '
-test_expect_success HAVE_JQ 'register-backing name=bar fails' '
+test_expect_success 'register-backing name=bar fails' '
 	test_must_fail register_backing bar 2>foo.err &&
 	grep "cannot be changed" foo.err
 '
-test_expect_success HAVE_JQ 'unregister-backing name=foo fails' '
+test_expect_success 'unregister-backing name=foo fails' '
 	test_must_fail unregister_backing foo 2>foo2.err &&
 	grep "is not active" foo2.err
 '

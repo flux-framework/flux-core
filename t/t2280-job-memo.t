@@ -44,55 +44,55 @@ test_expect_success 'memo: only job owner can add memo' '
 test_expect_success 'memo: memo cannot be added to inactive job' '
 	test_must_fail flux job memo $(cat inactivejob) foo=42
 '
-test_expect_success HAVE_JQ 'memo: add memo to pending job works' '
+test_expect_success 'memo: add memo to pending job works' '
 	flux job memo $pendingid foo=42 a=b &&
 	flux job wait-event -t 10 $pendingid memo &&
 	jmgr_check_memo $pendingid foo 42
 '
-test_expect_success HAVE_JQ 'memo: remove memo from pending job works' '
+test_expect_success 'memo: remove memo from pending job works' '
 	flux job memo $pendingid foo=null &&
 	flux job wait-event -m foo=null -t 10 $pendingid memo &&
 	test_expect_code 1 jmgr_check_memo_exists $pendingid foo
 '
-test_expect_success HAVE_JQ 'memo: add volatile memo to pending job works' '
+test_expect_success 'memo: add volatile memo to pending job works' '
 	flux job memo --volatile $pendingid foo=bar &&
 	jmgr_check_memo $pendingid foo \"bar\" &&
 	flux job eventlog $pendingid > eventlog.pending &&
 	test_expect_code 1 grep foo=bar eventlog.pending
 '
-test_expect_success HAVE_JQ 'memo: add memo to running job works' '
+test_expect_success 'memo: add memo to running job works' '
 	flux job memo $runid foo=42 &&
 	flux job wait-event -t 10 $runid memo &&
 	jmgr_check_memo $runid foo 42
 '
-test_expect_success HAVE_JQ 'memo: remove memo from running job works' '
+test_expect_success 'memo: remove memo from running job works' '
 	flux job memo $runid foo=null &&
 	flux job wait-event -m foo=null -t 10 $runid memo &&
 	test_expect_code 1 jmgr_check_memo_exists $runid foo
 '
-test_expect_success HAVE_JQ 'memo: flux job memo works with dotted path' '
+test_expect_success 'memo: flux job memo works with dotted path' '
 	flux job memo $runid a.b.c=42 a.d=test &&
 	jmgr_check_memo_exists $runid a.b.c &&
 	jmgr_check_memo_exists $runid a.d
 '
-test_expect_success HAVE_JQ 'memo: flux job memo works with key=- (stdin)' '
+test_expect_success 'memo: flux job memo works with key=- (stdin)' '
 	echo "xyz" | flux job memo $runid a.f=-A &&
 	jmgr_check_memo_exists $runid a.f
 '
-test_expect_success HAVE_JQ 'memo: flux job memo: null values unset keys' '
+test_expect_success 'memo: flux job memo: null values unset keys' '
 	flux job memo $runid a.b=null &&
 	flux job wait-event -v -m "a={\"b\":null}" -t 10 $runid memo &&
 	test_expect_code 1 jmgr_check_memo_exists $runid a.b &&
 	jmgr_check_memo $runid a.d \"test\"
 '
-test_expect_success HAVE_JQ 'memo: available in flux-jobs {user} attribute' '
+test_expect_success 'memo: available in flux-jobs {user} attribute' '
 	jlist_check_memo $runid a.d \"test\" &&
 	jlist_check_memo $pendingid a \"b\"
 '
 test_expect_success 'memo: reload job-list module' '
 	flux module reload job-list
 '
-test_expect_success HAVE_JQ 'memo: non-volatile memos still available in job-list' '
+test_expect_success 'memo: non-volatile memos still available in job-list' '
 	jlist_check_memo $runid a.d \"test\" &&
 	jlist_check_memo $pendingid a \"b\"
 '
@@ -101,7 +101,7 @@ test_expect_success 'memo: cancel all jobs' '
 	flux job wait-event $runid clean &&
 	flux job wait-event $pendingid clean
 '
-test_expect_success HAVE_JQ 'memo: non-volatile memos still available for jobs' '
+test_expect_success 'memo: non-volatile memos still available for jobs' '
 	jlist_check_memo $runid a.d \"test\" &&
 	jlist_check_memo $pendingid a \"b\"
 '

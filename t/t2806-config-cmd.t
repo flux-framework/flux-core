@@ -32,12 +32,12 @@ test_expect_success 'flux-config get --help prints usage' '
 	flux config get --help 2>get_help.out &&
 	grep -i "query broker configuration values" get_help.out
 '
-test_expect_success HAVE_JQ 'flux-config dumps entire object' '
+test_expect_success 'flux-config dumps entire object' '
 	echo 42 >foo.a.exp &&
 	flux config get | jq -r .foo.a >foo.a.out &&
 	test_cmp foo.a.exp foo.a.out
 '
-test_expect_success HAVE_JQ 'flux-config get dumps table' '
+test_expect_success 'flux-config get dumps table' '
 	flux config get foo | jq -r .a >foo.a2.out &&
 	test_cmp foo.a.exp foo.a2.out
 '
@@ -83,12 +83,12 @@ test_expect_success 'flux-config get --type=boolean dumps bool table member' '
 	flux config get --type=boolean foo.e >foo.e.out &&
 	test_cmp foo.d.exp foo.d.out
 '
-test_expect_success HAVE_JQ 'flux-config get --type=array dumps array' '
+test_expect_success 'flux-config get --type=array dumps array' '
 	echo barfu >foo.f1.exp &&
 	flux config get --type=array foo.f | jq -r -e ".[1]" >foo.f1.out &&
 	test_cmp foo.f1.exp foo.f1.out
 '
-test_expect_success HAVE_JQ 'flux-config get --type=object dumps table' '
+test_expect_success 'flux-config get --type=object dumps table' '
 	echo true >foo.bar.a.exp &&
 	flux config get --type=object foo.bar | jq -e ".a" >foo.bar.a.out &&
 	test_cmp foo.bar.a.exp foo.bar.a.out
@@ -133,21 +133,21 @@ test_expect_success 'flux-config load handles TOML input' '
 	flux config load <load.toml &&
 	flux config get >load.json
 '
-test_expect_success HAVE_JQ 'flux-config get returns loaded JSON' '
+test_expect_success 'flux-config get returns loaded JSON' '
 	jq -e ".test.y.z == 42" load.json
 '
 test_expect_success 'flux-config load handles empty input' '
 	flux config load </dev/null &&
 	flux config get >empty.json
 '
-test_expect_success HAVE_JQ 'now the config is empty' '
+test_expect_success 'now the config is empty' '
 	jq -e ". == {}" empty.json
 '
 test_expect_success 'flux-config load handles JSON input' '
 	flux config load <load.json &&
 	flux config get >load2.json
 '
-test_expect_success HAVE_JQ 'flux-config get returns loaded JSON' '
+test_expect_success 'flux-config get returns loaded JSON' '
 	jq -e ".test.y.z == 42" load2.json
 '
 test_expect_success 'flux-config load handles TOML directory' '
@@ -158,7 +158,7 @@ test_expect_success 'flux-config load handles TOML directory' '
 	flux config load conf.d &&
 	flux config get >fromfiles.json
 '
-test_expect_success HAVE_JQ 'flux-config get returns loaded JSON' '
+test_expect_success 'flux-config get returns loaded JSON' '
 	jq -e ".test.a.b.c == 999" fromfiles.json
 '
 test_expect_success 'flux-config load PATH fails on invalid TOML' '

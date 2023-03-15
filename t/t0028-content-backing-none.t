@@ -11,26 +11,26 @@ echo "# $0: flux session size will be ${SIZE}"
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
-test_expect_success HAVE_JQ 'checkpoint-get fails, no checkpoints yet' '
+test_expect_success 'checkpoint-get fails, no checkpoints yet' '
         checkpoint_put foo bar
 '
 
-test_expect_success HAVE_JQ 'checkpoint-put foo w/ rootref bar' '
+test_expect_success 'checkpoint-put foo w/ rootref bar' '
         checkpoint_put foo bar
 '
 
-test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref bar' '
+test_expect_success 'checkpoint-get foo returned rootref bar' '
         echo bar >rootref.exp &&
         checkpoint_get foo | jq -r .value | jq -r .rootref >rootref.out &&
         test_cmp rootref.exp rootref.out
 '
 
-test_expect_success HAVE_JQ 'checkpoint-put on rank 1 forwards to rank 0' '
+test_expect_success 'checkpoint-put on rank 1 forwards to rank 0' '
         o=$(checkpoint_put_msg rankone rankref) &&
         jq -j -c -n ${o} | flux exec -r 1 ${RPC} content.checkpoint-put
 '
 
-test_expect_success HAVE_JQ 'checkpoint-get on rank 1 forwards to rank 0' '
+test_expect_success 'checkpoint-get on rank 1 forwards to rank 0' '
         echo rankref >rankref.exp &&
         o=$(checkpoint_get_msg rankone) &&
         jq -j -c -n ${o} \
