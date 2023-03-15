@@ -165,7 +165,6 @@ matrix.add_build(
         CXX="clang++-6.0",
         PYTHON_VERSION="3.7",
         chain_lint="t",
-        TEST_CHECK_PREREQS="t",
     ),
     args="--with-flux-security",
     command_args="--workdir=/usr/src/" + "workdir/" * 15,

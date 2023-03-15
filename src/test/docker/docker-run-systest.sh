@@ -142,7 +142,6 @@ checks_group "Executing tests under system instance container" \
     -e PROJECT \
     -e CI \
     -e TAP_DRIVER_QUIET \
-    -e TEST_CHECK_PREREQS \
     -e FLUX_TEST_TIMEOUT \
     -e FLUX_TEST_SIZE_MAX \
     -e FLUX_ENABLE_SYSTEM_TESTS=t \
