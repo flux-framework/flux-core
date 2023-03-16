@@ -36,7 +36,7 @@ class FluxResourceConfig(UtilConfig):
     builtin_formats["status"] = {
         "default": {
             "description": "Default flux-resource status format string",
-            "format": "{state:>10} {nnodes:>6} {nodelist}",
+            "format": "{state:>10} {up:>2} {nnodes:>6} {nodelist}",
         },
         "long": {
             "description": "Long flux-resource status format string",
