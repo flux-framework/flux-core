@@ -91,6 +91,8 @@ jobs:
       DOCKER_USERNAME: travisflux
       DOCKER_PASSWORD: ${{ secrets.DOCKER_HUB_TRAVISFLUX_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_ACTOR: ${{ github.actor }}     
+      GITHUB_PACKAGE_REPO: ghcr.io/flux-framework/flux-core
     timeout-minutes: 60
     strategy:
       matrix: ${{fromJson(needs.generate-matrix.outputs.matrix)}}
