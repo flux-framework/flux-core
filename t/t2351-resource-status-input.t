@@ -11,6 +11,8 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 FORMAT="{state:>10} {nnodes:>6} {ranks:<15} {nodelist}"
 INPUTDIR=${SHARNESS_TEST_SRCDIR}/flux-resource/status
 
+export FLUX_PYCLI_LOGLEVEL=10
+
 for input in ${INPUTDIR}/*.json; do
     name=$(basename ${input%%.json})
     test_expect_success "flux-resource status input check: $name" '
@@ -26,7 +28,8 @@ done
 
 test_expect_success 'flux-resource status: header included with all formats' '
 	cat <<-EOF >headers.expected &&
-	state==STATUS
+	state==STATE
+	status=STATUS
 	nnodes==NNODES
 	ranks==RANKS
 	nodelist==NODELIST
@@ -42,7 +45,7 @@ test_expect_success 'flux-resource status: header included with all formats' '
 test_expect_success 'flux-resource status: --no-header works' '
 	INPUT=${INPUTDIR}/example.json &&
 	name=no-header &&
-	flux resource status -s all --no-header --from-stdin < $INPUT \
+	flux resource status -s exclude --no-header --from-stdin < $INPUT \
 	    > ${name}.out &&
 	test_debug "cat ${name}.out" &&
 	test $(wc -l < ${name}.out) -eq 1

@@ -1,2 +1,2 @@
-    STATUS NNODES RANKS           NODELIST
+     STATE NNODES RANKS           NODELIST
      avail      4 0-3             foo[1-4]
