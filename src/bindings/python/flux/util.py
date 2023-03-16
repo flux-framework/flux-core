@@ -676,6 +676,8 @@ class OutputFormat:
             if callable(pre):
                 pre(item)
             line = formatter.format(item)
+            if not line:
+                continue
             try:
                 print(line)
             except UnicodeEncodeError:
