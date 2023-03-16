@@ -152,6 +152,24 @@ def undrain(args):
     RPC(flux.Flux(), "resource.undrain", {"targets": args.targets}, nodeid=0).get()
 
 
+class AltField:
+    """
+    Convenient wrapper for fields that have an ascii and non-ascii
+    representation. Allows the ascii representation to be selected with
+    {field.ascii}.
+    """
+
+    def __init__(self, default, ascii):
+        self.default = default
+        self.ascii = ascii
+
+    def __str__(self):
+        return self.default
+
+    def __format__(self, fmt):
+        return str(self).__format__(fmt)
+
+
 class ResourceStatusLine:
     """Information specific to a given flux resource status line"""
 
@@ -186,6 +204,10 @@ class ResourceStatusLine:
     @property
     def status(self):
         return "online" if self._online else "offline"
+
+    @property
+    def up(self):
+        return AltField("✔", "y") if self._online else AltField("✗", "n")
 
     @property
     def nodelist(self):
@@ -311,6 +333,8 @@ def status(args):
         "reason": "REASON",
         "timestamp": "TIME",
         "status": "STATUS",
+        "up": "UP",
+        "up.ascii": "UP",
     }
 
     #  Emit list of valid states if requested
