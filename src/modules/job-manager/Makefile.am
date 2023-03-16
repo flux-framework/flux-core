@@ -99,12 +99,18 @@ plugins_submit_hold_la_SOURCES = \
 plugins_submit_hold_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
+plugins_submit_hold_la_LIBADD = \
+	$(top_builddir)/src/common/libjob/libjob.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	libjob-manager.la
 
 plugins_alloc_bypass_la_SOURCES = \
 	plugins/alloc-bypass.c
 plugins_alloc_bypass_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/librlist/librlist.la
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(top_builddir)/src/common/libjob/libjob.la \
+	libjob-manager.la
 plugins_alloc_bypass_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
@@ -114,7 +120,8 @@ plugins_perilog_la_SOURCES = \
 plugins_perilog_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
-	$(top_builddir)/src/common/libjob/libjob.la
+	$(top_builddir)/src/common/libjob/libjob.la \
+	libjob-manager.la
 plugins_perilog_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
