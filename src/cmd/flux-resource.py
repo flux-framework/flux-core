@@ -36,7 +36,7 @@ class FluxResourceConfig(UtilConfig):
     builtin_formats["status"] = {
         "default": {
             "description": "Default flux-resource status format string",
-            "format": "{state:>10} {up:>2} {nnodes:>6} {nodelist}",
+            "format": "{state:>10} {color_up}{up:>2}{color_off} {nnodes:>6} {nodelist}",
         },
         "long": {
             "description": "Long flux-resource status format string",
@@ -206,6 +206,14 @@ class ResourceStatusLine:
         return "online" if self._online else "offline"
 
     @property
+    def color_up(self):
+        return "\033[01;32m" if self._online else "\033[01;31m"
+
+    @property
+    def color_off(self):
+        return "\033[0;0m"
+
+    @property
     def up(self):
         return AltField("✔", "y") if self._online else AltField("✗", "n")
 
@@ -335,6 +343,8 @@ def status(args):
         "status": "STATUS",
         "up": "UP",
         "up.ascii": "UP",
+        "color_up": "",
+        "color_off": "",
     }
 
     #  Emit list of valid states if requested
@@ -354,6 +364,10 @@ def status(args):
         rstatus = resource_status(flux.Flux()).get()
 
     formatter = flux.util.OutputFormat(fmt, headings=headings)
+
+    # Remove any `{color*}` fields if color is off
+    if args.color == "never" or (args.color == "auto" and not sys.stdout.isatty()):
+        formatter = formatter.copy(except_fields=["color_up", "color_off"])
 
     #  Skip empty lines unless --states or --skip-empty
     skip_empty = args.skip_empty or not args.states
@@ -573,6 +587,17 @@ def main():
         "-n", "--no-header", action="store_true", help="Suppress header output"
     )
     drain_parser.add_argument(
+        "-L",
+        "--color",
+        type=str,
+        metavar="WHEN",
+        choices=["never", "always", "auto"],
+        nargs="?",
+        const="always",
+        default="auto",
+        help="Use color; WHEN can be 'never', 'always', or 'auto' (default)",
+    )
+    drain_parser.add_argument(
         "targets", nargs="?", help="List of targets to drain (IDSET or HOSTLIST)"
     )
     drain_parser.add_argument("reason", help="Reason", nargs=argparse.REMAINDER)
@@ -604,6 +629,17 @@ def main():
     )
     status_parser.add_argument(
         "-n", "--no-header", action="store_true", help="Suppress header output"
+    )
+    status_parser.add_argument(
+        "-L",
+        "--color",
+        type=str,
+        metavar="WHEN",
+        choices=["never", "always", "auto"],
+        nargs="?",
+        const="always",
+        default="auto",
+        help="Use color; WHEN can be 'never', 'always', or 'auto' (default)",
     )
     status_parser.add_argument(
         "--from-stdin", action="store_true", help=argparse.SUPPRESS
