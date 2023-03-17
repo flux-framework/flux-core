@@ -6,7 +6,7 @@
 SUBMITBENCH=${SHARNESS_TEST_DIRECTORY}/ingest/submitbench
 
 cat <<EOF >test.sh
-#!/bin/bash
+#!/usr/bin/env bash
 
 RC=0
 RANKS="[0-\$((\$(flux getattr size)-1))]"

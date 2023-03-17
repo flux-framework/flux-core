@@ -24,7 +24,7 @@ test_expect_success 'flux-shell: initrc: conf.shell_initrc can be set' '
 	EOF
 	initrc_old=$(flux getattr conf.shell_initrc) &&
 	flux setattr conf.shell_initrc $(pwd)/test-initrc.lua &&
-	flux run /bin/true > test-initrc.output 2>&1 &&
+	flux run true > test-initrc.output 2>&1 &&
 	test_debug "cat test-initrc.output" &&
 	grep "loaded test-initrc" test-initrc.output &&
 	flux setattr conf.shell_initrc "${initrc_old}"
@@ -35,7 +35,7 @@ test_expect_success 'flux-shell: initrc: plugin.searchpath set via broker attr' 
 	EOF
 	old_pluginpath=$(flux getattr conf.shell_pluginpath) &&
 	flux setattr conf.shell_pluginpath /test/foo &&
-	flux run -o initrc=$(pwd)/print-searchpath.lua /bin/true \
+	flux run -o initrc=$(pwd)/print-searchpath.lua true \
 		>print-searchpath.out 2>&1 &&
 	test_debug "cat print-searchpath.out" &&
 	grep "plugin.searchpath = /test/foo" print-searchpath.out &&

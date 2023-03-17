@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 cat <<-EOF >t4184.sh
 #!/bin/sh -e

@@ -8,6 +8,7 @@ Verify flux command driver behavior.
 
 . `dirname $0`/sharness.sh
 SIZE=4
+printenv=$(which printenv)
 test_under_flux ${SIZE} minimal
 
 test_expect_success 'baseline works' '
@@ -16,12 +17,12 @@ test_expect_success 'baseline works' '
 
 test_expect_success 'flux prepends to FLUX_MODULE_PATH' '
 	(FLUX_MODULE_PATH=/xyz \
-		flux /usr/bin/printenv | grep "FLUX_MODULE_PATH=.*:/xyz")
+		flux $printenv | grep "FLUX_MODULE_PATH=.*:/xyz")
 '
 
 test_expect_success 'flux prepends to FLUX_CONNECTOR_PATH' '
         (FLUX_CONNECTOR_PATH=/xyz \
-		flux /usr/bin/printenv | grep "FLUX_CONNECTOR_PATH=.*:/xyz")
+		flux $printenv | grep "FLUX_CONNECTOR_PATH=.*:/xyz")
 '
 
 test_expect_success 'flux fails for unknown connector scheme' '
@@ -94,21 +95,21 @@ test_expect_success READLINK 'cmddriver moves its own path to the front of PATH'
 "
 test_expect_success 'FLUX_*_PREPEND environment variables work' '
 	( FLUX_CONNECTOR_PATH_PREPEND=/foo \
-	  flux /usr/bin/printenv | grep "FLUX_CONNECTOR_PATH=/foo" &&
+	  flux $printenv | grep "FLUX_CONNECTOR_PATH=/foo" &&
 	FLUX_EXEC_PATH_PREPEND=/foo \
-	  flux /usr/bin/printenv | grep "FLUX_EXEC_PATH=/foo" &&
+	  flux $printenv | grep "FLUX_EXEC_PATH=/foo" &&
 	FLUX_MODULE_PATH_PREPEND=/foo \
-	  flux /usr/bin/printenv | grep "FLUX_MODULE_PATH=/foo" &&
+	  flux $printenv | grep "FLUX_MODULE_PATH=/foo" &&
 	FLUX_LUA_PATH_PREPEND=/foo \
-	  flux /usr/bin/printenv | grep "LUA_PATH=/foo" &&
+	  flux $printenv | grep "LUA_PATH=/foo" &&
 	FLUX_LUA_CPATH_PREPEND=/foo \
-	  flux /usr/bin/printenv | grep "LUA_CPATH=/foo" &&
+	  flux $printenv | grep "LUA_CPATH=/foo" &&
 	FLUX_PYTHONPATH_PREPEND=/foo \
-	  flux /usr/bin/printenv | grep "PYTHONPATH=/foo")
+	  flux $printenv | grep "PYTHONPATH=/foo")
 '
 test_expect_success 'environment variables are prepended in correct order' '
 	( FLUX_EXEC_PATH_PREPEND=/foo:/bar \
-	  flux /usr/bin/printenv FLUX_EXEC_PATH > prepend.out ) &&
+	  flux $printenv FLUX_EXEC_PATH > prepend.out ) &&
 	test_debug "cat prepend.out" &&
 	grep "^/foo:/bar:" prepend.out
 '

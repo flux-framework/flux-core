@@ -149,7 +149,7 @@ test_expect_success 'perilog: job can be canceled after prolog is complete' '
 	flux job wait-event -t 15 $jobid clean
 '
 test_expect_success 'perilog: prolog failure raises job exception' '
-	printf "#!/bin/sh\n/bin/false" > prolog.d/fail.sh &&
+	printf "#!/bin/sh\nfalse" > prolog.d/fail.sh &&
 	chmod +x prolog.d/fail.sh &&
 	test_when_finished "rm -f prolog.d/fail.sh" &&
 	jobid=$(flux submit --job-name=prolog-failure hostname) &&
@@ -228,7 +228,7 @@ test_expect_success 'perilog: prolog is killed even if it ignores SIGTERM' '
 test_expect_success 'perilog: epilog can be specified without a prolog' '
 	cat <<-EOF >config/perilog.toml &&
 	[job-manager.epilog]
-	command = [ "/bin/true" ]
+	command = [ "true" ]
 	EOF
 	flux config reload &&
 	flux jobtap load --remove=*.so perilog.so &&

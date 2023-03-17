@@ -4,7 +4,8 @@
 #
 
 cat <<EOF >t4182-test.sh
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 R="\$((flux R encode -r 0 -c 0 -H foo0 && \
      flux R encode -r 1 -c 0-1 -H foo1 && \

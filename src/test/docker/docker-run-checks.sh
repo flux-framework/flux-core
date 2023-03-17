@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Build flux "checks" docker image and run tests, exporting
 #   important environment variables to the docker environment.

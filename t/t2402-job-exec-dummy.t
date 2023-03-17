@@ -75,7 +75,7 @@ test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
 	flux module reload job-exec
 '
 test_expect_success 'job-exec: invalid job shell generates exception' '
-	id=$(flux run --dry-run /bin/true \
+	id=$(flux run --dry-run true \
 		| $jq ".attributes.system.exec.job_shell = \"/notthere\"" \
 		| flux job submit) &&
 	flux job wait-event -vt 5 $id clean

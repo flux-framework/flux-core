@@ -50,6 +50,7 @@ int main(int argc, char** argv)
 {
     struct popen2_child *p;
     char *av[] = { "cat", NULL };
+    char *av_false[] = { "env", "false", NULL };
     uint8_t outbuf[] = "hello\n";
     uint8_t inbuf[sizeof (outbuf)];
     int fd;
@@ -94,8 +95,8 @@ int main(int argc, char** argv)
         "popen2 /noexist failed with ENOENT");
 
     /* open/close (child exit error) */
-    ok ((p = popen2 ("/bin/false", av, 0)) != NULL,
-        "popen2 /bin/false OK");
+    ok ((p = popen2 ("/usr/bin/env", av_false, 0)) != NULL,
+        "popen2 /usr/bin/env false OK");
     ok (pclose2 (p) == 0x100,
         "pclose2 returns child exit code 1");
 

@@ -18,19 +18,19 @@ invalid_rank() {
 TMPDIR=$(cd /tmp && $(which pwd))
 
 test_expect_success 'basic exec functionality' '
-	flux exec -n /bin/true
+	flux exec -n true
 '
 
 test_expect_success 'exec to specific rank' '
-	flux exec -n -r 0 /bin/true
+	flux exec -n -r 0 true
 '
 
 test_expect_success 'exec to "all" ranks' '
-	flux exec -n -r all /bin/true
+	flux exec -n -r all true
 '
 
 test_expect_success 'exec to subset of ranks' '
-	flux exec -n -r 2-3 /bin/true
+	flux exec -n -r 2-3 true
 '
 
 test_expect_success 'exec to all except a set of ranks' '
@@ -42,11 +42,11 @@ test_expect_success 'exec to all except a set of ranks' '
 '
 
 test_expect_success 'exec to rank 0 from another rank is an error' '
-	test_must_fail flux exec -n -r 1 flux exec -n -r 0 /bin/true
+	test_must_fail flux exec -n -r 1 flux exec -n -r 0 true
 '
 
 test_expect_success 'exec to non-existent rank is an error' '
-	test_must_fail flux exec -n -r $(invalid_rank) /bin/true
+	test_must_fail flux exec -n -r $(invalid_rank) true
 '
 
 test_expect_success 'exec to valid and invalid ranks works' '
@@ -59,7 +59,7 @@ test_expect_success 'exec to valid and invalid ranks works' '
 '
 
 test_expect_success 'test_on_rank works' '
-	test_on_rank 1 /bin/true
+	test_on_rank 1 true
 '
 
 test_expect_success 'test_on_rank sends to correct rank' '
@@ -166,11 +166,11 @@ EOF
 '
 
 test_expect_success 'I/O, multiple lines, no newline on last line' '
-	/bin/echo -en "1: one\n1: two" >expected &&
-	flux exec -n -lr 1 /bin/echo -en "one\ntwo" >output &&
+	echo -en "1: one\n1: two" >expected &&
+	flux exec -n -lr 1 echo -en "one\ntwo" >output &&
 	test_cmp output expected &&
-	/bin/echo -en "1: one" >expected &&
-	flux exec -n -lr 1 /bin/echo -en "one" >output &&
+	echo -en "1: one" >expected &&
+	flux exec -n -lr 1 echo -en "one" >output &&
 	test_cmp output expected
 '
 
@@ -183,7 +183,7 @@ test_expect_success 'I/O -- long lines' '
 waitfile=$SHARNESS_TEST_SRCDIR/scripts/waitfile.lua
 test_expect_success 'signal forwarding works' '
 	cat >test_signal.sh <<-EOF &&
-	#!/bin/bash
+	#!/usr/bin/env bash
 	sig=\${1-INT}
 	stdbuf --output=L \
 	    flux exec -n sh -c "echo hi; sleep 100" >sleepready.out 2>&1 &

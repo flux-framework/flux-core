@@ -671,7 +671,7 @@ test_expect_success 'verify job names preserved across restart' '
 #
 
 test_expect_success 'flux job list output no queue if queue not set' '
-        jobid=`flux submit --wait /bin/true | flux job id` &&
+        jobid=`flux submit --wait true | flux job id` &&
         echo $jobid > jobqueue1.id &&
         wait_jobid_state $jobid inactive &&
         flux job list -s inactive | grep $jobid | jq -e ".queue == null"
@@ -685,7 +685,7 @@ test_expect_success 'reconfigure with one queue' '
 '
 
 test_expect_success 'flux job list outputs queue' '
-        jobid=`flux submit --wait --queue=foo /bin/true | flux job id` &&
+        jobid=`flux submit --wait --queue=foo true | flux job id` &&
         echo $jobid > jobqueue2.id &&
         wait_jobid_state $jobid inactive &&
         flux job list -s inactive | grep $jobid | jq -e ".queue == \"foo\""
@@ -1784,10 +1784,10 @@ wait_id_inactive() {
 }
 
 test_expect_success 'run some jobs in the batch,debug queues' '
-        flux submit -q batch --wait /bin/true | flux job id > stats1.id &&
-        flux submit -q debug --wait /bin/true | flux job id > stats2.id &&
-        flux submit -q batch --wait /bin/false | flux job id > stats3.id &&
-        flux submit -q debug --wait /bin/false | flux job id > stats4.id &&
+        flux submit -q batch --wait true | flux job id > stats1.id &&
+        flux submit -q debug --wait true | flux job id > stats2.id &&
+        flux submit -q batch --wait false | flux job id > stats3.id &&
+        flux submit -q debug --wait false | flux job id > stats4.id &&
         wait_id_inactive $(cat stats1.id) &&
         wait_id_inactive $(cat stats2.id) &&
         wait_id_inactive $(cat stats3.id) &&

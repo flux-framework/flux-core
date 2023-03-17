@@ -327,12 +327,14 @@ test_expect_success 'remove content-s3 module' '
 
 test_expect_success 'generate rc1/rc3 for content-s3 backing' '
 	cat >rc1-content-s3 <<EOF &&
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 flux module load content-s3
 flux module load kvs
 EOF
 	cat >rc3-content-s3 <<EOF &&
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 flux module remove kvs
 flux module remove content-s3
 EOF

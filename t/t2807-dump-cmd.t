@@ -189,7 +189,7 @@ test_expect_success 'restore --no-cache with no backing store fails' '
 '
 test_expect_success 'run a flux instance, preserving content.sqlite' '
 	mkdir test &&
-	flux start -o,-Sstatedir=$(pwd)/test /bin/true
+	flux start -o,-Sstatedir=$(pwd)/test true
 '
 
 reader() {
@@ -224,7 +224,7 @@ test_expect_success 'perform offline garbage collection with dump/restore' '
 
 test_expect_success 'restart flux instance and try to run a job' '
 	flux start -o,-Sstatedir=test \
-		flux run /bin/true
+		flux run true
 '
 
 test_done

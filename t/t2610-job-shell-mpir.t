@@ -26,7 +26,7 @@ for test in 1:1 2:2 2:4 4:4 4:8 4:7; do
     NODES=${test%:*}
     test_expect_success "flux-shell: ${NODES}N/${TASKS}P: trace+mpir works" '
 	id=$(flux submit -o stop-tasks-in-exec \
-             -n${TASKS} -N${NODES} /bin/true)  &&
+             -n${TASKS} -N${NODES} true)  &&
         flux job wait-event -vt 5 -p guest.exec.eventlog \
                 -m sync=true ${id} shell.start &&
         ${mpir} $(shell_leader_rank $id) $(shell_service $id) &&
@@ -37,7 +37,7 @@ done
 
 
 test_expect_success 'flux-shell: test security of proctable method' '
-    id=$(flux submit -o stop-tasks-in-exec /bin/true) &&
+    id=$(flux submit -o stop-tasks-in-exec true) &&
     flux job wait-event -vt 5 -p guest.exec.eventlog \
         -m sync=true ${id} shell.start &&
     shell_rank=$(shell_leader_rank $id) &&

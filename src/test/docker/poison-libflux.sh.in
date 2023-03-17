@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Build a "poison" libflux-core.so to install in system path.
 #

@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 

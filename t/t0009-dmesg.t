@@ -85,7 +85,7 @@ test_expect_success 'multi-line log messages are split' '
 '
 
 test_expect_success 'trailing cr/lf are stripped' '
-	/bin/echo -n -e "xxx\x0A\x0D\x0A" | flux logger --appname striptest &&
+	echo -n -e "xxx\x0A\x0D\x0A" | flux logger --appname striptest &&
 	flux dmesg|grep striptest | sed -e "s/.*: //" >striptest.out &&
 	echo "xxx" >striptest.exp &&
 	test_cmp striptest.exp striptest.out
@@ -105,7 +105,7 @@ test_expect_success 'embedded blank log messages are ignored' '
 
 # Try to make flux dmesg get an EPROTO error
 test_expect_success 'logged non-ascii characters handled ok' '
-	/bin/echo -n -e "\xFF\xFE\x82\x00" | flux logger &&
+	echo -n -e "\xFF\xFE\x82\x00" | flux logger &&
 	flux dmesg
 '
 test_expect_success 'dmesg request with empty payload fails with EPROTO(71)' '

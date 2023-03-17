@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Simulated ssh command that ignores all options except the command
 # and runs it locally

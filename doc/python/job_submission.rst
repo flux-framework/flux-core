@@ -172,7 +172,7 @@ Example usage:
 	import concurrent.futures
 	import flux.job
 
-	jobspec = flux.job.JobspecV1.from_command(["/bin/true"])
+	jobspec = flux.job.JobspecV1.from_command(["true"])
 	with flux.job.FluxExecutor() as executor:
 		futs = [executor.submit(jobspec) for _ in range(5)]
 		for f in concurrent.futures.as_completed(futs):
@@ -219,7 +219,7 @@ as futures complete.
 		print(fut.get_info())
 
 	flux_handle = flux.Flux()
-	jobspec = flux.job.JobspecV1.from_command(["/bin/true"])
+	jobspec = flux.job.JobspecV1.from_command(["true"])
 	for _ in range(5):
 		# submit 5 futures and attach callbacks to each one
 		submit_future = flux.job.submit_async(f, jobspec)

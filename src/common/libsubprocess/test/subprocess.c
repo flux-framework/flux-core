@@ -74,7 +74,7 @@ void completion_cb (flux_subprocess_t *p)
 
 void test_basic (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd, *cmd2;
     flux_reactor_t *r2;
     flux_subprocess_t *p = NULL;
@@ -119,7 +119,7 @@ void completion_fail_cb (flux_subprocess_t *p)
 
 void test_basic_fail (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/false", NULL };
+    char *av[] = { "false", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -145,7 +145,7 @@ void test_basic_fail (flux_reactor_t *r)
 void test_basic_errors (flux_reactor_t *r)
 {
     flux_t *h = NULL;
-    char *avgood[] = { "/bin/true", NULL };
+    char *avgood[] = { "true", NULL };
     char *avbad[] = { NULL };
     flux_cmd_t *cmd;
 
@@ -270,7 +270,7 @@ void test_basic_errors (flux_reactor_t *r)
 
 void test_errors (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -1106,7 +1106,7 @@ void test_flag_stdio_fallthrough (flux_reactor_t *r)
 
 void test_flag_setpgrp (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -1131,7 +1131,7 @@ void test_flag_setpgrp (flux_reactor_t *r)
 
 void test_flag_fork_exec (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -1228,7 +1228,7 @@ void completion_sigterm_cb (flux_subprocess_t *p)
 
 void test_kill (flux_reactor_t *r)
 {
-    char *av[]  = { "/bin/sleep", "1000", NULL };
+    char *av[]  = { "sleep", "1000", NULL };
     flux_cmd_t *cmd = NULL;
     flux_subprocess_t *p = NULL;
     flux_future_t *f = NULL;
@@ -1380,7 +1380,7 @@ void eof_cb (flux_subprocess_t *p, const char *stream)
 
 void test_kill_eofs (flux_reactor_t *r)
 {
-    char *av[]  = { "/bin/sleep", "1000", NULL };
+    char *av[]  = { "sleep", "1000", NULL };
     flux_cmd_t *cmd = NULL;
     flux_subprocess_t *p = NULL;
     flux_future_t *f = NULL;
@@ -1428,7 +1428,7 @@ void state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 
 void test_state_change (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -1469,7 +1469,7 @@ void state_change_stopped_cb (flux_subprocess_t *p,
 
 void test_state_change_stopped (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/sleep", "30", NULL };
+    char *av[] = { "sleep", "30", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -1548,7 +1548,7 @@ void test_exec_fail (flux_reactor_t *r)
 
 void test_context (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     char *extra = "mydata";
@@ -1581,7 +1581,7 @@ void test_context (flux_reactor_t *r)
 
 void test_refcount (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     char *extra = "mydata";
@@ -1951,7 +1951,7 @@ void channel_nul_terminate_cb (flux_subprocess_t *p, const char *stream)
 
 void test_bufsize (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -1994,7 +1994,7 @@ void test_bufsize (flux_reactor_t *r)
 
 void test_bufsize_error (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -2178,7 +2178,7 @@ void test_line_buffer_disable (flux_reactor_t *r)
 
 void test_line_buffer_error (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -2565,7 +2565,7 @@ void test_stream_stop_disable (flux_reactor_t *r)
 
 void test_stream_stop_error (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
 
@@ -2596,7 +2596,7 @@ void shmem_hook_cb (flux_subprocess_t *p, void *arg)
 
 void test_pre_exec_hook (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     int *shmem_count;
@@ -2647,7 +2647,7 @@ void count_hook_cb (flux_subprocess_t *p, void *arg)
 
 void test_post_fork_hook (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd;
     flux_subprocess_t *p = NULL;
     int hook_count = 0;
@@ -2687,7 +2687,7 @@ void destroy_in_completion_cb (flux_subprocess_t *p)
 
 void test_destroy_in_completion (flux_reactor_t *r)
 {
-    char *av[] = { "/bin/true", NULL };
+    char *av[] = { "true", NULL };
     flux_cmd_t *cmd, *cmd2;
     flux_reactor_t *r2;
     flux_subprocess_t *p = NULL;

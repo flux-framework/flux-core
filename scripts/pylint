@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 pylint=$(command -v pylint3 pylint | head -1)
 if test -n "$pylint"; then

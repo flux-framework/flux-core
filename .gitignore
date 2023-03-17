@@ -101,3 +101,10 @@ compile_flags.txt
 # Rules to ignore auto-generated test harness scripts
 test_*.t
 !/src/bindings/python/test_commands/test_runner.t
+.direnv
+build
+install
+node_modules
+outputs/out
+venv
+doc/man/.doctrees

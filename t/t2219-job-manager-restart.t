@@ -10,7 +10,7 @@ export FLUX_DISABLE_JOB_CLEANUP=t
 
 test_expect_success 'start instance with empty kvs, run one job, and dump' '
 	flux start -o,-Scontent.dump=dump.tar \
-	    flux run --env-remove=* /bin/true &&
+	    flux run --env-remove=* true &&
 	test -f $(pwd)/dump.tar
 '
 
@@ -51,7 +51,7 @@ test_expect_success 'and max_jobid is still greater than zero' '
 '
 
 test_expect_success 'purging all jobs triggers jobid checkpoint update' '
-	flux start bash -c "flux run --env-remove=* /bin/true && \
+	flux start bash -c "flux run --env-remove=* true && \
 	    flux job purge -f --num-limit=0 && \
 	    flux kvs get checkpoint.job-manager"
 '

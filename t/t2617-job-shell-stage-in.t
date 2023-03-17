@@ -71,33 +71,33 @@ test_expect_success 'verify that stage-in.destination works' '
 	mkdir testdest &&
 	flux run -N1 \
 	    -o stage-in.destination=$(pwd)/testdest \
-	    /bin/true &&
+	    true &&
 	test -f testdest/main/hello
 '
 test_expect_success 'verify that stage-in.destination=local:path works' '
 	rm -rf testdest/main &&
 	flux run -N1 \
 	    -o stage-in.destination=local:$(pwd)/testdest \
-	    /bin/true &&
+	    true &&
 	test -f testdest/main/hello
 '
 test_expect_success 'verify that stage-in.destination=global:path works' '
 	rm -rf testdest/main &&
 	flux run -N2 \
 	    -o stage-in.destination=global:$(pwd)/testdest \
-	    /bin/true &&
+	    true &&
 	test -f testdest/main/hello
 '
 test_expect_success 'verify that stage-in.destination fails on bad dir' '
 	test_must_fail flux run -N1 \
 	    -o stage-in.destination=/noexist \
-	    /bin/true
+	    true
 '
 test_expect_success 'verify that stage-in.destination fails on bad prefix' '
 	rm -rf testdest/main &&
 	test_must_fail flux run -N1 \
 	    -o stage-in.destination=wrong:$(pwd)/testdest \
-	    /bin/true
+	    true
 '
 test_expect_success 'unmap all' '
 	flux filemap unmap --tags=red,blue,main
@@ -112,7 +112,7 @@ test_expect_success 'modify mapped test file without reducing its size' '
         dd if=/dev/zero of=red/lptest bs=4096 count=1 conv=notrunc
 '
 test_expect_success 'content change should cause an error' '
-        test_must_fail flux run -N1 -o stage-in /bin/true 2>changed.err &&
+        test_must_fail flux run -N1 -o stage-in true 2>changed.err &&
 	grep changed changed.err
 '
 

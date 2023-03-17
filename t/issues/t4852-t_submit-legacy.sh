@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/sh -e
 
 # ensure t_submit/t_depend is available from job-list in older
 # versions of flux that did not have the validate event.  To test, we
@@ -7,7 +7,7 @@
 cat <<-EOF >t4852setup.sh
 #!/bin/sh -e
 
-jobid=\$(flux submit --wait /bin/true)
+jobid=\$(flux submit --wait true)
 
 kvspath=\$(flux job id --to=kvs \$jobid)
 

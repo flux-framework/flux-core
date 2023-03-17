@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 cmd=$1
 
 # Test requirement, make sure we change back to sharness trash directory,

@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 if ! flux version | grep systemd; then
     echo "flux not built with systemd"

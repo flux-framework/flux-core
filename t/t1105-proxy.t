@@ -27,8 +27,8 @@ test_expect_success 'flux-proxy cleans up socket' '
 '
 
 test_expect_success 'flux-proxy exits with command return code' '
-	flux proxy $TEST_URI /bin/true &&
-	! flux proxy $TEST_URI /bin/false
+	flux proxy $TEST_URI true &&
+	! flux proxy $TEST_URI false
 '
 
 test_expect_success 'flux-proxy forwards getattr request' '
@@ -95,10 +95,10 @@ test_expect_success 'set bogus broker version' '
 	flux setattr version 0.0.0
 '
 test_expect_success 'flux-proxy fails with version mismatch' '
-	test_must_fail flux proxy $FLUX_URI /bin/true
+	test_must_fail flux proxy $FLUX_URI true
 '
 test_expect_success 'flux-proxy --force works with version mismatch' '
-	flux proxy --force $FLUX_URI /bin/true
+	flux proxy --force $FLUX_URI true
 '
 test_expect_success 'restore real broker version' '
 	flux setattr version $(cat realversion)
@@ -120,7 +120,7 @@ test_expect_success 'flux-proxy works with /jobid argument' '
 '
 test_expect_success NO_CHAIN_LINT 'flux-proxy attempts to restore terminal on error' '
 	cat <<-EOF >test.sh &&
-	#!/bin/bash
+	#!/usr/bin/env bash
 	flux --parent job cancel \$(flux getattr jobid)
 	while flux getattr jobid; do sleep 0.1; done
 	EOF
@@ -134,7 +134,7 @@ test_expect_success NO_CHAIN_LINT 'flux-proxy attempts to restore terminal on er
 test_expect_success NO_CHAIN_LINT 'flux-proxy sends SIGHUP to children without --nohup' '
 	SHELL=/bin/sh &&
 	cat <<-EOF >test.sh &&
-	#!/bin/bash
+	#!/usr/bin/env bash
 	flux --parent job cancel \$(flux getattr jobid)
 	while true; do sleep 0.1; done
 	EOF

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 LASTTAG=$(git describe --tags --abbrev=0)
 

@@ -16,11 +16,11 @@ rexec_script="flux python ${SHARNESS_TEST_SRCDIR}/scripts/rexec.py"
 rexec="${FLUX_BUILD_DIR}/t/rexec/rexec"
 
 test_expect_success 'basic rexec functionality (process success)' '
-	$rexec /bin/true
+	$rexec true
 '
 
 test_expect_success 'basic rexec functionality (process fail)' '
-	! $rexec /bin/false
+	! $rexec false
 '
 
 test_expect_success 'basic rexec - cwd correct' '
@@ -57,7 +57,7 @@ test_expect_success 'basic rexec functionality (echo stdout/err)' '
 '
 
 test_expect_success 'basic rexec invalid rank' '
-	! $rexec -r 32 /bin/true > output 2>&1 &&
+	! $rexec -r 32 true > output 2>&1 &&
 	grep -q "No route to host" output
 '
 
@@ -77,14 +77,14 @@ test_expect_success 'basic rexec fail exec() ENOENT' '
 '
 
 test_expect_success 'basic rexec propogates exit code()' '
-	test_expect_code 0 $rexec /bin/true &&
-	test_expect_code 1 $rexec /bin/false &&
+	test_expect_code 0 $rexec true &&
+	test_expect_code 1 $rexec false &&
 	test_expect_code 2 $rexec sh -c "exit 2" &&
 	test_expect_code 3 $rexec sh -c "exit 3"
 '
 
 test_expect_success 'basic rexec functionality (check state changes)' '
-	$rexec -s /bin/true > output &&
+	$rexec -s true > output &&
 	echo "Running" > expected &&
 	echo "Exited" >> expected &&
 	test_cmp expected output
@@ -104,7 +104,7 @@ test_expect_success 'basic rexec stdin' '
 '
 
 test_expect_success 'basic rexec stdin / stdout multiple lines' '
-	/bin/echo -en "foo\nbar\nbaz\n" | $rexec -i stdin ${TEST_SUBPROCESS_DIR}/test_echo -O -n > output 2>&1 &&
+	echo -en "foo\nbar\nbaz\n" | $rexec -i stdin ${TEST_SUBPROCESS_DIR}/test_echo -O -n > output 2>&1 &&
 	echo "foo" > expected &&
 	echo "bar" >> expected &&
 	echo "baz" >> expected &&
@@ -142,7 +142,7 @@ test_expect_success 'rexec channel input and output' '
 # rexec does not close TEST_CHANNEL, so we tell test_echo max
 # bytes we're feeding in
 test_expect_success 'rexec channel input and output multiple lines' '
-	/bin/echo -en "foo\nbar\nbaz\n" | $rexec -i TEST_CHANNEL ${TEST_SUBPROCESS_DIR}/test_echo -c TEST_CHANNEL -C -n -b 6 > output 2>&1 &&
+	echo -en "foo\nbar\nbaz\n" | $rexec -i TEST_CHANNEL ${TEST_SUBPROCESS_DIR}/test_echo -c TEST_CHANNEL -C -n -b 6 > output 2>&1 &&
 	echo "foo" > expected &&
 	echo "bar" >> expected &&
 	echo "baz" >> expected &&
@@ -151,7 +151,7 @@ test_expect_success 'rexec channel input and output multiple lines' '
 
 test_expect_success 'rexec kill' '
 	test_expect_code 143 \
-	    $rexec -k /bin/sleep 10 > output 2>&1 &&
+	    $rexec -k sleep 10 > output 2>&1 &&
 	grep "subprocess terminated by signal 15" output
 '
 
@@ -164,13 +164,13 @@ test_expect_success 'rexec kill group' '
 
 test_expect_success 'rexec kill process not yet running' '
 	test_expect_code 143 \
-	    $rexec -K /bin/sleep 10 > K.out 2>&1 &&
+	    $rexec -K sleep 10 > K.out 2>&1 &&
 	grep "subprocess terminated by signal 15" K.out
 '
 
 test_expect_success 'rexec kill with already pending signal gets error' '
 	test_expect_code 143 \
-	    $rexec -K -K /bin/sleep 10 > KK.out 2>&1 &&
+	    $rexec -K -K sleep 10 > KK.out 2>&1 &&
 	grep "subprocess terminated by signal 15" KK.out &&
 	grep "rexec: flux_subprocess_kill: Invalid argument" KK.out
 '
@@ -238,7 +238,7 @@ test_expect_success 'rexec line buffering can be disabled' '
 # from "rexec_getline", so if everything is working correctly, we
 # should see the concatenation "barEOF" at the end of the output.
 test_expect_success 'rexec read_getline call works on remote streams' '
-	/bin/echo -en "foo\nbar" | ${FLUX_BUILD_DIR}/t/rexec/rexec_getline -i stdin ${TEST_SUBPROCESS_DIR}/test_echo -O -n > output 2>&1 &&
+	echo -en "foo\nbar" | ${FLUX_BUILD_DIR}/t/rexec/rexec_getline -i stdin ${TEST_SUBPROCESS_DIR}/test_echo -O -n > output 2>&1 &&
 	echo "foo" > expected &&
 	echo "barEOF" >> expected &&
 	test_cmp expected output
@@ -249,13 +249,13 @@ test_expect_success 'get URI for rank 1 and check that it works' '
 	test $(FLUX_URI=$(cat uri1) flux getattr rank) -eq 1
 '
 test_expect_success 'rexec from rank 0 to rank 1 works' '
-	$rexec -r 0 /bin/true
+	$rexec -r 0 true
 '
 test_expect_success 'rexec from rank 1 to rank 1 works' '
-	(FLUX_URI=$(cat uri1) $rexec -r 1 /bin/true)
+	(FLUX_URI=$(cat uri1) $rexec -r 1 true)
 '
 test_expect_success 'rexec from rank 1 to rank 0 is restricted' '
-	(FLUX_URI=$(cat uri1) test_must_fail $rexec -r 0 /bin/true)
+	(FLUX_URI=$(cat uri1) test_must_fail $rexec -r 0 true)
 '
 
 test_expect_success NO_CHAIN_LINT 'ps, kill work locally on rank 0' '

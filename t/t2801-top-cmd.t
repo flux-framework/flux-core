@@ -48,7 +48,7 @@ test_expect_success 'flux-top summary shows no jobs initially' '
 	grep "0 failed" nojobs.out
 '
 test_expect_success 'run a test job to completion' '
-	flux submit --wait -n1 flux start /bin/true >jobid
+	flux submit --wait -n1 flux start true >jobid
 '
 test_expect_success 'flux-top summary shows one completed job' '
 	nnodes=$(flux resource list --format="{nnodes}") &&

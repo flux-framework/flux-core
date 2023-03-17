@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 idset_from_count() {
     if test $1 -eq 1; then

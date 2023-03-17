@@ -27,11 +27,11 @@ test_expect_success 'job-exec: verify system instance using systemd' '
         flux cancel ${jobid}
 '
 test_expect_success 'job-exec: simple job exits 0 on success' '
-        jobid=$(flux submit /bin/true) &&
+        jobid=$(flux submit true) &&
         test_expect_code 0 flux job status $jobid
 '
 test_expect_success 'job-exec: simple job exits 1 on failure' '
-        jobid=$(flux submit /bin/false) &&
+        jobid=$(flux submit false) &&
         test_expect_code 1 flux job status -vv $jobid
 '
 test_expect_success 'job-exec: simple job exits 127 on bad command' '

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Run a workload in the docker container from a given flux-core tag
 #   (previous tag by default), and preserve a dumpfile.

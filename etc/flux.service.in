@@ -5,7 +5,7 @@ Wants=munge.service
 [Service]
 TimeoutStopSec=90
 KillMode=mixed
-ExecStart=/bin/bash -c '\
+ExecStart=/bin/sh -c '\
   XDG_RUNTIME_DIR=/run/user/$UID \
   DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$UID/bus \
   @X_BINDIR@/flux broker \

@@ -78,11 +78,11 @@ test_expect_success 'flux mini submit --flags debug,waitable works' '
 	flux job eventlog $jobid | grep submit | grep flags=6
 '
 test_expect_success 'flux mini submit --flags=novalidate works' '
-	jobid=$(flux mini submit --flags novalidate /bin/true) &&
+	jobid=$(flux mini submit --flags novalidate true) &&
 	flux job eventlog $jobid | grep submit | grep flags=8
 '
 test_expect_success 'flux mini submit with bad flags fails' '
-	test_must_fail flux mini submit --flags notaflag /bin/true
+	test_must_fail flux mini submit --flags notaflag true
 '
 test_expect_success 'flux mini run -v produces jobid on stderr' '
 	flux mini run -v hostname 2>v.err &&

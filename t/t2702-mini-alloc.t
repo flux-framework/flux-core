@@ -72,7 +72,7 @@ test_expect_success 'flux-mini alloc --bg option works' '
 	flux job wait-event $jobid clean
 '
 test_expect_success 'flux-mini alloc --bg option works with a command' '
-	jobid=$(flux mini alloc -n1 -v --bg /bin/true) &&
+	jobid=$(flux mini alloc -n1 -v --bg true) &&
 	flux job wait-event -t15 -v $jobid finish &&
 	flux job attach $jobid
 '

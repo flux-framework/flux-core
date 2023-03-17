@@ -6,9 +6,10 @@ test_description='Test offline KVS garbage collection'
 
 test_expect_success 'create test script' '
 	cat >runjobs.sh <<-EOT &&
-	#!/bin/bash -e
+	#!/bin/sh
+set -e
 	trap "" SIGHUP
-	flux submit --cc=1-10 /bin/true >/dev/null
+	flux submit --cc=1-10 true >/dev/null
 	flux queue drain
 	backingmod=\$(flux getattr content.backing-module)
 	flux module stats --type int --parse object_count \$backingmod

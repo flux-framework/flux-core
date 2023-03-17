@@ -210,7 +210,7 @@ void simple_test (flux_t *h)
 {
     struct simple_scorecard exp;
 
-    char *true_av[] = { "/bin/true", NULL };
+    char *true_av[] = { "true", NULL };
     memset (&exp, 0, sizeof (exp));
     exp.running = 1;
     exp.exited = 1;
@@ -219,7 +219,7 @@ void simple_test (flux_t *h)
     exp.stderr_eof = 1;
     simple_run_check (h, ARRAY_SIZE (true_av) - 1, true_av, &exp);
 
-    char *false_av[] = { "/bin/false", NULL };
+    char *false_av[] = { "false", NULL };
     memset (&exp, 0, sizeof (exp));
     exp.running = 1;
     exp.exited = 1;
@@ -309,7 +309,7 @@ flux_subprocess_ops_t stoptest_ops = {
 
 void sigstop_test (flux_t *h)
 {
-    char *av[] = { "/bin/cat", NULL };
+    char *av[] = { "cat", NULL };
     flux_subprocess_t *p;
     flux_cmd_t *cmd;
     int rc;

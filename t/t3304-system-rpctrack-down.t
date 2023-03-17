@@ -77,7 +77,7 @@ test_expect_success NO_CHAIN_LINT 'broker 0 tracked child rpc count is nonzero' 
 
 test_expect_success 'stop broker 1 hard and wait for it to exit' '
 	$startctl kill 1 9 &&
-	($startctl wait 1 || /bin/true)
+	($startctl wait 1 || true)
 '
 
 # Ensure an EHOSTUNREACH is encountered on the socket to trigger connected

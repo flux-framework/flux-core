@@ -22,15 +22,15 @@ test_expect_success 'configure valid job-size.*.nnodes limits' '
 	EOT
 '
 test_expect_success 'a job that exceeds job-size.max.nnodes is rejected' '
-	test_must_fail flux submit -N 3 /bin/true 2>max-nnodes.err &&
+	test_must_fail flux submit -N 3 true 2>max-nnodes.err &&
 	grep "exceeds policy limit of 2" max-nnodes.err
 '
 test_expect_success 'a job that is under job-size.min.nnodes is rejected' '
-	test_must_fail flux submit -N 1 /bin/true 2>min-nnodes.err &&
+	test_must_fail flux submit -N 1 true 2>min-nnodes.err &&
 	grep "is under policy limit of 2" min-nnodes.err
 '
 test_expect_success 'a job that is between both of those is accepted' '
-	flux submit -N 2 /bin/true
+	flux submit -N 2 true
 '
 test_expect_success 'configure job-size.*.ncores limits' '
 	flux config load <<-EOT
@@ -40,15 +40,15 @@ test_expect_success 'configure job-size.*.ncores limits' '
 	EOT
 '
 test_expect_success 'a job that exceeds job-size.max.ncores is rejected' '
-	test_must_fail flux submit -n 3 /bin/true 2>max-ncores.err &&
+	test_must_fail flux submit -n 3 true 2>max-ncores.err &&
 	grep "exceeds policy limit of 2" max-ncores.err
 '
 test_expect_success 'a job that is under job-size.min.ncores is rejected' '
-	test_must_fail flux submit -n 1 /bin/true 2>min-ncores.err &&
+	test_must_fail flux submit -n 1 true 2>min-ncores.err &&
 	grep "is under policy limit of 2" min-ncores.err
 '
 test_expect_success 'a job that is between both of those is accepted' '
-	flux submit -n 2 /bin/true
+	flux submit -n 2 true
 '
 test_expect_success 'configure job-size.*.ngpus limits' '
 	flux config load <<-EOT
@@ -58,15 +58,15 @@ test_expect_success 'configure job-size.*.ngpus limits' '
 	EOT
 '
 test_expect_success 'a job that exceeds job-size.max.ngpus is rejected' '
-	test_must_fail flux submit -g 3 /bin/true 2>max-ngpus.err &&
+	test_must_fail flux submit -g 3 true 2>max-ngpus.err &&
 	grep "exceeds policy limit of 2" max-ngpus.err
 '
 test_expect_success 'a job that is under job-size.min.ngpus is rejected' '
-	test_must_fail flux submit -g 1 /bin/true 2>min-ngpus.err &&
+	test_must_fail flux submit -g 1 true 2>min-ngpus.err &&
 	grep "is under policy limit of 2" min-ngpus.err
 '
 test_expect_success 'a job that is between both of those is accepted' '
-	flux submit -g 2 /bin/true
+	flux submit -g 2 true
 '
 test_expect_success 'configure job-size.max.ngpus and queue with unlimited' '
 	flux config load <<-EOT &&
@@ -79,13 +79,13 @@ test_expect_success 'configure job-size.max.ngpus and queue with unlimited' '
 	flux queue start --all
 '
 test_expect_success 'a job is accepted if under general gpu limit' '
-	flux submit --queue=debug -n1 /bin/true
+	flux submit --queue=debug -n1 true
 '
 test_expect_success 'a job is rejected if over gpu limit' '
-	test_must_fail flux submit --queue=debug -n1 -g1 /bin/true
+	test_must_fail flux submit --queue=debug -n1 -g1 true
 '
 test_expect_success 'same job is accepted with unlimited queue override' '
-	flux submit --queue=batch -n1 -g1 /bin/true
+	flux submit --queue=batch -n1 -g1 true
 '
 test_expect_success 'configure an invalid job-size object' '
 	test_must_fail flux config load <<-EOT
