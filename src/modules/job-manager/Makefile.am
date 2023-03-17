@@ -12,6 +12,12 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libccan \
 	$(JANSSON_CFLAGS)
 
+COMMON_LIBS = \
+	libjob-manager.la \
+	$(top_builddir)/src/common/libjob/libjob.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la
+
 fluxmod_LTLIBRARIES = \
 	job-manager.la
 
@@ -100,17 +106,13 @@ plugins_submit_hold_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
 plugins_submit_hold_la_LIBADD = \
-	$(top_builddir)/src/common/libjob/libjob.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	libjob-manager.la
+	${COMMON_LIBS}
 
 plugins_alloc_bypass_la_SOURCES = \
 	plugins/alloc-bypass.c
 plugins_alloc_bypass_la_LIBADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
-	$(top_builddir)/src/common/libjob/libjob.la \
-	libjob-manager.la
+	${COMMON_LIBS}
 plugins_alloc_bypass_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
@@ -118,10 +120,8 @@ plugins_alloc_bypass_la_LDFLAGS = \
 plugins_perilog_la_SOURCES = \
 	plugins/perilog.c
 plugins_perilog_la_LIBADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
-	$(top_builddir)/src/common/libjob/libjob.la \
-	libjob-manager.la
+	${COMMON_LIBS}
 plugins_perilog_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
