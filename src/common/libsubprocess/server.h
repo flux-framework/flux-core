@@ -26,8 +26,7 @@ typedef int (*subprocess_server_auth_f) (const flux_msg_t *msg,
  * that has terminated.
  */
 subprocess_server_t *subprocess_server_create (flux_t *h,
-                                               const char *local_uri,
-                                               uint32_t rank);
+                                               const char *local_uri);
 
 /* Register a callback to allow/deny each rexec request.
  * The callback should return 0 to allow.  It should return -1 with a

@@ -624,8 +624,7 @@ void subprocess_server_destroy (subprocess_server_t *s)
 }
 
 subprocess_server_t *subprocess_server_create (flux_t *h,
-                                               const char *local_uri,
-                                               uint32_t rank)
+                                               const char *local_uri)
 {
     subprocess_server_t *s;
 
@@ -646,7 +645,8 @@ subprocess_server_t *subprocess_server_create (flux_t *h,
     zlistx_set_destructor (s->subprocesses, proc_destructor);
     if (!(s->local_uri = strdup (local_uri)))
         goto error;
-    s->rank = rank;
+    if (flux_get_rank (h, &s->rank) < 0)
+        goto error;
     if (flux_msg_handler_addvec (s->h, htab, s, &s->handlers) < 0)
         goto error;
 

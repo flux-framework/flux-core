@@ -53,7 +53,11 @@ static int test_server (flux_t *h, void *arg)
         diag ("flux_set_default_subprocess_log failed");
         goto done;
     }
-    if (!(srv = subprocess_server_create (h, "smurf", 0))) {
+    if (flux_attr_set_cacheonly (h, "rank", "0") < 0) {
+        diag ("flux_attr_set_cacheonly failed");
+        goto done;
+    }
+    if (!(srv = subprocess_server_create (h, "smurf"))) {
         diag ("subprocess_server_create failed");
         goto done;
     }
@@ -80,6 +84,7 @@ flux_t *rcmdsrv_create (void)
     // N.B. test reactor is created with FLUX_REACTOR_SIGCHLD flag
     if (!(h = test_server_create (0, test_server, NULL)))
         BAIL_OUT ("test_server_create failed");
+
     return h;
 };
 
