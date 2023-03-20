@@ -48,30 +48,46 @@ COMMANDS
 ========
 
 **list** [-n] [-o FORMAT] [-s STATE,...]
-   Show scheduler view of resources. The *-n,--no-header* option suppresses
-   header from output,  *-o,--format=FORMAT*, customizes output formatting
-   (see below), and  *-s,--states=STATE,...* limits output to specified
-   resource states, where valid states are "up", "down", "allocated",
-   "free", and "all".  Note that the scheduler represents "offline",
-   "exclude", and "drain" resource states as "down" due to its simplified
+   Show scheduler view of resources.
+
+   With *-s,--states=STATE,...*, the set of resource states is restricted
+   to a list of provided states. Valid states include "up", "down",
+   "allocated", "free", and "all". Note that the scheduler represents
+   offline, excluded, and drained resources as "down" due to the simplified
    interface with the resource service defined by RFC 27.
+
+   The *-o,--format=FORMAT* option may be used to customize the output
+   format (See OUTPUT FORMAT section below).
+
+   The *-n,--no-header* option suppresses header from output,
 
 **info** [-s STATE,...]
    Show a brief, single line summary of scheduler view of resources.
+
    With *-s, --states=STATE,...*, limit the output to specified resource
    states as with ``flux resource list``. By default, the *STATE* reported
    by ``flux resource info`` is "all".
 
 **status**  [-n] [-o FORMAT] [-s STATE,...] [--skip-empty]
-   Show system view of resources.  The *-n,--no-header* suppresses
-   header from output, *-o,--format=FORMAT* customizes output formatting
-   (see below), and *-s,--states=STATE,...* limits output to specified
-   resource states, where valid states are "online", "offline", "avail",
-   "exclude", "draining", "drained", "drained*", and "all". The special
-   "drain" state is also supported, and selects both draining and drained
-   resources. Normally, ``flux resource status`` skips lines with no
-   resources, unless the ``-s, --states`` option is used. Suppression of
-   empty lines can always be forced with the ``--skip-empty`` option.
+   Show system view of resources. This command queries both the resource
+   service and scheduler to identify resources that are available,
+   excluded by configuration, or administratively drained or draining. The
+   command also identifies nodes that offline vs online.
+
+   With *-s,--states=STATE,...*, the set of resource states is restricted
+   to a list of provided states. Valid states include "online", "offline",
+   "avail", "exclude", "draining", "drained", "drained*", and "all".  The
+   special "drain" state is also supported, and selects both draining and
+   drained resources.
+
+   The *-o,--format=FORMAT* option customizes output formatting (See the
+   OUTPUT FORMAT section below for details).
+
+   With *-n,--no-header* the output header is suppressed.
+
+   Normally, ``flux resource status`` skips lines with no resources,
+   unless the ``-s, --states`` option is used. Suppression of empty lines
+   can may be forced with the ``--skip-empty`` option.
 
 **drain** [-n] [-o FORMAT] [-f] [-u] [targets] [reason ...]
    If specified without arguments, list drained nodes. In this mode,
