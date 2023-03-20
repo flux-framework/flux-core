@@ -119,8 +119,10 @@ def drain(args):
         sys.exit(1)
     if args.update:
         payload["mode"] = "update"
-    elif args.force:
+    elif args.force == 1:
         payload["mode"] = "overwrite"
+    elif args.force == 2:
+        payload["mode"] = "force-overwrite"
     if args.reason:
         payload["reason"] = " ".join(args.reason)
     try:
@@ -594,8 +596,10 @@ def main():
     drain_parser.add_argument(
         "-f",
         "--force",
-        action="store_true",
-        help="Force overwrite of existing drain reason",
+        action="count",
+        default=0,
+        help="Force overwrite of existing drain reason. Specify twice "
+        + "to also update drain timestamp.",
     )
     drain_parser.add_argument(
         "-u",

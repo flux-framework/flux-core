@@ -19,6 +19,8 @@
  *   on setting of optional 'mode' member:
  *    - If mode is not set, request fails
  *    - If mode=overwrite, request succeeds and reason is updated
+ *    - If mode=force-overwrite, request succeeds and timestamp and reason
+ *      are updated
  *    - If mode=update, request succeeds and reason is updated only for
  *      those target that are not drained or do not have reason set.
  *
@@ -97,7 +99,7 @@ static int update_draininfo_rank (struct drain *drain,
 
     free (drain->info[rank].reason);
     drain->info[rank].reason = cpy;
-    if (drain->info[rank].drained != drained) {
+    if (drain->info[rank].drained != drained || overwrite == 2) {
         drain->info[rank].drained = drained;
         drain->info[rank].timestamp = timestamp;
     }
@@ -361,6 +363,8 @@ static void drain_cb (flux_t *h,
             update_only = 1;
         else if (strcmp (mode, "overwrite") == 0)
             overwrite = 1;
+        else if (strcmp (mode, "force-overwrite") == 0)
+            overwrite = 2;
         else {
             errno = EINVAL;
             goto error;

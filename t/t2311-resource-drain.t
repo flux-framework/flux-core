@@ -21,7 +21,7 @@ has_resource_event () {
 }
 
 drain_timestamp () {
-	flux resource drain | tail -n 1 | awk '{ print $1 }'
+	flux resource drain -o {timestamp} | tail -n 1 | awk '{ print $1 }'
 }
 
 test_expect_success 'wait for monitor to declare all ranks are up' '
@@ -81,6 +81,15 @@ test_expect_success 'drain reason can be updated with --force' '
 
 test_expect_success 'original drain timestamp is preserved' '
 	test $(drain_timestamp) = $(cat rank1.timestamp)
+'
+
+test_expect_success 'drain timestamp and reason can be updated with -ff' '
+	flux resource drain --force --force 1 test_reason_updated_again &&
+	flux resource drain | grep test_reason_updated_again
+'
+
+test_expect_success 'original drain timestamp is preserved' '
+	test $(drain_timestamp) != $(cat rank1.timestamp)
 '
 
 test_expect_success 'drain update mode does not change already drained rank' '

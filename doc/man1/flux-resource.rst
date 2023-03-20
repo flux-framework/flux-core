@@ -83,7 +83,8 @@ COMMANDS
    By default, **flux resource drain** will fail if any of the *targets*
    are already drained. To change this behavior, use either of the
    *-f, --force* or *-u, --update* options. With *--force*, the *reason* for
-   all existing drained targets is overwritten, while with *--update*,
+   all existing drained targets is overwritten. If *--force* is specified
+   twice, then the timestamp is also overwritten. With *--update*,
    only those ranks that are not already drained or do not have a *reason* set
    have their *reason* updated.
 
