@@ -16,11 +16,17 @@ import os.path
 import sys
 
 import flux
-from flux.future import WaitAllFuture
+from flux.hostlist import Hostlist
 from flux.idset import IDset
-from flux.resource import ResourceSet, SchedResourceList, resource_list
+from flux.resource import (
+    ResourceSet,
+    ResourceStatus,
+    SchedResourceList,
+    resource_list,
+    resource_status,
+)
 from flux.rpc import RPC
-from flux.util import UtilConfig
+from flux.util import Deduplicator, UtilConfig
 
 
 class FluxResourceConfig(UtilConfig):
@@ -30,11 +36,14 @@ class FluxResourceConfig(UtilConfig):
     builtin_formats["status"] = {
         "default": {
             "description": "Default flux-resource status format string",
-            "format": "{state:>10} {nnodes:>6} {nodelist}",
+            "format": "{state:>10} {color_up}{up:>2}{color_off} {nnodes:>6} {nodelist}",
         },
         "long": {
             "description": "Long flux-resource status format string",
-            "format": "{state:>10} {nnodes:>6} {reason:<30.30+} {nodelist}",
+            "format": (
+                "{state:>10} {color_up}{up:>2}{color_off} "
+                "{nnodes:>6} {reason:<30.30+} {nodelist}"
+            ),
         },
     }
     builtin_formats["drain"] = {
@@ -146,26 +155,70 @@ def undrain(args):
     RPC(flux.Flux(), "resource.undrain", {"targets": args.targets}, nodeid=0).get()
 
 
-class StatusLine:
+class AltField:
+    """
+    Convenient wrapper for fields that have an ascii and non-ascii
+    representation. Allows the ascii representation to be selected with
+    {field.ascii}.
+    """
+
+    def __init__(self, default, ascii):
+        self.default = default
+        self.ascii = ascii
+
+    def __str__(self):
+        return self.default
+
+    def __format__(self, fmt):
+        return str(self).__format__(fmt)
+
+
+class ResourceStatusLine:
     """Information specific to a given flux resource status line"""
 
-    def __init__(self, state, ranks, hosts, reason=None, timestamp=None):
-        self.state = state
-        self.hostlist = hosts
-        self.rank_idset = ranks
-        if reason:
-            self.reason = reason
-        else:
-            self.reason = ""
-        if timestamp:
-            self.timestamp = timestamp
-        else:
-            self.timestamp = ""
+    def __init__(self, state, online, ranks, hosts, reason="", timestamp=""):
+        self._state = state
+        self._online = online
+        self.hostlist = Hostlist(hosts)
+        self._ranks = IDset(ranks)
+        self.reason = reason
+        self.timestamp = timestamp
 
     def update(self, ranks, hosts):
-        self.rank_idset.add(ranks)
+        self._ranks.add(ranks)
         self.hostlist.append(hosts)
         self.hostlist.sort()
+
+    @property
+    def statex(self):
+        return self._state
+
+    @property
+    def state(self):
+        state = self._state
+        if not self._online:
+            state += "*"
+        return state
+
+    @property
+    def offline(self):
+        return not self._online
+
+    @property
+    def status(self):
+        return "online" if self._online else "offline"
+
+    @property
+    def color_up(self):
+        return "\033[01;32m" if self._online else "\033[01;31m"
+
+    @property
+    def color_off(self):
+        return "\033[0;0m"
+
+    @property
+    def up(self):
+        return AltField("✔", "y") if self._online else AltField("✗", "n")
 
     @property
     def nodelist(self):
@@ -173,177 +226,71 @@ class StatusLine:
 
     @property
     def ranks(self):
-        return str(self.rank_idset)
+        return str(self._ranks)
 
     @property
     def nnodes(self):
         return len(self.hostlist)
 
+    def __repr__(self):
+        return f"{self.state} {self.hostlist}"
 
-def split_draining(drain_ranks, allocated_ranks, offline_ranks=None):
+
+def status_excluded(online, include_online, include_offline):
     """
-    Given drain_ranks and allocated_ranks, return "drained" vs "draining"
-    idsets as (IDset, state) tuples in a list of 1 or 2 elements.
+    Return true if the current online status is excluded
     """
-    if offline_ranks is None:
-        offline_ranks = IDset()
-    draining = drain_ranks.intersect(allocated_ranks)
-    drowned = drain_ranks.intersect(offline_ranks)
-    drained = drain_ranks.difference(draining).subtract(drowned)
-    return [
-        (drain_ranks.copy(), "drain"),
-        (draining, "draining"),
-        (drained, "drained"),
-        (drowned, "drained*"),
-    ]
+    included = (online and include_online) or (not online and include_offline)
+    return not included
 
 
-class ListStatusRPC(WaitAllFuture):
-    """Combination sched.resource-status and resource.status RPC
-
-    Inclusion of sched.resource-status response allows drain/draining
-    differentiation in resource status and drain command outputs.
+def statuslines(rstatus, states, formatter, include_online=True, include_offline=True):
     """
-
-    def __init__(self, handle):
-        # Initiate RPCs to both resource.status and sched.resource-status:
-        children = [RPC(handle, "resource.status", nodeid=0), resource_list(handle)]
-        self.rlist = None
-        self.rstatus = None
-        self.allocated_ranks = None
-        super().__init__(children)
-
-    def get_status(self):
-        if not self.rstatus:
-            self.get()
-            self.rstatus = self.children[0].get()
-        return self.rstatus
-
-    def get_allocated_ranks(self):
-        if not self.allocated_ranks:
-            #
-            #  If the scheduler is not loaded, do not propagate an error,
-            #   just return an empty idset for allocated ranks.
-            #
-            try:
-                self.get()
-                self.rlist = self.children[1].get()
-                self.allocated_ranks = self.rlist.allocated.ranks
-            except EnvironmentError:
-                self.allocated_ranks = IDset()
-        return self.allocated_ranks
-
-
-class ResourceStatus:
-    """Container for resource.status RPC response"""
-
-    # pylint: disable=too-many-instance-attributes
-
-    def __init__(self, rset=None, rlist=None):
-        self.rset = ResourceSet(rset)
-        self.rlist = rlist
-        self.nodelist = self.rset.nodelist
-        self.all = self.rset.ranks
-        self.statuslines = []
-        self.bystate = {}
-        self.idsets = {}
-
-    def __iter__(self):
-        for line in self.statuslines:
-            yield line
-
-    @property
-    def avail(self):
-        avail = self.all.copy()
-        avail.subtract(self.idsets["offline"])
-        avail.subtract(self.idsets["drain"])
-        avail.subtract(self.idsets["exclude"])
-        return avail
-
-    @property
-    def offline(self):
-        return self.idsets["offline"]
-
-    def _idset_update(self, state, idset):
-        if state not in self.idsets:
-            self.idsets[state] = IDset()
-        self.idsets[state].add(idset)
-
-    def find(self, state, reason="", timestamp=""):
-        try:
-            return self.bystate[f"{state}:{reason}:{timestamp}"]
-        except KeyError:
-            return None
-
-    def append(self, state, ranks="", reason=None, timestamp=None):
-        #
-        # If an existing status line has matching state and reason
-        #  update instead of appending a new output line:
-        #  (mainly useful for "drain" when reasons are not displayed)
-        #
-        hosts = self.nodelist[ranks]
-        rstatus = self.find(state, reason)
-        if rstatus:
-            rstatus.update(ranks, hosts)
-        else:
-            line = StatusLine(state, ranks, hosts, reason, timestamp)
-            self.bystate[f"{state}:{reason}:{timestamp}"] = line
-            self.statuslines.append(line)
-
-        self._idset_update(state, ranks)
-
-    @classmethod
-    def from_status_response(cls, resp, fmt, allocated=None):
-
-        #  Return empty ResourceStatus object if resp not set:
-        #  (mainly used for testing)
-        if not resp:
-            return cls()
-
-        if allocated is None:
-            allocated = IDset()
-
-        if isinstance(resp, str):
-            resp = json.loads(resp)
-
-        rstat = cls(resp["R"])
-
-        #  Append a line for listing all ranks/hosts
-        rstat.append("all", rstat.all)
-
-        #  "online", "offline", "exclude" keys contain idsets
-        #    specifying the set of ranks in that state:
-        #
-        for state in ["online", "offline", "exclude"]:
-            rstat.append(state, IDset(resp[state]))
-
-        #  "drain" key contains a dict of idsets with timestamp,reason
-        #
-        drained = 0
-        for drain_ranks, entry in resp["drain"].items():
-            for ranks, state in split_draining(
-                IDset(drain_ranks), allocated, rstat.offline
-            ):
-                #  Only include reason if it will be displayed in format
-                reason, timestamp = "", ""
-                if ranks:
-                    if "reason" in fmt:
-                        reason = entry["reason"]
-                    if "timestamp" in fmt:
-                        timestamp = entry["timestamp"]
-
-                rstat.append(state, IDset(ranks), reason, timestamp)
-                drained = drained + 1
-
-        #  If no drained nodes, append an empty StatusLine
-        if drained == 0:
-            for state in ["drain", "draining", "drained"]:
-                rstat.append(state)
-
-        #  "avail" is computed from above
-        rstat.append("avail", rstat.avail)
-
-        return rstat
+    Given a ResourceStatus object and OutputFormat formatter,
+    return a set of deduplicated ResourceStatusLine objects for
+    display.
+    """
+    result = Deduplicator(
+        formatter=formatter,
+        except_fields=["nodelist", "ranks", "nnodes"],
+        combine=lambda line, arg: line.update(arg.ranks, arg.hostlist),
+    )
+    states = set(states)
+    for state in ["avail", "exclude"]:
+        if not states & {state, "all"}:
+            continue
+        for online in (True, False):
+            if status_excluded(online, include_online, include_offline):
+                continue
+            status_ranks = rstatus["online" if online else "offline"]
+            ranks = rstatus[state].intersect(status_ranks)
+            result.append(
+                ResourceStatusLine(state, online, ranks, rstatus.nodelist[ranks])
+            )
+    for state in ["draining", "drained"]:
+        if not states & {state, "all", "drain"}:
+            continue
+        ranks = rstatus[state]
+        if not ranks:
+            if not status_excluded(True, include_online, include_offline):
+                # Append one empty line for "draining" and "drained":
+                result.append(ResourceStatusLine(state, True, "", ""))
+        for rank in ranks:
+            online = rank in rstatus.online
+            if status_excluded(online, include_online, include_offline):
+                continue
+            info = rstatus.get_drain_info(rank)
+            result.append(
+                ResourceStatusLine(
+                    state,
+                    online,
+                    rank,
+                    rstatus.nodelist[rank],
+                    timestamp=info.timestamp,
+                    reason=info.reason,
+                )
+            )
+    return result
 
 
 def status_help(args, valid_states, headings):
@@ -367,6 +314,11 @@ def status_get_state_list(args, valid_states, default_states):
             LOGGER.info("valid states: %s", ",".join(valid_states))
             sys.exit(1)
 
+    #  If only offline and/or online are specified, then append other
+    #  default states to states list, o/w status will return nothing
+    copy = list(filter(lambda x: x not in ("offline", "online"), states))
+    if not copy:
+        states.extend(default_states.split(","))
     return states
 
 
@@ -380,17 +332,22 @@ def status(args):
         "drain",
         "draining",
         "drained",
-        "drained*",
     ]
-    default_states = "avail,offline,exclude,draining,drained,drained*"
+    default_states = "avail,exclude,draining,drained"
 
     headings = {
-        "state": "STATUS",
+        "state": "STATE",
+        "statex": "STATE",
         "nnodes": "NNODES",
         "ranks": "RANKS",
         "nodelist": "NODELIST",
         "reason": "REASON",
         "timestamp": "TIME",
+        "status": "STATUS",
+        "up": "UP",
+        "up.ascii": "UP",
+        "color_up": "",
+        "color_off": "",
     }
 
     #  Emit list of valid states if requested
@@ -404,28 +361,41 @@ def status(args):
 
     #  Get payload from stdin or from resource.status RPC:
     if args.from_stdin:
-        resp = sys.stdin.read()
-        allocated = IDset()
+        input_str = sys.stdin.read()
+        rstatus = ResourceStatus(json.loads(input_str) if input_str else None)
     else:
-        rpc = ListStatusRPC(flux.Flux())
-        resp = rpc.get_status()
-        allocated = rpc.get_allocated_ranks()
-
-    rstat = ResourceStatus.from_status_response(resp, fmt, allocated)
+        rstatus = resource_status(flux.Flux()).get()
 
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
-    #  Skip empty lines unless --states or ---skip-empty
+    # Remove any `{color*}` fields if color is off
+    if args.color == "never" or (args.color == "auto" and not sys.stdout.isatty()):
+        formatter = formatter.copy(except_fields=["color_up", "color_off"])
+
+    #  Skip empty lines unless --states or --skip-empty
     skip_empty = args.skip_empty or not args.states
 
-    lines = []
-    for line in sorted(rstat, key=lambda x: valid_states.index(x.state)):
-        if line.state not in states:
-            continue
-        if line.nnodes == 0 and skip_empty:
-            continue
-        lines.append(line)
+    #  Skip empty offline lines unless offline explicily requested
+    skip_empty_offline = "offline" not in states
 
+    #  Include both online and offline lines by default, except if
+    #  one of those statuses are explicitly requested, then it
+    #  becomes exclusive (unless both are present).
+    include_online = "online" in states or "offline" not in states
+    include_offline = "offline" in states or "online" not in states
+
+    lines = []
+    for line in statuslines(
+        rstatus,
+        states,
+        formatter,
+        include_online=include_online,
+        include_offline=include_offline,
+    ):
+        if line.nnodes == 0:
+            if skip_empty or line.offline and skip_empty_offline:
+                continue
+        lines.append(line)
     formatter.print_items(lines, no_header=args.no_header)
 
 
@@ -433,7 +403,7 @@ def drain_list(args):
     fmt = FluxResourceConfig("drain").load().get_format_string(args.format)
     args.from_stdin = False
     args.format = fmt
-    args.states = "drained,drained*,draining"
+    args.states = "drain"
     args.skip_empty = True
     status(args)
 
@@ -584,6 +554,10 @@ LOGGER = logging.getLogger("flux-resource")
 
 @flux.util.CLIMain(LOGGER)
 def main():
+    sys.stdout = open(
+        sys.stdout.fileno(), "w", encoding="utf8", errors="surrogateescape"
+    )
+
     parser = argparse.ArgumentParser(prog="flux-resource")
     subparsers = parser.add_subparsers(
         title="subcommands", description="", dest="subcommand"
@@ -620,6 +594,17 @@ def main():
         "-n", "--no-header", action="store_true", help="Suppress header output"
     )
     drain_parser.add_argument(
+        "-L",
+        "--color",
+        type=str,
+        metavar="WHEN",
+        choices=["never", "always", "auto"],
+        nargs="?",
+        const="always",
+        default="auto",
+        help="Use color; WHEN can be 'never', 'always', or 'auto' (default)",
+    )
+    drain_parser.add_argument(
         "targets", nargs="?", help="List of targets to drain (IDSET or HOSTLIST)"
     )
     drain_parser.add_argument("reason", help="Reason", nargs=argparse.REMAINDER)
@@ -651,6 +636,17 @@ def main():
     )
     status_parser.add_argument(
         "-n", "--no-header", action="store_true", help="Suppress header output"
+    )
+    status_parser.add_argument(
+        "-L",
+        "--color",
+        type=str,
+        metavar="WHEN",
+        choices=["never", "always", "auto"],
+        nargs="?",
+        const="always",
+        default="auto",
+        help="Use color; WHEN can be 'never', 'always', or 'auto' (default)",
     )
     status_parser.add_argument(
         "--from-stdin", action="store_true", help=argparse.SUPPRESS

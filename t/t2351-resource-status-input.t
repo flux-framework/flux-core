@@ -11,6 +11,8 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 FORMAT="{state:>10} {nnodes:>6} {ranks:<15} {nodelist}"
 INPUTDIR=${SHARNESS_TEST_SRCDIR}/flux-resource/status
 
+export FLUX_PYCLI_LOGLEVEL=10
+
 for input in ${INPUTDIR}/*.json; do
     name=$(basename ${input%%.json})
     test_expect_success "flux-resource status input check: $name" '
@@ -26,7 +28,8 @@ done
 
 test_expect_success 'flux-resource status: header included with all formats' '
 	cat <<-EOF >headers.expected &&
-	state==STATUS
+	state==STATE
+	status=STATUS
 	nnodes==NNODES
 	ranks==RANKS
 	nodelist==NODELIST
@@ -42,7 +45,7 @@ test_expect_success 'flux-resource status: header included with all formats' '
 test_expect_success 'flux-resource status: --no-header works' '
 	INPUT=${INPUTDIR}/example.json &&
 	name=no-header &&
-	flux resource status -s all --no-header --from-stdin < $INPUT \
+	flux resource status -s exclude --no-header --from-stdin < $INPUT \
 	    > ${name}.out &&
 	test_debug "cat ${name}.out" &&
 	test $(wc -l < ${name}.out) -eq 1
@@ -93,4 +96,88 @@ test_expect_success 'flux-resource status: invalid state generates error' '
 	grep "Invalid resource state frelled specified" bad-state.out
 '
 
+test_expect_success 'flux-resource status: {status} field works' '
+	INPUT=${INPUTDIR}/example.json &&
+	flux resource status --from-stdin -o "{status:>8} {nnodes}" < $INPUT \
+		>status.output &&
+	cat <<-EOF >status.expected &&
+	  STATUS NNODES
+	  online 4
+	 offline 1
+	EOF
+	test_cmp status.expected status.output
+'
+
+test_expect_success 'flux-resource status: {up} field works' '
+	INPUT=${INPUTDIR}/example.json &&
+	flux resource status --from-stdin -o "{up:>2} {nnodes}" < $INPUT \
+		>up.output &&
+	cat <<-EOF >up.expected &&
+	UP NNODES
+	 ✔ 4
+	 ✗ 1
+	EOF
+	test_cmp up.expected up.output
+'
+
+test_expect_success 'flux-resource status: {up.ascii} field works' '
+	INPUT=${INPUTDIR}/example.json &&
+	flux resource status --from-stdin -o "{up.ascii:>2} {nnodes}" < $INPUT \
+		>up.ascii.output &&
+	cat <<-EOF >up.ascii.expected &&
+	UP NNODES
+	 y 4
+	 n 1
+	EOF
+	test_cmp up.ascii.expected up.ascii.output
+'
+
+test_expect_success 'flux-resource status: {color_up} works' '
+	INPUT=${INPUTDIR}/example.json &&
+	flux resource status -n --color --states=offline --from-stdin \
+		-o "{color_up}{nnodes}{color_off}" \
+		<$INPUT >color.out &&
+	test_debug "cat color.out" &&
+	grep "^.*1" color.out &&
+	flux resource status -n --color --states=avail --from-stdin \
+		-o "{color_up}{nnodes}{color_off}" \
+		<$INPUT >color.out &&
+	test_debug "cat color.out" &&
+	grep "^.*2" color.out
+'
+
+test_expect_success 'flux-resource status: similar lines are combined' '
+	INPUT=${INPUTDIR}/drain.json &&
+	flux resource status -n --color --states=drain --from-stdin \
+		--skip-empty \
+		-o "{state:>8} {nnodes}" \
+		<$INPUT >combined.out &&
+	test_debug "cat combined.out" &&
+	test $(wc -l < combined.out) -eq 1 &&
+	flux resource status -n --color --states=drain --from-stdin \
+		--skip-empty \
+		-o "{state:>8} {nnodes:>6} {reason}" \
+		<$INPUT >combined2.out &&
+	test_debug "cat combined2.out" &&
+	test $(wc -l < combined2.out) -eq 2
+'
+
+test_expect_success 'flux-resource status: lines are combined based on format' '
+	INPUT=${INPUTDIR}/drain.json &&
+	flux resource status -n --color --states=drain --from-stdin \
+		--skip-empty \
+		-o "{timestamp} {state:>8} {nnodes}" \
+		<$INPUT >ts-detailed.out &&
+	test_debug "cat ts-detailed.out" &&
+	test $(wc -l < ts-detailed.out) -eq 2 &&
+	flux resource status -n --color --states=drain --from-stdin \
+		--skip-empty \
+		-o "{timestamp!d:%F::<12} {state:>8} {nnodes}" \
+		<$INPUT >ts-detailed2.out &&
+	test_debug "cat ts-detailed2.out" &&
+	cat <<-EOF >ts-detailed2.expected &&
+	2020-12-09    drained 2
+	EOF
+	test_cmp ts-detailed2.expected ts-detailed2.out
+'
 test_done
