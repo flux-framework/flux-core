@@ -71,14 +71,19 @@ COMMANDS
 **status**  [-n] [-o FORMAT] [-s STATE,...] [--skip-empty]
    Show system view of resources. This command queries both the resource
    service and scheduler to identify resources that are available,
-   excluded by configuration, or administratively drained or draining. The
-   command also identifies nodes that offline vs online.
+   excluded by configuration, or administratively drained or draining.
+
+   The **status** command displays a line of output for each set of
+   resources that share a state and online/offline state. The possible
+   states are "avail" (available for scheduling when up), "exclude"
+   (excluded by configuration), "draining" (drained but still allocated),
+   or "drained".
 
    With *-s,--states=STATE,...*, the set of resource states is restricted
-   to a list of provided states. Valid states include "online", "offline",
-   "avail", "exclude", "draining", "drained", "drained*", and "all".  The
-   special "drain" state is also supported, and selects both draining and
-   drained resources.
+   to a list of provided states or offline/online status. With "online" or
+   "offline", only nodes with the provided status will be displayed. Other
+   valid states include "avail", "exclude", "draining", "drained", and "all".
+   The special "drain" state is shorthand for "drained,draining".
 
    The *-o,--format=FORMAT* option customizes output formatting (See the
    OUTPUT FORMAT section below for details).
@@ -144,8 +149,19 @@ The following field names can be specified for the **status** and **drain**
 subcommands:
 
 **state**
-   State of node(s): "online", "offline", "avail", "exclude", "drain",
-   "draining", "drained", "all"
+   State of node(s): "avail", "exclude", "drain", "draining", "drained". If
+   the set of resources is offline, an asterisk suffix is appended to the
+   state, e.g. "avail*".
+
+**statex**
+   Like **state**, but exclude the asterisk for offline resources.
+
+**status**
+   Current online/offline status of nodes(s): "online", "offline"
+
+**up**
+   Displays a *✔* if the node is online, or *✗* if offline. An ascii *y*
+   or *n* may be used instead with **up.ascii**.
 
 **nnodes**
    number of nodes
