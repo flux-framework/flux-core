@@ -526,6 +526,7 @@ AC_CONFIG_FILES( \
   src/common/libpmi/Makefile \
   src/common/libflux/Makefile \
   src/common/libflux/version.h \
+  src/common/libfluxutil/Makefile \
   src/common/libtestutil/Makefile \
   src/common/libkvs/Makefile \
   src/common/libcontent/Makefile \

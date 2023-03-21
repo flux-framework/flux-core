@@ -27,28 +27,24 @@
 #include <argz.h>
 #include <flux/core.h>
 
-#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/errno_safe.h"
+#include "src/common/libfluxutil/method.h"
 
 #include "module.h"
 #include "modservice.h"
-#include "ping.h"
-#include "rusage.h"
 
 typedef struct {
     flux_t *h;
     module_t *p;
-    zlist_t *handlers;
     flux_watcher_t *w_prepare;
+    flux_msg_handler_t **handlers;
 } modservice_ctx_t;
 
 static void freectx (void *arg)
 {
     modservice_ctx_t *ctx = arg;
-    flux_msg_handler_t *mh;
-    while ((mh = zlist_pop (ctx->handlers)))
-        flux_msg_handler_destroy (mh);
-    zlist_destroy (&ctx->handlers);
+    flux_msg_handler_delvec (ctx->handlers);
     flux_watcher_destroy (ctx->w_prepare);
     free (ctx);
 }
@@ -62,49 +58,11 @@ static modservice_ctx_t *getctx (flux_t *h, module_t *p)
             errno = ENOMEM;
             return NULL;
         }
-        if (!(ctx->handlers = zlist_new ())) {
-            free (ctx);
-            errno = ENOMEM;
-            return NULL;
-        }
         ctx->h = h;
         ctx->p = p;
         flux_aux_set (h, "flux::modservice", ctx, freectx);
     }
     return ctx;
-}
-
-static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
-{
-    flux_msgcounters_t mcs;
-
-    flux_get_msgcounters (h, &mcs);
-
-    if (flux_respond_pack (h, msg, "{ s:i s:i s:i s:i s:i s:i s:i s:i }",
-                           "#request (tx)", mcs.request_tx,
-                           "#request (rx)", mcs.request_rx,
-                           "#response (tx)", mcs.response_tx,
-                           "#response (rx)", mcs.response_rx,
-                           "#event (tx)", mcs.event_tx,
-                           "#event (rx)", mcs.event_rx,
-                           "#control (tx)", mcs.control_tx,
-                           "#control (rx)", mcs.control_rx) < 0)
-      FLUX_LOG_ERROR (h);
-}
-
-static void stats_clear_event_cb (flux_t *h, flux_msg_handler_t *mh,
-                                  const flux_msg_t *msg, void *arg)
-{
-    flux_clr_msgcounters (h);
-}
-
-static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                    const flux_msg_t *msg, void *arg)
-{
-    flux_clr_msgcounters (h);
-    if (flux_respond (h, msg, NULL) < 0)
-        FLUX_LOG_ERROR (h);
 }
 
 static void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -164,74 +122,56 @@ static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
     ctx->w_prepare = NULL;
 }
 
-static int register_event (modservice_ctx_t *ctx, const char *name,
-                           flux_msg_handler_f cb)
+static struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,
+      "shutdown",
+      shutdown_cb,
+      0
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "stats.get",
+      method_stats_get_cb,
+      FLUX_ROLE_ALL,
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "stats.clear",
+      method_stats_clear_cb,
+      0,
+    },
+    { FLUX_MSGTYPE_EVENT,
+      "stats.clear",
+      method_stats_clear_event_cb,
+      0,
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "debug",
+      debug_cb,
+      0,
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "rusage",
+      method_rusage_cb,
+      0,
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "ping",
+      method_ping_cb,
+      FLUX_ROLE_USER,
+    },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+static int mod_subscribe (flux_t *h, module_t *p, const char *method)
 {
-    struct flux_match match = FLUX_MATCH_EVENT;
-    flux_msg_handler_t *mh = NULL;
-    int rc = -1;
+    char *topic;
 
-    if (flux_match_asprintf (&match,
-                  "%s.%s",
-                  module_get_name (ctx->p),
-                  name) < 0) {
-        log_err ("asprintf");
-        goto cleanup;
+    if (asprintf (&topic, "%s.%s", module_get_name (p), method) < 0
+        || flux_event_subscribe (h, topic) < 0) {
+        ERRNO_SAFE_WRAP (free, topic);
+        return -1;
     }
-    if (!(mh = flux_msg_handler_create (ctx->h, match, cb, ctx->p))) {
-        log_err ("flux_msg_handler_create");
-        goto cleanup;
-    }
-    flux_msg_handler_start (mh);
-    if (zlist_append (ctx->handlers, mh) < 0) {
-        log_errn (ENOMEM, "zlist_append");
-        goto cleanup;
-    }
-    /* memory now managed by list */
-    mh = NULL;
-    if (flux_event_subscribe (ctx->h, match.topic_glob) < 0) {
-        log_err ("%s: flux_event_subscribe %s",
-                 __FUNCTION__, match.topic_glob);
-        goto cleanup;
-    }
-    rc = 0;
-cleanup:
-    flux_msg_handler_destroy (mh);
-    flux_match_free (match);
-    return rc;
-}
-
-static int register_request (modservice_ctx_t *ctx, const char *name,
-                             flux_msg_handler_f cb, uint32_t rolemask)
-{
-    struct flux_match match = FLUX_MATCH_REQUEST;
-    flux_msg_handler_t *mh = NULL;
-    int rc = -1;
-
-    if (flux_match_asprintf (&match,
-                  "%s.%s",
-                  module_get_name (ctx->p),
-                  name) < 0) {
-        log_err ("asprintf");
-        goto cleanup;
-    }
-    if (!(mh = flux_msg_handler_create (ctx->h, match, cb, ctx->p))) {
-        log_err ("flux_msg_handler_create");
-        goto cleanup;
-    }
-    flux_msg_handler_allow_rolemask (mh, rolemask);
-    flux_msg_handler_start (mh);
-    if (zlist_append (ctx->handlers, mh) < 0) {
-        log_errn (ENOMEM, "zlist_append");
-        goto cleanup;
-    }
-    /* memory now managed by list */
-    mh = NULL;
-    rc = 0;
-cleanup:
-    flux_msg_handler_destroy (mh);
-    flux_match_free (match);
-    return rc;
+    free (topic);
+    return 0;
 }
 
 int modservice_register (flux_t *h, module_t *p)
@@ -242,27 +182,20 @@ int modservice_register (flux_t *h, module_t *p)
     if (!ctx || !r)
         return -1;
 
-    if (register_request (ctx, "shutdown", shutdown_cb, FLUX_ROLE_OWNER) < 0)
-        return -1;
-    if (register_request (ctx, "stats.get", stats_get_cb, FLUX_ROLE_ALL) < 0)
-        return -1;
-    if (register_request (ctx, "stats.clear", stats_clear_request_cb, FLUX_ROLE_OWNER) < 0)
-        return -1;
-    if (register_request (ctx, "debug", debug_cb, FLUX_ROLE_OWNER) < 0)
+    if (flux_aux_set (h,
+                      "flux::uuid",
+                      (char *)module_get_uuid (ctx->p),
+                      NULL) < 0)
         return -1;
 
-    if (ping_initialize (h,
-                         module_get_name (ctx->p),
-                         module_get_uuid (ctx->p)) < 0) {
-        log_err ("ping_initialize");
+    if (flux_msg_handler_addvec_ex (h,
+                                    module_get_name (ctx->p),
+                                    htab,
+                                    ctx->p,
+                                    &ctx->handlers) < 0)
         return -1;
-    }
-    if (rusage_initialize (h, module_get_name (ctx->p)) < 0) {
-        log_err ("rusage_initialize");
-        return -1;
-    }
 
-    if (register_event (ctx, "stats.clear", stats_clear_event_cb) < 0)
+    if (mod_subscribe (h, ctx->p, "stats.clear") < 0)
         return -1;
 
     if (!(ctx->w_prepare = flux_prepare_watcher_create (r, prepare_cb, ctx))) {

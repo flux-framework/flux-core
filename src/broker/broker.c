@@ -40,6 +40,7 @@
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libfluxutil/method.h"
 #include "ccan/array_size/array_size.h"
 
 #include "module.h"
@@ -53,8 +54,6 @@
 #include "runat.h"
 #include "heaptrace.h"
 #include "exec.h"
-#include "ping.h"
-#include "rusage.h"
 #include "boot_config.h"
 #include "boot_pmi.h"
 #include "publisher.h"
@@ -442,15 +441,13 @@ int main (int argc, char *argv[])
         log_err ("exec_initialize");
         goto cleanup;
     }
-    if (ping_initialize (ctx.h, "broker", overlay_get_uuid (ctx.overlay)) < 0) {
-        log_err ("ping_initialize");
+    if (flux_aux_set (ctx.h,
+                      "flux::uuid",
+                      (char *)overlay_get_uuid (ctx.overlay),
+                      NULL) < 0) {
+        log_err ("error adding broker uuid to aux container");
         goto cleanup;
     }
-    if (rusage_initialize (ctx.h, "broker") < 0) {
-        log_err ("rusage_initialize");
-        goto cleanup;
-    }
-
     if (!(handlers = broker_add_services (&ctx))) {
         log_err ("broker_add_services");
         goto cleanup;
@@ -1566,6 +1563,18 @@ error:
 
 
 static const struct flux_msg_handler_spec htab[] = {
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "broker.rusage",
+        method_rusage_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "broker.ping",
+        method_ping_cb,
+        FLUX_ROLE_USER
+    },
     {
         FLUX_MSGTYPE_REQUEST,
         "broker.rmmod",
