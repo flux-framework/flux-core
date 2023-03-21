@@ -38,7 +38,7 @@ struct kvstxn_mgr {
     struct cache *cache;
     const char *ns_name;
     const char *hash_name;
-    int noop_stores;            /* for kvs.stats.get, etc.*/
+    int noop_stores;            /* for kvs.stats-get, etc.*/
     zlist_t *ready;
     flux_t *h;
     void *aux;

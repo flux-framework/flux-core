@@ -573,7 +573,7 @@ static void stats_request_cb (flux_t *h,
                            "{s:i s:i}",
                            "ring-used", (int)zlist_size (logbuf->buf),
                            "count", logbuf->seq) < 0)
-        flux_log_error (h, "error responding to log.stats.get");
+        flux_log_error (h, "error responding to log.stats-get");
 }
 
 
@@ -583,7 +583,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "log.dmesg",          dmesg_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.disconnect",     disconnect_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.cancel",         cancel_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "log.stats.get",      stats_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "log.stats-get",      stats_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

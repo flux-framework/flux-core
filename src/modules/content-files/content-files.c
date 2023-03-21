@@ -101,11 +101,11 @@ static void stats_get_cb (flux_t *h,
         goto error;
 
     if (flux_respond_pack (h, msg, "{s:i}", "object_count", count) < 0)
-        flux_log_error (h, "error responding to stats.get request");
+        flux_log_error (h, "error responding to stats-get request");
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "error responding to stats.get request");
+        flux_log_error (h, "error responding to stats-get request");
 }
 
 
@@ -299,7 +299,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-get", checkpoint_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-put", checkpoint_put_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-files.stats.get", stats_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-files.stats-get", stats_get_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

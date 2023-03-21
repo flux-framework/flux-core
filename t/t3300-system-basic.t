@@ -15,7 +15,7 @@ test_under_flux 3 system
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
 overlay_connected_children() {
-	flux python -c "import flux; print(flux.Flux().rpc(\"overlay.stats.get\",nodeid=0).get_str())" | jq -r '.["child-connected"]'
+	flux python -c "import flux; print(flux.Flux().rpc(\"overlay.stats-get\",nodeid=0).get_str())" | jq -r '.["child-connected"]'
 }
 
 test_expect_success 'broker hostlist has fake hostlist' '

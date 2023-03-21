@@ -1014,7 +1014,7 @@ static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
     watcher_cancel_all (ctx, msg, false);
 }
 
-/* kvs-watch.stats.get request
+/* kvs-watch.stats-get request
  */
 static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
@@ -1076,7 +1076,7 @@ static const struct flux_msg_handler_spec htab[] = {
       .rolemask     = 0
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "kvs-watch.stats.get",
+      .topic_glob   = "kvs-watch.stats-get",
       .cb           = stats_cb,
       .rolemask     = 0
     },

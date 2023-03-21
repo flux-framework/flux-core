@@ -982,7 +982,7 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "content.stats.get",
+        "content.stats-get",
         content_stats_request,
         0
     },

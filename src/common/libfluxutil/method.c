@@ -171,11 +171,11 @@ void method_stats_get_cb (flux_t *h,
                              "response", mcs.response_rx,
                              "event", mcs.event_rx,
                              "control", mcs.control_rx) < 0)
-        flux_log_error (h, "error responding to stats.get request");
+        flux_log_error (h, "error responding to stats-get request");
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "error responding to stats.get request");
+        flux_log_error (h, "error responding to stats-get request");
 }
 
 void method_stats_clear_cb (flux_t *h,
@@ -187,11 +187,11 @@ void method_stats_clear_cb (flux_t *h,
         goto error;
     flux_clr_msgcounters (h);
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to stats.clear request");
+        flux_log_error (h, "error responding to stats-clear request");
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "error responding to stats.clear request");
+        flux_log_error (h, "error responding to stats-clear request");
 }
 
 void method_stats_clear_event_cb (flux_t *h,

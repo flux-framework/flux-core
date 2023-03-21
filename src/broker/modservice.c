@@ -129,17 +129,17 @@ static struct flux_msg_handler_spec htab[] = {
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "stats.get",
+      "stats-get",
       method_stats_get_cb,
       FLUX_ROLE_ALL,
     },
     { FLUX_MSGTYPE_REQUEST,
-      "stats.clear",
+      "stats-clear",
       method_stats_clear_cb,
       0,
     },
     { FLUX_MSGTYPE_EVENT,
-      "stats.clear",
+      "stats-clear",
       method_stats_clear_event_cb,
       0,
     },
@@ -195,7 +195,7 @@ int modservice_register (flux_t *h, module_t *p)
                                     &ctx->handlers) < 0)
         return -1;
 
-    if (mod_subscribe (h, ctx->p, "stats.clear") < 0)
+    if (mod_subscribe (h, ctx->p, "stats-clear") < 0)
         return -1;
 
     if (!(ctx->w_prepare = flux_prepare_watcher_create (r, prepare_cb, ctx))) {

@@ -72,7 +72,7 @@ static const struct flux_msg_handler_spec htab[] = {
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.stats.get",
+      .topic_glob   = "job-info.stats-get",
       .cb           = stats_cb,
       .rolemask     = 0
     },
