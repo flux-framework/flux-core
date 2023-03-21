@@ -198,10 +198,9 @@ int modservice_register (flux_t *h, module_t *p)
     if (mod_subscribe (h, ctx->p, "stats-clear") < 0)
         return -1;
 
-    if (!(ctx->w_prepare = flux_prepare_watcher_create (r, prepare_cb, ctx))) {
-        log_err ("flux_prepare_watcher_create");
+    if (!(ctx->w_prepare = flux_prepare_watcher_create (r, prepare_cb, ctx)))
         return -1;
-    }
+
     flux_watcher_start (ctx->w_prepare);
     return 0;
 }
