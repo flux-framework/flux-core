@@ -158,15 +158,19 @@ void method_stats_get_cb (flux_t *h,
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     flux_get_msgcounters (h, &mcs);
-    if (flux_respond_pack (h, msg, "{ s:i s:i s:i s:i s:i s:i s:i s:i }",
-                           "#request (tx)", mcs.request_tx,
-                           "#request (rx)", mcs.request_rx,
-                           "#response (tx)", mcs.response_tx,
-                           "#response (rx)", mcs.response_rx,
-                           "#event (tx)", mcs.event_tx,
-                           "#event (rx)", mcs.event_rx,
-                           "#control (tx)", mcs.control_tx,
-                           "#control (rx)", mcs.control_rx) < 0)
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:{s:i s:i s:i s:i} s:{s:i s:i s:i s:i}}",
+                           "tx",
+                             "request", mcs.request_tx,
+                             "response", mcs.response_tx,
+                             "event", mcs.event_tx,
+                             "control", mcs.control_tx,
+                           "rx",
+                             "request", mcs.request_rx,
+                             "response", mcs.response_rx,
+                             "event", mcs.event_rx,
+                             "control", mcs.control_rx) < 0)
         flux_log_error (h, "error responding to stats.get request");
     return;
 error:
