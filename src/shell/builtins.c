@@ -52,6 +52,7 @@ extern struct shell_builtin builtin_cyclic;
 extern struct shell_builtin builtin_signal;
 extern struct shell_builtin builtin_oom;
 extern struct shell_builtin builtin_hwloc;
+extern struct shell_builtin builtin_rexec;
 
 static struct shell_builtin * builtins [] = {
     &builtin_tmpdir,
@@ -76,6 +77,7 @@ static struct shell_builtin * builtins [] = {
     &builtin_signal,
     &builtin_oom,
     &builtin_hwloc,
+    &builtin_rexec,
     &builtin_list_end,
 };
 
