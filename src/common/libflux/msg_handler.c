@@ -20,6 +20,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "message.h"
 #include "reactor.h"
@@ -691,10 +692,11 @@ static bool at_end (struct flux_msg_handler_spec spec)
             && spec.rolemask == end.rolemask);
 }
 
-int flux_msg_handler_addvec (flux_t *h,
-                             const struct flux_msg_handler_spec tab[],
-                             void *arg,
-                             flux_msg_handler_t **hp[])
+int flux_msg_handler_addvec_ex (flux_t *h,
+                                const char *service_name,
+                                const struct flux_msg_handler_spec tab[],
+                                void *arg,
+                                flux_msg_handler_t **hp[])
 {
     int i;
     struct flux_match match = FLUX_MATCH_ANY;
@@ -710,12 +712,16 @@ int flux_msg_handler_addvec (flux_t *h,
     if (!(handlers = calloc (count + 1, sizeof (flux_msg_handler_t *))))
         return -1;
     for (i = 0; i < count; i++) {
+        char *topic = NULL;
         match.typemask = tab[i].typemask;
-        /* flux_msg_handler_create() will make a copy of the topic_glob
-         * so it is safe to temporarily remove "const" from
-         * tab[i].topic_glob with a cast. */
-        match.topic_glob = (char *)tab[i].topic_glob;
-        if (!(handlers[i] = flux_msg_handler_create (h, match, tab[i].cb, arg)))
+        if (service_name) {
+            if (asprintf (&topic, "%s.%s", service_name, tab[i].topic_glob) < 0)
+                goto error;
+        }
+        match.topic_glob = topic ? topic : (char *)tab[i].topic_glob;
+        handlers[i] = flux_msg_handler_create (h, match, tab[i].cb, arg);
+        ERRNO_SAFE_WRAP (free, topic);
+        if (!handlers[i])
             goto error;
         flux_msg_handler_allow_rolemask (handlers[i], tab[i].rolemask);
         flux_msg_handler_start (handlers[i]);
@@ -725,6 +731,14 @@ int flux_msg_handler_addvec (flux_t *h,
 error:
     flux_msg_handler_delvec (handlers);
     return -1;
+}
+
+int flux_msg_handler_addvec (flux_t *h,
+                             const struct flux_msg_handler_spec tab[],
+                             void *arg,
+                             flux_msg_handler_t **hp[])
+{
+    return flux_msg_handler_addvec_ex (h, NULL, tab, arg, hp);
 }
 
 void flux_msg_handler_delvec (flux_msg_handler_t *handlers[])

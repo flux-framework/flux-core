@@ -49,6 +49,12 @@ struct flux_msg_handler_spec {
 };
 #define FLUX_MSGHANDLER_TABLE_END { 0, NULL, NULL, 0 }
 
+int flux_msg_handler_addvec_ex (flux_t *h,
+                                const char *service_name,
+                                const struct flux_msg_handler_spec tab[],
+                                void *arg,
+                                flux_msg_handler_t **hp[]);
+
 int flux_msg_handler_addvec (flux_t *h,
                              const struct flux_msg_handler_spec tab[],
                              void *arg,
