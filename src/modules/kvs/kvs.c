@@ -66,7 +66,7 @@ const double max_namespace_age = 3600.;
 struct kvs_ctx {
     struct cache *cache;    /* blobref => cache_entry */
     kvsroot_mgr_t *krm;
-    int faults;                 /* for kvs.stats.get, etc. */
+    int faults;                 /* for kvs.stats-get, etc. */
     flux_t *h;
     uint32_t rank;
     flux_watcher_t *prep_w;
@@ -2754,9 +2754,9 @@ static void config_reload_cb (flux_t *h,
 /* see comments above in event_subscribe() regarding event
  * subscriptions to kvs.namespace */
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",stats_clear_event_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.stats-get",  stats_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.stats-clear",stats_clear_request_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "kvs.stats-clear",stats_clear_event_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.namespace-*-setroot",  setroot_event_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.namespace-*-error",    error_event_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.getroot",

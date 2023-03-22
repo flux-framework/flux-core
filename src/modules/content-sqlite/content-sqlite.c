@@ -589,13 +589,13 @@ void stats_get_cb (flux_t *h,
                            "dbfile_free", get_fs_free (ctx->dbfile),
                            "load_time", load_time,
                            "store_time", store_time) < 0)
-        flux_log_error (h, "error responding to stats.get request");
+        flux_log_error (h, "error responding to stats-get request");
     json_decref (load_time);
     json_decref (store_time);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "error responding to stats.get request");
+        flux_log_error (h, "error responding to stats-get request");
     json_decref (load_time);
     json_decref (store_time);
 }
@@ -737,7 +737,7 @@ static const struct flux_msg_handler_spec htab[] = {
                             checkpoint_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-put",
                             checkpoint_put_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-sqlite.stats.get", stats_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-sqlite.stats-get", stats_get_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

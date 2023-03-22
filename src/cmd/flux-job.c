@@ -3621,7 +3621,7 @@ int cmd_purge (optparse_t *p, int argc, char **argv)
         flux_future_destroy (f);
     } while (force && count == batch);
 
-    if (!(f = flux_rpc (h, "job-manager.stats.get", NULL, 0, 0))
+    if (!(f = flux_rpc (h, "job-manager.stats-get", NULL, 0, 0))
         || flux_rpc_get_unpack (f, "{s:i}", "inactive_jobs", &inactives) < 0)
         log_err_exit ("purge: failed to fetch inactive job count");
     flux_future_destroy (f);

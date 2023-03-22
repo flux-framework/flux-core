@@ -19,7 +19,7 @@ startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
 overlay_connected_children() {
 	rank=$1
-        flux python -c "import flux; print(flux.Flux().rpc(\"overlay.stats.get\",nodeid=${rank}).get_str())" | jq -r '.["child-connected"]'
+        flux python -c "import flux; print(flux.Flux().rpc(\"overlay.stats-get\",nodeid=${rank}).get_str())" | jq -r '.["child-connected"]'
 }
 
 # Usage: wait_connected rank count tries delay

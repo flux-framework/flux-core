@@ -605,13 +605,13 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
 
     if (optparse_hasopt (p, "clear")) {
-        topic = xasprintf ("%s.stats.clear", service);
+        topic = xasprintf ("%s.stats-clear", service);
         if (!(f = flux_rpc (h, topic, NULL, nodeid, 0)))
             log_err_exit ("%s", topic);
         if (flux_future_get (f, NULL) < 0)
             log_err_exit ("%s", topic);
     } else if (optparse_hasopt (p, "clear-all")) {
-        topic = xasprintf ("%s.stats.clear", service);
+        topic = xasprintf ("%s.stats-clear", service);
         flux_msg_t *msg = flux_event_encode (topic, NULL);
         if (!msg)
             log_err_exit ("creating event");
@@ -628,7 +628,7 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
             log_errn_exit (EPROTO, "%s", topic);
         parse_json (p, json_str);
     } else {
-        topic = xasprintf ("%s.stats.get", service);
+        topic = xasprintf ("%s.stats-get", service);
         if (!(f = flux_rpc (h, topic, NULL, nodeid, 0)))
             log_err_exit ("%s", topic);
         if (flux_rpc_get (f, &json_str) < 0)

@@ -59,10 +59,10 @@ int count_watchers (flux_t *h)
     if (flux_get_size (h, &size) < 0)
         log_err_exit ("flux_get_size");
     for (rank = 0; rank < size; rank++) {
-        if (!(f = flux_rpc (h, "kvs-watch.stats.get", NULL, rank, 0)))
-            log_err_exit ("flux_rpc kvs-watch.stats.get");
+        if (!(f = flux_rpc (h, "kvs-watch.stats-get", NULL, rank, 0)))
+            log_err_exit ("flux_rpc kvs-watch.stats-get");
         if (flux_rpc_get_unpack (f, "{ s:i }", "watchers", &n) < 0)
-            log_err_exit ("kvs-watch.stats.get");
+            log_err_exit ("kvs-watch.stats-get");
         count += n;
         flux_future_destroy (f);
     }

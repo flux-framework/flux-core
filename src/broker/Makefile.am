@@ -51,10 +51,6 @@ libbroker_la_SOURCES = \
 	heaptrace.c \
 	exec.h \
 	exec.c \
-	ping.h \
-	ping.c \
-	rusage.h \
-	rusage.c \
 	boot_config.h \
 	boot_config.c \
 	boot_pmi.h \

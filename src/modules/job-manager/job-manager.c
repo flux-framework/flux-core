@@ -138,7 +138,7 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "job-manager.stats.get",
+        "job-manager.stats-get",
         stats_cb,
         0
     },

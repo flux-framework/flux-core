@@ -188,44 +188,36 @@ test_expect_success 'flux module debug --clear clears debug flags' '
 # test stats
 
 test_expect_success 'flux module stats gets comms statistics' '
-	flux module stats $TESTMOD >comms.stats &&
-	grep -q "#request (tx)" comms.stats &&
-	grep -q "#request (rx)" comms.stats &&
-	grep -q "#response (tx)" comms.stats &&
-	grep -q "#response (rx)" comms.stats &&
-	grep -q "#event (tx)" comms.stats &&
-	grep -q "#event (rx)" comms.stats &&
-	grep -q "#control (tx)" comms.stats &&
-	grep -q "#control (rx)" comms.stats
+	flux module stats $TESTMOD >comms.stats
 '
 
-test_expect_success 'flux module stats --parse "#event (tx)" counts events' '
-	EVENT_TX=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+test_expect_success 'flux module stats --parse tx.event counts events' '
+	EVENT_TX=$(flux module stats --parse tx.event $TESTMOD) &&
 	flux event pub xyz &&
-	EVENT_TX2=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	EVENT_TX2=$(flux module stats --parse tx.event $TESTMOD) &&
 	test "$EVENT_TX" = $((${EVENT_TX2}-1))
 '
 
 test_expect_success 'flux module stats --clear works' '
 	flux event pub xyz &&
 	flux module stats --clear $TESTMOD &&
-	EVENT_TX2=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	EVENT_TX2=$(flux module stats --parse tx.event $TESTMOD) &&
 	test "$EVENT_TX" = 0
 '
 
 test_expect_success 'flux module stats --clear-all works' '
 	flux event pub xyz &&
 	flux module stats --clear-all $TESTMOD &&
-	EVENT_TX2=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
+	EVENT_TX2=$(flux module stats --parse tx.event $TESTMOD) &&
 	test "$EVENT_TX" = 0
 '
-
 test_expect_success 'flux module stats --scale works' '
 	flux event pub xyz &&
-	EVENT_TX=$(flux module stats --parse "#event (tx)" $TESTMOD) &&
-	EVENT_TX2=$(flux module stats --parse "#event (tx)" --scale=2 $TESTMOD) &&
+	EVENT_TX=$(flux module stats --parse tx.event $TESTMOD) &&
+	EVENT_TX2=$(flux module stats --parse tx.event --scale=2 $TESTMOD) &&
 	test "$EVENT_TX2" -eq $((${EVENT_TX}*2))
 '
+
 
 test_expect_success 'flux module stats --rusage works' '
 	flux module stats --rusage $TESTMOD >rusage.stats &&

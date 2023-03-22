@@ -528,7 +528,7 @@ void stats_get_cb (flux_t *h,
                            "max", tstat_max (&ctx->sqlstore),
                            "mean", tstat_mean (&ctx->sqlstore),
                            "stddev", tstat_stddev (&ctx->sqlstore)) < 0)
-        flux_log_error (h, "error responding to stats.get request");
+        flux_log_error (h, "error responding to stats-get request");
     return;
 }
 
@@ -589,7 +589,7 @@ static int process_config (struct job_archive_ctx *ctx)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job-archive.stats.get", stats_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job-archive.stats-get", stats_get_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

@@ -1460,11 +1460,11 @@ static void overlay_stats_get_cb (flux_t *h,
                            "parent-count", ov->rank > 0 ? 1 : 0,
                            "parent-rpc", rpc_track_count (ov->parent.tracker),
                            "child-rpc", child_rpc_track_count (ov)) < 0)
-        flux_log_error (h, "error responding to overlay.stats.get");
+        flux_log_error (h, "error responding to overlay.stats-get");
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "error responding to overlay.stats.get");
+        flux_log_error (h, "error responding to overlay.stats-get");
 }
 
 static int overlay_health_respond (struct overlay *ov, const flux_msg_t *msg)
@@ -2057,7 +2057,7 @@ void overlay_destroy (struct overlay *ov)
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
-        "overlay.stats.get",
+        "overlay.stats-get",
         overlay_stats_get_cb,
         FLUX_ROLE_USER,
     },
