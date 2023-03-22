@@ -34,10 +34,10 @@ def main():
     if sys.stderr.isatty():
         cmd = sys.argv[1] if len(sys.argv) > 1 else None
         if cmd in ["submit", "run", "batch", "alloc", "bulksubmit"]:
-            suggestion = f"flux {sys.argv[1]} "
+            suggestion = f"flux {cmd} "
         else:
             suggestion = "flux submit, flux run, etc."
-        LOGGER.warning(f"⚠️ flux-mini is deprecated, use {suggestion}⚠️")
+        LOGGER.warning(f"⚠️ flux mini is deprecated, use {suggestion}⚠️")
 
     parser = argparse.ArgumentParser(prog="flux-mini")
     subparsers = parser.add_subparsers(
