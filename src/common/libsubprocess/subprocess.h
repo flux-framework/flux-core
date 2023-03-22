@@ -107,6 +107,19 @@ typedef struct {
 } flux_subprocess_hooks_t;
 
 /*
+ *  llog-compatible callback
+ */
+typedef void (*subprocess_log_f) (void *arg,
+                                  const char *file,
+                                  int line,
+                                  const char *func,
+                                  const char *subsys,
+                                  int level,
+                                  const char *fmt,
+                                  va_list args);
+
+
+/*
  * Convenience Functions:
  */
 
@@ -473,15 +486,6 @@ int flux_subprocess_aux_set (flux_subprocess_t *p,
  *   no such context exists, then NULL is returned.
  */
 void *flux_subprocess_aux_get (flux_subprocess_t *p, const char *name);
-
-typedef void (*subprocess_log_f) (void *arg,
-                                  const char *file,
-                                  int line,
-                                  const char *func,
-                                  const char *subsys,
-                                  int level,
-                                  const char *fmt,
-                                  va_list args);
 
 /* Set default internal logging function.
  */

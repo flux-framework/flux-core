@@ -50,15 +50,15 @@ static int test_server (flux_t *h, void *arg)
     int rc = -1;
     subprocess_server_t *srv = NULL;
 
-    if (flux_set_default_subprocess_log (h, tap_logger, NULL) < 0) {
-        diag ("flux_set_default_subprocess_log failed");
-        goto done;
-    }
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0) {
         diag ("flux_attr_set_cacheonly failed");
         goto done;
     }
-    if (!(srv = subprocess_server_create (h, service_name, "smurf"))) {
+    if (!(srv = subprocess_server_create (h,
+                                          service_name,
+                                          "smurf",
+                                          tap_logger,
+                                          NULL))) {
         diag ("subprocess_server_create failed");
         goto done;
     }
