@@ -46,6 +46,7 @@ void tap_logger (void *arg,
 
 static int test_server (flux_t *h, void *arg)
 {
+    const char *service_name = arg;
     int rc = -1;
     subprocess_server_t *srv = NULL;
 
@@ -57,7 +58,7 @@ static int test_server (flux_t *h, void *arg)
         diag ("flux_attr_set_cacheonly failed");
         goto done;
     }
-    if (!(srv = subprocess_server_create (h, "rexec", "smurf"))) {
+    if (!(srv = subprocess_server_create (h, service_name, "smurf"))) {
         diag ("subprocess_server_create failed");
         goto done;
     }
@@ -73,7 +74,7 @@ done:
     return rc;
 }
 
-flux_t *rcmdsrv_create (void)
+flux_t *rcmdsrv_create (const char *service_name)
 {
     flux_t *h;
 
@@ -82,7 +83,7 @@ flux_t *rcmdsrv_create (void)
     signal (SIGPIPE, SIG_IGN);
 
     // N.B. test reactor is created with FLUX_REACTOR_SIGCHLD flag
-    if (!(h = test_server_create (0, test_server, NULL)))
+    if (!(h = test_server_create (0, test_server, (char *)service_name)))
         BAIL_OUT ("test_server_create failed");
 
     return h;

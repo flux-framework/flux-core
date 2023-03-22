@@ -18,7 +18,7 @@
 /* Start subprocess server.  Returns one end of back-to-back flux_t test
  * handle.  Call test_server_stop (h) when done to join with server thread.
  */
-flux_t *rcmdsrv_create (void);
+flux_t *rcmdsrv_create (const char *service_name);
 
 /* llog-compatible logger
  */
