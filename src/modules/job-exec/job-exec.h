@@ -87,6 +87,7 @@ struct jobinfo {
 
     double                kill_timeout; /* grace time between sigterm,kill */
     flux_watcher_t       *kill_timer;
+    flux_watcher_t       *kill_shell_timer;
     flux_watcher_t       *expiration_timer;
 
     /* Exec implementation for this job */
