@@ -57,7 +57,7 @@ static int test_server (flux_t *h, void *arg)
         diag ("flux_attr_set_cacheonly failed");
         goto done;
     }
-    if (!(srv = subprocess_server_create (h, "smurf"))) {
+    if (!(srv = subprocess_server_create (h, "rexec", "smurf"))) {
         diag ("subprocess_server_create failed");
         goto done;
     }

@@ -298,6 +298,14 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
                                const flux_cmd_t *cmd,
                                const flux_subprocess_ops_t *ops);
 
+flux_subprocess_t *flux_rexec_ex (flux_t *h,
+                                  const char *service_name,
+                                  int rank,
+                                  int flags,
+                                  const flux_cmd_t *cmd,
+                                  const flux_subprocess_ops_t *ops);
+
+
 /* Start / stop a read stream temporarily on local processes.  This
  * may be useful for flow control.  If you desire to have a stream not
  * call 'on_stdout' or 'on_stderr' when the local subprocess has

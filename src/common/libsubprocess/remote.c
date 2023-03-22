@@ -182,7 +182,7 @@ static int remote_write (struct subprocess_channel *c)
         eof = true;
 
     if (subprocess_write (c->p->h,
-                          "rexec",
+                          c->p->service_name,
                           c->p->rank,
                           c->p->pid,
                           c->name,
@@ -205,7 +205,7 @@ error:
 static int remote_close (struct subprocess_channel *c)
 {
     if (subprocess_write (c->p->h,
-                          "rexec",
+                          c->p->service_name,
                           c->p->rank,
                           c->p->pid,
                           c->name,
@@ -492,11 +492,13 @@ static int remote_setup_channels (flux_subprocess_t *p)
     return 0;
 }
 
-int subprocess_remote_setup (flux_subprocess_t *p)
+int subprocess_remote_setup (flux_subprocess_t *p, const char *service_name)
 {
     if (remote_setup_stdio (p) < 0)
         return -1;
     if (remote_setup_channels (p) < 0)
+        return -1;
+    if (!(p->service_name = strdup (service_name)))
         return -1;
     return 0;
 }
@@ -609,7 +611,7 @@ int remote_exec (flux_subprocess_t *p)
     if (p->ops.on_stderr)
         flags |= SUBPROCESS_REXEC_STDERR;
 
-    if (!(f = subprocess_rexec (p->h, "rexec", p->rank, p->cmd, flags))
+    if (!(f = subprocess_rexec (p->h, p->service_name, p->rank, p->cmd, flags))
         || flux_future_then (f, -1., rexec_continuation, p) < 0) {
         llog_debug (p,
                     "error sending rexec.exec request: %s",
@@ -622,7 +624,7 @@ int remote_exec (flux_subprocess_t *p)
 
 flux_future_t *remote_kill (flux_subprocess_t *p, int signum)
 {
-    return subprocess_kill (p->h, "rexec", p->rank, p->pid, signum);
+    return subprocess_kill (p->h, p->service_name, p->rank, p->pid, signum);
 }
 
 static void remote_kill_nowait (flux_subprocess_t *p, int signum)

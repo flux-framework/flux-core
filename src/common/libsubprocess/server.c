@@ -554,27 +554,27 @@ static void server_disconnect_cb (flux_t *h,
 
 static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,
-      "rexec.exec",
+      "exec",
       server_exec_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "rexec.write",
+      "write",
       server_write_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "rexec.kill",
+      "kill",
       server_kill_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "rexec.list",
+      "list",
       server_list_cb,
       0
     },
     { FLUX_MSGTYPE_REQUEST,
-      "rexec.disconnect",
+      "disconnect",
       server_disconnect_cb,
       0
     },
@@ -624,11 +624,12 @@ void subprocess_server_destroy (subprocess_server_t *s)
 }
 
 subprocess_server_t *subprocess_server_create (flux_t *h,
+                                               const char *service_name,
                                                const char *local_uri)
 {
     subprocess_server_t *s;
 
-    if (!h || !local_uri) {
+    if (!h || !local_uri || !service_name) {
         errno = EINVAL;
         return NULL;
     }
@@ -647,7 +648,11 @@ subprocess_server_t *subprocess_server_create (flux_t *h,
         goto error;
     if (flux_get_rank (h, &s->rank) < 0)
         goto error;
-    if (flux_msg_handler_addvec (s->h, htab, s, &s->handlers) < 0)
+    if (flux_msg_handler_addvec_ex (s->h,
+                                    service_name,
+                                    htab,
+                                    s,
+                                    &s->handlers) < 0)
         goto error;
 
     return s;
