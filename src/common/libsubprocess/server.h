@@ -16,8 +16,8 @@
 typedef struct subprocess_server subprocess_server_t;
 
 typedef int (*subprocess_server_auth_f) (const flux_msg_t *msg,
-		                         void *arg,
-					 flux_error_t *error);
+                                         void *arg,
+                                         flux_error_t *error);
 
 /* Create a subprocess server.  The handle 'h' must contain a reactor
  * created with the FLUX_REACTOR_SIGCHLD flag.  Note that there can be
@@ -26,7 +26,7 @@ typedef int (*subprocess_server_auth_f) (const flux_msg_t *msg,
  * that has terminated.
  */
 subprocess_server_t *subprocess_server_create (flux_t *h,
-		                               const char *service_name,
+                                               const char *service_name,
                                                const char *local_uri);
 
 /* Register a callback to allow/deny each rexec request.

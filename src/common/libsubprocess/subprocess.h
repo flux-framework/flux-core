@@ -178,7 +178,7 @@ char *flux_cmd_stringify (const flux_cmd_t *cmd);
  *   If `overwrite` is non-zero then overwrite any existing setting for `name`.
  */
 int flux_cmd_setenvf (flux_cmd_t *cmd, int overwrite,
-		      const char *name, const char *fmt, ...)
+                      const char *name, const char *fmt, ...)
                       __attribute__ ((format (printf, 4, 5)));
 
 /*
