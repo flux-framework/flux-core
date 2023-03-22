@@ -174,6 +174,7 @@ TESTSCRIPTS = \
 	t2403-job-exec-conf.t \
 	t2404-job-exec-multiuser.t \
 	t2405-job-exec-sdexec.t \
+	t2406-job-exec-cleanup.t \
 	t2410-exec-systemd.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
