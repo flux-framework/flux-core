@@ -25,6 +25,8 @@
 
 #include "rcmdsrv.h"
 
+#define SERVER_NAME "test-remote"
+
 struct simple_scorecard {
     unsigned int completion:1;
     unsigned int exit_nonzero:1;
@@ -150,11 +152,11 @@ void simple_run_check (flux_t *h,
 
     memset (&ctx, 0, sizeof (ctx));
     ctx.h = h;
-    p = flux_rexec (h, FLUX_NODEID_ANY, 0, cmd, &simple_ops);
+    p = flux_rexec_ex (h, SERVER_NAME, FLUX_NODEID_ANY, 0, cmd, &simple_ops);
     ok (p != NULL,
-        "%s: flux_rexec returned a subprocess object", av[0]);
+        "%s: flux_rexec_ex returned a subprocess object", av[0]);
     if (!p)
-        BAIL_OUT ("flux_rexec failed");
+        BAIL_OUT ("flux_rexec_ex failed");
     if (flux_subprocess_aux_set (p, "ctx", &ctx, NULL) < 0)
         BAIL_OUT ("flux_subprocess_aux_set failed");
     rc = flux_reactor_run (flux_get_reactor (h), 0);
@@ -309,7 +311,7 @@ void sigstop_test (flux_t *h)
     if (!cmd)
         BAIL_OUT ("flux_cmd_create failed");
 
-    p = flux_rexec (h, FLUX_NODEID_ANY, 0, cmd, &stoptest_ops);
+    p = flux_rexec_ex (h, SERVER_NAME, FLUX_NODEID_ANY, 0, cmd, &stoptest_ops);
     ok (p != NULL,
         "stoptest: created subprocess");
     if (flux_subprocess_aux_set (p, "reactor", flux_get_reactor (h), NULL) < 0)
@@ -329,7 +331,7 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    h = rcmdsrv_create ();
+    h = rcmdsrv_create (SERVER_NAME);
 
     if (flux_set_default_subprocess_log (h, tap_logger, NULL) < 0)
         BAIL_OUT ("could not set logger");

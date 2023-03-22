@@ -232,7 +232,7 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    h = rcmdsrv_create ();
+    h = rcmdsrv_create ("rexec");
 
     if (flux_set_default_subprocess_log (h, tap_logger, NULL) < 0)
         BAIL_OUT ("could not set logger");

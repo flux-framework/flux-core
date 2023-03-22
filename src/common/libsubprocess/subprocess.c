@@ -160,6 +160,7 @@ static void subprocess_free (flux_subprocess_t *p)
 
         if (p->f)
             flux_future_destroy (p->f);
+        free (p->service_name);
 
         free (p);
         errno = saved_errno;
@@ -561,9 +562,12 @@ static int check_local_only_cmd_options (const flux_cmd_t *cmd)
     return cmd_find_opts (cmd, substrings);
 }
 
-flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
-                               const flux_cmd_t *cmd,
-                               const flux_subprocess_ops_t *ops)
+flux_subprocess_t *flux_rexec_ex (flux_t *h,
+                                  const char *service_name,
+                                  int rank,
+                                  int flags,
+                                  const flux_cmd_t *cmd,
+                                  const flux_subprocess_ops_t *ops)
 {
     flux_subprocess_t *p = NULL;
     flux_reactor_t *r;
@@ -572,7 +576,8 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
         || (rank < 0
             && rank != FLUX_NODEID_ANY
             && rank != FLUX_NODEID_UPSTREAM)
-        || !cmd) {
+        || !cmd
+        || !service_name) {
         errno = EINVAL;
         return NULL;
     }
@@ -601,7 +606,7 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
     if (!(p = subprocess_create (h, r, flags, cmd, ops, NULL, rank, false)))
         goto error;
 
-    if (subprocess_remote_setup (p) < 0)
+    if (subprocess_remote_setup (p, service_name) < 0)
         goto error;
 
     if (subprocess_setup_state_change (p) < 0)
@@ -618,6 +623,15 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
 error:
     flux_subprocess_unref (p);
     return NULL;
+}
+
+flux_subprocess_t *flux_rexec (flux_t *h,
+                               int rank,
+                               int flags,
+                               const flux_cmd_t *cmd,
+                               const flux_subprocess_ops_t *ops)
+{
+    return flux_rexec_ex (h, "rexec", rank, flags, cmd, ops);
 }
 
 int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)

@@ -13,7 +13,7 @@
 
 #include "subprocess.h"
 
-int subprocess_remote_setup (flux_subprocess_t *p);
+int subprocess_remote_setup (flux_subprocess_t *p, const char *service_name);
 
 int remote_exec (flux_subprocess_t *p);
 
