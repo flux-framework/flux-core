@@ -112,8 +112,7 @@ char *rhwloc_local_topology_xml (rhwloc_flags_t rflags)
     if (topo == NULL)
         return (NULL);
 #if HWLOC_API_VERSION >= 0x20000
-    int flags = HWLOC_TOPOLOGY_EXPORT_XML_FLAG_V1;
-    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen, flags) < 0) {
+    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen, 0) < 0) {
 #else
     if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen) < 0) {
 #endif
