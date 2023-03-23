@@ -85,7 +85,7 @@ void test_basic (flux_reactor_t *r)
         .on_completion = completion_cb
     };
     completion_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -129,7 +129,7 @@ void test_basic_fail (flux_reactor_t *r)
         .on_completion = completion_fail_cb
     };
     completion_fail_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -152,20 +152,17 @@ void test_basic_errors (flux_reactor_t *r)
     ok ((h = flux_open ("loop://", 0)) != NULL,
         "flux_open on loop works");
 
-    ok (!subprocess_server_create (NULL, NULL, NULL)
+    ok (!subprocess_server_create (NULL, NULL, NULL, NULL, NULL)
         && errno == EINVAL,
         "subprocess_server_create fails with NULL pointer inputs");
     ok (subprocess_server_shutdown (NULL, 0) == NULL
         && errno == EINVAL,
         "subprocess_server_shutdown fails with NULL pointer inputs");
 
-    ok (flux_exec (NULL, 0, NULL, NULL, NULL) == NULL
-        && errno == EINVAL,
-        "flux_exec fails with NULL pointer inputs");
-    ok (flux_local_exec (NULL, 0, NULL, NULL, NULL) == NULL
+    ok (flux_local_exec (NULL, 0, NULL, NULL) == NULL
         && errno == EINVAL,
         "flux_local_exec fails with NULL pointer inputs");
-    ok (flux_local_exec (r, 1234, NULL, NULL, NULL) == NULL
+    ok (flux_local_exec (r, 1234, NULL, NULL) == NULL
         && errno == EINVAL,
         "flux_local_exec fails with invalid flag");
     ok (flux_rexec (NULL, 0, 0, NULL, NULL) == NULL
@@ -177,7 +174,7 @@ void test_basic_errors (flux_reactor_t *r)
 
     ok ((cmd = flux_cmd_create (0, avbad, NULL)) != NULL,
         "flux_cmd_create with 0 args works");
-    ok (flux_local_exec (r, 0, cmd, NULL, NULL) == NULL
+    ok (flux_local_exec (r, 0, cmd, NULL) == NULL
         && errno == EINVAL,
         "flux_local_exec fails with cmd with zero args");
     ok (flux_rexec (h, 0, 0, cmd, NULL) == NULL
@@ -283,7 +280,7 @@ void test_errors (flux_reactor_t *r)
         .on_completion = completion_cb
     };
     completion_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -405,7 +402,7 @@ void test_basic_stdout (flux_reactor_t *r)
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -435,7 +432,7 @@ void test_basic_stderr (flux_reactor_t *r)
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -468,7 +465,7 @@ void test_basic_stdout_and_stderr (flux_reactor_t *r)
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -497,7 +494,7 @@ void test_basic_default_output (flux_reactor_t *r)
         .on_stderr = flux_standard_output
     };
     completion_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -557,7 +554,7 @@ void test_basic_stdin (flux_reactor_t *r)
     };
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -641,7 +638,7 @@ void test_basic_no_newline (flux_reactor_t *r)
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -712,7 +709,7 @@ void test_basic_trimmed_line (flux_reactor_t *r)
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -804,7 +801,7 @@ void test_basic_multiple_lines (flux_reactor_t *r)
     completion_cb_count = 0;
     multiple_lines_stdout_output_cb_count = 0;
     multiple_lines_stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -873,7 +870,7 @@ void test_basic_stdin_closed (flux_reactor_t *r)
     completion_cb_count = 0;
     stdin_closed_stdout_cb_count = 0;
     stdin_closed_stderr_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -949,7 +946,7 @@ void test_basic_read_line_until_eof (flux_reactor_t *r)
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1026,7 +1023,7 @@ void test_basic_read_line_until_eof_error (flux_reactor_t *r)
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1055,7 +1052,7 @@ void test_write_after_close (flux_reactor_t *r)
     };
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1093,8 +1090,7 @@ void test_flag_stdio_fallthrough (flux_reactor_t *r)
     p = flux_local_exec (r,
                          FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH,
                          cmd,
-                         &ops,
-                         NULL);
+                         &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1120,7 +1116,7 @@ void test_flag_setpgrp (flux_reactor_t *r)
         .on_completion = completion_cb
     };
     completion_cb_count = 0;
-    p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_SETPGRP, cmd, &ops, NULL);
+    p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_SETPGRP, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1145,7 +1141,7 @@ void test_flag_fork_exec (flux_reactor_t *r)
         .on_completion = completion_cb
     };
     completion_cb_count = 0;
-    p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_FORK_EXEC, cmd, &ops, NULL);
+    p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_FORK_EXEC, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1204,7 +1200,7 @@ void test_env_passed (flux_reactor_t *r)
     };
     completion_cb_count = 0;
     env_passed_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1243,7 +1239,7 @@ void test_kill (flux_reactor_t *r)
         .on_completion = completion_sigterm_cb
     };
     completion_sigterm_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1332,7 +1328,7 @@ void test_kill_setpgrp (flux_reactor_t *r)
     output_processes_cb_count = 0;
     parent_pid = -1;
     child_pid = -1;
-    p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_SETPGRP, cmd, &ops, NULL);
+    p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_SETPGRP, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1399,7 +1395,7 @@ void test_kill_eofs (flux_reactor_t *r)
     completion_sigterm_cb_count = 0;
     stdout_eof_cb_count = 0;
     stderr_eof_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1444,7 +1440,7 @@ void test_state_change (flux_reactor_t *r)
     };
     completion_cb_count = 0;
     state_change_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1483,7 +1479,7 @@ void test_state_change_stopped (flux_reactor_t *r)
         .on_state_change = state_change_stopped_cb
     };
     stopped_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1529,7 +1525,7 @@ void test_exec_fail (flux_reactor_t *r)
     ok (flux_cmd_setcwd (cmd, getcwd (path, sizeof (path))) == 0,
         "flux_cmd_setcwd");
 
-    p = flux_local_exec (r, 0, cmd, NULL, NULL);
+    p = flux_local_exec (r, 0, cmd, NULL);
     ok (p == NULL
         && errno == EACCES,
         "flux_local_exec failed with EACCES");
@@ -1542,7 +1538,7 @@ void test_exec_fail (flux_reactor_t *r)
     ok (flux_cmd_setcwd (cmd, getcwd (path, sizeof (path))) == 0,
         "flux_cmd_setcwd");
 
-    p = flux_local_exec (r, 0, cmd, NULL, NULL);
+    p = flux_local_exec (r, 0, cmd, NULL);
     ok (p == NULL
         && errno == ENOENT,
         "flux_local_exec failed with ENOENT");
@@ -1564,7 +1560,7 @@ void test_context (flux_reactor_t *r)
         .on_completion = completion_cb
     };
     completion_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1597,7 +1593,7 @@ void test_refcount (flux_reactor_t *r)
         .on_completion = completion_cb
     };
     completion_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1670,7 +1666,7 @@ void test_channel_fd_env (flux_reactor_t *r)
     };
     completion_cb_count = 0;
     channel_fd_env_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1736,7 +1732,7 @@ void test_channel_fd_in (flux_reactor_t *r)
     };
     completion_cb_count = 0;
     channel_in_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1807,7 +1803,7 @@ void test_channel_fd_in_and_out (flux_reactor_t *r)
     };
     completion_cb_count = 0;
     channel_in_and_out_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1897,7 +1893,7 @@ void test_channel_multiple_lines (flux_reactor_t *r)
     };
     completion_cb_count = 0;
     multiple_lines_channel_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -1983,7 +1979,7 @@ void test_bufsize (flux_reactor_t *r)
         .on_stderr = flux_standard_output
     };
     completion_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -2016,7 +2012,7 @@ void test_bufsize_error (flux_reactor_t *r)
         .on_stdout = flux_standard_output,
         .on_stderr = flux_standard_output
     };
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p == NULL
         && errno == EINVAL,
         "flux_local_exec fails with EINVAL due to bad bufsize input");
@@ -2079,7 +2075,7 @@ void test_line_buffer_default (flux_reactor_t *r)
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -2113,7 +2109,7 @@ void test_line_buffer_enable (flux_reactor_t *r)
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -2164,7 +2160,7 @@ void test_line_buffer_disable (flux_reactor_t *r)
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -2197,7 +2193,7 @@ void test_line_buffer_error (flux_reactor_t *r)
         .on_stdout = flux_standard_output,
         .on_stderr = flux_standard_output
     };
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p == NULL
         && errno == EINVAL,
         "flux_local_exec fails with EINVAL due to bad line_buffer input");
@@ -2221,7 +2217,7 @@ void test_stream_start_stop_basic (flux_reactor_t *r)
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -2330,7 +2326,7 @@ void test_stream_start_stop_initial_stop (flux_reactor_t *r)
     stderr_output_cb_count = 0;
     stdout_output_cb_len_count = 0;
     stderr_output_cb_len_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -2433,7 +2429,7 @@ void test_stream_start_stop_mid_stop (flux_reactor_t *r)
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
     timer_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok ((tw = flux_timer_watcher_create (r, 2.0, 0.0,
@@ -2497,7 +2493,7 @@ void test_stream_stop_enable (flux_reactor_t *r)
     stderr_output_cb_count = 0;
     stdout_output_cb_len_count = 0;
     stderr_output_cb_len_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -2550,7 +2546,7 @@ void test_stream_stop_disable (flux_reactor_t *r)
     completion_cb_count = 0;
     stdout_output_cb_count = 0;
     stderr_output_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
@@ -2584,7 +2580,7 @@ void test_stream_stop_error (flux_reactor_t *r)
         .on_stdout = flux_standard_output,
         .on_stderr = flux_standard_output
     };
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p == NULL
         && errno == EINVAL,
         "flux_local_exec fails with EINVAL due to bad stream_stop input");
@@ -2625,8 +2621,14 @@ void test_pre_exec_hook (flux_reactor_t *r)
         .pre_exec_arg = shmem_count
     };
     completion_cb_count = 0;
-    p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH, cmd, &ops, &hooks);
-    ok (p != NULL, "flux_local_exec");
+    p = flux_local_exec_ex (r,
+                            FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH,
+                            cmd,
+                            &ops,
+                            &hooks,
+                            NULL,
+                            NULL);
+    ok (p != NULL, "flux_local_exec_ex");
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
@@ -2660,8 +2662,8 @@ void test_post_fork_hook (flux_reactor_t *r)
         .post_fork_arg = &hook_count
     };
     completion_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, &hooks);
-    ok (p != NULL, "flux_local_exec");
+    p = flux_local_exec_ex (r, 0, cmd, &ops, &hooks, NULL, NULL);
+    ok (p != NULL, "flux_local_exec_ex");
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
@@ -2696,7 +2698,7 @@ void test_destroy_in_completion (flux_reactor_t *r)
         .on_completion = destroy_in_completion_cb
     };
     completion_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    p = flux_local_exec (r, 0, cmd, &ops);
     ok (p != NULL, "flux_local_exec");
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,

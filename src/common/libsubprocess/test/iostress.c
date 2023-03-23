@@ -232,7 +232,14 @@ bool iostress_run_check (flux_t *h,
         if (flux_cmd_setopt (cmd, "stdout_BUFSIZE", nbuf) < 0)
             BAIL_OUT ("flux_cmd_setopt failed");
     }
-    if (!(ctx.p = flux_rexec (h, FLUX_NODEID_ANY, 0, cmd, &iostress_ops)))
+    if (!(ctx.p = flux_rexec_ex (h,
+                                 "rexec",
+                                 FLUX_NODEID_ANY,
+                                 0,
+                                 cmd,
+                                 &iostress_ops,
+                                 tap_logger,
+                                 NULL)))
         BAIL_OUT ("flux_rexec failed");
     if (flux_subprocess_aux_set (ctx.p, "ctx", &ctx, NULL) < 0)
         BAIL_OUT ("flux_subprocess_aux_set failed");
@@ -275,9 +282,6 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     h = rcmdsrv_create ("rexec");
-
-    if (flux_set_default_subprocess_log (h, tap_logger, NULL) < 0)
-        BAIL_OUT ("could not set logger");
 
     ok (iostress_run_check (h, "balanced", false, 0, 0, 8, 8, 80),
         "balanced worked");

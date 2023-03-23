@@ -321,11 +321,13 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(p = flux_exec (s->h,
-                         FLUX_SUBPROCESS_FLAGS_SETPGRP,
-                         cmd,
-                         &ops,
-                         NULL)))
+    if (!(p = flux_local_exec_ex (flux_get_reactor (s->h),
+                                  FLUX_SUBPROCESS_FLAGS_SETPGRP,
+                                  cmd,
+                                  &ops,
+                                  NULL,
+                                  s->llog,
+                                  s->llog_data)))
         goto error;
 
     if (flux_subprocess_aux_set (p,
@@ -627,7 +629,9 @@ void subprocess_server_destroy (subprocess_server_t *s)
 
 subprocess_server_t *subprocess_server_create (flux_t *h,
                                                const char *service_name,
-                                               const char *local_uri)
+                                               const char *local_uri,
+                                               subprocess_log_f log_fn,
+                                               void *log_data)
 {
     subprocess_server_t *s;
 
@@ -640,8 +644,8 @@ subprocess_server_t *subprocess_server_create (flux_t *h,
 
     s->h = h;
 
-    s->llog = flux_aux_get (h, "flux::subprocess_llog_fn");
-    s->llog_data = flux_aux_get (h, "flux::subprocess_llog_data");
+    s->llog = log_fn;
+    s->llog_data = log_data;
 
     if (!(s->subprocesses = zlistx_new ()))
         goto error;

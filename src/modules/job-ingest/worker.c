@@ -357,8 +357,13 @@ flux_future_t *worker_kill (struct worker *w, int signo)
 static int worker_start (struct worker *w)
 {
     if (!w->p) {
-        if (!(w->p = flux_rexec (w->h, FLUX_NODEID_ANY, 0,
-                                 w->cmd, &worker_ops))) {
+        if (!(w->p = flux_rexec_ex (w->h,
+                                    "rexec",
+                                    FLUX_NODEID_ANY, 0,
+                                    w->cmd,
+                                    &worker_ops,
+                                    flux_llog,
+                                    w->h))) {
             return -1;
         }
         if (flux_subprocess_aux_set (w->p, worker_auxkey, w, NULL) < 0) {

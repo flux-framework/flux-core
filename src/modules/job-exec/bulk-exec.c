@@ -287,11 +287,14 @@ static int exec_start_cmd (struct bulk_exec *exec,
     uint32_t rank;
     rank = idset_first (cmd->ranks);
     while (rank != IDSET_INVALID_ID && (max < 0 || count < max)) {
-        flux_subprocess_t *p = flux_rexec (exec->h,
-                                           rank,
-                                           cmd->flags,
-                                           cmd->cmd,
-                                           &exec->ops);
+        flux_subprocess_t *p = flux_rexec_ex (exec->h,
+                                              "rexec",
+                                              rank,
+                                              cmd->flags,
+                                              cmd->cmd,
+                                              &exec->ops,
+                                              flux_llog,
+                                              exec->h);
         if (!p)
             return -1;
         if (flux_subprocess_aux_set (p, "job-exec::exec", exec, NULL) < 0

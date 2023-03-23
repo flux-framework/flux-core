@@ -107,6 +107,19 @@ typedef struct {
 } flux_subprocess_hooks_t;
 
 /*
+ *  llog-compatible callback
+ */
+typedef void (*subprocess_log_f) (void *arg,
+                                  const char *file,
+                                  int line,
+                                  const char *func,
+                                  const char *subsys,
+                                  int level,
+                                  const char *fmt,
+                                  va_list args);
+
+
+/*
  * Convenience Functions:
  */
 
@@ -178,7 +191,7 @@ char *flux_cmd_stringify (const flux_cmd_t *cmd);
  *   If `overwrite` is non-zero then overwrite any existing setting for `name`.
  */
 int flux_cmd_setenvf (flux_cmd_t *cmd, int overwrite,
-		      const char *name, const char *fmt, ...)
+                      const char *name, const char *fmt, ...)
                       __attribute__ ((format (printf, 4, 5)));
 
 /*
@@ -270,8 +283,8 @@ const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
 
 /*
  *  Asynchronously create a new subprocess described by command object
- *   `cmd`.  flux_exec() and flux_local_exec() create a new subprocess
- *   locally.  flux_rexec() creates a new subprocess on Flux rank
+ *   `cmd`.  flux_local_exec() create a new subprocess locally.
+ *   flux_rexec() creates a new subprocess on Flux rank
  *   `rank`. Callbacks in `ops` structure that are non-NULL will be
  *   called to process state changes, I/O, and completion.
  *
@@ -284,15 +297,18 @@ const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
  *   by the time the call returns.
  *
  */
-flux_subprocess_t *flux_exec (flux_t *h, int flags,
-                              const flux_cmd_t *cmd,
-                              const flux_subprocess_ops_t *ops,
-                              const flux_subprocess_hooks_t *hooks);
-
-flux_subprocess_t *flux_local_exec (flux_reactor_t *r, int flags,
+flux_subprocess_t *flux_local_exec (flux_reactor_t *r,
+                                    int flags,
                                     const flux_cmd_t *cmd,
-                                    const flux_subprocess_ops_t *ops,
-                                    const flux_subprocess_hooks_t *hooks);
+                                    const flux_subprocess_ops_t *ops);
+
+flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
+                                       int flags,
+                                       const flux_cmd_t *cmd,
+                                       const flux_subprocess_ops_t *ops,
+                                       const flux_subprocess_hooks_t *hooks,
+                                       subprocess_log_f log_fn,
+                                       void *log_data);
 
 flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
                                const flux_cmd_t *cmd,
@@ -303,7 +319,9 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
                                   int rank,
                                   int flags,
                                   const flux_cmd_t *cmd,
-                                  const flux_subprocess_ops_t *ops);
+                                  const flux_subprocess_ops_t *ops,
+                                  subprocess_log_f log_fn,
+                                  void *log_data);
 
 
 /* Start / stop a read stream temporarily on local processes.  This
@@ -473,22 +491,6 @@ int flux_subprocess_aux_set (flux_subprocess_t *p,
  *   no such context exists, then NULL is returned.
  */
 void *flux_subprocess_aux_get (flux_subprocess_t *p, const char *name);
-
-typedef void (*subprocess_log_f) (void *arg,
-                                  const char *file,
-                                  int line,
-                                  const char *func,
-                                  const char *subsys,
-                                  int level,
-                                  const char *fmt,
-                                  va_list args);
-
-/* Set default internal logging function.
- */
-int flux_set_default_subprocess_log (flux_t *h,
-                                     subprocess_log_f log_fn,
-                                     void *log_data);
-
 
 
 #ifdef __cplusplus

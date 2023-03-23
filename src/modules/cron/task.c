@@ -331,7 +331,7 @@ int cron_task_run (cron_task_t *t,
     if (!(cmd = exec_cmd_create (t, command, cwd, env)))
         goto done;
 
-    if (!(p = flux_rexec (h, rank, 0, cmd, &ops))) {
+    if (!(p = flux_rexec_ex (h, "rexec", rank, 0, cmd, &ops, flux_llog, h))) {
         cron_task_rexec_failed (t, errno);
         goto done;
     }

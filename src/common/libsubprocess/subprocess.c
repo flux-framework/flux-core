@@ -174,17 +174,17 @@ static flux_subprocess_t * subprocess_create (flux_t *h,
                                               const flux_subprocess_ops_t *ops,
                                               const flux_subprocess_hooks_t *hooks,
                                               int rank,
-                                              bool local)
+                                              bool local,
+                                              subprocess_log_f log_fn,
+                                              void *log_data)
 {
     flux_subprocess_t *p = calloc (1, sizeof (*p));
 
     if (!p)
         return NULL;
 
-    if (h) {
-        p->llog = flux_aux_get (h, "flux::subprocess_llog_fn");
-        p->llog_data = flux_aux_get (h, "flux::subprocess_llog_data");
-    }
+    p->llog = log_fn;
+    p->llog_data = log_data;
 
     /* init fds, so on error we don't accidentally close stdin
      * (i.e. fd == 0)
@@ -481,10 +481,13 @@ static int subprocess_setup_completed (flux_subprocess_t *p)
     return 0;
 }
 
-static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int flags,
-                                           const flux_cmd_t *cmd,
-                                           const flux_subprocess_ops_t *ops,
-                                           const flux_subprocess_hooks_t *hooks)
+flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
+                                       int flags,
+                                       const flux_cmd_t *cmd,
+                                       const flux_subprocess_ops_t *ops,
+                                       const flux_subprocess_hooks_t *hooks,
+                                       subprocess_log_f log_fn,
+                                       void *log_data)
 {
     flux_subprocess_t *p = NULL;
     int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
@@ -507,7 +510,16 @@ static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int fla
         goto error;
     }
 
-    if (!(p = subprocess_create (h, r, flags, cmd, ops, hooks, -1, true)))
+    if (!(p = subprocess_create (NULL,
+                                 r,
+                                 flags,
+                                 cmd,
+                                 ops,
+                                 hooks,
+                                 -1,
+                                 true,
+                                 log_fn,
+                                 log_data)))
         goto error;
 
     if (subprocess_local_setup (p) < 0)
@@ -528,30 +540,11 @@ error:
     return NULL;
 }
 
-flux_subprocess_t * flux_exec (flux_t *h, int flags,
-                               const flux_cmd_t *cmd,
-                               const flux_subprocess_ops_t *ops,
-                               const flux_subprocess_hooks_t *hooks)
-{
-    flux_reactor_t *r;
-
-    if (!h) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if (!(r = flux_get_reactor (h)))
-        return NULL;
-
-    return flux_exec_wrap (h, r, flags, cmd, ops, hooks);
-}
-
 flux_subprocess_t * flux_local_exec (flux_reactor_t *r, int flags,
                                      const flux_cmd_t *cmd,
-                                     const flux_subprocess_ops_t *ops,
-                                     const flux_subprocess_hooks_t *hooks)
+                                     const flux_subprocess_ops_t *ops)
 {
-    return flux_exec_wrap (NULL, r, flags, cmd, ops, hooks);
+    return flux_local_exec_ex (r, flags, cmd, ops, NULL, NULL, NULL);
 }
 
 static int check_local_only_cmd_options (const flux_cmd_t *cmd)
@@ -567,7 +560,9 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
                                   int rank,
                                   int flags,
                                   const flux_cmd_t *cmd,
-                                  const flux_subprocess_ops_t *ops)
+                                  const flux_subprocess_ops_t *ops,
+                                  subprocess_log_f log_fn,
+                                  void *log_data)
 {
     flux_subprocess_t *p = NULL;
     flux_reactor_t *r;
@@ -603,7 +598,16 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
     if (!(r = flux_get_reactor (h)))
         goto error;
 
-    if (!(p = subprocess_create (h, r, flags, cmd, ops, NULL, rank, false)))
+    if (!(p = subprocess_create (h,
+                                 r,
+                                 flags,
+                                 cmd,
+                                 ops,
+                                 NULL,
+                                 rank,
+                                 false,
+                                 log_fn,
+                                 log_data)))
         goto error;
 
     if (subprocess_remote_setup (p, service_name) < 0)
@@ -631,7 +635,7 @@ flux_subprocess_t *flux_rexec (flux_t *h,
                                const flux_cmd_t *cmd,
                                const flux_subprocess_ops_t *ops)
 {
-    return flux_rexec_ex (h, "rexec", rank, flags, cmd, ops);
+    return flux_rexec_ex (h, "rexec", rank, flags, cmd, ops, NULL, NULL);
 }
 
 int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)

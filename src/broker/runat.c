@@ -239,7 +239,13 @@ static flux_subprocess_t *start_command (struct runat *r,
         ops.on_stdout = stdio_cb;
         ops.on_stderr = stdio_cb;
     }
-    if (!(p = flux_exec (r->h, cmd->flags, cmd->cmd, &ops, NULL)))
+    if (!(p = flux_local_exec_ex (flux_get_reactor (r->h),
+                                  cmd->flags,
+                                  cmd->cmd,
+                                  &ops,
+                                  NULL,
+                                  flux_llog,
+                                  r->h)))
         return NULL;
     if (flux_subprocess_aux_set (p, "runat_entry", entry, NULL) < 0)
         goto error;

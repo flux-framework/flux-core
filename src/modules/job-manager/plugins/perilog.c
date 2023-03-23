@@ -288,7 +288,7 @@ static int run_command (flux_plugin_t *p,
         return -1;
     }
 
-    if (!(sp = flux_rexec (h, 0, 0, cmd, &ops))) {
+    if (!(sp = flux_rexec_ex (h, "rexec", 0, 0, cmd, &ops, flux_llog, h))) {
         flux_log_error (h, "%s: flux_rexec", prolog ? "prolog" : "epilog");
         return -1;
     }
