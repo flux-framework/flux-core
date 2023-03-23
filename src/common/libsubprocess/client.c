@@ -36,7 +36,6 @@ struct rexec_io {
 struct rexec_response {
     const char *type;
     pid_t pid;
-    flux_subprocess_state_t state;
     int status;
     struct rexec_io io;
 };
@@ -54,7 +53,6 @@ static void rexec_response_clear (struct rexec_response *resp)
 
     memset (resp, 0, sizeof (*resp));
 
-    resp->state = FLUX_SUBPROCESS_INIT;
     resp->pid = -1;
 }
 
@@ -92,19 +90,6 @@ error:
     return NULL;
 }
 
-static int has_stdout_flag (struct rexec_ctx *ctx)
-{
-    return ctx->flags & SUBPROCESS_REXEC_STDOUT ? 1 : 0;
-}
-static int has_stderr_flag (struct rexec_ctx *ctx)
-{
-    return ctx->flags & SUBPROCESS_REXEC_STDERR ? 1 : 0;
-}
-static int has_channel_flag (struct rexec_ctx *ctx)
-{
-    return ctx->flags & SUBPROCESS_REXEC_CHANNEL ? 1 : 0;
-}
-
 flux_future_t *subprocess_rexec (flux_t *h,
                                  const char *service_name,
                                  uint32_t rank,
@@ -127,11 +112,9 @@ flux_future_t *subprocess_rexec (flux_t *h,
                              topic,
                              rank,
                              FLUX_RPC_STREAMING,
-                             "{s:O s:i s:i s:i}",
+                             "{s:O s:i}",
                              "cmd", ctx->cmd,
-                             "on_channel_out", has_channel_flag (ctx),
-                             "on_stdout", has_stdout_flag (ctx),
-                             "on_stderr", has_stderr_flag (ctx)))
+                             "flags", ctx->flags))
         || flux_future_aux_set (f,
                                 "flux::rexec",
                                 ctx,
@@ -150,7 +133,6 @@ error:
 int subprocess_rexec_get (flux_future_t *f)
 {
     struct rexec_ctx *ctx;
-    int rank; // not used
 
     if (!(ctx = flux_future_aux_get (f, "flux::rexec"))) {
         errno = EINVAL;
@@ -158,10 +140,8 @@ int subprocess_rexec_get (flux_future_t *f)
     }
     rexec_response_clear (&ctx->response);
     if (flux_rpc_get_unpack (f,
-                             "{s:s s:i s?i s?i s?i s?O}",
+                             "{s:s s?i s?i s?O}",
                              "type", &ctx->response.type,
-                             "rank", &rank,
-                             "state", &ctx->response.state,
                              "pid", &ctx->response.pid,
                              "status", &ctx->response.status,
                              "io", &ctx->response.io.obj) < 0)
@@ -175,7 +155,9 @@ int subprocess_rexec_get (flux_future_t *f)
                       &ctx->response.io.eof) < 0)
             return -1;
     }
-    else if (!streq (ctx->response.type, "state")) {
+    else if (!streq (ctx->response.type, "started")
+        && !streq (ctx->response.type, "stopped")
+        && !streq (ctx->response.type, "finished")) {
         errno = EPROTO;
         return -1;
     }
@@ -186,8 +168,8 @@ bool subprocess_rexec_is_started (flux_future_t *f, pid_t *pid)
 {
     struct rexec_ctx *ctx;
     if ((ctx = flux_future_aux_get (f, "flux::rexec"))
-        && streq (ctx->response.type, "state")
-        && ctx->response.state == FLUX_SUBPROCESS_RUNNING) {
+        && ctx->response.type != NULL
+        && streq (ctx->response.type, "started")) {
         if (pid)
             *pid = ctx->response.pid;
         return true;
@@ -199,8 +181,8 @@ bool subprocess_rexec_is_stopped (flux_future_t *f)
 {
     struct rexec_ctx *ctx;
     if ((ctx = flux_future_aux_get (f, "flux::rexec"))
-        && streq (ctx->response.type, "state")
-        && ctx->response.state == FLUX_SUBPROCESS_STOPPED)
+        && ctx->response.type != NULL
+        && streq (ctx->response.type, "stopped"))
         return true;
     return false;
 }
@@ -209,8 +191,8 @@ bool subprocess_rexec_is_finished (flux_future_t *f, int *status)
 {
     struct rexec_ctx *ctx;
     if ((ctx = flux_future_aux_get (f, "flux::rexec"))
-        && streq (ctx->response.type, "state")
-        && ctx->response.state == FLUX_SUBPROCESS_EXITED) {
+        && ctx->response.type != NULL
+        && streq (ctx->response.type, "finished")) {
         if (status)
             *status = ctx->response.status;
         return true;
@@ -226,6 +208,7 @@ bool subprocess_rexec_is_output (flux_future_t *f,
 {
     struct rexec_ctx *ctx;
     if ((ctx = flux_future_aux_get (f, "flux::rexec"))
+        && ctx->response.type != NULL
         && streq (ctx->response.type, "output")) {
         if (stream)
             *stream = ctx->response.io.stream;
