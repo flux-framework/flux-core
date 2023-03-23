@@ -347,11 +347,11 @@ static int terminus_session_start (struct terminus_session *s,
         .on_completion = terminus_session_exit,
     };
     s->cmd = cmd;
-    s->p = flux_local_exec (flux_get_reactor (s->server->h),
-                            flags,
-                            cmd,
-                            &ops,
-                            &hooks);
+    s->p = flux_local_exec_ex (flux_get_reactor (s->server->h),
+                               flags,
+                               cmd,
+                               &ops,
+                               &hooks);
     if (!s->p)
         goto cleanup;
     if (flux_subprocess_aux_set (s->p, "terminus", s, NULL) < 0)

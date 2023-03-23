@@ -302,10 +302,16 @@ flux_subprocess_t *flux_exec (flux_t *h, int flags,
                               const flux_subprocess_ops_t *ops,
                               const flux_subprocess_hooks_t *hooks);
 
-flux_subprocess_t *flux_local_exec (flux_reactor_t *r, int flags,
+flux_subprocess_t *flux_local_exec (flux_reactor_t *r,
+                                    int flags,
                                     const flux_cmd_t *cmd,
-                                    const flux_subprocess_ops_t *ops,
-                                    const flux_subprocess_hooks_t *hooks);
+                                    const flux_subprocess_ops_t *ops);
+
+flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
+                                       int flags,
+                                       const flux_cmd_t *cmd,
+                                       const flux_subprocess_ops_t *ops,
+                                       const flux_subprocess_hooks_t *hooks);
 
 flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
                                const flux_cmd_t *cmd,

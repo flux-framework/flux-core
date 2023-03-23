@@ -546,12 +546,20 @@ flux_subprocess_t * flux_exec (flux_t *h, int flags,
     return flux_exec_wrap (h, r, flags, cmd, ops, hooks);
 }
 
-flux_subprocess_t * flux_local_exec (flux_reactor_t *r, int flags,
-                                     const flux_cmd_t *cmd,
-                                     const flux_subprocess_ops_t *ops,
-                                     const flux_subprocess_hooks_t *hooks)
+flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
+                                       int flags,
+                                       const flux_cmd_t *cmd,
+                                       const flux_subprocess_ops_t *ops,
+                                       const flux_subprocess_hooks_t *hooks)
 {
     return flux_exec_wrap (NULL, r, flags, cmd, ops, hooks);
+}
+
+flux_subprocess_t * flux_local_exec (flux_reactor_t *r, int flags,
+                                     const flux_cmd_t *cmd,
+                                     const flux_subprocess_ops_t *ops)
+{
+    return flux_local_exec_ex (r, flags, cmd, ops, NULL);
 }
 
 static int check_local_only_cmd_options (const flux_cmd_t *cmd)

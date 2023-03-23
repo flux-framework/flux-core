@@ -147,8 +147,7 @@ static int child_create (struct proxy_command *ctx,
     if (!(p = flux_local_exec (flux_get_reactor (ctx->h),
                                FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH,
                                cmd,
-                               &ops,
-                               NULL)))
+                               &ops)))
         goto error;
 
     if (flux_subprocess_aux_set (p, "ctx", ctx, NULL) < 0)
