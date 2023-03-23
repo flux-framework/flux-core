@@ -283,8 +283,8 @@ const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
 
 /*
  *  Asynchronously create a new subprocess described by command object
- *   `cmd`.  flux_exec() and flux_local_exec() create a new subprocess
- *   locally.  flux_rexec() creates a new subprocess on Flux rank
+ *   `cmd`.  flux_local_exec() create a new subprocess locally.
+ *   flux_rexec() creates a new subprocess on Flux rank
  *   `rank`. Callbacks in `ops` structure that are non-NULL will be
  *   called to process state changes, I/O, and completion.
  *
@@ -297,11 +297,6 @@ const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
  *   by the time the call returns.
  *
  */
-flux_subprocess_t *flux_exec (flux_t *h, int flags,
-                              const flux_cmd_t *cmd,
-                              const flux_subprocess_ops_t *ops,
-                              const flux_subprocess_hooks_t *hooks);
-
 flux_subprocess_t *flux_local_exec (flux_reactor_t *r,
                                     int flags,
                                     const flux_cmd_t *cmd,

@@ -159,9 +159,6 @@ void test_basic_errors (flux_reactor_t *r)
         && errno == EINVAL,
         "subprocess_server_shutdown fails with NULL pointer inputs");
 
-    ok (flux_exec (NULL, 0, NULL, NULL, NULL) == NULL
-        && errno == EINVAL,
-        "flux_exec fails with NULL pointer inputs");
     ok (flux_local_exec (NULL, 0, NULL, NULL) == NULL
         && errno == EINVAL,
         "flux_local_exec fails with NULL pointer inputs");

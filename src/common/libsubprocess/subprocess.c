@@ -481,12 +481,13 @@ static int subprocess_setup_completed (flux_subprocess_t *p)
     return 0;
 }
 
-static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int flags,
-                                           const flux_cmd_t *cmd,
-                                           const flux_subprocess_ops_t *ops,
-                                           const flux_subprocess_hooks_t *hooks,
-                                           subprocess_log_f log_fn,
-                                           void *log_data)
+flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
+                                       int flags,
+                                       const flux_cmd_t *cmd,
+                                       const flux_subprocess_ops_t *ops,
+                                       const flux_subprocess_hooks_t *hooks,
+                                       subprocess_log_f log_fn,
+                                       void *log_data)
 {
     flux_subprocess_t *p = NULL;
     int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
@@ -509,7 +510,7 @@ static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int fla
         goto error;
     }
 
-    if (!(p = subprocess_create (h,
+    if (!(p = subprocess_create (NULL,
                                  r,
                                  flags,
                                  cmd,
@@ -537,35 +538,6 @@ static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int fla
 error:
     flux_subprocess_unref (p);
     return NULL;
-}
-
-flux_subprocess_t * flux_exec (flux_t *h, int flags,
-                               const flux_cmd_t *cmd,
-                               const flux_subprocess_ops_t *ops,
-                               const flux_subprocess_hooks_t *hooks)
-{
-    flux_reactor_t *r;
-
-    if (!h) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if (!(r = flux_get_reactor (h)))
-        return NULL;
-
-    return flux_exec_wrap (h, r, flags, cmd, ops, hooks, NULL, NULL);
-}
-
-flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
-                                       int flags,
-                                       const flux_cmd_t *cmd,
-                                       const flux_subprocess_ops_t *ops,
-                                       const flux_subprocess_hooks_t *hooks,
-                                       subprocess_log_f log_fn,
-                                       void *log_data)
-{
-    return flux_exec_wrap (NULL, r, flags, cmd, ops, hooks, log_fn, log_data);
 }
 
 flux_subprocess_t * flux_local_exec (flux_reactor_t *r, int flags,
