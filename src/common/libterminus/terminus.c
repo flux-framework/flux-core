@@ -351,7 +351,9 @@ static int terminus_session_start (struct terminus_session *s,
                                flags,
                                cmd,
                                &ops,
-                               &hooks);
+                               &hooks,
+                               NULL,
+                               NULL);
     if (!s->p)
         goto cleanup;
     if (flux_subprocess_aux_set (s->p, "terminus", s, NULL) < 0)

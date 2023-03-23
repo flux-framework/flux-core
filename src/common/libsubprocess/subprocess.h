@@ -311,7 +311,9 @@ flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
                                        int flags,
                                        const flux_cmd_t *cmd,
                                        const flux_subprocess_ops_t *ops,
-                                       const flux_subprocess_hooks_t *hooks);
+                                       const flux_subprocess_hooks_t *hooks,
+                                       subprocess_log_f log_fn,
+                                       void *log_data);
 
 flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
                                const flux_cmd_t *cmd,
@@ -322,7 +324,9 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
                                   int rank,
                                   int flags,
                                   const flux_cmd_t *cmd,
-                                  const flux_subprocess_ops_t *ops);
+                                  const flux_subprocess_ops_t *ops,
+                                  subprocess_log_f log_fn,
+                                  void *log_data);
 
 
 /* Start / stop a read stream temporarily on local processes.  This
@@ -492,13 +496,6 @@ int flux_subprocess_aux_set (flux_subprocess_t *p,
  *   no such context exists, then NULL is returned.
  */
 void *flux_subprocess_aux_get (flux_subprocess_t *p, const char *name);
-
-/* Set default internal logging function.
- */
-int flux_set_default_subprocess_log (flux_t *h,
-                                     subprocess_log_f log_fn,
-                                     void *log_data);
-
 
 
 #ifdef __cplusplus

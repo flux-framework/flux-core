@@ -39,7 +39,7 @@ int exec_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
 
     if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0)
         goto cleanup;
-    if (!(s = subprocess_server_create (h, "rexec", local_uri, NULL, NULL)))
+    if (!(s = subprocess_server_create (h, "rexec", local_uri, flux_llog, h)))
         goto cleanup;
     if (rank == 0)
         subprocess_server_set_auth_cb (s, reject_nonlocal, NULL);

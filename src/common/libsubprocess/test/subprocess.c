@@ -2628,7 +2628,9 @@ void test_pre_exec_hook (flux_reactor_t *r)
                             FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH,
                             cmd,
                             &ops,
-                            &hooks);
+                            &hooks,
+                            NULL,
+                            NULL);
     ok (p != NULL, "flux_local_exec_ex");
 
     int rc = flux_reactor_run (r, 0);
@@ -2663,7 +2665,7 @@ void test_post_fork_hook (flux_reactor_t *r)
         .post_fork_arg = &hook_count
     };
     completion_cb_count = 0;
-    p = flux_local_exec_ex (r, 0, cmd, &ops, &hooks);
+    p = flux_local_exec_ex (r, 0, cmd, &ops, &hooks, NULL, NULL);
     ok (p != NULL, "flux_local_exec_ex");
 
     int rc = flux_reactor_run (r, 0);

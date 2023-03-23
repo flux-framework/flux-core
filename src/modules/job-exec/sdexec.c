@@ -704,8 +704,15 @@ static int sdexec_kill_multiuser (struct sdexec *se, int signum)
         goto cleanup;
     }
 
-    if (!(p = flux_rexec (se->h, rank, 0, cmd, &ops))) {
-        flux_log_error (se->h, "flux_rexec");
+    if (!(p = flux_rexec_ex (se->h,
+                             "rexec",
+                             rank,
+                             0,
+                             cmd,
+                             &ops,
+                             flux_llog,
+                             se->h))) {
+        flux_log_error (se->h, "flux_rexec_ex");
         goto cleanup;
     }
 

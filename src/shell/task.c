@@ -205,7 +205,13 @@ int shell_task_start (struct flux_shell *shell,
     if (shell->nosetpgrp)
         flags &= ~FLUX_SUBPROCESS_FLAGS_SETPGRP;
 
-    task->proc = flux_local_exec_ex (r, flags, task->cmd, &subproc_ops, &hooks);
+    task->proc = flux_local_exec_ex (r,
+                                     flags,
+                                     task->cmd,
+                                     &subproc_ops,
+                                     &hooks,
+                                     NULL,
+                                     NULL);
     if (!task->proc)
         return -1;
     if (flux_subprocess_aux_set (task->proc, "flux::task", task, NULL) < 0) {

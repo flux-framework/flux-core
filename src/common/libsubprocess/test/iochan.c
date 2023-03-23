@@ -191,8 +191,15 @@ bool iochan_run_check (flux_t *h, const char *name, int count)
     if (flux_cmd_add_channel (cmd, "IOCHAN_IN") < 0
         || flux_cmd_add_channel (cmd, "IOCHAN_OUT") < 0)
         BAIL_OUT ("flux_cmd_add_channel failed");
-    if (!(ctx.p = flux_rexec (h, FLUX_NODEID_ANY, 0, cmd, &iochan_ops)))
-        BAIL_OUT ("flux_rexec failed");
+    if (!(ctx.p = flux_rexec_ex (h,
+                                 "rexec",
+                                 FLUX_NODEID_ANY,
+                                 0,
+                                 cmd,
+                                 &iochan_ops,
+                                 tap_logger,
+                                 NULL)))
+        BAIL_OUT ("flux_rexec_ex failed");
     if (flux_subprocess_aux_set (ctx.p, "ctx", &ctx, NULL) < 0)
         BAIL_OUT ("flux_subprocess_aux_set failed");
 
@@ -233,9 +240,6 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     h = rcmdsrv_create ("rexec");
-
-    if (flux_set_default_subprocess_log (h, tap_logger, NULL) < 0)
-        BAIL_OUT ("could not set logger");
 
     ok (iochan_run_check (h, "simple", linesize * 100),
         "simple check worked");
