@@ -41,4 +41,10 @@ test_expect_success 'flux uptime on rank 2 reports join state' '
 	grep join uptime.out
 '
 
+test_expect_success 'flux dmesg on rank 2 works' '
+	bash -c \
+		"FLUX_URI=$(echo $FLUX_URI | sed s/local-0/local-2/) \
+			flux dmesg" >/dev/null
+'
+
 test_done
