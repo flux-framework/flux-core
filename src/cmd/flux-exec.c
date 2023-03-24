@@ -44,6 +44,9 @@ static struct optparse_option cmdopts[] = {
       .usage = "Run with more verbosity." },
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Suppress extraneous output." },
+    { .name = "service", .has_arg = 1, .arginfo = "NAME",
+      .flags = OPTPARSE_OPT_HIDDEN,
+      .usage = "Override service name (default: rexec)." },
     OPTPARSE_TABLE_END
 };
 
@@ -318,6 +321,7 @@ int main (int argc, char *argv[])
         .on_stderr = output_cb,
     };
     struct timespec t0;
+    const char *service_name;
 
     log_init ("flux-exec");
 
@@ -406,10 +410,18 @@ int main (int argc, char *argv[])
     if (!(exitsets = zhashx_new ()))
         log_err_exit ("zhashx_new()");
 
+    service_name = optparse_get_str (opts, "service", "rexec");
     rank = idset_first (ns);
     while (rank != IDSET_INVALID_ID) {
         flux_subprocess_t *p;
-        if (!(p = flux_rexec (h, rank, 0, cmd, &ops)))
+        if (!(p = flux_rexec_ex (h,
+                                 service_name,
+                                 rank,
+                                 0,
+                                 cmd,
+                                 &ops,
+                                 NULL,
+                                 NULL)))
             log_err_exit ("flux_rexec");
         if (zlist_append (subprocesses, p) < 0)
             log_err_exit ("zlist_append");
