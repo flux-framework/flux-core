@@ -472,7 +472,16 @@ test_expect_success 'job-manager: job prolog/epilog events work' '
 	test_debug "echo Checking that epilog-finish=$n_epilog event occurs before free=$n_free event" &&
 	test $n_prolog -lt $n_start -a $n_epilog -lt $n_free
 '
-
+test_expect_success 'job-manager: epilog works after exception during prolog' '
+	flux jobtap load --remove=all ${PLUGINPATH}/perilog-test.so \
+		prolog-exception=1 &&
+	jobid=$(flux submit hostname) &&
+	flux job attach --wait-event clean -vE $jobid 2>&1 \
+	    | tee perilog-exception-test.out &&
+	n_epilog=$(lineno job.epilog-finish perilog-exception-test.out) &&
+	n_free=$(lineno job.free perilog-exception-test.out) &&
+	test $n_epilog -lt $n_free
+'
 test_expect_success 'job-manager: job.create posts events before validation' '
 	flux jobtap load --remove=all ${PLUGINPATH}/create-event.so &&
 	jobid=$(flux submit hostname) &&

@@ -407,6 +407,7 @@ int event_job_action (struct event *event, struct job *job)
              * it is safe to release all resources to the scheduler.
              */
             if (job->has_resources
+                && !job_event_is_queued (job, "epilog-start")
                 && !job->perilog_active
                 && !job->alloc_bypass
                 && !job->start_pending

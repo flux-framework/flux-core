@@ -26,6 +26,8 @@ struct perilog_data {
     int status;
 };
 
+static int prolog_exception = 0;
+
 static struct perilog_data *
 perilog_data_create (flux_plugin_t *p,
                      flux_jobid_t id,
@@ -125,6 +127,13 @@ static int cb (flux_plugin_t *p,
                                      prolog ? "prolog" : "epilog",
                                      strerror (errno));
     }
+    if (prolog && prolog_exception) {
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "prolog test exception");
+        /* Use timer_cb to finish prolog */
+        timer_cb (flux_get_reactor (h), tw, 0, d);
+    }
     return 0;
 }
 
@@ -138,6 +147,8 @@ int flux_plugin_init (flux_plugin_t *p)
 {
     if (flux_plugin_register (p, "perilog-test", tab) < 0)
         return -1;
+    flux_plugin_conf_unpack (p, "{s?i}",
+                             "prolog-exception", &prolog_exception);
     return 0;
 }
 
