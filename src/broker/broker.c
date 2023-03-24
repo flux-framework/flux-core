@@ -405,9 +405,6 @@ int main (int argc, char *argv[])
         || init_critical_ranks_attr (ctx.overlay, ctx.attrs) < 0)
         goto cleanup;
 
-    if (ctx.rank == 0 && execute_parental_notifications (&ctx) < 0)
-        goto cleanup;
-
     if (create_runat_phases (&ctx) < 0)
         goto cleanup;
 
@@ -495,6 +492,9 @@ int main (int argc, char *argv[])
         log_err ("load_module connector-local");
         goto cleanup;
     }
+
+    if (ctx.rank == 0 && execute_parental_notifications (&ctx) < 0)
+        goto cleanup;
 
     /* Event loop
      */

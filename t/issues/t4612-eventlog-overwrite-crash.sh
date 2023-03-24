@@ -2,6 +2,10 @@
 
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 
+echo pid=$pid
+flux resource list
+flux jobs -a
+
 jobid=$(flux submit --wait-event=start sh -c "echo foo; sleep 300")
 
 kvsdir=$(flux job id --to=kvs $jobid)
@@ -20,4 +24,5 @@ flux kvs get --raw ${kvsdir}.eventlog \
 wait
 
 # if flux broker segfaulted, this won't work
-flux run hostname
+flux cancel $jobid
+flux job status $jobid || true
