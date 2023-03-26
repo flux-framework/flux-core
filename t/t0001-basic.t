@@ -12,6 +12,11 @@ other tests.
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
+# In some scenarios man(1) tests below may fail due to process sandboxing
+# done via seccomp filter (e.g. for nix). Just disable seccomp for man for
+# the duration of this test to avoid these failure
+export MAN_DISABLE_SECCOMP=1
+
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 startctl=${SHARNESS_TEST_SRCDIR}/scripts/startctl.py
 
