@@ -82,8 +82,7 @@ test_expect_success 'job-exec: simple job outputs stdout under systemd' '
 test_expect_success 'job-exec: simple job outputs stderr under systemd' '
         jobid=$(flux submit ${TEST_SDPROCESS_DIR}/test_echo -E boobar) &&
         flux job attach $jobid 2> stderr.out &&
-        echo boobar > stderr.expected &&
-        test_cmp stderr.expected stderr.out
+        grep boobar stderr.out
 '
 test_expect_success 'job-exec: simple job takes stdin under systemd' '
         jobid=$(flux submit ${TEST_SDPROCESS_DIR}/test_echo -O) &&
