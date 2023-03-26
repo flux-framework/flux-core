@@ -51,11 +51,13 @@ test_expect_success 'flux-shell: historical batch jobspec still work' '
 	for spec in $SHARNESS_TEST_SRCDIR/batch/jobspec/*.json; do
 		input=$(basename $spec) &&
 		cat $spec |
-		    jq -S ".attributes.system.environment.PATH=\"$PATH\"" \
+		    jq -S ".attributes.system.environment.PATH=\"$PATH\"" |
+		    jq -S ".attributes.system.environment.PATH=\"$PATH\"" |
+		    jq -S ".attributes.system.environment.PYTHONPATH=\"$PYTHONPATH\"" \
 		    >$input &&
 		flux job submit --flags=waitable $input
 	done &&
-	flux job attach $(flux job last) &&
+	flux job attach -vEX $(flux job last) &&
 	flux job wait --all --verbose
 '
 test_done
