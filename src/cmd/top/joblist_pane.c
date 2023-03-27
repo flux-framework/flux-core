@@ -370,15 +370,33 @@ void joblist_pane_set_current (struct joblist_pane *joblist, bool next)
     if (joblist->current != FLUX_JOBID_ANY)
         index = lookup_jobid_index (joblist->jobs, joblist->current);
 
+    /* find next valid index */
     njobs = json_array_size (joblist->jobs);
-    if (next && index == njobs - 1)
-        index = -1;
-    else if (!next && index <= 0)
-        index = njobs;
+    while (1) {
+        int next_index = next ? index + 1 : index - 1;
+        if (next_index == njobs)
+            next_index = 0;
+        else if (next_index < 0)
+            next_index = njobs - 1;
 
-    if (!(job = json_array_get (joblist->jobs,
-                                next ? index + 1 : index - 1)))
-        return;
+        if (!(job = json_array_get (joblist->jobs, next_index)))
+            return;
+
+        if (joblist->top->queue) {
+            const char *queue = "";
+            if (json_unpack (job, "{s?s}", "queue", &queue) < 0)
+                fatal (0, "error decoding a job record from job-list RPC");
+            if (!streq (joblist->top->queue, queue)) {
+                index = next_index;
+                continue;
+            }
+            break;
+        }
+        else
+            break;
+
+    }
+
     if (job && json_unpack (job, "{s:I}", "id", &id) < 0)
         return;
 
