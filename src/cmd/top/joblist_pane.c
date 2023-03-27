@@ -357,7 +357,7 @@ void joblist_pane_refresh (struct joblist_pane *joblist)
 
 void joblist_pane_set_current (struct joblist_pane *joblist, bool next)
 {
-    int current = -1;
+    int index = -1;
     json_t *job;
     flux_jobid_t id = FLUX_JOBID_ANY;
     int njobs;
@@ -366,16 +366,16 @@ void joblist_pane_set_current (struct joblist_pane *joblist, bool next)
         return;
 
     if (joblist->current != FLUX_JOBID_ANY)
-        current = lookup_jobid_index (joblist->jobs, joblist->current);
+        index = lookup_jobid_index (joblist->jobs, joblist->current);
 
     njobs = json_array_size (joblist->jobs);
-    if (next && current == njobs - 1)
-        current = -1;
-    else if (!next && current <= 0)
-        current = njobs;
+    if (next && index == njobs - 1)
+        index = -1;
+    else if (!next && index <= 0)
+        index = njobs;
 
     if (!(job = json_array_get (joblist->jobs,
-                                next ? current + 1 : current - 1)))
+                                next ? index + 1 : index - 1)))
         return;
     if (job && json_unpack (job, "{s:I}", "id", &id) < 0)
         return;
