@@ -174,7 +174,7 @@ As a reminder to the reader, some shells will interpret braces
 (``{`` and ``}``) in the format string.  They may need to be quoted.
 
 The special presentation type *h* can be used to convert an empty
-string, "0s", "0.0", or "0:00:00" to a hyphen. For example, normally
+string, "0s", "0.0", "0:00:00", or epoch time to a hyphen. For example, normally
 "{nodelist}" would output an empty string if the job has not yet run.
 By specifying, "{nodelist:h}", a hyphen would be presented instead.
 
