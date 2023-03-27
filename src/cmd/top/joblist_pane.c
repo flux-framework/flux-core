@@ -369,7 +369,7 @@ void joblist_pane_set_current (struct joblist_pane *joblist, bool next)
         current = lookup_jobid_index (joblist->jobs, joblist->current);
 
     njobs = json_array_size (joblist->jobs);
-    if (next && current == njobs -1)
+    if (next && current == njobs - 1)
         current = -1;
     else if (!next && current <= 0)
         current = njobs;
