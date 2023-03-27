@@ -357,7 +357,7 @@ void joblist_pane_refresh (struct joblist_pane *joblist)
 
 void joblist_pane_set_current (struct joblist_pane *joblist, bool next)
 {
-    int current = -1;;
+    int current = -1;
     json_t *job;
     flux_jobid_t id = FLUX_JOBID_ANY;
     int njobs;
