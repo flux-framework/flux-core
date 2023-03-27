@@ -91,6 +91,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
     json_t *job;
     int queue_width = 0;
     int name_width;
+    int job_output_count = 0;
 
     werase (joblist->win);
     wattron (joblist->win, A_REVERSE);
@@ -166,7 +167,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
             wattron (joblist->win, COLOR_PAIR(TOP_COLOR_BLUE) | A_BOLD);
         if (joblist->show_queue) {
             mvwprintw (joblist->win,
-                       1 + index,
+                       1 + job_output_count,
                        0,
                         "%13.13s %8.8s %8.8s %2.2s %6d %6d %7.7s %-*.*s",
                        idstr,
@@ -193,7 +194,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
         }
         else {
             mvwprintw (joblist->win,
-                       1 + index,
+                       1 + job_output_count,
                        0,
                         "%13.13s %8.8s %2.2s %6d %6d %7.7s %-*.*s",
                        idstr,
@@ -216,6 +217,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
                          run,
                          name);
         }
+        job_output_count++;
         wattroff (joblist->win, A_REVERSE);
         wattroff (joblist->win, COLOR_PAIR(TOP_COLOR_BLUE) | A_BOLD);
     }
