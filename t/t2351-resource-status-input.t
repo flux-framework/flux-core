@@ -42,6 +42,18 @@ test_expect_success 'flux-resource status: header included with all formats' '
         test_cmp headers.expected headers.output
 '
 
+test_expect_success 'flux resource status: FLUX_RESOURCE_STATUS_FORMAT_DEFAULT works' '
+	FLUX_RESOURCE_STATUS_FORMAT_DEFAULT="{nodelist} {nodelist}" \
+		flux resource status --from-stdin > default_override.out < /dev/null &&
+	grep "NODELIST NODELIST" default_override.out
+'
+
+test_expect_success 'flux resource status: FLUX_RESOURCE_STATUS_FORMAT_DEFAULT works w/ named format' '
+	FLUX_RESOURCE_STATUS_FORMAT_DEFAULT=long \
+		flux resource status --from-stdin > default_override_named.out < /dev/null &&
+	grep "REASON" default_override_named.out
+'
+
 test_expect_success 'flux-resource status: --no-header works' '
 	INPUT=${INPUTDIR}/example.json &&
 	name=no-header &&

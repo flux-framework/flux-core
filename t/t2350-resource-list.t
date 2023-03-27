@@ -15,6 +15,18 @@ test_expect_success 'flux resource list: default lists some expected fields' '
 	grep NCORES default.out
 '
 
+test_expect_success 'flux resource list: FLUX_RESOURCE_LIST_FORMAT_DEFAULT works' '
+	FLUX_RESOURCE_LIST_FORMAT_DEFAULT="{nodelist} {nodelist}" \
+		flux resource list > default_override.out &&
+	grep "NODELIST NODELIST" default_override.out
+'
+
+test_expect_success 'flux resource list: FLUX_RESOURCE_LIST_FORMAT_DEFAULT works w/ named format' '
+	FLUX_RESOURCE_LIST_FORMAT_DEFAULT=rlist \
+		flux resource list > default_override_named.out &&
+	grep -w "LIST" default_override_named.out
+'
+
 test_expect_success 'flux resource list: --no-header works' '
 	flux resource list --no-header > default_no_header.out &&
 	test_must_fail grep STATE default_no_header.out &&

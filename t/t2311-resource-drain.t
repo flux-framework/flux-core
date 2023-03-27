@@ -34,6 +34,18 @@ test_expect_success 'flux resource drain: default lists some expected fields' '
 	grep REASON default.out
 '
 
+test_expect_success 'flux resource drain: FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT works' '
+	FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT="{nodelist} {nodelist}" \
+		flux resource drain > default_override.out &&
+	grep "NODELIST NODELIST" default_override.out
+'
+
+test_expect_success 'flux resource drain: FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT works w/ named format' '
+	FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT=long \
+		flux resource drain > default_override_named.out &&
+	grep "RANKS" default_override_named.out
+'
+
 test_expect_success 'flux resource drain: --no-header works' '
 	flux resource drain --no-header > default_no_header.out &&
 	test_must_fail grep STATE default_no_header.out &&
