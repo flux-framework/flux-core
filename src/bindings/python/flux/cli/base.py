@@ -623,8 +623,9 @@ class MiniCmd:
         parser.add_argument(
             "--begin-time",
             action=BeginTimeAction,
-            metavar="TIME",
-            help="Set minimum begin time for job",
+            metavar="+FSD|TIME",
+            help="Set minimum start time as offset in FSD (e.g. +1h) or "
+            + 'an absolute TIME (e.g. "3pm") for job',
         )
         parser.add_argument(
             "--env",

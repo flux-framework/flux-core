@@ -34,10 +34,10 @@ OTHER OPTIONS
    character, then VAL is interpreted as a file, which must be valid JSON,
    to use as the attribute value.
 
-**--begin-time=DATETIME**
+**--begin-time=+FSD|DATETIME**
    Convenience option for setting a ``begin-time`` dependency for a job.
    The job is guaranteed to start after the specified date and time.
-   If *DATETIME* begins with a ``+`` character, then the remainder is
+   If argument begins with a ``+`` character, then the remainder is
    considered to be an offset in Flux standard duration (RFC 23), otherwise,
    any datetime expression accepted by the Python 
    `parsedatetime <https://github.com/bear/parsedatetime>`_ module
