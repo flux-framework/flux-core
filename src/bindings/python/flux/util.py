@@ -422,7 +422,8 @@ class UtilFormatter(Formatter):
             spec = spec[:-1]
 
         if spec.endswith("h"):
-            basecases = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00")
+            localepoch = datetime.fromtimestamp(0.0).strftime("%FT%T")
+            basecases = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00", localepoch)
             value = "-" if str(value) in basecases else str(value)
             spec = spec[:-1] + "s"
         retval = super().format_field(value, spec)
