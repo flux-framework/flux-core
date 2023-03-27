@@ -1796,6 +1796,7 @@ static bool allow_early_request (const flux_msg_t *msg)
         // let state-machine.get and attr.get work for flux-uptime(1)
         { FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "state-machine.get" },
         { FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "attr.get" },
+        { FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "log.dmesg" },
     };
     for (int i = 0; i < ARRAY_SIZE (match); i++)
         if (flux_msg_cmp (msg, match[i]))
