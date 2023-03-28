@@ -15,6 +15,7 @@
  *
  * Handle RPCs from front-end commands.
  * - if a node in undrain target is not drained, request fails
+ * - if a node in undrain target is excluded, request fails
  * - if a node in drain target is already drained, request status depends
  *   on setting of optional 'mode' member:
  *    - If mode is not set, request fails
@@ -140,16 +141,29 @@ static int check_draininfo_idset (struct drain *drain,
 {
     int rc = 0;
     unsigned int rank;
+    bool was_excluded = false;
+    bool was_drained = false;
+    const struct idset *exclude;
     struct idset *errids = idset_create (0, IDSET_FLAG_AUTOGROW);
-
-    if (!errids)
-        return -1;
 
     errp->text[0] = '\0';
 
+    if (!errids)
+        return -1;
+    exclude = exclude_get (drain->ctx->exclude);
+
     rank = idset_first (idset);
     while (rank != IDSET_INVALID_ID) {
+        bool is_error = false;
+        if (idset_test (exclude, rank)) {
+            was_excluded = true;
+            is_error = true;
+        }
         if (drain->info[rank].drained && drain->info[rank].reason) {
+            was_drained = true;
+            is_error = true;
+        }
+        if (is_error) {
             rc = -1;
             if (idset_set (errids, rank) < 0)
                 flux_log_error (drain->ctx->h,
@@ -165,11 +179,13 @@ static int check_draininfo_idset (struct drain *drain,
         if (!(s = idset_encode (errids, IDSET_FLAG_RANGE)))
             flux_log_error (drain->ctx->h,
                             "check_draininfo_idset: idset_encode");
-
         errprintf (errp,
-                   "rank%s %s already drained",
+                   "rank%s %s %s%s%s",
                    n > 1 ? "s" : "",
-                   s ? s : "(unknown)");
+                   s ? s : "(unknown)",
+                   was_drained ? "already drained" : "",
+                   was_drained && was_excluded ? " or " : "",
+                   was_excluded ? "excluded" : "");
         free (s);
         errno = EEXIST;
     }
