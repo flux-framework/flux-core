@@ -28,6 +28,18 @@ test_expect_success 'wait for monitor to declare all ranks are up' '
 	waitdown 0
 '
 
+test_expect_success 'flux resource drain: default lists some expected fields' '
+	flux resource drain > default.out &&
+	grep STATE default.out &&
+	grep REASON default.out
+'
+
+test_expect_success 'flux resource drain: --no-header works' '
+	flux resource drain --no-header > default_no_header.out &&
+	test_must_fail grep STATE default_no_header.out &&
+	test_must_fail grep REASON default_no_header.out
+'
+
 test_expect_success 'drain works with no reason' '
 	flux resource drain 1 &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 1
