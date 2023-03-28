@@ -1764,7 +1764,7 @@ test_expect_success 'configure batch,debug queues' '
 	[queues.batch]
 	[queues.debug]
 	EOT
-	flux queue start --all'
+	flux queue start --all
 '
 
 wait_id_inactive() {
