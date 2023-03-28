@@ -64,10 +64,11 @@ OPTIONS
 **-o, --format**\ *=NAME|FORMAT*
    Specify a named output format *NAME* or a format string using Python's
    format syntax. See OUTPUT FORMAT below for field names. Named formats
-   may be listed via ``--format=help``. Additional named formats may be
-   registered with ``flux jobs`` via configuration. See the CONFIGURATION
-   section for more details. A configuration snippet for an existing
-   named format may be generated with ``--format=get-config=NAME``.
+   may be listed via ``--format=help``.  An alternate default format can be set
+   via the FLUX_JOBS_FORMAT_DEFAULT environment variable.  Additional named
+   formats may be registered with ``flux jobs`` via configuration. See the
+   CONFIGURATION section for more details. A configuration snippet for an
+   existing named format may be generated with ``--format=get-config=NAME``.
 
 **--color**\ *[=WHEN]*
    Control output coloring.  The optional argument *WHEN* can be
