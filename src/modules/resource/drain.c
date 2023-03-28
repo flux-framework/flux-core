@@ -65,6 +65,11 @@ struct drain {
     flux_future_t *f;
 };
 
+struct drain_init_args {
+    struct drain *drain;
+    const struct idset *exclude;
+};
+
 static int get_timestamp_now (double *timestamp)
 {
     struct timespec ts;
@@ -532,10 +537,15 @@ error:
 
 static int replay_map (unsigned int id, json_t *val, void *arg)
 {
-    struct drain *drain = arg;
+    struct drain_init_args *args = arg;
+    struct drain *drain = args->drain;
     const char *reason;
     double timestamp;
     char *cpy;
+
+    /* Ignore excluded ranks */
+    if (idset_test (args->exclude, id))
+        return 0;
 
     if (id >= drain->ctx->size) {
         errno = EINVAL;
@@ -565,6 +575,7 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
 {
     size_t index;
     json_t *entry;
+    const struct idset *exclude = exclude_get (drain->ctx->exclude);
 
     if (eventlog) {
         json_array_foreach (eventlog, index, entry) {
@@ -579,11 +590,15 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
             if (eventlog_entry_parse (entry, &timestamp, &name, &context) < 0)
                 return -1;
             if (!strcmp (name, "resource-init")) {
+                struct drain_init_args args = {
+                    .drain = drain,
+                    .exclude = exclude
+                };
                 if (json_unpack (context, "{s:o}", "drain", &draininfo) < 0) {
                     errno = EPROTO;
                     return -1;
                 }
-                if (rutil_idkey_map (draininfo, replay_map, drain) < 0)
+                if (rutil_idkey_map (draininfo, replay_map, &args) < 0)
                     return -1;
             }
             else if (!strcmp (name, "drain")) {
@@ -597,6 +612,8 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
                     return -1;
                 }
                 if (!(idset = idset_decode (s)))
+                    return -1;
+                if (exclude && idset_subtract (idset, exclude) < 0)
                     return -1;
                 if (update_draininfo_idset (drain,
                                             idset,
@@ -615,6 +632,8 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
                     return -1;
                 }
                 if (!(idset = idset_decode (s)))
+                    return -1;
+                if (exclude && idset_subtract (idset, exclude) < 0)
                     return -1;
                 if (update_draininfo_idset (drain,
                                             idset,
