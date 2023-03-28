@@ -975,7 +975,10 @@ class UtilConfig:
     in glob(3) order.
 
     Args:
-        name: name of utility, used as the stem of config file to load
+        name: config name, used as the stem of config file to load
+              this is typically the name of the tool
+        toolname (optional): actual name of the tool/utility if "name" is
+                             different.  used in environment variable lookup.
         subcommand (optional): name of subcommand. Used as name of subtable
                                in configuration to use.
         initial_dict: Set of default values (optional)
@@ -990,8 +993,9 @@ class UtilConfig:
 
     builtin_formats = {}
 
-    def __init__(self, name, subcommand=None, initial_dict=None):
+    def __init__(self, name, toolname=None, subcommand=None, initial_dict=None):
         self.name = name
+        self.toolname = toolname
         self.dict = {}
         if initial_dict:
             self.dict = copy.deepcopy(initial_dict)
@@ -1105,6 +1109,16 @@ class UtilConfig:
         subclasses may define it to implement higher level validation.
         """
 
+    def _default_env_name(self):
+        """
+        Get tool default environment variable (name upper case, s/-/_/g)
+        """
+        name = self.toolname if self.toolname else self.name
+        prefix = name.upper().replace("-", "_")
+        if self.subtable:
+            prefix += "_" + self.subtable.upper().replace("-", "_")
+        return prefix + "_FORMAT_DEFAULT"
+
     def get_format_string(self, format_name):
         """
         Convenience function to fetch a format string from the current
@@ -1145,6 +1159,16 @@ class UtilConfig:
                 print(f"description = \"{entry['description']}\"")
             print(f"format = \"{entry['format']}\"")
             sys.exit(0)
+        elif format_name == "default":
+            # Default can be overridden by environment variable
+            try:
+                format_name = os.environ[self._default_env_name()]
+                if "{" in format_name:
+                    return format_name
+            except KeyError:
+                # no environment var, fallthrough
+                pass
+
         try:
             return formats[format_name]["format"]
         except KeyError:
