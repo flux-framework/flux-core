@@ -152,6 +152,13 @@ test_expect_success NO_CHAIN_LINT 'flux-top quits on q keypress' '
 	kill -USR1 $pid &&
 	wait $pid
 '
+# there are two jobs running, the first (listed higher) is the
+# non-batch job, the second (listed lower) is the batch job.  So we're
+# moving down three times (highlight first job, highlight second job,
+# cycle back to first job), moving up (cycle back to second job), then
+# hitting enter.
+#
+# we then hit quit twice to exit
 test_expect_success NO_CHAIN_LINT 'flux-top can call itself recursively' '
 	SHELL=/bin/sh &&
 	flux jobs &&
