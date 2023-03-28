@@ -18,7 +18,8 @@
 #include <errno.h>
 #include <argz.h>
 
-#include "src/common/libccan/ccan/base64/base64.h"
+#include "ccan/base64/base64.h"
+#include "ccan/str/str.h"
 
 #include "sign_none.h"
 
@@ -43,17 +44,17 @@ int header_decode (const char *src, int srclen, uint32_t *useridp)
     while ((key = entry = argz_next (dst, dstlen, entry))) {
         if (!(val = entry = argz_next (dst, dstlen, entry)))
             goto error_inval;
-        if (!strcmp (key, "version"))
+        if (streq (key, "version"))
             val_version = val;
-        else if (!strcmp (key, "userid"))
+        else if (streq (key, "userid"))
             val_userid = val;
-        else if (!strcmp (key, "mechanism"))
+        else if (streq (key, "mechanism"))
             val_mech = val;
         else
             goto error_inval;
     }
-    if (!val_version || !val_mech || strcmp (val_version, "i1") != 0
-                                  || strcmp (val_mech, "snone") != 0)
+    if (!val_version || !val_mech || !streq (val_version, "i1")
+                                  || !streq (val_mech, "snone"))
         goto error_inval;
     if (!val_userid || *val_userid != 'i')
         goto error_inval;
@@ -172,7 +173,7 @@ int sign_none_unwrap (const char *input,
     input = p + 1;
     if (!(p = strchr (input, '.')))
         goto error_inval;
-    if (strcmp (p, ".none") != 0)
+    if (!streq (p, ".none"))
         goto error_inval;
     if (payload_decode (input, p - input, payload, payloadsz) < 0)
         goto error;

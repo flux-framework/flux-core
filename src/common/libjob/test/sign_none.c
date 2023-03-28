@@ -19,7 +19,8 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libjob/sign_none.h"
-#include "src/common/libccan/ccan/base64/base64.h"
+#include "ccan/base64/base64.h"
+#include "ccan/str/str.h"
 
 void simple (void)
 {
@@ -373,7 +374,7 @@ void interop_sign_core (void)
         diag ("unwrap: %s", flux_security_last_error (sec));
     ok (rc == 0
         && userid == 1000
-        && !strcmp (mech_type, "none")
+        && streq (mech_type, "none")
         && payloadsz == 4
         && memcmp (payload, "foo", 4) == 0,
         "flux-security can unwrap envelope from flux-core internal signer");

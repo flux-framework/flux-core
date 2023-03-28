@@ -19,6 +19,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/str/str.h"
 
 #include "jobspec1.h"
 #include "jobspec1_private.h"
@@ -248,11 +249,11 @@ static int slot_vertex_check (json_t *slot, flux_jobspec1_error_t *error)
             errprintf (error, "slot with: %s", json_error.text);
             goto error;
         }
-        if (strcmp (type, "core") != 0 && strcmp (type, "gpu") != 0) {
+        if (!streq (type, "core") && !streq (type, "gpu")) {
             errprintf (error, "slot with type must be core or gpu");
             goto error;
         }
-        if (strcmp (type, "core") == 0)
+        if (streq (type, "core"))
             min_count = 1;
         if (count < min_count) {
             errprintf (error, "slot %s count must be >= %d", type, min_count);
@@ -322,11 +323,11 @@ static int resources_check (json_t *res, flux_jobspec1_error_t *error)
         errprintf (error, "resource vertex: %s", json_error.text);
         goto error;
     }
-    if (!strcmp (type, "node")) {
+    if (streq (type, "node")) {
         if (node_vertex_check (vertex, error) < 0)
             goto error;
     }
-    else if (!strcmp (type, "slot")) {
+    else if (streq (type, "slot")) {
         if (slot_vertex_check (vertex, error) < 0)
             goto error;
     }
@@ -347,7 +348,7 @@ static int attr_system_check (json_t *o, flux_jobspec1_error_t *error)
     bool has_duration = false;
 
     json_object_foreach (o, key, value) {
-        if (!strcmp (key, "duration")) {
+        if (streq (key, "duration")) {
             if (!json_is_number (value)) {
                 errprintf (error,
                            "attributes.system.duration must be a number");
@@ -355,21 +356,21 @@ static int attr_system_check (json_t *o, flux_jobspec1_error_t *error)
             }
             has_duration = true;
         }
-        else if (!strcmp (key, "environment")) {
+        else if (streq (key, "environment")) {
             if (!(json_is_object (value))) {
                 errprintf (error,
                          "attributes.system.environment must be a dictionary");
                 return -1;
             }
         }
-        else if (!strcmp (key, "constraints")) {
+        else if (streq (key, "constraints")) {
             if (!(json_is_object (value))) {
                 errprintf (error,
                          "attributes.system.constraints must be a dictionary");
                 return -1;
             }
         }
-        else if (!strcmp (key, "dependencies")) {
+        else if (streq (key, "dependencies")) {
             size_t index;
             json_t *el;
             const char *scheme;
@@ -398,7 +399,7 @@ static int attr_system_check (json_t *o, flux_jobspec1_error_t *error)
                 }
             }
         }
-        else if (!strcmp (key, "shell")) {
+        else if (streq (key, "shell")) {
             json_t *opt;
             if ((opt = json_object_get (value, "options"))
                 && !json_is_object (opt)) {
@@ -436,14 +437,14 @@ int flux_jobspec1_attr_check (flux_jobspec1_t *jobspec,
         goto error;
     }
     json_object_foreach (o, key, value) {
-        if (!strcmp (key, "user")) {
+        if (streq (key, "user")) {
             if (json_object_size (value) == 0) {
                 errprintf (error,
                            "if present, attributes.user must contain values");
                 goto error;
             }
         }
-        else if (!strcmp (key, "system")) {
+        else if (streq (key, "system")) {
             if (json_object_size (value) == 0) {
                 errprintf (error,
                            "if present, attributes.system must contain values");
@@ -581,9 +582,9 @@ static int flux_jobspec1_set_stdio (flux_jobspec1_t *jobspec,
 {
     char key[256];
 
-    if (!jobspec || !path || (strcmp (stdio_name, "input.stdin")
-        && strcmp (stdio_name, "output.stdout")
-        && strcmp (stdio_name, "output.stderr"))) {
+    if (!jobspec || !path || (!streq (stdio_name, "input.stdin")
+        && !streq (stdio_name, "output.stdout")
+        && !streq (stdio_name, "output.stderr"))) {
         errno = EINVAL;
         return -1;
     }
