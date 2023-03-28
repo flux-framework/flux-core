@@ -344,4 +344,48 @@ test_expect_success 'flux-top shows expected data in debug queue after cancels' 
 	test $(grep batch debugqC.out | wc -l) -eq 0 &&
 	test $(grep debug debugqC.out | wc -l) -eq 0
 '
+# for interactive test below, job submission order here is important.
+# first two jobs are to batch queue, last is to debug queue.  This
+# leads to the debug queue job normally being listed first when jobs
+# in all queues are listed.  Thus we can test that the jobs specific
+# to the batch queue are listed correctly when there is queue
+# filtering
+test_expect_success 'submit jobs to queues for interactive test' '
+	cat >batchQ.sh <<-EOT &&
+	#!/bin/sh
+	flux submit --wait-event=start sleep 300
+	touch job-queue1-has-started
+	flux queue drain
+	EOT
+	chmod +x batchQ.sh &&
+	flux batch -t30m -n1 --queue=batch batchQ.sh >jobidQ1 &&
+	$waitfile job-queue1-has-started &&
+	flux submit -n1 --queue=batch \
+		bash -c "touch job-queue2-has-started && sleep 300" >jobidQ2 &&
+	$waitfile job-queue2-has-started &&
+	flux submit -n1 --queue=debug \
+		bash -c "touch job-queue3-has-started && sleep 300" >jobidQ3 &&
+	$waitfile job-queue3-has-started
+'
+# only two batch jobs should be listed in filtered output.  See non-queue
+# based equivalent test above for description on what this is doing
+# interactively.
+test_expect_success NO_CHAIN_LINT 'flux-top can call itself recursively with queue filter' '
+	SHELL=/bin/sh &&
+	flux jobs &&
+	flux proxy $(cat jobidQ1) flux jobs -c1 -no {id} >expectedQ.id &&
+	cat <<-EOF >recurseQ.in &&
+	{ "version": 2 }
+	[0.5, "i", "j"]
+	[1.0, "i", "j"]
+	[1.5, "i", "j"]
+	[2.0, "i", "k"]
+	[2.5, "i", "\n"]
+	[3.25, "i", "q"]
+	[3.75, "i", "q"]
+	EOF
+	$runpty -o recurseQ.log --input=recurseQ.in flux top --queue=batch &&
+	grep -q $(echo $(cat expectedQ.id) | sed "s/ƒ//") recurseQ.log
+'
+
 test_done
