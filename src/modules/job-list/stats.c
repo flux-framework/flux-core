@@ -15,6 +15,8 @@
 #include <ctype.h>
 #include <flux/core.h>
 
+#include "ccan/str/str.h"
+
 #include "stats.h"
 #include "job_data.h"
 
@@ -112,9 +114,9 @@ static void stats_add (struct job_stats *stats,
         if (!job->success) {
             stats->failed++;
             if (job->exception_occurred) {
-                if (strcmp (job->exception_type, "cancel") == 0)
+                if (streq (job->exception_type, "cancel"))
                     stats->canceled++;
-                else if (strcmp (job->exception_type, "timeout") == 0)
+                else if (streq (job->exception_type, "timeout"))
                     stats->timeout++;
             }
         }
@@ -162,9 +164,9 @@ static void stats_purge (struct job_stats *stats, struct job *job)
     if (!job->success) {
         stats->failed--;
         if (job->exception_occurred) {
-            if (strcmp (job->exception_type, "cancel") == 0)
+            if (streq (job->exception_type, "cancel"))
                 stats->canceled--;
-            else if (strcmp (job->exception_type, "timeout") == 0)
+            else if (streq (job->exception_type, "timeout"))
                 stats->timeout--;
         }
     }

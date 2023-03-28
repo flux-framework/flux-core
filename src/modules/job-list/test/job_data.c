@@ -20,6 +20,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/read_all.h"
 #include "src/modules/job-list/job_data.h"
+#include "ccan/str/str.h"
 
 struct test_jobspec_corner_case {
     const char *filename;
@@ -337,7 +338,7 @@ static void test_jobspec_job_name (void)
 
         ret = parse_jobspec (job, filename);
         ok (ret == 0, "job_parse_jobspec parsed %s", filename);
-        ok (strcmp (job_name, job->name) == 0,
+        ok (streq (job_name, job->name),
             "job_parse_jobspec correctly parsed job name %s=%s",
             job_name, job->name);
 
@@ -409,7 +410,7 @@ static void test_R_ranks (void)
 
         ret = parse_R (job, filename);
         ok (ret == 0, "job_parse_R parsed %s", filename);
-        ok (strcmp (ranks, job->ranks) == 0,
+        ok (streq (ranks, job->ranks),
             "job_parse_jobspec correctly parsed job ranks %s=%s",
             ranks, job->ranks);
 
@@ -434,7 +435,7 @@ static void test_R_nodelist (void)
 
         ret = parse_R (job, filename);
         ok (ret == 0, "job_parse_R parsed %s", filename);
-        ok (strcmp (nodelist, job->nodelist) == 0,
+        ok (streq (nodelist, job->nodelist),
             "job_parse_jobspec correctly parsed job nodelist %s=%s",
             nodelist, job->nodelist);
 
