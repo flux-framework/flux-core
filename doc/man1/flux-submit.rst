@@ -35,6 +35,8 @@ The available OPTIONS are detailed below.
 
 .. include:: common/submit-process-resource-limits.rst
 
+.. include:: common/submit-job-environment-variables.rst
+
 .. include:: common/submit-exit-status.rst
 
 .. include:: common/submit-other-options.rst
