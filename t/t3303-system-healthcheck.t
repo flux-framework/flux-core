@@ -103,6 +103,17 @@ test_expect_success 'flux overlay status --color option works' '
 	flux overlay status --color --highlight=0 | grep "\["
 '
 
+test_expect_success 'overlay whatsup basics work, reports everything up' '
+	flux overlay whatsup | grep "up:" | grep "15:" &&
+	flux overlay whatsup | grep "up:" | grep "fake\[0-14\]" &&
+	flux overlay whatsup --ranks | grep "up:" | grep "0-14" &&
+	flux overlay whatsup | grep "down:" | grep "0:" &&
+	flux overlay whatsup --up | grep "15: fake\[0-14\]" &&
+	flux overlay whatsup --down | grep "^0:" &&
+	flux overlay whatsup --up --count | grep "^15$" &&
+	flux overlay whatsup --down --count | grep "^0$"
+'
+
 test_expect_success 'stop broker 3 with children 7,8' '
 	$startctl kill 3 15
 '
@@ -176,6 +187,31 @@ test_expect_success 'flux overlay status: 0,1:partial, 3,7-8:offline, rest:full'
 	grep "14 fake14: full" health4.out
 '
 
+# Poll for a specific number of up ranks
+# Usage: wait_up_count target tries
+wait_up_count() {
+	local expected=$1
+	local tries=$2
+	local count
+	while test $tries -gt 0; do
+		count=$(flux overlay whatsup --up --count)
+		test $count -eq $expected && return 0
+		sleep 0.25
+		tries=$(($tries-1))
+	done
+	return 1
+}
+
+
+# to avoid raciness we spin for a bit until broker groups are synced
+test_expect_success 'overlay whatsup reports 3 ranks down' '
+	wait_up_count 12 20 &&
+	flux overlay whatsup | grep "up:" | grep "12:" &&
+	flux overlay whatsup | grep "up:" | grep "fake\[0-2,4-6,9-14\]" &&
+	flux overlay whatsup | grep "down:" | grep "3:" &&
+	flux overlay whatsup | grep "down:" | grep "fake\[3,7-8\]"
+'
+
 test_expect_success 'kill broker 14' '
 	$startctl kill 14 9
 '
@@ -204,6 +240,14 @@ test_expect_success 'flux overlay status -vv' '
 '
 test_expect_success 'flux overlay status -v' '
 	flux overlay status --timeout=0 -v
+'
+
+test_expect_success 'overlay whatsup reports 4 ranks down' '
+	wait_up_count 11 20 &&
+	flux overlay whatsup | grep "up:" | grep "11:" &&
+	flux overlay whatsup | grep "up:" | grep "fake\[0-2,4-6,9-13\]" &&
+	flux overlay whatsup | grep "down:" | grep "4:" &&
+	flux overlay whatsup | grep "down:" | grep "fake\[3,7-8,14\]"
 '
 
 test_expect_success 'flux overlay lookup with no target fails' '
