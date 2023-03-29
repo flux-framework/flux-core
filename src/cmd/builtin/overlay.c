@@ -918,6 +918,7 @@ static int subcmd_disconnect (optparse_t *p, int ac, char *av[])
 
     return 0;
 }
+
 int cmd_overlay (optparse_t *p, int argc, char *argv[])
 {
     log_init ("flux-overlay");
