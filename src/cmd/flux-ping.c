@@ -111,12 +111,12 @@ void ping_continuation (flux_future_t *f, void *arg)
     int seq;
     struct ping_data *pdata = flux_future_aux_get (f, "ping");
     tstat_t *tstat = pdata->tstat;
-    uint32_t rolemask, userid;
+    uint32_t rolemask, userid, rank;
     char ubuf[32];
     char rbuf[32];
 
     if (flux_rpc_get_unpack (f,
-                             "{ s:i s:I s:I s:s s:s s:i s:i !}",
+                             "{ s:i s:I s:I s:s s:s s:i s:i s:i !}",
                              "seq",
                              &seq,
                              "time.tv_sec",
@@ -130,7 +130,9 @@ void ping_continuation (flux_future_t *f, void *arg)
                              "userid",
                              &userid,
                              "rolemask",
-                             &rolemask) < 0)
+                             &rolemask,
+                             "rank",
+                             &rank) < 0)
         log_err_exit ("%s%s",
                       rank_bang_str (ctx->nodeid, rbuf, sizeof (rbuf)),
                       ctx->topic);
@@ -152,7 +154,7 @@ void ping_continuation (flux_future_t *f, void *arg)
     pdata->rpc_count++;
 
     printf ("%s%s pad=%zu%s seq=%d time=%0.3f ms (%s)\n",
-            rank_bang_str (ctx->nodeid, rbuf, sizeof (rbuf)),
+            rank_bang_str (rank, rbuf, sizeof (rbuf)),
             ctx->topic,
             strlen (ctx->pad),
             ctx->userid_flag
