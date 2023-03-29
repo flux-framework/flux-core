@@ -65,24 +65,28 @@ test_expect_success 'ping fails on invalid target' '
 
 test_expect_success 'ping output format for "any" rank is correct (default)' '
 	run_timeout 15 flux ping --count 1 broker 1>stdout &&
+        head -n 1 stdout | grep -q "any!broker" &&
         grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for "any" rank is correct (format 1)' '
 	run_timeout 15 flux ping --count 1 --rank any broker 1>stdout &&
+        head -n 1 stdout | grep -q "any!broker" &&
         grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for "any" rank is correct (format 2)' '
 	run_timeout 15 flux ping --count 1 any!broker 1>stdout &&
+        head -n 1 stdout | grep -q "any!broker" &&
         grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for "any" rank is correct (format 3)' '
 	run_timeout 15 flux ping --count 1 any 1>stdout &&
+        head -n 1 stdout | grep -q "any!broker" &&
         grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
@@ -138,10 +142,16 @@ test_expect_success 'ping help output works' '
 '
 
 test_expect_success 'ping works with hostname' '
-        flux ping --count=1 $(hostname)
+        hostname=$(hostname) &&
+        flux ping --count=1 ${hostname} 1>stdout &&
+        head -n 1 stdout | grep -q "${hostname}!broker" &&
+        head -n 1 stdout | grep -q "(rank 0)"
 '
 test_expect_success 'ping works with hostname!service' '
-        flux ping --count=1 "$(hostname)!broker"
+        hostname=$(hostname) &&
+        flux ping --count=1 "${hostname}!broker" 1>stdout &&
+        head -n 1 stdout | grep -q "${hostname}!broker" &&
+        head -n 1 stdout | grep -q "(rank 0)"
 '
 test_expect_success 'ping fails with unknown hostname' '
         test_must_fail flux ping --count=1 "notmyhost!broker"
