@@ -12,7 +12,6 @@ import argparse
 import logging
 import os
 import re
-import sre_constants
 import sys
 from itertools import islice
 from pathlib import PurePath
@@ -265,7 +264,7 @@ def main():
     fh = flux.Flux()
     try:
         pgrep = JobPgrep(args.expression)
-    except (ValueError, SyntaxError, TypeError, sre_constants.error) as exc:
+    except (ValueError, SyntaxError, TypeError, re.error) as exc:
         LOGGER.error(f"expression error: {exc}")
         sys.exit(2)
 
