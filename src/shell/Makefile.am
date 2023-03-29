@@ -20,7 +20,6 @@ shellrcdir = \
 
 nobase_dist_shellrc_SCRIPTS = \
 	initrc.lua \
-	lua.d/mvapich.lua \
 	lua.d/intel_mpi.lua \
 	lua.d/openmpi.lua \
 	lua.d/mpi/spectrum.lua

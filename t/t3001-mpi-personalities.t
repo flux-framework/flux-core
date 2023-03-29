@@ -16,23 +16,8 @@ run_program() {
 	run_timeout $timeout flux run $OPTS -n${ntasks} -N${nnodes} $*
 }
 
-CONF_PMI_LIBRARY_PATH=$(flux getattr conf.pmi_library_path | sed 's|/libpmi.so||')
-
-test_expect_success 'mvapich mpi prepends to LD_LIBRARY_PATH for tasks' '
-	run_program \
-	  15 ${SIZE} ${SIZE} printenv LD_LIBRARY_PATH > mvapich.ld.out &&
-	result="$(uniq mvapich.ld.out | cut -d: -f1)" &&
-	echo $result &&
-	echo $CONF_PMI_LIBRARY_PATH &&
-	test "$result" = $CONF_PMI_LIBRARY_PATH
-'
-
-test_expect_success 'mvapich mpi sets MPIRUN_RANK for tasks' '
-	run_program 15 ${SIZE} ${SIZE} printenv MPIRUN_RANK \
-	  | sort > mvapich.rank.out &&
-	test_debug "cat mvapich.rank.out" &&
-	printf "0\n1\n2\n3\n" > mvapich.rank.expected &&
-	test_cmp mvapich.rank.expected mvapich.rank.out
+test_expect_success 'LD_LIBRARY_PATH is not being set by MPI personalties' '
+	test_must_fail flux run --env-remove=* printenv LD_LIBRARY_PATH
 '
 
 test_expect_success "intel mpi rewrites I_MPI_MPI_LIBRARY" '
