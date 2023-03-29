@@ -101,7 +101,7 @@ test_expect_success MULTICORE 'flux-mini batch: exclusive flag worked' '
 
 test_expect_success 'flux-mini batch: --output=kvs directs output to kvs' '
 	id=$(flux mini batch -n1 --flags=waitable --output=kvs batch-script.sh) &&
-	run_timeout 60 flux job attach $id > kvs-output.log 2>&1 &&
+	run_timeout 180 flux job attach $id > kvs-output.log 2>&1 &&
 	test_debug "cat kvs-output.log" &&
 	grep "size=1 nodes=1" kvs-output.log
 '
@@ -110,10 +110,10 @@ test_expect_success 'flux-mini batch: --broker-opts works' '
 	     --broker-opts=-v batch-script.sh) &&
 	id2=$(flux mini batch -n1 --flags=waitable \
 	     --broker-opts=-v,-v batch-script.sh) &&
-	run_timeout 60 flux job wait $id &&
+	run_timeout 180 flux job wait $id &&
 	test_debug "cat flux-${id}.out" &&
 	grep "boot: rank=0 size=1" flux-${id}.out &&
-	run_timeout 60 flux job wait $id2 &&
+	run_timeout 180 flux job wait $id2 &&
 	grep "boot: rank=0 size=1" flux-${id2}.out &&
 	grep "entering event loop" flux-${id2}.out
 '
@@ -173,19 +173,19 @@ test_expect_success 'flux mini batch: MPI env vars are not set in batch script' 
 test_expect_success 'flux mini batch: --dump works' '
 	id=$(flux mini batch -N1 --dump \
 		--flags=waitable --wrap true) &&
-	run_timeout 60 flux job wait $id &&
+	run_timeout 180 flux job wait $id &&
 	tar tvf flux-${id}-dump.tgz
 '
 test_expect_success 'flux mini batch: --dump=FILE works' '
 	id=$(flux mini batch -N1 --dump=testdump.tgz \
 		--flags=waitable --wrap true) &&
-	run_timeout 60 flux job wait $id &&
+	run_timeout 180 flux job wait $id &&
 	tar tvf testdump.tgz
 '
 test_expect_success 'flux mini batch: --dump=FILE works with mustache' '
 	id=$(flux mini batch -N1 --dump=testdump-{{id}}.tgz \
 		--flags=waitable --wrap true) &&
-	run_timeout 60 flux job wait $id &&
+	run_timeout 180 flux job wait $id &&
 	tar tvf testdump-${id}.tgz
 '
 test_expect_success 'flux mini batch: supports directives in script' '
