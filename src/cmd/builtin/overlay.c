@@ -13,6 +13,7 @@
 #endif
 #include <unistd.h>
 #include <jansson.h>
+#include <math.h>
 #include <flux/core.h>
 
 #include "src/common/libccan/ccan/str/str.h"
@@ -21,6 +22,8 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/librlist/rlist.h"
+#include "src/common/libidset/idset.h"
+#include "src/common/libhostlist/hostlist.h"
 
 #include "builtin.h"
 
@@ -78,6 +81,22 @@ static struct optparse_option status_opts[] = {
 static struct optparse_option disconnect_opts[] = {
     { .name = "parent", .key = 'r', .has_arg = 1, .arginfo = "NODEID",
       .usage = "Set parent rank to NODEID (default: determine from topology)",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option whatsup_opts[] = {
+    { .name = "up", .key = 'u', .has_arg = 0,
+      .usage = "Output only up hosts",
+    },
+    { .name = "down", .key = 'd', .has_arg = 0,
+      .usage = "Output only down hosts",
+    },
+    { .name = "ranks", .key = 'r', .has_arg = 0,
+      .usage = "Output ranks instead of hosts",
+    },
+    { .name = "count", .key = 'c', .has_arg = 0,
+      .usage = "Only output count",
     },
     OPTPARSE_TABLE_END
 };
@@ -919,6 +938,104 @@ static int subcmd_disconnect (optparse_t *p, int ac, char *av[])
     return 0;
 }
 
+static int subcmd_whatsup (optparse_t *p, int ac, char *av[])
+{
+    flux_t *h = builtin_get_flux_handle (p);
+    bool up = optparse_hasopt (p, "up");
+    bool down = optparse_hasopt (p, "down");
+    bool ranks = optparse_hasopt (p, "ranks");
+    bool count = optparse_hasopt (p, "count");
+    flux_future_t *f;
+    const char *members, *val;
+    struct idset *idset_up, *idset_down;
+    struct hostlist *hl_up = NULL, *hl_down = NULL;
+    char *up_str = NULL, *down_str = NULL;
+    size_t up_count, down_count;
+    size_t overlay_size;
+    char *endptr;
+
+    /* get currently "up" ranks */
+    if (!(f = flux_rpc_pack (h,
+                             "groups.get",
+                             0, /* must send to rank 0 */
+                             0,
+                             "{s:s}",
+                             "name", "broker.online")))
+        log_err_exit ("groups.get");
+    if (flux_rpc_get_unpack (f, "{s:s}", "members", &members) < 0)
+        log_err_exit ("groups.get: %s", future_strerror (f, errno));
+
+    /* get max ranks size */
+    if (!(val = flux_attr_get (h, "size")))
+        log_err_exit ("cannot get size attr");
+
+    errno = 0;
+    overlay_size = strtoul (val, &endptr, 10);
+    if (errno != 0 || *endptr != '\0' || overlay_size == 0)
+        log_msg_exit ("invalid overlay size retrieved: %s", val);
+
+    if (!(idset_up = idset_decode (members)))
+        log_msg_exit ("cannot decode up idset %s", members);
+
+    /* determine down nodes */
+    if (!(idset_down = idset_create (overlay_size, 0)))
+        log_err_exit ("cannot create idset");
+    if (idset_range_set (idset_down, 0, overlay_size - 1) < 0)
+        log_err_exit ("cannot set idset range");
+    if (idset_subtract (idset_down, idset_up) < 0)
+        log_err_exit ("cannot construct idset down");
+
+    up_count = idset_count (idset_up);
+    down_count = idset_count (idset_down);
+    up_str = idset_encode (idset_up, IDSET_FLAG_RANGE);
+    down_str = idset_encode (idset_down, IDSET_FLAG_RANGE);
+
+    if (!ranks) {
+        flux_error_t error;
+        char *tmp = up_str;
+        if (!(up_str = flux_hostmap_lookup (h, tmp, &error)))
+            log_msg_exit ("error converting ranks to hosts: %s", error.text);
+        free (tmp);
+        tmp = down_str;
+        if (!(down_str = flux_hostmap_lookup (h, tmp, &error)))
+            log_msg_exit ("error converting ranks to hosts: %s", error.text);
+        free (tmp);
+    }
+
+    /* output based on user inputs */
+    if (up) {
+        if (count)
+            printf ("%zu\n", up_count);
+        else
+            printf ("%zu: %s\n", up_count, up_str);
+    }
+    else if (down) {
+        if (count)
+            printf ("%zu\n", down_count);
+        else
+            printf ("%zu: %s\n", down_count, down_str);
+    }
+    else {
+        if (count) {
+            printf ("up: %zu\n", up_count);
+            printf ("down: %zu\n", down_count);
+        }
+        else {
+            printf ("up: %zu: %s\n", up_count, up_str);
+            printf ("down: %zu: %s\n", down_count, down_str);
+        }
+    }
+
+    flux_future_destroy (f);
+    idset_destroy (idset_up);
+    idset_destroy (idset_down);
+    hostlist_destroy (hl_up);
+    hostlist_destroy (hl_down);
+    free (up_str);
+    free (down_str);
+    return 0;
+}
+
 int cmd_overlay (optparse_t *p, int argc, char *argv[])
 {
     log_init ("flux-overlay");
@@ -959,6 +1076,13 @@ static struct optparse_subcommand overlay_subcmds[] = {
       subcmd_disconnect,
       0,
       disconnect_opts,
+    },
+    { "whatsup",
+      "[OPTIONS]",
+      "show up vs down status of all hosts",
+      subcmd_whatsup,
+      0,
+      whatsup_opts,
     },
     OPTPARSE_SUBCMD_END
 };
