@@ -109,6 +109,10 @@ COMMANDS
    only those ranks that are not already drained or do not have a *reason* set
    have their *reason* updated.
 
+   Resources cannot be both excluded and drained, so **flux resource drain**
+   will also fail if any *targets* are currently excluded by configuration.
+   There is no option to force an excluded node into the drain state.
+
    This command, when run with arguments, is restricted to the Flux instance
    owner.
 
