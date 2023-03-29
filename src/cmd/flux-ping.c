@@ -216,36 +216,47 @@ void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     }
 }
 
-int parse_nodeid (struct ping_ctx *ctx, const char *input, uint32_t *nodeid)
+int parse_nodeid (struct ping_ctx *ctx,
+                  const char *input,
+                  uint32_t *nodeid,
+                  char **nodeidstr,
+                  char **suffixstr)
 {
     int rank;
     char *endptr;
 
     if (!strcmp (input, "any")) {
         *nodeid = FLUX_NODEID_ANY;
+        (*nodeidstr) = xasprintf ("%s", "any");
         return 0;
     }
     if (!strcmp (input, "upstream")) {
         *nodeid = FLUX_NODEID_UPSTREAM;
+        (*nodeidstr) = xasprintf ("%s", "upstream");
         return 0;
     }
     if ((rank = flux_get_rankbyhost (ctx->h, input)) >= 0) {
         *nodeid = rank;
+        (*nodeidstr) = xasprintf ("%s", input);
+        (*suffixstr) = xasprintf (" (rank %d)", rank);
         return 0;
     }
     errno = 0;
     rank = strtol (input, &endptr, 10);
     if (errno == 0 && *endptr == '\0' && rank >= 0) {
         *nodeid = rank;
+        (*nodeidstr) = xasprintf ("%d", rank);
         return 0;
     }
     return -1;
 }
 
-void parse_target (struct ping_ctx *ctx, const char *target)
+void parse_target (struct ping_ctx *ctx, const char *target, char **header)
 {
     char *cpy;
     char *service;
+    char *nodeidstr = NULL;
+    char *suffixstr = NULL;
 
     if (!(cpy = strdup (target)))
         log_err_exit ("out of memory");
@@ -253,19 +264,26 @@ void parse_target (struct ping_ctx *ctx, const char *target)
     /* TARGET specifies nodeid!service */
     if ((service = strchr (cpy, '!'))) {
         *service++ = '\0';
-        if (parse_nodeid (ctx, cpy, &ctx->nodeid) < 0)
+        if (parse_nodeid (ctx, cpy, &ctx->nodeid, &nodeidstr, &suffixstr) < 0)
             log_msg_exit ("invalid nodeid/host: '%s'", cpy);
     }
     /* TARGET only specifies service, assume nodeid is ANY */
-    else if (parse_nodeid (ctx, cpy, &ctx->nodeid) < 0) {
+    else if (parse_nodeid (ctx, cpy, &ctx->nodeid, &nodeidstr, &suffixstr) < 0) {
         service = cpy;
         ctx->nodeid = FLUX_NODEID_ANY;
+        nodeidstr = xasprintf ("%s", "any");
     }
     /* TARGET only specifies nodeid, assume service is "broker" */
     else
         service = "broker";
     ctx->topic = xasprintf ("%s.ping", service);
+    (*header) = xasprintf ("flux-ping %s!%s%s",
+                           nodeidstr,
+                           service,
+                           suffixstr ? suffixstr : "");
     free (cpy);
+    free (nodeidstr);
+    free (suffixstr);
 }
 
 int main (int argc, char *argv[])
@@ -277,6 +295,7 @@ int main (int argc, char *argv[])
     struct ping_ctx ctx;
     int optindex;
     char *target;
+    char *header = NULL;
 
     memset (&ctx, 0, sizeof (ctx));
 
@@ -339,8 +358,9 @@ int main (int argc, char *argv[])
 
     /* Set ctx.nodeid and ctx.topic from TARGET argument
      */
-    parse_target (&ctx, target);
+    parse_target (&ctx, target, &header);
 
+    printf ("%s\n", header);
     /* In batch mode, requests are sent before reactor is started
      * to process responses.  o/w requests are set in a timer watcher.
      */
@@ -367,6 +387,7 @@ int main (int argc, char *argv[])
     free (ctx.pad);
 
     free (target);
+    free (header);
     flux_close (ctx.h);
     optparse_destroy (opts);
     log_fini ();
