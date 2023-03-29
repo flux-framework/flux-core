@@ -477,6 +477,46 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
     return 0;
 }
 
+static int undrain_rank_idset (struct drain *drain,
+                               const flux_msg_t *msg,
+                               struct idset *idset)
+{
+    char *idstr;
+    int rc;
+
+    if (idset_count (idset) == 0)
+        return 0;
+    if (update_draininfo_idset (drain, idset, false, 0., NULL, 1) < 0)
+        return -1;
+    if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE)))
+        return -1;
+    rc = reslog_post_pack (drain->ctx->reslog,
+                           msg,
+                           0.,
+                           "undrain",
+                           "{s:s}",
+                           "idset",
+                           idstr);
+    free (idstr);
+    return rc;
+}
+
+int undrain_ranks (struct drain *drain, const struct idset *ranks)
+{
+    struct idset *drained = NULL;
+    struct idset *undrain_ranks = NULL;
+    int rc = -1;
+
+    if (!(drained = drain_get (drain))
+        || !(undrain_ranks = idset_intersect (ranks, drained)))
+        goto out;
+    rc = undrain_rank_idset (drain, NULL, undrain_ranks);
+out:
+    idset_destroy (drained);
+    idset_destroy (undrain_ranks);
+    return rc;
+}
+
 /* Un-drain a set of ranked execution targets.
  * If any of the ranks are not drained, fail the whole request.
  */
@@ -489,7 +529,6 @@ static void undrain_cb (flux_t *h,
     const char *s;
     struct idset *idset = NULL;
     unsigned int id;
-    char *idstr = NULL;
     const char *errstr = NULL;
     flux_error_t error;
 
@@ -513,25 +552,13 @@ static void undrain_cb (flux_t *h,
         }
         id = idset_next (idset, id);
     }
-    if (update_draininfo_idset (drain, idset, false, 0., NULL, 1) < 0)
+    if (undrain_rank_idset (drain, msg, idset) < 0)
         goto error;
-    if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE)))
-        goto error;
-    if (reslog_post_pack (drain->ctx->reslog,
-                          msg,
-                          0.,
-                          "undrain",
-                          "{s:s}",
-                          "idset",
-                          idstr) < 0)
-        goto error;
-    free (idstr);
     idset_destroy (idset);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to undrain request");
-    free (idstr);
     idset_destroy (idset);
 }
 
