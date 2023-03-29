@@ -31,6 +31,7 @@
 #include "exclude.h"
 #include "rutil.h"
 #include "inventory.h"
+#include "drain.h"
 
 struct exclude {
     struct resource_ctx *ctx;
@@ -83,6 +84,12 @@ int exclude_update (struct exclude *exclude,
             flux_log_error (h, "error posting exclude event");
         }
         free (add_s);
+        /*  Added exclude ranks can no longer be drained:
+         */
+        if (undrain_ranks (exclude->ctx->drain, add) < 0)
+            flux_log_error (h,
+                            "exclude: failed to undrain ranks in %s",
+                            add_s);
         idset_destroy (add);
     }
     if (del) {
