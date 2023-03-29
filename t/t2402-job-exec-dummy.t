@@ -71,7 +71,20 @@ test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
 	flux cancel $id &&
 	(flux job attach -vEX $id >kill.output 2>&1 || true) &&
 	test_debug "cat kill.output" &&
-	grep "trap-sigterm got SIGTERM" kill.output &&
+	grep "trap-sigterm got SIGTERM" kill.output
+'
+test_expect_success 'job-exec: job shell eventually killed by SIGKILL' '
+	id=$(flux submit --wait-event=start -n1 \
+	     sh -c "trap \"\" SIGTERM;
+                    flux kvs put ready=1;
+	            while true; do sleep 1; done") &&
+	flux kvs get --waitcreate \
+		--namespace=$(flux job namespace $id) \
+		ready &&
+	flux cancel $id &&
+	flux job wait-event -vt 15 $id clean &&
+	flux dmesg | grep $(flux job id $id) &&
+	test_expect_code 137 flux job status $id &&
 	flux module reload job-exec
 '
 test_expect_success 'job-exec: invalid job shell generates exception' '

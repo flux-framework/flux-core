@@ -136,6 +136,7 @@ void jobinfo_decref (struct jobinfo *job)
         idset_destroy (job->critical_ranks);
         eventlogger_destroy (job->ev);
         flux_watcher_destroy (job->kill_timer);
+        flux_watcher_destroy (job->kill_shell_timer);
         flux_watcher_destroy (job->expiration_timer);
         zhashx_delete (job->ctx->jobs, &job->id);
         if (job->impl && job->impl->exit)
@@ -355,29 +356,61 @@ static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
     }
 }
 
-static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                           int revents, void *arg)
+static void kill_shell_timer_cb (flux_reactor_t  *r,
+                                 flux_watcher_t *w,
+                                 int revents,
+                                 void *arg)
 {
     struct jobinfo *job = arg;
     flux_log (job->h,
               LOG_DEBUG,
-              "Sending SIGKILL to job %ju",
+              "Sending SIGKILL to job shell for job %ju",
               (uintmax_t) job->id);
     (*job->impl->kill) (job, SIGKILL);
+}
+
+static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
+                           int revents, void *arg)
+{
+    struct jobinfo *job = arg;
+    flux_future_t *f;
+    flux_log (job->h,
+              LOG_DEBUG,
+              "Sending SIGKILL to job %ju",
+              (uintmax_t) job->id);
+    if (!(f = flux_job_kill (job->h, job->id, SIGKILL))) {
+        flux_log_error (job->h,
+                        "flux_job_kill (%ju, SIGKILL)",
+                        job->id);
+        return;
+    }
+    /* Open loop */
+    flux_future_destroy (f);
 }
 
 
 static void jobinfo_killtimer_start (struct jobinfo *job, double after)
 {
+    flux_reactor_t *r = flux_get_reactor (job->h);
+
     /* Only start kill timer if not already running */
     if (job->kill_timer == NULL) {
-        job->kill_timer = flux_timer_watcher_create (flux_get_reactor (job->h),
+        job->kill_timer = flux_timer_watcher_create (r,
                                                      after,
                                                      0.,
                                                      kill_timer_cb,
                                                      job);
         flux_watcher_start (job->kill_timer);
     }
+    if (job->kill_shell_timer == NULL) {
+        job->kill_shell_timer = flux_timer_watcher_create (r,
+                                                           after*5,
+                                                           0.,
+                                                           kill_shell_timer_cb,
+                                                           job);
+        flux_watcher_start (job->kill_shell_timer);
+    }
+
 }
 
 static void timelimit_cb (flux_reactor_t *r,
