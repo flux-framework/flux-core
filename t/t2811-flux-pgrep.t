@@ -18,7 +18,7 @@ test_expect_success 'flux-pgrep returns 1 when no jobs match' '
 	test_expect_code 1 flux pgrep foo
 '
 test_expect_success 'flux-pgrep works for job nanes' '
-	flux bulksubmit --job-name={} sleep 60 \
+	flux bulksubmit --job-name={} sleep 300 \
 		::: testA testB foo &&
 	flux pgrep ^test > pgrep.out &&
 	test $(wc -l <pgrep.out) -eq 2
@@ -35,6 +35,17 @@ test_expect_success 'flux-pgrep --filter works' '
 	flux pgrep --filter=sched,run . >pgrep-filtered.out &&
 	test_debug "cat pgrep-filtered.out" &&
 	test $(wc -l <pgrep-filtered.out) -eq 3
+'
+test_expect_success 'flux-pgrep default override works' '
+	FLUX_PGREP_FORMAT_DEFAULT="{id} {id}" flux pgrep -a . >default_override.out &&
+	test_debug "cat default_override.out" &&
+	grep "JOBID JOBID" default_override.out
+'
+test_expect_success 'flux-pgrep default override w/ named format works' '
+	FLUX_PGREP_FORMAT_DEFAULT=full flux pgrep -a . >default_override_named.out &&
+	test_debug "cat default_override_named.out" &&
+	grep "TIME" default_override_named.out &&
+	grep "INFO" default_override_named.out
 '
 test_expect_success 'flux-pkill works' '
 	flux pkill ^test &&

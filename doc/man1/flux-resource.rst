@@ -128,10 +128,13 @@ OUTPUT FORMAT
 
 The *--format* option can be used to specify an output format using Python's
 string format syntax or a defined format by name. For a list of built-in and
-configured formats use ``-o help``.  A configuration snippet for an existing
-named format may be generated with ``--format=get-config=NAME``.  See
-:man1:`flux-jobs` *OUTPUT FORMAT* section for a detailed description of this
-syntax.
+configured formats use ``-o help``.  An alternate default format can be set via
+the FLUX_RESOURCE_STATUS_FORMAT_DEFAULT, FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT, and
+FLUX_RESOURCE_LIST_FORMAT_DEFAULT environment variables (for ``flux resource
+status``, ``flux resource drain``, and ``flux resource list`` respectively).  A
+configuration snippet for an existing named format may be generated with
+``--format=get-config=NAME``.  See :man1:`flux-jobs` *OUTPUT FORMAT* section for
+a detailed description of this syntax.
 
 Resources are combined into a single line of output when possible depending on
 the supplied output format.  Resource counts are not included in the

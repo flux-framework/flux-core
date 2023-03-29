@@ -1004,6 +1004,16 @@ test_expect_success 'flux-jobs emits empty string for special case t_estimate' '
 	test_cmp t_estimate_annotations.out t_estimate_annotations.exp
 '
 
+test_expect_success 'FLUX_JOBS_FORMAT_DEFAULT works' '
+	FLUX_JOBS_FORMAT_DEFAULT="{id} {id}" flux jobs > env_format.out &&
+	grep "JOBID JOBID" env_format.out
+'
+
+test_expect_success 'FLUX_JOBS_FORMAT_DEFAULT works with named format' '
+	FLUX_JOBS_FORMAT_DEFAULT=long flux jobs > env_format2.out &&
+	grep "STATUS" env_format2.out
+'
+
 #
 # format header tests.
 #

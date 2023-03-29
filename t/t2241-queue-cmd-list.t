@@ -16,6 +16,13 @@ test_expect_success 'flux-queue: default lists expected fields' '
 	grep NGPUS default.out
 '
 
+test_expect_success 'flux-queue: FLUX_QUEUE_LIST_FORMAT_DEFAULT works' '
+	FLUX_QUEUE_LIST_FORMAT_DEFAULT="{limits.min.nnodes} {limits.max.ngpus}" \
+		flux queue list > default_override.out &&
+	grep MINNODES default_override.out &&
+	grep MAXGPUS default_override.out
+'
+
 test_expect_success 'flux-queue: --no-header works' '
 	flux queue list --no-header > default_no_header.out &&
 	test_must_fail grep DEFAULTTIME default_no_header.out &&

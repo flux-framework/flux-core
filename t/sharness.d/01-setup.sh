@@ -10,6 +10,14 @@ unset FLUX_MODULE_PATH
 unset FLUX_PMI_CLIENT_SEARCHPATH
 unset FLUX_PMI_CLIENT_METHODS
 
+# Unset any user defined output defaults, since that may mess up tests
+unset FLUX_JOBS_FORMAT_DEFAULT
+unset FLUX_RESOURCE_LIST_FORMAT_DEFAULT
+unset FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT
+unset FLUX_RESOURCE_STATUS_FORMAT_DEFAULT
+unset FLUX_QUEUE_LIST_FORMAT_DEFAULT
+unset FLUX_PGREP_FORMAT_DEFAULT
+
 #
 #  FLUX_BUILD_DIR and FLUX_SOURCE_DIR are set to build and source paths
 #  (based on current directory)

@@ -8,6 +8,32 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 
 test_under_flux 4 full
 
+test_expect_success 'flux resource list: default lists some expected fields' '
+	flux resource list > default.out &&
+	grep STATE default.out &&
+	grep NNODES default.out &&
+	grep NCORES default.out
+'
+
+test_expect_success 'flux resource list: FLUX_RESOURCE_LIST_FORMAT_DEFAULT works' '
+	FLUX_RESOURCE_LIST_FORMAT_DEFAULT="{nodelist} {nodelist}" \
+		flux resource list > default_override.out &&
+	grep "NODELIST NODELIST" default_override.out
+'
+
+test_expect_success 'flux resource list: FLUX_RESOURCE_LIST_FORMAT_DEFAULT works w/ named format' '
+	FLUX_RESOURCE_LIST_FORMAT_DEFAULT=rlist \
+		flux resource list > default_override_named.out &&
+	grep -w "LIST" default_override_named.out
+'
+
+test_expect_success 'flux resource list: --no-header works' '
+	flux resource list --no-header > default_no_header.out &&
+	test_must_fail grep STATE default_no_header.out &&
+	test_must_fail grep NNODES default_no_header.out &&
+	test_must_fail grep NCORES default_no_header.out
+'
+
 # Use a static format to avoid breaking output if default flux-resource list
 #  format ever changes
 FORMAT="{state:>10} {properties:<10} {nnodes:>6} {ncores:>8} {ngpus:>8}"

@@ -61,7 +61,9 @@ class FluxPgrepConfig(UtilConfig):
 
     def __init__(self):
         initial_dict = {"formats": dict(self.builtin_formats)}
-        super().__init__(name="flux-jobs", initial_dict=initial_dict)
+        super().__init__(
+            name="flux-jobs", toolname="flux-pgrep", initial_dict=initial_dict
+        )
 
     def validate(self, path, config):
         """Validate a loaded flux-pgrep config file as dictionary"""
@@ -70,6 +72,9 @@ class FluxPgrepConfig(UtilConfig):
                 self.validate_formats(path, value)
             else:
                 raise ValueError(f"{path}: invalid key {key}")
+
+    def get_default(self):
+        return self.builtin_formats["default"]["format"]
 
 
 class JobPgrep:
@@ -275,7 +280,12 @@ def main():
 
     sformatter = JobInfoFormat(formatter.filter_empty(jobs))
 
-    if args.format == "default":
+    # "default" can be overridden by environment variable, so check if
+    # it's different than the builtin default
+    if (
+        args.format == "default"
+        and FluxPgrepConfig().get_default() == sformatter.get_format(orig=True)
+    ):
         args.no_header = True
 
     sformatter.print_items(jobs, no_header=args.no_header)
