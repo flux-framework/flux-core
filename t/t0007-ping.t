@@ -65,25 +65,25 @@ test_expect_success 'ping fails on invalid target' '
 
 test_expect_success 'ping output format for "any" rank is correct (default)' '
 	run_timeout 15 flux ping --count 1 broker 1>stdout &&
-        grep -q "^broker.ping" stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for "any" rank is correct (format 1)' '
 	run_timeout 15 flux ping --count 1 --rank any broker 1>stdout &&
-        grep -q "^broker.ping" stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for "any" rank is correct (format 2)' '
 	run_timeout 15 flux ping --count 1 any!broker 1>stdout &&
-        grep -q "^broker.ping" stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for "any" rank is correct (format 3)' '
 	run_timeout 15 flux ping --count 1 any 1>stdout &&
-        grep -q "^broker.ping" stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
@@ -116,19 +116,19 @@ test_expect_success 'ping with "upstream" fails on rank 0' '
 
 test_expect_success 'ping with "upstream" works (format 1)' '
         run_timeout 15 flux exec -n --rank 1 flux ping --count 1 --rank upstream broker 1>stdout &&
-        grep -q "^upstream!broker.ping" stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping with "upstream" works (format 2)' '
         run_timeout 15 flux exec -n --rank 1 flux ping --count 1 upstream!broker 1>stdout &&
-        grep -q "^upstream!broker.ping" stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping with "upstream" works (format 3)' '
         run_timeout 15 flux exec -n --rank 1 flux ping --count 1 upstream 1>stdout &&
-        grep -q "^upstream!broker.ping" stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
