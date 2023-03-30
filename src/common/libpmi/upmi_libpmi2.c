@@ -1,0 +1,316 @@
+/************************************************************\
+ * Copyright 2022 Lawrence Livermore National Security, LLC
+ * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+ *
+ * This file is part of the Flux resource manager framework.
+ * For details, see https://github.com/flux-framework.
+ *
+ * SPDX-License-Identifier: LGPL-3.0
+\************************************************************/
+
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
+#include <stdlib.h>
+#include <errno.h>
+#include <dlfcn.h>
+#include <link.h>
+
+#include "src/common/libutil/errprintf.h"
+#include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
+
+#include "simple_client.h"
+#include "pmi_strerror.h"
+#include "pmi2.h"
+#include "upmi.h"
+#include "upmi_plugin.h"
+
+struct plugin_ctx {
+    void *dso;
+    int (*init) (int *spawned, int *size, int *rank, int *appnum);
+    int (*finalize) (void);
+    int (*job_getid) (char *jobid, int jobid_size);
+    int (*kvs_put) (const char *key, const char *value);
+    int (*kvs_fence) (void);
+    int (*kvs_get) (const char *jobid,
+                    int src_pmi_id,
+                    const char *key,
+                    char *value,
+                    int maxvalue,
+                    int *vallen);
+    int (*getjobattr) (const char *name,
+                       const char *value,
+                       int valuelen,
+                       int *found);
+};
+
+static const char *plugin_name = "libpmi2";
+
+static const char *dlinfo_name (void *dso)
+{
+    struct link_map *p;
+    if (dlinfo (dso, RTLD_DI_LINKMAP, &p) < 0)
+        return NULL;
+    return p->l_name;
+}
+
+static int dlopen_wrap (const char *path,
+                        int flags,
+                        bool noflux,
+                        void **result,
+                        flux_error_t *error)
+{
+    void *dso;
+
+    dlerror ();
+    if (!(dso = dlopen (path, flags))) {
+        char *errstr = dlerror ();
+        if (errstr)
+            errprintf (error, "%s", errstr); // dlerror() already includes path
+        else
+            errprintf (error, "%s: dlopen failed", path);
+        return -1;
+    }
+    if (noflux) {
+        if (dlsym (dso, "flux_pmi_library") != NULL) {
+            errprintf (error,
+                       "%s: dlopen found Flux library (%s)",
+                       path,
+                       dlinfo_name (dso));
+            goto error;
+        }
+    }
+    *result = dso;
+    return 0;
+error:
+    dlclose (dso);
+    return -1;
+}
+
+static void plugin_ctx_destroy (struct plugin_ctx *ctx)
+{
+    if (ctx) {
+        int saved_errno = errno;
+        if (ctx->dso)
+            dlclose (ctx->dso);
+        free (ctx);
+        errno = saved_errno;
+    }
+}
+
+static struct plugin_ctx *plugin_ctx_create (const char *path,
+                                             bool noflux,
+                                             flux_error_t *error)
+{
+    struct plugin_ctx *ctx;
+
+    if (!(ctx = calloc (1, sizeof (*ctx)))) {
+        errprintf (error, "out of memory");
+        return NULL;
+    }
+    if (!path)
+        path = "libpmi2.so";
+    // Use RTLD_GLOBAL due to flux-framework/flux-core#432
+    if (dlopen_wrap (path,
+                     RTLD_NOW | RTLD_GLOBAL,
+                     noflux,
+                     &ctx->dso,
+                     error) < 0)
+        goto error;
+    if (!(ctx->init = dlsym (ctx->dso, "PMI2_Init"))
+        || !(ctx->finalize = dlsym (ctx->dso, "PMI2_Finalize"))
+        || !(ctx->job_getid = dlsym (ctx->dso, "PMI2_Job_GetId"))
+        || !(ctx->kvs_put = dlsym (ctx->dso, "PMI2_KVS_Put"))
+        || !(ctx->kvs_fence = dlsym (ctx->dso, "PMI2_KVS_Fence"))
+        || !(ctx->kvs_get = dlsym (ctx->dso, "PMI2_KVS_Get"))
+        || !(ctx->getjobattr = dlsym (ctx->dso, "PMI2_Info_GetJobAttr"))) {
+        errprintf (error, "%s:  missing required PMI2_* symbols", path);
+        goto error;
+    }
+    return ctx;
+error:
+    if (ctx->dso)
+        dlclose (ctx->dso);
+    free (ctx);
+    return NULL;
+}
+
+static int op_put (flux_plugin_t *p,
+                   const char *topic,
+                   flux_plugin_arg_t *args,
+                   void *data)
+{
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    const char *key;
+    const char *value;
+    int result;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s s:s}",
+                                "key", &key,
+                                "value", &value) < 0)
+        return upmi_seterror (p, args, "error unpacking put arguments");
+
+    result = ctx->kvs_put (key, value);
+    if (result != PMI2_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+
+    return 0;
+}
+
+static int op_get (flux_plugin_t *p,
+                   const char *topic,
+                   flux_plugin_arg_t *args,
+                   void *data)
+{
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    int result;
+    const char *key;
+    char value[1024];
+    int vallen = 0; // ignored
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s}",
+                                "key", &key) < 0)
+        return upmi_seterror (p, args, "error unpacking get arguments");
+
+    /* Divert PMI_process_mapping to a job attribute request.
+     */
+    if (streq (key, "PMI_process_mapping")) {
+        int found = 0;
+        result = ctx->getjobattr (key, value, sizeof (value), &found);
+        if (result == PMI2_SUCCESS && !found)
+            result = PMI2_ERR_INVALID_KEY;
+    }
+    else {
+        result = ctx->kvs_get (NULL,            // this job's key-value space
+                               PMI2_ID_NULL,    // no hints for you
+                               key,
+                               value,
+                               sizeof (value),
+                               &vallen);
+    }
+    if (result != PMI2_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+
+    if (flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_OUT,
+                              "{s:s}",
+                              "value", value) < 0)
+        return -1;
+    return 0;
+}
+
+static int op_barrier (flux_plugin_t *p,
+                       const char *topic,
+                       flux_plugin_arg_t *args,
+                       void *data)
+{
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    int result;
+
+    result = ctx->kvs_fence ();
+    if (result != PMI2_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+
+    return 0;
+}
+
+static int op_initialize (flux_plugin_t *p,
+                          const char *topic,
+                          flux_plugin_arg_t *args,
+                          void *data)
+{
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    int result;
+    int spawned;
+    int size;
+    int rank;
+    int appnum;
+    char jobid[256];
+
+    result = ctx->init (&spawned, &size, &rank, &appnum);
+    if (result != PMI2_SUCCESS)
+        return upmi_seterror (p, args, "init: %s", pmi_strerror (result));
+
+    result = ctx->job_getid (jobid, sizeof (jobid));
+    if (result != PMI2_SUCCESS)
+        return upmi_seterror (p, args, "init: %s", pmi_strerror (result));
+
+    if (flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_OUT,
+                              "{s:i s:s s:i}",
+                              "rank", rank,
+                              "name", jobid,
+                              "size", size) < 0)
+        return -1;
+    return 0;
+}
+
+
+static int op_finalize (flux_plugin_t *p,
+                        const char *topic,
+                        flux_plugin_arg_t *args,
+                        void *data)
+{
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+
+    int result;
+
+    result = ctx->finalize ();
+    if (result != PMI2_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+
+    return 0;
+}
+
+static int op_preinit (flux_plugin_t *p,
+                       const char *topic,
+                       flux_plugin_arg_t *args,
+                       void *data)
+{
+    struct plugin_ctx *ctx;
+    flux_error_t error;
+    const char *path = NULL;
+    int noflux = 0;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s?s s?b}",
+                                "path", &path,
+                                "noflux", &noflux) < 0)
+        return upmi_seterror (p, args, "error unpacking preinit arguments");
+    if (!(ctx = plugin_ctx_create (path, noflux, &error)))
+        return upmi_seterror (p, args, "%s", error.text);
+    if (flux_plugin_aux_set (p,
+                             plugin_name,
+                             ctx,
+                             (flux_free_f)plugin_ctx_destroy) < 0) {
+        plugin_ctx_destroy (ctx);
+        return upmi_seterror (p, args, "%s", strerror (errno));
+    }
+    return 0;
+}
+
+static const struct flux_plugin_handler optab[] = {
+    { "upmi.put",           op_put,         NULL },
+    { "upmi.get",           op_get,         NULL },
+    { "upmi.barrier",       op_barrier,     NULL },
+    { "upmi.initialize",    op_initialize,  NULL },
+    { "upmi.finalize",      op_finalize,    NULL },
+    { "upmi.preinit",       op_preinit,     NULL },
+    { 0 },
+};
+
+int upmi_libpmi2_init (flux_plugin_t *p)
+{
+    if (flux_plugin_register (p, plugin_name, optab) < 0)
+        return -1;
+    return 0;
+}
+
+
+// vi:ts=4 sw=4 expandtab

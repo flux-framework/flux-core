@@ -41,6 +41,7 @@ libupmi_la_SOURCES = \
 	upmi_plugin.h \
 	upmi_simple.c \
 	upmi_libpmi.c \
+	upmi_libpmi2.c \
 	upmi_single.c
 
 fluxinclude_HEADERS = \
