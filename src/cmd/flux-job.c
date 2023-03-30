@@ -3497,8 +3497,16 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     else {
         if (!(f = flux_job_wait (h, id)))
             log_err_exit ("flux_job_wait");
-        if (flux_job_wait_get_status (f, &success, &errstr) < 0)
-            log_msg_exit ("%s", flux_future_error_string (f));
+        if (flux_job_wait_get_status (f, &success, &errstr) < 0) {
+            /* ECHILD == no more waitable jobs or not waitable,
+             * exit code 2 instead of 1 */
+            if (errno == ECHILD)
+                rc = 2;
+            else
+                rc = 1;
+            log_msg ("%s", flux_future_error_string (f));
+            goto out;
+        }
         if (id == FLUX_JOBID_ANY) {
             if (flux_job_wait_get_id (f, &id) < 0)
                 log_err_exit ("flux_job_wait_get_id");
@@ -3508,6 +3516,7 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
             log_msg_exit ("%s", errstr);
         flux_future_destroy (f);
     }
+out:
     flux_close (h);
     return (rc);
 }
