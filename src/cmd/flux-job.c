@@ -591,7 +591,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL,
     },
     { "purge",
-      "[--age-limit=FSD] [--num-limit=N]",
+      "[--age-limit=FSD] [--num-limit=N] [--batch=COUNT] [--force]",
       "Purge the oldest inactive jobs",
       cmd_purge,
       0,
