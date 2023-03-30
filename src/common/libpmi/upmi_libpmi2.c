@@ -26,6 +26,8 @@
 #include "upmi.h"
 #include "upmi_plugin.h"
 
+#define LIBPMI2_IS_CRAY_CRAY 1
+
 struct plugin_ctx {
     void *dso;
     int (*init) (int *spawned, int *size, int *rank, int *appnum);
@@ -43,6 +45,7 @@ struct plugin_ctx {
                        const char *value,
                        int valuelen,
                        int *found);
+    int flags;
 };
 
 static const char *plugin_name = "libpmi2";
@@ -128,6 +131,10 @@ static struct plugin_ctx *plugin_ctx_create (const char *path,
         errprintf (error, "%s:  missing required PMI2_* symbols", path);
         goto error;
     }
+
+    if (dlsym (ctx->dso, "PMI_CRAY_Get_app_size") != NULL)
+        ctx->flags |= LIBPMI2_IS_CRAY_CRAY;
+
     return ctx;
 error:
     if (ctx->dso)
@@ -184,6 +191,16 @@ static int op_get (flux_plugin_t *p,
         result = ctx->getjobattr (key, value, sizeof (value), &found);
         if (result == PMI2_SUCCESS && !found)
             result = PMI2_ERR_INVALID_KEY;
+    }
+    /* Workaround for flux-framework/flux-core#5040.
+     * Cray's libpmi2.so prints to stderr when asked for a missing key.
+     * To avoid that unpleasantness, short circuit the request for "flux."
+     * prefixed keys, on the assumption that Cray's libpmi2.so won't ever be
+     * employed by Flux to launch Flux.
+     */
+    else if ((ctx->flags & LIBPMI2_IS_CRAY_CRAY)
+        && (!strncmp (key, "flux.", 5))) {
+        result = PMI2_ERR_INVALID_KEY;
     }
     else {
         result = ctx->kvs_get (NULL,            // this job's key-value space
