@@ -15,6 +15,7 @@ import string
 import sys
 import time
 from collections import namedtuple
+from itertools import chain
 
 import flux.constants
 from flux.core.inner import raw
@@ -288,6 +289,22 @@ class JobInfo:
         "waitstatus": "",
     }
 
+    #  Other properties (used in to_dict())
+    properties = (
+        "id",
+        "t_submit",
+        "t_remaining",
+        "state",
+        "result",
+        "username",
+        "userid",
+        "urgency",
+        "runtime",
+        "status",
+        "returncode",
+        "dependencies",
+    )
+
     def __init__(self, info_resp):
         #  Set defaults, then update with job-list.list response items:
         combined_dict = self.defaults.copy()
@@ -472,6 +489,52 @@ class JobInfo:
         if state in ["PRIORITY", "DEPEND", "SCHED"]:
             return self.duration
         return self.runtime
+
+    def to_dict(self, filtered=True):
+        """
+        Return a set of job attributes as a dict
+        By default, empty or unset values are filtered from the result,
+        so these keys will be missing. Set ``filtered=False`` to get the
+        unfiltered dict, which has these uninitialized values set to
+        an empty string or 0, key dependent.
+        """
+        result = {}
+        for attr in chain(self.defaults.keys(), self.properties):
+            val = getattr(self, attr)
+            if val is not None:
+                result[attr] = val
+
+        #  The following attributes all need special handling to
+        #  be converted to a dict:
+        result["annotations"] = self.annotations.annotationsDict
+        result["exception"] = self.exception.__dict__
+        if self.uri is not None:
+            result["uri"] = str(self.uri)
+
+        if not filtered:
+            return result
+
+        #  Now clear empty/unset values to avoid confusion:
+        #  - Remove any empty values (empty string).
+        #  - Remove any unset timestamp values (key t_*, value 0)
+        #  - Remove runtime and expiration if 0
+        def zero_remove(key):
+            return key.startswith("t_") or key in ("runtime", "expiration")
+
+        for key in list(result.keys()):
+            val = result[key]
+            if val == "" or (zero_remove(key) and val == 0):
+                del result[key]
+            if key == "exception" and not val["occurred"]:
+                result["exception"] = {"occurred": False}
+
+        #  Remove duplicate annotations.user.uri if necessary:
+        if self.uri is not None:
+            del result["annotations"]["user"]["uri"]
+            if not result["annotations"]["user"]:
+                del result["annotations"]["user"]
+
+        return result
 
 
 def job_fields_to_attrs(fields):
