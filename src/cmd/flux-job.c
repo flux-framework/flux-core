@@ -3653,7 +3653,7 @@ static void purge_id_continuation (flux_future_t *f, void *arg)
     int *count = arg;
     int tmp;
     if (flux_rpc_get_unpack (f, "{s:i}", "count", &tmp) < 0)
-        log_err_exit ("purge: %s", future_strerror (f, errno));
+        log_msg_exit ("purge: %s", future_strerror (f, errno));
     (*count) += tmp;
     flux_future_destroy (f);
 }
