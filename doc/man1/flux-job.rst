@@ -31,7 +31,7 @@ SYNOPSIS
 
 **flux** **job** **timeleft** [*OPTIONS*] [*id*]
 
-**flux** **job** **purge** [*OPTIONS*]
+**flux** **job** **purge** [*OPTIONS*] [*id...*]
 
 DESCRIPTION
 ===========
@@ -247,7 +247,8 @@ PURGE
 =====
 
 Inactive job data may be purged from the Flux instance with ``flux job purge``.
-The following options may be used to add selection criteria:
+Specific job ids may be specified for purging.  If no job ids are
+specified, the following options may be used for selection criteria:
 
 **--age-limit=FSD**
    Purge inactive jobs older than the specified Flux Standard Duration.
