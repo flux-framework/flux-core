@@ -13,7 +13,7 @@ import pwd
 
 import flux.constants
 from flux.future import WaitAllFuture
-from flux.job.info import JobInfo, statetostr
+from flux.job.info import JobInfo
 from flux.rpc import RPC
 
 
@@ -112,30 +112,13 @@ def get_job(flux_handle, jobid):
     payload = {"id": int(jobid), "attrs": ["all"]}
     rpc = JobListIdRPC(flux_handle, "job-list.list-id", payload)
     try:
-        jobinfo = rpc.get()
+        jobinfo = rpc.get_jobinfo()
 
     # The job does not exist!
     except FileNotFoundError:
         return None
 
-    jobinfo = jobinfo["job"]
-
-    # User friendly string from integer
-    state = jobinfo["state"]
-    jobinfo["state"] = statetostr(state)
-
-    # Get job info to add to result
-    info = rpc.get_jobinfo()
-    jobinfo["nnodes"] = info._nnodes
-    jobinfo["result"] = info.result
-    jobinfo["returncode"] = info.returncode
-    jobinfo["runtime"] = info.runtime
-    jobinfo["priority"] = info._priority
-    jobinfo["waitstatus"] = info._waitstatus
-    jobinfo["nodelist"] = info._nodelist
-    jobinfo["nodelist"] = info._nodelist
-    jobinfo["exception"] = info._exception.__dict__
-    return jobinfo
+    return jobinfo.to_dict(filtered=False)
 
 
 class JobListIdsFuture(WaitAllFuture):
