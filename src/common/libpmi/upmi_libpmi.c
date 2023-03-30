@@ -39,7 +39,7 @@ struct plugin_ctx {
     char kvsname[1024];
 };
 
-const char *plugin_name = "libpmi";
+static const char *plugin_name = "libpmi";
 
 static const char *dlinfo_name (void *dso)
 {
