@@ -352,7 +352,7 @@ test_expect_success 'job stats lists jobs in correct state (mix)' '
 	flux job stats | jq -e ".job_states.inactive == $(job_list_state_count inactive)" &&
 	flux job stats | jq -e ".job_states.total == $(job_list_state_count all)" &&
 	flux job stats | jq -e ".successful == $(job_list_state_count completed)" &&
-	flux job stats | jq -e ".failed == $(job_list_state_count failed canceled timeout)" &&
+	flux job stats | jq -e ".failed == $(job_list_state_count failed)" &&
 	flux job stats | jq -e ".canceled == $(job_list_state_count canceled)" &&
 	flux job stats | jq -e ".timeout == $(job_list_state_count timeout)" &&
 	flux job stats | jq -e ".inactive_purged == 0" &&
@@ -395,8 +395,8 @@ test_expect_success 'job-list: list successfully reconstructed' '
 	test_cmp before_reload.out after_reload.out
 '
 
-# the failed and canceled checks may look confusing.  We canceled all active jobs
-# right above here, so all those active jobs became failed / canceled as a result
+# the canceled checks may look confusing.  We canceled all active jobs
+# right above here, so all those active jobs became canceled as a result
 test_expect_success 'job stats lists jobs in correct state (all inactive)' '
 	flux job stats | jq -e ".job_states.depend == 0" &&
 	flux job stats | jq -e ".job_states.priority == 0" &&
@@ -406,7 +406,7 @@ test_expect_success 'job stats lists jobs in correct state (all inactive)' '
 	flux job stats | jq -e ".job_states.inactive == $(job_list_state_count all)" &&
 	flux job stats | jq -e ".job_states.total == $(job_list_state_count all)" &&
 	flux job stats | jq -e ".successful == $(job_list_state_count completed)" &&
-	flux job stats | jq -e ".failed == $(job_list_state_count active failed canceled timeout)" &&
+	flux job stats | jq -e ".failed == $(job_list_state_count failed)" &&
 	flux job stats | jq -e ".canceled == $(job_list_state_count active canceled)" &&
 	flux job stats | jq -e ".timeout == $(job_list_state_count timeout)" &&
 	flux job stats | jq -e ".inactive_purged == 0" &&

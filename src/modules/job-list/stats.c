@@ -112,13 +112,16 @@ static void stats_add (struct job_stats *stats,
 
     if (state == FLUX_JOB_STATE_INACTIVE) {
         if (!job->success) {
-            stats->failed++;
             if (job->exception_occurred) {
                 if (streq (job->exception_type, "cancel"))
                     stats->canceled++;
                 else if (streq (job->exception_type, "timeout"))
                     stats->timeout++;
+                else
+                    stats->failed++;
             }
+            else
+                stats->failed++;
         }
         else
             stats->successful++;
@@ -162,13 +165,16 @@ static void stats_purge (struct job_stats *stats, struct job *job)
     stats->state_count[state_index (job->state)]--;
 
     if (!job->success) {
-        stats->failed--;
         if (job->exception_occurred) {
             if (streq (job->exception_type, "cancel"))
                 stats->canceled--;
             else if (streq (job->exception_type, "timeout"))
                 stats->timeout--;
+            else
+                stats->failed--;
         }
+        else
+            stats->failed--;
     }
     else
         stats->successful--;
