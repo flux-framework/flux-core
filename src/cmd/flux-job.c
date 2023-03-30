@@ -3596,7 +3596,6 @@ int cmd_purge (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
     flux_t *h;
-    int rc = 0;
     double age_limit = optparse_get_duration (p, "age-limit", -1.);
     int num_limit = optparse_get_int (p, "num-limit", -1);
     int batch = optparse_get_int (p, "batch", 50);
@@ -3646,7 +3645,7 @@ int cmd_purge (optparse_t *p, int argc, char **argv)
 
     flux_close (h);
 
-    return rc;
+    return 0;
 }
 
 static struct taskmap *flux_job_taskmap (flux_jobid_t id)
