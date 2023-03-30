@@ -17,6 +17,7 @@ SYNOPSIS
 
 **flux** **overlay** **disconnect** [*OPTIONS*] *TARGET*
 
+**flux** **overlay** **whatsup** [*OPTIONS*]
 
 DESCRIPTION
 ===========
@@ -82,6 +83,14 @@ Round trip RPC times are shown with ``-vv``, e.g.
   ├─ 5 test5: offline for 12.754h
   ├─ 6 test6: full for 18.3052h (2.131 ms)
   └─ 7 test7: offline for 12.754h
+
+A short summary of up vs down nodes in the overlay can be output with
+
+::
+
+  $ flux overlay whatsup
+  up: 8: test[0-7]
+  down: 0:
 
 A broker that is not responding but is not shown as *lost* or *offline* may
 be forcibly disconnected from the overlay network with
