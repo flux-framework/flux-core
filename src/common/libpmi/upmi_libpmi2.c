@@ -17,8 +17,10 @@
 #include <link.h>
 
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
+#include "ccan/base64/base64.h"
 
 #include "simple_client.h"
 #include "pmi_strerror.h"
@@ -143,6 +145,61 @@ error:
     return NULL;
 }
 
+static void charsub (char *s, char c1, char c2)
+{
+    for (int i = 0; i < strlen (s); i++)
+        if (s[i] == c1)
+            s[i] = c2;
+}
+
+/* Base64 encode 's', then translate = to a character not in RFC 4648 base64
+ * alphabet.  Caller must free result.
+ */
+static char *encode_cray_value (const char *s)
+{
+    size_t len = strlen (s);
+    size_t bufsize = base64_encoded_length (len) + 1; // +1 for \0 termination
+    char *buf;
+
+    if (!(buf = malloc (bufsize)))
+        return NULL;
+    if (base64_encode (buf, bufsize, s, len) < 0) {
+        free (buf);
+        errno = EINVAL;
+        return NULL;
+    }
+    charsub (buf, '=', '*');
+    return buf;
+}
+
+/* Reverse the result of encode_cray_value().  Caller must free result.
+ */
+static char *decode_cray_value (const char *s)
+{
+    char *cpy;
+
+    if (!(cpy = strdup (s)))
+        return NULL;
+    charsub (cpy, '*', '=');
+
+    int len = strlen (cpy);
+    size_t bufsize = base64_decoded_length (len) + 1; // +1 for \0 termination
+    void *buf;
+
+    if (!(buf = malloc (bufsize)))
+        goto error;
+    if (base64_decode (buf, bufsize, cpy, len) < 0) {
+        errno = EINVAL;
+        goto error;
+    }
+    free (cpy);
+    return buf;
+error:
+    ERRNO_SAFE_WRAP (free, cpy);
+    ERRNO_SAFE_WRAP (free, buf);
+    return NULL;
+}
+
 static int op_put (flux_plugin_t *p,
                    const char *topic,
                    flux_plugin_arg_t *args,
@@ -151,6 +208,7 @@ static int op_put (flux_plugin_t *p,
     struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
     const char *key;
     const char *value;
+    char *xvalue = NULL;
     int result;
 
     if (flux_plugin_arg_unpack (args,
@@ -159,11 +217,20 @@ static int op_put (flux_plugin_t *p,
                                 "key", &key,
                                 "value", &value) < 0)
         return upmi_seterror (p, args, "error unpacking put arguments");
+    /* Workaround for flux-framework/flux-core#5040.
+     * Cray's libpmi2.so doesn't like ; and = characters in KVS values.
+     */
+    if ((ctx->flags & LIBPMI2_IS_CRAY_CRAY)) {
+        if (!(xvalue = encode_cray_value (value)))
+            return upmi_seterror (p, args, "%s", strerror (errno));
+    }
 
-    result = ctx->kvs_put (key, value);
-    if (result != PMI2_SUCCESS)
+    result = ctx->kvs_put (key, xvalue ? xvalue : value);
+    if (result != PMI2_SUCCESS) {
+        free (xvalue);
         return upmi_seterror (p, args, "%s", pmi_strerror (result));
-
+    }
+    free (xvalue);
     return 0;
 }
 
@@ -177,6 +244,7 @@ static int op_get (flux_plugin_t *p,
     const char *key;
     char value[1024];
     int vallen = 0; // ignored
+    char *xvalue = NULL;
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
@@ -209,6 +277,15 @@ static int op_get (flux_plugin_t *p,
                                value,
                                sizeof (value),
                                &vallen);
+        if (result == PMI2_SUCCESS) {
+            /* Workaround for flux-framework/flux-core#5040.
+             * Cray's libpmi2.so doesn't like ; and = characters in KVS values.
+             */
+            if ((ctx->flags & LIBPMI2_IS_CRAY_CRAY)) {
+                if (!(xvalue = decode_cray_value (value)))
+                    return upmi_seterror (p, args, "%s", strerror (errno));
+            }
+        }
     }
     if (result != PMI2_SUCCESS)
         return upmi_seterror (p, args, "%s", pmi_strerror (result));
@@ -216,8 +293,11 @@ static int op_get (flux_plugin_t *p,
     if (flux_plugin_arg_pack (args,
                               FLUX_PLUGIN_ARG_OUT,
                               "{s:s}",
-                              "value", value) < 0)
+                              "value", xvalue ? xvalue : value) < 0) {
+        free (xvalue);
         return -1;
+    }
+    free (xvalue);
     return 0;
 }
 
