@@ -60,6 +60,13 @@ class FluxJobsConfig(UtilConfig):
                 "{priority:<12} {state:<8.8} {dependencies}"
             ),
         },
+        "endreason": {
+            "description": "Show why each job ended",
+            "format": (
+                "{id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10+} "
+                "{status_abbrev:>2.2} {t_inactive!d:%b%d %R::>12h} {inactive_reason}"
+            ),
+        },
     }
 
     def __init__(self):
