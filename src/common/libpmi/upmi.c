@@ -46,6 +46,7 @@ void upmi_trace (struct upmi *upmi, const char *fmt, ...);
 static int upmi_preinit (struct upmi *upmi,
                          int flags,
                          const char *path,
+                         const char **note,
                          flux_error_t *error);
 
 int upmi_simple_init (flux_plugin_t *p);
@@ -256,21 +257,27 @@ struct upmi *upmi_create (const char *uri,
 
     if (uri) {
         const char *path;
+        const char *note;
+
         if (!(upmi->plugin = lookup_plugin (upmi, uri, errp)))
             goto error;
         if ((path = strchr (uri, ':')))
             path++;
-        if (upmi_preinit (upmi, upmi->flags, path, errp) < 0)
+        if (upmi_preinit (upmi, upmi->flags, path, &note, errp) < 0)
             goto error;
+        if (note != NULL)
+            upmi_trace (upmi, "%s", note);
     }
     else {
         flux_error_t error;
+        const char *note;
+
         uri = argz_next (upmi->methods, upmi->methods_len, NULL);
         while (uri) {
             upmi_trace (upmi, "trying '%s'", uri);
             if ((upmi->plugin = lookup_plugin (upmi, uri, &error))
-                && upmi_preinit (upmi, upmi->flags, NULL, &error) == 0) {
-                upmi_trace (upmi, "selected");
+                && upmi_preinit (upmi, upmi->flags, NULL, &note, &error) == 0) {
+                upmi_trace (upmi, "%s", note ? note : "selected");
                 break;
             }
             upmi_trace (upmi, "%s", error.text);
@@ -357,6 +364,7 @@ static int upmi_call (struct upmi *upmi,
 static int upmi_preinit (struct upmi *upmi,
                          int flags,
                          const char *path,
+                         const char **notep,
                          flux_error_t *error)
 {
     json_t *payload;
@@ -378,6 +386,14 @@ static int upmi_preinit (struct upmi *upmi,
     }
     rc = upmi_call (upmi, "upmi.preinit", error, "O", payload);
     json_decref (payload);
+    if (rc == 0 && notep) {
+        const char *note = NULL;
+        (void)flux_plugin_arg_unpack (upmi->args,
+                                      FLUX_PLUGIN_ARG_OUT,
+                                      "{s:s}",
+                                      "note", &note);
+        *notep = note;
+    }
     return rc;
 nomem:
     json_decref (payload);
