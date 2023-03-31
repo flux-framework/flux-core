@@ -84,7 +84,7 @@ static int set_broker_mapping_attr (struct upmi *upmi,
     int rc;
 
     if (size == 1)
-        val = strdup ("{\"version\":1,\"map\":[[0,1,1,1]]}");
+        val = strdup ("[[0,1,1,1]]");
     else {
         /* First attempt to get flux.taskmap, falling back to
          * PMI_process_mapping if this key is not available.
