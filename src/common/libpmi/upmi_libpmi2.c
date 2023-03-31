@@ -392,6 +392,20 @@ static int op_preinit (flux_plugin_t *p,
         plugin_ctx_destroy (ctx);
         return upmi_seterror (p, args, "%s", strerror (errno));
     }
+    const char *name = dlinfo_name (ctx->dso);
+    if (name) {
+        char note[1024];
+        snprintf (note,
+                  sizeof (note),
+                  "using %s%s",
+                  name,
+                  (ctx->flags & LIBPMI2_IS_CRAY_CRAY)
+                      ? " (cray quirks enabled)" : "");
+        flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_OUT,
+                              "{s:s}",
+                              "note", note);
+    }
     return 0;
 }
 
