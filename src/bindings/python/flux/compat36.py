@@ -10,6 +10,7 @@
 
 import signal
 
+
 # strsignal() is only available on Python 3.8 and up
 def strsignal(signum):
     if signum == signal.SIGHUP:

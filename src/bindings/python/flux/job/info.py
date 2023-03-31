@@ -29,6 +29,13 @@ try:
 except ImportError:
     SchedResourceList = None
 
+# strsignal() is only available in Python 3.8 and up.
+# flux-core's minimum is 3.6.  Use compat library if not available.
+try:
+    from signal import strsignal  # novermin
+except ImportError:
+    from flux.compat36 import strsignal
+
 
 def statetostr(stateid, fmt="L"):
     return raw.flux_job_statetostr(stateid, fmt).decode("utf-8")
@@ -541,6 +548,55 @@ class JobInfo:
 
         return result
 
+    @memoized_property
+    def inactive_reason(self):
+        """
+        Generate contextual exit reason based on how the job ended
+        """
+        state = str(self.state)
+        if state != "INACTIVE":
+            return ""
+        result = str(self.result)
+        if result == "CANCELED":
+            if (
+                self.exception.occurred
+                and self.exception.type == "cancel"
+                and self.exception.note
+            ):
+                return f"Canceled: {self.exception.note}"
+            else:
+                return "Canceled"
+        elif result == "FAILED":
+            # exception.type == "exec" is special case, handled by returncode
+            if (
+                self.exception.occurred
+                and self.exception.type != "exec"
+                and self.exception.severity == 0
+            ):
+                note = None
+                if self.exception.note:
+                    note = f" note={self.exception.note}"
+                return f'Exception: type={self.exception.type}{note or ""}'
+            elif self.returncode > 128:
+                signum = self.returncode - 128
+                try:
+                    sigdesc = strsignal(signum)
+                except ValueError:
+                    sigdesc = f"Signaled {signum}"
+                return sigdesc
+            elif self.returncode == 126:
+                return "Command invoked cannot execute"
+            elif self.returncode == 127:
+                return "command not found"
+            elif self.returncode == 128:
+                return "Invalid argument to exit"
+            else:
+                return f"Exit {self.returncode}"
+        elif result == "TIMEOUT":
+            return "Timeout"
+        else:
+            return f"Exit {self.returncode}"
+
 
 def job_fields_to_attrs(fields):
     # Note there is no attr for "id", it is always returned
@@ -593,6 +649,15 @@ def job_fields_to_attrs(fields):
         "dependencies": ("dependencies",),
         "contextual_info": ("state", "dependencies", "annotations", "nodelist"),
         "contextual_time": ("state", "t_run", "t_cleanup", "duration"),
+        "inactive_reason": (
+            "state",
+            "result",
+            "waitstatus",
+            "exception_occurred",
+            "exception_severity",
+            "exception_type",
+            "exception_note",
+        ),
         # Special cases, pointers to sub-dicts in annotations
         "sched": ("annotations",),
         "user": ("annotations",),
@@ -676,6 +741,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "dependencies": "DEPENDENCIES",
         "contextual_info": "INFO",
         "contextual_time": "TIME",
+        "inactive_reason": "INACTIVE-REASON",
         # The following are special pre-defined cases per RFC27
         "annotations.sched.t_estimate": "T_ESTIMATE",
         "annotations.sched.reason_pending": "REASON",
