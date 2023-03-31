@@ -50,6 +50,9 @@ j, down-arrow
 k, up-arrow
    Move cursor up in the job listing.
 
+h/l, left-arrow/right-arrow
+   Rotate through all queues on the system.
+
 d
    Toggle display of inactive job details (failed vs successful jobs).
 
