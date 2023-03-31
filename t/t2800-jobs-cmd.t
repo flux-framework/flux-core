@@ -926,6 +926,33 @@ test_expect_success 'flux-jobs --format={waitstatus},{returncode}' '
 	test $count -eq $(state_count canceled)
 '
 
+test_expect_success 'flux-jobs --format={inactive_reason}' '
+	FORMAT="{inactive_reason:h}" &&
+	flux jobs --filter=pending,running -no "$FORMAT" > inactivereasonPR.out &&
+	count=$(grep -c "^-$" inactivereasonPR.out) &&
+	test_debug "echo empty got $count, want $(state_count active)" &&
+	test $count -eq $(state_count active) &&
+	flux jobs --filter=inactive -no "$FORMAT" > inactivereasonI.out &&
+	count=$(grep -c "^command not found$" inactivereasonI.out) &&
+	test_debug "echo command not found got $count, want $(state_count failed_exec)" &&
+	test $count -eq $(state_count failed_exec) &&
+	count=$(grep -c "^Terminated$" inactivereasonI.out) &&
+	test_debug "echo Terminated got $count, want $(state_count terminated)" &&
+	test $count -eq $(state_count terminated) &&
+	count=$(grep -c "^Exception: type=myexception note=myexception$" inactivereasonI.out) &&
+	test_debug "echo exception got $count, want $(state_count exception)" &&
+	test $count -eq $(state_count exception) &&
+	count=$(grep -c "^Timeout$" inactivereasonI.out) &&
+	test_debug "echo Timeout got $count, want $(state_count timeout)" &&
+	test $count -eq $(state_count timeout) &&
+	count=$(grep -c "^Exit 0$" inactivereasonI.out) &&
+	test_debug "echo Exit 0 got $count, want $(state_count completed)" &&
+	test $count -eq $(state_count completed) &&
+	count=$(grep -c "^Canceled: mecanceled$" inactivereasonI.out) &&
+	test_debug "echo canceled got $count, want $(state_count canceled)" &&
+	test $count -eq $(state_count canceled)
+'
+
 test_expect_success 'flux-jobs --format={expiration},{t_remaining} works' '
 	expiration=$(flux jobs -f running -c1 -no "{expiration:.0f}") &&
 	t_remaining=$(flux jobs -f running -c1 -no "{t_remaining:.0f}") &&
@@ -1094,6 +1121,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	nodelist==NODELIST
 	contextual_info==INFO
 	contextual_time==TIME
+	inactive_reason==INACTIVE-REASON
 	success==SUCCESS
 	exception.occurred==EXCEPTION-OCCURRED
 	exception.severity==EXCEPTION-SEVERITY
