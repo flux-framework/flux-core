@@ -106,6 +106,7 @@ static void plugin_ctx_destroy (struct plugin_ctx *ctx)
 
 static struct plugin_ctx *plugin_ctx_create (const char *path,
                                              bool noflux,
+                                             bool craycray,
                                              flux_error_t *error)
 {
     struct plugin_ctx *ctx;
@@ -134,7 +135,7 @@ static struct plugin_ctx *plugin_ctx_create (const char *path,
         goto error;
     }
 
-    if (dlsym (ctx->dso, "PMI_CRAY_Get_app_size") != NULL)
+    if (dlsym (ctx->dso, "PMI_CRAY_Get_app_size") != NULL || craycray)
         ctx->flags |= LIBPMI2_IS_CRAY_CRAY;
 
     return ctx;
@@ -373,14 +374,16 @@ static int op_preinit (flux_plugin_t *p,
     flux_error_t error;
     const char *path = NULL;
     int noflux = 0;
+    int craycray = 0;
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
-                                "{s?s s?b}",
+                                "{s?s s?b s?b}",
                                 "path", &path,
-                                "noflux", &noflux) < 0)
+                                "noflux", &noflux,
+                                "craycray", &craycray) < 0)
         return upmi_seterror (p, args, "error unpacking preinit arguments");
-    if (!(ctx = plugin_ctx_create (path, noflux, &error)))
+    if (!(ctx = plugin_ctx_create (path, noflux, craycray, &error)))
         return upmi_seterror (p, args, "%s", error.text);
     if (flux_plugin_aux_set (p,
                              plugin_name,
