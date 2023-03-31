@@ -133,6 +133,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
         int ntasks;
         int nnodes;
         double t_run;
+        const char *filter_queue;
 
         if (json_unpack (job,
                          "{s:I s:i s:i s:s s?s s:i s:i s:f s?{s?{s?s}}}",
@@ -149,7 +150,9 @@ void joblist_pane_draw (struct joblist_pane *joblist)
                              "uri", &uri) < 0)
             fatal (0, "error decoding a job record from job-list RPC");
 
-        if (joblist->top->queue && !streq (joblist->top->queue, queue))
+        /* can return NULL filter_queue for "all" queues */
+        queues_get_queue_name (joblist->top->queues, &filter_queue);
+        if (filter_queue && !streq (filter_queue, queue))
             continue;
 
         if (flux_job_id_encode (id, "f58", idstr, sizeof (idstr)) < 0)
@@ -363,12 +366,16 @@ void joblist_pane_set_current (struct joblist_pane *joblist, bool next)
     json_t *job;
     flux_jobid_t id = FLUX_JOBID_ANY;
     int njobs;
+    const char *filter_queue;
 
     if (joblist->jobs == NULL)
         return;
 
     if (joblist->current != FLUX_JOBID_ANY)
         index = lookup_jobid_index (joblist->jobs, joblist->current);
+
+    /* can return NULL filter_queue for "all" queues */
+    queues_get_queue_name (joblist->top->queues, &filter_queue);
 
     /* find next valid index */
     njobs = json_array_size (joblist->jobs);
@@ -382,11 +389,11 @@ void joblist_pane_set_current (struct joblist_pane *joblist, bool next)
         if (!(job = json_array_get (joblist->jobs, next_index)))
             return;
 
-        if (joblist->top->queue) {
+        if (filter_queue) {
             const char *queue = "";
             if (json_unpack (job, "{s?s}", "queue", &queue) < 0)
                 fatal (0, "error decoding a job record from job-list RPC");
-            if (!streq (joblist->top->queue, queue)) {
+            if (!streq (filter_queue, queue)) {
                 index = next_index;
                 continue;
             }

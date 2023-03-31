@@ -31,8 +31,7 @@ struct top {
     flux_t *h;
     char *title;
     json_t *flux_config;
-    const char *queue;
-    json_t *queue_constraint;
+    struct queues *queues;
     flux_jobid_t id;
 
     unsigned int test_exit:1;    /*  Exit after first output of all panes */
@@ -87,6 +86,12 @@ void keys_destroy (struct keys *keys);
 struct ucache *ucache_create (void);
 void ucache_destroy (struct ucache *ucache);
 const char *ucache_lookup (struct ucache *ucache, uid_t userid);
+
+void queues_destroy (struct queues *queues);
+struct queues *queues_create (json_t *flux_config);
+void queues_set_queue (struct queues *queues, const char *name);
+void queues_get_queue_name (struct queues *queues, const char **name);
+void queues_get_queue_constraint (struct queues *queues, json_t **constraint);
 
 void fatal (int errnum, const char *fmt, ...)
     __attribute__ ((format (printf, 2, 3)));

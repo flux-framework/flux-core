@@ -200,7 +200,7 @@ void top_destroy (struct top *top)
         joblist_pane_destroy (top->joblist_pane);
         summary_pane_destroy (top->summary_pane);
         keys_destroy (top->keys);
-        json_decref (top->queue_constraint);
+        queues_destroy (top->queues);
         json_decref (top->flux_config);
         if (top->testf)
             fclose (top->testf);
@@ -252,31 +252,6 @@ static void get_config (struct top *top)
     flux_future_destroy (f);
 }
 
-static void setup_constraint (struct top *top)
-{
-    json_t *tmp;
-    json_t *requires = NULL;
-
-    /* first verify queue legit */
-    if (json_unpack (top->flux_config,
-                     "{s:{s:o}}",
-                     "queues", top->queue, &tmp) < 0)
-        fatal (0, "queue %s not configured", top->queue);
-
-    /* not required to be configured */
-    (void) json_unpack (top->flux_config,
-                        "{s:{s:{s:o}}}",
-                        "queues",
-                          top->queue,
-                            "requires",
-                            &requires);
-    if (requires) {
-        if (!(top->queue_constraint = json_pack ("{s:O}",
-                                                 "properties", requires)))
-            fatal (0, "Error creating queue constraints");
-    }
-}
-
 struct top *top_create (const char *uri,
                         const char *title,
                         const char *queue,
@@ -293,12 +268,13 @@ struct top *top_create (const char *uri,
 
     get_config (top);
 
-    /* setup / configure before calls to joblist_pane_create() and
+    if (!(top->queues = queues_create (top->flux_config)))
+        goto fail;
+
+    /* setup / configure queue before calls to joblist_pane_create() and
      * summary_pane_create() below */
-    if (queue) {
-        top->queue = queue;
-        setup_constraint (top);
-    }
+    if (queue)
+        queues_set_queue (top->queues, queue);
 
     flux_comms_error_set (top->h, comms_error, &top);
     top->refresh = flux_prepare_watcher_create (flux_get_reactor (top->h),
