@@ -65,39 +65,17 @@ static json_t *get_current_job (struct joblist_pane *joblist)
 }
 
 
-/*  Return true if any job in joblist->jobs has a queue defined. If
- *  joblist->jobs is NULL or empty, then return the current show_queue
- *  value.
- */
-static bool show_queue (struct joblist_pane *joblist)
-{
-    size_t index;
-    json_t *job;
-
-    if (!joblist->jobs || json_array_size (joblist->jobs) == 0)
-        return joblist->show_queue;
-
-    json_array_foreach (joblist->jobs, index, job) {
-        if (json_object_get (job, "queue"))
-            return true;
-    }
-    return false;
-}
-
 void joblist_pane_draw (struct joblist_pane *joblist)
 {
     double now = flux_reactor_now (flux_get_reactor (joblist->top->h));
     size_t index;
     json_t *job;
-    int queue_width = 0;
+    int queue_width = joblist->show_queue ? 8 : 0;
     int name_width;
     int job_output_count = 0;
 
     werase (joblist->win);
     wattron (joblist->win, A_REVERSE);
-
-    if ((joblist->show_queue = show_queue (joblist)))
-        queue_width = 8;
 
     name_width = getmaxx (joblist->win)
                  - (12 + 8 + queue_width + 2 + 6 + 6 + 7 + 6);
@@ -423,6 +401,7 @@ struct joblist_pane *joblist_pane_create (struct top *top)
         fatal (errno, "could not create ucache");
     joblist->top = top;
     joblist->current = FLUX_JOBID_ANY;
+    joblist->show_queue = queues_configured (top->queues);
     if (!(joblist->win = newwin (win_dim.y_length,
                                  win_dim.x_length,
                                  win_dim.y_begin,
