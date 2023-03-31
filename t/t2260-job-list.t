@@ -88,6 +88,16 @@ test_expect_success 'submit jobs for job list testing' '
 	flux job id $jobid > terminated.ids &&
 	flux job id $jobid >> failedids &&
 	#
+	#  Run a job that we will end with a user exception, copy its JOBID to both
+	#	inactive and failed and exception lists.
+	#
+	jobid=`flux submit --wait-event=start sleep inf` &&
+	flux job raise --type=myexception --severity=0 -m "myexception" $jobid &&
+	fj_wait_event $jobid clean &&
+	echo $jobid >> inactiveids &&
+	flux job id $jobid > exception.ids &&
+	flux job id $jobid >> failedids &&
+	#
 	#  Run a job that will timeout, copy its JOBID to both inactive and
 	#	timeout lists.
 	#
@@ -189,7 +199,7 @@ test_expect_success 'flux job list inactive jobs results are correct' '
 	flux job list -s inactive | jq .result | ${JOB_CONV} resulttostr > list_result_I.out &&
 	echo "CANCELED" >> list_result_I.exp &&
 	echo "TIMEOUT" >> list_result_I.exp &&
-	for count in `seq 1 2`; do \
+	for count in `seq 1 3`; do \
 		echo "FAILED" >> list_result_I.exp; \
 	done &&
 	for count in `seq 1 4`; do \
@@ -471,7 +481,7 @@ test_expect_success 'flux job list-inactive w/ since (second to most recent time
 test_expect_success 'flux job list-inactive w/ since (oldest timestamp)' '
 	timestamp=`cat list-inactive.out | tail -n 1 | jq .t_inactive` &&
 	count=`flux job list-inactive --since=${timestamp} | wc -l` &&
-	test $count -eq 23
+	test $count -eq 24
 '
 
 test_expect_success 'flux job list-inactive w/ since (middle timestamp #1)' '
@@ -1401,6 +1411,18 @@ test_expect_success 'flux job list outputs exceptions correctly (exception cance
 	echo $obj | jq -e ".exception_note == \"mecanceled\""
 '
 
+test_expect_success 'flux job list outputs exceptions correctly (user exception)' '
+	jobid=`flux submit sleep inf | flux job id` &&
+	echo $jobid > exceptions5.id &&
+	flux job raise --type=foo --severity=0 -m "foobar" $jobid &&
+	wait_jobid_state $jobid inactive &&
+	obj=$(flux job list -s inactive | grep $jobid) &&
+	echo $obj | jq -e ".exception_occurred == true" &&
+	echo $obj | jq -e ".exception_severity == 0" &&
+	echo $obj | jq -e ".exception_type == \"foo\"" &&
+	echo $obj | jq -e ".exception_note == \"foobar\""
+'
+
 test_expect_success 'reload the job-list module' '
 	flux module reload job-list
 '
@@ -1410,6 +1432,7 @@ test_expect_success 'verify task count preserved across restart' '
 	jobid2=`cat exceptions2.id` &&
 	jobid3=`cat exceptions3.id` &&
 	jobid4=`cat exceptions4.id` &&
+	jobid5=`cat exceptions5.id` &&
 	obj=$(flux job list -s inactive | grep ${jobid1}) &&
 	echo $obj | jq -e ".success == true" &&
 	echo $obj | jq -e ".exception_occurred == false" &&
@@ -1430,7 +1453,12 @@ test_expect_success 'verify task count preserved across restart' '
 	echo $obj | jq -e ".exception_occurred == true" &&
 	echo $obj | jq -e ".exception_severity == 0" &&
 	echo $obj | jq -e ".exception_type == \"cancel\"" &&
-	echo $obj | jq -e ".exception_note == \"mecanceled\""
+	echo $obj | jq -e ".exception_note == \"mecanceled\"" &&
+	obj=$(flux job list -s inactive | grep ${jobid5}) &&
+	echo $obj | jq -e ".exception_occurred == true" &&
+	echo $obj | jq -e ".exception_severity == 0" &&
+	echo $obj | jq -e ".exception_type == \"foo\"" &&
+	echo $obj | jq -e ".exception_note == \"foobar\""
 '
 
 # expiration time
