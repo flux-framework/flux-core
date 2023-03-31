@@ -241,15 +241,11 @@ test_expect_success 'configure queues and resource split amongst queues' '
 	flux module reload resource &&
 	flux module load sched-simple
 '
-test_expect_success 'flux-top doesnt display job queues when no jobs in queues' '
-	$runpty -f asciicast -o no-queue.log flux top --test-exit &&
-	grep -v QUEUE no-queue.log
-'
 test_expect_success 'submit a bunch of jobs' '
 	flux submit --cc=0-1 --queue=batch bash -c "sleep 300" &&
 	flux submit --queue=debug sleep 300
 '
-test_expect_success 'flux-top displays job queues when present' '
+test_expect_success 'flux-top displays job queues' '
 	$runpty -f asciicast -o queue.log flux top --test-exit &&
 	grep QUEUE queue.log &&
 	grep batch queue.log &&
