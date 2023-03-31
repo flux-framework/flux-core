@@ -35,7 +35,7 @@ struct top {
     json_t *queue_constraint;
     flux_jobid_t id;
 
-    unsigned int test_exit:1;    /*  Exit after first joblist pane update */
+    unsigned int test_exit:1;    /*  Exit after first output of all panes */
     unsigned int test_exit_count;
     FILE *testf;
     const char *f_char;
