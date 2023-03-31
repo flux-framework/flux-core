@@ -123,12 +123,6 @@ test_expect_success "wait works when job tasks exit 1" '
 	grep exit false.out
 '
 
-test_expect_success "wait works when job tasks exit 1" '
-	JOBID=$(flux submit --flags waitable /bin/false) &&
-	test_must_fail flux job wait ${JOBID} 2>false.out &&
-	grep exit false.out
-'
-
 test_expect_success "wait --all fails with jobid" '
 	test_must_fail flux job wait --all 42
 '
