@@ -113,19 +113,19 @@ test_expect_success "wait FLUX_JOBID_ANY fails with no waitable jobs" '
 test_expect_success "wait works when job terminated by exception" '
 	JOBID=$(flux submit --flags waitable sleep 120) &&
 	flux job raise --severity=0 ${JOBID} my-exception-message &&
-	! flux job wait ${JOBID} 2>exception.out &&
+	test_must_fail flux job wait ${JOBID} 2>exception.out &&
 	grep my-exception-message exception.out
 '
 
 test_expect_success "wait works when job tasks exit 1" '
 	JOBID=$(flux submit --flags waitable /bin/false) &&
-	! flux job wait ${JOBID} 2>false.out &&
+	test_must_fail flux job wait ${JOBID} 2>false.out &&
 	grep exit false.out
 '
 
 test_expect_success "wait works when job tasks exit 1" '
 	JOBID=$(flux submit --flags waitable /bin/false) &&
-	! flux job wait ${JOBID} 2>false.out &&
+	test_must_fail flux job wait ${JOBID} 2>false.out &&
 	grep exit false.out
 '
 
@@ -207,12 +207,16 @@ test_expect_success "a second wait fails on waitable, inactive job" '
 '
 
 test_expect_success "guest cannot submit job with WAITABLE flag" '
-	! FLUX_HANDLE_ROLEMASK=0x2 flux submit --flags waitable /bin/true
+	export FLUX_HANDLE_ROLEMASK=0x2 &&
+	test_must_fail flux submit --flags waitable /bin/true &&
+	unset FLUX_HANDLE_ROLEMASK
 '
 
 test_expect_success "guest cannot wait on a job" '
 	JOBID=$(flux submit --flags waitable /bin/true) &&
-	! FLUX_HANDLE_ROLEMASK=0x2 flux job wait ${JOBID}
+	export FLUX_HANDLE_ROLEMASK=0x2 &&
+	test_must_fail flux job wait ${JOBID} &&
+	unset FLUX_HANDLE_ROLEMASK
 '
 
 test_done
