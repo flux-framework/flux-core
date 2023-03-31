@@ -271,7 +271,7 @@ static int op_preinit (flux_plugin_t *p,
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
-                                "{s?s s:b}",
+                                "{s?s s?b}",
                                 "path", &path,
                                 "noflux", &noflux) < 0)
         return upmi_seterror (p, args, "error unpacking preinit arguments");
@@ -283,6 +283,15 @@ static int op_preinit (flux_plugin_t *p,
                              (flux_free_f)plugin_ctx_destroy) < 0) {
         plugin_ctx_destroy (ctx);
         return upmi_seterror (p, args, "%s", strerror (errno));
+    }
+    const char *name = dlinfo_name (ctx->dso);
+    if (name) {
+        char note[1024];
+        snprintf (note, sizeof (note), "using %s", name);
+        flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_OUT,
+                              "{s:s}",
+                              "note", note);
     }
     return 0;
 }
