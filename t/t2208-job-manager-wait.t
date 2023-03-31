@@ -30,7 +30,7 @@ test_expect_success "python FLUX_JOBID_ANY matches job.h" '
 	test $py_id = $c_id
 '
 
-test_expect_success "wait works on waitable job run with flux-mini" '
+test_expect_success "wait works on waitable job run with flux submit" '
 	JOBID=$(flux submit --flags waitable /bin/true) &&
 	flux job wait ${JOBID}
 '
