@@ -171,6 +171,65 @@ test_expect_success 'no nodes remain drained after restart' '
 	test $(flux resource status -s drain -no {nnodes}) -eq 0
 '
 
+test_expect_success 'drain one node' '
+	flux resource drain 0 testing
+'
+
+test_expect_success 'exclude one node via configuration' '
+	echo "resource.exclude = \"0\"" | flux config load
+'
+
+test_expect_success 'excluded node is no longer drained' '
+	test $(flux resource status -s drain -no {nnodes}) -eq 0
+'
+
+test_expect_success 'excluded node cannot be forcibly drained' '
+	test_must_fail flux resource drain 0 reason
+'
+
+test_expect_success 'drain of idset with excluded and drained nodes fails' '
+	flux resource drain 1 reason &&
+	test_must_fail flux resource drain 0-1 another reason 2>multi.err &&
+	test_debug "cat multi.err" &&
+	grep "drained or excluded" multi.err
+'
+
+test_expect_success 'undrain/unexclude ranks' '
+	flux resource undrain 1 &&
+	echo "resource.exclude = \"\"" | flux config load
+'
+
+test_expect_success 'no nodes remain drained or excluded' '
+	test $(flux resource status -s drain -no {nnodes}) -eq 0 &&
+	test $(flux resource status -s exclude -no {nnodes}) -eq 0
+'
+
+test_expect_success 'drained rank subsequently excluded is ignored' '
+	flux resource drain 1 this will be ignored &&
+	test $(flux resource status -s drain -no {nnodes}) -eq 1 &&
+	flux module remove sched-simple &&
+	flux module remove resource &&
+	echo resource.exclude = \"1\" | flux config load &&
+	flux module load resource &&
+	waitdown 0 &&
+	flux module load sched-simple &&
+	test $(flux resource status -s drain -no {nnodes}) -eq 0 &&
+	flux resource list
+'
+
+test_expect_success 'unexclude ranks' '
+	echo "resource.exclude = \"\"" | flux config load
+'
+
+test_expect_success 'no nodes remain drained or excluded' '
+	test $(flux resource status -s drain -no {nnodes}) -eq 0 &&
+	test $(flux resource status -s exclude -no {nnodes}) -eq 0
+'
+
+test_expect_success 'reload scheduler so it seems all ranks' '
+	flux module reload sched-simple
+'
+
 test_expect_success 'undrain fails if rank not drained' '
 	test_must_fail flux resource undrain 1 2>undrain_not.err &&
 	grep "rank 1 not drained" undrain_not.err

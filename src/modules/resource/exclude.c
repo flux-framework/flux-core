@@ -31,6 +31,7 @@
 #include "exclude.h"
 #include "rutil.h"
 #include "inventory.h"
+#include "drain.h"
 
 struct exclude {
     struct resource_ctx *ctx;
@@ -58,7 +59,8 @@ int exclude_update (struct exclude *exclude,
                                                   s,
                                                   errp)))
             return -1;
-        if (idset_last (idset) >= exclude->ctx->size) {
+        if (idset_count (idset) > 0
+            && idset_last (idset) >= exclude->ctx->size) {
             errprintf (errp, "exclusion idset is out of range");
             idset_destroy (idset);
             errno = EINVAL;
@@ -82,6 +84,12 @@ int exclude_update (struct exclude *exclude,
             flux_log_error (h, "error posting exclude event");
         }
         free (add_s);
+        /*  Added exclude ranks can no longer be drained:
+         */
+        if (undrain_ranks (exclude->ctx->drain, add) < 0)
+            flux_log_error (h,
+                            "exclude: failed to undrain ranks in %s",
+                            add_s);
         idset_destroy (add);
     }
     if (del) {
@@ -132,7 +140,8 @@ struct exclude *exclude_create (struct resource_ctx *ctx,
                             error.text);
             goto error;
         }
-        if (idset_last (exclude->idset) >= exclude->ctx->size) {
+        if (idset_count (exclude->idset) > 0
+            && idset_last (exclude->idset) >= exclude->ctx->size) {
             flux_log_error (ctx->h,
                             "exclude set %s is out of range",
                             exclude_idset);

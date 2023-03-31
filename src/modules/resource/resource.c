@@ -446,19 +446,41 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto error;
     if (flux_attr_get (ctx->h, "broker.recovery-mode"))
         noverify = true;
-    if (ctx->rank == 0) {
-        if (!(ctx->reslog = reslog_create (h)))
-            goto error;
-        if (reload_eventlog (h, &eventlog) < 0)
-            goto error;
-        if (!(ctx->drain = drain_create (ctx, eventlog)))
-            goto error;
-    }
+
+    /*  Note: Order of creation of resource subsystems is important.
+     *  Create inventory on all ranks first, since it is required by
+     *  the exclude and drain subsystems on rank 0.
+     */
     if (!(ctx->inventory = inventory_create (ctx, R_from_config)))
         goto error;
     /*  Done with R_from_config now, so free it.
      */
     json_decref (R_from_config);
+    if (ctx->rank == 0) {
+        /*  Create reslog and reload eventlog before intializing
+         *  acquire, exclude, and drain subsystems, since these
+         *  are required by acquire and exclude.
+         */
+        if (!(ctx->reslog = reslog_create (h)))
+            goto error;
+        if (reload_eventlog (h, &eventlog) < 0)
+            goto error;
+        if (!(ctx->acquire = acquire_create (ctx)))
+            goto error;
+
+        /*  Intialize exclude subsystem before drain since drain uses
+         *  the exclude idset to ensure drained ranks that are now
+         *  excluded are ignored.
+         */
+        if (!(ctx->exclude = exclude_create (ctx, exclude_idset)))
+            goto error;
+        if (!(ctx->drain = drain_create (ctx, eventlog)))
+            goto error;
+    }
+
+    /*  topology is initialized after exclude/drain etc since this
+     *  rank may attempt to drain itself due to a topology mismatch.
+     */
     if (!(ctx->topology = topo_create (ctx, noverify, norestrict)))
         goto error;
     if (!(ctx->monitor = monitor_create (ctx,
@@ -466,10 +488,6 @@ int mod_main (flux_t *h, int argc, char **argv)
                                          monitor_force_up)))
         goto error;
     if (ctx->rank == 0) {
-        if (!(ctx->acquire = acquire_create (ctx)))
-            goto error;
-        if (!(ctx->exclude = exclude_create (ctx, exclude_idset)))
-            goto error;
         if (post_restart_event (ctx, eventlog ? 1 : 0) < 0)
             goto error;
         if (reslog_sync (ctx->reslog) < 0)
