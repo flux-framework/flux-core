@@ -42,6 +42,20 @@ static void keys_cb (flux_reactor_t *r,
         case KEY_UP:
             joblist_pane_set_current (keys->top->joblist_pane, false);
             break;
+        case 'h':
+        case KEY_LEFT:
+            queues_prev (keys->top->queues);
+            summary_pane_query (keys->top->summary_pane);
+            summary_pane_draw (keys->top->summary_pane);
+            joblist_pane_draw (keys->top->joblist_pane);
+            break;
+        case 'l':
+        case KEY_RIGHT:
+            queues_next (keys->top->queues);
+            summary_pane_query (keys->top->summary_pane);
+            summary_pane_draw (keys->top->summary_pane);
+            joblist_pane_draw (keys->top->joblist_pane);
+            break;
         case '\n':
         case KEY_ENTER:
             joblist_pane_enter (keys->top->joblist_pane);
