@@ -144,7 +144,7 @@ test_expect_success 'submit jobs for job list testing' '
 	#
 	jobid=`flux submit --job-name=canceledjob sleep 30` &&
 	fj_wait_event $jobid depend &&
-	flux cancel $jobid &&
+	flux cancel -m "mecanceled" $jobid &&
 	fj_wait_event $jobid clean &&
 	echo $jobid >> inactiveids &&
 	echo $jobid > canceled.ids &&
@@ -788,7 +788,7 @@ test_expect_success 'flux-jobs --format={exception.*},{exception.*:h} works' '
 	count=$(grep -c "^,-,,-,,-,,-$" exceptionPR.out) &&
 	test $count -eq $(state_count sched run) &&
 	flux jobs --filter=inactive -no "$fmt" > exceptionI.out &&
-	count=$(grep -c "^True,True,0,0,cancel,cancel,,-$" exceptionI.out) &&
+	count=$(grep -c "^True,True,0,0,cancel,cancel,mecanceled,mecanceled$" exceptionI.out) &&
 	test $count -eq $(state_count canceled) &&
 	count=$(grep -c "^True,True,0,0,exec,exec,.*No such file.*" exceptionI.out) &&
 	test $count -eq $(state_count failed) &&

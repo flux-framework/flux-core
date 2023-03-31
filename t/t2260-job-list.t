@@ -1364,6 +1364,30 @@ test_expect_success 'flux job list outputs exceptions correctly (exception)' '
 	echo $obj | jq .exception_note | grep "No such file or directory"
 '
 
+test_expect_success 'flux job list outputs exceptions correctly (exception cancel no message)' '
+	jobid=`flux submit sleep inf | flux job id` &&
+	echo $jobid > exceptions3.id &&
+	flux cancel $jobid &&
+	wait_jobid_state $jobid inactive &&
+	obj=$(flux job list -s inactive | grep $jobid) &&
+	echo $obj | jq -e ".exception_occurred == true" &&
+	echo $obj | jq -e ".exception_severity == 0" &&
+	echo $obj | jq -e ".exception_type == \"cancel\"" &&
+	echo $obj | jq -e ".exception_note == \"\""
+'
+
+test_expect_success 'flux job list outputs exceptions correctly (exception cancel w/ message)' '
+	jobid=`flux submit sleep inf | flux job id` &&
+	echo $jobid > exceptions4.id &&
+	flux cancel -m "mecanceled" $jobid &&
+	wait_jobid_state $jobid inactive &&
+	obj=$(flux job list -s inactive | grep $jobid) &&
+	echo $obj | jq -e ".exception_occurred == true" &&
+	echo $obj | jq -e ".exception_severity == 0" &&
+	echo $obj | jq -e ".exception_type == \"cancel\"" &&
+	echo $obj | jq -e ".exception_note == \"mecanceled\""
+'
+
 test_expect_success 'reload the job-list module' '
 	flux module reload job-list
 '
@@ -1371,6 +1395,8 @@ test_expect_success 'reload the job-list module' '
 test_expect_success 'verify task count preserved across restart' '
 	jobid1=`cat exceptions1.id` &&
 	jobid2=`cat exceptions2.id` &&
+	jobid3=`cat exceptions3.id` &&
+	jobid4=`cat exceptions4.id` &&
 	obj=$(flux job list -s inactive | grep ${jobid1}) &&
 	echo $obj | jq -e ".success == true" &&
 	echo $obj | jq -e ".exception_occurred == false" &&
@@ -1381,7 +1407,17 @@ test_expect_success 'verify task count preserved across restart' '
 	echo $obj | jq -e ".exception_occurred == true" &&
 	echo $obj | jq -e ".exception_severity == 0" &&
 	echo $obj | jq -e ".exception_type == \"exec\"" &&
-	echo $obj | jq .exception_note | grep "No such file or directory"
+	echo $obj | jq .exception_note | grep "No such file or directory" &&
+	obj=$(flux job list -s inactive | grep ${jobid3}) &&
+	echo $obj | jq -e ".exception_occurred == true" &&
+	echo $obj | jq -e ".exception_severity == 0" &&
+	echo $obj | jq -e ".exception_type == \"cancel\"" &&
+	echo $obj | jq -e ".exception_note == \"\"" &&
+	obj=$(flux job list -s inactive | grep ${jobid4}) &&
+	echo $obj | jq -e ".exception_occurred == true" &&
+	echo $obj | jq -e ".exception_severity == 0" &&
+	echo $obj | jq -e ".exception_type == \"cancel\"" &&
+	echo $obj | jq -e ".exception_note == \"mecanceled\""
 '
 
 # expiration time
