@@ -60,6 +60,17 @@ static bool is_valid_queue (struct queues *queues, const char *name)
     return true;
 }
 
+bool queues_configured (struct queues *queues)
+{
+    json_t *tmp;
+
+    if (json_unpack (queues->flux_config,
+                     "{s:o}",
+                     "queues", &tmp) < 0)
+        return false;
+    return true;
+}
+
 void queues_set_queue (struct queues *queues, const char *name)
 {
     json_t *requires = NULL;
