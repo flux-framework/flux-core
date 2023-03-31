@@ -310,9 +310,20 @@ static void draw_info (struct summary_pane *sum)
                    sum->instance_level);
     mvwprintw (sum->win,
                info_dim.y_begin,
-               info_dim.x_begin + 30,
+               info_dim.x_begin + 25,
                "uptime: %s",
                fsd);
+    if (queues_configured (sum->top->queues)) {
+        const char *filter_queue;
+        /* can return NULL filter_queue for "all" queues */
+        queues_get_queue_name (sum->top->queues, &filter_queue);
+        if (filter_queue)
+            mvwprintw (sum->win,
+                       info_dim.y_begin,
+                       info_dim.x_begin + 40,
+                       "queue: %s",
+                       filter_queue);
+    }
     mvwprintw (sum->win,
                info_dim.y_begin,
                info_dim.x_begin +
