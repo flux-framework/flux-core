@@ -187,7 +187,12 @@ static int check_draininfo_idset (struct drain *drain,
                    was_drained && was_excluded ? " or " : "",
                    was_excluded ? "excluded" : "");
         free (s);
-        errno = EEXIST;
+
+        /*  If any node was drained, then return EEXIST as a hint of this
+         *  fact. Otherwise, an attempt to drain an excluded node was made,
+         *  and that is invalid, so return EINVAL.
+         */
+        errno = was_drained ? EEXIST : EINVAL;
     }
     idset_destroy (errids);
     return rc;
