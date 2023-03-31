@@ -383,5 +383,47 @@ test_expect_success NO_CHAIN_LINT 'flux-top can call itself recursively with que
 	$runpty -o recurseQ.log --input=recurseQ.in flux top --queue=batch &&
 	grep -q $(echo $(cat expectedQ.id) | sed "s/ƒ//") recurseQ.log
 '
+# in order to test that the left/right arrow keys work, we will
+# "start" flux-top filtering only jobs in the `batch` queue.  Then
+# either the left or right keys should show our job from the debug
+# queue.  One direction shows just debug queue, the other direction
+# shows "all" queues.
+test_expect_success NO_CHAIN_LINT 'flux-top left shows other queue' '
+	SHELL=/bin/sh &&
+	cat <<-EOF >leftQ.in &&
+	{ "version": 2 }
+	[0.50, "i", "h"]
+	[1.00, "i", "q"]
+	EOF
+	FLUX_URI_RESOLVE_LOCAL=t $runpty -o leftQ.log --input=leftQ.in \
+		flux top --queue=batch &&
+	grep -q "debug" leftQ.log
+'
+test_expect_success NO_CHAIN_LINT 'flux-top right shows other queue' '
+	SHELL=/bin/sh &&
+	cat <<-EOF >rightQ.in &&
+	{ "version": 2 }
+	[0.50, "i", "l"]
+	[1.00, "i", "q"]
+	EOF
+	FLUX_URI_RESOLVE_LOCAL=t $runpty -o rightQ.log --input=rightQ.in \
+		flux top --queue=batch &&
+	grep -q "debug" rightQ.log
+'
+test_expect_success NO_CHAIN_LINT 'flux-top cycles left and right work' '
+	SHELL=/bin/sh &&
+	cat <<-EOF >cycleQ.in &&
+	{ "version": 2 }
+	[0.50, "i", "h"]
+	[1.00, "i", "h"]
+	[1.50, "i", "h"]
+	[2.00, "i", "l"]
+	[2.50, "i", "l"]
+	[3.00, "i", "l"]
+	[3.50, "i", "q"]
+	EOF
+	FLUX_URI_RESOLVE_LOCAL=t $runpty -o cycleQ.log --input=cycleQ.in \
+		flux top --queue=batch
+'
 
 test_done
