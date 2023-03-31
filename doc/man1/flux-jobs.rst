@@ -453,6 +453,13 @@ the state of the job or other context:
    Returns the job runtime for jobs in RUN state or later, otherwise the
    job duration (if set) is returned.
 
+**inactive_reason**
+   If the job is inactive, returns the reason that the job is no
+   longer active.  Generally speaking, will output "Exit", "Timeout",
+   "Canceled", or signal.  If available, other contextual information
+   will also be provided such as the exit ``returncode`` or
+   cancellation message.
+
 CONFIGURATION
 =============
 
