@@ -129,9 +129,9 @@ When there are no more waitable jobs, it exits with a code of two.  The exit cod
 of two can be used to determine when no more jobs are waitable when using
 ``flux job wait`` in a loop.
 
-``flux job wait --all`` loops through waitable jobs as they complete, printing
-their jobids.  If all jobs are successful, it exits with a code of zero.  If
-any jobs have failed, it exits with a code of one.
+``flux job wait --all`` loops through all the waitable jobs as they complete,
+printing their jobids.  If all jobs are successful, it exits with a code of zero.
+If any jobs have failed, it exits with a code of one.
 
 **-a, --all**
    Wait for all waitable jobs and exit with error if any jobs are
