@@ -88,7 +88,6 @@ static int set_broker_mapping_attr (struct upmi *upmi,
     else {
         /* First attempt to get flux.taskmap, falling back to
          * PMI_process_mapping if this key is not available.
-         * This should be replaced when #4800 is fixed.
          */
         char *s;
         if (upmi_get (upmi, "flux.taskmap", -1, &s, NULL) == 0
