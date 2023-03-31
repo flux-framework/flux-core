@@ -91,6 +91,8 @@ void queues_destroy (struct queues *queues);
 struct queues *queues_create (json_t *flux_config);
 bool queues_configured (struct queues *queues);
 void queues_set_queue (struct queues *queues, const char *name);
+void queues_next (struct queues *queues);
+void queues_prev (struct queues *queues);
 void queues_get_queue_name (struct queues *queues, const char **name);
 void queues_get_queue_constraint (struct queues *queues, json_t **constraint);
 
