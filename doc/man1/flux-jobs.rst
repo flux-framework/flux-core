@@ -70,6 +70,24 @@ OPTIONS
    CONFIGURATION section for more details. A configuration snippet for an
    existing named format may be generated with ``--format=get-config=NAME``.
 
+**--json**
+   Emit data for selected jobs in JSON format. The data for multiple
+   matching jobs is contained in a ``jobs`` array in the emitted JSON
+   object, unless a single job was selected by jobid on the command
+   line, in which case a JSON object representing that job is emitted on
+   success. With ``-R, --recursive``, each job which is also an instance
+   of Flux will will have any recursively listed jobs in a ``jobs`` array,
+   and so on for each sub-child.
+
+   Only the attributes which are available at the time of the flux-jobs
+   query will be present in the returned JSON object for a job. For
+   instance a pending job will not have ``runtime``, ``waitstatus`` or
+   ``result`` keys, among others. A missing key should be considered
+   unavailable.
+
+   The ``--json`` option is incompatible with ``--stats`` and
+   ``--stats-only``, and any ``--format`` is ignored.
+
 **--color**\ *[=WHEN]*
    Control output coloring.  The optional argument *WHEN* can be
    *auto*, *never*, or *always*.  If *WHEN* is omitted, it defaults to
