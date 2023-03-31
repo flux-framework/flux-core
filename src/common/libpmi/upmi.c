@@ -13,6 +13,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <jansson.h>
 #include <flux/core.h>
 #include <assert.h>
 #include <argz.h>
@@ -353,30 +354,35 @@ static int upmi_call (struct upmi *upmi,
     return rc;
 }
 
-static int upmi_preinit_path (struct upmi *upmi,
-                              int noflux,
-                              const char *path,
-                              flux_error_t *error)
-{
-    return upmi_call (upmi,
-                      "upmi.preinit",
-                      error,
-                      "{s:s s:b}",
-                      "path", path,
-                      "noflux", noflux);
-}
-
 static int upmi_preinit (struct upmi *upmi,
                          int flags,
                          const char *path,
                          flux_error_t *error)
 {
-    int noflux = 0;
-    if ((flags & UPMI_LIBPMI_NOFLUX))
-        noflux = 1;
-    if (path)
-        return upmi_preinit_path (upmi, noflux, path, error);
-    return upmi_call (upmi, "upmi.preinit", error, "{s:b}", "noflux", noflux);
+    json_t *payload;
+    int rc;
+
+    if (!(payload = json_object ()))
+        goto nomem;
+    if ((flags & UPMI_LIBPMI_NOFLUX)) {
+        if (json_object_set (payload, "noflux", json_true ()) < 0)
+            goto nomem;
+    }
+    if (path) {
+        json_t *o;
+        if (!(o = json_string (path))
+            || json_object_set_new (payload, "path", o) < 0) {
+            json_decref (o);
+            goto nomem;
+        }
+    }
+    rc = upmi_call (upmi, "upmi.preinit", error, "O", payload);
+    json_decref (payload);
+    return rc;
+nomem:
+    json_decref (payload);
+    errno = ENOMEM;
+    return -1;
 }
 
 int upmi_initialize (struct upmi *upmi,

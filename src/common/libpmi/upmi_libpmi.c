@@ -271,7 +271,7 @@ static int op_preinit (flux_plugin_t *p,
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
-                                "{s?s s:b}",
+                                "{s?s s?b}",
                                 "path", &path,
                                 "noflux", &noflux) < 0)
         return upmi_seterror (p, args, "error unpacking preinit arguments");
