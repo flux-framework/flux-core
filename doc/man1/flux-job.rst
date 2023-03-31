@@ -119,14 +119,15 @@ results are consumed.
 When run with a jobid argument, ``flux job wait`` blocks until the specified
 job completes.  If the job was successful, it silently exits with a code of
 zero.  If the job has failed, an error is printed on stderr, and it exits with
-a code of one.  It is an error if the job was not submitted with the
-``waitable`` flag.
+a code of one.  If the jobid is invalid or the job is not waitable, ``flux job wait``
+exits with a code of two.  This special exit code of two is used to differentiate
+between a failed job and not being able to wait on the job.
 
 When run without arguments, ``flux job wait`` blocks until the next waitable
 job completes and behaves as above except that the jobid is printed to stdout.
-When there are no more waitable jobs, it exits with a code of one.  Note that
-a ``while flux job wait...`` loop terminates on the first unsuccessful job
-or when there are no more jobs.
+When there are no more waitable jobs, it exits with a code of two.  The exit code
+of two can be used to determine when no more jobs are waitable when using
+``flux job wait`` in a loop.
 
 ``flux job wait --all`` loops through waitable jobs as they complete, printing
 their jobids.  If all jobs are successful, it exits with a code of zero.  If
