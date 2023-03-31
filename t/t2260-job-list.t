@@ -76,7 +76,17 @@ test_expect_success 'submit jobs for job list testing' '
 	#
 	! jobid=`flux submit --wait nosuchcommand` &&
 	echo $jobid >> inactiveids &&
-	flux job id $jobid > failed.ids &&
+	flux job id $jobid > failedids &&
+	#
+	#  Run a job that we will end with a signal, copy its JOBID to both inactive and
+	#	failed and terminated lists.
+	#
+	jobid=`flux submit --wait-event=start sleep inf` &&
+	flux job kill $jobid &&
+	fj_wait_event $jobid clean &&
+	echo $jobid >> inactiveids &&
+	flux job id $jobid > terminated.ids &&
+	flux job id $jobid >> failedids &&
 	#
 	#  Run a job that will timeout, copy its JOBID to both inactive and
 	#	timeout lists.
@@ -122,6 +132,7 @@ test_expect_success 'submit jobs for job list testing' '
 	flux job wait-event $jobid clean &&
 	flux job id $jobid >> inactiveids &&
 	flux job id $jobid > canceled.ids &&
+	tac failedids | flux job id > failed.ids &&
 	tac inactiveids | flux job id > inactive.ids &&
 	cat active.ids > all.ids &&
 	cat inactive.ids >> all.ids &&
@@ -178,7 +189,9 @@ test_expect_success 'flux job list inactive jobs results are correct' '
 	flux job list -s inactive | jq .result | ${JOB_CONV} resulttostr > list_result_I.out &&
 	echo "CANCELED" >> list_result_I.exp &&
 	echo "TIMEOUT" >> list_result_I.exp &&
-	echo "FAILED" >> list_result_I.exp &&
+	for count in `seq 1 2`; do \
+		echo "FAILED" >> list_result_I.exp; \
+	done &&
 	for count in `seq 1 4`; do \
 		echo "COMPLETED" >> list_result_I.exp; \
 	done &&
@@ -458,7 +471,7 @@ test_expect_success 'flux job list-inactive w/ since (second to most recent time
 test_expect_success 'flux job list-inactive w/ since (oldest timestamp)' '
 	timestamp=`cat list-inactive.out | tail -n 1 | jq .t_inactive` &&
 	count=`flux job list-inactive --since=${timestamp} | wc -l` &&
-	test $count -eq 22
+	test $count -eq 23
 '
 
 test_expect_success 'flux job list-inactive w/ since (middle timestamp #1)' '
