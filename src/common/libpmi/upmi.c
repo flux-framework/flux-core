@@ -50,16 +50,18 @@ static int upmi_preinit (struct upmi *upmi,
                          flux_error_t *error);
 
 int upmi_simple_init (flux_plugin_t *p);
+int upmi_libpmi2_init (flux_plugin_t *p);
 int upmi_libpmi_init (flux_plugin_t *p);
 int upmi_single_init (flux_plugin_t *p);
 
 static flux_plugin_init_f builtins[] = {
     &upmi_simple_init,
+    &upmi_libpmi2_init,
     &upmi_libpmi_init,
     &upmi_single_init,
 };
 
-static const char *default_methods = "simple libpmi single";
+static const char *default_methods = "simple libpmi2 libpmi single";
 
 void upmi_destroy (struct upmi *upmi)
 {
@@ -164,7 +166,7 @@ static struct upmi *upmi_create_uninit (const char *methods,
 {
     struct upmi *upmi;
 
-    if (flags & ~(UPMI_TRACE | UPMI_LIBPMI_NOFLUX)) {
+    if (flags & ~(UPMI_TRACE | UPMI_LIBPMI_NOFLUX | UPMI_LIBPMI2_CRAY)) {
         errprintf (error, "invalid argument");
         return NULL;
     }
@@ -374,6 +376,10 @@ static int upmi_preinit (struct upmi *upmi,
         goto nomem;
     if ((flags & UPMI_LIBPMI_NOFLUX)) {
         if (json_object_set (payload, "noflux", json_true ()) < 0)
+            goto nomem;
+    }
+    if ((flags & UPMI_LIBPMI2_CRAY)) {
+        if (json_object_set (payload, "craycray", json_true ()) < 0)
             goto nomem;
     }
     if (path) {

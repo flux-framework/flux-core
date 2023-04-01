@@ -20,6 +20,7 @@
 enum {
     UPMI_TRACE = 1,         // call the trace callback for each operation
     UPMI_LIBPMI_NOFLUX = 2, // libpmi should fail if Flux libflux.so is found
+    UPMI_LIBPMI2_CRAY = 4,  // force cray libpmi2 workarounds for testing
 };
 
 struct upmi_info {

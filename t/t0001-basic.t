@@ -197,6 +197,13 @@ test_expect_success 'flux-start test exec fails on bad broker shell script' "
 test_expect_success 'flux-start -s1 works' "
 	flux start ${ARGS} -s1 /bin/true
 "
+test_expect_success 'flux-start -s1 sets broker.mapping to expected value' "
+	cat >mapping_1.exp <<-EOT &&
+	[[0,1,1,1]]
+	EOT
+	flux start ${ARGS} -s1 flux getattr broker.mapping >mapping_1.out &&
+	test_cmp mapping_1.exp mapping_1.out
+"
 test_expect_success 'flux-start --test-rundir without --test-size fails' "
 	test_must_fail flux start ${ARGS} --test-rundir=$(pwd) /bin/true
 "

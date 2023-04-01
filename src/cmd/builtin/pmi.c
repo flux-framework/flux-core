@@ -200,6 +200,8 @@ static int cmd_pmi (optparse_t *p, int argc, char *argv[])
         flags |= UPMI_TRACE;
     if (optparse_hasopt (p, "libpmi-noflux"))
         flags |= UPMI_LIBPMI_NOFLUX;
+    if (optparse_hasopt (p, "libpmi2-cray"))
+        flags |= UPMI_LIBPMI2_CRAY;
     if (!(upmi = upmi_create (method, flags, trace, NULL, &error)))
         log_msg_exit ("%s", error.text);
 
@@ -231,6 +233,8 @@ static struct optparse_option general_opts[] = {
       .usage = "Specify PMI method to use", },
     { .name = "libpmi-noflux", .has_arg = 0,
       .usage = "Fail if libpmi method finds the Flux libpmi.so", },
+    { .name = "libpmi2-cray", .has_arg = 0,
+      .usage = "Force-enable libpmi2 cray workarounds for testing", },
     { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
       .usage = "Trace PMI operations", },
     OPTPARSE_TABLE_END,

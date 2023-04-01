@@ -182,38 +182,75 @@ test_expect_success 'flux-pmi -opmi=off --method=simple fails' '
 	    flux pmi --method=simple barrier
 '
 # method=libpmi
+test_expect_success 'get pmi library path' '
+	flux getattr conf.pmi_library_path >libpmi
+'
 test_expect_success 'flux-pmi --method=libpmi:/bad/path fails' '
 	test_must_fail flux run \
 	    flux pmi --method=libpmi:/bad/path barrier
 '
 test_expect_success 'flux-pmi --method=libpmi barrier works w/ flux libpmi.so' '
 	flux run -n2 bash -c "\
-	    flux pmi -v \
-	        --method=libpmi:\$(flux getattr conf.pmi_library_path) \
-	        barrier"
+	    flux pmi -v --method=libpmi:$(cat libpmi) barrier"
 '
 test_expect_success 'flux-pmi --method=libpmi exchange works w/ flux libpmi.so' '
 	flux run -n2 bash -c "\
-	    flux pmi -v \
-	        --method=libpmi:\$(flux getattr conf.pmi_library_path) \
-	        exchange"
+	    flux pmi -v --method=libpmi:$(cat libpmi) exchange"
 '
 test_expect_success 'flux-pmi --method=libpmi get works w/ flux libpmi.so' '
 	flux run -n2 bash -c "\
-	    flux pmi -v \
-	        --method=libpmi:\$(flux getattr conf.pmi_library_path) \
-	        get flux.taskmap"
+	    flux pmi -v --method=libpmi:$(cat libpmi) get flux.taskmap"
 '
 test_expect_success 'flux-pmi --libpmi-noflux fails w/ flux libpmi.so' '
 	test_must_fail flux run bash -c "\
-	    flux pmi \
-	        --method=libpmi:\$(flux getattr conf.pmi_library_path) \
-		--libpmi-noflux \
-	        barrier"
+	    flux pmi --method=libpmi:$(cat libpmi) --libpmi-noflux barrier"
 '
 test_expect_success 'flux broker refuses the Flux libpmi.so and goes single' '
-	FLUX_PMI_DEBUG=1 \
-	    LD_LIBRARY_PATH=$(dirname $(flux getattr conf.pmi_library_path)) \
+	FLUX_PMI_DEBUG=1 FLUX_PMI_CLIENT_METHODS="libpmi single" \
+	    LD_LIBRARY_PATH=$(dirname $(cat libpmi)) \
+            flux start /bin/true 2>debug.err &&
+	grep single debug.err
+'
+# method=libpmi2
+test_expect_success 'get pmi2 library path' '
+	flux getattr conf.pmi_library_path | sed s/libpmi/libpmi2/ >libpmi2
+'
+test_expect_success 'flux-pmi --method=libpmi2:/bad/path fails' '
+	test_must_fail flux run \
+	    flux pmi --method=libpmi2:/bad/path barrier
+'
+test_expect_success 'flux-pmi --method=libpmi2 barrier works w/ flux pmi lib' '
+	flux run -n2 bash -c "\
+	    flux pmi -v --method=libpmi2:$(cat libpmi2) barrier"
+'
+test_expect_success 'flux-pmi --method=libpmi2 exchange works w/ flux pmi lib' '
+	flux run -n2 bash -c "\
+	    flux pmi -v --method=libpmi2:$(cat libpmi2) exchange"
+'
+test_expect_success 'flux-pmi --method=libpmi2 exchange works w/ cray quirks' '
+	flux run -n2 bash -c "\
+	    flux pmi -v --libpmi2-cray --method=libpmi2:$(cat libpmi2) exchange"
+'
+test_expect_success 'flux-pmi --method=libpmi2 get works w/ flux pmi lib' '
+	flux run -n2 bash -c "\
+	    flux pmi -v --method=libpmi2:$(cat libpmi2) get flux.taskmap"
+'
+test_expect_success 'flux-pmi --method=libpmi2 get fails w/ cray quirks' '
+	test_must_fail flux run -n2 bash -c "\
+	    flux pmi -v --libpmi2-cray --method=libpmi2:$(cat libpmi2) \
+	        get flux.taskmap"
+'
+test_expect_success 'PMI_process_mapping special case works' '
+	flux run -n2 bash -c "\
+	    flux pmi -v --method=libpmi2:$(cat libpmi2) get PMI_process_mapping"
+'
+test_expect_success 'flux-pmi --libpmi-noflux fails w/ flux libpmi2.so' '
+	test_must_fail flux run bash -c "\
+	    flux pmi --method=libpmi2:$(cat libpmi2) --libpmi-noflux barrier"
+'
+test_expect_success 'flux broker refuses the Flux pmi lib and goes single' '
+	FLUX_PMI_DEBUG=1 FLUX_PMI_CLIENT_METHODS="libpmi2 single" \
+	    LD_LIBRARY_PATH=$(dirname $(cat libpmi2)) \
             flux start /bin/true 2>debug.err &&
 	grep single debug.err
 '
