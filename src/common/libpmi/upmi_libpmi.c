@@ -124,6 +124,16 @@ static struct plugin_ctx *plugin_ctx_create (const char *path,
         errprintf (error, "%s:  missing required PMI_* symbols", path);
         goto error;
     }
+
+    /* Cray's libpmi requires workarounds implemented in the libpmi2 plugin.
+     * We shouldn't land here but if we do, fail early.
+     * See flux-framework/flux-core#504
+     */
+    if (dlsym (ctx->dso, "PMI_CRAY_Get_app_size") != NULL) {
+        errprintf (error, "refusing to use quirky cray libpmi.so");
+        goto error;
+    }
+
     return ctx;
 error:
     if (ctx->dso)
