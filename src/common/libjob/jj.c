@@ -16,6 +16,8 @@
 #include <string.h>
 #include <jansson.h>
 
+#include "ccan/str/str.h"
+
 #include "jj.h"
 
 static int jj_read_level (json_t *o, int level, struct jj_counts *jj);
@@ -44,16 +46,16 @@ static int jj_read_vertex (json_t *o, int level, struct jj_counts *jj)
         errno = EINVAL;
         return -1;
     }
-    if (strcmp (type, "node") == 0) {
+    if (streq (type, "node")) {
         jj->nnodes = count;
         if (exclusive)
             jj->exclusive = true;
     }
-    else if (strcmp (type, "slot") == 0)
+    else if (streq (type, "slot"))
         jj->nslots = count;
-    else if (strcmp (type, "core") == 0)
+    else if (streq (type, "core"))
         jj->slot_size = count;
-    else if (strcmp (type, "gpu") == 0)
+    else if (streq (type, "gpu"))
         jj->slot_gpus = count;
     else {
         sprintf (jj->error, "Unsupported resource type '%s'", type);

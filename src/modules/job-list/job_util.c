@@ -19,6 +19,7 @@
 #include <assert.h>
 
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "job-list.h"
 #include "job_util.h"
@@ -42,21 +43,21 @@ static int store_attr (struct job *job,
 {
     json_t *val = NULL;
 
-    if (!strcmp (attr, "userid")) {
+    if (streq (attr, "userid")) {
         val = json_integer (job->userid);
     }
-    else if (!strcmp (attr, "urgency")) {
+    else if (streq (attr, "urgency")) {
         val = json_integer (job->urgency);
     }
-    else if (!strcmp (attr, "priority")) {
+    else if (streq (attr, "priority")) {
         if (!(job->states_mask & FLUX_JOB_STATE_SCHED))
             return 0;
         val = json_integer (job->priority);
     }
-    else if (!strcmp (attr, "t_submit")) {
+    else if (streq (attr, "t_submit")) {
         val = json_real (job->t_submit);
     }
-    else if (!strcmp (attr, "t_depend")) {
+    else if (streq (attr, "t_depend")) {
         /* if submit_version < 1, it means it was not set.  This is
          * before the introduction of event `validate` after 0.41.1.
          * Before the introduction of this event, t_submit and
@@ -70,31 +71,31 @@ static int store_attr (struct job *job,
             return 0;
         val = json_real (job->t_depend);
     }
-    else if (!strcmp (attr, "t_run")) {
+    else if (streq (attr, "t_run")) {
         if (!(job->states_mask & FLUX_JOB_STATE_RUN))
             return 0;
         val = json_real (job->t_run);
     }
-    else if (!strcmp (attr, "t_cleanup")) {
+    else if (streq (attr, "t_cleanup")) {
         if (!(job->states_mask & FLUX_JOB_STATE_CLEANUP))
             return 0;
         val = json_real (job->t_cleanup);
     }
-    else if (!strcmp (attr, "t_inactive")) {
+    else if (streq (attr, "t_inactive")) {
         if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE))
             return 0;
         val = json_real (job->t_inactive);
     }
-    else if (!strcmp (attr, "state")) {
+    else if (streq (attr, "state")) {
         val = json_integer (job->state);
     }
-    else if (!strcmp (attr, "name")) {
+    else if (streq (attr, "name")) {
         /* job->name potentially NULL if jobspec invalid */
         if (!job->name)
             return 0;
         val = json_string (job->name);
     }
-    else if (!strcmp (attr, "queue")) {
+    else if (streq (attr, "queue")) {
         /* job->queue potentially NULL if:
          * - unspecified
          * - jobspec invalid
@@ -103,98 +104,98 @@ static int store_attr (struct job *job,
             return 0;
         val = json_string (job->queue);
     }
-    else if (!strcmp (attr, "ntasks")) {
+    else if (streq (attr, "ntasks")) {
         /* job->ntasks potentially < 0 if jobspec invalid */
         if (job->ntasks < 0)
             return 0;
         val = json_integer (job->ntasks);
     }
-    else if (!strcmp (attr, "ncores")) {
+    else if (streq (attr, "ncores")) {
         /* job->ncores potentially < 0 if not set yet or R invalid,
          * may be set in DEPEND or RUN state */
         if (job->ncores < 0)
             return 0;
         val = json_integer (job->ncores);
     }
-    else if (!strcmp (attr, "duration")) {
+    else if (streq (attr, "duration")) {
         /* job->duration potentially < 0 if jobspec invalid */
         if (job->duration < 0)
             return 0;
         val = json_real (job->duration);
     }
-    else if (!strcmp (attr, "nnodes")) {
+    else if (streq (attr, "nnodes")) {
         /* job->nnodes < 0 if not set yet or R invalid, may be set in
          * DEPEND or RUN state */
         if (job->nnodes < 0)
             return 0;
         val = json_integer (job->nnodes);
     }
-    else if (!strcmp (attr, "ranks")) {
+    else if (streq (attr, "ranks")) {
         /* job->ranks potentially NULL if R invalid */
         if (!(job->states_mask & FLUX_JOB_STATE_RUN)
             || !job->ranks)
             return 0;
         val = json_string (job->ranks);
     }
-    else if (!strcmp (attr, "nodelist")) {
+    else if (streq (attr, "nodelist")) {
         /* job->nodelist potentially NULL if R invalid */
         if (!(job->states_mask & FLUX_JOB_STATE_RUN)
             || !job->nodelist)
             return 0;
         val = json_string (job->nodelist);
     }
-    else if (!strcmp (attr, "expiration")) {
+    else if (streq (attr, "expiration")) {
         /* job->expiration potentially < 0 if R invalid */
         if (!(job->states_mask & FLUX_JOB_STATE_RUN)
             || job->expiration < 0)
             return 0;
         val = json_real (job->expiration);
     }
-    else if (!strcmp (attr, "waitstatus")) {
+    else if (streq (attr, "waitstatus")) {
         if (job->wait_status < 0)
             return 0;
         val = json_integer (job->wait_status);
     }
-    else if (!strcmp (attr, "success")) {
+    else if (streq (attr, "success")) {
         if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE))
             return 0;
         val = json_boolean (job->success);
     }
-    else if (!strcmp (attr, "exception_occurred")) {
+    else if (streq (attr, "exception_occurred")) {
         if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE))
             return 0;
         val = json_boolean (job->exception_occurred);
     }
-    else if (!strcmp (attr, "exception_severity")) {
+    else if (streq (attr, "exception_severity")) {
         if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE)
             || !job->exception_occurred)
             return 0;
         val = json_integer (job->exception_severity);
     }
-    else if (!strcmp (attr, "exception_type")) {
+    else if (streq (attr, "exception_type")) {
         if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE)
             || !job->exception_occurred)
             return 0;
         val = json_string (job->exception_type);
     }
-    else if (!strcmp (attr, "exception_note")) {
+    else if (streq (attr, "exception_note")) {
         if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE)
             || !job->exception_occurred
             || !job->exception_note)
             return 0;
         val = json_string (job->exception_note);
     }
-    else if (!strcmp (attr, "result")) {
+    else if (streq (attr, "result")) {
         if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE))
             return 0;
         val = json_integer (job->result);
     }
-    else if (!strcmp (attr, "annotations")) {
+    else if (streq (attr, "annotations")) {
         if (!job->annotations)
             return 0;
         val = json_incref (job->annotations);
     }
-    else if (!strcmp (attr, "dependencies")) {
+    else if (streq (attr, "dependencies")) {
         if (!job->dependencies)
             return 0;
         val = json_incref (grudgeset_tojson (job->dependencies));
@@ -265,7 +266,7 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_list_error_t *errp)
             errno = EINVAL;
             goto error;
         }
-        if (strcmp (attr, "all") == 0) {
+        if (streq (attr, "all")) {
             if (store_all_attr (job, o, errp) < 0)
                 goto error;
         }

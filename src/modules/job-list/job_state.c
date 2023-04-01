@@ -25,6 +25,7 @@
 #include "src/common/libutil/grudgeset.h"
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libidset/idset.h"
+#include "ccan/str/str.h"
 
 #include "job-list.h"
 #include "job_state.h"
@@ -377,9 +378,9 @@ static void eventlog_inactive_complete (struct job *job)
     if (job->success)
         job->result = FLUX_JOB_RESULT_COMPLETED;
     else if (job->exception_occurred) {
-        if (!strcmp (job->exception_type, "cancel"))
+        if (streq (job->exception_type, "cancel"))
             job->result = FLUX_JOB_RESULT_CANCELED;
-        else if (!strcmp (job->exception_type, "timeout"))
+        else if (streq (job->exception_type, "timeout"))
             job->result = FLUX_JOB_RESULT_TIMEOUT;
     }
 }
@@ -570,35 +571,35 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
         }
 
         job->eventlog_seq++;
-        if (!strcmp (name, "submit")) {
+        if (streq (name, "submit")) {
             if (submit_context_parse (jsctx->h, job, context) < 0)
                 goto error;
             set_submit_timestamp (job, timestamp);
         }
-        else if (!strcmp (name, "validate")) {
+        else if (streq (name, "validate")) {
             update_job_state (jsctx, job, FLUX_JOB_STATE_DEPEND, timestamp);
         }
-        else if (!strcmp (name, "depend")) {
+        else if (streq (name, "depend")) {
             update_job_state (jsctx, job, FLUX_JOB_STATE_PRIORITY, timestamp);
         }
-        else if (!strcmp (name, "priority")) {
+        else if (streq (name, "priority")) {
             if (priority_context_parse (jsctx->h, job, context) < 0)
                 goto error;
             if (job->state == FLUX_JOB_STATE_PRIORITY)
                 update_job_state (jsctx, job, FLUX_JOB_STATE_SCHED, timestamp);
         }
-        else if (!strcmp (name, "urgency")) {
+        else if (streq (name, "urgency")) {
             if (urgency_context_parse (jsctx->h, job, context) < 0)
                 goto error;
         }
-        else if (!strcmp (name, "exception")) {
+        else if (streq (name, "exception")) {
             int severity;
             if (exception_context_parse (jsctx->h, job, context, &severity) < 0)
                 goto error;
             if (severity == 0)
                 update_job_state (jsctx, job, FLUX_JOB_STATE_CLEANUP, timestamp);
         }
-        else if (!strcmp (name, "alloc")) {
+        else if (streq (name, "alloc")) {
             /* context not required if no annotations */
             if (context) {
                 json_t *annotations;
@@ -611,23 +612,23 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
             if (job->state == FLUX_JOB_STATE_SCHED)
                 update_job_state (jsctx, job, FLUX_JOB_STATE_RUN, timestamp);
         }
-        else if (!strcmp (name, "finish")) {
+        else if (streq (name, "finish")) {
             if (finish_context_parse (jsctx->h, job, context) < 0)
                 goto error;
             if (job->state == FLUX_JOB_STATE_RUN)
                 update_job_state (jsctx, job, FLUX_JOB_STATE_CLEANUP, timestamp);
         }
-        else if (!strcmp (name, "clean")) {
+        else if (streq (name, "clean")) {
             update_job_state (jsctx, job, FLUX_JOB_STATE_INACTIVE, timestamp);
         }
-        else if (!strcmp (name, "flux-restart")) {
+        else if (streq (name, "flux-restart")) {
             revert_job_state (jsctx, job, timestamp);
         }
         else if (!strncmp (name, "dependency-", 11)) {
             if (dependency_context_parse (jsctx->h, job, name+11, context) < 0)
                 goto error;
         }
-        else if (!strcmp (name, "memo")) {
+        else if (streq (name, "memo")) {
             if (context && memo_update (jsctx->h, job, context) < 0)
                 goto error;
         }
@@ -1143,9 +1144,9 @@ static int dependency_context_parse (flux_t *h,
         return -1;
     }
 
-    if (strcmp (cmd, "add") == 0)
+    if (streq (cmd, "add"))
         rc = dependency_add (job, description);
-    else if (strcmp (cmd, "remove") == 0)
+    else if (streq (cmd, "remove"))
         rc = dependency_remove (job, description);
     else {
         flux_log (h, LOG_ERR,
@@ -1265,7 +1266,7 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
      */
     if ((job = zhashx_lookup (jsctx->index, &id))
          && (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1
-             && strcmp (name, "memo") != 0))
+             && !streq (name, "memo")))
             return 0;
 
     /* The "submit" event is now posted before the job transitions out of NEW
@@ -1273,7 +1274,7 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
      * submission failed and the job is removed from the KVS.  Drop the
      * nascent job info.
      */
-    if (job && !strcmp (name, "invalidate")) {
+    if (job && streq (name, "invalidate")) {
         if (job->list_handle) {
             zlistx_detach (jsctx->processing, job->list_handle);
             job->list_handle = NULL;
@@ -1292,7 +1293,7 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
      *  No need to proceed unless this is the first event (submit),
      *   but log an error since this is an unexpected condition.
      */
-    if (!job && strcmp (name, "submit") != 0) {
+    if (!job && !streq (name, "submit")) {
         flux_log (jsctx->h,
                   LOG_ERR,
                   "event %s: job %ju not in hash",
@@ -1301,7 +1302,7 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
         return 0;
     }
 
-    if (!strcmp (name, "submit")) {
+    if (streq (name, "submit")) {
         if (journal_submit_event (jsctx,
                                   job,
                                   id,
@@ -1310,28 +1311,28 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
                                   context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "validate")) {
+    else if (streq (name, "validate")) {
         if (journal_advance_job (jsctx,
                                  job,
                                  FLUX_JOB_STATE_DEPEND,
                                  timestamp) < 0)
             return -1;
     }
-    else if (!strcmp (name, "depend")) {
+    else if (streq (name, "depend")) {
         if (journal_advance_job (jsctx,
                                  job,
                                  FLUX_JOB_STATE_PRIORITY,
                                  timestamp) < 0)
             return -1;
     }
-    else if (!strcmp (name, "priority")) {
+    else if (streq (name, "priority")) {
         if (journal_priority_event (jsctx,
                                     job,
                                     timestamp,
                                     context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "alloc")) {
+    else if (streq (name, "alloc")) {
         /* alloc event contains annotations, but we only update
          * annotations via "annotations" events */
         if (journal_advance_job (jsctx,
@@ -1340,40 +1341,40 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
                                  timestamp) < 0)
             return -1;
     }
-    else if (!strcmp (name, "finish")) {
+    else if (streq (name, "finish")) {
         if (journal_finish_event (jsctx,
                                   job,
                                   timestamp,
                                   context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "clean")) {
+    else if (streq (name, "clean")) {
         if (journal_advance_job (jsctx,
                                  job,
                                  FLUX_JOB_STATE_INACTIVE,
                                  timestamp) < 0)
             return -1;
     }
-    else if (!strcmp (name, "urgency")) {
+    else if (streq (name, "urgency")) {
         if (journal_urgency_event (jsctx,
                                    job,
                                    context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "exception")) {
+    else if (streq (name, "exception")) {
         if (journal_exception_event (jsctx,
                                      job,
                                      timestamp,
                                      context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "annotations")) {
+    else if (streq (name, "annotations")) {
         if (journal_annotations_event (jsctx,
                                        job,
                                        context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "memo")) {
+    else if (streq (name, "memo")) {
         if (memo_update (jsctx->h, job, context) < 0)
             return -1;
     }
@@ -1381,7 +1382,7 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
         if (journal_dependency_event (jsctx, job, name+11, context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "flux-restart")) {
+    else if (streq (name, "flux-restart")) {
         /* Presently, job-list depends on job-manager.events-journal
          * service.  So if job-manager reloads, job-list must be
          * reloaded, making the probability of reaching this

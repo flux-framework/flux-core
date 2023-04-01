@@ -842,7 +842,7 @@ test_expect_success 'flux-jobs --format={status},{status_abbrev} works' '
 	count=$(grep -c "FAILED,F" statusI.out) &&
 	test $count -eq $(state_count failed) &&
 	count=$(grep -c "TIMEOUT,TO" statusI.out) &&
-	test $count -eq $(state_count failed) &&
+	test $count -eq $(state_count timeout) &&
 	count=$(grep -c "COMPLETED,CD" statusI.out) &&
 	test $count -eq $(state_count completed)
 '

@@ -17,6 +17,7 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 struct jobkey_input {
     bool guest;
@@ -75,7 +76,7 @@ void check_one_jobkey (struct jobkey_input *try)
 
     if (try->expected) {
         if (len >= 0 && len == strlen (try->expected)
-                     && !strcmp (path, try->expected))
+                     && streq (path, try->expected))
             valid = true;
     }
     else { // expected failure
@@ -252,13 +253,13 @@ void check_statestr(void)
         const char *s_long = flux_job_statetostr (ss->state, "L");
         const char *s_lower = flux_job_statetostr (ss->state, "s");
         const char *s_long_lower = flux_job_statetostr (ss->state, "l");
-        ok (s && !strcmp (s, ss->s),
+        ok (s && streq (s, ss->s),
             "flux_job_statetostr (%d, S) = %s", ss->state, ss->s);
-        ok (s_long && !strcmp (s_long, ss->s_long),
+        ok (s_long && streq (s_long, ss->s_long),
             "flux_job_statetostr (%d, L) = %s", ss->state, ss->s_long);
-        ok (s_lower && !strcmp (s_lower, ss->s_lower),
+        ok (s_lower && streq (s_lower, ss->s_lower),
             "flux_job_statetostr (%d, s) = %s", ss->state, ss->s_lower);
-        ok (s_long_lower && !strcmp (s_long_lower, ss->s_long_lower),
+        ok (s_long_lower && streq (s_long_lower, ss->s_long_lower),
             "flux_job_statetostr (%d, l) = %s", ss->state, ss->s_long_lower);
     }
     for (ss = &sstab[0]; ss->s != NULL; ss++) {
@@ -315,13 +316,13 @@ void check_resultstr(void)
         const char *r_long = flux_job_resulttostr (rr->result, "L");
         const char *r_lower = flux_job_resulttostr (rr->result, "s");
         const char *r_long_lower = flux_job_resulttostr (rr->result, "l");
-        ok (r && !strcmp (r, rr->r),
+        ok (r && streq (r, rr->r),
             "flux_job_resulttostr (%d, S) = %s", rr->result, rr->r);
-        ok (r_long && !strcmp (r_long, rr->r_long),
+        ok (r_long && streq (r_long, rr->r_long),
             "flux_job_resulttostr (%d, L) = %s", rr->result, rr->r_long);
-        ok (r_lower && !strcmp (r_lower, rr->r_lower),
+        ok (r_lower && streq (r_lower, rr->r_lower),
             "flux_job_resulttostr (%d, s) = %s", rr->result, rr->r_lower);
-        ok (r_long_lower && !strcmp (r_long_lower, rr->r_long_lower),
+        ok (r_long_lower && streq (r_long_lower, rr->r_long_lower),
             "flux_job_resulttostr (%d, l) = %s", rr->result, rr->r_long_lower);
     }
     for (rr = &rrtab[0]; rr->r != NULL; rr++) {
@@ -417,7 +418,7 @@ void check_jobid_parse_encode (void)
     struct jobid_parse_test *tp = jobid_parse_tests;
     while (tp->type != NULL) {
         memset (buf, 0, sizeof (buf));
-        if (MB_CUR_MAX == 1 && strcmp (tp->type, "f58") == 0) {
+        if (MB_CUR_MAX == 1 && streq (tp->type, "f58")) {
             tap_skip (4, "Skipping F58 encode/decode due to current locale");
             tp++;
             continue;

@@ -14,6 +14,7 @@
 #include <flux/core.h>
 
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #include "job.h"
 #include "strtab.h"
@@ -48,25 +49,25 @@ static flux_job_result_t job_result_calc (json_t *res)
 {
     double t_run = -1.;
     int status = -1;
-    bool exception = false;
+    bool exception_occurred = false;
     const char *exception_type = NULL;
     json_error_t error;
 
     if (json_unpack_ex (res, &error, 0,
                         "{s?f s:b s?i s?s}",
                         "t_run", &t_run,
-                        "exception_occurred", &exception,
+                        "exception_occurred", &exception_occurred,
                         "waitstatus", &status,
                         "exception_type", &exception_type) < 0)
         return FLUX_JOB_RESULT_FAILED;
 
     if (t_run > 0. && status == 0)
         return FLUX_JOB_RESULT_COMPLETED;
-    if (exception) {
+    if (exception_occurred) {
         if (exception_type != NULL) {
-            if (strcmp (exception_type, "cancel") == 0)
+            if (streq (exception_type, "cancel"))
                 return FLUX_JOB_RESULT_CANCELED;
-            if (strcmp (exception_type, "timeout") == 0)
+            if (streq (exception_type, "timeout"))
                 return FLUX_JOB_RESULT_TIMEOUT;
         }
     }
@@ -111,9 +112,9 @@ static int job_result_handle_exception (json_t *res,
     json_t *type;
     json_t *severity;
     json_t *note = NULL;
-    json_t *exception = json_object_get (res, "exception_occurred");
+    json_t *exception_occurred = json_object_get (res, "exception_occurred");
 
-    if (!exception)
+    if (!exception_occurred)
         return -1;
 
     if (json_unpack (context,
@@ -123,7 +124,7 @@ static int job_result_handle_exception (json_t *res,
                      "note", &note) < 0)
         return -1;
 
-    if (json_is_true (exception)) {
+    if (json_is_true (exception_occurred)) {
         /* Only overwrite previous exception if the latest
          *  is of greater severity.
          */
@@ -159,22 +160,22 @@ static void result_eventlog_cb (flux_future_t *f, void *arg)
         || eventlog_entry_parse (o, NULL, &name, &context) < 0)
         goto error;
 
-    if (!strcmp (name, "submit")) {
+    if (streq (name, "submit")) {
         if (json_object_set (res, "t_submit", timestamp) < 0)
             goto error;
     }
-    else if (!strcmp (name, "alloc")) {
+    else if (streq (name, "alloc")) {
         if (json_object_set (res, "t_run", timestamp) < 0)
             goto error;
     }
-    else if (!strcmp (name, "finish")) {
+    else if (streq (name, "finish")) {
         json_t *wstatus = NULL;
         if (json_object_set (res, "t_cleanup", timestamp) < 0
             || !(wstatus = json_object_get (context, "status"))
             || json_object_set (res, "waitstatus", wstatus) < 0)
             goto error;
     }
-    else if (!strcmp (name, "exception"))
+    else if (streq (name, "exception"))
         job_result_handle_exception (res, context);
 
     json_decref (o);
