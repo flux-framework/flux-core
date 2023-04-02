@@ -91,6 +91,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
     json_t *job;
     int queue_width = 0;
     int name_width;
+    int job_output_count = 0;
 
     werase (joblist->win);
     wattron (joblist->win, A_REVERSE);
@@ -166,7 +167,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
             wattron (joblist->win, COLOR_PAIR(TOP_COLOR_BLUE) | A_BOLD);
         if (joblist->show_queue) {
             mvwprintw (joblist->win,
-                       1 + index,
+                       1 + job_output_count,
                        0,
                         "%13.13s %8.8s %8.8s %2.2s %6d %6d %7.7s %-*.*s",
                        idstr,
@@ -193,7 +194,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
         }
         else {
             mvwprintw (joblist->win,
-                       1 + index,
+                       1 + job_output_count,
                        0,
                         "%13.13s %8.8s %2.2s %6d %6d %7.7s %-*.*s",
                        idstr,
@@ -216,6 +217,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
                          run,
                          name);
         }
+        job_output_count++;
         wattroff (joblist->win, A_REVERSE);
         wattroff (joblist->win, COLOR_PAIR(TOP_COLOR_BLUE) | A_BOLD);
     }
@@ -357,7 +359,7 @@ void joblist_pane_refresh (struct joblist_pane *joblist)
 
 void joblist_pane_set_current (struct joblist_pane *joblist, bool next)
 {
-    int current = -1;;
+    int index = -1;
     json_t *job;
     flux_jobid_t id = FLUX_JOBID_ANY;
     int njobs;
@@ -366,17 +368,35 @@ void joblist_pane_set_current (struct joblist_pane *joblist, bool next)
         return;
 
     if (joblist->current != FLUX_JOBID_ANY)
-        current = lookup_jobid_index (joblist->jobs, joblist->current);
+        index = lookup_jobid_index (joblist->jobs, joblist->current);
 
+    /* find next valid index */
     njobs = json_array_size (joblist->jobs);
-    if (next && current == njobs -1)
-        current = -1;
-    else if (!next && current <= 0)
-        current = njobs;
+    while (1) {
+        int next_index = next ? index + 1 : index - 1;
+        if (next_index == njobs)
+            next_index = 0;
+        else if (next_index < 0)
+            next_index = njobs - 1;
 
-    if (!(job = json_array_get (joblist->jobs,
-                                next ? current + 1 : current - 1)))
-        return;
+        if (!(job = json_array_get (joblist->jobs, next_index)))
+            return;
+
+        if (joblist->top->queue) {
+            const char *queue = "";
+            if (json_unpack (job, "{s?s}", "queue", &queue) < 0)
+                fatal (0, "error decoding a job record from job-list RPC");
+            if (!streq (joblist->top->queue, queue)) {
+                index = next_index;
+                continue;
+            }
+            break;
+        }
+        else
+            break;
+
+    }
+
     if (job && json_unpack (job, "{s:I}", "id", &id) < 0)
         return;
 

@@ -152,6 +152,13 @@ test_expect_success NO_CHAIN_LINT 'flux-top quits on q keypress' '
 	kill -USR1 $pid &&
 	wait $pid
 '
+# there are two jobs running, the first (listed higher) is the
+# non-batch job, the second (listed lower) is the batch job.  So we're
+# moving down three times (highlight first job, highlight second job,
+# cycle back to first job), moving up (cycle back to second job), then
+# hitting enter.
+#
+# we then hit quit twice to exit
 test_expect_success NO_CHAIN_LINT 'flux-top can call itself recursively' '
 	SHELL=/bin/sh &&
 	flux jobs &&
@@ -169,6 +176,8 @@ test_expect_success NO_CHAIN_LINT 'flux-top can call itself recursively' '
 	$runpty -o recurse.log --input=recurse.in flux top &&
 	grep -q $(echo $(cat expected.id) | sed "s/ƒ//") recurse.log
 '
+# note that FLUX_URI_RESOLVE_LOCAL=t is intentionally not set on
+# the runpty line below, as we're using a fake ssh
 test_expect_success NO_CHAIN_LINT 'flux-top does not exit on recursive failure' '
 	cat <<-EOF1 >ssh-fail &&
 	#!/bin/sh
@@ -192,6 +201,7 @@ test_expect_success NO_CHAIN_LINT 'flux-top does not exit on recursive failure' 
 	FLUX_SSH=$(pwd)/ssh-fail \
 	    $runpty -f asciicast -o recurse-fail.log \
 	        --input=recurse-fail.in flux top &&
+	export FLUX_URI_RESOLVE_LOCAL=t
 	grep -qi "error connecting to Flux" recurse-fail.log
 '
 test_expect_success 'cleanup running jobs' '
@@ -334,4 +344,48 @@ test_expect_success 'flux-top shows expected data in debug queue after cancels' 
 	test $(grep batch debugqC.out | wc -l) -eq 0 &&
 	test $(grep debug debugqC.out | wc -l) -eq 0
 '
+# for interactive test below, job submission order here is important.
+# first two jobs are to batch queue, last is to debug queue.  This
+# leads to the debug queue job normally being listed first when jobs
+# in all queues are listed.  Thus we can test that the jobs specific
+# to the batch queue are listed correctly when there is queue
+# filtering
+test_expect_success 'submit jobs to queues for interactive test' '
+	cat >batchQ.sh <<-EOT &&
+	#!/bin/sh
+	flux submit --wait-event=start sleep 300
+	touch job-queue1-has-started
+	flux queue drain
+	EOT
+	chmod +x batchQ.sh &&
+	flux batch -t30m -n1 --queue=batch batchQ.sh >jobidQ1 &&
+	$waitfile job-queue1-has-started &&
+	flux submit -n1 --queue=batch \
+		bash -c "touch job-queue2-has-started && sleep 300" >jobidQ2 &&
+	$waitfile job-queue2-has-started &&
+	flux submit -n1 --queue=debug \
+		bash -c "touch job-queue3-has-started && sleep 300" >jobidQ3 &&
+	$waitfile job-queue3-has-started
+'
+# only two batch jobs should be listed in filtered output.  See non-queue
+# based equivalent test above for description on what this is doing
+# interactively.
+test_expect_success NO_CHAIN_LINT 'flux-top can call itself recursively with queue filter' '
+	SHELL=/bin/sh &&
+	flux jobs &&
+	flux proxy $(cat jobidQ1) flux jobs -c1 -no {id} >expectedQ.id &&
+	cat <<-EOF >recurseQ.in &&
+	{ "version": 2 }
+	[0.5, "i", "j"]
+	[1.0, "i", "j"]
+	[1.5, "i", "j"]
+	[2.0, "i", "k"]
+	[2.5, "i", "\n"]
+	[3.25, "i", "q"]
+	[3.75, "i", "q"]
+	EOF
+	$runpty -o recurseQ.log --input=recurseQ.in flux top --queue=batch &&
+	grep -q $(echo $(cat expectedQ.id) | sed "s/ƒ//") recurseQ.log
+'
+
 test_done
