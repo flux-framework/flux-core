@@ -1156,6 +1156,53 @@ test_expect_success 'flux-jobs: --color=always works (notty)' '
 '
 
 #
+# json tests
+#
+
+test_expect_success 'flux-jobs: --json does not work with --stats' '
+	test_must_fail flux jobs --stats --json &&
+	test_must_fail flux jobs --stats-only --json
+'
+
+#  Multiple jobs return an array
+#  Active jobs do not have result
+test_expect_success 'flux-jobs: --json option works' '
+	flux jobs --json >jobs.json &&
+	jq -e ".jobs[0].id" < jobs.json &&
+	jq -e ".jobs[0] | .result | not" < jobs.json &&
+	jq -e ".jobs[0] | .t_cleanup | not" < jobs.json &&
+	jq -e ".jobs[0] | .exception.occurred == false" < jobs.json
+'
+
+#  Ensure single jobid argument returns single JSON object
+test_expect_success 'flux-jobs: --json option works with one jobid' '
+	testid=$(cat active.ids | head -1 | flux job id) &&
+	flux jobs --json $testid | jq -e ".id == $testid"
+'
+
+#  Ensure failed job has some expected fields
+test_expect_success 'flux-jobs: --json works for inactive job' '
+	testid=$(cat failed.ids | head -1 | flux job id) &&
+	flux jobs --json $testid > failedjob.json &&
+	test_debug "jq < failedjob.json" &&
+	jq -e ".id == $testid" < failedjob.json &&
+	jq -e ".result == \"FAILED\"" < failedjob.json &&
+	jq -e ".success == false" < failedjob.json &&
+	jq -e ".state == \"INACTIVE\"" < failedjob.json &&
+	jq -e ".t_cleanup > 0" < failedjob.json &&
+	jq -e ".t_run > 0" < failedjob.json &&
+	jq -e ".runtime > 0" < failedjob.json &&
+	jq -e ".exception.occurred == true" < failedjob.json &&
+	jq -e ".exception.type" < failedjob.json
+'
+
+#  Asking for a specific nonexisting jobid returns no output
+test_expect_success 'flux-jobs: --json with missing jobid returns nothing' '
+	flux jobs --json 123 >missing.json &&
+	test_must_be_empty missing.json
+'
+
+#
 # corner cases
 #
 
