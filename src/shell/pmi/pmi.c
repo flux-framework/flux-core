@@ -50,7 +50,7 @@
  * - Teardown of the subprocess channel is deferred until task completion,
  *   although client closes its end after PMI_Finalize().
  */
-#define FLUX_SHELL_PLUGIN_NAME "pmi"
+#define FLUX_SHELL_PLUGIN_NAME "pmi-simple"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -58,6 +58,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <argz.h>
 #include <flux/core.h>
 #include <jansson.h>
 
@@ -570,6 +571,25 @@ error:
     return NULL;
 }
 
+static bool member_of_csv (const char *list, const char *name)
+{
+    char *argz = NULL;
+    size_t argz_len;
+
+    if (argz_create_sep (list, ',', &argz, &argz_len) == 0) {
+        const char *entry = NULL;
+
+        while ((entry = argz_next (argz, argz_len, entry))) {
+            if (streq (entry, name)) {
+                free (argz);
+                return true;
+            }
+        }
+        free (argz);
+    }
+    return false;
+}
+
 static int shell_pmi_init (flux_plugin_t *p,
                            const char *topic,
                            flux_plugin_arg_t *arg,
@@ -578,15 +598,22 @@ static int shell_pmi_init (flux_plugin_t *p,
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct shell_pmi *pmi;
     json_t *config = NULL;
+    const char *pmi_opt = NULL;
 
-    if (flux_shell_getopt_unpack (shell, "pmi", "o", &config) < 0)
-        return -1;
-    if (config && json_is_string (config)) {
-        if (streq (json_string_value (config), "off"))
-            return 0; // plugin disabled
-        shell_log_error ("unknown option: '%s'", json_string_value (config));
+    if (flux_shell_getopt_unpack (shell, "pmi", "s", &pmi_opt) < 0) {
+        shell_log_error ("pmi shell option must be a string");
         return -1;
     }
+    if (flux_shell_getopt_unpack (shell, "pmi-simple", "o", &config) < 0) {
+        shell_log_error ("error parsing pmi-simple shell option");
+        return -1;
+    }
+    /* This plugin is disabled _only_ if '-opmi=LIST' was specified without
+     * "simple" in LIST.
+     */
+    if (pmi_opt && !member_of_csv (pmi_opt, "simple"))
+        return 0; // plugin disabled
+    shell_debug ("simple wire protocol is enabled");
 
     if (!(pmi = pmi_create (shell, config)))
         return -1;
