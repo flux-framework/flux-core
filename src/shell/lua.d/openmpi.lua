@@ -10,9 +10,6 @@
 
 if shell.options.mpi == "none" then return end
 
-shell.setenv ("OMPI_MCA_pmix", "flux")
-shell.setenv ("OMPI_MCA_schizo", "flux")
-
 -- OpenMPI needs a job-unique directory for vader shmem paths, otherwise
 -- multiple jobs per node may conflict (see flux-framework/flux-core#3649).
 
