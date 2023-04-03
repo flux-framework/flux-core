@@ -14,6 +14,24 @@ kvstest2=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest2
 pmi_info=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 pmi2_info=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi2_info
 
+test_expect_success 'flux run sets PMI_FD' '
+	flux run printenv PMI_FD
+'
+test_expect_success 'flux run -o pmi=simple sets PMI_FD' '
+	flux run -o pmi=simple printenv PMI_FD
+'
+test_expect_success 'flux run -o pmi=simple,unknown sets PMI_FD' '
+	flux run -o pmi=simple,unknown printenv PMI_FD
+'
+test_expect_success 'flux run -o pmi=unknown,simple sets PMI_FD' '
+	flux run -o pmi=unknown,simple printenv PMI_FD
+'
+test_expect_success 'flux run -o pmi=unknown does not set PMI_FD' '
+	test_must_fail flux run -o pmi=unknown printenv PMI_FD
+'
+test_expect_success 'flux run -o pmi=off does not set PMI_FD' '
+	test_must_fail flux run -o pmi=off printenv PMI_FD
+'
 test_expect_success 'flux run -o pmi.badopt fails' '
 	test_must_fail flux run -o pmi.badopt /bin/true
 '
