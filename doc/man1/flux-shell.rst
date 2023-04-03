@@ -325,17 +325,22 @@ options are supported by the builtin plugins of ``flux-shell``:
   be set by the :man1:`flux-submit` and related commands --taskmap`` option.
 
 **pmi=off**
-  Disable the process management interface (PMI-1) which is required for
-  bootstrapping most parallel program environments.
+  Disable the process management interface for parallel jobs (see below).
 
-**pmi.nomap**
+**pmi=LIST**
+  Specify a comma-separated list of PMI implementations to enable.  If the
+  option is unspecified, the ``simple`` PMI-1 wire protocol implementation
+  is enabled.  Other options such as ``cray-pals`` or ``pmix`` may be
+  installed on your system.
+
+**pmi-simple.nomap**
   Skip populating the PMI ``flux.taskmap`` and ``PMI_process_mapping`` keys.
 
-**pmi.kvs=native**
+**pmi-simple.kvs=native**
   Use the native Flux KVS instead of the PMI plugin's built-in key exchange
   algorithm.
 
-**pmi.exchange.k=N**
+**pmi-simple.exchange.k=N**
   Configure the PMI plugin's built-in key exchange algorithm to use a
   virtual tree fanout of ``N`` for key gather/broadcast.  The default is 2.
 

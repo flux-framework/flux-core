@@ -705,3 +705,4 @@ testprog
 libc
 unbuffered
 statex
+pmix
