@@ -36,6 +36,8 @@ struct plugin_ctx {
     int (*kvs_put) (const char *kvsname, const char *key, const char *value);
     int (*kvs_commit) (const char *kvsname);
     int (*kvs_get) (const char *kvsname, const char *key, char *value, int len);
+    int rank;
+    int size;
     char kvsname[1024];
 };
 
@@ -124,6 +126,16 @@ static struct plugin_ctx *plugin_ctx_create (const char *path,
         errprintf (error, "%s:  missing required PMI_* symbols", path);
         goto error;
     }
+
+    /* Cray's libpmi requires workarounds implemented in the libpmi2 plugin.
+     * We shouldn't land here but if we do, fail early.
+     * See flux-framework/flux-core#504
+     */
+    if (dlsym (ctx->dso, "PMI_CRAY_Get_app_size") != NULL) {
+        errprintf (error, "refusing to use quirky cray libpmi.so");
+        goto error;
+    }
+
     return ctx;
 error:
     if (ctx->dso)
@@ -209,36 +221,14 @@ static int op_initialize (flux_plugin_t *p,
                           void *data)
 {
     struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
-    int result;
-    int spawned;
-    int rank;
-    int size;
-
-    result = ctx->init (&spawned);
-    if (result != PMI_SUCCESS)
-        return upmi_seterror (p, args, "init: %s", pmi_strerror (result));
-
-    result = ctx->kvs_get_my_name (ctx->kvsname, sizeof (ctx->kvsname));
-    if (result != PMI_SUCCESS)
-        return upmi_seterror (p, args, "get_name: %s", pmi_strerror (result));
-
-    result = ctx->get_rank (&rank);
-    if (result != PMI_SUCCESS)
-        return upmi_seterror (p, args, "get_rank: %s", pmi_strerror (result));
-
-    result = ctx->get_size (&size);
-    if (result != PMI_SUCCESS)
-        return upmi_seterror (p, args, "get_size: %s", pmi_strerror (result));
 
     if (flux_plugin_arg_pack (args,
                               FLUX_PLUGIN_ARG_OUT,
                               "{s:i s:s s:i}",
-                              "rank", rank,
+                              "rank", ctx->rank,
                               "name", ctx->kvsname,
-                              "size", size) < 0)
+                              "size", ctx->size) < 0)
         return -1;
-
-
     return 0;
 }
 
@@ -284,6 +274,28 @@ static int op_preinit (flux_plugin_t *p,
         plugin_ctx_destroy (ctx);
         return upmi_seterror (p, args, "%s", strerror (errno));
     }
+
+    /* Call PMI_Init() and basic info functions now so that upmi can fall
+     * through to the next plugin on failure.
+     */
+    int result;
+    int spawned;
+    result = ctx->init (&spawned);
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "init: %s", pmi_strerror (result));
+
+    result = ctx->kvs_get_my_name (ctx->kvsname, sizeof (ctx->kvsname));
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "get_name: %s", pmi_strerror (result));
+
+    result = ctx->get_rank (&ctx->rank);
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "get_rank: %s", pmi_strerror (result));
+
+    result = ctx->get_size (&ctx->size);
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "get_size: %s", pmi_strerror (result));
+
     const char *name = dlinfo_name (ctx->dso);
     if (name) {
         char note[1024];

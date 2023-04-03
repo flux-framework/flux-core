@@ -48,6 +48,9 @@ struct plugin_ctx {
                        int valuelen,
                        int *found);
     int flags;
+    int size;
+    int rank;
+    char jobid[256];
 };
 
 static const char *plugin_name = "libpmi2";
@@ -323,27 +326,13 @@ static int op_initialize (flux_plugin_t *p,
                           void *data)
 {
     struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
-    int result;
-    int spawned;
-    int size;
-    int rank;
-    int appnum;
-    char jobid[256];
-
-    result = ctx->init (&spawned, &size, &rank, &appnum);
-    if (result != PMI2_SUCCESS)
-        return upmi_seterror (p, args, "init: %s", pmi_strerror (result));
-
-    result = ctx->job_getid (jobid, sizeof (jobid));
-    if (result != PMI2_SUCCESS)
-        return upmi_seterror (p, args, "init: %s", pmi_strerror (result));
 
     if (flux_plugin_arg_pack (args,
                               FLUX_PLUGIN_ARG_OUT,
                               "{s:i s:s s:i}",
-                              "rank", rank,
-                              "name", jobid,
-                              "size", size) < 0)
+                              "rank", ctx->rank,
+                              "name", ctx->jobid,
+                              "size", ctx->size) < 0)
         return -1;
     return 0;
 }
@@ -392,6 +381,23 @@ static int op_preinit (flux_plugin_t *p,
         plugin_ctx_destroy (ctx);
         return upmi_seterror (p, args, "%s", strerror (errno));
     }
+
+    /* Call PMI2_Init() and PMI2_Job_Getid() now so that upmi can fall
+     * through to the next plugin on failure.
+     */
+    int spawned;
+    int appnum;
+    int result;
+    result = ctx->init (&spawned, &ctx->size, &ctx->rank, &appnum);
+    if (result != PMI2_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+    /* N.B. slurm's libpmi2 succeeds in PMI2_Init() but fails here
+     * outside of a slurm job.  See: flux-framework/flux-core#5057
+     */
+    result = ctx->job_getid (ctx->jobid, sizeof (ctx->jobid));
+    if (result != PMI2_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+
     const char *name = dlinfo_name (ctx->dso);
     if (name) {
         char note[1024];
