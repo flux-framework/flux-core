@@ -47,6 +47,7 @@ static void keys_cb (flux_reactor_t *r,
             queues_prev (keys->top->queues);
             summary_pane_query (keys->top->summary_pane);
             summary_pane_draw (keys->top->summary_pane);
+            joblist_filter_jobs (keys->top->joblist_pane);
             joblist_pane_draw (keys->top->joblist_pane);
             break;
         case 'l':
@@ -54,6 +55,7 @@ static void keys_cb (flux_reactor_t *r,
             queues_next (keys->top->queues);
             summary_pane_query (keys->top->summary_pane);
             summary_pane_draw (keys->top->summary_pane);
+            joblist_filter_jobs (keys->top->joblist_pane);
             joblist_pane_draw (keys->top->joblist_pane);
             break;
         case '\n':

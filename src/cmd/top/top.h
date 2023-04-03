@@ -79,6 +79,7 @@ void joblist_pane_refresh (struct joblist_pane *joblist);
 void joblist_pane_query (struct joblist_pane *joblist);
 void joblist_pane_set_current (struct joblist_pane *joblist, bool next);
 void joblist_pane_enter (struct joblist_pane *joblist);
+void joblist_filter_jobs (struct joblist_pane *joblist);
 
 struct keys *keys_create (struct top *top);
 void keys_destroy (struct keys *keys);
