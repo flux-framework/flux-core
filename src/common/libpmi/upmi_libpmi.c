@@ -280,32 +280,33 @@ static int op_preinit (flux_plugin_t *p,
      */
     int result;
     int spawned;
+    const char *name = dlinfo_name (ctx->dso);
+
+    if (!name)
+        name = "unknown";
+
     result = ctx->init (&spawned);
     if (result != PMI_SUCCESS)
-        return upmi_seterror (p, args, "init: %s", pmi_strerror (result));
-
+        goto error;
     result = ctx->kvs_get_my_name (ctx->kvsname, sizeof (ctx->kvsname));
     if (result != PMI_SUCCESS)
-        return upmi_seterror (p, args, "get_name: %s", pmi_strerror (result));
-
+        goto error;
     result = ctx->get_rank (&ctx->rank);
     if (result != PMI_SUCCESS)
-        return upmi_seterror (p, args, "get_rank: %s", pmi_strerror (result));
-
+        goto error;
     result = ctx->get_size (&ctx->size);
     if (result != PMI_SUCCESS)
-        return upmi_seterror (p, args, "get_size: %s", pmi_strerror (result));
+        goto error;
 
-    const char *name = dlinfo_name (ctx->dso);
-    if (name) {
-        char note[1024];
-        snprintf (note, sizeof (note), "using %s", name);
-        flux_plugin_arg_pack (args,
-                              FLUX_PLUGIN_ARG_OUT,
-                              "{s:s}",
-                              "note", note);
-    }
+    char note[1024];
+    snprintf (note, sizeof (note), "using %s", name);
+    flux_plugin_arg_pack (args,
+                          FLUX_PLUGIN_ARG_OUT,
+                          "{s:s}",
+                          "note", note);
     return 0;
+error:
+    return upmi_seterror (p, args, "%s: %s", name, pmi_strerror (result));
 }
 
 static const struct flux_plugin_handler optab[] = {

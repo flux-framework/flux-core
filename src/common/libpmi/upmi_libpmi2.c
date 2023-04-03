@@ -388,31 +388,35 @@ static int op_preinit (flux_plugin_t *p,
     int spawned;
     int appnum;
     int result;
+    const char *name = dlinfo_name (ctx->dso);
+
+    if (!name)
+        name = "unknown";
+
     result = ctx->init (&spawned, &ctx->size, &ctx->rank, &appnum);
     if (result != PMI2_SUCCESS)
-        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+        goto error;
     /* N.B. slurm's libpmi2 succeeds in PMI2_Init() but fails here
      * outside of a slurm job.  See: flux-framework/flux-core#5057
      */
     result = ctx->job_getid (ctx->jobid, sizeof (ctx->jobid));
     if (result != PMI2_SUCCESS)
-        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+        goto error;
 
-    const char *name = dlinfo_name (ctx->dso);
-    if (name) {
-        char note[1024];
-        snprintf (note,
-                  sizeof (note),
-                  "using %s%s",
-                  name,
-                  (ctx->flags & LIBPMI2_IS_CRAY_CRAY)
-                      ? " (cray quirks enabled)" : "");
-        flux_plugin_arg_pack (args,
-                              FLUX_PLUGIN_ARG_OUT,
-                              "{s:s}",
-                              "note", note);
-    }
+    char note[1024];
+    snprintf (note,
+              sizeof (note),
+              "using %s%s",
+              name,
+              (ctx->flags & LIBPMI2_IS_CRAY_CRAY)
+                  ? " (cray quirks enabled)" : "");
+    flux_plugin_arg_pack (args,
+                          FLUX_PLUGIN_ARG_OUT,
+                          "{s:s}",
+                          "note", note);
     return 0;
+error:
+    return upmi_seterror (p, args, "%s: %s", name, pmi_strerror (result));
 }
 
 static const struct flux_plugin_handler optab[] = {
