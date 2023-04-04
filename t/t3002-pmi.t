@@ -14,20 +14,35 @@ kvstest2=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest2
 pmi_info=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 pmi2_info=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi2_info
 
-test_expect_success 'flux run -o pmi=badopt fails' '
-	test_must_fail flux run -o pmi=badopt /bin/true
+test_expect_success 'flux run sets PMI_FD' '
+	flux run printenv PMI_FD
+'
+test_expect_success 'flux run -o pmi=simple sets PMI_FD' '
+	flux run -o pmi=simple printenv PMI_FD
+'
+test_expect_success 'flux run -o pmi=simple,unknown sets PMI_FD' '
+	flux run -o pmi=simple,unknown printenv PMI_FD
+'
+test_expect_success 'flux run -o pmi=unknown,simple sets PMI_FD' '
+	flux run -o pmi=unknown,simple printenv PMI_FD
+'
+test_expect_success 'flux run -o pmi=unknown does not set PMI_FD' '
+	test_must_fail flux run -o pmi=unknown printenv PMI_FD
+'
+test_expect_success 'flux run -o pmi=off does not set PMI_FD' '
+	test_must_fail flux run -o pmi=off printenv PMI_FD
 '
 test_expect_success 'flux run -o pmi.badopt fails' '
 	test_must_fail flux run -o pmi.badopt /bin/true
 '
-test_expect_success 'flux run -o pmi.exchange.badopt fails' '
-	test_must_fail flux run -o pmi.exchange.badopt /bin/true
+test_expect_success 'flux run -o pmi-simple.exchange.badopt fails' '
+	test_must_fail flux run -o pmi-simple.exchange.badopt /bin/true
 '
-test_expect_success 'flux run -o pmi.exchange.k=foo fails' '
-	test_must_fail flux run -o pmi.exchange.k=foo /bin/true
+test_expect_success 'flux run -o pmi-simple.exchange.k=foo fails' '
+	test_must_fail flux run -o pmi-simple.exchange.k=foo /bin/true
 '
-test_expect_success 'flux run -o pmi.nomap=foo fails' '
-	test_must_fail flux run -o pmi.nomap=foo /bin/true
+test_expect_success 'flux run -o pmi-simple.nomap=foo fails' '
+	test_must_fail flux run -o pmi-simple.nomap=foo /bin/true
 '
 
 test_expect_success 'pmi_info works' '
@@ -41,7 +56,7 @@ test_expect_success 'pmi_info --clique shows each node with own clique' '
 	test $count -eq ${SIZE}
 '
 test_expect_success 'pmi_info --clique none shows each task in its own clique' '
-	flux run -opmi.nomap -n${SIZE} -N${SIZE} \
+	flux run -opmi-simple.nomap -n${SIZE} -N${SIZE} \
 		${pmi_info} --clique >clique.none.out &&
 	count=$(cut -f2 -d: clique.none.out | sort | uniq | wc -l) &&
 	test $count -eq ${SIZE}
@@ -50,34 +65,34 @@ test_expect_success 'kvstest works' '
 	flux run -n${SIZE} -N${SIZE} ${kvstest}
 '
 
-test_expect_success 'kvstest works with -o pmi.exchange.k=1' '
-	flux run -n${SIZE} -N${SIZE} -o pmi.exchange.k=1 ${kvstest}
+test_expect_success 'kvstest works with -o pmi-simple.exchange.k=1' '
+	flux run -n${SIZE} -N${SIZE} -o pmi-simple.exchange.k=1 ${kvstest}
 '
-test_expect_success 'kvstest works with -o pmi.exchange.k=SIZE' '
-	flux run -n${SIZE} -N${SIZE} -o pmi.exchange.k=${SIZE} \
+test_expect_success 'kvstest works with -o pmi-simple.exchange.k=SIZE' '
+	flux run -n${SIZE} -N${SIZE} -o pmi-simple.exchange.k=${SIZE} \
 		${kvstest} 2>kvstest_k.err &&
 	grep "using k=${SIZE}" kvstest_k.err
 '
-test_expect_success 'kvstest works with -o pmi.exchange.k=SIZE+1' '
-	flux run -n${SIZE} -N${SIZE} -o pmi.exchange.k=$((${SIZE}+1)) \
+test_expect_success 'kvstest works with -o pmi-simple.exchange.k=SIZE+1' '
+	flux run -n${SIZE} -N${SIZE} -o pmi-simple.exchange.k=$((${SIZE}+1)) \
 		${kvstest} 2>kvstest_kp1.err &&
 	grep "using k=${SIZE}" kvstest_kp1.err
 '
 
-test_expect_success 'kvstest fails with -o pmi.kvs=unknown' '
-	test_must_fail flux run -o pmi.kvs=unknown ${kvstest}
+test_expect_success 'kvstest fails with -o pmi-simple.kvs=unknown' '
+	test_must_fail flux run -o pmi-simple.kvs=unknown ${kvstest}
 '
 
-test_expect_success 'kvstest works with -o pmi.kvs=native' '
-	flux run -n${SIZE} -N${SIZE} -o pmi.kvs=native ${kvstest}
+test_expect_success 'kvstest works with -o pmi-simple.kvs=native' '
+	flux run -n${SIZE} -N${SIZE} -o pmi-simple.kvs=native ${kvstest}
 '
 
 test_expect_success 'kvstest -N8 works' '
 	flux run -n${SIZE} -N${SIZE} ${kvstest} -N8
 '
 
-test_expect_success 'kvstest -N8 works with -o pmi.kvs=native' '
-	flux run -n${SIZE} -N${SIZE} -o pmi.kvs=native ${kvstest} -N8
+test_expect_success 'kvstest -N8 works with -o pmi-simple.kvs=native' '
+	flux run -n${SIZE} -N${SIZE} -o pmi-simple.kvs=native ${kvstest} -N8
 '
 
 test_expect_success 'verbose=2 shell option enables PMI server side tracing' '

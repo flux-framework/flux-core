@@ -27,7 +27,7 @@
  * Nodes that are peers in the ersatz tree may actually be multiple hops
  * apart on the Flux tree based overlay network at the broker level.
  */
-#define FLUX_SHELL_PLUGIN_NAME "pmi"
+#define FLUX_SHELL_PLUGIN_NAME "pmi-simple"
 
 #if HAVE_CONFIG_H
 #include "config.h"
