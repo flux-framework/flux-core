@@ -1,3 +1,57 @@
+flux-core version 0.49.0 - 2023-04-05
+-------------------------------------
+
+## New Features
+ * libpmi: improve error messages from upmi plugins (#5066)
+ * shell: support -o pmi=LIST (#5069)
+ * flux-jobs: add --json option (#5054)
+ * flux-job: add special exit code to flux job wait when not waitable (#5049)
+ * libpmi: enable flux to bootstrap with cray libpmi2.so (#5051)
+ * libpmi: improve tracing of dlopened PMI libraries (#5053)
+ * resource: do not allow ranks to be both drained and excluded (#5039)
+ * Support environment variable to override default output formats (#5028)
+ * improve broker debugging on overlay connect failure (#5014)
+ * rewrite flux-resource status (#4997)
+ * flux-resource: support overwrite of drain timestamp with `--force --force`
+   (#5000)
+ * python: improve Hostlist class indexing (#4993)
+
+## Fixes
+ * openmpi: don't force flux MCA plugins (#5067)
+ * PMI: ensure fallthrough when PMI library fails to initialize (#5058)
+ * flux-top: fix queue specific output display (#5032)
+ * flux-pgrep: fix warning about `sre_constants` on Python 3.11+ (#5043)
+ * prevent orphaned job processes when terminating jobs due to exception
+   (#4990)
+ * python: recognize local timezone epoch adjustment (#5025)
+ * fix rare `Unable to connect to JOBID` error from `flux alloc --bg` (#5012)
+ * job-manager: ensure epilog-start event prevents resource release for
+   job that never started (#5011)
+ * librlist: drop V1 flag from hwloc XML generation (#5007)
+ * fix: warning message to user should be actual command (#5002)
+ * flux-mini: improve deprecation warning (#4989)
+
+## Cleanup
+ * job-list: minor code consistency cleanup (#5031)
+ * mpi: drop mvapich.lua plugin (#5045)
+ * libflux: remove extraneous +1s used in buffers (#5020)
+ * cleanup: improve interface for subprocess logging (#5006)
+ * cleanup: simplify remote subprocess protocol (#5004)
+ * cleanup: allow subprocess service name to be configured (#5003)
+ * cleanup: improve reusability of common message handlers (#5001)
+
+## Documentation
+ * flux-job(1): update WAIT section (#5042)
+ * doc: document job environment variables (#5024)
+ * doc: document `FLUX_URI_RESOLVE_LOCAL` (#5023)
+ * cli: adjust description of `--begin-time` submission option (#5018)
+
+## Testsuite/CI/Development
+ * testsuite: increase test timeouts (#5017)
+ * testsuite: speed up t4000-issues-test-driver.t (#5010)
+ * testsuite: require jq(1) (#4995)
+
+
 flux-core version 0.48.0 - 2023-03-07
 -------------------------------------
 
