@@ -119,7 +119,7 @@ static int inventory_put_finalize (struct inventory *inv)
     int rc = -1;
 
     if (flux_future_get (inv->f, NULL) < 0) {
-        flux_log_error (inv->ctx->h, "error commiting R to KVS");
+        flux_log_error (inv->ctx->h, "error committing R to KVS");
         goto done;
     }
     if (reslog_post_pack (inv->ctx->reslog,
@@ -625,7 +625,7 @@ static void resource_reload (flux_t *h,
 
         if (!(resobj = resobj_from_xml (xml))) {
             errprintf (&error,
-                       "error buiding R from hwloc XML: %s",
+                       "error building R from hwloc XML: %s",
                        strerror (errno));
             errstr = error.text;
             goto error;

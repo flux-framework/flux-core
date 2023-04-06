@@ -69,7 +69,7 @@ static void post_startlog_event (flux_t *h,
 
     if (!(f = flux_kvs_commit (h, NULL, commit_flags, txn))
         || flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("Error commiting %s event: %s",
+        log_msg_exit ("Error committing %s event: %s",
                       name,
                       future_strerror (f, errno));
 

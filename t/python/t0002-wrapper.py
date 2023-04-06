@@ -23,10 +23,10 @@ def __flux_size():
 
 
 class TestWrapper(unittest.TestCase):
-    def test_call_non_existant(self):
+    def test_call_non_existent(self):
         f = flux.Flux("loop://")
         with self.assertRaises(flux.wrapper.MissingFunctionError):
-            f.non_existant_function_that_should_die("stuff")
+            f.non_existent_function_that_should_die("stuff")
 
     def test_call_insufficient_arguments(self):
         f = flux.Flux("loop://")

@@ -101,7 +101,7 @@ test_expect_success 'flux exec -d none works' '
 #  rank id to a file. After successful completion, the contents of the files
 #  are verfied to ensure each rank connected to the right broker.
 test_expect_success 'test_on_rank works on multiple ranks' '
-	ouput_dir=$(pwd) &&
+	output_dir=$(pwd) &&
 	rm -f rank_output.* &&
 	cat >multiple_rank_test <<EOF &&
 rank=\`flux getattr rank\`

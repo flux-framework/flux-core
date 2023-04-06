@@ -626,7 +626,7 @@ static int l_plugin_newindex (lua_State *L)
         plugstack_set_searchpath (rc_shell->plugstack, path);
         return 0;
     }
-    return luaL_error (L, "invald plugin method %s called", key);
+    return luaL_error (L, "invalid plugin method %s called", key);
 }
 
 static int l_shell_index (lua_State *L)
@@ -898,7 +898,7 @@ int shell_rc (flux_shell_t *shell, const char *rcfile)
                      lua_tostring (L, -1));
     }
     else
-        shell_trace ("Sucessfully loaded flux.shell module");
+        shell_trace ("Successfully loaded flux.shell module");
     lua_settop (L, 0);
     return shell_run_rcfile (shell, L, rcfile);
 }

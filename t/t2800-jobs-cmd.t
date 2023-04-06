@@ -429,7 +429,7 @@ test_expect_success 'flux-jobs good and bad IDs works' '
 	test $count -eq 3
 '
 
-test_expect_success 'flux-jobs ouputs warning on invalid options' '
+test_expect_success 'flux-jobs outputs warning on invalid options' '
 	ids=$(state_ids sched) &&
 	flux jobs --no-header -A ${ids} > warn.out 2> warn.err &&
 	grep WARNING warn.err

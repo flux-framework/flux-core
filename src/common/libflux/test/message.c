@@ -993,7 +993,7 @@ void check_aux (void)
     ok (flux_msg_aux_get (msg, "incorrect") == NULL,
         "flux_msg_aux_get for unknown key returns NULL");
     ok (flux_msg_aux_get (msg, "test") == test_data,
-        "flux_msg_aux_get aux data memeber key returns orig pointer");
+        "flux_msg_aux_get aux data member key returns orig pointer");
     flux_msg_destroy (msg);
     ok (myfree_arg == test_data,
         "destroyed message and aux destructor was called");

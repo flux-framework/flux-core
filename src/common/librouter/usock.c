@@ -258,7 +258,7 @@ static void conn_write_cb (flux_reactor_t *r,
                     /* Remote peer has closed connection.
                      * However, there may still be pending messages sent
                      * by peer, so do not destroy connection here. Instead,
-                     * drop all pending messsages in the output queue, and
+                     * drop all pending messages in the output queue, and
                      * let connection be closed after EOF/ECONNRESET from
                      * *read* side of connection.
                      */

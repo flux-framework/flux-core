@@ -76,7 +76,7 @@ typedef enum {
 
 typedef uint64_t flux_jobid_t;
 
-/*  Parse a jobid from NULL-teminated string 's' in any supported encoding.
+/*  Parse a jobid from NULL-terminated string 's' in any supported encoding.
  *  Returns 0 on success, -1 on failure.
  */
 int flux_job_id_parse (const char *s, flux_jobid_t *id);
@@ -263,7 +263,7 @@ int flux_job_result_get_unpack (flux_future_t *f, const char *fmt, ...);
  *  no timelimit), then timeleft is set to infinity. If the job is not
  *  in RUN state, or the job has expired, then timeleft is set to 0.
  *
- *  Returns -1 with error string assinged to 'errp' on failure.
+ *  Returns -1 with error string assigned to 'errp' on failure.
  */
 int flux_job_timeleft (flux_t *h, flux_error_t *errp, double *timeleft);
 

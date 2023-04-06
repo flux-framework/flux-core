@@ -25,7 +25,7 @@
  *
  * If the target job is active when the wait request is received,
  * the request is tacked onto the 'struct job' and processed upon
- * transtion to INACTIVE state.  If the target waitable job has already
+ * transition to INACTIVE state.  If the target waitable job has already
  * transitioned to INACTIVE, it is found in the wait->zombies hash
  * and the request is processed immediately.
  *

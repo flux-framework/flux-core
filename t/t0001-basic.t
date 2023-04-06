@@ -190,7 +190,7 @@ test_expect_success 'flux-start test exec fails on bad broker shell script' "
 	#
 	# We can't use test_must_fail here because on some OSes this command
 	# might fail with exit code 127, which test_must_fail does not
-	# acccept, so we use ! here since any failure is acceptable here
+	# accept, so we use ! here since any failure is acceptable here
 	#
 	! bash -c 'FLUX_EXEC_PATH_PREPEND=. flux start -s1 /bin/true'
 "
@@ -400,7 +400,7 @@ test_expect_success 'hostlist attr is set on size 1 instance' '
 test_expect_success 'hostlist attr is set on all ranks of size 4 instance' '
 	flux start ${ARGS} -s4 flux exec flux getattr hostlist
 '
-test_expect_success 'flux start (singlton) cleans up rundir' '
+test_expect_success 'flux start (singleton) cleans up rundir' '
 	flux start ${ARGS} \
 		flux getattr rundir >rundir_pmi.out &&
 	RUNDIR=$(cat rundir_pmi.out) &&

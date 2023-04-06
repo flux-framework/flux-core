@@ -148,7 +148,7 @@ test_expect_success 'try dump - | restore - to key and verify content' '
 	test $(flux kvs readlink yy.zz.z) = "smurf::otherthing"
 '
 test_expect_success 'dump ignores empty kvs directories' '
-	flux kvs mkdir emtpy &&
+	flux kvs mkdir empty &&
 	flux dump -v foo3.tar &&
 	tar tvf foo3.tar >toc &&
 	test_must_fail grep empty toc

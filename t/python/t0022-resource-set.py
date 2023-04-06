@@ -174,7 +174,7 @@ class TestRSet(unittest.TestCase):
         with self.assertRaises(ValueError):
             rset.set_property("yy", "foo")
 
-        # copy_constraint() with invalid property resturns empty set
+        # copy_constraint() with invalid property returns empty set
         empty = rset.copy_constraint({"properties": ["foo"]})
         self.assertIsInstance(empty, ResourceSet)
         self.assertEqual(str(empty), "")

@@ -27,7 +27,7 @@ def timer_cb(fh, *args, **kwargs):
 
 def rpc_cb(future):
     if future.get()["success"]:
-        print("client: Sucesss", file=sys.stderr)
+        print("client: Success", file=sys.stderr)
         future.get_flux().reactor_stop()
     else:
         future.get_flux().reactor_stop_error()

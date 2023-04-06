@@ -35,7 +35,7 @@
  *  the booting instance at what "level" it will be running, i.e. the
  *  number of parents. If the PMI key is missing, this is not an error,
  *  instead the level of this instance is considered to be zero.
- *  Additonally, if level > 0, the shell will have put the instance's
+ *  Additionally, if level > 0, the shell will have put the instance's
  *  jobid in the PMI kvsname for us as well, so populate the 'jobid' attr.
  */
 static int set_instance_level_attr (struct upmi *upmi,

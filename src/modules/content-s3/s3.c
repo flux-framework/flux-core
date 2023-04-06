@@ -153,7 +153,7 @@ int s3_bucket_create (struct s3_config *cfg, const char **errstr)
                                 //  to S3_initialize())
                           cfg->bucket,
                           S3CannedAclPrivate,
-                          NULL, // locationContstraint
+                          NULL, // locationConstraint
                           NULL, // requestContext (NULL for synchronous
                                 //  operation)
                           &resp_hndl,

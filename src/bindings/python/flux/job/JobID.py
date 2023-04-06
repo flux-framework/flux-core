@@ -41,7 +41,7 @@ class JobID(int):
     encoding, including:
 
      - decimal integer (no prefix)
-     - hexidecimal integer (prefix 0x)
+     - hexadecimal integer (prefix 0x)
      - dotted hex (dothex) (xxxx.xxxx.xxxx.xxxx)
      - kvs dir (dotted hex with `job.` prefix)
      - RFC19 F58: (Base58 encoding with prefix `ƒ` or `f`)
@@ -79,12 +79,12 @@ class JobID(int):
 
     @property
     def hex(self):
-        """Return 0x-prefixed hexidecimal representation of a JobID"""
+        """Return 0x-prefixed hexadecimal representation of a JobID"""
         return self.encode("hex")
 
     @property
     def dothex(self):
-        """Return dotted hexidecimal representation of a JobID"""
+        """Return dotted hexadecimal representation of a JobID"""
         return self.encode("dothex")
 
     @property

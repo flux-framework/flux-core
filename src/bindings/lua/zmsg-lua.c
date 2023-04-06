@@ -141,7 +141,7 @@ static int l_zmsg_info_index (lua_State *L)
         int errnum;
         if (!(zi->typemask & FLUX_MSGTYPE_RESPONSE))
             return lua_pusherror (L,
-                "zmsg: errnum requested for non-respose msg");
+                "zmsg: errnum requested for non-response msg");
         flux_msg_get_errnum (zi->msg, &errnum);
         lua_pushnumber (L, errnum);
         return (1);

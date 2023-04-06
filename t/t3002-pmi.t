@@ -125,7 +125,7 @@ test_expect_success 'PMI2 application abort is handled properly' '
 		${pmi2_info} --abort 0
 '
 
-# Ensure tha pmi_info can get clique ranks with a large enough
+# Ensure that pmi_info can get clique ranks with a large enough
 # number of tasks per node that PMI_process_mapping likely
 # overflowed the max value length for the PMI-1 KVS. This ensures
 # that the PMI client picked up flux.taskmap instead:

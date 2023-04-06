@@ -457,7 +457,7 @@ int mod_main (flux_t *h, int argc, char **argv)
      */
     json_decref (R_from_config);
     if (ctx->rank == 0) {
-        /*  Create reslog and reload eventlog before intializing
+        /*  Create reslog and reload eventlog before initializing
          *  acquire, exclude, and drain subsystems, since these
          *  are required by acquire and exclude.
          */
@@ -468,7 +468,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         if (!(ctx->acquire = acquire_create (ctx)))
             goto error;
 
-        /*  Intialize exclude subsystem before drain since drain uses
+        /*  Initialize exclude subsystem before drain since drain uses
          *  the exclude idset to ensure drained ranks that are now
          *  excluded are ignored.
          */

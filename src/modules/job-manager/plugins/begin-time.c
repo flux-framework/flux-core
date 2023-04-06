@@ -135,7 +135,7 @@ static int parse_timestamp (const char *s, double *dp)
     return 0;
 }
 
-/*  Handle job.dependnecy.begin-time requests
+/*  Handle job.dependency.begin-time requests
  */
 static int depend_cb (flux_plugin_t *p,
                       const char *topic,

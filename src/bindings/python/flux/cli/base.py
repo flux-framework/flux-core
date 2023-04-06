@@ -1269,7 +1269,7 @@ class SubmitBulkCmd(SubmitBaseCmd):
             ).then(self.exec_watch_cb, future, args, jobinfo, label)
         elif event.name == "finish":
             #
-            #  Collect exit status and adust self.exitcode if necesary:
+            #  Collect exit status and adust self.exitcode if necessary:
             #
             jobinfo["state"] = "done"
             status = self.status_to_exitcode(event.context["status"])

@@ -53,7 +53,7 @@ alias test_expect_success='expect_success_wrap'
 
 #
 #  All system instance tests are defined in t/system/*
-#  We run them serially to avoid conficted requests for resources
+#  We run them serially to avoid conflicted requests for resources
 #   to the enclosing system instance, which in CI may be limited.
 #
 for testscript in ${FLUX_SOURCE_DIR}/t/system/${T9000_SYSTEM_GLOB}; do

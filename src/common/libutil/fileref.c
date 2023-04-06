@@ -274,7 +274,7 @@ static json_t *fileref_create_directory (const char *path,
                          "mtime", (json_int_t)sb->st_mtime,
                          "ctime", (json_int_t)sb->st_ctime,
                          "mode", sb->st_mode))) {
-        errprintf (error, "%s: error packing directry file object", path);
+        errprintf (error, "%s: error packing directory file object", path);
         errno = ENOMEM;
         return NULL;
     }

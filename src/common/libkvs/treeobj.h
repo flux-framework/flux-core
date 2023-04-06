@@ -78,7 +78,7 @@ int treeobj_decode_val (const json_t *obj, void **data, int *len);
 int treeobj_get_count (const json_t *obj);
 
 /* get/add/remove directory entry
- * Get returns JSON object (owned by 'obj', do not destory), NULL on error.
+ * Get returns JSON object (owned by 'obj', do not destroy), NULL on error.
  * insert takes a reference on 'obj2' (caller retains ownership).
  * insert/delete return 0 on success, -1 on error with errno set.
  */

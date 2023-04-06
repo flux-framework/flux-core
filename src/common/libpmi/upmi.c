@@ -155,7 +155,7 @@ static int upmi_register_builtin (struct upmi *upmi)
     return 0;
 }
 
-/* Instantate 'struct upmi' without selecting a plugin.
+/* Instantiate 'struct upmi' without selecting a plugin.
  */
 static struct upmi *upmi_create_uninit (const char *methods,
                                         const char *searchpath,

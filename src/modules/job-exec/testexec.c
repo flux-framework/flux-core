@@ -12,7 +12,7 @@
  *
  * DESCRIPTION
  *
- * This exec module implments timer driven test execution without any
+ * This exec module implements timer driven test execution without any
  * job-shells for testing and demonstration purposes. The module is
  * activated either when it is the only active exec implementation
  * loaded, or if the exec test configuration block is present in the

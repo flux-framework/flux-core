@@ -334,7 +334,7 @@ void test_raw_values (void)
     ok (txn_get_op_count (txn) == 2,
         "txn contains two ops");
     ok (txn_get_op (txn, 0, &entry) == 0 && entry != NULL,
-        "retreived 1st op from txn");
+        "retrieved 1st op from txn");
     jdiag (entry);
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "txn_decode_op works");
@@ -350,7 +350,7 @@ void test_raw_values (void)
     /* Get 2nd
      */
     ok (txn_get_op (txn, 1, &entry) == 0 && entry != NULL,
-        "retreived 2nd op from txn");
+        "retrieved 2nd op from txn");
     jdiag (entry);
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "txn_decode_op works");

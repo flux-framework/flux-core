@@ -10,7 +10,7 @@ plugin.register { name = "done",
 }
 pass ("registered done_testing() plugin")
 
--- Create a plugin that will be overidden
+-- Create a plugin that will be overridden
 plugin.register { name = "test",
     handlers = {
       { topic = "*",

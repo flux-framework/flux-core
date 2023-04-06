@@ -39,7 +39,7 @@
  * JOB STARTING/RUNNING:
  *
  * After initialization is complete, the exec service emits a "starting"
- * event to the exec eventlog and calls the implementaton "start" method.
+ * event to the exec eventlog and calls the implementation "start" method.
  * Once all job shells or equivalent are running, the exec implementation
  * should invoke jobinfo_started(), which emits a "running" event to the
  * exec eventlog and sends the "start" response to the job-manager.
@@ -75,7 +75,7 @@
  * }
  *
  * The "bulk" execution implementation supports testing and other
- * paramters under attributes.system.exec.bulkexec, including:
+ * parameters under attributes.system.exec.bulkexec, including:
  *
  * {
  *   "mock_exception":s     - cancel job after a certain number of shells
@@ -695,7 +695,7 @@ static flux_future_t * namespace_move (struct jobinfo *job)
     /*
      *  Ensure the final eventlog entry ("done", from above), is committed
      *   to then eventlog before performing the next steps. This ensures
-     *   the eventlog is quiesced before the namspace is moved and becomes
+     *   the eventlog is quiesced before the namespace is moved and becomes
      *   read-only.
      */
     if (!(f = eventlogger_commit (job->ev))) {

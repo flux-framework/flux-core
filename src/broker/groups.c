@@ -131,7 +131,7 @@ static struct group *group_lookup (struct groups *g,
 
 /* Decode batch update object.
  * Caller must idset_destroy 'ranks' on success.
- * Returns 0 on success, -1 on failure with erro set.
+ * Returns 0 on success, -1 on failure with error set.
  */
 static int update_decode (json_t *o, struct idset **ranksp, bool *set_flagp)
 {

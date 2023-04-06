@@ -286,7 +286,7 @@ void check_statestr(void)
     ok (flux_job_statetostr (0, "l") != NULL,
         "flux_job_statetostr (0, l) returned non-NULL");
     ok (flux_job_statetostr (0, "") != NULL,
-        "flux_job_statetostr (0, <emtpy string>) returned non-NULL");
+        "flux_job_statetostr (0, <empty string>) returned non-NULL");
     ok (flux_job_statetostr (0, NULL) != NULL,
         "flux_job_statetostr (0, NULL) returned non-NULL");
 }

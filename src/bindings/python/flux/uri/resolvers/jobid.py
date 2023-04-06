@@ -28,7 +28,7 @@ class URIResolver(URIResolverPlugin):
 
     def _do_resolve(self, uri, flux_handle, force_local=False):
         #
-        #  Convert a possible hiearchy of jobids to a list, dropping any
+        #  Convert a possible hierarchy of jobids to a list, dropping any
         #   extraneous '/' (e.g. //id0/id1 -> [ "id0", "id1" ]
         jobids = filter_slash(PurePath(uri.path).parts)
 

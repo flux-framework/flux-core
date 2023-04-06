@@ -106,7 +106,7 @@ error:
     return -1;
 }
 
-/* Usock client encouters an error.
+/* Usock client encounters an error.
  */
 static void uconn_error (struct usock_conn *uconn, int errnum, void *arg)
 {

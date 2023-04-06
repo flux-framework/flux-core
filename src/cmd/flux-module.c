@@ -493,9 +493,9 @@ void lsmod_print_list (FILE *f, json_t *o)
                          "idle", &idle,
                          "status", &status,
                          "services", &services) < 0)
-            log_msg_exit ("Erorr parsing lsmod response");
+            log_msg_exit ("Error parsing lsmod response");
         if (!json_is_array (services))
-            log_msg_exit ("Erorr parsing lsmod services array");
+            log_msg_exit ("Error parsing lsmod services array");
         lsmod_print_entry (f,
                            name,
                            size,

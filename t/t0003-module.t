@@ -146,7 +146,7 @@ test_expect_success 'module: remove fails on invalid module' '
 	test_must_fail flux module remove nosuchmodule 2>nosuch.err &&
 	grep "nosuchmodule: No such file or directory" nosuch.err
 '
-test_expect_sucess 'module: remove -f succeeds on nonexistent module' '
+test_expect_success 'module: remove -f succeeds on nonexistent module' '
 	flux module remove -f nosuchmodule
 '
 test_expect_success 'module: info works' '

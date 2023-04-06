@@ -151,7 +151,7 @@ test_expect_success 'negative entries are not cached' '
 
 # Store the same content on all ranks
 # Retrieve it from one rank
-# (Really we want to test whther stores were squashed, fill in later)
+# (Really we want to test whether stores were squashed, fill in later)
 
 test_expect_success 'store on all ranks can be retrieved from rank 0' '
 	flux exec -n sh -c "echo foof | flux content store" >/dev/null &&

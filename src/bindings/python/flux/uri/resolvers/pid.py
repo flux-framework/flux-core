@@ -27,7 +27,7 @@ def _get_broker_child_fallback(broker_pid):
     pids.remove(broker_pid)
 
     #  Now iterate all processes, returning immediately when
-    #   we've found a proces for which broker_pid is the parent
+    #   we've found a process for which broker_pid is the parent
     for pid in pids:
         try:
             with open(f"/proc/{pid}/stat") as statf:

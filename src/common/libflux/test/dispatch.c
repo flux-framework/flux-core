@@ -135,7 +135,7 @@ void test_fastpath (flux_t *h)
 }
 
 /* Verify that a non-glob request handler overrides earlier-registered one.
- * "Built-in" methods like "ping" should be overrideable.
+ * "Built-in" methods like "ping" should be overridable.
  */
 void test_method_override (flux_t *h)
 {

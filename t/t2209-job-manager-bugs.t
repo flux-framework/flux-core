@@ -27,7 +27,7 @@ test_expect_success 'issue2664: start three jobs ' '
 test_expect_success 'issue2664: cancel job 3' '
 	flux cancel $(cat job3.out)
 '
-# Next job submitted triggers another alloc request when ther are no
+# Next job submitted triggers another alloc request when there are no
 # more slots, which triggers error response from scheduler that is fatal
 # to job manager.
 test_expect_success 'issue2664: submit job 4' '

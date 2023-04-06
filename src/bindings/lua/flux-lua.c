@@ -152,7 +152,7 @@ static int lua_push_flux_handle (lua_State *L, flux_t *f)
     *fp = f;
 
     /*
-     *  2. Set metatable for Lua "flux" object so it inherets the right
+     *  2. Set metatable for Lua "flux" object so it inherits the right
      *     methods:
      */
     luaL_getmetatable (L, "FLUX.handle");

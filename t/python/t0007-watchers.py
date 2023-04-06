@@ -129,7 +129,7 @@ class TestSignal(unittest.TestCase):
             cb_called = True
             handle.reactor_stop()
 
-        def raise_signal(handle, wathcer, revents, args):
+        def raise_signal(handle, watcher, revents, args):
             os.kill(os.getpid(), signal.SIGUSR1)
 
         def stop(h, w, r, y):

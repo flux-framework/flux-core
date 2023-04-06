@@ -57,7 +57,7 @@ int main (int argc, char *argv[])
     if (!(p = optparse_create ("flux-keygen"))
         || optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS
         || optparse_set (p, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)
-        log_err_exit ("error setting up otpion parsing");
+        log_err_exit ("error setting up option parsing");
     if ((optindex = optparse_parse_args (p, argc, argv)) < 0)
         exit (1);
     if (optindex < argc)

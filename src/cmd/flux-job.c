@@ -1756,7 +1756,7 @@ static void handle_output_log (struct attach_ctx *ctx,
  * redirect, or log messages.  Print each data entry to stdout/stderr,
  * with task/rank prefix if --label-io was specified.  For each redirect entry, print
  * information on paths to redirected locations if --quiet is not
- * speciifed.
+ * specified.
  */
 void attach_output_continuation (flux_future_t *f, void *arg)
 {
@@ -1874,7 +1874,7 @@ static void attach_send_shell_completion (flux_future_t *f, void *arg)
 {
     struct attach_ctx *ctx = arg;
 
-    /* failng to write stdin to service is (generally speaking) a
+    /* failing to write stdin to service is (generally speaking) a
      * fatal error */
     if (flux_future_get (f, NULL) < 0) {
         /* stdin may not be accepted for multiple reasons

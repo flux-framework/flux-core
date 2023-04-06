@@ -28,13 +28,13 @@ class MissingFunctionError(Exception):
         caller = inspect.getframeinfo(call_stack[2][0])
 
         message = """
-A non-existant or unavailable function invocation has been detected.
+A non-existent or unavailable function invocation has been detected.
 Has this function been recently removed or renamed?
 
 Name called: {name}
 Possible C names: {name_list}
 Arguments: {arguments}
-Likely intended C invokation: {c_name}{arguments}
+Likely intended C invocation: {c_name}{arguments}
 Invocation detail: inside function {outer}
 {file}:{line}: {context}
         """.format(

@@ -209,7 +209,7 @@ error:
  * Set up nonblocking sender and receiver.
  * Run the reactor:
  * - sender sends all enqueued messages
- * - receiver enqueues all recived messages
+ * - receiver enqueues all received messages
  * Verify that messages are all received intact.
  */
 void test_nonblock (int size, int count)

@@ -499,7 +499,7 @@ void test_errors (void)
             });
 
     e = optparse_add_option (p, &opt);
-    ok (e == OPTPARSE_EEXIST, "optparse_add_option: Errror with EEXIST");
+    ok (e == OPTPARSE_EEXIST, "optparse_add_option: Error with EEXIST");
     e = optparse_add_option (NULL, &opt);
     ok (e == OPTPARSE_BAD_ARG, "optparse_add_option: BAD_ARG with invalid optparse_t");
 

@@ -143,7 +143,7 @@ int treq_mgr_iter_transactions (treq_mgr_t *trm, treq_itr_f cb, void *data)
 int treq_mgr_remove_transaction (treq_mgr_t *trm, const char *name)
 {
     /* it's dangerous to remove if we're in the middle of an
-     * interation, so save name for removal later.
+     * iteration, so save name for removal later.
      */
     if (trm->iterating_transactions) {
         char *str = strdup (name);

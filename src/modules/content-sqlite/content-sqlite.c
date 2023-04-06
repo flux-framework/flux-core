@@ -110,7 +110,7 @@ static void set_errno_from_sqlite_error (struct content_sqlite *ctx)
         case SQLITE_NOMEM:      /* cannot allocate memory */
             errno = ENOMEM;
             break;
-        case SQLITE_ABORT:      /* statment is not authorized */
+        case SQLITE_ABORT:      /* statement is not authorized */
         case SQLITE_PERM:       /* access mode for new db cannot be provided */
         case SQLITE_READONLY:   /* attempt to alter data with no permission */
             errno = EPERM;

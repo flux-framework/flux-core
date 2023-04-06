@@ -50,7 +50,7 @@ static void test_api (unwrap_f unwrap)
     userid = 0;
     result = (*unwrap) (s, false, NULL, NULL);
     ok (result != NULL && userid == 0,
-        "unwrap_string() works wih NULL userid and error paramters");
+        "unwrap_string() works with NULL userid and error parameters");
     is (result, "bar",
         "got expected result");
     free (result);
@@ -58,7 +58,7 @@ static void test_api (unwrap_f unwrap)
     userid = 0;
     result = (*unwrap) (s, true, NULL, NULL);
     ok (result != NULL && userid == 0,
-        "unwrap_string() works wih verify and NULL userid and error paramters");
+        "unwrap_string() works with verify and NULL userid and error parameters");
     is (result, "bar",
         "got expected result");
     free (result);

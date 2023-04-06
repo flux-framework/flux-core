@@ -463,7 +463,7 @@ def main():
     formatter = TreeFormatter(args)
 
     #  Default for skip_root is True if there is a "prefix" format or
-    #   specific jobids are targetted, possibly overridden by the value of
+    #   specific jobids are targeted, possibly overridden by the value of
     #   --skip-root provided by user
     #
     skip_root = formatter.prefix is not None or args.jobids

@@ -471,7 +471,7 @@ static void prioritize_cb (flux_t *h,
         zlistx_sort (ss->queue);
 
         /*  zlistx handles are invalidated after a zlistx_sort(),
-         *   so reaquire them now
+         *   so reacquire them now
          */
         job = zlistx_first (ss->queue);
         while (job) {

@@ -1407,7 +1407,7 @@ static int kvstxn_merge (kvstxn_t *dest, kvstxn_t *src)
  *
  * Break when an unmergeable transaction is discovered.  We do not
  * wish to merge non-adjacent transactions, as it can create
- * undesireable out of order scenarios.  e.g.
+ * undesirable out of order scenarios.  e.g.
  *
  * transaction #1 is mergeable:     set A=1
  * transaction #2 is non-mergeable: set A=2

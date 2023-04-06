@@ -28,7 +28,7 @@ static char *valid[] = {
     "<42>1 2016-06-12T22:59:59.816857Z 0 - - - - message",
     "<42>1 2016-06-12T22:59:59.816857Z 1 - - - - message",
     "<42>1 2016-06-12T22:59:59.816857Z 4294967295 - - - - message",
-    "<42>1 2016-06-12T22:59:59.816857Z this-is-a-really-long-hostname-field-well-we-have-255-chars-avaialable-so-maybe-not-that-long-huh - - - - message",
+    "<42>1 2016-06-12T22:59:59.816857Z this-is-a-really-long-hostname-field-well-we-have-255-chars-available-so-maybe-not-that-long-huh - - - - message",
     "<42>1 2016-06-12T22:59:59.816857Z 0 logger - - - message",
     "<42>1 2016-06-12T22:59:59.816857Z 0 procid-000@@@-aaa - - - message",
     "<42>1 2016-06-12T22:59:59.816857Z 0 logger procid - - message",

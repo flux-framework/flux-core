@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 
-test_description='Verify rc scripts excute with proper semantics
+test_description='Verify rc scripts execute with proper semantics
 '
 # Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile --debug

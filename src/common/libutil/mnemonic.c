@@ -265,7 +265,7 @@ mn_decode_word_index (mn_index index, void *vdest, int destsize, int *offset)
       return *offset;
     }
 
-  groupofs = *offset & ~3;	/* Offset of 4 byte group containing offet */
+  groupofs = *offset & ~3;	/* Offset of 4 byte group containing offset */
   x = 0;
   for (i = 0; i < 4; i++)
     if (groupofs + i < destsize)	/* Ignore any bytes outside buffer */

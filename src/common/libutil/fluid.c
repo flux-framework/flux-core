@@ -437,7 +437,7 @@ int fluid_parse (const char *s, fluid_t *fluidp)
         return -1;
     }
 
-    /*  Skip leading whitepsace
+    /*  Skip leading whitespace
      */
     while (*s != '\0' && isspace (*s))
         s++;

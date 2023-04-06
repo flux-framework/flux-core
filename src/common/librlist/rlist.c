@@ -238,7 +238,7 @@ static struct rlist *rlist_copy_internal (const struct rlist *orig,
         rl->scheduling = scheduling_key_append (orig->scheduling, NULL);
 
 
-    /*  Copy noremap hash from orignal rlist
+    /*  Copy noremap hash from original rlist
      */
     zhashx_destroy (&rl->noremap);
     rl->noremap = zhashx_dup (orig->noremap);
@@ -302,7 +302,7 @@ struct rlist *rlist_copy_down (const struct rlist *orig)
     if (rlist_nnodes (rl) > 0)
         rl->scheduling = scheduling_key_append (orig->scheduling, NULL);
 
-    /*  Copy noremap hash from orignal rlist
+    /*  Copy noremap hash from original rlist
      */
     zhashx_destroy (&rl->noremap);
     rl->noremap = zhashx_dup (orig->noremap);
@@ -340,7 +340,7 @@ struct rlist * rlist_copy_ranks (const struct rlist *rl, struct idset *ranks)
     if (rlist_nnodes (result) > 0)
         result->scheduling = scheduling_key_append (rl->scheduling, NULL);
 
-    /*  Copy noremap hash from orignal rlist
+    /*  Copy noremap hash from original rlist
      */
     zhashx_destroy (&result->noremap);
     result->noremap = zhashx_dup (rl->noremap);

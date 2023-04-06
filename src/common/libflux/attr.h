@@ -21,7 +21,7 @@
  *   flux lsattr [-v]
  *   flux setattr name value
  *   flux getattr name
- * In additon, the following functions may be used to get/set broker
+ * In addition, the following functions may be used to get/set broker
  * attributes programmatically.
  */
 

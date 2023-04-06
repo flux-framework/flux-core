@@ -54,7 +54,7 @@ function Command:fullname ()
 end
 
 --
--- Split line in `s` at `columns` colums assuming left pad `pad`
+-- Split line in `s` at `columns` columns assuming left pad `pad`
 --
 local function linesplit (s, columns, pad)
     local width = columns - pad
@@ -170,7 +170,7 @@ local DefaultHelp = {
         end
         local cmd = self.parent:lookup (arg[1])
         if not cmd then
-            self:die ("Unkown command %s", arg[1])
+            self:die ("Unknown command %s", arg[1])
         end
         cmd:help (0)
     end

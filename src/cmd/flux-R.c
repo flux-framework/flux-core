@@ -193,7 +193,7 @@ static struct optparse_subcommand subcommands[] = {
     },
     { "rerank",
       "HOSTLIST",
-      "Retrun the union of all R objects on stdin with ranks re-mapped "
+      "Return the union of all R objects on stdin with ranks re-mapped "
       " based on their index in HOSTLIST.",
       cmd_rerank,
       0,

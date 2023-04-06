@@ -42,7 +42,7 @@ void test_empty (void)
     char *keyat;
 
     lives_ok ({flux_kvsdir_destroy (NULL);},
-        "flux_kvsdir_destroy with NULL paramter doesn't crash");
+        "flux_kvsdir_destroy with NULL parameter doesn't crash");
 
     errno = 0;
     dir = flux_kvsdir_create (NULL, NULL, NULL, NULL);

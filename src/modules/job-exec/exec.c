@@ -20,7 +20,7 @@
  * attributes.system.exec.bulkexec object. Supported keys include
  *
  * {
- *    "mock_exception":s       - Generate a mock execption in phase:
+ *    "mock_exception":s       - Generate a mock exception in phase:
  *                               "init", or "starting"
  * }
  *

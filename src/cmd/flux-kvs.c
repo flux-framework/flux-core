@@ -360,7 +360,7 @@ static struct optparse_subcommand subcommands[] = {
     },
     { "version",
       "[-N ns]",
-      "Display curent KVS version",
+      "Display current KVS version",
       cmd_version,
       0,
       namespace_opt

@@ -253,7 +253,7 @@ bool iostress_run_check (flux_t *h,
                                                  0.,
                                                  iostress_timer_cb,
                                                  &ctx)))
-        BAIL_OUT ("counld not create timer watcher");
+        BAIL_OUT ("could not create timer watcher");
 
     rc = flux_reactor_run (flux_get_reactor (h), 0);
     if (rc < 0) {
@@ -286,7 +286,7 @@ int main (int argc, char *argv[])
     ok (iostress_run_check (h, "balanced", false, 0, 0, 8, 8, 80),
         "balanced worked");
 
-    // (remote?) stdout buffer is overun
+    // (remote?) stdout buffer is overrun
     // Needs further investigation as no errors are thrown and completion is
     // not called called after subprocess exit.  The doomsday timer stops
     // the test.

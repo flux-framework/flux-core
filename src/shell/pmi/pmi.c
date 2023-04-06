@@ -17,7 +17,7 @@
  * At startup this module is registered as a builtin shell plugin under
  * the name "pmi" via an entry in builtins.c builtins array.
  *
- * At shell "init", the plugin intiailizes a PMI object including the
+ * At shell "init", the plugin initializes a PMI object including the
  * pmi simple server and empty local kvs cache.
  *
  * During each task's "task init" callback, the pmi plugin sets up the

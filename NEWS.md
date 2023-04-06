@@ -919,7 +919,7 @@ tool, and a critical fix for system deployments of Flux (#3958).
  * broker: record child instance URIs as job memo (#3986)
  * Support job memo events (#3984)
  * job-exec: checkpoint/restore KVS namespaces of running jobs (#3947)
- * set hostlist broker attribute when boostrapped by PMI (#3966)
+ * set hostlist broker attribute when bootstrapped by PMI (#3966)
  * add `flux_get_hostbyrank()` and improve broker attribute caching (#3971)
  * broker: log slow nodes during startup (#3980)
  * add flux-top command (#3979)
@@ -1116,7 +1116,7 @@ DEPENDENCIES section.
 flux-core version 0.27.0 - 2021-05-28
 -------------------------------------
 
-This release features additonal performance improvements that affect
+This release features additional performance improvements that affect
 job throughput over time (see issue #3583).
 
 ### Fixes
@@ -2337,7 +2337,7 @@ flux-core version 0.6.0 - 2016-11-29
  * Fix for possible unconstrained memory growth in modules/libjsc (#891)
  * Fix error message on flux-help failure (#887)
  * Issue fatal error in wrexecd for invalid tasks on node (#901)
- * Fix barrier protocol incompatability with older jansson versions (#889)
+ * Fix barrier protocol incompatibility with older jansson versions (#889)
 
 #### New Features
 
@@ -2469,7 +2469,7 @@ flux-core version 0.4.0 - 2016-08-11
 
 * Sophia content backing store module (#727)
 
-* mrpc KVS based muti-RPC interface (#689)
+* mrpc KVS based multi-RPC interface (#689)
 
 * ZPL config file (#674)
 
@@ -2509,7 +2509,7 @@ flux-core version 0.3.0 - 2016-04-26
 
 * Add module status reporting via keepalive messages.
   `flux module list` now reports live module status:
-  - I = intializing
+  - I = initializing
   - S = sleeping
   - X = exited
   - R = running

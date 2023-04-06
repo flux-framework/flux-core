@@ -119,7 +119,7 @@ struct test_vector pmi_invalid[] = {
     { "(vector, (1.11, 2.2))", "unable to parse block: (1.11, 2.2))" },
     { "(vector, (1,1,0))", "invalid number in block: (1,1,0))" },
     { "((1,1,1))", "invalid token near '('" },
-    { "((1,1,1), vector,)", "vector prefix must preceed blocklist" },
+    { "((1,1,1), vector,)", "vector prefix must precede blocklist" },
     { NULL, NULL },
 };
 

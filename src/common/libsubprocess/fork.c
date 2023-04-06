@@ -190,7 +190,7 @@ static int local_child (flux_subprocess_t *p)
     /*
      * NB: close stdout and stderr here to avoid flushing buffers at exit.
      *  This can cause duplicate output if parent was running in fully
-     *  bufferred mode, and there was buffered output.
+     *  buffered mode, and there was buffered output.
      */
     close (STDOUT_FILENO);
     local_child_report_exec_failed_errno (p, errnum);
