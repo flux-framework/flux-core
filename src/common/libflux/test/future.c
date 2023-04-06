@@ -581,7 +581,7 @@ void test_mumble_inception (void)
 }
 
 /* walk - multiple mumbles wrapped in a future, executed serially
- * The next future is created in the current future's contination.
+ * The next future is created in the current future's continuation.
  */
 struct walk {
     zlist_t *f; // stack of futures

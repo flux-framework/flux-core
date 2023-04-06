@@ -57,7 +57,7 @@ test_expect_success 'FLUX_CONF_DIR also works to specify config dir' '
 	test_cmp empty.exp empty2.out
 '
 
-test_expect_success 'flux broker fails with specfied config directory missing' "
+test_expect_success 'flux broker fails with specified config directory missing' "
 	test_must_fail flux broker ${ARGS} -c noexist /bin/true
 "
 
@@ -80,7 +80,7 @@ test_expect_success 'broker fails with invalid TOML file' '
 #
 # [bootstrap] tests
 #
-test_expect_success 'generate curve certficate for configuration' '
+test_expect_success 'generate curve certificate for configuration' '
 	flux keygen testcert
 '
 

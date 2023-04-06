@@ -73,7 +73,7 @@ struct option_info {
     struct optparse_option * p_opt;   /* Copy of program option structure  */
     zlist_t *               optargs;  /* If non-NULL, the option argument(s) */
     const char *            optarg;   /* Pointer to last element in optargs */
-    int                     seq;      /* Sequence in which option was addd  */
+    int                     seq;      /* Sequence in which option was added  */
 
     unsigned int            found;    /* number of times we saw this option */
 
@@ -305,7 +305,7 @@ static int log_stderr (const char *fmt, ...)
 }
 
 /*
- * Default fatalerr funciton.
+ * Default fatalerr function.
  */
 static int fatal_exit (void *h, int exit_code)
 {

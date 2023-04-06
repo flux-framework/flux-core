@@ -507,7 +507,7 @@ done:
     flux_future_destroy (f);
 }
 
-/* Send content load request and setup contination to handle response.
+/* Send content load request and setup continuation to handle response.
  */
 static int content_load_request_send (struct kvs_ctx *ctx, const char *ref)
 {
@@ -581,7 +581,7 @@ static int load (struct kvs_ctx *ctx, const char *ref, wait_t *wait, bool *stall
          * multiple times from the same kvstxn and on the same
          * reference, we're effectively adding identical waiters onto
          * this cache entry.  This is far better than sending multiple
-         * RPCs (the cache entry chck above protects against this),
+         * RPCs (the cache entry check above protects against this),
          * but could be improved later.  See Issue #1751.
          */
         if (cache_entry_wait_valid (entry, wait) < 0) {
@@ -1992,7 +1992,7 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
     }
     else {
-        /* If root is not initialized, we have to intialize ourselves
+        /* If root is not initialized, we have to initialize ourselves
          * first.
          */
         bool stall = false;

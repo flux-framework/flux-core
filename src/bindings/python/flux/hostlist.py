@@ -145,7 +145,7 @@ class Hostlist(WrapperPimpl):
         if isinstance(index, collections.abc.Iterable):
             hl = Hostlist()
             for n in index:
-                # Avoid infinite recursion by catching non-integer indeces
+                # Avoid infinite recursion by catching non-integer indices
                 if not isinstance(n, numbers.Integral):
                     raise TypeError(f"Invalid Hostlist index '{n}'")
                 hl.append(self[n])

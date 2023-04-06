@@ -180,7 +180,7 @@ ssize_t flux_msg_encode_size (const flux_msg_t *msg)
         encode_count (&size, strlen (msg->topic));
     if (msg_has_route (msg)) {
         struct route_id *r = NULL;
-        /* route delimeter */
+        /* route delimiter */
         encode_count (&size, 0);
         list_for_each (&msg->routes, r, route_id_node)
             encode_count (&size, strlen (r->id));

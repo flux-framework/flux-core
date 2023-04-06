@@ -159,7 +159,7 @@ static int shell_init_jobinfo (flux_shell_t *shell,
     if (jobspec_provided && !(jobspec = strdup (jobspec_provided)))
         shell_die (1, "Out of memory copying provided jobspec");
 
-    /*  If shell is not running standlone, fetch hwloc topology
+    /*  If shell is not running standalone, fetch hwloc topology
      *   from resource module to avoid having to load from scratch
      *   here. The topology XML is then cached for future shell plugin
      *   use.

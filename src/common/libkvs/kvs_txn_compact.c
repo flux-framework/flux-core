@@ -26,7 +26,7 @@
  * performance issues.
  *
  * One way to improve performance is to "compact" these appends in KVS
- * transactions before they are commited to the KVS.  If multiple
+ * transactions before they are committed to the KVS.  If multiple
  * appends to the same key exist in a KVS transaction, combine them
  * into a single append.  For example, an append of "A" to the key
  * "foo", followed by an append of "B" to the key "foo", could be

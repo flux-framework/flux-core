@@ -42,7 +42,7 @@ test_expect_success 'kvs: store 2x4 directory tree and walk' '
 test_expect_success 'kvs: add other types to 2x4 directory and walk' '
 	flux kvs link $DIR.dtree $DIR.dtree.link &&
 	flux kvs put $DIR.dtree.double=3.14 &&
-	flux kvs put $DIR.dtree.booelan=true &&
+	flux kvs put $DIR.dtree.boolean=true &&
 	test $(flux kvs dir -R $DIR.dtree | wc -l) = 19
 '
 

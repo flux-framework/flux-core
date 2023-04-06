@@ -1586,7 +1586,7 @@ int sdprocess_systemd_cleanup (sdprocess_t *sdp)
     if (!strcmp (active_state, "active")) {
         int exec_main_code;
 
-        /* Due to "RemainAfterExit", an exited succesful process will
+        /* Due to "RemainAfterExit", an exited successful process will
          * stay "active".  So we gotta make sure its actually exited.
          * Observation is that a state can go to "inactive", then back
          * to "active" b/c of "RemainAfterExit".

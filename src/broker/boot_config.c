@@ -107,7 +107,7 @@ static int set_string (json_t *o, const char *key, const char *s)
     return 0;
 }
 
-/* Make a copy of 'entry', set host key to the specificed value, and append
+/* Make a copy of 'entry', set host key to the specified value, and append
  * to 'hosts' array.
  */
 static int boot_config_append_host (json_t *hosts,

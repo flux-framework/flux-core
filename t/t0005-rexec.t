@@ -76,7 +76,7 @@ test_expect_success 'basic rexec fail exec() ENOENT' '
 	grep -q "No such file or directory" output
 '
 
-test_expect_success 'basic rexec propogates exit code()' '
+test_expect_success 'basic rexec propagates exit code()' '
 	test_expect_code 0 $rexec /bin/true &&
 	test_expect_code 1 $rexec /bin/false &&
 	test_expect_code 2 $rexec sh -c "exit 2" &&

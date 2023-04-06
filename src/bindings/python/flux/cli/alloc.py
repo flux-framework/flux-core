@@ -52,7 +52,7 @@ class AllocCmd(base.MiniCmd):
             args.nslots = args.nodes
             args.exclusive = True
 
-        #  For --bg, do not run an rc2 (inital program) unless
+        #  For --bg, do not run an rc2 (initial program) unless
         #    the user explicitly specified COMMAND:
         if args.bg and not args.COMMAND:
             args.broker_opts = args.broker_opts or []

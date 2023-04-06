@@ -35,7 +35,7 @@ parser.add_argument(
     "-w",
     "--wait-for",
     metavar="N",
-    help="wait for N packets to be recieved",
+    help="wait for N packets to be received",
     type=int,
     default=1,
 )

@@ -37,7 +37,7 @@ int fripp_sendf (struct fripp_ctx *ctx, const char *fmt, ...)
 int fripp_count (struct fripp_ctx *ctx, const char *name, ssize_t count);
 
 /* Update (or create) and store 'value' for 'name' to be sent on the
- * next flush. The'inc' indicates wether or not 'value' is some delta on
+ * next flush. The'inc' indicates whether or not 'value' is some delta on
  * the previous value. If 'inc' is set and 'name' was not previously stored,
  * then the value is stored directly.
  */

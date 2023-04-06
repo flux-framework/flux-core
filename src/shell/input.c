@@ -117,7 +117,7 @@ static void shell_input_put_kvs_completion (flux_future_t *f, void *arg)
     struct shell_input *in = arg;
 
     if (flux_future_get (f, NULL) < 0)
-        /* failng to write stdin to input is a fatal error */
+        /* failing to write stdin to input is a fatal error */
         shell_die (1, "shell_input_put_kvs: %s", strerror (errno));
     flux_future_destroy (f);
 

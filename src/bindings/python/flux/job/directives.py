@@ -17,7 +17,7 @@ class Directive:
     This class represents a single job submission directive processed
     from an input file or batch script. Input values to the constructor
     should have the sentinel stripped, and are then split using Python's
-    shlex module to provide familiary UNIX shell syntax and quoting
+    shlex module to provide familiarity UNIX shell syntax and quoting
     for argument. The first argument after shell lexing determines the
     Directive type or "action".
 
@@ -73,7 +73,7 @@ class MultiLine:
     """
     Container for multiline quoted directives.
 
-    A Multiline is opened and closed by macthing triple quote at the end
+    A Multiline is opened and closed by matching triple quote at the end
     of a line. While a multi line triple quote is open, lines are pushed
     verbatim (minus any common indent). When the Multiline is finished
     a string is returned with the multiline literal escaped such that it

@@ -122,7 +122,7 @@ static void exit_batch_cb (flux_reactor_t *r, flux_watcher_t *w,
  *   then start a timer which will fire and call the function to
  *   notify bulk_exec user of the batch of subprocess exits.
  *
- *  This appraoch avoids unecessarily calling into user's callback
+ *  This approach avoids unnecessarily calling into user's callback
  *   multiple times when all tasks exit within 0.01s.
  */
 static void exit_batch_append (struct bulk_exec *exec, flux_subprocess_t *p)

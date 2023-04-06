@@ -88,7 +88,7 @@ static void worker_cleanup_process (struct worker *w, flux_subprocess_t *p)
 }
 
 /* Subprocess completed.
- * Destroy the subprocess, but don't use w->p since that may be a diferent
+ * Destroy the subprocess, but don't use w->p since that may be a different
  * one, if worker_stop() was followed immediately by worker_start().
  * Remove from w->trash to avoid double-free in worker_destroy()
  */

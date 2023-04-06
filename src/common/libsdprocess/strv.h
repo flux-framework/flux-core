@@ -15,7 +15,7 @@
 
 /* Create a string vector from the given string, using the characters
  * in 'delim' as separators.  str can be NULL to return an array with
- * only the NULL delimeter string set.
+ * only the NULL delimiter string set.
  */
 char **strv_create (char *str, char *delim);
 
@@ -23,7 +23,7 @@ char **strv_create (char *str, char *delim);
 void strv_destroy (char **strv);
 
 /* Copy a string vector. strv can be NULL to return an array with only
- * the NULL delimeter string set */
+ * the NULL delimiter string set */
 int strv_copy (char **strv, char ***strv_cpy);
 
 #endif /* !_STRV_H */

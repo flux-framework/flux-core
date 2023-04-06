@@ -164,7 +164,7 @@ test_expect_success "wait --all fails when second job fails" '
 '
 
 
-test_expect_success "wait --all --verbose emits one line per succesful job" '
+test_expect_success "wait --all --verbose emits one line per successful job" '
 	flux submit --flags waitable /bin/true &&
 	flux submit --flags waitable /bin/true &&
 	flux submit --flags waitable /bin/false &&

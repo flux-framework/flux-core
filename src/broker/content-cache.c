@@ -801,7 +801,7 @@ error:
 }
 
 /* Forcibly drop all entries from the cache that can be dropped
- * without data loss.  Use the LRU for this since all entires are
+ * without data loss.  Use the LRU for this since all entries are
  * valid and clean.
  */
 

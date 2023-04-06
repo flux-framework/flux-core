@@ -21,7 +21,7 @@ typedef void (*pmi_exchange_f)(struct pmi_exchange *pex, void *arg);
 
 /* Perform one exchange across all shell ranks.
  * 'dict' is the input from this  shell.  Once the the result of the exchange
- * is availbale, 'cb' is invoked.
+ * is available, 'cb' is invoked.
  */
 int pmi_exchange (struct pmi_exchange *pex,
                   json_t *dict,

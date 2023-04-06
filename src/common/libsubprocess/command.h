@@ -49,7 +49,7 @@ char **cmd_argv_expand (flux_cmd_t *cmd);
 int cmd_set_env (flux_cmd_t *cmd, char **env);
 
 /*
- *  Return list of channels.  Should not be destryed by caller.
+ *  Return list of channels.  Should not be destroyed by caller.
  */
 zlist_t *cmd_channel_list (flux_cmd_t *cmd);
 

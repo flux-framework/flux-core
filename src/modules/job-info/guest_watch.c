@@ -61,7 +61,7 @@
  *     before we start reading it via a call in #3.
  *
  * 4) If the namespace has not yet been created (event "start" has not
- *    ocurred), must wait for the guest namespace to be created
+ *    occurred), must wait for the guest namespace to be created
  *    (wait_guest_namespace()), then eventually follow the path of
  *    watching events in the guest namespace (#3).
  */

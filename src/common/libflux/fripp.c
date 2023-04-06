@@ -450,7 +450,7 @@ struct fripp_ctx *fripp_ctx_create (flux_t *h)
     if (!(ctx = calloc (1, sizeof (*ctx))))
         goto error;
     ctx->sock = -1;
-    /* If envirnoment variable is unset, or it is set wrong, let the context
+    /* If environment variable is unset, or it is set wrong, let the context
      * be created with disabled status so we don't repeatedly try to create
      * it "on demand" in the flux_stats_*() functions.
      */

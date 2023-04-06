@@ -111,11 +111,11 @@ int flux_pty_client_count (struct flux_pty *pty);
  */
 int flux_pty_sendmsg (struct flux_pty *pty, const flux_msg_t *msg);
 
-/*  Add new client that recieves no data, only waits for pty to exit
+/*  Add new client that receives no data, only waits for pty to exit
  */
 int flux_pty_add_exit_watcher (struct flux_pty *pty, const flux_msg_t *msg);
 
-/*  Disconnect any client mathing sender
+/*  Disconnect any client matching sender
  */
 int flux_pty_disconnect_client (struct flux_pty *pty, const char *sender);
 

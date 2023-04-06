@@ -547,7 +547,7 @@ void test_then (flux_t *h)
         "reactor completed normally");
     flux_future_destroy (r);
 
-    /* ensure contination is called if "get" called before "then"
+    /* ensure continuation is called if "get" called before "then"
      */
     ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");

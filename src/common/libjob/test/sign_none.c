@@ -287,7 +287,7 @@ void decode_bad_other (void)
     errno = 0;
     rc = sign_none_unwrap ("", &payload, &payloadsz, &userid);
     ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap emtpy input fails with EINVAL");
+        "sign_none_unwrap empty input fails with EINVAL");
 }
 
 

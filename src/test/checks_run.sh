@@ -78,7 +78,7 @@ export PATH=/usr/lib/ccache:$PATH
 # Ensure ccache dir exists
 mkdir -p $HOME/.ccache
 
-# clang+ccache requries second cpp pass:
+# clang+ccache requires second cpp pass:
 if echo "$CC" | grep -q "clang"; then
     CCACHE_CPP=1
 fi

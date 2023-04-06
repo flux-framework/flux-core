@@ -18,7 +18,7 @@
  * its subscriptions.
  *
  * The router entry (client) has its sh->sub() / sh->unsub() callbacks wired
- * to the router's subhash_subcribe() / subhash_unsubscribe() functions,
+ * to the router's subhash_subscribe() / subhash_unsubscribe() functions,
  * while the router's sh->sub() / sh->unsub() callbacks are wired to the
  * real flux_event_subscribe() / flux_event_unsubscribe().
  *

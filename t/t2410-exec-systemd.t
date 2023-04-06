@@ -2,7 +2,7 @@
 #
 # ci=system
 
-test_description='Test simulated job exection with system instance'
+test_description='Test simulated job execution with system instance'
 
 . `dirname $0`/sharness.sh
 

@@ -34,7 +34,7 @@ is (msg, nil, "rpc: invalid packet: nil response indicates error")
 is (err, "Invalid argument", "rpc: invalid packet: err is 'Invalid argument'")
 
 --
--- 'ping' to specfic rank
+-- 'ping' to specific rank
 --
 local packet = { seq = "1", pad = "xxxxxx" }
 local msg, err = f:rpc ("broker.ping", packet, 1)

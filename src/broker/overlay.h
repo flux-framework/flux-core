@@ -61,7 +61,7 @@ int overlay_sendmsg (struct overlay *ov,
  * and overlay_set_parent_pubkey() with the public key of the parent
  * before calling overlay_connect().
  * NOTE: if bootstrapping with PMI, unique public keys are generated for
- * each broker and shared via PMI exchange.  If boostrapping with config
+ * each broker and shared via PMI exchange.  If bootstrapping with config
  * files, each broker loads an (assumed) identical key-pair from a file.
  * Only the public key may be shared over the network, never the private key.
  */

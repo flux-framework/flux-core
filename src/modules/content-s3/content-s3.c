@@ -435,7 +435,7 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-/* Create the s3 context, initalize the connection, and
+/* Create the s3 context, initialize the connection, and
  * create the working bucket
  */
 static struct content_s3 *content_s3_create (flux_t *h)

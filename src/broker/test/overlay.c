@@ -466,7 +466,7 @@ void trio (flux_t *h)
     ok (zmqutil_msg_send (zsock_none, msg) == 0,
         "none-2: zsock_msg_sendzsock works");
 
-    /* 2) Curve, and correct server publc key, but client public key
+    /* 2) Curve, and correct server public key, but client public key
      * was not authorized
      */
     if (!(zsock_curve = zsock_new_dealer (NULL)))

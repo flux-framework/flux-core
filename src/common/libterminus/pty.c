@@ -16,14 +16,14 @@
  *  PROTOCOL:
  *
  *  Client attach to server:
- *  { "type":"attach", "mode":s, "winsize":{"rows":i,"colums":i}}
+ *  { "type":"attach", "mode":s, "winsize":{"rows":i,"columns":i}}
  *  where mode is one of "rw", "ro", or "rw"
  *
  *  Server response to attach:
  *  { "type":"attach" }
  *
  *  Resize request: (client->server or server->client)
- *  { "type":"resize", "winsize"?{"rows":i,"colums":i} }
+ *  { "type":"resize", "winsize"?{"rows":i,"columns":i} }
  *
  *  Client/server write raw data to tty (string is utf-8)
  *  { "type":"data", "data":s% }

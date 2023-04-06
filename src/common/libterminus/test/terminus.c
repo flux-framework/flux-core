@@ -344,7 +344,7 @@ static void test_protocol (void)
     ok (rc == 0,
         "terminus.list: OK");
     ok (o && json_is_array (o) && json_array_size (o) == 2,
-        "terminus.list: now returns 2 seesions");
+        "terminus.list: now returns 2 sessions");
     flux_future_destroy (f);
 
 

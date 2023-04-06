@@ -73,7 +73,7 @@ assert (f:msghandler {
     msgtypes = { flux.MSGTYPE_EVENT },
     handler = function (f, msg, mh)
         local id = msg.data.id
-        printf ("%s: exeception for %d\n", service, id)
+        printf ("%s: exception for %d\n", service, id)
         if jobs[id] then
             job_complete (jobs[id].msg, id, 9)
         end

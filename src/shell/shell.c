@@ -1225,7 +1225,7 @@ static int load_initrc (flux_shell_t *shell, const char *default_rcfile)
     bool required = false;
     const char *rcfile = NULL;
 
-    /* If initrc is set on commmand line or in jobspec, then
+    /* If initrc is set on command line or in jobspec, then
      *  it is required, O/w initrc is treated as empty file.
      */
     if (optparse_getopt (shell->p, "initrc", &rcfile) > 0

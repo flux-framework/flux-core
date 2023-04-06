@@ -41,7 +41,7 @@ local function _start_testing ()
     out:reset()
     err:reset()
 
-    -- remeber that we're testing
+    -- remember that we're testing
     testing = true
     testing_num = tb:current_test()
     tb:current_test(0)

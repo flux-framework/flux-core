@@ -232,7 +232,7 @@ static void entry_stop_cb (flux_reactor_t *r, flux_watcher_t *w,
 }
 
 /* Stop cron entry `e` "safely" by waiting until the next
- *  "prepare" callback. Temporary watcher created here wil lbe
+ *  "prepare" callback. Temporary watcher created here will be
  *  destroyed within prepare_cb.
  */
 int cron_entry_stop_safe (cron_entry_t *e)

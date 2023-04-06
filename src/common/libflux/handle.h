@@ -96,7 +96,7 @@ void flux_decref(flux_t *h);
  */
 flux_t *flux_clone (flux_t *orig);
 
-/* Drop connection to broker and re-establish, if suported by connector.
+/* Drop connection to broker and re-establish, if supported by connector.
  */
 int flux_reconnect (flux_t *h);
 
@@ -170,7 +170,7 @@ int flux_pollevents (flux_t *h);
  * should then call flux_pollevents().  See src/common/libflux/ev_flux.[ch]
  * for an example of a libev "composite watcher" based on these interfaces,
  * that is used internally by the flux reactor.
- * Returns fd on sucess, -1 on failure with errno set.
+ * Returns fd on success, -1 on failure with errno set.
  */
 int flux_pollfd (flux_t *h);
 

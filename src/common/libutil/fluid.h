@@ -78,7 +78,7 @@ fluid_string_type_t fluid_string_detect_type (const char *s);
 /* Convert NULL-terminated string 's' to 'fluid' by auto-detecting
  *  the encoding in 's'.
  * Supported encodings include any fluid_string_type_t, or an integer
- *  in decimal or hexidecimal prefixed with "0x".
+ *  in decimal or hexadecimal prefixed with "0x".
  * Return 0 on success, -1 on failure.
  */
 int fluid_parse (const char *s, fluid_t *fluid);

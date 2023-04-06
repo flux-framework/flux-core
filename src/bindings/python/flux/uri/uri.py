@@ -108,7 +108,7 @@ class URIResolverURI(URI):
 
     A URI used with ``FluxURIResolver.resolve``.
     Includes a workaround for ``urllib.parse.urlparse`` problems parsing
-    path componenets with only digits.
+    path components with only digits.
     """
 
     def __init__(self, uri):
@@ -190,7 +190,7 @@ class FluxURIResolver:
 
         result = JobURI(self.resolvers[scheme].resolve(resolver_uri))
 
-        #  Special case for 'local' or 'remote' query paramters:
+        #  Special case for 'local' or 'remote' query parameters:
         if "local" in query:
             result = JobURI(result.local)
         elif "remote" in query:

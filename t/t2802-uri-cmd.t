@@ -115,7 +115,7 @@ test_expect_success 'flux uri jobid returns error for non-instance job' '
 test_expect_success 'flux uri jobid scheme returns error for invalid jobid' '
 	test_expect_code 1 flux uri jobid:boop
 '
-test_expect_success 'flux uri jobid scheme returns error for unkown jobid' '
+test_expect_success 'flux uri jobid scheme returns error for unknown jobid' '
 	test_expect_code 1 flux uri jobid:f1
 '
 test_expect_success 'setup fake srun and scontrol cmds for mock slurm testing' '

@@ -77,7 +77,7 @@ struct flux_subprocess {
 
     flux_cmd_t *cmd;                /* readonly/o copy of the command     */
 
-    struct aux_item *aux;           /* auxillary data                     */
+    struct aux_item *aux;           /* auxiliary data                     */
 
     zhash_t *channels;              /* hash index by name to channel info */
     int channels_eof_expected;      /* number of eofs to expect */

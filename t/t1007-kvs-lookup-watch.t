@@ -106,7 +106,7 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --watch terminated by namespace 
 	! wait $pid
 '
 
-test_expect_success NO_CHAIN_LINT 'flux kvs get --watch sees duplicate commited values' '
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch sees duplicate committed values' '
 	flux kvs put test.f=1 &&
 
 	flux kvs get --count=20 --watch test.f >seq3.out &
@@ -120,7 +120,7 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get --watch sees duplicate commited 
 	wait $pid
 '
 
-test_expect_success NO_CHAIN_LINT 'flux kvs get --watch and --uniq do not see duplicate commited values' '
+test_expect_success NO_CHAIN_LINT 'flux kvs get --watch and --uniq do not see duplicate committed values' '
 	flux kvs put test.f=1 &&
 
 	flux kvs get --count=3 --watch --uniq test.f >seq4.out &

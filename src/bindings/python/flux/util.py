@@ -144,7 +144,7 @@ def help_formatter(argwidth=40):
             optstring = ", ".join(opts)
 
             #  If only a long option is supported, then prefix with
-            #   whitepsace by the width of a short option so that all
+            #   whitespace by the width of a short option so that all
             #   long opts start in the same column:
             if len(opts) == 1 and len(opts[0]) > 2:
                 optstring = "    " + opts[0]
@@ -310,7 +310,7 @@ class UtilDatetime(datetime):
     """
 
     def __format__(self, fmt):
-        # The string "::" is used to split the strftime() fromat from
+        # The string "::" is used to split the strftime() format from
         # any Python format spec:
         vals = fmt.split("::", 1)
 
@@ -632,14 +632,14 @@ class OutputFormat:
                 break
 
         #  Remove any entries that were empty from self.format_list
-        #  (use index field of lst to remove by postition in self.format_list)
+        #  (use index field of lst to remove by position in self.format_list)
         format_list = [
             x
             for i, x in enumerate(self.format_list)
             if i not in [x["index"] for x in lst]
         ]
 
-        #  Remove "?:" from remaining entries so they disappear in ouput.
+        #  Remove "?:" from remaining entries so they disappear in output.
         for entry in format_list:
             if entry[0].endswith("?:"):
                 entry[0] = entry[0][:-2]

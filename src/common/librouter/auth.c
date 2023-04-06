@@ -32,7 +32,7 @@ int auth_init_message (flux_msg_t *msg, const struct flux_msg_cred *conn)
     /* Owner:
      * If message credentials have been set, we allow them to pass through.
      * Use case #1: owner message router components, where auth is "downstream"
-     * Use case #2: testing, to simulate guest accesss.
+     * Use case #2: testing, to simulate guest access.
      * If they have not been set, overwrite with connect creds, as above.
      */
     else {

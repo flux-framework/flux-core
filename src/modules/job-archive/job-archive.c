@@ -376,7 +376,7 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
     }
     while (sqlite3_step (ctx->store_stmt) != SQLITE_DONE) {
         /* due to rounding errors in sqlite, duplicate entries could be
-         * written out on occassion leading to a SQLITE_CONSTRAINT error.
+         * written out on occasion leading to a SQLITE_CONSTRAINT error.
          * We accept this and move on.
          */
         int err = sqlite3_errcode (ctx->db);

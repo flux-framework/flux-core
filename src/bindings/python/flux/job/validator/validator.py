@@ -36,7 +36,7 @@ class ValidatorResult:
 
         Args:
             errnum (:obj:`int`): error number (0 for success)
-            errmsg (:obj:`str`, optional): An optional error messsage for a
+            errmsg (:obj:`str`, optional): An optional error message for a
                 failed result.
         """
         if errnum > self.errnum:
@@ -91,7 +91,7 @@ class ValidatorPlugin(ABC):  # pragma: no cover
     """Base class for Validator Plugins"""
 
     def __init__(self, parser):
-        """Intialize a ValidatorPlugin"""
+        """Initialize a ValidatorPlugin"""
 
     def configure(self, args):
         """Configure a ValidatorPlugin. Run after argparse.parse_args()
@@ -127,7 +127,7 @@ class ValidatorPlugin(ABC):  # pragma: no cover
 class JobValidator:
     """A plugin-based job validator class
 
-    JobValidator loads plugins that implenment the ValidatorPlugin interface
+    JobValidator loads plugins that implement the ValidatorPlugin interface
     from the 'flux.job.validator.plugins' namespace. Plugins may be configured
     at runtime by passing in a ``--plugins=LIST`` option
 

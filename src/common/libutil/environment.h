@@ -42,7 +42,7 @@ const char *environment_next (struct environment *e);
  * @brief Get the value of the current cursor element, matching the key from
  * either *_first or *_next
  *
- * @param e the envirnoment to operate on
+ * @param e the environment to operate on
  *
  * @return The value of the current environment element
  */

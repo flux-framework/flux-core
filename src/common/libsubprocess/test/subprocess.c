@@ -2023,7 +2023,7 @@ void test_bufsize_error (flux_reactor_t *r)
 /* Line buffering tests are technically racy.  If the stdout in the
  * test_multi_echo command occurs fast enough, a single on_stdout
  * callback could occur.  But hopefully by repeating the word "hi" a
- * lot of times, the probability of that occuring is zero if line
+ * lot of times, the probability of that occurring is zero if line
  * buffering is not working.
  *
  * I pick 2200 to make sure we output enough to surpass 4096 bytes of
@@ -2300,7 +2300,7 @@ void start_stdout_after_stderr_cb (flux_subprocess_t *p, const char *stream)
  *
  * This test is racy, as its always possible stderr just arrives
  * before stdout under normal circumstances, but the probability of
- * that occuring is low given how much we output.
+ * that occurring is low given how much we output.
  */
 void test_stream_start_stop_initial_stop (flux_reactor_t *r)
 {
@@ -2401,11 +2401,11 @@ void mid_stop_cb (flux_subprocess_t *p, const char *stream)
 /* How this tests works is we output "hi" alot of times without line
  * buffering on stdout.  After the first callback, we stop the output
  * stream, and setup a timer.  For a bit of time, we should see no
- * more stdout, and after the timer expires, we'll re-eanble the
+ * more stdout, and after the timer expires, we'll re-enable the
  * stdout stream.
  *
  * This test is racy, as its always possible stdout is just delayed,
- * but the probability of that occuring is low given how much we
+ * but the probability of that occurring is low given how much we
  * output.
  */
 void test_stream_start_stop_mid_stop (flux_reactor_t *r)
@@ -2464,7 +2464,7 @@ void test_stream_start_stop_mid_stop (flux_reactor_t *r)
  *
  * This test is racy, as its always possible stderr just arrives
  * before stdout under normal circumstances, but the probability of
- * that occuring is low given how much we output.
+ * that occurring is low given how much we output.
   */
 void test_stream_stop_enable (flux_reactor_t *r)
 {
