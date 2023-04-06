@@ -216,7 +216,7 @@ void decode_bad_header (void)
     errno = 0;
     rc = sign_none_unwrap (bad11, &payload, &payloadsz, &userid);
     ok (rc < 0 && errno == EINVAL,
-        "sign_none_unwrap extra seprator fails with EINVAL");
+        "sign_none_unwrap extra separator fails with EINVAL");
 
     free (bad1);
     free (bad2);

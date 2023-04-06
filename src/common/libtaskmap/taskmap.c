@@ -384,7 +384,7 @@ static struct taskmap *taskmap_decode_pmi (const char *s, flux_error_t *errp)
             got_sentinel = true;
         else if (!is_empty (tok)) {
             if (!got_sentinel) {
-                errprintf (errp, "vector prefix must preceed blocklist");
+                errprintf (errp, "vector prefix must precede blocklist");
                 goto error;
             }
             if (parse_pmi_block (tok, &nodeid, &count, &ppn) < 0) {

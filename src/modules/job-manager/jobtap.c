@@ -849,7 +849,7 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
                               "dependency", entry) < 0
         || flux_plugin_arg_set (args, FLUX_PLUGIN_ARG_OUT, "{}") < 0) {
         flux_log_error (jobtap->ctx->h,
-                        "jobtap_check_depedency: failed to prepare args");
+                        "jobtap_check_dependency: failed to prepare args");
         return -1;
     }
 

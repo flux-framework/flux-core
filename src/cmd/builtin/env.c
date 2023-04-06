@@ -28,12 +28,12 @@ static int cmd_env (optparse_t *p, int ac, char *av[])
 {
     int n = optparse_option_index (p);
     if (av && av[n]) {
-        execvp (av[n], av+n); /* no return if sucessful */
+        execvp (av[n], av+n); /* no return if successful */
         log_err_exit ("execvp (%s)", av[n]);
     } else {
         struct environment *env = optparse_get_data (p, "env");
         if (env == NULL)
-            log_msg_exit ("flux-env: failed to get flux envirnoment!");
+            log_msg_exit ("flux-env: failed to get flux environment!");
         print_environment (env);
     }
     return (0);

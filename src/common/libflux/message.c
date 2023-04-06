@@ -239,7 +239,7 @@ int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size)
                 return -1;
             total += n;
         }
-        /* route delimeter */
+        /* route delimiter */
         if ((n = encode_frame (buf + total,
                                size - total,
                                NULL,
@@ -1391,7 +1391,7 @@ int flux_msg_frames (const flux_msg_t *msg)
     if (msg_has_topic (msg))
         n++;
     if (msg_has_route (msg)) {
-        /* +1 for routes delimeter frame */
+        /* +1 for routes delimiter frame */
         n += msg->routes_len + 1;
     }
     return n;

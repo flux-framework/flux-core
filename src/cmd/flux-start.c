@@ -354,7 +354,7 @@ static void completion_cb (flux_subprocess_t *p)
             cli->exit_rc += 128;
     }
 
-    /* In 'any' mode, the higest of the broker exit codes is
+    /* In 'any' mode, the highest of the broker exit codes is
      * flux-start's exit code.  In 'leader' mode, the leader broker's
      * exit code is flux-start's exit code.
      */
@@ -991,7 +991,7 @@ void start_server_finalize (void)
 }
 
 /* Start an internal PMI server, and then launch the requested number of
- * broker processes that inherit a file desciptor to the internal PMI
+ * broker processes that inherit a file descriptor to the internal PMI
  * server.  They will use that to bootstrap.  Since the PMI server is
  * internal and the connections to it passed through inherited file
  * descriptors it implies that the brokers in this instance must all

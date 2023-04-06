@@ -183,7 +183,7 @@ static struct optparse_option store_opts[] = {
 static struct optparse_subcommand content_subcmds[] = {
     { "load",
       "[OPTIONS] BLOBREF ...",
-      "Concatentate blobs stored under BLOBREF(s) to stdout",
+      "Concatenate blobs stored under BLOBREF(s) to stdout",
       internal_content_load,
       0,
       load_opts,

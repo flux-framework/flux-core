@@ -90,7 +90,7 @@ def _validate_constraint_op(operator, args):
         for ranks in args:
             idset.decode(ranks)
     else:
-        raise TypeError(f"uknown constraint operator '{operator}'")
+        raise TypeError(f"unknown constraint operator '{operator}'")
 
 
 def _validate_constraint(constraints):
