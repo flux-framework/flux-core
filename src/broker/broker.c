@@ -271,6 +271,19 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
+    const char *val;
+    if (attr_get (ctx.attrs, "broker.sd-notify", &val, NULL) == 0
+        && !streq (val, "0")) {
+#if !HAVE_LIBSYSTEMD
+        log_err ("broker.sd_notify is set but Flux was not built"
+                 " with systemd support.");
+        goto cleanup;
+#else
+        ctx.sd_notify = true;
+#endif
+    }
+
+
     /* Parse config.
      */
     if (!(ctx.config = brokercfg_create (ctx.h,
