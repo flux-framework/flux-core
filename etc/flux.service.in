@@ -27,6 +27,7 @@ ExecReload=@X_BINDIR@/flux config reload
 Restart=always
 RestartSec=5s
 RestartPreventExitStatus=42
+SuccessExitStatus=42
 User=flux
 Group=flux
 RuntimeDirectory=flux
