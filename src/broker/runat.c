@@ -24,6 +24,9 @@
 #include <assert.h>
 #include <argz.h>
 #include <jansson.h>
+#if HAVE_LIBSYSTEMD
+#include <systemd/sd-daemon.h>
+#endif
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -56,6 +59,7 @@ struct runat {
     const char *local_uri;
     zhashx_t *entries;
     flux_msg_handler_t **handlers;
+    bool sd_notify;
 };
 
 static void runat_command_destroy (struct runat_command *cmd);
@@ -272,6 +276,13 @@ static void start_next_command (struct runat *r, struct runat_entry *entry)
     }
     else {
         while (!started && (cmd = zlist_head (entry->commands))) {
+#if HAVE_LIBSYSTEMD
+            if (r->sd_notify) {
+                char *s = get_cmdline (cmd->cmd);
+                sd_notifyf (0, "STATUS=Running %s", s ? s : "unknown command");
+                free (s);
+            }
+#endif
             if (!(cmd->p = start_command (r, entry, cmd))) {
                 log_command (r->h, entry, 1, 0, "error starting command");
                 if (entry->exit_code == 0)
@@ -658,7 +669,7 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-struct runat *runat_create (flux_t *h, const char *local_uri)
+struct runat *runat_create (flux_t *h, const char *local_uri, bool sdnotify)
 {
     struct runat *r;
 
@@ -671,6 +682,7 @@ struct runat *runat_create (flux_t *h, const char *local_uri)
     zhashx_set_destructor (r->entries, runat_entry_destroy_wrapper);
     r->h = h;
     r->local_uri = local_uri;
+    r->sd_notify = sdnotify;
     return r;
 error:
     runat_destroy (r);

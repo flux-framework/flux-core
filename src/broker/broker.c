@@ -740,7 +740,7 @@ static int create_runat_phases (broker_ctx_t *ctx)
     if (attr_get (ctx->attrs, "broker.rc2_none", NULL, NULL) == 0)
         rc2_none = true;
 
-    if (!(ctx->runat = runat_create (ctx->h, local_uri))) {
+    if (!(ctx->runat = runat_create (ctx->h, local_uri, ctx->sd_notify))) {
         log_err ("runat_create");
         return -1;
     }
