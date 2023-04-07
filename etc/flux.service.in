@@ -3,6 +3,7 @@ Description=Flux message broker
 Wants=munge.service
 
 [Service]
+Type=notify
 NotifyAccess=main
 TimeoutStopSec=90
 KillMode=mixed
