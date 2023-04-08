@@ -11,6 +11,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#if HAVE_LIBSYSTEMD
+#include <systemd/sd-daemon.h>
+#endif
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -210,8 +213,18 @@ static void action_join (struct state_machine *s)
 {
     if (s->ctx->rank == 0)
         state_machine_post (s, "parent-none");
-    else
+    else {
+#if HAVE_LIBSYSTEMD
+        if (s->ctx->sd_notify) {
+            sd_notifyf (0,
+                        "STATUS=Joining Flux instance via %s",
+                        overlay_get_parent_uri (s->ctx->overlay));
+            if (s->ctx->rank > 0)
+                sd_notify (0, "READY=1");
+        }
+#endif
         join_check_parent (s);
+    }
 }
 
 static void quorum_timer_cb (flux_reactor_t *r,
@@ -276,6 +289,10 @@ static void action_quorum (struct state_machine *s)
 {
     flux_future_t *f;
 
+#if HAVE_LIBSYSTEMD
+    if (s->ctx->sd_notify)
+        sd_notify (0, "STATUS=Waiting for instance quorum");
+#endif
     if (!(f = flux_rpc_pack (s->ctx->h,
                              "groups.join",
                              FLUX_NODEID_ANY,
@@ -340,6 +357,17 @@ static void action_run (struct state_machine *s)
         run_check_parent (s);
     else
         state_machine_post (s, "rc2-none");
+
+#if HAVE_LIBSYSTEMD
+    if (s->ctx->sd_notify) {
+        sd_notifyf (0,
+                    "STATUS=Running as %s of %d node Flux instance",
+                    s->ctx->rank == 0 ? "leader" : "member",
+                    (int)s->ctx->size);
+        if (s->ctx->rank == 0)
+            sd_notify (0, "READY=1");
+    }
+#endif
 }
 
 static void action_cleanup (struct state_machine *s)
@@ -371,6 +399,13 @@ static void action_shutdown (struct state_machine *s)
 {
     if (overlay_get_child_peer_count (s->ctx->overlay) == 0)
         state_machine_post (s, "children-none");
+#if HAVE_LIBSYSTEMD
+    if (s->ctx->sd_notify) {
+        sd_notifyf (0,
+                    "STATUS=Waiting for %d peers to shutdown",
+                    overlay_get_child_peer_count (s->ctx->overlay));
+    }
+#endif
 }
 
 static void rmmod_continuation (flux_future_t *f, void *arg)
@@ -434,6 +469,10 @@ static void action_exit (struct state_machine *s)
         flux_reactor_stop (flux_get_reactor (h));
         flux_future_destroy (f);
     }
+#if HAVE_LIBSYSTEMD
+    if (s->ctx->sd_notify)
+        sd_notify (0, "STATUS=Exiting");
+#endif
 }
 
 static void process_event (struct state_machine *s, const char *event)

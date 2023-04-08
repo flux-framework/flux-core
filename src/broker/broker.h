@@ -51,6 +51,8 @@ struct broker {
     char *init_shell_cmd;
     size_t init_shell_cmd_len;
 
+    bool sd_notify;
+
     int exit_rc;
 };
 

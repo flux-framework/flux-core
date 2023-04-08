@@ -3,6 +3,8 @@ Description=Flux message broker
 Wants=munge.service
 
 [Service]
+Type=notify
+NotifyAccess=main
 TimeoutStopSec=90
 KillMode=mixed
 ExecStart=/bin/bash -c '\
@@ -20,6 +22,7 @@ ExecStart=/bin/bash -c '\
   -Sbroker.quorum=0 \
   -Sbroker.quorum-timeout=none \
   -Sbroker.exit-norestart=42 \
+  -Sbroker.sd-notify=1 \
   -Scontent.restore=auto \
 '
 SyslogIdentifier=flux

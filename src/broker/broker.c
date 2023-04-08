@@ -271,6 +271,19 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
+    const char *val;
+    if (attr_get (ctx.attrs, "broker.sd-notify", &val, NULL) == 0
+        && !streq (val, "0")) {
+#if !HAVE_LIBSYSTEMD
+        log_err ("broker.sd_notify is set but Flux was not built"
+                 " with systemd support.");
+        goto cleanup;
+#else
+        ctx.sd_notify = true;
+#endif
+    }
+
+
     /* Parse config.
      */
     if (!(ctx.config = brokercfg_create (ctx.h,
@@ -727,7 +740,7 @@ static int create_runat_phases (broker_ctx_t *ctx)
     if (attr_get (ctx->attrs, "broker.rc2_none", NULL, NULL) == 0)
         rc2_none = true;
 
-    if (!(ctx->runat = runat_create (ctx->h, local_uri))) {
+    if (!(ctx->runat = runat_create (ctx->h, local_uri, ctx->sd_notify))) {
         log_err ("runat_create");
         return -1;
     }
