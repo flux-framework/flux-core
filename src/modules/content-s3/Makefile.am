@@ -10,20 +10,15 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux
 
-fluxmod_LTLIBRARIES = content-s3.la
+noinst_LTLIBRARIES = libcontent-s3.la
 
-content_s3_la_SOURCES = \
+libcontent_s3_la_SOURCES = \
 	content-s3.c \
-	s3.h \
-	s3.c
-
-content_s3_la_LDFLAGS = $(fluxmod_ldflags) -module
-content_s3_la_LIBADD = \
-		$(top_builddir)/src/common/libflux-internal.la \
-		$(top_builddir)/src/common/libflux-core.la \
-		$(LIBS3)
+	s3.c \
+	s3.h
 
 test_ldadd = \
+	$(builddir)/libcontent-s3.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
@@ -40,10 +35,10 @@ check_PROGRAMS = \
 
 test_load_SOURCES = test/load.c
 test_load_CPPFLAGS = $(test_cppflags)
-test_load_LDADD = $(builddir)/s3.o $(test_ldadd)
+test_load_LDADD = $(test_ldadd)
 test_load_LDFLAGS = $(test_ldflags)
 
 test_store_SOURCES = test/store.c
 test_store_CPPFLAGS = $(test_cppflags)
-test_store_LDADD = $(builddir)/s3.o $(test_ldadd)
+test_store_LDADD = $(test_ldadd)
 test_store_LDFLAGS = $(test_ldflags)

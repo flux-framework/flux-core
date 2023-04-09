@@ -12,9 +12,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libccan \
 	$(JANSSON_CFLAGS)
 
-fluxmod_LTLIBRARIES = \
-	job-manager.la
-
 noinst_LTLIBRARIES = \
 	libjob-manager.la
 
@@ -23,11 +20,9 @@ jobtap_plugin_LTLIBRARIES = \
 	plugins/alloc-bypass.la \
 	plugins/perilog.la
 
-job_manager_la_SOURCES = \
-	job-manager.c \
-	job-manager.h
-
 libjob_manager_la_SOURCES = \
+	job-manager.c \
+	job-manager.h \
 	job.c \
 	job.h \
 	conf.c \
@@ -79,20 +74,6 @@ libjob_manager_la_SOURCES = \
 
 fluxinclude_HEADERS = \
 	jobtap.h
-
-job_manager_la_LDFLAGS = \
-	$(fluxlib_ldflags) \
-	-avoid-version \
-	-export-symbols-regex \
-	'^(flux_jobtap.*|mod_name|mod_service|mod_main)$$' \
-	-module
-job_manager_la_LIBADD = \
-	libjob-manager.la \
-	$(top_builddir)/src/common/libjob/libjob.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux-optparse.la \
-	$(JANSSON_LIBS)
 
 plugins_submit_hold_la_SOURCES = \
 	plugins/submit-hold.c

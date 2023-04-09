@@ -35,7 +35,7 @@
 #include "job.h"
 #include "event.h"
 #include "kill.h"
-#include <job-manager.h>
+#include "job-manager.h"
 
 #ifndef SIGRTMAX
 #  define SIGRTMAX 64

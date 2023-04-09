@@ -10,21 +10,17 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux
 
-fluxmod_LTLIBRARIES = content-files.la
+noinst_LTLIBRARIES = libcontent-files.la
 
-content_files_la_SOURCES = \
+libcontent_files_la_SOURCES = \
 	content-files.c \
 	filedb.h \
 	filedb.c
 
-content_files_la_LDFLAGS = $(fluxmod_ldflags) -module
-content_files_la_LIBADD = \
-		$(top_builddir)/src/common/libflux-internal.la \
-		$(top_builddir)/src/common/libflux-core.la
-
 TESTS = test_filedb.t
 
 test_ldadd = \
+	$(builddir)/libcontent-files.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
@@ -47,15 +43,15 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 
 test_load_SOURCES = test/load.c
 test_load_CPPFLAGS = $(test_cppflags)
-test_load_LDADD = $(builddir)/filedb.o $(test_ldadd)
+test_load_LDADD = $(test_ldadd)
 test_load_LDFLAGS = $(test_ldflags)
 
 test_store_SOURCES = test/store.c
 test_store_CPPFLAGS = $(test_cppflags)
-test_store_LDADD = $(builddir)/filedb.o $(test_ldadd)
+test_store_LDADD = $(test_ldadd)
 test_store_LDFLAGS = $(test_ldflags)
 
 test_filedb_t_SOURCES = test/filedb.c
 test_filedb_t_CPPFLAGS = $(test_cppflags)
-test_filedb_t_LDADD = $(builddir)/filedb.o $(test_ldadd)
+test_filedb_t_LDADD =  $(test_ldadd)
 test_filedb_t_LDFLAGS = $(test_ldflags)

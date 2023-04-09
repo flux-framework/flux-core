@@ -13,9 +13,9 @@ AM_CPPFLAGS = \
 	$(FLUX_SECURITY_CFLAGS) \
 	$(JANSSON_CFLAGS)
 
-fluxmod_LTLIBRARIES = job-list.la
+noinst_LTLIBRARIES = libjob-list.la
 
-job_list_la_SOURCES = \
+libjob_list_la_SOURCES = \
 	job-list.c \
 	job-list.h \
 	job_state.h \
@@ -31,20 +31,11 @@ job_list_la_SOURCES = \
 	stats.h \
 	stats.c
 
-job_list_la_LDFLAGS = $(fluxmod_ldflags) -module
-job_list_la_LIBADD = \
-	$(top_builddir)/src/common/libjob/libjob.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux-optparse.la \
-	$(top_builddir)/src/common/librlist/librlist.la \
-	$(JANSSON_LIBS) \
-	$(HWLOC_LIBS)
-
 TESTS = \
 	test_job_data.t
 
 test_ldadd = \
+	$(builddir)/libjob-list.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
@@ -70,7 +61,6 @@ test_job_data_t_CPPFLAGS = \
 	-DTEST_SRCDIR=\"$(top_srcdir)/src/modules/job-list/test\" \
 	$(test_cppflags)
 test_job_data_t_LDADD = \
-	$(top_builddir)/src/modules/job-list/job_data.o \
 	$(test_ldadd)
 test_job_data_t_LDFLAGS = \
 	$(test_ldflags)
