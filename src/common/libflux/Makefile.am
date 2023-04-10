@@ -199,8 +199,6 @@ test_cppflags = \
         $(AM_CPPFLAGS)
 
 check_LTLIBRARIES = \
-	test/module_fake1.la \
-	test/module_fake2.la \
 	test/plugin_foo.la \
 	test/plugin_bar.la
 
@@ -308,18 +306,8 @@ test_disconnect_t_CPPFLAGS = $(test_cppflags)
 test_disconnect_t_LDADD = $(test_ldadd)
 
 test_module_t_SOURCES = test/module.c
-test_module_t_CPPFLAGS = $(test_cppflags) \
-	-DFAKE1=\"$(abs_builddir)/test/.libs/module_fake1.so\" \
-	-DFAKE2=\"$(abs_builddir)/test/.libs/module_fake2.so\"
+test_module_t_CPPFLAGS = $(test_cppflags)
 test_module_t_LDADD = $(test_ldadd)
-
-test_module_fake1_la_SOURCES = test/module_fake1.c
-test_module_fake1_la_CPPFLAGS = $(test_cppflags)
-test_module_fake1_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
-
-test_module_fake2_la_SOURCES = test/module_fake2.c
-test_module_fake2_la_CPPFLAGS = $(test_cppflags)
-test_module_fake2_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 
 test_plugin_t_SOURCES = test/plugin.c
 test_plugin_t_CPPFLAGS = $(test_cppflags)
