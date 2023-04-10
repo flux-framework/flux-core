@@ -456,11 +456,6 @@ void lsmod_print_list (FILE *f, json_t *o)
     }
 }
 
-/* Fetch lsmod data from one or more ranks.  Each lsmod response returns
- * an array of module records.  The records are merged to produce a hash
- * by module SHA1 digest (computed over module file) + services list.
- * Each hash entry is then displayed as a line of output.
- */
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
     char *service = "broker";
