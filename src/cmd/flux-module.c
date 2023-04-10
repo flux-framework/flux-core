@@ -80,7 +80,7 @@ static struct optparse_option debug_opts[] = {
 
 static struct optparse_subcommand subcommands[] = {
     { "list",
-      "[OPTIONS] [module]",
+      "[OPTIONS]",
       "List loaded modules",
       cmd_list,
       0,
@@ -208,21 +208,6 @@ void parse_modarg (const char *arg, char **name, char **path)
     *path = modpath;
 }
 
-/* Derive name of module loading service from module name.
- * Caller must free.
- */
-char *getservice (const char *modname)
-{
-    char *service = NULL;
-    if (strchr (modname, '.')) {
-        service = xstrdup (modname);
-        char *p = strrchr (service, '.');
-        *p = '\0';
-    } else
-        service = xstrdup ("broker");
-    return service;
-}
-
 static void module_load (flux_t *h, optparse_t *p, int argc, char **argv)
 {
     char *modname;
@@ -236,8 +221,6 @@ static void module_load (flux_t *h, optparse_t *p, int argc, char **argv)
     }
     parse_modarg (argv[n++], &modname, &modpath);
 
-    char *service = getservice (modname);
-    char *topic = xasprintf ("%s.insmod", service);
     json_t *args = json_array ();
     if (!args)
         log_msg_exit ("json_array() failed");
@@ -249,7 +232,7 @@ static void module_load (flux_t *h, optparse_t *p, int argc, char **argv)
     }
 
     if (!(f = flux_rpc_pack (h,
-                             topic,
+                             "broker.insmod",
                              FLUX_NODEID_ANY,
                              0,
                              "{s:s s:O}",
@@ -257,15 +240,13 @@ static void module_load (flux_t *h, optparse_t *p, int argc, char **argv)
                              modpath,
                              "args",
                              args)))
-        log_err_exit ("%s", topic);
+        log_err_exit ("load");
     if (flux_rpc_get (f, NULL) < 0) {
         if (errno == EEXIST)
-            log_msg_exit ("%s: %s module/service is in use", topic, modname);
-        log_err_exit ("%s", topic);
+            log_msg_exit ("load %s: module/service is in use", modname);
+        log_err_exit ("load %s", modname);
     }
     flux_future_destroy (f);
-    free (topic);
-    free (service);
     json_decref (args);
     free (modpath);
     free (modname);
@@ -284,24 +265,20 @@ int cmd_load (optparse_t *p, int argc, char **argv)
 static void module_remove (flux_t *h, const char *modname, optparse_t *p)
 {
     flux_future_t *f;
-    char *service = getservice (modname);
-    char *topic = xasprintf ("%s.rmmod", service);
 
     if (!(f = flux_rpc_pack (h,
-                             topic,
+                             "broker.rmmod",
                              FLUX_NODEID_ANY,
                              0,
                              "{s:s}",
                              "name",
                              modname)))
-        log_err_exit ("%s %s", topic, modname);
+        log_err_exit ("remove %s", modname);
     if (flux_rpc_get (f, NULL) < 0) {
         if (!(optparse_hasopt (p, "force") && errno == ENOENT))
-            log_err_exit ("%s %s", topic, modname);
+            log_err_exit ("remove %s", modname);
     }
     flux_future_destroy (f);
-    free (topic);
-    free (service);
 }
 
 int cmd_remove (optparse_t *p, int argc, char **argv)
@@ -458,33 +435,24 @@ void lsmod_print_list (FILE *f, json_t *o)
 
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
-    char *service = "broker";
-    char *topic;
     flux_future_t *f;
     flux_t *h;
     int n;
     json_t *o;
 
-    if ((n = optparse_option_index (p)) < argc - 1) {
+    if ((n = optparse_option_index (p)) < argc) {
         optparse_print_usage (p);
         exit (1);
     }
-    if (n < argc)
-        service = argv[n++];
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    topic = xasprintf ("%s.lsmod", service);
-    if (!(f = flux_rpc (h, topic, NULL, FLUX_NODEID_ANY, 0)))
-        log_err_exit ("%s", topic);
-    if (flux_rpc_get_unpack (f, "{s:o}", "mods", &o) < 0)
-        log_err_exit ("%s", topic);
-    if (!json_is_array (o))
-        log_msg_exit ("%s: module list is not an array", topic);
+    if (!(f = flux_rpc (h, "broker.lsmod", NULL, FLUX_NODEID_ANY, 0))
+        || flux_rpc_get_unpack (f, "{s:o}", "mods", &o) < 0)
+        log_err_exit ("list");
     lsmod_print_header (stdout);
     lsmod_print_list (stdout, o);
     flux_future_destroy (f);
-    free (topic);
     flux_close (h);
     return (0);
 }
