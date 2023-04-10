@@ -310,23 +310,21 @@ static void state_change_prep_cb (flux_reactor_t *r,
 
 static flux_subprocess_state_t state_change_next (flux_subprocess_t *p)
 {
-    assert (p->state != FLUX_SUBPROCESS_FAILED);
+    /* N.B. possible transition to FLUX_SUBPROCESS_STOPPED not handled
+     * here, see issue #5083
+     */
+    assert (p->state_reported != p->state);
+    assert (p->state_reported == FLUX_SUBPROCESS_INIT
+            || p->state_reported == FLUX_SUBPROCESS_RUNNING);
 
-    switch (p->state_reported) {
-    case FLUX_SUBPROCESS_INIT:
+    if (p->state_reported == FLUX_SUBPROCESS_INIT)
         /* next state must be RUNNING */
         return FLUX_SUBPROCESS_RUNNING;
-    case FLUX_SUBPROCESS_RUNNING:
+    else if (p->state_reported == FLUX_SUBPROCESS_RUNNING)
         /* next state is EXITED */
         return FLUX_SUBPROCESS_EXITED;
-    case FLUX_SUBPROCESS_EXITED:
-    case FLUX_SUBPROCESS_FAILED:
-    case FLUX_SUBPROCESS_STOPPED:
-        break;
-    }
-
     /* shouldn't be possible to reach here */
-    assert (0);
+    return p->state_reported;
 }
 
 static void state_change_check_cb (flux_reactor_t *r,
