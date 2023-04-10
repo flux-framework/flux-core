@@ -85,8 +85,6 @@ libutil_la_SOURCES = \
 	llog.h \
 	grudgeset.c \
 	grudgeset.h \
-	digest.c \
-	digest.h \
 	jpath.c \
 	jpath.h \
 	uri.c \
@@ -127,7 +125,6 @@ TESTS = test_sha1.t \
 	test_intree.t \
 	test_fdwalk.t \
 	test_grudgeset.t \
-	test_digest.t \
 	test_jpath.t \
 	test_errprintf.t \
 	test_fileref.t \
@@ -252,10 +249,6 @@ test_fdwalk_t_LDADD = $(test_ldadd)
 test_grudgeset_t_SOURCES = test/grudgeset.c
 test_grudgeset_t_CPPFLAGS = $(test_cppflags)
 test_grudgeset_t_LDADD = $(test_ldadd)
-
-test_digest_t_SOURCES = test/digest.c
-test_digest_t_CPPFLAGS = $(test_cppflags)
-test_digest_t_LDADD = $(test_ldadd)
 
 test_jpath_t_SOURCES = test/jpath.c
 test_jpath_t_CPPFLAGS = $(test_cppflags)
