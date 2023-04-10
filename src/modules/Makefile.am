@@ -1,25 +1,25 @@
 AM_CFLAGS = \
-        $(WARNING_CFLAGS) \
-        $(CODE_COVERAGE_CFLAGS)
+	$(WARNING_CFLAGS) \
+	$(CODE_COVERAGE_CFLAGS)
 
 AM_LDFLAGS = \
-        $(CODE_COVERAGE_LIBS)
+	$(CODE_COVERAGE_LIBS)
 
 AM_CPPFLAGS = \
-        -I$(top_srcdir) \
-        -I$(top_srcdir)/src/include \
-        -I$(top_builddir)/src/common/libflux \
-        -I$(top_srcdir)/src/common/libccan \
+	-I$(top_srcdir) \
+	-I$(top_srcdir)/src/include \
+	-I$(top_builddir)/src/common/libflux \
+	-I$(top_srcdir)/src/common/libccan \
 	$(JANSSON_CFLAGS)
 
 SUBDIRS = \
- kvs \
- content-files \
- job-ingest \
- job-manager \
- job-list \
- job-exec \
- resource
+	kvs \
+	content-files \
+	job-ingest \
+	job-manager \
+	job-list \
+	job-exec \
+	resource
 
 if ENABLE_CONTENT_S3
 SUBDIRS += content-s3
