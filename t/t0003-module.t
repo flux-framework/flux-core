@@ -149,13 +149,6 @@ test_expect_success 'module: remove fails on invalid module' '
 test_expect_success 'module: remove -f succeeds on nonexistent module' '
 	flux module remove -f nosuchmodule
 '
-test_expect_success 'module: info works' '
-	flux module info ${FLUX_BUILD_DIR}/t/module/.libs/parent.so
-'
-
-test_expect_success 'module: info fails on invalid module' '
-	! flux module info nosuchmodule
-'
 
 # N.B. avoid setting the actual debug bits - lets reserve LSB
 TESTMOD=connector-local
@@ -257,7 +250,6 @@ test_expect_success 'flux module -h lists subcommands' '
 	grep -q remove module.help &&
 	grep -q reload module.help &&
 	grep -q load module.help &&
-	grep -q info module.help &&
 	grep -q stats module.help &&
 	grep -q debug module.help
 '

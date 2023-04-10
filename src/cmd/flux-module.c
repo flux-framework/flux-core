@@ -35,7 +35,6 @@ int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_remove (optparse_t *p, int argc, char **argv);
 int cmd_load (optparse_t *p, int argc, char **argv);
 int cmd_reload (optparse_t *p, int argc, char **argv);
-int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_debug (optparse_t *p, int argc, char **argv);
 
@@ -125,13 +124,6 @@ static struct optparse_subcommand subcommands[] = {
       0,
       remove_opts,
     },
-    { "info",
-      "[OPTIONS] module",
-      "Display module info",
-      cmd_info,
-      0,
-      NULL
-    },
     { "stats",
       "[OPTIONS] module",
       "Display stats on module",
@@ -198,14 +190,6 @@ int main (int argc, char *argv[])
     return (exitval);
 }
 
-int filesize (const char *path)
-{
-    struct stat sb;
-    if (stat (path, &sb) < 0)
-        return 0;
-    return sb.st_size;
-}
-
 void module_dlerror (const char *errmsg, void *arg)
 {
     log_msg ("%s", errmsg);
@@ -232,30 +216,6 @@ void parse_modarg (const char *arg, char **name, char **path)
     }
     *name = modname;
     *path = modpath;
-}
-
-int cmd_info (optparse_t *p, int argc, char **argv)
-{
-    char *modpath = NULL;
-    char *modname = NULL;
-    char *digest = NULL;
-    int n;
-
-    if ((n = optparse_option_index (p)) != argc - 1) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-    parse_modarg (argv[n], &modname, &modpath);
-    digest = digest_file (modpath, NULL);
-    printf ("Module name:  %s\n", modname);
-    printf ("Module path:  %s\n", modpath);
-    printf ("SHA1 Digest:  %s\n", digest);
-    printf ("Size:         %d bytes\n", filesize (modpath));
-
-    free (modpath);
-    free (modname);
-    free (digest);
-    return (0);
 }
 
 /* Derive name of module loading service from module name.
