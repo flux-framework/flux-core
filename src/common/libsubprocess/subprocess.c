@@ -746,8 +746,9 @@ int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream)
     if (p->local)
         ret = c->buffer_read_w_started ? 1 : 0;
     else {
-        /* fb = c->read_buffer; */
-        assert (0);
+        /* not supported on remote right now */
+        errno = EINVAL;
+        return -1;
     }
 
     return ret;
