@@ -75,12 +75,6 @@ test_expect_success 'module: load test module (all ranks)' '
 		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
 '
 
-test_expect_success 'module: remove/load --rank 1' '
-	flux module remove -r 1 parent &&
-	flux module load -r 1 \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
-'
-
 test_expect_success 'module: load submodule with invalid args (this rank)' '
 	test_must_fail flux module load \
 		${FLUX_BUILD_DIR}/t/module/.libs/child.so \

@@ -38,17 +38,7 @@ int cmd_reload (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_debug (optparse_t *p, int argc, char **argv);
 
-static struct optparse_option legacy_opts[] =  {
-    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "RANK",
-      .usage = "Send RPC to specified rank",
-    },
-    OPTPARSE_TABLE_END,
-};
-
 static struct optparse_option remove_opts[] =  {
-    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "RANK",
-      .usage = "Send RPC to specified rank",
-    },
     { .name = "force", .key = 'f',
       .usage = "Ignore nonexistent modules",
     },
@@ -115,7 +105,7 @@ static struct optparse_subcommand subcommands[] = {
       "Load module",
       cmd_load,
       0,
-      legacy_opts,
+      NULL,
     },
     { "reload",
       "[OPTIONS] module",
@@ -260,7 +250,7 @@ static void module_load (flux_t *h, optparse_t *p, int argc, char **argv)
 
     if (!(f = flux_rpc_pack (h,
                              topic,
-                             optparse_get_int (p, "rank", FLUX_NODEID_ANY),
+                             FLUX_NODEID_ANY,
                              0,
                              "{s:s s:O}",
                              "path",
@@ -299,7 +289,7 @@ static void module_remove (flux_t *h, const char *modname, optparse_t *p)
 
     if (!(f = flux_rpc_pack (h,
                              topic,
-                             optparse_get_int (p, "rank", FLUX_NODEID_ANY),
+                             FLUX_NODEID_ANY,
                              0,
                              "{s:s}",
                              "name",
