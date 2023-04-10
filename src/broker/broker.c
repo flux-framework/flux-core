@@ -1407,7 +1407,6 @@ error:
 }
 
 /* Load a module by name.
- * Message format is defined by RFC 5.
  */
 static void broker_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
                              const flux_msg_t *msg, void *arg)

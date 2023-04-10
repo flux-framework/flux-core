@@ -27,7 +27,6 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
-#include "src/common/libutil/digest.h"
 
 #include "module.h"
 #include "modservice.h"
@@ -54,8 +53,6 @@ struct broker_module {
     char *name;
     char *path;             /* retain the full path as a key for lookup */
     void *dso;              /* reference on dlopened module */
-    int size;               /* size of .so file for lsmod */
-    char *digest;           /* digest of .so file for lsmod */
     size_t argz_len;
     char *argz;
     int status;
@@ -402,7 +399,6 @@ static void module_destroy (module_t *p)
 #ifndef __SANITIZE_ADDRESS__
     dlclose (p->dso);
 #endif
-    free (p->digest);
     free (p->argz);
     free (p->name);
     free (p->path);
@@ -572,7 +568,6 @@ module_t *module_add (modhash_t *mh, const char *path)
     void *dso;
     const char **mod_namep;
     mod_main_f *mod_main;
-    size_t size;
     int rc;
 
     dlerror ();
@@ -599,9 +594,6 @@ module_t *module_add (modhash_t *mh, const char *path)
     if (!(p->name = strdup (*mod_namep))
         || !(p->path = strdup (path)))
         goto cleanup;
-    if (!(p->digest = digest_file (path, &size)))
-        goto cleanup;
-    p->size = (int)size;
     uuid_generate (p->uuid);
     uuid_unparse (p->uuid, p->uuid_str);
     if (!(p->rmmod = zlist_new ()))
@@ -723,10 +715,8 @@ json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw)
 
             if (!(svcs  = service_list_byuuid (sw, uuid)))
                 goto nomem;
-            if (!(entry = json_pack ("{s:s s:i s:s s:i s:i s:o}",
+            if (!(entry = json_pack ("{s:s s:i s:i s:o}",
                                      "name", module_get_name (p),
-                                     "size", p->size,
-                                     "digest", p->digest,
                                       "idle", module_get_idle (p),
                                       "status", p->status,
                                       "services", svcs))) {

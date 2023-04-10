@@ -26,7 +26,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
-#include "src/common/libutil/digest.h"
 #include "src/common/libutil/jpath.h"
 #include "ccan/str/str.h"
 
@@ -364,26 +363,21 @@ char lsmod_state_char (int state)
 
 void lsmod_print_header (FILE *f)
 {
-    fprintf (f, "%-24s %8s %-7s %4s  %c %s\n",
-            "Module", "Size", "Digest", "Idle", 'S', "Service");
+    fprintf (f, "%-24s %4s  %c %s\n",
+            "Module", "Idle", 'S', "Service");
 }
 
 void lsmod_print_entry (FILE *f,
                        const char *name,
-                       int size,
-                       const char *digest,
                        int idle,
                        int status,
                        json_t *services)
 {
-    int digest_len = strlen (digest);
     char *serv_s = lsmod_services_string (services, name);
     char idle_s[16];
 
-    fprintf (f, "%-24.24s %8d %7s %4s  %c %s\n",
+    fprintf (f, "%-24.24s %4s  %c %s\n",
              name,
-             size,
-             digest_len > 7 ? digest + digest_len - 7 : digest,
              lsmod_idle_string (idle, idle_s, sizeof (idle_s)),
              lsmod_state_char (status),
              serv_s ? serv_s : "");
@@ -396,30 +390,20 @@ void lsmod_print_list (FILE *f, json_t *o)
     size_t index;
     json_t *value;
     const char *name;
-    int size;
-    const char *digest;
     int idle;
     int status;
     json_t *services;
 
     json_array_foreach (o, index, value) {
-        if (json_unpack (value, "{s:s s:i s:s s:i s:i s:o}",
+        if (json_unpack (value, "{s:s s:i s:i s:o}",
                          "name", &name,
-                         "size", &size,
-                         "digest", &digest,
                          "idle", &idle,
                          "status", &status,
                          "services", &services) < 0)
             log_msg_exit ("Error parsing lsmod response");
         if (!json_is_array (services))
             log_msg_exit ("Error parsing lsmod services array");
-        lsmod_print_entry (f,
-                           name,
-                           size,
-                           digest,
-                           idle,
-                           status,
-                           services);
+        lsmod_print_entry (f, name, idle, status, services);
     }
 }
 
