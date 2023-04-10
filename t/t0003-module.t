@@ -85,8 +85,8 @@ test_expect_success 'module: insmod returns initialization error' '
 '
 
 test_expect_success 'module: load fails on invalid module' '
-	! flux module load nosuchmodule 2> stderr &&
-	grep "nosuchmodule: not found in module search path" stderr
+	test_must_fail flux module load nosuchmodule 2>load.err &&
+	grep "module not found" load.err
 '
 
 test_expect_success 'module: remove fails on invalid module' '

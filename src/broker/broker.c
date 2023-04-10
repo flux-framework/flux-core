@@ -40,6 +40,7 @@
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libfluxutil/method.h"
 #include "ccan/array_size/array_size.h"
 
@@ -81,11 +82,12 @@ static int broker_handle_signals (broker_ctx_t *ctx);
 static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
 static void broker_remove_services (flux_msg_handler_t *handlers[]);
 
-static int load_module_byname (broker_ctx_t *ctx, const char *name,
-                               const char *argz, size_t argz_len,
-                               const flux_msg_t *request);
-static int unload_module_byname (broker_ctx_t *ctx, const char *name,
-                                 const flux_msg_t *request);
+static int load_module (broker_ctx_t *ctx,
+                        const char *path,
+                        const char *argz,
+                        size_t argz_len,
+                        const flux_msg_t *request,
+                        flux_error_t *error);
 
 static void set_proctitle (uint32_t rank);
 
@@ -197,6 +199,7 @@ int main (int argc, char *argv[])
     flux_msg_handler_t **handlers = NULL;
     const flux_conf_t *conf;
     const char *method;
+    flux_error_t error;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -501,8 +504,8 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose > 1)
         log_msg ("loading connector-local");
-    if (load_module_byname (&ctx, "connector-local", NULL, 0, NULL) < 0) {
-        log_err ("load_module connector-local");
+    if (load_module (&ctx, "connector-local", NULL, 0, NULL, &error) < 0) {
+        log_err ("load_module connector-local: %s", error.text);
         goto cleanup;
     }
 
@@ -1179,28 +1182,13 @@ static int mod_svc_cb (const flux_msg_t *msg, void *arg)
     return rc;
 }
 
-/* If a dlerror/dlsym error occurs during modfind/modname,
- * log it here.  Such messages can be helpful in diagnosing
- * dynamic binding problems for modules.
- */
-static void module_dlerror (const char *errmsg, void *arg)
-{
-    flux_t *h = arg;
-    flux_log (h, LOG_DEBUG, "flux_modname: %s", errmsg);
-}
-
-
-static int load_module_bypath (broker_ctx_t *ctx, const char *path,
+static int load_module_bypath (broker_ctx_t *ctx,const char *path,
                                const char *argz, size_t argz_len,
                                const flux_msg_t *request)
 {
     module_t *p = NULL;
-    char *name, *arg;
+    char *arg;
 
-    if (!(name = flux_modname (path, module_dlerror, ctx->h))) {
-        errno = ENOENT;
-        goto error;
-    }
     if (!(p = module_add (ctx->modhash, path)))
         goto error;
     if (service_add (ctx->services, module_get_name (p),
@@ -1217,43 +1205,91 @@ static int load_module_bypath (broker_ctx_t *ctx, const char *path,
         goto service_remove;
     if (module_start (p) < 0)
         goto service_remove;
-    flux_log (ctx->h, LOG_DEBUG, "insmod %s", name);
-    free (name);
+    flux_log (ctx->h, LOG_DEBUG, "insmod %s", module_get_name (p));
     return 0;
 service_remove:
     service_remove_byuuid (ctx->services, module_get_uuid (p));
 module_remove:
     module_remove (ctx->modhash, p);
 error:
-    free (name);
     return -1;
 }
 
-static int load_module_byname (broker_ctx_t *ctx, const char *name,
-                               const char *argz, size_t argz_len,
-                               const flux_msg_t *request)
+/* Find file <name>.ext in one of the colon-separated directories in
+ * 'searchpath' and place its full path in 'path' (caller must free).
+ * Return 0 on success, -1 on failure.  Errno is not set.
+ */
+static int search_file_ext (const char *name,
+                            const char *ext,
+                            const char *searchpath,
+                            char **path)
 {
-    const char *modpath;
-    char *path;
+    char *argz = NULL;
+    size_t argz_len = 0;
+    char *entry = NULL;
+    char *fullpath = NULL;
+    int e;
+    int rc = -1;
 
-    if (attr_get (ctx->attrs, "conf.module_path", &modpath, NULL) < 0) {
-        log_msg ("conf.module_path is not set");
+    if ((e = argz_create_sep (searchpath, ':', &argz, &argz_len)) != 0)
         return -1;
+    while ((entry = argz_next (argz, argz_len, entry))) {
+        char *s;
+        if (asprintf (&s, "%s/%s%s", entry, name, ext) < 0)
+            goto out;
+        if (access (s, F_OK | R_OK) == 0) {
+            fullpath = s;
+            break;
+        }
+        free (s);
     }
-    if (!(path = flux_modfind (modpath, name, module_dlerror, ctx->h))) {
-        log_msg ("%s: not found in module search path", name);
-        return -1;
+    if (fullpath) {
+        *path = fullpath;
+        rc = 0;
+    }
+out:
+    free (argz);
+    return rc;
+}
+
+/* Load module by fully qualified path or by module name.
+ * Note: for the latter to work, broker modules must use a filename that
+ * is the same as the module name, e.g. "kvs.so" is the module named "kvs".
+ */
+static int load_module (broker_ctx_t *ctx,
+                        const char *path, // path or module name
+                        const char *argz,
+                        size_t argz_len,
+                        const flux_msg_t *request,
+                        flux_error_t *error)
+{
+    const char *searchpath;
+    char *fullpath = NULL;
+
+    if (!strchr (path, '/')) {
+        if (attr_get (ctx->attrs, "conf.module_path", &searchpath, NULL) < 0) {
+            errprintf (error, "conf.module_path attribute is not set");
+            errno = EINVAL;
+            return -1;
+        }
+        if (search_file_ext (path, ".so", searchpath, &fullpath) < 0) {
+            errprintf (error, "module not found in search path");
+            errno = ENOENT;
+            return -1;
+        }
+        path = fullpath;
     }
     if (load_module_bypath (ctx, path, argz, argz_len, request) < 0) {
-        free (path);
+        errprintf (error, "%s", strerror (errno));
+        free (fullpath);
         return -1;
     }
-    free (path);
+    free (fullpath);
     return 0;
 }
 
-static int unload_module_byname (broker_ctx_t *ctx, const char *name,
-                                 const flux_msg_t *request)
+static int unload_module (broker_ctx_t *ctx, const char *name,
+                          const flux_msg_t *request)
 {
     module_t *p;
 
@@ -1306,9 +1342,8 @@ static int broker_handle_signals (broker_ctx_t *ctx)
  ** Built-in services
  **/
 
-/* Unload a module by name, asynchronously.
- * Message format is defined by RFC 5.
- * N.B. unload_module_byname() handles response, unless it fails early
+/* Unload a module, asynchronously.
+ * N.B. unload_module() handles response, unless it fails early
  * and returns -1.
  */
 static void broker_rmmod_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -1319,7 +1354,7 @@ static void broker_rmmod_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
-    if (unload_module_byname (ctx, name, msg) < 0)
+    if (unload_module (ctx, name, msg) < 0)
         goto error;
     return;
 error:
@@ -1327,9 +1362,8 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-/* Load a module by name, asynchronously.
- * Message format is defined by RFC 5.
- * N.B. load_module_bypath() handles response, unless it returns -1.
+/* Load a module, asynchronously.
+ * N.B. load_module() handles response, unless it returns -1.
  */
 static void broker_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
@@ -1342,6 +1376,8 @@ static void broker_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
     char *argz = NULL;
     size_t argz_len = 0;
     error_t e;
+    flux_error_t error;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path,
                                                      "args", &args) < 0)
@@ -1356,14 +1392,16 @@ static void broker_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         }
     }
-    if (load_module_bypath (ctx, path, argz, argz_len, msg) < 0)
+    if (load_module (ctx, path, argz, argz_len, msg, &error) < 0) {
+        errmsg = error.text;
         goto error;
+    }
     free (argz);
     return;
 proto:
     errno = EPROTO;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     free (argz);
 }

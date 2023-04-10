@@ -52,6 +52,7 @@ struct broker_module {
     pthread_t t;            /* module thread */
     mod_main_f *main;       /* dlopened mod_main() */
     char *name;
+    char *path;             /* retain the full path as a key for lookup */
     void *dso;              /* reference on dlopened module */
     int size;               /* size of .so file for lsmod */
     char *digest;           /* digest of .so file for lsmod */
@@ -404,6 +405,7 @@ static void module_destroy (module_t *p)
     free (p->digest);
     free (p->argz);
     free (p->name);
+    free (p->path);
     if (p->rmmod) {
         flux_msg_t *msg;
         while ((msg = zlist_pop (p->rmmod)))
@@ -594,7 +596,8 @@ module_t *module_add (modhash_t *mh, const char *path)
     }
     p->main = mod_main;
     p->dso = dso;
-    if (!(p->name = strdup (*mod_namep)))
+    if (!(p->name = strdup (*mod_namep))
+        || !(p->path = strdup (path)))
         goto cleanup;
     if (!(p->digest = digest_file (path, &size)))
         goto cleanup;
@@ -770,13 +773,14 @@ module_t *module_lookup_byname (modhash_t *mh, const char *name)
     uuid = zlist_first (uuids);
     while (uuid) {
         module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
-        assert (p != NULL);
-        if (!strcmp (module_get_name (p), name)) {
-            result = p;
-            break;
+        if (p) {
+            if (streq (module_get_name (p), name)
+                || streq (p->path, name)) {
+                result = p;
+                break;
+            }
         }
         uuid = zlist_next (uuids);
-        p = NULL;
     }
     zlist_destroy (&uuids);
     return result;

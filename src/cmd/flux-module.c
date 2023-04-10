@@ -28,6 +28,7 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/digest.h"
 #include "src/common/libutil/jpath.h"
+#include "ccan/str/str.h"
 
 const int max_idle = 99;
 
@@ -180,38 +181,32 @@ int main (int argc, char *argv[])
     return (exitval);
 }
 
-void module_dlerror (const char *errmsg, void *arg)
+static bool has_suffix (const char *s, const char *suffix)
 {
-    log_msg ("%s", errmsg);
+    int n = strlen (s) - strlen (suffix);
+    if (n >= 0 && streq (&s[n], suffix))
+        return true;
+    return false;
 }
 
-void parse_modarg (const char *arg, char **name, char **path)
+/* If path looks like a dso filename, then canonicalize it so that
+ * the broker, possibly running in a different directory, can dlopen() it.
+ */
+static int canonicalize_if_path (const char *path, char **fullpathp)
 {
-    char *modpath = NULL;
-    char *modname = NULL;
-
-    if (strchr (arg, '/')) {
-        if (!(modpath = realpath (arg, NULL)))
-            log_err_exit ("%s", arg);
-        if (!(modname = flux_modname (modpath, module_dlerror, NULL)))
-            log_msg_exit ("%s", modpath);
-    } else {
-        char *searchpath = getenv ("FLUX_MODULE_PATH");
-        if (!searchpath)
-            log_msg_exit ("FLUX_MODULE_PATH is not set");
-        modname = xstrdup (arg);
-        if (!(modpath = flux_modfind (searchpath, modname,
-                                      module_dlerror, NULL)))
-            log_msg_exit ("%s: not found in module search path", modname);
+    char *fullpath = NULL;
+    if (strchr (path, '/') || has_suffix (path, ".so")) {
+        if (!(fullpath = realpath (path, NULL)))
+            return -1;
     }
-    *name = modname;
-    *path = modpath;
+    *fullpathp = fullpath;
+    return 0;
 }
 
 static void module_load (flux_t *h, optparse_t *p, int argc, char **argv)
 {
-    char *modname;
-    char *modpath;
+    char *path;
+    char *fullpath = NULL;
     int n;
     flux_future_t *f;
 
@@ -219,7 +214,9 @@ static void module_load (flux_t *h, optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
-    parse_modarg (argv[n++], &modname, &modpath);
+    path = argv[n++];
+    if (canonicalize_if_path (path, &fullpath) < 0)
+        log_err_exit ("could not canonicalize module path '%s'", path);
 
     json_t *args = json_array ();
     if (!args)
@@ -236,20 +233,14 @@ static void module_load (flux_t *h, optparse_t *p, int argc, char **argv)
                              FLUX_NODEID_ANY,
                              0,
                              "{s:s s:O}",
-                             "path",
-                             modpath,
-                             "args",
-                             args)))
-        log_err_exit ("load");
-    if (flux_rpc_get (f, NULL) < 0) {
-        if (errno == EEXIST)
-            log_msg_exit ("load %s: module/service is in use", modname);
-        log_err_exit ("load %s", modname);
+                             "path", fullpath ? fullpath : path,
+                             "args", args))
+        || flux_rpc_get (f, NULL) < 0) {
+        log_msg_exit ("load %s: %s", path, future_strerror (f, errno));
     }
     flux_future_destroy (f);
     json_decref (args);
-    free (modpath);
-    free (modname);
+    free (fullpath);
 }
 
 int cmd_load (optparse_t *p, int argc, char **argv)
@@ -262,23 +253,26 @@ int cmd_load (optparse_t *p, int argc, char **argv)
     return 0;
 }
 
-static void module_remove (flux_t *h, const char *modname, optparse_t *p)
+static void module_remove (flux_t *h, const char *path, optparse_t *p)
 {
+    char *fullpath = NULL;
     flux_future_t *f;
+
+    if (canonicalize_if_path (path, &fullpath) < 0)
+        log_err_exit ("could not canonicalize module path '%s'", path);
 
     if (!(f = flux_rpc_pack (h,
                              "broker.rmmod",
                              FLUX_NODEID_ANY,
                              0,
                              "{s:s}",
-                             "name",
-                             modname)))
-        log_err_exit ("remove %s", modname);
-    if (flux_rpc_get (f, NULL) < 0) {
+                             "name", fullpath ? fullpath : path))
+        || flux_rpc_get (f, NULL) < 0) {
         if (!(optparse_hasopt (p, "force") && errno == ENOENT))
-            log_err_exit ("remove %s", modname);
+            log_msg_exit ("remove %s: %s", path, future_strerror (f, errno));
     }
     flux_future_destroy (f);
+    free (fullpath);
 }
 
 int cmd_remove (optparse_t *p, int argc, char **argv)
@@ -304,8 +298,6 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
 
 int cmd_reload (optparse_t *p, int argc, char **argv)
 {
-    char *modname;
-    char *modpath;
     flux_t *h;
     int n;
 
@@ -313,12 +305,10 @@ int cmd_reload (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
-    parse_modarg (argv[n], &modname, &modpath);
-
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    module_remove (h, modname, p);
+    module_remove (h, argv[n], p);
     module_load (h, p, argc, argv);
     return (0);
 }

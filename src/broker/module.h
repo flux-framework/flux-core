@@ -103,6 +103,7 @@ int module_response_sendmsg (modhash_t *mh, const flux_msg_t *msg);
 module_t *module_lookup (modhash_t *mh, const char *uuid);
 
 /* Find a module matching 'name'.
+ * Either the module name or the path given to module_add() works.
  * N.B. this is a slow linear search - keep out of crit paths
  */
 module_t *module_lookup_byname (modhash_t *mh, const char *name);
