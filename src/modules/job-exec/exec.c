@@ -221,23 +221,26 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
      *   create flux_cmd_t
      */
     if (cmd) {
-        const char *errmsg = "job shell execution error";
         if (errnum == EHOSTUNREACH) {
             if (!idset_test (job->critical_ranks, shell_rank)
                 && lost_shell (job, shell_rank, hostname) == 0)
                 return;
-            errmsg = "lost contact with job shell";
-            errnum = 0;
+            jobinfo_fatal_error (job,
+                                0,
+                                "%s on broker %s (rank %d)",
+                                "lost contact with job shell",
+                                hostname,
+                                rank);
         }
-        else
-            errmsg = "job shell exec error";
-
-        jobinfo_fatal_error (job,
-                             errnum,
-                             "%s on broker %s (rank %d)",
-                             errmsg,
-                             hostname,
-                             rank);
+        else {
+            jobinfo_fatal_error (job,
+                                 errnum,
+                                 "%s on broker %s (rank %d): %s",
+                                 "job shell exec error",
+                                 hostname,
+                                 rank,
+                                 flux_cmd_arg (cmd, 0));
+        }
     }
     else
         jobinfo_fatal_error (job,
