@@ -45,8 +45,25 @@ static struct optparse_option list_opts[] = {
 };
 
 static struct optparse_option remove_opts[] =  {
-    { .name = "force", .key = 'f',
+    { .name = "force", .key = 'f', .has_arg = 0,
       .usage = "Ignore nonexistent modules",
+    },
+    OPTPARSE_TABLE_END,
+};
+
+static struct optparse_option reload_opts[] =  {
+    { .name = "force", .key = 'f', .has_arg = 0,
+      .usage = "Ignore nonexistent modules",
+    },
+    { .name = "name", .has_arg = 1, .arginfo = "NAME",
+      .usage = "Override default module name",
+    },
+    OPTPARSE_TABLE_END,
+};
+
+static struct optparse_option load_opts[] =  {
+    { .name = "name", .has_arg = 1, .arginfo = "NAME",
+      .usage = "Override default module name",
     },
     OPTPARSE_TABLE_END,
 };
@@ -111,14 +128,14 @@ static struct optparse_subcommand subcommands[] = {
       "Load module",
       cmd_load,
       0,
-      NULL,
+      load_opts,
     },
     { "reload",
       "[OPTIONS] module",
       "Reload module",
       cmd_reload,
       0,
-      remove_opts,
+      reload_opts,
     },
     { "stats",
       "[OPTIONS] module",
@@ -226,12 +243,23 @@ error:
     return NULL;
 }
 
+static int set_string (json_t *o, const char *key, const char *val)
+{
+    json_t *s = json_string (val);
+    if (!s || json_object_set_new (o, key, s) < 0) {
+        json_decref (s);
+        return -1;
+    }
+    return 0;
+}
+
 static void module_load (flux_t *h,
                          optparse_t *p,
                          const char *path,
                          int argc,
                          char **argv)
 {
+    const char *name = optparse_get_str (p, "name", NULL);
     char *fullpath = NULL;
     flux_future_t *f;
     json_t *args;
@@ -242,7 +270,8 @@ static void module_load (flux_t *h,
     if (!(args = args_create (argc, argv))
         || !(payload = json_pack ("{s:s s:O}",
                                "path", fullpath ? fullpath : path,
-                               "args", args)))
+                               "args", args))
+        || (name && set_string (payload, "name", name) < 0))
         log_msg_exit ("failed to create broker.insmod payload");
     if (!(f = flux_rpc_pack (h,
                              "broker.insmod",
@@ -325,6 +354,7 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
 int cmd_reload (optparse_t *p, int argc, char **argv)
 {
     int n = optparse_option_index (p);
+    const char *name = optparse_get_str (p, "name", NULL);
     const char *path;
     flux_t *h;
 
@@ -336,7 +366,11 @@ int cmd_reload (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    module_remove (h, p, path);
+    /* If --name=NAME was specified, remove by that name rather than
+     * the path so the correct instantiation of the DSO is selected.
+     */
+    module_remove (h, p, name ? name : path);
+
     module_load (h, p, path, argc - n, argv + n);
     return (0);
 }
