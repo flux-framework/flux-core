@@ -183,4 +183,16 @@ test_expect_success 'job-exec: critical-ranks RPC handles unexpected input' '
             test_must_fail flux python critical-ranks.py $id 0
         )
 '
+grep 'release 7' /etc/centos-release >/dev/null 2>&1 \
+	|| test_set_prereq NOT_CENTOS7
+
+# The following test does not work on CentOS 7 since exec errno does
+#  not work with job-exec (for as yet unknown reason). Skip the test on
+#  this distro:
+test_expect_success NOT_CENTOS7 'job-exec: path to shell is emitted on exec error' '
+	test_expect_code 127 flux run \
+	  --setattr=exec.job_shell=/foo/flux-shell hostname 2>exec.err &&
+	test_debug "cat exec.err" &&
+	grep /foo/flux-shell exec.err
+'
 test_done
