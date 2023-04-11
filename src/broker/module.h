@@ -35,7 +35,10 @@ void modhash_initialize (modhash_t *mh,
 
 /* Prepare module at 'path' for starting.
  */
-module_t *module_add (modhash_t *mh, const char *path, json_t *args);
+module_t *module_add (modhash_t *mh,
+                      const char *path,
+                      json_t *args,
+                      flux_error_t *error);
 void module_remove (modhash_t *mh, module_t *p);
 
 /* Get module name.

@@ -27,6 +27,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "module.h"
 #include "modservice.h"
@@ -542,7 +543,10 @@ flux_msg_t *module_pop_insmod (module_t *p)
     return msg;
 }
 
-module_t *module_add (modhash_t *mh, const char *path, json_t *args)
+module_t *module_add (modhash_t *mh,
+                      const char *path,
+                      json_t *args,
+                      flux_error_t *error)
 {
     module_t *p;
     void *dso;
@@ -552,60 +556,54 @@ module_t *module_add (modhash_t *mh, const char *path, json_t *args)
 
     dlerror ();
     if (!(dso = dlopen (path, RTLD_NOW | RTLD_GLOBAL | FLUX_DEEPBIND))) {
-        log_msg ("%s", dlerror ());
+        errprintf (error, "%s", dlerror ());
         errno = ENOENT;
         return NULL;
     }
     mod_main = dlsym (dso, "mod_main");
     mod_namep = dlsym (dso, "mod_name");
     if (!mod_main || !mod_namep || !*mod_namep) {
+        errprintf (error, "required broker module symbols not found");
         dlclose (dso);
         errno = ENOENT;
         return NULL;
     }
     if (!(p = calloc (1, sizeof (*p)))) {
-        int saved_errno = errno;
         dlclose (dso);
-        errno = saved_errno;
-        return NULL;
+        goto nomem;
     }
+    p->main = mod_main;
+    p->dso = dso;
     if (args) {
         size_t index;
         json_t *entry;
 
         json_array_foreach (args, index, entry) {
-            error_t e;
             const char *s = json_string_value (entry);
-            if (s && (e = argz_add (&p->argz, &p->argz_len, s))) {
-                errno = e;
-                goto cleanup;
-            }
+            if (s && (argz_add (&p->argz, &p->argz_len, s) != 0))
+                goto nomem;
         }
     }
-    p->main = mod_main;
-    p->dso = dso;
     if (!(p->name = strdup (*mod_namep))
-        || !(p->path = strdup (path)))
-        goto cleanup;
+        || !(p->path = strdup (path))
+        || !(p->rmmod = zlist_new ())
+        || !(p->subs = zlist_new ()))
+        goto nomem;
     uuid_generate (p->uuid);
     uuid_unparse (p->uuid, p->uuid_str);
-    if (!(p->rmmod = zlist_new ()))
-        goto nomem;
-    if (!(p->subs = zlist_new ()))
-        goto nomem;
 
     p->modhash = mh;
 
     /* Broker end of PAIR socket is opened here.
      */
     if (!(p->sock = zsock_new_pair (NULL))) {
-        log_err ("zsock_new_pair");
+        errprintf (error, "could not create zsock for %s", p->name);
         goto cleanup;
     }
     zsock_set_unbounded (p->sock);
     zsock_set_linger (p->sock, 5);
     if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0) {
-        log_err ("zsock_bind inproc://%s", module_get_uuid (p));
+        errprintf (error, "zsock_bind inproc://%s", module_get_uuid (p));
         goto cleanup;
     }
     if (!(p->broker_w = zmqutil_watcher_create (
@@ -614,7 +612,7 @@ module_t *module_add (modhash_t *mh, const char *path, json_t *args)
                                         FLUX_POLLIN,
                                         module_cb,
                                         p))) {
-        log_err ("zmqutil_watcher_create");
+        errprintf (error, "could not create %s zsock watcher", p->name);
         goto cleanup;
     }
     /* Set creds for connection.
@@ -632,6 +630,7 @@ module_t *module_add (modhash_t *mh, const char *path, json_t *args)
                   (zhash_free_fn *)module_destroy);
     return p;
 nomem:
+    errprintf (error, "out of memory");
     errno = ENOMEM;
 cleanup:
     module_destroy (p);

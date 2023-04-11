@@ -1181,34 +1181,6 @@ static int mod_svc_cb (const flux_msg_t *msg, void *arg)
     return rc;
 }
 
-static int load_module_bypath (broker_ctx_t *ctx,
-                               const char *path,
-                               json_t *args,
-                               const flux_msg_t *request)
-{
-    module_t *p = NULL;
-
-    if (!(p = module_add (ctx->modhash, path, args)))
-        goto error;
-    if (service_add (ctx->services, module_get_name (p),
-                                    module_get_uuid (p), mod_svc_cb, p) < 0)
-        goto module_remove;
-    module_set_poller_cb (p, module_cb, ctx);
-    module_set_status_cb (p, module_status_cb, ctx);
-    if (request && module_push_insmod (p, request) < 0) // response deferred
-        goto service_remove;
-    if (module_start (p) < 0)
-        goto service_remove;
-    flux_log (ctx->h, LOG_DEBUG, "insmod %s", module_get_name (p));
-    return 0;
-service_remove:
-    service_remove_byuuid (ctx->services, module_get_uuid (p));
-module_remove:
-    module_remove (ctx->modhash, p);
-error:
-    return -1;
-}
-
 /* Find file <name>.ext in one of the colon-separated directories in
  * 'searchpath' and place its full path in 'path' (caller must free).
  * Return 0 on success, -1 on failure.  Errno is not set.
@@ -1258,6 +1230,7 @@ static int load_module (broker_ctx_t *ctx,
 {
     const char *searchpath;
     char *fullpath = NULL;
+    module_t *p;
 
     if (!strchr (path, '/')) {
         if (attr_get (ctx->attrs, "conf.module_path", &searchpath, NULL) < 0) {
@@ -1272,13 +1245,37 @@ static int load_module (broker_ctx_t *ctx,
         }
         path = fullpath;
     }
-    if (load_module_bypath (ctx, path, args, request) < 0) {
-        errprintf (error, "%s", strerror (errno));
-        free (fullpath);
-        return -1;
+    if (!(p = module_add (ctx->modhash, path, args, error)))
+        goto error;
+    if (service_add (ctx->services,
+                     module_get_name (p),
+                     module_get_uuid (p),
+                     mod_svc_cb,
+                     p) < 0) {
+        errprintf (error, "error registering %s service", module_get_name (p));
+        goto module_remove;
     }
+    module_set_poller_cb (p, module_cb, ctx);
+    module_set_status_cb (p, module_status_cb, ctx);
+    if (request && module_push_insmod (p, request) < 0) { // response deferred
+        errprintf (error, "error saving %s request", module_get_name (p));
+        goto service_remove;
+    }
+    if (module_start (p) < 0) {
+        errprintf (error, "error starting %s module", module_get_name (p));
+        goto service_remove;
+    }
+    flux_log (ctx->h, LOG_DEBUG, "insmod %s", module_get_name (p));
     free (fullpath);
+
     return 0;
+service_remove:
+    service_remove_byuuid (ctx->services, module_get_uuid (p));
+module_remove:
+    module_remove (ctx->modhash, p);
+error:
+    ERRNO_SAFE_WRAP (free, fullpath);
+    return -1;
 }
 
 static int unload_module (broker_ctx_t *ctx, const char *name,
