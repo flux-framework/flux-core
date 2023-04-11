@@ -83,6 +83,7 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
 static void broker_remove_services (flux_msg_handler_t *handlers[]);
 
 static int load_module (broker_ctx_t *ctx,
+                        const char *name,
                         const char *path,
                         json_t *args,
                         const flux_msg_t *request,
@@ -503,7 +504,7 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose > 1)
         log_msg ("loading connector-local");
-    if (load_module (&ctx, "connector-local", NULL, NULL, &error) < 0) {
+    if (load_module (&ctx, NULL, "connector-local", NULL, NULL, &error) < 0) {
         log_err ("load_module connector-local: %s", error.text);
         goto cleanup;
     }
@@ -1218,12 +1219,13 @@ out:
     return rc;
 }
 
-/* Load module by fully qualified path or by module name.
- * Note: for the latter to work, broker modules must use a filename that
- * is the same as the module name, e.g. "kvs.so" is the module named "kvs".
+/* Load broker module.
+ * 'name' is the name to use for the module (NULL = use dso basename minus .so)
+ * 'path' is either a dso path or a dso basename (e.g. "kvs" or "/a/b/kvs.so".
  */
 static int load_module (broker_ctx_t *ctx,
-                        const char *path, // path or module name
+                        const char *name,
+                        const char *path,
                         json_t *args,
                         const flux_msg_t *request,
                         flux_error_t *error)
@@ -1245,7 +1247,7 @@ static int load_module (broker_ctx_t *ctx,
         }
         path = fullpath;
     }
-    if (!(p = module_add (ctx->modhash, path, args, error)))
+    if (!(p = module_add (ctx->modhash, name, path, args, error)))
         goto error;
     if (service_add (ctx->services,
                      module_get_name (p),
@@ -1359,15 +1361,20 @@ static void broker_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
+    const char *name = NULL;
     const char *path;
     json_t *args;
     flux_error_t error;
     const char *errmsg = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path,
-                                                     "args", &args) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s?s s:s s:o}",
+                             "name", &name,
+                             "path", &path,
+                             "args", &args) < 0)
         goto error;
-    if (load_module (ctx, path, args, msg, &error) < 0) {
+    if (load_module (ctx, name, path, args, msg, &error) < 0) {
         errmsg = error.text;
         goto error;
     }

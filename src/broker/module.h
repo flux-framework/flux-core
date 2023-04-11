@@ -36,6 +36,7 @@ void modhash_initialize (modhash_t *mh,
 /* Prepare module at 'path' for starting.
  */
 module_t *module_add (modhash_t *mh,
+                      const char *name, // may be NULL
                       const char *path,
                       json_t *args,
                       flux_error_t *error);

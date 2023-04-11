@@ -559,6 +559,7 @@ static char *module_name_from_path (char *path)
 }
 
 module_t *module_add (modhash_t *mh,
+                      const char *name,
                       const char *path,
                       json_t *args,
                       flux_error_t *error)
@@ -599,16 +600,23 @@ module_t *module_add (modhash_t *mh,
     }
     if (!(p->path = strdup (path))
         || !(p->rmmod = zlist_new ())
-        || !(p->subs = zlist_new ())
-        || !(p->name_buf = strdup (path))
-        || !(p->name = module_name_from_path (p->name_buf)))
+        || !(p->subs = zlist_new ()))
         goto nomem;
+    if (name) {
+        if (!(p->name = strdup (name)))
+            goto nomem;
+    }
+    else {
+        if (!(p->name_buf = strdup (path))
+            || !(p->name = module_name_from_path (p->name_buf)))
+            goto nomem;
+    }
     /* Handle legacy 'mod_name' symbol - not recommended for new modules
      * but double check that it's sane if present.
      */
     if ((mod_namep = dlsym (p->dso, "mod_name")) && *mod_namep != NULL) {
         if (!streq (*mod_namep, p->name)) {
-            errprintf (error, "mod_name, if specified, must match file name");
+            errprintf (error, "mod_name %s != name %s", *mod_namep, name);
             errno = EINVAL;
             goto cleanup;
         }
