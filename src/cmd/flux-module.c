@@ -208,57 +208,78 @@ static int canonicalize_if_path (const char *path, char **fullpathp)
     return 0;
 }
 
-static void module_load (flux_t *h, optparse_t *p, int argc, char **argv)
+static json_t *args_create (int argc, char **argv)
 {
-    char *path;
-    char *fullpath = NULL;
-    int n;
-    flux_future_t *f;
-
-    if ((n = optparse_option_index (p)) == argc) {
-        optparse_print_usage (p);
-        exit (1);
+    json_t *args;
+    if (!(args = json_array ()))
+        goto error;
+    for (int i = 0; i < argc; i++) {
+        json_t *s = json_string (argv[i]);
+        if (!s || json_array_append_new (args, s) < 0) {
+            json_decref (s);
+            goto error;
+        }
     }
-    path = argv[n++];
+    return args;
+error:
+    json_decref (args);
+    return NULL;
+}
+
+static void module_load (flux_t *h,
+                         optparse_t *p,
+                         const char *path,
+                         int argc,
+                         char **argv)
+{
+    char *fullpath = NULL;
+    flux_future_t *f;
+    json_t *args;
+    json_t *payload;
+
     if (canonicalize_if_path (path, &fullpath) < 0)
         log_err_exit ("could not canonicalize module path '%s'", path);
-
-    json_t *args = json_array ();
-    if (!args)
-        log_msg_exit ("json_array() failed");
-    while (n < argc) {
-        json_t *str = json_string (argv[n]);
-        if (!str || json_array_append_new (args, str) < 0)
-            log_msg_exit ("json_string() or json_array_append_new() failed");
-        n++;
-    }
-
+    if (!(args = args_create (argc, argv))
+        || !(payload = json_pack ("{s:s s:O}",
+                               "path", fullpath ? fullpath : path,
+                               "args", args)))
+        log_msg_exit ("failed to create broker.insmod payload");
     if (!(f = flux_rpc_pack (h,
                              "broker.insmod",
                              FLUX_NODEID_ANY,
                              0,
-                             "{s:s s:O}",
-                             "path", fullpath ? fullpath : path,
-                             "args", args))
+                             "O",
+                             payload))
         || flux_rpc_get (f, NULL) < 0) {
         log_msg_exit ("load %s: %s", path, future_strerror (f, errno));
     }
     flux_future_destroy (f);
+    json_decref (payload);
     json_decref (args);
     free (fullpath);
 }
 
 int cmd_load (optparse_t *p, int argc, char **argv)
 {
+    int n = optparse_option_index (p);
+    const char *path;
     flux_t *h;
+
+    if (n == argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    path = argv[n++];
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    module_load (h, p, argc, argv);
+
+    module_load (h, p, path, argc - n, argv + n);
+
     flux_close (h);
     return 0;
 }
 
-static void module_remove (flux_t *h, const char *path, optparse_t *p)
+static void module_remove (flux_t *h, optparse_t *p, const char *path)
 {
     char *fullpath = NULL;
     flux_future_t *f;
@@ -282,20 +303,20 @@ static void module_remove (flux_t *h, const char *path, optparse_t *p)
 
 int cmd_remove (optparse_t *p, int argc, char **argv)
 {
-    char *modname;
+    int n = optparse_option_index (p);
+    char *path;
     flux_t *h;
-    int n;
 
-    if ((n = optparse_option_index (p)) != argc - 1) {
+    if (n != argc - 1) {
         optparse_print_usage (p);
         exit (1);
     }
-    modname = argv[n++];
+    path = argv[n];
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    module_remove (h, modname, p);
+    module_remove (h, p, path);
 
     flux_close (h);
     return (0);
@@ -303,18 +324,20 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
 
 int cmd_reload (optparse_t *p, int argc, char **argv)
 {
+    int n = optparse_option_index (p);
+    const char *path;
     flux_t *h;
-    int n;
 
-    if ((n = optparse_option_index (p)) == argc) {
+    if (n == argc) {
         optparse_print_usage (p);
         exit (1);
     }
+    path = argv[n++];
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    module_remove (h, argv[n], p);
-    module_load (h, p, argc, argv);
+    module_remove (h, p, path);
+    module_load (h, p, path, argc - n, argv + n);
     return (0);
 }
 
