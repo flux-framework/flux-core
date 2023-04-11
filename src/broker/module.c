@@ -731,8 +731,9 @@ json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw)
 
             if (!(svcs  = service_list_byuuid (sw, uuid)))
                 goto nomem;
-            if (!(entry = json_pack ("{s:s s:i s:i s:o}",
+            if (!(entry = json_pack ("{s:s s:s s:i s:i s:o}",
                                      "name", module_get_name (p),
+                                     "path", p->path,
                                      "idle", module_get_idle (p),
                                      "status", p->status,
                                      "services", svcs))) {
