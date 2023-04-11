@@ -48,37 +48,6 @@ test_expect_success 'module: lsmod does not show test module' '
 	! flux module list | grep parent
 '
 
-test_expect_success 'module API: load test module' '
-	flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
-'
-
-test_expect_success 'module API: lsmod shows test module' '
-	flux module list | grep parent
-'
-
-test_expect_success 'module API: cannot load the same module twice' '
-        test_must_fail flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
-'
-
-test_expect_success 'module API: unload test module' '
-	flux module remove parent
-'
-
-test_expect_success 'module API: lsmod does not show test module' '
-	! flux module list | grep parent
-'
-
-test_expect_success 'module: load test module (all ranks)' '
-	flux exec -r all flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
-'
-
-test_expect_success 'module: unload test module (all ranks)' '
-	flux exec -r all flux module remove parent
-'
-
 test_expect_success 'module: insmod returns initialization error' '
 	test_must_fail flux module load \
 		${FLUX_BUILD_DIR}/t/module/.libs/parent.so --init-failure
