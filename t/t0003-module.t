@@ -34,6 +34,9 @@ test_expect_success 'module: reload test module' '
 test_expect_success 'module: lsmod shows test module' '
 	flux module list | grep testmod
 '
+test_expect_success 'module: lsmod -l shows test module path' '
+	flux module list -l | grep $testmod
+'
 
 test_expect_success 'module: cannot load the same module twice' '
 	test_must_fail flux module load $testmod
