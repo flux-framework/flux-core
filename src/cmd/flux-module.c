@@ -38,6 +38,12 @@ int cmd_reload (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_debug (optparse_t *p, int argc, char **argv);
 
+static struct optparse_option list_opts[] = {
+    { .name = "long",  .key = 'l',  .has_arg = 0,
+      .usage = "Include full DSO path for each module", },
+    OPTPARSE_TABLE_END,
+};
+
 static struct optparse_option remove_opts[] =  {
     { .name = "force", .key = 'f',
       .usage = "Ignore nonexistent modules",
@@ -84,7 +90,7 @@ static struct optparse_subcommand subcommands[] = {
       "List loaded modules",
       cmd_list,
       0,
-      NULL,
+      list_opts,
     },
     { "remove",
       "[OPTIONS] module",
@@ -318,7 +324,7 @@ int cmd_reload (optparse_t *p, int argc, char **argv)
  * the module name, implicitly registered as a service).
  * Caller must free result.
  */
-char *lsmod_services_string (json_t *services, const char *skip)
+char *lsmod_services_string (json_t *services, const char *skip, int maxcol)
 {
     size_t index;
     json_t *value;
@@ -333,16 +339,19 @@ char *lsmod_services_string (json_t *services, const char *skip)
     }
     if (argz)
         argz_stringify (argz, argz_len, ',');
+    if (argz && maxcol > 0 && strlen (argz) > maxcol) {
+        argz[maxcol - 1] = '+';
+        argz[maxcol] = '\0';
+    }
     return argz;
 }
 
-char *lsmod_idle_string (int idle, char *buf, int bufsz)
+void lsmod_idle_string (int idle, char *buf, int bufsz)
 {
     if (idle <= max_idle)
         snprintf (buf, bufsz, "%d", idle);
     else
         snprintf (buf, bufsz, "idle");
-    return buf;
 }
 
 char lsmod_state_char (int state)
@@ -361,54 +370,81 @@ char lsmod_state_char (int state)
     }
 }
 
-void lsmod_print_header (FILE *f)
+void lsmod_print_header (FILE *f, bool longopt)
 {
-    fprintf (f, "%-24s %4s  %c %s\n",
-            "Module", "Idle", 'S', "Service");
+    if (longopt) {
+        fprintf (f,
+                 "%-24.24s %4s  %c %-8s %s\n",
+                 "Module", "Idle", 'S', "Service", "Path");
+    }
+    else {
+        fprintf (f,
+                 "%-24s %4s  %c %s\n",
+                 "Module", "Idle", 'S', "Service");
+    }
 }
 
 void lsmod_print_entry (FILE *f,
                        const char *name,
+                       const char *path,
                        int idle,
                        int status,
-                       json_t *services)
+                       json_t *services,
+                       bool longopt)
 {
-    char *serv_s = lsmod_services_string (services, name);
     char idle_s[16];
+    char state = lsmod_state_char (status);
 
-    fprintf (f, "%-24.24s %4s  %c %s\n",
-             name,
-             lsmod_idle_string (idle, idle_s, sizeof (idle_s)),
-             lsmod_state_char (status),
-             serv_s ? serv_s : "");
+    lsmod_idle_string (idle, idle_s, sizeof (idle_s));
 
-    free (serv_s);
+    if (longopt) {
+        char *s = lsmod_services_string (services, name, 8);
+        fprintf (f, "%-24.24s %4s  %c %-8s %s\n",
+                 name,
+                 idle_s,
+                 state,
+                 s ? s : "",
+                 path);
+        free (s);
+    }
+    else {
+        char *s = lsmod_services_string (services, name, 0);
+        fprintf (f, "%-24.24s %4s  %c %s\n",
+                 name,
+                 idle_s,
+                 state,
+                 s ? s : "");
+        free (s);
+    }
 }
 
-void lsmod_print_list (FILE *f, json_t *o)
+void lsmod_print_list (FILE *f, json_t *o, bool longopt)
 {
     size_t index;
     json_t *value;
     const char *name;
+    const char *path;
     int idle;
     int status;
     json_t *services;
 
     json_array_foreach (o, index, value) {
-        if (json_unpack (value, "{s:s s:i s:i s:o}",
+        if (json_unpack (value, "{s:s s:s s:i s:i s:o}",
                          "name", &name,
+                         "path", &path,
                          "idle", &idle,
                          "status", &status,
                          "services", &services) < 0)
             log_msg_exit ("Error parsing lsmod response");
         if (!json_is_array (services))
             log_msg_exit ("Error parsing lsmod services array");
-        lsmod_print_entry (f, name, idle, status, services);
+        lsmod_print_entry (f, name, path, idle, status, services, longopt);
     }
 }
 
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
+    bool longopt = optparse_hasopt (p, "long");
     flux_future_t *f;
     flux_t *h;
     int n;
@@ -424,8 +460,8 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     if (!(f = flux_rpc (h, "broker.lsmod", NULL, FLUX_NODEID_ANY, 0))
         || flux_rpc_get_unpack (f, "{s:o}", "mods", &o) < 0)
         log_err_exit ("list");
-    lsmod_print_header (stdout);
-    lsmod_print_list (stdout, o);
+    lsmod_print_header (stdout, longopt);
+    lsmod_print_list (stdout, o, longopt);
     flux_future_destroy (f);
     flux_close (h);
     return (0);
