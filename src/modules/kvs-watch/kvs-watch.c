@@ -1142,8 +1142,6 @@ done:
     return rc;
 }
 
-MOD_NAME ("kvs-watch");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

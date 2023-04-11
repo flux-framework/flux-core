@@ -904,8 +904,6 @@ done:
     return rc;
 }
 
-MOD_NAME ("cron");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

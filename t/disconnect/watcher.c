@@ -37,7 +37,6 @@ int mod_main (flux_t *h, int argc, char *argv[])
     flux_future_destroy (f);
     return rc;
 }
-MOD_NAME ("watcher");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

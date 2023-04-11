@@ -414,8 +414,6 @@ done:
     return rc;
 }
 
-MOD_NAME ("content-files");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

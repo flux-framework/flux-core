@@ -38,10 +38,6 @@ int mod_main (flux_t *h, int argc, char *argv[])
     return 0;
 }
 
-/* This dso extends a module named "parent".
- */
-MOD_NAME ("running");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

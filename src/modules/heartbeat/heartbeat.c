@@ -167,8 +167,6 @@ error:
     return -1;
 }
 
-MOD_NAME ("heartbeat");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

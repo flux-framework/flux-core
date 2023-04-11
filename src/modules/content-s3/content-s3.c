@@ -525,8 +525,6 @@ done:
     return rc;
 }
 
-MOD_NAME ("content-s3");
-
 /*
  * vi:ts=4 sw=4 expandtab
  */

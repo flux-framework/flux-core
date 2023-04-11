@@ -338,8 +338,6 @@ done:
     return rc;
 }
 
-MOD_NAME ("connector-local");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

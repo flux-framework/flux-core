@@ -29,8 +29,6 @@ error:
     return -1;
 }
 
-MOD_NAME ("parent");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
