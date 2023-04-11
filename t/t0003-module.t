@@ -24,33 +24,33 @@ module_status () {
 
 test_expect_success 'module: load test module' '
 	flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+		${FLUX_BUILD_DIR}/t/module/.libs/testmod.so
 '
 test_expect_success 'module: reload test module' '
 	flux module reload \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+		${FLUX_BUILD_DIR}/t/module/.libs/testmod.so
 '
 
 test_expect_success 'module: lsmod shows test module' '
-	flux module list | grep parent
+	flux module list | grep testmod
 '
 
 test_expect_success 'module: cannot load the same module twice' '
 	test_must_fail flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+		${FLUX_BUILD_DIR}/t/module/.libs/testmod.so
 '
 
 test_expect_success 'module: unload test module' '
-	flux module remove parent
+	flux module remove testmod
 '
 
 test_expect_success 'module: lsmod does not show test module' '
-	! flux module list | grep parent
+	! flux module list | grep testmod
 '
 
 test_expect_success 'module: insmod returns initialization error' '
 	test_must_fail flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so --init-failure
+		${FLUX_BUILD_DIR}/t/module/.libs/testmod.so --init-failure
 '
 
 test_expect_success 'module: load fails on invalid module' '
