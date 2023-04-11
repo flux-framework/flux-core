@@ -1377,7 +1377,7 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-/* Load a module by name.
+/* List loaded modules
  */
 static void broker_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
                              const flux_msg_t *msg, void *arg)
