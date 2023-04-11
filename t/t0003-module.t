@@ -44,7 +44,8 @@ test_expect_success 'module: unload test module' '
 '
 
 test_expect_success 'module: lsmod does not show test module' '
-	! flux module list | grep testmod
+	flux module list >list.out &&
+	test_must_fail grep testmod list.out
 '
 
 test_expect_success 'module: insmod returns initialization error' '
