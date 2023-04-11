@@ -15,6 +15,7 @@ invalid_rank() {
 }
 
 testmod=${FLUX_BUILD_DIR}/t/module/.libs/testmod.so
+legacy=${FLUX_BUILD_DIR}/t/module/.libs/legacy.so
 
 module_status_bad_proto() {
 	flux python -c "import flux; print(flux.Flux().rpc(\"broker.module-status\").get())"
@@ -22,6 +23,10 @@ module_status_bad_proto() {
 
 module_status () {
 	flux python -c "import flux; print(flux.Flux().rpc(\"broker.module-status\",{\"status\":0}).get())"
+}
+
+module_getinfo () {
+	FLUX_HANDLE_TRACE=1 flux python -c "import flux; print(flux.Flux().rpc(\"$1.info\").get_str())"
 }
 
 test_expect_success 'module: load test module' '
@@ -41,14 +46,31 @@ test_expect_success 'module: lsmod -l shows test module path' '
 test_expect_success 'module: cannot load the same module twice' '
 	test_must_fail flux module load $testmod
 '
-
+test_expect_success 'module: unless a new --name is specified' '
+	flux module load --name smurf $testmod
+'
+test_expect_success 'module: lsmod shows test module' '
+	flux module list | grep smurf
+'
+test_expect_success 'module: module answers to new name' '
+	test $(module_getinfo smurf) = "smurf"
+'
+test_expect_success 'module: lsmod -l shows test module path twice' '
+	count=$(flux module list -l | grep $testmod | wc -l) &&
+	test $count -eq 2
+'
+test_expect_success 'module: reload test module with new name works' '
+	flux module reload --name smurf $testmod
+'
+test_expect_success 'module: unload test module using new name' '
+	flux module remove smurf
+'
 test_expect_success 'module: unload test module' '
 	flux module remove testmod
 '
-
 test_expect_success 'module: lsmod does not show test module' '
-	flux module list >list.out &&
-	test_must_fail grep testmod list.out
+	flux module list -l >list.out &&
+	test_must_fail grep $testmod list.out
 '
 
 test_expect_success 'module: insmod returns initialization error' '
@@ -66,6 +88,13 @@ test_expect_success 'module: remove fails on invalid module' '
 '
 test_expect_success 'module: remove -f succeeds on nonexistent module' '
 	flux module remove -f nosuchmodule
+'
+test_expect_success 'module: legacy module naming still works' '
+	flux module load $legacy &&
+	flux module remove $legacy
+'
+test_expect_success 'module: legacy module cannot be loaded under new name' '
+	test_must_fail flux module load --name=newname $legacy
 '
 
 # N.B. avoid setting the actual debug bits - lets reserve LSB
