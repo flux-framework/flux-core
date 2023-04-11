@@ -84,8 +84,7 @@ static void broker_remove_services (flux_msg_handler_t *handlers[]);
 
 static int load_module (broker_ctx_t *ctx,
                         const char *path,
-                        const char *argz,
-                        size_t argz_len,
+                        json_t *args,
                         const flux_msg_t *request,
                         flux_error_t *error);
 
@@ -504,7 +503,7 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose > 1)
         log_msg ("loading connector-local");
-    if (load_module (&ctx, "connector-local", NULL, 0, NULL, &error) < 0) {
+    if (load_module (&ctx, "connector-local", NULL, NULL, &error) < 0) {
         log_err ("load_module connector-local: %s", error.text);
         goto cleanup;
     }
@@ -1182,23 +1181,18 @@ static int mod_svc_cb (const flux_msg_t *msg, void *arg)
     return rc;
 }
 
-static int load_module_bypath (broker_ctx_t *ctx,const char *path,
-                               const char *argz, size_t argz_len,
+static int load_module_bypath (broker_ctx_t *ctx,
+                               const char *path,
+                               json_t *args,
                                const flux_msg_t *request)
 {
     module_t *p = NULL;
-    char *arg;
 
-    if (!(p = module_add (ctx->modhash, path)))
+    if (!(p = module_add (ctx->modhash, path, args)))
         goto error;
     if (service_add (ctx->services, module_get_name (p),
                                     module_get_uuid (p), mod_svc_cb, p) < 0)
         goto module_remove;
-    arg = argz_next (argz, argz_len, NULL);
-    while (arg) {
-        module_add_arg (p, arg);
-        arg = argz_next (argz, argz_len, arg);
-    }
     module_set_poller_cb (p, module_cb, ctx);
     module_set_status_cb (p, module_status_cb, ctx);
     if (request && module_push_insmod (p, request) < 0) // response deferred
@@ -1258,8 +1252,7 @@ out:
  */
 static int load_module (broker_ctx_t *ctx,
                         const char *path, // path or module name
-                        const char *argz,
-                        size_t argz_len,
+                        json_t *args,
                         const flux_msg_t *request,
                         flux_error_t *error)
 {
@@ -1279,7 +1272,7 @@ static int load_module (broker_ctx_t *ctx,
         }
         path = fullpath;
     }
-    if (load_module_bypath (ctx, path, argz, argz_len, request) < 0) {
+    if (load_module_bypath (ctx, path, args, request) < 0) {
         errprintf (error, "%s", strerror (errno));
         free (fullpath);
         return -1;
@@ -1371,39 +1364,20 @@ static void broker_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
     broker_ctx_t *ctx = arg;
     const char *path;
     json_t *args;
-    size_t index;
-    json_t *value;
-    char *argz = NULL;
-    size_t argz_len = 0;
-    error_t e;
     flux_error_t error;
     const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:s s:o}", "path", &path,
                                                      "args", &args) < 0)
         goto error;
-    if (!json_is_array (args))
-        goto proto;
-    json_array_foreach (args, index, value) {
-        if (!json_is_string (value))
-            goto proto;
-        if ((e = argz_add (&argz, &argz_len, json_string_value (value)))) {
-            errno = e;
-            goto error;
-        }
-    }
-    if (load_module (ctx, path, argz, argz_len, msg, &error) < 0) {
+    if (load_module (ctx, path, args, msg, &error) < 0) {
         errmsg = error.text;
         goto error;
     }
-    free (argz);
     return;
-proto:
-    errno = EPROTO;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-    free (argz);
 }
 
 /* Load a module by name.

@@ -35,13 +35,8 @@ void modhash_initialize (modhash_t *mh,
 
 /* Prepare module at 'path' for starting.
  */
-module_t *module_add (modhash_t *mh, const char *path);
+module_t *module_add (modhash_t *mh, const char *path, json_t *args);
 void module_remove (modhash_t *mh, module_t *p);
-
-/* Set arguments to module main().  Call before module_start().
- */
-void module_set_args (module_t *p, int argc, char * const argv[]);
-void module_add_arg (module_t *p, const char *arg);
 
 /* Get module name.
  */

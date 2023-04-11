@@ -468,26 +468,6 @@ done:
     return rc;
 }
 
-void module_set_args (module_t *p, int argc, char * const argv[])
-{
-    int e;
-
-    if (p->argz) {
-        free (p->argz);
-        p->argz_len = 0;
-    }
-    if (argv && (e = argz_create (argv, &p->argz, &p->argz_len)) != 0)
-        log_errn_exit (e, "argz_create");
-}
-
-void module_add_arg (module_t *p, const char *arg)
-{
-    int e;
-
-    if ((e = argz_add (&p->argz, &p->argz_len, arg)) != 0)
-        log_errn_exit (e, "argz_add");
-}
-
 void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg)
 {
     p->poller_cb = cb;
@@ -562,7 +542,7 @@ flux_msg_t *module_pop_insmod (module_t *p)
     return msg;
 }
 
-module_t *module_add (modhash_t *mh, const char *path)
+module_t *module_add (modhash_t *mh, const char *path, json_t *args)
 {
     module_t *p;
     void *dso;
@@ -588,6 +568,19 @@ module_t *module_add (modhash_t *mh, const char *path)
         dlclose (dso);
         errno = saved_errno;
         return NULL;
+    }
+    if (args) {
+        size_t index;
+        json_t *entry;
+
+        json_array_foreach (args, index, entry) {
+            error_t e;
+            const char *s = json_string_value (entry);
+            if (s && (e = argz_add (&p->argz, &p->argz_len, s))) {
+                errno = e;
+                goto cleanup;
+            }
+        }
     }
     p->main = mod_main;
     p->dso = dso;
