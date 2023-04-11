@@ -14,6 +14,8 @@ invalid_rank() {
 	echo $((${SIZE} + 1))
 }
 
+testmod=${FLUX_BUILD_DIR}/t/module/.libs/testmod.so
+
 module_status_bad_proto() {
 	flux python -c "import flux; print(flux.Flux().rpc(\"broker.module-status\").get())"
 }
@@ -23,12 +25,10 @@ module_status () {
 }
 
 test_expect_success 'module: load test module' '
-	flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/testmod.so
+	flux module load $testmod
 '
 test_expect_success 'module: reload test module' '
-	flux module reload \
-		${FLUX_BUILD_DIR}/t/module/.libs/testmod.so
+	flux module reload $testmod
 '
 
 test_expect_success 'module: lsmod shows test module' '
@@ -36,8 +36,7 @@ test_expect_success 'module: lsmod shows test module' '
 '
 
 test_expect_success 'module: cannot load the same module twice' '
-	test_must_fail flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/testmod.so
+	test_must_fail flux module load $testmod
 '
 
 test_expect_success 'module: unload test module' '
@@ -49,8 +48,7 @@ test_expect_success 'module: lsmod does not show test module' '
 '
 
 test_expect_success 'module: insmod returns initialization error' '
-	test_must_fail flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/testmod.so --init-failure
+	test_must_fail flux module load $testmod --init-failure
 '
 
 test_expect_success 'module: load fails on invalid module' '
@@ -67,69 +65,69 @@ test_expect_success 'module: remove -f succeeds on nonexistent module' '
 '
 
 # N.B. avoid setting the actual debug bits - lets reserve LSB
-TESTMOD=connector-local
+REALMOD=connector-local
 
 test_expect_success 'flux module debug gets debug flags' '
-	FLAGS=$(flux module debug $TESTMOD) &&
+	FLAGS=$(flux module debug $REALMOD) &&
 	test "$FLAGS" = "0x0"
 '
 test_expect_success 'flux module debug --setbit sets individual debug flags' '
-	flux module debug --setbit 0x10000 $TESTMOD &&
-	FLAGS=$(flux module debug $TESTMOD) &&
+	flux module debug --setbit 0x10000 $REALMOD &&
+	FLAGS=$(flux module debug $REALMOD) &&
 	test "$FLAGS" = "0x10000"
 '
 test_expect_success 'flux module debug --set replaces debug flags' '
-	flux module debug --set 0xff00 $TESTMOD &&
-	FLAGS=$(flux module debug $TESTMOD) &&
+	flux module debug --set 0xff00 $REALMOD &&
+	FLAGS=$(flux module debug $REALMOD) &&
 	test "$FLAGS" = "0xff00"
 '
 test_expect_success 'flux module debug --clearbit clears individual debug flags' '
-	flux module debug --clearbit 0x1000 $TESTMOD &&
-	FLAGS=$(flux module debug $TESTMOD) &&
+	flux module debug --clearbit 0x1000 $REALMOD &&
+	FLAGS=$(flux module debug $REALMOD) &&
 	test "$FLAGS" = "0xef00"
 '
 test_expect_success 'flux module debug --clear clears debug flags' '
-	flux module debug --clear $TESTMOD &&
-	FLAGS=$(flux module debug $TESTMOD) &&
+	flux module debug --clear $REALMOD &&
+	FLAGS=$(flux module debug $REALMOD) &&
 	test "$FLAGS" = "0x0"
 '
 
 # test stats
 
 test_expect_success 'flux module stats gets comms statistics' '
-	flux module stats $TESTMOD >comms.stats
+	flux module stats $REALMOD >comms.stats
 '
 
 test_expect_success 'flux module stats --parse tx.event counts events' '
-	EVENT_TX=$(flux module stats --parse tx.event $TESTMOD) &&
+	EVENT_TX=$(flux module stats --parse tx.event $REALMOD) &&
 	flux event pub xyz &&
-	EVENT_TX2=$(flux module stats --parse tx.event $TESTMOD) &&
+	EVENT_TX2=$(flux module stats --parse tx.event $REALMOD) &&
 	test "$EVENT_TX" = $((${EVENT_TX2}-1))
 '
 
 test_expect_success 'flux module stats --clear works' '
 	flux event pub xyz &&
-	flux module stats --clear $TESTMOD &&
-	EVENT_TX2=$(flux module stats --parse tx.event $TESTMOD) &&
+	flux module stats --clear $REALMOD &&
+	EVENT_TX2=$(flux module stats --parse tx.event $REALMOD) &&
 	test "$EVENT_TX" = 0
 '
 
 test_expect_success 'flux module stats --clear-all works' '
 	flux event pub xyz &&
-	flux module stats --clear-all $TESTMOD &&
-	EVENT_TX2=$(flux module stats --parse tx.event $TESTMOD) &&
+	flux module stats --clear-all $REALMOD &&
+	EVENT_TX2=$(flux module stats --parse tx.event $REALMOD) &&
 	test "$EVENT_TX" = 0
 '
 test_expect_success 'flux module stats --scale works' '
 	flux event pub xyz &&
-	EVENT_TX=$(flux module stats --parse tx.event $TESTMOD) &&
-	EVENT_TX2=$(flux module stats --parse tx.event --scale=2 $TESTMOD) &&
+	EVENT_TX=$(flux module stats --parse tx.event $REALMOD) &&
+	EVENT_TX2=$(flux module stats --parse tx.event --scale=2 $REALMOD) &&
 	test "$EVENT_TX2" -eq $((${EVENT_TX}*2))
 '
 
 
 test_expect_success 'flux module stats --rusage works' '
-	flux module stats --rusage $TESTMOD >rusage.stats &&
+	flux module stats --rusage $REALMOD >rusage.stats &&
 	grep -q utime rusage.stats &&
 	grep -q stime rusage.stats &&
 	grep -q maxrss rusage.stats &&
@@ -149,7 +147,7 @@ test_expect_success 'flux module stats --rusage works' '
 '
 
 test_expect_success 'flux module stats --rusage --parse maxrss works' '
-	RSS=$(flux module stats --rusage --parse maxrss $TESTMOD) &&
+	RSS=$(flux module stats --rusage --parse maxrss $REALMOD) &&
 	test "$RSS" -gt 0
 '
 
