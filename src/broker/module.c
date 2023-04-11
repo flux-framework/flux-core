@@ -28,6 +28,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "module.h"
 #include "modservice.h"
@@ -52,6 +53,7 @@ struct broker_module {
     pthread_t t;            /* module thread */
     mod_main_f *main;       /* dlopened mod_main() */
     char *name;
+    char *name_buf;
     char *path;             /* retain the full path as a key for lookup */
     void *dso;              /* reference on dlopened module */
     size_t argz_len;
@@ -401,7 +403,7 @@ static void module_destroy (module_t *p)
     dlclose (p->dso);
 #endif
     free (p->argz);
-    free (p->name);
+    free (p->name_buf);
     free (p->path);
     if (p->rmmod) {
         flux_msg_t *msg;
@@ -543,6 +545,19 @@ flux_msg_t *module_pop_insmod (module_t *p)
     return msg;
 }
 
+/* Destructive to 'path'.
+ */
+static char *module_name_from_path (char *path)
+{
+    char *name = basename (path);
+    if (name) {
+        int n = strlen (name);
+        if (n > 3 && streq (&name[n - 3], ".so"))
+            name[n - 3] = '\0';
+    }
+    return name;
+}
+
 module_t *module_add (modhash_t *mh,
                       const char *path,
                       json_t *args,
@@ -560,12 +575,10 @@ module_t *module_add (modhash_t *mh,
         errno = ENOENT;
         return NULL;
     }
-    mod_main = dlsym (dso, "mod_main");
-    mod_namep = dlsym (dso, "mod_name");
-    if (!mod_main || !mod_namep || !*mod_namep) {
-        errprintf (error, "required broker module symbols not found");
+    if (!(mod_main = dlsym (dso, "mod_main"))) {
+        errprintf (error, "module does not define mod_main()");
         dlclose (dso);
-        errno = ENOENT;
+        errno = EINVAL;
         return NULL;
     }
     if (!(p = calloc (1, sizeof (*p)))) {
@@ -584,11 +597,22 @@ module_t *module_add (modhash_t *mh,
                 goto nomem;
         }
     }
-    if (!(p->name = strdup (*mod_namep))
-        || !(p->path = strdup (path))
+    if (!(p->path = strdup (path))
         || !(p->rmmod = zlist_new ())
-        || !(p->subs = zlist_new ()))
+        || !(p->subs = zlist_new ())
+        || !(p->name_buf = strdup (path))
+        || !(p->name = module_name_from_path (p->name_buf)))
         goto nomem;
+    /* Handle legacy 'mod_name' symbol - not recommended for new modules
+     * but double check that it's sane if present.
+     */
+    if ((mod_namep = dlsym (p->dso, "mod_name")) && *mod_namep != NULL) {
+        if (!streq (*mod_namep, p->name)) {
+            errprintf (error, "mod_name, if specified, must match file name");
+            errno = EINVAL;
+            goto cleanup;
+        }
+    }
     uuid_generate (p->uuid);
     uuid_unparse (p->uuid, p->uuid_str);
 

@@ -45,7 +45,7 @@ test_expect_success 'job-ingest: submit fails without job-ingest' '
 
 test_expect_success 'job-ingest: load job-manager-dummy module' '
 	flux module load \
-		${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager-dummy.so
+		${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager.so
 '
 
 test_expect_success 'job-ingest: job-ingest fails with bad option' '
@@ -157,7 +157,7 @@ test_expect_success 'job-ingest: reload dummy job-manager in fail mode' '
 	ingest_module reload batch-count=4 &&
 	flux module remove job-manager &&
 	flux module load \
-	    ${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager-dummy.so force_fail
+	    ${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager.so force_fail
 '
 
 test_expect_success 'job-ingest: handle total batch failure in job-ingest' '

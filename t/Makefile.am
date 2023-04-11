@@ -447,7 +447,7 @@ check_LTLIBRARIES = \
 	module/parent.la \
 	module/running.la \
 	request/req.la \
-	ingest/job-manager-dummy.la \
+	ingest/job-manager.la \
 	disconnect/watcher.la \
 	shell/plugins/dummy.la \
 	shell/plugins/conftest.la \
@@ -732,10 +732,10 @@ rexec_rexec_getline_CPPFLAGS = $(test_cppflags)
 rexec_rexec_getline_LDADD = $(test_ldadd)
 rexec_rexec_getline_LDFLAGS = $(test_ldflags)
 
-ingest_job_manager_dummy_la_SOURCES = ingest/job-manager-dummy.c
-ingest_job_manager_dummy_la_CPPFLAGS = $(test_cppflags)
-ingest_job_manager_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
-ingest_job_manager_dummy_la_LIBADD = $(test_ldadd)
+ingest_job_manager_la_SOURCES = ingest/job-manager.c
+ingest_job_manager_la_CPPFLAGS = $(test_cppflags)
+ingest_job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
+ingest_job_manager_la_LIBADD = $(test_ldadd)
 
 ingest_submitbench_SOURCES = ingest/submitbench.c
 ingest_submitbench_CPPFLAGS = $(test_cppflags)
