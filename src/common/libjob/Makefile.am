@@ -69,6 +69,7 @@ test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap
 
 test_job_t_SOURCES = test/job.c
+test_job_t_CFLAGS = -Wno-deprecated-declarations
 test_job_t_CPPFLAGS = $(test_cppflags)
 test_job_t_LDADD = $(test_ldadd)
 
