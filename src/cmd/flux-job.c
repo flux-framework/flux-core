@@ -1628,6 +1628,7 @@ void attach_completed_check (struct attach_ctx *ctx)
         flux_watcher_stop (ctx->sigint_w);
         flux_watcher_stop (ctx->sigtstp_w);
         flux_watcher_stop (ctx->stdin_w);
+        flux_watcher_stop (ctx->notify_timer);
     }
 }
 
