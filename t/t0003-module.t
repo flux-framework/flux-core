@@ -77,6 +77,26 @@ test_expect_success 'module: insmod returns initialization error' '
 	test_must_fail flux module load $testmod --init-failure
 '
 
+test_expect_success 'module: load fails with no arguments' '
+	test_must_fail flux module load
+'
+test_expect_success 'module: reload fails with no arguments' '
+	test_must_fail flux module reload
+'
+test_expect_success 'module: remove fails with no arguments' '
+	test_must_fail flux module remove
+'
+test_expect_success 'module: list fails with argument' '
+	test_must_fail flux module list foo
+'
+# register a long service name that is truncateed in --long output
+# just to exercise that code in test
+test_expect_success 'module: list shows service name' '
+	flux module load $testmod --service=abcdefghijklmnopqrstuvwxyz &&
+	flux module list -l | grep abc &&
+	flux module remove $testmod
+'
+
 test_expect_success 'module: load fails on invalid module' '
 	test_must_fail flux module load nosuchmodule 2>load.err &&
 	grep "module not found" load.err

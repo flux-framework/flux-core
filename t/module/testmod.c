@@ -32,10 +32,24 @@ int mod_main (flux_t *h, int argc, char **argv)
     flux_msg_handler_t **handlers = NULL;
     int rc;
 
-    if (argc == 1 && !strcmp (argv[0], "--init-failure")) {
-        flux_log (h, LOG_INFO, "aborting during init per test request");
-        errno = EIO;
-        return -1;
+    /* Dynamically register a service name if requested.
+     */
+    for (int i = 0; i < argc; i++) {
+        if (!strncmp (argv[i], "--service=", 10)) {
+            const char *service = argv[i] + 10;
+            flux_future_t *f;
+            if (!(f = flux_service_register (h, service))
+                || flux_rpc_get (f, NULL) < 0) {
+                flux_log (h, LOG_ERR, "failed to register service %s", service);
+                return -1;
+            }
+            flux_future_destroy (f);
+        }
+        else if (!strcmp (argv[0], "--init-failure")) {
+            flux_log (h, LOG_INFO, "aborting during init per test request");
+            errno = EIO;
+            return -1;
+        }
     }
     if (flux_msg_handler_addvec_ex (h,
                                     flux_aux_get (h, "flux::name"),
