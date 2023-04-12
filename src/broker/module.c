@@ -53,7 +53,6 @@ struct broker_module {
     pthread_t t;            /* module thread */
     mod_main_f *main;       /* dlopened mod_main() */
     char *name;
-    char *name_buf;
     char *path;             /* retain the full path as a key for lookup */
     void *dso;              /* reference on dlopened module */
     size_t argz_len;
@@ -403,7 +402,7 @@ static void module_destroy (module_t *p)
     dlclose (p->dso);
 #endif
     free (p->argz);
-    free (p->name_buf);
+    free (p->name);
     free (p->path);
     if (p->rmmod) {
         flux_msg_t *msg;
@@ -545,17 +544,25 @@ flux_msg_t *module_pop_insmod (module_t *p)
     return msg;
 }
 
-/* Destructive to 'path'.
- */
-static char *module_name_from_path (char *path)
+static char *module_name_from_path (const char *s)
 {
-    char *name = basename (path);
-    if (name) {
-        int n = strlen (name);
-        if (n > 3 && streq (&name[n - 3], ".so"))
-            name[n - 3] = '\0';
-    }
-    return name;
+    char *path, *name, *cpy;
+
+    if (!(path = strdup (s))
+        || !(name = basename (path)))
+        goto error;
+
+    int n = strlen (name);
+    if (n > 3 && streq (&name[n - 3], ".so"))
+        name[n - 3] = '\0';
+
+    if (!(cpy = strdup (name)))
+        goto error;
+    free (path);
+    return cpy;
+error:
+    ERRNO_SAFE_WRAP (free, path);
+    return NULL;
 }
 
 module_t *module_add (modhash_t *mh,
@@ -607,8 +614,7 @@ module_t *module_add (modhash_t *mh,
             goto nomem;
     }
     else {
-        if (!(p->name_buf = strdup (path))
-            || !(p->name = module_name_from_path (p->name_buf)))
+        if (!(p->name = module_name_from_path (path)))
             goto nomem;
     }
     /* Handle legacy 'mod_name' symbol - not recommended for new modules
