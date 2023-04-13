@@ -613,7 +613,8 @@ test_expect_success 'flux-help command list can be extended' '
 	grep "^test two commands" help2.out &&
 	grep "a test two" help2.out
 '
-test_expect_success 'flux-help command can display manpages for subcommands' '
+command -v man >/dev/null && test_set_prereq HAVE_MAN
+test_expect_success HAVE_MAN 'flux-help command can display manpages for subcommands' '
 	PWD=$(pwd) &&
 	mkdir -p man/man1 &&
 	cat <<-EOF > man/man1/flux-foo.1 &&
@@ -623,7 +624,7 @@ test_expect_success 'flux-help command can display manpages for subcommands' '
 	EOF
 	MANPATH=${PWD}/man FLUX_IGNORE_NO_DOCS=y flux help foo | grep "^FOO(1)"
 '
-test_expect_success 'flux-help command can display manpages for api calls' '
+test_expect_success HAVE_MAN 'flux-help command can display manpages for api calls' '
 	PWD=$(pwd) &&
 	mkdir -p man/man3 &&
 	cat <<-EOF > man/man3/flux_foo.3 &&
@@ -638,7 +639,7 @@ missing_man_code()
 	man notacommand >/dev/null 2>&1
 	echo $?
 }
-test_expect_success 'flux-help returns nonzero exit code from man(1)' '
+test_expect_success HAVE_MAN 'flux-help returns nonzero exit code from man(1)' '
 	test_expect_code $(missing_man_code) \
 		eval FLUX_IGNORE_NO_DOCS=y flux help notacommand
 '

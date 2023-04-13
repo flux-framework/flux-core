@@ -10,6 +10,7 @@
 
 #if HAVE_CONFIG_H
 #include "config.h"
+#include <signal.h>
 #endif
 #if HAVE_LIBSYSTEMD
 #include <systemd/sd-daemon.h>

@@ -208,9 +208,11 @@ int flux_pty_kill (struct flux_pty *pty, int sig)
         pty->wait_for_client = false;
         pty->wait_on_close = false;
     }
+#ifdef TIOCSIG
     if (ioctl (pty->leader, TIOCSIG, sig) >= 0)
         return 0;
     llog_debug (pty, "ioctl (TIOCSIG): %s", strerror (errno));
+#endif
     if (ioctl (pty->leader, TIOCGPGRP, &pgrp) >= 0
         && pgrp > 0
         && kill (-pgrp, sig) >= 0)

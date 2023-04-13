@@ -18,6 +18,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdio.h>
+#include <signal.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>

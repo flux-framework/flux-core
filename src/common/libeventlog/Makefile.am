@@ -37,4 +37,5 @@ test_eventlog_t_LDADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libeventlog/libeventlog.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
-	$(JANSSON_LIBS)
+	$(JANSSON_LIBS) \
+	$(LIBRT)

@@ -13,6 +13,7 @@
 #endif
 
 #include <unistd.h> // defines environ
+#include <signal.h>
 #include <errno.h>
 #include <flux/core.h>
 
