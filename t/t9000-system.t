@@ -3,8 +3,12 @@
 
 test_description='Run tests against a system instance of Flux'
 
-if test -n "$FLUX_ENABLE_SYSTEM_TESTS" || test -n "$debug"; then
-	FLUX_TEST_INSTALLED_PATH=${FLUX_TEST_INSTALLED_PATH:-/usr/bin}
+#  Allow this test to be forced to run if debug is set _and_ a flux binary
+#  exists in the FLUX_TEST_INSTALLED_PATH or /usr/bin:
+if test -n "$debug"; then
+	if test -x ${FLUX_TEST_INSTALLED_PATH:-/usr/bin}/flux; then
+		FLUX_TEST_INSTALLED_PATH=${FLUX_TEST_INSTALLED_PATH:-/usr/bin}
+	fi
 fi
 . `dirname $0`/sharness.sh
 
