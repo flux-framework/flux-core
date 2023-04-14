@@ -99,6 +99,21 @@ void joblist_pane_draw (struct joblist_pane *joblist)
     wattroff (joblist->win, A_REVERSE);
     if (joblist->jobs == NULL)
         return;
+
+    if (json_array_size (joblist->jobs) == 0
+        && queues_configured (joblist->top->queues)) {
+        const char *filter_queue = NULL;
+        /* can return NULL filter_queue for "all" queues */
+        queues_get_queue_name (joblist->top->queues, &filter_queue);
+        if (filter_queue)
+            mvwprintw (joblist->win,
+                       5,
+                       25,
+                       "No jobs to display in queue %s",
+                       filter_queue);
+        return;
+    }
+
     json_array_foreach (joblist->jobs, index, job) {
         char *uri = NULL;
         char idstr[16];
