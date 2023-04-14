@@ -511,6 +511,15 @@ static int remote_output (flux_subprocess_t *p,
 {
     struct subprocess_channel *c;
 
+    if (!p || !p->channels || !stream) {
+        llog_debug (p,
+                    "ignoring %d bytes of %s for invalid subprocess/stream",
+                    len,
+                    stream ? stream : "(unknown)");
+        errno = EINVAL;
+        return -1;
+    }
+
     if (!(c = zhash_lookup (p->channels, stream))) {
         llog_debug (p,
                     "Error buffering %d bytes received from remote"
