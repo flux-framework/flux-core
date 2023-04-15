@@ -11,10 +11,6 @@
 #ifndef _FLUX_CORE_MODULE_H
 #define _FLUX_CORE_MODULE_H
 
-/* Module management messages are constructed according to Flux RFC 5.
- * https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_5.html
- */
-
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -37,22 +33,6 @@ enum {
  */
 #define MOD_NAME(x) const char *mod_name = x
 typedef int (mod_main_f)(flux_t *h, int argc, char *argv[]);
-
-typedef void (flux_moderr_f)(const char *errmsg, void *arg);
-
-/* Read the value of 'mod_name' from the specified module filename.
- * Caller must free the returned name.  Returns NULL on failure.
- * If 'cb' is non-NULL, any dlopen/dlsym errors are reported via callback.
- */
-char *flux_modname (const char *filename, flux_moderr_f *cb, void *arg);
-
-/* Search a colon-separated list of directories (recursively) for a .so file
- * with the requested module name and return its path, or NULL on failure.
- * Caller must free the returned path.
- * If 'cb' is non-NULL, any dlopen/dlsym errors are reported via callback.
- */
-char *flux_modfind (const char *searchpath, const char *modname,
-                    flux_moderr_f *cb, void *arg);
 
 /* Test and optionally clear module debug bit from within a module, as
  * described in RFC 5.  Return true if 'flag' bit is set.  If clear=true,

@@ -38,7 +38,7 @@ installed_conf_cppflags = \
 	-DINSTALLED_BINDIR=\"$(fluxcmddir)\"
 
 intree_conf_cppflags = \
-	-DINTREE_MODULE_PATH=\"$(abs_top_builddir)/src/modules\" \
+	-DINTREE_MODULE_PATH=\"$(abs_top_builddir)/src/modules/.libs\" \
 	-DINTREE_CONNECTOR_PATH=\"$(abs_top_builddir)/src/connectors\" \
 	-DINTREE_EXEC_PATH=\"$(abs_top_builddir)/src/cmd:$(abs_top_srcdir)/src/cmd:$(abs_top_builddir)/src/broker\" \
 	-DINTREE_LUA_PATH_ADD=\"$(abs_top_builddir)/t/?.lua\;$(abs_top_srcdir)/src/bindings/lua/?.lua\" \
@@ -199,8 +199,6 @@ test_cppflags = \
         $(AM_CPPFLAGS)
 
 check_LTLIBRARIES = \
-	test/module_fake1.la \
-	test/module_fake2.la \
 	test/plugin_foo.la \
 	test/plugin_bar.la
 
@@ -308,18 +306,8 @@ test_disconnect_t_CPPFLAGS = $(test_cppflags)
 test_disconnect_t_LDADD = $(test_ldadd)
 
 test_module_t_SOURCES = test/module.c
-test_module_t_CPPFLAGS = $(test_cppflags) \
-	-DFAKE1=\"$(abs_builddir)/test/.libs/module_fake1.so\" \
-	-DFAKE2=\"$(abs_builddir)/test/.libs/module_fake2.so\"
+test_module_t_CPPFLAGS = $(test_cppflags)
 test_module_t_LDADD = $(test_ldadd)
-
-test_module_fake1_la_SOURCES = test/module_fake1.c
-test_module_fake1_la_CPPFLAGS = $(test_cppflags)
-test_module_fake1_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
-
-test_module_fake2_la_SOURCES = test/module_fake2.c
-test_module_fake2_la_CPPFLAGS = $(test_cppflags)
-test_module_fake2_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 
 test_plugin_t_SOURCES = test/plugin.c
 test_plugin_t_CPPFLAGS = $(test_cppflags)

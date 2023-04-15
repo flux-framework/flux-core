@@ -857,8 +857,6 @@ done:
     return rc;
 }
 
-MOD_NAME ("content-sqlite");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

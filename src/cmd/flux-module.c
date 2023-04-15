@@ -26,8 +26,8 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
-#include "src/common/libutil/digest.h"
 #include "src/common/libutil/jpath.h"
+#include "ccan/str/str.h"
 
 const int max_idle = 99;
 
@@ -35,23 +35,35 @@ int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_remove (optparse_t *p, int argc, char **argv);
 int cmd_load (optparse_t *p, int argc, char **argv);
 int cmd_reload (optparse_t *p, int argc, char **argv);
-int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_debug (optparse_t *p, int argc, char **argv);
 
-static struct optparse_option legacy_opts[] =  {
-    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "RANK",
-      .usage = "Send RPC to specified rank",
-    },
+static struct optparse_option list_opts[] = {
+    { .name = "long",  .key = 'l',  .has_arg = 0,
+      .usage = "Include full DSO path for each module", },
     OPTPARSE_TABLE_END,
 };
 
 static struct optparse_option remove_opts[] =  {
-    { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "RANK",
-      .usage = "Send RPC to specified rank",
-    },
-    { .name = "force", .key = 'f',
+    { .name = "force", .key = 'f', .has_arg = 0,
       .usage = "Ignore nonexistent modules",
+    },
+    OPTPARSE_TABLE_END,
+};
+
+static struct optparse_option reload_opts[] =  {
+    { .name = "force", .key = 'f', .has_arg = 0,
+      .usage = "Ignore nonexistent modules",
+    },
+    { .name = "name", .has_arg = 1, .arginfo = "NAME",
+      .usage = "Override default module name",
+    },
+    OPTPARSE_TABLE_END,
+};
+
+static struct optparse_option load_opts[] =  {
+    { .name = "name", .has_arg = 1, .arginfo = "NAME",
+      .usage = "Override default module name",
     },
     OPTPARSE_TABLE_END,
 };
@@ -91,11 +103,11 @@ static struct optparse_option debug_opts[] = {
 
 static struct optparse_subcommand subcommands[] = {
     { "list",
-      "[OPTIONS] [module]",
+      "[OPTIONS]",
       "List loaded modules",
       cmd_list,
       0,
-      NULL,
+      list_opts,
     },
     { "remove",
       "[OPTIONS] module",
@@ -116,21 +128,14 @@ static struct optparse_subcommand subcommands[] = {
       "Load module",
       cmd_load,
       0,
-      legacy_opts,
+      load_opts,
     },
     { "reload",
       "[OPTIONS] module",
       "Reload module",
       cmd_reload,
       0,
-      remove_opts,
-    },
-    { "info",
-      "[OPTIONS] module",
-      "Display module info",
-      cmd_info,
-      0,
-      NULL
+      reload_opts,
     },
     { "stats",
       "[OPTIONS] module",
@@ -198,178 +203,149 @@ int main (int argc, char *argv[])
     return (exitval);
 }
 
-int filesize (const char *path)
+static bool has_suffix (const char *s, const char *suffix)
 {
-    struct stat sb;
-    if (stat (path, &sb) < 0)
-        return 0;
-    return sb.st_size;
+    int n = strlen (s) - strlen (suffix);
+    if (n >= 0 && streq (&s[n], suffix))
+        return true;
+    return false;
 }
 
-void module_dlerror (const char *errmsg, void *arg)
-{
-    log_msg ("%s", errmsg);
-}
-
-void parse_modarg (const char *arg, char **name, char **path)
-{
-    char *modpath = NULL;
-    char *modname = NULL;
-
-    if (strchr (arg, '/')) {
-        if (!(modpath = realpath (arg, NULL)))
-            log_err_exit ("%s", arg);
-        if (!(modname = flux_modname (modpath, module_dlerror, NULL)))
-            log_msg_exit ("%s", modpath);
-    } else {
-        char *searchpath = getenv ("FLUX_MODULE_PATH");
-        if (!searchpath)
-            log_msg_exit ("FLUX_MODULE_PATH is not set");
-        modname = xstrdup (arg);
-        if (!(modpath = flux_modfind (searchpath, modname,
-                                      module_dlerror, NULL)))
-            log_msg_exit ("%s: not found in module search path", modname);
-    }
-    *name = modname;
-    *path = modpath;
-}
-
-int cmd_info (optparse_t *p, int argc, char **argv)
-{
-    char *modpath = NULL;
-    char *modname = NULL;
-    char *digest = NULL;
-    int n;
-
-    if ((n = optparse_option_index (p)) != argc - 1) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-    parse_modarg (argv[n], &modname, &modpath);
-    digest = digest_file (modpath, NULL);
-    printf ("Module name:  %s\n", modname);
-    printf ("Module path:  %s\n", modpath);
-    printf ("SHA1 Digest:  %s\n", digest);
-    printf ("Size:         %d bytes\n", filesize (modpath));
-
-    free (modpath);
-    free (modname);
-    free (digest);
-    return (0);
-}
-
-/* Derive name of module loading service from module name.
- * Caller must free.
+/* If path looks like a dso filename, then canonicalize it so that
+ * the broker, possibly running in a different directory, can dlopen() it.
  */
-char *getservice (const char *modname)
+static int canonicalize_if_path (const char *path, char **fullpathp)
 {
-    char *service = NULL;
-    if (strchr (modname, '.')) {
-        service = xstrdup (modname);
-        char *p = strrchr (service, '.');
-        *p = '\0';
-    } else
-        service = xstrdup ("broker");
-    return service;
+    char *fullpath = NULL;
+    if (strchr (path, '/') || has_suffix (path, ".so")) {
+        if (!(fullpath = realpath (path, NULL)))
+            return -1;
+    }
+    *fullpathp = fullpath;
+    return 0;
 }
 
-static void module_load (flux_t *h, optparse_t *p, int argc, char **argv)
+static json_t *args_create (int argc, char **argv)
 {
-    char *modname;
-    char *modpath;
-    int n;
+    json_t *args;
+    if (!(args = json_array ()))
+        goto error;
+    for (int i = 0; i < argc; i++) {
+        json_t *s = json_string (argv[i]);
+        if (!s || json_array_append_new (args, s) < 0) {
+            json_decref (s);
+            goto error;
+        }
+    }
+    return args;
+error:
+    json_decref (args);
+    return NULL;
+}
+
+static int set_string (json_t *o, const char *key, const char *val)
+{
+    json_t *s = json_string (val);
+    if (!s || json_object_set_new (o, key, s) < 0) {
+        json_decref (s);
+        return -1;
+    }
+    return 0;
+}
+
+static void module_load (flux_t *h,
+                         optparse_t *p,
+                         const char *path,
+                         int argc,
+                         char **argv)
+{
+    const char *name = optparse_get_str (p, "name", NULL);
+    char *fullpath = NULL;
     flux_future_t *f;
+    json_t *args;
+    json_t *payload;
 
-    if ((n = optparse_option_index (p)) == argc) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-    parse_modarg (argv[n++], &modname, &modpath);
-
-    char *service = getservice (modname);
-    char *topic = xasprintf ("%s.insmod", service);
-    json_t *args = json_array ();
-    if (!args)
-        log_msg_exit ("json_array() failed");
-    while (n < argc) {
-        json_t *str = json_string (argv[n]);
-        if (!str || json_array_append_new (args, str) < 0)
-            log_msg_exit ("json_string() or json_array_append_new() failed");
-        n++;
-    }
-
+    if (canonicalize_if_path (path, &fullpath) < 0)
+        log_err_exit ("could not canonicalize module path '%s'", path);
+    if (!(args = args_create (argc, argv))
+        || !(payload = json_pack ("{s:s s:O}",
+                               "path", fullpath ? fullpath : path,
+                               "args", args))
+        || (name && set_string (payload, "name", name) < 0))
+        log_msg_exit ("failed to create broker.insmod payload");
     if (!(f = flux_rpc_pack (h,
-                             topic,
-                             optparse_get_int (p, "rank", FLUX_NODEID_ANY),
+                             "broker.insmod",
+                             FLUX_NODEID_ANY,
                              0,
-                             "{s:s s:O}",
-                             "path",
-                             modpath,
-                             "args",
-                             args)))
-        log_err_exit ("%s", topic);
-    if (flux_rpc_get (f, NULL) < 0) {
-        if (errno == EEXIST)
-            log_msg_exit ("%s: %s module/service is in use", topic, modname);
-        log_err_exit ("%s", topic);
+                             "O",
+                             payload))
+        || flux_rpc_get (f, NULL) < 0) {
+        log_msg_exit ("load %s: %s", path, future_strerror (f, errno));
     }
     flux_future_destroy (f);
-    free (topic);
-    free (service);
+    json_decref (payload);
     json_decref (args);
-    free (modpath);
-    free (modname);
+    free (fullpath);
 }
 
 int cmd_load (optparse_t *p, int argc, char **argv)
 {
+    int n = optparse_option_index (p);
+    const char *path;
     flux_t *h;
+
+    if (n == argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    path = argv[n++];
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    module_load (h, p, argc, argv);
+
+    module_load (h, p, path, argc - n, argv + n);
+
     flux_close (h);
     return 0;
 }
 
-static void module_remove (flux_t *h, const char *modname, optparse_t *p)
+static void module_remove (flux_t *h, optparse_t *p, const char *path)
 {
+    char *fullpath = NULL;
     flux_future_t *f;
-    char *service = getservice (modname);
-    char *topic = xasprintf ("%s.rmmod", service);
+
+    if (canonicalize_if_path (path, &fullpath) < 0)
+        log_err_exit ("could not canonicalize module path '%s'", path);
 
     if (!(f = flux_rpc_pack (h,
-                             topic,
-                             optparse_get_int (p, "rank", FLUX_NODEID_ANY),
+                             "broker.rmmod",
+                             FLUX_NODEID_ANY,
                              0,
                              "{s:s}",
-                             "name",
-                             modname)))
-        log_err_exit ("%s %s", topic, modname);
-    if (flux_rpc_get (f, NULL) < 0) {
+                             "name", fullpath ? fullpath : path))
+        || flux_rpc_get (f, NULL) < 0) {
         if (!(optparse_hasopt (p, "force") && errno == ENOENT))
-            log_err_exit ("%s %s", topic, modname);
+            log_msg_exit ("remove %s: %s", path, future_strerror (f, errno));
     }
     flux_future_destroy (f);
-    free (topic);
-    free (service);
+    free (fullpath);
 }
 
 int cmd_remove (optparse_t *p, int argc, char **argv)
 {
-    char *modname;
+    int n = optparse_option_index (p);
+    char *path;
     flux_t *h;
-    int n;
 
-    if ((n = optparse_option_index (p)) != argc - 1) {
+    if (n != argc - 1) {
         optparse_print_usage (p);
         exit (1);
     }
-    modname = argv[n++];
+    path = argv[n];
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    module_remove (h, modname, p);
+    module_remove (h, p, path);
 
     flux_close (h);
     return (0);
@@ -377,22 +353,25 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
 
 int cmd_reload (optparse_t *p, int argc, char **argv)
 {
-    char *modname;
-    char *modpath;
+    int n = optparse_option_index (p);
+    const char *name = optparse_get_str (p, "name", NULL);
+    const char *path;
     flux_t *h;
-    int n;
 
-    if ((n = optparse_option_index (p)) == argc) {
+    if (n == argc) {
         optparse_print_usage (p);
         exit (1);
     }
-    parse_modarg (argv[n], &modname, &modpath);
-
+    path = argv[n++];
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    module_remove (h, modname, p);
-    module_load (h, p, argc, argv);
+    /* If --name=NAME was specified, remove by that name rather than
+     * the path so the correct instantiation of the DSO is selected.
+     */
+    module_remove (h, p, name ? name : path);
+
+    module_load (h, p, path, argc - n, argv + n);
     return (0);
 }
 
@@ -402,7 +381,7 @@ int cmd_reload (optparse_t *p, int argc, char **argv)
  * the module name, implicitly registered as a service).
  * Caller must free result.
  */
-char *lsmod_services_string (json_t *services, const char *skip)
+char *lsmod_services_string (json_t *services, const char *skip, int maxcol)
 {
     size_t index;
     json_t *value;
@@ -417,16 +396,19 @@ char *lsmod_services_string (json_t *services, const char *skip)
     }
     if (argz)
         argz_stringify (argz, argz_len, ',');
+    if (argz && maxcol > 0 && strlen (argz) > maxcol) {
+        argz[maxcol - 1] = '+';
+        argz[maxcol] = '\0';
+    }
     return argz;
 }
 
-char *lsmod_idle_string (int idle, char *buf, int bufsz)
+void lsmod_idle_string (int idle, char *buf, int bufsz)
 {
     if (idle <= max_idle)
         snprintf (buf, bufsz, "%d", idle);
     else
         snprintf (buf, bufsz, "idle");
-    return buf;
 }
 
 char lsmod_state_char (int state)
@@ -445,101 +427,99 @@ char lsmod_state_char (int state)
     }
 }
 
-void lsmod_print_header (FILE *f)
+void lsmod_print_header (FILE *f, bool longopt)
 {
-    fprintf (f, "%-24s %8s %-7s %4s  %c %s\n",
-            "Module", "Size", "Digest", "Idle", 'S', "Service");
+    if (longopt) {
+        fprintf (f,
+                 "%-24.24s %4s  %c %-8s %s\n",
+                 "Module", "Idle", 'S', "Service", "Path");
+    }
+    else {
+        fprintf (f,
+                 "%-24s %4s  %c %s\n",
+                 "Module", "Idle", 'S', "Service");
+    }
 }
 
 void lsmod_print_entry (FILE *f,
                        const char *name,
-                       int size,
-                       const char *digest,
+                       const char *path,
                        int idle,
                        int status,
-                       json_t *services)
+                       json_t *services,
+                       bool longopt)
 {
-    int digest_len = strlen (digest);
-    char *serv_s = lsmod_services_string (services, name);
     char idle_s[16];
+    char state = lsmod_state_char (status);
 
-    fprintf (f, "%-24.24s %8d %7s %4s  %c %s\n",
-             name,
-             size,
-             digest_len > 7 ? digest + digest_len - 7 : digest,
-             lsmod_idle_string (idle, idle_s, sizeof (idle_s)),
-             lsmod_state_char (status),
-             serv_s ? serv_s : "");
+    lsmod_idle_string (idle, idle_s, sizeof (idle_s));
 
-    free (serv_s);
+    if (longopt) {
+        char *s = lsmod_services_string (services, name, 8);
+        fprintf (f, "%-24.24s %4s  %c %-8s %s\n",
+                 name,
+                 idle_s,
+                 state,
+                 s ? s : "",
+                 path);
+        free (s);
+    }
+    else {
+        char *s = lsmod_services_string (services, name, 0);
+        fprintf (f, "%-24.24s %4s  %c %s\n",
+                 name,
+                 idle_s,
+                 state,
+                 s ? s : "");
+        free (s);
+    }
 }
 
-void lsmod_print_list (FILE *f, json_t *o)
+void lsmod_print_list (FILE *f, json_t *o, bool longopt)
 {
     size_t index;
     json_t *value;
     const char *name;
-    int size;
-    const char *digest;
+    const char *path;
     int idle;
     int status;
     json_t *services;
 
     json_array_foreach (o, index, value) {
-        if (json_unpack (value, "{s:s s:i s:s s:i s:i s:o}",
+        if (json_unpack (value, "{s:s s:s s:i s:i s:o}",
                          "name", &name,
-                         "size", &size,
-                         "digest", &digest,
+                         "path", &path,
                          "idle", &idle,
                          "status", &status,
                          "services", &services) < 0)
             log_msg_exit ("Error parsing lsmod response");
         if (!json_is_array (services))
             log_msg_exit ("Error parsing lsmod services array");
-        lsmod_print_entry (f,
-                           name,
-                           size,
-                           digest,
-                           idle,
-                           status,
-                           services);
+        lsmod_print_entry (f, name, path, idle, status, services, longopt);
     }
 }
 
-/* Fetch lsmod data from one or more ranks.  Each lsmod response returns
- * an array of module records.  The records are merged to produce a hash
- * by module SHA1 digest (computed over module file) + services list.
- * Each hash entry is then displayed as a line of output.
- */
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
-    char *service = "broker";
-    char *topic;
+    bool longopt = optparse_hasopt (p, "long");
     flux_future_t *f;
     flux_t *h;
     int n;
     json_t *o;
 
-    if ((n = optparse_option_index (p)) < argc - 1) {
+    if ((n = optparse_option_index (p)) < argc) {
         optparse_print_usage (p);
         exit (1);
     }
-    if (n < argc)
-        service = argv[n++];
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    topic = xasprintf ("%s.lsmod", service);
-    if (!(f = flux_rpc (h, topic, NULL, FLUX_NODEID_ANY, 0)))
-        log_err_exit ("%s", topic);
-    if (flux_rpc_get_unpack (f, "{s:o}", "mods", &o) < 0)
-        log_err_exit ("%s", topic);
-    if (!json_is_array (o))
-        log_msg_exit ("%s: module list is not an array", topic);
-    lsmod_print_header (stdout);
-    lsmod_print_list (stdout, o);
+    if (!(f = flux_rpc (h, "broker.lsmod", NULL, FLUX_NODEID_ANY, 0))
+        || flux_rpc_get_unpack (f, "{s:o}", "mods", &o) < 0)
+        log_err_exit ("list");
+    lsmod_print_header (stdout, longopt);
+    lsmod_print_list (stdout, o, longopt);
     flux_future_destroy (f);
-    free (topic);
     flux_close (h);
     return (0);
 }

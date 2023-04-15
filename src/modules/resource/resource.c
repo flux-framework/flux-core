@@ -508,8 +508,6 @@ error:
     return -1;
 }
 
-MOD_NAME ("resource");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

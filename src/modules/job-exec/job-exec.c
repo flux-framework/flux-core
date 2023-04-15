@@ -1443,8 +1443,6 @@ out:
     return rc;
 }
 
-MOD_NAME ("job-exec");
-
 /*
  * vi: tabstop=4 shiftwidth=4 expandtab
  */

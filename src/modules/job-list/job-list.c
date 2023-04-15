@@ -211,8 +211,6 @@ done:
     return rc;
 }
 
-MOD_NAME ("job-list");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

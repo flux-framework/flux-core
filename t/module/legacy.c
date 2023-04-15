@@ -1,5 +1,5 @@
 /************************************************************\
- * Copyright 2014 Lawrence Livermore National Security, LLC
+ * Copyright 2023 Lawrence Livermore National Security, LLC
  * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
  *
  * This file is part of the Flux resource manager framework.
@@ -8,11 +8,16 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#include "src/common/libflux/module.h"
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
+#include <flux/core.h>
 
-int mod_main (int argc, char **argv)
+int mod_main (flux_t *h, int argc, char **argv)
 {
-     return 0;
+    return flux_reactor_run (flux_get_reactor (h), 0);
 }
-// leave undefined for unit test
-//MOD_NAME ("fake2");
+
+MOD_NAME("legacy");
+
+// vi:ts=4 sw=4 expandtab

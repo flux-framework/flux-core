@@ -633,8 +633,6 @@ done:
     return rc;
 }
 
-MOD_NAME ("job-archive");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

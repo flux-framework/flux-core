@@ -12,32 +12,26 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	$(JANSSON_CFLAGS)
 
-fluxmod_LTLIBRARIES = kvs.la
+noinst_LTLIBRARIES = libkvs.la
 
-kvs_la_SOURCES = \
+libkvs_la_SOURCES = \
 	kvs.c \
 	cache.c \
 	cache.h \
 	waitqueue.c \
 	waitqueue.h \
-	lookup.h \
 	lookup.c \
-	treq.h \
+	lookup.h \
 	treq.c \
-	kvstxn.h \
+	treq.h \
 	kvstxn.c \
-	kvsroot.h \
+	kvstxn.h \
 	kvsroot.c \
-	kvs_wait_version.h \
+	kvsroot.h \
 	kvs_wait_version.c \
-	kvs_checkpoint.h \
-	kvs_checkpoint.c
-
-kvs_la_LDFLAGS = $(fluxmod_ldflags) -module
-kvs_la_LIBADD = $(top_builddir)/src/common/libkvs/libkvs.la \
-		$(top_builddir)/src/common/libflux-internal.la \
-		$(top_builddir)/src/common/libflux-core.la \
-		$(JANSSON_LIBS)
+	kvs_wait_version.h \
+	kvs_checkpoint.c \
+	kvs_checkpoint.h
 
 TESTS = \
 	test_waitqueue.t \
@@ -49,6 +43,7 @@ TESTS = \
 	test_kvs_wait_version.t
 
 test_ldadd = \
+	$(builddir)/libkvs.la \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \

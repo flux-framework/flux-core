@@ -510,8 +510,6 @@ done:
     return rc;
 }
 
-MOD_NAME ("barrier");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

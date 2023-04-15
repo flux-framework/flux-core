@@ -15,6 +15,7 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = libingest.la
 
 libingest_la_SOURCES = \
+	job-ingest.c \
 	workcrew.c \
 	workcrew.h \
 	worker.c \
@@ -26,21 +27,6 @@ libingest_la_SOURCES = \
 	job.c \
 	pipeline.h \
 	pipeline.c
-
-fluxmod_LTLIBRARIES = job-ingest.la
-
-job_ingest_la_SOURCES = \
-	job-ingest.c
-
-job_ingest_la_LDFLAGS = $(fluxmod_ldflags) -module
-job_ingest_la_LIBADD = \
-	$(builddir)/libingest.la \
-	$(top_builddir)/src/common/libjob/libjob.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux-optparse.la \
-	$(JANSSON_LIBS) \
-	$(FLUX_SECURITY_LIBS)
 
 fluxschemadir = $(datadir)/flux/schema/jobspec/
 dist_fluxschema_DATA = \

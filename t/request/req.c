@@ -372,8 +372,6 @@ error:
     return -1;
 }
 
-MOD_NAME ("req");
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

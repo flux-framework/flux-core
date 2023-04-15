@@ -172,6 +172,11 @@ int modservice_register (flux_t *h, module_t *p)
                       (char *)module_get_uuid (ctx->p),
                       NULL) < 0)
         return -1;
+    if (flux_aux_set (h,
+                      "flux::name",
+                      (char *)module_get_name (ctx->p),
+                      NULL) < 0)
+        return -1;
 
     if (flux_msg_handler_addvec_ex (h,
                                     module_get_name (ctx->p),

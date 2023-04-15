@@ -503,7 +503,7 @@ AC_SUBST(fluxbindingincludedir)
 ##
 # Macros to avoid repetition in Makefiles.am's
 ##
-fluxmod_ldflags="$san_ld_zdef_flag -avoid-version -export-symbols-regex '^mod_(main|name|service)\$\$' --disable-static -shared -export-dynamic"
+fluxmod_ldflags="$san_ld_zdef_flag -avoid-version -export-symbols-regex '^mod_(main|name)\$\$' --disable-static -shared -export-dynamic"
 AC_SUBST(fluxmod_ldflags)
 
 fluxplugin_ldflags="-avoid-version -export-symbols-regex '^flux_plugin_init\$\$' --disable-static -shared -export-dynamic"
@@ -563,22 +563,13 @@ AC_CONFIG_FILES( \
   src/connectors/loop/Makefile \
   src/connectors/ssh/Makefile \
   src/modules/Makefile \
-  src/modules/connector-local/Makefile \
   src/modules/kvs/Makefile \
-  src/modules/kvs-watch/Makefile \
-  src/modules/content-sqlite/Makefile \
   src/modules/content-files/Makefile \
   src/modules/content-s3/Makefile \
-  src/modules/barrier/Makefile \
-  src/modules/heartbeat/Makefile \
-  src/modules/cron/Makefile \
   src/modules/job-ingest/Makefile \
   src/modules/job-manager/Makefile \
-  src/modules/job-info/Makefile \
   src/modules/job-list/Makefile \
   src/modules/job-exec/Makefile \
-  src/modules/job-archive/Makefile \
-  src/modules/sched-simple/Makefile \
   src/modules/resource/Makefile \
   src/test/Makefile \
   etc/Makefile \

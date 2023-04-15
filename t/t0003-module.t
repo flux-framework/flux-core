@@ -14,6 +14,9 @@ invalid_rank() {
 	echo $((${SIZE} + 1))
 }
 
+testmod=${FLUX_BUILD_DIR}/t/module/.libs/testmod.so
+legacy=${FLUX_BUILD_DIR}/t/module/.libs/legacy.so
+
 module_status_bad_proto() {
 	flux python -c "import flux; print(flux.Flux().rpc(\"broker.module-status\").get())"
 }
@@ -22,124 +25,81 @@ module_status () {
 	flux python -c "import flux; print(flux.Flux().rpc(\"broker.module-status\",{\"status\":0}).get())"
 }
 
+module_getinfo () {
+	FLUX_HANDLE_TRACE=1 flux python -c "import flux; print(flux.Flux().rpc(\"$1.info\").get_str())"
+}
+
 test_expect_success 'module: load test module' '
-	flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+	flux module load $testmod
 '
 test_expect_success 'module: reload test module' '
-	flux module reload \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+	flux module reload $testmod
 '
 
 test_expect_success 'module: lsmod shows test module' '
-	flux module list | grep parent
+	flux module list | grep testmod
+'
+test_expect_success 'module: lsmod -l shows test module path' '
+	flux module list -l | grep $testmod
 '
 
 test_expect_success 'module: cannot load the same module twice' '
-	test_must_fail flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+	test_must_fail flux module load $testmod
 '
-
+test_expect_success 'module: unless a new --name is specified' '
+	flux module load --name smurf $testmod
+'
+test_expect_success 'module: lsmod shows test module' '
+	flux module list | grep smurf
+'
+test_expect_success 'module: module answers to new name' '
+	test $(module_getinfo smurf) = "smurf"
+'
+test_expect_success 'module: lsmod -l shows test module path twice' '
+	count=$(flux module list -l | grep $testmod | wc -l) &&
+	test $count -eq 2
+'
+test_expect_success 'module: reload test module with new name works' '
+	flux module reload --name smurf $testmod
+'
+test_expect_success 'module: unload test module using new name' '
+	flux module remove smurf
+'
 test_expect_success 'module: unload test module' '
-	flux module remove parent
+	flux module remove testmod
 '
-
 test_expect_success 'module: lsmod does not show test module' '
-	! flux module list | grep parent
-'
-
-test_expect_success 'module API: load test module' '
-	flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
-'
-
-test_expect_success 'module API: lsmod shows test module' '
-	flux module list | grep parent
-'
-
-test_expect_success 'module API: cannot load the same module twice' '
-        test_must_fail flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
-'
-
-test_expect_success 'module API: unload test module' '
-	flux module remove parent
-'
-
-test_expect_success 'module API: lsmod does not show test module' '
-	! flux module list | grep parent
-'
-
-test_expect_success 'module: load test module (all ranks)' '
-	flux exec -r all flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
-'
-
-test_expect_success 'module: remove/load --rank 1' '
-	flux module remove -r 1 parent &&
-	flux module load -r 1 \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
-'
-
-test_expect_success 'module: load submodule with invalid args (this rank)' '
-	test_must_fail flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/child.so \
-		wrong argument list
-'
-
-test_expect_success 'module: load submodule (all ranks)' '
-	flux exec -r all flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/child.so \
-		foo=42 bar=abcd
-'
-
-test_expect_success 'module: lsmod shows submodule (all ranks)' '
-	flux exec -r all flux module list parent | grep parent.child
-'
-
-#
-# Expected 'lsmod -r all parent' output is something like this:
-#  parent.child         1113944 2517539    0  I         3 rank3,test1,test2
-#  parent.child         1113944 2517539    0  I         0 rank0,test1,test2
-#  parent.child         1113944 2517539    0  I         2 rank2,test1,test2
-#  parent.child         1113944 2517539    0  I         1 rank1,test1,test2
-#
-test_expect_success 'module: lsmod -r all parent works' '
-	flux exec -r all flux module list parent | grep child >child.lsmod.out
-'
-test_expect_success 'module: hardwired test1,test2 services are listed in sorted order' '
-	grep -q test1,test2 child.lsmod.out
-'
-test_expect_success "module: hardwired rankN services are listed" '
-	for rank in $(seq 0 $(($SIZE-1))); do \
-		grep -q rank${rank} child.lsmod.out; \
-	done
-'
-test_expect_success "module: there are size=$SIZE lines of output due to unique rankN service" '
-	test $(wc -l < child.lsmod.out) -eq $SIZE
-'
-
-test_expect_success 'module: unload submodule (all ranks)' '
-	flux exec -r all flux module remove parent.child
-'
-
-test_expect_success 'module: lsmod does not show submodule (all ranks)' '
-	flux exec -r all flux module list parent >noshow.out &&
-	test_must_fail grep parent.child noshow.out
-'
-
-test_expect_success 'module: unload test module (all ranks)' '
-	flux exec -r all flux module remove parent
+	flux module list -l >list.out &&
+	test_must_fail grep $testmod list.out
 '
 
 test_expect_success 'module: insmod returns initialization error' '
-	test_must_fail flux module load \
-		${FLUX_BUILD_DIR}/t/module/.libs/parent.so --init-failure
+	test_must_fail flux module load $testmod --init-failure
+'
+
+test_expect_success 'module: load fails with no arguments' '
+	test_must_fail flux module load
+'
+test_expect_success 'module: reload fails with no arguments' '
+	test_must_fail flux module reload
+'
+test_expect_success 'module: remove fails with no arguments' '
+	test_must_fail flux module remove
+'
+test_expect_success 'module: list fails with argument' '
+	test_must_fail flux module list foo
+'
+# register a long service name that is truncateed in --long output
+# just to exercise that code in test
+test_expect_success 'module: list shows service name' '
+	flux module load $testmod --service=abcdefghijklmnopqrstuvwxyz &&
+	flux module list -l | grep abc &&
+	flux module remove $testmod
 '
 
 test_expect_success 'module: load fails on invalid module' '
-	! flux module load nosuchmodule 2> stderr &&
-	grep "nosuchmodule: not found in module search path" stderr
+	test_must_fail flux module load nosuchmodule 2>load.err &&
+	grep "module not found" load.err
 '
 
 test_expect_success 'module: remove fails on invalid module' '
@@ -149,78 +109,78 @@ test_expect_success 'module: remove fails on invalid module' '
 test_expect_success 'module: remove -f succeeds on nonexistent module' '
 	flux module remove -f nosuchmodule
 '
-test_expect_success 'module: info works' '
-	flux module info ${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+test_expect_success 'module: legacy module naming still works' '
+	flux module load $legacy &&
+	flux module remove $legacy
 '
-
-test_expect_success 'module: info fails on invalid module' '
-	! flux module info nosuchmodule
+test_expect_success 'module: legacy module cannot be loaded under new name' '
+	test_must_fail flux module load --name=newname $legacy
 '
 
 # N.B. avoid setting the actual debug bits - lets reserve LSB
-TESTMOD=connector-local
+REALMOD=connector-local
 
 test_expect_success 'flux module debug gets debug flags' '
-	FLAGS=$(flux module debug $TESTMOD) &&
+	FLAGS=$(flux module debug $REALMOD) &&
 	test "$FLAGS" = "0x0"
 '
 test_expect_success 'flux module debug --setbit sets individual debug flags' '
-	flux module debug --setbit 0x10000 $TESTMOD &&
-	FLAGS=$(flux module debug $TESTMOD) &&
+	flux module debug --setbit 0x10000 $REALMOD &&
+	FLAGS=$(flux module debug $REALMOD) &&
 	test "$FLAGS" = "0x10000"
 '
 test_expect_success 'flux module debug --set replaces debug flags' '
-	flux module debug --set 0xff00 $TESTMOD &&
-	FLAGS=$(flux module debug $TESTMOD) &&
+	flux module debug --set 0xff00 $REALMOD &&
+	FLAGS=$(flux module debug $REALMOD) &&
 	test "$FLAGS" = "0xff00"
 '
 test_expect_success 'flux module debug --clearbit clears individual debug flags' '
-	flux module debug --clearbit 0x1000 $TESTMOD &&
-	FLAGS=$(flux module debug $TESTMOD) &&
+	flux module debug --clearbit 0x1000 $REALMOD &&
+	FLAGS=$(flux module debug $REALMOD) &&
 	test "$FLAGS" = "0xef00"
 '
 test_expect_success 'flux module debug --clear clears debug flags' '
-	flux module debug --clear $TESTMOD &&
-	FLAGS=$(flux module debug $TESTMOD) &&
+	flux module debug --clear $REALMOD &&
+	FLAGS=$(flux module debug $REALMOD) &&
 	test "$FLAGS" = "0x0"
 '
 
 # test stats
 
 test_expect_success 'flux module stats gets comms statistics' '
-	flux module stats $TESTMOD >comms.stats
+	flux module stats $REALMOD >comms.stats
 '
 
 test_expect_success 'flux module stats --parse tx.event counts events' '
-	EVENT_TX=$(flux module stats --parse tx.event $TESTMOD) &&
+	EVENT_TX=$(flux module stats --parse tx.event $REALMOD) &&
 	flux event pub xyz &&
-	EVENT_TX2=$(flux module stats --parse tx.event $TESTMOD) &&
+	EVENT_TX2=$(flux module stats --parse tx.event $REALMOD) &&
 	test "$EVENT_TX" = $((${EVENT_TX2}-1))
 '
 
 test_expect_success 'flux module stats --clear works' '
 	flux event pub xyz &&
-	flux module stats --clear $TESTMOD &&
-	EVENT_TX2=$(flux module stats --parse tx.event $TESTMOD) &&
+	flux module stats --clear $REALMOD &&
+	EVENT_TX2=$(flux module stats --parse tx.event $REALMOD) &&
 	test "$EVENT_TX" = 0
 '
 
 test_expect_success 'flux module stats --clear-all works' '
 	flux event pub xyz &&
-	flux module stats --clear-all $TESTMOD &&
-	EVENT_TX2=$(flux module stats --parse tx.event $TESTMOD) &&
+	flux module stats --clear-all $REALMOD &&
+	EVENT_TX2=$(flux module stats --parse tx.event $REALMOD) &&
 	test "$EVENT_TX" = 0
 '
 test_expect_success 'flux module stats --scale works' '
 	flux event pub xyz &&
-	EVENT_TX=$(flux module stats --parse tx.event $TESTMOD) &&
-	EVENT_TX2=$(flux module stats --parse tx.event --scale=2 $TESTMOD) &&
+	EVENT_TX=$(flux module stats --parse tx.event $REALMOD) &&
+	EVENT_TX2=$(flux module stats --parse tx.event --scale=2 $REALMOD) &&
 	test "$EVENT_TX2" -eq $((${EVENT_TX}*2))
 '
 
 
 test_expect_success 'flux module stats --rusage works' '
-	flux module stats --rusage $TESTMOD >rusage.stats &&
+	flux module stats --rusage $REALMOD >rusage.stats &&
 	grep -q utime rusage.stats &&
 	grep -q stime rusage.stats &&
 	grep -q maxrss rusage.stats &&
@@ -240,7 +200,7 @@ test_expect_success 'flux module stats --rusage works' '
 '
 
 test_expect_success 'flux module stats --rusage --parse maxrss works' '
-	RSS=$(flux module stats --rusage --parse maxrss $TESTMOD) &&
+	RSS=$(flux module stats --rusage --parse maxrss $REALMOD) &&
 	test "$RSS" -gt 0
 '
 
@@ -257,7 +217,6 @@ test_expect_success 'flux module -h lists subcommands' '
 	grep -q remove module.help &&
 	grep -q reload module.help &&
 	grep -q load module.help &&
-	grep -q info module.help &&
 	grep -q stats module.help &&
 	grep -q debug module.help
 '

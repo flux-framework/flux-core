@@ -444,11 +444,11 @@ check_PROGRAMS += \
 endif
 
 check_LTLIBRARIES = \
-	module/parent.la \
-	module/child.la \
+	module/testmod.la \
 	module/running.la \
+	module/legacy.la \
 	request/req.la \
-	ingest/job-manager-dummy.la \
+	ingest/job-manager.la \
 	disconnect/watcher.la \
 	shell/plugins/dummy.la \
 	shell/plugins/conftest.la \
@@ -672,20 +672,20 @@ request_rpc_stream_CPPFLAGS = $(test_cppflags)
 request_rpc_stream_LDADD = $(test_ldadd)
 request_rpc_stream_LDFLAGS = $(test_ldflags)
 
-module_parent_la_SOURCES = module/parent.c
-module_parent_la_CPPFLAGS = $(test_cppflags)
-module_parent_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
-module_parent_la_LIBADD = $(test_ldadd) $(LIBDL)
-
-module_child_la_SOURCES = module/child.c
-module_child_la_CPPFLAGS = $(test_cppflags)
-module_child_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
-module_child_la_LIBADD = $(test_ldadd)
+module_testmod_la_SOURCES = module/testmod.c
+module_testmod_la_CPPFLAGS = $(test_cppflags)
+module_testmod_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+module_testmod_la_LIBADD = $(test_ldadd) $(LIBDL)
 
 module_running_la_SOURCES = module/running.c
 module_running_la_CPPFLAGS = $(test_cppflags)
 module_running_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 module_running_la_LIBADD = $(test_ldadd)
+
+module_legacy_la_SOURCES = module/legacy.c
+module_legacy_la_CPPFLAGS = $(test_cppflags)
+module_legacy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+module_legacy_la_LIBADD = $(test_ldadd) $(LIBDL)
 
 barrier_tbarrier_SOURCES = barrier/tbarrier.c
 barrier_tbarrier_CPPFLAGS = $(test_cppflags)
@@ -738,10 +738,10 @@ rexec_rexec_getline_CPPFLAGS = $(test_cppflags)
 rexec_rexec_getline_LDADD = $(test_ldadd)
 rexec_rexec_getline_LDFLAGS = $(test_ldflags)
 
-ingest_job_manager_dummy_la_SOURCES = ingest/job-manager-dummy.c
-ingest_job_manager_dummy_la_CPPFLAGS = $(test_cppflags)
-ingest_job_manager_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
-ingest_job_manager_dummy_la_LIBADD = $(test_ldadd)
+ingest_job_manager_la_SOURCES = ingest/job-manager.c
+ingest_job_manager_la_CPPFLAGS = $(test_cppflags)
+ingest_job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
+ingest_job_manager_la_LIBADD = $(test_ldadd)
 
 ingest_submitbench_SOURCES = ingest/submitbench.c
 ingest_submitbench_CPPFLAGS = $(test_cppflags)
