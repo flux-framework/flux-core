@@ -569,7 +569,7 @@ static void rexec_continuation (flux_future_t *f, void *arg)
     if (subprocess_rexec_get (f) < 0) {
         if (errno == ENODATA) {
             remote_completion (p);
-            goto complete;
+            return;
         }
         goto error;
     }
@@ -594,9 +594,6 @@ error:
     p->failed_errno = errno;
     process_new_state (p, FLUX_SUBPROCESS_FAILED);
     remote_kill_nowait (p, SIGKILL);
-complete:
-    flux_future_destroy (f);
-    p->f = NULL;
 }
 
 int remote_exec (flux_subprocess_t *p)
@@ -619,6 +616,7 @@ int remote_exec (flux_subprocess_t *p)
         flux_future_destroy (f);
         return -1;
     }
+    p->f = f;
     return 0;
 }
 
