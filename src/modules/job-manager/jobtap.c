@@ -393,9 +393,8 @@ static int jobtap_conf_entry (struct jobtap *jobtap,
     }
     if (load && !jobtap_load_plugin (jobtap, load, conf, &jobtap_err)) {
         return errprintf (errp,
-                          "[job-manager.plugins][%d]: load %s: %s",
+                          "[job-manager.plugins][%d]: load: %s",
                           index,
-                          load,
                           jobtap_err.text);
     }
     return 0;
