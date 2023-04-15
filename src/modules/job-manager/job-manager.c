@@ -217,7 +217,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
     if (!(ctx.jobtap = jobtap_create (&ctx))) {
-        flux_log_error (h, "error creating jobtap interface");
+        flux_log (h, LOG_ERR, "error creating jobtap interface");
         goto done;
     }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
