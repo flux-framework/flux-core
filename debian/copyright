@@ -1,0 +1,77 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: flux-core
+Source: <https://github.com/flux-framework/flux-core>
+
+Files: *
+Copyright: 2014-2023 Lawrence Livermore National Security
+License: LGPL-3+
+
+Files: src/common/libev/*
+Copyright: Copyright (c) 2007-2013 Marc Alexander Lehmann.
+License: BSD-2
+
+Files: src/common/libczmqcontainers/*
+Copyright: Copyright (c) the Contributors as noted in the AUTHORS file.
+License: Mozilla Public License v. 2.0
+
+Files: src/common/libtap/*
+Copyright: Copyright (c) the Contributors as noted in the AUTHORS file.
+License: LGPL
+
+Files: src/common/libtomlc99/*
+Copyright: Copyright (c) 2017 CK Tan
+License: MIT
+
+Files: src/common/libyuarel/*
+Copyright: Copyright (C) 2016,2017 Jack Engqvist Johansson
+License: MIT
+
+Files: src/common/libccan/*
+Copyright: Rusty Russell <rusty@rustcorp.com.au>
+License: CC0
+
+Files: src/common/libccan/bitmap/*
+Copyright: David Gibson <david@gibson.dropbear.id.au>
+License: LGPL-2.1+
+
+Files: src/common/libccan/list/*
+Copyright: Rusty Russell <rusty@rustcorp.com.au>
+License: BSD-MIT
+
+Files: src/common/libccan/base64/*
+Copyright: Rusty Russell <rusty@rustcorp.com.au>
+License: BSD-MIT
+
+Files: t/sharness.sh
+Copyright: Copyright (c) 2011-2012 Mathias Lafeldt
+ Copyright (c) 2005-2012 Git project
+ Copyright (c) 2005-2012 Junio C Hamano
+ Copyright (c) 2019-2023 Felipe Contreras
+License: GPL-2.0
+
+Files: src/bindings/python/flux/utils/parsedatetime/*
+Copyright: Copyright 2004-2021 Mike Taylor
+License: Apache-2.0
+
+Files: src/bindings/python/flux/utils/tomli/*
+Copyright: Copyright (c) 2021 Taneli Hukkinen
+License: MIT
+
+Files: debian/*
+Copyright: 2023 Mark A. Grondona <grondo@unknown>
+License: GPL-2+
+ This package is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <https://www.gnu.org/licenses/>
+ .
+ On Debian systems, the complete text of the GNU General
+ Public License version 2 can be found in "/usr/share/common-licenses/GPL-2".
