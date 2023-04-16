@@ -591,7 +591,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL,
     },
     { "purge",
-      "[--age-limit=FSD] [--num-limit=N]",
+      "[--age-limit=FSD] [--num-limit=N] [--batch=COUNT] [--force] [ID ...]",
       "Purge the oldest inactive jobs",
       cmd_purge,
       0,
@@ -3592,30 +3592,42 @@ int cmd_memo (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-int cmd_purge (optparse_t *p, int argc, char **argv)
+static void purge_finish (flux_t *h, int force, int total)
 {
-    int optindex = optparse_option_index (p);
+    int inactives;
+    flux_future_t *f;
+
+    if (!(f = flux_rpc (h, "job-manager.stats-get", NULL, 0, 0))
+        || flux_rpc_get_unpack (f, "{s:i}", "inactive_jobs", &inactives) < 0)
+        log_err_exit ("purge: failed to fetch inactive job count");
+    flux_future_destroy (f);
+
+    if (force)
+        printf ("purged %d inactive jobs, %d remaining\n", total, inactives);
+    else {
+        printf ("use --force to purge %d of %d inactive jobs\n",
+                total,
+                inactives);
+    }
+}
+
+static int purge_range (optparse_t *p, int argc, char **argv)
+{
     flux_t *h;
-    int rc = 0;
     double age_limit = optparse_get_duration (p, "age-limit", -1.);
     int num_limit = optparse_get_int (p, "num-limit", -1);
     int batch = optparse_get_int (p, "batch", 50);
     int force = 0;
     int count;
     int total = 0;
-    int inactives;
-    flux_future_t *f;
 
-    if ((argc - optindex) > 0) {
-        optparse_print_usage (p);
-        exit (1);
-    }
     if (optparse_hasopt (p, "force"))
         force = 1;
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
     do {
+        flux_future_t *f;
         if (!(f = flux_rpc_pack (h,
                                  "job-manager.purge",
                                  0,
@@ -3631,22 +3643,64 @@ int cmd_purge (optparse_t *p, int argc, char **argv)
         flux_future_destroy (f);
     } while (force && count == batch);
 
-    if (!(f = flux_rpc (h, "job-manager.stats-get", NULL, 0, 0))
-        || flux_rpc_get_unpack (f, "{s:i}", "inactive_jobs", &inactives) < 0)
-        log_err_exit ("purge: failed to fetch inactive job count");
-    flux_future_destroy (f);
+    purge_finish (h, force, total);
+    flux_close (h);
+    return 0;
+}
 
-    if (force)
-        printf ("purged %d inactive jobs, %d remaining\n", total, inactives);
-    else {
-        printf ("use --force to purge %d of %d inactive jobs\n",
-                total,
-                inactives);
+static void purge_id_continuation (flux_future_t *f, void *arg)
+{
+    int *count = arg;
+    int tmp;
+    if (flux_rpc_get_unpack (f, "{s:i}", "count", &tmp) < 0)
+        log_msg_exit ("purge: %s", future_strerror (f, errno));
+    (*count) += tmp;
+    flux_future_destroy (f);
+}
+
+static int purge_ids (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h;
+    int force = 0;
+    int total = 0;
+    int i, ids_len;
+
+    if (optparse_hasopt (p, "force"))
+        force = 1;
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    ids_len = argc - optindex;
+    for (i = 0; i < ids_len; i++) {
+        flux_jobid_t id = parse_jobid (argv[optindex + i]);
+        flux_future_t *f;
+        if (!(f = flux_rpc_pack (h,
+                                 "job-manager.purge-id",
+                                 0,
+                                 0,
+                                 "{s:I s:i}",
+                                 "id", id,
+                                 "force", force)))
+            log_err_exit ("job-manager.purge-id");
+        if (flux_future_then (f, -1, purge_id_continuation, &total) < 0)
+            log_err_exit ("flux_future_then");
     }
 
-    flux_close (h);
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
 
-    return rc;
+    purge_finish (h, force, total);
+    flux_close (h);
+    return 0;
+}
+
+int cmd_purge (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    if ((argc - optindex) > 0)
+        return purge_ids (p, argc, argv);
+    return purge_range (p, argc, argv);
 }
 
 static struct taskmap *flux_job_taskmap (flux_jobid_t id)
