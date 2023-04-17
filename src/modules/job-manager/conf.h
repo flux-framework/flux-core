@@ -18,7 +18,7 @@
 
 /* Return value:
  *   0=success, one-shot
- *  -1=falure (set 'error' but not errno)
+ *  -1=failure (set 'error' but not errno)
  *   1=success, continue to invoke callback on config updates
  */
 typedef int (*conf_update_f)(const flux_conf_t *conf,

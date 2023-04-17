@@ -632,7 +632,7 @@ _flux_kvs()
         -W --waitcreate \
         -w --watch \
         -u --uniq \
-        -A --apend \
+        -A --append \
         -f --full \
         -c --count= \
     "

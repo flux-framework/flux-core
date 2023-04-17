@@ -646,7 +646,7 @@ test_expect_success 'flux kvs get --watch allows guest access to its ns' '
 	flux kvs namespace remove testns3
 '
 
-test_expect_success 'flux kvs get --watch denies guest access to anothers ns' '
+test_expect_success 'flux kvs get --watch denies guest access to another ns' '
 	flux kvs namespace create --owner=9999 testns4 &&
 	flux kvs put --namespace=testns4 test.j=102 &&
 	! FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=9998 \
