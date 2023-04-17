@@ -3,9 +3,12 @@
 
 test_description='Run tests against a system instance of Flux'
 
-#  Allow this test to be forced to run if debug is set _and_ a flux binary
-#  exists in the FLUX_TEST_INSTALLED_PATH or /usr/bin:
-if test -n "$debug"; then
+#  If FLUX_TEST_INSTALLED_PATH is not set and /usr/bin/flux exists,
+#  set FLUX_TEST_INSTALLED_PATH to /usr/bin.
+#
+#  Must set FLUX_TEST_INSTALLED_PATH before sourcing sharness,
+#  otherwise correct flux may not be used in tests.
+if test -n "$FLUX_ENABLE_SYSTEM_TESTS"; then
 	if test -x ${FLUX_TEST_INSTALLED_PATH:-/usr/bin}/flux; then
 		FLUX_TEST_INSTALLED_PATH=${FLUX_TEST_INSTALLED_PATH:-/usr/bin}
 	fi
