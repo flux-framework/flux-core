@@ -264,8 +264,7 @@ void parse_target (struct ping_ctx *ctx, const char *target)
     /* TARGET only specifies nodeid, assume service is "broker" */
     else
         service = "broker";
-    if (asprintf (&ctx->topic, "%s.ping", service) < 0)
-        log_err_exit ("out of memory");
+    ctx->topic = xasprintf ("%s.ping", service);
     free (cpy);
 }
 
@@ -308,9 +307,7 @@ int main (int argc, char *argv[])
             log_msg_exit ("error parsing --rank option");
         if (strchr (target, '!'))
             log_msg_exit ("--rank and TARGET both try to specify a nodeid");
-        char *new_target;
-        if (asprintf (&new_target, "%s!%s", s, target) < 0)
-            log_msg_exit ("out of memory");
+        char *new_target = xasprintf ("%s!%s", s, target);
         free (target);
         target = new_target;
     }
