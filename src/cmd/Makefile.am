@@ -173,7 +173,8 @@ flux_top_SOURCES = \
 	top/keys.c \
 	top/joblist_pane.c \
 	top/summary_pane.c \
-	top/ucache.c
+	top/ucache.c \
+	top/queues.c
 flux_top_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
 	$(CURSES_CFLAGS)

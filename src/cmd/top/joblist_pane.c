@@ -27,6 +27,7 @@ static const struct dimension win_dim = { 0, 6, 80, 60 };
 struct joblist_pane {
     struct top *top;
     WINDOW *win;
+    json_t *jobs_all;
     json_t *jobs;
     struct ucache *ucache;
 
@@ -65,39 +66,17 @@ static json_t *get_current_job (struct joblist_pane *joblist)
 }
 
 
-/*  Return true if any job in joblist->jobs has a queue defined. If
- *  joblist->jobs is NULL or empty, then return the current show_queue
- *  value.
- */
-static bool show_queue (struct joblist_pane *joblist)
-{
-    size_t index;
-    json_t *job;
-
-    if (!joblist->jobs || json_array_size (joblist->jobs) == 0)
-        return joblist->show_queue;
-
-    json_array_foreach (joblist->jobs, index, job) {
-        if (json_object_get (job, "queue"))
-            return true;
-    }
-    return false;
-}
-
 void joblist_pane_draw (struct joblist_pane *joblist)
 {
     double now = flux_reactor_now (flux_get_reactor (joblist->top->h));
     size_t index;
     json_t *job;
-    int queue_width = 0;
+    int queue_width = joblist->show_queue ? 8 : 0;
     int name_width;
     int job_output_count = 0;
 
     werase (joblist->win);
     wattron (joblist->win, A_REVERSE);
-
-    if ((joblist->show_queue = show_queue (joblist)))
-        queue_width = 8;
 
     name_width = getmaxx (joblist->win)
                  - (12 + 8 + queue_width + 2 + 6 + 6 + 7 + 6);
@@ -120,6 +99,21 @@ void joblist_pane_draw (struct joblist_pane *joblist)
     wattroff (joblist->win, A_REVERSE);
     if (joblist->jobs == NULL)
         return;
+
+    if (json_array_size (joblist->jobs) == 0
+        && queues_configured (joblist->top->queues)) {
+        const char *filter_queue = NULL;
+        /* can return NULL filter_queue for "all" queues */
+        queues_get_queue_name (joblist->top->queues, &filter_queue);
+        if (filter_queue)
+            mvwprintw (joblist->win,
+                       5,
+                       25,
+                       "No jobs to display in queue %s",
+                       filter_queue);
+        return;
+    }
+
     json_array_foreach (joblist->jobs, index, job) {
         char *uri = NULL;
         char idstr[16];
@@ -148,9 +142,6 @@ void joblist_pane_draw (struct joblist_pane *joblist)
                            "user",
                              "uri", &uri) < 0)
             fatal (0, "error decoding a job record from job-list RPC");
-
-        if (joblist->top->queue && !streq (joblist->top->queue, queue))
-            continue;
 
         if (flux_job_id_encode (id, "f58", idstr, sizeof (idstr)) < 0)
             fatal (errno, "error encoding jobid as F58");
@@ -223,6 +214,36 @@ void joblist_pane_draw (struct joblist_pane *joblist)
     }
 }
 
+void joblist_filter_jobs (struct joblist_pane *joblist)
+{
+    json_decref (joblist->jobs);
+
+    if (queues_configured (joblist->top->queues)) {
+        const char *filter_queue;
+        /* can return NULL filter_queue for "all" queues */
+        queues_get_queue_name (joblist->top->queues, &filter_queue);
+        if (filter_queue) {
+            json_t *a;
+            size_t index;
+            json_t *job;
+            if (!(a = json_array ()))
+                fatal (ENOMEM, "error creating joblist array");
+            json_array_foreach (joblist->jobs_all, index, job) {
+                const char *queue;
+                if (json_unpack (job, "{s:s}", "queue", &queue) < 0)
+                    fatal (0, "error decoding a job record from job-list RPC");
+                if (!streq (filter_queue, queue))
+                    continue;
+                if (json_array_append (a, job) < 0)
+                    fatal (ENOMEM, "error appending job to joblist");
+            }
+            joblist->jobs = a;
+            return;
+        }
+    }
+    joblist->jobs = json_incref (joblist->jobs_all);
+}
+
 static void joblist_continuation (flux_future_t *f, void *arg)
 {
     struct joblist_pane *joblist = arg;
@@ -234,8 +255,9 @@ static void joblist_continuation (flux_future_t *f, void *arg)
         flux_future_destroy (f);
         return;
     }
-    json_decref (joblist->jobs);
-    joblist->jobs = json_incref (jobs);
+    json_decref (joblist->jobs_all);
+    joblist->jobs_all = json_incref (jobs);
+    joblist_filter_jobs (joblist);
     joblist_pane_draw (joblist);
     if (joblist->top->test_exit) {
         /* Ensure joblist window is refreshed before exiting */
@@ -363,6 +385,7 @@ void joblist_pane_set_current (struct joblist_pane *joblist, bool next)
     json_t *job;
     flux_jobid_t id = FLUX_JOBID_ANY;
     int njobs;
+    int next_index;
 
     if (joblist->jobs == NULL)
         return;
@@ -372,30 +395,16 @@ void joblist_pane_set_current (struct joblist_pane *joblist, bool next)
 
     /* find next valid index */
     njobs = json_array_size (joblist->jobs);
-    while (1) {
-        int next_index = next ? index + 1 : index - 1;
-        if (next_index == njobs)
-            next_index = 0;
-        else if (next_index < 0)
-            next_index = njobs - 1;
+    next_index = next ? index + 1 : index - 1;
 
-        if (!(job = json_array_get (joblist->jobs, next_index)))
-            return;
+    /* wrap around to top/bottom if index out of range */
+    if (next_index == njobs)
+        next_index = 0;
+    else if (next_index < 0)
+        next_index = njobs - 1;
 
-        if (joblist->top->queue) {
-            const char *queue = "";
-            if (json_unpack (job, "{s?s}", "queue", &queue) < 0)
-                fatal (0, "error decoding a job record from job-list RPC");
-            if (!streq (joblist->top->queue, queue)) {
-                index = next_index;
-                continue;
-            }
-            break;
-        }
-        else
-            break;
-
-    }
+    if (!(job = json_array_get (joblist->jobs, next_index)))
+        return;
 
     if (job && json_unpack (job, "{s:I}", "id", &id) < 0)
         return;
@@ -416,6 +425,7 @@ struct joblist_pane *joblist_pane_create (struct top *top)
         fatal (errno, "could not create ucache");
     joblist->top = top;
     joblist->current = FLUX_JOBID_ANY;
+    joblist->show_queue = queues_configured (top->queues);
     if (!(joblist->win = newwin (win_dim.y_length,
                                  win_dim.x_length,
                                  win_dim.y_begin,
@@ -433,6 +443,7 @@ void joblist_pane_destroy (struct joblist_pane *joblist)
         int saved_errno = errno;
         delwin (joblist->win);
         ucache_destroy (joblist->ucache);
+        json_decref (joblist->jobs_all);
         json_decref (joblist->jobs);
         free (joblist);
         errno = saved_errno;
