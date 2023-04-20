@@ -133,11 +133,13 @@ test_expect_success 'there are no flux-t2406 units loaded' '
 '
 test_expect_success 'create subscribe script' '
 	cat >subscribe.py <<-EOT &&
+	import sys
 	import flux
 	handle = flux.Flux()
 	fut = handle.rpc("sdbus.subscribe",{},flags=flux.constants.FLUX_RPC_STREAMING)
 	while True:
 	    print(fut.get_str())
+	    sys.stdout.flush()
 	    fut.reset()
 	EOT
 	chmod +x subscribe.py
