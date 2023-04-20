@@ -82,7 +82,8 @@ bus_get_prop () {
 # Usage: bus_start_simple name description remain cmd arg1
 # where remain=True|False and cmd has exactly one argument
 bus_start_simple() {
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"member\":\"StartTransientUnit\",\"params\":[\"$1\",\"fail\",[ [\"Description\",[\"s\",\"$2\"]], [\"RemainAfterExit\",[\"b\",$3]], [\"ExecStart\",[\"a(sasb)\",[[\"$4\",[\"$4\",\"$5\"],False]]]] ], []]}).get_str())"
+    local cmd=$(which $4) || return 1
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"member\":\"StartTransientUnit\",\"params\":[\"$1\",\"fail\",[ [\"Description\",[\"s\",\"$2\"]], [\"RemainAfterExit\",[\"b\",$3]], [\"ExecStart\",[\"a(sasb)\",[[\"$cmd\",[\"$4\",\"$5\"],False]]]] ], []]}).get_str())"
 }
 
 bus_call_unknown_member() {
