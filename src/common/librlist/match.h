@@ -38,4 +38,4 @@ bool rnode_match (const struct rnode *n, struct job_constraint *c);
 struct rnode *rnode_copy_match (const struct rnode *n,
                                 struct job_constraint *c);
 
-#endif /* !HAVE_SCHED_RLIST_MATCH */
+#endif /* !HAVE_RLIST_MATCH_H */
