@@ -8,7 +8,7 @@ test_under_flux 4 job
 
 flux setattr log-stderr-level 1
 
-test_expect_success 'flux-mini: --requires option works' '
+test_expect_success 'flux run: --requires option works' '
 	flux run --dry-run \
 		--env=-* \
 		--requires=foo,bar \
@@ -53,7 +53,7 @@ test_expect_success 'jobspec validator rejects invalid hostlist/ranks' '
 test_expect_success 'jobspec validator rejects invalid constraint operation' '
 	test_must_fail flux submit -n1 --requires=foo:bar hostname
 '
-test_expect_success 'flux-mini: --requires works with scheduler' '
+test_expect_success 'flux bulksubmit: --requires works with scheduler' '
 	flux bulksubmit --wait --log=job.{}.id -n1 --requires={} \
 		flux getattr rank \
 		::: xx yy xx,yy ^xx ^yy \

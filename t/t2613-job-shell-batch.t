@@ -32,7 +32,6 @@ test_expect_success 'flux-shell: per-resource with count works' '
 	foo
 	EOF
 	test_cmp 4-per-core.expected 4-per-core.out
-	
 '
 test_expect_success 'flux-shell: per-resource type=node works' '
 	ncores=$(flux resource list -s up -no {ncores}) &&

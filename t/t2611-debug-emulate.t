@@ -28,14 +28,14 @@ parse_totalview_jobid() {
 	echo ${jobid}
 }
 
-test_expect_success 'debugger: launching under debugger via flux-mini works' '
+test_expect_success 'debugger: launching under debugger via flux run works' '
 	flux run -v --debug-emulate -N 2 -n 2 sleep 0 2> jobid.out &&
 	jobid=$(parse_jobid jobid.out) &&
 	echo ${jobid} > jobid &&
 	flux job wait-event -vt ${TIMEOUT} ${jobid} finish
 '
 
-test_expect_success 'debugger: submitting under debugger via flux-mini works' '
+test_expect_success 'debugger: submitting under debugger via flux submit works' '
 	jobid=$(flux submit -N 2 -n 2 -o stop-tasks-in-exec hostname) &&
 	flux job wait-event -vt ${TIMEOUT}  ${jobid} start &&
 	flux job attach --debug-emulate ${jobid} &&

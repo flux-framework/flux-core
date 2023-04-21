@@ -30,7 +30,7 @@ Homepage: https://github.com/flux-framework/flux-core
 Package: flux-core
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description:  Core support for the Flux reource manager framework
+Description:  Core support for the Flux resource manager framework
  flux-core implements the communication layer and lowest level
  services and interfaces for the Flux resource manager framework.
  It consists of a distributed message broker, plug-in modules

@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-test_description='Test flux-mini/flux-shell taskmap plugin support'
+test_description='Test flux-submit/flux-shell taskmap plugin support'
 
 . `dirname $0`/sharness.sh
 
