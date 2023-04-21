@@ -104,7 +104,7 @@ static bool match_idset (struct job_constraint *c,
 }
 
 static struct job_constraint *create_idset_constraint (json_t *values,
-                                                      flux_error_t *errp)
+                                                       flux_error_t *errp)
 {
     struct job_constraint *c;
     struct idset *idset = array_to_idset (values, errp);
@@ -165,7 +165,7 @@ static bool match_hostlist (struct job_constraint *c,
 }
 
 static struct job_constraint *create_hostlist_constraint (json_t *values,
-                                                         flux_error_t *errp)
+                                                          flux_error_t *errp)
 {
     struct job_constraint *c;
     struct hostlist *hl = array_to_hostlist (values, errp);
