@@ -112,6 +112,7 @@ static struct job_constraint *create_idset_constraint (json_t *values,
         return NULL;
     if (!(c = job_constraint_new (errp))
         || !zlistx_add_end (c->values, idset)) {
+        job_constraint_destroy (c);
         idset_destroy (idset);
         return NULL;
     }
@@ -173,6 +174,7 @@ static struct job_constraint *create_hostlist_constraint (json_t *values,
         return NULL;
     if (!(c = job_constraint_new (errp))
         || !zlistx_add_end (c->values, hl)) {
+        job_constraint_destroy (c);
         hostlist_destroy (hl);
         return NULL;
     }
