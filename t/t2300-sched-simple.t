@@ -43,6 +43,9 @@ test_expect_success 'sched-simple: generate jobspec for simple test job' '
 	flux run --dry-run hostname >basic.json
 '
 
+test_expect_success 'sched-simple cannot be loaded again under a new name' '
+	test_must_fail flux module load --name=newsched sched-simple
+'
 test_expect_success 'job-manager: load sched-simple w/ an illegal mode' '
 	flux module unload sched-simple &&
 	flux module load sched-simple mode=foobar
