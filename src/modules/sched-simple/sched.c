@@ -141,21 +141,25 @@ err:
 
 static void simple_sched_destroy (flux_t *h, struct simple_sched *ss)
 {
-    struct jobreq *job = zlistx_first (ss->queue);
-    while (job) {
-        flux_respond_error (h, job->msg, ENOSYS, "simple sched exiting");
-        job = zlistx_next (ss->queue);
+    if (ss) {
+        int saved_errno = errno;
+        struct jobreq *job = zlistx_first (ss->queue);
+        while (job) {
+            flux_respond_error (h, job->msg, ENOSYS, "simple sched exiting");
+            job = zlistx_next (ss->queue);
+        }
+        flux_future_destroy (ss->acquire_f);
+        zlistx_destroy (&ss->queue);
+        flux_watcher_destroy (ss->prep);
+        flux_watcher_destroy (ss->check);
+        flux_watcher_destroy (ss->idle);
+        schedutil_destroy (ss->util_ctx);
+        rlist_destroy (ss->rlist);
+        free (ss->alloc_mode);
+        free (ss->mode);
+        free (ss);
+        errno = saved_errno;
     }
-    flux_future_destroy (ss->acquire_f);
-    zlistx_destroy (&ss->queue);
-    flux_watcher_destroy (ss->prep);
-    flux_watcher_destroy (ss->check);
-    flux_watcher_destroy (ss->idle);
-    schedutil_destroy (ss->util_ctx);
-    rlist_destroy (ss->rlist);
-    free (ss->alloc_mode);
-    free (ss->mode);
-    free (ss);
 }
 
 static struct simple_sched * simple_sched_create (void)
