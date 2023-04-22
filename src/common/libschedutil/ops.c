@@ -144,25 +144,6 @@ static int service_register (flux_t *h)
     return 0;
 }
 
-/* Unregister dynamic service name 'sched'
- */
-static void service_unregister (flux_t *h)
-{
-    flux_future_t *f;
-
-    if (!(f = flux_service_unregister (h, "sched"))) {
-        flux_log_error (h, "service_unregister");
-        return;
-    }
-    if (flux_future_get (f, NULL) < 0) {
-        flux_log_error (h, "service_unregister");
-        flux_future_destroy (f);
-        return;
-    }
-    flux_log (h, LOG_DEBUG, "service_unregister");
-    flux_future_destroy (f);
-}
-
 int schedutil_ops_register (schedutil_t *util)
 {
     flux_t *h = util->h;
@@ -171,14 +152,10 @@ int schedutil_ops_register (schedutil_t *util)
         errno = EINVAL;
         return -1;
     }
-    if (service_register (h) < 0)
-        goto error;
-    if (flux_msg_handler_addvec (h, htab, util, &util->handlers) < 0)
-        goto error;
+    if (service_register (h) < 0
+        || flux_msg_handler_addvec (h, htab, util, &util->handlers) < 0)
+        return -1;
     return 0;
-error:
-    schedutil_ops_unregister (util);
-    return -1;
 }
 
 void schedutil_ops_unregister (schedutil_t *util)
@@ -186,7 +163,6 @@ void schedutil_ops_unregister (schedutil_t *util)
     if (!util)
         return;
 
-    service_unregister (util->h);
     flux_msg_handler_delvec (util->handlers);
  }
 
