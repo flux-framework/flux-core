@@ -79,9 +79,13 @@ int get_jobs_from_list (json_t *jobs,
     job = zlistx_first (list);
     while (job) {
 
-        /*  If job->t_inactive > 0. (we're on the inactive jobs list),
-         *   and job->t_inactive > since, then we're done since inactive
-         *   jobs are sorted by inactive time.
+        /*  If job->t_inactive > 0. we're on the inactive jobs list and jobs are
+         *  sorted on the inactive list, larger t_inactive first.
+         *
+         *  If job->t_inactive > since, this is a job that could potentially be returned
+         *
+         *  So if job->t_inactive <= since, then we're done b/c the rest of the inactive
+         *   jobs cannot be returned.
          */
         if (job->t_inactive > 0. && job->t_inactive <= since)
             break;
