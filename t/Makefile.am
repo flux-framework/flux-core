@@ -175,6 +175,7 @@ TESTSCRIPTS = \
 	t2404-job-exec-multiuser.t \
 	t2405-job-exec-sdexec.t \
 	t2406-job-exec-cleanup.t \
+	t2407-job-exec-sdexec-properties.t \
 	t2410-exec-systemd.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
@@ -373,6 +374,7 @@ dist_check_SCRIPTS = \
 	job-exec/dummy.sh \
 	job-exec/imp.sh \
 	job-exec/imp-fail.sh \
+	job-exec/idset2bitmask.py \
 	job-list/list-id.py \
 	job-list/list-rpc.py \
 	job-list/job-list-helper.sh \

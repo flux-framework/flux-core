@@ -59,8 +59,21 @@ typedef int (*sdprocess_list_f) (flux_t *h,
 /* Launch process under systemd
  *
  * command must be an absolute path
- * argv & envv arrays are NULL terminated
+ * argv & envv & properties arrays are NULL terminated
  * if unnecessary, set fd to < 0
+ *
+ * Current properties supported:
+ * - CPUAffinity=<flux idset> (N.B. input different than systemd)
+ * - AllowedCPUs=<flux idset> (N.B. input different than systemd)
+ * - MemoryHigh=<bytes> (k, m, g, t suffix allowed)
+ *   OR MemoryHigh=<percent> (double + '%')
+ *   OR MemoryHigh=infinity (same as 100%)
+ * - MemoryMax=<bytes> (k, m, g, t suffix allowed)
+ *   OR MemoryMax=<percent> (double + '%')
+ *   OR MemoryMax=infinity (same as 100%)
+ *
+ * Properties not allowed due to internal use:
+ * - RemainAfterExit
  *
  * Setup of XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS environment
  * variables are assumed.  If not, systemd will return error.
@@ -69,6 +82,7 @@ sdprocess_t *sdprocess_exec (flux_t *h,
                              const char *unitname,
                              char **argv,
                              char **envv,
+                             char **properties,
                              int stdin_fd,
                              int stdout_fd,
                              int stderr_fd);

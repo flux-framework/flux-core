@@ -44,7 +44,10 @@
 
 #include <systemd/sd-bus.h>
 
+#include "src/common/libidset/idset.h"
+
 #include "sdprocess.h"
+#include "parse.h"
 #include "strv.h"
 
 struct sdprocess {
@@ -53,6 +56,7 @@ struct sdprocess {
     char *unitname;
     char **argv;
     char **envv;
+    char **properties;
     int stdin_fd;
     int stdout_fd;
     int stderr_fd;
@@ -229,6 +233,7 @@ static sdprocess_t *sdprocess_create (flux_t *h,
                                       const char *unitname,
                                       char **argv,
                                       char **envv,
+                                      char **properties,
                                       int stdin_fd,
                                       int stdout_fd,
                                       int stderr_fd)
@@ -246,6 +251,10 @@ static sdprocess_t *sdprocess_create (flux_t *h,
     }
     if (envv) {
         if (strv_copy (envv, &sdp->envv) < 0)
+            goto cleanup;
+    }
+    if (properties) {
+        if (strv_copy (properties, &sdp->properties) < 0)
             goto cleanup;
     }
     sdp->h = h;
@@ -269,6 +278,210 @@ static sdprocess_t *sdprocess_create (flux_t *h,
 cleanup:
     sdprocess_destroy (sdp);
     return NULL;
+}
+
+static int cpu_idset_to_bitmask (const char *idset_str,
+                                 uint8_t **bitmask,
+                                 size_t *bitmask_len)
+{
+    struct idset *idset = NULL;
+    unsigned int i, high_cpu_id;
+    uint8_t *cpu_bitmask = NULL;
+    size_t cpu_bitmask_len = -1;
+
+    if (!(idset = idset_decode (idset_str)))
+        goto error;
+
+    if ((high_cpu_id = idset_last (idset)) == IDSET_INVALID_ID) {
+        errno = EINVAL;
+        goto error;
+    }
+
+    /* N.B. as of this code's writing, max CONFIG_NR_CPUS in Linux is
+     * 8192 */
+    if (high_cpu_id >= 8192) {
+        errno = EINVAL;
+        goto error;
+    }
+
+    cpu_bitmask_len = (high_cpu_id / 8) + 1;
+    if (!(cpu_bitmask = calloc (1, cpu_bitmask_len)))
+        goto error;
+
+    i = idset_first (idset);
+    while (i != IDSET_INVALID_ID) {
+        cpu_bitmask[i / 8] |= 0x1 << (i % 8);
+        i = idset_next (idset, i);
+    }
+
+    idset_destroy (idset);
+    (*bitmask) = cpu_bitmask;
+    (*bitmask_len) = cpu_bitmask_len;
+    return 0;
+
+error:
+    idset_destroy (idset);
+    free (cpu_bitmask);
+    return -1;
+}
+
+static int set_property_cpuset (sdprocess_t *sdp,
+                                sd_bus_message *m,
+                                const char *property,
+                                const char *value)
+{
+    uint8_t *bitmask = NULL;
+    size_t bitmask_len;
+    int ret;
+
+    if (cpu_idset_to_bitmask (value, &bitmask, &bitmask_len) < 0)
+        return -1;
+
+    if ((ret = sd_bus_message_open_container (m, SD_BUS_TYPE_STRUCT, "sv")) < 0)
+        goto error;
+
+    if ((ret = sd_bus_message_append_basic (m,
+                                            SD_BUS_TYPE_STRING,
+                                            property)) < 0)
+        goto error;
+
+    if ((ret = sd_bus_message_open_container (m, 'v', "ay")) < 0)
+        goto error;
+
+    if ((ret = sd_bus_message_append_array (m, 'y', bitmask, bitmask_len)) < 0)
+        goto error;
+
+    if ((ret = sd_bus_message_close_container (m)) < 0)
+        goto error;
+
+    if ((ret = sd_bus_message_close_container (m)) < 0)
+        goto error;
+
+    free (bitmask);
+    return 0;
+
+error:
+    set_errno_log (sdp->h, ret, "error setting cpuset property");
+    free (bitmask);
+    return -1;
+}
+
+static int set_property_memory (sdprocess_t *sdp,
+                                sd_bus_message *m,
+                                const char *property,
+                                const char *value)
+{
+    double percent;
+    uint64_t bytes;
+    int ret;
+
+    if (parse_percent (value, &percent) == 0) {
+        char *prop;
+        uint32_t val;
+
+        /* Percentages go to the "<propertyname>Scale" property.  It
+         * takes a value in the range 0-UINT32_MAX, which reflects the
+         * percentage.
+         */
+
+        if (asprintf (&prop, "%sScale", property) < 0)
+            return -1;
+
+        val = (double)UINT32_MAX * percent;
+
+        if ((ret = sd_bus_message_append (m, "(sv)", prop, "u", val)) < 0) {
+            free (prop);
+            goto sdbus_error;
+        }
+
+        free (prop);
+        return 0;
+    }
+
+    if (parse_unsigned (value, &bytes) < 0)
+        return -1;
+
+    if ((ret = sd_bus_message_append (m, "(sv)", property, "t", bytes)) < 0)
+        goto sdbus_error;
+
+    return 0;
+
+sdbus_error:
+    set_errno_log (sdp->h, ret, "error setting memory property");
+    return -1;
+}
+
+static int transient_service_parse_user_property (sdprocess_t *sdp,
+                                                  sd_bus_message *m,
+                                                  const char *str)
+{
+    char *value;
+    char *property = NULL;
+    int rv = -1;
+
+    if (!strchr (str, '=')) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!(property = strdup (str)))
+        return -1;
+
+    if (!(value = strchr (property, '='))) {
+        errno = EINVAL;
+        goto error;
+    }
+    (*value) = '\0';
+    value++;
+
+    /* See comments in transient_service_set_properties(), we do not allow
+     * the user to set RemainAfterExit */
+    if (!strcmp (property, "RemainAfterExit")) {
+        errno = EINVAL;
+        goto error;
+    }
+
+    /* N.B. for consistency to systemd, properties are case sensitive */
+    if (!strcmp (property, "CPUAffinity")) {
+        if (set_property_cpuset (sdp, m, property, value) < 0)
+            goto error;
+    }
+    else if (!strcmp (property, "AllowedCPUs")) {
+        if (set_property_cpuset (sdp, m, property, value) < 0)
+            goto error;
+    }
+    else if (!strcmp (property, "MemoryHigh")) {
+        if (set_property_memory (sdp, m, property, value) < 0)
+            goto error;
+    }
+    else if (!strcmp (property, "MemoryMax")) {
+        if (set_property_memory (sdp, m, property, value) < 0)
+            goto error;
+    }
+    else {
+        errno = EINVAL;
+        goto error;
+    }
+
+    rv = 0;
+error:
+    free (property);
+    return rv;
+}
+
+static int transient_service_set_user_properties (sdprocess_t *sdp,
+                                                  sd_bus_message *m)
+{
+    if (sdp->properties) {
+        char **ptr = sdp->properties;
+        while (*ptr) {
+            if (transient_service_parse_user_property (sdp, m, *ptr) < 0)
+                return -1;
+            ptr++;
+        }
+    }
+
+    return 0;
 }
 
 static int transient_service_set_stdio_properties (sdprocess_t *sdp,
@@ -405,8 +618,6 @@ static int transient_service_set_properties (sdprocess_t *sdp,
         return -1;
     }
 
-    /* achu: no property assignments for the time being */
-
     if ((ret = sd_bus_message_append (m, "(sv)", "AddRef", "b", 1)) < 0) {
         set_errno_log (sdp->h, ret, "sd_bus_message_append");
         return -1;
@@ -427,6 +638,11 @@ static int transient_service_set_properties (sdprocess_t *sdp,
         set_errno_log (sdp->h, ret, "sd_bus_message_append");
         return -1;
     }
+
+    /* User properties */
+
+    if (transient_service_set_user_properties (sdp, m) < 0)
+        return -1;
 
     /* Stdio */
 
@@ -512,6 +728,7 @@ sdprocess_t *sdprocess_exec (flux_t *h,
                              const char *unitname,
                              char **argv,
                              char **envv,
+                             char **properties,
                              int stdin_fd,
                              int stdout_fd,
                              int stderr_fd)
@@ -530,6 +747,7 @@ sdprocess_t *sdprocess_exec (flux_t *h,
                                   unitname,
                                   argv,
                                   envv,
+                                  properties,
                                   stdin_fd,
                                   stdout_fd,
                                   stderr_fd)))
@@ -587,6 +805,7 @@ sdprocess_t *sdprocess_find_unit (flux_t *h, const char *unitname)
 
     if (!(sdp = sdprocess_create (h,
                                   unitname,
+                                  NULL,
                                   NULL,
                                   NULL,
                                   -1,
