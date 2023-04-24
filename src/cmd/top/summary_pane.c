@@ -152,7 +152,11 @@ static void draw_stats (struct summary_pane *sum)
     }
 
     if (sum->show_details) {
-        int failed = sum->stats.failed;
+        /* flux-top reports the total number of unsuccessful jobs in
+         * the 'failed' display, not just the count of jobs that ran
+         * to completion with nonzero exit code
+         */
+        int failed = sum->stats.failed + sum->stats.timeout + sum->stats.canceled;
         int complete = sum->stats.successful;
 
         if (complete)
