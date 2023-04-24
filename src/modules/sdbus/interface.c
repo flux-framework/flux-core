@@ -14,7 +14,7 @@
  * D-Bus (interface, member) that we need in Flux requires translation
  * callbacks here for now.
  *
- * To list sytemd Manager methods and signatures:
+ * To list systemd Manager methods and signatures:
  *   busctl --user introspect \
  *      org.freedesktop.systemd1 \
  *      /org/freedesktop/systemd1 \

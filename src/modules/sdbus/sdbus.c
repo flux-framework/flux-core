@@ -172,7 +172,7 @@ static void sdbus_recv (struct sdbus_ctx *ctx, sd_bus_message *m)
             log_msg_signal (ctx->h, m, "drop");
             goto out;
         }
-        /* Handled signals are loged as a "recv".  Dispatch them to
+        /* Handled signals are logged as a "recv".  Dispatch them to
          * subscribers here.  N.B. There is no subscriber filtering yet.
          * Perhaps later if needed.
          */
@@ -529,7 +529,7 @@ error:
     sdbus_recover (ctx, error.text);
 }
 
-/* Connect completed. Initiate asynchonous bus subscribe.
+/* Connect completed. Initiate asynchronous bus subscribe.
  */
 static void connect_continuation (flux_future_t *f, void *arg)
 {

@@ -19,7 +19,7 @@
  *
  * If first_time=true, connect immediately; otherwise, wait retry_min secs.
  * If the initial connect is unsuccessful, retry in retry_min secs.  If that
- * is unsuccessful, back off exponentialy, leveling off at retry_max secs
+ * is unsuccessful, back off exponentially, leveling off at retry_max secs
  * between attempts.
  *
  * Connect attempt successes and failures are logged at LOG_INFO level.
