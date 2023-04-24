@@ -104,6 +104,9 @@ OPTIONS
    will display a summary of statistics along with the top 25
    running jobs, updated every 2 seconds.
 
+   Note that all job failures, including canceled and timeout jobs,
+   are collectively counted as "failed" in ``--stats``.
+
 **--stats-only**
    Output a summary of job statistics and exit.  By default shows
    global statistics.  If ``--queue`` is specified, shows statistics
@@ -115,6 +118,9 @@ OPTIONS
 
    All options other than ``--queue`` are ignored when
    ``--stats-only`` is used.
+
+   Note that all job failures, including canceled and timeout jobs,
+   are collectively counted as "failed" in ``--stats-only``.
 
 **-R, --recursive**
    List jobs recursively. Each child job which is also an instance of
