@@ -3,6 +3,7 @@ queue_rules:
     conditions:
       - base=master
       - status-success="validate commits"
+      - status-success="spelling"
       - status-success="flux-sched check"
       - status-success="flux-accounting check"
       - status-success="python linting"

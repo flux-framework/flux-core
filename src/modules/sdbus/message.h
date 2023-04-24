@@ -35,7 +35,7 @@ int sdmsg_get (sd_bus_message *m, const char *fmt, json_t **op);
 
 /* Get list of values specified by 'fmt' from message 'm' at the current cursor
  * position and append them to the json array 'o'.
- * Return 1 on success, or -errno on falure.
+ * Return 1 on success, or -errno on failure.
  */
 int sdmsg_read (sd_bus_message *m, const char *fmt, json_t *o);
 
