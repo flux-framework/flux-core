@@ -9,6 +9,10 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS =
 
+EXTRA_DIST = \
+	LICENSE \
+	README.md
+
 noinst_LTLIBRARIES = libtomlc99.la
 
 libtomlc99_la_SOURCES = \
