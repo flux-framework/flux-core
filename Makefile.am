@@ -6,6 +6,7 @@ EXTRA_DIST = \
 	config/tap-driver.sh \
 	config/tap-driver.py \
 	NOTICE.LLNS \
+	LICENSE \
 	README.md \
 	vscode.md \
 	NEWS.md \
