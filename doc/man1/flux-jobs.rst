@@ -162,7 +162,7 @@ states also exist: "pending", an alias for DEPEND,SCHED; "running", an
 alias for RUN,CLEANUP; "active", an alias for "pending,running".
 
 After a job has finished and is in the INACTIVE state, it can be
-marked with one of three possible results: COMPLETED, FAILED,
+marked with one of the possible results: COMPLETED, FAILED,
 CANCELED, TIMEOUT. Under the *result_abbrev* field name, these are
 abbreviated as CD, F, CA, and TO respectively.
 
