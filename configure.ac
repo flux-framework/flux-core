@@ -339,6 +339,9 @@ if test "$have_libsystemd" = yes -a "$have_sd_bus_h" = yes; then
     AC_CHECK_LIB(systemd, sd_bus_set_method_call_timeout,
                  AC_DEFINE([HAVE_SD_BUS_SET_METHOD_CALL_TIMEOUT], [1],
                            [Define if you have sd_bus_set_method_call_timeout]))
+    AC_CHECK_LIB(systemd, sd_bus_message_dump,
+                 AC_DEFINE([HAVE_SD_BUS_MESSAGE_DUMP], [1],
+                           [Define if you have sd_bus_message_dump]))
 fi
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.11.1], [], [])
 PKG_CHECK_MODULES([LZ4], [liblz4], [], [])
@@ -571,6 +574,7 @@ AC_CONFIG_FILES( \
   src/modules/job-list/Makefile \
   src/modules/job-exec/Makefile \
   src/modules/resource/Makefile \
+  src/modules/sdbus/Makefile \
   src/test/Makefile \
   etc/Makefile \
   etc/flux-core.pc \

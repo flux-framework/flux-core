@@ -19,7 +19,8 @@ SUBDIRS = \
 	job-manager \
 	job-list \
 	job-exec \
-	resource
+	resource \
+	sdbus
 
 if ENABLE_CONTENT_S3
 SUBDIRS += content-s3
@@ -41,7 +42,8 @@ fluxmod_LTLIBRARIES = \
 	kvs.la \
 	kvs-watch.la \
 	resource.la \
-	sched-simple.la
+	sched-simple.la \
+	sdbus.la
 
 if ENABLE_CONTENT_S3
 fluxmod_LTLIBRARIES += content-s3.la
@@ -259,3 +261,14 @@ sched_simple_la_LIBADD = \
 	$(JANSSON_LIBS) \
 	$(HWLOC_LIBS)
 sched_simple_la_LDFLAGS = $(fluxmod_ldflags) -module
+
+sdbus_la_SOURCES =
+sdbus_la_LIBADD = \
+	$(builddir)/sdbus/libsdbus.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(JANSSON_LIBS)
+if HAVE_LIBSYSTEMD
+sdbus_la_LIBADD += $(LIBSYSTEMD_LIBS)
+endif
+sdbus_la_LDFLAGS = $(fluxmod_ldflags) -module
