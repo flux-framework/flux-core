@@ -134,6 +134,12 @@ static int hostname_split (char *name, int *suffix)
     int n = len - 1;
     while (n >= 0 && isdigit (name[n]))
         n--;
+    /*  Now advance past leading zeros (not including a final zero)
+     *  These will not be part of the suffix since they can't be represented
+     *  as an integer.
+     */
+    while (name[n+1] == '0' && name[n+2] != '\0')
+        n++;
     if (++n == len)
         return 0;
     *suffix = (int) strtol (name+n, NULL, 10);
