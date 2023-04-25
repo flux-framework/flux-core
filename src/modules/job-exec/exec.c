@@ -86,7 +86,7 @@ static void start_cb (struct bulk_exec *exec, void *arg)
     /*  This is going to be really slow. However, it should at least
      *   work for now. We wait for all imp's to start, then send input
      */
-    if (job->multiuser) {
+    if (job->multiuser && !config_use_imp_helper ()) {
         char *input = NULL;
         json_t *o = json_pack ("{s:s}", "J", job->J);
         if (!o || !(input = json_dumps (o, JSON_COMPACT))) {
@@ -351,6 +351,15 @@ static int exec_init (struct jobinfo *job)
         goto err;
     }
     if (job->multiuser) {
+            if (config_use_imp_helper ()
+                && flux_cmd_setenvf (cmd,
+                                     1,
+                                     "FLUX_IMP_EXEC_HELPER",
+                                     "flux imp-exec-helper %ju",
+                                     (uintmax_t) job->id) < 0) {
+            flux_log_error (job->h, "exec_init: flux_cmd_setenvf");
+            goto err;
+        }
         if (flux_cmd_argv_append (cmd, config_get_imp_path ()) < 0
             || flux_cmd_argv_append (cmd, "exec") < 0) {
             flux_log_error (job->h, "exec_init: flux_cmd_argv_append");

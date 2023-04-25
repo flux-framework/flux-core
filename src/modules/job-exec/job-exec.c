@@ -101,6 +101,7 @@
 
 #include "job-exec.h"
 #include "checkpoint.h"
+#include "exec_config.h"
 
 static double kill_timeout=5.0;
 
@@ -890,7 +891,7 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
         jobinfo_fatal_error (job, errno, "initializing critical ranks");
         goto done;
     }
-    if (job->multiuser) {
+    if (job->multiuser && !config_use_imp_helper ()) {
         const char *J = jobinfo_kvs_lookup_get (f, "J");
         if (!J || !(job->J = strdup (J))) {
             jobinfo_fatal_error (job, errno, "reading J: %s", error.text);
@@ -1056,6 +1057,7 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
         || flux_future_push (f, "R", f_kvs) < 0)
         goto err;
     if (job->multiuser
+        && !config_use_imp_helper ()
         && (!(f_kvs = flux_jobid_kvs_lookup (h, job->id, 0, "J"))
         || flux_future_push (f, "J", f_kvs) < 0)) {
         goto err;
