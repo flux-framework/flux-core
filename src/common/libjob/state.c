@@ -26,6 +26,9 @@ static struct strtab states[] = {
     { FLUX_JOB_STATE_RUN,       "RUN",      "run",      "R", "r" },
     { FLUX_JOB_STATE_CLEANUP,   "CLEANUP",  "cleanup",  "C", "c" },
     { FLUX_JOB_STATE_INACTIVE,  "INACTIVE", "inactive", "I", "i" },
+    { FLUX_JOB_STATE_PENDING,   "PENDING",  "pending",  "PD", "pd" },
+    { FLUX_JOB_STATE_RUNNING,   "RUNNING",  "running",  "RU", "ru" },
+    { FLUX_JOB_STATE_ACTIVE,    "ACTIVE",   "active",   "A",  "a" },
 };
 
 
