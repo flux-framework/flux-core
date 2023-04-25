@@ -583,6 +583,10 @@ void test_empty (void)
     json_decref (o);
     rmfile ("testempty");
 
+    if (!have_sparse) {
+        tap_skip (3, "test directory does not support sparse files");
+        return;
+    }
     mkfile_empty ("testempty2", 1024);
     o = xfileref_create (mkpath ("testempty2"));
     ok (o != NULL && json_object_get (o, "data") == NULL,
