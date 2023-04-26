@@ -43,6 +43,32 @@ static const char *test1 [] = {
     NULL,
 };
 
+static const char *test2 [] = {
+    "test01",
+    "test02",
+    "test09",
+    "test0201",
+    "test0202",
+    "test0203",
+    "test1200",
+    "test1201",
+    "test1202",
+    NULL
+};
+
+static const char *test3 [] = {
+    "foo008",
+    "foo008",
+    "foo009",
+    "foo009",
+    "foo010",
+    "foo010",
+    "foo011",
+    "foo011",
+    NULL
+};
+
+
 struct nodelist * nodelist_from_array (const char *names[])
 {
     struct nodelist *nl = nodelist_create ();
@@ -108,6 +134,8 @@ int main (int argc, char **argv)
     plan (NO_PLAN);
     do_test (test0);
     do_test (test1);
+    do_test (test2);
+    do_test (test3);
     test_append ();
     done_testing ();
     return 0;
