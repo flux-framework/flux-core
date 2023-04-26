@@ -8,6 +8,30 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* nodelist.c - compressed encoding of a list of hostnames
+ *
+ * A nodelist is a pure JSON representation of a list of possibly
+ * repeating hostnames. The implementation takes advantage of the
+ * tendency to place a numeric suffix on hostanmes of large HPC
+ * clusters and uses the rangelist implementation to encode the
+ * suffixes of a common hostname prefix.
+ *
+ * A JSON nodelist is an array of entries (entries are called a
+ * "prefix list" in the code below), where each entry represents
+ *  one or more hosts. Entries can have the following form:
+ *
+ * - a single string represents one hostname
+ * - an array entry has 2 elements:
+ *   1. a common hostname prefix
+ *   2. a rangelist representing the set of suffixes
+ *      (see rangelist.c).
+ *      An empty string (no suffix) is represented as -1.
+ *
+ * For each prefix list the common prefix is combined with the
+ * rangelist-encoded suffixes to form the list of hosts.
+ *
+ */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
