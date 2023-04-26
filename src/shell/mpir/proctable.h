@@ -13,6 +13,11 @@
 #ifndef HAVE_PROCTABLE_H
 #define HAVE_PROCTABLE_H
 
+/* MPIR_PROCDESC is defined in the MPIR Process Acquisition Interface
+ * Version 1:
+ *
+ * See https://www.mpi-forum.org/docs/mpir-specification-03-01-2018.pdf
+ */
 typedef struct {
     char *host_name;
     char *executable_name;

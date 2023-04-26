@@ -8,6 +8,24 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* proctable.c - compressed, JSON encoded MPIR_proctable
+ *
+ * An MPIR proctable is an array of MPIR_PROCDESC entries, including
+ * a taskid, hostname, executable name, and PID for every task in
+ * parallel job. In order to reduce the transfer of data back to a
+ * frontend command, the MPIR proctable is encoded by the job shell
+ * using the compression techniques in rangelist.c and nodelist.c.
+ *
+ * The shell simply encodes the proctable as 4 separate lists, each
+ * encoded in the same order:
+ *
+ *  - nodes: the list of hostnames in 'nodelist' form
+ *  - executables: the list of executables in 'nodelist' form
+ *  - taskids: the list of task ids in 'rangelist' form
+ *  - pids: the list of process ids in 'rangelist' form
+ *
+ */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
