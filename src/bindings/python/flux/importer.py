@@ -36,10 +36,16 @@ def import_plugins(pkg_name, pluginpath=None):
 
     try:
         #  Load 'pkg_name' as a namespace plugin
+        #
+        #  Note: importlib.import_module() will raise ModuleNotFoundError
+        #  if pkg_name points to an empty directory, but we just want to
+        #  return an empty list in this case:
+        #
         pkg = importlib.import_module(pkg_name)
-        plugins = import_plugins_pkg(pkg)
     except ModuleNotFoundError:
         return {}
+
+    plugins = import_plugins_pkg(pkg)
 
     if pluginpath is not None:
         #  Undo any added pluginpath elements.
