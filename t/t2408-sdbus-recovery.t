@@ -13,6 +13,10 @@ if ! systemctl --user show --property Version; then
 	skip_all="user systemd is not running"
 	test_done
 fi
+if ! busctl --user status >/dev/null; then
+	skip_all="user dbus is not running"
+	test_done
+fi
 
 test_under_flux 1 minimal
 
