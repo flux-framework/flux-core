@@ -56,7 +56,7 @@ int timestamp_fromstr (const char *s, time_t *tp)
     time_t t;
     if (!strptime (s, "%FT%TZ", &tm))
         return -1;
-    if ((t = timegm (&tm)) < 0)
+    if ((t = portable_timegm (&tm)) < 0)
         return -1;
     if (tp)
         *tp = t;
