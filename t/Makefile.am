@@ -178,6 +178,7 @@ TESTSCRIPTS = \
 	t2406-job-exec-cleanup.t \
 	t2407-sdbus.t \
 	t2408-sdbus-recovery.t \
+	t2409-sdexec.t \
 	t2410-exec-systemd.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
