@@ -95,7 +95,12 @@ int timestamp_parse (const char *s,
          */
         if (errno != 0 || *endptr != 'Z')
             return -1;
-        tv->tv_usec = d * 1000000;
+
+        /*  Note: cast to integer type truncates. To handle underflow from
+         *  double arithmetic (e.g. result = 1234.999), add 0.5 and then
+         *  allow the truncation to simulate floor(3).
+         */
+        tv->tv_usec = (d * 1000000) + 0.5;
     }
     return 0;
 }
