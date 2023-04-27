@@ -1,0 +1,6 @@
+SETARGS(['--output=Test_quoted.{{id}}.out'])
+SETARGS(['--output=Test_unquoted.{{id}}.out'])
+SETARGS(['--output=Test_unquoted.-out'])
+SETARGS(['--output=Test_unquoted.:out'])
+SETARGS(['--output=Test_unquoted.@out'])
+SETARGS(['--output=Test[unquoted]'])
