@@ -164,6 +164,20 @@ test_expect_success 'flux-shell: run 1-task echo job (mustache id stdout & stder
         grep stdout:baz out${id} &&
         grep stderr:baz out${id}
 '
+test_expect_success 'flux-shell: run 1-task echo job (mustache job name)' '
+	id=$(flux submit --wait -n1 --job-name=thisname \
+	     --output="out.{{name}}" \
+             ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
+	grep stdout:baz out.thisname &&
+	grep stderr:baz out.thisname
+'
+test_expect_success 'flux-shell: run 1-task echo job (mustache job name)' '
+	id=$(flux submit --wait -n1 \
+	     --output="out.{{name}}" \
+             ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
+	grep stdout:baz out.test_echo &&
+	grep stderr:baz out.test_echo
+'
 
 test_expect_success 'flux-shell: bad mustache template still writes output' '
         id=$(flux submit -n1 \
