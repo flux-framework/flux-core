@@ -49,6 +49,11 @@ class Directive:
         # quoting and avoid splitting on cmdline args like --foo.
         lexer = shlex.shlex(value, posix=True, punctuation_chars=True)
         #
+        # set whitespace_split to match shell parsing of cmdlines as
+        # closely as possible as documented in the final note here:
+        # https://docs.python.org/3/library/shlex.html
+        lexer.whitespace_split = True
+        #
         # Add single-quote to escapedquotes. This is necessary to avoid
         # unclosed quote ValueError due to escaped single quote. (The
         # default in Posix mode is to escape only '"')
