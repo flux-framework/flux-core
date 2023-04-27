@@ -982,6 +982,36 @@ char *shell_mustache_render (flux_shell_t *shell, const char *fmt)
     return mustache_render (shell->mr, fmt);
 }
 
+static int mustache_render_name (flux_shell_t *shell,
+                                 const char *name,
+                                 FILE *fp)
+{
+    const char *jobname = NULL;
+    json_error_t error;
+    if (json_unpack_ex (shell->info->jobspec->jobspec, &error, 0,
+                        "{s:{s:{s?{s?s}}}}",
+                        "attributes",
+                         "system",
+                          "job",
+                           "name", &jobname) < 0) {
+        shell_log_error ("render_name: %s", error.text);
+        jobname = NULL;
+    }
+    if (!jobname) {
+        json_t *cmd = json_array_get (shell->info->jobspec->command, 0);
+        if (!cmd
+            || !(jobname = json_string_value (cmd))
+            || !(jobname = basename (jobname)))
+            jobname = "unknown";
+    }
+    if (fputs (jobname, fp) == EOF) {
+        shell_log_error ("memstream write failed for %s: %s",
+                         name,
+                         strerror (errno));
+    }
+    return 0;
+}
+
 static int mustache_render_jobid (flux_shell_t *shell,
                                   const char *name,
                                   FILE *fp)
@@ -1027,6 +1057,8 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
         name += 3;
     if (strncmp (name, "id", 2) == 0)
         return mustache_render_jobid (shell, name, fp);
+    if (strcmp (name, "name") == 0)
+        return mustache_render_name (shell, name, fp);
 
     if (snprintf (topic,
                   sizeof (topic),

@@ -15,13 +15,21 @@ emitting the job's I/O to its stdout and stderr.
 **--output=TEMPLATE**
    Specify the filename *TEMPLATE* for stdout redirection, bypassing
    the KVS.  *TEMPLATE* may be a mustache template which supports the
-   tags *{{id}}* and *{{jobid}}* which expand to the current jobid
-   in the F58 encoding.  If needed, an alternate encoding can be
-   selected by using a subkey with the name of the desired encoding,
-   e.g. *{{id.dec}}*. Supported encodings include *f58* (the default),
-   *dec*, *hex*, *dothex*, and *words*. For :man1:`flux-batch` the
-   default *TEMPLATE* is *flux-{{id}}.out*. To force output to KVS so it is
-   available with ``flux job attach``, set *TEMPLATE* to *none* or *kvs*.
+   following tags:
+
+   *{{id}}* or *{{jobid}}*
+     Expands to the current jobid in the F58 encoding. If needed, an
+     alternate encoding may be selected by using a subkey with the name
+     of the desired encoding, e.g. *{{id.dec}}*. Supported encodings
+     include *f58* (the default), *dec*, *hex*, *dothex*, and *words*.
+
+   *{{name}}*
+     Expands to the current job name. If a name is not set for the job,
+     then the basename of the command will be used.
+
+   For :man1:`flux-batch` the default *TEMPLATE* is *flux-{{id}}.out*.
+   To force output to KVS so it is available with ``flux job attach``,
+   set *TEMPLATE* to *none* or *kvs*.
 
 **--error=TEMPLATE**
    Redirect stderr to the specified filename *TEMPLATE*, bypassing the KVS.
