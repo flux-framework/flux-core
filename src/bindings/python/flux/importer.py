@@ -16,10 +16,13 @@ import sys
 
 def import_plugins_pkg(ns_pkg):
     """Import all modules found in the namespace package ``ns_pkg``"""
-    return {
-        name: importlib.import_module(f"{ns_pkg.__name__}.{name}")
-        for finder, name, ispkg in pkgutil.iter_modules(ns_pkg.__path__)
-    }
+    result = {}
+    for finder, name, ispkg in pkgutil.iter_modules(ns_pkg.__path__):
+        try:
+            result[name] = importlib.import_module(f"{ns_pkg.__name__}.{name}")
+        except ImportError as exc:
+            raise ImportError(f"failed to import {name} plugin: {exc}")
+    return result
 
 
 def import_plugins(pkg_name, pluginpath=None):
@@ -33,10 +36,16 @@ def import_plugins(pkg_name, pluginpath=None):
 
     try:
         #  Load 'pkg_name' as a namespace plugin
+        #
+        #  Note: importlib.import_module() will raise ModuleNotFoundError
+        #  if pkg_name points to an empty directory, but we just want to
+        #  return an empty list in this case:
+        #
         pkg = importlib.import_module(pkg_name)
-        plugins = import_plugins_pkg(pkg)
     except ModuleNotFoundError:
         return {}
+
+    plugins = import_plugins_pkg(pkg)
 
     if pluginpath is not None:
         #  Undo any added pluginpath elements.

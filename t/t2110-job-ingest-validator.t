@@ -51,6 +51,19 @@ test_expect_success 'validator plugin behaves when no plugins are found' '
 	EOF
 	flux python ./test-importer.py
 '
+test_expect_success 'validator plugin importer reports errors on import' '
+	mkdir t2110plugins &&
+	cat <<-EOF >t2110plugins/test.py &&
+	import froufroufoxes
+	EOF
+	cat <<-EOF >test-importer2.py &&
+	from flux.importer import import_plugins
+	import_plugins("t2110plugins")
+	EOF
+	test_must_fail flux python ./test-importer2.py >import-fail.out 2>&1 &&
+	test_debug "cat import-fail.out" &&
+	grep "No module named.*froufroufoxes" import-fail.out
+'
 test_expect_success 'flux job-validator --help shows help for selected plugins' '
 	flux job-validator --plugins=jobspec --help >help.jobspec.out 2>&1 &&
 	flux job-validator --plugins=schema --help >help.schema.out 2>&1 &&
