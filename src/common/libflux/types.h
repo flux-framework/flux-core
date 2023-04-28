@@ -24,6 +24,12 @@ typedef struct {
     char text[160];
 } flux_error_t;
 
+/* FLUX_DEPRECATED may be altered during pre-processing, check for
+ * definition */
+#ifndef FLUX_DEPRECATED
+#define FLUX_DEPRECATED(...) __VA_ARGS__ __attribute__((deprecated))
+#endif
+
 #ifdef __cplusplus
 }
 #endif

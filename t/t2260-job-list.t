@@ -435,12 +435,12 @@ test_expect_success 'flux job list-inactive w/ count limits output of inactive j
 
 test_expect_success 'flux job list-inactive w/ since -1 leads to error' '
 	test_must_fail flux job list-inactive --since=-1 > list_inactive_error1.out 2>&1 &&
-	grep "Invalid argument" list_inactive_error1.out
+	grep "Protocol error" list_inactive_error1.out
 '
 
 test_expect_success 'flux job list-inactive w/ count -1 leads to error' '
 	test_must_fail flux job list-inactive --count=-1 > list_inactive_error2.out 2>&1 &&
-	grep "Invalid argument" list_inactive_error1.out
+	grep "Protocol error" list_inactive_error2.out
 '
 
 test_expect_success 'flux job list-inactive w/ since (most recent timestamp)' '
