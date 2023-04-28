@@ -71,19 +71,27 @@ int timestamp_parse (const char *s,
     struct tm gm_tm;
     time_t t;
 
-    memset (tm, 0, sizeof (*tm));
-
-    if (!(extra = strptime (s, "%FT%T", &gm_tm)))
+    if (s == NULL || (!tm && !tv)) {
+        errno = EINVAL;
         return -1;
+    }
 
-    if ((t = portable_timegm (&gm_tm)) == (time_t) -1)
+    if (!(extra = strptime (s, "%FT%T", &gm_tm))
+        || (t = portable_timegm (&gm_tm)) < (time_t) -1) {
+        errno = EINVAL;
         return -1;
+    }
 
-    if (!(localtime_r (&t, tm)))
-        return -1;
-    tv->tv_sec = t;
+    if (tm) {
+        memset (tm, 0, sizeof (*tm));
+        if (!(localtime_r (&t, tm)))
+            return -1;
+    }
 
-    if (extra[0] == '.') {
+    if (tv)
+        tv->tv_sec = t;
+
+    if (tv && extra[0] == '.') {
         char *endptr;
         double d;
 

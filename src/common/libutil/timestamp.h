@@ -27,6 +27,7 @@ int timestamp_fromstr (const char *s, time_t *tp);
  *
  * e.g. "2022-10-15T14:43:18.159009Z"
  *
+ * At least one of 'tm' or 'tv' must be provided.
  */
 int timestamp_parse (const char *s,
                      struct tm *tm,
