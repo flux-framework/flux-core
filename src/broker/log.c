@@ -22,6 +22,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"
+#include "src/common/libutil/timestamp.h"
 
 #include "log.h"
 
@@ -371,6 +372,22 @@ static int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
     return 0;
 }
 
+static void log_timestamp (FILE *fp,
+                           struct stdlog_header *hdr,
+                           int flags)
+{
+    struct tm tm;
+    struct timeval tv;
+    char datetime[16]; /* 'MMM DD HH:MM:SS' */
+
+    if (flags & LOG_NO_TIMESTAMP)
+        return;
+    if (timestamp_parse (hdr->timestamp, &tm, &tv) < 0
+        || strftime (datetime, sizeof (datetime), "%b %d %T", &tm) == 0)
+        fprintf (fp, "%s ", hdr->timestamp);
+    fprintf (fp, "%s.%06ld ", datetime, tv.tv_usec);
+}
+
 /* Log a message to 'fp', if non-NULL.
  * Set flags to LOG_NO_TIMESTAMP to suppress timestamp.
  */
@@ -387,9 +404,8 @@ static void log_fp (FILE *fp, int flags, const char *buf, int len)
         else {
             nodeid = strtoul (hdr.hostname, NULL, 10);
             severity = STDLOG_SEVERITY (hdr.pri);
-            fprintf (fp, "%s%s%s.%s[%" PRIu32 "]: %.*s\n",
-                     (flags & LOG_NO_TIMESTAMP) ? "" : hdr.timestamp,
-                     (flags & LOG_NO_TIMESTAMP) ? "" : " ",
+            log_timestamp (fp, &hdr, flags);
+            fprintf (fp, "%s.%s[%" PRIu32 "]: %.*s\n",
                      hdr.appname,
                      stdlog_severity_to_string (severity),
                      nodeid,
