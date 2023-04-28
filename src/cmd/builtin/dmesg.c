@@ -14,9 +14,9 @@
 #include "builtin.h"
 #include <inttypes.h>
 #include <unistd.h>
-#include <time.h>
 
 #include "src/common/libutil/stdlog.h"
+#include "src/common/libutil/timestamp.h"
 #include "ccan/str/str.h"
 
 #define ANSI_COLOR_RED        "\x1b[31m"
@@ -106,64 +106,6 @@ static const char *dmesg_color_reset (struct dmesg_ctx *ctx)
     return "";
 }
 
-/*
- *  GNU libc has timegm(3), but the manual states:
- *
- *   These functions [timelocal(), timegm()] are nonstandard GNU extensions
- *    that are also present on the BSDs.  Avoid their use.
- *
- *  This "portable" version was found on sourceware.org, and appears to work:
- *
- *   https://patchwork.sourceware.org/project/glibc/patch/20211011115406.11430-2-alx.manpages@gmail.com/
- *
- */
-static time_t portable_timegm (struct tm *tm)
-{
-    time_t t;
-
-    tm->tm_isdst = 0;
-    if ((t = mktime (tm)) == (time_t) -1)
-        return t;
-    return t - timezone;
-}
-
-static int parse_timestamp (const char *s,
-                            struct tm *tm,
-                            struct timeval *tv)
-{
-    char *extra;
-    struct tm gm_tm;
-    time_t t;
-
-    memset (tm, 0, sizeof (*tm));
-
-    if (!(extra = strptime (s, "%C%y-%m-%dT%H:%M:%S", &gm_tm)))
-        return -1;
-
-    if ((t = portable_timegm (&gm_tm)) == (time_t) -1)
-        return -1;
-
-    if (!(localtime_r (&t, tm)))
-        return -1;
-    tv->tv_sec = t;
-
-    if (extra[0] == '.') {
-        char *endptr;
-        double d;
-
-        errno = 0;
-        d = strtod (extra, &endptr);
-
-        /*  Note: in this implementation, there should be a "Z" after the
-         *  timestamp to indicate UTC or "Zulu" time.
-         */
-        if (errno != 0 || *endptr != 'Z')
-            return -1;
-        tv->tv_usec = d * 1000000;
-    }
-    return 0;
-}
-
 static double tv_to_double (struct timeval *tv)
 {
     return (tv->tv_sec + (tv->tv_usec/1e6));
@@ -189,7 +131,7 @@ void print_human_timestamp (struct dmesg_ctx *ctx, struct stdlog_header hdr)
 {
     struct tm tm;
     struct timeval tv;
-    if (parse_timestamp (hdr.timestamp, &tm, &tv) < 0) {
+    if (timestamp_parse (hdr.timestamp, &tm, &tv) < 0) {
         printf ("%s[%s]%s ",
                 dmesg_color (ctx, DMESG_COLOR_TIME),
                 hdr.timestamp,
