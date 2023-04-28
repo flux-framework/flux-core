@@ -26,6 +26,8 @@
 #include "list.h"
 #include "job_util.h"
 #include "job_data.h"
+#include "match.h"
+#include "state_match.h"
 
 json_t *get_job_by_id (struct job_state_ctx *jsctx,
                        job_list_error_t *errp,
@@ -34,28 +36,6 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
                        json_t *attrs,
                        flux_job_state_t state,
                        bool *stall);
-
-/* Filter test to determine if job desired by caller */
-bool job_filter (struct job *job,
-                 uint32_t userid,
-                 int states,
-                 int results,
-                 const char *name,
-                 const char *queue)
-{
-    if (name && (!job->name || !streq (job->name, name)))
-        return false;
-    if (queue && (!job->queue || !streq (job->queue, queue)))
-        return false;
-    if (!(job->state & states))
-        return false;
-    if (userid != FLUX_USERID_UNKNOWN && job->userid != userid)
-        return false;
-    if (job->state & FLUX_JOB_STATE_INACTIVE
-        && !(job->result & results))
-        return false;
-    return true;
-}
 
 /* Put jobs from list onto jobs array, breaking if max_entries has
  * been reached. Returns 1 if jobs array is full, 0 if continue, -1
@@ -68,12 +48,8 @@ int get_jobs_from_list (json_t *jobs,
                         zlistx_t *list,
                         int max_entries,
                         json_t *attrs,
-                        uint32_t userid,
-                        int states,
-                        int results,
                         double since,
-                        const char *name,
-                        const char *queue)
+                        struct list_constraint *c)
 {
     struct job *job;
 
@@ -91,7 +67,7 @@ int get_jobs_from_list (json_t *jobs,
         if (job->t_inactive > 0. && job->t_inactive <= since)
             break;
 
-        if (job_filter (job, userid, states, results, name, queue)) {
+        if (job_match (job, c)) {
             json_t *o;
             if (!(o = job_to_json (job, attrs, errp)))
                 return -1;
@@ -122,11 +98,8 @@ json_t *get_jobs (struct job_state_ctx *jsctx,
                   int max_entries,
                   double since,
                   json_t *attrs,
-                  uint32_t userid,
-                  int states,
-                  int results,
-                  const char *name,
-                  const char *queue)
+                  struct list_constraint *c,
+                  struct state_constraint *statec)
 {
     json_t *jobs = NULL;
     int saved_errno;
@@ -138,51 +111,39 @@ json_t *get_jobs (struct job_state_ctx *jsctx,
     /* We return jobs in the following order, pending, running,
      * inactive */
 
-    if (states & FLUX_JOB_STATE_PENDING) {
+    if (state_match (FLUX_JOB_STATE_PENDING, statec)) {
         if ((ret = get_jobs_from_list (jobs,
                                        errp,
                                        jsctx->pending,
                                        max_entries,
                                        attrs,
-                                       userid,
-                                       states,
-                                       results,
                                        0.,
-                                       name,
-                                       queue)) < 0)
+                                       c)) < 0)
             goto error;
     }
 
-    if (states & FLUX_JOB_STATE_RUNNING) {
+    if (state_match (FLUX_JOB_STATE_RUNNING, statec)) {
         if (!ret) {
             if ((ret = get_jobs_from_list (jobs,
                                            errp,
                                            jsctx->running,
                                            max_entries,
                                            attrs,
-                                           userid,
-                                           states,
-                                           results,
                                            0.,
-                                           name,
-                                           queue)) < 0)
+                                           c)) < 0)
                 goto error;
         }
     }
 
-    if (states & FLUX_JOB_STATE_INACTIVE) {
+    if (state_match (FLUX_JOB_STATE_INACTIVE, statec)) {
         if (!ret) {
             if ((ret = get_jobs_from_list (jobs,
                                            errp,
                                            jsctx->inactive,
                                            max_entries,
                                            attrs,
-                                           userid,
-                                           states,
-                                           results,
                                            since,
-                                           name,
-                                           queue)) < 0)
+                                           c)) < 0)
                 goto error;
         }
     }
@@ -207,21 +168,16 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *attrs;
     int max_entries;
     double since = 0.;
-    uint32_t userid;
-    int states;
-    int results;
-    const char *name = NULL;
-    const char *queue = NULL;
+    json_t *constraint = NULL;
+    struct list_constraint *c = NULL;
+    struct state_constraint *statec = NULL;
+    flux_error_t error;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s:o s:i s:i s:i s?F s?s s?s}",
+    if (flux_request_unpack (msg, NULL, "{s:i s:o s?F s?o}",
                              "max_entries", &max_entries,
                              "attrs", &attrs,
-                             "userid", &userid,
-                             "states", &states,
-                             "results", &results,
                              "since", &since,
-                             "name", &name,
-                             "queue", &queue) < 0) {
+                             "constraint", &constraint) < 0) {
         seterror (&err, "invalid payload: %s", flux_msg_last_error (msg));
         errno = EPROTO;
         goto error;
@@ -241,32 +197,38 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-    /* If user sets no states, assume they want all information */
-    if (!states)
-        states = (FLUX_JOB_STATE_PENDING
-                  | FLUX_JOB_STATE_RUNNING
-                  | FLUX_JOB_STATE_INACTIVE);
-
-    /* If user sets no results, assume they want all information */
-    if (!results)
-        results = (FLUX_JOB_RESULT_COMPLETED
-                   | FLUX_JOB_RESULT_FAILED
-                   | FLUX_JOB_RESULT_CANCELED
-                   | FLUX_JOB_RESULT_TIMEOUT);
+    if (!(c = list_constraint_create (constraint, &error))) {
+        seterror (&err,
+                  "invalid payload: constraint object invalid: %s",
+                  error.text);
+        errno = EPROTO;
+        goto error;
+    }
+    if (!(statec = state_constraint_create (constraint, &error))) {
+        seterror (&err,
+                  "invalid payload: constraint object invalid: %s",
+                  error.text);
+        errno = EPROTO;
+        goto error;
+    }
 
     if (!(jobs = get_jobs (ctx->jsctx, &err, max_entries, since,
-                           attrs, userid, states, results, name, queue)))
+                           attrs, c, statec)))
         goto error;
 
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
 
     json_decref (jobs);
+    list_constraint_destroy (c);
+    state_constraint_destroy (statec);
     return;
 
 error:
     if (flux_respond_error (h, msg, errno, err.text) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    list_constraint_destroy (c);
+    state_constraint_destroy (statec);
 }
 
 void check_id_valid_continuation (flux_future_t *f, void *arg)

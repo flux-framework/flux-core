@@ -25,6 +25,7 @@ flux_future_t *flux_job_list (flux_t *h,
 {
     flux_future_t *f;
     json_t *o = NULL;
+    json_t *c = NULL;
     int valid_states = (FLUX_JOB_STATE_PENDING
                         | FLUX_JOB_STATE_RUNNING
                         | FLUX_JOB_STATE_INACTIVE);
@@ -37,15 +38,22 @@ flux_future_t *flux_job_list (flux_t *h,
         errno = EINVAL;
         return NULL;
     }
+    if (!(c = json_pack ("{ s:[ {s:[i]}, {s:[i]} ] }",
+                         "and",
+                         "userid", userid,
+                         "states", states ? states : valid_states))) {
+        json_decref (o);
+        errno = ENOMEM;
+        return NULL;
+    }
     if (!(f = flux_rpc_pack (h, "job-list.list", FLUX_NODEID_ANY, 0,
-                             "{s:i s:o s:i s:i s:i}",
+                             "{s:i s:o s:o}",
                              "max_entries", max_entries,
                              "attrs", o,
-                             "userid", userid,
-                             "states", states,
-                             "results", 0))) {
+                             "constraint", c))) {
         saved_errno = errno;
         json_decref (o);
+        json_decref (c);
         errno = saved_errno;
         return NULL;
     }
@@ -59,6 +67,7 @@ flux_future_t *flux_job_list_inactive (flux_t *h,
 {
     flux_future_t *f;
     json_t *o = NULL;
+    json_t *c = NULL;
     int saved_errno;
 
     if (!h || max_entries < 0 || since < 0. || !attrs_json_str
@@ -66,16 +75,20 @@ flux_future_t *flux_job_list_inactive (flux_t *h,
         errno = EINVAL;
         return NULL;
     }
+    if (!(c = json_pack ("{s:[i]}", "states", FLUX_JOB_STATE_INACTIVE))) {
+        json_decref (o);
+        errno = ENOMEM;
+        return NULL;
+    }
     if (!(f = flux_rpc_pack (h, "job-list.list", FLUX_NODEID_ANY, 0,
-                             "{s:i s:f s:i s:i s:i s:o}",
+                             "{s:i s:f s:o s:o}",
                              "max_entries", max_entries,
                              "since", since,
-                             "userid", FLUX_USERID_UNKNOWN,
-                             "states", FLUX_JOB_STATE_INACTIVE,
-                             "results", 0,
-                             "attrs", o))) {
+                             "attrs", o,
+                             "constraint", c))) {
         saved_errno = errno;
         json_decref (o);
+        json_decref (c);
         errno = saved_errno;
         return NULL;
     }

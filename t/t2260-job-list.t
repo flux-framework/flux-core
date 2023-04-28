@@ -206,36 +206,36 @@ test_expect_success 'flux job list inactive jobs results are correct' '
 
 test_expect_success 'flux job list only canceled jobs' '
 	id=$(id -u) &&
-	state=`${JOB_CONV} strtostate INACTIVE` &&
 	result=`${JOB_CONV} strtoresult CANCELED` &&
-	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
+	constraint="{ and: [ {userid:[${id}]}, {results:[${result}]}] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
 	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_canceled.out &&
 	test_cmp canceled.ids list_result_canceled.out
 '
 
 test_expect_success 'flux job list only failed jobs' '
 	id=$(id -u) &&
-	state=`${JOB_CONV} strtostate INACTIVE` &&
 	result=`${JOB_CONV} strtoresult FAILED` &&
-	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
+	constraint="{ and: [ {userid:[${id}]}, {results:[${result}]}] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
 	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_failed.out &&
 	test_cmp failed.ids list_result_failed.out
 '
 
 test_expect_success 'flux job list only timeout jobs' '
 	id=$(id -u) &&
-	state=`${JOB_CONV} strtostate INACTIVE` &&
 	result=`${JOB_CONV} strtoresult TIMEOUT` &&
-	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
+	constraint="{ and: [ {userid:[${id}]}, {results:[${result}]}] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
 	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_timeout.out &&
 	test_cmp timeout.ids list_result_timeout.out
 '
 
 test_expect_success 'flux job list only completed jobs' '
 	id=$(id -u) &&
-	state=`${JOB_CONV} strtostate INACTIVE` &&
 	result=`${JOB_CONV} strtoresult COMPLETED` &&
-	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
+	constraint="{ and: [ {userid:[${id}]}, {results:[${result}]}] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
 	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_completed.out &&
 	test_cmp completed.ids list_result_completed.out
 '
@@ -1652,9 +1652,8 @@ test_expect_success 'verify task count preserved across restart' '
 # so we check for all the core / expected attributes for the situation
 
 test_expect_success 'list request with all attr works (job success)' '
-	id=$(id -u) &&
 	flux run hostname &&
-	$jq -j -c -n  "{max_entries:1, userid:${id}, states:0, results:0, attrs:[\"all\"]}" \
+	$jq -j -c -n  "{max_entries:1, attrs:[\"all\"]}" \
 	  | $RPC job-list.list | jq ".jobs[0]" > all_success.out &&
 	cat all_success.out | jq -e ".id" &&
 	cat all_success.out | jq -e ".userid" &&
@@ -1679,9 +1678,8 @@ test_expect_success 'list request with all attr works (job success)' '
 '
 
 test_expect_success 'list request with all attr works (job fail)' '
-	id=$(id -u) &&
 	! flux run -N1000 -n1000 hostname &&
-	$jq -j -c -n  "{max_entries:1, userid:${id}, states:0, results:0, attrs:[\"all\"]}" \
+	$jq -j -c -n  "{max_entries:1, attrs:[\"all\"]}" \
 	  | $RPC job-list.list | jq ".jobs[0]" > all_fail.out &&
 	cat all_fail.out | jq -e ".id" &&
 	cat all_fail.out | jq -e ".userid" &&
@@ -1830,8 +1828,7 @@ test_expect_success 'list request with empty payload fails with EPROTO(71)' '
 '
 test_expect_success 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
 	name="attrs-not-array" &&
-	id=$(id -u) &&
-	$jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:5}" \
+	$jq -j -c -n  "{max_entries:5, attrs:5}" \
 	  | $listRPC >${name}.out &&
 	cat <<-EOF >${name}.expected &&
 	errno 71: invalid payload: attrs must be an array
@@ -1840,8 +1837,7 @@ test_expect_success 'list request with invalid input fails with EPROTO(71) (attr
 '
 test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
 	name="attr-not-string" &&
-	id=$(id -u) &&
-	$jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[5]}" \
+	$jq -j -c -n  "{max_entries:5, attrs:[5]}" \
 	  | $listRPC > ${name}.out &&
 	cat <<-EOF >${name}.expected &&
 	errno 22: attr has no string value
@@ -1850,8 +1846,7 @@ test_expect_success 'list request with invalid input fails with EINVAL(22) (attr
 '
 test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
 	name="field-not-valid" &&
-	id=$(id -u) &&
-	$jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[\"foo\"]}" \
+	$jq -j -c -n  "{max_entries:5, attrs:[\"foo\"]}" \
 	  | $listRPC > ${name}.out &&
 	cat <<-EOF >${name}.expected &&
 	errno 22: foo is not a valid attribute

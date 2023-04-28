@@ -506,19 +506,18 @@ void job_archive_cb (flux_reactor_t *r,
                              "job-list.list",
                              FLUX_NODEID_ANY,
                              0,
-                             "{s:i s:f s:i s:i s:i s:[ssssss]}",
+                             "{s:i s:f s:[ssssss] s:{s:[i]}}",
                              "max_entries", 0,
                              "since", ctx->since,
-                             "userid", FLUX_USERID_UNKNOWN,
-                             "states", FLUX_JOB_STATE_INACTIVE,
-                             "results", 0,
                              "attrs",
                                "userid",
                                "ranks",
                                "t_submit",
                                "t_run",
                                "t_cleanup",
-                               "t_inactive"))) {
+                               "t_inactive",
+                             "constraint",
+                               "states", FLUX_JOB_STATE_INACTIVE))) {
         flux_log_error (ctx->h, "%s: flux_rpc_pack", __FUNCTION__);
         return;
     }
