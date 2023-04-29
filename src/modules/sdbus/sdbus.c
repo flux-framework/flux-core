@@ -603,8 +603,15 @@ void sdbus_ctx_destroy (struct sdbus_ctx *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
-        flux_msglist_destroy (ctx->requests);
-        flux_msglist_destroy (ctx->subscribers);
+        const char *errmsg = "module is unloading";
+        if (ctx->subscribers) {
+            bulk_respond_error (ctx->h, ctx->subscribers, ENOSYS, errmsg);
+            flux_msglist_destroy (ctx->subscribers);
+        }
+        if (ctx->requests) {
+            bulk_respond_error (ctx->h, ctx->requests, ENOSYS, errmsg);
+            flux_msglist_destroy (ctx->requests);
+        }
         flux_msg_handler_delvec (ctx->handlers);
         flux_watcher_destroy (ctx->bus_w);
         flux_future_destroy (ctx->f_subscribe);
