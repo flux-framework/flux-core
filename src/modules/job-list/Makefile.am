@@ -31,11 +31,16 @@ libjob_list_la_SOURCES = \
 	stats.h \
 	stats.c \
 	match.h \
-	match.c
+	match.c \
+	state_match.h \
+	state_match.c \
+	match_util.h \
+	match_util.c
 
 TESTS = \
 	test_job_data.t \
-	test_match.t
+	test_match.t \
+	test_state_match.t
 
 test_ldadd = \
 	$(builddir)/libjob-list.la \
@@ -74,6 +79,14 @@ test_match_t_CPPFLAGS = \
 test_match_t_LDADD = \
 	$(test_ldadd)
 test_match_t_LDFLAGS = \
+	$(test_ldflags)
+
+test_state_match_t_SOURCES = test/state_match.c
+test_state_match_t_CPPFLAGS = \
+	$(test_cppflags)
+test_state_match_t_LDADD = \
+	$(test_ldadd)
+test_state_match_t_LDFLAGS = \
 	$(test_ldflags)
 
 EXTRA_DIST = \

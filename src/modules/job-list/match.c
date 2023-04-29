@@ -21,12 +21,9 @@
 #include "ccan/str/str.h"
 
 #include "match.h"
+#include "match_util.h"
 
-/* identical to czmq_destructor, czmq.h happens to define a
- * conflicting symbol we use */
-typedef void (destructor_f) (void **item);
 typedef bool (*match_f) (struct list_constraint *, const struct job *);
-typedef int (*array_to_bitmask_f) (json_t *, flux_error_t *);
 
 struct list_constraint {
     zlistx_t *values;
@@ -300,45 +297,6 @@ static bool match_states (struct list_constraint *c, const struct job *job)
 {
     int *states = zlistx_first (c->values);
     return ((*states) & job->state);
-}
-
-static int array_to_states_bitmask (json_t *values, flux_error_t *errp)
-{
-    int states = 0;
-    json_t *entry;
-    size_t index;
-    int valid_states = (FLUX_JOB_STATE_NEW
-                        | FLUX_JOB_STATE_PENDING
-                        | FLUX_JOB_STATE_RUNNING
-                        | FLUX_JOB_STATE_INACTIVE);
-
-    json_array_foreach (values, index, entry) {
-        flux_job_state_t state;
-        if (json_is_string (entry)) {
-            const char *statestr = json_string_value (entry);
-            if (flux_job_strtostate (statestr, &state) < 0) {
-                errprintf (errp,
-                           "invalid states value '%s' specified",
-                           statestr);
-                return -1;
-            }
-        }
-        else if (json_is_integer (entry)) {
-            state = json_integer_value (entry);
-            if (state & ~valid_states) {
-                errprintf (errp,
-                           "invalid states value '%Xh' specified",
-                           state);
-                return -1;
-            }
-        }
-        else {
-            errprintf (errp, "states value invalid type");
-            return -1;
-        }
-        states |= state;
-    }
-    return states;
 }
 
 static struct list_constraint *create_states_constraint (json_t *values,
