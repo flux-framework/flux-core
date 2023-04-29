@@ -51,7 +51,7 @@ test_toml_t_SOURCES = test/toml.c
 test_toml_t_LDADD = $(test_ldadd)
 test_toml_t_CPPFLAGS = $(test_cppflags)
 
-EXTRA_DIST = \
+EXTRA_DIST += \
 	BurntSushi_input/invalid/array-mixed-types-arrays-and-ints.toml \
 	BurntSushi_input/invalid/array-mixed-types-ints-and-floats.toml \
 	BurntSushi_input/invalid/array-mixed-types-strings-and-ints.toml \
