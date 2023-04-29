@@ -569,8 +569,8 @@ static void sdbus_recover (struct sdbus_ctx *ctx, const char *reason)
 
     /* Send any pending requests an error.
      */
-    bulk_respond_error (ctx->h, ctx->subscribers, ENOSYS, reason);
-    bulk_respond_error (ctx->h, ctx->requests, ENOSYS, reason);
+    bulk_respond_error (ctx->h, ctx->subscribers, EAGAIN, reason);
+    bulk_respond_error (ctx->h, ctx->requests, EAGAIN, reason);
 
     /* Destroy subscribe future.
      */
