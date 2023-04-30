@@ -72,10 +72,10 @@ test_expect_success 'print logs' '
 test_expect_success 'force another bus reconnect' '
 	bus_reconnect
 '
-test_expect_success NO_CHAIN_LINT 'background subscription fails' '
+test_expect_success NO_CHAIN_LINT 'background subscription fails with EAGAIN' '
 	pid=$(cat signals.pid) &&
 	test_must_fail wait $pid &&
-	grep "user request" signals.err
+	grep "Errno 11" signals.err
 '
 test_expect_success 'remove sdbus module' '
 	flux module remove sdbus
