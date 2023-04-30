@@ -77,7 +77,20 @@ test_expect_success NO_CHAIN_LINT 'background subscription fails with EAGAIN' '
 	test_must_fail wait $pid &&
 	grep "Errno 11" signals.err
 '
+test_expect_success NO_CHAIN_LINT 'initiate another subscription' '
+        flux python ./subscribe.py >signals2.out 2>signals2.err &
+        echo $! >signals2.pid
+'
+# There will be another 2s delay while sdbus reconnects
+test_expect_success 'get systemd version to ensure reconnect has occurred' '
+	bus_get_manager_prop Version
+'
 test_expect_success 'remove sdbus module' '
 	flux module remove sdbus
+'
+test_expect_success NO_CHAIN_LINT 'background subscription fails with ENOSYS' '
+	pid=$(cat signals2.pid) &&
+	test_must_fail wait $pid &&
+	grep "Errno 38" signals2.err
 '
 test_done
