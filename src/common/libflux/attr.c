@@ -103,11 +103,17 @@ const char *flux_attr_get (flux_t *h, const char *name)
         return NULL;
     if ((val = zhashx_lookup (c->cache, name)))
         return val;
-    if (!(f = flux_rpc_pack (h, "attr.get", FLUX_NODEID_ANY, 0, "{s:s}",
-                                                                "name", name)))
+    if (!(f = flux_rpc_pack (h,
+                             "attr.get",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s}",
+                             "name", name)))
         return NULL;
-    if (flux_rpc_get_unpack (f, "{s:s s:i}", "value", &val,
-                                             "flags", &flags) < 0)
+    if (flux_rpc_get_unpack (f,
+                             "{s:s s:i}",
+                             "value", &val,
+                             "flags", &flags) < 0)
         goto done;
     if (!(cpy = strdup (val)))
         goto done;
