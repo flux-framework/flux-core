@@ -13,6 +13,10 @@ if ! systemctl --user show --property Version; then
 	skip_all="user systemd is not running"
 	test_done
 fi
+if ! busctl --user status >/dev/null; then
+	skip_all="user dbus is not running"
+	test_done
+fi
 
 test_under_flux 1 minimal
 
@@ -68,12 +72,25 @@ test_expect_success 'print logs' '
 test_expect_success 'force another bus reconnect' '
 	bus_reconnect
 '
-test_expect_success NO_CHAIN_LINT 'background subscription fails' '
+test_expect_success NO_CHAIN_LINT 'background subscription fails with EAGAIN' '
 	pid=$(cat signals.pid) &&
 	test_must_fail wait $pid &&
-	grep "user request" signals.err
+	grep "Errno 11" signals.err
+'
+test_expect_success NO_CHAIN_LINT 'initiate another subscription' '
+        flux python ./subscribe.py >signals2.out 2>signals2.err &
+        echo $! >signals2.pid
+'
+# There will be another 2s delay while sdbus reconnects
+test_expect_success 'get systemd version to ensure reconnect has occurred' '
+	bus_get_manager_prop Version
 '
 test_expect_success 'remove sdbus module' '
 	flux module remove sdbus
+'
+test_expect_success NO_CHAIN_LINT 'background subscription fails with ENOSYS' '
+	pid=$(cat signals2.pid) &&
+	test_must_fail wait $pid &&
+	grep "Errno 38" signals2.err
 '
 test_done
