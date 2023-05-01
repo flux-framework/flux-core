@@ -322,6 +322,11 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
+    /* Never propagate FLUX_PROXY_REMOTE to processes started from
+     * a subprocess server.
+     */
+    flux_cmd_unsetenv (cmd, "FLUX_PROXY_REMOTE");
+
     if (!(p = flux_local_exec_ex (flux_get_reactor (s->h),
                                   FLUX_SUBPROCESS_FLAGS_SETPGRP,
                                   cmd,
