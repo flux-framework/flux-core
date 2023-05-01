@@ -15,6 +15,7 @@
 #include <stdbool.h>
 #include <jansson.h>
 
+#include "ccan/str/str.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/libidset/idset.h"
@@ -94,6 +95,8 @@ const char *flux_attr_get (flux_t *h, const char *name)
     int flags;
     flux_future_t *f;
     char *cpy = NULL;
+    const char *orig_name = name;
+    char *proxy_remote = NULL;
 
     if (!h || !name) {
         errno = EINVAL;
@@ -101,6 +104,22 @@ const char *flux_attr_get (flux_t *h, const char *name)
     }
     if (!(c = get_attr_cache (h)))
         return NULL;
+
+    /*  The attribute parent-uri is treated specifically here, since
+     *  a process connected to this instance via flux-proxy(1) should
+     *  have the parent-uri returned as a usable remote URI.
+     *
+     *  Therefore, if FLUX_PROXY_REMOTE is set in the current environment,
+     *  and the attribute is parent-uri, instead actually return the
+     *  handle-specific parent-remote-uri attribute. If this is not yet
+     *  available, fetch parent-uri and construct the remote uri by
+     *  substituting FLUX_PROXY_REMOTE in an ssh:// uri.
+     */
+    if (streq (name, "parent-uri")
+        && (proxy_remote = getenv ("FLUX_PROXY_REMOTE"))) {
+        orig_name = name;
+        name = "parent-remote-uri";
+    }
     if ((val = zhashx_lookup (c->cache, name)))
         return val;
     if (!(f = flux_rpc_pack (h,
@@ -108,14 +127,23 @@ const char *flux_attr_get (flux_t *h, const char *name)
                              FLUX_NODEID_ANY,
                              0,
                              "{s:s}",
-                             "name", name)))
+                             "name", orig_name)))
         return NULL;
     if (flux_rpc_get_unpack (f,
                              "{s:s s:i}",
                              "value", &val,
                              "flags", &flags) < 0)
         goto done;
-    if (!(cpy = strdup (val)))
+
+    /*  If proxy_remote is non-NULL then parent-uri has been aliased to
+     *  parent-remote-uri. Swap a local URI to a remote:
+     */
+    if (proxy_remote
+        && strstarts (val, "local://")) {
+        if (asprintf (&cpy, "ssh://%s%s", proxy_remote, val+8) < 0)
+            goto done;
+    }
+    else if (!(cpy = strdup (val)))
         goto done;
     if ((flags & FLUX_ATTRFLAG_IMMUTABLE))
         zhashx_update (c->cache, name, cpy);
