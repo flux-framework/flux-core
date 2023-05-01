@@ -174,6 +174,11 @@ struct validate_test validate_tests[] = {
       true,
       NULL
     },
+    { "empty not object is valid constraint",
+      "{ \"not\": [] }",
+      true,
+      NULL
+    },
     { "empty properties object is valid constraint",
       "{ \"properties\": [] }",
       true,
