@@ -576,7 +576,24 @@ test_expect_success NOCONNTO 'tbon.connect_timeout attr cannot be set with old z
 		/bin/true 2>noconnto_attr.err &&
 	grep "unsupported by this zeromq version" noconnto_attr.err
 '
-
-
+test_expect_success CONNTO 'tbon.connect_timeout config can be set to 0' '
+	mkdir conf28 &&
+	cat <<-EOT2 >connto_0.exp &&
+	0s
+	EOT2
+	cat <<-EOT >conf28/tbon.toml &&
+	[tbon]
+	connect_timeout = "0"
+	EOT
+	flux broker ${ARGS} -c conf28 flux getattr tbon.connect_timeout \
+		>connto_conf_0.out &&
+	test_cmp connto_0.exp connto_conf_0.out
+'
+test_expect_success CONNTO 'tbon.connect_timeout attr can be set to 0' '
+	flux broker ${ARGS} \
+		-Stbon.connect_timeout=0 \
+		flux getattr tbon.connect_timeout >connto_attr_0.out &&
+	test_cmp connto_0.exp connto_attr_0.out
+'
 
 test_done
