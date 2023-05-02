@@ -47,6 +47,16 @@ static bool have_tcp_maxrt = true;
 static bool have_tcp_maxrt = false;
 #endif
 
+/* How long to wait (seconds) for a connect attempt to time out before
+ * reconnecting.
+ */
+static const double default_connect_timeout = 30.;
+#ifdef ZMQ_CONNECT_TIMEOUT
+static bool have_connect_timeout = true;
+#else
+static bool have_connect_timeout = false;
+#endif
+
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers
 #endif
@@ -148,6 +158,7 @@ struct overlay {
     double torpid_min;
     double torpid_max;
     double tcp_user_timeout;
+    double connect_timeout;
 
     struct parent parent;
 
@@ -1308,6 +1319,12 @@ int overlay_connect (struct overlay *ov)
                                                          parent_monitor_cb,
                                                          ov);
         }
+#ifdef ZMQ_CONNECT_TIMEOUT
+        if (ov->connect_timeout > 0) {
+            zsock_set_connect_timeout (ov->parent.zsock,
+                                       ov->connect_timeout* 1000);
+        }
+#endif
         zsock_set_unbounded (ov->parent.zsock);
         zsock_set_linger (ov->parent.zsock, 5);
         zsock_set_ipv6 (ov->parent.zsock, ov->enable_ipv6);
@@ -2155,6 +2172,13 @@ struct overlay *overlay_create (flux_t *h,
                                    have_tcp_maxrt,
                                    default_tcp_user_timeout,
                                    &ov->tcp_user_timeout) < 0)
+        goto error;
+    if (overlay_configure_timeout (ov,
+                                   "tbon",
+                                   "connect_timeout",
+                                   have_connect_timeout,
+                                   default_connect_timeout,
+                                   &ov->connect_timeout) < 0)
         goto error;
     if (overlay_configure_zmqdebug (ov) < 0)
         goto error;
