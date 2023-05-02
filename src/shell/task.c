@@ -136,6 +136,10 @@ struct shell_task *shell_task_create (struct shell_info *info,
     if (flux_cmd_setenvf (task->cmd, 1, "FLUX_JOB_ID", "%s", buf) < 0)
         goto error;
 
+    /* Always unset FLUX_PROXY_REMOTE since this never makes sense
+     * in the environment of a job task.
+     */
+    flux_cmd_unsetenv (task->cmd, "FLUX_PROXY_REMOTE");
     flux_cmd_unsetenv (task->cmd, "FLUX_URI");
     if (getenv ("FLUX_URI")) {
         if (flux_cmd_setenvf (task->cmd, 1, "FLUX_URI", "%s",
