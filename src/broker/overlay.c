@@ -1955,8 +1955,7 @@ static int overlay_configure_timeout (struct overlay *ov,
             return -1;
         }
         if (fsd) {
-            if (fsd_parse_duration (fsd, &value) < 0
-                || value <= 0) {
+            if (fsd_parse_duration (fsd, &value) < 0) {
                 log_msg ("Config file error parsing %s", long_name);
                 return -1;
             }
@@ -1966,8 +1965,7 @@ static int overlay_configure_timeout (struct overlay *ov,
     /* Override with broker attribute (command line only) settings, if any.
      */
     if (attr_get (ov->attrs, long_name, &fsd, NULL) == 0) {
-        if (fsd_parse_duration (fsd, &value) < 0
-            || value < 0) {
+        if (fsd_parse_duration (fsd, &value) < 0) {
             log_msg ("Error parsing %s attribute", long_name);
             return -1;
         }
