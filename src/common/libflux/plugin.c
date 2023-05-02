@@ -290,8 +290,9 @@ int flux_plugin_load_dso (flux_plugin_t *p, const char *path)
     if (!(p->path = strdup (path)) || !(p->name = strdup (path)))
         return plugin_seterror (p, ENOMEM, NULL);
 
-    if ((init = dlsym (p->dso, "flux_plugin_init")))
-        return (*init) (p);
+    if ((init = dlsym (p->dso, "flux_plugin_init"))
+        && (*init) (p) < 0)
+        return plugin_seterror (p, 0, "%s: flux_plugin_init failed", path);
     return 0;
 }
 
