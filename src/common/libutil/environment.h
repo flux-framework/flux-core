@@ -49,6 +49,19 @@ const char *environment_next (struct environment *e);
 const char *environment_cursor (struct environment *e);
 
 /**
+ * @brief Iterate over a multi-element environment variable *_key
+ *
+ * @param e the environment to operate on
+ * @param key the environment variable to iterate over
+ * @param entry the current entry, set to NULL to begin iteration
+ *
+ * @return The value of the current environment variable element
+ */
+const char *environment_var_next (struct environment *e,
+                                  const char *key,
+                                  const char *entry);
+
+/**
  * @brief Apply the changes encoded in this environment to the environment of
  * the current process.
  *
