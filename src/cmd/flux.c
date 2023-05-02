@@ -22,6 +22,7 @@
 #include <flux/optparse.h>
 #include <pwd.h>
 
+#include "ccan/str/str.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/environment.h"
@@ -269,7 +270,7 @@ void setup_path (struct environment *env, const char *argv0)
     assert (argv0);
 
     /*  If argv[0] was explicitly "flux" then assume PATH is already set */
-    if (strcmp (argv0, "flux") == 0)
+    if (streq (argv0, "flux"))
         return;
     if ((selfdir = executable_selfdir ())) {
         environment_from_env (env, "PATH", "/bin:/usr/bin", ':');
