@@ -509,6 +509,18 @@ void test_uuid (void)
     free (ouuid);
 }
 
+void test_plugin_init_failure (void)
+{
+    flux_plugin_t *p = flux_plugin_create ();
+    if (!p || flux_plugin_set_conf (p, "{\"fail\": 1}") < 0)
+        BAIL_OUT ("flux_plugin_create/set_conf");
+    ok (flux_plugin_load_dso (p, "test/.libs/plugin_foo.so") < 0,
+        "flux_plugin_load fails if plugin init callback fails");
+    diag("%s", flux_plugin_strerror (p));
+    like (flux_plugin_strerror (p), "flux_plugin_init failed",
+        "flux_plugin_strerror() notes that plugin init failed");
+    flux_plugin_destroy (p);
+}
 
 int main (int argc, char *argv[])
 {
@@ -520,6 +532,7 @@ int main (int argc, char *argv[])
     test_load ();
     test_load_rtld_now ();
     test_uuid ();
+    test_plugin_init_failure ();
     done_testing();
     return (0);
 }
