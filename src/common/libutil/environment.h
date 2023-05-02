@@ -100,6 +100,22 @@ void environment_push_back (struct environment *e,
                             const char *value);
 
 /**
+ * @brief Push "value" before position "before" in the environment variable
+ *  "key."
+ *
+ * @param e the environment in which to add this element
+ * @param key the environment variable name
+ * @param before the element before which to insert this value
+ * @param value the value to insert
+ *
+ * @return 0 on success -1 with errno set on failure.
+ */
+int environment_insert (struct environment *e,
+                        const char *key,
+                        char *before,
+                        const char *value);
+
+/**
  * @brief Add the specified value to the front of the target key without
  * de-duplication, it will still be separated from the rest of the value by sep,
  * if a sep has been set for this key.
