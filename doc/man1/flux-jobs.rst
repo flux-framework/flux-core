@@ -46,10 +46,11 @@ OPTIONS
    Limit output to N jobs (default 1000)
 
 **--since**\ *WHEN*
-   Limit output to jobs that completed or have become inactive since a
-   given timestamp. This option implies ``-a`` if no other ``--filter``
-   options are specified. If *WHEN* begins with ``-`` character, then
-   the remainder is considered to be a an offset in Flux standard duration
+   Limit output to jobs that have been active since a given timestamp.  In other
+   words, jobs that are currently pending, currently running, or became inactive
+   since the given timestamp.  This option implies ``-a`` if no other
+   ``--filter`` options are specified.  If *WHEN* begins with ``-`` character,
+   then the remainder is considered to be a an offset in Flux standard duration
    (RFC 23). Otherwise, any datetime expression accepted by the Python
    `parsedatetime <https://github.com/bear/parsedatetime>`_ module is
    accepted. Examples: "-6h", "-1d", "yesterday", "2021-06-21 6am",
