@@ -41,6 +41,11 @@
  * This can be configured via TOML and on the broker command line.
  */
 static const double default_tcp_user_timeout = 20.;
+#ifdef ZMQ_TCP_MAXRT
+static bool have_tcp_maxrt = true;
+#else
+static bool have_tcp_maxrt = false;
+#endif
 
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers
@@ -1910,69 +1915,63 @@ static int overlay_configure_torpid (struct overlay *ov)
     return 0;
 }
 
-static int overlay_configure_tcp_user_timeout (struct overlay *ov)
+static int overlay_configure_timeout (struct overlay *ov,
+                                      const char *table,
+                                      const char *name,
+                                      bool enabled,
+                                      double default_value,
+                                      double *valuep)
 {
     const flux_conf_t *cf;
     const char *fsd = NULL;
     bool override = false;
-#ifdef ZMQ_TCP_MAXRT
-    bool have_tcp_maxrt = true;
-#else
-    bool have_tcp_maxrt = false;
-#endif
+    double value = default_value;
+    char long_name[128];
 
-    ov->tcp_user_timeout = default_tcp_user_timeout;
+    (void)snprintf (long_name, sizeof (long_name), "%s.%s", table, name);
 
     if ((cf = flux_get_conf (ov->h))) {
         flux_error_t error;
 
-        if (flux_conf_unpack (cf,
-                              &error,
-                              "{s?{s?s}}",
-                              "tbon",
-                                "tcp_user_timeout", &fsd) < 0) {
-            log_msg ("Config file error [tbon]: %s", error.text);
+        if (flux_conf_unpack (cf, &error, "{s?{s?s}}", table, name, &fsd) < 0) {
+            log_msg ("Config file error [%s]: %s", table, error.text);
             return -1;
         }
         if (fsd) {
-            if (fsd_parse_duration (fsd, &ov->tcp_user_timeout) < 0
-                || ov->tcp_user_timeout <= 0) {
-                log_msg ("Config file error parsing tbon.tcp_user_timeout");
+            if (fsd_parse_duration (fsd, &value) < 0
+                || value <= 0) {
+                log_msg ("Config file error parsing %s", long_name);
                 return -1;
             }
             override = true;
         }
     }
-
     /* Override with broker attribute (command line only) settings, if any.
      */
-    if (attr_get (ov->attrs, "tbon.tcp_user_timeout", &fsd, NULL) == 0) {
-        if (fsd_parse_duration (fsd, &ov->tcp_user_timeout) < 0
-            || ov->tcp_user_timeout < 0) {
-            log_msg ("Error parsing tbon.tcp_user_timeout attribute");
+    if (attr_get (ov->attrs, long_name, &fsd, NULL) == 0) {
+        if (fsd_parse_duration (fsd, &value) < 0
+            || value < 0) {
+            log_msg ("Error parsing %s attribute", long_name);
             return -1;
         }
-        if (attr_delete (ov->attrs, "tbon.tcp_user_timeout", true) < 0)
+        if (attr_delete (ov->attrs, long_name, true) < 0)
             return -1;
         override = true;
     }
-    if (have_tcp_maxrt) {
+    if (enabled) {
         char buf[64];
-        if (fsd_format_duration (buf, sizeof (buf), ov->tcp_user_timeout) < 0)
+        if (fsd_format_duration (buf, sizeof (buf), value) < 0)
             return -1;
-        if (attr_add (ov->attrs,
-                      "tbon.tcp_user_timeout",
-                      buf,
-                      ATTR_IMMUTABLE) < 0)
+        if (attr_add (ov->attrs, long_name, buf, ATTR_IMMUTABLE) < 0)
             return -1;
     }
     else {
         if (override) {
-            log_msg ("tbon.tcp_user_timeout unsupported by this zeromq "
-                     "version");
+            log_msg ("%s unsupported by this zeromq version", long_name);
             return -1;
         }
     }
+    *valuep = value;
     return 0;
 }
 
@@ -2150,7 +2149,12 @@ struct overlay *overlay_create (flux_t *h,
         goto error;
     if (overlay_configure_torpid (ov) < 0)
         goto error;
-    if (overlay_configure_tcp_user_timeout (ov) < 0)
+    if (overlay_configure_timeout (ov,
+                                   "tbon",
+                                   "tcp_user_timeout",
+                                   have_tcp_maxrt,
+                                   default_tcp_user_timeout,
+                                   &ov->tcp_user_timeout) < 0)
         goto error;
     if (overlay_configure_zmqdebug (ov) < 0)
         goto error;
