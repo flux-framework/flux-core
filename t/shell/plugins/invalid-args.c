@@ -74,6 +74,8 @@ static int shell_cb (flux_plugin_t *p,
         "flux_shell_unsetenv (NULL, 'foo') returns EINVAL");
     ok (flux_shell_unsetenv (shell, NULL) < 0 && errno == EINVAL,
         "flux_shell_unsetenv (shell, NULL) returns EINVAL");
+    ok (flux_shell_unsetenv (shell, "MissingEnvVar") < 0 && errno == ENOENT,
+        "flux_shell_unsetenv (shell, MissingEnvVar) returns ENOENT");
 
     ok (flux_shell_setenvf (NULL, 0, "foo", "bar") < 0 && errno == EINVAL,
         "flux_shell_setenvf (NULL, ...) returns EINVAL");
