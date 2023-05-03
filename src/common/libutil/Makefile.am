@@ -131,7 +131,8 @@ TESTS = test_sha1.t \
 	test_hola.t \
 	test_strstrip.t \
 	test_slice.t \
-	test_timestamp.t
+	test_timestamp.t \
+	test_environment.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -278,3 +279,7 @@ test_slice_t_LDADD = $(test_ldadd)
 test_timestamp_t_SOURCES = test/timestamp.c
 test_timestamp_t_CPPFLAGS = $(test_cppflags)
 test_timestamp_t_LDADD = $(test_ldadd)
+
+test_environment_t_SOURCES = test/environment.c
+test_environment_t_CPPFLAGS = $(test_cppflags)
+test_environment_t_LDADD = $(test_ldadd)

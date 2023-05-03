@@ -162,7 +162,6 @@ static void environment_push_inner (struct environment *e,
             split_value = rev;
             split_value_len = rev_len;
         }
-
         entry = NULL;
         while((entry = argz_next (split_value, split_value_len, entry))) {
             char *found;
@@ -254,6 +253,38 @@ const char *environment_cursor (struct environment *e)
 {
     return zhash_cursor (e->environment);
 }
+
+const char *environment_var_next (struct environment *e,
+                                  const char *key,
+                                  const char *entry)
+{
+    struct env_item *item = zhash_lookup (e->environment, key);
+    if (!item)
+        return NULL;
+    return argz_next (item->argz, item->argz_len, entry);
+}
+
+int environment_insert (struct environment *e,
+                        const char *key,
+                        char *before,
+                        const char *value)
+{
+    error_t err;
+    struct env_item *item = zhash_lookup (e->environment, key);
+    if (!item) {
+        errno = ENOENT;
+        return -1;
+    }
+    if ((err = argz_insert (&item->argz,
+                            &item->argz_len,
+                            before,
+                            value) != 0)) {
+        errno = err;
+        return -1;
+    }
+    return 0;
+}
+
 
 void environment_apply (struct environment *e)
 {
