@@ -182,7 +182,7 @@ test_expect_success 'flux-jobs: custom format with numeric spec works' '
 test_expect_success 'flux-jobs: collapsible fields work' '
 	flux jobs -ao "{id.f58:<12} ?:{exception.type:>8}" >nocollapse.out &&
 	flux jobs -f running,completed \
-		-ao "{id.f58:<12} ?:{exception.type:>8}"   >collapsed.out &&
+		 -o "{id.f58:<12} ?:{exception.type:>8}"   >collapsed.out &&
 	test_debug "head -n1 nocollapse.out" &&
 	test_debug "head -n1 collapsed.out" &&
 	grep EXCEPTION-TYPE nocollapse.out &&
