@@ -248,6 +248,13 @@ test_expect_success 'flux-jobs --since works with fsd offset' '
 	test $count -eq $nall
 '
 
+# -a ignored if --filter specified
+test_expect_success 'flux-jobs -a and --filter=pending' '
+	count=`flux jobs -n -a --filter=pending 2> filter_a.err | wc -l` &&
+	test $count -eq $(job_list_state_count sched) &&
+	grep ignoring filter_a.err
+'
+
 test_expect_success 'flux-jobs --name works' '
 	test_debug "flux jobs -an --name=nosuchcommand" &&
 	test $(flux jobs -an --name=nosuchcommand | wc -l) -eq 1 &&
