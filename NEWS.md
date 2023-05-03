@@ -1,3 +1,59 @@
+flux-core version 0.50.0 - 2023-05-03
+-------------------------------------
+
+## New Features
+ * broker: make `tbon.connect_timeout` configurable (#5140)
+ * flux-job: support job ids to purge (#5047)
+ * sdbus: enable flux to communicate with a systemd user instance (#5070, #5131)
+ * shell: support `{{name}}` tag in output file templates (#5128)
+ * flux-top: support ability to flip through queues via left/right arrow keys
+   (#5052)
+ * flux-ping: output header before output of main ping output (#5034)
+ * broker: improve systemd integration with `sd_notify(3)` (#5078)
+
+## Fixes
+ * `flux(1)`: avoid prepending to PATH when unnecessary (#5138)
+ * python: make `SchedResourceList` optional in `flux.job.info` (#5141)
+ * fix parent-uri attribute under remote `flux-proxy(1)` (#5133)
+ * job-list: make job stats consistent to job results (#5048)
+ * fileref: fix compile on systems without `SEEK_DATA`/`SEEK_HOLE` (#5114)
+ * fixes for build/test on Fedora 36 (GCC 12) (#5107)
+ * shell: fix improper encoding of some hostnames in MPIR proctable (#5117)
+ * python: fix parsing of special characters in submission directives (#5125)
+ * job-validator: fix empty plugins list when one plugin fails to import
+   (#5124)
+ * broker: use human readable timestamp in local time when logging to stderr
+   (#5129)
+ * improve error on plugin load if `flux_plugin_init()` returns an error
+   (#5135)
+ * librlist: fix memleak + misc cleanup (#5110)
+ * sched-simple: avoid assertion failure when trying to load scheduler twice
+   (#5109)
+ * job-manager: improve errors from jobtap initialization (#5099)
+ * libsubprocess: avoid segfault on error path (#5096)
+ * job-exec: improve error message when job shell/imp execution fails (#5088)
+ * systemd: avoid leaving unit in failed state after flux-shutdown(1) (#5077)
+
+## Cleanup
+ * libjob: deprecate `flux_job_list()` and `flux_job_list_inactive()` (#4855)
+ * broker: clean up module infrastructure (#5085)
+ * libsubprocess: remove use of assert(0) (#5084)
+
+## Testsuite/CI/Development
+ * ensure license and other informational files appear in distribution
+   tarball (#5113)
+ * mergify: add spelling check to required checks (#5112)
+ * Add false positives typos config (#5106)
+ * Fix minor typos and formatting (#5019)
+ * testsuite: fix test issues under nix (#5015)
+ * testsuite: fix column width output corner case (#5103)
+ * testsuite: fix setup error in system tests (#5102)
+ * build: add `make deb` target to build test debian package (#5101)
+ * build: applicable build and test fixes for conda (#5093)
+ * testsuite: skip failing test on RHEL7 (#5090)
+ * add spell check for news, readme, and user facing code (#5074)
+
+
 flux-core version 0.49.0 - 2023-04-05
 -------------------------------------
 
