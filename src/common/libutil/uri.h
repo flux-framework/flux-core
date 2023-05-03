@@ -32,6 +32,13 @@
  */
 char *uri_resolve (const char *target, flux_error_t *errp);
 
+/*  Return the authority part of a remote URI, e.g. [username@]host
+ *  Returns NULL if uri is NULL or not a remote URI.
+ *
+ *  Caller must free returned value.
+ */
+char *uri_remote_get_authority (const char *uri);
+
 #endif /* !_UTIL_URI_H */
 
 // vi:ts=4 sw=4 expandtab

@@ -21,6 +21,7 @@
 #include "read_all.h"
 #include "log.h"
 #include "strstrip.h"
+#include "errno_safe.h"
 #include "uri.h"
 
 static void nullify_newline (char *str)
@@ -38,6 +39,30 @@ static char *uri_to_local (struct yuarel *yuri)
     if (asprintf (&uri, "local:///%s", yuri->path) < 0)
         return NULL;
     return uri;
+}
+
+char *uri_remote_get_authority (const char *uri)
+{
+    struct yuarel yuri;
+    char *cpy;
+    char *result = NULL;
+
+    if (!uri)
+        return NULL;
+
+    cpy = strdup (uri);
+    if (yuarel_parse (&yuri, cpy) == 0
+        && yuri.scheme
+        && strcmp (yuri.scheme, "ssh") == 0) {
+        if (asprintf (&result,
+                      "%s%s%s",
+                      yuri.username ? yuri.username : "",
+                      yuri.username ? "@" : "",
+                      yuri.host) < 0)
+            result = NULL;
+    }
+    ERRNO_SAFE_WRAP (free, cpy);
+    return result;
 }
 
 char *uri_resolve (const char *uri, flux_error_t *errp)

@@ -76,6 +76,7 @@ static const char *env_blocklist[] = {
     "FLUX_TASK_LOCAL_ID",
     "FLUX_URI",
     "FLUX_KVS_NAMESPACE",
+    "FLUX_PROXY_REMOTE",
     "PMI_FD",
     "PMI_RANK",
     "PMI_SIZE",

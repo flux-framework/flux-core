@@ -114,7 +114,35 @@ test_expect_success 'flux-proxy works with jobid argument' '
 test_expect_success 'flux-proxy works with /jobid argument' '
 	uri=$(flux proxy /$id?local flux getattr parent-uri) &&
 	test_debug "echo flux proxy $id flux getattr parent-uri = $uri" &&
-	test "$uri" = "$FLUX_URI" &&
+	test "$uri" = "$FLUX_URI"
+'
+tssh=${SHARNESS_TEST_SRCDIR}/scripts/tssh
+test_expect_success 'flux-proxy sets FLUX_PROXY_REMOTE for remote URIs' '
+	FLUX_SSH=${tssh} \
+	    flux proxy ${id}?remote printenv FLUX_PROXY_REMOTE \
+	      >proxy_remote.out &&
+	test_debug "cat proxy_remote.out" &&
+	test "$(cat proxy_remote.out)" = "$(hostname)"
+'
+test_expect_success 'flux-proxy does not set FLUX_PROXY_REMOTE for local URIs' '
+	test_must_fail flux proxy ${id}?local printenv FLUX_PROXY_REMOTE
+'
+test_expect_success 'flux-proxy preserves options in FLUX_PROXY_REMOTE' '
+	uri=$(flux uri ${id} | sed "s|ssh://|ssh://user@|") &&
+	FLUX_SSH=${tssh} \
+	    flux proxy $uri printenv FLUX_PROXY_REMOTE \
+	      >proxy_remote_user.out &&
+	test_debug "cat proxy_remote_user.out" &&
+	test "$(cat proxy_remote_user.out)" = "user@$(hostname)"
+'
+test_expect_success 'parent-uri under remote flux-proxy is rewritten' '
+	uri=$(flux uri ${id} | sed "s|ssh://|ssh://user@|") &&
+	FLUX_SSH=${tssh} \
+	    flux proxy $uri flux getattr parent-uri >proxy-parent-uri.out &&
+	test_debug "cat proxy-parent-uri.out" &&
+	grep ssh://user@$(hostname) proxy-parent-uri.out
+'
+test_expect_success 'cancel test job' '
 	flux cancel $id &&
 	flux job wait-event -vt 10 $id clean
 '

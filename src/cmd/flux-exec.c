@@ -331,6 +331,8 @@ int main (int argc, char *argv[])
     if (!(cmd = flux_cmd_create (argc - optindex, &argv[optindex], environ)))
         log_err_exit ("flux_cmd_create");
 
+    flux_cmd_unsetenv (cmd, "FLUX_PROXY_REMOTE");
+
     if (optparse_getopt (opts, "dir", &optargp) > 0) {
         if (!(cwd = strdup (optargp)))
             log_err_exit ("strdup");

@@ -34,6 +34,9 @@ static struct entry hardwired[] = {
     { .key = "bear",    .val = "roar",  .flags = 1  },
     { .key = "hostlist", .val = "foo[0-2]", .flags = 1 },
     { .key = "broker.starttime", .val = "3.14", .flags = 1 },
+    { .key = "parent-uri",
+      .val = "local:///tmp/foo/bar",
+      .flags = 1 },
     { .key = NULL,      .val = NULL,    .flags = 1  },
 };
 
@@ -346,6 +349,16 @@ int main (int argc, char *argv[])
     errno = 0;
     ok (flux_get_instance_starttime (NULL, &d) < 0 && errno == EINVAL,
         "flux_get_instance_starttime h=NULL fails with EINVAL");
+
+    /* test special handling of parent-uri */
+    unsetenv ("FLUX_PROXY_REMOTE");
+    value = flux_attr_get (h, "parent-uri");
+    is (value, "local:///tmp/foo/bar",
+        "flux_attr_get 'parent-uri' is local uri without FLUX_PROXY_REMOTE");
+    setenv ("FLUX_PROXY_REMOTE", "host123", 1);
+    value = flux_attr_get (h, "parent-uri");
+    is (value, "ssh://host123/tmp/foo/bar",
+        "flux_attr_get 'parent-uri' with FLUX_PROXY_REMOTE returns remote");
 
     test_server_stop (h);
     flux_close (h);
