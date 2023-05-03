@@ -22,8 +22,12 @@ from flux.core.inner import raw
 from flux.job.JobID import JobID
 from flux.job.stats import JobStats
 from flux.memoized_property import memoized_property
-from flux.resource import SchedResourceList
 from flux.uri import JobURI
+
+try:
+    from flux.resource import SchedResourceList
+except ImportError:
+    SchedResourceList = None
 
 
 def statetostr(stateid, fmt="L"):
@@ -212,7 +216,7 @@ class InstanceInfo:
     def __init__(self, uri=None):
         self.initialized = False
         try:
-            if not uri:
+            if not uri or SchedResourceList is None:
                 raise ValueError
             handle = flux.Flux(str(uri))
             future = handle.rpc("sched.resource-status")
