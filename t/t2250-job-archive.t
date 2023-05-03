@@ -171,6 +171,11 @@ test_expect_success 'job-archive: load module' '
         flux module load job-archive
 '
 
+test_expect_success 'job-archive: launch a running job' '
+        jobid=`flux submit sleep inf` &&
+        echo $jobid > long_running_job.id
+'
+
 test_expect_success 'job-archive: stores inactive job info (job good)' '
         jobid=`flux submit hostname` &&
         fj_wait_event $jobid clean &&
@@ -187,6 +192,27 @@ test_expect_success 'job-archive: stores inactive job info (job fail)' '
         wait_db $jobid ${ARCHIVEDB} &&
         db_check_entries $jobid ${ARCHIVEDB} &&
         db_check_values_run $jobid ${ARCHIVEDB}
+'
+
+# ensure long running job wasn't stored
+test_expect_success 'job-archive: check 2 jobs stored' '
+        count=`db_count_entries ${ARCHIVEDB}` &&
+        test $count -eq 2
+'
+
+test_expect_success 'job-archive: cancel long running job' '
+        jobid=$(cat long_running_job.id) &&
+        flux cancel $jobid &&
+        fj_wait_event $jobid clean &&
+        wait_jobid_state $jobid inactive &&
+        wait_db $jobid ${ARCHIVEDB} &&
+        db_check_entries $jobid ${ARCHIVEDB} &&
+        db_check_values_run $jobid ${ARCHIVEDB}
+'
+
+test_expect_success 'job-archive: check 3 jobs stored' '
+        count=`db_count_entries ${ARCHIVEDB}` &&
+        test $count -eq 3
 '
 
 # to ensure job canceled before we run, we submit a job to eat up all
@@ -217,7 +243,7 @@ test_expect_success 'job-archive: stores inactive job info (resources)' '
 
 test_expect_success 'job-archive: all jobs stored' '
         count=`db_count_entries ${ARCHIVEDB}` &&
-        test $count -eq 5
+        test $count -eq 6
 '
 
 test_expect_success 'job-archive: reload module' '
@@ -226,7 +252,7 @@ test_expect_success 'job-archive: reload module' '
 
 test_expect_success 'job-archive: doesnt restore old data' '
         count=`db_count_entries ${ARCHIVEDB}` &&
-        test $count -eq 5
+        test $count -eq 6
 '
 
 test_expect_success 'job-archive: stores more inactive job info' '
@@ -246,7 +272,7 @@ test_expect_success 'job-archive: stores more inactive job info' '
 
 test_expect_success 'job-archive: all jobs stored' '
         count=`db_count_entries ${ARCHIVEDB}` &&
-        test $count -eq 7
+        test $count -eq 8
 '
 
 # we don't check values in module stats b/c it can be racy w/ polling
@@ -260,7 +286,7 @@ test_expect_success 'job-archive: unload module' '
 
 test_expect_success 'job-archive: db exists after module unloaded' '
         count=`db_count_entries ${ARCHIVEDB}` &&
-        test $count -eq 7
+        test $count -eq 8
 '
 
 test_expect_success 'job-archive: setup config file without dbpath' '
