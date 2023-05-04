@@ -1532,6 +1532,7 @@ t_cleanup \
 t_inactive \
 state \
 name \
+queue \
 ntasks \
 ncores \
 duration \
@@ -1547,7 +1548,8 @@ result \
 expiration \
 annotations \
 waitstatus \
-dependencies
+dependencies \
+all
 "
 
 test_expect_success 'list request with empty attrs works' '

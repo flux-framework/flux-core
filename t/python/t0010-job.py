@@ -485,7 +485,6 @@ class TestJob(unittest.TestCase):
             "nnodes",
             "ranks",
             "nodelist",
-            "waitstatus",
             "success",
             "exception_occurred",
             "exception_type",
@@ -494,6 +493,7 @@ class TestJob(unittest.TestCase):
             "result",
             "expiration",
             "annotations",
+            "waitstatus",
             "dependencies",
             "all",
         ]
