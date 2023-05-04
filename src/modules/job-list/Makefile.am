@@ -94,6 +94,7 @@ EXTRA_DIST = \
 	test/jobspec/4slot.jobspec \
 	test/jobspec/4slot_perresourcecore4.jobspec \
 	test/jobspec/duration_alt.jobspec \
+	test/jobspec/queue_specified.jobspec \
 	test/jobspec/invalid_attributes_system_job.jobspec \
 	test/jobspec/invalid_command_array.jobspec \
 	test/jobspec/invalid_command_string.jobspec \
