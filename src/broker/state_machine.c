@@ -220,12 +220,13 @@ static void action_join (struct state_machine *s)
             sd_notifyf (0,
                         "STATUS=Joining Flux instance via %s",
                         overlay_get_parent_uri (s->ctx->overlay));
-            if (s->ctx->rank > 0)
-                sd_notify (0, "READY=1");
         }
 #endif
         join_check_parent (s);
     }
+#if HAVE_LIBSYSTEMD
+    sd_notify (0, "READY=1");
+#endif
 }
 
 static void quorum_timer_cb (flux_reactor_t *r,
@@ -365,8 +366,6 @@ static void action_run (struct state_machine *s)
                     "STATUS=Running as %s of %d node Flux instance",
                     s->ctx->rank == 0 ? "leader" : "member",
                     (int)s->ctx->size);
-        if (s->ctx->rank == 0)
-            sd_notify (0, "READY=1");
     }
 #endif
 }
