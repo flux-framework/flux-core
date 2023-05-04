@@ -714,7 +714,7 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
     if (job->states_mask & FLUX_JOB_STATE_RUN) {
         if (flux_job_kvs_key (path, sizeof (path), id, "R") < 0) {
             errno = EINVAL;
-            return -1;
+            goto done;
         }
         if (!(f3 = flux_kvs_lookup (jsctx->h, NULL, 0, path)))
             goto done;
