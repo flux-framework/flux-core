@@ -46,7 +46,10 @@ int restart_count_char (const char *s, char c)
     return count;
 }
 
-static struct job *lookup_job (flux_t *h, flux_jobid_t id, flux_error_t *error)
+static struct job *lookup_job (flux_t *h,
+                               flux_jobid_t id,
+                               flux_error_t *error,
+                               bool *fatal)
 {
     flux_future_t *f1 = NULL;
     flux_future_t *f2 = NULL;
@@ -63,24 +66,33 @@ static struct job *lookup_job (flux_t *h, flux_jobid_t id, flux_error_t *error)
                    "cannot send lookup requests for job %ju: %s",
                    (uintmax_t)id,
                    strerror (errno));
+        *fatal = true;
         goto done;
     }
     if (flux_kvs_lookup_get (f1, &eventlog) < 0) {
         errprintf (error, "lookup %s: %s", k1, strerror (errno));
+        *fatal = false;
         goto done;
     }
     if (flux_kvs_lookup_get (f2, &jobspec) < 0) {
         errprintf (error, "lookup %s: %s", k2, strerror (errno));
+        *fatal = false;
         goto done;
     }
-    if (!(job = job_create_from_eventlog (id, eventlog, jobspec, &e)))
+    if (!(job = job_create_from_eventlog (id, eventlog, jobspec, &e))) {
         errprintf (error, "replay %s: %s", k1, e.text);
+        *fatal = true;
+    }
 done:
     flux_future_destroy (f1);
     flux_future_destroy (f2);
     return job;
 }
 
+/* Create a 'struct job' from the KVS, using synchronous KVS RPCs.
+ * Return 1 on success, 0 on non-fatal error, or -1 on a fatal error,
+ * where a fatal error will prevent flux from starting.
+ */
 static int depthfirst_map_one (flux_t *h,
                                const char *key,
                                int dirskip,
@@ -101,8 +113,22 @@ static int depthfirst_map_one (flux_t *h,
         errprintf (error, "could not decode %s to job ID", key + dirskip + 1);
         return -1;
     }
-    if (!(job = lookup_job (h, id, error)))
-        return -1;
+
+    flux_error_t lookup_error;
+    bool fatal = false;
+    if (!(job = lookup_job (h, id, &lookup_error, &fatal))) {
+        if (fatal) {
+            errprintf (error, "%s", lookup_error.text);
+            return -1;
+        }
+        flux_log (h,
+                  LOG_ERR,
+                  "job %ju not replayed: %s",
+                  (uintmax_t)id,
+                  lookup_error.text);
+        return 0;
+    }
+
     if (cb (job, arg, error) < 0)
         goto done;
     rc = 1;
