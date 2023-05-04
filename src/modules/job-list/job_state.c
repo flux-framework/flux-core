@@ -673,7 +673,7 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
     flux_future_t *f3 = NULL;
     const char *eventlog, *jobspec, *R;
     char path[64];
-    int rc = -1;
+    int rc = 0; // non-fatal error
 
     if (strlen (key) <= dirskip) {
         errno = EINVAL;
@@ -736,7 +736,7 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
 
     rc = 1;
 done:
-    if (rc < 0)
+    if (rc == 0)
         job_destroy (job);
     flux_future_destroy (f1);
     flux_future_destroy (f2);
