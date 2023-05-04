@@ -44,6 +44,7 @@ struct job {
     flux_job_state_t state;
     const char *name;
     const char *queue;
+    const char *cwd;
     int ntasks;
     int ntasks_per_core_on_node_count;  /* flag for ntasks calculation */
     int ncores;
