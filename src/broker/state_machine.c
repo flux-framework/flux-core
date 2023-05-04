@@ -38,8 +38,8 @@
 #include "shutdown.h"
 
 struct quorum {
-    struct idset *want;
-    struct idset *have; // cumulative on rank 0, batch buffer on rank > 0
+    struct idset *all;
+    struct idset *online; // cumulative on rank 0, batch buffer on rank > 0
     flux_future_t *f;
     double timeout;
     bool warned;
@@ -245,7 +245,7 @@ static void quorum_timer_cb (flux_reactor_t *r,
     if (s->state != STATE_QUORUM)
         return;
 
-    if (!(ids = idset_difference (s->quorum.want, s->quorum.have))
+    if (!(ids = idset_difference (s->quorum.all, s->quorum.online))
         || !(rankstr = idset_encode (ids, IDSET_FLAG_RANGE))
         || !(hl = hostlist_create ())) {
         flux_log_error (h, "error computing slow brokers");
@@ -758,11 +758,11 @@ static int quorum_configure (struct state_machine *s)
     unsigned long id;
 
     if (attr_get (s->ctx->attrs, "broker.quorum", &val, NULL) == 0) {
-        if (!(s->quorum.want = idset_decode (val))) {
+        if (!(s->quorum.all = idset_decode (val))) {
             log_msg ("Error parsing broker.quorum attribute");
             return -1;
         }
-        id = idset_last (s->quorum.want);
+        id = idset_last (s->quorum.all);
         if (id != IDSET_INVALID_ID && id >= s->ctx->size) {
             log_msg ("Error parsing broker.quorum attribute: exceeds size");
             return -1;
@@ -771,12 +771,12 @@ static int quorum_configure (struct state_machine *s)
             return -1;
     }
     else {
-        if (!(s->quorum.want = idset_create (s->ctx->size, 0)))
+        if (!(s->quorum.all = idset_create (s->ctx->size, 0)))
             return -1;
-        if (idset_range_set (s->quorum.want, 0, s->ctx->size - 1) < 0)
+        if (idset_range_set (s->quorum.all, 0, s->ctx->size - 1) < 0)
             return -1;
     }
-    if (!(tmp = idset_encode (s->quorum.want, IDSET_FLAG_RANGE)))
+    if (!(tmp = idset_encode (s->quorum.all, IDSET_FLAG_RANGE)))
         return -1;
     if (attr_add (s->ctx->attrs,
                   "broker.quorum",
@@ -837,9 +837,9 @@ static void broker_online_cb (flux_future_t *f, void *arg)
         return;
     }
 
-    idset_destroy (s->quorum.have);
-    s->quorum.have = ids;
-    if (is_subset_of (s->quorum.want, s->quorum.have)) {
+    idset_destroy (s->quorum.online);
+    s->quorum.online = ids;
+    if (is_subset_of (s->quorum.all, s->quorum.online)) {
         quorum_reached = true;
     }
 
@@ -1150,8 +1150,8 @@ void state_machine_destroy (struct state_machine *s)
         flux_msglist_destroy (s->wait_requests);
         flux_future_destroy (s->monitor.f);
         flux_msglist_destroy (s->monitor.requests);
-        idset_destroy (s->quorum.want);
-        idset_destroy (s->quorum.have);
+        idset_destroy (s->quorum.all);
+        idset_destroy (s->quorum.online);
         flux_watcher_destroy (s->quorum.timer);
         flux_future_destroy (s->quorum.f);
         free (s);
@@ -1190,7 +1190,7 @@ struct state_machine *state_machine_create (struct broker *ctx)
         if (!(s->monitor.f = monitor_parent (ctx->h, s)))
             goto error;
     }
-    if (!(s->quorum.have = idset_create (ctx->size, 0)))
+    if (!(s->quorum.online = idset_create (ctx->size, 0)))
         goto error;
     if (quorum_configure (s) < 0
         || quorum_timeout_configure (s) < 0) {
