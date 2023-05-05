@@ -724,7 +724,7 @@ class TestJob(unittest.TestCase):
             dt = job.timeleft(self.fh)
         except OSError:
             pass
-        
+
 if __name__ == "__main__":
     from subflux import rerun_under_flux
 
