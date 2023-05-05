@@ -77,7 +77,7 @@ OPTIONS
 **--test-start-mode**\ =\ *MODE*
    Set the start mode.  If set to ``all``, all brokers are started immediately.
    If set to ``leader``, only the leader is started.  Hint: in ``leader`` mode,
-   use ``--setattr=broker.quorum=0`` to let the initial program start before
+   use ``--setattr=broker.quorum=1`` to let the initial program start before
    the other brokers are online.  Default: ``all``.
 
 **--test-rundir**\ =\ *PATH*

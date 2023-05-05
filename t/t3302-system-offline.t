@@ -12,7 +12,7 @@ confirm that the user gets a reasonable error.
 . `dirname $0`/sharness.sh
 
 export TEST_UNDER_FLUX_TOPO=kary:1
-export TEST_UNDER_FLUX_QUORUM=0
+export TEST_UNDER_FLUX_QUORUM=1
 export TEST_UNDER_FLUX_START_MODE=leader
 
 test_under_flux 3 system
