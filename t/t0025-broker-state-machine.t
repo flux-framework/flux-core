@@ -31,23 +31,30 @@ test_expect_success 'quorum reached on instance with 3 TBON levels' '
 '
 
 test_expect_success 'broker.quorum can be set on the command line' '
-	flux start -s3 ${ARGS} -o,-Sbroker.quorum="0-2" \
+	flux start -s3 ${ARGS} -o,-Sbroker.quorum=3 \
 		${GROUPSCMD} get broker.online >full1_explicit.out &&
 	test_cmp full1.exp full1_explicit.out
 '
 
 test_expect_success 'broker fails with malformed broker.quorum' '
 	test_must_fail flux start ${ARGS} \
-		-o,-Sbroker.quorum="badids" /bin/true 2>qmalformed.err &&
+		-o,-Sbroker.quorum=9-10 /bin/true 2>qmalformed.err &&
 	grep "Error parsing broker.quorum attribute" qmalformed.err
 '
 
 test_expect_success 'broker fails with broker.quorum that exceeds size' '
 	test_must_fail flux start ${ARGS} \
-		-o,-Sbroker.quorum="0-1" /bin/true 2>qtoobig.err &&
-	grep "Error parsing broker.quorum attribute: exceeds size" qtoobig.err
+		-o,-Sbroker.quorum=99 /bin/true 2>qtoobig.err &&
+	grep "Error parsing broker.quorum attribute" qtoobig.err
 '
-
+test_expect_success 'broker.quorum can be 0 for compatibility' '
+	flux start ${ARGS} -o,-Sbroker.quorum=0 /bin/true 2>compat1.err &&
+	grep assuming compat1.err
+'
+test_expect_success 'broker.quorum can be 0-1 (size=2) for compatibility' '
+	flux start -s2 ${ARGS} -o,-Sbroker.quorum=0-1 /bin/true 2>compat2.err &&
+	grep assuming compat2.err
+'
 test_expect_success 'create rc1 that blocks on FIFO for rank != 0' '
 	cat <<-EOT >rc1_block &&
 	#!/bin/bash
@@ -77,7 +84,7 @@ test_expect_success 'instance functions with late-joiner' '
 		-o,-Slog-stderr-level=6 \
 		-o,-Sbroker.rc1_path="$(pwd)/rc1_block" \
 		-o,-Sbroker.rc3_path= \
-		-o,-Sbroker.quorum="0" \
+		-o,-Sbroker.quorum=1 \
 		$(pwd)/rc2_unblock >late.out &&
 	test_cmp late.exp late.out
 '

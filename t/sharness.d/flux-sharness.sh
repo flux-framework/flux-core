@@ -118,7 +118,7 @@ make_bootstrap_config() {
     echo "--test-hosts=$fakehosts -o,-c$workdir/conf.d"
     echo "--test-exit-mode=${TEST_UNDER_FLUX_EXIT_MODE:-leader}"
     echo "--test-exit-timeout=${TEST_UNDER_FLUX_EXIT_TIMEOUT:-0}"
-    echo "-o,-Sbroker.quorum=${TEST_UNDER_FLUX_QUORUM:-$full}"
+    echo "-o,-Sbroker.quorum=${TEST_UNDER_FLUX_QUORUM:-$size}"
     echo "--test-start-mode=${TEST_UNDER_FLUX_START_MODE:-all}"
     echo "-o,-Stbon.topo=${TEST_UNDER_FLUX_TOPO:-custom}"
     echo "-o,-Stbon.zmqdebug=1"
@@ -173,7 +173,7 @@ remove_trashdir_wrapper() {
 #    - TEST_UNDER_FLUX_EXIT_TIMEOUT
 #        Set the flux-start exit timeout (default: 0)
 #    - TEST_UNDER_FLUX_QUORUM
-#        Set the broker.quorum attribute (default: 0-<highest_rank>)
+#        Set the broker.quorum attribute (default: <size>)
 #    - TEST_UNDER_FLUX_START_MODE
 #        Set the flux-start start mode (default: all)
 #    - TEST_UNDER_FLUX_TOPO

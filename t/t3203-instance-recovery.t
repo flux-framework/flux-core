@@ -16,7 +16,7 @@ test_expect_success 'start a persistent instance of size 4' '
 test_expect_success 'expected broker attributes are set in recovery mode' '
 	cat >recov_attrs.exp <<-EOT &&
 	1
-	0
+	1
 	5
 	EOT
 	flux start --recovery=$(pwd)/test1 \
