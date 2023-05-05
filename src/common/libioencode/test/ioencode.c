@@ -62,6 +62,14 @@ void basic (void)
         && eof == true,
         "iodecode returned correct info");
     free (data);
+
+    ok (iodecode (o, &stream, &rank, NULL, &len, &eof) == 0,
+        "iodecode can be passed NULL data to query len");
+    ok (!strcmp (stream, "stdout")
+        && !strcmp (rank, "[0-8]")
+        && len == 3
+        && eof == true,
+        "iodecode returned correct info");
     json_decref (o);
 
     ok ((o = ioencode ("stderr", "[4,5]", NULL, 0, true)) != NULL,
@@ -75,6 +83,14 @@ void basic (void)
         && eof == true,
         "iodecode returned correct info");
     free (data);
+
+    ok (iodecode (o, &stream, &rank, NULL, &len, &eof) == 0,
+        "iodecode can be passed NULL data to query len");
+    ok (!strcmp (stream, "stderr")
+        && !strcmp (rank, "[4,5]")
+        && len == 0
+        && eof == true,
+        "iodecode returned correct info");
     json_decref (o);
 }
 
@@ -108,6 +124,10 @@ static void binary_data (void)
     ok (memcmp (data, buffer, len) == 0,
         "data matches");
     free (data);
+    ok (iodecode (o, &stream, &rank, NULL, &len, &eof) == 0,
+        "iodecode can be passed NULL data to query len");
+    ok (len == sizeof (buffer),
+        "len is correct");
     json_decref (o);
 }
 
