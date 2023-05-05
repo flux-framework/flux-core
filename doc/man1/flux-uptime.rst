@@ -59,9 +59,9 @@ init
    The local broker is waiting for the ``rc1`` script to complete locally.
 
 quorum
-   All brokers are waiting for a configured set of brokers to reach **quorum**
-   state.  The default quorum set is all brokers.  A Flux system instance
-   typically defines the quorum set to only the rank 0 broker.
+   All brokers are waiting for a configured number of brokers to reach
+   **quorum** state.  The default quorum is the instance size.  A Flux
+   system instance typically defines the quorum size to 1.
 
 run
    Flux is fully up and running.

@@ -107,9 +107,9 @@ broker.pid
    The process id of the local broker.
 
 broker.quorum [Updates: C]
-   An RFC 22 idset representing broker ranks that are required to be online
-   before the rank 0 broker enters the RUN state and starts the initial
-   program, if any.  Default: all ranks.
+   The number of brokers that are required to be online before the rank 0
+   broker enters the RUN state and starts the initial program, if any.
+   Default: instance size.
 
 broker.quorum-timeout [Updates: C]
    The amount of time (in RFC 23 Flux Standard Duration format) that the
