@@ -540,7 +540,7 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
         struct stat sb;
 
         add_argzf (&argz, &argz_len, "-Sbroker.recovery-mode=1");
-        add_argzf (&argz, &argz_len, "-Sbroker.quorum=0");
+        add_argzf (&argz, &argz_len, "-Sbroker.quorum=1");
         add_argzf (&argz, &argz_len, "-Slog-stderr-level=5");
 
         // if --recovery has no optional argument, assume this is the system
