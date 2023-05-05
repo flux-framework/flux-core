@@ -27,6 +27,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libsubprocess/server.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #include "state_machine.h"
 
@@ -38,6 +39,7 @@
 #include "shutdown.h"
 
 struct quorum {
+    uint32_t size;
     struct idset *all;
     struct idset *online; // cumulative on rank 0, batch buffer on rank > 0
     flux_future_t *f;
@@ -180,21 +182,6 @@ static broker_state_t state_next (broker_state_t current, const char *event)
             return nexttab[i].next;
     }
     return current;
-}
-
-/* return true if a is a subset of b */
-static bool is_subset_of (const struct idset *a, const struct idset *b)
-{
-    struct idset *ids;
-    int count;
-
-    if (!(ids = idset_difference (a, b)))
-        return false;
-    count = idset_count (ids);
-    idset_destroy (ids);
-    if (count > 0)
-        return false;
-    return true;
 }
 
 static void action_init (struct state_machine *s)
@@ -749,43 +736,54 @@ static void quorum_check_parent (struct state_machine *s)
     }
 }
 
-/* Configure the set of broker ranks needed for quorum (default=all).
+/* For backwards compatibility, translate "0" and "0-<size-1>" to 1 and <size>,
+ * respectively, but print a warning on stderr.
+ */
+static bool quorum_configure_deprecated (struct state_machine *s,
+                                         const char *val)
+{
+    char all[64];
+    snprintf (all, sizeof (all), "0-%lu", (unsigned long)s->ctx->size - 1);
+    if (streq (val, all))
+        s->quorum.size = s->ctx->size;
+    else if (streq (val, "0"))
+        s->quorum.size = 1;
+    else
+        return false;
+    if (s->ctx->rank == 0) {
+        log_msg ("warning: broker.quorum is now a size - assuming %lu",
+                 (unsigned long)s->quorum.size);
+    }
+    return true;
+}
+
+/* Configure the count of broker ranks needed for quorum (default=<size>).
  */
 static int quorum_configure (struct state_machine *s)
 {
     const char *val;
-    char *tmp;
-    unsigned long id;
-
     if (attr_get (s->ctx->attrs, "broker.quorum", &val, NULL) == 0) {
-        if (!(s->quorum.all = idset_decode (val))) {
-            log_msg ("Error parsing broker.quorum attribute");
-            return -1;
+        if (!quorum_configure_deprecated (s, val)) {
+            errno = 0;
+            s->quorum.size = strtoul (val, NULL, 10);
+            if (errno != 0
+                || s->quorum.size < 1
+                || s->quorum.size > s->ctx->size) {
+                log_msg ("Error parsing broker.quorum attribute");
+                errno = EINVAL;
+                return -1;
+            }
         }
-        id = idset_last (s->quorum.all);
-        if (id != IDSET_INVALID_ID && id >= s->ctx->size) {
-            log_msg ("Error parsing broker.quorum attribute: exceeds size");
-            return -1;
-        }
-        if (attr_delete (s->ctx->attrs, "broker.quorum", true) < 0)
+        if (attr_set_flags (s->ctx->attrs, "broker.quorum", ATTR_IMMUTABLE) < 0)
             return -1;
     }
     else {
-        if (!(s->quorum.all = idset_create (s->ctx->size, 0)))
-            return -1;
-        if (idset_range_set (s->quorum.all, 0, s->ctx->size - 1) < 0)
+        s->quorum.size = s->ctx->size;
+        char buf[16];
+        snprintf (buf, sizeof (buf), "%lu", (unsigned long)s->quorum.size);
+        if (attr_add (s->ctx->attrs, "broker.quorum", buf, ATTR_IMMUTABLE) < 0)
             return -1;
     }
-    if (!(tmp = idset_encode (s->quorum.all, IDSET_FLAG_RANGE)))
-        return -1;
-    if (attr_add (s->ctx->attrs,
-                  "broker.quorum",
-                  tmp,
-                  ATTR_IMMUTABLE) < 0) {
-        ERRNO_SAFE_WRAP (free, tmp);
-        return -1;
-    }
-    free (tmp);
     return 0;
 }
 
@@ -839,9 +837,8 @@ static void broker_online_cb (flux_future_t *f, void *arg)
 
     idset_destroy (s->quorum.online);
     s->quorum.online = ids;
-    if (is_subset_of (s->quorum.all, s->quorum.online)) {
+    if (idset_count (s->quorum.online) >= s->quorum.size)
         quorum_reached = true;
-    }
 
     if (strlen (members) > 0
         && (quorum_reached || now - last_update > 5)) {
@@ -1192,6 +1189,10 @@ struct state_machine *state_machine_create (struct broker *ctx)
     }
     if (!(s->quorum.online = idset_create (ctx->size, 0)))
         goto error;
+    if (!(s->quorum.all = idset_create (s->ctx->size, 0))
+        || idset_range_set (s->quorum.all, 0, s->ctx->size - 1) < 0)
+        goto error;
+
     if (quorum_configure (s) < 0
         || quorum_timeout_configure (s) < 0) {
         log_err ("error configuring quorum attributes");
