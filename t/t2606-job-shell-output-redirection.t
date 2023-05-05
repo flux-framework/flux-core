@@ -348,4 +348,15 @@ test_expect_success 'job-shell: shell errors are captured in error file' '
 	test_expect_code 127  flux run --error=test.err nosuchcommand &&
 	grep "nosuchcommand: No such file or directory" test.err
 '
+test_expect_success LONGTEST 'job-shell: output to kvs is truncated at 10MB' '
+	dd if=/dev/urandom bs=10240 count=800 | base64 --wrap 79 >expected &&
+	flux run cat expected >output 2>truncate.error &&
+	test_debug "cat truncate.error" &&
+	grep "stdout.*truncated" truncate.error
+'
+test_expect_success LONGTEST 'job-shell: stderr to kvs is truncated at 10MB' '
+	dd if=/dev/urandom bs=10240 count=800 | base64 --wrap 79 >expected &&
+	flux run sh -c "cat expected >&2"  >truncate2.error 2>&1 &&
+	grep "stderr.*truncated" truncate2.error
+'
 test_done
