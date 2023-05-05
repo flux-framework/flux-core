@@ -302,6 +302,9 @@ The field names that can be specified are:
 **name**
    job name
 
+**cwd**
+   job current working directory
+
 **queue**
    job queue
 
