@@ -29,6 +29,7 @@ json_t *ioencode (const char *stream,
  * - both data and EOF can be available
  * - if no data available, data set to NULL and len to 0
  * - data must be freed after return
+ * - data can be NULL and len non-NULL to retrieve data length
  */
 int iodecode (json_t *o,
               const char **stream,
