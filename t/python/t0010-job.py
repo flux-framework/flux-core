@@ -691,6 +691,7 @@ class TestJob(unittest.TestCase):
                     't_depend',
                     'state',
                     'name',
+                    'cwd',
                     'ntasks',
                     'ncores',
                     'duration',

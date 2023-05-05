@@ -528,6 +528,15 @@ test_expect_success 'flux-jobs --format={name} works' '
 	test_cmp jobnameI.out jobnameI.exp
 '
 
+test_expect_success 'flux-jobs --format={cwd} works' '
+	pwd=$(pwd) &&
+	flux jobs -a -no "{cwd}" > jobcwd.out &&
+	for i in `seq 1 $(state_count all)`; do
+		echo "${pwd}" >> jobcwd.exp
+	done &&
+	test_cmp jobcwd.out jobcwd.exp
+'
+
 # in job submissions above: completed jobs should be in queue1, running jobs
 # in queue2, and the rest in defaultqueue
 test_expect_success 'flux-jobs --format={queue} works' '
@@ -1035,6 +1044,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	state_single==S
 	state_emoji==STATE
 	name==NAME
+	cwd==CWD
 	queue==QUEUE
 	ntasks==NTASKS
 	duration==DURATION
