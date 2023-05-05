@@ -19,7 +19,7 @@ ExecStart=/bin/bash -c '\
   -Slog-stderr-level=6 \
   -Slog-stderr-mode=local \
   -Sbroker.rc2_none \
-  -Sbroker.quorum=0 \
+  -Sbroker.quorum=1 \
   -Sbroker.quorum-timeout=none \
   -Sbroker.exit-norestart=42 \
   -Sbroker.sd-notify=1 \
