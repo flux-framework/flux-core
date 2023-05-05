@@ -478,6 +478,7 @@ class TestJob(unittest.TestCase):
             "t_inactive",
             "state",
             "name",
+            "cwd",
             "queue",
             "ntasks",
             "ncores",
