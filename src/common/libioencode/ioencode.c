@@ -85,8 +85,10 @@ json_t *ioencode (const char *stream,
             return NULL;
     }
     if (eof) {
-        if (json_object_set_new (o, "eof", json_true ()) < 0)
+        if (json_object_set_new (o, "eof", json_true ()) < 0) {
+            json_decref (o);
             return NULL;
+        }
     }
     return o;
 }
@@ -101,8 +103,10 @@ static int decode_data_base64 (char *src,
     if (datap) {
         if (!(*datap = malloc (size)))
             return -1;
-        if ((rc = base64_decode (*datap, size, src, srclen)) < 0)
+        if ((rc = base64_decode (*datap, size, src, srclen)) < 0) {
+            free (*datap);
             return -1;
+        }
         if (lenp)
             *lenp = rc;
     }
