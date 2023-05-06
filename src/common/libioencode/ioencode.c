@@ -53,7 +53,6 @@ json_t *ioencode (const char *stream,
                   bool eof)
 {
     json_t *o = NULL;
-    json_t *rv = NULL;
 
     /* data can be NULL and len == 0 if eof true */
     if (!stream
@@ -76,22 +75,20 @@ json_t *ioencode (const char *stream,
              *   encoding the data in base64:
              */
             if (!(o = data_encode_base64 (stream, rank, data, len)))
-                goto error;
+                return NULL;
         }
     }
     else {
         if (!(o = json_pack ("{s:s s:s}",
                              "stream", stream,
                              "rank", rank)))
-            goto error;
+            return NULL;
     }
     if (eof) {
         if (json_object_set_new (o, "eof", json_true ()) < 0)
-            goto error;
+            return NULL;
     }
-    rv = o;
-error:
-    return rv;
+    return o;
 }
 
 static int decode_data_base64 (char *src,
@@ -131,7 +128,6 @@ int iodecode (json_t *o,
     int eof = 0;
     bool has_data = false;
     bool has_eof = false;
-    int rv = -1;
 
     if (!o) {
         errno = EINVAL;
@@ -142,7 +138,7 @@ int iodecode (json_t *o,
                      "stream", &stream,
                      "rank", &rank,
                      "encoding", &encoding) < 0)
-        goto cleanup;
+        return -1;
     if (json_unpack (o, "{s:s%}", "data", &data, &len) == 0)
         has_data = true;
     if (json_unpack (o, "{s:b}", "eof", &eof) == 0)
@@ -150,7 +146,7 @@ int iodecode (json_t *o,
 
     if (!has_data && !has_eof) {
         errno = EPROTO;
-        goto cleanup;
+        return -1;
     }
 
     if (streamp)
@@ -163,13 +159,13 @@ int iodecode (json_t *o,
         if (data) {
             if (encoding && strcmp (encoding, "base64") == 0) {
                 if (decode_data_base64 (data, len, datap, &bin_len) < 0)
-                    goto cleanup;
+                    return -1;
             }
             else {
                 bin_len = len;
                 if (datap) {
                     if (!(*datap = malloc (bin_len)))
-                        goto cleanup;
+                        return -1;
                     memcpy (*datap, data, bin_len);
                 }
             }
@@ -179,10 +175,7 @@ int iodecode (json_t *o,
         (*lenp) = bin_len;
     if (eofp)
         (*eofp) = eof;
-
-    rv = 0;
-cleanup:
-    return rv;
+    return 0;
 }
 
 /*
