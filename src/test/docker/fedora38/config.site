@@ -1,0 +1,6 @@
+# Force libdir to /usr/lib64 if prefix=/usr on this platform
+if test "$prefix" = "/usr" ; then
+    test $sysconfdir = "${prefix}/etc" && sysconfdir=/etc
+    libdir=/usr/lib64
+fi
+:
