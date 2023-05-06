@@ -1042,7 +1042,7 @@ class UtilConfig:
                     continue
 
                 try:
-                    with open(filepath) as ofile:
+                    with open(filepath, "rb") as ofile:
                         conf = self.extension_handlers[ppath.suffix](ofile)
                 except (
                     tomllib.TOMLDecodeError,
