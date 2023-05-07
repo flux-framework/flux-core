@@ -16,9 +16,6 @@
 void list_cb (flux_t *h, flux_msg_handler_t *mh,
               const flux_msg_t *msg, void *arg);
 
-void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg);
-
 void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
                  const flux_msg_t *msg, void *arg);
 

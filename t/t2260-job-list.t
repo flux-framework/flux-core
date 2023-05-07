@@ -185,8 +185,8 @@ test_expect_success 'flux job list inactive jobs results are correct' '
 	test_cmp list_result_I.out list_result_I.exp
 '
 
-# Hard code results values for these tests, as we did not add a results
-# option to flux_job_list() or the flux-job command.
+# flux job list does not take results as an option, test via direct
+# call to job-list.list
 
 test_expect_success 'flux job list only canceled jobs' '
 	id=$(id -u) &&

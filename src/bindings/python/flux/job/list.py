@@ -236,11 +236,6 @@ class JobList:
     def add_filter(self, fname):
         """Append a state or result filter to JobList query"""
         fname = fname.lower()
-        if fname == "all":
-            self.states |= self.STATES["pending"]
-            self.states |= self.STATES["running"]
-            return
-
         if fname in self.STATES:
             self.states |= self.STATES[fname]
         elif fname in self.RESULTS:
