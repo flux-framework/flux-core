@@ -251,6 +251,21 @@ matrix.add_build(
     docker_tag=True,
 )
 
+# Fedora 38
+# Note: caliper does not compile on Fedora 38
+matrix.add_build(
+    name="fedora38 - gcc-13.1,py3.11",
+    image="fedora38",
+    args=(
+        "--prefix=/usr"
+        " --sysconfdir=/etc"
+        " --with-systemdsystemunitdir=/etc/systemd/system"
+        " --localstatedir=/var"
+        " --with-flux-security"
+    ),
+    docker_tag=True,
+)
+
 # inception
 matrix.add_build(
     name="inception",
