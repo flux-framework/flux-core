@@ -24,7 +24,7 @@ static int reject_nonlocal (const flux_msg_t *msg,
                             void *arg,
                             flux_error_t *error)
 {
-    if (!overlay_msg_is_local (msg)) {
+    if (!flux_msg_is_local (msg)) {
         errprintf (error,
                "Remote rexec requests are not allowed on rank 0");
         return -1;
