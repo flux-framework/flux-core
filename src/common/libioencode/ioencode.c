@@ -20,6 +20,7 @@
 #include <jansson.h>
 
 #include "src/common/libccan/ccan/base64/base64.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "ioencode.h"
 
@@ -36,13 +37,14 @@ static json_t *data_encode_base64 (const char *stream,
 
     if ((dest = malloc (destlen))
         && (n = base64_encode (dest, destlen, data, len)) >= 0) {
-            o = json_pack ("{s:s s:s s:s s:s#}",
-                           "stream", stream,
-                           "rank", rank,
-                           "encoding", "base64",
-                           "data", dest, n);
+        if (!(o = json_pack ("{s:s s:s s:s s:s#}",
+                             "stream", stream,
+                             "rank", rank,
+                             "encoding", "base64",
+                             "data", dest, n)))
+            errno = ENOMEM;
     }
-    free (dest);
+    ERRNO_SAFE_WRAP (free, dest);
     return o;
 }
 
@@ -81,12 +83,15 @@ json_t *ioencode (const char *stream,
     else {
         if (!(o = json_pack ("{s:s s:s}",
                              "stream", stream,
-                             "rank", rank)))
+                             "rank", rank))) {
+            errno = ENOMEM;
             return NULL;
+        }
     }
     if (eof) {
         if (json_object_set_new (o, "eof", json_true ()) < 0) {
             json_decref (o);
+            errno = ENOMEM;
             return NULL;
         }
     }
@@ -104,7 +109,7 @@ static int decode_data_base64 (char *src,
         if (!(*datap = malloc (size)))
             return -1;
         if ((rc = base64_decode (*datap, size, src, srclen)) < 0) {
-            free (*datap);
+            ERRNO_SAFE_WRAP (free, (*datap));
             return -1;
         }
         if (lenp)
@@ -141,8 +146,10 @@ int iodecode (json_t *o,
     if (json_unpack (o, "{s:s s:s s?s}",
                      "stream", &stream,
                      "rank", &rank,
-                     "encoding", &encoding) < 0)
+                     "encoding", &encoding) < 0) {
+        errno = EPROTO;
         return -1;
+    }
     if (json_unpack (o, "{s:s%}", "data", &data, &len) == 0)
         has_data = true;
     if (json_unpack (o, "{s:b}", "eof", &eof) == 0)
