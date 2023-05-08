@@ -980,8 +980,13 @@ static int get_protocol_fd (int *pfd)
     return 0;
 }
 
-char *shell_mustache_render (flux_shell_t *shell, const char *fmt)
+char *flux_shell_mustache_render (flux_shell_t *shell, const char *fmt)
 {
+    if (!shell) {
+        /* Note: shell->mr and fmt checked in mustache_render */
+        errno = EINVAL;
+        return NULL;
+    }
     return mustache_render (shell->mr, fmt);
 }
 
@@ -1537,7 +1542,8 @@ static int frob_command (flux_shell_t *shell, flux_cmd_t *cmd)
     for (int i = 0; i < flux_cmd_argc (cmd); i++) {
         if (strstr (flux_cmd_arg (cmd, i), "{{")) { // possibly mustachioed
             char *narg;
-            if (!(narg = shell_mustache_render (shell, flux_cmd_arg (cmd, i)))
+            if (!(narg = flux_shell_mustache_render (shell,
+                                                     flux_cmd_arg (cmd, i)))
                 || flux_cmd_argv_insert (cmd, i, narg) < 0) {
                 free (narg);
                 return -1;

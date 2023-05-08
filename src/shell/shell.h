@@ -403,7 +403,7 @@ int flux_shell_log_setlevel (int level, const char *dest);
 
 /*  Expand mustache template.  Caller must free the result.
  */
-char *shell_mustache_render (flux_shell_t *shell, const char *fmt);
+char *flux_shell_mustache_render (flux_shell_t *shell, const char *fmt);
 
 
 #ifdef __cplusplus

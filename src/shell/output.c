@@ -814,7 +814,7 @@ shell_output_setup_type_file (struct shell_output *out,
         return -1;
     }
 
-    if (!(ofp->path = shell_mustache_render (out->shell, path)))
+    if (!(ofp->path = flux_shell_mustache_render (out->shell, path)))
         return -1;
 
     if (flux_shell_getopt_unpack (out->shell, "output",
