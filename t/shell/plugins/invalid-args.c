@@ -194,6 +194,11 @@ static int shell_cb (flux_plugin_t *p,
     ok (flux_shell_task_next (NULL) == NULL && errno == EINVAL,
         "flux_shell_task_next (NULL) returns EINVAL");
 
+    ok (flux_shell_mustache_render (NULL, NULL) == NULL && errno == EINVAL,
+        "flux_shell_mustache_render (NULL, NULL) returns EINVAL");
+    ok (flux_shell_mustache_render (shell, NULL) == NULL && errno == EINVAL,
+        "flux_shell_mustache_render (shell, NULL) returns EINVAL");
+
     if (strcmp (topic, "shell.init") == 0) {
         ok (flux_shell_current_task (NULL) == NULL && errno == EINVAL,
             "flux_shell_current_task with NULL shell returns EINVAL");
