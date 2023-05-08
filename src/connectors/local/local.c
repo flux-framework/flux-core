@@ -77,7 +77,7 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
     struct local_connector *ctx = impl;
 
     if (ctx->testing_userid != FLUX_USERID_UNKNOWN
-                                || ctx->testing_rolemask != FLUX_ROLE_NONE)
+        || ctx->testing_rolemask != FLUX_ROLE_NONE)
         return send_testing (ctx, msg, flags);
 
     return usock_client_send (ctx->uclient, msg, flags);
@@ -104,14 +104,16 @@ static int op_setopt (void *impl, const char *option,
             goto done;
         }
         memcpy (&ctx->testing_userid, val, val_size);
-    } else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
+    }
+    else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
         val_size = sizeof (ctx->testing_rolemask);
         if (size != val_size) {
             errno = EINVAL;
             goto done;
         }
         memcpy (&ctx->testing_rolemask, val, val_size);
-    } else {
+    }
+    else {
         errno = EINVAL;
         goto done;
     }
@@ -134,7 +136,8 @@ static int op_getopt (void *impl, const char *option,
             goto done;
         }
         memcpy (val, &ctx->owner, val_size);
-    } else {
+    }
+    else {
         errno = EINVAL;
         goto done;
     }
