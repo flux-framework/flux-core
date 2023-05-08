@@ -62,6 +62,9 @@
 #include "builtins.h"
 #include "log.h"
 
+#define OUTPUT_LIMIT_BYTES 1024*1024*10
+#define OUTPUT_LIMIT_STRING "10MB"
+
 enum {
     FLUX_OUTPUT_TYPE_TERM = 1,
     FLUX_OUTPUT_TYPE_KVS = 2,
@@ -88,6 +91,8 @@ struct shell_output {
     bool stopped;
     int stdout_type;
     int stderr_type;
+    size_t stdout_bytes;
+    size_t stderr_bytes;
     struct shell_output_type_file stdout_file;
     struct shell_output_type_file stderr_file;
     zhash_t *fds;
@@ -298,21 +303,30 @@ error:
     return rc;
 }
 
-static int entry_output_is_kvs (struct shell_output *out, json_t *entry)
+/*  Return true if entry is a kvs destination, false otherwise.
+ *  If true, then then stream and len will be set to the stream and
+ *   length of data in this entry.
+ */
+static bool entry_output_is_kvs (struct shell_output *out,
+                                 json_t *entry,
+                                 bool *stdoutp,
+                                 int *lenp,
+                                 bool *eofp)
 {
     json_t *context;
     const char *name;
     const char *stream;
+
     if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
         shell_log_errno ("eventlog_entry_parse");
         return 0;
     }
     if (!strcmp (name, "data")) {
-        if (iodecode (context, &stream, NULL, NULL, NULL, NULL) < 0) {
+        if (iodecode (context, &stream, NULL, NULL, lenp, eofp) < 0) {
             shell_log_errno ("iodecode");
             return 0;
         }
-        if (!strcmp (stream, "stdout"))
+        if ((*stdoutp = !strcmp (stream, "stdout")))
             return (out->stdout_type == FLUX_OUTPUT_TYPE_KVS);
         else
             return (out->stderr_type == FLUX_OUTPUT_TYPE_KVS);
@@ -320,14 +334,61 @@ static int entry_output_is_kvs (struct shell_output *out, json_t *entry)
     return 0;
 }
 
+static bool check_kvs_output_limit (struct shell_output *out,
+                                    bool is_stdout,
+                                    int len)
+{
+    const char *stream;
+    size_t *bytesp;
+    size_t prev;
+
+    if (is_stdout) {
+        stream = "stdout";
+        bytesp = &out->stdout_bytes;
+    }
+    else {
+        stream = "stderr";
+        bytesp = &out->stderr_bytes;
+    }
+
+    prev = *bytesp;
+    *bytesp += len;
+
+    if (*bytesp > OUTPUT_LIMIT_BYTES) {
+        /*  Only log an error when the threshold is reached.
+        */
+        if (prev <= OUTPUT_LIMIT_BYTES)
+            shell_warn ("%s will be truncated, %s limit exceeded",
+                        stream,
+                        OUTPUT_LIMIT_STRING);
+        return true;
+    }
+    return false;
+}
+
 static int shell_output_kvs (struct shell_output *out)
 {
     json_t *entry;
     size_t index;
+    bool is_stdout;
+    int len;
+    bool eof;
+
     json_array_foreach (out->output, index, entry) {
-        if (entry_output_is_kvs (out, entry) &&
-            eventlogger_append_entry (out->ev, 0, "output", entry) < 0) {
-            return shell_log_errno ("eventlogger_append");
+        if (entry_output_is_kvs (out, entry, &is_stdout, &len, &eof)) {
+            bool truncate = check_kvs_output_limit (out, is_stdout, len);
+            if (!truncate || eof) {
+                if (eventlogger_append_entry (out->ev, 0, "output", entry) < 0)
+                    return shell_log_errno ("eventlogger_append");
+            }
+            if (eof && truncate) {
+                size_t total = is_stdout ?
+                               out->stdout_bytes : out->stderr_bytes;
+                shell_warn ("%s: %zu of %zu bytes truncated",
+                            is_stdout ? "stdout" : "stderr",
+                            total - OUTPUT_LIMIT_BYTES,
+                            total);
+            }
         }
     }
     return 0;

@@ -102,11 +102,16 @@ static int decode_data_base64 (char *src,
 {
     ssize_t rc;
     size_t size = base64_decoded_length (srclen);
-    if (!(*datap = malloc (size)))
-        return -1;
-    if ((rc = base64_decode (*datap, size, src, srclen)) < 0)
-        return -1;
-    *lenp = rc;
+    if (datap) {
+        if (!(*datap = malloc (size)))
+            return -1;
+        if ((rc = base64_decode (*datap, size, src, srclen)) < 0)
+            return -1;
+        if (lenp)
+            *lenp = rc;
+    }
+    else if (lenp)
+        *lenp = size;
     return 0;
 }
 
@@ -154,8 +159,9 @@ int iodecode (json_t *o,
         (*streamp) = stream;
     if (rankp)
         (*rankp) = rank;
-    if (datap) {
-        *datap = NULL;
+    if (datap || lenp) {
+        if (datap)
+            *datap = NULL;
         if (data) {
             if (encoding && strcmp (encoding, "base64") == 0) {
                 if (decode_data_base64 (data, len, datap, &bin_len) < 0)
@@ -163,9 +169,11 @@ int iodecode (json_t *o,
             }
             else {
                 bin_len = len;
-                if (!(*datap = malloc (bin_len)))
-                    goto cleanup;
-                memcpy (*datap, data, bin_len);
+                if (datap) {
+                    if (!(*datap = malloc (bin_len)))
+                        goto cleanup;
+                    memcpy (*datap, data, bin_len);
+                }
             }
         }
     }
