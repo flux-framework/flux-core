@@ -144,9 +144,8 @@ int iodecode (json_t *o,
                      "rank", &rank,
                      "encoding", &encoding) < 0)
         goto cleanup;
-    if (json_unpack (o, "{s:s%}", "data", &data, &len) == 0) {
+    if (json_unpack (o, "{s:s%}", "data", &data, &len) == 0)
         has_data = true;
-    }
     if (json_unpack (o, "{s:b}", "eof", &eof) == 0)
         has_eof = true;
 
