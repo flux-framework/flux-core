@@ -38,6 +38,7 @@ struct sdbus_ctx {
     flux_t *h;
 
     flux_future_t *f_subscribe;
+    uint32_t rank;
 };
 
 struct call_info {
@@ -52,6 +53,17 @@ static void sdbus_recover (struct sdbus_ctx *ctx, const char *reason);
  */
 static const double retry_min = 2;
 static const double retry_max = 60;
+
+static int authorize_request (const flux_msg_t *msg,
+                              uint32_t rank,
+                              flux_error_t *error)
+{
+    if (rank != 0 || flux_msg_is_local (msg))
+        return 0;
+    errprintf (error, "Remote sdbus requests are not allowed on rank 0");
+    errno = EPERM;
+    return -1;
+}
 
 static void bulk_respond_error (flux_t *h,
                                 struct flux_msglist *msglist,
@@ -346,6 +358,10 @@ static void call_cb (flux_t *h,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
+    if (authorize_request (msg, ctx->rank, &error) < 0) {
+        errmsg = error.text;
+        goto error;
+    }
     if (ctx->bus) { // defer request if bus is not yet connected
         if (handle_call_request (ctx, msg, &error) < 0) {
             errmsg = error.text;
@@ -368,9 +384,15 @@ static void subscribe_cb (flux_t *h,
                           void *arg)
 {
     struct sdbus_ctx *ctx = arg;
+    flux_error_t error;
+    const char *errmsg = NULL;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
+    if (authorize_request (msg, ctx->rank, &error) < 0) {
+        errmsg = error.text;
+        goto error;
+    }
     if (!flux_msg_is_streaming (msg)) {
         errno = EPROTO;
         goto error;
@@ -379,7 +401,7 @@ static void subscribe_cb (flux_t *h,
         goto error;
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "error responding to sdbus.subscribe request");
 }
 
@@ -391,7 +413,9 @@ static void subscribe_cancel_cb (flux_t *h,
                                  void *arg)
 {
     struct sdbus_ctx *ctx = arg;
-    flux_msglist_cancel (h, ctx->subscribers, msg);
+
+    if (authorize_request (msg, ctx->rank, NULL) == 0)
+        flux_msglist_cancel (h, ctx->subscribers, msg);
 }
 
 /* Handle disconnection of a client as described in RFC 6.
@@ -403,8 +427,10 @@ static void disconnect_cb (flux_t *h,
 {
     struct sdbus_ctx *ctx = arg;
 
-    (void)flux_msglist_disconnect (ctx->requests, msg);
-    (void)flux_msglist_disconnect (ctx->subscribers, msg);
+    if (authorize_request (msg, ctx->rank, NULL) == 0) {
+        (void)flux_msglist_disconnect (ctx->requests, msg);
+        (void)flux_msglist_disconnect (ctx->subscribers, msg);
+    }
 }
 
 /* Handle a request to force bus disconnection and recovery for testing.
@@ -415,10 +441,15 @@ static void reconnect_cb (flux_t *h,
                           void *arg)
 {
     struct sdbus_ctx *ctx = arg;
+    flux_error_t error;
     const char *errmsg = NULL;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
+    if (authorize_request (msg, ctx->rank, &error) < 0) {
+        errmsg = error.text;
+        goto error;
+    }
     if (!ctx->bus) {
         errmsg = "bus is not connected";
         errno = EINVAL;
@@ -634,7 +665,8 @@ struct sdbus_ctx *sdbus_ctx_create (flux_t *h, flux_error_t *error)
         || flux_future_then (ctx->f_conn, -1, connect_continuation, ctx) < 0
         || flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0
         || !(ctx->requests = flux_msglist_create ())
-        || !(ctx->subscribers = flux_msglist_create ()))
+        || !(ctx->subscribers = flux_msglist_create ())
+        || flux_get_rank (h, &ctx->rank) < 0)
         goto error;
     ctx->h = h;
     return ctx;
