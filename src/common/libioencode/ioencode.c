@@ -132,6 +132,7 @@ int iodecode (json_t *o,
     const char *rank;
     const char *encoding = NULL;
     size_t bin_len = 0;
+    char *bufp = NULL;
     char *data = NULL;
     size_t len = 0;
     int eof = 0;
@@ -165,23 +166,23 @@ int iodecode (json_t *o,
     if (rankp)
         (*rankp) = rank;
     if (datap || lenp) {
-        if (datap)
-            *datap = NULL;
         if (data) {
             if (encoding && strcmp (encoding, "base64") == 0) {
-                if (decode_data_base64 (data, len, datap, &bin_len) < 0)
+                if (decode_data_base64 (data, len, &bufp, &bin_len) < 0)
                     return -1;
             }
             else {
                 bin_len = len;
                 if (datap) {
-                    if (!(*datap = malloc (bin_len)))
+                    if (!(bufp = malloc (bin_len)))
                         return -1;
-                    memcpy (*datap, data, bin_len);
+                    memcpy (bufp, data, bin_len);
                 }
             }
         }
     }
+    if (datap)
+        (*datap) = bufp;
     if (lenp)
         (*lenp) = bin_len;
     if (eofp)
