@@ -667,6 +667,27 @@ test_expect_success 'verify job names preserved across restart' '
 '
 
 #
+# job cwd
+#
+
+test_expect_success 'flux job list outputs cwd' '
+	pwd=$(pwd) &&
+	jobid=`flux submit --wait /bin/true | flux job id` &&
+	echo $jobid > jobcwd.id &&
+	wait_jobid_state $jobid inactive &&
+	flux job list -s inactive | grep $jobid | jq -e ".cwd == \"${pwd}\""
+'
+test_expect_success 'reload the job-list module' '
+	flux module reload job-list
+'
+
+test_expect_success 'verify job cwd preserved across restart' '
+	pwd=$(pwd) &&
+	jobid=`cat jobcwd.id` &&
+	flux job list -s inactive | grep ${jobid} | jq -e ".cwd == \"${pwd}\""
+'
+
+#
 # job queue
 #
 
@@ -1532,6 +1553,8 @@ t_cleanup \
 t_inactive \
 state \
 name \
+cwd \
+queue \
 ntasks \
 ncores \
 duration \
@@ -1547,7 +1570,8 @@ result \
 expiration \
 annotations \
 waitstatus \
-dependencies
+dependencies \
+all
 "
 
 test_expect_success 'list request with empty attrs works' '
@@ -1920,7 +1944,7 @@ test_expect_success 'remove queues' '
 # invalid job data into the KVS could affect tests above.
 #
 
-# Following tests use invalid jobspecs, must load a more permissive validator
+# Following tests use invalid / unusual jobspecs, must load a more permissive validator
 
 ingest_module ()
 {
@@ -1963,6 +1987,25 @@ test_expect_success NO_CHAIN_LINT 'flux job list-ids works on job with illegal j
 	${RPC} job-list.job-state-unpause 0 </dev/null &&
 	wait $pid &&
 	cat list_id_illegal_jobspec.out | $jq -e ".id == ${jobid}"
+'
+
+test_expect_success 'create jobspec with missing cwd' '
+	cat hostname.json | $jq "del(.attributes.system.cwd)" > no_cwd_jobspec.json
+'
+
+test_expect_success 'flux job list works on job with no cwd' '
+	jobid=`flux job submit no_cwd_jobspec.json | flux job id` &&
+	fj_wait_event $jobid clean >/dev/null &&
+	i=0 &&
+	while ! flux job list --states=inactive | grep $jobid > /dev/null \
+		   && [ $i -lt 5 ]
+	do
+		sleep 1
+		i=$((i + 1))
+	done &&
+	test "$i" -lt "5" &&
+	flux job list --states=inactive | grep $jobid > list_no_cwd_jobspec.out &&
+	cat list_no_cwd_jobspec.out | $jq -e ".cwd == null"
 '
 
 test_expect_success 'reload job-ingest with defaults' '

@@ -58,6 +58,24 @@ struct test_jobspec_job_name {
     { NULL, 0 },
 };
 
+struct test_jobspec_cwd {
+    const char *filename;
+    const char *cwd;
+} jobspec_cwd_tests[] = {
+    { TEST_SRCDIR "/jobspec/1slot.jobspec", "/tmp/job" },
+    { TEST_SRCDIR "/jobspec/cwd_not_specified.jobspec", NULL },
+    { NULL, 0 },
+};
+
+struct test_jobspec_queue {
+    const char *filename;
+    const char *queue;
+} jobspec_queue_tests[] = {
+    { TEST_SRCDIR "/jobspec/1slot.jobspec", NULL },
+    { TEST_SRCDIR "/jobspec/queue_specified.jobspec", "batch" },
+    { NULL, 0 },
+};
+
 struct test_jobspec_duration {
     const char *filename;
     double duration;
@@ -347,6 +365,68 @@ static void test_jobspec_job_name (void)
     }
 }
 
+static void test_jobspec_cwd (void)
+{
+    struct test_jobspec_cwd *test;
+
+    test = jobspec_cwd_tests;
+    while (test->filename) {
+        struct job *job = job_create (NULL, FLUX_JOBID_ANY);
+        const char *filename = test->filename;
+        const char *cwd = test->cwd;
+        int ret;
+
+        if (!job)
+            BAIL_OUT ("job_create failed");
+
+        ret = parse_jobspec (job, filename);
+        ok (ret == 0, "job_parse_jobspec parsed %s", filename);
+        if (cwd) {
+            ok (streq (cwd, job->cwd),
+                "job_parse_jobspec correctly parsed job cwd %s=%s",
+                cwd, job->cwd);
+        }
+        else {
+            ok (job->cwd == NULL,
+                "job_parse_jobspec correctly parsed no job cwd");
+        }
+
+        job_destroy (job);
+        test++;
+    }
+}
+
+static void test_jobspec_queue (void)
+{
+    struct test_jobspec_queue *test;
+
+    test = jobspec_queue_tests;
+    while (test->filename) {
+        struct job *job = job_create (NULL, FLUX_JOBID_ANY);
+        const char *filename = test->filename;
+        const char *queue = test->queue;
+        int ret;
+
+        if (!job)
+            BAIL_OUT ("job_create failed");
+
+        ret = parse_jobspec (job, filename);
+        ok (ret == 0, "job_parse_jobspec parsed %s", filename);
+        if (queue) {
+            ok (streq (queue, job->queue),
+                "job_parse_jobspec correctly parsed job queue %s=%s",
+                queue, job->queue);
+        }
+        else {
+            ok (job->queue == NULL,
+                "job_parse_jobspec correctly parsed no job queue");
+        }
+
+        job_destroy (job);
+        test++;
+    }
+}
+
 static void test_jobspec_duration (void)
 {
     struct test_jobspec_duration *test;
@@ -555,6 +635,8 @@ int main (int argc, char *argv[])
 
     test_jobspec_corner_case ();
     test_jobspec_job_name ();
+    test_jobspec_cwd ();
+    test_jobspec_queue ();
     test_jobspec_duration ();
     test_R_corner_case ();
     test_R_ranks ();

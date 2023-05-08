@@ -95,6 +95,12 @@ static int store_attr (struct job *job,
             return 0;
         val = json_string (job->name);
     }
+    else if (streq (attr, "cwd")) {
+        /* job->cwd potentially NULL, is optional in jobspec */
+        if (!job->cwd)
+            return 0;
+        val = json_string (job->cwd);
+    }
     else if (streq (attr, "queue")) {
         /* job->queue potentially NULL if:
          * - unspecified

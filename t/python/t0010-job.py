@@ -478,6 +478,7 @@ class TestJob(unittest.TestCase):
             "t_inactive",
             "state",
             "name",
+            "cwd",
             "queue",
             "ntasks",
             "ncores",
@@ -485,7 +486,6 @@ class TestJob(unittest.TestCase):
             "nnodes",
             "ranks",
             "nodelist",
-            "waitstatus",
             "success",
             "exception_occurred",
             "exception_type",
@@ -494,6 +494,7 @@ class TestJob(unittest.TestCase):
             "result",
             "expiration",
             "annotations",
+            "waitstatus",
             "dependencies",
             "all",
         ]
@@ -690,6 +691,7 @@ class TestJob(unittest.TestCase):
                     't_depend',
                     'state',
                     'name',
+                    'cwd',
                     'ntasks',
                     'ncores',
                     'duration',
@@ -724,7 +726,7 @@ class TestJob(unittest.TestCase):
             dt = job.timeleft(self.fh)
         except OSError:
             pass
-        
+
 if __name__ == "__main__":
     from subflux import rerun_under_flux
 

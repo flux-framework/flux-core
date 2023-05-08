@@ -308,9 +308,10 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
         goto nonfatal_error;
 
     if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:{s:{s?:s}}}",
+                        "{s:{s:{s?:s s?s}}}",
                         "attributes",
                         "system",
+                        "cwd", &job->cwd,
                         "queue", &job->queue) < 0) {
         flux_log (job->h, LOG_ERR,
                   "%s: job %ju invalid jobspec: %s",
