@@ -217,7 +217,7 @@ int main (int argc, char *argv[])
     ctx.cred.userid = getuid ();
     /* Set default rolemask for messages sent with flux_send()
      * on the broker's internal handle. */
-    ctx.cred.rolemask = FLUX_ROLE_OWNER;
+    ctx.cred.rolemask = FLUX_ROLE_OWNER | FLUX_ROLE_LOCAL;
 
     init_attrs (ctx.attrs, getpid (), &ctx.cred);
 

@@ -658,7 +658,7 @@ module_t *module_add (modhash_t *mh,
      * credentials are always those of the instance owner.
      */
     p->cred.userid = getuid ();
-    p->cred.rolemask = FLUX_ROLE_OWNER;
+    p->cred.rolemask = FLUX_ROLE_OWNER | FLUX_ROLE_LOCAL;
 
     /* Update the modhash.
      */

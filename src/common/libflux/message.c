@@ -507,6 +507,15 @@ int flux_msg_authorize (const flux_msg_t *msg, uint32_t userid)
     return 0;
 }
 
+bool flux_msg_is_local (const flux_msg_t *msg)
+{
+    uint32_t rolemask;
+    if (flux_msg_get_rolemask (msg, &rolemask) == 0
+        && (rolemask & FLUX_ROLE_LOCAL))
+        return true;
+    return false;
+}
+
 int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid)
 {
     if (msg_validate (msg) < 0)
