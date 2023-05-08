@@ -19,7 +19,6 @@
 
 #include <jansson.h>
 
-#include "src/common/libutil/macros.h"
 #include "src/common/libccan/ccan/base64/base64.h"
 
 #include "ioencode.h"
