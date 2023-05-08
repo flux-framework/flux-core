@@ -16,7 +16,7 @@ JOBS=2
 MOUNT_HOME_ARGS="--volume=$HOME:/home/$USER -e HOME"
 
 if test "$PROJECT" = "flux-core"; then
-  FLUX_SECURITY_VERSION=0.7.0
+  FLUX_SECURITY_VERSION=0.8.0
   POISON=t
 fi
 
