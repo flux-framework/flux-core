@@ -330,8 +330,8 @@ void trio (flux_t *h)
     rmsg = recvmsg_timeout (ctx[0], 5);
     ok (rmsg != NULL,
         "%s: request was received by overlay", ctx[0]->name);
-    ok (!overlay_msg_is_local (rmsg),
-        "%s: overlay_msg_is_local fails on parent from child",
+    ok (!flux_msg_is_local (rmsg),
+        "%s: flux_msg_is_local fails on parent from child",
         ctx[1]->name);
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "meep"),
         "%s: received message has expected topic", ctx[0]->name);
@@ -354,8 +354,8 @@ void trio (flux_t *h)
     rmsg = recvmsg_timeout (ctx[1], 5);
     ok (rmsg != NULL,
         "%s: request was received by overlay", ctx[1]->name);
-    ok (!overlay_msg_is_local (rmsg),
-        "%s: overlay_msg_is_local fails on child from parent",
+    ok (!flux_msg_is_local (rmsg),
+        "%s: flux_msg_is_local fails on child from parent",
         ctx[1]->name);
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "errr"),
         "%s: request has expected topic", ctx[1]->name);
@@ -376,8 +376,8 @@ void trio (flux_t *h)
     rmsg = recvmsg_timeout (ctx[0], 5);
     ok (rmsg != NULL,
         "%s: response was received by overlay", ctx[0]->name);
-    ok (!overlay_msg_is_local (rmsg),
-        "%s: overlay_msg_is_local returns false for response from child");
+    ok (!flux_msg_is_local (rmsg),
+        "%s: flux_msg_is_local returns false for response from child");
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "m000"),
         "%s: received message has expected topic", ctx[0]->name);
     ok (flux_msg_route_count (rmsg) == 0,
@@ -396,8 +396,8 @@ void trio (flux_t *h)
         "%s: event was received by overlay", ctx[0]->name);
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "eeek"),
         "%s: received message has expected topic", ctx[0]->name);
-    ok (!overlay_msg_is_local (rmsg),
-        "%s: overlay_msg_is_local returns false for event from child");
+    ok (!flux_msg_is_local (rmsg),
+        "%s: flux_msg_is_local returns false for event from child");
 
     /* Response 0->1
      */
@@ -664,8 +664,8 @@ void wrongness (flux_t *h)
     ok (overlay_bind (ov, "ipc://@foobar") < 0 && errno == EINVAL,
         "overlay_bind fails if called before rank is known");
 
-    ok (!overlay_msg_is_local (NULL),
-        "overlay_msg_is_local (NULL) returns false");
+    ok (!flux_msg_is_local (NULL),
+        "flux_msg_is_local (NULL) returns false");
 
     overlay_destroy (ov);
     attr_destroy (attrs);

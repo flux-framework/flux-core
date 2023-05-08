@@ -454,14 +454,6 @@ static struct child *child_lookup (struct overlay *ov, const char *id)
     return NULL;
 }
 
-bool overlay_msg_is_local (const flux_msg_t *msg)
-{
-    /*  Return true only if msg is non-NULL and the message does not
-     *  have the overlay supplied "remote" tag.
-     */
-    return (msg && flux_msg_aux_get (msg, "overlay::remote") == NULL);
-}
-
 /* Lookup (direct) child peer by rank.
  * Returns NULL on lookup failure.
  */
@@ -899,13 +891,6 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
         logdrop (ov, OVERLAY_DOWNSTREAM, msg, "failed to clear local role");
         goto done;
     }
-    /* Flag this message as remotely received. This allows efficient
-     * operation of the overlay_msg_is_local() function.
-     */
-    if (flux_msg_aux_set (msg, "overlay::remote", int2ptr (1), NULL) < 0) {
-        logdrop (ov, OVERLAY_DOWNSTREAM, msg, "failed to tag msg as remote");
-        goto done;
-    }
     if (flux_msg_get_type (msg, &type) < 0
         || !(uuid = flux_msg_route_last (msg))) {
         logdrop (ov, OVERLAY_DOWNSTREAM, msg, "malformed message");
@@ -1010,13 +995,6 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
         return;
     if (clear_msg_role (msg, FLUX_ROLE_LOCAL) < 0) {
         logdrop (ov, OVERLAY_UPSTREAM, msg, "failed to clear local role");
-        goto done;
-    }
-    /* Flag this message as remotely received. This allows efficient
-     * operation of the overlay_msg_is_local() function.
-     */
-    if (flux_msg_aux_set (msg, "overlay::remote", int2ptr (1), NULL) < 0) {
-        logdrop (ov, OVERLAY_UPSTREAM, msg, "failed to tag msg as remote");
         goto done;
     }
     if (flux_msg_get_type (msg, &type) < 0) {
