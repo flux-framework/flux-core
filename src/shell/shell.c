@@ -974,10 +974,12 @@ static int get_protocol_fd (int *pfd)
         }
         if (fd_set_cloexec (fd) < 0)
             return -1;
-        *pfd = fd;
+        pfd[0] = fd;
+        pfd[1] = fd;
         return 0;
     }
-    *pfd = -1;
+    pfd[0] = STDIN_FILENO;
+    pfd[1] = STDOUT_FILENO;
     return 0;
 }
 
@@ -1112,7 +1114,7 @@ static void shell_initialize (flux_shell_t *shell)
     if (gethostname (shell->hostname, sizeof (shell->hostname)) < 0)
         shell_die_errno (1, "gethostname");
 
-    if (get_protocol_fd (&shell->protocol_fd) < 0)
+    if (get_protocol_fd (shell->protocol_fd) < 0)
         shell_die_errno (1, "Failed to parse FLUX_EXEC_PROTOCOL_FD");
 
     if (!(shell->completion_refs = zhashx_new ()))
@@ -1240,10 +1242,10 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
     if (shell->standalone || shell->info->shell_size == 1)
         return 0; // NO-OP
 
-    if (shell->protocol_fd < 0)
+    if (shell->protocol_fd[1] < 0)
         shell_die (1, "required FLUX_EXEC_PROTOCOL_FD not set");
 
-    if (dprintf (shell->protocol_fd, "enter\n") != 6)
+    if (dprintf (shell->protocol_fd[1], "enter\n") != 6)
         shell_die_errno (1, "shell_barrier: dprintf");
 
     /*  Note: The only expected values currently are "exit=0\n"
@@ -1254,7 +1256,7 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
      *   elsewhere.
      */
     memset (buf, 0, sizeof (buf));
-    if (read (shell->protocol_fd, buf, 7) < 0)
+    if (read (shell->protocol_fd[0], buf, 7) < 0)
         shell_die_errno (1, "shell_barrier: read");
     if (!streq (buf, "exit=0\n"))
         exit (1);

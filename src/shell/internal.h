@@ -27,7 +27,7 @@ struct flux_shell {
     flux_jobid_t jobid;
     int broker_rank;
     char hostname [MAXHOSTNAMELEN + 1];
-    int protocol_fd;
+    int protocol_fd[2];
 
     optparse_t *p;
     flux_t *h;
