@@ -142,7 +142,10 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
             sys.exit(1)
 
     if args.a:
-        args.filter.update(["pending", "running", "inactive"])
+        if args.filter:
+            LOGGER.warning("Both -a and --filter specified, ignoring -a")
+        else:
+            args.filter.update(["pending", "running", "inactive"])
 
     if not args.filter:
         args.filter = {"pending", "running"}
