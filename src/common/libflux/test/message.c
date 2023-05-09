@@ -1161,6 +1161,29 @@ void check_print (void)
     fclose (f);
 }
 
+void check_print_rolemask (void)
+{
+    flux_msg_t *msg;
+    FILE *fp;
+    uint32_t rolemask;
+    char *buf = NULL;
+    size_t size = 0;
+
+    rolemask = FLUX_ROLE_LOCAL | FLUX_ROLE_USER | 0x10;
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST))
+        || flux_msg_set_rolemask (msg, rolemask) < 0)
+        BAIL_OUT ("failed to create test request");
+    if (!(fp = open_memstream (&buf, &size)))
+        BAIL_OUT ("open_memstream failed");
+    flux_msg_fprint (fp, msg);
+    fclose (fp); // close flushes content
+    diag ("%s", buf);
+    ok (buf && strstr (buf, "rolemask=user,local,0x10") != NULL,
+        "flux_msg_fprint() rolemask string is correct");
+    free (buf);
+    flux_msg_destroy (msg);
+}
+
 void check_flags (void)
 {
     flux_msg_t *msg;
@@ -1404,6 +1427,7 @@ int main (int argc, char *argv[])
     check_refcount();
 
     check_print ();
+    check_print_rolemask ();
 
     check_proto_internal ();
 
