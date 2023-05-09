@@ -95,12 +95,12 @@ test_expect_success 'simulated local connector auth failure returns EPERM' '
 
 test_expect_success 'flux ping --userid displays userid' '
 	flux ping --count=1 --userid broker >ping.out &&
-	grep -q "userid=$(id -u) rolemask=0x1" ping.out
+	grep -q "userid=$(id -u) rolemask=0x5" ping.out
 '
 
 test_expect_success 'FLUX_HANDLE_USERID can spoof userid in message' '
 	FLUX_HANDLE_USERID=9999 flux ping --count=1 --userid broker >ping2.out &&
-	grep -q "userid=9999 rolemask=0x1" ping2.out
+	grep -q "userid=9999 rolemask=0x5" ping2.out
 '
 
 test_expect_success 'FLUX_HANDLE_ROLEMASK can spoof rolemask in message' '

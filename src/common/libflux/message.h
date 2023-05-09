@@ -233,6 +233,7 @@ enum {
     FLUX_ROLE_NONE = 0,
     FLUX_ROLE_OWNER = 1,
     FLUX_ROLE_USER = 2,
+    FLUX_ROLE_LOCAL = 4,
     FLUX_ROLE_ALL = 0xFFFFFFFF,
 };
 int flux_msg_set_rolemask (flux_msg_t *msg, uint32_t rolemask);
@@ -259,6 +260,11 @@ int flux_msg_cred_authorize (struct flux_msg_cred cred, uint32_t userid);
  * flux_msg_get_cred() + flux_msg_cred_authorize().
  */
 int flux_msg_authorize (const flux_msg_t *msg, uint32_t userid);
+
+/* Return true if 'msg' credential carries FLUX_ROLE_LOCAL, indicating
+ * that the message has not traversed brokers.
+ */
+bool flux_msg_is_local (const flux_msg_t *msg);
 
 /* Get/set errnum (response only)
  */

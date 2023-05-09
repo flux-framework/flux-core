@@ -90,6 +90,11 @@ static int client_authenticate (struct connector_local *ctx,
         errno = EPERM;
         goto error;
     }
+    /* Tack on FLUX_ROLE_LOCAL to indicate that this message was
+     * accepted by the local connector.  This role is cleared when
+     * the message is received by another broker.
+     */
+    rolemask |= FLUX_ROLE_LOCAL;
     /* Test hook: drop owner cred for one connection.
      */
     if (flux_module_debug_test (ctx->h, DEBUG_OWNERDROP_ONESHOT, true)) {

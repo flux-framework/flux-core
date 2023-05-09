@@ -454,14 +454,6 @@ static struct child *child_lookup (struct overlay *ov, const char *id)
     return NULL;
 }
 
-bool overlay_msg_is_local (const flux_msg_t *msg)
-{
-    /*  Return true only if msg is non-NULL and the message does not
-     *  have the overlay supplied "remote" tag.
-     */
-    return (msg && flux_msg_aux_get (msg, "overlay::remote") == NULL);
-}
-
 /* Lookup (direct) child peer by rank.
  * Returns NULL on lookup failure.
  */
@@ -869,6 +861,18 @@ static void logdrop (struct overlay *ov,
               reason);
 }
 
+static int clear_msg_role (flux_msg_t *msg, uint32_t role)
+{
+    uint32_t rolemask;
+
+    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+        return -1;
+    rolemask &= ~role;
+    if (flux_msg_set_rolemask (msg, rolemask) < 0)
+        return -1;
+    return 0;
+}
+
 /* Handle a message received from TBON child (downstream).
  */
 static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -883,11 +887,8 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     if (!(msg = zmqutil_msg_recv (ov->bind_zsock)))
         return;
-    /* Flag this message as remotely received. This allows efficient
-     * operation of the overlay_msg_is_local() function.
-     */
-    if (flux_msg_aux_set (msg, "overlay::remote", int2ptr (1), NULL) < 0) {
-        logdrop (ov, OVERLAY_DOWNSTREAM, msg, "failed to tag msg as remote");
+    if (clear_msg_role (msg, FLUX_ROLE_LOCAL) < 0) {
+        logdrop (ov, OVERLAY_DOWNSTREAM, msg, "failed to clear local role");
         goto done;
     }
     if (flux_msg_get_type (msg, &type) < 0
@@ -992,11 +993,8 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     if (!(msg = zmqutil_msg_recv (ov->parent.zsock)))
         return;
-    /* Flag this message as remotely received. This allows efficient
-     * operation of the overlay_msg_is_local() function.
-     */
-    if (flux_msg_aux_set (msg, "overlay::remote", int2ptr (1), NULL) < 0) {
-        logdrop (ov, OVERLAY_UPSTREAM, msg, "failed to tag msg as remote");
+    if (clear_msg_role (msg, FLUX_ROLE_LOCAL) < 0) {
+        logdrop (ov, OVERLAY_UPSTREAM, msg, "failed to clear local role");
         goto done;
     }
     if (flux_msg_get_type (msg, &type) < 0) {

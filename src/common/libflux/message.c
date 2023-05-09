@@ -507,6 +507,15 @@ int flux_msg_authorize (const flux_msg_t *msg, uint32_t userid)
     return 0;
 }
 
+bool flux_msg_is_local (const flux_msg_t *msg)
+{
+    uint32_t rolemask;
+    if (flux_msg_get_rolemask (msg, &rolemask) == 0
+        && (rolemask & FLUX_ROLE_LOCAL))
+        return true;
+    return false;
+}
+
 int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid)
 {
     if (msg_validate (msg) < 0)
@@ -1238,26 +1247,39 @@ static void userid2str (uint32_t userid, char *buf, int buflen)
     assert (n < buflen);
 }
 
-static void rolemask2str (uint32_t rolemask, char *buf, int buflen)
+static int roletostr (uint32_t role, const char *sep, char *buf, int buflen)
 {
     int n;
-    switch (rolemask) {
-        case FLUX_ROLE_NONE:
-            n = snprintf (buf, buflen, "none");
-            break;
-        case FLUX_ROLE_OWNER:
-            n = snprintf (buf, buflen, "owner");
-            break;
-        case FLUX_ROLE_USER:
-            n = snprintf (buf, buflen, "user");
-            break;
-        case FLUX_ROLE_ALL:
-            n = snprintf (buf, buflen, "all");
-            break;
-        default:
-            n = snprintf (buf, buflen, "unknown");
+    if (role == FLUX_ROLE_OWNER)
+        n = snprintf (buf, buflen, "%sowner", sep);
+    else if (role == FLUX_ROLE_USER)
+        n = snprintf (buf, buflen, "%suser", sep);
+    else if (role == FLUX_ROLE_LOCAL)
+        n = snprintf (buf, buflen, "%slocal", sep);
+    else
+        n = snprintf (buf, buflen, "%s0x%x", sep, role);
+    if (n >= buflen)
+        n = buflen;
+    return n;
+}
+
+static void rolemask2str (uint32_t rolemask, char *buf, int buflen)
+{
+    if (rolemask == FLUX_ROLE_NONE)
+        snprintf (buf, buflen, "none");
+    else if (rolemask == FLUX_ROLE_ALL)
+        snprintf (buf, buflen, "all");
+    else {
+        int offset = 0;
+        for (int i = 0; i < sizeof (rolemask)*8; i++) {
+            if (rolemask & 1<<i) {
+                offset += roletostr (rolemask & 1<<i,
+                                     offset > 0 ? "," : "",
+                                     buf + offset,
+                                     buflen - offset);
+            }
+        }
     }
-    assert (n < buflen);
 }
 
 static void nodeid2str (uint32_t nodeid, char *buf, int buflen)

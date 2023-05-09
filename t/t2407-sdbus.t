@@ -18,7 +18,7 @@ if ! busctl --user status >/dev/null; then
 	test_done
 fi
 
-test_under_flux 1 minimal
+test_under_flux 2 minimal
 
 flux setattr log-stderr-level 1
 
@@ -263,6 +263,27 @@ test_expect_success NO_CHAIN_LINT 'all test units triggered signals' '
 	test $(grep flux-t2406-2 signals.out | wc -l) -gt 0 &&
 	test $(grep flux-t2406-3 signals.out | wc -l) -gt 0 &&
 	test $(grep flux-t2406-4 signals.out | wc -l) -gt 0
+'
+# Test restriction of RPCs to sdbus on rank 0 from rank 1
+# N.B. requests are forwarded upstream b/c sdbus is not loaded on rank 1
+test_expect_success 'subscribe from rank 1 is restricted' '
+        test_must_fail flux exec -r 1 flux python ./subscribe.py 2>sub1.err &&
+	grep "not allowed" sub1.err
+'
+test_expect_success 'create list script' '
+	cat >list.py <<-EOT &&
+	import sys
+	import flux
+	print(flux.Flux().rpc("sdbus.call",{"member":"ListUnitsByPatterns","params":[[],["*"]]}).get_str())
+	EOT
+	chmod +x list.py
+'
+test_expect_success 'list from rank 0 is allowed' '
+	flux python ./list.py >/dev/null
+'
+test_expect_success 'list-units-leader from rank 1 is restricted' '
+	test_must_fail flux exec -r 1 flux python ./list.py 2>list1.err &&
+	grep "not allowed" list1.err
 '
 
 test_expect_success 'remove sdbus module' '
