@@ -345,7 +345,15 @@ test_expect_success 'flux-jobs --filter works (job results)' '
 	count=`flux jobs --no-header --filter=running,canceled | wc -l` &&
 	test $count -eq $(job_list_state_count run canceled) &&
 	count=`flux jobs --no-header --filter=running,timeout | wc -l` &&
-	test $count -eq $(job_list_state_count run timeout)
+	test $count -eq $(job_list_state_count run timeout) &&
+	count=`flux jobs --no-header --filter=inactive,completed | wc -l` &&
+	test $count -eq $(job_list_state_count inactive) &&
+	count=`flux jobs --no-header --filter=inactive,failed | wc -l` &&
+	test $count -eq $(job_list_state_count inactive) &&
+	count=`flux jobs --no-header --filter=inactive,canceled | wc -l` &&
+	test $count -eq $(job_list_state_count inactive) &&
+	count=`flux jobs --no-header --filter=inactive,timeout | wc -l` &&
+	test $count -eq $(job_list_state_count inactive)
 '
 
 
