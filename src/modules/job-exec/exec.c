@@ -117,13 +117,13 @@ static void complete_cb (struct bulk_exec *exec, void *arg)
 static int exec_barrier_enter (struct bulk_exec *exec)
 {
     struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
+    const char *stream = config_use_imp_helper () ?
+                         "stdin" :
+                         "FLUX_EXEC_PROTOCOL_FD";
     if (!ctx)
         return -1;
     if (++ctx->barrier_enter_count == bulk_exec_total (exec)) {
-        if (bulk_exec_write (exec,
-                             "FLUX_EXEC_PROTOCOL_FD",
-                             "exit=0\n",
-                             7) < 0)
+        if (bulk_exec_write (exec, stream, "exit=0\n", 7) < 0)
             return -1;
         ctx->barrier_enter_count = 0;
         ctx->barrier_completion_count++;
@@ -135,10 +135,7 @@ static int exec_barrier_enter (struct bulk_exec *exec)
          *   case where a shell exits while a barrier is already in progress
          *   is handled in exit_cb().
          */
-        if (bulk_exec_write (exec,
-                             "FLUX_EXEC_PROTOCOL_FD",
-                             "exit=1\n",
-                             7) < 0)
+        if (bulk_exec_write (exec, stream, "exit=1\n", 7) < 0)
             return -1;
     }
     return 0;
@@ -153,7 +150,8 @@ static void output_cb (struct bulk_exec *exec, flux_subprocess_t *p,
     struct jobinfo *job = arg;
     const char *cmd = flux_cmd_arg (flux_subprocess_get_cmd (p), 0);
 
-    if (streq (stream, "FLUX_EXEC_PROTOCOL_FD")) {
+    if (streq (stream, "FLUX_EXEC_PROTOCOL_FD")
+        || (config_use_imp_helper () && streq (stream, "stdout"))) {
         if (streq (data, "enter\n")
             && exec_barrier_enter (exec) < 0) {
             jobinfo_fatal_error (job,
@@ -293,10 +291,10 @@ static void exit_cb (struct bulk_exec *exec,
      */
     if (ctx->barrier_completion_count == 0
         || ctx->barrier_enter_count > 0) {
-        if (bulk_exec_write (exec,
-                             "FLUX_EXEC_PROTOCOL_FD",
-                             "exit=1\n",
-                             7) < 0)
+        const char *stream = config_use_imp_helper () ?
+                             "stdin" :
+                             "FLUX_EXEC_PROTOCOL_FD";
+        if (bulk_exec_write (exec, stream, "exit=1\n", 7) < 0)
             jobinfo_fatal_error (job, 0,
                                  "failed to terminate barrier: %s",
                                  strerror (errno));
@@ -375,7 +373,7 @@ static int exec_init (struct jobinfo *job)
     /*  If more than one shell is involved in this job, set up a channel
      *   for exec system based barrier:
      */
-    if (idset_count (ranks) > 1) {
+    if (idset_count (ranks) > 1 && !config_use_imp_helper ()) {
         if (flux_cmd_add_channel (cmd, "FLUX_EXEC_PROTOCOL_FD") < 0
             || flux_cmd_setopt (cmd,
                                 "FLUX_EXEC_PROTOCOL_FD_LINE_BUFFER",
