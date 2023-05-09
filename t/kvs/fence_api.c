@@ -26,6 +26,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
+#include "ccan/str/str.h"
 
 typedef struct {
     pthread_t t;
@@ -171,10 +172,10 @@ int main (int argc, char *argv[])
      * should all be the same
      */
     for (i = 1; i < count; i++) {
-        if (strcmp (thd[0].treeobj, thd[i].treeobj))
+        if (!streq (thd[0].treeobj, thd[i].treeobj))
             log_msg_exit ("treeobj mismatch: %s != %s\n",
                           thd[0].treeobj, thd[i].treeobj);
-        if (strcmp (thd[0].rootref, thd[i].rootref))
+        if (!streq (thd[0].rootref, thd[i].rootref))
             log_msg_exit ("rootref mismatch: %s != %s\n",
                           thd[0].rootref, thd[i].rootref);
         if (thd[0].sequence != thd[i].sequence)

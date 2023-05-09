@@ -27,6 +27,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/bindings/lua/jansson-lua.h"
 #include "src/bindings/lua/lutil.h"
+#include "ccan/str/str.h"
 #include "internal.h"
 #include "info.h"
 
@@ -600,15 +601,15 @@ static int l_plugin_index (lua_State *L)
     if (key == NULL)
         return luaL_error (L, "plugin: invalid key");
 
-    if (strcmp (key, "load") == 0) {
+    if (streq (key, "load")) {
         lua_pushcfunction (L, l_plugin_load);
         return 1;
     }
-   if (strcmp (key, "register") == 0) {
+   if (streq (key, "register")) {
         lua_pushcfunction (L, l_plugin_register);
         return 1;
     }
-    else if (strcmp (key, "searchpath") == 0) {
+    else if (streq (key, "searchpath")) {
         lua_pushstring (L, plugstack_get_searchpath (rc_shell->plugstack));
         return 1;
     } else {
@@ -621,7 +622,7 @@ static int l_plugin_index (lua_State *L)
 static int l_plugin_newindex (lua_State *L)
 {
     const char *key = lua_tostring (L, 2);
-    if (strcmp (key, "searchpath") == 0) {
+    if (streq (key, "searchpath")) {
         const char *path = lua_tostring (L, 3);
         plugstack_set_searchpath (rc_shell->plugstack, path);
         return 0;
@@ -636,43 +637,43 @@ static int l_shell_index (lua_State *L)
     if (key == NULL)
         return luaL_error (L, "shell: invalid key");
 
-    if (strcmp (key, "info") == 0)
+    if (streq (key, "info"))
         return l_shell_info (L);
-    else if (strcmp (key, "getenv") == 0) {
+    else if (streq (key, "getenv")) {
         lua_pushcfunction (L, l_shell_getenv);
         return 1;
     }
-    else if (strcmp (key, "setenv") == 0) {
+    else if (streq (key, "setenv")) {
         lua_pushcfunction (L, l_shell_setenv);
         return 1;
     }
-    else if (strcmp (key, "unsetenv") == 0) {
+    else if (streq (key, "unsetenv")) {
         lua_pushcfunction (L, l_shell_unsetenv);
         return 1;
     }
-    else if (strcmp (key, "get_rankinfo") == 0) {
+    else if (streq (key, "get_rankinfo")) {
         lua_pushcfunction (L, l_shell_rankinfo);
         return 1;
     }
-    else if (strcmp (key, "rankinfo") == 0)
+    else if (streq (key, "rankinfo"))
         return l_shell_rankinfo (L);
-    else if (strcmp (key, "verbose") == 0) {
+    else if (streq (key, "verbose")) {
         lua_pushboolean (L, rc_shell->verbose);
         return 1;
     }
-    else if (strcmp (key, "log") == 0) {
+    else if (streq (key, "log")) {
         lua_pushcfunction (L, l_shell_log);
         return 1;
     }
-    else if (strcmp (key, "debug") == 0) {
+    else if (streq (key, "debug")) {
         lua_pushcfunction (L, l_shell_debug);
         return 1;
     }
-    else if (strcmp (key, "log_error") == 0) {
+    else if (streq (key, "log_error")) {
         lua_pushcfunction (L, l_shell_log_error);
         return 1;
     }
-    else if (strcmp (key, "die") == 0) {
+    else if (streq (key, "die")) {
         lua_pushcfunction (L, l_shell_die);
         return 1;
     }
@@ -692,7 +693,7 @@ static int is_shell_method (const char *name)
 {
     const char **sp = &shell_fields [0];
     while (*sp != NULL) {
-        if (strcmp (name, *sp) == 0)
+        if (streq (name, *sp))
             return 1;
         sp++;
     }
@@ -713,7 +714,7 @@ static int l_shell_newindex (lua_State *L)
                                   key);
         }
 
-        if (strcmp (key, "verbose") == 0) {
+        if (streq (key, "verbose")) {
             int level;
             /*  Handle Lua's baffling choice for lua_tonumber(true) == nil
              *  allows shell.verbose = 1 or true to work.
@@ -796,18 +797,18 @@ static int l_task_index (lua_State *L)
 
     if (key == NULL)
         return lua_pusherror (L, "invalid key %s", key);
-    else if (strcmp (key, "info") == 0) {
+    else if (streq (key, "info")) {
         return l_task_info (L, task);
     }
-    else if (strcmp (key, "getenv") == 0) {
+    else if (streq (key, "getenv")) {
         lua_pushcfunction (L, l_task_getenv);
         return 1;
     }
-    else if (strcmp (key, "setenv") == 0) {
+    else if (streq (key, "setenv")) {
         lua_pushcfunction (L, l_task_setenv);
         return 1;
     }
-    else if (strcmp (key, "unsetenv") == 0) {
+    else if (streq (key, "unsetenv")) {
         lua_pushcfunction (L, l_task_unsetenv);
         return 1;
     }

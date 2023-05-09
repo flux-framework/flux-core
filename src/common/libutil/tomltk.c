@@ -20,6 +20,7 @@
 #include <jansson.h>
 
 #include "src/common/libtomlc99/toml.h"
+#include "ccan/str/str.h"
 #include "timestamp.h"
 #include "tomltk.h"
 
@@ -56,9 +57,9 @@ static void errfromtoml (struct tomltk_error *error,
     if (error) {
         char *msg = errstr;
         int lineno = -1;
-        if (!strncmp (errstr, "line ", 5)) {
+        if (strstarts (errstr, "line ")) {
             lineno = strtoul (errstr + 5, &msg, 10);
-            if (!strncmp (msg, ": ", 2))
+            if (strstarts (msg, ": "))
                 msg += 2;
         }
         return errprintf (error, filename, lineno, "%s", msg);

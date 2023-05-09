@@ -15,6 +15,7 @@
 
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libfluxutil/method.h"
+#include "ccan/str/str.h"
 
 #include "module.h"
 #include "modservice.h"
@@ -73,13 +74,13 @@ static void debug_cb (flux_t *h, flux_msg_handler_t *mh,
         }
         flux_aux_set (h, "flux::debug_flags", debug_flags, free);
     }
-    if (!strcmp (op, "setbit"))
+    if (streq (op, "setbit"))
         *debug_flags |= flags;
-    else if (!strcmp (op, "clrbit"))
+    else if (streq (op, "clrbit"))
         *debug_flags &= ~flags;
-    else if (!strcmp (op, "set"))
+    else if (streq (op, "set"))
         *debug_flags = flags;
-    else if (!strcmp (op, "clr"))
+    else if (streq (op, "clr"))
         *debug_flags = 0;
     else {
         errno = EPROTO;

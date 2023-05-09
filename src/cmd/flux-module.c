@@ -390,7 +390,7 @@ char *lsmod_services_string (json_t *services, const char *skip, int maxcol)
 
     json_array_foreach (services, index, value) {
         const char *name = json_string_value (value);
-        if (name && (!skip || strcmp (name, skip) != 0))
+        if (name && (!skip || !streq (name, skip)))
             if (argz_add (&argz, &argz_len, name) != 0)
                 oom ();
     }
@@ -548,10 +548,12 @@ static void parse_json (optparse_t *p, const char *json_str)
      */
     scale = optparse_get_double (p, "scale", 1.0);
     typestr = optparse_get_str (p, "type", NULL);
-    if (json_typeof (o) == JSON_INTEGER || (typestr && !strcmp (typestr, "int"))) {
+    if (json_typeof (o) == JSON_INTEGER
+        || (typestr && streq (typestr, "int"))) {
         double d = json_number_value (o);
         printf ("%d\n", (int)(d * scale));
-    } else if (json_typeof (o) == JSON_REAL || (typestr && !strcmp (typestr, "double"))) {
+    } else if (json_typeof (o) == JSON_REAL
+        || (typestr && streq (typestr, "double"))) {
         double d = json_number_value (o);
         printf ("%lf\n", d * scale);
     } else {

@@ -24,6 +24,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "attr.h"
 #include "overlay.h"
@@ -378,7 +379,7 @@ int boot_config_getrankbyname (json_t *hosts, const char *name, uint32_t *rank)
         /* N.B. entry already validated by boot_config_parse().
          */
         if (json_unpack (entry, "{s:s}", "host", &host) == 0
-                    && !strcmp (name, host)) {
+            && streq (name, host)) {
             *rank = index;
             return 0;
         }

@@ -18,6 +18,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libccan/ccan/base64/base64.h"
+#include "ccan/str/str.h"
 
 #include "module.h"
 #include "publisher.h"
@@ -170,7 +171,7 @@ static void broker_unsubscribe (struct broker *ctx, const char *topic)
 {
     char *s = zlist_first (ctx->subscriptions);
     while (s) {
-        if (!strcmp (s, topic)) {
+        if (streq (s, topic)) {
             zlist_remove (ctx->subscriptions, s);
             break;
         }

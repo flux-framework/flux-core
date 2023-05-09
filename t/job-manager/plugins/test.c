@@ -3,6 +3,7 @@
 
 #include <flux/core.h>
 #include <flux/jobtap.h>
+#include "ccan/str/str.h"
 
 static int cb (flux_plugin_t *p,
                const char *topic,
@@ -29,12 +30,12 @@ static int cb (flux_plugin_t *p,
         return -1;
     }
 
-    if (strcmp (topic, "job.validate") == 0) {
-        if (strcmp (test_mode, "validate failure") == 0)
+    if (streq (topic, "job.validate")) {
+        if (streq (test_mode, "validate failure"))
             return flux_jobtap_reject_job (p, args, "rejected for testing");
-        if (strcmp (test_mode, "validate failure nullmsg") == 0)
+        if (streq (test_mode, "validate failure nullmsg"))
             return flux_jobtap_reject_job (p, args, NULL);
-        if (strcmp (test_mode, "validate failure nomsg") == 0)
+        if (streq (test_mode, "validate failure nomsg"))
             return -1;
         return 0;
     }
@@ -50,12 +51,12 @@ static int cb (flux_plugin_t *p,
                   "arg_pack: %s",
                   flux_plugin_arg_strerror (args));
 
-    if (strcmp (topic, "job.state.priority") == 0) {
-        if (strcmp (test_mode, "priority unset") == 0)
+    if (streq (topic, "job.state.priority")) {
+        if (streq (test_mode, "priority unset"))
             return 0;
-        if (strcmp (test_mode, "callback error") == 0)
+        if (streq (test_mode, "callback error"))
             return -1;
-        if (strcmp (test_mode, "annotations error") == 0) {
+        if (streq (test_mode, "annotations error")) {
             if (flux_plugin_arg_pack (args,
                                       FLUX_PLUGIN_ARG_OUT,
                                       "{s:s}",
@@ -65,33 +66,33 @@ static int cb (flux_plugin_t *p,
                           flux_plugin_arg_strerror (args));
             return 0;
         }
-        if (strcmp (test_mode, "priority type error") == 0) {
+        if (streq (test_mode, "priority type error")) {
             flux_plugin_arg_pack (args,
                                   FLUX_PLUGIN_ARG_OUT,
                                   "{s:s}",
                                   "priority", "foo");
         }
     }
-    else if (strcmp (topic, "job.state.sched") == 0) {
-        if (strcmp (test_mode, "sched: priority unavail") == 0)
+    else if (streq (topic, "job.state.sched")) {
+        if (streq (test_mode, "sched: priority unavail"))
             return flux_jobtap_priority_unavail (p, args);
-        if (strcmp (test_mode, "sched: callback error") == 0)
+        if (streq (test_mode, "sched: callback error"))
             return -1;
-        if (strcmp (test_mode, "sched: update priority") == 0) {
+        if (streq (test_mode, "sched: update priority")) {
             flux_plugin_arg_pack (args,
                                   FLUX_PLUGIN_ARG_OUT,
                                   "{s:i}",
                                   "priority", 42);
         }
-        if (strcmp (test_mode, "sched: dependency-add") == 0) {
+        if (streq (test_mode, "sched: dependency-add")) {
             return flux_jobtap_dependency_add (p, id, "foo");
         }
-        if (strcmp (test_mode, "sched: exception") == 0) {
+        if (streq (test_mode, "sched: exception")) {
             flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
                                         "test", 0,
                                         "sched: test exception");
         }
-        if (strcmp (test_mode, "sched: exception error") == 0) {
+        if (streq (test_mode, "sched: exception error")) {
             if (flux_jobtap_raise_exception (NULL, 0, "test", 0, "") >= 0
                 || errno != EINVAL)
                 flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
@@ -99,12 +100,12 @@ static int cb (flux_plugin_t *p,
                                             "sched: exception error failed");
         }
     }
-    else if (strcmp (topic, "job.priority.get") == 0) {
-        if (strcmp (test_mode, "priority.get: fail") == 0)
+    else if (streq (topic, "job.priority.get")) {
+        if (streq (test_mode, "priority.get: fail"))
             return -1;
-        if (strcmp (test_mode, "priority.get: unavail") == 0)
+        if (streq (test_mode, "priority.get: unavail"))
             return flux_jobtap_priority_unavail (p, args);
-        if (strcmp (test_mode, "priority.get: bad arg") == 0) {
+        if (streq (test_mode, "priority.get: bad arg")) {
             flux_plugin_arg_pack (args,
                                   FLUX_PLUGIN_ARG_OUT,
                                   "{s:s}",

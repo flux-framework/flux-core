@@ -4,6 +4,7 @@ AM_LDFLAGS =	$(CODE_COVERAGE_LIBS)
 AM_CPPFLAGS =	\
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
+	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux \
 	$(LUA_INCLUDE)
 

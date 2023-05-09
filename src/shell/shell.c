@@ -32,6 +32,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libtaskmap/taskmap_private.h"
+#include "ccan/str/str.h"
 
 #include "internal.h"
 #include "builtins.h"
@@ -1061,11 +1062,11 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
     char topic[128];
 
     /*  "jobid" is a synonym for "id" */
-    if (strncmp (name, "jobid", 5) == 0)
+    if (strstarts (name, "jobid"))
         name += 3;
-    if (strncmp (name, "id", 2) == 0)
+    if (strstarts (name, "id"))
         return mustache_render_jobid (shell, name, fp);
-    if (strcmp (name, "name") == 0)
+    if (streq (name, "name"))
         return mustache_render_name (shell, name, fp);
 
     if (snprintf (topic,
@@ -1255,7 +1256,7 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
     memset (buf, 0, sizeof (buf));
     if (read (shell->protocol_fd, buf, 7) < 0)
         shell_die_errno (1, "shell_barrier: read");
-    if (strcmp (buf, "exit=0\n") != 0)
+    if (!streq (buf, "exit=0\n"))
         exit (1);
     return 0;
 }
@@ -1351,14 +1352,14 @@ static int shell_taskmap (flux_shell_t *shell)
         return -1;
     }
     if (rc == 0
-        || strcmp (scheme, "block") == 0)
+        || streq (scheme, "block"))
         return 0;
 
     shell_trace ("remapping tasks with scheme=%s value=%s",
                  scheme,
                  value);
 
-    if (strcmp (scheme, "manual") == 0) {
+    if (streq (scheme, "manual")) {
         if (!(taskmap = taskmap_decode (value, &error)))
             shell_die (1, "taskmap=%s: %s", value, error.text);
         if (shell_info_set_taskmap (shell->info, taskmap) < 0)

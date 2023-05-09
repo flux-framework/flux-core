@@ -25,6 +25,7 @@
 #include "src/common/libutil/dirwalk.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/str/str.h"
 
 #include "rutil.h"
 
@@ -192,7 +193,7 @@ static int load_xml_file (dirwalk_t *d, void *arg)
         return 0;
     errno = 0;
     rank = strtol (name, &endptr, 10);
-    if (errno > 0 || strcmp (endptr, ".xml") != 0)
+    if (errno > 0 || !streq (endptr, ".xml"))
         return 0;
 
     /* Read the file and encode as JSON string, storing under rank key.

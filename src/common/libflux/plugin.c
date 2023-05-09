@@ -26,6 +26,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
+#include "ccan/str/str.h"
 
 #include "plugin.h"
 
@@ -79,7 +80,7 @@ static const struct flux_plugin_handler * find_handler (flux_plugin_t *p,
 {
     struct flux_plugin_handler *h = zlistx_first (p->handlers);
     while (h) {
-        if (strcmp (h->topic, string) == 0)
+        if (streq (h->topic, string))
             return h;
         h = zlistx_next (p->handlers);
     }

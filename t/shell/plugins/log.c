@@ -19,6 +19,7 @@
 #include <flux/shell.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 static int get_shell_rank (flux_shell_t *shell)
 {
@@ -44,7 +45,7 @@ static int check_shell_log (flux_plugin_t *p,
     int shell_rank;
     const char *s = NULL;
 
-    if (strcmp (topic, "shell.log") == 0)
+    if (streq (topic, "shell.log"))
         return 0;
 
     shell_rank = get_shell_rank (shell);
@@ -52,7 +53,7 @@ static int check_shell_log (flux_plugin_t *p,
         shell_die (1, "error parsing log-fatal-error");
 
     if (s) {
-        if (strcmp (s, topic) == 0 && shell_rank == 1)
+        if (streq (s, topic) && shell_rank == 1)
             shell_die (1, "log-fatal-error requested!");
         /* For log-fatal-error test, avoid the remaining log testing
          *  below on the non-fatal ranks
@@ -74,7 +75,7 @@ static int check_shell_log (flux_plugin_t *p,
     ok (shell_log_errno ("%s: log_errno message", topic) == -1,
         "shell_log_errno returns -1");
 
-    if (strcmp (topic, "shell.exit") == 0 || strcmp (topic, "task.exec") == 0)
+    if (streq (topic, "shell.exit") || streq (topic, "task.exec"))
         return exit_status () == 0 ? 0 : -1;
     return 0;
 }

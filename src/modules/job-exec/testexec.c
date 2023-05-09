@@ -50,6 +50,8 @@
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
+
 #include "job-exec.h"
 
 struct testexec_ctx {
@@ -147,7 +149,7 @@ static int init_testconf (flux_t *h, struct testconf *conf, json_t *jobspec)
 static bool testconf_mock_exception (struct testconf *conf, const char *where)
 {
     const char *s = conf->mock_exception;
-    return (s && strcmp (s, where) == 0);
+    return (s && streq (s, where));
 }
 
 /* Timer callback, post the "finish" event and notify tasks are complete
@@ -250,7 +252,7 @@ static int testexec_reattach_starttime (struct jobinfo *job,
             jobinfo_fatal_error (job, errno, "eventlog_entry_parse");
             goto cleanup;
         }
-        if (!strcmp (name, "start")) {
+        if (streq (name, "start")) {
             (*startp) = (time_t)timestamp;
             break;
         }
@@ -387,7 +389,7 @@ static void testexec_request_cb (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (strcmp (event, "start") == 0) {
+    if (streq (event, "start")) {
         if (te->job->running) {
             errmsg = "Job already running";
             errno = EINVAL;
@@ -396,7 +398,7 @@ static void testexec_request_cb (flux_t *h,
         if (start_timer (h, te, te->conf.run_duration) < 0)
             goto error;
     }
-    else if (strcmp (event, "finish") == 0) {
+    else if (streq (event, "finish")) {
         if (!te->job->running) {
             errmsg = "Job not running";
             errno = EINVAL;

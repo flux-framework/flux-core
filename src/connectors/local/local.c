@@ -16,6 +16,7 @@
 
 #include "src/common/librouter/usock.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/str/str.h"
 
 struct local_connector {
     struct usock_client *uclient;
@@ -97,7 +98,7 @@ static int op_setopt (void *impl, const char *option,
     size_t val_size;
     int rc = -1;
 
-    if (option && !strcmp (option, FLUX_OPT_TESTING_USERID)) {
+    if (option && streq (option, FLUX_OPT_TESTING_USERID)) {
         val_size = sizeof (ctx->testing_userid);
         if (size != val_size) {
             errno = EINVAL;
@@ -105,7 +106,7 @@ static int op_setopt (void *impl, const char *option,
         }
         memcpy (&ctx->testing_userid, val, val_size);
     }
-    else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
+    else if (option && streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
         val_size = sizeof (ctx->testing_rolemask);
         if (size != val_size) {
             errno = EINVAL;
@@ -129,7 +130,7 @@ static int op_getopt (void *impl, const char *option,
     size_t val_size;
     int rc = -1;
 
-    if (option && !strcmp (option, "flux::owner")) {
+    if (option && streq (option, "flux::owner")) {
         val_size = sizeof (ctx->owner);
         if (size != val_size) {
             errno = EINVAL;

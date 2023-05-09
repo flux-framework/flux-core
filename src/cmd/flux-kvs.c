@@ -26,6 +26,7 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "ccan/str/str.h"
 
 int cmd_namespace (optparse_t *p, int argc, char **argv);
 int cmd_get (optparse_t *p, int argc, char **argv);
@@ -865,7 +866,7 @@ int cmd_put (optparse_t *p, int argc, char **argv)
             int len;
             uint8_t *buf = NULL;
 
-            if (!strcmp (val, "-")) { // special handling for "--treeobj key=-"
+            if (streq (val, "-")) { // special handling for "--treeobj key=-"
                 if ((len = read_all (STDIN_FILENO, (void **)&buf)) < 0)
                     log_err_exit ("stdin");
                 val = (char *)buf;
@@ -881,7 +882,7 @@ int cmd_put (optparse_t *p, int argc, char **argv)
             if (optparse_hasopt (p, "append"))
                 put_flags |= FLUX_KVS_APPEND;
 
-            if (!strcmp (val, "-")) { // special handling for "--raw key=-"
+            if (streq (val, "-")) { // special handling for "--raw key=-"
                 if ((len = read_all (STDIN_FILENO, (void **)&buf)) < 0)
                     log_err_exit ("stdin");
                 val = (char *)buf;
@@ -2092,7 +2093,7 @@ void eventlog_wait_event_continuation (flux_future_t *f, void *arg)
         if (eventlog_entry_parse (value, NULL, &name, NULL) < 0)
             log_err_exit ("eventlog_entry_parse");
 
-        if (!strcmp (name, ctx->wait_event)) {
+        if (streq (name, ctx->wait_event)) {
             if (!optparse_hasopt (ctx->p, "quiet"))
                 eventlog_print (ctx->p, value);
             ctx->got_event = true;

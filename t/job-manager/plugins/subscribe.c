@@ -3,6 +3,7 @@
 
 #include <flux/core.h>
 #include <flux/jobtap.h>
+#include "ccan/str/str.h"
 
 static int cb (flux_plugin_t *p,
                const char *topic,
@@ -11,7 +12,7 @@ static int cb (flux_plugin_t *p,
 {
     flux_t *h = flux_jobtap_get_flux (p);
 
-    if (strcmp (topic, "job.event.start") == 0) {
+    if (streq (topic, "job.event.start")) {
         /*  Test flux_jobtap_job_event_posted(), then unsusbscribe()
          */
         if (flux_jobtap_job_event_posted (NULL, 0, NULL) != -1
@@ -29,7 +30,7 @@ static int cb (flux_plugin_t *p,
                                          "event_count 'start' didn't return 1");
         flux_jobtap_job_unsubscribe (p, FLUX_JOBTAP_CURRENT_JOB);
     }
-    else if (strcmp (topic, "job.event.finish") == 0) {
+    else if (streq (topic, "job.event.finish")) {
         flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
                                      "subscribe-test",
                                      0,
@@ -39,7 +40,7 @@ static int cb (flux_plugin_t *p,
     }
 
     flux_log (h, LOG_INFO, "subscribe-check: %s: OK", topic);
-    if (strcmp (topic, "job.event.start") == 0) {
+    if (streq (topic, "job.event.start")) {
         // Test for nonzero exit from job.event.* callback:
         return -1;
     }

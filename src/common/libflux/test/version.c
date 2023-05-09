@@ -10,6 +10,7 @@
 
 #include "src/common/libflux/version.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 #include <string.h>
 
@@ -30,7 +31,7 @@ int main (int argc, char *argv[])
 
     snprintf (vs, sizeof (vs), "%d.%d.%d", a,b,c);
     s = flux_core_version_string ();
-    ok (s != NULL && !strncmp (s, vs, strlen (vs)),
+    ok (s != NULL && strstarts (s, vs),
         "flux_core_version_string returned expected string");
     diag (s);
 

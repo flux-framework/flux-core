@@ -23,6 +23,7 @@
 
 #include "bulk-exec.h"
 #include "src/common/libutil/log.h"
+#include "ccan/str/str.h"
 
 extern char **environ;
 static int cancel_after = 0;
@@ -64,7 +65,7 @@ void on_output (struct bulk_exec *exec, flux_subprocess_t *p,
                 int data_len, void *arg)
 {
     int rank = flux_subprocess_rank (p);
-    FILE *fp = strcmp (stream, "stdout") == 0 ? stdout : stderr;
+    FILE *fp = streq (stream, "stdout") ? stdout : stderr;
     fprintf (fp, "%d: %s", rank, data);
 }
 
@@ -224,7 +225,7 @@ int main (int ac, char **av)
     if (flux_get_size (h, &size) < 0)
         log_err_exit ("flux_get_size");
 
-    if (strcmp (ranks, "all") == 0) {
+    if (streq (ranks, "all")) {
         if (!(idset = idset_create (size, 0)))
             log_err_exit ("idset_create");
         if (idset_range_set (idset, 0, size - 1) < 0)

@@ -25,6 +25,7 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
+#include "ccan/str/str.h"
 
 
 #define OPTIONS "hc:s:p:qv"
@@ -151,7 +152,7 @@ int main (int argc, char *argv[])
             log_err_exit ("flux_kvs_lookup '%s'", key);
         if (verbose)
             log_msg ("%s = %s", key, s);
-        if (strcmp (s, val) != 0)
+        if (!streq (s, val))
             log_msg_exit ("kvs_lookup: key '%s' wrong value '%s'", key, s);
         free (key);
         flux_future_destroy (f);

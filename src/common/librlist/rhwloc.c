@@ -14,6 +14,8 @@
 
 #include <flux/idset.h>
 
+#include "ccan/str/str.h"
+
 #include "rhwloc.h"
 
 /*  Common hwloc_topology_init() and flags for Flux hwloc usage:
@@ -161,9 +163,9 @@ out:
 static bool backend_is_coproc (const char *s)
 {
     /* Only count cudaX, openclX, and rmsiX devices for now */
-    return (strcmp (s, "CUDA") == 0
-            || strcmp (s, "OpenCL") == 0
-            || strcmp (s, "RSMI") == 0);
+    return (streq (s, "CUDA")
+            || streq (s, "OpenCL")
+            || streq (s, "RSMI"));
 }
 
 char * rhwloc_gpu_idset_string (hwloc_topology_t topo)

@@ -32,6 +32,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/monotime.h"
+#include "ccan/str/str.h"
 
 #include "runat.h"
 
@@ -103,8 +104,8 @@ static char *get_cmdline (flux_cmd_t *cmd)
     /* Drop the "/bin/bash -c" from logging for brevity.
      */
     if (flux_cmd_argc (cmd) > 2
-        && !strcmp (flux_cmd_arg (cmd, 0), get_shell ())
-        && !strcmp (flux_cmd_arg (cmd, 1), "-c"))
+        && streq (flux_cmd_arg (cmd, 0), get_shell ())
+        && streq (flux_cmd_arg (cmd, 1), "-c"))
         start += 2;
     for (i = start; i < flux_cmd_argc (cmd); i++) {
         if (argz_add (&buf, &len, flux_cmd_arg (cmd, i)) != 0) {
@@ -219,7 +220,7 @@ static void stdio_cb (flux_subprocess_t *p, const char *stream)
     int len;
 
     if ((line = flux_subprocess_getline (p, stream, &len)) && len > 0) {
-        if (!strcmp (stream, "stderr"))
+        if (streq (stream, "stderr"))
             flux_log (r->h, LOG_ERR, "%s.%d: %s", entry->name, index, line);
         else
             flux_log (r->h, LOG_INFO, "%s.%d: %s", entry->name, index, line);

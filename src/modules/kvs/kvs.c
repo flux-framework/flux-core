@@ -625,7 +625,7 @@ static void content_store_completion (flux_future_t *f, void *arg)
      * location we calculated.
      * N.B. perhaps this check is excessive and could be removed
      */
-    if (strcmp (blobref, cache_blobref)) {
+    if (!streq (blobref, cache_blobref)) {
         flux_log (ctx->h, LOG_ERR, "%s: inconsistent blobref returned",
                   __FUNCTION__);
         errno = EPROTO;
@@ -2809,7 +2809,7 @@ static void process_args (struct kvs_ctx *ctx, int ac, char **av)
     int i;
 
     for (i = 0; i < ac; i++) {
-        if (strncmp (av[i], "transaction-merge=", 13) == 0)
+        if (strstarts (av[i], "transaction-merge="))
             ctx->transaction_merge = strtoul (av[i]+13, NULL, 10);
         else
             flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
@@ -2924,7 +2924,7 @@ static int store_initial_rootdir (struct kvs_ctx *ctx, char *ref, int ref_len)
         /* Sanity check that content cache is using the same hash alg as KVS.
          * It should suffice to do this once at startup.
          */
-        if (strcmp (newref, ref) != 0) {
+        if (!streq (newref, ref)) {
             errno = EPROTO;
             flux_log_error (ctx->h, "%s: hash mismatch kvs=%s content=%s",
                             __FUNCTION__, ref, newref);

@@ -14,6 +14,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libsubprocess/command.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 /*
  *  Check basic flux_cmd_create () with args
@@ -128,15 +129,15 @@ void check_cmd_attributes (flux_cmd_t *cmd)
         "flux_cmd_arg returns EINVAL on bad range");
     arg = flux_cmd_arg (cmd, 0);
     ok (arg != NULL
-        && !strcmp (arg, "command"),
+        && streq (arg, "command"),
         "flux_cmd_arg returns correct argv[0]");
     arg = flux_cmd_arg (cmd, 1);
     ok (arg != NULL
-        && !strcmp (arg, "foo"),
+        && streq (arg, "foo"),
         "flux_cmd_arg returns correct argv[1]");
     arg = flux_cmd_arg (cmd, 2);
     ok (arg != NULL
-        && !strcmp (arg, "bar"),
+        && streq (arg, "bar"),
         "flux_cmd_arg returns correct argv[2]");
 
     is (flux_cmd_getenv (cmd, "PATH"), "/bin:/usr/bin",

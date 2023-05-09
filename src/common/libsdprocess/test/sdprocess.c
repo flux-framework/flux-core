@@ -8,7 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#define _GNU_SOURCE
+#if HAVE_CONFIG_H
+# include "config.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,6 +25,7 @@
 #include "src/common/libsdprocess/sdprocess_private.h"
 #include "src/common/libsdprocess/strv.h"
 #include "src/common/libutil/fluid.h"
+#include "ccan/str/str.h"
 #include "src/common/libtestutil/util.h"
 
 static struct fluid_generator gen;
@@ -213,7 +216,7 @@ static void test_unitname (flux_t *h)
         "sdprocess_wait success");
 
     unitnameptr = sdprocess_unitname (sdp);
-    ok (unitnameptr && strcmp (unitname, unitnameptr) == 0,
+    ok (unitnameptr && streq (unitname, unitnameptr),
         "sdprocess_unitname returns correct unitname");
 
     sdprocess_systemd_cleanup_wrap (sdp);
@@ -1022,7 +1025,7 @@ static void test_output (flux_t *h,
     ok (ret == 0,
         "sdprocess_wait success");
 
-    ok (strcmp (buf, "foobar\n") == 0,
+    ok (streq (buf, "foobar\n"),
         "%s received the right output", do_stdout ? "stdout" : "stderr");
 
     sdprocess_systemd_cleanup_wrap (sdp);
@@ -1093,7 +1096,7 @@ static void test_stdin (flux_t *h)
     ok (ret == 0,
         "sdprocess_wait success");
 
-    ok (strcmp (buf, "foobar\n") == 0,
+    ok (streq (buf, "foobar\n"),
         "stdout received the right output");
 
     sdprocess_systemd_cleanup_wrap (sdp);
@@ -1144,7 +1147,7 @@ static void test_environment (flux_t *h)
     ok (ret == 0,
         "sdprocess_wait success");
 
-    ok (strcmp (buf, "FOO=BAR\n") == 0,
+    ok (streq (buf, "FOO=BAR\n"),
         "stdout received message indicating environment set correctly");
 
     sdprocess_systemd_cleanup_wrap (sdp);

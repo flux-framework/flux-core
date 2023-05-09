@@ -41,6 +41,7 @@
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/librouter/usock_service.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #define DEFAULT_EXIT_TIMEOUT 20.0
 
@@ -197,13 +198,13 @@ int main (int argc, char *argv[])
                                                   ctx.exit_timeout);
 
     ctx.exit_mode = optparse_get_str (ctx.opts, "test-exit-mode", "any");
-    if (strcmp (ctx.exit_mode, "any") != 0
-        && strcmp (ctx.exit_mode, "leader") != 0)
+    if (!streq (ctx.exit_mode, "any")
+        && !streq (ctx.exit_mode, "leader"))
         log_msg_exit ("unknown --test-exit-mode: %s", ctx.exit_mode);
 
     ctx.start_mode = optparse_get_str (ctx.opts, "test-start-mode", "all");
-    if (strcmp (ctx.start_mode, "all") != 0
-        && strcmp (ctx.start_mode, "leader") != 0)
+    if (!streq (ctx.start_mode, "all")
+        && !streq (ctx.start_mode, "leader"))
         log_msg_exit ("unknown --test-start-mode: %s", ctx.start_mode);
 
     ctx.verbose = optparse_get_int (ctx.opts, "verbose", 0);
@@ -230,7 +231,7 @@ int main (int argc, char *argv[])
         int i;
         for (i = 0; i < ARRAY_SIZE (opts); i++) {
             if (opts[i].name
-                && !strncmp (opts[i].name, "test-", 5)
+                && strstarts (opts[i].name, "test-")
                 && optparse_hasopt (ctx.opts, opts[i].name))
                 log_msg_exit ("%s only works with --test-size", opts[0].name);
         }
@@ -328,11 +329,11 @@ void update_timer (void)
             leader_exit = true;
         cli = zlist_next (ctx.clients);
     }
-    if (!strcmp (ctx.exit_mode, "any")) {
+    if (streq (ctx.exit_mode, "any")) {
         if (count > 0 && count < ctx.test_size)
             shutdown = true;
     }
-    else if (!strcmp (ctx.exit_mode, "leader")) {
+    else if (streq (ctx.exit_mode, "leader")) {
         if (count > 0 && leader_exit)
             shutdown = true;
     }
@@ -358,11 +359,11 @@ static void completion_cb (flux_subprocess_t *p)
      * flux-start's exit code.  In 'leader' mode, the leader broker's
      * exit code is flux-start's exit code.
      */
-    if (!strcmp (ctx.exit_mode, "any")) {
+    if (streq (ctx.exit_mode, "any")) {
         if (cli->exit_rc > ctx.exit_rc)
             ctx.exit_rc = cli->exit_rc;
     }
-    else if (!strcmp (ctx.exit_mode, "leader")) {
+    else if (streq (ctx.exit_mode, "leader")) {
         if (cli->rank == 0)
             ctx.exit_rc = cli->exit_rc;
     }
@@ -418,7 +419,7 @@ void channel_cb (flux_subprocess_t *p, const char *stream)
     int rc, lenp;
 
     assert (cli);
-    assert (!strcmp (stream, "PMI_FD"));
+    assert (streq (stream, "PMI_FD"));
 
     if (!(ptr = flux_subprocess_read_line (p, stream, &lenp)))
         log_err_exit ("%s: flux_subprocess_read_line", __FUNCTION__);
@@ -692,15 +693,15 @@ void pmi_server_initialize (int flags)
         || !(map = taskmap_create ()))
         oom ();
 
-    if (!strcmp (mode, "single")) {
+    if (streq (mode, "single")) {
         if (taskmap_append (map, 0, 1, ctx.test_size) < 0)
             log_err_exit ("error encoding PMI_process_mapping");
     }
-    else if (!strcmp (mode, "per-broker")) {
+    else if (streq (mode, "per-broker")) {
         if (taskmap_append (map, 0, ctx.test_size, 1) < 0)
             log_err_exit ("error encoding PMI_process_mapping");
     }
-    else if (strcmp (mode, "none") != 0)
+    else if (!streq (mode, "none"))
         log_msg_exit ("unsupported test-pmi-clique mode: %s", mode);
 
     if (taskmap_nnodes (map) > 0) {
@@ -1072,12 +1073,12 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
         if (zlist_append (ctx.clients, cli) < 0)
             log_err_exit ("zlist_append");
     }
-    if (!strcmp (ctx.start_mode, "leader")) {
+    if (streq (ctx.start_mode, "leader")) {
         cli = zlist_first (ctx.clients);
         if (client_run (cli) < 0)
             log_err_exit ("client_run");
     }
-    else if (!strcmp (ctx.start_mode, "all")) {
+    else if (streq (ctx.start_mode, "all")) {
         cli = zlist_first (ctx.clients);
         while (cli) {
             if (client_run (cli) < 0)

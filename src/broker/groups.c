@@ -43,6 +43,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "overlay.h"
 #include "groups.h"
@@ -727,15 +728,16 @@ static void overlay_monitor_cb (struct overlay *ov, uint32_t rank, void *arg)
     /* Generate LEAVEs for any groups 'rank' (and subtree) may be a member
      * of if transitioning to lost (crashed) or offline (shutdown).
      */
-    if (!strcmp (status, "lost") || !strcmp (status, "offline")) {
+    if (streq (status, "lost")
+        || streq (status, "offline")) {
         auto_leave (g, status, rank, ids);
     }
     /* Update broker.torpid if torpidity has changed while subtree is in
      * one of the "online" states.
      */
-    else if (!strcmp (status, "full")
-        || !strcmp (status, "partial")
-        || !strcmp (status, "degraded")) {
+    else if (streq (status, "full")
+        || streq (status, "partial")
+        || streq (status, "degraded")) {
         torpid_update (g, rank, ids, overlay_peer_is_torpid (ov, rank));
     }
 

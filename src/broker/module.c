@@ -14,6 +14,7 @@
 #include <dlfcn.h>
 #include <argz.h>
 #include <czmq.h>
+#undef streq // redefined by ccan/str/str.h below
 #include <uuid.h>
 #include <flux/core.h>
 #include <jansson.h>
@@ -29,6 +30,7 @@
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "module.h"
 #include "modservice.h"
@@ -300,7 +302,7 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
      */
     if (p->muted) {
         if (type != FLUX_MSGTYPE_RESPONSE
-            || strcmp (topic, "broker.module-status") != 0) {
+            || !streq (topic, "broker.module-status")) {
             errno = ENOSYS;
             return -1;
         }
@@ -841,7 +843,7 @@ int module_unsubscribe (modhash_t *mh, const char *uuid, const char *topic)
     }
     s = zlist_first (p->subs);
     while (s) {
-        if (!strcmp (topic, s)) {
+        if (streq (topic, s)) {
             zlist_remove (p->subs, s);
             free (s);
             break;
@@ -858,7 +860,7 @@ static bool match_sub (module_t *p, const char *topic)
     char *s = zlist_first (p->subs);
 
     while (s) {
-        if (!strncmp (topic, s, strlen (s)))
+        if (strstarts (topic, s))
             return true;
         s = zlist_next (p->subs);
     }

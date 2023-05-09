@@ -26,6 +26,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
+#include "ccan/str/str.h"
 
 const char *t1 = \
 "i = 1\n" \
@@ -87,7 +88,7 @@ void test_builtin (void)
     s3 = flux_conf_builtin_get ("shell_path", FLUX_CONF_AUTO);
     ok (s3 != NULL,
         "flux_conf_builtin_get shell_path AUTO works");
-    ok (s2 && s3 && !strcmp (s2, s3),
+    ok (s2 && s3 && streq (s2, s3),
         "AUTO returned INTREE value for test executable");
 
     errno = 0;
@@ -203,7 +204,7 @@ void test_basic (void)
         "unpacked double value");
     ok (b == true,
         "unpacked boolean value");
-    ok (s != NULL && !strcmp (s, "foo"),
+    ok (s != NULL && streq (s, "foo"),
         "unpacked string value");
 
     /* Check array contents
@@ -393,28 +394,28 @@ void test_globerr (void)
     memset (&error, 0, sizeof (error));
     conf_globerr (&error, "meep", GLOB_NOMATCH);
     ok (errno == ENOENT
-        && !strcmp (error.text, "meep: No match"),
+        && streq (error.text, "meep: No match"),
         "conf_globerr pat=meep rc=NOMATCH sets errno and error as expected");
 
     errno = 0;
     memset (&error, 0, sizeof (error));
     conf_globerr (&error, "moo", GLOB_NOSPACE);
     ok (errno == ENOMEM
-        && !strcmp (error.text, "moo: Out of memory"),
+        && streq (error.text, "moo: Out of memory"),
         "conf_globerr pat=moo rc=NOSPACE sets errno and error as expected");
 
     errno = 0;
     memset (&error, 0, sizeof (error));
     conf_globerr (&error, "foo", GLOB_ABORTED);
     ok (errno == EINVAL
-        && !strcmp (error.text, "foo: Read error"),
+        && streq (error.text, "foo: Read error"),
         "conf_globerr pat=moo rc=ABORTED sets errno and error as expected");
 
     errno = 0;
     memset (&error, 0, sizeof (error));
     conf_globerr (&error, "oops", 666);
     ok (errno == EINVAL
-        && !strcmp (error.text, "oops: Unknown glob error"),
+        && streq (error.text, "oops: Unknown glob error"),
         "conf_globerr pat=oops rc=666 sets errno and error as expected");
 }
 

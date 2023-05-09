@@ -15,6 +15,7 @@
 
 #include <flux/core.h>
 #include <flux/jobtap.h>
+#include "ccan/str/str.h"
 
 static int cb (flux_plugin_t *p,
                const char *topic,
@@ -50,7 +51,7 @@ static int cb (flux_plugin_t *p,
         return -1;
     }
 
-    if (strcmp (topic, "job.new") == 0) {
+    if (streq (topic, "job.new")) {
         /*  Subscribe to events so we get all job.event.* callbacks */
         if (flux_jobtap_job_subscribe (p, FLUX_JOBTAP_CURRENT_JOB) < 0) {
             flux_log (h,
@@ -60,7 +61,7 @@ static int cb (flux_plugin_t *p,
                        strerror (errno));
         }
     }
-    if (strncmp (topic, "job.state.", 10) == 0) {
+    if (strstarts (topic, "job.state.")) {
         if (entry == NULL
             || state == 4096
             || prev_state == 4096) {

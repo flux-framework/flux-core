@@ -43,6 +43,7 @@
 #include <ctype.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "nodelist.h"
 #include "rangelist.h"
@@ -193,7 +194,7 @@ int nodelist_append (struct nodelist *nl, const char *host)
     strcpy (name, host);
     hostname_split (name, &suffix);
 
-    if (pl && strcmp (name, pl->prefix) == 0)
+    if (pl && streq (name, pl->prefix))
         return rangelist_append (pl->suffixes, suffix);
 
     if (!(pl = prefix_list_create (name, suffix))
@@ -208,7 +209,7 @@ int nodelist_append_list_destroy (struct nodelist *nl1, struct nodelist *nl2)
 {
     struct prefix_list *pl1 = zlist_tail (nl1->list);
     struct prefix_list *pl2 = zlist_pop (nl2->list);
-    if (strcmp (pl1->prefix, pl2->prefix) == 0) {
+    if (streq (pl1->prefix, pl2->prefix)) {
         rangelist_append_list (pl1->suffixes, pl2->suffixes);
         prefix_list_destroy (pl2);
         pl2 = zlist_pop (nl2->list);

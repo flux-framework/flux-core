@@ -21,6 +21,7 @@
 
 #include "src/common/libccan/ccan/base64/base64.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "ioencode.h"
 
@@ -167,7 +168,7 @@ int iodecode (json_t *o,
         (*rankp) = rank;
     if (datap || lenp) {
         if (data) {
-            if (encoding && strcmp (encoding, "base64") == 0) {
+            if (encoding && streq (encoding, "base64")) {
                 if (decode_data_base64 (data, len, &bufp, &bin_len) < 0)
                     return -1;
             }

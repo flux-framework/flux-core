@@ -25,6 +25,7 @@
 #include "src/modules/kvs/cache.h"
 #include "src/modules/kvs/lookup.h"
 #include "src/common/libutil/blobref.h"
+#include "ccan/str/str.h"
 
 struct flux_msg_cred owner_cred = { .userid = 0, .rolemask = FLUX_ROLE_OWNER };
 struct flux_msg_cred user_cred = { .userid = 0, .rolemask = FLUX_ROLE_USER };
@@ -241,7 +242,7 @@ void basic_api (void)
         "lookup_create works");
     ok ((tmp = lookup_get_namespace (lh)) != NULL,
         "lookup_get_namespace works");
-    ok (!strcmp (tmp, KVS_PRIMARY_NAMESPACE),
+    ok (streq (tmp, KVS_PRIMARY_NAMESPACE),
         "lookup_get_namespace returns correct string");
     ok (lookup_missing_namespace (lh) == NULL,
         "lookup_missing_namespace returned NULL, no missing namespace yet");
@@ -377,7 +378,7 @@ void basic_lookup (void) {
         "lookup process finished");
     ok ((tmp = lookup_get_root_ref (lh)) != NULL,
         "lookup_get_root_ref returns non-NULL");
-    ok (!strcmp (tmp, root_ref),
+    ok (streq (tmp, root_ref),
         "lookup_get_root_ref returned correct root_ref");
     ok (lookup_get_root_seq (lh) >= 0,
         "lookup_get_root_seq returned valid root_seq");
@@ -398,7 +399,7 @@ void basic_lookup (void) {
         "lookup process finished");
     ok ((tmp = lookup_get_root_ref (lh)) != NULL,
         "lookup_get_root_ref returns non-NULL");
-    ok (!strcmp (tmp, root_ref),
+    ok (streq (tmp, root_ref),
         "lookup_get_root_ref returned correct root_ref");
     ok (lookup_get_root_seq (lh) == 18,
         "lookup_get_root_seq returned correct root_seq");
@@ -466,7 +467,7 @@ void check_common (lookup_t *lh,
                 "%s: missing ref returned one missing refs", msg);
 
             if (ld.ref) {
-                ok (strcmp (ld.ref, missing_ref_result) == 0,
+                ok (streq (ld.ref, missing_ref_result),
                     "%s: missing ref returned matched expectation", msg);
             }
             else {
@@ -2334,7 +2335,7 @@ void lookup_stall_namespace (void) {
         "lookup stalled on missing namespace");
     ok ((tmp = lookup_missing_namespace (lh)) != NULL,
         "lookup_missing_namespace returned non-NULL");
-    ok (!strcmp (tmp, KVS_PRIMARY_NAMESPACE),
+    ok (streq (tmp, KVS_PRIMARY_NAMESPACE),
         "lookup_missing_namespace returned correct namespace");
 
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref1, 0);
@@ -2375,7 +2376,7 @@ void lookup_stall_namespace (void) {
         "lookup stalled on missing namespace");
     ok ((tmp = lookup_missing_namespace (lh)) != NULL,
         "lookup_missing_namespace returned non-NULL");
-    ok (!strcmp (tmp, "foo"),
+    ok (streq (tmp, "foo"),
         "lookup_missing_namespace returned correct namespace");
 
     setup_kvsroot (krm, "foo", cache, root_ref2, 0);
@@ -2416,7 +2417,7 @@ void lookup_stall_namespace (void) {
         "lookup stalled on missing namespace");
     ok ((tmp = lookup_missing_namespace (lh)) != NULL,
         "lookup_missing_namespace returned non-NULL");
-    ok (!strcmp (tmp, "roottest"),
+    ok (streq (tmp, "roottest"),
         "lookup_missing_namespace returned correct namespace");
 
     setup_kvsroot (krm, "roottest", cache, root_ref1, 0);

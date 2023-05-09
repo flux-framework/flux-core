@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "exec_config.h"
+#include "ccan/str/str.h"
 
 static const char *default_cwd = "/tmp";
 static const char *default_job_shell = NULL;
@@ -106,9 +107,9 @@ int config_init (flux_t *h, int argc, char **argv)
     if (argv && argc) {
         /* Finally, override values on cmdline */
         for (int i = 0; i < argc; i++) {
-            if (strncmp (argv[i], "job-shell=", 10) == 0)
+            if (strstarts (argv[i], "job-shell="))
                 default_job_shell = argv[i]+10;
-            else if (strncmp (argv[i], "imp=", 4) == 0)
+            else if (strstarts (argv[i], "imp="))
                 flux_imp_path = argv[i]+4;
         }
     }

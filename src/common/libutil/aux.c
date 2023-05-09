@@ -15,6 +15,8 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "ccan/str/str.h"
+
 #include "aux.h"
 
 struct aux_item {
@@ -70,7 +72,7 @@ static void aux_item_delete (struct aux_item **head, const char *key)
         struct aux_item *item;
 
         while ((item = *head) && item->key) {
-            if (!strcmp (item->key, key)) {
+            if (streq (item->key, key)) {
                 *head = item->next;
                 aux_item_destroy (item);
                 break;
@@ -88,7 +90,7 @@ static struct aux_item *aux_item_find (struct aux_item *head, const char *key)
 {
     if (key) {
         while (head && head->key) {
-            if (!strcmp (key, head->key))
+            if (streq (key, head->key))
                 return head;
             head = head->next;
         }

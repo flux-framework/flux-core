@@ -19,6 +19,7 @@
 #include <argz.h>
 #include <flux/core.h>
 #include <czmq.h>
+#undef streq // redefined by ccan/str/str.h below
 #include <jansson.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
@@ -43,6 +44,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libfluxutil/method.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #include "module.h"
 #include "brokercfg.h"
@@ -690,8 +692,8 @@ static bool is_interactive_shell (const char *argz, size_t argz_len)
         char *shell;
         char *cmd = argz_next (argz, argz_len, NULL);
         while ((shell = getusershell ())) {
-            if (strcmp (cmd, shell) == 0
-                || strcmp (cmd, basename (shell)) == 0) {
+            if (streq (cmd, shell)
+                || streq (cmd, basename (shell))) {
                 result = true;
                 break;
             }
@@ -935,7 +937,7 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
     else {
         char path[1024];
 
-        if (strncmp (uri, "local://", 8) != 0) {
+        if (!strstarts (uri, "local://")) {
             log_msg ("local-uri is malformed");
             return -1;
         }
@@ -1507,7 +1509,7 @@ static int service_allow (struct flux_msg_cred cred, const char *name)
     if ((cred.rolemask & FLUX_ROLE_OWNER))
         return 0;
     snprintf (prefix, sizeof (prefix), "%" PRIu32 "-", cred.userid);
-    if (!strncmp (prefix, name, strlen (prefix)))
+    if (strstarts (name, prefix))
         return 0;
     errno = EPERM;
     return -1;
@@ -1571,7 +1573,7 @@ static void service_remove_cb (flux_t *h, flux_msg_handler_t *w,
         errno = ENOENT;
         goto error;
     }
-    if (strcmp (uuid, sender) != 0) {
+    if (!streq (uuid, sender)) {
         errno = EINVAL;
         goto error;
     }
@@ -1793,7 +1795,7 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
      */
     s = zlist_first (ctx->subscriptions);
     while (s) {
-        if (!strncmp (s, topic, strlen (s))) {
+        if (strstarts (topic, s)) {
             if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
                 flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
             break;

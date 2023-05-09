@@ -31,6 +31,7 @@
 #include "src/common/libkvs/kvs_commit.h"
 #include "src/common/libkvs/kvs_txn_private.h"
 #include "src/common/libkvs/kvs_util_private.h"
+#include "ccan/str/str.h"
 
 #include "kvstxn.h"
 
@@ -617,7 +618,7 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
 
     /* Special case root
      */
-    if (strcmp (name, ".") == 0) {
+    if (streq (name, ".")) {
         saved_errno = EINVAL;
         goto done;
     }
@@ -709,7 +710,7 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
             assert (target);
 
             /* can't cross into a new namespace */
-            if (ns && strcmp (ns, kt->ktm->ns_name)) {
+            if (ns && !streq (ns, kt->ktm->ns_name)) {
                 saved_errno = EINVAL;
                 goto done;
             }
@@ -860,7 +861,7 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
         if (kt->state == KVSTXN_STATE_INIT) {
             /* Do some initial checks */
             if (kt->flags & FLUX_KVS_SYNC
-                && strcmp (kt->ktm->ns_name, KVS_PRIMARY_NAMESPACE) != 0) {
+                && !streq (kt->ktm->ns_name, KVS_PRIMARY_NAMESPACE)) {
                 kt->errnum = EINVAL;
                 return KVSTXN_PROCESS_ERROR;
             }

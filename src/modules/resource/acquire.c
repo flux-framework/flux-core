@@ -59,6 +59,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/librlist/rlist.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "resource.h"
 #include "reslog.h"
@@ -329,7 +330,7 @@ static void reslog_cb (struct reslog *reslog, const char *name, void *arg)
     while (msg) {
         struct acquire_request *ar = flux_msg_aux_get (msg, "acquire");
 
-        if (!strcmp (name, "resource-define")) {
+        if (streq (name, "resource-define")) {
             if (ar->response_count == 0) {
                 if (!(resobj = inventory_get (ctx->inventory))) {
                     errmsg = "resource discovery failed or interrupted";
@@ -348,9 +349,9 @@ static void reslog_cb (struct reslog *reslog, const char *name, void *arg)
                 }
             }
         }
-        else if (!strcmp (name, "online") || !strcmp (name, "offline")
-                || !strcmp (name, "exclude") || !strcmp (name, "unexclude")
-                || !strcmp (name, "drain") || !strcmp (name, "undrain")) {
+        else if (streq (name, "online") || streq (name, "offline")
+                || streq (name, "exclude") || streq (name, "unexclude")
+                || streq (name, "drain") || streq (name, "undrain")) {
             if (ar->response_count > 0) {
                 struct idset *up, *dn;
                 if (acquire_request_update (ar, acquire, name, &up, &dn) < 0) {

@@ -17,6 +17,7 @@
 #include "src/common/libpmi/dgetline.h"
 #include "src/common/libpmi/pmi2.h"
 #include "src/common/libflux/reactor.h"
+#include "ccan/str/str.h"
 
 #include "src/common/libtap/tap.h"
 
@@ -124,13 +125,13 @@ int main (int argc, char *argv[])
                                    val,
                                    sizeof (val),
                                    &found);
-    ok (result == PMI2_SUCCESS && found != 0 && !strcmp (val, "1"),
+    ok (result == PMI2_SUCCESS && found != 0 && streq (val, "1"),
        "PMI2_Info_GetJobAttr PMI_process_mapping works and found != 0");
 
     jobid[0] = '\0';
     result = PMI2_Job_GetId (jobid, sizeof (jobid));
     ok (result == PMI2_SUCCESS
-        && !strcmp (jobid, "bleepgorp"),
+        && streq (jobid, "bleepgorp"),
         "PMI2_Job_GetId works");
 
     /* Exchange node scope data
@@ -143,14 +144,14 @@ int main (int argc, char *argv[])
     result = PMI2_Info_GetNodeAttr ("attr1", val, sizeof (val), &found, 0);
     ok (result == PMI2_SUCCESS
         && found == 1
-        && strcmp (val, "xyz") == 0,
+        && streq (val, "xyz"),
         "PMI2_Info_GetNodeAttr name=attr1 works");
 
     found = 42;
     result = PMI2_Info_GetNodeAttr ("attr1", val, sizeof (val), &found, 1);
     ok (result == PMI2_SUCCESS
         && found == 1
-        && strcmp (val, "xyz") == 0,
+        && streq (val, "xyz"),
         "PMI2_Info_GetNodeAttr name=attr1 waitfor=1 works");
 
     found = 42;
@@ -211,7 +212,7 @@ int main (int argc, char *argv[])
 
     result = PMI2_KVS_Get (jobid, 0, "foo", val, sizeof (val), &vallen);
     ok (result == PMI2_SUCCESS
-        && !strcmp (val, "bar")
+        && streq (val, "bar")
         && vallen == strlen (val),
         "PMI2_KVS_Get works and got expected value");
 

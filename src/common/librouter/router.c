@@ -16,6 +16,7 @@
 
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "router.h"
 #include "subhash.h"
@@ -172,19 +173,19 @@ void router_entry_recv (struct router_entry *entry, flux_msg_t *msg)
         return;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            if (!strcmp (topic, "event.subscribe")) {
+            if (streq (topic, "event.subscribe")) {
                 local_sub_request (entry, msg);
                 break;
             }
-            if (!strcmp (topic, "event.unsubscribe")) {
+            if (streq (topic, "event.unsubscribe")) {
                 local_unsub_request (entry, msg);
                 break;
             }
-            if (!strcmp (topic, "service.add")) {
+            if (streq (topic, "service.add")) {
                 service_add_request (entry, msg);
                 break;
             }
-            if (!strcmp (topic, "service.remove")) {
+            if (streq (topic, "service.remove")) {
                 service_remove_request (entry, msg);
                 break;
             }

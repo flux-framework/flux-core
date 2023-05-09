@@ -14,6 +14,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/fluid.h"
+#include "ccan/str/str.h"
 
 struct f58_test {
     fluid_t id;
@@ -69,8 +70,8 @@ void test_f58 (void)
     while (tp->f58 != NULL) {
         ok (fluid_encode (buf, sizeof(buf), tp->id, type) == 0,
             "f58_encode (%ju)", tp->id);
-        if (strcmp (buf, tp->f58) == 0
-            || strcmp (buf, tp->f58_alt) == 0)
+        if (streq (buf, tp->f58)
+            || streq (buf, tp->f58_alt))
             pass ("f58_encode %ju -> %s", tp->id, buf);
         else
             fail ("f58_encode %ju: got %s expected %s",

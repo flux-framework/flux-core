@@ -11,6 +11,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"
+#include "ccan/str/str.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -56,7 +57,7 @@ void test_split (void)
     ok (len >= 0,
         "stdlog_encode encoded foo\\nbar\\nbaz");
     xtra = stdlog_split_message (buf, &len, "\r\n");
-    ok (xtra != NULL && !strcmp (xtra, "bar\nbaz"),
+    ok (xtra != NULL && streq (xtra, "bar\nbaz"),
         "stdlog_split_message got bar\\nbaz");
     ok (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) == 0
         && msg != NULL && msglen == 3 && !strncmp (msg, "foo", msglen),
@@ -68,7 +69,7 @@ void test_split (void)
         "stdlog_encode encoded bar\\nbaz");
     free (xtra);
     xtra = stdlog_split_message (buf, &len, "\r\n");
-    ok (xtra != NULL && !strcmp (xtra, "baz"),
+    ok (xtra != NULL && streq (xtra, "baz"),
         "stdlog_split_message got baz");
     diag ("xtra='%s'", xtra);
     ok (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) == 0
@@ -113,15 +114,15 @@ int main(int argc, char** argv)
         "stdlog_decode decoded pri");
     ok (hdr.version == cln.version,
         "stdlog_decode decoded version");
-    ok (strcmp (hdr.timestamp, cln.timestamp) == 0,
+    ok (streq (hdr.timestamp, cln.timestamp),
         "stdlog_decode decoded timestamp");
-    ok (strcmp (hdr.hostname, cln.hostname) == 0,
+    ok (streq (hdr.hostname, cln.hostname),
         "stdlog_decode decoded hostname") ;
-    ok (strcmp (hdr.appname, cln.appname) == 0,
+    ok (streq (hdr.appname, cln.appname),
         "stdlog_decode decoded appname") ;
-    ok (strcmp (hdr.procid, cln.procid) == 0,
+    ok (streq (hdr.procid, cln.procid),
         "stdlog_decode decoded procid") ;
-    ok (strcmp (hdr.msgid, cln.msgid) == 0,
+    ok (streq (hdr.msgid, cln.msgid),
         "stdlog_decode decoded msgid") ;
     ok (sdlen == strlen (STDLOG_NILVALUE) && strncmp (sd, STDLOG_NILVALUE, sdlen) == 0,
         "stdlog_decode decoded structured data");

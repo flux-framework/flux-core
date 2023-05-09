@@ -16,7 +16,7 @@
 #include <stdarg.h>
 #include <jansson.h>
 
-#include "src/common/libccan/ccan/base64/base64.h"
+#include "ccan/base64/base64.h"
 
 #include "event.h"
 #include "rpc.h"

@@ -136,9 +136,9 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
         goto error;
     }
     while ((item = argz_next (ctx->argz, ctx->argz_len, item))) {
-        if (!strcmp (item, "bind"))
+        if (streq (item, "bind"))
             bind_socket = 1;
-        else if (!strcmp (item, "connect"))
+        else if (streq (item, "connect"))
             bind_socket = 0;
         else {
             errno = EINVAL;

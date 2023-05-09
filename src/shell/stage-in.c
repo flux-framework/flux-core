@@ -483,9 +483,9 @@ static int stage_in (flux_shell_t *shell, json_t *config)
         goto error;
     }
     if (destination) {
-        if (strncmp (destination, "local:", 6) == 0)
+        if (strstarts (destination, "local:"))
             ctx.destdir = destination + 6;
-        else if (strncmp (destination, "global:", 7) == 0) {
+        else if (strstarts (destination, "global:")) {
             ctx.destdir = destination + 7;
             leader_only = true;
         }

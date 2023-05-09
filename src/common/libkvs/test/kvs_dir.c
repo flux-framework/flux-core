@@ -24,6 +24,7 @@
 #include "src/common/libflux/flux.h"
 #include "kvs_dir.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 void jdiag (json_t *o)
 {
@@ -91,10 +92,10 @@ void test_empty (void)
         "flux_kvsdir_issymlink on nonexistent key returns false");
 
     key = flux_kvsdir_key (dir);
-    ok (key != NULL && !strcmp (key, "foo"),
+    ok (key != NULL && streq (key, "foo"),
         "flux_kvsdir_key returns the key we put in");
     keyat = flux_kvsdir_key_at (dir, "a.b.c");
-    ok (keyat != NULL && !strcmp (keyat, "foo.a.b.c"),
+    ok (keyat != NULL && streq (keyat, "foo.a.b.c"),
         "flux_kvsdir_key_at a.b.c returns foo.a.b.c");
     free (keyat);
     ok (flux_kvsdir_handle (dir) == NULL,

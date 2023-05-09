@@ -24,6 +24,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libcontent/content.h"
+#include "ccan/str/str.h"
 
 #include "builtin.h"
 
@@ -62,7 +63,7 @@ static struct archive *dump_create (const char *outfile)
 
     if (!(ar = archive_write_new ()))
         log_msg_exit ("error creating libarchive write context");
-    if (!strcmp (outfile, "-")) {
+    if (streq (outfile, "-")) {
         if (archive_write_set_format_pax_restricted (ar) != ARCHIVE_OK
             || archive_write_open_FILE (ar, stdout) != ARCHIVE_OK)
             log_msg_exit ("%s", archive_error_string (ar));

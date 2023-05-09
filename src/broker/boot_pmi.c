@@ -23,6 +23,7 @@
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libpmi/upmi.h"
+#include "ccan/str/str.h"
 
 #include "attr.h"
 #include "overlay.h"
@@ -114,7 +115,7 @@ static bool use_ipc (attr_t *attrs)
     const char *val;
 
     if (attr_get (attrs, "tbon.prefertcp", &val, NULL) == 0
-        && strcmp (val, "0") != 0)
+        && !streq (val, "0"))
         goto done;
     if (attr_get (attrs, "broker.mapping", &val, NULL) < 0 || !val)
         goto done;

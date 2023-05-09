@@ -14,6 +14,7 @@
 #include <stdlib.h>
 
 #include "src/common/libutil/setenvf.h"
+#include "ccan/str/str.h"
 #include "builtin.h"
 
 static int no_docs_set (optparse_t *p)
@@ -49,7 +50,7 @@ static int cmd_help (optparse_t *p, int ac, char *av[])
          *  O/w, assume user is asking for help on a flux command
          *   so prepend flux-
          */
-        if (strncmp (topic, "flux", 4) == 0)
+        if (strstarts (topic, "flux"))
             cmd = xasprintf ("man %s", topic);
         else
             cmd = xasprintf ("man flux-%s", topic);

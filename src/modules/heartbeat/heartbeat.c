@@ -18,6 +18,7 @@
 #include <flux/core.h>
 
 #include <src/common/libutil/fsd.h>
+#include "ccan/str/str.h"
 
 static const double default_period = 2.0;
 
@@ -86,7 +87,7 @@ static int parse_args (int argc, char **argv, struct heartbeat *hb)
     int i;
 
     for (i = 0; i < argc; i++) {
-        if (!strncmp (argv[i], "period=", 7)) {
+        if (strstarts (argv[i], "period=")) {
             if (fsd_parse_duration (argv[i] + 7, &hb->period) < 0) {
                 flux_log_error (hb->h, "error parsing period value");
                 return -1;

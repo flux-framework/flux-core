@@ -14,6 +14,8 @@
 #include <string.h>
 #include <errno.h>
 
+#include "ccan/str/str.h"
+
 #include <jansson.h>
 
 struct grudgeset {
@@ -58,7 +60,7 @@ static int json_array_find (json_t *array, const char *val)
     json_t *entry;
     json_array_foreach (array, index, entry) {
         const char *s = json_string_value (entry);
-        if (val && strcmp (val, s) == 0) {
+        if (val && streq (val, s)) {
             return (int) index;
         }
     }

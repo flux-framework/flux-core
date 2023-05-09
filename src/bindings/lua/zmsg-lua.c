@@ -15,6 +15,7 @@
 #include <lauxlib.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "flux/core.h"
 #include "lutil.h"
@@ -121,23 +122,23 @@ static int l_zmsg_info_index (lua_State *L)
     if (key == NULL)
         return lua_pusherror (L, "zmsg: invalid member");
 
-    if (strcmp (key, "type") == 0) {
+    if (streq (key, "type")) {
         lua_pushstring (L, zmsg_type_string (zi->typemask));
         return (1);
     }
-    if (strcmp (key, "tag") == 0) {
+    if (streq (key, "tag")) {
         if (zi->tag)
             lua_pushstring (L, zi->tag);
         else
             lua_pushnil (L);
         return (1);
     }
-    if (strcmp (key, "data") == 0) {
+    if (streq (key, "data")) {
         if (!zi->o || json_object_to_lua (L, zi->o) < 0)
             lua_pushnil (L);
         return (1);
     }
-    if (strcmp (key, "errnum") == 0) {
+    if (streq (key, "errnum")) {
         int errnum;
         if (!(zi->typemask & FLUX_MSGTYPE_RESPONSE))
             return lua_pusherror (L,
@@ -146,7 +147,7 @@ static int l_zmsg_info_index (lua_State *L)
         lua_pushnumber (L, errnum);
         return (1);
     }
-    if (strcmp (key, "matchtag") == 0) {
+    if (streq (key, "matchtag")) {
         uint32_t matchtag;
         if (flux_msg_get_matchtag (zi->msg, &matchtag) < 0)
             return lua_pusherror (L, "zmsg: matchtag: %s",

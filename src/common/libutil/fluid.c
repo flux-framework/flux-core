@@ -24,6 +24,7 @@
 #include <langinfo.h>
 #include <locale.h>
 
+#include "ccan/str/str.h"
 #include "fluid.h"
 #include "mnemonic.h"
 
@@ -181,7 +182,7 @@ static inline int is_utf8_locale (void)
      * or similar), but allow ascii encoding to be enforced if
      * FLUX_F58_FORCE_ASCII is set.
      */
-    if (MB_CUR_MAX > 1 && !strcmp (nl_langinfo (CODESET), "UTF-8")
+    if (MB_CUR_MAX > 1 && streq (nl_langinfo (CODESET), "UTF-8")
         && !getenv ("FLUX_F58_FORCE_ASCII"))
         return 1;
     return 0;
@@ -254,15 +255,12 @@ static int b58decode (const char *str, uint64_t *idp)
 
 static int fluid_is_f58 (const char *str)
 {
-    int len = 0;
     if (str == NULL || str[0] == '\0')
         return 0;
-    len = strlen (f58_prefix);
-    if (strncmp (str, f58_prefix, len) == 0)
-        return len;
-    len = strlen (f58_alt_prefix);
-    if (strncmp (str, f58_alt_prefix, len) == 0)
-        return len;
+    if (strstarts (str, f58_prefix))
+        return strlen (f58_prefix);
+    if (strstarts (str, f58_alt_prefix))
+        return strlen (f58_alt_prefix);
     return 0;
 }
 
@@ -448,7 +446,7 @@ int fluid_parse (const char *s, fluid_t *fluidp)
     /* O/w, FLUID encoded as an integer, either base16 (prefix="0x")
      *  or base10 (no prefix).
      */
-    if (strncmp (s, "0x", 2) == 0)
+    if (strstarts (s, "0x"))
         base = 16;
     errno = 0;
     l = strtoull (s, &endptr, base);

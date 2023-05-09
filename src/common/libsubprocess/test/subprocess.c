@@ -20,6 +20,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libsubprocess/subprocess.h"
 #include "src/common/libsubprocess/server.h"
+#include "ccan/str/str.h"
 
 extern char **environ;
 
@@ -368,7 +369,7 @@ void output_cb (flux_subprocess_t *p, const char *stream)
 
         sprintf (cmpbuf, "%s:hi\n", stream);
 
-        ok (!strcmp (ptr, cmpbuf),
+        ok (streq (ptr, cmpbuf),
             "flux_subprocess_read_line returned correct data");
         /* 1 + 2 + 1 for ':', "hi", '\n' */
         ok (lenp == (strlen (stream) + 1 + 2 + 1),
@@ -521,7 +522,7 @@ void output_default_stream_cb (flux_subprocess_t *p, const char *stream)
 
         sprintf (cmpbuf, "%s:hi\n", stream);
 
-        ok (!strcmp (ptr, cmpbuf),
+        ok (streq (ptr, cmpbuf),
             "flux_subprocess_read_line returned correct data");
         /* 1 + 2 + 1 for ':', "hi", '\n' */
         ok (lenp == (strlen (stream) + 1 + 2 + 1),
@@ -603,7 +604,7 @@ void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
 
         sprintf (cmpbuf, "%s:hi", stream);
 
-        ok (!strcmp (ptr, cmpbuf),
+        ok (streq (ptr, cmpbuf),
             "flux_subprocess_read returned correct data");
         /* 1 + 2 + 1 for ':', "hi" */
         ok (lenp == (strlen (stream) + 1 + 2),
@@ -677,7 +678,7 @@ void output_trimmed_line_cb (flux_subprocess_t *p, const char *stream)
 
         sprintf (cmpbuf, "%s:hi", stream);
 
-        ok (!strcmp (ptr, cmpbuf),
+        ok (streq (ptr, cmpbuf),
             "flux_subprocess_read_trimmed_line returned correct data");
     }
     else {
@@ -745,7 +746,7 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
             && lenp > 0,
             "flux_subprocess_read_line on %s success", stream);
 
-        ok (!strcmp (ptr, "foo\n"),
+        ok (streq (ptr, "foo\n"),
             "flux_subprocess_read_line returned correct data");
         ok (lenp == 4,
             "flux_subprocess_read_line returned correct data len");
@@ -756,7 +757,7 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
             && lenp > 0,
             "flux_subprocess_read_line on %s success", stream);
 
-        ok (!strcmp (ptr, "bar\n"),
+        ok (streq (ptr, "bar\n"),
             "flux_subprocess_read_line returned correct data");
         ok (lenp == 4,
             "flux_subprocess_read_line returned correct data len");
@@ -767,7 +768,7 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
             && lenp > 0,
             "flux_subprocess_read_line on %s success", stream);
 
-        ok (!strcmp (ptr, "bo\n"),
+        ok (streq (ptr, "bo\n"),
             "flux_subprocess_read_line returned correct data");
         ok (lenp == 3,
             "flux_subprocess_read_line returned correct data len");
@@ -907,7 +908,7 @@ void output_read_line_until_eof_cb (flux_subprocess_t *p, const char *stream)
     if ((*counter) == 0) {
         ok (ptr != NULL,
             "flux_subprocess_getline on %s success", stream);
-        ok (!strcmp (ptr, "foo\n"),
+        ok (streq (ptr, "foo\n"),
             "flux_subprocess_getline returned correct data");
         ok (lenp == 4,
             "flux_subprocess_getline returned correct data len");
@@ -915,7 +916,7 @@ void output_read_line_until_eof_cb (flux_subprocess_t *p, const char *stream)
     else if ((*counter) == 1) {
         ok (ptr != NULL,
             "flux_subprocess_getline on %s success", stream);
-        ok (!strcmp (ptr, "bar"),
+        ok (streq (ptr, "bar"),
             "flux_subprocess_getline returned correct data");
         ok (lenp == 3,
             "flux_subprocess_getline returned correct data len");
@@ -1168,7 +1169,7 @@ void env_passed_cb (flux_subprocess_t *p, const char *stream)
             && lenp > 0,
             "flux_subprocess_read_line on %s success", stream);
 
-        ok (!strncmp (ptr, "FOOBAR=foobaz", 13),
+        ok (strstarts (ptr, "FOOBAR=foobaz"),
             "environment variable FOOBAR in subprocess");
         ok (lenp == 14,
             "flux_subprocess_read_line returned correct data len");
@@ -1632,7 +1633,7 @@ void channel_fd_env_cb (flux_subprocess_t *p, const char *stream)
             && lenp > 0,
             "flux_subprocess_read_line on %s success", stream);
 
-        ok (!strncmp (ptr, "FOO=", 4),
+        ok (strstarts (ptr, "FOO="),
             "environment variable FOO created in subprocess");
         /* no length check, can't predict channel FD value */
     }
@@ -1837,7 +1838,7 @@ void channel_multiple_lines_cb (flux_subprocess_t *p, const char *stream)
             && lenp > 0,
             "flux_subprocess_read_line on %s success", stream);
 
-        ok (!strcmp (ptr, "bob\n"),
+        ok (streq (ptr, "bob\n"),
             "flux_subprocess_read_line returned correct data");
     }
     else if (multiple_lines_channel_cb_count == 1) {
@@ -1846,7 +1847,7 @@ void channel_multiple_lines_cb (flux_subprocess_t *p, const char *stream)
             && lenp > 0,
             "flux_subprocess_read_line on %s success", stream);
 
-        ok (!strcmp (ptr, "dan\n"),
+        ok (streq (ptr, "dan\n"),
             "flux_subprocess_read_line returned correct data");
     }
     else if (multiple_lines_channel_cb_count == 2) {
@@ -1855,7 +1856,7 @@ void channel_multiple_lines_cb (flux_subprocess_t *p, const char *stream)
             && lenp > 0,
             "flux_subprocess_read_line on %s success", stream);
 
-        ok (!strcmp (ptr, "jo\n"),
+        ok (streq (ptr, "jo\n"),
             "flux_subprocess_read_line returned correct data");
 
         ok (flux_subprocess_close (p, "TEST_CHANNEL") == 0,
@@ -2282,7 +2283,7 @@ void start_stdout_after_stderr_cb (flux_subprocess_t *p, const char *stream)
     (*len_counter)+= lenp;
 
     if (ptr && lenp && (*len_counter) == 10001) {
-        if (!strcmp (stream, "stderr")) {
+        if (streq (stream, "stderr")) {
             ok (stdout_output_cb_count == 0
                 && stdout_output_cb_len_count == 0,
                 "received all stderr data and stdout output is still 0");

@@ -26,6 +26,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/llog.h"
+#include "ccan/str/str.h"
 
 #include "pty.h"
 
@@ -356,13 +357,13 @@ static void pty_server_cb (flux_future_t *f, void *arg)
         c->rpc_f = NULL;
         return;
     }
-    if (strcmp (type, "attach") == 0)
+    if (streq (type, "attach"))
         pty_client_attached (c);
-    else if (strcmp (type, "data") == 0)
+    else if (streq (type, "data"))
         pty_client_data (c, f);
-    else if (strcmp (type, "resize") == 0)
+    else if (streq (type, "resize"))
         pty_client_resize (c);
-    else if (strcmp (type, "exit") == 0)
+    else if (streq (type, "exit"))
         pty_client_exit (c, f);
     else {
         llog_error (c, "unknown server response type=%s", type);
@@ -549,7 +550,7 @@ int flux_pty_client_attach (struct flux_pty_client *c,
     if (c->flags & FLUX_PTY_CLIENT_ATTACH_SYNC) {
         const char *type;
         if (flux_rpc_get_unpack (f, "{s:s}", "type", &type) < 0
-            || strcmp (type, "attach") != 0) {
+            || !streq (type, "attach")) {
             flux_future_destroy (f);
             return -1;
         }

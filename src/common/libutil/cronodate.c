@@ -21,6 +21,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "ccan/str/str.h"
 
 #include "cronodate.h"
 
@@ -221,7 +222,7 @@ static int tm_string2int (const char *s, tm_unit_t u)
 static int get_range (const char *r, tm_unit_t u, int *lo, int *hi)
 {
     char *p;
-    if (strcmp (r, "*") == 0) {
+    if (streq (r, "*")) {
         *lo = tm_unit_min (u);
         *hi = tm_unit_max (u);
     }

@@ -14,11 +14,7 @@
 #include <stdint.h>
 #include <jansson.h>
 
-/* czmq and ccan both define streq */
-#ifdef streq
-#undef streq
-#endif
-#include "src/common/libccan/ccan/list/list.h"
+#include "ccan/list/list.h"
 
 #include "message_proto.h"
 

@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
+#include "ccan/str/str.h"
 
 static void info (flux_t *h,
                   flux_msg_handler_t *mh,
@@ -35,7 +36,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     /* Dynamically register a service name if requested.
      */
     for (int i = 0; i < argc; i++) {
-        if (!strncmp (argv[i], "--service=", 10)) {
+        if (strstarts (argv[i], "--service=")) {
             const char *service = argv[i] + 10;
             flux_future_t *f;
             if (!(f = flux_service_register (h, service))
@@ -45,7 +46,7 @@ int mod_main (flux_t *h, int argc, char **argv)
             }
             flux_future_destroy (f);
         }
-        else if (!strcmp (argv[0], "--init-failure")) {
+        else if (streq (argv[0], "--init-failure")) {
             flux_log (h, LOG_INFO, "aborting during init per test request");
             errno = EIO;
             return -1;

@@ -16,6 +16,7 @@
 
 #include "job.h"
 
+#include "ccan/str/str.h"
 #include "src/common/libutil/fluid.h"
 
 int flux_job_id_parse (const char *s, flux_jobid_t *idp)
@@ -35,7 +36,7 @@ int flux_job_id_parse (const char *s, flux_jobid_t *idp)
     /*  Ignore any `job.` prefix. This allows a "kvs" encoding
      *   created by flux_job_id_encode(3) to properly decode.
      */
-    if (strncmp (p, "job.", 4) == 0)
+    if (strstarts (p, "job."))
         p += 4;
     return fluid_parse (p, idp);
 }

@@ -20,6 +20,7 @@
 #include <assert.h>
 
 #include "src/common/libutil/log.h"
+#include "ccan/str/str.h"
 
 #include "task.h"
 
@@ -222,7 +223,7 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
 
     assert (t);
 
-    if (!strcmp (stream, "stderr"))
+    if (streq (stream, "stderr"))
         is_stderr = true;
 
     if (!(ptr = flux_subprocess_read_trimmed_line (p, stream, &lenp))) {

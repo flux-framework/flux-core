@@ -20,6 +20,7 @@
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libutil/fsd.h"
+#include "ccan/str/str.h"
 
 #include "builtin.h"
 
@@ -170,7 +171,7 @@ static void startlog_list (flux_t *h, optparse_t *p)
         if (startlog_parse_event (entry, &timestamp, &name, &context) < 0)
             continue; // ignore (but tolerate) non-conforming entries
         format_timestamp (timebuf, sizeof (timebuf), timestamp);
-        if (!strcmp (name, "start")) {
+        if (streq (name, "start")) {
             if (started) {
                 if (!quiet)
                     printf ("crashed\n");
@@ -186,7 +187,7 @@ static void startlog_list (flux_t *h, optparse_t *p)
             }
             started = true;
         }
-        else if (!strcmp (name, "finish")) {
+        else if (streq (name, "finish")) {
             if (started) {
                 fsd_format_duration_ex (fsd,
                                         sizeof (fsd),

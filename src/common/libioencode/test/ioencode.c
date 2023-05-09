@@ -13,6 +13,7 @@
 #include <jansson.h>
 #include <errno.h>
 
+#include "ccan/str/str.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libioencode/ioencode.h"
 
@@ -42,8 +43,8 @@ void basic (void)
         "ioencode success (data, eof = false)");
     ok (!iodecode (o, &stream, &rank, &data, &len, &eof),
         "iodecode success");
-    ok (!strcmp (stream, "stdout")
-        && !strcmp (rank, "1")
+    ok (streq (stream, "stdout")
+        && streq (rank, "1")
         && len == 3
         && !strncmp (data, "foo", len)
         && eof == false,
@@ -55,8 +56,8 @@ void basic (void)
         "ioencode success (data, eof = true)");
     ok (!iodecode (o, &stream, &rank, &data, &len, &eof),
         "iodecode success");
-    ok (!strcmp (stream, "stdout")
-        && !strcmp (rank, "[0-8]")
+    ok (streq (stream, "stdout")
+        && streq (rank, "[0-8]")
         && len == 3
         && !strncmp (data, "bar", len)
         && eof == true,
@@ -65,8 +66,8 @@ void basic (void)
 
     ok (iodecode (o, &stream, &rank, NULL, &len, &eof) == 0,
         "iodecode can be passed NULL data to query len");
-    ok (!strcmp (stream, "stdout")
-        && !strcmp (rank, "[0-8]")
+    ok (streq (stream, "stdout")
+        && streq (rank, "[0-8]")
         && len == 3
         && eof == true,
         "iodecode returned correct info");
@@ -76,8 +77,8 @@ void basic (void)
         "ioencode success (no data, eof = true)");
     ok (!iodecode (o, &stream, &rank, &data, &len, &eof),
         "iodecode success");
-    ok (!strcmp (stream, "stderr")
-        && !strcmp (rank, "[4,5]")
+    ok (streq (stream, "stderr")
+        && streq (rank, "[4,5]")
         && data == NULL
         && len == 0
         && eof == true,
@@ -86,8 +87,8 @@ void basic (void)
 
     ok (iodecode (o, &stream, &rank, NULL, &len, &eof) == 0,
         "iodecode can be passed NULL data to query len");
-    ok (!strcmp (stream, "stderr")
-        && !strcmp (rank, "[4,5]")
+    ok (streq (stream, "stderr")
+        && streq (rank, "[4,5]")
         && len == 0
         && eof == true,
         "iodecode returned correct info");

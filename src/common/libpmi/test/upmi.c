@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 #include "src/common/libpmi/upmi.h"
 
 void diag_trace (void *arg, const char *text)
@@ -157,7 +158,7 @@ void test_env (void)
                         &error);
     if (!upmi)
         diag ("%s", error.text);
-    ok (upmi != NULL && !strcmp (upmi_describe (upmi), "singlex"),
+    ok (upmi != NULL && streq (upmi_describe (upmi), "singlex"),
         "upmi_create respects FLUX_PMI_CLIENT_METHODS order");
     upmi_destroy (upmi);
 

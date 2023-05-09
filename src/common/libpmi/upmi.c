@@ -201,7 +201,7 @@ static bool match_scheme (const char *scheme, const char *uri)
     size_t slen = strlen (scheme);
     if (slen < strlen (uri)
         && uri[slen] == ':'
-        && strncmp (uri, scheme, slen) == 0)
+        && strstarts (uri, scheme))
             return true;
     return streq (uri, scheme);
 }

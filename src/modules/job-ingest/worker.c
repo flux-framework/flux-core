@@ -46,6 +46,7 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "worker.h"
 
@@ -242,12 +243,12 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
          * all output complete.
          */
         if (w->p == p &&
-            !strcmp (stream, "stdout") &&
+            streq (stream, "stdout") &&
             worker_queue_depth (w) > 0)
             worker_unexpected_exit (w);
         return;
     }
-    if (!strcmp (stream, "stdout")) {
+    if (streq (stream, "stdout")) {
         flux_future_t *f;
 
         if (!(f = zlist_pop (w->queue))) {
@@ -260,7 +261,7 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
         if (zlist_size (w->queue) == 0)
             worker_inactive (w);
     }
-    else if (!strcmp (stream, "stderr")) {
+    else if (streq (stream, "stderr")) {
         flux_log (w->h, LOG_DEBUG, "%s: %s", w->name, s ? s : "");
     }
 }
