@@ -19,8 +19,8 @@
 
 #include <jansson.h>
 
-#include "src/common/libutil/macros.h"
 #include "src/common/libccan/ccan/base64/base64.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "ioencode.h"
 
@@ -37,13 +37,14 @@ static json_t *data_encode_base64 (const char *stream,
 
     if ((dest = malloc (destlen))
         && (n = base64_encode (dest, destlen, data, len)) >= 0) {
-            o = json_pack ("{s:s s:s s:s s:s#}",
-                           "stream", stream,
-                           "rank", rank,
-                           "encoding", "base64",
-                           "data", dest, n);
+        if (!(o = json_pack ("{s:s s:s s:s s:s#}",
+                             "stream", stream,
+                             "rank", rank,
+                             "encoding", "base64",
+                             "data", dest, n)))
+            errno = ENOMEM;
     }
-    free (dest);
+    ERRNO_SAFE_WRAP (free, dest);
     return o;
 }
 
@@ -54,7 +55,6 @@ json_t *ioencode (const char *stream,
                   bool eof)
 {
     json_t *o = NULL;
-    json_t *rv = NULL;
 
     /* data can be NULL and len == 0 if eof true */
     if (!stream
@@ -77,22 +77,25 @@ json_t *ioencode (const char *stream,
              *   encoding the data in base64:
              */
             if (!(o = data_encode_base64 (stream, rank, data, len)))
-                goto error;
+                return NULL;
         }
     }
     else {
         if (!(o = json_pack ("{s:s s:s}",
                              "stream", stream,
-                             "rank", rank)))
-            goto error;
+                             "rank", rank))) {
+            errno = ENOMEM;
+            return NULL;
+        }
     }
     if (eof) {
-        if (json_object_set_new (o, "eof", json_true ()) < 0)
-            goto error;
+        if (json_object_set_new (o, "eof", json_true ()) < 0) {
+            json_decref (o);
+            errno = ENOMEM;
+            return NULL;
+        }
     }
-    rv = o;
-error:
-    return rv;
+    return o;
 }
 
 static int decode_data_base64 (char *src,
@@ -105,8 +108,10 @@ static int decode_data_base64 (char *src,
     if (datap) {
         if (!(*datap = malloc (size)))
             return -1;
-        if ((rc = base64_decode (*datap, size, src, srclen)) < 0)
+        if ((rc = base64_decode (*datap, size, src, srclen)) < 0) {
+            ERRNO_SAFE_WRAP (free, (*datap));
             return -1;
+        }
         if (lenp)
             *lenp = rc;
     }
@@ -127,12 +132,12 @@ int iodecode (json_t *o,
     const char *rank;
     const char *encoding = NULL;
     size_t bin_len = 0;
+    char *bufp = NULL;
     char *data = NULL;
     size_t len = 0;
     int eof = 0;
     bool has_data = false;
     bool has_eof = false;
-    int rv = -1;
 
     if (!o) {
         errno = EINVAL;
@@ -142,17 +147,18 @@ int iodecode (json_t *o,
     if (json_unpack (o, "{s:s s:s s?s}",
                      "stream", &stream,
                      "rank", &rank,
-                     "encoding", &encoding) < 0)
-        goto cleanup;
-    if (json_unpack (o, "{s:s%}", "data", &data, &len) == 0) {
-        has_data = true;
+                     "encoding", &encoding) < 0) {
+        errno = EPROTO;
+        return -1;
     }
+    if (json_unpack (o, "{s:s%}", "data", &data, &len) == 0)
+        has_data = true;
     if (json_unpack (o, "{s:b}", "eof", &eof) == 0)
         has_eof = true;
 
     if (!has_data && !has_eof) {
         errno = EPROTO;
-        goto cleanup;
+        return -1;
     }
 
     if (streamp)
@@ -160,31 +166,28 @@ int iodecode (json_t *o,
     if (rankp)
         (*rankp) = rank;
     if (datap || lenp) {
-        if (datap)
-            *datap = NULL;
         if (data) {
             if (encoding && strcmp (encoding, "base64") == 0) {
-                if (decode_data_base64 (data, len, datap, &bin_len) < 0)
-                    goto cleanup;
+                if (decode_data_base64 (data, len, &bufp, &bin_len) < 0)
+                    return -1;
             }
             else {
                 bin_len = len;
                 if (datap) {
-                    if (!(*datap = malloc (bin_len)))
-                        goto cleanup;
-                    memcpy (*datap, data, bin_len);
+                    if (!(bufp = malloc (bin_len)))
+                        return -1;
+                    memcpy (bufp, data, bin_len);
                 }
             }
         }
     }
+    if (datap)
+        (*datap) = bufp;
     if (lenp)
         (*lenp) = bin_len;
     if (eofp)
         (*eofp) = eof;
-
-    rv = 0;
-cleanup:
-    return rv;
+    return 0;
 }
 
 /*
