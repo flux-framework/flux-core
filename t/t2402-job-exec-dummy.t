@@ -55,7 +55,7 @@ test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
 	flux module reload job-exec kill-timeout=0.2 &&
 	cat <<-EOF >trap-sigterm.sh &&
 	#!/bin/sh
-	trap "echo trap-sigterm got SIGTERM" 15
+	trap "echo trap-sigterm got SIGTERM >&2" 15
 	flux kvs put trap-ready=1
 	sleep 60 &
 	pid=\$!
