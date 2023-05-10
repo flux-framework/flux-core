@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
 #include <string.h>
 #include <locale.h>
@@ -91,6 +94,7 @@ void test_f58 (void)
         tp++;
     }
 
+#if !ASSUME_BROKEN_LOCALE
     if (setenv ("FLUX_F58_FORCE_ASCII", "1", 1) < 0)
         BAIL_OUT ("Failed to setenv FLUX_F58_FORCE_ASCII");
     ok (fluid_encode (buf, sizeof (buf), f58_tests->id, type) == 0,
@@ -99,6 +103,7 @@ void test_f58 (void)
         "fluid_encode with FLUX_F58_FORCE_ASCII used ascii prefix");
     if (unsetenv ("FLUX_F58_FORCE_ASCII") < 0)
         BAIL_OUT ("Failed to unsetenv FLUX_F58_FORCE_ASCII");
+#endif
 
     ok (fluid_encode (buf, 1, 1, type) < 0 && errno == EOVERFLOW,
         "fluid_encode (buf, 1, 1, F58) returns EOVERFLOW");
