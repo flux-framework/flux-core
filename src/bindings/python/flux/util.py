@@ -360,6 +360,12 @@ def fsd(secs):
     return strtmp
 
 
+def empty_outputs():
+    localepoch = datetime.fromtimestamp(0.0).strftime("%FT%T")
+    empty = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00", localepoch)
+    return empty
+
+
 class UtilFormatter(Formatter):
     # pylint: disable=too-many-branches
 
@@ -439,8 +445,7 @@ class UtilFormatter(Formatter):
         # must be deferred to the UtilDatetetime format() method, since
         # that method will be called after this one:
         if spec.endswith("h") and not isinstance(value, UtilDatetime):
-            localepoch = datetime.fromtimestamp(0.0).strftime("%FT%T")
-            basecases = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00", localepoch)
+            basecases = empty_outputs()
             value = "-" if str(value) in basecases else str(value)
             spec = spec[:-1] + "s"
         retval = super().format_field(value, spec)
@@ -639,7 +644,7 @@ class OutputFormat:
 
         #  Iterate over all items, rebuilding lst each time to contain
         #  only those fields that resulted in non-"empty" strings:
-        empty = ("", "0", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00")
+        empty = empty_outputs()
         for item in items:
             lst = [x for x in lst if formatter.format(x["fmt"], item) in empty]
 
