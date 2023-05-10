@@ -299,7 +299,7 @@ test_expect_success 'create list script' '
 test_expect_success 'list from rank 0 is allowed' '
 	flux python ./list.py >/dev/null
 '
-test_expect_success 'list-units-leader from rank 1 is restricted' '
+test_expect_success 'list from rank 1 is restricted' '
 	test_must_fail flux exec -r 1 flux python ./list.py 2>list1.err &&
 	grep "not allowed" list1.err
 '
