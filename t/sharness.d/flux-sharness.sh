@@ -292,6 +292,23 @@ test_on_rank() {
     flux exec --rank=${ranks} "$@"
 }
 
+#  Note: Some versions of bash may cause the `flux` libtool wrapper script
+#  to reset the COLUMNS shell variable even if it is explicitly set for
+#  for testing purposes. This causes tests that check for output truncation
+#  based on COLUMNS to erroneously fail. (Note: this only seems to be the
+#  case when tests are run with --debug --verbose for unknown reasons.
+#
+#  Add a script for tests that use COLUMNS to check if the variable will
+#  be preserved across an invovation of flux(1) so they may set a prereq
+#  and skip tests that might erroneous fail if COLUMNS is not preserved.
+#
+test_columns_variable_preserved() {
+	local cols=$(COLUMNS=12 \
+	             flux python -c \
+	             "import shutil; print(shutil.get_terminal_size().columns)")
+	test "$cols" = "12"
+}
+
 #  Export a shorter name for this test
 TEST_NAME=$SHARNESS_TEST_NAME
 export TEST_NAME
