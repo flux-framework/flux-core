@@ -17,6 +17,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libkvs/kvs_util_private.h"
+#include "ccan/str/str.h"
 
 void kvs_util_normalize_key_path_tests (void)
 {
@@ -24,42 +25,42 @@ void kvs_util_normalize_key_path_tests (void)
     bool dirflag;
 
     s = kvs_util_normalize_key ("a.b.c..d.e", &dirflag);
-    ok (s != NULL && !strcmp (s, "a.b.c.d.e") && dirflag == false,
+    ok (s != NULL && streq (s, "a.b.c.d.e") && dirflag == false,
         "kvs_util_normalize_key transforms consecutive path separators to one");
     free (s);
 
     s = kvs_util_normalize_key (".a.b.c.d.e", &dirflag);
-    ok (s != NULL && !strcmp (s, "a.b.c.d.e") && dirflag == false,
+    ok (s != NULL && streq (s, "a.b.c.d.e") && dirflag == false,
         "kvs_util_normalize_key drops one leading path separator");
     free (s);
 
     s = kvs_util_normalize_key ("....a.b.c.d.e", &dirflag);
-    ok (s != NULL && !strcmp (s, "a.b.c.d.e") && dirflag == false,
+    ok (s != NULL && streq (s, "a.b.c.d.e") && dirflag == false,
         "kvs_util_normalize_key drops several leading path separators");
     free (s);
 
     s = kvs_util_normalize_key ("a.b.c.d.e.", &dirflag);
-    ok (s != NULL && !strcmp (s, "a.b.c.d.e") && dirflag == true,
+    ok (s != NULL && streq (s, "a.b.c.d.e") && dirflag == true,
         "kvs_util_normalize_key drops one trailing path separator");
     free (s);
 
     s = kvs_util_normalize_key ("a.b.c.d.e.....", &dirflag);
-    ok (s != NULL && !strcmp (s, "a.b.c.d.e") && dirflag == true,
+    ok (s != NULL && streq (s, "a.b.c.d.e") && dirflag == true,
         "kvs_util_normalize_key drops several trailing path separators");
     free (s);
 
     s = kvs_util_normalize_key (".a....b.c.....d..e.....", &dirflag);
-    ok (s != NULL && !strcmp (s, "a.b.c.d.e") && dirflag == true,
+    ok (s != NULL && streq (s, "a.b.c.d.e") && dirflag == true,
         "kvs_util_normalize_key fixes a big mess");
     free (s);
 
     s = kvs_util_normalize_key (".", &dirflag);
-    ok (s != NULL && !strcmp (s, "."),
+    ok (s != NULL && streq (s, "."),
         "kvs_util_normalize_key leaves one standalone separator as is");
     free (s);
 
     s = kvs_util_normalize_key ("....", &dirflag);
-    ok (s != NULL && !strcmp (s, "."),
+    ok (s != NULL && streq (s, "."),
         "kvs_util_normalize_key transforms several standalone separators to one");
     free (s);
 }

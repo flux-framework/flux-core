@@ -22,6 +22,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/lru_cache.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 #include "taskmap.h"
 
 struct taskmap_block {
@@ -380,7 +381,7 @@ static struct taskmap *taskmap_decode_pmi (const char *s, flux_error_t *errp)
         while (isspace (*tok))
             tok++;
 
-        if (strncmp (tok, "vector,", 7) == 0)
+        if (strstarts (tok, "vector,"))
             got_sentinel = true;
         else if (!is_empty (tok)) {
             if (!got_sentinel) {

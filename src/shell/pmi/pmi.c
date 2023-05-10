@@ -206,7 +206,7 @@ static int native_kvs_put (void *arg,
 
     /* Hack to support "node scope" for partial PMI2 impl needed for Cray.
      */
-    if (strncmp (key, "local::", 7) == 0)
+    if (strstarts (key, "local::"))
         return put_dict (pmi->locals, key, val);
     return put_dict (pmi->pending, key, val);
 }
@@ -321,7 +321,7 @@ static int exchange_kvs_put (void *arg,
 
     /* Hack to support "node scope" for partial PMI2 impl needed for Cray.
      */
-    if (strncmp (key, "local::", 7) == 0)
+    if (strstarts (key, "local::"))
         return put_dict (pmi->locals, key, val);
     return put_dict (pmi->pending, key, val);
 }
@@ -514,14 +514,14 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell, json_t *config)
 
     if (parse_args (config, &exchange_k, &kvs, &nomap) < 0)
         goto error;
-    if (!strcmp (kvs, "native")) {
+    if (streq (kvs, "native")) {
         shell_pmi_ops.kvs_put = native_kvs_put;
         shell_pmi_ops.kvs_get = native_kvs_get;
         shell_pmi_ops.barrier_enter = native_barrier_enter;
         if (shell->info->shell_rank == 0)
             shell_warn ("using native Flux kvs implementation");
     }
-    else if (!strcmp (kvs, "exchange")) {
+    else if (streq (kvs, "exchange")) {
         shell_pmi_ops.kvs_put = exchange_kvs_put;
         shell_pmi_ops.kvs_get = exchange_kvs_get;
         shell_pmi_ops.barrier_enter = exchange_barrier_enter;

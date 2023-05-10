@@ -25,6 +25,8 @@
 
 #include "flux/core.h"
 
+#include "ccan/str/str.h"
+
 #include "jansson-lua.h"
 #include "zmsg-lua.h"
 #include "lutil.h"
@@ -242,9 +244,9 @@ static int l_flux_index (lua_State *L)
     if (key == NULL)
         return luaL_error (L, "flux: invalid index");
 
-    if (strcmp (key, "size") == 0)
+    if (streq (key, "size"))
         return l_flux_size (L);
-    if (strcmp (key, "rank") == 0)
+    if (streq (key, "rank"))
         return l_flux_rank (L);
 
     lua_getmetatable (L, 1);
@@ -786,7 +788,7 @@ static int l_msghandler_index (lua_State *L)
     /*
      *  Check for method names
      */
-    if (strcmp (key, "remove") == 0) {
+    if (streq (key, "remove")) {
         lua_getmetatable (L, 1);
         lua_getfield (L, -1, "remove");
         return (1);
@@ -937,7 +939,7 @@ static int l_watcher_index (lua_State *L)
     /*
      *  Check for method names
      */
-    if (strcmp (key, "remove") == 0) {
+    if (streq (key, "remove")) {
         lua_getmetatable (L, 1);
         lua_getfield (L, -1, "remove");
         return (1);
@@ -1046,9 +1048,9 @@ static int l_flux_reactor_start (lua_State *L)
     flux_t *h;
     int mode = 0;
     if ((lua_gettop (L) > 1) && (arg = lua_tostring (L, 2))) {
-        if (strcmp (arg, "once") == 0)
+        if (streq (arg, "once"))
             mode = FLUX_REACTOR_ONCE;
-        else if (strcmp (arg, "nowait") == 0)
+        else if (streq (arg, "nowait"))
             mode = FLUX_REACTOR_NOWAIT;
         else
             return lua_pusherror (L, "flux_reactor: Invalid argument");

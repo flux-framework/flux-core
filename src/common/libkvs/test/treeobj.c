@@ -17,6 +17,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/sha1.h"
 #include "src/common/libutil/blobref.h"
+#include "ccan/str/str.h"
 
 const int large_dir_entries = 5000;
 json_t *create_large_dir (void)
@@ -83,7 +84,7 @@ void test_codec (void)
     p = treeobj_encode (cpy1);
     ok (p != NULL,
         "re-encoded %d-entry dir", large_dir_entries);
-    ok (strcmp (p, s) == 0,
+    ok (streq (p, s),
         "and they match");
     free (p);
 
@@ -126,17 +127,17 @@ void test_valref (void)
     ok (treeobj_get_count (valref) == 1,
         "treeobj_get_count returns 1");
     blobref = treeobj_get_blobref (valref, 0);
-    ok (blobref != NULL && !strcmp (blobref, blobrefs[0]),
+    ok (blobref != NULL && streq (blobref, blobrefs[0]),
         "treeobj_get_blobref [0] returns expected blobref");
     ok (treeobj_append_blobref (valref, blobrefs[1]) == 0,
         "treeobj_append_blobref works on 2nd blobref");
     ok (treeobj_get_count (valref) == 2,
         "treeobj_get_count returns 1");
     blobref = treeobj_get_blobref (valref, 0);
-    ok (blobref != NULL && !strcmp (blobref, blobrefs[0]),
+    ok (blobref != NULL && streq (blobref, blobrefs[0]),
         "treeobj_get_blobref [0] still returns expected blobref");
     blobref = treeobj_get_blobref (valref, 1);
-    ok (blobref != NULL && !strcmp (blobref, blobrefs[1]),
+    ok (blobref != NULL && streq (blobref, blobrefs[1]),
         "treeobj_get_blobref [1] returns expected blobref");
     diag_json (valref);
     json_decref (valref);
@@ -148,7 +149,7 @@ void test_valref (void)
     ok (treeobj_get_count (valref) == 1,
         "treeobj_get_count returns 1");
     blobref = treeobj_get_blobref (valref, 0);
-    ok (blobref != NULL && !strcmp (blobref, blobrefs[0]),
+    ok (blobref != NULL && streq (blobref, blobrefs[0]),
         "treeobj_get_blobref [0] returns expected blobref");
     diag_json (valref);
     json_decref (valref);
@@ -165,7 +166,7 @@ void test_valref (void)
     blobref = treeobj_get_blobref (valref, 0);
     for (i = 1; i < 4; i++) {
         blobref2 = treeobj_get_blobref (valref, i);
-        if (!blobref || !blobref2 || strcmp (blobref, blobref2) != 0)
+        if (!blobref || !blobref2 || !streq (blobref, blobref2))
             break;
     }
     ok (i == 4,
@@ -254,17 +255,17 @@ void test_dirref (void)
     ok (treeobj_get_count (dirref) == 1,
         "treeobj_get_count returns 1");
     blobref = treeobj_get_blobref (dirref, 0);
-    ok (blobref != NULL && !strcmp (blobref, blobrefs[0]),
+    ok (blobref != NULL && streq (blobref, blobrefs[0]),
         "treeobj_get_blobref [0] returns expected blobref");
     ok (treeobj_append_blobref (dirref, blobrefs[1]) == 0,
         "treeobj_append_blobref works on 2nd blobref");
     ok (treeobj_get_count (dirref) == 2,
         "treeobj_get_count returns 1");
     blobref = treeobj_get_blobref (dirref, 0);
-    ok (blobref != NULL && !strcmp (blobref, blobrefs[0]),
+    ok (blobref != NULL && streq (blobref, blobrefs[0]),
         "treeobj_get_blobref [0] still returns expected blobref");
     blobref = treeobj_get_blobref (dirref, 1);
-    ok (blobref != NULL && !strcmp (blobref, blobrefs[1]),
+    ok (blobref != NULL && streq (blobref, blobrefs[1]),
         "treeobj_get_blobref [1] returns expected blobref");
     diag_json (dirref);
     json_decref (dirref);
@@ -276,7 +277,7 @@ void test_dirref (void)
     ok (treeobj_get_count (dirref) == 1,
         "treeobj_get_count returns 1");
     blobref = treeobj_get_blobref (dirref, 0);
-    ok (blobref != NULL && !strcmp (blobref, blobrefs[0]),
+    ok (blobref != NULL && streq (blobref, blobrefs[0]),
         "treeobj_get_blobref [0] returns expected blobref");
 
     diag_json (dirref);
@@ -686,7 +687,7 @@ void test_symlink (void)
         "treeobj_get_symlink works on symlink without namespace");
     ok (ns_str == NULL,
         "treeobj_get_symlink returns NULL for namespace");
-    ok (!strcmp (target_str, "a.b.c"),
+    ok (streq (target_str, "a.b.c"),
         "treeobj_get_symlink returns correct string for target");
 
     json_decref (o);
@@ -701,9 +702,9 @@ void test_symlink (void)
         "treeobj_get_data returned string");
     ok (treeobj_get_symlink (o, &ns_str, &target_str) == 0,
         "treeobj_get_symlink works on symlink with namespace");
-    ok (!strcmp (ns_str, "ns"),
+    ok (streq (ns_str, "ns"),
         "treeobj_get_symlink returns correct string for namespace");
-    ok (!strcmp (target_str, "d.e.f"),
+    ok (streq (target_str, "d.e.f"),
         "treeobj_get_symlink returns correct string for target");
 
     json_decref (o);

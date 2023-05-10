@@ -49,6 +49,8 @@
 #include <sys/types.h>
 #include <string.h>
 
+#include "ccan/str/str.h"
+
 #include "pmi.h"
 #include "pmi2.h"
 #include "pmi_strerror.h"
@@ -341,7 +343,7 @@ int PMI2_Info_GetJobAttr (const char name[],
         result = PMI2_ERR_INVALID_ARG;
         goto error;
     }
-    if (!strcmp (name, "PMI_process_mapping")) {
+    if (streq (name, "PMI_process_mapping")) {
         const char *kvsname;
 
         result = get_cached_kvsname (pmi_global_ctx, &kvsname);
@@ -355,7 +357,7 @@ int PMI2_Info_GetJobAttr (const char name[],
         if (result != PMI2_SUCCESS)
             goto error;
     }
-    else if (!strcmp (name, "universeSize")) {
+    else if (streq (name, "universeSize")) {
         int universe_size;
 
         result = pmi_simple_client_get_universe_size (pmi_global_ctx,

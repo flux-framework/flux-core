@@ -27,7 +27,8 @@
 
 #include "src/common/libterminus/pty.h"
 #include "src/common/libterminus/terminus.h"
-#include "src/common/libccan/ccan/ptrint/ptrint.h"
+#include "ccan/ptrint/ptrint.h"
+#include "ccan/str/str.h"
 #include "builtins.h"
 #include "log.h"
 
@@ -110,7 +111,7 @@ static struct idset *shell_taskids_intersect (flux_shell_t *shell,
         return NULL;
     if (!(localids = idset_decode (taskids)))
         return NULL;
-    if (strcmp (ids, "all") == 0)
+    if (streq (ids, "all"))
         return localids;
     if (!(idset = idset_decode (ids)))
         goto out;

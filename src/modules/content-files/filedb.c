@@ -22,6 +22,7 @@
 
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "filedb.h"
 
@@ -37,8 +38,8 @@ int filedb_get (const char *dbpath,
     void *data;
     ssize_t size;
 
-    if (strlen (key) == 0 || strchr (key, '/') || !strcmp (key, "..")
-                          || !strcmp (key, ".")) {
+    if (strlen (key) == 0 || strchr (key, '/') || streq (key, "..")
+                          || streq (key, ".")) {
         errno = EINVAL;
         if (errstr)
             *errstr = "invalid key name";
@@ -74,8 +75,8 @@ int filedb_put (const char *dbpath,
     char path[1024];
     int fd;
 
-    if (strlen (key) == 0 || strchr (key, '/') || !strcmp (key, "..")
-                          || !strcmp (key, ".")) {
+    if (strlen (key) == 0 || strchr (key, '/') || streq (key, "..")
+                          || streq (key, ".")) {
         errno = EINVAL;
         if (errstr)
             *errstr = "invalid key";

@@ -178,7 +178,8 @@ static broker_state_t state_next (broker_state_t current, const char *event)
 {
     int i;
     for (i = 0; i < ARRAY_SIZE (nexttab); i++) {
-        if (nexttab[i].current == current && !strcmp (event, nexttab[i].event))
+        if (nexttab[i].current == current
+            && streq (event, nexttab[i].event))
             return nexttab[i].next;
     }
     return current;
@@ -578,7 +579,7 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
     if (runat_get_exit_code (r, name, &rc) < 0)
         log_err ("runat_get_exit_code %s", name);
 
-    if (!strcmp (name, "rc1")) {
+    if (streq (name, "rc1")) {
         if (rc == 0)
             state_machine_post (s, "rc1-success");
         else if (attr_get (s->ctx->attrs,
@@ -597,17 +598,17 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
             state_machine_post (s, "rc1-fail");
         }
     }
-    else if (!strcmp (name, "rc2")) {
+    else if (streq (name, "rc2")) {
         if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "rc2-success" : "rc2-fail");
     }
-    else if (!strcmp (name, "cleanup")) {
+    else if (streq (name, "cleanup")) {
         if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "cleanup-success" : "cleanup-fail");
     }
-    else if (!strcmp (name, "rc3")) {
+    else if (streq (name, "rc3")) {
         if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "rc3-success" : "rc3-fail");
@@ -794,7 +795,7 @@ static int quorum_timeout_configure (struct state_machine *s)
     char fsd[32];
 
     if (attr_get (s->ctx->attrs, name, &val, NULL) == 0) {
-        if (!strcmp (val, "none"))
+        if (streq (val, "none"))
             s->quorum.timeout = -1;
         else {
             if (fsd_parse_duration (val, &s->quorum.timeout) < 0) {

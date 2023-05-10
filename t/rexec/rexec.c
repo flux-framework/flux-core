@@ -21,6 +21,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/read_all.h"
+#include "ccan/str/str.h"
 
 extern char **environ;
 
@@ -109,7 +110,7 @@ void stdin2stream (flux_subprocess_t *p, const char *stream)
     }
 
     /* do not close for channel, b/c can race w/ data coming back */
-    if (!strcmp (stream, "stdin")) {
+    if (streq (stream, "stdin")) {
         if (flux_subprocess_close (p, stream) < 0)
             log_err_exit ("flux_subprocess_close");
     }
@@ -165,9 +166,9 @@ int main (int argc, char *argv[])
     free (cwd);
 
     if (optparse_getopt (opts, "stdin2stream", &optargp) > 0) {
-        if (strcmp (optargp, "stdin")
-            && strcmp (optargp, "stdout")
-            && strcmp (optargp, "stderr")) {
+        if (!streq (optargp, "stdin")
+            && !streq (optargp, "stdout")
+            && !streq (optargp, "stderr")) {
             if (flux_cmd_add_channel (cmd, optargp) < 0)
                 log_err_exit ("flux_cmd_add_channel");
             ops.on_channel_out = flux_standard_output;

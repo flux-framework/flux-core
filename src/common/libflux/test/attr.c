@@ -18,6 +18,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libtestutil/util.h"
+#include "ccan/str/str.h"
 
 struct entry {
     char *key;
@@ -44,7 +45,7 @@ static bool lookup_hardwired (const char *key, const char **val, int *flags)
 {
     int i;
     for (i = 0; hardwired[i].key != NULL; i++) {
-        if (!strcmp (hardwired[i].key, key)) {
+        if (streq (hardwired[i].key, key)) {
             if (val)
                 *val = hardwired[i].val;
             if (flags)
@@ -198,40 +199,40 @@ int main (int argc, char *argv[])
 
     get_count = 0;
     value = flux_attr_get (h, "foo");
-    ok (value && !strcmp (value, "bar") && get_count == 1,
+    ok (value && streq (value, "bar") && get_count == 1,
         "flux_attr_get foo=bar (with rpc)");
     value = flux_attr_get (h, "foo");
-    ok (value && !strcmp (value, "bar") && get_count == 2,
+    ok (value && streq (value, "bar") && get_count == 2,
         "flux_attr_get foo=bar (with 2nd rpc)");
 
     get_count = 0;
     value2 = flux_attr_get (h, "baz");
-    ok (value2 && !strcmp (value2, "meep") && get_count == 1,
+    ok (value2 && streq (value2, "meep") && get_count == 1,
         "flux_attr_get baz=meep (with rpc)");
     value2 = flux_attr_get (h, "baz");
-    ok (value2 && !strcmp (value2, "meep") && get_count == 2,
+    ok (value2 && streq (value2, "meep") && get_count == 2,
         "flux_attr_get baz=meep (with 2nd rpc)");
 
-    ok (value && !strcmp (value, "bar"),
+    ok (value && streq (value, "bar"),
         "const return value of flux_attr_get foo=bar still valid");
 
     /* get (cached) */
 
     get_count = 0;
     value = flux_attr_get (h, "cow");
-    ok (value && !strcmp (value, "moo") && get_count == 1,
+    ok (value && streq (value, "moo") && get_count == 1,
         "flux_attr_get cow=moo (with rpc)");
     get_count = 0;
     value = flux_attr_get (h, "chick");
-    ok (value && !strcmp (value, "peep") && get_count == 1,
+    ok (value && streq (value, "peep") && get_count == 1,
         "flux_attr_get chick=peep (with rpc)");
     get_count = 0;
     value = flux_attr_get (h, "cow");
-    ok (value && !strcmp (value, "moo") && get_count == 0,
+    ok (value && streq (value, "moo") && get_count == 0,
         "flux_attr_get cow=moo (cached)");
     get_count = 0;
     value = flux_attr_get (h, "chick");
-    ok (value && !strcmp (value, "peep") && get_count == 0,
+    ok (value && streq (value, "peep") && get_count == 0,
         "flux_attr_get chick=peep (cached)");
 
     /* cacheonly */
@@ -240,7 +241,7 @@ int main (int argc, char *argv[])
         "flux_attr_set_cacheonly fake=42");
     get_count = 0;
     value = flux_attr_get (h, "fake");
-    ok (value && !strcmp (value, "42") && get_count == 0,
+    ok (value && streq (value, "42") && get_count == 0,
         "flux_attr_get fake=42 (no rpc)");
 
     ok (flux_attr_set_cacheonly (h, "fake", NULL) == 0,
@@ -276,19 +277,19 @@ int main (int argc, char *argv[])
 
     /* test flux_get_hostbyrank () */
     ok ((value = flux_get_hostbyrank (NULL, 42)) != NULL
-        && !strcmp (value, "(null)"),
+        && streq (value, "(null)"),
         "flux_get_hostbyrank h=NULL returns (null)");
     ok ((value = flux_get_hostbyrank (h, FLUX_NODEID_ANY)) != NULL
-        && !strcmp (value, "any"),
+        && streq (value, "any"),
         "flux_get_hostbyrank FLUX_NODEID_ANY returns any");
     ok ((value = flux_get_hostbyrank (h, FLUX_NODEID_UPSTREAM)) != NULL
-        && !strcmp (value, "upstream"),
+        && streq (value, "upstream"),
         "flux_get_hostbyrank FLUX_NODEID_UPSTREAMreturns upstream");
     ok ((value = flux_get_hostbyrank (h, 2)) != NULL
-        && !strcmp (value, "foo2"),
+        && streq (value, "foo2"),
         "flux_get_hostbyrank 2 returns foo2");
     ok ((value = flux_get_hostbyrank (h, 3)) != NULL
-        && !strcmp (value, "(null)"),
+        && streq (value, "(null)"),
         "flux_get_hostbyrank 3 returns (null)");
 
     /* test flux_get_rankbyhost () */

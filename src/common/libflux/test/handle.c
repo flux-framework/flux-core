@@ -17,6 +17,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
+#include "ccan/str/str.h"
 
 /* Destructor for malloc'ed string.
  * Set flag so we know this was called when aux was destroyed.
@@ -120,7 +121,7 @@ int main (int argc, char *argv[])
         "flux_aux_get returns NULL on unknown key");
     flux_aux_set (h, "handletest::thing1", xstrdup ("hello"), aux_free);
     s = flux_aux_get (h, "handletest::thing1");
-    ok (s != NULL && !strcmp (s, "hello"),
+    ok (s != NULL && streq (s, "hello"),
         "flux_aux_get returns what was set");
     flux_aux_set (h, "handletest::thing1", NULL, NULL);
     ok (aux_destroyed,
@@ -169,7 +170,7 @@ int main (int argc, char *argv[])
        "flux_pollevents shows FLUX_POLLIN set on non-empty queue");
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
         && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "foo"),
+        && streq (topic, "foo"),
         "flux_recv works and sent message was received");
     ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
        "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
@@ -195,12 +196,12 @@ int main (int argc, char *argv[])
        "flux_pollevents shows FLUX_POLLIN set after requeue");
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
         && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "bar"),
+        && streq (topic, "bar"),
         "flux_recv got bar");
     flux_msg_destroy (msg);
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
         && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "foo"),
+        && streq (topic, "foo"),
         "flux_recv got foo");
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
@@ -221,12 +222,12 @@ int main (int argc, char *argv[])
        "flux_pollevents shows FLUX_POLLIN set after requeue");
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
         && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "foo"),
+        && streq (topic, "foo"),
         "flux_recv got foo");
     flux_msg_destroy (msg);
     ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
         && flux_request_decode (msg, &topic, NULL) == 0
-        && !strcmp (topic, "bar"),
+        && streq (topic, "bar"),
         "flux_recv got bar");
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,

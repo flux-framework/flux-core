@@ -22,6 +22,7 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
+#include "ccan/str/str.h"
 
 #define OPTIONS "nN:"
 static const struct option longopts[] = {
@@ -123,7 +124,7 @@ int main(int argc, char *argv[])
                 if (e != PMI_SUCCESS)
                     log_msg_exit ("%d: PMI_KVS_Get: %s", rank, pmi_strerror (e));
                 snprintf (val2, val_len, "sandwich.%d.%d", j, i);
-                if (strcmp (val, val2) != 0)
+                if (!streq (val, val2))
                     log_msg_exit ("%d: PMI_KVS_Get: exp %s got %s\n",
                              rank, val2, val);
             }
@@ -135,7 +136,7 @@ int main(int argc, char *argv[])
                 log_msg_exit ("%d: PMI_KVS_Get: %s", rank, pmi_strerror (e));
             snprintf (val2, val_len, "sandwich.%d.%d",
                       rank > 0 ? rank - 1 : size - 1, i);
-            if (strcmp (val, val2) != 0)
+            if (!streq (val, val2))
                 log_msg_exit ("%d: PMI_KVS_Get: exp %s got %s\n", rank, val2, val);
         }
     }

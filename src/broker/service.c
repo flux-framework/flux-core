@@ -15,6 +15,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
+#include "ccan/str/str.h"
 
 #include "service.h"
 
@@ -97,7 +98,8 @@ json_t *service_list_byuuid (struct service_switch *sw, const char *uuid)
         return NULL;
     svc = zhash_first (sw->services);
     while (svc) {
-        if (uuid && svc->uuid && !strcmp (uuid, svc->uuid)) {
+        if (uuid && svc->uuid
+            && streq (uuid, svc->uuid)) {
             json_t *name = json_string  (zhash_cursor (sw->services));
             if (!name)
                 goto error;
@@ -124,7 +126,8 @@ void service_remove_byuuid (struct service_switch *sw, const char *uuid)
 
     svc = zhash_first (sw->services);
     while (svc != NULL) {
-        if (svc->uuid && !strcmp (svc->uuid, uuid)) {
+        if (svc->uuid
+            && streq (svc->uuid, uuid)) {
             if (!trash)
                 trash = zlist_new ();
             if (!trash)

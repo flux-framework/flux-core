@@ -97,6 +97,7 @@
 #include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "job-exec.h"
 #include "checkpoint.h"
@@ -1319,7 +1320,7 @@ static int job_exec_initialize (flux_t *h, int argc, char **argv)
     }
     /* Override via commandline */
     for (int i = 0; i < argc; i++) {
-        if (strncmp (argv[i], "kill-timeout=", 13) == 0)
+        if (strstarts (argv[i], "kill-timeout="))
             kto = argv[i] + 13;
     }
 

@@ -34,12 +34,12 @@
 #include <assert.h>
 #include <fnmatch.h>
 #include <inttypes.h>
-#include <czmq.h>
 #include <jansson.h>
 
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/errno_safe.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #include "message.h"
 
@@ -664,7 +664,7 @@ static bool isa_matchany (const char *s)
 {
     if (!s || strlen(s) == 0)
         return true;
-    if (!strcmp (s, "*"))
+    if (streq (s, "*"))
         return true;
     return false;
 }
@@ -697,7 +697,7 @@ bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match)
             if (fnmatch (match.topic_glob, topic, 0) != 0)
                 return false;
         } else {
-            if (strcmp (match.topic_glob, topic) != 0)
+            if (!streq (match.topic_glob, topic))
                 return false;
         }
     }
@@ -1455,7 +1455,7 @@ bool flux_msg_route_match_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
 
     if (!id1 && !id2)
         return true;
-    if (id1 && id2 && strcmp (id1, id2) == 0)
+    if (id1 && id2 && streq (id1, id2))
         return true;
     return false;
 }

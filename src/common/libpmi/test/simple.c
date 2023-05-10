@@ -19,6 +19,7 @@
 #include "src/common/libpmi/keyval.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libflux/reactor.h"
+#include "ccan/str/str.h"
 
 #include "src/common/libtap/tap.h"
 
@@ -200,7 +201,7 @@ int main (int argc, char *argv[])
     val = xzmalloc (cli->vallen_max);
     ok (pmi_simple_client_kvs_get (cli, name, "foo",
                                    val, cli->vallen_max) == PMI_SUCCESS
-        && !strcmp (val, "bar"),
+        && streq (val, "bar"),
         "pmi_simple_client_kvs_get foo OK, val=%s", val);
 
     /* put long=... / get long
@@ -213,7 +214,7 @@ int main (int argc, char *argv[])
     ok (pmi_simple_client_kvs_get (cli, name, "long",
                                    val, cli->vallen_max) == PMI_SUCCESS
         && strnlen (val2, cli->vallen_max) < cli->vallen_max
-        && strcmp (val, val2) == 0,
+        && streq (val, val2),
         "pmi_simple_client_kvs_get long OK, val=xxx...");
 
     /* put: value too long

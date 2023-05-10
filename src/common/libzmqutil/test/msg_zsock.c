@@ -68,7 +68,7 @@ void check_sendzsock (void)
         "zmqutil_msg_recv works");
     ok (flux_msg_get_type (msg2, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
             && flux_msg_get_topic (msg2, &topic) == 0
-            && !strcmp (topic, "foo.bar")
+            && streq (topic, "foo.bar")
             && flux_msg_has_payload (msg2) == false,
         "decoded message looks like what was sent");
     flux_msg_destroy (msg2);
@@ -81,7 +81,7 @@ void check_sendzsock (void)
         "try2: zmqutil_msg_recv works");
     ok (flux_msg_get_type (msg2, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
             && flux_msg_get_topic (msg2, &topic) == 0
-            && !strcmp (topic, "foo.bar")
+            && streq (topic, "foo.bar")
             && flux_msg_has_payload (msg2) == false,
         "try2: decoded message looks like what was sent");
     flux_msg_destroy (msg2);

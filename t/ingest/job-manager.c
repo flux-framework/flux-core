@@ -17,6 +17,7 @@
 #include <jansson.h>
 
 #include "src/common/libeventlog/eventlog.h"
+#include "ccan/str/str.h"
 
 const char *eventlog_path = "test.ingest.eventlog";
 static int force_fail = 0;
@@ -173,7 +174,7 @@ int mod_main (flux_t *h, int argc, char *argv[])
     flux_msg_handler_t **handlers = NULL;
     int rc = -1;
 
-    if (argc >= 1 && strcmp (argv[0], "force_fail") == 0)
+    if (argc >= 1 && streq (argv[0], "force_fail"))
         force_fail = 1;
 
     if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0) {

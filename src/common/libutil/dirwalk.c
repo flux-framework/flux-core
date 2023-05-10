@@ -26,6 +26,7 @@
 #include <fcntl.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "dirwalk.h"
 
@@ -186,7 +187,7 @@ int dirwalk_isdir (dirwalk_t *d)
 
 static int is_dotted_dir (struct dirent *dent)
 {
-    if (!strcmp (dent->d_name, ".") || !strcmp (dent->d_name, ".."))
+    if (streq (dent->d_name, ".") || streq (dent->d_name, ".."))
         return 1;
     return 0;
 }

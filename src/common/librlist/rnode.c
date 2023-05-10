@@ -21,7 +21,8 @@
 #include <flux/idset.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
-#include "src/common/libccan/ccan/ptrint/ptrint.h"
+#include "ccan/ptrint/ptrint.h"
+#include "ccan/str/str.h"
 
 #include "rnode.h"
 
@@ -244,7 +245,7 @@ struct rnode *rnode_create_children (const char *name,
         struct rnode_child *c = rnode_add_child (n, key, ids);
         if (c == NULL)
             goto fail;
-        if (strcmp (key, "core") == 0)
+        if (streq (key, "core"))
             n->cores = c;
     }
     return n;
@@ -394,7 +395,7 @@ struct rnode *rnode_copy_cores (const struct rnode *orig)
             goto error;
         name = zlistx_first (keys);
         while (name) {
-            if (strcmp (name, "core") != 0)
+            if (!streq (name, "core"))
                 zhashx_delete (n->children, name);
             name = zlistx_next (keys);
         }
@@ -468,7 +469,7 @@ struct rnode *rnode_diff (const struct rnode *a, const struct rnode *b)
 
             /*  For non-core resources, remove empty sets:
              */
-            if (strcmp (nc->name, "core") != 0
+            if (!streq (nc->name, "core")
                 && idset_count (nc->ids) == 0)
                 zhashx_delete (n->children, nc->name);
         }

@@ -32,6 +32,8 @@
 
 #include <unistd.h>
 
+#include "ccan/str/str.h"
+
 #include "job-exec.h"
 #include "exec_config.h"
 #include "bulk-exec.h"
@@ -151,8 +153,8 @@ static void output_cb (struct bulk_exec *exec, flux_subprocess_t *p,
     struct jobinfo *job = arg;
     const char *cmd = flux_cmd_arg (flux_subprocess_get_cmd (p), 0);
 
-    if (strcmp (stream, "FLUX_EXEC_PROTOCOL_FD") == 0) {
-        if (strcmp (data, "enter\n") == 0
+    if (streq (stream, "FLUX_EXEC_PROTOCOL_FD")) {
+        if (streq (data, "enter\n")
             && exec_barrier_enter (exec) < 0) {
             jobinfo_fatal_error (job,
                                  errno,
@@ -406,7 +408,7 @@ static int exec_start (struct jobinfo *job)
 {
     struct bulk_exec *exec = job->data;
 
-    if (strcmp (exec_mock_exception (exec), "init") == 0) {
+    if (streq (exec_mock_exception (exec), "init")) {
         /* If creating an "init" mock exception, generate it and
          *  then return to simulate an exception that came in before
          *  we could actually start the job
@@ -414,7 +416,7 @@ static int exec_start (struct jobinfo *job)
         jobinfo_fatal_error (job, 0, "mock init exception generated");
         return 0;
     }
-    else if (strcmp (exec_mock_exception (exec), "starting") == 0) {
+    else if (streq (exec_mock_exception (exec), "starting")) {
         /*  If we're going to mock an exception in "starting" phase, then
          *   set up a check watcher to cancel the job when some shells have
          *   started but (potentially) not all.

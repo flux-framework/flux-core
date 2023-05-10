@@ -1834,9 +1834,9 @@ static int set_torpid (const char *name, const char *val, void *arg)
 
     if (fsd_parse_duration (val, &d) < 0)
         return -1;
-    if (!strcmp (name, "tbon.torpid_max"))
+    if (streq (name, "tbon.torpid_max"))
         ov->torpid_max = d;
-    else if (!strcmp (name, "tbon.torpid_min")) {
+    else if (streq (name, "tbon.torpid_min")) {
         if (d == 0)
             goto error;
         ov->torpid_min = d;
@@ -1855,9 +1855,9 @@ static int get_torpid (const char *name, const char **val, void *arg)
     static char buf[64];
     double d;
 
-    if (!strcmp (name, "tbon.torpid_max"))
+    if (streq (name, "tbon.torpid_max"))
         d = ov->torpid_max;
-    else if (!strcmp (name, "tbon.torpid_min"))
+    else if (streq (name, "tbon.torpid_min"))
         d = ov->torpid_min;
     else
         goto error;

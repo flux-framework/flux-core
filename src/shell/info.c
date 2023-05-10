@@ -24,6 +24,7 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/librlist/rhwloc.h"
 #include "src/common/libjob/unwrap.h"
+#include "ccan/str/str.h"
 
 #include "internal.h"
 #include "info.h"
@@ -109,7 +110,7 @@ static char *parse_arg_file (const char *optarg)
     ssize_t size;
     void *buf = NULL;
 
-    if (!strcmp (optarg, "-"))
+    if (streq (optarg, "-"))
         fd = STDIN_FILENO;
     else {
         if ((fd = open (optarg, O_RDONLY)) < 0) {

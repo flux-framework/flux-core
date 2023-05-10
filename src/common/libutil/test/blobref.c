@@ -14,6 +14,7 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/sha1.h"
 #include "src/common/libutil/sha256.h"
+#include "ccan/str/str.h"
 
 const char *badref[] = {
     "nerf-4d4ed591f7d26abd8145650f334d283bdb661765", // unknown hash
@@ -134,7 +135,7 @@ int main(int argc, char** argv)
                            sizeof (ref2)) == 0,
         "blobref_hashtostr back again works");
     diag ("%s", ref2);
-    ok (strcmp (ref, ref2) == 0,
+    ok (streq (ref, ref2),
         "and blobrefs match");
 
     /* sha256 */
@@ -160,7 +161,7 @@ int main(int argc, char** argv)
                            sizeof (ref2)) == 0,
         "blobref_hashtostr back again works");
     diag ("%s", ref2);
-    ok (strcmp (ref, ref2) == 0,
+    ok (streq (ref, ref2),
         "and blobrefs match");
 
     /* blobref_validate */

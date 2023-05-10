@@ -14,6 +14,8 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "ccan/str/str.h"
+
 #include "schedutil_private.h"
 #include "init.h"
 #include "ready.h"
@@ -28,7 +30,7 @@ int schedutil_ready (schedutil_t *util, const char *mode, int *queue_depth)
         errno = EINVAL;
         return -1;
     }
-    if (!strncmp (mode, "limited=", 8)) {
+    if (strstarts (mode, "limited=")) {
         char *endptr;
         int n = strtol (mode+8, &endptr, 0);
         if (*endptr != '\0' || n <= 0) {
@@ -38,7 +40,7 @@ int schedutil_ready (schedutil_t *util, const char *mode, int *queue_depth)
         mode = "limited";
         limit = n;
     }
-    else if (strcmp (mode, "unlimited")) {
+    else if (!streq (mode, "unlimited")) {
         errno = EINVAL;
         return -1;
     }

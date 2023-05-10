@@ -22,6 +22,7 @@
 #include "src/common/libflux/message_proto.h"
 #include "src/common/libtap/tap.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 static bool verbose = false;
 
@@ -577,7 +578,7 @@ void check_payload_json_formatted (void)
        "flux_msg_unpack object works");
     ok (strlen (flux_msg_last_error (msg)) == 0,
         "flux_msg_last_error is empty string after ok unpack");
-    ok (i == 42 && s != NULL && !strcmp (s, "baz"),
+    ok (i == 42 && s != NULL && streq (s, "baz"),
         "decoded content matches encoded content");
 
     /* reset payload */
@@ -587,14 +588,14 @@ void check_payload_json_formatted (void)
     s = NULL;
     ok (flux_msg_unpack (msg, "{s:i, s:s}", "foo", &i, "bar", &s) == 0,
        "flux_msg_unpack object works");
-    ok (i == 43 && s != NULL && !strcmp (s, "smurf"),
+    ok (i == 43 && s != NULL && streq (s, "smurf"),
         "decoded content matches new encoded content");
 
     i = 0;
     s = NULL;
     ok (flux_msg_unpack (msg, "{s:s, s:i}", "bar", &s, "foo", &i) == 0,
        "flux_msg_unpack object works out of order");
-    ok (i == 43 && s != NULL && !strcmp (s, "smurf"),
+    ok (i == 43 && s != NULL && streq (s, "smurf"),
         "decoded content matches new encoded content");
 
     ok (strlen (flux_msg_last_error (msg)) == 0,
@@ -966,7 +967,7 @@ void check_encode (void)
     free (buf);
     ok (flux_msg_get_type (msg2, &type) == 0 && type == FLUX_MSGTYPE_REQUEST,
         "decoded expected message type");
-    ok (flux_msg_get_topic (msg2, &topic) == 0 && !strcmp (topic, "foo.bar"),
+    ok (flux_msg_get_topic (msg2, &topic) == 0 && streq (topic, "foo.bar"),
         "decoded expected topic string");
     ok (flux_msg_has_payload (msg2) == false,
         "decoded expected (lack of) payload");
@@ -1041,7 +1042,7 @@ void check_copy (void)
              && flux_msg_get_payload (cpy, &cpybuf, &cpylen) == 0
              && cpylen == sizeof (buf) && memcmp (cpybuf, buf, cpylen) == 0
              && flux_msg_route_count (cpy) == 2
-             && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic,"foo"),
+             && flux_msg_get_topic (cpy, &topic) == 0 && streq (topic,"foo"),
         "copy is request: w/routes, topic, and payload");
 
     ok ((s = flux_msg_route_last (cpy)) != NULL,
@@ -1066,7 +1067,7 @@ void check_copy (void)
     ok (flux_msg_get_type (cpy, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
              && !flux_msg_has_payload (cpy)
              && flux_msg_route_count (cpy) == 2
-             && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic,"foo"),
+             && flux_msg_get_topic (cpy, &topic) == 0 && streq (topic,"foo"),
         "copy is request: w/routes, topic, and no payload");
     flux_msg_destroy (cpy);
     flux_msg_destroy (msg);

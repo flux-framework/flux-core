@@ -18,7 +18,7 @@
 #include <stdlib.h>
 
 #include "fsd.h"
-#include "src/common/libccan/ccan/str/str.h"
+#include "ccan/str/str.h"
 
 static int is_invalid_duration (double d)
 {

@@ -26,6 +26,7 @@
 #include "src/modules/kvs/kvstxn.h"
 #include "src/modules/kvs/kvsroot.h"
 #include "src/modules/kvs/lookup.h"
+#include "ccan/str/str.h"
 
 static int test_global = 5;
 
@@ -350,7 +351,7 @@ bool is_op_key (json_t *ops, const char *key)
     json_array_foreach (ops, index, entry) {
         if ((o = json_object_get (entry, "key"))
                     && (k = json_string_value (o))
-                    && !strcmp (key, k))
+                    && streq (key, k))
             return true;
     }
     return false;
@@ -684,7 +685,7 @@ void kvstxn_basic_tests (void)
     ok ((ns = kvstxn_get_namespace (kt)) != NULL,
         "kvstxn_get_namespace returns non-NULL");
 
-    ok (!strcmp (ns, KVS_PRIMARY_NAMESPACE),
+    ok (streq (ns, KVS_PRIMARY_NAMESPACE),
         "kvstxn_get_namespace returns correct string");
 
     ok (kvstxn_get_aux (kt) == &test_global,
@@ -902,7 +903,7 @@ void kvstxn_basic_kvstxn_process_test_empty_ops (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
-    ok (strcmp (newroot, rootref) == 0,
+    ok (streq (newroot, rootref),
         "root stays identical when no ops in transaction");
 
     verify_keys_and_ops_standard (kt);
@@ -962,7 +963,7 @@ void kvstxn_basic_kvstxn_process_test_internal_flags (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
-    ok (strcmp (newroot, rootref) == 0,
+    ok (streq (newroot, rootref),
         "root stays identical when no ops in transaction");
 
     verify_keys_and_ops_standard (kt);
@@ -1331,7 +1332,7 @@ int rootref_cb (kvstxn_t *kt, const char *ref, void *data)
     json_t *rootdir;
     struct cache_entry *entry;
 
-    ok (strcmp (ref, rd->rootref) == 0,
+    ok (streq (ref, rd->rootref),
         "missing root reference is what we expect it to be");
 
     ok ((rootdir = treeobj_create_dir ()) != NULL,

@@ -13,6 +13,7 @@
 
 #include "src/common/libflux/plugin.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 
 /* function prototype for invalid args testing below */
@@ -281,9 +282,9 @@ int op1 (flux_plugin_t *p, const char *topic,
     int a, b;
     if (flux_plugin_arg_unpack (args, 0, "{s:i s:i}", "a", &a, "b", &b) < 0)
         return -1;
-    if (strcmp (topic, "op.add") == 0)
+    if (streq (topic, "op.add"))
         a += b;
-    else if (strcmp (topic, "op.multiply") == 0)
+    else if (streq (topic, "op.multiply"))
         a *= b;
     else {
         errno = ENOTSUP;
@@ -503,7 +504,7 @@ void test_uuid (void)
         BAIL_OUT ("flux_plugin_create failed");
     uuid = flux_plugin_get_uuid (p);
 
-    ok (uuid != NULL && strcmp (ouuid, uuid) != 0,
+    ok (uuid != NULL && !streq (ouuid, uuid),
         "second plugin instance has different uuid");
     flux_plugin_destroy (p);
     free (ouuid);

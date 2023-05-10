@@ -17,6 +17,7 @@
 #include <time.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "eventlog.h"
 
@@ -390,7 +391,7 @@ int eventlog_contains_event (const char *s, const char *name)
         json_t *c;
         if (eventlog_entry_parse (value, &t, &n, &c) < 0)
             goto out;
-        if (!strcmp (name, n)) {
+        if (streq (name, n)) {
             rv = 1;
             goto out;
         }

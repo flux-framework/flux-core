@@ -59,6 +59,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/dirwalk.h"
 #include "src/common/libutil/unlink_recursive.h"
+#include "ccan/str/str.h"
 
 #include "src/common/libcontent/content-util.h"
 
@@ -358,9 +359,9 @@ static int parse_args (flux_t *h,
 {
     int i;
     for (i = 0; i < argc; i++) {
-        if (!strcmp (argv[i], "testing"))
+        if (streq (argv[i], "testing"))
             *testing = true;
-        else if (!strcmp (argv[i], "truncate"))
+        else if (streq (argv[i], "truncate"))
             *truncate = true;
         else {
             flux_log (h, LOG_ERR, "Unknown module option: %s", argv[i]);

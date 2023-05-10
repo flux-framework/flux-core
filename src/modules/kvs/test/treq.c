@@ -19,6 +19,7 @@
 #include "src/common/libflux/message.h"
 #include "src/common/libflux/request.h"
 #include "src/modules/kvs/treq.h"
+#include "ccan/str/str.h"
 
 int msg_cb (treq_t *tr, const flux_msg_t *req, void *data)
 {
@@ -26,7 +27,7 @@ int msg_cb (treq_t *tr, const flux_msg_t *req, void *data)
     const char *topic;
 
     if (!flux_msg_get_topic (req, &topic)
-        && !strcmp (topic, "mytopic"))
+        && streq (topic, "mytopic"))
         (*count)++;
 
     return 0;
@@ -58,7 +59,7 @@ void treq_basic_tests (void)
     ok ((name = treq_get_name (tr)) != NULL,
         "treq_get_name works");
 
-    ok (strcmp (name, "foo") == 0,
+    ok (streq (name, "foo"),
         "treq_get_name returns the correct name");
 
     ok (treq_get_nprocs (tr) == 1,

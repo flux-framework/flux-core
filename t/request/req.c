@@ -19,6 +19,7 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "ccan/str/str.h"
 
 typedef struct {
     flux_t *h;
@@ -304,7 +305,7 @@ void null_request_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_msg_get_topic", __FUNCTION__);
         goto error;
     }
-    if (strcmp (topic, "req.null") != 0) {
+    if (!streq (topic, "req.null")) {
         flux_log (h, LOG_ERR, "%s: unexpected topic: %s", __FUNCTION__,
                   topic);
         goto error;

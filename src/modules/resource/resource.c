@@ -23,6 +23,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/librlist/rlist.h"
+#include "ccan/str/str.h"
 
 #include "resource.h"
 #include "inventory.h"
@@ -340,7 +341,7 @@ static int prune_eventlog (json_t *eventlog)
 
     json_array_foreach (eventlog, index, entry) {
         if (eventlog_entry_parse (entry, NULL, &name, NULL) == 0
-                && !strcmp (name, "resource-init"))
+                && streq (name, "resource-init"))
             last_entry = index;
     }
     if (last_entry < json_array_size (eventlog)) {
@@ -401,9 +402,9 @@ int parse_args (flux_t *h,
         /* Test option to force all ranks to be marked online in the initial
          * 'restart' event posted to resource.eventlog.
          */
-        if (!strcmp (argv[i], "monitor-force-up"))
+        if (streq (argv[i], "monitor-force-up"))
             *monitor_force_up = true;
-        else if (!strcmp (argv[i], "noverify"))
+        else if (streq (argv[i], "noverify"))
             *noverify = true;
         else  {
             flux_log (h, LOG_ERR, "unknown option: %s", argv[i]);

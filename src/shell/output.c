@@ -55,6 +55,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libioencode/ioencode.h"
+#include "ccan/str/str.h"
 
 #include "task.h"
 #include "svc.h"
@@ -158,7 +159,7 @@ static int shell_output_term (struct shell_output *out)
             shell_log_errno ("eventlog_entry_parse");
             return -1;
         }
-        if (!strcmp (name, "data")) {
+        if (streq (name, "data")) {
             int output_type;
             FILE *f;
             const char *stream = NULL;
@@ -169,7 +170,7 @@ static int shell_output_term (struct shell_output *out)
                 shell_log_errno ("iodecode");
                 return -1;
             }
-            if (!strcmp (stream, "stdout")) {
+            if (streq (stream, "stdout")) {
                 output_type = out->stdout_type;
                 f = stdout;
             }
@@ -321,12 +322,12 @@ static bool entry_output_is_kvs (struct shell_output *out,
         shell_log_errno ("eventlog_entry_parse");
         return 0;
     }
-    if (!strcmp (name, "data")) {
+    if (streq (name, "data")) {
         if (iodecode (context, &stream, NULL, NULL, lenp, eofp) < 0) {
             shell_log_errno ("iodecode");
             return 0;
         }
-        if ((*stdoutp = !strcmp (stream, "stdout")))
+        if ((*stdoutp = streq (stream, "stdout")))
             return (out->stdout_type == FLUX_OUTPUT_TYPE_KVS);
         else
             return (out->stderr_type == FLUX_OUTPUT_TYPE_KVS);
@@ -432,7 +433,7 @@ static int shell_output_data (struct shell_output *out, json_t *context)
         shell_log_errno ("iodecode");
         return -1;
     }
-    if (!strcmp (stream, "stdout")) {
+    if (streq (stream, "stdout")) {
         output_type = out->stdout_type;
         ofp = &out->stdout_file;
     }
@@ -507,13 +508,13 @@ static int shell_output_file (struct shell_output *out)
             shell_log_errno ("eventlog_entry_parse");
             return -1;
         }
-        if (!strcmp (name, "data")) {
+        if (streq (name, "data")) {
             if (shell_output_data (out, context) < 0) {
                 shell_log_errno ("shell_output_data");
                 return -1;
             }
         }
-        else if (!strcmp (name, "log"))
+        else if (streq (name, "log"))
             shell_output_log (out, context);
    }
     return 0;
@@ -544,7 +545,7 @@ static int shell_output_write_leader (struct shell_output *out,
 {
     json_t *entry;
 
-    if (strcmp (type, "eof") == 0) {
+    if (streq (type, "eof")) {
         shell_output_decref (out, mh);
         return 0;
     }
@@ -783,11 +784,11 @@ static int shell_output_parse_type (struct shell_output *out,
                                     const char *typestr,
                                     int *typep)
 {
-    if (out->shell->standalone && !strcmp (typestr, "term"))
+    if (out->shell->standalone && streq (typestr, "term"))
         (*typep) = FLUX_OUTPUT_TYPE_TERM;
-    else if (!strcmp (typestr, "kvs"))
+    else if (streq (typestr, "kvs"))
         (*typep) = FLUX_OUTPUT_TYPE_KVS;
-    else if (!strcmp (typestr, "file"))
+    else if (streq (typestr, "file"))
         (*typep) = FLUX_OUTPUT_TYPE_FILE;
     else
         return shell_log_errn (EINVAL,
@@ -840,7 +841,7 @@ static int shell_output_setup_type (struct shell_output *out,
         struct shell_output_type_file *ofp = NULL;
         struct shell_output_type_file *ofp_copy = NULL;
 
-        if (!strcmp (stream, "stdout"))
+        if (streq (stream, "stdout"))
             ofp = &(out->stdout_file);
         else
             ofp = &(out->stderr_file);

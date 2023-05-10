@@ -27,6 +27,7 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_util_private.h"
+#include "ccan/str/str.h"
 
 #include "cache.h"
 #include "kvsroot.h"
@@ -313,7 +314,7 @@ static lookup_process_t walk_symlink (lookup_t *lh,
         /* if symlink target is root, no need to recurse, just get
          * root_dirent and continue on.
          */
-        if (!strcmp (target, ".")) {
+        if (streq (target, ".")) {
             if (root) {
                 json_decref (wl->tmp_dirent);
                 wl->tmp_dirent = treeobj_create_dirref (root->ref);
@@ -954,7 +955,7 @@ lookup_process_t lookup (lookup_t *lh)
             }
 
             /* special case root */
-            if (!strcmp (lh->path, ".")) {
+            if (streq (lh->path, ".")) {
                 if ((lh->flags & FLUX_KVS_TREEOBJ)) {
                     if (!(lh->val = treeobj_create_dirref (lh->root_ref))) {
                         lh->errnum = errno;

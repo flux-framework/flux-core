@@ -22,6 +22,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fsd.h"
+#include "ccan/str/str.h"
 
 #include "optparse.h"
 #include "getopt.h"
@@ -170,9 +171,9 @@ static int option_info_cmp (void *arg1, void *arg2)
             return (-1);
         else if (y->isdoc)
             return (1);
-        else if (strcmp (o1->name, "help") == 0)
+        else if (streq (o1->name, "help"))
             return -1;
-        else if (strcmp (o2->name, "help") == 0)
+        else if (streq (o2->name, "help"))
             return 1;
         else if (isalnum (o1->key) && isalnum (o2->key))
             return (o1->key - o2->key);
@@ -217,7 +218,7 @@ static struct option_info *find_option_info (optparse_t *p, const char *name)
     o = zlist_first (p->option_list);
     while (o) {
         if (o->p_opt->name != NULL
-            && strcmp (o->p_opt->name, name) == 0)
+            && streq (o->p_opt->name, name))
             return o;
         o = zlist_next (p->option_list);
     }

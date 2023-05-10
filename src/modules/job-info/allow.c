@@ -20,6 +20,7 @@
 #include "allow.h"
 
 #include "src/common/libeventlog/eventlog.h"
+#include "ccan/str/str.h"
 
 /* Parse the submit userid from the event log.
  * Assume "submit" is the first event.
@@ -50,7 +51,7 @@ static int eventlog_get_userid (struct info_ctx *ctx, const char *s,
         flux_log_error (ctx->h, "%s: eventlog_decode", __FUNCTION__);
         goto error;
     }
-    if (strcmp (name, "submit") != 0 || !context) {
+    if (!streq (name, "submit") || !context) {
         flux_log (ctx->h, LOG_ERR, "%s: invalid event: %s", __FUNCTION__, name);
         errno = EPROTO;
         goto error;

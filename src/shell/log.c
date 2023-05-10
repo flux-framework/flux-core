@@ -30,6 +30,8 @@
 #include <flux/core.h>
 #include <flux/shell.h>
 
+#include "ccan/str/str.h"
+
 #include "info.h"
 #include "internal.h"
 #include "log.h"
@@ -348,7 +350,7 @@ int flux_shell_log_setlevel (int level, const char *dest)
      *   the severity level change.
      */
     if (dest != NULL) {
-        if (strcmp (dest, "stderr") == 0)
+        if (streq (dest, "stderr"))
             logger.fp_level = level;
         else
             return log_setlevel (logger.shell, dest, level);

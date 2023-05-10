@@ -22,6 +22,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "ccan/str/str.h"
 
 #include "job-info.h"
 #include "watch.h"
@@ -330,13 +331,13 @@ static int check_guest_namespace_status (struct guest_watch_ctx *gw,
         json_t *context = NULL;
         if (eventlog_entry_parse (event, NULL, &name, &context) < 0)
             goto error;
-        if (!strcmp (name, "start"))
+        if (streq (name, "start"))
             gw->guest_started = true;
-        if (!strcmp (name, "release")) {
+        if (streq (name, "release")) {
             void *iter = json_object_iter (context);
             while (iter && !gw->guest_released) {
                 const char *key = json_object_iter_key (iter);
-                if (!strcmp (key, "final")) {
+                if (streq (key, "final")) {
                     json_t *value = json_object_iter_value (iter);
                     if (json_is_boolean (value) && json_is_true (value))
                         gw->guest_released = true;
@@ -465,7 +466,7 @@ static int check_guest_namespace_created (struct guest_watch_ctx *gw,
         goto error;
     }
 
-    if (!strcmp (name, "start"))
+    if (streq (name, "start"))
         gw->guest_started = true;
 
     /* Do not need to check for "clean", if "start" never occurs, will

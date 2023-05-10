@@ -17,6 +17,7 @@
 #include "src/common/libpmi/dgetline.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libflux/reactor.h"
+#include "ccan/str/str.h"
 
 #include "src/common/libtap/tap.h"
 
@@ -274,7 +275,7 @@ int main (int argc, char *argv[])
         "PMI_KVS_Get length=-1 fails with PMI_ERR_INVALID_ARG");
 
     result = PMI_KVS_Get (kvsname, "foo", val, vallen_max);
-    ok (result == PMI_SUCCESS && !strcmp (val, "bar"),
+    ok (result == PMI_SUCCESS && streq (val, "bar"),
         "PMI_KVS_Get works and got expected value");
 
     /* clique
@@ -377,11 +378,11 @@ int main (int argc, char *argv[])
         "PMI_Get_id_length_max works and set idlen to kvsname_max");
 
     result = PMI_Get_id (buf, sizeof (buf));
-    ok (result == PMI_SUCCESS && !strcmp (buf, kvsname),
+    ok (result == PMI_SUCCESS && streq (buf, kvsname),
         "PMI_Get_id works and set buf to kvsname");
 
     result = PMI_Get_kvs_domain_id (buf, sizeof (buf));
-    ok (result == PMI_SUCCESS && !strcmp (buf, kvsname),
+    ok (result == PMI_SUCCESS && streq (buf, kvsname),
         "PMI_Get_kvs_domain_id works and set buf to kvsname");
 
     /* finalize

@@ -25,6 +25,7 @@
 #include "src/common/libutil/tomltk.h"
 
 #include "src/common/libyuarel/yuarel.h"
+#include "ccan/str/str.h"
 
 #include "s3.h"
 
@@ -186,7 +187,7 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
     if (!(cfg->bucket = strdup (bucket)))
         goto error;
 
-    if (!strncmp (yuri.scheme, "https", 5))
+    if (strstarts (yuri.scheme, "https"))
         cfg->is_secure = 1;
 
     cfg->is_virtual_host = is_virtual_host;
@@ -483,7 +484,7 @@ error:
 static int parse_args (flux_t *h, int argc, char **argv)
 {
     for (int i = 0; i < argc; i++) {
-        if (!strcmp (argv[i], "truncate")) {
+        if (streq (argv[i], "truncate")) {
             flux_log (h,
                       LOG_ERR,
                       "truncate is not implemented.  Use S3 console"

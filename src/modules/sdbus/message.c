@@ -222,9 +222,9 @@ int sdmsg_write (sd_bus_message *m, const char *fmt, json_t *o)
 
         if (!(entry = json_array_get (o, cursor++)))
             return -EPROTO;
-        if (!strncmp (&fmt[i], "a(sasb)", 7))
+        if (strstarts (&fmt[i], "a(sasb)"))
             efmt = strndup (&fmt[i], 7);
-        else if (!strncmp (&fmt[i], "a(sv)", 5))
+        else if (strstarts (&fmt[i], "a(sv)"))
             efmt = strndup (&fmt[i], 5);
         else if (fmt[i] == 'a' && strlen (&fmt[i]) > 1)
             efmt = strndup (&fmt[i], 2);
@@ -457,7 +457,7 @@ int sdmsg_read (sd_bus_message *m, const char *fmt, json_t *o)
         char *efmt = NULL;
         int e;
 
-        if (!strncmp (&fmt[i], "a{sv}", 5))
+        if (strstarts (&fmt[i], "a{sv}"))
             efmt = strndup (&fmt[i], 5);
         else if (fmt[i] == 'a' && strlen (&fmt[i]) > 1)
             efmt = strndup (&fmt[i], 2);

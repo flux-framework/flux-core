@@ -20,6 +20,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtestutil/util.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 #include "future.h"
 #include "reactor.h"
@@ -106,7 +107,7 @@ void test_simple (void)
         && errno == ENOENT,
         "flux_future_aux_get of wrong value returns ENOENT");
     p = flux_future_aux_get (f, "foo");
-    ok (p != NULL && !strcmp (p, "bar"),
+    ok (p != NULL && streq (p, "bar"),
         "flux_future_aux_get of known returns it");
     // same value as "foo" key to not muck up destructor arg test
     ok (flux_future_aux_set (f, NULL, "bar", aux_destroy_fun) == 0,
@@ -136,7 +137,7 @@ void test_simple (void)
     ok (flux_future_is_ready (f),
         "flux_future_is_ready returns true after result is set");
     ok (flux_future_get (f, &result) == 0
-        && result != NULL && !strcmp (result, "Hello"),
+        && result != NULL && streq (result, "Hello"),
         "flux_future_get returns correct result");
     ok (flux_future_get (f, NULL) == 0,
         "flux_future_get with NULL results argument also works");
@@ -155,10 +156,10 @@ void test_simple (void)
         "flux_future_then registered continuation");
     ok (flux_reactor_run (r, 0) == 0,
         "reactor ran successfully");
-    ok (contin_called && contin_arg != NULL && !strcmp (contin_arg, "nerp"),
+    ok (contin_called && contin_arg != NULL && streq (contin_arg, "nerp"),
         "continuation was called with correct argument");
     ok (contin_get_rc == 0 && contin_get_result != NULL
-        && !strcmp (contin_get_result, "Hello"),
+        && streq (contin_get_result, "Hello"),
         "continuation obtained correct result with flux_future_get");
     ok (contin_reactor == r,
         "flux_future_get_reactor from continuation returned set reactor");
@@ -166,10 +167,10 @@ void test_simple (void)
     /* destructors */
     flux_future_destroy (f);
     ok (aux_destroy_called == 2 && aux_destroy_arg != NULL
-        && !strcmp (aux_destroy_arg, "bar"),
+        && streq (aux_destroy_arg, "bar"),
         "flux_future_destroy called aux destructor correctly");
     ok (result_destroy_called && result_destroy_arg != NULL
-        && !strcmp (result_destroy_arg, "Hello"),
+        && streq (result_destroy_arg, "Hello"),
         "flux_future_destroy called result destructor correctly");
 
     flux_reactor_destroy (r);
@@ -330,10 +331,10 @@ void test_init_now (void)
     result = NULL;
     ok (flux_future_get (f, (const void **)&result) == 0,
         "flux_future_get worked");
-    ok (result != NULL && !strcmp (result, "Result!"),
+    ok (result != NULL && streq (result, "Result!"),
         "and correct result was returned");
     ok (simple_init_called == 1 && simple_init_arg != NULL
-        && !strcmp (simple_init_arg, "testarg"),
+        && streq (simple_init_arg, "testarg"),
         "init was called once with correct arg");
     ok (simple_init_r != NULL,
         "flux_future_get_reactor returned tmp reactor in init");
@@ -376,7 +377,7 @@ void test_init_then (void)
     ok (flux_future_then (f, -1., simple_contin, NULL) == 0,
         "flux_future_then registered continuation");
     ok (simple_init_called == 1 && simple_init_arg != NULL
-        && !strcmp (simple_init_arg, "testarg"),
+        && streq (simple_init_arg, "testarg"),
         "init was called once with correct arg");
     ok (simple_init_r == r,
         "flux_future_get_reactor return set reactor in init");
@@ -387,7 +388,7 @@ void test_init_then (void)
     ok (simple_contin_rc == 0,
         "continuation get succeeded");
     ok (simple_contin_result != NULL
-        && !strcmp (simple_contin_result, "Result!"),
+        && streq (simple_contin_result, "Result!"),
         "continuation get returned correct result");
 
     flux_future_destroy (f);
@@ -441,7 +442,8 @@ void test_fclass_synchronous (char *tag, flux_future_t *f, const char *expected)
 
     ok (flux_future_wait_for (f, -1.) == 0,
         "%s: flux_future_wait_for returned successfully", tag);
-    ok (flux_future_get (f, (const void **)&s) == 0 && s != NULL && !strcmp (s, expected),
+    ok (flux_future_get (f, (const void **)&s) == 0
+        && s != NULL && streq (s, expected),
         "%s: flux_future_get worked", tag);
 }
 
@@ -464,7 +466,7 @@ void test_fclass_asynchronous (char *tag,
         "%s: flux_reactor_run returned", tag);
     ok (fclass_contin_rc == 0,
         "%s: continuation called flux_future_get with success", tag);
-    ok (s != NULL && !strcmp (s, expected),
+    ok (s != NULL && streq (s, expected),
         "%s: continuation fetched expected value", tag);
 
     flux_reactor_destroy (r);
@@ -956,7 +958,7 @@ void test_error_string (void)
     ok (flux_future_get (f, NULL) < 0
         && errno == ENOENT
         && (str = flux_future_error_string (f)) != NULL
-        && !strcmp (str, "No such file or directory"),
+        && streq (str, "No such file or directory"),
         "flux_future_error_string returns ENOENT strerror string");
 
     flux_future_destroy (f);
@@ -969,7 +971,7 @@ void test_error_string (void)
     ok (flux_future_get (f, NULL) < 0
         && errno == ENOENT
         && (str = flux_future_error_string (f)) != NULL
-        && !strcmp (str, "foobar"),
+        && streq (str, "foobar"),
         "flux_future_error_string returns correct string when error string set");
 
     flux_future_destroy (f);
@@ -982,7 +984,7 @@ void test_error_string (void)
     ok (flux_future_get (f, NULL) < 0
         && errno == ENOENT
         && (str = flux_future_error_string (f)) != NULL
-        && !strcmp (str, "No such file or directory"),
+        && streq (str, "No such file or directory"),
         "flux_future_error_string returns ENOENT strerror string");
 
     flux_future_destroy (f);
@@ -995,7 +997,7 @@ void test_error_string (void)
     ok (flux_future_get (f, NULL) < 0
         && errno == ENOENT
         && (str = flux_future_error_string (f)) != NULL
-        && !strcmp (str, "boobaz"),
+        && streq (str, "boobaz"),
         "flux_future_error_string returns correct fatal error string "
         "when error string set");
 
@@ -1024,7 +1026,7 @@ void test_multiple_fulfill (void)
     result = NULL;
     ok (flux_future_get (f, (const void **)&result) == 0
         && result
-        && !strcmp (result, "foo"),
+        && streq (result, "foo"),
         "flux_future_get gets fulfillment");
     flux_future_reset (f);
 
@@ -1036,7 +1038,7 @@ void test_multiple_fulfill (void)
     result = NULL;
     ok (flux_future_get (f, (const void **)&result) == 0
         && result
-        && !strcmp (result, "bar"),
+        && streq (result, "bar"),
         "flux_future_get gets queued fulfillment");
     flux_future_reset (f);
 
@@ -1048,7 +1050,7 @@ void test_multiple_fulfill (void)
     result = NULL;
     ok (flux_future_get (f, (const void **)&result) == 0
         && result
-        && !strcmp (result, "baz"),
+        && streq (result, "baz"),
         "flux_future_get gets queued fulfillment");
     flux_future_reset (f);
 
@@ -1085,7 +1087,7 @@ void test_multiple_fulfill_asynchronous (void)
     /* Call continuation once to get first value and reset future */
     multiple_fulfill_continuation (f, &result);
 
-    ok (strcmp (result, "foo") == 0,
+    ok (streq (result, "foo"),
         "calling multiple_fulfill_continuation synchronously worked");
 
     rc = flux_future_then (f, -1., multiple_fulfill_continuation, &result);
@@ -1093,7 +1095,7 @@ void test_multiple_fulfill_asynchronous (void)
         "flux_future_then() works for multiple fulfilled future");
     if (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) < 0)
         BAIL_OUT ("flux_reactor_run NOWAIT failed");
-    ok (strcmp (result, "bar") == 0,
+    ok (streq (result, "bar"),
         "continuation was called for multiple-fulfilled future");
 
     flux_future_destroy (f);
@@ -1142,7 +1144,7 @@ void test_fulfill_with (void)
         "flux_future_t f is now ready");
     ok (flux_future_get (f, (const void **)&result) == 0,
         "flux_future_get (f) works");
-    ok (result == p_result && strcmp (result, "result") == 0,
+    ok (result == p_result && streq (result, "result"),
         "flux_future_get (f) returns result from p");
     ok (flux_future_aux_get (f, "test") == (void *) 0x42,
         "flux_future_aux_get (f, ...) retrieves aux item from p");
@@ -1162,7 +1164,7 @@ void test_fulfill_with (void)
     ok (flux_future_get (f, NULL) < 0 && errno == EFAULT,
         "flux_future_get returns expected error and errno");
     ok (flux_future_error_string (f) &&
-        strcmp (flux_future_error_string (f), "test error string") == 0,
+        streq (flux_future_error_string (f), "test error string"),
         "flux_future_error_string() has expected error string");
 
     /* Test fulfill_with multiple fulfillment:
@@ -1209,7 +1211,7 @@ void test_fulfill_with (void)
     ok (flux_future_get (f, NULL) < 0 && errno == EFAULT,
         "flux_future_get returns expected error and errno");
     ok (flux_future_error_string (f) &&
-        strcmp (flux_future_error_string (f), "fatal error string") == 0,
+        streq (flux_future_error_string (f), "fatal error string"),
         "flux_future_error_string() has expected error string");
 
     flux_future_destroy (f);

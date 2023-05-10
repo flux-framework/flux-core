@@ -31,6 +31,7 @@
 #include "src/common/libutil/monotime.h"
 
 #include "src/common/libcontent/content-util.h"
+#include "ccan/str/str.h"
 
 const size_t lzo_buf_chunksize = 1024*1024;
 const size_t compression_threshold = 256; /* compress blobs >= this size */
@@ -808,13 +809,13 @@ static int process_args (struct content_sqlite *ctx,
 {
     int i;
     for (i = 0; i < argc; i++) {
-        if (strncmp ("journal_mode=", argv[i], 13) == 0) {
+        if (strstarts (argv[i], "journal_mode=")) {
             ctx->journal_mode = argv[i] + 13;
         }
-        else if (strncmp ("synchronous=", argv[i], 12) == 0) {
+        else if (strstarts (argv[i], "synchronous=")) {
             ctx->synchronous = argv[i] + 12;
         }
-        else if (strcmp ("truncate", argv[i]) == 0) {
+        else if (streq ("truncate", argv[i])) {
             *truncate = true;
         }
         else {

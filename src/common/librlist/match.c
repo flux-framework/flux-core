@@ -198,7 +198,7 @@ static bool rnode_has (const struct rnode *n, const char *property)
     }
 
     if ((n->properties && zhashx_lookup (n->properties, prop))
-        || strcmp (n->hostname, prop) == 0)
+        || streq (n->hostname, prop))
         match = true;
 
     return negate ? !match : match;

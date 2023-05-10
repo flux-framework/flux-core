@@ -23,6 +23,7 @@
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"
 #include "src/common/libutil/timestamp.h"
+#include "ccan/str/str.h"
 
 #include "log.h"
 
@@ -255,19 +256,19 @@ static int attr_get_log (const char *name, const char **val, void *arg)
 {
     logbuf_t *logbuf = arg;
 
-    if (!strcmp (name, "log-forward-level"))
+    if (streq (name, "log-forward-level"))
         *val = int_to_string (logbuf->forward_level);
-    else if (!strcmp (name, "log-critical-level"))
+    else if (streq (name, "log-critical-level"))
         *val = int_to_string (logbuf->critical_level);
-    else if (!strcmp (name, "log-stderr-level"))
+    else if (streq (name, "log-stderr-level"))
         *val = int_to_string (logbuf->stderr_level);
-    else if (!strcmp (name, "log-stderr-mode"))
+    else if (streq (name, "log-stderr-mode"))
         *val = logbuf->stderr_mode == MODE_LEADER ? "leader" : "local";
-    else if (!strcmp (name, "log-ring-size"))
+    else if (streq (name, "log-ring-size"))
         *val = int_to_string (logbuf->ring_size);
-    else if (!strcmp (name, "log-filename"))
+    else if (streq (name, "log-filename"))
         *val = logbuf->filename;
-    else if (!strcmp (name, "log-level"))
+    else if (streq (name, "log-level"))
         *val = int_to_string (logbuf->level);
     else {
         errno = ENOENT;
@@ -281,35 +282,35 @@ static int attr_set_log (const char *name, const char *val, void *arg)
     logbuf_t *logbuf = arg;
     int rc = -1;
 
-    if (!strcmp (name, "log-forward-level")) {
+    if (streq (name, "log-forward-level")) {
         int level = strtol (val, NULL, 10);
         if (logbuf_set_forward_level (logbuf, level) < 0)
             goto done;
-    } else if (!strcmp (name, "log-critical-level")) {
+    } else if (streq (name, "log-critical-level")) {
         int level = strtol (val, NULL, 10);
         if (logbuf_set_critical_level (logbuf, level) < 0)
             goto done;
-    } else if (!strcmp (name, "log-stderr-level")) {
+    } else if (streq (name, "log-stderr-level")) {
         int level = strtol (val, NULL, 10);
         if (logbuf_set_stderr_level (logbuf, level) < 0)
             goto done;
-    } else if (!strcmp (name, "log-stderr-mode")) {
-        if (!strcmp (val, "leader"))
+    } else if (streq (name, "log-stderr-mode")) {
+        if (streq (val, "leader"))
             logbuf->stderr_mode = MODE_LEADER;
-        else if (!strcmp (val, "local"))
+        else if (streq (val, "local"))
             logbuf->stderr_mode = MODE_LOCAL;
         else {
             errno = EINVAL;
             goto done;
         }
-    } else if (!strcmp (name, "log-ring-size")) {
+    } else if (streq (name, "log-ring-size")) {
         int size = strtol (val, NULL, 10);
         if (logbuf_set_ring_size (logbuf, size) < 0)
             goto done;
-    } else if (!strcmp (name, "log-filename")) {
+    } else if (streq (name, "log-filename")) {
         if (logbuf_set_filename (logbuf, val) < 0)
             goto done;
-    } else if (!strcmp (name, "log-level")) {
+    } else if (streq (name, "log-level")) {
         int level = strtol (val, NULL, 10);
         if (logbuf_set_level (logbuf, level) < 0)
             goto done;

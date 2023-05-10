@@ -8,12 +8,16 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
 #include <string.h>
 #include <locale.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/fluid.h"
+#include "ccan/str/str.h"
 
 struct f58_test {
     fluid_t id;
@@ -69,8 +73,8 @@ void test_f58 (void)
     while (tp->f58 != NULL) {
         ok (fluid_encode (buf, sizeof(buf), tp->id, type) == 0,
             "f58_encode (%ju)", tp->id);
-        if (strcmp (buf, tp->f58) == 0
-            || strcmp (buf, tp->f58_alt) == 0)
+        if (streq (buf, tp->f58)
+            || streq (buf, tp->f58_alt))
             pass ("f58_encode %ju -> %s", tp->id, buf);
         else
             fail ("f58_encode %ju: got %s expected %s",
@@ -90,6 +94,7 @@ void test_f58 (void)
         tp++;
     }
 
+#if !ASSUME_BROKEN_LOCALE
     if (setenv ("FLUX_F58_FORCE_ASCII", "1", 1) < 0)
         BAIL_OUT ("Failed to setenv FLUX_F58_FORCE_ASCII");
     ok (fluid_encode (buf, sizeof (buf), f58_tests->id, type) == 0,
@@ -98,6 +103,7 @@ void test_f58 (void)
         "fluid_encode with FLUX_F58_FORCE_ASCII used ascii prefix");
     if (unsetenv ("FLUX_F58_FORCE_ASCII") < 0)
         BAIL_OUT ("Failed to unsetenv FLUX_F58_FORCE_ASCII");
+#endif
 
     ok (fluid_encode (buf, 1, 1, type) < 0 && errno == EOVERFLOW,
         "fluid_encode (buf, 1, 1, F58) returns EOVERFLOW");

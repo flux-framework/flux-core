@@ -10,6 +10,7 @@
 
 #include <string.h>
 #include "entry.h"
+#include "ccan/str/str.h"
 
 /* List of external operations structures defined in
  *  type-specific source files:
@@ -33,7 +34,7 @@ int cron_type_operations_lookup (const char *name,
 {
     struct cron_typeinfo *type = cron_types;
     while (type && type->name) {
-        if (strcmp (name, type->name) == 0) {
+        if (streq (name, type->name)) {
             *ops = *type->ops;
             return (0);
         }

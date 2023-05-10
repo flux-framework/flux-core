@@ -25,6 +25,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libcontent/content.h"
+#include "ccan/str/str.h"
 
 #include "builtin.h"
 
@@ -70,7 +71,7 @@ static struct archive *restore_create (const char *infile)
     if (archive_read_support_format_all (ar) != ARCHIVE_OK
         || archive_read_support_filter_all (ar) != ARCHIVE_OK)
         log_msg_exit ("%s", archive_error_string (ar));
-    if (!strcmp (infile, "-")) {
+    if (streq (infile, "-")) {
         if (archive_read_open_FILE (ar, stdin) != ARCHIVE_OK)
             log_msg_exit ("%s", archive_error_string (ar));
     }

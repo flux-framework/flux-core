@@ -23,6 +23,7 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/iterators.h"
+#include "ccan/str/str.h"
 
 
 #include "environment.h"
@@ -70,7 +71,7 @@ char *find_env_item(struct env_item *i, const char *s)
 {
     char *entry = 0;
     while ((entry = argz_next (i->argz, i->argz_len, entry))) {
-        if (!strcmp(entry, s))
+        if (streq (entry, s))
             return entry;
     }
     return NULL;

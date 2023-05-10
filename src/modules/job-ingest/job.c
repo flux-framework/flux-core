@@ -23,6 +23,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libjob/sign_none.h"
+#include "ccan/str/str.h"
 
 #include "job.h"
 
@@ -147,7 +148,7 @@ struct job *job_create_from_request (const flux_msg_t *msg,
         goto error;
     }
     if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
-        && !strcmp (mech_type, "none")) {
+        && streq (mech_type, "none")) {
         errprintf (error, "only instance owner can use sign-type=none");
         errno = EPERM;
         goto error;

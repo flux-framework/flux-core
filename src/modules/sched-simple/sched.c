@@ -20,6 +20,7 @@
 #include "src/common/libjob/job.h"
 #include "src/common/libjob/jj.h"
 #include "src/common/librlist/rlist.h"
+#include "ccan/str/str.h"
 
 // e.g. flux module debug --setbit 0x1 sched-simple
 // e.g. flux module debug --clearbit 0x1 sched-simple
@@ -798,9 +799,9 @@ out:
 
 static char * get_alloc_mode (flux_t *h, const char *alloc_mode)
 {
-    if (strcmp (alloc_mode, "worst-fit") == 0
-        || strcmp (alloc_mode, "first-fit") == 0
-        || strcmp (alloc_mode, "best-fit") == 0)
+    if (streq (alloc_mode, "worst-fit")
+        || streq (alloc_mode, "first-fit")
+        || streq (alloc_mode, "best-fit"))
         return strdup (alloc_mode);
     flux_log (h, LOG_ERR, "unknown allocation mode: %s", alloc_mode);
     return NULL;
@@ -808,7 +809,7 @@ static char * get_alloc_mode (flux_t *h, const char *alloc_mode)
 
 static void set_mode (struct simple_sched *ss, const char *mode)
 {
-    if (!strncmp (mode, "limited=", 8)) {
+    if (strstarts (mode, "limited=")) {
         char *endptr;
         int n = strtol (mode+8, &endptr, 0);
         if (*endptr != '\0' || n <= 0) {
@@ -842,14 +843,14 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 {
     int i;
     for (i = 0; i < argc; i++) {
-        if (strncmp ("alloc-mode=", argv[i], 11) == 0) {
+        if (strstarts (argv[i], "alloc-mode=")) {
             free (ss->alloc_mode);
             ss->alloc_mode = get_alloc_mode (h, argv[i]+11);
         }
-        else if (strncmp ("mode=", argv[i], 5) == 0) {
+        else if (strstarts (argv[i], "mode=")) {
             set_mode (ss, argv[i]+5);
         }
-        else if (strcmp ("test-free-nolookup", argv[i]) == 0) {
+        else if (streq (argv[i], "test-free-nolookup")) {
             ss->schedutil_flags |= SCHEDUTIL_FREE_NOLOOKUP;
         }
         else {

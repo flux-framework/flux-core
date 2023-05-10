@@ -20,6 +20,7 @@
 #include "src/common/libkvs/kvs.h"
 #include "src/modules/kvs/kvsroot.h"
 #include "src/modules/kvs/treq.h"
+#include "ccan/str/str.h"
 
 int global = 0;
 
@@ -80,7 +81,7 @@ void basic_api_tests (void)
 
     kvsroot_setroot (krm, root, "foobar", 18);
 
-    ok (!strcmp (root->ref, "foobar"),
+    ok (streq (root->ref, "foobar"),
         "kvsroot_setroot set ref correctly");
 
     ok (root->seq == 18,

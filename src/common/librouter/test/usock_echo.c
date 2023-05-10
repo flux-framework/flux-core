@@ -18,6 +18,7 @@
 #include "src/common/libutil/unlink_recursive.h"
 #include "src/common/libtestutil/util.h"
 #include "src/common/librouter/usock.h"
+#include "ccan/str/str.h"
 
 #include "usock_util.h"
 
@@ -150,7 +151,7 @@ static bool equal_message (const flux_msg_t *m1, const flux_msg_t *m2)
         return false;
     if (flux_msg_get_topic (m2, &topic2) < 0)
         return false;
-    if (strcmp (topic1, topic2) != 0)
+    if (!streq (topic1, topic2))
         return false;
     if (flux_msg_has_payload (m1) && !flux_msg_has_payload (m2))
         return false;

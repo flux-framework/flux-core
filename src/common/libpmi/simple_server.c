@@ -74,6 +74,7 @@
 #include <sys/param.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "simple_server.h"
 #include "keyval.h"
@@ -219,7 +220,7 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
 
     /* spawn continuation (unimplemented) */
     if (cli->mcmd_started) {
-        if (strcmp (buf, "endcmd\n") != 0)
+        if (!streq (buf, "endcmd\n"))
             goto out_noresponse; // ignore protocol between mcmd and endcmd
         snprintf (resp, sizeof (resp), "cmd=spawn_result rc=-1\n");
         cli->mcmd_started = false;

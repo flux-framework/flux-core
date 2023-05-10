@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "src/common/libyuarel/yuarel.h"
+#include "ccan/str/str.h"
 #include "errprintf.h"
 #include "popen2.h"
 #include "read_all.h"
@@ -53,7 +54,7 @@ char *uri_remote_get_authority (const char *uri)
     cpy = strdup (uri);
     if (yuarel_parse (&yuri, cpy) == 0
         && yuri.scheme
-        && strcmp (yuri.scheme, "ssh") == 0) {
+        && streq (yuri.scheme, "ssh")) {
         if (asprintf (&result,
                       "%s%s%s",
                       yuri.username ? yuri.username : "",
@@ -78,8 +79,8 @@ char *uri_resolve (const char *uri, flux_error_t *errp)
     if (!cpy)
         return NULL;
     if (yuarel_parse (&yuri, cpy) == 0 && yuri.scheme) {
-        if (strcmp (yuri.scheme, "ssh") == 0
-            || strcmp (yuri.scheme, "local") == 0) {
+        if (streq (yuri.scheme, "ssh")
+            || streq (yuri.scheme, "local")) {
             if (getenv ("FLUX_URI_RESOLVE_LOCAL"))
                 result = uri_to_local (&yuri);
             else

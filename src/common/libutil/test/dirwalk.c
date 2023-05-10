@@ -8,7 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#define _GNU_SOURCE
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -23,6 +25,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 #include "src/common/libutil/dirwalk.h"
 
 static int makepath (const char *fmt, ...)
@@ -157,7 +160,6 @@ int check_zlist_order (zlist_t *l, const char *base, char *expected[])
     dir = zlist_first (l);
     while (dir) {
         diag ("zlist_order: %d: %s", i, dir);
-        int result;
         char *exp;
         if (expected[i] == NULL) {
             diag ("check_zlist: more results than expected=%d\n", i-1);
@@ -166,8 +168,7 @@ int check_zlist_order (zlist_t *l, const char *base, char *expected[])
         if (asprintf (&exp, "%s%s", base, expected [i]) < 0)
             BAIL_OUT ("asprintf");
 
-        result = strcmp (exp, dir);
-        if (result != 0) {
+        if (!streq (exp, dir)) {
             diag ("check_zlist: %d: expected %s got %s", i, exp, dir);
             free (exp);
             return 0;
@@ -261,7 +262,7 @@ int main(int argc, char** argv)
     l = dirwalk_find (tmp, 0, "foo", 1, NULL, 0);
     ok (l != NULL, "dirwalk_find");
     ok (l && zlist_size (l) == 1, "dirwalk_find stopped at 1 result");
-    ok (strcmp (basename (zlist_first (l)), "foo") == 0,
+    ok (streq (basename (zlist_first (l)), "foo"),
         "breadth-first search got expected match");
     zlist_destroy (&l);
 

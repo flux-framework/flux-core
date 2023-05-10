@@ -14,6 +14,7 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 #include "src/common/librouter/disconnect.h"
 
 /* Used for topic() and hashkeys() subtests */
@@ -58,7 +59,7 @@ void topic (void)
 
     for (i = 0; topics[i].topic != NULL; i++) {
         ok (disconnect_topic (topics[i].topic, buf, sizeof (buf)) >= 0
-            && !strcmp (buf, topics[i].out),
+            && streq (buf, topics[i].out),
             "topic: %s => %s", topics[i].topic, topics[i].out);
     }
 
@@ -107,7 +108,7 @@ void hashkey (void)
             BAIL_OUT ("gen_request failed");
 
         ok (disconnect_hashkey (msg, buf, sizeof (buf)) >= 0
-            && !strcmp (buf, hashkeys[i].out),
+            && streq (buf, hashkeys[i].out),
             "hashkey: %s,%u,%u => %s",
             hashkeys[i].topic,
             (unsigned int)hashkeys[i].nodeid,

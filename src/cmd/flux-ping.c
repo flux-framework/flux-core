@@ -22,6 +22,7 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
+#include "ccan/str/str.h"
 
 struct ping_ctx {
     double interval;    /* interval between sends, in seconds */
@@ -137,7 +138,7 @@ void ping_continuation (flux_future_t *f, void *arg)
                       rank_bang_str (ctx->nodeid, rbuf, sizeof (rbuf)),
                       ctx->topic);
 
-    if (strcmp (ctx->pad, pad) != 0)
+    if (!streq (ctx->pad, pad))
         log_msg_exit ("%s%s: padding contents invalid",
                       rank_bang_str (ctx->nodeid, rbuf, sizeof (rbuf)),
                       ctx->topic);
@@ -225,12 +226,12 @@ int parse_nodeid (struct ping_ctx *ctx,
     int rank;
     char *endptr;
 
-    if (!strcmp (input, "any")) {
+    if (streq (input, "any")) {
         *nodeid = FLUX_NODEID_ANY;
         (*nodeidstr) = xasprintf ("%s", "any");
         return 0;
     }
-    if (!strcmp (input, "upstream")) {
+    if (streq (input, "upstream")) {
         *nodeid = FLUX_NODEID_UPSTREAM;
         (*nodeidstr) = xasprintf ("%s", "upstream");
         return 0;

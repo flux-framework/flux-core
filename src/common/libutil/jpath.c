@@ -16,6 +16,7 @@
 #include <jansson.h>
 
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "jpath.h"
 
@@ -194,7 +195,7 @@ json_t * jpath_set_new (json_t *o, const char *path, json_t *val)
 int jpath_update (json_t *o, const char *path, json_t *val)
 {
     /* Special case, allow "." to update current object */
-    if (strcmp (path, ".") == 0)
+    if (streq (path, "."))
         return update_object_recursive (o, val);
     return jpath_do_set (o, 0, path, val);
 }

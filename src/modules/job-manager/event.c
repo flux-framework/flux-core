@@ -665,11 +665,11 @@ int event_job_update (struct job *job, json_t *event)
     else if (streq (name, "validate")) {
         job->state = FLUX_JOB_STATE_DEPEND;
     }
-    else if (!strcmp (name, "jobspec-update")) {
+    else if (streq (name, "jobspec-update")) {
         if (event_handle_jobspec_update (job, context) < 0)
             goto inval;
     }
-    else if (!strncmp (name, "dependency-", 11)) {
+    else if (strstarts (name, "dependency-")) {
         if (job->state == FLUX_JOB_STATE_DEPEND
             || job->state == FLUX_JOB_STATE_NEW) {
             if (event_handle_dependency (job, name+11, context) < 0)
@@ -754,13 +754,13 @@ int event_job_update (struct job *job, json_t *event)
             job->t_clean = timestamp;
         }
     }
-    else if (!strncmp (name, "prolog-", 7)) {
+    else if (strstarts (name, "prolog-")) {
         if (!job->start_pending) {
             if (event_handle_perilog (job, name+7, context) < 0)
                 goto error;
         }
     }
-    else if (!strncmp (name, "epilog-", 7)) {
+    else if (strstarts (name, "epilog-")) {
         if (job->state == FLUX_JOB_STATE_CLEANUP) {
             if (event_handle_perilog (job, name+7, context) < 0)
                 goto error;

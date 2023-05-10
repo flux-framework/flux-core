@@ -46,6 +46,7 @@
 
 #include "sdprocess.h"
 #include "strv.h"
+#include "ccan/str/str.h"
 
 struct sdprocess {
     flux_t *h;
@@ -562,7 +563,7 @@ static int check_exist (sdprocess_t *sdp)
         goto cleanup;
     }
 
-    if (!strcmp (load_state, "not-found")) {
+    if (streq (load_state, "not-found")) {
         errno = ENOENT;
         goto cleanup;
     }
@@ -651,7 +652,7 @@ cleanup:
 static void calc_wait_status (sdprocess_t *sdp)
 {
     assert (sdp->result);
-    if (!strcmp (sdp->result, "signal"))
+    if (streq (sdp->result, "signal"))
         sdp->wait_status = __W_EXITCODE (0, sdp->exec_main_status);
     else
         sdp->wait_status = __W_EXITCODE (sdp->exec_main_status, 0);
@@ -706,7 +707,7 @@ static int get_properties_string (sdprocess_t *sdp,
     }
 
     if (!(*strp)
-        || strcmp ((*strp), str) != 0) {
+        || !streq ((*strp), str)) {
         char *tmp;
         if (!(tmp = strdup (str)))
             return -1;
@@ -812,19 +813,19 @@ static int get_properties_changed (sdprocess_t *sdp)
             goto cleanup;
         }
 
-        if (!strcmp (member, "ActiveState")) {
+        if (streq (member, "ActiveState")) {
             if (get_properties_string (sdp, m, &(sdp->active_state)) < 0)
                 goto cleanup;
         }
-        else if (!strcmp (member, "Result")) {
+        else if (streq (member, "Result")) {
             if (get_properties_string (sdp, m, &(sdp->result)) < 0)
                 goto cleanup;
         }
-        else if (!strcmp (member, "ExecMainStatus")) {
+        else if (streq (member, "ExecMainStatus")) {
             if (get_properties_int (sdp, m, &(sdp->exec_main_status)) < 0)
                 goto cleanup;
         }
-        else if (!strcmp (member, "ExecMainCode")) {
+        else if (streq (member, "ExecMainCode")) {
             if (get_properties_int (sdp, m, &(sdp->exec_main_code)) < 0)
                 goto cleanup;
         }
@@ -851,13 +852,13 @@ static int get_properties_changed (sdprocess_t *sdp)
     }
 
     if ((sdp->active_state &&
-         !strcmp (sdp->active_state, "failed"))
+         streq (sdp->active_state, "failed"))
         || check_exec_main_code_unit_done (sdp->exec_main_code)) {
         calc_wait_status (sdp);
         sdp->exited = true;
     }
     else if ((sdp->active_state &&
-              !strcmp (sdp->active_state, "active")))
+              streq (sdp->active_state, "active")))
         sdp->active = true;
 
     rv = 0;
@@ -1003,8 +1004,8 @@ static int setup_state_watcher (sdprocess_t *sdp, flux_reactor_t *reactor)
                                    NULL,
                                    NULL)) < 0) {
         if (!error.name
-            || strcmp (error.name,
-                       "org.freedesktop.systemd1.AlreadySubscribed") != 0) {
+            || !streq (error.name,
+                       "org.freedesktop.systemd1.AlreadySubscribed")) {
             set_errno_log_errmsg (sdp->h, ret, &error, "sd_bus_call_method");
             goto cleanup;
         }
@@ -1153,19 +1154,19 @@ static int check_state (sdprocess_t *sdp)
      * "deactivating", "reloaded", we are transitioning to a final
      * state of "active" (success w/ RemainAfterExit) or
      * "failed" */
-    if (!strcmp (active_state, "failed")) {
+    if (streq (active_state, "failed")) {
         if (get_final_properties (sdp) < 0)
             goto cleanup;
         calc_wait_status (sdp);
         sdp->exited = true;
         goto done;
     }
-    else if (strcmp (active_state, "active")) {
+    else if (!streq (active_state, "active")) {
         errno = EAGAIN;
         goto cleanup;
     }
 
-    if (!strcmp (active_state, "active")) {
+    if (streq (active_state, "active")) {
         /* If unit is still active, possible it is done b/c of
          * RemainAfterExit, so check if unit exited.
          */
@@ -1403,7 +1404,7 @@ int sdprocess_pid (sdprocess_t *sdp)
     if (!(active_state = get_active_state (sdp)))
         goto cleanup;
 
-    if (strcmp (active_state, "active")) {
+    if (!streq (active_state, "active")) {
         /* XXX right errno? */
         errno = EPERM;
         goto cleanup;
@@ -1439,7 +1440,7 @@ static int check_active (sdprocess_t *sdp, bool *is_active)
     if (!(active_state = get_active_state (sdp)))
         goto cleanup;
 
-    (*is_active) = strcmp (active_state, "active") == 0 ? true : false;
+    (*is_active) = streq (active_state, "active");
     rv = 0;
 cleanup:
     save_errno = errno;
@@ -1536,7 +1537,7 @@ int sdprocess_kill (sdprocess_t *sdp, int signo)
     if (!(active_state = get_active_state (sdp)))
         goto cleanup;
 
-    if (strcmp (active_state, "active")) {
+    if (!streq (active_state, "active")) {
         /* XXX right errno? */
         errno = EPERM;
         goto cleanup;
@@ -1583,7 +1584,7 @@ int sdprocess_systemd_cleanup (sdprocess_t *sdp)
     if (!(active_state = get_active_state (sdp)))
         goto cleanup;
 
-    if (!strcmp (active_state, "active")) {
+    if (streq (active_state, "active")) {
         int exec_main_code;
 
         /* Due to "RemainAfterExit", an exited successful process will
@@ -1619,7 +1620,7 @@ int sdprocess_systemd_cleanup (sdprocess_t *sdp)
             goto cleanup;
         }
     }
-    else if (!strcmp (active_state, "failed")) {
+    else if (streq (active_state, "failed")) {
         /* This is loosely the equivalent of:
          *
          * systemctl reset-failed --user <unitname>.service
@@ -1637,7 +1638,7 @@ int sdprocess_systemd_cleanup (sdprocess_t *sdp)
             goto cleanup;
         }
     }
-    else if (!strcmp (active_state, "inactive")) {
+    else if (streq (active_state, "inactive")) {
         /* After cleanup, state could be inactive, but could also be
          * inactive via transitioning states.  AFAICT, no way to tell
          * difference.

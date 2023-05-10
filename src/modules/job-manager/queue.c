@@ -21,6 +21,7 @@
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "alloc.h"
 #include "job-manager.h"
@@ -631,7 +632,7 @@ static int queue_start (struct queue *queue, const char *name)
 {
     struct job *job = zhashx_first (queue->ctx->active_jobs);
     while (job) {
-        if (!name || (job->queue && !strcmp (job->queue, name))) {
+        if (!name || (job->queue && streq (job->queue, name))) {
             if (!job->alloc_queued
                 && !job->alloc_pending
                 && job->state == FLUX_JOB_STATE_SCHED) {
@@ -652,7 +653,7 @@ static void queue_stop (struct queue *queue, const char *name)
         || alloc_pending_count (queue->ctx->alloc) > 0) {
         struct job *job = zhashx_first (queue->ctx->active_jobs);
         while (job) {
-            if (!name || (job->queue && !strcmp (job->queue, name))) {
+            if (!name || (job->queue && streq (job->queue, name))) {
                 if (job->alloc_queued)
                     alloc_dequeue_alloc_request (queue->ctx->alloc, job);
                 else if (job->alloc_pending)

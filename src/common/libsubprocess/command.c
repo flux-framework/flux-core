@@ -21,6 +21,7 @@
 #include <jansson.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "command.h"
 
@@ -376,7 +377,7 @@ static const char * z_list_find (zlist_t *l, const char *s)
 {
     const char *v = zlist_first (l);
     while (v != NULL) {
-        if (strcmp (s, v) == 0)
+        if (streq (s, v))
             return (v);
         v = zlist_next (l);
     }

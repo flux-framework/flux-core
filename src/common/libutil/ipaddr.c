@@ -23,6 +23,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "ccan/str/str.h"
+
 #include "log.h"
 #include "ipaddr.h"
 
@@ -88,7 +90,7 @@ static struct ifaddrs *find_ifaddr (struct ifaddrs *ifaddr,
     struct ifaddrs *ifa;
 
     for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
-        if (!strcmp (ifa->ifa_name, name)
+        if (streq (ifa->ifa_name, name)
                 && ifa->ifa_addr != NULL
                 && ifa->ifa_addr->sa_family == family
                 && (ifa->ifa_addr->sa_family != AF_INET6

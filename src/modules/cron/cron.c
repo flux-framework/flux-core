@@ -35,6 +35,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fsd.h"
+#include "ccan/str/str.h"
 
 #include "task.h"
 #include "entry.h"
@@ -176,11 +177,11 @@ static void cron_entry_finished_handler (flux_t *h, cron_task_t *t, void *arg)
 {
     cron_entry_t *e = arg;
 
-    if (strcmp (cron_task_state (t), "Exec Failure") == 0) {
+    if (streq (cron_task_state (t), "Exec Failure")) {
         flux_log_error (h, "cron-%ju: failed to run %s", e->id, e->command);
         cron_entry_failure (e);
     }
-    else if (strcmp (cron_task_state (t), "Rexec Failure") == 0) {
+    else if (streq (cron_task_state (t), "Rexec Failure")) {
         flux_log_error (h, "cron-%ju: failure running %s", e->id, e->command);
         cron_entry_failure (e);
     }
@@ -869,9 +870,9 @@ static void process_args (cron_ctx_t *ctx, int ac, char **av)
 {
     int i;
     for (i = 0; i < ac; i++) {
-        if (strncmp (av[i], "sync=", 5) == 0)
+        if (strstarts (av[i], "sync="))
             cron_ctx_sync_event_init (ctx, (av[i])+5);
-        else if (strncmp (av[i], "sync_epsilon=", 13) == 0) {
+        else if (strstarts (av[i], "sync_epsilon=")) {
             char *s = (av[i])+13;
             if (fsd_parse_duration (s, &ctx->sync_epsilon) < 0)
                 flux_log_error (ctx->h, "option %s ignored", av[i]);

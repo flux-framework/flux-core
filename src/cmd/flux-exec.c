@@ -27,6 +27,7 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/log.h"
+#include "ccan/str/str.h"
 
 static struct optparse_option cmdopts[] = {
     { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "IDSET",
@@ -182,7 +183,7 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 
 void output_cb (flux_subprocess_t *p, const char *stream)
 {
-    FILE *fstream = !strcmp (stream, "stderr") ? stderr : stdout;
+    FILE *fstream = streq (stream, "stderr") ? stderr : stdout;
     const char *ptr;
     int lenp;
 
@@ -342,7 +343,7 @@ int main (int argc, char *argv[])
             log_err_exit ("get_current_dir_name");
     }
 
-    if (strcmp (cwd, "none") != 0) {
+    if (!streq (cwd, "none")) {
         if (flux_cmd_setcwd (cmd, cwd) < 0)
             log_err_exit ("flux_cmd_setcwd");
     }
@@ -357,7 +358,7 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_get_size");
 
     if (optparse_getopt (opts, "rank", &optargp) > 0
-        && strcmp (optargp, "all")) {
+        && !streq (optargp, "all")) {
         if (!(ns = idset_decode (optargp)))
             log_err_exit ("idset_decode");
         if (!(rank_count = idset_count (ns)))

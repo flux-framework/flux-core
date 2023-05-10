@@ -44,6 +44,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "ccan/str/str.h"
 
 #include "resource.h"
 #include "reslog.h"
@@ -385,11 +386,11 @@ static void drain_cb (flux_t *h,
 
     if (mode) {
         errstr = "Invalid mode specified";
-        if (strcmp (mode, "update") == 0)
+        if (streq (mode, "update"))
             update_only = 1;
-        else if (strcmp (mode, "overwrite") == 0)
+        else if (streq (mode, "overwrite"))
             overwrite = 1;
-        else if (strcmp (mode, "force-overwrite") == 0)
+        else if (streq (mode, "force-overwrite"))
             overwrite = 2;
         else {
             errno = EINVAL;
@@ -616,7 +617,7 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
 
             if (eventlog_entry_parse (entry, &timestamp, &name, &context) < 0)
                 return -1;
-            if (!strcmp (name, "resource-init")) {
+            if (streq (name, "resource-init")) {
                 struct drain_init_args args = {
                     .drain = drain,
                     .exclude = exclude
@@ -628,7 +629,7 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
                 if (rutil_idkey_map (draininfo, replay_map, &args) < 0)
                     return -1;
             }
-            else if (!strcmp (name, "drain")) {
+            else if (streq (name, "drain")) {
                 int overwrite = 1;
                 if (json_unpack (context,
                                  "{s:s s?s s?i}",
@@ -653,7 +654,7 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
                 }
                 idset_destroy (idset);
             }
-            else if (!strcmp (name, "undrain")) {
+            else if (streq (name, "undrain")) {
                 if (json_unpack (context, "{s:s}", "idset", &s) < 0) {
                     errno = EPROTO;
                     return -1;

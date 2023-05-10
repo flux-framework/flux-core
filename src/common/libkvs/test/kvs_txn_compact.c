@@ -21,6 +21,7 @@
 #include "treeobj.h"
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 /* Decode a 'val' containing base64 encoded emptiness.
  */
@@ -114,7 +115,7 @@ int main (int argc, char *argv[])
         "1: retrieved");
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "1: txn_decode_op works");
-    ok (!strcmp (key, "foo")
+    ok (streq (key, "foo")
         && flags == FLUX_KVS_APPEND
         && check_raw_value (dirent, "ABC", 3) == 0,
         "1: consolidated foo = ABC");
@@ -152,7 +153,7 @@ int main (int argc, char *argv[])
         "1: retrieved");
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "1: txn_decode_op works");
-    ok (!strcmp (key, "foo")
+    ok (streq (key, "foo")
         && flags == FLUX_KVS_APPEND
         && check_raw_value (dirent, "AC", 2) == 0,
         "1: consolidated foo = AC");
@@ -161,7 +162,7 @@ int main (int argc, char *argv[])
         "2: retrieved");
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "2: txn_decode_op works");
-    ok (!strcmp (key, "bar")
+    ok (streq (key, "bar")
         && flags == FLUX_KVS_APPEND
         && check_raw_value (dirent, "B", 1) == 0,
         "2: bar = B");
@@ -202,7 +203,7 @@ int main (int argc, char *argv[])
         "1: retrieved");
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "1: txn_decode_op works");
-    ok (!strcmp (key, "foo")
+    ok (streq (key, "foo")
         && flags == FLUX_KVS_APPEND
         && check_raw_value (dirent, "AC", 2) == 0,
         "1: consolidated foo = AC");
@@ -211,7 +212,7 @@ int main (int argc, char *argv[])
         "2: retrieved");
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "2: txn_decode_op works");
-    ok (!strcmp (key, "bar")
+    ok (streq (key, "bar")
         && flags == FLUX_KVS_APPEND
         && check_raw_value (dirent, "BD", 2) == 0,
         "2: bar = BD");
@@ -249,7 +250,7 @@ int main (int argc, char *argv[])
         "1: retrieved");
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "1: txn_decode_op works");
-    ok (!strcmp (key, "foo")
+    ok (streq (key, "foo")
         && flags == 0
         && check_raw_value (dirent, "A", 1) == 0,
         "1: consolidated foo = A");
@@ -258,7 +259,7 @@ int main (int argc, char *argv[])
         "2: retrieved");
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "2: txn_decode_op works");
-    ok (!strcmp (key, "foo")
+    ok (streq (key, "foo")
         && flags == FLUX_KVS_APPEND
         && check_raw_value (dirent, "BC", 2) == 0,
         "2: foo = BC");
@@ -315,7 +316,7 @@ int main (int argc, char *argv[])
         "1: retrieved");
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "1: txn_decode_op works");
-    ok (!strcmp (key, "foo")
+    ok (streq (key, "foo")
         && flags == FLUX_KVS_APPEND
         && check_raw_value (dirent, "A", 1) == 0,
         "1: consolidated foo = A");
@@ -353,7 +354,7 @@ int main (int argc, char *argv[])
         "1: retrieved");
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "1: txn_decode_op works");
-    ok (!strcmp (key, "foo")
+    ok (streq (key, "foo")
         && flags == FLUX_KVS_APPEND
         && check_null_value (dirent) == 0,
         "1: consolidated foo = A");

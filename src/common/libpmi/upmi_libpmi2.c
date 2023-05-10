@@ -271,9 +271,8 @@ static int op_get (flux_plugin_t *p,
      * employed by Flux to launch Flux.
      */
     else if ((ctx->flags & LIBPMI2_IS_CRAY_CRAY)
-        && (!strncmp (key, "flux.", 5))) {
+        && (strstarts (key, "flux.")))
         result = PMI2_ERR_INVALID_KEY;
-    }
     else {
         result = ctx->kvs_get (NULL,            // this job's key-value space
                                PMI2_ID_NULL,    // no hints for you

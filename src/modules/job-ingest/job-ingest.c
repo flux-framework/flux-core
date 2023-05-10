@@ -25,6 +25,7 @@
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libjob/job_hash.h"
+#include "ccan/str/str.h"
 
 #include "util.h"
 #include "job.h"
@@ -659,12 +660,12 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
         return -1;
     }
     for (int i = 0; i < argc; i++) {
-        if (!strncmp (argv[i], "validator-args=", 15)
-            || !strncmp (argv[i], "validator-plugins=", 18)
-            || !strcmp (argv[i], "disable-validator")) {
+        if (strstarts (argv[i], "validator-args=")
+            || strstarts (argv[i], "validator-plugins=")
+            || streq (argv[i], "disable-validator")) {
             /* handled in pipeline.c */
         }
-        else if (!strncmp (argv[i], "batch-count=", 12)) {
+        else if (strstarts (argv[i], "batch-count=")) {
             char *endptr;
             errno = 0;
             ctx->batch_count = strtol (argv[i]+12, &endptr, 0);

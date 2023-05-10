@@ -21,6 +21,7 @@
 #include "treeobj.h"
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 void jdiag (json_t *o)
 {
@@ -107,7 +108,7 @@ int check_string_value (json_t *dirent, const char *expected)
         json_decref (val);
         return -1;
     }
-    if (strcmp (expected, s) != 0) {
+    if (!streq (expected, s)) {
         diag ("%s: expected %s received %s", __FUNCTION__, expected, s);
         json_decref (val);
         return -1;
@@ -193,7 +194,7 @@ void basic (void)
         "1: retrieved");
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "1: txn_decode_op works");
-    ok (!strcmp (key, "foo.bar.baz")
+    ok (streq (key, "foo.bar.baz")
         && flags == FLUX_KVS_APPEND
         && check_int_value (dirent, 42) == 0,
         "1: put foo.bar.baz = 42");
@@ -203,7 +204,7 @@ void basic (void)
     jdiag (entry);
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "2: txn_decode_op works");
-    ok (!strcmp (key, "foo.bar.bleep")
+    ok (streq (key, "foo.bar.bleep")
         && flags == 0
         && check_string_value (dirent, "foo") == 0,
         "2: put foo.bar.baz = \"foo\"");
@@ -213,7 +214,7 @@ void basic (void)
     jdiag (entry);
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "3: txn_decode_op works");
-    ok (!strcmp (key, "a")
+    ok (streq (key, "a")
         && flags == 0
         && json_is_null (dirent),
         "3: unlink a");
@@ -223,7 +224,7 @@ void basic (void)
     jdiag (entry);
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "4: txn_decode_op works");
-    ok (!strcmp (key, "b.b.b")
+    ok (streq (key, "b.b.b")
         && flags == 0
         && treeobj_is_dir (dirent) && treeobj_get_count (dirent) == 0,
         "4: mkdir b.b.b");
@@ -233,12 +234,12 @@ void basic (void)
     jdiag (entry);
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "5: txn_decode_op works");
-    ok (!strcmp (key, "c.c.c")
+    ok (streq (key, "c.c.c")
         && flags == 0
         && treeobj_is_symlink (dirent)
         && !json_object_get (treeobj_get_data (dirent),
                              "namespace")
-        && !strcmp (json_string_value (json_object_get (treeobj_get_data (dirent),
+        && streq (json_string_value (json_object_get (treeobj_get_data (dirent),
                                                         "target")),
                     "b.b.b"),
         "5: symlink c.c.c b.b.b (no namespace)");
@@ -248,7 +249,7 @@ void basic (void)
     jdiag (entry);
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "6: txn_decode_op works");
-    ok (!strcmp (key, "d.d.d")
+    ok (streq (key, "d.d.d")
         && flags == 0
         && check_int_value (dirent, 43) == 0,
         "6: put foo.bar.baz = 43");
@@ -258,7 +259,7 @@ void basic (void)
     jdiag (entry);
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "7: txn_decode_op works");
-    ok (!strcmp (key, "e")
+    ok (streq (key, "e")
         && flags == 0
         && json_is_null (dirent),
         "7: unlink e");
@@ -268,7 +269,7 @@ void basic (void)
     jdiag (entry);
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "8: txn_decode_op works");
-    ok (!strcmp (key, "nerrrrb")
+    ok (streq (key, "nerrrrb")
         && flags == 0
         && check_null_value (dirent) == 0,
         "8: put nerrrrb = NULL");
@@ -278,14 +279,14 @@ void basic (void)
     jdiag (entry);
     ok (txn_decode_op (entry, &key, &flags, &dirent) == 0,
         "9: txn_decode_op works");
-    ok (!strcmp (key, "f.f.f")
+    ok (streq (key, "f.f.f")
         && flags == 0
-        && !strcmp (json_string_value (json_object_get (treeobj_get_data (dirent),
-                                                        "namespace")),
-                    "g.g.g")
-        && !strcmp (json_string_value (json_object_get (treeobj_get_data (dirent),
-                                                        "target")),
-                    "h.h.h"),
+        && streq (json_string_value (json_object_get (treeobj_get_data (dirent),
+                                                      "namespace")),
+                  "g.g.g")
+        && streq (json_string_value (json_object_get (treeobj_get_data (dirent),
+                                                      "target")),
+                  "h.h.h"),
         "9: symlink f.f.f g.g.g h.h.h (namespace)");
 
     errno = 0;

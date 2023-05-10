@@ -20,6 +20,8 @@
 #include <libgen.h>    /* dirname(3) */
 #include <pthread.h>
 
+#include "ccan/str/str.h"
+
 
 /*  Strip trailing ".libs", otherwise do nothing
  */
@@ -80,7 +82,7 @@ static int is_intree (void)
             return 0;
         return -1;
     }
-    if (strncmp (builddir, selfdir, strlen (builddir)) == 0)
+    if (strstarts (selfdir, builddir))
         ret = 1;
     free (builddir);
     return ret;

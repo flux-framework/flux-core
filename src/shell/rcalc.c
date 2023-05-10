@@ -20,6 +20,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/str/str.h"
 
 #include "rcalc.h"
 
@@ -353,9 +354,9 @@ int rcalc_distribute_per_resource (rcalc_t *r, const char *name, int ntasks)
     bool by_core = false;
     bool by_node = false;
 
-    if (strcmp (name, "core") == 0)
+    if (streq (name, "core"))
         by_core = true;
-    else if (strcmp (name, "node") == 0)
+    else if (streq (name, "node"))
         by_node = true;
     else {
         errno = EINVAL;

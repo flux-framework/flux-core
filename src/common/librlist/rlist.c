@@ -23,6 +23,7 @@
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/str/str.h"
 
 #include "rnode.h"
 #include "match.h"
@@ -442,7 +443,7 @@ struct rnode * rlist_find_host (const struct rlist *rl, const char *host)
 {
     struct rnode *n = zlistx_first (rl->nodes);
     while (n) {
-        if (n->hostname && strcmp (n->hostname, host) == 0)
+        if (n->hostname && streq (n->hostname, host))
             return n;
         n = zlistx_next (rl->nodes);
     }
@@ -700,9 +701,9 @@ static int rnode_namecmp (const void *s1, const void *s2)
     const char *a = s1;
     const char *b = s2;
 
-    if (strcmp (a, "core") == 0)
+    if (streq (a, "core"))
         return -1;
-    else if (strcmp (b, "core") == 0)
+    else if (streq (b, "core"))
         return 1;
     else return strcmp (a, b);
 }
@@ -1492,7 +1493,7 @@ static int rlist_idset_set_by_host (const struct rlist *rl,
     int count = 0;
     struct rnode *n = zlistx_first (rl->nodes);
     while (n) {
-        if (n->hostname && strcmp (n->hostname, host) == 0) {
+        if (n->hostname && streq (n->hostname, host)) {
             if (idset_set (ids, n->rank) < 0)
                 return -1;
             count++;
@@ -2046,11 +2047,11 @@ static struct rlist *rlist_try_alloc (struct rlist *rl,
 
     if (ai->nnodes > 0)
         result = rlist_alloc_nnodes (rl, ai);
-    else if (mode == NULL || strcmp (mode, "worst-fit") == 0)
+    else if (mode == NULL || streq (mode, "worst-fit"))
         result = rlist_alloc_worst_fit (rl, ai->slot_size, ai->nslots);
-    else if (mode && strcmp (mode, "best-fit") == 0)
+    else if (mode && streq (mode, "best-fit"))
         result = rlist_alloc_best_fit (rl, ai->slot_size, ai->nslots);
-    else if (mode && strcmp (mode, "first-fit") == 0)
+    else if (mode && streq (mode, "first-fit"))
         result = rlist_alloc_first_fit (rl, ai->slot_size, ai->nslots);
     else
         errno = EINVAL;
@@ -2330,7 +2331,7 @@ static int rlist_mark_state (struct rlist *rl, bool up, const char *ids)
 int rlist_mark_down (struct rlist *rl, const char *ids)
 {
     int count;
-    if (strcmp (ids, "all") == 0)
+    if (streq (ids, "all"))
         count = rlist_mark_all (rl, false);
     else
         count = rlist_mark_state (rl, false, ids);
@@ -2341,7 +2342,7 @@ int rlist_mark_down (struct rlist *rl, const char *ids)
 int rlist_mark_up (struct rlist *rl, const char *ids)
 {
     int count;
-    if (strcmp (ids, "all") == 0)
+    if (streq (ids, "all"))
         count = rlist_mark_all (rl, true);
     else
         count = rlist_mark_state (rl, true, ids);

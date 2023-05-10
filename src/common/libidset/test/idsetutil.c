@@ -21,6 +21,7 @@
 
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/read_all.h"
+#include "ccan/str/str.h"
 
 
 int expand (int argc, char **argv)
@@ -74,7 +75,7 @@ void usage (void)
 
 int main (int argc, char *argv[])
 {
-    if (argc < 2 || strcmp (argv[1], "expand") != 0) {
+    if (argc < 2 || !streq (argv[1], "expand")) {
         fprintf (stderr, "Usage: isdetutil expand IDSET\n");
         return 1;
     }

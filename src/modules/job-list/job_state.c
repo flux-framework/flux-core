@@ -624,7 +624,7 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
         else if (streq (name, "flux-restart")) {
             revert_job_state (jsctx, job, timestamp);
         }
-        else if (!strncmp (name, "dependency-", 11)) {
+        else if (strstarts (name, "dependency-")) {
             if (dependency_context_parse (jsctx->h, job, name+11, context) < 0)
                 goto error;
         }
@@ -1378,7 +1378,7 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
         if (memo_update (jsctx->h, job, context) < 0)
             return -1;
     }
-    else if (!strncmp (name, "dependency-", 11)) {
+    else if (strstarts (name, "dependency-")) {
         if (journal_dependency_event (jsctx, job, name+11, context) < 0)
             return -1;
     }

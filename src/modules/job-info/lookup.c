@@ -18,6 +18,7 @@
 #include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "job-info.h"
 #include "lookup.h"
@@ -272,7 +273,7 @@ static int check_keys_for_eventlog (struct lookup_ctx *l)
             errno = EINVAL;
             return -1;
         }
-        if (!strcmp (keystr, "eventlog"))
+        if (streq (keystr, "eventlog"))
             return 0;
     }
 

@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <flux/core.h>
 #include <flux/jobtap.h>
+#include "ccan/str/str.h"
 
 static int test_prolog_start_finish (flux_plugin_t *p,
                                      const char *topic,
@@ -39,7 +40,7 @@ static int test_prolog_start_finish (flux_plugin_t *p,
                                      EINVAL);
 
     errno = 0;
-    if (strcmp (topic, "job.state.cleanup") == 0) {
+    if (streq (topic, "job.state.cleanup")) {
         if (flux_jobtap_prolog_start (p, "test") == 0
             || errno != EINVAL)
             flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
@@ -126,7 +127,7 @@ static int test_epilog_start_finish (flux_plugin_t *p,
                                      EINVAL);
 
     errno = 0;
-    if (strcmp (topic, "job.state.run") == 0) {
+    if (streq (topic, "job.state.run")) {
         if (flux_jobtap_epilog_start (p, "test") == 0
             || errno != EINVAL)
             flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
@@ -217,7 +218,7 @@ static int test_event_post_pack (flux_plugin_t *p,
                                      ENOENT);
 
     const char *state;
-    if (strncmp (topic, "job.state.", 10) == 0)
+    if (strstarts (topic, "job.state."))
         state = topic+10;
     else
         state = topic+4;
@@ -290,7 +291,7 @@ static int test_job_flags (flux_plugin_t *p,
                            "p, FLUX_JOBTAP_CURRENT_JOB, foo",
                            EINVAL);
     const char *state;
-    if (strncmp (topic, "job.state.", 10) == 0)
+    if (strstarts (topic, "job.state."))
         state = topic+10;
     else
         state = topic+4;

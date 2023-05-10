@@ -17,6 +17,7 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 #include "mustache.h"
 
@@ -52,9 +53,9 @@ int cb (FILE *fp, const char *tag, void *arg)
         "cb passed valid tag");
     ok (arg != NULL,
         "cb passed valid arg");
-    if (strcmp (tag, "name") == 0)
+    if (streq (tag, "name"))
         return fputs ("foo", fp);
-    if (strcmp (tag, "number") == 0)
+    if (streq (tag, "number"))
         return fputs ("42", fp);
     errno = ENOENT;
     return -1;

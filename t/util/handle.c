@@ -18,6 +18,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
+#include "ccan/str/str.h"
 
 void usage (void)
 {
@@ -27,13 +28,13 @@ void usage (void)
 
 void getopt (flux_t *h, const char *type, const char *name)
 {
-    if (!strcmp (type, "u8")) {
+    if (streq (type, "u8")) {
         uint8_t val;
         if (flux_opt_get (h, name, &val, sizeof (val)) < 0)
             log_err_exit ("%s", name);
         printf ("%u\n", (unsigned int)val);
     }
-    else if (!strcmp (type, "u32")) {
+    else if (streq (type, "u32")) {
         uint32_t val;
         if (flux_opt_get (h, name, &val, sizeof (val)) < 0)
             log_err_exit ("%s", name);
@@ -53,7 +54,7 @@ int main (int argc, char *argv[])
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!strcmp (argv[1], "getopt"))
+    if (streq (argv[1], "getopt"))
         getopt (h, argv[2], argv[3]);
     else
         usage ();

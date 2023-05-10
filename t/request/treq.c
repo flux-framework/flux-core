@@ -24,6 +24,7 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 void test_null (flux_t *h, uint32_t nodeid);
 void test_echo (flux_t *h, uint32_t nodeid);
@@ -62,7 +63,7 @@ test_t *test_lookup (const char *name)
 {
     int i;
     for (i = 0; i < ARRAY_SIZE (tests); i++)
-        if (!strcmp (tests[i].name, name))
+        if (streq (tests[i].name, name))
             return &tests[i];
     return NULL;
 }
@@ -139,7 +140,7 @@ void test_echo (flux_t *h, uint32_t nodeid)
                              "{s:s}", "mumble", "burble"))
              || flux_rpc_get_unpack (f, "{s:s}", "mumble", &s) < 0)
         log_err_exit ("%s", __FUNCTION__);
-    if (strcmp (s, "burble") != 0)
+    if (!streq (s, "burble"))
         log_msg_exit ("%s: returned payload wasn't an echo", __FUNCTION__);
     flux_future_destroy (f);
 }

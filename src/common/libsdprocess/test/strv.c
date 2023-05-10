@@ -8,7 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#define _GNU_SOURCE
+#if HAVE_CONFIG_H
+# include "config.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +18,7 @@
 #include <assert.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 #include "src/common/libsdprocess/strv.h"
 
 static void test_corner_case (void)
@@ -60,8 +63,7 @@ static void test_strv_values (char **strv, char **expected_strv)
     char **expected_strv_ptr = expected_strv;
     int index = 0;
     while (*(expected_strv_ptr)) {
-        int ret = strcmp ((*strv_ptr), (*expected_strv_ptr));
-        ok (ret == 0,
+        ok (streq ((*strv_ptr), (*expected_strv_ptr)),
             "strv[%d] matches expected value %s", index, (*expected_strv_ptr));
         strv_ptr++;
         expected_strv_ptr++;

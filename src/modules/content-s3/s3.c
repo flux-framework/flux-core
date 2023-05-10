@@ -19,6 +19,7 @@
 #include <stdlib.h>
 
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "s3.h"
 
@@ -203,8 +204,8 @@ int s3_put (struct s3_config *cfg,
 
     if (strlen (key) == 0
         || strchr (key, '/')
-        || !strcmp (key, "..")
-        || !strcmp (key, ".")) {
+        || streq (key, "..")
+        || streq (key, ".")) {
         errno = EINVAL;
         if (errstr)
             *errstr = "invalid key";
@@ -280,8 +281,8 @@ int s3_get (struct s3_config *cfg,
 
     if (strlen (key) == 0
         || strchr (key, '/')
-        || !strcmp (key, "..")
-        || !strcmp (key, ".")) {
+        || streq (key, "..")
+        || streq (key, ".")) {
         errno = EINVAL;
         if (errstr)
             *errstr = "invalid key";
