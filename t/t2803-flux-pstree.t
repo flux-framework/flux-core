@@ -149,7 +149,8 @@ test_expect_success 'flux-pstree -a works' '
 	EOF
 	test_cmp ${name}.expected ${name}.output
 '
-test_expect_success 'flux-pstree truncates at COLUMNS' '
+test_columns_variable_preserved && test_set_prereq USE_COLUMNS
+test_expect_success USE_COLUMNS 'flux-pstree truncates at COLUMNS' '
 	name="truncated" &&
 	COLUMNS=16 flux pstree -a > ${name}.output &&
 	test_debug "cat ${name}.output" &&

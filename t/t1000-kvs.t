@@ -681,7 +681,8 @@ test_expect_success 'kvs: ls -w40 adjusts output width to 40' '
 	EOF
 	test_cmp expected output
 '
-test_expect_success 'kvs: ls with COLUMNS=20 adjusts output width to 20' '
+test_columns_variable_preserved && test_set_prereq USE_COLUMNS
+test_expect_success USE_COLUMNS 'kvs: ls with COLUMNS=20 adjusts output width to 20' '
 	flux kvs unlink -Rf $DIR &&
 	${FLUX_BUILD_DIR}/t/kvs/dtree -p$DIR -h1 -w50 &&
 	COLUMNS=20 flux kvs ls $DIR | wc -wl >output &&
