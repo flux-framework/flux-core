@@ -314,8 +314,11 @@ class UtilDatetime(datetime):
         # any Python format spec:
         vals = fmt.split("::", 1)
 
-        # Call strftime() to get the formatted datetime as a string
-        result = self.strftime(vals[0])
+        if self == datetime.fromtimestamp(0.0):
+            result = ""
+        else:
+            # Call strftime() to get the formatted datetime as a string
+            result = self.strftime(vals[0])
 
         # If there was a format spec, apply it here:
         try:

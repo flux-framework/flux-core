@@ -1008,7 +1008,7 @@ test_expect_success 'flux-jobs emits empty string for special case t_estimate' '
 	flux jobs -no "${fmt}" >t_estimate_annotations.out 2>&1 &&
 	test_debug "cat t_estimate_annotations.out" &&
 	for i in `seq 1 $(state_count active)`; do
-		echo ",00:00,,,,-,-,-" >> t_estimate_annotations.exp
+		echo ",,,,,-,-,-" >> t_estimate_annotations.exp
 	done &&
 	test_cmp t_estimate_annotations.out t_estimate_annotations.exp
 '
