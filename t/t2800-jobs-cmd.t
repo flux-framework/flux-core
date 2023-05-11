@@ -937,9 +937,20 @@ test_expect_success 'flux-jobs --format={expiration!d:%FT%T::>20.20} works' '
 	cat expiration.in | \
 	    flux jobs --from-stdin -o "{expiration!d:%b%d %R::>20.20}" \
 	    >exp-fmt.out &&
+	cat expiration.in | \
+	    flux jobs --from-stdin -o "{expiration!d:%b%d %R::>20.20h}" \
+	    >exp-fmth.out &&
 	test_debug "cat exp-fmt.out" &&
 	grep "          EXPIRATION" exp-fmt.out &&
-	grep "         $(date --date=@${exp} +%b%d\ %R)" exp-fmt.out
+	grep "         $(date --date=@${exp} +%b%d\ %R)" exp-fmt.out &&
+	test_debug "cat exp-fmth.out" &&
+	grep "          EXPIRATION" exp-fmth.out &&
+	grep "         $(date --date=@${exp} +%b%d\ %R)" exp-fmth.out
+'
+test_expect_success 'flux-jobs --format={expiration!d} works' '
+	cat expiration.in | flux jobs --from-stdin -o "{expiration!d}" \
+	    >exp-fmtd.out &&
+	grep "$(date --date=@${exp} +%FT%T)" exp-fmtd.out
 '
 test_expect_success 'flux-jobs --format={expiration!d:%FT%T::=^20} works' '
 	cat expiration.in | \
@@ -1002,13 +1013,14 @@ test_expect_success 'flux-jobs emits empty string for special case t_estimate' '
 	fmt="${fmt},{annotations.sched.t_estimate!D}" &&
 	fmt="${fmt},{annotations.sched.t_estimate!F}" &&
 	fmt="${fmt},{annotations.sched.t_estimate!H}" &&
+	fmt="${fmt},{annotations.sched.t_estimate!d:%H:%M::h}" &&
 	fmt="${fmt},{annotations.sched.t_estimate!D:h}" &&
 	fmt="${fmt},{annotations.sched.t_estimate!F:h}" &&
 	fmt="${fmt},{annotations.sched.t_estimate!H:h}" &&
 	flux jobs -no "${fmt}" >t_estimate_annotations.out 2>&1 &&
 	test_debug "cat t_estimate_annotations.out" &&
 	for i in `seq 1 $(state_count active)`; do
-		echo ",00:00,,,,-,-,-" >> t_estimate_annotations.exp
+		echo ",,,,,-,-,-,-" >> t_estimate_annotations.exp
 	done &&
 	test_cmp t_estimate_annotations.out t_estimate_annotations.exp
 '
