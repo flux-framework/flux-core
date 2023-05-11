@@ -318,7 +318,7 @@ class UtilDatetime(datetime):
             result = ""
         else:
             # Call strftime() to get the formatted datetime as a string
-            result = self.strftime(timefmt)
+            result = self.strftime(timefmt or "%FT%T")
 
         spec = spec[0] if spec else ""
 
