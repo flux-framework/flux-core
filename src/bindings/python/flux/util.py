@@ -312,19 +312,28 @@ class UtilDatetime(datetime):
     def __format__(self, fmt):
         # The string "::" is used to split the strftime() format from
         # any Python format spec:
-        vals = fmt.split("::", 1)
+        timefmt, *spec = fmt.split("::", 1)
 
         if self == datetime.fromtimestamp(0.0):
             result = ""
         else:
             # Call strftime() to get the formatted datetime as a string
-            result = self.strftime(vals[0])
+            result = self.strftime(timefmt)
+
+        spec = spec[0] if spec else ""
+
+        # Handling of the 'h' suffix on spec is required here, since the
+        # UtilDatetime format() is called _after_ UtilFormatter.format_field()
+        # (where this option is handled for other types)
+        if spec.endswith("h"):
+            if not result:
+                result = "-"
+            spec = spec[:-1] + "s"
 
         # If there was a format spec, apply it here:
-        try:
-            return f"{{0:{vals[1]}}}".format(result)
-        except IndexError:
-            return result
+        if spec:
+            return f"{{0:{spec}}}".format(result)
+        return result
 
 
 def fsd(secs):
@@ -424,7 +433,10 @@ class UtilFormatter(Formatter):
             denote_truncation = True
             spec = spec[:-1]
 
-        if spec.endswith("h"):
+        # Note: handling of the 'h' suffix for UtilDatetime objects
+        # must be deferred to the UtilDatetetime format() method, since
+        # that method will be called after this one:
+        if spec.endswith("h") and not isinstance(value, UtilDatetime):
             localepoch = datetime.fromtimestamp(0.0).strftime("%FT%T")
             basecases = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00", localepoch)
             value = "-" if str(value) in basecases else str(value)
