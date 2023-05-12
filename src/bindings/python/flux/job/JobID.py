@@ -93,6 +93,11 @@ class JobID(int):
         return self.encode("words")
 
     @property
+    def emoji(self):
+        """Return emoji (base256) representation of a JobID"""
+        return self.encode("emoji")
+
+    @property
     def kvs(self):
         """Return KVS directory path of a JobID"""
         return self.encode("kvs")
