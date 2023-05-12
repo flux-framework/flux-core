@@ -182,6 +182,11 @@ struct fluid_parse_test fluid_parse_tests [] = {
     { 65535, "0.0.0.ffff" },
     { 4294967295, "0000.0000.ffff.ffff" },
     { 18446744073709551615UL, "ffff.ffff.ffff.ffff" },
+    { 0,                 "🇫😀🐨😀🐨😀🐨😀🐨" },
+    { 1,                 "🇫😁🐨😀🐨😀🐨😀🐨" },
+    { 1234,              "🇫👢🐔😀🐨😀🐨😀🐨" },
+    { 12342435,          "🇫👅🍳🗨🐨😀🐨😀🐨" },
+    { 21900760568561664, "🇫😀🐨😀🌳👣🚘😹🐨" },
     { 0, NULL },
 };
 
@@ -245,6 +250,13 @@ void test_basic (void)
         "fluid_decode type=MNEMONIC works");
     diag ("%s", buf);
 
+    ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_BASE256) == 0,
+        "fluid_encode type=BASE256 works");
+    ok (fluid_decode (buf, &id2, FLUID_STRING_BASE256) == 0 && id == id2,
+        "fluid_decode type=BASE256 works");
+    diag ("%s", buf);
+
+
     /* With artificially tweaked generator state
      */
     const uint64_t time_34y = 1000ULL*60*60*24*365*34;
@@ -265,6 +277,13 @@ void test_basic (void)
     ok (fluid_decode (buf, &id2, FLUID_STRING_MNEMONIC) == 0 && id == id2,
         "fluid_decode type=MNEMONIC works");
     diag ("%s", buf);
+
+    ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_BASE256) == 0,
+        "fluid_encode type=BASE256 works");
+    ok (fluid_decode (buf, &id2, FLUID_STRING_BASE256) == 0 && id == id2,
+        "fluid_decode type=BASE256 works");
+    diag ("%s", buf);
+
 
     /* Generate 64K id's as rapidly as possible.
      * Probably will cover running out of seq bits.
@@ -339,6 +358,8 @@ void test_basic (void)
         "fluid_decode type=MNEMONIC fails on input=bogus");
     ok (fluid_decode ("a-a-a--a-a-a", &id, FLUID_STRING_MNEMONIC) < 0,
         "fluid_decode type=MNEMONIC fails on unknown words xx-xx-xx--xx-xx-xx");
+    ok (fluid_decode ("😁🐨😀🐨😀🐨😀🐨", &id, FLUID_STRING_BASE256) < 0,
+        "fluid_decode type=BASE256 fails on bad emoji string");
 }
 
 int main (int argc, char *argv[])
