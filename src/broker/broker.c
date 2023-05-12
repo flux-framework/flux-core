@@ -211,7 +211,6 @@ int main (int argc, char *argv[])
     struct sigaction old_sigact_term;
     flux_msg_handler_t **handlers = NULL;
     const flux_conf_t *conf;
-    const char *method;
     flux_error_t error;
 
     setlocale (LC_ALL, "");
@@ -355,24 +354,23 @@ int main (int argc, char *argv[])
     init_attrs_starttime (ctx.attrs, ctx.starttime);
 
     /* Execute broker network bootstrap.
-     * Default method is pmi.
-     * If [bootstrap] is defined in configuration, use static configuration.
      */
-    if (attr_get (ctx.attrs, "broker.boot-method", &method, NULL) < 0) {
+    const char *boot_method;
+    if (attr_get (ctx.attrs, "broker.boot-method", &boot_method, NULL) < 0) {
         if (flux_conf_unpack (conf, NULL, "{s:{}}", "bootstrap") == 0)
-            method = "config";
+            boot_method = "config";
         else
-            method = NULL;
+            boot_method = NULL;
     }
-    if (!method || !streq (method, "config")) {
-        if (boot_pmi (ctx.overlay, ctx.attrs) < 0) {
-            log_msg ("bootstrap failed");
+    if (boot_method && streq (boot_method, "config")) {
+        if (boot_config (ctx.h, ctx.overlay, ctx.attrs) < 0) {
+            log_msg ("boot-config failed");
             goto cleanup;
         }
     }
     else {
-        if (boot_config (ctx.h, ctx.overlay, ctx.attrs) < 0) {
-            log_msg ("bootstrap failed");
+        if (boot_pmi (ctx.overlay, ctx.attrs) < 0) {
+            log_msg ("boot-pmi failed");
             goto cleanup;
         }
     }
