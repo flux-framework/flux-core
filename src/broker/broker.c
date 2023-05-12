@@ -75,6 +75,7 @@
 #include "runat.h"
 #include "heaptrace.h"
 #include "exec.h"
+#include "boot_flub.h"
 #include "boot_config.h"
 #include "boot_pmi.h"
 #include "publisher.h"
@@ -359,12 +360,20 @@ int main (int argc, char *argv[])
     if (attr_get (ctx.attrs, "broker.boot-method", &boot_method, NULL) < 0) {
         if (flux_conf_unpack (conf, NULL, "{s:{}}", "bootstrap") == 0)
             boot_method = "config";
+        else if (attr_get (ctx.attrs, "broker.boot-server", NULL, NULL) == 0)
+            boot_method = "flub";
         else
             boot_method = NULL;
     }
     if (boot_method && streq (boot_method, "config")) {
         if (boot_config (ctx.h, ctx.overlay, ctx.attrs) < 0) {
             log_msg ("boot-config failed");
+            goto cleanup;
+        }
+    }
+    else if (boot_method && streq (boot_method, "flub")) {
+        if (boot_flub (&ctx, &error) < 0) {
+            log_msg ("boot-flub: %s", error.text);
             goto cleanup;
         }
     }
