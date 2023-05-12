@@ -369,6 +369,7 @@ struct jobid_parse_test jobid_parse_tests[] = {
     { "dothex", 0,     "0000.0000.0000.0000" },
     { "kvs",    0,     "job.0000.0000.0000.0000" },
     { "words",  0,     "academy-academy-academy--academy-academy-academy" },
+    { "emoji",  0,     "🇫😀🐨😀🐨😀🐨😀🐨" },
 #if ASSUME_BROKEN_LOCALE
     { "f58",    0,     "f1" },
 #else
@@ -380,6 +381,7 @@ struct jobid_parse_test jobid_parse_tests[] = {
     { "dothex", 1,     "0000.0000.0000.0001" },
     { "kvs",    1,     "job.0000.0000.0000.0001" },
     { "words",  1,     "acrobat-academy-academy--academy-academy-academy" },
+    { "emoji",  1,     "🇫😁🐨😀🐨😀🐨😀🐨" },
 #if ASSUME_BROKEN_LOCALE
     { "f58",    1,     "f2" },
 #else
@@ -391,6 +393,7 @@ struct jobid_parse_test jobid_parse_tests[] = {
     { "dothex", 65535, "0000.0000.0000.ffff" },
     { "kvs",    65535, "job.0000.0000.0000.ffff" },
     { "words",  65535, "nevada-archive-academy--academy-academy-academy" },
+    { "emoji",  65535, "🇫🐻🌛😀🐨😀🐨😀🐨" },
 #if ASSUME_BROKEN_LOCALE
     { "f58",    65535, "fLUv" },
 #else
@@ -402,6 +405,7 @@ struct jobid_parse_test jobid_parse_tests[] = {
     { "dothex", 6787342413402046, "0018.1d0d.4d85.0fbe" },
     { "kvs",    6787342413402046, "job.0018.1d0d.4d85.0fbe" },
     { "words",  6787342413402046, "cake-plume-nepal--neuron-pencil-academy" },
+    { "emoji",  6787342413402046, "🇫💭🐍👫🍗😗🐜😣🐨" },
 #if ASSUME_BROKEN_LOCALE
     { "f58",    6787342413402046, "fuzzybunny" },
 #else
