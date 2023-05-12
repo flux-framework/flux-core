@@ -27,6 +27,7 @@
 #include "ccan/str/str.h"
 #include "fluid.h"
 #include "mnemonic.h"
+#include "base256.h"
 
 /* fluid: [ts:40 id:14 seq:10] */
 static const int bits_per_ts = 40;
@@ -334,6 +335,10 @@ int fluid_encode (char *buf, int bufsz, fluid_t fluid,
             if (fluid_f58_encode (buf, bufsz, fluid) < 0)
                 return -1;
             break;
+        case FLUID_STRING_BASE256:
+            if (base256_encode (buf, bufsz, &fluid, sizeof (fluid_t)) < 0)
+                return -1;
+            break;
     }
     return 0;
 }
@@ -380,6 +385,10 @@ int fluid_decode (const char *s, fluid_t *fluidp, fluid_string_type_t type)
             if (fluid_f58_decode (&fluid, s) < 0)
                 return -1;
             break;
+        case FLUID_STRING_BASE256:
+            if (base256_decode (&fluid, sizeof (fluid_t), s) < 0)
+                return -1;
+            break;
         default:
             errno = EINVAL;
             return -1;
@@ -402,6 +411,12 @@ static bool fluid_is_words (const char *s)
 
 fluid_string_type_t fluid_string_detect_type (const char *s)
 {
+    /* First check for base256 since it starts with a special
+     * emoji character.
+     */
+    if (is_base256 (s))
+        return FLUID_STRING_BASE256;
+
     /* N.B.: An F58 encoded FLUID may start with 'f', which also could
      *  be true for dothex or words representations. Therefore, always
      *  check for these encodings first, since F58 must not have '.'
