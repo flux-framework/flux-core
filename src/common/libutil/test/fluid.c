@@ -236,7 +236,7 @@ void test_basic (void)
     ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_DOTHEX) == 0,
         "fluid_encode type=DOTHEX works");
     ok (fluid_decode (buf, &id2, FLUID_STRING_DOTHEX) == 0 && id == id2,
-        "fluid_decode type=MNEMONIC works");
+        "fluid_decode type=DOTHEX works");
     diag ("%s", buf);
 
     ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_MNEMONIC) == 0,
@@ -257,7 +257,7 @@ void test_basic (void)
     ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_DOTHEX) == 0,
         "fluid_encode type=DOTHEX works");
     ok (fluid_decode (buf, &id2, FLUID_STRING_DOTHEX) == 0 && id == id2,
-        "fluid_decode type=MNEMONIC works");
+        "fluid_decode type=DOTHEX works");
     diag ("%s", buf);
 
     ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_MNEMONIC) == 0,
