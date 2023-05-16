@@ -182,6 +182,15 @@ struct fluid_parse_test fluid_parse_tests [] = {
     { 65535, "0.0.0.ffff" },
     { 4294967295, "0000.0000.ffff.ffff" },
     { 18446744073709551615UL, "ffff.ffff.ffff.ffff" },
+    { 0, "😃" },
+    { 1, "😄" },
+    { 57, "🙊" },
+    { 1234, "😁👌" },
+    { 1888, "😆🐻" },
+    { 4369, "😊🌀" },
+    { 65535, "💁📚" },
+    { 4294967295, "😳🏪🍖🍸" },
+    { 18446744073709551615UL, "🚹💗💧👗😷📷📚" },
     { 0, NULL },
 };
 
@@ -245,6 +254,12 @@ void test_basic (void)
         "fluid_decode type=MNEMONIC works");
     diag ("%s", buf);
 
+    ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_EMOJI) == 0,
+        "fluid_encode type=EMOJI works");
+    ok (fluid_decode (buf, &id2, FLUID_STRING_EMOJI) == 0 && id == id2,
+        "fluid_decode type=EMOJI works");
+    diag ("%s", buf);
+
     /* With artificially tweaked generator state
      */
     const uint64_t time_34y = 1000ULL*60*60*24*365*34;
@@ -265,6 +280,13 @@ void test_basic (void)
     ok (fluid_decode (buf, &id2, FLUID_STRING_MNEMONIC) == 0 && id == id2,
         "fluid_decode type=MNEMONIC works");
     diag ("%s", buf);
+
+    ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_EMOJI) == 0,
+        "fluid_encode type=EMOJI works");
+    ok (fluid_decode (buf, &id2, FLUID_STRING_EMOJI) == 0 && id == id2,
+        "fluid_decode type=EMOJI works");
+    diag ("%s", buf);
+
 
     /* Generate 64K id's as rapidly as possible.
      * Probably will cover running out of seq bits.
@@ -307,6 +329,27 @@ void test_basic (void)
     ok (decode_errors == 0,
         "fluid_decode type=MNEMONIC worked 4K times");
 
+    /* Continue for another 4K with EMOJI encoding (slower).
+     */
+    generate_errors = 0;
+    encode_errors = 0;
+    decode_errors = 0;
+    for (i = 0; i < 4096; i++) {
+        if (fluid_generate (&gen, &id) < 0)
+            generate_errors++;
+        if (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_EMOJI) < 0)
+            encode_errors++;
+        if (fluid_decode (buf, &id2, FLUID_STRING_EMOJI) < 0 || id != id2)
+            decode_errors++;
+    }
+    ok (generate_errors == 0,
+        "fluid_generate worked 4K times");
+    ok (encode_errors == 0,
+        "fluid_encode type=EMOJI worked 4K times");
+    ok (decode_errors == 0,
+        "fluid_decode type=EMOJI worked 4K times");
+
+
     /* Generate 64K FLUIDs, restarting generator each time from timestamp
      * extracted from generated FLUID + 1.  Verify number always increases.
      */
@@ -339,6 +382,8 @@ void test_basic (void)
         "fluid_decode type=MNEMONIC fails on input=bogus");
     ok (fluid_decode ("a-a-a--a-a-a", &id, FLUID_STRING_MNEMONIC) < 0,
         "fluid_decode type=MNEMONIC fails on unknown words xx-xx-xx--xx-xx-xx");
+    ok (fluid_decode ("bogus", &id, FLUID_STRING_EMOJI) < 0,
+        "fluid_decode type=EMOJI fails on ascii string");
 }
 
 int main (int argc, char *argv[])
