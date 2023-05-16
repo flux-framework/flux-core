@@ -30,8 +30,10 @@ from typing import Mapping
 
 import yaml
 
+# tomllib added to standard library in Python 3.11
+# flux-core minimum is Python 3.6.
 try:
-    import tomllib
+    import tomllib  # novermin
 except ModuleNotFoundError:
     from flux.utils import tomli as tomllib
 
