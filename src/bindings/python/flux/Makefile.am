@@ -6,6 +6,7 @@ nobase_fluxpy_PYTHON = \
 	message.py \
 	constants.py \
 	util.py \
+	compat36.py \
 	future.py \
 	memoized_property.py \
 	debugged.py \

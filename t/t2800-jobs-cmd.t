@@ -116,7 +116,28 @@ test_expect_success 'submit jobs for job list testing' '
 	#
 	! jobid=`flux submit --wait nosuchcommand` &&
 	echo $jobid >> inactiveids &&
-	echo $jobid > failed.ids &&
+	flux job id $jobid > failed_exec.ids &&
+	echo $jobid > failedids &&
+	#
+	#  Run a job that we will end with a signal, copy its JOBID to both inactive and
+	#   failed and terminated lists.
+	#
+	jobid=`flux submit --wait-event=start sleep inf` &&
+	flux job kill $jobid &&
+	fj_wait_event $jobid clean &&
+	echo $jobid >> inactiveids &&
+	flux job id $jobid > terminated.ids &&
+	flux job id $jobid >> failedids &&
+	#
+	#  Run a job that we will end with a user exception, copy its JOBID to both
+	#	inactive and failed and exception lists.
+	#
+	jobid=`flux submit --wait-event=start sleep inf` &&
+	flux job raise --type=myexception --severity=0 -m "myexception" $jobid &&
+	fj_wait_event $jobid clean &&
+	echo $jobid >> inactiveids &&
+	flux job id $jobid > exception.ids &&
+	flux job id $jobid >> failedids &&
 	#
 	#  Run a job that will timeout, copy its JOBID to both inactive and
 	#   timeout lists.
@@ -144,10 +165,11 @@ test_expect_success 'submit jobs for job list testing' '
 	#
 	jobid=`flux submit --job-name=canceledjob sleep 30` &&
 	fj_wait_event $jobid depend &&
-	flux cancel $jobid &&
+	flux cancel -m "mecanceled" $jobid &&
 	fj_wait_event $jobid clean &&
 	echo $jobid >> inactiveids &&
 	echo $jobid > canceled.ids &&
+	tac failedids > failed.ids &&
 	tac inactiveids > inactive.ids &&
 	cat inactive.ids active.ids >> all.ids &&
 	#
@@ -520,8 +542,10 @@ test_expect_success 'flux-jobs --format={name} works' '
 	flux jobs --filter=inactive -no "{name}" > jobnameI.out &&
 	echo "canceledjob" >> jobnameI.exp &&
 	echo "sleep" >> jobnameI.exp &&
+	echo "sleep" >> jobnameI.exp &&
+	echo "sleep" >> jobnameI.exp &&
 	echo "nosuchcommand" >> jobnameI.exp &&
-	count=$(($(state_count inactive) - 3)) &&
+	count=$(($(state_count inactive) - 5)) &&
 	for i in `seq 1 $count`; do
 		echo "hostname" >> jobnameI.exp
 	done &&
@@ -613,7 +637,7 @@ test_expect_success 'flux-jobs --format={runtime:0.3f} works' '
 	done &&
 	test_cmp runtime-dotP.out runtime-dotP.exp &&
 	flux jobs --filter=running,inactive -no "{runtime:0.3f}" > runtime-dotRI.out &&
-	[ "$(grep -E "\.[0-9]{3}" runtime-dotRI.out | wc -l)" = "15" ]
+	[ "$(grep -E "\.[0-9]{3}" runtime-dotRI.out | wc -l)" = "17" ]
 '
 
 test_expect_success 'flux-jobs --format={contextual_time} works' '
@@ -788,14 +812,16 @@ test_expect_success 'flux-jobs --format={exception.*},{exception.*:h} works' '
 	count=$(grep -c "^,-,,-,,-,,-$" exceptionPR.out) &&
 	test $count -eq $(state_count sched run) &&
 	flux jobs --filter=inactive -no "$fmt" > exceptionI.out &&
-	count=$(grep -c "^True,True,0,0,cancel,cancel,,-$" exceptionI.out) &&
+	count=$(grep -c "^True,True,0,0,cancel,cancel,mecanceled,mecanceled$" exceptionI.out) &&
 	test $count -eq $(state_count canceled) &&
+	count=$(grep -c "^True,True,0,0,myexception,myexception,myexception,myexception$" exceptionI.out) &&
+	test $count -eq $(state_count exception) &&
 	count=$(grep -c "^True,True,0,0,exec,exec,.*No such file.*" exceptionI.out) &&
-	test $count -eq $(state_count failed) &&
+	test $count -eq $(state_count failed_exec) &&
 	count=$(grep -c "^True,True,0,0,timeout,timeout,.*expired.*" exceptionI.out) &&
 	test $count -eq $(state_count timeout) &&
 	count=$(grep -c "^False,False,,-,,-,," exceptionI.out) &&
-	test $count -eq $(state_count completed)
+	test $count -eq $(state_count completed terminated)
 '
 
 
@@ -884,8 +910,11 @@ test_expect_success 'flux-jobs --format={waitstatus},{returncode}' '
 	test_debug "echo active got $countPR, want $(state_count sched run)" &&
 	test $countPR -eq $(state_count sched run) &&
 	count=$(grep -c "^32512,127$" returncodeI.out) &&
-	test_debug "echo exit 127 got $count, want $(state_count failed)" &&
-	test $count -eq $(state_count failed) &&
+	test_debug "echo exit 127 got $count, want $(state_count failed_exec)" &&
+	test $count -eq $(state_count failed_exec) &&
+	count=$(grep -c "^36608,143$" returncodeI.out) &&
+	test_debug "echo exit 143 got $count, want $(state_count terminated exception)" &&
+	test $count -eq $(state_count terminated exception) &&
 	count=$(grep -c "^36352,142$" returncodeI.out) &&
 	test_debug "echo exit 142 got $count, want $(state_count timeout)" &&
 	test $count -eq $(state_count timeout) &&
@@ -893,6 +922,33 @@ test_expect_success 'flux-jobs --format={waitstatus},{returncode}' '
 	test_debug "echo complete got $count, want $(state_count completed)" &&
 	test $count -eq $(state_count completed) &&
 	count=$(grep -c "^-,-128$" returncodeI.out) &&
+	test_debug "echo canceled got $count, want $(state_count canceled)" &&
+	test $count -eq $(state_count canceled)
+'
+
+test_expect_success 'flux-jobs --format={inactive_reason}' '
+	FORMAT="{inactive_reason:h}" &&
+	flux jobs --filter=pending,running -no "$FORMAT" > inactivereasonPR.out &&
+	count=$(grep -c "^-$" inactivereasonPR.out) &&
+	test_debug "echo empty got $count, want $(state_count active)" &&
+	test $count -eq $(state_count active) &&
+	flux jobs --filter=inactive -no "$FORMAT" > inactivereasonI.out &&
+	count=$(grep -c "^command not found$" inactivereasonI.out) &&
+	test_debug "echo command not found got $count, want $(state_count failed_exec)" &&
+	test $count -eq $(state_count failed_exec) &&
+	count=$(grep -c "^Terminated$" inactivereasonI.out) &&
+	test_debug "echo Terminated got $count, want $(state_count terminated)" &&
+	test $count -eq $(state_count terminated) &&
+	count=$(grep -c "^Exception: type=myexception note=myexception$" inactivereasonI.out) &&
+	test_debug "echo exception got $count, want $(state_count exception)" &&
+	test $count -eq $(state_count exception) &&
+	count=$(grep -c "^Timeout$" inactivereasonI.out) &&
+	test_debug "echo Timeout got $count, want $(state_count timeout)" &&
+	test $count -eq $(state_count timeout) &&
+	count=$(grep -c "^Exit 0$" inactivereasonI.out) &&
+	test_debug "echo Exit 0 got $count, want $(state_count completed)" &&
+	test $count -eq $(state_count completed) &&
+	count=$(grep -c "^Canceled: mecanceled$" inactivereasonI.out) &&
 	test_debug "echo canceled got $count, want $(state_count canceled)" &&
 	test $count -eq $(state_count canceled)
 '
@@ -1065,6 +1121,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	nodelist==NODELIST
 	contextual_info==INFO
 	contextual_time==TIME
+	inactive_reason==INACTIVE-REASON
 	success==SUCCESS
 	exception.occurred==EXCEPTION-OCCURRED
 	exception.severity==EXCEPTION-SEVERITY
