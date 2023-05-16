@@ -45,6 +45,7 @@ class JobID(int):
      - dotted hex (dothex) (xxxx.xxxx.xxxx.xxxx)
      - kvs dir (dotted hex with `job.` prefix)
      - RFC19 F58: (Base58 encoding with prefix `ƒ` or `f`)
+     - basemoji (emoji encoding)
 
     A JobID object also has properties for encoding a JOBID into each
     of the above representations, e.g. jobid.f85, jobid.words, jobid.dothex...
@@ -91,6 +92,11 @@ class JobID(int):
     def words(self):
         """Return words (mnemonic) representation of a JobID"""
         return self.encode("words")
+
+    @property
+    def emoji(self):
+        """Return emoji representation of a JobID"""
+        return self.encode("emoji")
 
     @property
     def kvs(self):
