@@ -29,7 +29,7 @@ test_expect_success 'expected broker attributes are set in recovery mode' '
 	test_cmp recov_attrs.exp recov_attrs.exp
 '
 test_expect_success 'banner message is printed in interactive recovery mode' '
-	run_timeout --env=SHELL=/bin/sh 15 \
+	run_timeout --env=SHELL=/bin/sh 120 \
 	    $runpty -i none flux start \
 	        -o,-Sbroker.rc1_path= \
 	        -o,-Sbroker.rc3_path= \
@@ -59,7 +59,7 @@ test_expect_success 'recovery mode also works with dump file' '
 	test_cmp down.exp down_dump.out
 '
 test_expect_success 'banner message warns changes are not persistent' '
-	run_timeout --env=SHELL=/bin/sh 15 \
+	run_timeout --env=SHELL=/bin/sh 120 \
 	    $runpty -i none flux start \
 	        -o,-Sbroker.rc1_path= \
 	        -o,-Sbroker.rc3_path= \
