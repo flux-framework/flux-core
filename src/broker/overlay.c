@@ -1590,6 +1590,7 @@ int overlay_register_attrs (struct overlay *overlay)
                          overlay->rank,
                          ATTR_IMMUTABLE) < 0)
         return -1;
+    (void)attr_delete (overlay->attrs, "size", true);
     if (attr_add_uint32 (overlay->attrs,
                          "size", overlay->size,
                          ATTR_IMMUTABLE) < 0)
