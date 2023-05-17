@@ -934,6 +934,18 @@ test two: unrecognized option '-Z'\n\
 Try `test two --help' for more information.\n",
     "bad argument error message is expected");
 
+    // Test missing argument prints expected error
+    char *av43[] = { "test", "two", "-t", NULL};
+    ac = ARRAY_SIZE (av43) - 1;
+
+    diag ("parsing test two -t");
+    n = optparse_run_subcommand (a, ac, av43);
+    ok (n == -1,
+        "optparse_run_subcommand with missing argument fails");
+
+    usage_output_is ("test two: '-t' missing argument\n",
+                     "missing argument error message is expected");
+
     // Test no subcommand (and subcommand required) prints error
     char *av5[] = { "test", NULL };
     ac = ARRAY_SIZE (av5) - 1;
@@ -1346,7 +1358,7 @@ static void test_optional_args ()
 
 int main (int argc, char *argv[])
 {
-    plan (296);
+    plan (299);
 
     test_convenience_accessors (); /* 36 tests */
     test_usage_output (); /* 46 tests */
@@ -1354,7 +1366,7 @@ int main (int argc, char *argv[])
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
-    test_subcommand (); /* 67 tests */
+    test_subcommand (); /* 70 tests */
     test_long_only (); /* 13 tests */
     test_optional_argument (); /* 9 tests */
     test_corner_case (); /* 3 tests */
