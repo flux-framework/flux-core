@@ -30,9 +30,9 @@ from operator import attrgetter
 from pathlib import Path, PurePosixPath
 from string import Formatter
 from typing import Mapping
-from wcwidth import wcswidth
 
 import yaml
+from wcwidth import wcswidth
 
 # tomllib added to standard library in Python 3.11
 # flux-core minimum is Python 3.6.
@@ -579,6 +579,26 @@ class UtilFormatter(Formatter):
             basecases = empty_outputs()
             value = "-" if str(value) in basecases else str(value)
             spec = spec[:-1] + "s"
+
+        # Normal python output will not consider emoji width with
+        # width formatting.  So we will adjust the output width of
+        # field accordingly to account for it if the "W" modifier
+        # is specified.
+        if spec.endswith("W") and isinstance(value, str):
+            match = re.search(r"^([<>])(\d+)W", spec)
+            if match:
+                align = match[1]
+                width = int(match[2])
+                display_width = wcswidth(value)
+                normal_width = len(value)
+                width_diff = display_width - normal_width
+                if width_diff > 0 and width > width_diff:
+                    width -= width_diff
+                    spec = f"{align}{width}s"
+        # if spec was not modified above, need to convert "W" to "s"
+        if spec.endswith("W"):
+            spec = spec[:-1] + "s"
+
         retval = super().format_field(value, spec)
 
         if denote_truncation and len(retval) < len(str(value)):
@@ -735,6 +755,7 @@ class OutputFormat:
             "precision_str",
             "type",
             "hyphen",
+            "wide",
             "truncate",
         )
 
@@ -759,6 +780,7 @@ class OutputFormat:
                 r"(?:(?P<decimal>\.)(?P<precision_str>\d+))?"
                 r"(?P<type>[bcdeEfFgGnosxX%])?"
                 r"(?P<hyphen>h)?"
+                r"(?P<wide>W)?"
                 r"(?P<truncate>\+)?"
             )
             try:
