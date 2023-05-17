@@ -275,6 +275,11 @@ string, "0s", "0.0", "0:00:00", or epoch time to a hyphen. For example, normally
 "{nodelist}" would output an empty string if the job has not yet run.
 By specifying, "{nodelist:h}", a hyphen would be presented instead.
 
+The special presentation type *W* can be used to adjust output alignment
+for wide characters.  It only works with left/right alignment formatting
+of the form "(<|>)N", for example ``{id.emoji:>12W}``.  It is used almost
+exclusively for emoji based outputs and typically used alongside ``+:``.
+
 The special suffix *+* can be used to indicate if a string was truncated
 by including a ``+`` character when truncation occurs. If both *h* and
 *+* are being used, then the *+* must appear after the *h*.
