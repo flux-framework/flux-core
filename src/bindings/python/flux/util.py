@@ -22,6 +22,7 @@ import signal
 import sys
 import threading
 import traceback
+import unicodedata
 from collections import namedtuple
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
@@ -448,6 +449,24 @@ class UtilFormatter(Formatter):
             basecases = empty_outputs()
             value = "-" if str(value) in basecases else str(value)
             spec = spec[:-1] + "s"
+
+        if spec.endswith("W") and isinstance(value, str):
+            match = re.search(r"^([<>])(\d+)W", spec)
+            if match:
+                align = match[1]
+                width = int(match[2])
+                widecount = 0
+                for chr in value:
+                    if unicodedata.east_asian_width(chr) == "W":
+                        widecount += 1
+                if width > widecount:
+                    width -= widecount
+                    spec = f"{align}{width}s"
+        # if spec was not modified above, need to convert to "W"
+        # conversion to "s"
+        if spec.endswith("W"):
+            spec = spec[:-1] + "s"
+
         retval = super().format_field(value, spec)
 
         if denote_truncation and len(retval) < len(str(value)):
