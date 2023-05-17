@@ -470,7 +470,7 @@ test_expect_success 'flux-jobs --format={id} works' '
 	test_cmp idsI.out inactive.ids
 '
 
-test_expect_success 'flux-jobs --format={id.f58},{id.hex},{id.dothex},{id.words} works' '
+test_expect_success 'flux-jobs --format={id.dec/f58/hex/kvs/dothex/words} works' '
 	flux jobs -ano {id.dec},{id.f58},{id.hex},{id.kvs},{id.dothex},{id.words} \
 	    | sort -n > ids.XX.out &&
 	for id in $(cat all.ids); do
