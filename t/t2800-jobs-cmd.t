@@ -554,6 +554,17 @@ test_expect_success 'flux-jobs --format={id.f58},{id.f58plain},{id.hex},{id.doth
 	test_cmp ids.XX.expected ids.XX.out
 '
 
+# N.B. don't use test_cmp for match, there can be minor differences in spacing depending
+# on terminal and font.  Just do a grep.
+test_expect_success 'flux-jobs --format={id.emoji},{id.emoji:>12W},{id.emoji:<12W} works' '
+	flux jobs -ano "{id.emoji},{id.emoji:>12W},{id.emoji:<12W}" \
+	    > ids.emoji.out &&
+	for id in $(cat all.ids); do
+		idemoji=$(flux job id --to=emoji $id) &&
+		grep ${idemoji} ids.emoji.out
+	done
+'
+
 test_expect_success 'flux-jobs --format={userid},{username} works' '
 	flux jobs --no-header -a --format="{userid},{username}" > user.out &&
 	id=`id -u` &&
