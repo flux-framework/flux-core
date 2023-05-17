@@ -27,6 +27,7 @@
 #include "ccan/str/str.h"
 #include "fluid.h"
 #include "mnemonic.h"
+#include "basemoji.h"
 
 /* fluid: [ts:40 id:14 seq:10] */
 static const int bits_per_ts = 40;
@@ -334,6 +335,10 @@ int fluid_encode (char *buf, int bufsz, fluid_t fluid,
             if (fluid_f58_encode (buf, bufsz, fluid) < 0)
                 return -1;
             break;
+        case FLUID_STRING_EMOJI:
+            if (uint64_basemoji_encode (fluid, buf, bufsz) < 0)
+                return -1;
+            break;
     }
     return 0;
 }
@@ -380,6 +385,10 @@ int fluid_decode (const char *s, fluid_t *fluidp, fluid_string_type_t type)
             if (fluid_f58_decode (&fluid, s) < 0)
                 return -1;
             break;
+        case FLUID_STRING_EMOJI:
+            if (uint64_basemoji_decode (s, &fluid) < 0)
+                return -1;
+            break;
         default:
             errno = EINVAL;
             return -1;
@@ -413,6 +422,8 @@ fluid_string_type_t fluid_string_detect_type (const char *s)
         return FLUID_STRING_MNEMONIC;
     if (fluid_is_f58 (s) > 0)
         return FLUID_STRING_F58;
+    if (is_basemoji_string (s))
+        return FLUID_STRING_EMOJI;
     return 0;
 }
 

@@ -274,6 +274,9 @@ The field names that can be specified are:
 **id.words**
   job ID in mnemonic encoding
 
+**id.emoji**
+  job ID in emoji encoding
+
 **userid**
    job submitter's userid
 

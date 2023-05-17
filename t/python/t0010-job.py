@@ -415,6 +415,7 @@ class TestJob(unittest.TestCase):
                 "kvs": "job.0000.0000.0000.0000",
                 "f58": "ƒ1",
                 "words": "academy-academy-academy--academy-academy-academy",
+                "emoji": "😃",
             },
             {
                 "int": 1,
@@ -424,6 +425,7 @@ class TestJob(unittest.TestCase):
                 "kvs": "job.0000.0000.0000.0001",
                 "f58": "ƒ2",
                 "words": "acrobat-academy-academy--academy-academy-academy",
+                "emoji": "😄",
             },
             {
                 "int": 65535,
@@ -433,6 +435,7 @@ class TestJob(unittest.TestCase):
                 "kvs": "job.0000.0000.0000.ffff",
                 "f58": "ƒLUv",
                 "words": "nevada-archive-academy--academy-academy-academy",
+                "emoji": "💁📚",
             },
             {
                 "int": 6787342413402046,
@@ -442,6 +445,7 @@ class TestJob(unittest.TestCase):
                 "kvs": "job.0018.1d0d.4d85.0fbe",
                 "f58": "ƒuzzybunny",
                 "words": "cake-plume-nepal--neuron-pencil-academy",
+                "emoji": "👴😱🔚🎮🕙🚩",
             },
             {
                 "int": 18446744073709551614,
@@ -451,6 +455,7 @@ class TestJob(unittest.TestCase):
                 "kvs": "job.ffff.ffff.ffff.fffe",
                 "f58": "ƒjpXCZedGfVP",
                 "words": "mustang-analyze-verbal--natural-analyze-verbal",
+                "emoji": "🚹💗💧👗😷📷📙",
             },
         ]
         for test in parse_tests:
