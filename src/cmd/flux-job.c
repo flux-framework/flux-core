@@ -46,6 +46,7 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/fdutils.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libioencode/ioencode.h"
@@ -1887,7 +1888,7 @@ void attach_signal_cb (flux_reactor_t *r, flux_watcher_t *w,
  */
 void restore_stdin_flags (void)
 {
-    (void)fcntl (STDIN_FILENO, F_SETFL, stdin_flags);
+    (void)fd_set_flags (STDIN_FILENO, stdin_flags);
 }
 
 static void attach_send_shell_completion (flux_future_t *f, void *arg)
@@ -2093,12 +2094,10 @@ static void attach_setup_stdin (struct attach_ctx *ctx)
     /* flux_buffer_read_watcher_create() requires O_NONBLOCK on
      * stdin */
 
-    if ((stdin_flags = fcntl (STDIN_FILENO, F_GETFL)) < 0)
-        log_err_exit ("fcntl F_GETFL stdin");
+    if ((stdin_flags = fd_set_nonblocking (STDIN_FILENO)) < 0)
+        log_err_exit ("unable to set stdin nonblocking");
     if (atexit (restore_stdin_flags) != 0)
         log_err_exit ("atexit");
-    if (fcntl (STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK) < 0)
-        log_err_exit ("fcntl F_SETFL stdin");
 
     w = flux_buffer_read_watcher_create (flux_get_reactor (ctx->h),
                                          STDIN_FILENO,
