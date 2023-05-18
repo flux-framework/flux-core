@@ -297,6 +297,12 @@ int overlay_set_topology (struct overlay *ov, struct topology *topo)
 
     ov->size = topology_get_size (topo);
     ov->rank = topology_get_rank (topo);
+    if (!cert_meta_get (ov->cert, "name")) {
+        char val[16];
+        snprintf (val, sizeof (val), "%lu", (unsigned long)ov->rank);
+        if (cert_meta_set (ov->cert, "name", val) < 0)
+            goto error;
+    }
     ov->child_count = child_count;
     if (ov->child_count > 0) {
         int i;
