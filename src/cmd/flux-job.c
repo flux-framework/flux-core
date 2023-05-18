@@ -2105,8 +2105,20 @@ static void attach_setup_stdin (struct attach_ctx *ctx)
                                          attach_stdin_cb,
                                          flags,
                                          ctx);
-    if (!w)
+    if (!w) {
+        /* Users have reported rare occurrences of an EINVAL error
+         * from flux_buffer_read_watcher_create(), the cause of which
+         * is not understood (See issue #5175). In many cases, perhaps all,
+         * stdin is not used by the job, so aborting `flux job attach`
+         * is an unnecessary failure. Therefore, just ignore stdin when
+         * errno is EINVAL here:
+         */
+        if (errno == EINVAL) {
+            log_msg ("Warning: ignoring stdin: failed to create watcher");
+            return;
+        }
         log_err_exit ("flux_buffer_read_watcher_create");
+    }
 
     if (!(ctx->stdin_rpcs = zlist_new ()))
         log_err_exit ("zlist_new");
