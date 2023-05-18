@@ -1197,7 +1197,14 @@ static char * optstring_create ()
     char *optstring = calloc (4, 1);
     if (optstring == NULL)
         return (NULL);
-    optstring[0] = '\0';
+    /* Per getopt(3) manpage
+     *
+     * "If the first character ... of optstring is a colon (':'), then
+     * getopt() returns ':' instead of '?' to indicate a missing
+     * option argument"
+     */
+    optstring[0] = ':';
+    optstring[1] = '\0';
     return (optstring);
 }
 
@@ -1365,7 +1372,13 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
                                &li, &d, p->posixly_correct)) >= 0) {
         struct option_info *opt;
         struct optparse_option *o;
-        if (c == '?') {
+        if (c == ':') {
+            (*p->log_fn) ("%s: '%s' missing argument\n",
+                          fullname, argv[d.optind-1]);
+            d.optind = -1;
+            break;
+        }
+        else if (c == '?') {
             if (d.optopt != '\0')
                 (*p->log_fn) ("%s: unrecognized option '-%c'\n",
                               fullname,  d.optopt);
