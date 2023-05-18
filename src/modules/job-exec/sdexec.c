@@ -86,11 +86,6 @@ struct sdexec
     bool jobinfo_tasks_complete_called;
 };
 
-static int sdexec_config (flux_t *h, int argc, char **argv)
-{
-    return config_init (h, argc, argv);
-}
-
 static void sdexec_destroy (void *data)
 {
     struct sdexec *se = data;
@@ -788,7 +783,6 @@ static int sdexec_cancel (struct jobinfo *job)
 
 struct exec_implementation sdexec = {
     .name =     "sdexec",
-    .config =   sdexec_config,
     .init =     sdexec_init,
     .exit =     sdexec_exit,
     .start =    sdexec_start,
