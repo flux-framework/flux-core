@@ -278,6 +278,12 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     if (topology_set_rank (topo, info.rank) < 0
         || overlay_set_topology (overlay, topo) < 0)
         goto error;
+    if (info.rank == 0 && size > info.size) {
+        if (overlay_flub_provision (overlay, info.size, size - 1, true) < 0) {
+            log_msg ("error provisioning flub allocator");
+            goto error;
+        }
+    }
     if (gethostname (hostname, sizeof (hostname)) < 0) {
         log_err ("gethostname");
         goto error;
