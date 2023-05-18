@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #define _XOPEN_SOURCE 700
 #include <stdlib.h>
 #include <time.h>
