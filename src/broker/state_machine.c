@@ -836,6 +836,25 @@ static void broker_online_cb (flux_future_t *f, void *arg)
         return;
     }
 
+    /* A broker that drops out of s->quorum.online is provisioned
+     * for replacement via flub, and unprovisioned if returns.
+     */
+    if (s->quorum.online) {
+        unsigned int id;
+        id = idset_first (s->quorum.online);
+        while (id != IDSET_INVALID_ID) { // online -> offline
+            if (!idset_test (ids, id))
+                (void)overlay_flub_provision (s->ctx->overlay, id, id, true);
+            id = idset_next (s->quorum.online, id);
+        }
+        id = idset_first (ids);
+        while (id != IDSET_INVALID_ID) { // offline -> online
+            if (!idset_test (s->quorum.online, id))
+                (void)overlay_flub_provision (s->ctx->overlay, id, id, false);
+            id = idset_next (ids, id);
+        }
+    }
+
     idset_destroy (s->quorum.online);
     s->quorum.online = ids;
     if (idset_count (s->quorum.online) >= s->quorum.size)
