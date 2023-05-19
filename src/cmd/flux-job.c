@@ -1526,7 +1526,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
 #if HAVE_FLUX_SECURITY
     flux_security_t *sec = NULL;
     const char *sec_config;
-    const char *sign_type;
+    const char *sign_type = NULL;
 #endif
     int flags = 0;
     void *jobspec;
