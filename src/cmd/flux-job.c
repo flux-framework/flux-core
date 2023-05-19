@@ -1565,12 +1565,17 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
      */
     if (optparse_hasopt (p, "security-config")
         || optparse_hasopt (p, "sign-type")) {
-        sec_config = optparse_get_str (p, "security-config", NULL);
-        if (!(sec = flux_security_create (0)))
-            log_err_exit ("security");
-        if (flux_security_configure (sec, sec_config) < 0)
-            log_err_exit ("security config %s", flux_security_last_error (sec));
-        sign_type = optparse_get_str (p, "sign-type", NULL);
+        if (flags & FLUX_JOB_PRE_SIGNED)
+            log_msg ("Ignoring security config with --flags=pre-signed");
+        else {
+            sec_config = optparse_get_str (p, "security-config", NULL);
+            if (!(sec = flux_security_create (0)))
+                log_err_exit ("security");
+            if (flux_security_configure (sec, sec_config) < 0)
+                log_err_exit ("security config %s",
+                              flux_security_last_error (sec));
+            sign_type = optparse_get_str (p, "sign-type", NULL);
+        }
     }
 #endif
     if (!(h = flux_open (NULL, 0)))
