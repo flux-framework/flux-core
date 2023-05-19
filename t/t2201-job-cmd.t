@@ -87,7 +87,14 @@ test_expect_success HAVE_FLUX_SECURITY 'flux-job: submit with bad sign type fail
 		--sign-type=notvalid \
 		basic.json
 '
-
+test_expect_success HAVE_FLUX_SECURITY 'flux-job: submit ignores security-config with --flags=signed' '
+	flux run --dry-run -n1 hostnane | \
+	    flux python \
+	    ${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py $(id -u) >signed.json &&
+	flux job submit --security-config=/nonexist --flags=signed \
+		signed.json >submit-signed.out 2>&1 &&
+	grep "Ignoring security config" submit-signed.out
+'
 test_expect_success 'flux-job: can submit jobspec on stdin with -' '
 	flux job submit - <basic.json
 '

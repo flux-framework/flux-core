@@ -65,7 +65,7 @@ test_expect_success 'job-exec: large jobspec does not get truncated' '
 		actual=imp-$(flux job id $id).input &&
 		test_debug "echo expecting J of size $(wc -c < job.signed)B" &&
 		test_debug "echo input to IMP was $(wc -c < $actual)B" &&
-		jq -j .J ${actual} > J.input &&
+		jq -r .J ${actual} > J.input &&
 		test_cmp job.signed J.input
 	)
 '

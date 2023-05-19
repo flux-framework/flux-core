@@ -47,6 +47,7 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/fdutils.h"
+#include "src/common/libutil/strstrip.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libioencode/ioencode.h"
@@ -1525,7 +1526,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
 #if HAVE_FLUX_SECURITY
     flux_security_t *sec = NULL;
     const char *sec_config;
-    const char *sign_type;
+    const char *sign_type = NULL;
 #endif
     int flags = 0;
     void *jobspec;
@@ -1563,27 +1564,38 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
      * context so jobspec can be pre-signed before submission.
      */
     if (optparse_hasopt (p, "security-config")
-                            || optparse_hasopt (p, "sign-type")) {
-        sec_config = optparse_get_str (p, "security-config", NULL);
-        if (!(sec = flux_security_create (0)))
-            log_err_exit ("security");
-        if (flux_security_configure (sec, sec_config) < 0)
-            log_err_exit ("security config %s", flux_security_last_error (sec));
-        sign_type = optparse_get_str (p, "sign-type", NULL);
+        || optparse_hasopt (p, "sign-type")) {
+        if (flags & FLUX_JOB_PRE_SIGNED)
+            log_msg ("Ignoring security config with --flags=pre-signed");
+        else {
+            sec_config = optparse_get_str (p, "security-config", NULL);
+            if (!(sec = flux_security_create (0)))
+                log_err_exit ("security");
+            if (flux_security_configure (sec, sec_config) < 0)
+                log_err_exit ("security config %s",
+                              flux_security_last_error (sec));
+            sign_type = optparse_get_str (p, "sign-type", NULL);
+        }
     }
 #endif
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    jobspecsz = read_jobspec (input, &jobspec);
-    assert (((char *)jobspec)[jobspecsz] == '\0');
-    if (jobspecsz == 0)
+    if ((jobspecsz = read_jobspec (input, &jobspec)) == 0)
         log_msg_exit ("required jobspec is empty");
+
+    /* If jobspec was pre-signed, then assign J to to jobspec after
+     * stripping surrounding whitespace.
+     */
+    if (flags & FLUX_JOB_PRE_SIGNED)
+        J = strstrip (jobspec);
+
     urgency = optparse_get_int (p, "urgency", FLUX_JOB_URGENCY_DEFAULT);
 
 #if HAVE_FLUX_SECURITY
     if (sec) {
         if (!(J = flux_sign_wrap (sec, jobspec, jobspecsz, sign_type, 0)))
-            log_err_exit ("flux_sign_wrap: %s", flux_security_last_error (sec));
+            log_err_exit ("flux_sign_wrap: %s",
+                          flux_security_last_error (sec));
         flags |= FLUX_JOB_PRE_SIGNED;
     }
 #endif
