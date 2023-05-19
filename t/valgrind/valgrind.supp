@@ -82,9 +82,9 @@
    Memcheck:Leak
    match-leak-kinds: definite
    fun:malloc
-   obj:/usr/lib64/libhwloc.so.15.4.0
-   obj:/usr/lib64/libhwloc.so.15.4.0
-   obj:/usr/lib64/libhwloc.so.15.4.0
+   ...
+   obj:*libhwloc.so.15.4.*
+   obj:*libhwloc.so.15.4.*
    fun:hwloc_topology_load
    ...
 }
