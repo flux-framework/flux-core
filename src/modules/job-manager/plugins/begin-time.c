@@ -10,6 +10,9 @@
 
 /*  begin-time: Builtin job-manager begin-time dependency plugin */
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <time.h>
 #include <math.h>
 #include <jansson.h>
