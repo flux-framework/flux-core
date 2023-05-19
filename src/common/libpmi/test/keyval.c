@@ -8,12 +8,12 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#include <string.h>
+#include <ctype.h>
+
 #include "src/common/libtap/tap.h"
 #include "src/common/libpmi/keyval.h"
 #include "ccan/str/str.h"
-
-#include <string.h>
-#include <ctype.h>
 
 static char *valid[] = {
     "key1=val1",

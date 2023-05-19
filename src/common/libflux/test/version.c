@@ -8,11 +8,11 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#include <string.h>
+
 #include "src/common/libflux/version.h"
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"
-
-#include <string.h>
 
 int main (int argc, char *argv[])
 {
