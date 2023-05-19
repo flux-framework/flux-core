@@ -1563,7 +1563,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
      * context so jobspec can be pre-signed before submission.
      */
     if (optparse_hasopt (p, "security-config")
-                            || optparse_hasopt (p, "sign-type")) {
+        || optparse_hasopt (p, "sign-type")) {
         sec_config = optparse_get_str (p, "security-config", NULL);
         if (!(sec = flux_security_create (0)))
             log_err_exit ("security");
@@ -1583,7 +1583,8 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
 #if HAVE_FLUX_SECURITY
     if (sec) {
         if (!(J = flux_sign_wrap (sec, jobspec, jobspecsz, sign_type, 0)))
-            log_err_exit ("flux_sign_wrap: %s", flux_security_last_error (sec));
+            log_err_exit ("flux_sign_wrap: %s",
+                          flux_security_last_error (sec));
         flags |= FLUX_JOB_PRE_SIGNED;
     }
 #endif
