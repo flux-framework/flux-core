@@ -47,6 +47,7 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/fdutils.h"
+#include "src/common/libutil/strstrip.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libioencode/ioencode.h"
@@ -1576,6 +1577,13 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     if ((jobspecsz = read_jobspec (input, &jobspec)) == 0)
         log_msg_exit ("required jobspec is empty");
+
+    /* If jobspec was pre-signed, then assign J to to jobspec after
+     * stripping surrounding whitespace.
+     */
+    if (flags & FLUX_JOB_PRE_SIGNED)
+        J = strstrip (jobspec);
+
     urgency = optparse_get_int (p, "urgency", FLUX_JOB_URGENCY_DEFAULT);
 
 #if HAVE_FLUX_SECURITY
