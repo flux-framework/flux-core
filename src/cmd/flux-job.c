@@ -1574,9 +1574,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
 #endif
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    jobspecsz = read_jobspec (input, &jobspec);
-    assert (((char *)jobspec)[jobspecsz] == '\0');
-    if (jobspecsz == 0)
+    if ((jobspecsz = read_jobspec (input, &jobspec)) == 0)
         log_msg_exit ("required jobspec is empty");
     urgency = optparse_get_int (p, "urgency", FLUX_JOB_URGENCY_DEFAULT);
 
