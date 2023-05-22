@@ -216,13 +216,15 @@ as futures complete.
 		result_fut.then(result_cb)
 
 	def result_cb(fut):
-		print(fut.get_info())
+		job = fut.get_info()
+		result = job.result.lower()
+		print(f"{job.id}: {result} with returncode {job.returncode}")
 
 	flux_handle = flux.Flux()
 	jobspec = flux.job.JobspecV1.from_command(["/bin/true"])
 	for _ in range(5):
 		# submit 5 futures and attach callbacks to each one
-		submit_future = flux.job.submit_async(f, jobspec)
+		submit_future = flux.job.submit_async(flux_handle, jobspec)
 		submit_future.then(submit_cb, flux_handle)
 	# enter the flux event loop (the 'reactor') to trigger the callbacks
 	# once the futures complete
