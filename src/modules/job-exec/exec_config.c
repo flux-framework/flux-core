@@ -27,7 +27,6 @@
 static const char *default_cwd = "/tmp";
 static const char *default_job_shell = NULL;
 static const char *flux_imp_path = NULL;
-static bool use_imp_helper = false;
 
 static const char *jobspec_get_job_shell (json_t *jobspec)
 {
@@ -74,11 +73,6 @@ const char *config_get_imp_path (void)
     return flux_imp_path;
 }
 
-bool config_use_imp_helper (void)
-{
-    return use_imp_helper;
-}
-
 /*  Initialize common configurations for use by job-exec exec modules.
  */
 int config_init (flux_t *h, int argc, char **argv)
@@ -114,14 +108,6 @@ int config_init (flux_t *h, int argc, char **argv)
         return -1;
     }
 
-#if HAVE_FLUX_SECURITY
-    /* Use IMP helper by default for flux-security >= 0.9.0
-     */
-    if (FLUX_SECURITY_VERSION_MAJOR >= 0
-        && FLUX_SECURITY_VERSION_MINOR >= 9)
-        use_imp_helper = true;
-#endif /* HAVE_FLUX_SECURITY */
-
     if (argv && argc) {
         /* Finally, override values on cmdline */
         for (int i = 0; i < argc; i++) {
@@ -129,8 +115,6 @@ int config_init (flux_t *h, int argc, char **argv)
                 default_job_shell = argv[i]+10;
             else if (strstarts (argv[i], "imp="))
                 flux_imp_path = argv[i]+4;
-            else if (streq (argv[i], "no-imp-helper"))
-                use_imp_helper = false;
         }
     }
 
@@ -138,9 +122,8 @@ int config_init (flux_t *h, int argc, char **argv)
     if (flux_imp_path) {
         flux_log (h,
                   LOG_DEBUG,
-                  "using imp path %s (%s helper)",
-                  flux_imp_path,
-                  use_imp_helper ? "with" : "without");
+                  "using imp path %s (with helper)",
+                  flux_imp_path);
     }
     return 0;
 }
