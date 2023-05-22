@@ -56,7 +56,11 @@ struct exec_ctx {
 
 static void exec_ctx_destroy (struct exec_ctx *tc)
 {
-    free (tc);
+    if (tc) {
+        int saved_errno = errno;
+        free (tc);
+        errno = saved_errno;
+    }
 }
 
 static struct exec_ctx *exec_ctx_create (json_t *jobspec)
@@ -338,6 +342,7 @@ static int exec_init (struct jobinfo *job)
     }
     if (bulk_exec_aux_set (exec, "ctx", ctx,
                           (flux_free_f) exec_ctx_destroy) < 0) {
+        exec_ctx_destroy (ctx);
         flux_log_error (job->h, "exec_init: bulk_exec_aux_set");
         goto err;
     }
