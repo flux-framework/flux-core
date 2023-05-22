@@ -350,12 +350,12 @@ static int exec_init (struct jobinfo *job)
         goto err;
     }
     if (job->multiuser) {
-            if (config_use_imp_helper ()
-                && flux_cmd_setenvf (cmd,
-                                     1,
-                                     "FLUX_IMP_EXEC_HELPER",
-                                     "flux imp-exec-helper %ju",
-                                     (uintmax_t) job->id) < 0) {
+        if (config_use_imp_helper ()
+            && flux_cmd_setenvf (cmd,
+                                 1,
+                                 "FLUX_IMP_EXEC_HELPER",
+                                 "flux imp-exec-helper %ju",
+                                 (uintmax_t) job->id) < 0) {
             flux_log_error (job->h, "exec_init: flux_cmd_setenvf");
             goto err;
         }
