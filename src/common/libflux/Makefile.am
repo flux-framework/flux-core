@@ -34,8 +34,7 @@ installed_conf_cppflags = \
 	-DINSTALLED_UPMI_PLUGINPATH=\"$(fluxlibdir)/upmi/plugins\" \
 	-DINSTALLED_CMDHELP_PATTERN=\"${datadir}/flux/help.d/*.json\" \
 	-DINSTALLED_NO_DOCS_PATH=\"${datadir}/flux/.nodocs\" \
-	-DINSTALLED_RUNDIR=\"${runstatedir}/flux\" \
-	-DINSTALLED_BINDIR=\"$(fluxcmddir)\"
+	-DINSTALLED_RUNDIR=\"${runstatedir}/flux\"
 
 intree_conf_cppflags = \
 	-DINTREE_MODULE_PATH=\"$(abs_top_builddir)/src/modules/.libs\" \
@@ -55,8 +54,7 @@ intree_conf_cppflags = \
 	-DINTREE_JOBTAP_PLUGINPATH=\"$(abs_top_builddir)/src/modules/job-manager/plugins/.libs\" \
 	-DINTREE_UPMI_PLUGINPATH=\"$(abs_top_builddir)/src/common/libpmi/plugins/.libs\" \
 	-DINTREE_CMDHELP_PATTERN=\"${abs_top_builddir}/etc/flux/help.d/*.json\" \
-	-DINTREE_NO_DOCS_PATH=\"${abs_top_builddir}/etc/flux/.nodocs\" \
-	-DINTREE_BINDIR=\"${abs_top_builddir}/src/cmd\"
+	-DINTREE_NO_DOCS_PATH=\"${abs_top_builddir}/etc/flux/.nodocs\"
 
 
 fluxcoreinclude_HEADERS = \
