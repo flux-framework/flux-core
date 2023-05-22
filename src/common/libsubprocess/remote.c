@@ -601,7 +601,7 @@ int remote_exec (flux_subprocess_t *p)
     flux_future_t *f;
     int flags = 0;
 
-    if (p->ops.on_channel_out)
+    if (zlist_size (cmd_channel_list (p->cmd)) > 0)
         flags |= SUBPROCESS_REXEC_CHANNEL;
     if (p->ops.on_stdout)
         flags |= SUBPROCESS_REXEC_STDOUT;
