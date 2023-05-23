@@ -43,6 +43,7 @@ fluxmod_LTLIBRARIES = \
 	kvs-watch.la \
 	resource.la \
 	sched-simple.la \
+	sdexec.la \
 	sdbus.la
 
 if ENABLE_CONTENT_S3
@@ -261,6 +262,19 @@ sched_simple_la_LIBADD = \
 	$(JANSSON_LIBS) \
 	$(HWLOC_LIBS)
 sched_simple_la_LDFLAGS = $(fluxmod_ldflags) -module
+
+sdexec_la_SOURCES = \
+	sdexec/sdexec.c
+sdexec_la_CPPFLAGS = \
+	$(AM_CPPFLAGS) \
+	$(LIBUUID_CFLAGS)
+sdexec_la_LIBADD = \
+	$(top_builddir)/src/common/libsdexec/libsdexec.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(LIBUUID_LIBS) \
+	$(JANSSON_LIBS)
+sdexec_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 sdbus_la_SOURCES =
 sdbus_la_LIBADD = \
