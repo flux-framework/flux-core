@@ -12,6 +12,26 @@ testssh="${SHARNESS_TEST_SRCDIR}/scripts/tssh"
 
 export FLUX_URI_RESOLVE_LOCAL=t
 
+# To ensure no raciness in tests below, ensure the job-list
+# module knows about submitted jobs in desired states
+JOB_WAIT_ITERS=100
+job_list_wait_state() {
+	id=$1
+	expected=$2
+	local i=0
+	while [ "$(flux jobs -no {state} ${id})" != "${expected}" ] \
+	       && [ $i -lt ${JOB_WAIT_ITERS} ]
+	do
+		sleep 0.1
+		i=$((i + 1))
+	done
+	if [ "$i" -eq "${JOB_WAIT_ITERS}" ]
+	then
+	    return 1
+	fi
+	return 0
+}
+
 test_expect_success 'flux-top -h prints custom usage' '
 	flux top -h 2>usage &&
 	grep "Usage:.*TARGET" usage
@@ -48,7 +68,8 @@ test_expect_success 'flux-top summary shows no jobs initially' '
 	grep "0 failed" nojobs.out
 '
 test_expect_success 'run a test job to completion' '
-	flux submit --wait -n1 flux start /bin/true >jobid
+	flux submit --wait -n1 flux start /bin/true >jobid &&
+	job_list_wait_state $(cat jobid) INACTIVE
 '
 test_expect_success 'flux-top summary shows one completed job' '
 	nnodes=$(flux resource list --format="{nnodes}") &&
@@ -123,7 +144,8 @@ test_expect_success 'flux-top JOBID works' '
 test_expect_success 'submit non-batch job and wait for it to start' '
 	flux submit -n1 \
 		bash -c "touch job3-has-started && sleep 300" >jobid3 &&
-	$waitfile job3-has-started
+	$waitfile job3-has-started &&
+	job_list_wait_state $(cat jobid3) RUN
 '
 test_expect_success 'flux-top shows 2 jobs running' '
 	nnodes=$(flux resource list --format="{nnodes}") &&
@@ -242,8 +264,11 @@ test_expect_success 'configure queues and resource split amongst queues' '
 	flux module load sched-simple
 '
 test_expect_success 'submit a bunch of jobs' '
-	flux submit --cc=0-1 --queue=batch bash -c "sleep 300" &&
-	flux submit --queue=debug sleep 300
+	flux submit --cc=0-1 --queue=batch bash -c "sleep 300" > batch.ids &&
+	flux submit --queue=debug sleep 300 > debug.ids &&
+	job_list_wait_state $(head -n1 batch.ids) RUN &&
+	job_list_wait_state $(tail -n1 batch.ids) RUN &&
+	job_list_wait_state $(cat debug.ids) RUN
 '
 test_expect_success 'flux-top displays job queues' '
 	$runpty -f asciicast -o queue.log flux top --test-exit &&
