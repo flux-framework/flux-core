@@ -45,6 +45,7 @@
 #include "src/common/libfluxutil/method.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
+#include "ccan/ptrint/ptrint.h"
 
 #include "module.h"
 #include "brokercfg.h"
@@ -1308,7 +1309,8 @@ static void broker_destroy_sigwatcher (void *data)
 
 static int broker_handle_signals (broker_ctx_t *ctx)
 {
-    int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGALRM };
+    int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM,
+                      SIGALRM, SIGUSR1, SIGUSR2 };
     int blocked[] = { SIGPIPE };
     flux_watcher_t *w;
 
@@ -1965,13 +1967,80 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
     }
 }
 
+static bool signal_is_deadly (int signum)
+{
+    int deadly_sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGALRM };
+    for (int i = 0; i < ARRAY_SIZE (deadly_sigs); i++) {
+        if (signum == deadly_sigs[i])
+            return true;
+    }
+    return false;
+}
+
+static void killall_cb (flux_future_t *f, void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    int count = 0;
+    if (flux_rpc_get_unpack (f, "{s:i}", "count", &count) < 0) {
+        flux_log_error (ctx->h,
+                        "job-manager.killall: %s",
+                        future_strerror (f, errno));
+    }
+    flux_future_destroy (f);
+    if (count) {
+        flux_log (ctx->h,
+                  LOG_INFO,
+                  "forwarded signal %d to %d jobs",
+                  (int) ptr2int (flux_future_aux_get (f, "signal")),
+                  count);
+    }
+}
+
+static int killall_jobs (broker_ctx_t *ctx, int signum)
+{
+    flux_future_t *f = NULL;
+    if (!(f = flux_rpc_pack (ctx->h,
+                             "job-manager.killall",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:b s:i s:i}",
+                             "dry_run", 0,
+                             "userid", FLUX_USERID_UNKNOWN,
+                             "signum", signum))
+        || flux_future_then (f, -1., killall_cb, ctx) < 0) {
+            flux_future_destroy (f);
+            return -1;
+    }
+    if (flux_future_aux_set (f, "signum", int2ptr (signum), NULL) < 0)
+        flux_log_error (ctx->h, "killall: future_aux_set");
+    return 0;
+}
+
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
-                         int revents, void *arg)
+                       int revents, void *arg)
 {
     broker_ctx_t *ctx = arg;
     int signum = flux_signal_watcher_get_signum (w);
 
     flux_log (ctx->h, LOG_INFO, "signal %d", signum);
+
+    if (ctx->rank == 0 && !signal_is_deadly (signum)) {
+        /* Attempt to forward non-deadly signals to jobs. If that fails,
+         * then fall through to state_machine_kill() so the signal is
+         * delivered somewhere.
+         */
+        if (killall_jobs (ctx, signum) == 0)
+            return;
+        /*
+         * Note: flux_rpc(3) in the rank 0 broker to the job manager module
+         *  is expected to fail immediately if the job-manager module is not
+         *  loaded due to the broker internal flux_t handle implementation.
+         */
+        flux_log (ctx->h,
+                  LOG_INFO,
+                  "killall failed, delivering signal %d locally instead",
+                  signum);
+    }
     state_machine_kill (ctx->state_machine, signum);
 }
 

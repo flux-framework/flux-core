@@ -344,6 +344,7 @@ dist_check_SCRIPTS = \
 	issues/t4711-job-list-purge-inactive.sh \
 	issues/t4771-flux-start-bash.sh \
 	issues/t4852-t_submit-legacy.sh \
+	issues/t5105-signal-propagation.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
