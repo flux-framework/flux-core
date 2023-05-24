@@ -31,7 +31,7 @@ class TestKVS(unittest.TestCase):
         with flux.kvs.get_dir(self.f) as d:
             self.assertIsNotNone(d)
 
-    def set_and_check_context(self, key, value, msg=""):
+    def set_and_check_context(self, key, value):
         kd = flux.kvs.KVSDir(self.f)
         kd[key] = value
         kd.commit()
