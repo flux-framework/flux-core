@@ -38,8 +38,12 @@ class TestKVS(unittest.TestCase):
 
         kd2 = flux.kvs.KVSDir(self.f)
         nv = kd2[key]
-        self.assertEqual(value, nv)
-        self.assertTrue(isinstance(nv, type))
+        if isinstance(value, bytes) and type is str:
+            self.assertEqual(value.decode('utf-8'), nv)
+        else:
+            self.assertEqual(value, nv)
+        if type is not None:
+            self.assertTrue(isinstance(nv, type))
 
         return kd2
 
@@ -52,8 +56,14 @@ class TestKVS(unittest.TestCase):
     def test_set_string(self):
         self.set_and_check_context("string", "stuff", str)
 
+    def test_set_none(self):
+        self.set_and_check_context("none", None, None)
+
     def test_set_unicode(self):
         self.set_and_check_context("unicode", "\u32db \u263a \u32e1", str)
+
+    def test_set_bytes(self):
+        self.set_and_check_context("bytes", bytes.fromhex("deadbeef"), bytes)
 
     def test_set_list(self):
         self.set_and_check_context("list", [1, 2, 3, 4], list)
@@ -62,6 +72,9 @@ class TestKVS(unittest.TestCase):
         self.set_and_check_context(
             "dict", {"thing": "stuff", "other thing": "more stuff"}, dict
         )
+
+    def test_set_not_legal_json(self):
+        self.set_and_check_context("badjson", b"{", str)
 
     def test_exists_dir(self):
         with flux.kvs.get_dir(self.f) as kd:
