@@ -31,33 +31,33 @@ class TestKVS(unittest.TestCase):
         with flux.kvs.get_dir(self.f) as d:
             self.assertIsNotNone(d)
 
-    def set_and_check_context(self, key, value):
+    def set_and_check_context(self, key, value, type):
         kd = flux.kvs.KVSDir(self.f)
         kd[key] = value
         kd.commit()
         nv = kd[key]
         self.assertEqual(value, nv)
-        self.assertFalse(isinstance(nv, bytes))
+        self.assertTrue(isinstance(nv, type))
         return kd
 
     def test_set_int(self):
-        self.set_and_check_context("int", 10)
+        self.set_and_check_context("int", 10, int)
 
     def test_set_float(self):
-        self.set_and_check_context("float", 10.5)
+        self.set_and_check_context("float", 10.5, float)
 
     def test_set_string(self):
-        self.set_and_check_context("string", "stuff")
+        self.set_and_check_context("string", "stuff", str)
 
     def test_set_unicode(self):
-        self.set_and_check_context("unicode", "\u32db \u263a \u32e1")
+        self.set_and_check_context("unicode", "\u32db \u263a \u32e1", str)
 
     def test_set_list(self):
-        self.set_and_check_context("list", [1, 2, 3, 4])
+        self.set_and_check_context("list", [1, 2, 3, 4], list)
 
     def test_set_dict(self):
         self.set_and_check_context(
-            "dict", {"thing": "stuff", "other thing": "more stuff"}
+            "dict", {"thing": "stuff", "other thing": "more stuff"}, dict
         )
 
     def test_exists_dir(self):
@@ -79,7 +79,7 @@ class TestKVS(unittest.TestCase):
         self.assertTrue(flux.kvs.exists(self.f, "flagcheck"))
 
     def test_remove(self):
-        kd = self.set_and_check_context("todel", "things to delete")
+        kd = self.set_and_check_context("todel", "things to delete", str)
         del kd["todel"]
         kd.commit()
         with self.assertRaises(KeyError):
@@ -96,7 +96,7 @@ class TestKVS(unittest.TestCase):
             self.assertEqual(kd["dir"]["other_thing"], "dirstuff")
 
     def test_set_deep(self):
-        self.set_and_check_context("a.b.c.e.f.j.k", 5)
+        self.set_and_check_context("a.b.c.e.f.j.k", 5, int)
 
     def test_bad_init(self):
         with self.assertRaises(ValueError):
