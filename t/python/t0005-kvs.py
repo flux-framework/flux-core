@@ -35,10 +35,13 @@ class TestKVS(unittest.TestCase):
         kd = flux.kvs.KVSDir(self.f)
         kd[key] = value
         kd.commit()
-        nv = kd[key]
+
+        kd2 = flux.kvs.KVSDir(self.f)
+        nv = kd2[key]
         self.assertEqual(value, nv)
         self.assertTrue(isinstance(nv, type))
-        return kd
+
+        return kd2
 
     def test_set_int(self):
         self.set_and_check_context("int", 10, int)
