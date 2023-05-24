@@ -35,7 +35,12 @@ def get_key_direct(flux_handle, key):
     if valp[0] == ffi.NULL:
         return None
 
-    ret = json.loads(ffi.string(valp[0]).decode("utf-8"))
+    try:
+        ret = json.loads(ffi.string(valp[0]).decode("utf-8"))
+    except json.decoder.JSONDecodeError:
+        ret = ffi.string(valp[0]).decode("utf-8")
+    except UnicodeDecodeError:
+        ret = ffi.string(valp[0])
     RAW.flux_future_destroy(future)
     return ret
 
@@ -78,10 +83,17 @@ def get(flux_handle, key):
 
 
 def put(flux_handle, key, value):
-    json_str = json.dumps(value)
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
-    return RAW.flux_kvs_txn_put(flux_handle.aux_txn, 0, key, json_str)
+    try:
+        json_str = json.dumps(value)
+        return RAW.flux_kvs_txn_put(flux_handle.aux_txn, 0, key, json_str)
+    except TypeError:
+        if isinstance(value, bytes):
+            return RAW.flux_kvs_txn_put_raw(
+                flux_handle.aux_txn, 0, key, value, len(value)
+            )
+        raise TypeError
 
 
 def put_mkdir(flux_handle, key):
