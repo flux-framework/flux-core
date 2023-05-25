@@ -137,7 +137,8 @@ TESTS = test_sha1.t \
 	test_slice.t \
 	test_timestamp.t \
 	test_environment.t \
-	test_basemoji.t
+	test_basemoji.t \
+	test_sigutil.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -292,3 +293,7 @@ test_environment_t_LDADD = $(test_ldadd)
 test_basemoji_t_SOURCES = test/basemoji.c
 test_basemoji_t_CPPFLAGS = $(test_cppflags)
 test_basemoji_t_LDADD = $(test_ldadd)
+
+test_sigutil_t_SOURCES = test/sigutil.c
+test_sigutil_t_CPPFLAGS = $(test_cppflags)
+test_sigutil_t_LDADD = $(test_ldadd)
