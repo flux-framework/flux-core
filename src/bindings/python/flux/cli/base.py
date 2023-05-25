@@ -20,6 +20,7 @@ import logging
 import os
 import re
 import resource
+import signal
 import sys
 from collections import ChainMap
 from itertools import chain
@@ -34,6 +35,71 @@ from flux.job import JobspecV1
 from flux.progress import ProgressBar
 
 LOGGER = logging.getLogger("flux")
+
+
+def decode_signal(val):
+    """
+    Decode a signal as string or number
+    A string can be of the form 'SIGUSR1' or just 'USR1'
+    """
+    if isinstance(val, int):
+        return val
+    try:
+        return int(val)
+    except ValueError:
+        pass  # Fall back to signal name
+    try:
+        return getattr(signal, val)
+    except AttributeError:
+        pass  # Fall back SIG{name}
+    try:
+        return getattr(signal, f"SIG{val}")
+    except AttributeError:
+        pass
+    raise ValueError(f"signal '{val}' is invalid")
+
+
+def decode_duration(val):
+    """
+    Decode a duration as a number or string in FSD
+    """
+    if isinstance(val, (float, int)):
+        return val
+    try:
+        return float(val)
+    except ValueError:
+        pass  # Fall back to fsd
+    return util.parse_fsd(val)
+
+
+def parse_signal_option(arg):
+    """
+    Parse the --signal= option argument of the form SIG@TIME, where
+    both signal and time are optional.
+
+    Returns a dict with signal and timeleft members
+    """
+    signo = signal.SIGUSR1
+    tleft = 60
+    if arg is not None:
+        sig, _, time = arg.partition("@")
+        if time:
+            tleft = time
+        if sig:
+            signo = sig
+    try:
+        signum = decode_signal(signo)
+        if signum <= 0:
+            raise ValueError("signal must be > 0")
+    except ValueError as exc:
+        raise ValueError(f"--signal={arg}: {exc}") from None
+
+    try:
+        timeleft = decode_duration(tleft)
+    except ValueError as exc:
+        raise ValueError(f"--signal={arg}: {exc}") from None
+
+    return {"signum": signum, "timeleft": timeleft}
 
 
 class MiniConstraintParser(ConstraintParser):
@@ -715,6 +781,12 @@ class MiniCmd:
             metavar="FLAGS",
         )
         parser.add_argument(
+            "--signal",
+            help="Schedule delivery of signal SIG at a defined TIME before "
+            + "job expiration. Default SIG is SIGUSR1, default TIME is 60s.",
+            metavar="[SIG][@TIME]",
+        )
+        parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Don't actually submit job, just emit jobspec",
@@ -742,6 +814,9 @@ class MiniCmd:
         rlimits = get_filtered_rlimits(args.rlimit)
         if rlimits:
             jobspec.setattr_shell_option("rlimit", rlimits)
+        if args.signal:
+            entry = parse_signal_option(args.signal)
+            jobspec.setattr_shell_option("signal", entry)
 
         # --taskmap is only defined for run/submit, but we check
         # for it in the base jobspec_create() for convenience
