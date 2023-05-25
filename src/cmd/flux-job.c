@@ -145,6 +145,13 @@ static struct optparse_option list_inactive_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option list_ids_opts[] =  {
+    { .name = "wait-state", .key = 'W', .has_arg = 1, .arginfo = "STATE",
+      .usage = "Return only after jobid has reached specified state",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option urgency_opts[] =  {
     { .name = "verbose", .key = 'v', .has_arg = 0,
       .usage = "Output old urgency value on success",
@@ -442,7 +449,7 @@ static struct optparse_subcommand subcommands[] = {
       "List job(s) by id",
       cmd_list_ids,
       OPTPARSE_SUBCMD_HIDDEN,
-      NULL,
+      list_ids_opts,
     },
     { "urgency",
       "[OPTIONS] id urgency",
@@ -1380,6 +1387,8 @@ int cmd_list_ids (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     flux_t *h;
     int i, ids_len;
+    flux_job_state_t state;
+    const char *state_str;
 
     if (isatty (STDOUT_FILENO)) {
         fprintf (stderr,
@@ -1394,12 +1403,28 @@ int cmd_list_ids (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
+    /* if no job state specified by user, pick first job state of
+     * depend, which means will return as soon as the job-list module
+     * is aware of the job
+     */
+    state_str = optparse_get_str (p, "wait-state", "depend");
+    if (flux_job_strtostate (state_str, &state) < 0)
+        log_msg_exit ("invalid job state specified");
+
     ids_len = argc - optindex;
     for (i = 0; i < ids_len; i++) {
         flux_jobid_t id = parse_jobid (argv[optindex + i]);
         flux_future_t *f;
-        if (!(f = flux_job_list_id (h, id, "[\"all\"]")))
-            log_err_exit ("flux_job_list_id");
+        if (!(f = flux_rpc_pack (h,
+                                 "job-list.list-id",
+                                 FLUX_NODEID_ANY,
+                                 0,
+                                 "{s:I s:[s] s:i}",
+                                 "id", id,
+                                 "attrs",
+                                   "all",
+                                 "state", state)))
+            log_err_exit ("flux_rpc_pack");
         if (flux_future_then (f, -1, list_id_continuation, NULL) < 0)
             log_err_exit ("flux_future_then");
     }
