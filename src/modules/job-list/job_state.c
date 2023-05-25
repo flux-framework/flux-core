@@ -267,6 +267,8 @@ static void update_job_state_and_list (struct job_state_ctx *jsctx,
         zlistx_reorder (jsctx->pending,
                         job->list_handle,
                         search_direction (job));
+
+    idsync_check_waiting_id (jsctx->isctx, job);
 }
 
 static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
@@ -291,7 +293,6 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
     st = zlist_head (job->next_states);
     assert (st);
     update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-    idsync_check_waiting_id (jsctx->isctx, job);
     zlist_remove (job->next_states, st);
     process_next_state (jsctx, job);
 

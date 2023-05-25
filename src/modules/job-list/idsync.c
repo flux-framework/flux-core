@@ -54,6 +54,7 @@ static struct idsync_data *idsync_data_create (flux_t *h,
                                                flux_jobid_t id,
                                                const flux_msg_t *msg,
                                                json_t *attrs,
+                                               flux_job_state_t state,
                                                flux_future_t *f_lookup)
 {
     struct idsync_data *isd = NULL;
@@ -66,6 +67,7 @@ static struct idsync_data *idsync_data_create (flux_t *h,
     if (!(isd->msg = flux_msg_copy (msg, false)))
         goto error;
     isd->attrs = json_incref (attrs);
+    isd->state = state;
     isd->f_lookup = f_lookup;
     return isd;
 
@@ -137,7 +139,8 @@ void idsync_ctx_destroy (struct idsync_ctx *isctx)
 struct idsync_data *idsync_check_id_valid (struct idsync_ctx *isctx,
                                            flux_jobid_t id,
                                            const flux_msg_t *msg,
-                                           json_t *attrs)
+                                           json_t *attrs,
+                                           flux_job_state_t state)
 {
     flux_future_t *f = NULL;
     struct idsync_data *isd = NULL;
@@ -153,7 +156,7 @@ struct idsync_data *idsync_check_id_valid (struct idsync_ctx *isctx,
         goto error;
     }
 
-    if (!(isd = idsync_data_create (isctx->h, id, msg, attrs, f)))
+    if (!(isd = idsync_data_create (isctx->h, id, msg, attrs, state, f)))
         goto error;
 
     /* future now owned by struct idsync_data */
@@ -231,11 +234,12 @@ int idsync_wait_valid (struct idsync_ctx *isctx, struct idsync_data *isd)
 int idsync_wait_valid_id (struct idsync_ctx *isctx,
                           flux_jobid_t id,
                           const flux_msg_t *msg,
-                          json_t *attrs)
+                          json_t *attrs,
+                          flux_job_state_t state)
 {
     struct idsync_data *isd = NULL;
 
-    if (!(isd = idsync_data_create (isctx->h, id, msg, attrs, NULL)))
+    if (!(isd = idsync_data_create (isctx->h, id, msg, attrs, state, NULL)))
         return -1;
 
     return idsync_add_waiter (isctx, isd);
@@ -270,10 +274,24 @@ void idsync_check_waiting_id (struct idsync_ctx *isctx, struct job *job)
         struct idsync_data *isd;
         isd = zlistx_first (iwl->l);
         while (isd) {
-            idsync_data_respond (isctx, isd, job);
+            /* Some job states can be missed.  For example a job that
+             * is canceled before it runs will never reach the
+             * FLUX_JOB_STATE_RUN state.  To ensure jobs waiting on
+             * states that are missed will eventually get a response, always
+             * respond once the job has reached the inactive state.
+             */
+            if (!isd->state
+                || (isd->state & job->states_mask)
+                || (isd->state && job->state == FLUX_JOB_STATE_INACTIVE)) {
+                struct idsync_data *tmp;
+                idsync_data_respond (isctx, isd, job);
+                tmp = zlistx_detach_cur (iwl->l);
+                idsync_data_destroy (tmp);
+            }
             isd = zlistx_next (iwl->l);
         }
-        zhashx_delete (isctx->waits, &iwl->id);
+        if (!zlistx_size (iwl->l))
+            zhashx_delete (isctx->waits, &job->id);
     }
 }
 
