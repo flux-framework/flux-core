@@ -100,7 +100,9 @@ libutil_la_SOURCES = \
 	strstrip.c \
 	strstrip.h \
 	basemoji.h \
-	basemoji.c
+	basemoji.c \
+	sigutil.h \
+	sigutil.c
 
 EXTRA_DIST = veb_mach.c
 
