@@ -8,8 +8,12 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <string.h>
 #include <errno.h>
+
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/sha1.h"

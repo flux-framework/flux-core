@@ -8,9 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#if HAVE_CONFIG_H
-#include "config.h"
-#endif
+/* Do not include project config.h, we are testing public module
+ * interface */
 #include <flux/core.h>
 
 int mod_main (flux_t *h, int argc, char **argv)
