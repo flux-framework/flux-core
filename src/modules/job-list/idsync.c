@@ -193,7 +193,7 @@ static int idsync_add_waiter (struct idsync_ctx *isctx,
     return 0;
 
 enomem:
-    idsync_data_destroy (isd);
+    zlistx_destroy (&list_isd);
     errno = ENOMEM;
     return -1;
 }
