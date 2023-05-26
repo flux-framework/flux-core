@@ -363,6 +363,19 @@ options are supported by the builtin plugins of ``flux-shell``:
   job's nodes if the scope is local, versus only the first node of the
   job if the scope is global.
 
+**signal=OPTION**
+  Deliver signal ``SIGUSR1`` to the job 60s before job expiration.
+  To customize the signal number or amount of time before expiration to
+  deliver the signal, the ``signal`` option may be an object with one
+  or both of the keys ``signum`` or ``timeleft``. (See below)
+
+**signal.signum**\ =\ *NUMBER*
+  Send signal *NUMBER* to the job ``signal.timeleft`` seconds before
+  the time limit.
+
+**signal.timeleft**\ =\ *TIME*
+  Send signal ``signal.signum`` *TIME* seconds before job expiration.
+
 .. warning::
   The $FLUX_JOB_TMPDIR is cleaned up when the job ends, is guaranteed to
   be unique, and is generally on fast local storage such as a *tmpfs*.
