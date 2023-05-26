@@ -22,6 +22,12 @@
 #include "idsync.h"
 #include "job_util.h"
 
+/* Used in waits hash, need to store job id within data structure for lookup */
+struct idsync_wait_list {
+    zlistx_t *l;
+    flux_jobid_t id;
+};
+
 void idsync_data_destroy (void *data)
 {
     if (data) {
@@ -70,10 +76,15 @@ static struct idsync_data *idsync_data_create (flux_t *h,
     return NULL;
 }
 
-static void idsync_waits_list_destroy (void **data)
+static void idsync_wait_list_destroy (void **data)
 {
-    if (data)
-        zlistx_destroy ((zlistx_t **) data);
+    if (data) {
+        struct idsync_wait_list *iwl = *data;
+        if (iwl) {
+            zlistx_destroy (&iwl->l);
+            free (iwl);
+        }
+    }
 }
 
 struct idsync_ctx *idsync_ctx_create (flux_t *h)
@@ -93,7 +104,7 @@ struct idsync_ctx *idsync_ctx_create (flux_t *h)
     if (!(isctx->waits = job_hash_create ()))
         goto error;
 
-    zhashx_set_destructor (isctx->waits, idsync_waits_list_destroy);
+    zhashx_set_destructor (isctx->waits, idsync_wait_list_destroy);
 
     return isctx;
 
@@ -174,26 +185,31 @@ void idsync_check_id_valid_cleanup (struct idsync_ctx *isctx,
 static int idsync_add_waiter (struct idsync_ctx *isctx,
                               struct idsync_data *isd)
 {
-    zlistx_t *list_isd;
+    struct idsync_wait_list *iwl = NULL;
 
     /* isctx->waits holds lists of ids waiting on, b/c multiple callers
      * could wait on same id */
-    if (!(list_isd = zhashx_lookup (isctx->waits, &isd->id))) {
-        if (!(list_isd = zlistx_new ()))
+    if (!(iwl = zhashx_lookup (isctx->waits, &isd->id))) {
+        iwl = calloc (1, sizeof (*iwl));
+        if (!iwl)
             goto enomem;
-        zlistx_set_destructor (list_isd, idsync_data_destroy_wrapper);
 
-        if (zhashx_insert (isctx->waits, &isd->id, list_isd) < 0)
+        if (!(iwl->l = zlistx_new ()))
+            goto enomem;
+        zlistx_set_destructor (iwl->l, idsync_data_destroy_wrapper);
+        iwl->id = isd->id;
+
+        if (zhashx_insert (isctx->waits, &iwl->id, iwl) < 0)
             goto enomem;
     }
 
-    if (!zlistx_add_end (list_isd, isd))
+    if (!zlistx_add_end (iwl->l, isd))
         goto enomem;
 
     return 0;
 
 enomem:
-    zlistx_destroy (&list_isd);
+    idsync_wait_list_destroy ((void **)&iwl);
     errno = ENOMEM;
     return -1;
 }
@@ -248,16 +264,16 @@ error:
 
 void idsync_check_waiting_id (struct idsync_ctx *isctx, struct job *job)
 {
-    zlistx_t *list_isd;
+    struct idsync_wait_list *iwl;
 
-    if ((list_isd = zhashx_lookup (isctx->waits, &job->id))) {
+    if ((iwl = zhashx_lookup (isctx->waits, &job->id))) {
         struct idsync_data *isd;
-        isd = zlistx_first (list_isd);
+        isd = zlistx_first (iwl->l);
         while (isd) {
             idsync_data_respond (isctx, isd, job);
-            isd = zlistx_next (list_isd);
+            isd = zlistx_next (iwl->l);
         }
-        zhashx_delete (isctx->waits, &job->id);
+        zhashx_delete (isctx->waits, &iwl->id);
     }
 }
 
