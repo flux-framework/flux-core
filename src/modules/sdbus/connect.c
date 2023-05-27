@@ -80,7 +80,22 @@ static void timer_cb (flux_reactor_t *r,
         timeout = sdc->retry_max;
 
     if ((e = sd_bus_open_user (&bus)) < 0) {
-        flux_log (sdc->h, LOG_INFO, "connect: %s", strerror (-e));
+        char buf[1024];
+        const char *path = getenv ("DBUS_SESSION_BUS_ADDRESS");
+        if (!path) {
+            if ((path = getenv ("XDG_RUNTIME_DIR"))) {
+                snprintf (buf, sizeof (buf), "unix:path:%s/bus", path);
+                path = buf;
+            }
+        }
+        if (!path)
+            path = "sd_bus_open_user";
+        flux_log (sdc->h,
+                  LOG_INFO,
+                  "%s: %s (retrying in %.0fs)",
+                  path,
+                  strerror (-e),
+                  timeout);
         goto retry;
     }
     flux_log (sdc->h, LOG_INFO, "connected");
