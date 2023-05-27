@@ -18,21 +18,10 @@ fj_wait_event() {
 	flux job wait-event --timeout=20 "$@"
 }
 
+# To avoid raciness in tests, need to ensure that job state we care about
+# testing against has been reached in the job-list module.
 wait_jobid_state() {
-	local jobid=$(flux job id $1)
-	local state=$2
-	local i=0
-	while ! flux job list --states=${state} | grep $jobid > /dev/null \
-		   && [ $i -lt 50 ]
-	do
-		sleep 0.1
-		i=$((i + 1))
-	done
-	if [ "$i" -eq "50" ]
-	then
-		return 1
-	fi
-	return 0
+	flux job list-ids --wait-state=$2 $1 > /dev/null
 }
 
 # submit a whole bunch of jobs for job list testing
@@ -147,9 +136,13 @@ test_expect_success 'submit jobs for job list testing' '
 	cat active.ids > all.ids &&
 	cat inactive.ids >> all.ids &&
 	#
-	#  Synchronize all expected states
+	#  The job-list module has eventual consistency with the jobs stored in
+	#  the job-manager queue.  To ensure no raciness in tests, ensure
+	#  jobs above have reached expected states in job-list before continuing.
 	#
-	job_list_wait_states
+	flux job list-ids --wait-state=sched $(job_list_state_ids pending) &&
+	flux job list-ids --wait-state=run $(job_list_state_ids running) &&
+	flux job list-ids --wait-state=inactive $(job_list_state_ids inactive)
 '
 
 # Note: "running" = "run" | "cleanup", we also test just "run" state
@@ -772,7 +765,7 @@ test_expect_success 'flux job list job state timing outputs valid (job inactive)
 test_expect_success 'flux job list job state timing outputs valid (job running)' '
 	jobid=$(flux submit sleep 60 | flux job id) &&
 	fj_wait_event $jobid start >/dev/null &&
-	wait_jobid_state $jobid running &&
+	wait_jobid_state $jobid run &&
 	obj=$(flux job list -s running | grep $jobid) &&
 	echo $obj | jq -e ".t_submit < .t_depend" &&
 	echo $obj | jq -e ".t_depend < .t_run" &&

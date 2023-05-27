@@ -23,32 +23,6 @@ runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer -f asciicast"
 #   - running jobs - by start time (most recent first)
 #   - inactive jobs - by completion time (most recent first)
 #
-# the job-list module has eventual consistency with the jobs stored in
-# the job-manager's queue.  To ensure no raciness in tests, we spin
-# until all of the pending jobs have reached SCHED state, running jobs
-# have reached RUN state, and inactive jobs have reached INACTIVE
-# state.
-#
-
-wait_states() {
-	sched=$(job_list_state_count sched)
-	run=$(job_list_state_count run)
-	inactive=$(job_list_state_count inactive)
-	local i=0
-	printf >&2 "Waiting for sched=$sched run=$run inactive=$inactive\n"
-	while ( [ "$(flux jobs -n --filter=sched | wc -l)" != "$sched" ] \
-	     || [ "$(flux jobs -n --filter=run | wc -l)" != "$run" ] \
-	     || [ "$(flux jobs -n --filter=inactive | wc -l)" != "$inactive" ]) \
-	&& [ $i -lt 50 ]
-	do
-		sleep 0.1
-		i=$((i + 1))
-	done
-	if [ "$i" -eq "50" ]; then
-		return 1
-	fi
-	return 0
-}
 
 export FLUX_PYCLI_LOGLEVEL=10
 
@@ -159,8 +133,13 @@ test_expect_success 'submit jobs for job list testing' '
 	tac inactiveids > inactive.ids &&
 	cat inactive.ids active.ids >> all.ids &&
 	#
-	#  Synchronize all expected states
-	wait_states
+	#  The job-list module has eventual consistency with the jobs stored in
+	#  the job-manager queue.  To ensure no raciness in tests, ensure
+	#  jobs above have reached expected states in job-list before continuing.
+	#
+	flux job list-ids --wait-state=sched $(job_list_state_ids sched) &&
+	flux job list-ids --wait-state=run $(job_list_state_ids run) &&
+	flux job list-ids --wait-state=inactive $(job_list_state_ids inactive)
 '
 
 #
