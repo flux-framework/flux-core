@@ -98,6 +98,10 @@ compile_flags.txt
 .idea
 .clangd
 
+# Python
+src/bindings/python/*.so-built
+src/bindings/python/_flux
+
 # Rules to ignore auto-generated test harness scripts
 test_*.t
 !/src/bindings/python/test_commands/test_runner.t

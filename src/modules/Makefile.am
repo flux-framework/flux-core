@@ -26,6 +26,10 @@ if ENABLE_CONTENT_S3
 SUBDIRS += content-s3
 endif
 
+if ENABLE_PROMETHEUS
+SUBDIRS += prometheus
+endif
+
 fluxmod_LTLIBRARIES = \
 	barrier.la \
 	connector-local.la \
@@ -47,6 +51,10 @@ fluxmod_LTLIBRARIES = \
 
 if ENABLE_CONTENT_S3
 fluxmod_LTLIBRARIES += content-s3.la
+endif
+
+if ENABLE_PROMETHEUS
+fluxmod_LTLIBRARIES += prometheus.la
 endif
 
 # N.B. SOURCES should be empty when module subdir is listed in
@@ -82,6 +90,16 @@ content_s3_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(LIBS3)
 content_s3_la_LDFLAGS = $(fluxmod_ldflags) -module
+endif
+
+if ENABLE_PROMETHEUS
+prometheus_la_SOURCES =
+prometheus_la_LIBADD = \
+	$(builddir)/prometheus/libprometheus.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(LIBPROMETHEUS)
+prometheus_la_LDFLAGS = $(fluxmod_ldflags) -module
 endif
 
 content_sqlite_la_SOURCES = \

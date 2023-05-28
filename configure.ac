@@ -377,7 +377,7 @@ AS_IF([test "x$with_flux_security" = "xyes"], [
                       [flux_sec_incdir=`$PKG_CONFIG --variable=includedir flux-security`],
                       [flux_sec_incdir=;])
     AS_IF([test "x$flux_sec_incdir" = x],
-          [AC_MSG_ERROR([couldn't find flux-security or include directory])])
+          [AC_MSG_ERROR([could not find flux-security or include directory])])
     AC_CHECK_HEADERS([flux/security/version.h])
     AC_DEFINE([HAVE_FLUX_SECURITY], [1], [Define flux-security is available])
     AC_SUBST(FLUX_SECURITY_INCDIR, $flux_sec_incdir)
@@ -396,6 +396,7 @@ if test "$enable_caliper" = "yes"; then
     AC_DEFINE([HAVE_CALIPER], [1], [Define if you have libcaliper])
 fi
 
+# content-s3 module / plugin
 AC_ARG_ENABLE([content-s3],
     AS_HELP_STRING([--enable-content-s3], [Enable S3 storage backend]))
 
@@ -418,6 +419,20 @@ AS_IF([test "x$enable_content_s3" = "xyes"], [
 ])
 
 AM_CONDITIONAL([ENABLE_CONTENT_S3], [test "x$enable_content_s3" = "xyes"])
+
+# prometheus plugin / module
+AC_ARG_ENABLE([prometheus],
+    AS_HELP_STRING([--enable-prometheus], [Enable Prometheus metric endpoint]))
+
+AS_IF([test "x$enable_prometheus" = "xyes"], [
+    X_AC_CHECK_COND_LIB(prom, prom_initialize)
+    X_AC_CHECK_COND_LIB(promhttp, promhttp_initialize)
+    X_AC_CHECK_COND_LIB(microhttpd, microhttpd_initialize)
+
+    # TODO how do I define the paths I find here to pass into prometheus Makefile.am?
+])
+
+AM_CONDITIONAL([ENABLE_PROMETHEUS], [test "x$enable_prometheus" = "xyes"])
 
 AC_ARG_ENABLE(
     [broken-locale-mode],
@@ -573,6 +588,7 @@ AC_CONFIG_FILES( \
   src/modules/job-manager/Makefile \
   src/modules/job-list/Makefile \
   src/modules/job-exec/Makefile \
+  src/modules/prometheus/Makefile \
   src/modules/resource/Makefile \
   src/modules/sdbus/Makefile \
   src/test/Makefile \
