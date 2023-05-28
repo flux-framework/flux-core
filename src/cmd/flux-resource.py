@@ -366,6 +366,12 @@ def status(args):
     else:
         rstatus = resource_status(flux.Flux()).get()
 
+    if args.include:
+        try:
+            rstatus.filter(include=args.include)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"--include: {exc}") from None
+
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
     # Remove any `{color*}` fields if color is off
@@ -583,6 +589,13 @@ def main():
         + "are already drained. Do not overwrite any existing drain reason.",
     )
     drain_parser.add_argument(
+        "-i",
+        "--include",
+        metavar="TARGETS",
+        help="Include only specified targets in output set. TARGETS may be "
+        + "provided as an idset or hostlist.",
+    )
+    drain_parser.add_argument(
         "-o",
         "--format",
         default="default",
@@ -633,6 +646,13 @@ def main():
         "--states",
         metavar="STATE,...",
         help="Output resources in given states",
+    )
+    status_parser.add_argument(
+        "-i",
+        "--include",
+        metavar="TARGETS",
+        help="Include only specified targets in output set. TARGETS may be "
+        + "provided as an idset or hostlist.",
     )
     status_parser.add_argument(
         "-n", "--no-header", action="store_true", help="Suppress header output"
