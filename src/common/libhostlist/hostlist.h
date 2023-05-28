@@ -92,7 +92,7 @@ void hostlist_sort (struct hostlist * hl);
  */
 void hostlist_uniq (struct hostlist *hl);
 
-/* 
+/*
  *  Return the host at the head of hostlist 'hl', or NULL if list is empty.
  *  Leaves internal cursor pointing at the head item.
  *
@@ -102,7 +102,7 @@ void hostlist_uniq (struct hostlist *hl);
  */
 const char * hostlist_first (struct hostlist *hl);
 
-/* 
+/*
  *  Return the host at the tail of hostlist 'hl', or NULL if list is empty.
  *  Leaves internal cursor pointing at the last item.
  *
@@ -112,7 +112,7 @@ const char * hostlist_first (struct hostlist *hl);
  */
 const char * hostlist_last (struct hostlist *hl);
 
-/* 
+/*
  *  Advance the internal cursor and return the next host in 'hl' or NULL
  *   if list is empty or the end of the list has been reached.
  *
