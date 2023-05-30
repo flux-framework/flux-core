@@ -92,6 +92,7 @@ static struct perilog_proc * perilog_proc_create (flux_plugin_t *p,
     proc->sp = sp;
     if (zhashx_insert (perilog_config.processes, &proc->id, proc) < 0) {
         free (proc);
+        errno = EEXIST;
         return NULL;
     }
     return proc;

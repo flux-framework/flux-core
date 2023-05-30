@@ -995,7 +995,7 @@ static int shell_output_type_file_setup (struct shell_output *out,
         goto error;
 
     if (zhash_insert (out->fds, ofp->path, fdp) < 0) {
-        errno = ENOMEM;
+        errno = EEXIST;
         goto error;
     }
     zhash_freefn (out->fds, ofp->path, shell_output_fd_destroy);

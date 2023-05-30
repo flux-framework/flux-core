@@ -729,8 +729,10 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
     if (job->states_mask & FLUX_JOB_STATE_INACTIVE)
         eventlog_inactive_complete (job);
 
-    if (zhashx_insert (jsctx->index, &job->id, job) < 0)
+    if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
+        errno = EEXIST;
         goto done;
+    }
 
     if (job_insert_list (jsctx, job, job->state) < 0)
         goto done;
@@ -934,7 +936,7 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
             return -1;
         if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
             job_destroy (job);
-            errno = ENOMEM;
+            errno = EEXIST;
             return -1;
         }
         /* job always starts off on processing list */

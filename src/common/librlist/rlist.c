@@ -1605,16 +1605,7 @@ static zhashx_t *rlist_properties (struct rlist *rl)
                         errno = ENOMEM;
                         goto error;
                     }
-                    /* This zhashx_insert() cannot fail since we are
-                     *  guaranteed that `name` is not set in properties
-                     *  hash. However, check for error return in case
-                     *  zhashx_insert() returns -1 on ENOMEM in the future.
-                     */
-                    if (zhashx_insert (properties, name, ids) < 0) {
-                        idset_destroy (ids);
-                        errno = ENOMEM;
-                        goto error;
-                    }
+                    (void)zhashx_insert (properties, name, ids);
                 }
                 if (idset_set (ids, n->rank) < 0)
                     goto error;
