@@ -1,5 +1,5 @@
-files: '^(src/bindings/python/flux|src/cmd|t/.*\\.py)'
-exclude: "^(src/bindings/python/_flux/|src/bindings/python/flux/utils/)"
+files: '^(src/bindings/python/flux|src/cmd|t/python/.*\.py|t/scripts/.*\.py)'
+exclude: "^(src/bindings/python/_flux/|src/bindings/python/flux/utils/|t/python/tap)"
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.0.1
