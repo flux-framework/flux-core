@@ -10,10 +10,11 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import unittest
-import os
 import gc
+import os
 import signal
+import unittest
+
 import flux
 from subflux import rerun_under_flux
 
@@ -67,8 +68,8 @@ class TestTimer(unittest.TestCase):
         def cb(x, y, z, w):
             raise RuntimeError("this is a test")
 
-        with self.f.timer_watcher_create(0.01, cb) as timer:
-            with self.assertRaises(RuntimeError) as cm:
+        with self.f.timer_watcher_create(0.01, cb):
+            with self.assertRaises(RuntimeError):
                 self.f.reactor_run()
 
     def test_msg_watcher_unicode(self):
@@ -155,7 +156,7 @@ class TestSignal(unittest.TestCase):
         #  Create new Flux handle to avoid potential stale state in
         #  self.f handle. (makes test unreliable)
         h = flux.Flux()
-        with h.signal_watcher_create(signal.SIGUSR2, signal_cb) as watcher:
+        with h.signal_watcher_create(signal.SIGUSR2, signal_cb):
             h.timer_watcher_create(0.05, raise_signal).start()
             with self.assertRaises(RuntimeError):
                 rc = h.reactor_run()
@@ -231,7 +232,7 @@ class TestIssue3973(unittest.TestCase):
         self.f.timer_watcher_create(0.0, cb, repeat=0.05).start()
 
         #  Timeout/abort after 5s
-        tw = self.f.timer_watcher_create(5.0, cb_abort).start()
+        self.f.timer_watcher_create(5.0, cb_abort).start()
         self.f.reactor_run()
 
         #  callback should have been called 5 times, not less

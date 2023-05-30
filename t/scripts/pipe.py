@@ -11,9 +11,10 @@
 #
 # Pipe standard input to a job, then exit.
 #
+import sys
+
 import flux
 from flux.job import JobID, event_wait
-import sys
 
 
 def pipe_stdin(h, jobid, ranks):

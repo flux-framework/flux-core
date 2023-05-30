@@ -9,10 +9,10 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 import argparse
+import os
 import re
 import socket
 import subprocess
-import os
 import sys
 
 parser = argparse.ArgumentParser()
@@ -75,7 +75,7 @@ if len(p) < args.wait_for:
 
 if args.validate:
     metrics = str.splitlines("".join(p))
-    ex = re.compile("^\w+:[\+\-]*\d+\|ms|[gC]$")
+    ex = re.compile(r"^\w+:[\+\-]*\d+\|ms|[gC]$")
 
     for m in metrics:
         if not ex.search(m):

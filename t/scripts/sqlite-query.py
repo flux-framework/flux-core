@@ -12,9 +12,9 @@
 
 # Usage: flux python query.py [OPTIONS] dbpath query
 
-import sys
 import argparse
 import sqlite3
+import sys
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

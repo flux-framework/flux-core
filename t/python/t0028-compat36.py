@@ -10,11 +10,12 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import unittest
-import subflux  # To set up PYTHONPATH
-from pycotap import TAPTestRunner
 import signal
+import unittest
+
 import flux.compat36
+import subflux  # noqa: F401 - To set up PYTHONPATH
+from pycotap import TAPTestRunner
 
 
 class TestCompat36(unittest.TestCase):
@@ -24,7 +25,7 @@ class TestCompat36(unittest.TestCase):
         # N.B. SIGSTKFLT not defined until Python 3.11, will get ValueError
         for i in range(signal.SIGHUP, signal.SIGIO):
             try:
-                desc = flux.compat36.strsignal(i)
+                flux.compat36.strsignal(i)
             except ValueError:
                 pass
 
@@ -38,7 +39,7 @@ class TestCompat36(unittest.TestCase):
         gotvalueerror = False
 
         try:
-            str = flux.compat36.strsignal(0)
+            flux.compat36.strsignal(0)
         except ValueError:
             gotvalueerror = True
 

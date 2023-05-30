@@ -10,8 +10,8 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import unittest
 import multiprocessing as mp
+import unittest
 
 import flux
 from subflux import rerun_under_flux

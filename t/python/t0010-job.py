@@ -10,27 +10,24 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import os
-import errno
-import sys
-import json
-import unittest
 import datetime
-import signal
+import errno
+import json
 import locale
+import os
 import pathlib
+import signal
 import subprocess
+import unittest
 from glob import glob
 
-import yaml
-
 import flux
-import flux.kvs
 import flux.constants
+import flux.kvs
+import yaml
 from flux import job
-from flux.job import Jobspec, JobspecV1, ffi, JobID, JobInfo
+from flux.job import JobInfo, Jobspec, JobspecV1, ffi
 from flux.job.stats import JobStats
-from flux.future import Future
 
 
 def __flux_size():
@@ -49,7 +46,7 @@ class TestJob(unittest.TestCase):
         self.fh = flux.Flux()
         self.use_ascii = False
         build_opts = subprocess.check_output(["flux", "version"]).decode()
-        if  locale.getlocale()[1] != "UTF-8" or "ascii-only" in build_opts:
+        if locale.getlocale()[1] != "UTF-8" or "ascii-only" in build_opts:
             self.use_ascii = True
 
         self.jobspec_dir = os.path.abspath(
@@ -90,7 +87,7 @@ class TestJob(unittest.TestCase):
             ):
                 with self.assertRaises(
                     (ValueError, TypeError, yaml.scanner.ScannerError)
-                ) as cm:
+                ):
                     cls.from_yaml_file(invalid_jobspec_filepath)
 
     def test_04_valid_construction(self):
@@ -332,7 +329,7 @@ class TestJob(unittest.TestCase):
             events.append(event.name)
 
         future.then(cb, events)
-        rc = self.fh.reactor_run()
+        self.fh.reactor_run()
 
         # Last event should be "start"
         self.assertEqual(events[-1], "start")
@@ -688,32 +685,34 @@ class TestJob(unittest.TestCase):
         jobid = job.submit(self.fh, self.sleep_jobspec)
         meta = job.get_job(self.fh, jobid)
         self.assertIsInstance(meta, dict)
-        for key in ['id',
-                    'userid',
-                    'urgency',
-                    'priority',
-                    't_submit',
-                    't_depend',
-                    'state',
-                    'name',
-                    'cwd',
-                    'ntasks',
-                    'ncores',
-                    'duration',
-                    'nnodes',
-                    'result',
-                    'runtime',
-                    'returncode',
-                    'waitstatus',
-                    'nodelist',
-                    'exception']:
+        for key in [
+            "id",
+            "userid",
+            "urgency",
+            "priority",
+            "t_submit",
+            "t_depend",
+            "state",
+            "name",
+            "cwd",
+            "ntasks",
+            "ncores",
+            "duration",
+            "nnodes",
+            "result",
+            "runtime",
+            "returncode",
+            "waitstatus",
+            "nodelist",
+            "exception",
+        ]:
             self.assertIn(key, meta)
 
-        self.assertEqual(meta['id'], jobid)
-        self.assertEqual(meta['name'], "sleep")
-        self.assertTrue(meta['state'] in ["SCHED", "DEPEND", "RUN"])
-        self.assertEqual(meta['ntasks'], 1)
-        self.assertEqual(meta['ncores'], 1)
+        self.assertEqual(meta["id"], jobid)
+        self.assertEqual(meta["name"], "sleep")
+        self.assertTrue(meta["state"] in ["SCHED", "DEPEND", "RUN"])
+        self.assertEqual(meta["ntasks"], 1)
+        self.assertEqual(meta["ncores"], 1)
 
         # Test a job that does not exist
         meta = job.get_job(self.fh, 123456)
@@ -727,10 +726,11 @@ class TestJob(unittest.TestCase):
         jobid = job.submit(self.fh, spec, waitable=True)
         job.wait(self.fh, jobid=jobid)
         try:
-            dt = job.timeleft()
-            dt = job.timeleft(self.fh)
+            job.timeleft()
+            job.timeleft(self.fh)
         except OSError:
             pass
+
 
 if __name__ == "__main__":
     from subflux import rerun_under_flux

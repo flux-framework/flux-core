@@ -10,15 +10,13 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import unittest
 import errno
 import sys
+import unittest
 
 import flux
-from flux.message import Message
-from flux.core.inner import ffi
 from flux.constants import FLUX_MSGTYPE_REQUEST, FLUX_MSGTYPE_RESPONSE
-
+from flux.message import Message
 from subflux import rerun_under_flux
 
 
@@ -93,7 +91,7 @@ class TestServiceAddRemove(unittest.TestCase):
 
         def then_cb(future):
             cb_called[0] = True
-            with self.assertRaises(OSError) as error:
+            with self.assertRaises(OSError):
                 future.get()
             future.get_flux().reactor_stop()
 
@@ -130,8 +128,6 @@ class TestServiceAddRemove(unittest.TestCase):
         #   then, ensure "baz" service was removed.
         #
         def add_service_and_disconnect():
-            import sys
-
             h = flux.Flux()
             try:
                 h.service_register("baz").get()

@@ -1,4 +1,5 @@
 import sys
+
 from flux.security import SecurityContext
 
 if len(sys.argv) < 2:
