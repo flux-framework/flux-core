@@ -318,6 +318,12 @@ test_expect_success 'flux resource drain differentiates drain/draining' '
 	test $(flux resource status -s drain -no {nnodes}) -eq ${SIZE}
 '
 
+test_expect_success 'flux resource drain supports --include' '
+	flux resource drain -ni 0 >drain-include.output &&
+	test_debug "cat drain-include.output" &&
+	test $(wc -l <drain-include.output) -eq 1
+'
+
 test_expect_success 'flux resource drain works without scheduler loaded' '
 	flux module unload sched-simple &&
 	flux resource drain &&

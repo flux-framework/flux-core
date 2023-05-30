@@ -160,6 +160,24 @@ class TestHostlistMethods(unittest.TestCase):
         hl.delete("foo[0-3]")
         self.assertEqual(str(cp), "foo[0-3]")
 
+    def test_find(self):
+        hl = hostlist.decode("foo[0-3]")
+        self.assertEqual(hl.find("foo1"), 1)
+        self.assertEqual(hl.find("foo3"), 3)
+        with self.assertRaises(FileNotFoundError):
+            hl.find("foo4")
+
+    def test_index_method(self):
+        hl = hostlist.decode("foo[0-10]")
+        self.assertListEqual(hl.index("foo[1,5,7]"), [1, 5, 7])
+        self.assertListEqual(hl.index(hostlist.decode("foo1")), [1])
+        self.assertListEqual(hl.index("foo[9-11]", ignore_nomatch=True), [9, 10])
+        self.assertListEqual(hl.index("foo11", ignore_nomatch=True), [])
+        with self.assertRaises(FileNotFoundError):
+            hl.index("foo[9-11]")
+        with self.assertRaises(FileNotFoundError):
+            hl.index("foo11")
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=TAPTestRunner())

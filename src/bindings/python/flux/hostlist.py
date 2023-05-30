@@ -160,7 +160,7 @@ class Hostlist(WrapperPimpl):
     def __contains__(self, name):
         """Test if a hostname is in a Hostlist"""
         try:
-            self.pimpl.find(name)
+            self.find(name)
         except FileNotFoundError:
             return False
         return True
@@ -217,6 +217,34 @@ class Hostlist(WrapperPimpl):
     def copy(self):
         """Copy a Hostlist object"""
         return Hostlist(handle=self.pimpl.copy())
+
+    def find(self, host):
+        """Return the position of a host in a Hostlist"""
+        return self.pimpl.find(host)
+
+    def index(self, hosts, ignore_nomatch=False):
+        """
+        Return a list of integers corresponding to the indices of ``hosts``
+        in the current Hostlist.
+        Args:
+            hosts (str, Hostlist): List of hosts to find
+            ignore_nomatch (bool): Ignore hosts in ``hosts`` that are not
+             present in Hostlist. Otherwise, FileNotFound error is raised
+             with the missing hosts.
+        """
+        if not isinstance(hosts, Hostlist):
+            hosts = Hostlist(hosts)
+        ids = []
+        notfound = Hostlist()
+        for host in hosts:
+            try:
+                ids.append(self.find(host))
+            except FileNotFoundError:
+                notfound.append(host)
+        if notfound and not ignore_nomatch:
+            suffix = "s" if len(notfound) > 1 else ""
+            raise FileNotFoundError(f"host{suffix} '{notfound}' not found")
+        return ids
 
 
 def decode(arg):

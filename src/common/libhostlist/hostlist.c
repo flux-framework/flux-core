@@ -456,7 +456,7 @@ static int append_range_list_with_suffix (struct hostlist *hl,
     unsigned long j;
 
     /* compute max buffer size for this set of hosts */
-    int size = strlen (pfx) + strlen (sfx) + 20 + rng->width; 
+    int size = strlen (pfx) + strlen (sfx) + 20 + rng->width;
 
 
     for (i = 0; i < n; i++) {
@@ -854,8 +854,8 @@ static void hostlist_coalesce (struct hostlist *hl)
              */
             if (new->hi < hprev->hi)
                 hnext->hi = hprev->hi;
-    
-            /*  
+
+            /*
              *  The duplicated range will inserted piecemeal below,
              *   e.g. [5-7,6-8] -> [5-6,6-7,7-8]
              *  Therefore adjust the end of hprev to new->lo (the
