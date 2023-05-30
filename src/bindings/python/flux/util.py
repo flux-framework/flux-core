@@ -696,11 +696,11 @@ class OutputFormat:
         if not no_header:
             print(formatter.header())
         for item in items:
-            if callable(pre):
-                pre(item)
             line = formatter.format(item)
             if not line:
                 continue
+            if callable(pre):
+                pre(item)
             try:
                 print(line)
             except UnicodeEncodeError:
