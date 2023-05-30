@@ -68,7 +68,7 @@ COMMANDS
    states as with ``flux resource list``. By default, the *STATE* reported
    by ``flux resource info`` is "all".
 
-**status**  [-n] [-o FORMAT] [-s STATE,...] [--skip-empty]
+**status**  [-n] [-o FORMAT] [-s STATE,...] [-i TARGETS] [--skip-empty]
    Show system view of resources. This command queries both the resource
    service and scheduler to identify resources that are available,
    excluded by configuration, or administratively drained or draining.
@@ -85,6 +85,12 @@ COMMANDS
    valid states include "avail", "exclude", "draining", "drained", and "all".
    The special "drain" state is shorthand for "drained,draining".
 
+   With *-i, --include=TARGETS*, the results are filtered to only include
+   resources matching **TARGETS**, which may be specified either as an idset
+   of broker ranks or list of hosts in hostlist form. It is not an error to
+   specify ranks or hosts which do not exist, the result will be filtered
+   to include only those ranks or hosts that are present in *TARGETS*.
+
    The *-o,--format=FORMAT* option customizes output formatting (See the
    OUTPUT FORMAT section below for details).
 
@@ -94,12 +100,18 @@ COMMANDS
    unless the ``-s, --states`` option is used. Suppression of empty lines
    can may be forced with the ``--skip-empty`` option.
 
-**drain** [-n] [-o FORMAT] [-f] [-u] [targets] [reason ...]
+**drain** [-n] [-o FORMAT] [-i TARGETS] [-f] [-u] [targets] [reason ...]
    If specified without arguments, list drained nodes. In this mode,
    *-n,--no-header* suppresses header from output and *-o,--format=FORMAT*
    customizes output formatting (see below).  The *targets* argument is an
    IDSET or HOSTLIST specifying nodes to drain.  Any remaining arguments
    are assumed to be a reason to be recorded with the drain event.
+
+   With *-i, --include=TARGETS*, **drain** output is filtered to only include
+   resources matching **TARGETS**, which may be specified either as an idset
+   of broker ranks or list of hosts in hostlist form. It is not an error to
+   specify ranks or hosts which do not exist, the result will be filtered
+   to include only those ranks or hosts that are present in *TARGETS*.
 
    By default, **flux resource drain** will fail if any of the *targets*
    are already drained. To change this behavior, use either of the
