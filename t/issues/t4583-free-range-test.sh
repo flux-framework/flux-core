@@ -42,7 +42,7 @@ log "Started job $jobid\n"
 
 #  Run a job on all ranks of child job
 log "Current overlay status of $jobid:\n"
-flux proxy $jobid flux overlay status 
+flux proxy $jobid flux overlay status
 
 log "Launch a sleep job within $jobid:\n"
 flux proxy $jobid flux submit -N4 sleep inf
@@ -63,7 +63,7 @@ log "But running a 3 node job in $jobid still works:\n"
 flux proxy $jobid flux run -t 5s -N3 hostname
 
 log "Overlay status of $jobid should show rank offline:\n"
-flux proxy $jobid flux overlay status 
+flux proxy $jobid flux overlay status
 
 log "Call flux shutdown on $jobid\n"
 flux shutdown --quiet $jobid
