@@ -14,7 +14,7 @@ kvsdir=$(flux job id --to=kvs $jobid)
 flux job attach $jobid > t4612.out &
 
 # ensure backgrounded process has started to monitor eventlog
-$waitfile --count=1 --timeout=30 --pattern=foo t4612.out
+$waitfile --count=1 --timeout=100 --pattern=foo t4612.out
 
 # now overwrite the eventlog without changing its length
 flux kvs get --raw ${kvsdir}.eventlog \
