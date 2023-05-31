@@ -117,8 +117,7 @@ void completion_cb (flux_subprocess_t *p)
             if (!(idset = idset_create (rank_range, 0)))
                 log_err_exit ("idset_create");
             (void)zhashx_insert (exitsets, buf, idset);
-            if (!zhashx_freefn (exitsets, buf, idset_destroy_wrapper))
-                log_err_exit ("zhashx_freefn");
+            (void)zhashx_freefn (exitsets, buf, idset_destroy_wrapper);
         }
 
         if (idset_set (idset, rank) < 0)
