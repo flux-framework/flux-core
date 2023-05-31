@@ -16,6 +16,7 @@
 #endif
 #include <flux/core.h>
 #include <systemd/sd-bus.h>
+#include <fnmatch.h>
 
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
@@ -26,6 +27,7 @@
 #include "watcher.h"
 #include "subscribe.h"
 #include "connect.h"
+#include "objpath.h"
 #include "sdbus.h"
 
 struct sdbus_ctx {
@@ -82,21 +84,56 @@ static void bulk_respond_error (flux_t *h,
     }
 }
 
-static void bulk_respond (flux_t *h,
-                          struct flux_msglist *msglist,
-                          json_t *payload)
+static bool match_subscription (const flux_msg_t *msg, sd_bus_message *m)
 {
+    const char *path_glob = NULL;
+    const char *member = NULL;
+    const char *interface = NULL;
+
+    (void)flux_request_unpack (msg,
+                               NULL,
+                               "{s?s s?s s?s}",
+                               "path", &path_glob,
+                               "interface", &interface,
+                               "member", &member);
+    if (interface && !streq (interface, sd_bus_message_get_interface (m)))
+        return false;
+    if (member && !streq (member, sd_bus_message_get_member (m)))
+        return false;
+    if (path_glob) {
+        char *m_path = objpath_decode (sd_bus_message_get_path (m));
+        bool match = (m_path && fnmatch (path_glob, m_path, FNM_PATHNAME) == 0);
+        free (m_path);
+        if (!match)
+            return false;
+    }
+    return true;
+}
+
+static bool bulk_respond_match (flux_t *h,
+                                struct flux_msglist *msglist,
+                                sd_bus_message *m)
+{
+    json_t *payload = NULL; // decode deferred until match for performance
     const flux_msg_t *msg;
+    bool match = false;
 
     msg = flux_msglist_first (msglist);
-    while (msg)  {
-        if (flux_respond_pack (h, msg, "O", payload) < 0) {
-            const char *topic = "unknown";
-            (void)flux_msg_get_topic (msg, &topic);
-            flux_log_error (h, "error responding to %s request", topic);
+    while (msg) {
+        if (match_subscription (msg, m)) {
+            if (!payload) {
+                if (!(payload = interface_signal_tojson (m, NULL)))
+                    return false;
+            }
+            if (flux_respond_pack (h, msg, "O", payload) < 0)
+                flux_log_error (h, "error responding to subscribe request");
+            else
+                match = true;
         }
         msg = flux_msglist_next (msglist);
     }
+    json_decref (payload);
+    return match;
 }
 
 /* Locate a pending sdbus.call request that matches a cookie from a
@@ -166,7 +203,6 @@ static void sdbus_recv (struct sdbus_ctx *ctx, sd_bus_message *m)
         const char *path = sd_bus_message_get_path (m);
         const char *iface = sd_bus_message_get_interface (m);
         const char *member = sd_bus_message_get_member (m);
-        json_t *o;
 
         /* Apparently sd-bus, when it shuts down nicely, gives us a polite
          * note informing us that it can no longer abide our company.
@@ -178,19 +214,13 @@ static void sdbus_recv (struct sdbus_ctx *ctx, sd_bus_message *m)
             sdbus_recover (ctx, "received Disconnected signal from bus");
             goto out;
         }
-        /* Unhandled signals are logged as a "drop" so we know what's missed.
+        /* Dispatch handled signals to subscribers here.
+         * Log signals with no subscribers as a drop.
          */
-        if (!(o = interface_signal_tojson (m, NULL))) {
+        if (bulk_respond_match (ctx->h, ctx->subscribers, m))
+            log_msg_signal (ctx->h, m, "recv");
+        else
             log_msg_signal (ctx->h, m, "drop");
-            goto out;
-        }
-        /* Handled signals are logged as a "recv".  Dispatch them to
-         * subscribers here.  N.B. There is no subscriber filtering yet.
-         * Perhaps later if needed.
-         */
-        log_msg_signal (ctx->h, m, "recv");
-        bulk_respond (ctx->h, ctx->subscribers, o);
-        json_decref (o);
     }
     else if (sd_bus_message_is_method_call (m, NULL, NULL)) {
         /* Log any method calls (for example requesting introspection) as
@@ -386,8 +416,14 @@ static void subscribe_cb (flux_t *h,
     struct sdbus_ctx *ctx = arg;
     flux_error_t error;
     const char *errmsg = NULL;
+    const char *s1, *s2, *s3; // not used
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s?s s?s s?s}",
+                             "path", &s1,
+                             "interface", &s2,
+                             "member", &s3) < 0)
         goto error;
     if (authorize_request (msg, ctx->rank, &error) < 0) {
         errmsg = error.text;
