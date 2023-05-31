@@ -107,6 +107,7 @@ flux_shell_LDADD = \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(top_builddir)/src/common/libterminus/libterminus.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/libfilemap/libfilemap.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(LUA_LIB) \
 	$(HWLOC_LIBS) \
