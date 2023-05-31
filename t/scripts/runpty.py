@@ -4,20 +4,20 @@ Run command in a pty, logging the output one of a set of formats that
 is safe and useful for later processing.
 """
 
-import os
-import sys
-import logging
-import pty
-import termios
-import fcntl
-import struct
-import time
-import json
 import argparse
 import asyncio
+import fcntl
+import json
+import logging
+import os
+import pty
+import struct
+import sys
+import termios
+import time
+from signal import SIGINT, SIGTERM, SIGUSR1, SIGWINCH, signal
 
 from flux import util
-from signal import signal, SIGUSR1, SIGWINCH, SIGTERM, SIGINT
 
 
 def setwinsize(fd, rows, cols):
@@ -146,14 +146,14 @@ def parse_args():
     parser.add_argument(
         "--term",
         metavar="TERMINAL",
-        help=f"set value of TERM variable for client (default xterm)",
+        help="set value of TERM variable for client (default xterm)",
         default="xterm",
     )
     parser.add_argument(
         "-c",
         "--quit-char",
         metavar="C",
-        help=f"Set the QUIT character (written to pty on SIGUSR1)",
+        help="Set the QUIT character (written to pty on SIGUSR1)",
         default="",
     )
     parser.add_argument(
@@ -181,7 +181,7 @@ class TTYBuffer:
             self.data += data
         except (BlockingIOError, InterruptedError):
             pass
-        except OSError as e:
+        except OSError:
             self.eof = True
 
     def get(self):
@@ -234,7 +234,7 @@ def main():
 
     try:
         formatter = formats[args.format]
-    except KeyError as e:
+    except KeyError:
         log.error(f'Unknown output format "{args.format}"')
         sys.exit(1)
 

@@ -10,8 +10,9 @@
 
 # groups - manipulate broker groups
 
-import logging
 import argparse
+import logging
+
 import flux
 from flux.idset import IDset
 
@@ -98,13 +99,6 @@ def waitfor(args):
     )
     rpc.then(waitfor_continuation, args.count)
     h.reactor_run()
-
-
-def get(args):
-    """
-    Get current value of group.
-    This only works on rank 0, but for testing that case we have --rank.
-    """
 
 
 def get(args):

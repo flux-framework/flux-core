@@ -10,11 +10,11 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import unittest
 import syslog
+import unittest
 
 import flux
-from subflux import rerun_under_flux, script_dir
+from subflux import rerun_under_flux
 
 
 def __flux_size():

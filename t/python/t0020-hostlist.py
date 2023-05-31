@@ -10,10 +10,11 @@
 ###############################################################
 
 import unittest
-import subflux
-from pycotap import TAPTestRunner
+
 import flux.hostlist as hostlist
+import subflux  # noqa: F401
 from flux.idset import IDset
+from pycotap import TAPTestRunner
 
 
 class TestHostlistMethods(unittest.TestCase):
@@ -93,7 +94,7 @@ class TestHostlistMethods(unittest.TestCase):
         self.assertEqual(hl[-1], "foo9")
         self.assertEqual(hl[-2], "foo8")
         self.assertListEqual(list(hl[1:3]), ["foo1", "foo2"])
-        hl2 = hl[1,2,3]
+        hl2 = hl[1, 2, 3]
         self.assertIsInstance(hl2, hostlist.Hostlist)
         self.assertListEqual(list(hl2), ["foo1", "foo2", "foo3"])
         ids = IDset("0-1")

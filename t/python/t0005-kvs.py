@@ -14,7 +14,6 @@ import unittest
 
 import flux
 import flux.kvs
-
 from subflux import rerun_under_flux
 
 
@@ -39,7 +38,7 @@ class TestKVS(unittest.TestCase):
         kd2 = flux.kvs.KVSDir(self.f)
         nv = kd2[key]
         if isinstance(value, bytes) and type is str:
-            self.assertEqual(value.decode('utf-8'), nv)
+            self.assertEqual(value.decode("utf-8"), nv)
         else:
             self.assertEqual(value, nv)
         if type is not None:

@@ -9,14 +9,11 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import io
-import os
-import json
-import sys
 import unittest
-import subflux  # To set up PYTHONPATH
-from pycotap import TAPTestRunner
+
+import subflux  # noqa: F401 - To set up PYTHONPATH
 from flux.constraint.parser import ConstraintParser, ConstraintSyntaxError
+from pycotap import TAPTestRunner
 
 VALID = [
     {"in": "a", "out": {"t": ["a"]}},
@@ -76,13 +73,16 @@ INVALID = ["a|", "a:' ", "(a", "(a))", "-(a|b)", "4g,host:foo", "foo and a:"]
 class TestConstraintParser(ConstraintParser):
     operator_map = {None: "t", "a": "op-a"}
 
+
 class TestSplitParser(ConstraintParser):
     operator_map = {None: "t"}
     split_values = {"t": ","}
 
+
 class TestCombineParser(ConstraintParser):
     operator_map = {None: "t"}
     combined_terms = set("t")
+
 
 class TestParser(unittest.TestCase):
     def test_parse_valid(self):
@@ -110,37 +110,38 @@ class TestParser(unittest.TestCase):
         print("ConstraintParser can split values if configured")
         result = parser.parse("xx,yy")
         print(f"got {result}")
-        self.assertDictEqual({"t":["xx", "yy"]}, result)
+        self.assertDictEqual({"t": ["xx", "yy"]}, result)
 
         result = parser.parse("xx")
         print(f"got {result}")
-        self.assertDictEqual({"t":["xx"]}, result)
+        self.assertDictEqual({"t": ["xx"]}, result)
 
         result = parser.parse("t:xx,yy")
         print(f"got {result}")
-        self.assertDictEqual({"t":["xx", "yy"]}, result)
+        self.assertDictEqual({"t": ["xx", "yy"]}, result)
 
     def test_combine_terms(self):
         parser = TestCombineParser()
         print("ConstraintParser doesn't combine unconfigured like terms")
         result = parser.parse("a:xx b:yy")
         print(f"got {result}")
-        self.assertDictEqual({"and": [{"a":["xx"]}, {"b": ["yy"]}]}, result)
+        self.assertDictEqual({"and": [{"a": ["xx"]}, {"b": ["yy"]}]}, result)
 
         print("ConstraintParser combines configured like terms")
         result = parser.parse("xx and yy")
         print(f"got {result}")
-        self.assertDictEqual({"t":["xx", "yy"]}, result)
+        self.assertDictEqual({"t": ["xx", "yy"]}, result)
 
         print("ConstraintParser combines configured like terms (nested)")
         result = parser.parse("not (xx and yy)")
         print(f"got {result}")
-        self.assertDictEqual({"not": [{"t":["xx", "yy"]}]}, result)
+        self.assertDictEqual({"not": [{"t": ["xx", "yy"]}]}, result)
 
         print("ConstraintParser doesn't combine like terms (or)")
         result = parser.parse("xx|yy")
         print(f"got {result}")
-        self.assertDictEqual({"or": [{"t":["xx"]}, {"t": ["yy"]}]}, result)
+        self.assertDictEqual({"or": [{"t": ["xx"]}, {"t": ["yy"]}]}, result)
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=TAPTestRunner())

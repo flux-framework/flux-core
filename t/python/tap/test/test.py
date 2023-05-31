@@ -2,19 +2,20 @@
 
 # pylint: disable=C0325
 
-import sys, os
+import os
+import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-import unittest
 import re
+import unittest
 
 if sys.hexversion >= 0x03000000:
     from io import StringIO
 else:
     from StringIO import StringIO
 
-from pycotap import TAPTestRunner, LogMode
+from pycotap import LogMode, TAPTestRunner
 
 
 class TAPTestRunnerTest(unittest.TestCase):

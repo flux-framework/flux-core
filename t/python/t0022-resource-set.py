@@ -11,11 +11,12 @@
 
 import json
 import unittest
-import subflux
-from pycotap import TAPTestRunner
-from flux.resource import ResourceSet, Rlist
-from flux.idset import IDset
+
+import subflux  # noqa: F401 - for PYTHONPATH
 from flux.hostlist import Hostlist
+from flux.idset import IDset
+from flux.resource import ResourceSet, Rlist
+from pycotap import TAPTestRunner
 
 
 class TestRSet(unittest.TestCase):

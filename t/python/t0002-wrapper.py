@@ -13,8 +13,8 @@
 import unittest
 
 import flux
-from flux.core.inner import ffi, raw
 import flux.wrapper
+from flux.core.inner import ffi, raw
 from subflux import rerun_under_flux
 
 
@@ -42,12 +42,12 @@ class TestWrapper(unittest.TestCase):
         f = flux.Flux()
         payload = {"seq": 1, "pad": "stuff"}
         future = f.rpc("broker.ping", payload)
-        resp = future.get()
+        future.get()
         future.pimpl.handle = None
         with self.assertRaisesRegex(
             ValueError, r"Attempting to call a cached, bound method.*NULL handle"
         ):
-            resp = future.get()
+            future.get()
 
     def test_automatic_unwrapping(self):
         flux.core.inner.raw.flux_log(flux.Flux("loop://"), 0, "stuff")

@@ -10,11 +10,12 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import unittest
 import platform
-import subflux  # To set up PYTHONPATH
+import unittest
+
+import subflux  # noqa: F401 - To set up PYTHONPATH
+from flux.uri import JobURI
 from pycotap import TAPTestRunner
-from flux.uri import JobURI, FluxURIResolver
 
 
 class TestJobURI(unittest.TestCase):
@@ -45,11 +46,11 @@ class TestJobURI(unittest.TestCase):
         self.assertEqual(uri.params, "")
 
     def test_parse_errors(self):
-        with self.assertRaises(ValueError) as error:
+        with self.assertRaises(ValueError):
             JobURI("foo:///tmp/bar").remote
-        with self.assertRaises(ValueError) as error:
+        with self.assertRaises(ValueError):
             JobURI("foo:///tmp/bar").local
-        with self.assertRaises(ValueError) as error:
+        with self.assertRaises(ValueError):
             JobURI("")
 
 

@@ -17,7 +17,7 @@ from tempfile import NamedTemporaryFile
 
 try:
     from flux.security import SecurityContext
-except:
+except ModuleNotFoundError:
     print("1..0 # skip flux.security module not available")
     sys.exit(0)
 
