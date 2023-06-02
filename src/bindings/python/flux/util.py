@@ -9,6 +9,7 @@
 ###############################################################
 
 import argparse
+import base64
 import copy
 import errno
 import glob
@@ -19,6 +20,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import sys
 import threading
 import traceback
@@ -1198,3 +1200,47 @@ class UtilConfig:
 
     def __getattr__(self, attr):
         return self.config[attr]
+
+
+class Fileref(dict):
+    """
+    Construct a RFC 37 data file object from a data parameter and optional
+    permissions and encoding. ``Fileref`` is a subclass of ``dict`` so it
+    may be used in place of a dict and is directly serializable to JSON.
+
+    If ``data`` is a dict, then a file object with no encoding is created
+    and the dict is stored in ``data`` for eventual encoding as JSON
+    content. Otherwise, if ``encoding`` is set, then data is presumed to
+    already be encoded and is stored verbatim.  If data is not a dict,
+    and encoding is not set, then data is assumed to be the path to file
+    in the filesystem, in which case the encoding will be 'utf-8' if the
+    file contents can be encoded as such, otherwise 'base64'.
+
+    Args:
+        data (dict, str, bytes): File data or path as explained above.
+        perms: File permissions (default 0600 octal)
+        encoding: Explicit encoding if `data` is not a dict or filename.
+    """
+
+    def __init__(self, data, perms=0o0600, encoding=None):
+        ref = {"mode": perms | stat.S_IFREG}
+        if isinstance(data, dict):
+            ref["data"] = data
+        elif encoding is not None:
+            if encoding not in ("base64", "utf-8"):
+                raise ValueError("invalid encoding: {encoding}")
+            ref["data"] = data
+            ref["encoding"] = encoding
+        else:
+            st = os.stat(data)
+            ref["size"] = st.st_size
+            ref["mode"] = st.st_mode
+            with open(data, "rb") as infp:
+                try:
+                    ref["data"] = infp.read().decode("utf-8")
+                    ref["encoding"] = "utf-8"
+                except UnicodeError:
+                    infp.seek(0)
+                    ref["data"] = base64.b64encode(infp.read()).decode("utf-8")
+                    ref["encoding"] = "base64"
+        super().__init__(**ref)
