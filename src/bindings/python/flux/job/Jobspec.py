@@ -897,6 +897,7 @@ class JobspecV1(Jobspec):
         num_nodes=None,
         broker_opts=None,
         exclusive=False,
+        conf=None,
     ):
         """
         Create a Jobspec describing a nested Flux instance controlled by
@@ -928,6 +929,11 @@ class JobspecV1(Jobspec):
                 individual nodes
             broker_opts (iterable of `str`): options to pass to the new Flux
                 broker
+            conf (dict): optional broker configuration to pass to the
+                child instance brokers. If set, `conf` will be set in the
+                jobspec 'files' (RFC 37 File Archive) attribute as `conf.json`,
+                and broker_opts will be extended to add
+                `-c{{tmpdir}}/conf.json`
         """
         if not script.startswith("#!"):
             raise ValueError(f"{jobname} does not appear to start with '#!'")
@@ -940,6 +946,7 @@ class JobspecV1(Jobspec):
             num_nodes=num_nodes,
             broker_opts=broker_opts,
             exclusive=exclusive,
+            conf=conf,
         )
         #  Copy script contents into jobspec
         jobspec.add_file("script", script, perms=0o700, encoding="utf-8")
@@ -956,6 +963,7 @@ class JobspecV1(Jobspec):
         num_nodes=None,
         broker_opts=None,
         exclusive=False,
+        conf=None,
     ):
         """
         Create a Jobspec describing a nested Flux instance controlled by
@@ -981,8 +989,15 @@ class JobspecV1(Jobspec):
                 individual nodes
             broker_opts (iterable of `str`): options to pass to the new Flux
                 broker
+            conf (dict): optional broker configuration to pass to the
+                child instance brokers. If set, `conf` will be set in the
+                jobspec 'files' (RFC 37 File Archive) attribute as `conf.json`,
+                and broker_opts will be extended to add
+                `-c{{tmpdir}}/conf.json`
         """
-        broker_opts = () if broker_opts is None else broker_opts
+        broker_opts = [] if broker_opts is None else broker_opts
+        if conf is not None:
+            broker_opts.append("-c{{tmpdir}}/conf.json")
         jobspec = cls.from_command(
             command=["flux", "broker", *broker_opts, *command],
             num_tasks=num_slots,
@@ -993,4 +1008,6 @@ class JobspecV1(Jobspec):
         )
         jobspec.setattr_shell_option("per-resource.type", "node")
         jobspec.setattr_shell_option("mpi", "none")
+        if conf is not None:
+            jobspec.add_file("conf.json", conf)
         return jobspec
