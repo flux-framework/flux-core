@@ -705,3 +705,4 @@ libc
 unbuffered
 statex
 pmix
+SIGUSR

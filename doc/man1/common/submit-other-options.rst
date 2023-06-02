@@ -44,6 +44,20 @@ OTHER OPTIONS
    is accepted, e.g. ``2021-06-21 8am``, ``in an hour``,
    ``tomorrow morning``, etc.
 
+**--signal=SIG@TIME**
+   Send signal ``SIG`` to job ``TIME`` before the job time limit. ``SIG``
+   can specify either an integer signal number or a full or abbreviated
+   signal name, e.g. ``SIGUSR1`` or ``USR1`` or ``10``. ``TIME`` is
+   specified in Flux Standard Duration, e.g. ``30`` for 30s or ``1h`` for
+   1 hour. Either parameter may be omitted, with defaults of ``SIGUSR1``
+   and 60s.  For example, ``--signal=USR2`` will send ``SIGUSR2`` to
+   the job 60 seconds before expiration, and ``--signal=@3m`` will send
+   ``SIGUSR1`` 3 minutes before expiration. Note that if ``TIME`` is
+   greater than the remaining time of a job as it starts, the job will
+   be signaled immediately.
+
+   The default behavior is to not send any warning signal to jobs.
+
 **--taskmap=SCHEME[:VALUE]**
    Choose an alternate method for mapping job task IDs to nodes of the
    job. The job shell maps tasks using a "block" distribution scheme by
