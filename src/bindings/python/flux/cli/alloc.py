@@ -70,6 +70,7 @@ class AllocCmd(base.MiniCmd):
             num_nodes=args.nodes,
             broker_opts=base.list_split(args.broker_opts),
             exclusive=args.exclusive,
+            conf=args.conf.config,
         )
 
         #  For --bg, always allocate a pty, but not interactive,
