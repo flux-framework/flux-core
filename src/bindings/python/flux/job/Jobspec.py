@@ -19,7 +19,7 @@ import os
 import yaml
 from _flux._core import ffi
 from flux import hostlist, idset
-from flux.util import parse_fsd, set_treedict
+from flux.util import Fileref, parse_fsd, set_treedict
 
 
 def _convert_jobspec_arg_to_string(jobspec):
@@ -502,6 +502,36 @@ class Jobspec(object):
             )
         self.setattr_shell_option("{}.{}.type".format(iotype, stream_name), "file")
         self.setattr_shell_option("{}.{}.path".format(iotype, stream_name), path)
+
+    def add_file(self, path, data, perms=0o0600, encoding=None):
+        """
+        Add a file to the RFC 14 "files" dictionary in Jobspec. If
+        ``data`` contains newlines or an encoding is explicitly provided,
+        then it is presumed to be the file content. Otherwise, ``data``
+        is a local filesystem path, the contents of which are to be loaded
+        into jobspec. For filesystem
+
+        Args:
+            path (str): path or file name to encode ``data`` as in Jobspec
+            data (dict, str): content of file or a local path to load
+            perms (int): file pemissions, default 0o0600 (octal). If ``data``
+                is a file system path, then permissions of the local file
+                system object will be used.
+            encoding (str): RFC 37 compatible encoding for ``data``. None
+                if ``data`` is a dict or to determine encoding from a file
+                when ``data`` specifies a filesystem path.  O/w, if encoding
+                set, data is a string encoded in specified ``encoding``.
+        """
+        if not (isinstance(data, abc.Mapping) or isinstance(data, str)):
+            raise TypeError("data must be a Mapping or string")
+
+        files = self.jobspec["attributes"]["system"].get("files", {})
+        if "\n" in data and encoding is None:
+            #  Use default encoding of utf-8 if data contains newlines,
+            #  since this is presumed to be file content.
+            encoding = "utf-8"
+        files[path] = Fileref(data, perms=perms, encoding=encoding)
+        self.jobspec["attributes"]["system"]["files"] = files
 
     def setattr(self, key, val):
 
