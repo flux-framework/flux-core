@@ -942,7 +942,7 @@ class JobspecV1(Jobspec):
             exclusive=exclusive,
         )
         #  Copy script contents into jobspec
-        jobspec.setattr("system.batch.script", script)
+        jobspec.add_file("script", script, perms=0o700, encoding="utf-8")
         jobspec.setattr("system.job.name", jobname)
         return jobspec
 

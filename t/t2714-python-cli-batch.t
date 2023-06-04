@@ -25,17 +25,17 @@ test_expect_success 'create generic test batch script' '
 '
 test_expect_success 'flux batch copies script into jobspec' '
 	flux batch -n1 --dry-run batch-script.sh | \
-		jq -j .attributes.system.batch.script > script.sh &&
+		jq -j .attributes.system.files.script.data > script.sh &&
 	test_cmp batch-script.sh script.sh
 '
 test_expect_success 'flux batch takes a script on stdin' '
 	flux batch -n1 --dry-run < batch-script.sh | \
-		jq -j .attributes.system.batch.script > script-stdin.sh &&
+		jq -j .attributes.system.files.script.data > script-stdin.sh &&
 	test_cmp batch-script.sh script.sh
 '
 test_expect_success 'flux batch --wrap option works' '
 	flux batch -n1 --dry-run --wrap foo bar baz | \
-		jq -j .attributes.system.batch.script >script-wrap.out &&
+		jq -j .attributes.system.files.script.data >script-wrap.out &&
 	cat <<-EOF >script-wrap.expected &&
 	#!/bin/sh
 	foo bar baz
@@ -45,7 +45,7 @@ test_expect_success 'flux batch --wrap option works' '
 test_expect_success 'flux batch --wrap option works on stdin' '
 	printf "foo\nbar\nbaz\n" | \
 	    flux batch -n1 --dry-run --wrap | \
-		jq -j .attributes.system.batch.script >stdin-wrap.out &&
+		jq -j .attributes.system.files.script.data >stdin-wrap.out &&
 	cat <<-EOF >stdin-wrap.expected &&
 	#!/bin/sh
 	foo
