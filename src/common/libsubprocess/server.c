@@ -102,7 +102,7 @@ static flux_subprocess_t *proc_find_bypid (subprocess_server_t *s, pid_t pid)
             return p;
         p = zlistx_next (s->subprocesses);
     }
-    errno = ENOENT;
+    errno = ESRCH;
     return NULL;
 }
 
