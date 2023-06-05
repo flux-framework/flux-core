@@ -230,4 +230,28 @@ test_expect_success 'flux batch: shell parsing error is caught' '
 	test_debug "cat d4.out" &&
 	grep "directives4.sh: line 2" d4.out
 '
+test_expect_success 'flux batch: file can be added via directives' '
+	cat <<-EOF >directives5.sh &&
+	#!/bin/sh
+	# flux: -n1
+	# flux: --add-file=foo="""
+	# flux: This is a test file
+	# flux: """
+	cat \$FLUX_JOB_TMPDIR/foo
+	EOF
+	flux batch --dry-run directives5.sh >d5.json &&
+	jq -e ".attributes.system.files.foo.data == \"This is a test file\n\""
+'
+test_expect_success 'flux batch: multiline --add-file requires name=' '
+	cat <<-EOF >directives6.sh &&
+	#!/bin/sh
+	# flux: -n1
+	# flux: --add-file="""
+	# flux: This is a test file
+	# flux: """
+	cat \$FLUX_JOB_TMPDIR/foo
+	EOF
+	test_must_fail flux batch --dry-run directives6.sh >d6.out 2>&1 &&
+	grep "file name missing" d6.out
+'
 test_done
