@@ -14,22 +14,10 @@ export FLUX_URI_RESOLVE_LOCAL=t
 
 # To ensure no raciness in tests below, ensure the job-list
 # module knows about submitted jobs in desired states
-JOB_WAIT_ITERS=100
 job_list_wait_state() {
 	id=$1
-	expected=$2
-	local i=0
-	while [ "$(flux jobs -no {state} ${id})" != "${expected}" ] \
-	       && [ $i -lt ${JOB_WAIT_ITERS} ]
-	do
-		sleep 0.1
-		i=$((i + 1))
-	done
-	if [ "$i" -eq "${JOB_WAIT_ITERS}" ]
-	then
-	    return 1
-	fi
-	return 0
+	state=$2
+	flux job list-ids --wait-state=$2 $1 > /dev/null
 }
 
 test_expect_success 'flux-top -h prints custom usage' '

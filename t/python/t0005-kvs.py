@@ -10,6 +10,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import ast
 import unittest
 
 import flux
@@ -39,6 +40,10 @@ class TestKVS(unittest.TestCase):
         nv = kd2[key]
         if isinstance(value, bytes) and type is str:
             self.assertEqual(value.decode("utf-8"), nv)
+        elif isinstance(value, bytes) and type is dict:
+            # convert value bytes into string, then convert into
+            # Python dict via ast.literal_evl for comparison.
+            self.assertDictEqual(ast.literal_eval(value.decode("utf-8")), nv)
         else:
             self.assertEqual(value, nv)
         if type is not None:
@@ -71,6 +76,9 @@ class TestKVS(unittest.TestCase):
         self.set_and_check_context(
             "dict", {"thing": "stuff", "other thing": "more stuff"}, dict
         )
+
+    def test_set_legal_json(self):
+        self.set_and_check_context("badjson", b"{}", dict)
 
     def test_set_not_legal_json(self):
         self.set_and_check_context("badjson", b"{", str)

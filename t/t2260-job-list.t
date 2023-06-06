@@ -18,21 +18,10 @@ fj_wait_event() {
 	flux job wait-event --timeout=20 "$@"
 }
 
+# To avoid raciness in tests, need to ensure that job state we care about
+# testing against has been reached in the job-list module.
 wait_jobid_state() {
-	local jobid=$(flux job id $1)
-	local state=$2
-	local i=0
-	while ! flux job list --states=${state} | grep $jobid > /dev/null \
-		   && [ $i -lt 50 ]
-	do
-		sleep 0.1
-		i=$((i + 1))
-	done
-	if [ "$i" -eq "50" ]
-	then
-		return 1
-	fi
-	return 0
+	flux job list-ids --wait-state=$2 $1 > /dev/null
 }
 
 # submit a whole bunch of jobs for job list testing
@@ -147,9 +136,13 @@ test_expect_success 'submit jobs for job list testing' '
 	cat active.ids > all.ids &&
 	cat inactive.ids >> all.ids &&
 	#
-	#  Synchronize all expected states
+	#  The job-list module has eventual consistency with the jobs stored in
+	#  the job-manager queue.  To ensure no raciness in tests, ensure
+	#  jobs above have reached expected states in job-list before continuing.
 	#
-	job_list_wait_states
+	flux job list-ids --wait-state=sched $(job_list_state_ids pending) &&
+	flux job list-ids --wait-state=run $(job_list_state_ids running) &&
+	flux job list-ids --wait-state=inactive $(job_list_state_ids inactive)
 '
 
 # Note: "running" = "run" | "cleanup", we also test just "run" state
@@ -548,6 +541,27 @@ test_expect_success 'flux job list-ids fails with one bad ID out of several' '
 	grep "No such file or directory" list_ids_error4.out
 '
 
+test_expect_success 'flux job list-ids works with --wait-state' '
+	id=`head -n 1 pending.ids` &&
+	flux job list-ids --wait-state=sched $id > /dev/null &&
+	id=`head -n 1 running.ids` &&
+	flux job list-ids --wait-state=sched $id > /dev/null &&
+	flux job list-ids --wait-state=run $id > /dev/null &&
+	id=`head -n 1 completed.ids` &&
+	flux job list-ids --wait-state=sched $id > /dev/null &&
+	flux job list-ids --wait-state=run $id > /dev/null &&
+	flux job list-ids --wait-state=inactive $id > /dev/null &&
+	id=`head -n 1 canceled.ids` &&
+	flux job list-ids --wait-state=sched $id > /dev/null &&
+	flux job list-ids --wait-state=run $id > /dev/null &&
+	flux job list-ids --wait-state=inactive $id > /dev/null
+'
+
+test_expect_success 'flux job list-ids fail with bad --wait-state' '
+	id=`head -n 1 pending.ids` &&
+	test_must_fail flux job list-ids --wait-state=foo $id > /dev/null
+'
+
 # In order to test potential racy behavior, use job state pause/unpause to pause
 # the handling of job state transitions from the job-manager.
 #
@@ -613,6 +627,125 @@ test_expect_success NO_CHAIN_LINT 'flux job list-ids waits for job ids (same id)
 	cat list_id_wait3B.out | jq -e ".id == ${jobid}"
 '
 
+test_expect_success NO_CHAIN_LINT 'flux job list-ids waits for job id state (depend)' '
+	${RPC} job-list.job-state-pause 0 </dev/null
+	jobid=`flux submit --wait-event=start sleep inf | flux job id`
+	flux job list-ids --wait-state=depend ${jobid} > list_id_wait_state_depend.out &
+	pid=$!
+	wait_idsync 1 &&
+	${RPC} job-list.job-state-unpause 0 </dev/null &&
+	wait $pid &&
+	flux cancel $jobid &&
+	fj_wait_event $jobid clean >/dev/null &&
+	cat list_id_wait_state_depend.out | jq -e ".id == ${jobid}"
+'
+
+test_expect_success NO_CHAIN_LINT 'flux job list-ids waits for job id state (run)' '
+	${RPC} job-list.job-state-pause 0 </dev/null
+	jobid=`flux submit --wait-event=start sleep inf | flux job id`
+	flux job list-ids --wait-state=run ${jobid} > list_id_wait_state_run.out &
+	pid=$!
+	wait_idsync 1 &&
+	${RPC} job-list.job-state-unpause 0 </dev/null &&
+	wait $pid &&
+	flux cancel $jobid &&
+	fj_wait_event $jobid clean >/dev/null &&
+	cat list_id_wait_state_run.out | jq -e ".id == ${jobid}" &&
+	cat list_id_wait_state_run.out | jq .state | ${JOB_CONV} statetostr > list_id_state_run.out &&
+	grep RUN list_id_state_run.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux job list-ids waits for job id state (cleanup)' '
+	${RPC} job-list.job-state-pause 0 </dev/null
+	jobid=`flux submit --wait-event=start sleep inf | flux job id`
+	flux job list-ids --wait-state=cleanup ${jobid} > list_id_wait_state_cleanup.out &
+	pid=$!
+	wait_idsync 1 &&
+	${RPC} job-list.job-state-unpause 0 </dev/null &&
+	flux cancel $jobid &&
+	fj_wait_event $jobid clean >/dev/null &&
+	wait $pid &&
+	cat list_id_wait_state_cleanup.out | jq -e ".id == ${jobid}" &&
+	cat list_id_wait_state_cleanup.out | jq .state | ${JOB_CONV} statetostr > list_id_state_cleanup.out &&
+	grep CLEANUP list_id_state_cleanup.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux job list-ids waits for job id state (inactive)' '
+	${RPC} job-list.job-state-pause 0 </dev/null
+	jobid=`flux submit --wait-event=start sleep inf | flux job id`
+	flux job list-ids --wait-state=inactive ${jobid} > list_id_wait_state_inactive.out &
+	pid=$!
+	wait_idsync 1 &&
+	${RPC} job-list.job-state-unpause 0 </dev/null &&
+	flux cancel $jobid &&
+	fj_wait_event $jobid clean >/dev/null &&
+	wait $pid &&
+	cat list_id_wait_state_inactive.out | jq -e ".id == ${jobid}" &&
+	cat list_id_wait_state_inactive.out | jq .state | ${JOB_CONV} statetostr > list_id_state_inactive.out &&
+	grep INACTIVE list_id_state_inactive.out
+'
+
+# The job should never reach job state b/c we cancel it before it can
+# run, so will return when job becomes inactive
+test_expect_success NO_CHAIN_LINT 'flux job list-ids waits for job id state (run - cancel)' '
+	${RPC} job-list.job-state-pause 0 </dev/null
+	flux queue stop &&
+	jobid=`flux submit sleep inf | flux job id`
+	flux job list-ids --wait-state=run ${jobid} > list_id_wait_state_run_cancel.out &
+	pid=$!
+	wait_idsync 1 &&
+	flux cancel $jobid &&
+	fj_wait_event $jobid clean >/dev/null &&
+	flux queue start &&
+	${RPC} job-list.job-state-unpause 0 </dev/null &&
+	wait $pid &&
+	cat list_id_wait_state_run_cancel.out | jq -e ".id == ${jobid}" &&
+	cat list_id_wait_state_run_cancel.out | jq .state | ${JOB_CONV} statetostr > list_id_state_run_cancel.out &&
+	grep INACTIVE list_id_state_run_cancel.out
+'
+
+# Can't guarantee output order, so grep for jobid instead of match jobid
+test_expect_success NO_CHAIN_LINT 'flux job list-ids waits for job ids state (different ids)' '
+	${RPC} job-list.job-state-pause 0 </dev/null
+	jobid1=`flux submit --wait-event=start sleep inf | flux job id`
+	jobid2=`flux submit --wait-event=start sleep inf | flux job id`
+	flux job list-ids --wait-state=run ${jobid1} ${jobid2} > list_id_wait_state_different_ids.out &
+	pid=$!
+	wait_idsync 2 &&
+	${RPC} job-list.job-state-unpause 0 </dev/null &&
+	wait $pid &&
+	flux cancel $jobid1 $jobid2 &&
+	fj_wait_event $jobid1 clean >/dev/null &&
+	fj_wait_event $jobid2 clean >/dev/null &&
+	grep ${jobid1} list_id_wait_state_different_ids.out &&
+	grep ${jobid2} list_id_wait_state_different_ids.out &&
+	head -n1 list_id_wait_state_different_ids.out | jq .state | ${JOB_CONV} statetostr > list_id_state_different_idsA.out &&
+	tail -n1 list_id_wait_state_different_ids.out | jq .state | ${JOB_CONV} statetostr > list_id_state_different_idsB.out &&
+	grep RUN list_id_state_different_idsA.out &&
+	grep RUN list_id_state_different_idsB.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux job list-ids waits for job ids state (same id)' '
+	${RPC} job-list.job-state-pause 0 </dev/null
+	jobid=`flux submit --wait-event=start sleep inf | flux job id`
+	flux job list-ids --wait-state=run ${jobid} > list_id_wait_state_same_idsA.out &
+	pid1=$!
+	flux job list-ids --wait-state=cleanup ${jobid} > list_id_wait_state_same_idsB.out &
+	pid2=$!
+	wait_idsync 1 &&
+	${RPC} job-list.job-state-unpause 0 </dev/null &&
+	wait ${pid1} &&
+	flux cancel $jobid &&
+	fj_wait_event $jobid clean >/dev/null &&
+	wait ${pid2} &&
+	cat list_id_wait_state_same_idsA.out | jq -e ".id == ${jobid}" &&
+	cat list_id_wait_state_same_idsB.out | jq -e ".id == ${jobid}" &&
+	cat list_id_wait_state_same_idsA.out | jq .state | ${JOB_CONV} statetostr > list_id_state_same_idsA.out &&
+	grep RUN list_id_state_same_idsA.out &&
+	cat list_id_wait_state_same_idsB.out | jq .state | ${JOB_CONV} statetostr > list_id_state_same_idsB.out &&
+	grep CLEANUP list_id_state_same_idsB.out
+'
+
 #
 # job list timing
 #
@@ -632,7 +765,7 @@ test_expect_success 'flux job list job state timing outputs valid (job inactive)
 test_expect_success 'flux job list job state timing outputs valid (job running)' '
 	jobid=$(flux submit sleep 60 | flux job id) &&
 	fj_wait_event $jobid start >/dev/null &&
-	wait_jobid_state $jobid running &&
+	wait_jobid_state $jobid run &&
 	obj=$(flux job list -s running | grep $jobid) &&
 	echo $obj | jq -e ".t_submit < .t_depend" &&
 	echo $obj | jq -e ".t_depend < .t_run" &&

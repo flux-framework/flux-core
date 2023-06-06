@@ -81,9 +81,13 @@ test_expect_success 'submit jobs for job list testing' '
         cat active.ids > all.ids &&
         cat inactive.ids >> all.ids &&
         #
-        #  Synchronize all expected states
+        #  The job-list module has eventual consistency with the jobs stored in
+        #  the job-manager queue.  To ensure no raciness in tests, ensure
+        #  jobs above have reached expected states in job-list before continuing.
         #
-        job_list_wait_states
+        flux job list-ids --wait-state=sched $(job_list_state_ids pending) &&
+        flux job list-ids --wait-state=run $(job_list_state_ids running) &&
+        flux job list-ids --wait-state=inactive $(job_list_state_ids inactive)
 '
 
 # Note: "running" = "run" | "cleanup", we also test just "run" state
