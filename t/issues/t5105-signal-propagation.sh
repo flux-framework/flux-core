@@ -24,11 +24,11 @@ id=$(flux submit --output=log flux start \
      flux run flux start \
      flux run flux python ./test.py)
 
-$waitfile -t 30 -v ready
+$waitfile -t 100 -v ready
 
 flux job kill -s SIGUSR1 $id
 
-$waitfile -t 30 -v -p "got SIGUSR1" log
+$waitfile -t 100 -v -p "got SIGUSR1" log
 
 flux job status --json -v $id
 

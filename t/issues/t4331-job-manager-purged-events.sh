@@ -8,7 +8,7 @@ EVENTS_JOURNAL_STREAM=${FLUX_BUILD_DIR}/t/job-manager/events_journal_stream
 wait_jobid_event() {
     local file=$1
     local jobid=$2
-    for i in `seq 1 30`
+    for i in `seq 1 100`
     do
         if grep -q ${jobid} ${file}
         then
@@ -16,7 +16,7 @@ wait_jobid_event() {
         fi
         sleep 1
     done
-    if [ "${i}" -eq "30" ]
+    if [ "${i}" -eq "100" ]
     then
         return 1
     fi

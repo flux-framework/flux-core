@@ -79,7 +79,7 @@ test_expect_success 'instance functions with late-joiner' '
 	echo "0" >late.exp &&
 	rm -f fifo &&
 	mkfifo fifo &&
-	run_timeout 10 \
+	run_timeout 60 \
 		flux start -s2 \
 		-o,-Slog-stderr-level=6 \
 		-o,-Sbroker.rc1_path="$(pwd)/rc1_block" \

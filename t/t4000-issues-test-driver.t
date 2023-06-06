@@ -18,7 +18,7 @@ if test -z "$T4000_ISSUES_GLOB"; then
     T4000_ISSUES_GLOB="*"
 fi
 
-flux bulksubmit -n1 -o pty --job-name={./%} -t 2m \
+flux bulksubmit -n1 -o pty --job-name={./%} -t 10m \
 	--flags=waitable \
 	--quiet --watch  \
 	flux start {} \

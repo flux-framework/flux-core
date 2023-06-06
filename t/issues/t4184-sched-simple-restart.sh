@@ -31,13 +31,13 @@ flux job wait-event \$id clean
 
 echo "t4184: waiting for \$id2 to start..."
 
-flux job wait-event -t 15 \$id2 start
+flux job wait-event -t 100 \$id2 start
 
 echo "t4184: canceling \$id2..."
 flux cancel \$id2
 
 echo "t4184: waiting for \$id2 to end..."
-flux job wait-event -t 15 \$id2 clean
+flux job wait-event -t 100 \$id2 clean
 
 EOF
 
