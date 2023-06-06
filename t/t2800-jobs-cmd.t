@@ -137,9 +137,9 @@ test_expect_success 'submit jobs for job list testing' '
 	#  the job-manager queue.  To ensure no raciness in tests, ensure
 	#  jobs above have reached expected states in job-list before continuing.
 	#
-	flux job list-ids --wait-state=sched $(job_list_state_ids sched) &&
-	flux job list-ids --wait-state=run $(job_list_state_ids run) &&
-	flux job list-ids --wait-state=inactive $(job_list_state_ids inactive)
+	flux job list-ids --wait-state=sched $(job_list_state_ids sched) > /dev/null &&
+	flux job list-ids --wait-state=run $(job_list_state_ids run) > /dev/null &&
+	flux job list-ids --wait-state=inactive $(job_list_state_ids inactive) > /dev/null
 '
 
 #
