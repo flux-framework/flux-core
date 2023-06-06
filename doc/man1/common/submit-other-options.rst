@@ -48,6 +48,32 @@ OTHER OPTIONS
    encode multiple files.  Note: As documented in RFC 14, the file names
    ``script`` and ``conf.json`` are both reserved.
 
+**--conf=FILE|KEY=VAL|STRING**
+   The ``--conf`` option allows configuration for a Flux instance started
+   via ``flux-batch(1)`` or ``flux-alloc(1)`` to be iteratively built on
+   the command line. On first use, a ``conf.json`` entry is added to the
+   internal jobspec file archive, and ``-c{{tmpdir}}/conf.json`` is added
+   to the flux broker command line. Each subsequent use of the ``--conf``
+   option updates this configuration.
+
+   The argument to ``--conf`` may be in one of several forms:
+
+   * A multiline string, e.g. from a batch directive. In this case the string
+     is parsed as JSON or TOML::
+
+      # flux: --conf="""
+      # flux: [resource]
+      # flux: exclude = "0"
+      # flux: """
+
+   * A string containing a ``=`` character, in which case the argument is
+     parsed as ``KEY=VAL``, where ``VAL`` is parsed as JSON, e.g.::
+
+      --conf=resource.exclude=\"0\"
+
+   * A string ending in ``.json`` or ``.toml``, in which case configuration
+     is loaded from a JSON or TOML file.
+
 **--begin-time=+FSD|DATETIME**
    Convenience option for setting a ``begin-time`` dependency for a job.
    The job is guaranteed to start after the specified date and time.
