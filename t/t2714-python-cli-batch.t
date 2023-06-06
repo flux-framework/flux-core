@@ -25,17 +25,17 @@ test_expect_success 'create generic test batch script' '
 '
 test_expect_success 'flux batch copies script into jobspec' '
 	flux batch -n1 --dry-run batch-script.sh | \
-		jq -j .attributes.system.batch.script > script.sh &&
+		jq -j .attributes.system.files.script.data > script.sh &&
 	test_cmp batch-script.sh script.sh
 '
 test_expect_success 'flux batch takes a script on stdin' '
 	flux batch -n1 --dry-run < batch-script.sh | \
-		jq -j .attributes.system.batch.script > script-stdin.sh &&
+		jq -j .attributes.system.files.script.data > script-stdin.sh &&
 	test_cmp batch-script.sh script.sh
 '
 test_expect_success 'flux batch --wrap option works' '
 	flux batch -n1 --dry-run --wrap foo bar baz | \
-		jq -j .attributes.system.batch.script >script-wrap.out &&
+		jq -j .attributes.system.files.script.data >script-wrap.out &&
 	cat <<-EOF >script-wrap.expected &&
 	#!/bin/sh
 	foo bar baz
@@ -45,7 +45,7 @@ test_expect_success 'flux batch --wrap option works' '
 test_expect_success 'flux batch --wrap option works on stdin' '
 	printf "foo\nbar\nbaz\n" | \
 	    flux batch -n1 --dry-run --wrap | \
-		jq -j .attributes.system.batch.script >stdin-wrap.out &&
+		jq -j .attributes.system.files.script.data >stdin-wrap.out &&
 	cat <<-EOF >stdin-wrap.expected &&
 	#!/bin/sh
 	foo
@@ -229,5 +229,29 @@ test_expect_success 'flux batch: shell parsing error is caught' '
 	test_must_fail flux batch --dry-run directives4.sh >d4.out 2>&1 &&
 	test_debug "cat d4.out" &&
 	grep "directives4.sh: line 2" d4.out
+'
+test_expect_success 'flux batch: file can be added via directives' '
+	cat <<-EOF >directives5.sh &&
+	#!/bin/sh
+	# flux: -n1
+	# flux: --add-file=foo="""
+	# flux: This is a test file
+	# flux: """
+	cat \$FLUX_JOB_TMPDIR/foo
+	EOF
+	flux batch --dry-run directives5.sh >d5.json &&
+	jq -e ".attributes.system.files.foo.data == \"This is a test file\n\""
+'
+test_expect_success 'flux batch: multiline --add-file requires name=' '
+	cat <<-EOF >directives6.sh &&
+	#!/bin/sh
+	# flux: -n1
+	# flux: --add-file="""
+	# flux: This is a test file
+	# flux: """
+	cat \$FLUX_JOB_TMPDIR/foo
+	EOF
+	test_must_fail flux batch --dry-run directives6.sh >d6.out 2>&1 &&
+	grep "file name missing" d6.out
 '
 test_done

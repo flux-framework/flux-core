@@ -24,6 +24,7 @@ import signal
 import sys
 from collections import ChainMap
 from itertools import chain
+from os.path import basename
 from string import Template
 from urllib.parse import parse_qs, urlparse
 
@@ -675,6 +676,15 @@ class MiniCmd:
             metavar="ATTR",
         )
         parser.add_argument(
+            "--add-file",
+            action="append",
+            help="Add a file at PATH with optional NAME to jobspec. The "
+            + "file will be extracted to {{tmpdir}}/NAME. If NAME is not "
+            + "specified, then the basename of PATH will be used. (multiple "
+            + "use OK)",
+            metavar="[NAME=]PATH",
+        )
+        parser.add_argument(
             "--dependency",
             action="append",
             help="Set an RFC 26 dependency URI for this job",
@@ -909,6 +919,20 @@ class MiniCmd:
                 #   to start at the top level (since .system is not applied
                 #   due to above conditional)
                 jobspec.setattr(key.lstrip("."), val)
+
+        if args.add_file is not None:
+            for arg in args.add_file:
+                name, _, data = arg.partition("=")
+                if not data:
+                    # No '=' implies path-only argument (no multiline allowed)
+                    if "\n" in name:
+                        raise ValueError("--add-file: file name missing")
+                    data = name
+                    name = basename(data)
+                try:
+                    jobspec.add_file(name, data)
+                except (TypeError, ValueError, OSError) as exc:
+                    raise ValueError(f"--add-file={arg}: {exc}") from None
 
         return jobspec
 

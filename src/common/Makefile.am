@@ -26,7 +26,8 @@ SUBDIRS = \
 	libczmqcontainers \
 	libccan \
 	libzmqutil \
-	libtaskmap
+	libtaskmap \
+	libfilemap
 
 if HAVE_LIBSYSTEMD
 SUBDIRS += libsdprocess

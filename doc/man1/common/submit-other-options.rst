@@ -34,6 +34,20 @@ OTHER OPTIONS
    character, then VAL is interpreted as a file, which must be valid JSON,
    to use as the attribute value.
 
+**--add-file=[NAME=]ARG**
+   Add a file to the RFC 37 file archive in jobspec before submission. Both
+   the file metadata and content are stored in the archive, so modification
+   or deletion of a file after being processed by this option will have no
+   effect on the job. If no ``NAME`` is provided, then ``ARG`` is assumed to
+   be the path to a local file and the basename of the file will be used as
+   ``NAME``.  Otherwise, if ``ARG`` contains a newline, then it is assumed
+   to be the raw file data to encode. The file will be extracted by the
+   job shell into the job temporary directory and may be referenced as
+   ``{{tmpdir}}/NAME`` on the command line, or ``$FLUX_JOB_TMPDIR/NAME``
+   in a batch script.  This option may be specified multiple times to
+   encode multiple files.  Note: As documented in RFC 14, the file names
+   ``script`` and ``conf.json`` are both reserved.
+
 **--begin-time=+FSD|DATETIME**
    Convenience option for setting a ``begin-time`` dependency for a job.
    The job is guaranteed to start after the specified date and time.

@@ -277,5 +277,30 @@ test_expect_success 'flux submit --input=IDSET fails' '
 	test_must_fail flux submit --input=0 hostname &&
 	test_must_fail flux submit -n2 --input=0-1 hostname
 '
-
+test_expect_success 'flux submit: create test files ' '
+	cat <<-EOF >file.txt &&
+	This is a test file
+	EOF
+	dd if=/dev/urandom of=file.binary bs=64 count=1 &&
+	touch file.empty
+'
+for file in file.txt file.binary file.empty; do
+	test_expect_success \
+		"flux submit --add-file works for ${file#file.} file" '
+		flux submit -n1 --watch --add-file=${file} \
+			cp {{tmpdir}}/${file} ${file}.result &&
+		test_cmp ${file} ${file}.result
+	'
+done
+test_expect_success 'flux submit --add-file=name=file works' '
+	flux submit -n1 --watch --add-file=myfile=file.txt \
+		cp {{tmpdir}}/myfile . &&
+	test_cmp file.txt myfile
+'
+test_expect_success 'flux submit --add-file complains for non-regular files' '
+	test_must_fail flux submit -n1 --add-file=/tmp hostname
+'
+test_expect_success 'flux submit --add-file complains for missing files' '
+	test_must_fail flux submit -n1 --add-file=doesnotexist hostname
+'
 test_done
