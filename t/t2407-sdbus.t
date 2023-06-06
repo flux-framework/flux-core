@@ -135,12 +135,16 @@ test_expect_success 'reset/unload any flux-t2406 units from prior runs' '
 test_expect_success 'there are no flux-t2406 units loaded' '
 	bus_wait_for_unit_count 10 0 "flux-t2406-*"
 '
+# script usage: subscribe.py [path-glob]
 test_expect_success 'create subscribe script' '
 	cat >subscribe.py <<-EOT &&
 	import sys
 	import flux
 	handle = flux.Flux()
-	fut = handle.rpc("sdbus.subscribe",{},flags=flux.constants.FLUX_RPC_STREAMING)
+	sub = {"member":"PropertiesChanged","interface":"org.freedesktop.DBus.Properties"}
+	if len(sys.argv) > 1:
+	    sub["path"] = sys.argv[1]
+	fut = handle.rpc("sdbus.subscribe",sub,flags=flux.constants.FLUX_RPC_STREAMING)
 	while True:
 	    print(fut.get_str())
 	    sys.stdout.flush()
@@ -148,9 +152,16 @@ test_expect_success 'create subscribe script' '
 	EOT
 	chmod +x subscribe.py
 '
-test_expect_success NO_CHAIN_LINT 'subscribe to signals in the background' '
-	flux python ./subscribe.py >signals.out 2>signals.err &
+test_expect_success NO_CHAIN_LINT 'subscribe to flux-t2406-[2-9]* signals' '
+	flux python ./subscribe.py \
+	    /org/freedesktop/systemd1/unit/flux-t2406-[2-9]* \
+	    >signals.out 2>signals.err &
 	echo $! >signals.pid
+'
+test_expect_success NO_CHAIN_LINT 'subscribe to all signals' '
+	flux python ./subscribe.py \
+	    >signals_all.out 2>signals_all.err &
+	echo $! >signals_all.pid
 '
 test_expect_success 'StopUnit unknown.service fails' '
 	test_must_fail bus_stop_unit unknown.service 2>stop_unknown.err &&
@@ -252,14 +263,21 @@ test_expect_success 'non-streaming sdbus.subscribe fails' '
 test_expect_success 'send a sdbus.subscribe-cancel on random matchtag for fun' '
 	(FLUX_HANDLE_TRACE=1 bus_subscribe_cancel 424242)
 '
-test_expect_success NO_CHAIN_LINT 'terminate background subscriber' '
+test_expect_success NO_CHAIN_LINT 'terminate background subscribers' '
+	kill -15 $(cat signals_all.pid) &&
 	kill -15 $(cat signals.pid)
 '
 test_expect_success NO_CHAIN_LINT 'PropertiesChanged signals were received' '
-	test $(grep PropertiesChanged signals.out | wc -l) -gt 0
+	test $(grep PropertiesChanged signals_all.out | wc -l) -gt 0
 '
-test_expect_success NO_CHAIN_LINT 'all test units triggered signals' '
-	test $(grep flux-t2406-1 signals.out | wc -l) -gt 0 &&
+test_expect_success NO_CHAIN_LINT 'all units triggered signals' '
+	test $(grep flux-t2406-1 signals_all.out | wc -l) -gt 0 &&
+	test $(grep flux-t2406-2 signals_all.out | wc -l) -gt 0 &&
+	test $(grep flux-t2406-3 signals_all.out | wc -l) -gt 0 &&
+	test $(grep flux-t2406-4 signals_all.out | wc -l) -gt 0
+'
+test_expect_success NO_CHAIN_LINT 'subscription filter worked' '
+	test $(grep flux-t2406-1 signals.out | wc -l) -eq 0 &&
 	test $(grep flux-t2406-2 signals.out | wc -l) -gt 0 &&
 	test $(grep flux-t2406-3 signals.out | wc -l) -gt 0 &&
 	test $(grep flux-t2406-4 signals.out | wc -l) -gt 0
