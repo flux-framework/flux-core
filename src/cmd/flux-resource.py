@@ -539,6 +539,12 @@ def list_handler(args):
         except Exception as e:
             LOGGER.warning("Could not get flux config: " + str(e))
 
+    if args.include:
+        try:
+            resources.filter(include=args.include)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"--include: {exc}") from None
+
     fmt = FluxResourceConfig("list").load().get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
@@ -696,6 +702,13 @@ def main():
         help="Output resources in given states",
     )
     list_parser.add_argument(
+        "-i",
+        "--include",
+        metavar="TARGETS",
+        help="Include only specified targets in output set. TARGETS may be "
+        + "provided as an idset or hostlist.",
+    )
+    list_parser.add_argument(
         "-n", "--no-header", action="store_true", help="Suppress header output"
     )
     list_parser.add_argument(
@@ -712,6 +725,13 @@ def main():
         "--states",
         metavar="STATE,...",
         help="Show output only for resources in given states",
+    )
+    info_parser.add_argument(
+        "-i",
+        "--include",
+        metavar="TARGETS",
+        help="Include only specified targets in output set. TARGETS may be "
+        + "provided as an idset or hostlist.",
     )
     info_parser.add_argument(
         "--from-stdin", action="store_true", help=argparse.SUPPRESS
