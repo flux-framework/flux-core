@@ -48,7 +48,7 @@ OTHER OPTIONS
    encode multiple files.  Note: As documented in RFC 14, the file names
    ``script`` and ``conf.json`` are both reserved.
 
-**--conf=FILE|KEY=VAL|STRING**
+**--conf=FILE|KEY=VAL|STRING|NAME**
    The ``--conf`` option allows configuration for a Flux instance started
    via ``flux-batch(1)`` or ``flux-alloc(1)`` to be iteratively built on
    the command line. On first use, a ``conf.json`` entry is added to the
@@ -73,6 +73,17 @@ OTHER OPTIONS
 
    * A string ending in ``.json`` or ``.toml``, in which case configuration
      is loaded from a JSON or TOML file.
+
+   * If none of the above conditions match, then the argument ``NAME`` is
+     assumed to refer to a "named" config file ``NAME.toml`` or ``NAME.json``
+     within the following search path, in order of precedence:
+
+     - ``XDG_CONFIG_HOME/flux/config`` or ``$HOME/.config/flux/config`` if
+       ``XDG_CONFIG_HOME`` is not set
+
+     - ``$XDG_CONFIG_DIRS/flux/config`` or ``/etc/xdg/flux/config`` if
+       ``XDG_CONFIG_DIRS`` is not set. Note that ``XDG_CONFIG_DIRS`` may
+       be a colon-separated path.
 
 **--begin-time=+FSD|DATETIME**
    Convenience option for setting a ``begin-time`` dependency for a job.
