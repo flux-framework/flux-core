@@ -18,6 +18,7 @@ import fnmatch
 import json
 import logging
 import os
+import pathlib
 import re
 import resource
 import signal
@@ -28,12 +29,18 @@ from os.path import basename
 from string import Template
 from urllib.parse import parse_qs, urlparse
 
+try:
+    import tomllib  # novermin
+except ModuleNotFoundError:
+    from flux.utils import tomli as tomllib
+
 import flux
 from flux import debugged, job, util
 from flux.constraint.parser import ConstraintParser, ConstraintSyntaxError
 from flux.idset import IDset
 from flux.job import JobspecV1
 from flux.progress import ProgressBar
+from flux.util import dict_merge, set_treedict
 
 LOGGER = logging.getLogger("flux")
 
@@ -373,6 +380,122 @@ class EnvFilterAction(argparse.Action):
             items = []
         items.append("-" + values)
         setattr(namespace, "env", items)
+
+
+class BatchConfig:
+    """Convenience class for handling a --conf=[FILE|KEY=VAL] option
+
+    Iteratively build a "config" dict from successive updates.
+    """
+
+    loaders = {".toml": tomllib.load, ".json": json.load}
+
+    def __init__(self):
+        self.config = None
+
+    def update_string(self, value):
+        # Update config with JSON or TOML string
+        try:
+            conf = json.loads(value)
+        except json.decoder.JSONDecodeError:
+            # Try TOML
+            try:
+                conf = tomllib.loads(value)
+            except tomllib.TOMLDecodeError:
+                raise ValueError(
+                    "--conf: failed to parse multiline as TOML or JSON"
+                ) from None
+        self.config = dict_merge(self.config, conf)
+        return self
+
+    def update_keyval(self, keyval):
+        # dotted key (e.g. resource.noverify=true)
+        key, _, value = keyval.partition("=")
+        try:
+            value = json.loads(value)
+        except json.decoder.JSONDecodeError:
+            value = str(value)
+        set_treedict(self.config, key, value)
+        return self
+
+    def update_file(self, path, extension=".toml"):
+        # Update from file in the filesystem
+        try:
+            loader = self.loaders[extension]
+        except KeyError:
+            raise ValueError("--conf: {path} must end in .toml or .json")
+        try:
+            with open(path, "rb") as fp:
+                conf = loader(fp)
+        except OSError as exc:
+            raise ValueError(f"--conf: {exc}") from None
+        except (json.decoder.JSONDecodeError, tomllib.TOMLDecodeError) as exc:
+            raise ValueError(f"--conf: parse error: {path}: {exc}") from None
+        self.config = dict_merge(self.config, conf)
+        return self
+
+    def _find_config(self, name):
+        # Find a named config as either TOML or JSON in XDG search path
+        for path in util.xdg_searchpath(subdir="config"):
+            # Take the first matching filename preferring TOML:
+            for ext in (".toml", ".json"):
+                filename = f"{path}/{name}{ext}"
+                if os.path.exists(filename):
+                    return filename, self.loaders[ext]
+        return None, None
+
+    def update_named_config(self, name):
+        # Update from a named configuration file in a standard path or paths.
+        filename, loader = self._find_config(name)
+        if filename is not None:
+            try:
+                with open(filename, "rb") as fp:
+                    self.config = dict_merge(self.config, loader(fp))
+                    return self
+            except (
+                OSError,
+                tomllib.TOMLDecodeError,
+                json.decoder.JSONDecodeError,
+            ) as exc:
+                raise ValueError(f"--conf={name}: {filename}: {exc}") from None
+        raise ValueError(f"--conf: named config '{name}' not found")
+
+    def update(self, value):
+        """
+        Update current config with value using the following rules:
+        - If value contains one or more newlines, parse it as a JSON or
+          TOML string.
+        - Otherwise, if value contains an ``=``, then parse it as a dotted
+          key and value, e.g. ``resource.noverify=true``. The value (part
+          after the ``=``) will be parsed as JSON.
+        - Otherwise, if value ends in ``.toml`` or ``.json`` treat value as
+          a path and attempt to parse contents of file as TOML or JSON.
+        - Otherwise, read a named config from a standard config search path.
+
+        Configuration can be updated iteratively. The end result is available
+        in the ``config`` attribute.
+        """
+        if self.config is None:
+            self.config = {}
+        if "\n" in value:
+            return self.update_string(value)
+        if "=" in value:
+            return self.update_keyval(value)
+        extension = pathlib.Path(value).suffix
+        if extension in (".toml", ".json"):
+            return self.update_file(value, extension)
+        return self.update_named_config(value)
+
+
+class ConfAction(argparse.Action):
+    """Handle batch/alloc --conf option"""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        conf = getattr(namespace, "conf", None)
+        if conf is None:
+            conf = BatchConfig()
+            setattr(namespace, "conf", conf)
+        conf.update(values)
 
 
 class Xcmd:
@@ -1595,6 +1718,17 @@ def add_batch_alloc_args(parser):
     Add "batch"-specific resource allocation arguments to parser object
     which deal in slots instead of tasks.
     """
+    parser.add_argument(
+        "--conf",
+        metavar="CONF",
+        default=BatchConfig(),
+        action=ConfAction,
+        help="Set configuration for a child Flux instance. CONF may be a "
+        + "multiline string in JSON or TOML, a configuration key=value, a "
+        + "path to a JSON or TOML file, or a configuration loaded by name "
+        + "from a standard search path. This option may specified multiple "
+        + "times, in which case the config is iteratively updated.",
+    )
     parser.add_argument(
         "--broker-opts",
         metavar="OPTS",

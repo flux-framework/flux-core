@@ -987,6 +987,23 @@ def dict_merge(src, new):
     return src
 
 
+def xdg_searchpath(subdir=""):
+    """
+    Build standard Flux config search path based on XDG specification
+    """
+    #  Start with XDG_CONFIG_HOME (or ~/.config) since it is the
+    #  highest precedence:
+    confdirs = [os.getenv("XDG_CONFIG_HOME") or f"{Path.home()}/.config"]
+
+    #  Append XDG_CONFIG_DIRS as colon separated path (or /etc/xdg)
+    #  Note: colon separated paths are in order of precedence.
+    confdirs += (os.getenv("XDG_CONFIG_DIRS") or "/etc/xdg").split(":")
+
+    #  Append "/flux" (with optional subdir) to all members of
+    #  confdirs to build searchpath:
+    return [Path(directory, "flux", subdir) for directory in confdirs]
+
+
 class UtilConfig:
     """
     Very simple class for loading hierarchical configuration for Flux
@@ -1032,17 +1049,7 @@ class UtilConfig:
         #  specification. Later this will be reversed since we want
         #  to traverse the paths in _reverse_ precedence order in this
         #  implementation.
-        #
-        #  Start with XDG_CONFIG_HOME (or ~/.config) since it is the
-        #  highest precedence:
-        confdirs = [os.getenv("XDG_CONFIG_HOME") or f"{Path.home()}/.config"]
-
-        #  Append XDG_CONFIG_DIRS as colon separated path (or /etc/xdg)
-        #  Note: colon separated paths are in order of precedence.
-        confdirs += (os.getenv("XDG_CONFIG_DIRS") or "/etc/xdg").split(":")
-
-        #  Append "/flux" to all members of confdirs to build searchpath:
-        self.searchpath = [Path(directory, "flux") for directory in confdirs]
+        self.searchpath = xdg_searchpath()
 
         #  Reorder searchpath into reverse precedence order
         self.searchpath.reverse()
