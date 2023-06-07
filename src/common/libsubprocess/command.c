@@ -17,6 +17,7 @@
 #include <argz.h>
 #include <envz.h>
 #include <assert.h>
+#include <fnmatch.h>
 
 #include <jansson.h>
 
@@ -579,9 +580,39 @@ int flux_cmd_setenvf (flux_cmd_t *cmd, int overwrite,
     return (rc);
 }
 
+static bool isa_glob (const char *s)
+{
+    if (strchr (s, '*') || strchr (s, '?') || strchr (s, '['))
+        return true;
+    return false;
+}
+
 void flux_cmd_unsetenv (flux_cmd_t *cmd, const char *name)
 {
-    envz_remove (&cmd->envz, &cmd->envz_len, name);
+    if (!cmd
+        || !name
+        || cmd->envz == NULL
+        || cmd->envz_len == 0)
+        return;
+
+    if (isa_glob (name)) {
+        char *cpy = NULL;
+        size_t cpy_len = 0;
+        char buf[1024];
+        char *s;
+
+        if (argz_append (&cpy, &cpy_len, cmd->envz, cmd->envz_len) == 0) {
+            char *entry = NULL;
+            while ((entry = argz_next (cpy, cpy_len, entry))) {
+                if ((s = env_entry_name (entry, buf, sizeof (buf)))
+                    && fnmatch (name, s, 0) == 0)
+                    envz_remove (&cmd->envz, &cmd->envz_len, s);
+            }
+            free (cpy);
+        }
+    }
+    else
+        envz_remove (&cmd->envz, &cmd->envz_len, name);
 }
 
 const char * flux_cmd_getenv (const flux_cmd_t *cmd, const char *name)
