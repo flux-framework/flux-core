@@ -20,6 +20,12 @@ job_list_wait_state() {
 	flux job list-ids --wait-state=$2 $1 > /dev/null
 }
 
+# flux-top will redraw panes when a heartbeat is received, which could
+# lead to racy output with tests below.  Remove the heartbeat module to
+# remove this possibility.
+test_expect_success 'set high heartbeat period' '
+	flux module remove heartbeat
+'
 test_expect_success 'flux-top -h prints custom usage' '
 	flux top -h 2>usage &&
 	grep "Usage:.*TARGET" usage

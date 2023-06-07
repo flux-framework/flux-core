@@ -385,6 +385,11 @@ int main (int argc, char *argv[])
                             optparse_get_str (opts, "queue", NULL),
                             &error)))
         fatal (0, "%s", error.text);
+    /* top_create() call above will call initial "draw" routines.  We
+     * do not want those draws to output anything during testing with
+     * the --test-exit-dump option.  Thus we handle --test-exit and
+     * --test-exit-dump setup after the top_create() call.
+     */
     if (optparse_hasopt (opts, "test-exit")) {
         const char *file;
         top->test_exit = 1;
