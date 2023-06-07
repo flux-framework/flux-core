@@ -388,6 +388,8 @@ class BatchConfig:
     Iteratively build a "config" dict from successive updates.
     """
 
+    loaders = {".toml": tomllib.load, ".json": json.load}
+
     def __init__(self):
         self.config = None
 
@@ -418,11 +420,9 @@ class BatchConfig:
 
     def update_file(self, path, extension=".toml"):
         # Update from file in the filesystem
-        if extension == ".json":
-            loader = json.load
-        elif extension == ".toml":
-            loader = tomllib.load
-        else:
+        try:
+            loader = self.loaders[extension]
+        except KeyError:
             raise ValueError("--conf: {path} must end in .toml or .json")
         try:
             with open(path, "rb") as fp:
@@ -434,8 +434,31 @@ class BatchConfig:
         self.config = dict_merge(self.config, conf)
         return self
 
+    def _find_config(self, name):
+        # Find a named config as either TOML or JSON in XDG search path
+        for path in util.xdg_searchpath(subdir="config"):
+            # Take the first matching filename preferring TOML:
+            for ext in (".toml", ".json"):
+                filename = f"{path}/{name}{ext}"
+                if os.path.exists(filename):
+                    return filename, self.loaders[ext]
+        return None, None
+
     def update_named_config(self, name):
-        raise NotImplementedError("--conf: no named config support") from None
+        # Update from a named configuration file in a standard path or paths.
+        filename, loader = self._find_config(name)
+        if filename is not None:
+            try:
+                with open(filename, "rb") as fp:
+                    self.config = dict_merge(self.config, loader(fp))
+                    return self
+            except (
+                OSError,
+                tomllib.TOMLDecodeError,
+                json.decoder.JSONDecodeError,
+            ) as exc:
+                raise ValueError(f"--conf={name}: {filename}: {exc}") from None
+        raise ValueError(f"--conf: named config '{name}' not found")
 
     def update(self, value):
         """
@@ -447,8 +470,7 @@ class BatchConfig:
           after the ``=``) will be parsed as JSON.
         - Otherwise, if value ends in ``.toml`` or ``.json`` treat value as
           a path and attempt to parse contents of file as TOML or JSON.
-        - (Future extension: If path does not exist, read a named config from
-           a configuration repository in the local filesystem)
+        - Otherwise, read a named config from a standard config search path.
 
         Configuration can be updated iteratively. The end result is available
         in the ``config`` attribute.
@@ -1702,8 +1724,9 @@ def add_batch_alloc_args(parser):
         default=BatchConfig(),
         action=ConfAction,
         help="Set configuration for a child Flux instance. CONF may be a "
-        + "multiline string in JSON or TOML, a configuration key=value, or a "
-        + "path to a JSON or TOML file. This option may specified multiple "
+        + "multiline string in JSON or TOML, a configuration key=value, a "
+        + "path to a JSON or TOML file, or a configuration loaded by name "
+        + "from a standard search path. This option may specified multiple "
         + "times, in which case the config is iteratively updated.",
     )
     parser.add_argument(
