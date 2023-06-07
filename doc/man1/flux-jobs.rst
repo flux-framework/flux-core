@@ -470,7 +470,7 @@ The ``flux-jobs`` command supports registration of named output formats
 in configuration files. The command loads configuration files from
 ``flux-jobs.EXT`` from the following paths in order of increasing precedence:
 
- * ``$XDG_CONFIG_DIRS/flux`` or ``/etc/flux/xdg`` if ``XDG_CONFIG_DIRS`` is
+ * ``$XDG_CONFIG_DIRS/flux`` or ``/etc/xdg/flux`` if ``XDG_CONFIG_DIRS`` is
    not set. Note that ``XDG_CONFIG_DIRS`` is traversed in reverse order
    such that entries first in the colon separated path are highest priority.
 
