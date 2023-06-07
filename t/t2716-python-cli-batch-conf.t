@@ -58,11 +58,64 @@ test_expect_success 'flux-batch --conf=FILE detects invalid JSON syntax' '
 	test_debug "cat parse-error2.out" &&
 	grep "parse error" parse-error2.out
 '
-test_expect_success 'flux-batch --conf=NAME raises NotImplemented' '
-	test_must_fail flux batch --conf=named -n1 --dry-run \
-		--wrap hostname >named.out 2>&1 &&
-	test_debug "cat named.out" &&
-	grep "no named config support" named.out
+test_expect_success 'flux-batch --conf=noexist fails' '
+	test_must_fail flux batch --conf=noexist -n1 --dry-run \
+		--wrap hostname >noexist.out 2>&1 &&
+	test_debug "cat noexist.out" &&
+	grep "named config.*not found" noexist.out
+'
+test_expect_success 'flux-batch --conf=NAME works with XDG_CONFIG_HOME' '
+	mkdir -p d/flux/config &&
+	cat <<-EOF >d/flux/config/test.toml &&
+	[resource]
+	noverify = true
+	exclude = "0"
+	EOF
+	XDG_CONFIG_HOME="$(pwd)/d" \
+		flux batch --conf=test -n1 --dry-run --wrap hostname \
+		  >named-test.json &&
+	jq -e ".attributes.system.files[\"conf.json\"].data.resource.noverify" \
+		<named-test.json &&
+	jq -e ".attributes.system.files[\"conf.json\"].data.resource.exclude == \"0\"" \
+		<named-test.json
+'
+test_expect_success 'flux-batch --conf=NAME works with JSON config' '
+	cat <<-EOF >d/flux/config/test2.json &&
+	{"resource": {"exclude": "1"}}
+	EOF
+	XDG_CONFIG_HOME="$(pwd)/d" \
+		flux batch --conf=test2 -n1 --dry-run --wrap hostname \
+		  >named-json.json &&
+	jq -e ".attributes.system.files[\"conf.json\"].data.resource.exclude == \"1\"" \
+		<named-json.json
+'
+test_expect_success 'flux-batch --conf=NAME works with XDG_CONFIG_DIRS' '
+	mkdir -p d2/flux/config &&
+	cat <<-EOF >d2/flux/config/test.toml &&
+	[resource]
+	noverify = false
+	exclude = "1"
+	EOF
+	XDG_CONFIG_DIRS="$(pwd)/d2:$(pwd)/d" \
+		flux batch --conf=test -n1 --dry-run --wrap hostname \
+		  >named2-test.json &&
+	jq -e ".attributes.system.files[\"conf.json\"].data.resource.noverify == false" \
+		<named2-test.json &&
+	jq -e ".attributes.system.files[\"conf.json\"].data.resource.exclude == \"1\"" \
+		<named2-test.json
+'
+test_expect_success 'flux-batch parse error in named config is caught' '
+	mkdir -p d3/flux/config &&
+	cat <<-EOF >d3/flux/config/test.toml &&
+	[resource]
+	noverify = foo
+	EOF
+	XDG_CONFIG_DIRS="$(pwd)/d3:$(pwd)/d2:$(pwd)/d" \
+		test_must_fail \
+		  flux batch --conf=test -n1 --dry-run --wrap hostname \
+		    >named-parse-error.out 2>&1 &&
+	test_debug "cat named-parse-error.out" &&
+	grep 'conf=test:.*test.toml' named-parse-error.out
 '
 test_expect_success 'flux-batch --conf=KEY=VAL works' '
 	flux batch --conf=resource.noverify=true -n1 --dry-run \
