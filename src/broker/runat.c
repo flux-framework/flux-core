@@ -432,10 +432,7 @@ static int runat_push (struct runat *r,
     if (!(entry = zhashx_lookup (r->entries, name))) {
         if (!(entry = runat_entry_create (name)))
             return -1;
-        if (zhashx_insert (r->entries, name, entry) < 0) {
-            runat_entry_destroy (entry);
-            return -1;
-        }
+        (void)zhashx_insert (r->entries, name, entry);
     }
     if (zlist_push (entry->commands, cmd) < 0) {
         if (zlist_size (entry->commands) == 0)

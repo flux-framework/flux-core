@@ -160,10 +160,7 @@ int service_add (struct service_switch *sh, const char *name,
     svc = service_create (uuid);
     svc->cb = cb;
     svc->cb_arg = arg;
-    if (zhash_insert (sh->services, name, svc) < 0) {
-        errno = ENOMEM;
-        goto error;
-    }
+    (void)zhash_insert (sh->services, name, svc);
     zhash_freefn (sh->services, name, (zhash_free_fn *)service_destroy);
     return 0;
 error:

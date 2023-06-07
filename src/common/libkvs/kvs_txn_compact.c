@@ -275,7 +275,7 @@ int txn_compact (flux_kvs_txn_t *txn)
                     goto error;
                 }
                 if (zhash_insert (append_keys, key, ck) < 0) {
-                    errno = ENOMEM;
+                    errno = EEXIST;
                     goto error;
                 }
                 zhash_freefn (append_keys, key, compact_key_destroy);

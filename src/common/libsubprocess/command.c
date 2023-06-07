@@ -309,7 +309,7 @@ static zhash_t *zhash_fromjson (json_t *o)
             goto fail;
         if (zhash_insert (h, key, (char *) json_string_value (val)) < 0) {
             /* Duplicate key. This can't happen unless json object is
-             *  corrupt, so give up and return error (EINVAL)
+             *  corrupt, so give up and return error (EPROTO)
              */
             goto fail;
         }

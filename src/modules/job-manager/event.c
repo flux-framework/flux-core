@@ -1084,16 +1084,7 @@ int event_index (struct event *event, const char *name)
     void *entry = zhashx_lookup (event->evindex, name);
     if (!entry) {
         entry = int2ptr (((int) zhashx_size (event->evindex) + 1));
-        if (zhashx_insert (event->evindex, name, entry) < 0) {
-            /*
-             *  insertion only fails on duplicate entry, which we know
-             *   is not possible in this case. However, cover ENOMEM
-             *   case here in case assert-on-malloc failure is fixed
-             *   in the future for zhashx.
-             */
-            errno = ENOMEM;
-            return -1;
-        }
+        (void)zhashx_insert (event->evindex, name, entry);
     }
     return ptr2int (entry);
 }

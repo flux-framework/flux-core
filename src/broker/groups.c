@@ -121,11 +121,7 @@ static struct group *group_lookup (struct groups *g,
         }
         if (!(group = group_create (name)))
             return NULL;
-        if (zhashx_insert (g->groups, group->name, group) < 0) {
-            group_destroy (group);
-            errno = ENOMEM;
-            return NULL;
-        }
+        (void)zhashx_insert (g->groups, group->name, group);
     }
     return group;
 }

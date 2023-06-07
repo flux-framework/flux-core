@@ -458,11 +458,9 @@ static int queue_configure (const flux_conf_t *conf,
          */
         json_object_foreach (queues, name, value) {
             if (!zhashx_lookup (queue->named, name)) {
-                if (!(q = jobq_create (name))
-                    || zhashx_insert (queue->named, name, q) < 0) {
-                    jobq_destroy (q);
+                if (!(q = jobq_create (name)))
                     goto nomem;
-                }
+                (void)zhashx_insert (queue->named, name, q);
             }
         }
     }

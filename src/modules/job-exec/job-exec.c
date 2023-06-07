@@ -1157,6 +1157,7 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
     }
 
     if (zhashx_insert (ctx->jobs, &job->id, job) < 0) {
+        errno = EEXIST;
         flux_log_error (ctx->h, "zhashx_insert");
         jobinfo_fatal_error (job, errno, "failed to hash job");
         return -1;

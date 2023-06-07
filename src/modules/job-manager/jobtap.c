@@ -1298,8 +1298,12 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
         goto error;
 
     char *uuid = (char *)flux_plugin_get_uuid (p);
-    if (zhashx_insert (jobtap->plugins_byuuid, uuid, p) < 0
-        || !zlistx_add_end (jobtap->plugins, p)) {
+    if (zhashx_insert (jobtap->plugins_byuuid, uuid, p) < 0) {
+        errprintf (errp, "Error adding plugin to list");
+        errno = EEXIST;
+        goto error;
+    }
+    if (!zlistx_add_end (jobtap->plugins, p)) {
         zhashx_delete (jobtap->plugins_byuuid, uuid);
         errprintf (errp, "Out of memory adding plugin to list");
         errno = ENOMEM;

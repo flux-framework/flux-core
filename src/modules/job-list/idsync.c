@@ -202,8 +202,7 @@ static int idsync_add_waiter (struct idsync_ctx *isctx,
         zlistx_set_destructor (iwl->l, idsync_data_destroy_wrapper);
         iwl->id = isd->id;
 
-        if (zhashx_insert (isctx->waits, &iwl->id, iwl) < 0)
-            goto enomem;
+        (void)zhashx_insert (isctx->waits, &iwl->id, iwl);
     }
 
     if (!zlistx_add_end (iwl->l, isd))
