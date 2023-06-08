@@ -1319,7 +1319,7 @@ _flux_start()
 
 _flux_core()
 {
-    local cur prev cmd subcmd
+    local cur prev cmd subcmd matched
     local cmds=$(__get_flux_subcommands)
     cmd=$(_flux_get_cmd)
     subcmd=$(_flux_get_subcmd $cmd)
@@ -1333,6 +1333,7 @@ _flux_core()
         prev=${COMP_WORDS[COMP_CWORD-1]}
     fi
 
+    matched=t
     case "${cmd}" in
     submit|run|alloc|batch|bulksubmit)
         _flux_mini $cmd
@@ -1415,11 +1416,21 @@ _flux_core()
     -*)
         COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )
         ;;
-    help|*)
+    help)
+        COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
+        ;;
+    *)
+        matched=f
         COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
         ;;
     esac
 
+    # If there was an exact command match, and current == command and
+    # there are no other completion possibilities, return it so it gets
+    # completed by a tab, e.g. `flux top<tab>` adds a space: `flux top `.
+    if test "$matched" = "t" -a -z "$COMPREPLY" -a "$cur" = "$cmd"; then
+        COMPREPLY="$cur"
+    fi
     return 0
 }
 
