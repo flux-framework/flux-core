@@ -188,10 +188,12 @@ _flux_mini()
         --dry-run \
         -h --help \
         --cwd= \
+        --signal= \
+        --add-file= \
     "
     local SUBMIT_OPTIONS="\
         -N --nodes= \
-        --exclusive \
+        -x --exclusive \
         -n --ntasks= \
         -c --cores-per-task= \
         -g --gpus-per-task= \
@@ -207,7 +209,9 @@ _flux_mini()
         -c --cores-per-slot= \
         -g --gpus-per-slot= \
         -N --nodes= \
-        --exclusive \
+        --dump= \
+        --conf= \
+        -x --exclusive \
     "
     local SUBMITBULK_OPTIONS="\
         --quiet \
@@ -295,12 +299,14 @@ _flux_resource()
     local info_OPTS="\
         -h --help \
         -s --states= \
+        -i --include= \
     "
     local list_OPTS="\
         -h --help \
         -o --format= \
         -s --states= \
         -n --no-header \
+        -i --include= \
     "
     local status_OPTS="\
         ${list_OPTS} \
@@ -314,6 +320,7 @@ _flux_resource()
         -u --update \
         -o --format= \
         -n --no-header \
+        -i --include= \
     "
 
     if [[ $cmd != "resource" ]]; then
@@ -517,6 +524,7 @@ _flux_queue()
         stop \
         status \
         drain \
+        list \
         idle
     "
     local enable_OPTS="\
@@ -818,14 +826,13 @@ _flux_admin()
 _flux_module()
 {
     local cmd=$1
-    local subcmds_module_arg="remove reload info stats debug"
+    local subcmds_module_arg="remove reload stats debug"
     local subcmds="list load ${subcmds_module_arg}"
 
     local load_OPTS="\
-        -r --rank= \
+        --name= \
     "
     local remove_OPTS="\
-        -r --rank= \
         -f --force \
     "
     local reload_OPTS="\
@@ -844,6 +851,9 @@ _flux_module()
         -S --set \
         -s --setbit \
         -c --clearbit \
+    "
+    local list_OPTS="\
+        -l, --long \
     "
     if [[ $cmd != "module" ]]; then
 
@@ -1067,10 +1077,22 @@ _flux_restore()
 _flux_top()
 {
     local cmd=$1
+    local OPTS="\
+        --color= \
+        -q --queue= \
+    "
+    if _flux_complete_queue; then
+        return 0
+    fi
     #  flux-top(1) can target jobids that are also instances
     local jobs=$(flux jobs -no {uri}:{id} | grep -v ^None: \
                  | sed -n 's/.*://p')
-    COMPREPLY=( $(compgen -W "$jobs" -- "$cur") )
+    COMPREPLY=( $(compgen -W "${OPTS} $jobs" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
 }
 
 # flux-dmesg(1) completions
@@ -1319,7 +1341,7 @@ _flux_start()
 
 _flux_core()
 {
-    local cur prev cmd subcmd
+    local cur prev cmd subcmd matched
     local cmds=$(__get_flux_subcommands)
     cmd=$(_flux_get_cmd)
     subcmd=$(_flux_get_subcmd $cmd)
@@ -1333,6 +1355,7 @@ _flux_core()
         prev=${COMP_WORDS[COMP_CWORD-1]}
     fi
 
+    matched=t
     case "${cmd}" in
     submit|run|alloc|batch|bulksubmit)
         _flux_mini $cmd
@@ -1415,11 +1438,21 @@ _flux_core()
     -*)
         COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )
         ;;
-    help|*)
+    help)
+        COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
+        ;;
+    *)
+        matched=f
         COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
         ;;
     esac
 
+    # If there was an exact command match, and current == command and
+    # there are no other completion possibilities, return it so it gets
+    # completed by a tab, e.g. `flux top<tab>` adds a space: `flux top `.
+    if test "$matched" = "t" -a -z "$COMPREPLY" -a "$cur" = "$cmd"; then
+        COMPREPLY="$cur"
+    fi
     return 0
 }
 
