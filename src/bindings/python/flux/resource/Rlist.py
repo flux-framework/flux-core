@@ -112,7 +112,7 @@ class Rlist(WrapperPimpl):
 
     def remove_ranks(self, ranks):
         if not isinstance(ranks, IDset):
-            ranks = IDset(str(ranks))
+            ranks = IDset(ranks)
         self.pimpl.remove_ranks(ranks)
         return self
 
