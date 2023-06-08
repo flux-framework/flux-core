@@ -321,31 +321,12 @@ void test_arg_insert_delete (void)
     flux_cmd_destroy (cmd);
 }
 
-int main (int argc, char *argv[])
+void test_env (void)
 {
-    json_t *o;
-    flux_cmd_t *cmd, *copy;
+    flux_cmd_t *cmd;
 
-    plan (NO_PLAN);
-
-    diag ("Basic flux_cmd_create");
-    check_basic_create ();
-
-    diag ("Create a flux_cmd_t and fill it with known values");
-    // Create an empty command then fill it with nonsense:
-    cmd = flux_cmd_create (0, NULL, NULL);
-    ok (cmd != NULL, "flux_cmd_create (0, NULL, NULL)");
-    check_empty_cmd_attributes (cmd);
-    set_cmd_attributes (cmd);
-
-    diag ("Ensure flux_cmd_t contains expected values and test interfaces");
-    // Check the nonsense
-    check_cmd_attributes (cmd);
-
-    set_cmd_attributes2 (cmd);
-
-    diag ("Ensure flux_cmd_t contains expected values again");
-    check_cmd_attributes (cmd);
+    if (!(cmd = flux_cmd_create (0, NULL, NULL)))
+        BAIL_OUT ("failed to create command object");
 
     // Test unsetenv with throwaway var
     diag ("Test setenv/getenv/unsetenv");
@@ -371,6 +352,35 @@ int main (int argc, char *argv[])
     is (flux_cmd_getenv (cmd, "FOO"), "24",
         "flux_cmd_getenv (FOO) == 24");
     flux_cmd_unsetenv (cmd, "FOO");
+
+    flux_cmd_destroy (cmd);
+}
+
+int main (int argc, char *argv[])
+{
+    json_t *o;
+    flux_cmd_t *cmd, *copy;
+
+    plan (NO_PLAN);
+
+    diag ("Basic flux_cmd_create");
+    check_basic_create ();
+
+    diag ("Create a flux_cmd_t and fill it with known values");
+    // Create an empty command then fill it with nonsense:
+    cmd = flux_cmd_create (0, NULL, NULL);
+    ok (cmd != NULL, "flux_cmd_create (0, NULL, NULL)");
+    check_empty_cmd_attributes (cmd);
+    set_cmd_attributes (cmd);
+
+    diag ("Ensure flux_cmd_t contains expected values and test interfaces");
+    // Check the nonsense
+    check_cmd_attributes (cmd);
+
+    set_cmd_attributes2 (cmd);
+
+    diag ("Ensure flux_cmd_t contains expected values again");
+    check_cmd_attributes (cmd);
 
     // Test opt overwrite
     ok (flux_cmd_setopt (cmd, "FOO", "BAR") >= 0,
@@ -404,6 +414,8 @@ int main (int argc, char *argv[])
             diag ("%d:%d: %s", error.line, error.column, error.text);
     }
     flux_cmd_destroy (cmd);
+
+    test_env ();
 
     test_find_opts ();
 
