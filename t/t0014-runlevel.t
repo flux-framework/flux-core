@@ -116,7 +116,7 @@ test_expect_success 'flux admin cleanup-push (stdin) retains cmd block order' '
 '
 
 test_expect_success 'capture the environment for all three rc scripts' '
-	flux start \
+	SLURM_FOO=42 flux start \
 		-o,-Slog-stderr-level=6 \
 		-o,-Sbroker.rc1_path="bash -c printenv >rc1.env" \
 		-o,-Sbroker.rc3_path="bash -c printenv >rc3.env" \
@@ -143,6 +143,9 @@ test_expect_success 'PMI_FD, PMI_SIZE, PMI_RANK are not set in rc scripts' '
 	var_is_unset PMI_FD *.env &&
 	var_is_unset PMI_RANK *.env &&
 	var_is_unset PMI_SIZE *.env
+'
+test_expect_success 'SLURM_* vars were cleared from env of rc scripts' '
+	var_is_unset SLURM_FOO *.env
 '
 test_expect_success 'FLUX_URI is set in rc scripts' '
 	var_is_set FLUX_URI *.env
