@@ -196,6 +196,7 @@ int flux_cmd_setenvf (flux_cmd_t *cmd, int overwrite,
 
 /*
  *  Unset environment variable `name` in the command object `cmd`.
+ *   If `name` is a glob pattern, unset all matching variables.
  */
 void flux_cmd_unsetenv (flux_cmd_t *cmd, const char *name);
 

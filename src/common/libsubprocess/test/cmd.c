@@ -321,31 +321,12 @@ void test_arg_insert_delete (void)
     flux_cmd_destroy (cmd);
 }
 
-int main (int argc, char *argv[])
+void test_env (void)
 {
-    json_t *o;
-    flux_cmd_t *cmd, *copy;
+    flux_cmd_t *cmd;
 
-    plan (NO_PLAN);
-
-    diag ("Basic flux_cmd_create");
-    check_basic_create ();
-
-    diag ("Create a flux_cmd_t and fill it with known values");
-    // Create an empty command then fill it with nonsense:
-    cmd = flux_cmd_create (0, NULL, NULL);
-    ok (cmd != NULL, "flux_cmd_create (0, NULL, NULL)");
-    check_empty_cmd_attributes (cmd);
-    set_cmd_attributes (cmd);
-
-    diag ("Ensure flux_cmd_t contains expected values and test interfaces");
-    // Check the nonsense
-    check_cmd_attributes (cmd);
-
-    set_cmd_attributes2 (cmd);
-
-    diag ("Ensure flux_cmd_t contains expected values again");
-    check_cmd_attributes (cmd);
+    if (!(cmd = flux_cmd_create (0, NULL, NULL)))
+        BAIL_OUT ("failed to create command object");
 
     // Test unsetenv with throwaway var
     diag ("Test setenv/getenv/unsetenv");
@@ -371,6 +352,68 @@ int main (int argc, char *argv[])
     is (flux_cmd_getenv (cmd, "FOO"), "24",
         "flux_cmd_getenv (FOO) == 24");
     flux_cmd_unsetenv (cmd, "FOO");
+
+    flux_cmd_destroy (cmd);
+}
+
+void test_env_glob (void)
+{
+    flux_cmd_t *cmd;
+
+    if (!(cmd = flux_cmd_create (0, NULL, NULL)))
+        BAIL_OUT ("failed to create command object");
+    lives_ok ({flux_cmd_unsetenv (NULL, "FOO");},
+        "flux_cmd_unset (NULL, FOO) doesn't crash");
+    lives_ok ({flux_cmd_unsetenv (cmd, NULL);},
+        "flux_cmd_unset (cmd, NULL) doesn't crash");
+    lives_ok ({flux_cmd_unsetenv (cmd, "FOO");},
+        "flux_cmd_unset (cmd, FOO) doesn't crash on empty cmd env");
+    ok (flux_cmd_setenvf (cmd, 0, "NOMATCH_FOO", "%d", 1) >= 0,
+        "flux_cmd_setenvf (NOMATCH_FOO=1)");
+    ok (flux_cmd_setenvf (cmd, 0, "MATCH_FOO", "%d", 2) >= 0,
+        "flux_cmd_setenvf (MATCH_FOO=2)");
+    ok (flux_cmd_setenvf (cmd, 0, "NOMATCH_BAR", "%d", 3) >= 0,
+        "flux_cmd_setenvf (NOMATCH_BAR=3)");
+    ok (flux_cmd_setenvf (cmd, 0, "MATCH_BAR", "%d", 4) >= 0,
+        "flux_cmd_setenvf (MATCH_BAR=4)");
+    flux_cmd_unsetenv (cmd, "MATCH_*");
+    diag ("flux_cmd_unsetenv (MATCH_*)");
+    is (flux_cmd_getenv (cmd, "NOMATCH_FOO"), "1",
+        "flux_cmd_getenv (NOMATCH_FOO == 1");
+    ok (flux_cmd_getenv (cmd, "MATCH_FOO") == NULL,
+        "flux_cmd_getenv (MATCH_FOO == NULL)");
+    is (flux_cmd_getenv (cmd, "NOMATCH_BAR"), "3",
+        "flux_cmd_getenv (NOMATCH_BAR == 3");
+    ok (flux_cmd_getenv (cmd, "MATCH_BAR") == NULL,
+        "flux_cmd_getenv (MATCH_BAR == NULL)");
+    flux_cmd_destroy (cmd);
+}
+
+int main (int argc, char *argv[])
+{
+    json_t *o;
+    flux_cmd_t *cmd, *copy;
+
+    plan (NO_PLAN);
+
+    diag ("Basic flux_cmd_create");
+    check_basic_create ();
+
+    diag ("Create a flux_cmd_t and fill it with known values");
+    // Create an empty command then fill it with nonsense:
+    cmd = flux_cmd_create (0, NULL, NULL);
+    ok (cmd != NULL, "flux_cmd_create (0, NULL, NULL)");
+    check_empty_cmd_attributes (cmd);
+    set_cmd_attributes (cmd);
+
+    diag ("Ensure flux_cmd_t contains expected values and test interfaces");
+    // Check the nonsense
+    check_cmd_attributes (cmd);
+
+    set_cmd_attributes2 (cmd);
+
+    diag ("Ensure flux_cmd_t contains expected values again");
+    check_cmd_attributes (cmd);
 
     // Test opt overwrite
     ok (flux_cmd_setopt (cmd, "FOO", "BAR") >= 0,
@@ -404,6 +447,9 @@ int main (int argc, char *argv[])
             diag ("%d:%d: %s", error.line, error.column, error.text);
     }
     flux_cmd_destroy (cmd);
+
+    test_env ();
+    test_env_glob ();
 
     test_find_opts ();
 
