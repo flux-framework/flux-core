@@ -356,6 +356,39 @@ void test_env (void)
     flux_cmd_destroy (cmd);
 }
 
+void test_env_glob (void)
+{
+    flux_cmd_t *cmd;
+
+    if (!(cmd = flux_cmd_create (0, NULL, NULL)))
+        BAIL_OUT ("failed to create command object");
+    lives_ok ({flux_cmd_unsetenv (NULL, "FOO");},
+        "flux_cmd_unset (NULL, FOO) doesn't crash");
+    lives_ok ({flux_cmd_unsetenv (cmd, NULL);},
+        "flux_cmd_unset (cmd, NULL) doesn't crash");
+    lives_ok ({flux_cmd_unsetenv (cmd, "FOO");},
+        "flux_cmd_unset (cmd, FOO) doesn't crash on empty cmd env");
+    ok (flux_cmd_setenvf (cmd, 0, "NOMATCH_FOO", "%d", 1) >= 0,
+        "flux_cmd_setenvf (NOMATCH_FOO=1)");
+    ok (flux_cmd_setenvf (cmd, 0, "MATCH_FOO", "%d", 2) >= 0,
+        "flux_cmd_setenvf (MATCH_FOO=2)");
+    ok (flux_cmd_setenvf (cmd, 0, "NOMATCH_BAR", "%d", 3) >= 0,
+        "flux_cmd_setenvf (NOMATCH_BAR=3)");
+    ok (flux_cmd_setenvf (cmd, 0, "MATCH_BAR", "%d", 4) >= 0,
+        "flux_cmd_setenvf (MATCH_BAR=4)");
+    flux_cmd_unsetenv (cmd, "MATCH_*");
+    diag ("flux_cmd_unsetenv (MATCH_*)");
+    is (flux_cmd_getenv (cmd, "NOMATCH_FOO"), "1",
+        "flux_cmd_getenv (NOMATCH_FOO == 1");
+    ok (flux_cmd_getenv (cmd, "MATCH_FOO") == NULL,
+        "flux_cmd_getenv (MATCH_FOO == NULL)");
+    is (flux_cmd_getenv (cmd, "NOMATCH_BAR"), "3",
+        "flux_cmd_getenv (NOMATCH_BAR == 3");
+    ok (flux_cmd_getenv (cmd, "MATCH_BAR") == NULL,
+        "flux_cmd_getenv (MATCH_BAR == NULL)");
+    flux_cmd_destroy (cmd);
+}
+
 int main (int argc, char *argv[])
 {
     json_t *o;
@@ -416,6 +449,7 @@ int main (int argc, char *argv[])
     flux_cmd_destroy (cmd);
 
     test_env ();
+    test_env_glob ();
 
     test_find_opts ();
 
