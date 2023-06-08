@@ -55,6 +55,50 @@ for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
     '
 done
 
+#  Ensure all tested inputs can also work with --include
+#  Simply restrict to rank 0 then ensure {ranks} returns only 0
+for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
+    testname=$(basename ${input%%.json}) &&
+    base=${input%%.json} &&
+    name=$(basename $base) &&
+    test_expect_success "flux-resource list input --include check: $name" '
+        flux resource list -o "{ranks} {nodelist}" --include=0 \
+            --from-stdin < $input >$name-include.output 2>&1 &&
+        test_debug "cat $name-include.output" &&
+        grep "^0[^,-]" $name-include.output
+    '
+    test_expect_success "flux-resource info input --include check: $testname" '
+        flux resource info --from-stdin -i0 < $input \
+            > ${name}-info-include.output 2>&1 &&
+        test_debug "cat ${name}-info-include.output" &&
+	grep "1 Node" ${name}-info-include.output
+    '
+done
+
+test_expect_success 'flux-resource list supports --include' '
+	flux resource list -s all -ni 0 >list-include.output &&
+	test_debug "cat list-include.output" &&
+	test $(wc -l <list-include.output) -eq 1
+'
+INPUT=${SHARNESS_TEST_SRCDIR}/flux-resource/list/normal-new.json
+test_expect_success 'flux-resource list: --include works with ranks' '
+	flux resource list -s all -o "{nnodes} {ranks}" -ni 0,3 --from-stdin \
+		< $INPUT >include-ranks.out &&
+	test_debug "cat include-ranks.out" &&
+	grep "^2 0,3" include-ranks.out
+'
+test_expect_success 'flux-resource list: --include works with hostnames' '
+	flux resource list -s all -o "{nnodes} {nodelist}" -ni pi[0,3] \
+		--from-stdin < $INPUT >include-hosts.out &&
+	test_debug "cat include-hosts.out" &&
+	grep "^2 pi\[3,0\]" include-hosts.out
+'
+test_expect_success 'flux-resource list: --include works with invalid host' '
+	flux resource list -s all -o "{nnodes} {nodelist}" -ni pi7 \
+		--from-stdin < $INPUT >include-invalid-hosts.out &&
+	test_debug "cat include-invalid-hosts.out" &&
+	grep "^0" include-invalid-hosts.out
+'
 test_expect_success 'create test input with properties' '
 	cat <<-EOF >properties-test.in
 	{

@@ -189,7 +189,7 @@ class ResourceSet:
                       to remove
         """
         if not isinstance(ranks, IDset):
-            ranks = IDset(str(ranks))
+            ranks = IDset(ranks)
         self.impl.remove_ranks(ranks)
         return self
 
@@ -202,7 +202,7 @@ class ResourceSet:
                       to copy
         """
         if not isinstance(ranks, IDset):
-            ranks = IDset(str(ranks))
+            ranks = IDset(ranks)
         rset = ResourceSet(self.impl.copy_ranks(ranks))
 
         #  Preserve current state

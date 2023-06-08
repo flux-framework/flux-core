@@ -47,7 +47,7 @@ RESOURCE INVENTORY section below.
 COMMANDS
 ========
 
-**list** [-n] [-o FORMAT] [-s STATE,...]
+**list** [-n] [-o FORMAT] [-s STATE,...] [-i TARGETS]
    Show scheduler view of resources.
 
    With *-s,--states=STATE,...*, the set of resource states is restricted
@@ -56,17 +56,29 @@ COMMANDS
    offline, excluded, and drained resources as "down" due to the simplified
    interface with the resource service defined by RFC 27.
 
+   With *-i, --include=TARGETS*, the results are filtered to only include
+   resources matching **TARGETS**, which may be specified either as an idset
+   of broker ranks or list of hosts in hostlist form. It is not an error to
+   specify ranks or hosts which do not exist, the result will be filtered
+   to include only those ranks or hosts that are present in *TARGETS*.
+
    The *-o,--format=FORMAT* option may be used to customize the output
    format (See OUTPUT FORMAT section below).
 
    The *-n,--no-header* option suppresses header from output,
 
-**info** [-s STATE,...]
+**info** [-s STATE,...] [-i TARGETS]
    Show a brief, single line summary of scheduler view of resources.
 
    With *-s, --states=STATE,...*, limit the output to specified resource
    states as with ``flux resource list``. By default, the *STATE* reported
    by ``flux resource info`` is "all".
+
+   With *-i, --include=TARGETS*, the results are filtered to only include
+   resources matching **TARGETS**, which may be specified either as an idset
+   of broker ranks or list of hosts in hostlist form. It is not an error to
+   specify ranks or hosts which do not exist, the result will be filtered
+   to include only those ranks or hosts that are present in *TARGETS*.
 
 **status**  [-n] [-o FORMAT] [-s STATE,...] [-i TARGETS] [--skip-empty]
    Show system view of resources. This command queries both the resource
