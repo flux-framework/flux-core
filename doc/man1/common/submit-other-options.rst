@@ -48,6 +48,12 @@ OTHER OPTIONS
    encode multiple files.  Note: As documented in RFC 14, the file names
    ``script`` and ``conf.json`` are both reserved.
 
+   .. note::
+      This option should only be used for small files such as program input
+      parameters, configuration, scripts, and so on. For broadcast of large
+      files, binaries, and directories, the :man1:`flux-shell` ``stage-in``
+      plugin will be more appropriate.
+
 **--conf=FILE|KEY=VAL|STRING|NAME**
    The ``--conf`` option allows configuration for a Flux instance started
    via ``flux-batch(1)`` or ``flux-alloc(1)`` to be iteratively built on
