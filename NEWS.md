@@ -1,3 +1,86 @@
+flux-core version 0.51.0 - 2023-06-09
+-------------------------------------
+
+This release adds the flux-batch(1) and flux-alloc(1) `--conf` option,
+which makes subinstance configuration significantly easier.  Sys admins
+may note that _named configurations_ can be added to `/etc/xdg/flux/config`
+for configurations that are anticipated to be commonly needed such as
+node-exclusive scheduling.
+
+For example, `/etc/xdg/flux/config/node-exclusive.toml` could contain:
+```toml
+[sched-fluxion-resource]
+match-policy = "lonodex"
+```
+And then users could request this in a batch subinstance with:
+```
+flux batch --conf=node-exclusive ...
+```
+
+## New Features
+
+ * add `--conf` option for registering instance config in `flux-batch` and
+   `flux-alloc` (#5232)
+ * support RFC 14 `files` file archive in jobspec, add `--add-file` option
+   to cli submission commands (#5228, #5239)
+ * support option to signal a job a configurable time before expiration (#5212)
+ * flux-resource: add `-i, --include` option to filter hosts for `status`
+   and `drain` commands (#5219)
+ * flux-resource: add `-i, --include=TARGETS` option to `list`  and `info`
+   subcommands (#5236)
+ * broker: forward nonfatal signals to all running jobs (#5202)
+ * broker: unset `SLURM_*` in initial program environment (#5237)
+ * sdbus: add subscription filtering (#5227)
+ * job-exec: provide IMP exec helper when possible and use stdin/out for
+   shell exec protocol (#5186)
+ * support emoji encoding for Flux jobids (#5174)
+ * job-list: support retrieving current working directory for jobs (#5156)
+ * job-list: allow list-id to wait for job state (#5213)
+ * flux-jobs: support new `inactive_reason` output field and `endreason`
+   format (#5055)
+ * broker: redefine broker.quorum as a size (#5153)
+ * broker: signal readiness to systemd in JOIN state (#5152)
+
+## Fixes
+
+ * completions: update bash completions with recent command changes (#5241)
+ * shell/pmi: accept pmi1 and pmi2 as aliases for "simple" pmi (#5242)
+ * `zhash_insert()`/`zhashx_insert()` return EEXIST  (#5217)
+ * restrict remote access to sdbus on rank 0 (#5162)
+ * flux-job: submit: strip unnecessary whitespace from pre-signed jobspec
+   (#5185)
+ * libsubprocess: fail with ESRCH when pid cannot be found (#5229)
+ * flux-jobs: reduce likelihood of leaving bad terminal color state on
+   empty output (#5211)
+ * python: support non-JSON formatted data in KVS (#5204)
+ * Add missing include of config.h (#5182)
+ * liboptparse: correct message on missing argument (#5180)
+ * python: improve handling of `!d` conversion specifier in output formats
+   (#5169)
+ * libioencode: fix memleaks on error paths (#5159)
+ * shell: add missing `flux_` prefix to `shell_mustache_render(3)` (#5161)
+ * shell: truncate output to KVS after 10MB (#5155)
+ * python: open UtilConfig files as binary (#5157)
+ * job-manager: make some replay errors non-fatal (#5150)
+ * doc: fix python example (#5191)
+ * flux-job: ignore stdin instead of aborting when unable to create stdin
+   watcher (#5183)
+
+## Cleanup
+ * cleanup: use ccan/str in place of strcmp(), strncmp() (#5163)
+ * job-list: misc cleanup (#5144)
+
+## Testsuite/CI
+ * testsuite: fix potential flux-top race (#5224)
+ * testsuite: fix tests when run in debug mode (#5231)
+ * testsuite: increase test expiration (#5222)
+ * testsuite: fix race in flux top tests (#5194)
+ * testsuite: skip tests that expect COLUMNS to be inherited across calls
+   to flux(1) when that isn't true (#5166)
+ * pre-commit: increase vermin version (#5173)
+ * ci: fix pre-commit config to lint python files in testsuite (#5221)
+ * ci: add fedora38 builder, update flux-security default to 0.8.0 (#5160)
+
 flux-core version 0.50.0 - 2023-05-03
 -------------------------------------
 
