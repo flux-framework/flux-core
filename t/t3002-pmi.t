@@ -20,6 +20,12 @@ test_expect_success 'flux run sets PMI_FD' '
 test_expect_success 'flux run -o pmi=simple sets PMI_FD' '
 	flux run -o pmi=simple printenv PMI_FD
 '
+test_expect_success 'flux run -o pmi=pmi1 sets PMI_FD' '
+	flux run -o pmi=pmi1 printenv PMI_FD
+'
+test_expect_success 'flux run -o pmi=pmi2 sets PMI_FD' '
+	flux run -o pmi=pmi2 printenv PMI_FD
+'
 test_expect_success 'flux run -o pmi=simple,unknown sets PMI_FD' '
 	flux run -o pmi=simple,unknown printenv PMI_FD
 '
