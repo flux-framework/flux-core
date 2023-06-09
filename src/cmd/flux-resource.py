@@ -569,6 +569,19 @@ def info(args):
     list_handler(args)
 
 
+def emit_R(args):
+    """Emit R in JSON on stdout for requested set of resources"""
+    resources, config = get_resource_list(args)
+
+    rset = ResourceSet()
+    for state in args.states:
+        try:
+            rset.add(resources[state])
+        except AttributeError:
+            raise ValueError(f"unknown state {state}")
+    print(rset.encode())
+
+
 LOGGER = logging.getLogger("flux-resource")
 
 
@@ -765,6 +778,24 @@ def main():
         default=False,
         help="allow resources to contain invalid ranks",
     )
+
+    R_parser = subparsers.add_parser("R", formatter_class=flux.util.help_formatter())
+    R_parser.set_defaults(func=emit_R)
+    R_parser.add_argument(
+        "-s",
+        "--states",
+        metavar="STATE,...",
+        default="all",
+        help="Emit R for resources in given states",
+    )
+    R_parser.add_argument(
+        "-i",
+        "--include",
+        metavar="TARGETS",
+        help="Include only specified targets in output set. TARGETS may be "
+        + "provided as an idset or hostlist.",
+    )
+    R_parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
 
     args = parser.parse_args()
     args.func(args)
