@@ -28,6 +28,7 @@
 #include <jansson.h>
 #include <argz.h>
 #include <sys/ioctl.h>
+#include <signal.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <flux/hostlist.h>
