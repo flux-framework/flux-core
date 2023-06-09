@@ -599,6 +599,7 @@ static int shell_pmi_init (flux_plugin_t *p,
     struct shell_pmi *pmi;
     json_t *config = NULL;
     const char *pmi_opt = NULL;
+    bool enable = false;
 
     if (flux_shell_getopt_unpack (shell, "pmi", "s", &pmi_opt) < 0) {
         shell_log_error ("pmi shell option must be a string");
@@ -609,9 +610,24 @@ static int shell_pmi_init (flux_plugin_t *p,
         return -1;
     }
     /* This plugin is disabled _only_ if '-opmi=LIST' was specified without
-     * "simple" in LIST.
+     * "simple" in LIST.  "pmi1" and "pmi2" are considered aliases for
+     * "simple" - see flux-framework/flux-core#5226.
      */
-    if (pmi_opt && !member_of_csv (pmi_opt, "simple"))
+    if (pmi_opt) {
+        if (member_of_csv (pmi_opt, "simple"))
+            enable = true;
+        else if (member_of_csv (pmi_opt, "pmi2")) {
+            shell_debug ("pmi2 is interpreted as an alias for simple");
+            enable = true;
+        }
+        else if (member_of_csv (pmi_opt, "pmi1")) {
+            shell_debug ("pmi1 is interpreted as an alias for simple");
+            enable = true;
+        }
+    }
+    else
+        enable = true;
+    if (!enable)
         return 0; // plugin disabled
     shell_debug ("simple wire protocol is enabled");
 
