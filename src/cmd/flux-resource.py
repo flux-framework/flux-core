@@ -506,24 +506,15 @@ def resources_uniq_lines(resources, states, formatter, config):
     return lines
 
 
-def list_handler(args):
+def get_resource_list(args):
+    """
+    Common function for list_handler() and emit_R()
+    """
     valid_states = ["up", "down", "allocated", "free", "all"]
-    headings = {
-        "state": "STATE",
-        "queue": "QUEUE",
-        "properties": "PROPERTIES",
-        "propertiesx": "PROPERTIES",
-        "nnodes": "NNODES",
-        "ncores": "NCORES",
-        "ngpus": "NGPUS",
-        "ranks": "RANKS",
-        "nodelist": "NODELIST",
-        "rlist": "LIST",
-    }
     config = None
 
-    states = args.states.split(",")
-    for state in states:
+    args.states = args.states.split(",")
+    for state in args.states:
         if state not in valid_states:
             LOGGER.error("Invalid resource state %s specified", state)
             sys.exit(1)
@@ -544,11 +535,28 @@ def list_handler(args):
             resources.filter(include=args.include)
         except (ValueError, TypeError) as exc:
             raise ValueError(f"--include: {exc}") from None
+    return resources, config
+
+
+def list_handler(args):
+    headings = {
+        "state": "STATE",
+        "queue": "QUEUE",
+        "properties": "PROPERTIES",
+        "propertiesx": "PROPERTIES",
+        "nnodes": "NNODES",
+        "ncores": "NCORES",
+        "ngpus": "NGPUS",
+        "ranks": "RANKS",
+        "nodelist": "NODELIST",
+        "rlist": "LIST",
+    }
+    resources, config = get_resource_list(args)
 
     fmt = FluxResourceConfig("list").load().get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
-    lines = resources_uniq_lines(resources, states, formatter, config)
+    lines = resources_uniq_lines(resources, args.states, formatter, config)
     formatter.print_items(lines.values(), no_header=args.no_header)
 
 
