@@ -53,6 +53,11 @@ for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
         test_debug "cat ${name}-info.output" &&
         test_cmp ${base}-info.expected ${name}-info.output
     '
+    test_expect_success "flux-resource R input check: $testname" '
+        flux resource R --from-stdin < $input > ${name}-R.output 2>&1 &&
+        test_debug "cat ${name}-info.output" &&
+        test_cmp ${base}.R ${name}-R.output
+    '
 done
 
 #  Ensure all tested inputs can also work with --include
@@ -72,6 +77,11 @@ for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
             > ${name}-info-include.output 2>&1 &&
         test_debug "cat ${name}-info-include.output" &&
 	grep "1 Node" ${name}-info-include.output
+    '
+    test_expect_success "flux-resource R input ---include check: $testname" '
+        flux resource R --from-stdin -i0 < $input \
+           > ${name}-info-R.output &&
+        test "$(flux R decode --count=node <${name}-info-R.output)" -eq 1
     '
 done
 
@@ -98,6 +108,14 @@ test_expect_success 'flux-resource list: --include works with invalid host' '
 		--from-stdin < $INPUT >include-invalid-hosts.out &&
 	test_debug "cat include-invalid-hosts.out" &&
 	grep "^0" include-invalid-hosts.out
+'
+test_expect_success 'flux-resource R supports --states' '
+	flux resource R --from-stdin -s all <$INPUT >all.R &&
+	test $(flux R decode --count=node <all.R) -eq 5 &&
+	flux resource R --from-stdin -s up <$INPUT >up.R &&
+	test $(flux R decode --count=node <up.R) -eq 5 &&
+	flux resource R --from-stdin -s down <$INPUT >down.R &&
+	test $(flux R decode --count=node <down.R) -eq 0
 '
 test_expect_success 'create test input with properties' '
 	cat <<-EOF >properties-test.in
