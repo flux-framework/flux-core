@@ -48,6 +48,16 @@ static void test_api (unwrap_f unwrap)
         error.text);
 
     userid = 0;
+    result = (*unwrap) (s, false, NULL, &error);
+    ok (result != NULL && userid == 0,
+        "unwrap_string() works with NULL userid");
+    if (result == NULL)
+        diag ("got error: %s", error.text);
+    is (result, "bar",
+        "got expected result");
+    free (result);
+
+    userid = 0;
     result = (*unwrap) (s, false, NULL, NULL);
     ok (result != NULL && userid == 0,
         "unwrap_string() works with NULL userid and error parameters");
