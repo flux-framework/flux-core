@@ -506,24 +506,15 @@ def resources_uniq_lines(resources, states, formatter, config):
     return lines
 
 
-def list_handler(args):
+def get_resource_list(args):
+    """
+    Common function for list_handler() and emit_R()
+    """
     valid_states = ["up", "down", "allocated", "free", "all"]
-    headings = {
-        "state": "STATE",
-        "queue": "QUEUE",
-        "properties": "PROPERTIES",
-        "propertiesx": "PROPERTIES",
-        "nnodes": "NNODES",
-        "ncores": "NCORES",
-        "ngpus": "NGPUS",
-        "ranks": "RANKS",
-        "nodelist": "NODELIST",
-        "rlist": "LIST",
-    }
     config = None
 
-    states = args.states.split(",")
-    for state in states:
+    args.states = args.states.split(",")
+    for state in args.states:
         if state not in valid_states:
             LOGGER.error("Invalid resource state %s specified", state)
             sys.exit(1)
@@ -544,11 +535,28 @@ def list_handler(args):
             resources.filter(include=args.include)
         except (ValueError, TypeError) as exc:
             raise ValueError(f"--include: {exc}") from None
+    return resources, config
+
+
+def list_handler(args):
+    headings = {
+        "state": "STATE",
+        "queue": "QUEUE",
+        "properties": "PROPERTIES",
+        "propertiesx": "PROPERTIES",
+        "nnodes": "NNODES",
+        "ncores": "NCORES",
+        "ngpus": "NGPUS",
+        "ranks": "RANKS",
+        "nodelist": "NODELIST",
+        "rlist": "LIST",
+    }
+    resources, config = get_resource_list(args)
 
     fmt = FluxResourceConfig("list").load().get_format_string(args.format)
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
-    lines = resources_uniq_lines(resources, states, formatter, config)
+    lines = resources_uniq_lines(resources, args.states, formatter, config)
     formatter.print_items(lines.values(), no_header=args.no_header)
 
 
@@ -559,6 +567,19 @@ def info(args):
     args.no_header = True
     args.format = "{nnodes} Nodes, {ncores} Cores, {ngpus} GPUs"
     list_handler(args)
+
+
+def emit_R(args):
+    """Emit R in JSON on stdout for requested set of resources"""
+    resources, config = get_resource_list(args)
+
+    rset = ResourceSet()
+    for state in args.states:
+        try:
+            rset.add(resources[state])
+        except AttributeError:
+            raise ValueError(f"unknown state {state}")
+    print(rset.encode())
 
 
 LOGGER = logging.getLogger("flux-resource")
@@ -757,6 +778,24 @@ def main():
         default=False,
         help="allow resources to contain invalid ranks",
     )
+
+    R_parser = subparsers.add_parser("R", formatter_class=flux.util.help_formatter())
+    R_parser.set_defaults(func=emit_R)
+    R_parser.add_argument(
+        "-s",
+        "--states",
+        metavar="STATE,...",
+        default="all",
+        help="Emit R for resources in given states",
+    )
+    R_parser.add_argument(
+        "-i",
+        "--include",
+        metavar="TARGETS",
+        help="Include only specified targets in output set. TARGETS may be "
+        + "provided as an idset or hostlist.",
+    )
+    R_parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
 
     args = parser.parse_args()
     args.func(args)

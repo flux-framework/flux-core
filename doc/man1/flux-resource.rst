@@ -80,6 +80,21 @@ COMMANDS
    specify ranks or hosts which do not exist, the result will be filtered
    to include only those ranks or hosts that are present in *TARGETS*.
 
+**R** [-s STATE,..] [-i TARGETS]
+   Emit an RFC 20 Resource Set on stdout.
+
+   With *-s,--states=STATE,...*, the set of resource states is restricted
+   to a list of provided states. Valid states include "up", "down",
+   "allocated", "free", and "all". Note that the scheduler represents
+   offline, excluded, and drained resources as "down" due to the simplified
+   interface with the resource service defined by RFC 27.
+
+   With *-i, --include=TARGETS*, the results are filtered to only include
+   resources matching **TARGETS**, which may be specified either as an idset
+   of broker ranks or list of hosts in hostlist form. It is not an error to
+   specify ranks or hosts which do not exist, the result will be filtered
+   to include only those ranks or hosts that are present in *TARGETS*.
+
 **status**  [-n] [-o FORMAT] [-s STATE,...] [-i TARGETS] [--skip-empty]
    Show system view of resources. This command queries both the resource
    service and scheduler to identify resources that are available,

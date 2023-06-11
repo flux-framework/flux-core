@@ -288,7 +288,7 @@ _flux_mini()
 # flux-resource(1) completions
 _flux_resource()
 {
-    local subcmds="drain undrain status list info reload"
+    local subcmds="drain undrain status list R info reload"
     local cmd=$1
 
     local reload_OPTS="\
@@ -310,6 +310,11 @@ _flux_resource()
     "
     local status_OPTS="\
         ${list_OPTS} \
+    "
+    local R_OPTS="\
+        -h --help \
+        -s --states= \
+        -i --include= \
     "
     local undrain_OPTS="\
         -h --help \
