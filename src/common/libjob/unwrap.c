@@ -80,6 +80,7 @@ char *unwrap_string (const char *s,
         errprintf (errp,
                    "failed to create security context: %s",
                    strerror (errno));
+        return NULL;
     }
     if (flux_security_configure (sec, NULL) < 0) {
         errprintf (errp,
