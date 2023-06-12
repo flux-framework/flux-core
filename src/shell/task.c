@@ -42,6 +42,7 @@
 #include <flux/core.h>
 #include <flux/shell.h>
 
+#include "src/common/libjob/idf58.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "internal.h"
@@ -98,7 +99,6 @@ struct shell_task *shell_task_create (struct shell_info *info,
     const char *key;
     json_t *entry;
     size_t i;
-    char buf[64];
 
     if (!(task = shell_task_new ()))
         return NULL;
@@ -130,10 +130,11 @@ struct shell_task *shell_task_create (struct shell_info *info,
                           info->shell_size) < 0)
         goto error;
 
-    /* Attempt to encode jobid as F58 by default */
-    if (flux_job_id_encode (info->jobid, "f58", buf, sizeof (buf)) < 0)
-       snprintf (buf, sizeof (buf), "%ju", (uintmax_t)info->jobid);
-    if (flux_cmd_setenvf (task->cmd, 1, "FLUX_JOB_ID", "%s", buf) < 0)
+    if (flux_cmd_setenvf (task->cmd,
+                          1,
+                          "FLUX_JOB_ID",
+                          "%s",
+                          idf58 (info->jobid)) < 0)
         goto error;
 
     /* Always unset FLUX_PROXY_REMOTE since this never makes sense
