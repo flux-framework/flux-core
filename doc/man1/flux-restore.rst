@@ -53,6 +53,8 @@ OPTIONS
    Bypass the broker content cache and interact directly with the backing
    store.  Performance will vary depending on the content of the archive.
 
+**--size-limit**\ =\ *SIZE*
+   Skip restoring keys that exceed SIZE bytes (default: no limit).
 
 RESOURCES
 =========
