@@ -44,6 +44,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/jpath.h"
+#include "src/common/libjob/idf58.h"
 #include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
 
@@ -212,8 +213,8 @@ static void event_batch_destroy (struct event_batch *batch)
                 job->hold_events = 0;
                 if (event_job_post_deferred (batch->event, job) < 0)
                     flux_log_error (batch->event->ctx->h,
-                                    "%ju: error posting deferred events",
-                                    (uintmax_t) job->id);
+                                    "%s: error posting deferred events",
+                                    idf58 (job->id));
             }
             zlist_destroy (&batch->jobs);
         }
@@ -440,8 +441,8 @@ int event_job_action (struct event *event, struct job *job)
                 if (purge_enqueue_job (ctx->purge, job) < 0) {
                     flux_log (event->ctx->h,
                               LOG_ERR,
-                              "%ju: error adding inactive job to purge queue",
-                               (uintmax_t)job->id);
+                              "%s: error adding inactive job to purge queue",
+                               idf58 (job->id));
                 }
             }
             (void) jobtap_call (ctx->jobtap, job, "job.destroy", NULL);
@@ -802,9 +803,9 @@ static int event_jobtap_call (struct event *event,
                                    "{s:O}",
                                    "entry", entry) < 0)
             flux_log (event->ctx->h, LOG_ERR,
-                      "jobtap: event.%s callback failed for job %ju",
+                      "jobtap: event.%s callback failed for job %s",
                       name,
-                      (uintmax_t) job->id);
+                      idf58 (job->id));
 
     if (job->state != old_state) {
         /*

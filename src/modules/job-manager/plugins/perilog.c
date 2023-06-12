@@ -161,8 +161,8 @@ static void emit_finish_event (struct perilog_proc *proc, int status)
                                        "job-manager.prolog",
                                        status) < 0)
             flux_log_error (flux_jobtap_get_flux (proc->p),
-                            "flux_jobtap_prolog_finish: id=%ju status=%d",
-                            proc->id,
+                            "flux_jobtap_prolog_finish: id=%s status=%d",
+                            idf58 (proc->id),
                             status);
     }
     else {
@@ -233,8 +233,8 @@ static void io_cb (flux_subprocess_t *sp, const char *stream)
     int len;
 
     if (!(s = flux_subprocess_getline (sp, stream, &len))) {
-        flux_log_error (h, "%ju: %s: %s: flux_subprocess_getline",
-                        (uintmax_t) proc->id,
+        flux_log_error (h, "%s: %s: %s: flux_subprocess_getline",
+                        idf58 (proc->id),
                         proc->prolog ? "prolog": "epilog",
                         stream);
         return;
@@ -245,8 +245,8 @@ static void io_cb (flux_subprocess_t *sp, const char *stream)
             level = LOG_ERR;
         flux_log (h,
                   level,
-                  "%ju: %s: %s: %s",
-                  (uintmax_t) proc->id,
+                  "%s: %s: %s: %s",
+                  idf58 (proc->id),
                   proc->prolog ? "prolog" : "epilog",
                   stream,
                   s);
@@ -380,8 +380,8 @@ static void prolog_kill_cb (flux_future_t *f, void *arg)
 
     if (flux_future_get (f, NULL) < 0) {
         flux_log_error (h,
-                        "%ju: Failed to signal job prolog",
-                        (uintmax_t) proc->id);
+                        "%s: Failed to signal job prolog",
+                        idf58 (proc->id));
     }
 }
 
@@ -419,8 +419,8 @@ static void prolog_kill_timer_cb (flux_reactor_t *r,
 
     if (!(f = flux_subprocess_kill (proc->sp, SIGKILL))) {
         flux_log_error (h,
-                        "%ju: failed to send SIGKILL to prolog",
-                        (uintmax_t) proc->id);
+                        "%s: failed to send SIGKILL to prolog",
+                        idf58 (proc->id));
         return;
     }
     /* Do not wait for any response */
@@ -439,8 +439,8 @@ static int prolog_kill_timer_start (struct perilog_proc *proc, double timeout)
                                                       proc);
         if (!proc->kill_timer) {
             flux_log_error (h,
-                            "%ju: failed to start prolog kill timer",
-                            (uintmax_t) proc->id);
+                            "%s: failed to start prolog kill timer",
+                            idf58 (proc->id));
             return -1;
         }
         flux_watcher_start (proc->kill_timer);

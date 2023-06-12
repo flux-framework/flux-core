@@ -57,6 +57,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libjob/job_hash.h"
+#include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
 
 #include "drain.h"
@@ -148,8 +149,8 @@ static void wait_respond (struct waitjob *wait,
     if (decode_job_result (job, &success, &error) < 0) {
         flux_log (h,
                   LOG_ERR,
-                  "wait_respond id=%ju: result decode failure",
-                  (uintmax_t)job->id);
+                  "wait_respond id=%s: result decode failure",
+                  idf58 (job->id));
         goto error;
     }
     if (flux_respond_pack (h,
@@ -161,11 +162,11 @@ static void wait_respond (struct waitjob *wait,
                            success ? 1 : 0,
                            "errstr",
                            error.text) < 0)
-        flux_log_error (h, "wait_respond id=%ju", (uintmax_t)job->id);
+        flux_log_error (h, "wait_respond id=%s", idf58 (job->id));
     return;
 error:
     if (flux_respond_error (h, msg, errno, "Flux job wait internal error") < 0)
-        flux_log_error (h, "wait_respond id=%ju", (uintmax_t)job->id);
+        flux_log_error (h, "wait_respond id=%s", idf58 (job->id));
 }
 
 /* Callback from event_job_action().  The 'job' has entered INACTIVE state.

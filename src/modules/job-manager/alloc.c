@@ -25,6 +25,7 @@
 #include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
 
 #include "job.h"
@@ -130,14 +131,14 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_msg_unpack (msg, "{s:I}", "id", &id) < 0)
         goto teardown;
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        flux_log (h, LOG_ERR, "sched.free-response: id=%ju not active",
-                  (uintmax_t)id);
+        flux_log (h, LOG_ERR, "sched.free-response: id=%s not active",
+                  idf58 (id));
         errno = EINVAL;
         goto teardown;
     }
     if (!job->has_resources) {
-        flux_log (h, LOG_ERR, "sched.free-response: id=%ju not allocated",
-                  (uintmax_t)id);
+        flux_log (h, LOG_ERR, "sched.free-response: %s not allocated",
+                  idf58 (id));
         errno = EINVAL;
         goto teardown;
     }
@@ -184,7 +185,7 @@ int cancel_request (struct alloc *alloc, struct job *job)
                              "{s:I}",
                              "id",
                              job->id))) {
-        flux_log_error (h, "sending sched.cancel id=%ju", (uintmax_t)job->id);
+        flux_log_error (h, "sending sched.cancel id=%s", idf58 (job->id));
         return -1;
     }
     flux_future_destroy (f);
@@ -215,14 +216,14 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                               "annotations", &annotations) < 0)
         goto teardown;
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        flux_log (h, LOG_ERR, "sched.alloc-response: id=%ju not active",
-                  (uintmax_t)id);
+        flux_log (h, LOG_ERR, "sched.alloc-response: id=%s not active",
+                  idf58 (id));
         errno = EINVAL;
         goto teardown;
     }
     if (!job->alloc_pending) {
-        flux_log (h, LOG_ERR, "sched.alloc-response: id=%ju not requested",
-                  (uintmax_t)id);
+        flux_log (h, LOG_ERR, "sched.alloc-response: id=%s not requested",
+                  idf58 (id));
         errno = EINVAL;
         goto teardown;
     }
@@ -236,13 +237,13 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         if (job->has_resources) {
             flux_log (h,
                       LOG_ERR,
-                      "sched.alloc-response: id=%ju already allocated",
-                      (uintmax_t)id);
+                      "sched.alloc-response: id=%s already allocated",
+                      idf58 (id));
             errno = EEXIST;
             goto teardown;
         }
         if (annotations_update_and_publish (ctx, job, annotations) < 0)
-            flux_log_error (h, "annotations_update: id=%ju", (uintmax_t)id);
+            flux_log_error (h, "annotations_update: id=%s", idf58 (id));
 
         /*  Only modify job state after annotation event is published
          */
@@ -265,7 +266,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             goto teardown;
         }
         if (annotations_update_and_publish (ctx, job, annotations) < 0)
-            flux_log_error (h, "annotations_update: id=%ju", (uintmax_t)id);
+            flux_log_error (h, "annotations_update: id=%s", idf58 (id));
         break;
     case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
@@ -281,8 +282,9 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                      EVENT_NO_COMMIT,
                                      "{s:n}", "annotations") < 0)
                 flux_log_error (ctx->h,
-                                "%s: event_job_post_pack: id=%ju",
-                                __FUNCTION__, (uintmax_t)id);
+                                "%s: event_job_post_pack: id=%s",
+                                __FUNCTION__,
+                                idf58 (id));
         }
         if (event_job_post_pack (ctx->event, job, "exception", 0,
                                  "{ s:s s:i s:I s:s }",
@@ -310,14 +312,15 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                      EVENT_NO_COMMIT,
                                      "{s:n}", "annotations") < 0)
                 flux_log_error (ctx->h,
-                                "%s: event_job_post_pack: id=%ju",
-                                __FUNCTION__, (uintmax_t)id);
+                                "%s: event_job_post_pack: id=%s",
+                                __FUNCTION__,
+                                idf58 (id));
         }
         if (queue_started (alloc->ctx->queue, job)) {
             if (event_job_action (ctx->event, job) < 0) {
                 flux_log_error (h,
-                                "event_job_action id=%ju on alloc cancel",
-                                (uintmax_t)id);
+                                "event_job_action id=%s on alloc cancel",
+                                idf58 (id));
                 goto teardown;
             }
         }

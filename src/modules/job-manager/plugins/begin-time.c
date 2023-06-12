@@ -20,6 +20,8 @@
 #include <flux/core.h>
 #include <flux/jobtap.h>
 
+#include "src/common/libjob/idf58.h"
+
 struct begin_time_arg {
     flux_plugin_t *p;
     flux_watcher_t *w;
@@ -94,7 +96,7 @@ static int add_begin_time (flux_plugin_t *p,
     flux_watcher_start (arg->w);
 
     if (flux_jobtap_dependency_add (p, id, arg->desc) < 0) {
-        flux_log_error (h, "%ju: flux_jobtap_dependency_add", (uintmax_t) id);
+        flux_log_error (h, "%s: flux_jobtap_dependency_add", idf58 (id));
         goto error;
     }
 
