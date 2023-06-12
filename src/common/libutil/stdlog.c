@@ -180,8 +180,6 @@ int stdlog_vencodef (char *buf, int len, struct stdlog_header *hdr,
     rc += n;
     if (n > len - m)
         n = len - m;
-    for (i = 0; i < n; i++)
-        buf[m + i] &= 0x7f; // ensure only ascii chars are logged
     for (i = n - 1; i >= 0; i--) {
         if (buf[m + i] != '\r' && buf[m + i] != '\n')
             break;

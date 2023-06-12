@@ -13,6 +13,7 @@
 #endif
 #include <assert.h>
 #include <libgen.h>
+#include <locale.h>
 #include <inttypes.h>
 #include <sys/prctl.h>
 #include <sys/resource.h>
@@ -203,6 +204,8 @@ int main (int argc, char *argv[])
     const flux_conf_t *conf;
     const char *method;
     flux_error_t error;
+
+    setlocale (LC_ALL, "");
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
