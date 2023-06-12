@@ -43,6 +43,7 @@
 #include "src/common/libutil/jpath.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libjob/unwrap.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/fsd.h"
@@ -1462,11 +1463,7 @@ size_t read_jobspec (const char *name, void **bufp)
 
 static void print_jobid (flux_jobid_t id)
 {
-    char buf[32];
-    if (flux_job_id_encode (id, "f58", buf, sizeof (buf)) < 0)
-        printf ("%ju\n", (uintmax_t) id);
-    else
-        printf ("%s\n", buf);
+    printf ("%s\n", idf58 (id));
 }
 
 int cmd_submit (optparse_t *p, int argc, char **argv)
@@ -3426,13 +3423,6 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-static char *to_f58 (flux_jobid_t id, char *buf, int len)
-{
-    if (flux_job_id_encode (id, "f58", buf, len) < 0)
-        (void) snprintf (buf, len, "%ju", (uintmax_t) id);
-    return buf;
-}
-
 int cmd_wait (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
@@ -3441,7 +3431,6 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     flux_jobid_t id = FLUX_JOBID_ANY;
     bool success;
     const char *errstr;
-    char buf[32];
     int rc = 0;
 
     if ((argc - optindex) > 1) {
@@ -3472,16 +3461,14 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
                 log_msg_exit ("flux_job_wait_get_id: %s",
                               future_strerror (f, errno));
             if (!success) {
-                fprintf (stderr, "%s: %s\n",
-                         to_f58 (id, buf, sizeof (buf)),
-                         errstr);
+                fprintf (stderr, "%s: %s\n", idf58 (id), errstr);
                 rc = 1;
             }
             else {
                 if (optparse_hasopt (p, "verbose"))
                     fprintf (stderr,
                              "%s: job completed successfully\n",
-                             to_f58 (id, buf, sizeof (buf)));
+                             idf58 (id));
             }
             flux_future_destroy (f);
         }
@@ -3502,7 +3489,7 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
         if (id == FLUX_JOBID_ANY) {
             if (flux_job_wait_get_id (f, &id) < 0)
                 log_err_exit ("flux_job_wait_get_id");
-            printf ("%s\n", to_f58 (id, buf, sizeof (buf)));
+            printf ("%s\n", idf58 (id));
         }
         if (!success)
             log_msg_exit ("%s", errstr);
@@ -3902,7 +3889,6 @@ int cmd_last (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     flux_future_t *f;
     flux_t *h;
-    char buf[32];
     json_t *jobs;
     size_t index;
     json_t *entry;
@@ -3941,12 +3927,8 @@ int cmd_last (optparse_t *p, int argc, char **argv)
     }
     if (json_array_size (jobs) == 0)
         log_msg_exit ("job history is empty");
-    json_array_foreach (jobs, index, entry) {
-        flux_jobid_t id = json_integer_value (entry);
-        if (flux_job_id_encode (id, "f58", buf, sizeof (buf)) < 0)
-            log_err_exit ("error encoding job ID");
-        printf ("%s\n", buf);
-    }
+    json_array_foreach (jobs, index, entry)
+        printf ("%s\n", idf58 (json_integer_value (entry)));
     flux_future_destroy (f);
     flux_close (h);
     return 0;
