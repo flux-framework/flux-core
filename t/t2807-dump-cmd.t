@@ -227,4 +227,34 @@ test_expect_success 'restart flux instance and try to run a job' '
 		flux run /bin/true
 '
 
+# Cover --size-limit
+
+test_expect_success 'create bigdump.tar with a 12M blob in it' '
+	mkdir -p big &&
+	dd if=/dev/zero of=big/tinyblob bs=1048576 count=1 &&
+	dd if=/dev/zero of=big/bigblob bs=1048576 count=12 &&
+	dd if=/dev/zero of=big/smallblob bs=1048576 count=3 &&
+	dd if=/dev/zero of=big/medblob bs=1048576 count=6 &&
+	dd if=/dev/zero of=big/med2blob bs=1048576 count=6 &&
+	tar cvf bigdump.tar big
+'
+test_expect_success 'restore bigdump.tar and verify blob count' '
+	flux start flux restore \
+		--key=foo bigdump.tar 2>bigdump.err &&
+	grep "restored 5 keys (7 blobs)" bigdump.err
+'
+test_expect_success 'restore bigdump.tar with size limit' '
+	flux start flux restore --size-limit=10485760 \
+		--key=foo bigdump.tar 2>bigdump2.err &&
+	grep "exceeds" bigdump2.err &&
+	grep "restored 4 keys (6 blobs)" bigdump2.err
+'
+test_expect_success 'rc1 skips blob that exceeds 100M limit' '
+	dd if=/dev/zero of=big/hugeblob bs=1048576 count=120 &&
+	tar cvf bigdump2.tar big &&
+	flux start -o,-Scontent.restore=bigdump2.tar \
+		/bin/true 2>bigdump3.err &&
+	grep "exceeds" bigdump3.err
+'
+
 test_done
