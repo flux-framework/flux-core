@@ -174,9 +174,9 @@ flux_future_t *jobinfo_shell_rpc_pack (struct jobinfo *job,
     uint32_t rank;
 
     if (asprintf (&shell_topic,
-                  "%ju-shell-%ju.%s",
+                  "%ju-shell-%s.%s",
                   (uintmax_t) job->userid,
-                  (uintmax_t) job->id,
+                  idf58 (job->id),
                   topic) < 0
         || ((rank = resource_set_nth_rank (job->R, 0)) == IDSET_INVALID_ID))
         goto out;
