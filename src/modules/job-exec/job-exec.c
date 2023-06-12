@@ -186,7 +186,7 @@ flux_future_t *jobinfo_shell_rpc_pack (struct jobinfo *job,
     flux_future_aux_set (f, "jobinfo", job, (flux_free_f) jobinfo_decref);
     jobinfo_incref (job);
 out:
-    ERRNO_SAFE_WRAP (free ,shell_topic);
+    ERRNO_SAFE_WRAP (free, shell_topic);
     return f;
 }
 
