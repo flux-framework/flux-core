@@ -159,14 +159,8 @@ The following example is a simple, two node cluster with a fully specified
    curve_cert = "/etc/flux/system/curve.cert"
 
    hosts = [
-       {
-           host="foo",
-           bind="tcp://eth0:9001",
-           connect="tcp://10.0.1.1:9001"
-       },
-       {
-           host = "bar"
-       },
+       { host="foo", bind="tcp://eth0:9001", connect="tcp://10.0.1.1:9001" },
+       { host = "bar" },
    ]
 
 
@@ -188,14 +182,11 @@ a different network interface configuration compared to its peers.
    default_connect = "tcp://e%h:%p"
 
    hosts = [
-       {   # Management requires non-default config
-           host="test0",
-           bind="tcp://en4:9001",
-           connect="tcp://test-mgmt:9001"
-       },
-       {   # Other nodes use defaults
-           host = "test[1-255]"
-       },
+       # Management requires non-default config
+       { host="test0", bind="tcp://en4:9001", connect="tcp://test-mgmt:9001" },
+
+       # Other nodes use defaults
+       { host = "test[1-255]" },
    ]
 
 The following example is a 256 node cluster that uses the ``parent`` key to
