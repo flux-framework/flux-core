@@ -52,6 +52,7 @@
 #include <flux/jobtap.h>
 
 #include "src/common/libjob/job_hash.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
@@ -269,7 +270,6 @@ static int run_command (flux_plugin_t *p,
         .on_stderr = io_cb
     };
     char path[PATH_MAX + 1];
-    char jobid[128];
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
@@ -280,13 +280,8 @@ static int run_command (flux_plugin_t *p,
         return -1;
     }
 
-    if (flux_job_id_encode (id, "f58", jobid, sizeof (jobid)) < 0) {
-        flux_log_error (h, "flux_job_id_encode");
-        return -1;
-    }
-
     if (flux_cmd_setcwd (cmd, getcwd (path, sizeof (path))) < 0
-        || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_ID", "%s", jobid) < 0
+        || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_ID", "%s", idf58 (id)) < 0
         || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_USERID", "%u", userid) < 0) {
         flux_log_error (h, "%s: flux_cmd_create", prolog ? "prolog" : "epilog");
         return -1;
