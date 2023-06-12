@@ -32,6 +32,7 @@
 
 #include <unistd.h>
 
+#include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
 
 #include "job-exec.h"
@@ -462,8 +463,8 @@ static int exec_kill (struct jobinfo *job, int signum)
     }
 
     flux_log (job->h, LOG_DEBUG,
-              "exec_kill: %ju: signal %d",
-              (uintmax_t) job->id,
+              "exec_kill: %s: signal %d",
+              idf58 (job->id),
               signum);
 
     jobinfo_incref (job);

@@ -93,6 +93,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/job_hash.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libutil/fsd.h"
@@ -290,8 +291,8 @@ static int jobid_exception (flux_t *h, flux_jobid_t id,
 
     flux_log (h,
               LOG_INFO,
-              "job-exception: id=%ju: %s",
-              (uintmax_t) id,
+              "job-exception: id=%s: %s",
+              idf58 (id),
               note);
     return flux_respond_pack (h, msg, "{s:I s:s s:{s:i s:s s:s}}",
                                       "id", id,
@@ -366,8 +367,8 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
     struct jobinfo *job = arg;
     flux_log (job->h,
               LOG_DEBUG,
-              "Sending SIGKILL to job shell for job %ju",
-              (uintmax_t) job->id);
+              "Sending SIGKILL to job shell for job %s",
+              idf58 (job->id));
     (*job->impl->kill) (job, SIGKILL);
 }
 
@@ -378,8 +379,8 @@ static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_future_t *f;
     flux_log (job->h,
               LOG_DEBUG,
-              "Sending SIGKILL to job %ju",
-              (uintmax_t) job->id);
+              "Sending SIGKILL to job %s",
+              idf58 (job->id));
     if (!(f = flux_job_kill (job->h, job->id, SIGKILL))) {
         flux_log_error (job->h,
                         "flux_job_kill (%ju, SIGKILL)",
@@ -1221,7 +1222,7 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
          *   doesn't dump a duplicate exception into the eventlog.
          */
         job->exception_in_progress = 1;
-        flux_log (h, LOG_DEBUG, "exec aborted: id=%ju", (uintmax_t)id);
+        flux_log (h, LOG_DEBUG, "exec aborted: id=%s", idf58 (id));
         jobinfo_fatal_error (job, 0, "aborted due to exception type=%s", type);
     }
 }
