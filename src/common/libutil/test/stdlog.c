@@ -150,6 +150,22 @@ int main(int argc, char** argv)
         && strncmp (msg, "Hello whorl", msglen) == 0,
         "trailing cr/lf chars were truncated");
 
+    /* Check that valid UTF-8 non-ascii characters are preserved
+     */
+    const char data[] = "jobid ƒ6LEmNENaf9 😄 😹";
+    len = stdlog_encode (buf,
+                         sizeof (buf),
+                         &hdr,
+                         STDLOG_NILVALUE,
+                         data);
+    ok (len >= 0,
+        "stdlog_encode worked with %s", data);
+    n = stdlog_decode (buf, len, &hdr, &sd, &sdlen, &msg, &msglen);
+    ok (n == 0,
+        "stdlog_decode worked");
+    is (data, msg,
+        "non-ascii characters were preserved");
+
     int i = 0;
     while (valid[i] != NULL) {
         n = stdlog_decode (valid[i],
