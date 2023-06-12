@@ -20,6 +20,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
+#include "src/common/libjob/idf58.h"
 #include "bulk-exec.h"
 
 struct exec_cmd {
@@ -491,8 +492,8 @@ void bulk_exec_kill_log_error (flux_future_t *f, flux_jobid_t id)
         if (flux_future_get (cf, NULL) < 0) {
             uint32_t rank = flux_rpc_get_nodeid (cf);
             flux_log_error (h,
-                            "%ju: exec_kill: %s (rank %lu)",
-                            (uintmax_t) id,
+                            "%s: exec_kill: %s (rank %lu)",
+                            idf58 (id),
                             flux_get_hostbyrank (h, rank),
                             (unsigned long)rank);
         }
