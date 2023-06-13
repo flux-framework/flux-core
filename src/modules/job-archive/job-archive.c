@@ -28,6 +28,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libjob/idf58.h"
 
 #define BUSY_TIMEOUT_DEFAULT 50
 #define BUFSIZE              1024
@@ -298,8 +299,8 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
                         "t_run", &t_run,
                         "t_cleanup", &t_cleanup,
                         "t_inactive", &t_inactive) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: parse job %ju error: %s",
-                  __FUNCTION__, (uintmax_t)id, error.text);
+        flux_log (ctx->h, LOG_ERR, "%s: parse job %s error: %s",
+                  __FUNCTION__, idf58 (id), error.text);
         goto out;
     }
 
