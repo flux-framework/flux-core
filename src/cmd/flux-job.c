@@ -3283,6 +3283,7 @@ void info_usage (void)
 }
 
 struct info_ctx {
+    const char *id_arg;
     flux_jobid_t id;
     json_t *keys;
     bool original;
@@ -3295,7 +3296,7 @@ void info_output (flux_future_t *f, const char *suffix, struct info_ctx *ctx)
     if (flux_rpc_get_unpack (f, "{s:s}", suffix, &s) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
-            log_msg_exit ("job %ju id or key not found", (uintmax_t)ctx->id);
+            log_msg_exit ("job %s id or key not found", ctx->id_arg);
         }
         else
             log_err_exit ("flux_rpc_get_unpack");
@@ -3340,6 +3341,7 @@ void info_lookup (flux_t *h,
     flux_future_t *f;
     struct info_ctx ctx = {0};
 
+    ctx.id_arg = argv[optindex-1];
     ctx.id = id;
     if (!(ctx.keys = json_array ()))
         log_msg_exit ("json_array");
