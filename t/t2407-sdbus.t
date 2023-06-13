@@ -111,8 +111,21 @@ bus_subscribe_cancel () {
     flux python -c "import flux; flux.Flux().rpc(\"sdbus.subscribe-cancel\",{\"matchtag\":$1},flags=flux.constants.FLUX_RPC_NORESPONSE)"
 }
 
+test_expect_success 'enable sdbus-debug in configuration' '
+	flux config load <<-EOT
+	[systemd]
+	sdbus-debug = true
+	EOT
+'
 test_expect_success 'load sdbus module' '
 	flux module load sdbus
+'
+test_expect_success 'sdbus reconfig fails with bad sdbus-debug value' '
+	test_must_fail flux config load <<-EOT 2>config.err &&
+	[systemd]
+	sdbus-debug = 42
+	EOT
+	grep "Expected true or false" config.err
 '
 
 test_expect_success 'sdbus list-units works' '

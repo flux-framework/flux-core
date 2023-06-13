@@ -18,7 +18,13 @@ if ! busctl --user status >/dev/null; then
 	test_done
 fi
 
-test_under_flux 1 minimal
+mkdir -p config
+cat >config/config.toml <<EOF
+[systemd]
+sdbus-debug = true
+EOF
+
+test_under_flux 1 minimal -o,--config-path=$(pwd)/config
 
 flux setattr log-stderr-level 1
 
