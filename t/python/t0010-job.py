@@ -468,6 +468,12 @@ class TestJob(unittest.TestCase):
                     # Ensure encode back to same type works
                     self.assertEqual(getattr(jobid, key), test[key])
 
+        # JobID can also take a JobID
+        jobid1 = job.JobID(1234)
+        jobid2 = job.JobID(jobid1)
+        self.assertEqual(jobid1, jobid2)
+        self.assertEqual(jobid2.orig, "1234")
+
     def test_25_job_list_attrs(self):
         expected_attrs = [
             "userid",
