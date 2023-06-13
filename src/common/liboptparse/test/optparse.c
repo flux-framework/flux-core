@@ -370,11 +370,13 @@ void test_convenience_accessors (void)
 { .name = "dub", .key = 7, .has_arg = 1, .arginfo = "", .usage = "" },
 { .name = "ndb", .key = 8, .has_arg = 1, .arginfo = "", .usage = "" },
 { .name = "dur", .key = 9, .has_arg = 1, .arginfo = "", .usage = "" },
+{ .name = "size", .key = 10, .has_arg = 1, .arginfo = "", .usage = "" },
         OPTPARSE_TABLE_END,
     };
 
     char *av[] = { "test", "--foo", "--baz=hello", "--mnf=7", "--neg=-4",
-                   "--dub=5.7", "--ndb=-3.2", "--dur=1.5m", NULL };
+                   "--dub=5.7", "--ndb=-3.2", "--dur=1.5m", "--size=1M",
+                   NULL };
     int ac = ARRAY_SIZE (av) - 1;
     int rc, optindex;
 
@@ -386,7 +388,7 @@ void test_convenience_accessors (void)
 
     ok (optparse_option_index (p) == -1, "optparse_option_index returns -1 before parse");
     optindex = optparse_parse_args (p, ac, av);
-    ok (optindex == ac, "parse options, verify optindex");
+    ok (optindex == ac, "parse options, verify optindex (optindex=%d)", optindex);
 
     ok (optparse_option_index (p) == optindex, "optparse_option_index works after parse");
 
@@ -460,6 +462,28 @@ void test_convenience_accessors (void)
             "get_duration returns arg when present");
     ok (optparse_get_duration (p, "dur", 42) == 90.,
             "get_duration returns duration arg when present");
+
+    /* get size
+     */
+    dies_ok ({optparse_get_size (p, "no-exist", 0); },
+            "get_size exits on unknown arg");
+    dies_ok ({optparse_get_size (p, "foo", "0"); },
+            "get_size exits on option with no argument");
+    dies_ok ({optparse_get_size (p, "baz", "0"); },
+            "get_size exits on option with wrong type argument (string)");
+    dies_ok ({optparse_get_size (p, "neg", "42"); },
+            "get_size exits on negative arg");
+    dies_ok ({optparse_get_size (p, "dur", "42"); },
+            "get_size exits on bad suffix");
+    lives_ok ({optparse_get_size (p, "size", "1k"); },
+            "get_size lives on known arg");
+
+    ok (optparse_get_size (p, "bar", "10M") == 10*1024*1024,
+            "get_size returns default argument when arg not present");
+    ok (optparse_get_size (p, "mnf", "0") == 7,
+            "get_size returns arg when present");
+    ok (optparse_get_size (p, "size", "0") == 1*1024*1024,
+            "get_size returns size arg when present");
 
     /* get_str
      */
@@ -1361,9 +1385,9 @@ static void test_optional_args ()
 
 int main (int argc, char *argv[])
 {
-    plan (299);
+    plan (308);
 
-    test_convenience_accessors (); /* 36 tests */
+    test_convenience_accessors (); /* 45 tests */
     test_usage_output (); /* 46 tests */
     test_option_cb ();  /* 16 tests */
     test_errors (); /* 9 tests */
