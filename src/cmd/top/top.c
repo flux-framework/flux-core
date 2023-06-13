@@ -17,6 +17,7 @@
 
 #include "src/common/libutil/uri.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
 #include "top.h"
 
@@ -224,18 +225,8 @@ static flux_jobid_t get_jobid (flux_t *h)
 
 static char * build_title (struct top *top, const char *title)
 {
-    if (!title) {
-        char jobid [24];
-        title = "";
-        if (top->id != FLUX_JOBID_ANY) {
-            if (flux_job_id_encode (top->id,
-                                    "f58",
-                                    jobid,
-                                    sizeof (jobid)) < 0)
-                fatal (errno, "failed to build jobid");
-            title = jobid;
-        }
-    }
+    if (!title)
+        title = idf58 (top->id);
     return strdup (title);
 }
 

@@ -93,6 +93,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/job_hash.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libutil/fsd.h"
@@ -173,9 +174,9 @@ flux_future_t *jobinfo_shell_rpc_pack (struct jobinfo *job,
     uint32_t rank;
 
     if (asprintf (&shell_topic,
-                  "%ju-shell-%ju.%s",
+                  "%ju-shell-%s.%s",
                   (uintmax_t) job->userid,
-                  (uintmax_t) job->id,
+                  idf58 (job->id),
                   topic) < 0
         || ((rank = resource_set_nth_rank (job->R, 0)) == IDSET_INVALID_ID))
         goto out;
@@ -185,7 +186,7 @@ flux_future_t *jobinfo_shell_rpc_pack (struct jobinfo *job,
     flux_future_aux_set (f, "jobinfo", job, (flux_free_f) jobinfo_decref);
     jobinfo_incref (job);
 out:
-    ERRNO_SAFE_WRAP (free ,shell_topic);
+    ERRNO_SAFE_WRAP (free, shell_topic);
     return f;
 }
 
@@ -290,8 +291,8 @@ static int jobid_exception (flux_t *h, flux_jobid_t id,
 
     flux_log (h,
               LOG_INFO,
-              "job-exception: id=%ju: %s",
-              (uintmax_t) id,
+              "job-exception: id=%s: %s",
+              idf58 (id),
               note);
     return flux_respond_pack (h, msg, "{s:I s:s s:{s:i s:s s:s}}",
                                       "id", id,
@@ -366,8 +367,8 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
     struct jobinfo *job = arg;
     flux_log (job->h,
               LOG_DEBUG,
-              "Sending SIGKILL to job shell for job %ju",
-              (uintmax_t) job->id);
+              "Sending SIGKILL to job shell for job %s",
+              idf58 (job->id));
     (*job->impl->kill) (job, SIGKILL);
 }
 
@@ -378,12 +379,12 @@ static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_future_t *f;
     flux_log (job->h,
               LOG_DEBUG,
-              "Sending SIGKILL to job %ju",
-              (uintmax_t) job->id);
+              "Sending SIGKILL to job %s",
+              idf58 (job->id));
     if (!(f = flux_job_kill (job->h, job->id, SIGKILL))) {
         flux_log_error (job->h,
-                        "flux_job_kill (%ju, SIGKILL)",
-                        job->id);
+                        "flux_job_kill (%s, SIGKILL)",
+                        idf58 (job->id));
         return;
     }
     /* Open loop */
@@ -428,8 +429,8 @@ static void timelimit_cb (flux_reactor_t *r,
     if (jobid_exception (job->h, job->id, job->req, "timeout", 0, 0,
                          "resource allocation expired") < 0)
         flux_log_error (job->h,
-                        "failed to generate timeout exception for %ju",
-                        job->id);
+                        "failed to generate timeout exception for %s",
+                        idf58 (job->id));
     (*job->impl->kill) (job, SIGALRM);
     flux_watcher_stop (w);
     job->exception_in_progress = 1;
@@ -497,8 +498,8 @@ void jobinfo_started (struct jobinfo *job)
     if (h && job->req) {
         if (jobinfo_set_expiration (job) < 0)
             flux_log_error (h,
-                            "failed to set expiration for %ju",
-                            (uintmax_t) job->id);
+                            "failed to set expiration for %s",
+                            idf58 (job->id));
         job->running = 1;
         if (jobinfo_respond (h, job, "start") < 0)
             flux_log_error (h, "jobinfo_started: flux_respond");
@@ -640,8 +641,8 @@ void jobinfo_log_output (struct jobinfo *job,
                                  "rank", buf,
                                  "data", data, len) < 0)
         flux_log_error (job->h,
-                        "eventlog_append failed: %ju: message=%s",
-                        (uintmax_t) job->id,
+                        "eventlog_append failed: %s: message=%s",
+                        idf58 (job->id),
                         data);
 }
 
@@ -1008,8 +1009,8 @@ static void get_rootref_cb (flux_future_t *fprev, void *arg)
                                                   job->userid)))
         flux_log (job->h,
                   LOG_DEBUG,
-                  "checkpoint rootref not found: %ju",
-                  (uintmax_t)job->id);
+                  "checkpoint rootref not found: %s",
+                  idf58 (job->id));
 
     /* if rootref not found, still create namespace */
     if (!(f = ns_create_and_link (h, job, 0)))
@@ -1083,8 +1084,8 @@ static void evlog_err (struct eventlogger *ev, void *arg, int err, json_t *e)
     struct jobinfo *job = arg;
     char *s = json_dumps (e, JSON_COMPACT);
     flux_log_error (job->h,
-                    "eventlog error: job=%ju: entry=%s",
-                    (uintmax_t) job->id,
+                    "eventlog error: %s: entry=%s",
+                    idf58 (job->id),
                     s);
     free (s);
 }
@@ -1150,8 +1151,8 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
     job->ev = eventlogger_create (job->h, 0.01, &ev_ops, job);
     if (!job->ev || eventlogger_setns (job->ev, job->ns) < 0) {
         flux_log_error (job->h,
-                        "eventlogger_create/setns for job %ju failed",
-                        (uintmax_t) job->id);
+                        "eventlogger_create/setns for job %s failed",
+                        idf58 (job->id));
         jobinfo_decref (job);
         return -1;
     }
@@ -1221,7 +1222,7 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
          *   doesn't dump a duplicate exception into the eventlog.
          */
         job->exception_in_progress = 1;
-        flux_log (h, LOG_DEBUG, "exec aborted: id=%ju", (uintmax_t)id);
+        flux_log (h, LOG_DEBUG, "exec aborted: id=%s", idf58 (id));
         jobinfo_fatal_error (job, 0, "aborted due to exception type=%s", type);
     }
 }

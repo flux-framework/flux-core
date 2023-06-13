@@ -24,6 +24,7 @@
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/grudgeset.h"
 #include "src/common/libjob/job_hash.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/libidset/idset.h"
 #include "ccan/str/str.h"
 
@@ -282,8 +283,8 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
     assert (jsctx);
 
     if (flux_rpc_get_unpack (f, "{s:s}", "jobspec", &s) < 0) {
-        flux_log_error (jsctx->h, "%s: error jobspec for %ju",
-                        __FUNCTION__, (uintmax_t)job->id);
+        flux_log_error (jsctx->h, "%s: error jobspec for %s",
+                        __FUNCTION__, idf58 (job->id));
         goto out;
     }
 
@@ -332,8 +333,8 @@ static void state_run_lookup_continuation (flux_future_t *f, void *arg)
     assert (jsctx);
 
     if (flux_rpc_get_unpack (f, "{s:s}", "R", &s) < 0) {
-        flux_log_error (jsctx->h, "%s: error eventlog for %ju",
-                        __FUNCTION__, (uintmax_t)job->id);
+        flux_log_error (jsctx->h, "%s: error eventlog for %s",
+                        __FUNCTION__, idf58 (job->id));
         goto out;
     }
 
@@ -555,8 +556,8 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
         goto error;
 
     if (!(a = eventlog_decode (eventlog))) {
-        flux_log_error (jsctx->h, "%s: error parsing eventlog for %ju",
-                        __FUNCTION__, (uintmax_t)job->id);
+        flux_log_error (jsctx->h, "%s: error parsing eventlog for %s",
+                        __FUNCTION__, idf58 (job->id));
         goto error;
     }
 
@@ -566,8 +567,8 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
         json_t *context = NULL;
 
         if (eventlog_entry_parse (value, &timestamp, &name, &context) < 0) {
-            flux_log_error (jsctx->h, "%s: error parsing entry for %ju",
-                            __FUNCTION__, (uintmax_t)job->id);
+            flux_log_error (jsctx->h, "%s: error parsing entry for %s",
+                            __FUNCTION__, idf58 (job->id));
             goto error;
         }
 
@@ -839,15 +840,15 @@ static int job_update_eventlog_seq (struct job_state_ctx *jsctx,
         return 0;
     if (latest_eventlog_seq <= job->eventlog_seq) {
         flux_log (jsctx->h, LOG_INFO,
-                  "%s: job %ju duplicate event (last = %d, latest = %d)",
-                  __FUNCTION__, (uintmax_t)job->id,
+                  "%s: job %s duplicate event (last = %d, latest = %d)",
+                  __FUNCTION__, idf58 (job->id),
                   job->eventlog_seq, latest_eventlog_seq);
         return 1;
     }
     if (latest_eventlog_seq > (job->eventlog_seq + 1))
         flux_log (jsctx->h, LOG_INFO,
-                  "%s: job %ju missed event (last = %d, latest = %d)",
-                  __FUNCTION__, (uintmax_t)job->id,
+                  "%s: job %s missed event (last = %d, latest = %d)",
+                  __FUNCTION__, idf58 (job->id),
                   job->eventlog_seq, latest_eventlog_seq);
     job->eventlog_seq = latest_eventlog_seq;
     return 0;
@@ -912,8 +913,8 @@ static int submit_context_parse (flux_t *h,
                         "urgency", &urgency,
                         "userid", &userid,
                         "version", &version) < 0) {
-        flux_log (h, LOG_ERR, "%s: submit context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)job->id);
+        flux_log (h, LOG_ERR, "%s: submit context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -963,8 +964,8 @@ static int priority_context_parse (flux_t *h,
         || json_unpack (context,
                         "{ s:I }",
                         "priority", (json_int_t *)&job->priority) < 0) {
-        flux_log (h, LOG_ERR, "%s: priority context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)job->id);
+        flux_log (h, LOG_ERR, "%s: priority context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -1003,8 +1004,8 @@ static int finish_context_parse (flux_t *h,
         || json_unpack (context,
                         "{ s:i }",
                         "status", &job->wait_status) < 0) {
-        flux_log (h, LOG_ERR, "%s: finish context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)job->id);
+        flux_log (h, LOG_ERR, "%s: finish context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -1045,8 +1046,8 @@ static int urgency_context_parse (flux_t *h,
         || json_unpack (context, "{ s:i }", "urgency", &urgency) < 0
         || (urgency < FLUX_JOB_URGENCY_MIN
             || urgency > FLUX_JOB_URGENCY_MAX)) {
-        flux_log (h, LOG_ERR, "%s: urgency context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)job->id);
+        flux_log (h, LOG_ERR, "%s: urgency context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -1077,8 +1078,8 @@ static int exception_context_parse (flux_t *h,
                         "type", &type,
                         "severity", &severity,
                         "note", &note) < 0) {
-        flux_log (h, LOG_ERR, "%s: exception context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)job->id);
+        flux_log (h, LOG_ERR, "%s: exception context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -1106,8 +1107,8 @@ static int dependency_add (struct job *job,
         && errno != EEXIST)
         /*  Log non-EEXIST errors, but it is not fatal */
         flux_log_error (job->h,
-                        "job %ju: dependency-add",
-                         (uintmax_t) job->id);
+                        "job %s: dependency-add",
+                         idf58 (job->id));
     return 0;
 }
 
@@ -1119,8 +1120,8 @@ static int dependency_remove (struct job *job,
         /*  No matching dependency is non-fatal error */
         flux_log (job->h,
                   LOG_DEBUG,
-                  "job %ju: dependency-remove '%s' not found",
-                  (uintmax_t) job->id,
+                  "job %s: dependency-remove '%s' not found",
+                  idf58 (job->id),
                   description);
         rc = 0;
     }
@@ -1140,8 +1141,8 @@ static int dependency_context_parse (flux_t *h,
                         "{s:s}",
                         "description", &description) < 0) {
         flux_log (h, LOG_ERR,
-                  "job %ju: dependency-%s context invalid",
-                  (uintmax_t) job->id,
+                  "job %s: dependency-%s context invalid",
+                  idf58 (job->id),
                   cmd);
         errno = EPROTO;
         return -1;
@@ -1153,8 +1154,8 @@ static int dependency_context_parse (flux_t *h,
         rc = dependency_remove (job, description);
     else {
         flux_log (h, LOG_ERR,
-                  "job %ju: invalid dependency event: dependency-%s",
-                  (uintmax_t) job->id,
+                  "job %s: invalid dependency event: dependency-%s",
+                  idf58 (job->id),
                   cmd);
         return -1;
     }
@@ -1166,7 +1167,7 @@ static int memo_update (flux_t *h,
                         json_t *o)
 {
     if (!o) {
-        flux_log (h, LOG_ERR, "%ju: invalid memo context", (uintmax_t) job->id);
+        flux_log (h, LOG_ERR, "%s: invalid memo context", idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -1214,8 +1215,8 @@ static int journal_annotations_event (struct job_state_ctx *jsctx,
     if (!context
         || json_unpack (context, "{ s:o }", "annotations", &annotations) < 0) {
         flux_log (jsctx->h, LOG_ERR,
-                  "%s: annotations event context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)job->id);
+                  "%s: annotations event context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -1299,9 +1300,9 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
     if (!job && !streq (name, "submit")) {
         flux_log (jsctx->h,
                   LOG_ERR,
-                  "event %s: job %ju not in hash",
+                  "event %s: job %s not in hash",
                   name,
-                  (uintmax_t) id);
+                  idf58 (id));
         return 0;
     }
 

@@ -18,6 +18,7 @@
 #include <jansson.h>
 
 #include "src/common/libutil/fsd.h"
+#include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
 
 #include "top.h"
@@ -116,7 +117,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
 
     json_array_foreach (joblist->jobs, index, job) {
         char *uri = NULL;
-        char idstr[16];
+        const char *idstr;
         char run[16] = "";
         flux_jobid_t id;
         int userid;
@@ -143,8 +144,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
                              "uri", &uri) < 0)
             fatal (0, "error decoding a job record from job-list RPC");
 
-        if (flux_job_id_encode (id, "f58", idstr, sizeof (idstr)) < 0)
-            fatal (errno, "error encoding jobid as F58");
+        idstr = idf58 (id);
         (void)fsd_format_duration_ex (run, sizeof (run), fabs (now - t_run), 2);
         if (!(username = ucache_lookup (joblist->ucache, userid)))
             fatal (errno, "error looking up userid %d in ucache", (int)userid);
@@ -314,7 +314,6 @@ void joblist_pane_enter (struct joblist_pane *joblist)
     flux_jobid_t id;
     char *uri = NULL;
     char title [1024];
-    char jobid [24];
     flux_error_t error;
 
     json_t *job = get_current_job (joblist);
@@ -329,12 +328,11 @@ void joblist_pane_enter (struct joblist_pane *joblist)
         return;
     if (uri == NULL)
         return;
-    if (flux_job_id_encode (id, "f58", jobid, sizeof (jobid)) < 0
-        || snprintf (title,
-                     sizeof(title),
-                     "%s/%s",
-                     joblist->top->title,
-                     jobid) > sizeof (title))
+    if (snprintf (title,
+                  sizeof(title),
+                  "%s/%s",
+                  joblist->top->title,
+                  idf58 (id)) > sizeof (title))
         fatal (errno, "failed to build job title for job");
 
     /*  Lazily attempt to run top on jobid, but for now simply return to the

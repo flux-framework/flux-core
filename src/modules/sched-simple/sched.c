@@ -19,6 +19,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libjob/jj.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/librlist/rlist.h"
 #include "ccan/str/str.h"
 
@@ -272,7 +273,7 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
                                               "jobs_ahead") < 0)
         flux_log_error (h, "schedutil_alloc_respond_success_pack");
 
-    flux_log (h, LOG_DEBUG, "alloc: %ju: %s", (uintmax_t) job->id, s);
+    flux_log (h, LOG_DEBUG, "alloc: %s: %s", idf58 (job->id), s);
     rc = 0;
 
 out:
@@ -402,8 +403,8 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg, void *arg)
         jobreq_destroy (job);
         return;
     }
-    flux_log (h, LOG_DEBUG, "req: %ju: spec={%d,%d,%d} duration=%.1f",
-                            (uintmax_t) job->id, job->jj.nnodes,
+    flux_log (h, LOG_DEBUG, "req: %s: spec={%d,%d,%d} duration=%.1f",
+                            idf58 (job->id), job->jj.nnodes,
                             job->jj.nslots, job->jj.slot_size,
                             job->jj.duration);
     search_dir = job->priority > FLUX_JOB_URGENCY_DEFAULT;
@@ -521,8 +522,8 @@ static int hello_cb (flux_t *h,
     }
 
     flux_log (h, LOG_DEBUG,
-              "hello: id=%ju priority=%u userid=%u t_submit=%0.1f",
-              (uintmax_t)id,
+              "hello: id=%s priority=%u userid=%u t_submit=%0.1f",
+              idf58 (id),
               priority,
               (unsigned int)userid,
               t_submit);

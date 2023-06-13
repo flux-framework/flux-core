@@ -85,6 +85,7 @@
 #include <flux/core.h>
 #include <assert.h>
 
+#include "src/common/libjob/idf58.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
@@ -134,8 +135,10 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     while (job) {
         if (job->state == FLUX_JOB_STATE_RUN) {
             if (event_job_action (ctx->event, job) < 0)
-                flux_log_error (h, "%s: event_job_action id=%ju", __FUNCTION__,
-                                (uintmax_t)job->id);
+                flux_log_error (h,
+                                "%s: event_job_action id=%s",
+                                __FUNCTION__,
+                                idf58 (job->id));
         }
         job = zhashx_next (ctx->active_jobs);
     }
@@ -195,8 +198,8 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        flux_log (h, LOG_ERR, "start response: id=%ju not active",
-                  (uintmax_t)id);
+        flux_log (h, LOG_ERR, "start response: id=%s not active",
+                  idf58 (id));
         errno = EINVAL;
         goto error;
     }
@@ -204,8 +207,8 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         if (job->reattach)
             flux_log (h,
                       LOG_ERR,
-                      "start response: id=%ju should not get start event",
-                      (uintmax_t)id);
+                      "start response: id=%s should not get start event",
+                      idf58 (id));
         else {
             if (event_job_post_pack (ctx->event, job, "start", 0, NULL) < 0)
                 goto error_post;

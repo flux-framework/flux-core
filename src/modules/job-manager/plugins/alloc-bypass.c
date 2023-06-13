@@ -24,6 +24,7 @@
 #include <flux/jobtap.h>
 
 #include "src/common/librlist/rlist.h"
+#include "src/common/libjob/idf58.h"
 
 static void alloc_continuation (flux_future_t *f, void *arg)
 {
@@ -56,8 +57,8 @@ static void alloc_continuation (flux_future_t *f, void *arg)
      */
     if (flux_jobtap_job_aux_set (p, *idptr, "alloc-bypass::free", p, NULL) < 0)
         flux_log_error (flux_jobtap_get_flux (p),
-                        "id=%ju: Failed to set alloc-bypass::free",
-                        *idptr);
+                        "id=%s: Failed to set alloc-bypass::free",
+                        idf58 (*idptr));
 
 done:
     flux_future_destroy (f);

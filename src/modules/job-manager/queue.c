@@ -20,6 +20,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
@@ -404,8 +405,8 @@ bool queue_started (struct queue *queue, struct job *job)
             return false;
         if (!(q = zhashx_lookup (queue->named, job->queue))) {
             flux_log (queue->ctx->h, LOG_ERR,
-                      "%s: job %ju invalid queue: %s",
-                      __FUNCTION__, (uintmax_t)job->id, job->queue);
+                      "%s: job %s invalid queue: %s",
+                      __FUNCTION__, idf58 (job->id), job->queue);
             return false;
         }
         return q->start;

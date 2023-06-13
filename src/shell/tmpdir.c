@@ -15,6 +15,7 @@
 #endif
 
 #include "src/common/libutil/cleanup.h"
+#include "src/common/libjob/idf58.h"
 
 #include "builtins.h"
 #include "internal.h"
@@ -39,13 +40,16 @@ static int make_job_path (flux_shell_t *shell,
 {
     size_t n;
 
-    n = snprintf (buf, size, "%s/jobtmp-%d-", parent, shell->info->shell_rank);
+    n = snprintf (buf,
+                  size,
+                  "%s/jobtmp-%d-%s",
+                  parent,
+                  shell->info->shell_rank,
+                  idf58 (shell->jobid));
     if (n >= size) {
         errno = EOVERFLOW;
         return -1;
     }
-    if (flux_job_id_encode (shell->jobid, "f58", buf + n, size - n) < 0)
-        return -1;
     return 0;
 }
 

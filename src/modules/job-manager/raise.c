@@ -31,6 +31,7 @@
 #include <ctype.h>
 #include <flux/core.h>
 
+#include "src/common/libjob/idf58.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "job.h"
@@ -254,8 +255,8 @@ void raiseall_handle_request (flux_t *h,
         while (job) {
             if (raise_job (ctx, type, severity, cred.userid, note, job) < 0) {
                 flux_log_error (h,
-                                "error raising exception on id=%ju",
-                                (uintmax_t)job->id);
+                                "error raising exception on id=%s",
+                                idf58 (job->id));
                 error_count++;
             }
             job = zlistx_next (target_jobs);

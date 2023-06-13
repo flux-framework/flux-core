@@ -83,7 +83,7 @@ test_expect_success 'job-exec: job shell eventually killed by SIGKILL' '
 		ready &&
 	flux cancel $id &&
 	flux job wait-event -vt 15 $id clean &&
-	flux dmesg | grep $(flux job id $id) &&
+	flux dmesg | grep $(flux job id --to=f58 $id) &&
 	test_expect_code 137 flux job status $id &&
 	flux module reload job-exec
 '
