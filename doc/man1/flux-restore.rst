@@ -54,7 +54,11 @@ OPTIONS
    store.  Performance will vary depending on the content of the archive.
 
 **--size-limit**\ =\ *SIZE*
-   Skip restoring keys that exceed SIZE bytes (default: no limit).
+   Skip restoring keys that exceed SIZE bytes (default: no limit). SIZE may
+   be a floating point number with an optional multiplicative suffix 'k'
+   or 'K' for for kibibytes (KiB, units of 1024 bytes), 'M' for mebibytes
+   (MiB, units of 1024 * 1024 bytes), 'G' for gibibytes (GiB, units of
+   1024 * 1024 * 1024 bytes), and so on for 'T', 'P', and 'E'.
 
 RESOURCES
 =========
