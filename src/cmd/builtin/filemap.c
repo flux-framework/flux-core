@@ -29,7 +29,7 @@
 #include "src/common/libfilemap/filemap.h"
 #include "src/common/libutil/fileref.h"
 
-static const int default_chunksize = 1048576;
+static const char *default_chunksize = "1M";
 static const int default_small_file_threshold = 4096;
 
 static json_t *get_list_option (optparse_t *p,
@@ -175,7 +175,7 @@ static int subcmd_map (optparse_t *p, int ac, char *av[])
     }
     ctx.p = p;
     ctx.verbose = optparse_get_int (p, "verbose", 0);
-    ctx.chunksize = optparse_get_int (p, "chunksize", default_chunksize);
+    ctx.chunksize = optparse_get_size (p, "chunksize", default_chunksize);
     ctx.threshold = optparse_get_int (p,
                                       "small-file-threshold",
                                       default_small_file_threshold);
@@ -375,9 +375,9 @@ static struct optparse_option map_opts[] = {
       .usage = "Change to DIR before mapping", },
     { .name = "verbose", .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
       .usage = "Increase output detail.", },
-    { .name = "chunksize", .has_arg = 1, .arginfo = "N",
+    { .name = "chunksize", .has_arg = 1, .arginfo = "N[kMG]",
       .usage = "Limit blob size to N bytes with 0=unlimited"
-               " (default 1048576)", },
+               " (default 1M)", },
     { .name = "small-file-threshold", .has_arg = 1, .arginfo = "N",
       .usage = "Adjust the maximum size of a \"small file\" in bytes"
                " (default 4096)", },
