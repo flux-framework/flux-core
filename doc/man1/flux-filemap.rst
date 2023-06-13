@@ -76,7 +76,10 @@ OPTIONS
 
 **--chunksize=N**
    Limit the content mapped blob size to N bytes.  Set to 0 for unlimited.
-   The default is 1048576 (*map* subcommand only).
+   N may be a floating-point number with optional suffix 'b' for bytes (the
+   default), 'k' for kibibytes (KiB, units of 1024 bytes), 'M' for mebibytes
+   (MiB, units of 1024 * 1024 bytes), or 'G' for gibibytes (units of 1024 *
+   1024 * 1024 bytes). The default is 1M (*map* subcommand only).
 
 **--direct**
    Avoid indirection through the content cache when fetching the top level
