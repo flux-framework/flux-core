@@ -12,6 +12,7 @@
 #define _UTIL_OPTPARSE_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -381,6 +382,16 @@ int optparse_get_int (optparse_t *p, const char *name, int default_value);
 double optparse_get_duration (optparse_t *p, const char *name,
                               double default_value);
 
+/*   Return the option argument parsed as a file size parameter in
+ *   floating-point 'size[bkMGTPE]', where the optional suffix designates
+ *   'k' or 'K' for kibibytes (KiB), 'M' for mebibytes (MiB) or
+ *   'G' for gibibytes (GiB), 'T' for tebibytes (TiB), P for pebibytes (PiB),
+ *   'E' for exbibytes (EiB). The end result in bytes is truncated and
+ *   returned as uint64_t. If there was an error parsing the size string, then
+ *   the fatal error function is called.
+ */
+uint64_t optparse_get_size (optparse_t *p, const char *name,
+                            const char *default_value);
 /*
  *   Return the option argument as a double if 'name' was used,
  *    'default_value' if not.  If the option is unknown, or the argument

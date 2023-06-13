@@ -19,9 +19,11 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <argz.h>
+#include <math.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/parse_size.h"
 #include "ccan/str/str.h"
 
 #include "optparse.h"
@@ -948,6 +950,34 @@ double optparse_get_duration (optparse_t *p, const char *name,
         return -1;
     }
     return d;
+}
+
+uint64_t optparse_get_size (optparse_t *p,
+                            const char *name,
+                            const char *default_value)
+{
+    int n;
+    uint64_t result;
+    const char *s = NULL;
+
+    if ((n = optparse_getopt (p, name, &s)) < 0) {
+        optparse_fatalmsg (p, 1,
+                           "%s: optparse error: no such argument '%s'\n",
+                           p->program_name, name);
+        return (uintmax_t) -1;
+    }
+    if (n == 0)
+        s = default_value;
+    if (parse_size (s, &result) < 0) {
+        optparse_fatalmsg (p, 1,
+                          "%s: invalid value for option '%s': %s: %s",
+                          p->program_name,
+                          name,
+                          s,
+                          strerror (errno));
+        return (uintmax_t) -1;
+    }
+    return result;
 }
 
 const char *optparse_get_str (optparse_t *p, const char *name,
