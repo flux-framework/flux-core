@@ -53,6 +53,8 @@ class JobID(int):
     """
 
     def __new__(cls, value):
+        if isinstance(value, JobID):
+            return cls(value.orig_str)
         if isinstance(value, int):
             jobid = value
         else:
