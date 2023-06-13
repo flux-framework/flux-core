@@ -19,6 +19,7 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <argz.h>
+#include <math.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fsd.h"
@@ -948,6 +949,77 @@ double optparse_get_duration (optparse_t *p, const char *name,
         return -1;
     }
     return d;
+}
+
+static bool invalid_size (double val)
+{
+    switch (fpclassify (val)) {
+        case FP_NORMAL:     // [[fallthrough]]
+        case FP_SUBNORMAL:  // [[fallthrough]]
+        case FP_ZERO:       // [[fallthrough]]
+            break;          // OK
+        case FP_NAN:        // [[fallthrough]]
+        case FP_INFINITE:   // [[fallthrough]]
+        default:            // something else, bad
+            errno = EINVAL;
+            return -1;
+    }
+
+    if (val < 0.) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return 0;
+}
+
+off_t optparse_get_size (optparse_t *p,
+                         const char *name,
+                         const char *default_value)
+{
+    int n;
+    double val;
+    char *end;
+    int scale = 0;
+    const char *s = NULL;
+
+    if ((n = optparse_getopt (p, name, &s)) < 0) {
+        optparse_fatalmsg (p, 1,
+                           "%s: optparse error: no such argument '%s'\n",
+                           p->program_name, name);
+        return -1;
+    }
+    if (n == 0)
+        s = default_value;
+    val = strtod (s, &end);
+    if (invalid_size (val)
+        || strlen (end) > 1) {
+        optparse_fatalmsg (p, 1,
+                           "%s: invalid argument for option '%s': '%s'\n",
+                           p->program_name, name, s);
+        return -1;
+    }
+    switch (*end) {
+        case 'k':
+            scale = 1024;
+            break;
+        case 'M':
+            scale = 1024*1024;
+            break;
+        case 'G':
+            scale = 1024*1024*1024;
+            break;
+        case 'b':
+        case 0:
+            scale = 1;
+            break;
+        default:
+            optparse_fatalmsg (p, 1,
+                              "%s: invalid size suffix '%c' for option %s",
+                              p->program_name, *end, name);
+            return ((size_t) -1);
+    }
+    return (off_t) (val * scale);
 }
 
 const char *optparse_get_str (optparse_t *p, const char *name,
