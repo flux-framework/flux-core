@@ -708,3 +708,9 @@ pmix
 SIGUSR
 iteratively
 noverify
+KiB
+kibibytes
+MiB
+mebibytes
+GiB
+gibibytes
