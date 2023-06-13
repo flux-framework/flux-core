@@ -22,6 +22,7 @@
 #include "src/common/librlist/rnode.h"
 #include "src/common/libccan/ccan/str/str.h"
 #include "src/common/libjob/jj.h"
+#include "src/common/libjob/idf58.h"
 
 #include "job_data.h"
 
@@ -104,8 +105,8 @@ static int parse_jobspec_job_name (struct job *job,
                             "{s?:s}",
                             "name", &job->name) < 0) {
             flux_log (job->h, LOG_ERR,
-                      "%s: job %ju invalid job dictionary: %s",
-                      __FUNCTION__, (uintmax_t)job->id, error.text);
+                      "%s: job %s invalid job dictionary: %s",
+                      __FUNCTION__, idf58 (job->id), error.text);
             return -1;
         }
     }
@@ -120,23 +121,23 @@ static int parse_jobspec_job_name (struct job *job,
                             "[{s:o}]",
                             "command", &command) < 0) {
             flux_log (job->h, LOG_ERR,
-                      "%s: job %ju invalid jobspec: %s",
-                      __FUNCTION__, (uintmax_t)job->id, error.text);
+                      "%s: job %s invalid jobspec: %s",
+                      __FUNCTION__, idf58 (job->id), error.text);
             return -1;
         }
 
         if (!json_is_array (command)) {
             flux_log (job->h, LOG_ERR,
-                      "%s: job %ju invalid jobspec",
-                      __FUNCTION__, (uintmax_t)job->id);
+                      "%s: job %s invalid jobspec",
+                      __FUNCTION__, idf58 (job->id));
             return -1;
         }
 
         arg0 = json_array_get (command, 0);
         if (!arg0 || !json_is_string (arg0)) {
             flux_log (job->h, LOG_ERR,
-                      "%s: job %ju invalid job command",
-                      __FUNCTION__, (uintmax_t)job->id);
+                      "%s: job %s invalid job command",
+                      __FUNCTION__, idf58 (job->id));
             return -1;
         }
         job->name = parse_job_name (json_string_value (arg0));
@@ -181,8 +182,8 @@ static int parse_per_resource (struct job *job,
                               "options",
                                 "per-resource", &o) < 0) {
         flux_log (job->h, LOG_ERR,
-                  "%s: job %ju invalid jobspec: %s",
-                  __FUNCTION__, (uintmax_t)job->id, error.text);
+                  "%s: job %s invalid jobspec: %s",
+                  __FUNCTION__, idf58 (job->id), error.text);
         return -1;
     }
 
@@ -193,8 +194,8 @@ static int parse_per_resource (struct job *job,
                             "type", type,
                             "count", count) < 0) {
             flux_log (job->h, LOG_ERR,
-                      "%s: job %ju invalid per-resource spec: %s",
-                      __FUNCTION__, (uintmax_t)job->id, error.text);
+                      "%s: job %s invalid per-resource spec: %s",
+                      __FUNCTION__, idf58 (job->id), error.text);
             return -1;
         }
     }
@@ -269,8 +270,8 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
 
     if (!(job->jobspec = json_loads (s, 0, &error))) {
         flux_log (job->h, LOG_ERR,
-                  "%s: job %ju invalid jobspec: %s",
-                  __FUNCTION__, (uintmax_t)job->id, error.text);
+                  "%s: job %s invalid jobspec: %s",
+                  __FUNCTION__, idf58 (job->id), error.text);
         goto error;
     }
 
@@ -281,16 +282,16 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
                         "job",
                         &jobspec_job) < 0) {
         flux_log (job->h, LOG_ERR,
-                  "%s: job %ju invalid jobspec: %s",
-                  __FUNCTION__, (uintmax_t)job->id, error.text);
+                  "%s: job %s invalid jobspec: %s",
+                  __FUNCTION__, idf58 (job->id), error.text);
         goto nonfatal_error;
     }
 
     if (jobspec_job) {
         if (!json_is_object (jobspec_job)) {
             flux_log (job->h, LOG_ERR,
-                      "%s: job %ju invalid jobspec",
-                      __FUNCTION__, (uintmax_t)job->id);
+                      "%s: job %s invalid jobspec",
+                      __FUNCTION__, idf58 (job->id));
             goto nonfatal_error;
         }
     }
@@ -299,8 +300,8 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
                         "{s:o}",
                         "tasks", &tasks) < 0) {
         flux_log (job->h, LOG_ERR,
-                  "%s: job %ju invalid jobspec: %s",
-                  __FUNCTION__, (uintmax_t)job->id, error.text);
+                  "%s: job %s invalid jobspec: %s",
+                  __FUNCTION__, idf58 (job->id), error.text);
         goto nonfatal_error;
     }
 
@@ -314,15 +315,15 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
                         "cwd", &job->cwd,
                         "queue", &job->queue) < 0) {
         flux_log (job->h, LOG_ERR,
-                  "%s: job %ju invalid jobspec: %s",
-                  __FUNCTION__, (uintmax_t)job->id, error.text);
+                  "%s: job %s invalid jobspec: %s",
+                  __FUNCTION__, idf58 (job->id), error.text);
         goto nonfatal_error;
     }
 
     if (jj_get_counts_json (job->jobspec, &jj) < 0) {
         flux_log (job->h, LOG_ERR,
-                  "%s: job %ju invalid jobspec; %s",
-                  __FUNCTION__, (uintmax_t)job->id, jj.error);
+                  "%s: job %s invalid jobspec; %s",
+                  __FUNCTION__, idf58 (job->id), jj.error);
         goto nonfatal_error;
     }
 
@@ -371,8 +372,8 @@ static int parse_R (struct job *job, const char *s, bool allow_nonfatal)
 
     if (!(job->R = json_loads (s, 0, &error))) {
         flux_log (job->h, LOG_ERR,
-                  "%s: job %ju invalid R: %s",
-                  __FUNCTION__, (uintmax_t)job->id, error.text);
+                  "%s: job %s invalid R: %s",
+                  __FUNCTION__, idf58 (job->id), error.text);
         goto nonfatal_error;
     }
 
