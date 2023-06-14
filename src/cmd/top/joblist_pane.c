@@ -27,6 +27,7 @@ static const struct dimension win_dim = { 0, 6, 80, 60 };
 
 struct joblist_pane {
     struct top *top;
+    int jobid_width;
     WINDOW *win;
     json_t *jobs_all;
     json_t *jobs;
@@ -85,7 +86,8 @@ void joblist_pane_draw (struct joblist_pane *joblist)
         mvwprintw (joblist->win,
                    0,
                    0,
-                   "%12s %8s %8s %2s %6s %6s %7s %-*s",
+                   "%*s %8s %8s %2s %6s %6s %7s %-*s",
+                   joblist->jobid_width,
                    "JOBID", "QUEUE", "USER", "ST",
                    "NTASKS", "NNODES", "RUNTIME",
                    name_width, "NAME");
@@ -93,7 +95,8 @@ void joblist_pane_draw (struct joblist_pane *joblist)
         mvwprintw (joblist->win,
                    0,
                    0,
-                   "%12s %8s %2s %6s %6s %7s %-*s",
+                   "%*s %8s %2s %6s %6s %7s %-*s",
+                   joblist->jobid_width,
                    "JOBID","USER", "ST", "NTASKS", "NNODES", "RUNTIME",
                    name_width, "NAME");
 
@@ -413,6 +416,24 @@ void joblist_pane_set_current (struct joblist_pane *joblist, bool next)
     }
 }
 
+/*
+ *  Workaround for mvwprintw(3) issues with multibyte jobid 'ƒ' character.
+ *
+ *  Empirically, the JOBID column must be formatted as %12s when the 'ƒ'
+ *  character appears in f58 encoded jobids, but %13s when ascii 'f' is used.
+ *  Guess at the current jobid encoding by determining if the f58 encoding
+ *  of jobid 0 has a length of 2 (ascii) or 3 (utf-8).
+ *
+ */
+static int estimate_jobid_width (void)
+{
+    const char *id = idf58 (0);
+    if (strlen (id) == 2)
+        return 13;
+    else
+        return 12;
+}
+
 struct joblist_pane *joblist_pane_create (struct top *top)
 {
     struct joblist_pane *joblist;
@@ -422,6 +443,7 @@ struct joblist_pane *joblist_pane_create (struct top *top)
     if (!(joblist->ucache = ucache_create ()))
         fatal (errno, "could not create ucache");
     joblist->top = top;
+    joblist->jobid_width = estimate_jobid_width ();
     joblist->current = FLUX_JOBID_ANY;
     joblist->show_queue = queues_configured (top->queues);
     if (!(joblist->win = newwin (win_dim.y_length,
