@@ -22,6 +22,7 @@
  *    . FLUX_JOB_NNODES
  *    . FLUX_JOB_ID
  *    . FLUX_URI (if not running standalone)
+ *    . correct HOSTNAME if set in job environment
  *
  * Current working directory
  *    Ignore - shell should already be in it.
@@ -154,6 +155,17 @@ struct shell_task *shell_task_create (flux_shell_t *shell,
                               getenv ("FLUX_KVS_NAMESPACE")) < 0)
             goto error;
     }
+
+    /* If HOSTNAME is set in job environment it is almost certain to be
+     * incorrect. Overwrite with the correct hostname.
+     */
+    if (flux_cmd_getenv (task->cmd, "HOSTNAME")
+        && flux_cmd_setenvf (task->cmd,
+                             1,
+                             "HOSTNAME",
+                             "%s",
+                             shell->hostname) < 0)
+        goto error;
     return task;
 error:
     shell_task_destroy (task);
