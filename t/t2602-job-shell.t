@@ -340,7 +340,18 @@ test_expect_success 'job-shell: fails if FLUX_EXEC_PROTOCOL_FD incorrect' '
 		-n2 -N2 hostname 2>protocol_fd_invalid.err &&
 	grep FLUX_EXEC_PROTOCOL_FD protocol_fd_invalid.err
 '
-
+test_expect_success 'job-shell: corrects HOSTNAME environment variable' '
+	HOSTNAME=incorrect \
+		flux run -n1 printenv HOSTNAME >hostname.out &&
+	test_debug "cat hostname.out" &&
+	test "$(hostname)" = "$(cat hostname.out)"
+'
+test_expect_success 'job-shell: leaves HOSTNAME unset if not set' '
+	( unset HOSTNAME &&
+	  test_expect_code 1 flux run -n1 printenv HOSTNAME >hostname.out2
+	) &&
+	test_must_be_empty hostname.out2
+'
 #  Note: in below tests, os.exit(True) returns with nonzero exit code,
 #   so the sense of the tests is reversed so the tasks exit with zero exit
 #   code for success.
