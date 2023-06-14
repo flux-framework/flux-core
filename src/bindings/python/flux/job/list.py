@@ -13,6 +13,7 @@ import pwd
 
 import flux.constants
 from flux.future import WaitAllFuture
+from flux.job import JobID
 from flux.job.info import JobInfo
 from flux.rpc import RPC
 
@@ -211,7 +212,7 @@ class JobList:
         self.since = since
         self.name = name
         self.queue = queue
-        self.ids = ids
+        self.ids = list(map(JobID, ids)) if ids else None
         self.errors = []
         for fname in filters:
             for x in fname.split(","):
