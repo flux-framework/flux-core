@@ -102,7 +102,9 @@ libutil_la_SOURCES = \
 	basemoji.h \
 	basemoji.c \
 	sigutil.h \
-	sigutil.c
+	sigutil.c \
+	parse_size.h \
+	parse_size.c
 
 EXTRA_DIST = veb_mach.c
 
