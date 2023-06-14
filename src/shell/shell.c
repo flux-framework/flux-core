@@ -1668,7 +1668,7 @@ int main (int argc, char *argv[])
     while (taskid != IDSET_INVALID_ID) {
         struct shell_task *task;
 
-        if (!(task = shell_task_create (shell.info, i, taskid)))
+        if (!(task = shell_task_create (&shell, i, taskid)))
             shell_die (1, "shell_task_create index=%d", i);
 
         task->pre_exec_cb = shell_task_exec;
