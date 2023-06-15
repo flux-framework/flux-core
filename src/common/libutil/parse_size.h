@@ -22,7 +22,7 @@
  *  P     2^50
  *  E     2^60
  *
- * The numeric part is parsed with first strtoull(3) then strtod(3), so
+ * The numeric part is parsed with first strtoull(3) then strtod(3),
  * so all input supported by those functions should work including
  * decimal (255), hex (0xf), octal (0377 prefix), exponent (2.55E2), etc.
  *
