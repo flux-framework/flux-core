@@ -373,7 +373,7 @@ AS_IF([test x$enable_code_coverage = xyes], [
 AC_ARG_WITH([flux-security], AS_HELP_STRING([--with-flux-security],
              [Build with flux-security]))
 AS_IF([test "x$with_flux_security" = "xyes"], [
-    PKG_CHECK_MODULES([FLUX_SECURITY], [flux-security],
+    PKG_CHECK_MODULES([FLUX_SECURITY], [flux-security >= 0.9.0],
                       [flux_sec_incdir=`$PKG_CONFIG --variable=includedir flux-security`],
                       [flux_sec_incdir=;])
     AS_IF([test "x$flux_sec_incdir" = x],
