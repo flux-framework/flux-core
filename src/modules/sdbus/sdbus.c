@@ -56,6 +56,20 @@ static void sdbus_recover (struct sdbus_ctx *ctx, const char *reason);
 static const double retry_min = 2;
 static const double retry_max = 60;
 
+static bool sdbus_debug = false;
+
+static __attribute__ ((format (printf, 2, 3)))
+void sdbus_log_debug (flux_t *h, const char *fmt, ...)
+{
+    if (sdbus_debug) {
+        va_list ap;
+
+        va_start (ap, fmt);
+        flux_vlog (h, LOG_DEBUG, fmt, ap);
+        va_end (ap);
+    }
+}
+
 static int authorize_request (const flux_msg_t *msg,
                               uint32_t rank,
                               flux_error_t *error)
@@ -173,13 +187,12 @@ static void log_msg_signal (flux_t *h,
 
     if (path)
         (void)sd_bus_path_decode (path, prefix, &s);
-    flux_log (h,
-              LOG_DEBUG,
-              "bus %s %s %s %s",
-              disposition,
-              sdmsg_typestr (m),
-              s ? s : path,
-              sd_bus_message_get_member (m));
+    sdbus_log_debug (h,
+                     "bus %s %s %s %s",
+                     disposition,
+                     sdmsg_typestr (m),
+                     s ? s : path,
+                     sd_bus_message_get_member (m));
     free (s);
 }
 
@@ -189,12 +202,11 @@ static void log_msg_method_reply (flux_t *h,
                                   sd_bus_message *m,
                                   struct call_info *info)
 {
-    flux_log (h,
-              LOG_DEBUG,
-              "bus recv %s cookie=%ju %s",
-              sdmsg_typestr (m),
-              (uintmax_t)info->cookie,
-              info->member);
+    sdbus_log_debug (h,
+                     "bus recv %s cookie=%ju %s",
+                     sdmsg_typestr (m),
+                     (uintmax_t)info->cookie,
+                     info->member);
 }
 
 static void sdbus_recv (struct sdbus_ctx *ctx, sd_bus_message *m)
@@ -287,7 +299,7 @@ static void sdbus_recv (struct sdbus_ctx *ctx, sd_bus_message *m)
 out:
     return;
 log_drop:
-    flux_log (ctx->h, LOG_DEBUG, "bus drop %s", sdmsg_typestr (m));
+    sdbus_log_debug (ctx->h, "bus drop %s", sdmsg_typestr (m));
 }
 
 static void call_info_destroy (struct call_info *info)
@@ -352,12 +364,11 @@ static int handle_call_request (struct sdbus_ctx *ctx,
         goto error;
     }
 
-    flux_log (ctx->h,
-              LOG_DEBUG,
-              "bus send %s cookie=%ju %s",
-              sdmsg_typestr (m),
-              (uintmax_t)cookie,
-              sd_bus_message_get_member (m));
+    sdbus_log_debug (ctx->h,
+                     "bus send %s cookie=%ju %s",
+                     sdmsg_typestr (m),
+                     (uintmax_t)cookie,
+                     sd_bus_message_get_member (m));
 
     if (!(info = call_info_create (m, cookie))
         || flux_msg_aux_set (msg,
@@ -500,6 +511,53 @@ error:
         flux_log_error (h, "error responding to sdbus.reconnect request");
 }
 
+static int sdbus_configure (struct sdbus_ctx *ctx,
+                            const flux_conf_t *conf,
+                            flux_error_t *error)
+{
+    flux_error_t conf_error;
+    int debug = 0;
+
+    if (flux_conf_unpack (conf,
+                          &conf_error,
+                          "{s?{s?b}}",
+                          "systemd",
+                            "sdbus-debug", &debug) < 0) {
+        errprintf (error,
+                   "error reading [systemd] config table: %s",
+                   conf_error.text);
+        return -1;
+    }
+    sdbus_debug = (debug ? true : false);
+    return 0;
+}
+
+static void reload_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
+{
+    struct sdbus_ctx *ctx = arg;
+    const flux_conf_t *conf;
+    flux_error_t error;
+    const char *errstr = NULL;
+
+    if (flux_conf_reload_decode (msg, &conf) < 0) {
+        errstr = "Failed to parse config-reload request";
+        goto error;
+    }
+    if (sdbus_configure (ctx, conf, &error) < 0) {
+        errstr = error.text;
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+}
+
 static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,
       "sdbus.disconnect",
@@ -524,6 +582,11 @@ static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,
       "sdbus.reconnect",
       reconnect_cb,
+      0
+    },
+    { FLUX_MSGTYPE_REQUEST,
+      "sdbus.config-reload",
+      reload_cb,
       0
     },
     FLUX_MSGHANDLER_TABLE_END,
@@ -696,18 +759,22 @@ struct sdbus_ctx *sdbus_ctx_create (flux_t *h, flux_error_t *error)
 {
     struct sdbus_ctx *ctx;
 
-    if (!(ctx = calloc (1, sizeof (*ctx)))
-        || !(ctx->f_conn = sdbus_connect (h, true, retry_min, retry_max))
+    if (!(ctx = calloc (1, sizeof (*ctx))))
+        goto error_create;
+    if (sdbus_configure (ctx, flux_get_conf (h), error) < 0)
+        goto error;
+    if (!(ctx->f_conn = sdbus_connect (h, true, retry_min, retry_max))
         || flux_future_then (ctx->f_conn, -1, connect_continuation, ctx) < 0
         || flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0
         || !(ctx->requests = flux_msglist_create ())
         || !(ctx->subscribers = flux_msglist_create ())
         || flux_get_rank (h, &ctx->rank) < 0)
-        goto error;
+        goto error_create;
     ctx->h = h;
     return ctx;
-error:
+error_create:
     errprintf (error, "error creating sdbus context: %s", strerror (errno));
+error:
     sdbus_ctx_destroy (ctx);
     return NULL;
 }

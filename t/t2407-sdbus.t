@@ -111,8 +111,21 @@ bus_subscribe_cancel () {
     flux python -c "import flux; flux.Flux().rpc(\"sdbus.subscribe-cancel\",{\"matchtag\":$1},flags=flux.constants.FLUX_RPC_NORESPONSE)"
 }
 
+test_expect_success 'enable sdbus-debug in configuration' '
+	flux config load <<-EOT
+	[systemd]
+	sdbus-debug = true
+	EOT
+'
 test_expect_success 'load sdbus module' '
 	flux module load sdbus
+'
+test_expect_success 'sdbus reconfig fails with bad sdbus-debug value' '
+	test_must_fail flux config load <<-EOT 2>config.err &&
+	[systemd]
+	sdbus-debug = 42
+	EOT
+	grep "Expected true or false" config.err
 '
 
 test_expect_success 'sdbus list-units works' '
@@ -299,7 +312,7 @@ test_expect_success 'create list script' '
 test_expect_success 'list from rank 0 is allowed' '
 	flux python ./list.py >/dev/null
 '
-test_expect_success 'list-units-leader from rank 1 is restricted' '
+test_expect_success 'list from rank 1 is restricted' '
 	test_must_fail flux exec -r 1 flux python ./list.py 2>list1.err &&
 	grep "not allowed" list1.err
 '
