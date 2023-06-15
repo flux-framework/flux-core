@@ -316,7 +316,7 @@ int main (int argc, char *argv[])
     if (!(target = strdup (argv[optindex])))
         log_msg_exit ("out of memory");
 
-    pad_bytes = optparse_get_int (opts, "pad", 0);
+    pad_bytes = optparse_get_size (opts, "pad", "0");
     if (pad_bytes < 0)
         log_msg_exit ("pad must be >= 0");
 
