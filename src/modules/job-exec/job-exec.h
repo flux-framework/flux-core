@@ -68,7 +68,6 @@ struct jobinfo {
 
     struct resource_set * R;         /* Fetched and parsed resource set R */
     json_t *              jobspec;   /* Fetched jobspec */
-    char *                J;         /* Signed jobspec */
 
     struct idset *        critical_ranks;  /* critical shell ranks */
 

@@ -210,6 +210,14 @@ static struct sdexec *sdexec_create (flux_t *h,
             flux_log_error (job->h, "flux_cmd_argv_append");
             goto cleanup;
         }
+        if (flux_cmd_setenvf (se->cmd,
+                              1,
+                              "FLUX_IMP_EXEC_HELPER",
+                              "flux imp-exec-helper %ju",
+                              (uintmax_t) job->id) < 0) {
+            flux_log_error (job->h, "flux_cmd_setenvf");
+            goto cleanup;
+        }
     }
 
     if (flux_cmd_argv_append (se->cmd, job_shell) < 0
@@ -357,26 +365,7 @@ static void state_cb (sdprocess_t *sdp, sdprocess_state_t state, void *arg)
     if (!se->job->reattach && !se->job->running)
         jobinfo_started (se->job);
 
-    if (state == SDPROCESS_ACTIVE) {
-        /*  Don't try to write J to stdin_fd of -1
-         *  This probably indicates we've reattached to this job
-         */
-        if (se->job->multiuser && se->stdin_fds[0] >= 0) {
-            char *input = NULL;
-            json_t *o = json_pack ("{s:s}", "J", se->job->J);
-            if (!o || !(input = json_dumps (o, JSON_COMPACT))) {
-                jobinfo_fatal_error (se->job, errno, "Failed to get input to IMP");
-                return;
-            }
-            if (write (se->stdin_fds[0], input, strlen (input)) < 0) {
-                jobinfo_fatal_error (se->job, errno, "write");
-                return;
-            }
-            close (se->stdin_fds[0]);
-            se->stdin_fds[0] = -1;
-        }
-    }
-    else if (state == SDPROCESS_EXITED
+    if (state == SDPROCESS_EXITED
              && !se->jobinfo_tasks_complete_called) {
 
         /* Since we are calling jobinfo_tasks_complete(), the

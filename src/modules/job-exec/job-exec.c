@@ -147,7 +147,6 @@ void jobinfo_decref (struct jobinfo *job)
         job->ctx = NULL;
         flux_msg_decref (job->req);
         job->req = NULL;
-        free (job->J);
         resource_set_destroy (job->R);
         json_decref (job->jobspec);
         free (job->rootref);
@@ -892,13 +891,6 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
         jobinfo_fatal_error (job, errno, "initializing critical ranks");
         goto done;
     }
-    if (job->multiuser && !config_use_imp_helper ()) {
-        const char *J = jobinfo_kvs_lookup_get (f, "J");
-        if (!J || !(job->J = strdup (J))) {
-            jobinfo_fatal_error (job, errno, "reading J: %s", error.text);
-            goto done;
-        }
-    }
     if (jobinfo_load_implementation (job) < 0) {
         jobinfo_fatal_error (job, errno, "failed to initialize implementation");
         goto done;
@@ -1057,12 +1049,6 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
     if (!(f_kvs = flux_jobid_kvs_lookup (h, job->id, 0, "R"))
         || flux_future_push (f, "R", f_kvs) < 0)
         goto err;
-    if (job->multiuser
-        && !config_use_imp_helper ()
-        && (!(f_kvs = flux_jobid_kvs_lookup (h, job->id, 0, "J"))
-        || flux_future_push (f, "J", f_kvs) < 0)) {
-        goto err;
-    }
     if (job->reattach)
         f_kvs = ns_get_rootref (h, job, 0);
     else
