@@ -103,6 +103,85 @@ test_expect_success 'flux-resource list: --include works with hostnames' '
 	test_debug "cat include-hosts.out" &&
 	grep "^2 pi\[3,0\]" include-hosts.out
 '
+test_expect_success 'flux-resource list: -i works with excluded hosts #5266' '
+	cat <<-'EOF' >corona.json &&
+	{
+	  "all": {
+	    "execution": {
+	      "R_lite": [
+	        {
+	          "children": {
+	            "core": "0-47",
+	            "gpu": "0-7"
+	          },
+	          "rank": "4-124"
+	        }
+	      ],
+	      "expiration": 0,
+	      "nodelist": [
+	        "corona[171-207,213-296]"
+	      ],
+	      "properties": {
+	        "pbatch": "20-124",
+	        "pdebug": "4-19"
+	      },
+	      "starttime": 0
+	    },
+	    "version": 1
+	  },
+	  "allocated": {
+	    "execution": {
+	      "R_lite": [
+	        {
+	          "children": {
+	            "core": "0-47",
+	            "gpu": "0-7"
+	          },
+	          "rank": "20-27,29-34,36-75,78-84,86-87,90-97,99-111,113-124"
+	        }
+	      ],
+	      "expiration": 0,
+	      "nodelist": [
+	        "corona[187-194,196-201,203-207,213-247,250-256,258-259,262-269,271-283,285-296]"
+	      ],
+	      "properties": {
+	        "pbatch": "20-27,29-34,36-75,78-84,86-87,90-97,99-111,113-124"
+	      },
+	      "starttime": 0
+	    },
+	    "version": 1
+	  },
+	  "down": {
+	    "execution": {
+	      "R_lite": [
+	        {
+	          "children": {
+	            "core": "0-47",
+	            "gpu": "0-7"
+	          },
+	          "rank": "5,9,28,35,76-77,85,88-89,98,112"
+	        }
+	      ],
+	      "expiration": 0,
+	      "nodelist": [
+	        "corona[172,176,195,202,248-249,257,260-261,270,284]"
+	      ],
+	      "properties": {
+	        "pbatch": "28,35,76-77,85,88-89,98,112",
+	        "pdebug": "5,9"
+	      },
+	      "starttime": 0
+	    },
+	    "version": 1
+	  }
+	}
+	EOF
+	NODELIST="corona[176,249,260-261,270,284]" &&
+	flux resource list -s all -o "{nodelist}" -ni $NODELIST \
+		--from-stdin < corona.json >corona.output &&
+	test_debug "cat corona.output" &&
+	test "$(cat corona.output)" = "$NODELIST"
+'
 test_expect_success 'flux-resource list: --include works with invalid host' '
 	flux resource list -s all -o "{nnodes} {nodelist}" -ni pi7 \
 		--from-stdin < $INPUT >include-invalid-hosts.out &&

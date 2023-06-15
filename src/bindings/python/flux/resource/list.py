@@ -58,8 +58,7 @@ class SchedResourceList:
         try:
             include_ranks = IDset(include)
         except ValueError:
-            nodelist = self["all"].nodelist
-            include_ranks = nodelist.index(include, ignore_nomatch=True)
+            include_ranks = IDset(self["all"].host_ranks(include, ignore_nomatch=True))
         for state in ["all", "down", "allocated"]:
             setattr(self, state, self[state].copy_ranks(include_ranks))
 
