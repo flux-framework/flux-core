@@ -143,5 +143,13 @@ test_expect_success 'flux alloc: --dump=FILE works with mustache' '
 	flux job wait-event $jobid clean &&
         tar tvf testdump-${jobid}.tgz
 '
+test_expect_success 'flux alloc: does not suppress log messages' '
+	$runpty -o logmsgs.out flux alloc -n1 --cwd=/noexist pwd &&
+	grep -i "going to /tmp instead" logmsgs.out
+'
+test_expect_success 'flux alloc: no duplication of output with pty.capture' '
+	$runpty -o duplicates.out flux alloc -o pty.capture -n1 echo testing &&
+	test $(grep -c testing duplicates.out) -eq 1
+'
 
 test_done
