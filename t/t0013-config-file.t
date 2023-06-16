@@ -1,6 +1,9 @@
 #!/bin/sh
 #
 
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
+
 test_description='Test config file overlay bootstrap'
 
 . `dirname $0`/sharness.sh
@@ -258,6 +261,43 @@ test_expect_success 'start size=3 instance with ipc:// and custom topology' '
 		flux getattr tbon.maxlevel >conf8a.out &&
 	echo 2 >conf8a.exp &&
 	test_cmp conf8a.exp conf8a.out
+'
+
+waitgrep() {
+	local pattern=$1
+	local file=$2
+	local iter=$3
+	while test $iter -gt 0; do
+		grep "$pattern" $file 2>/dev/null && return 0
+		sleep 0.3
+		iter=$(($iter-1))
+	done
+	return 1
+}
+
+# RFC 2606 reserves the .invalid domain for testing
+test_expect_success NO_CHAIN_LINT 'a warning is printed when upstream URI has unknown host' '
+	mkdir conf8b &&
+	cat <<-EOT >conf8b/bootstrap.toml &&
+	[bootstrap]
+	curve_cert = "testcert"
+	[[bootstrap.hosts]]
+	host = "fake0"
+	connect = "tcp://foo.invalid:1234"
+	[[bootstrap.hosts]]
+	host = "fake1"
+	EOT
+	FLUX_FAKE_HOSTNAME=fake1 \
+		flux broker -vv -Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		--config-path=conf8b 2>warn.err &
+	echo $! >warn.pid &&
+	waitgrep "unable to resolve upstream peer" warn.err 30
+'
+# In case warn.pid actually refers to a libtool wrapper, try pkill(1) -P
+# first to kill its children, then kill(1).  See flux-framework/flux-core#5275.
+test_expect_success NO_CHAIN_LINT 'clean up broker from previous test' '
+	warnpid=$(cat warn.pid) &&
+	pkill -15 -P $warnpid || kill -15 $warnpid
 '
 
 getport() {
