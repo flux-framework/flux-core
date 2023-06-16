@@ -88,10 +88,40 @@ static void test_parse (void)
     }
 }
 
+const struct entry encode_tests[] = {
+    { "0", 0, 0 },
+    { "1K", 1024, 0 },
+    { "1.5K", 1024*1.5, 0 },
+    { "4K", 4096, 0 },
+    { "1M", 1048576, 0 },
+    { "1.000001M", 1048577, 0 },
+    { "8.75M", 1024*1024*8.75, 0 },
+    { "2G", 2147483648, 0 },
+    { "512", 512, 0 },
+    { "1.22G", 1024*1024*1024*1.22, 0 },
+    { "4T", 4398046511104, 0 },
+    { "4.04T", 4398046511104*1.01, 0 },
+    { "8.5P", 1125899906842624UL * 8.5, 0 },
+    { "16E", UINT64_MAX, 0 },
+};
+
+static void test_encode (void)
+{
+    for (int i = 0; i < ARRAY_SIZE (encode_tests); i++) {
+        const struct entry *te = &encode_tests[i];
+        const char *result = encode_size (te->val);
+        is (result, te->s,
+            "encode_size (%ju) = %s",
+            (uintmax_t) te->val,
+            result);
+    }
+}
+
 int main (int argc, char **argv)
 {
     plan (NO_PLAN);
     test_parse ();
+    test_encode ();
     done_testing ();
     return 0;
 }
