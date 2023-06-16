@@ -7,7 +7,6 @@
  *
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
-
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -60,12 +59,10 @@ const struct entry testvec[] = {
     { "0.5E", 576460752303423488, 0 },
 };
 
-int main (int argc, char **argv)
+static void test_parse (void)
 {
     uint64_t val;
     int rc;
-
-    plan (NO_PLAN);
 
     lives_ok ({parse_size (NULL, &val);},
         "parse_size input=NULL doesn't crash");
@@ -89,9 +86,13 @@ int main (int argc, char **argv)
                 testvec[i].errnum);
         }
     }
+}
 
+int main (int argc, char **argv)
+{
+    plan (NO_PLAN);
+    test_parse ();
     done_testing ();
-
     return 0;
 }
 
