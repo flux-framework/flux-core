@@ -384,11 +384,13 @@ void test_convenience_accessors (void)
     rc = optparse_add_option_table (p, opts);
     ok (rc == OPTPARSE_SUCCESS, "register options");
 
-    ok (optparse_option_index (p) == -1, "optparse_option_index returns -1 before parse");
+    ok (optparse_option_index (p) == -1,
+        "optparse_option_index returns -1 before parse");
     optindex = optparse_parse_args (p, ac, av);
     ok (optindex == ac, "parse options, verify optindex");
 
-    ok (optparse_option_index (p) == optindex, "optparse_option_index works after parse");
+    ok (optparse_option_index (p) == optindex,
+        "optparse_option_index works after parse");
 
     /* hasopt
      */
