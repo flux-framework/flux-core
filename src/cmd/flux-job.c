@@ -1576,6 +1576,7 @@ struct attach_ctx {
     flux_watcher_t *sigtstp_w;
     flux_watcher_t *notify_timer;
     struct flux_pty_client *pty_client;
+    int pty_capture;
     struct timespec t_sigint;
     flux_watcher_t *stdin_w;
     zlist_t *stdin_rpcs;
@@ -1646,6 +1647,15 @@ static void handle_output_data (struct attach_ctx *ctx, json_t *context)
         log_msg_exit ("stream data read before header");
     if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0)
         log_msg_exit ("malformed event context");
+    /*
+     * If this process is attached to a pty (ctx->pty_client != NULL)
+     *  and output corresponds to rank 0 and the interactive pty is being
+     *  captured, then this data is a duplicate, so do nothing.
+     */
+    if (ctx->pty_client != NULL
+        && streq (rank, "0")
+        && ctx->pty_capture)
+        goto out;
     if (streq (stream, "stdout"))
         fp = stdout;
     else
@@ -1654,8 +1664,14 @@ static void handle_output_data (struct attach_ctx *ctx, json_t *context)
         if (optparse_hasopt (ctx->p, "label-io"))
             fprintf (fp, "%s: ", rank);
         fwrite (data, len, 1, fp);
+        /*  If attached to a pty, terminal is in raw mode so a carriage
+         *  return will be necessary to return cursor to the start of line.
+         */
+        if (ctx->pty_client)
+            fputc ('\r', fp);
         fflush (fp);
     }
+out:
     free (data);
 }
 
@@ -1725,6 +1741,11 @@ static void handle_output_log (struct attach_ctx *ctx,
                 fprintf (stderr, ":%d", line);
         }
         fprintf (stderr, ": %s\n", msg);
+        /*  If attached to a pty, terminal is in raw mode so a carriage
+         *  return will be necessary to return cursor to the start of line.
+         */
+        if (ctx->pty_client)
+            fprintf (stderr, "\r");
     }
 }
 
@@ -2314,13 +2335,15 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     if (streq (name, "shell.init")) {
         const char *pty_service = NULL;
         if (json_unpack (context,
-                         "{s:i s:s s?s}",
+                         "{s:i s:s s?s s?i}",
                          "leader-rank",
                          &ctx->leader_rank,
                          "service",
                          &service,
                          "pty",
-                         &pty_service) < 0)
+                         &pty_service,
+                         "capture",
+                         &ctx->pty_capture) < 0)
             log_err_exit ("error decoding shell.init context");
         if (!(ctx->service = strdup (service)))
             log_err_exit ("strdup service from shell.init");
@@ -2333,15 +2356,14 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
          *   to process normal stdio. (This may be because the job is
          *   already complete).
          */
+        attach_output_start (ctx);
         if (pty_service) {
             if (ctx->readonly)
                 log_msg_exit ("Cannot connect to pty in readonly mode");
             attach_pty (ctx, pty_service);
         }
-        else {
+        else
             attach_setup_stdin (ctx);
-            attach_output_start (ctx);
-        }
     } else if (streq (name, "shell.start")) {
         if (MPIR_being_debugged)
             setup_mpir_interface (ctx, context);
