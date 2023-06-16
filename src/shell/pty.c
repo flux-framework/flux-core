@@ -339,7 +339,7 @@ static int pty_init (flux_plugin_t *p,
                                               0,
                                               "{s:s}",
                                               "pty", "terminus.0") < 0) {
-                shell_log_errno ("flux_shell_service_register");
+                shell_log_errno ("flux_shell_add_event_context (pty)");
                 goto error;
             }
             /*  Ensure that rank 0 pty waits for client to attach
