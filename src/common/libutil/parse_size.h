@@ -31,6 +31,17 @@
  */
 int parse_size (const char *s, uint64_t *vp);
 
+/* Format 'size' as a human readable string using suffixes documented
+ * above for parse_size(). Note that due to use of double precision
+ * arithmetic and because the result is rounded to 8 significant figures
+ * the returned string may be imprecise. Passing the result of encode_size()
+ * to parse_size() may not result in the same value for 'size'.
+ *
+ * The result is only good until the next call to encode_size() from the
+ * current thread.
+ */
+const char *encode_size (uint64_t size);
+
 #endif /* !_UTIL_PARSE_SIZE_H */
 
 // vi:ts=4 sw=4 expandtab
