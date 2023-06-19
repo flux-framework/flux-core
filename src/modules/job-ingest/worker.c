@@ -173,9 +173,9 @@ static void worker_fulfill_future (struct worker *w, flux_future_t *f, const cha
         errnum = EINVAL;
         goto error;
     }
-    if (json_unpack (o, "{s:i s?:s s?:o}", "errnum", &errnum,
-                                           "errstr", &errstr,
-                                           "data", &data) < 0) {
+    if (json_unpack (o, "{s:i s?s s?o}", "errnum", &errnum,
+                                         "errstr", &errstr,
+                                         "data", &data) < 0) {
         flux_log (w->h, LOG_ERR, "%s: json_unpack '%s' failed", w->name, s);
         errnum = EINVAL;
         goto error;

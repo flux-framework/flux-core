@@ -218,7 +218,7 @@ int parse_config (struct connector_local *ctx,
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?:{s?:b s?:b !}}",
+                          "{s?{s?b s?b !}}",
                           "access",
                             "allow-guest-user",
                             &allow_guest_user,

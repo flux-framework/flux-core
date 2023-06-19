@@ -87,7 +87,7 @@ int config_init (flux_t *h, int argc, char **argv)
     /*  Check configuration for exec.job-shell */
     if (flux_conf_unpack (flux_get_conf (h),
                           &err,
-                          "{s?:{s?s}}",
+                          "{s?{s?s}}",
                           "exec",
                             "job-shell", &default_job_shell) < 0) {
         flux_log (h, LOG_ERR,
@@ -99,7 +99,7 @@ int config_init (flux_t *h, int argc, char **argv)
     /*  Check configuration for exec.imp */
     if (flux_conf_unpack (flux_get_conf (h),
                           &err,
-                          "{s?:{s?s}}",
+                          "{s?{s?s}}",
                           "exec",
                             "imp", &flux_imp_path) < 0) {
         flux_log (h, LOG_ERR,

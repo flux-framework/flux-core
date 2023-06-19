@@ -376,7 +376,7 @@ static int jobtap_conf_entry (struct jobtap *jobtap,
     json_t *conf = NULL;
 
     if (json_unpack_ex (entry, &json_err, 0,
-                        "{s?:s s?:o s?:s}",
+                        "{s?s s?o s?s}",
                         "load", &load,
                         "conf", &conf,
                         "remove", &remove) < 0) {
@@ -471,7 +471,7 @@ static int jobtap_parse_config (const flux_conf_t *conf,
     if (!jobtap->configured) {
         if (flux_conf_unpack (conf,
                               &error,
-                              "{s?:{s?:o}}",
+                              "{s?{s?o}}",
                               "job-manager",
                                 "plugins", &plugins) < 0) {
             return errprintf (errp,

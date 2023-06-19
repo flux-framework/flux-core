@@ -161,7 +161,7 @@ static int jobspec_redacted_parse_queue (struct job *job)
          * optional
          */
         if (json_unpack (job->jobspec_redacted,
-                         "{s:{s?{s?s}}}",
+                         "{s?{s?{s?s}}}",
                          "attributes",
                          "system",
                          "queue", &job->queue) < 0) {

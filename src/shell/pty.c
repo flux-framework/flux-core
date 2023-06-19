@@ -182,7 +182,7 @@ static int pty_getopt (flux_shell_t *shell,
         if (json_unpack_ex (o,
                             &error,
                             JSON_STRICT,
-                            "{s?:o s?i s?i}",
+                            "{s?o s?i s?i}",
                             "ranks", &ranks_obj,
                             "capture", capture,
                             "interactive", interactive) < 0) {

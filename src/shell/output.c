@@ -474,7 +474,7 @@ static void shell_output_log (struct shell_output *out, json_t *context)
     json_error_t error;
 
     if (json_unpack_ex (context, &error, 0,
-                     "{ s?i s:i s:s s?:s s?:s s?:i }",
+                     "{ s?i s:i s:s s?s s?s s?i }",
                      "rank", &rank,
                      "level", &level,
                      "message", &msg,
@@ -806,7 +806,7 @@ shell_output_setup_type_file (struct shell_output *out,
     const char *path = NULL;
 
     if (flux_shell_getopt_unpack (out->shell, "output",
-                                  "{s:{s?:s}}",
+                                  "{s:{s?s}}",
                                   stream, "path", &path) < 0)
         return -1;
 
@@ -819,7 +819,7 @@ shell_output_setup_type_file (struct shell_output *out,
         return -1;
 
     if (flux_shell_getopt_unpack (out->shell, "output",
-                                  "{s:{s?:b}}",
+                                  "{s:{s?b}}",
                                   stream, "label", &(ofp->label)) < 0)
         return -1;
 
@@ -861,12 +861,12 @@ static int shell_output_check_alternate_output (struct shell_output *out)
     const char *stderr_typestr = NULL;
 
     if (flux_shell_getopt_unpack (out->shell, "output",
-                                  "{s?:{s?:s}}",
+                                  "{s?{s?s}}",
                                   "stdout", "type", &stdout_typestr) < 0)
         return -1;
 
     if (flux_shell_getopt_unpack (out->shell, "output",
-                                  "{s?:{s?:s}}",
+                                  "{s?{s?s}}",
                                   "stderr", "type", &stderr_typestr) < 0)
         return -1;
 
@@ -923,7 +923,7 @@ static int parse_alternate_buffer_type (struct shell_output *out,
     const char *buffer_type = NULL;
 
     if (flux_shell_getopt_unpack (out->shell, "output",
-                                  "{s?:{s?:{s?:s}}}",
+                                  "{s?{s?{s?s}}}",
                                   stream,
                                   "buffer",
                                   "type", &buffer_type) < 0)

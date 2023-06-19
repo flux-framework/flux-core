@@ -70,7 +70,7 @@ static int parse_config (struct resource_ctx *ctx,
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?:{s?:s s?:o s?:s s?:b s?b !}}",
+                          "{s?{s?s s?o s?s s?b s?b !}}",
                           "resource",
                             "path", &path,
                             "config", &config,

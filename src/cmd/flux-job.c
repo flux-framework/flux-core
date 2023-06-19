@@ -1666,7 +1666,7 @@ static void handle_output_redirect (struct attach_ctx *ctx, json_t *context)
     const char *path = NULL;
     if (!ctx->output_header_parsed)
         log_msg_exit ("stream redirect read before header");
-    if (json_unpack (context, "{ s:s s:s s?:s }",
+    if (json_unpack (context, "{ s:s s:s s?s }",
                               "stream", &stream,
                               "rank", &rank,
                               "path", &path) < 0)
@@ -1700,7 +1700,7 @@ static void handle_output_log (struct attach_ctx *ctx,
     json_error_t err;
 
     if (json_unpack_ex (context, &err, 0,
-                        "{ s?i s:i s:s s?:s s?:s s?:i }",
+                        "{ s?i s:i s:s s?s s?s s?i }",
                         "rank", &rank,
                         "level", &level,
                         "message", &msg,
@@ -2008,7 +2008,7 @@ static void setup_mpir_interface (struct attach_ctx *ctx, json_t *context)
     flux_future_t *f = NULL;
     int stop_tasks_in_exec = 0;
 
-    if (json_unpack (context, "{s?:b}", "sync", &stop_tasks_in_exec) < 0)
+    if (json_unpack (context, "{s?b}", "sync", &stop_tasks_in_exec) < 0)
         log_err_exit ("error decoding shell.init context");
 
     snprintf (topic, sizeof (topic), "%s.proctable", ctx->service);
@@ -2513,7 +2513,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
         int severity;
         const char *note = NULL;
 
-        if (json_unpack (context, "{s:s s:i s?:s}",
+        if (json_unpack (context, "{s:s s:i s?s}",
                          "type", &type,
                          "severity", &severity,
                          "note", &note) < 0)

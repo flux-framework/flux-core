@@ -301,7 +301,7 @@ static int sdexec_init (struct jobinfo *job)
         const char *method = NULL;
         if (flux_conf_unpack (flux_get_conf (h),
                               &err,
-                              "{s?:{s?s}}",
+                              "{s?{s?s}}",
                               "exec",
                                 "method", &method) < 0) {
             flux_log (h, LOG_ERR,

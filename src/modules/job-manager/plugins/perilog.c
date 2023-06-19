@@ -510,7 +510,7 @@ static int conf_init (flux_t *h, struct perilog_conf *conf)
 
     if (flux_conf_unpack (flux_get_conf (h),
                           &error,
-                          "{s?:{s?:{s?o s?F !} s?:{s?o !}}}",
+                          "{s?{s?{s?o s?F !} s?{s?o !}}}",
                           "job-manager",
                           "prolog",
                             "command", &prolog,

@@ -92,7 +92,7 @@ static int decode_job_result (struct job *job,
         const char *note = NULL;
 
         if (json_unpack (context,
-                         "{s:s s?:s}",
+                         "{s:s s?s}",
                          "type",
                          &type,
                          "note",
