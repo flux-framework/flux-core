@@ -262,7 +262,7 @@ static struct sdexec *sdexec_create (flux_t *h,
     se->stderrlog = SDEXEC_LOG_EVENTLOG;
 
     (void) json_unpack_ex (job->jobspec, NULL, 0,
-                           "{s:{s:{s:{s:{s?b s?s s?s s?b}}}}}",
+                           "{s:{s?{s?{s?{s?b s?s s?s s?b}}}}}",
                            "attributes", "system", "exec", "sd",
                            "test_exec_fail", &se->test_exec_fail,
                            "stdoutlog", &stdoutlog,

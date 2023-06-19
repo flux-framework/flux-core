@@ -175,7 +175,7 @@ static int parse_per_resource (struct job *job,
     json_t *o = NULL;
 
     if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:{s:{s?:{s?:{s?:o}}}}}",
+                        "{s:{s?{s?:{s?:{s?:o}}}}}",
                         "attributes",
                           "system",
                             "shell",
@@ -276,7 +276,7 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
     }
 
     if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:{s:{s?:o}}}",
+                        "{s:{s?{s?:o}}}",
                         "attributes",
                         "system",
                         "job",
@@ -309,7 +309,7 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
         goto nonfatal_error;
 
     if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:{s:{s?:s s?s}}}",
+                        "{s:{s?{s?:s s?s}}}",
                         "attributes",
                         "system",
                         "cwd", &job->cwd,

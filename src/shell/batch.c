@@ -213,7 +213,7 @@ static int batch_init (flux_plugin_t *p,
         return shell_log_errno ("failed to unpack jobspec");
     json_error_t err;
     if (json_unpack_ex (jobspec, &err, 0,
-                        "{s:{s:{s?o}}}",
+                        "{s:{s?{s?o}}}",
                         "attributes",
                           "system",
                             "batch", &batch) < 0) {

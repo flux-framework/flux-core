@@ -127,7 +127,7 @@ jobreq_create (const flux_msg_t *msg)
         job->errnum = errno;
     }
     if (json_unpack (jobspec,
-                     "{s?{s?{s?O}}}",
+                     "{s:{s?{s?O}}}",
                      "attributes",
                      "system",
                      "constraints", &job->constraints) < 0) {
@@ -618,7 +618,7 @@ static void feasibility_cb (flux_t *h,
                             "jobspec", &jobspec) < 0)
         goto err;
     if (json_unpack (jobspec,
-                     "{s?{s?{s?o}}}",
+                     "{s:{s?{s?o}}}",
                      "attributes",
                      "system",
                      "constraints", &constraints) < 0)
