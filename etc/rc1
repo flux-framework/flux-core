@@ -47,7 +47,7 @@ if test $RANK -eq 0; then
             flux module load ${backingmod} truncate
         fi
         echo "restoring content from ${dumpfile}"
-        flux restore --quiet --checkpoint --size-limit=104857600 ${dumpfile}
+        flux restore --quiet --checkpoint --size-limit=100M ${dumpfile}
         if test -n "${dumplink}"; then
             rm -f ${dumplink}
         fi

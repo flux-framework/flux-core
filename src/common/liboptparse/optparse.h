@@ -12,6 +12,7 @@
 #define _UTIL_OPTPARSE_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -380,6 +381,27 @@ int optparse_get_int (optparse_t *p, const char *name, int default_value);
  */
 double optparse_get_duration (optparse_t *p, const char *name,
                               double default_value);
+
+/*
+ *   Return the option argument parsed as a size in bytes (or other unit)
+ *    with optional multiplicative suffix: k or K=1024, M=1024*1024,
+ *    G=1024*1024*1024, and so on for T, P, and E. The end result is
+ *    truncated and returned as uint64_t. If there was an error parsing
+ *    the size string, then the fatal error function is called.
+ *
+ *   Return default value if option was unused. default_value=NULL
+ *    is equivalent to default_value="0".
+ */
+uint64_t optparse_get_size (optparse_t *p, const char *name,
+                            const char *default_value);
+
+/*
+ *  Like optparse_get_size(), but return an int and ensure the provided
+ *   argument does not overflow INT_MAX (calls fatal error function if so).
+ */
+int optparse_get_size_int (optparse_t *p,
+                           const char *name,
+                           const char *default_value);
 
 /*
  *   Return the option argument as a double if 'name' was used,

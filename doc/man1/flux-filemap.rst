@@ -68,15 +68,19 @@ OPTIONS
 
 **--small-file-threshold=N**
    Set the threshold in bytes over which a regular file is mapped through
-   the distributed content cache.  Set to 0 to always use the content cache.
-   The default is 4096 (*map* subcommand only).
+   the distributed content cache. Set to 0 to always use the content cache.
+   N may be specified as a floating point number with multiplicative suffix
+   k,K=1024, M=1024\*1024, or G=1024\*1024\*1024 up to ``INT_MAX``.
+   The default is 4K (*map* subcommand only).
 
 **--disable-mmap**
    Never map a regular file through the distributed content cache.
 
 **--chunksize=N**
    Limit the content mapped blob size to N bytes.  Set to 0 for unlimited.
-   The default is 1048576 (*map* subcommand only).
+   N may be specified as a floating point number with multiplicative suffix
+   k,K=1024, M=1024\*1024, or G=1024\*1024\*1024 up to ``INT_MAX``.
+   The default is 1M (*map* subcommand only).
 
 **--direct**
    Avoid indirection through the content cache when fetching the top level

@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
 #include <math.h>
@@ -130,6 +131,31 @@ int parse_size (const char *s, uint64_t *vp)
         && parse_as_double (s, vp) < 0)
         return -1;
     return 0;
+}
+
+const char *encode_size (uint64_t size)
+{
+    /* Allocate a thread-local buffer to make this function easy to use
+     * in output formats (its intended use case).
+     *
+     * Note: The maximum printable digits for a double is 15 (DBL_DIG).
+     *  We also account for an optional decimal point, suffix, and required
+     *  space for NUL to get a buffer size of 18. (We ignore the fact that
+     *  a precision is specified in the %g format below for safety).
+     */
+    static __thread char buf[18];
+    const char* suffix[] = {"", "K", "M", "G", "T", "P", "E"};
+    int i = 0;
+    double value = size;
+    while (value >= 1024) {
+        value /= 1024;
+        i++;
+    }
+    /* Note: UINT64_MAX is 16E so there is no possibility that 'i' will
+     * overflow the suffix array.
+     */
+    (void) snprintf (buf, sizeof (buf), "%.8g%s", value, suffix[i]);
+    return buf;
 }
 
 // vi:ts=4 sw=4 expandtab

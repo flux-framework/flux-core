@@ -40,9 +40,11 @@ OPTIONS
    respectively. Default: send to “*any*”.
 
 **-p, --pad**\ *=N*
-   Include in the payload a string of length *N* bytes. The payload will be
-   echoed back in the response. This option can be used to explore the
-   effect of message size on latency. Default: no padding.
+   Include in the payload a string of length *N* bytes. *N* may be a
+   floating point number with optional multiplicative suffix k,K=1024,
+   M=1024\*1024, or G=1024\*1024\*1024. The payload will be echoed back in
+   the response. This option can be used to explore the effect of message
+   size on latency. Default: no padding.
 
 **-i, --interval**\ *=N*
    Specify the delay, in seconds, between successive requests.

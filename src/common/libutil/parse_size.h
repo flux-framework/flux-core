@@ -22,7 +22,7 @@
  *  P     2^50
  *  E     2^60
  *
- * The numeric part is parsed with first strtoull(3) then strtod(3), so
+ * The numeric part is parsed with first strtoull(3) then strtod(3),
  * so all input supported by those functions should work including
  * decimal (255), hex (0xf), octal (0377 prefix), exponent (2.55E2), etc.
  *
@@ -30,6 +30,17 @@
  * or return -1 on failure with errno set (EINVAL, EOVERFLOW).
  */
 int parse_size (const char *s, uint64_t *vp);
+
+/* Format 'size' as a human readable string using suffixes documented
+ * above for parse_size(). Note that due to use of double precision
+ * arithmetic and because the result is rounded to 8 significant figures
+ * the returned string may be imprecise. Passing the result of encode_size()
+ * to parse_size() may not result in the same value for 'size'.
+ *
+ * The result is only good until the next call to encode_size() from the
+ * current thread.
+ */
+const char *encode_size (uint64_t size);
 
 #endif /* !_UTIL_PARSE_SIZE_H */
 

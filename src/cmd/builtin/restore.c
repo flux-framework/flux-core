@@ -366,7 +366,7 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
         content_flags |= CONTENT_FLAG_CACHE_BYPASS;
         kvs_checkpoint_flags |= KVS_CHECKPOINT_FLAG_CACHE_BYPASS;
     }
-    blob_size_limit = optparse_get_int (p, "size-limit", 0);
+    blob_size_limit = optparse_get_size_int (p, "size-limit", "0");
 
     h = builtin_get_flux_handle (p);
     ar = restore_create (infile);
