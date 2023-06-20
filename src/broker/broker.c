@@ -1573,7 +1573,7 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "broker.rusage",
         method_rusage_cb,
-        0
+        FLUX_ROLE_USER
     },
     {
         FLUX_MSGTYPE_REQUEST,

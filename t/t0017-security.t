@@ -345,5 +345,13 @@ test_expect_success 'flux content store not allowed for guest user' '
 test_expect_success 'flux module list is open to guests' '
 	FLUX_HANDLE_ROLEMASK=0x2 flux module list >/dev/null
 '
+test_expect_success 'flux module stats --rusage is open to guests (broker)' '
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux module stats --rusage broker >/dev/null
+'
+test_expect_success 'flux module stats --rusage is open to guests (module)' '
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux module stats --rusage connector-local >/dev/null
+'
 
 test_done
