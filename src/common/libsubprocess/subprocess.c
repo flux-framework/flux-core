@@ -1232,6 +1232,27 @@ int flux_set_default_subprocess_log (flux_t *h,
     return 0;
 }
 
+void flux_subprocess_channel_incref (flux_subprocess_t *p, const char *name)
+{
+    struct subprocess_channel *c;
+    if (!p || !p->local)
+        return;
+    if (!(c = zhash_lookup (p->channels, name)))
+        return;
+    flux_buffer_read_watcher_incref (c->buffer_read_w);
+}
+
+void flux_subprocess_channel_decref (flux_subprocess_t *p, const char *name)
+{
+    struct subprocess_channel *c;
+    if (!p || !p->local)
+        return;
+    if (!(c = zhash_lookup (p->channels, name)))
+        return;
+    flux_buffer_read_watcher_decref (c->buffer_read_w);
+}
+
+
 /*
  * vi: ts=4 sw=4 expandtab
  */

@@ -493,6 +493,13 @@ int flux_subprocess_aux_set (flux_subprocess_t *p,
  */
 void *flux_subprocess_aux_get (flux_subprocess_t *p, const char *name);
 
+/*
+ *  Take/drop a reference on a subprocess output channel `name` (e.g. "stdout"
+ *   or "stderr"). EOF will not be produced from this channel the reference
+ *   count drops to zero.
+ */
+void flux_subprocess_channel_incref (flux_subprocess_t *p, const char *name);
+void flux_subprocess_channel_decref (flux_subprocess_t *p, const char *name);
 
 #ifdef __cplusplus
 }
