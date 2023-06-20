@@ -342,4 +342,8 @@ test_expect_success 'flux content store not allowed for guest user' '
 	    grep "Request requires owner credentials" content-store.err
 '
 
+test_expect_success 'flux module list is open to guests' '
+	FLUX_HANDLE_ROLEMASK=0x2 flux module list >/dev/null
+'
+
 test_done

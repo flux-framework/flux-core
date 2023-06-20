@@ -1597,7 +1597,7 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "broker.lsmod",
         broker_lsmod_cb,
-        0
+        FLUX_ROLE_USER,
     },
     {
         FLUX_MSGTYPE_REQUEST,
