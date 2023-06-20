@@ -549,15 +549,13 @@ flux_msg_t *module_pop_insmod (module_t *p)
 static char *module_name_from_path (const char *s)
 {
     char *path, *name, *cpy;
+    char *cp;
 
     if (!(path = strdup (s))
         || !(name = basename (path)))
         goto error;
-
-    int n = strlen (name);
-    if (n > 3 && streq (&name[n - 3], ".so"))
-        name[n - 3] = '\0';
-
+    if ((cp = strstr (name, ".so")))
+        *cp = '\0';
     if (!(cpy = strdup (name)))
         goto error;
     free (path);

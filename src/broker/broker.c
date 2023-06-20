@@ -1190,7 +1190,7 @@ static int mod_svc_cb (const flux_msg_t *msg, void *arg)
 }
 
 /* Load broker module.
- * 'name' is the name to use for the module (NULL = use dso basename minus .so)
+ * 'name' is the name to use for the module (NULL = use dso basename minus ext)
  * 'path' is either a dso path or a dso basename (e.g. "kvs" or "/a/b/kvs.so".
  */
 static int load_module (broker_ctx_t *ctx,
@@ -1211,7 +1211,7 @@ static int load_module (broker_ctx_t *ctx,
             errno = EINVAL;
             return -1;
         }
-        if (asprintf (&pattern, "%s.so", path) < 0) {
+        if (asprintf (&pattern, "%s.so*", path) < 0) {
             errprintf (error, "out of memory");
             return -1;
         }
