@@ -1933,6 +1933,9 @@ void attach_stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
  */
 void attach_output_start (struct attach_ctx *ctx)
 {
+    if (ctx->output_f)
+        return;
+
     if (!(ctx->output_f = flux_job_event_watch (ctx->h,
                                                 ctx->id,
                                                 "guest.output",
