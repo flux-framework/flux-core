@@ -108,9 +108,17 @@ test_expect_success 'pty: pty.interactive forces a pty on rank 0' '
 	flux job eventlog -p guest.output ${id} | grep "adding pty to rank 0"
 '
 test_expect_success 'pty: -o pty.interactive and -o pty.capture can be used together' '
-	id=$(flux submit -o pty.interactive -o pty.capture tty) &&
-	$runpty flux job attach $id >ptyim.out 2>&1 &&
-	$runpty flux job attach $id
+	for i in $(seq 1 3); do
+		id=$(flux submit -o pty.interactive -o pty.capture tty) &&
+		$runpty flux job attach $id >ptyim.out 2>&1 &&
+		$runpty flux job attach $id &&
+		flux job eventlog -f json -p guest.output $id \
+			| tail -n1 >last-event.$i
+	done &&
+	# Check that eof:true is the last event for all runs
+	cat last-event.1 | jq -e .context.eof &&
+	cat last-event.2 | jq -e .context.eof &&
+	cat last-event.3 | jq -e .context.eof
 '
 test_expect_success 'pty: unsupported -o pty.<opt> generates exception' '
 	test_must_fail flux run -o pty.foo hostname
