@@ -244,5 +244,14 @@ test_expect_success 'broker.module-status rejects request from unknown sender' '
 	test_must_fail module_status 2>sender.err &&
 	grep "error decoding/finding broker.module-status" sender.err
 '
+# issue #5255
+test_expect_success 'module with version ext can be loaded by name' '
+	mkdir -p testmoddir &&
+	cp $testmod testmoddir/testmod.so.0.0.0 &&
+	FLUX_MODULE_PATH_PREPEND=$(pwd)/testmoddir flux start \
+	    bash -c "flux module load testmod && flux module list -l" \
+	    >modlist.out &&
+	grep testmod.so.0.0.0 modlist.out
+'
 
 test_done
