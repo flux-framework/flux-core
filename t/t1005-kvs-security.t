@@ -292,9 +292,9 @@ test_expect_success 'kvs: dropcache fails (user)' '
         unset_userid
 '
 
-test_expect_success 'kvs: stats fails (user)' '
+test_expect_success 'kvs: stats works (user)' '
         set_userid 9999 &&
-        ! flux module stats kvs &&
+        flux module stats kvs >/dev/null &&
         unset_userid
 '
 
