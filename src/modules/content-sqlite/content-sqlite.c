@@ -738,7 +738,8 @@ static const struct flux_msg_handler_spec htab[] = {
                             checkpoint_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-put",
                             checkpoint_put_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-sqlite.stats-get", stats_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-sqlite.stats-get",
+                            stats_get_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

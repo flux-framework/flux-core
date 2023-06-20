@@ -373,6 +373,11 @@ test_expect_success 'full instance start fails corrupt database' '
 	test_must_fail flux start -o,-Sstatedir=$(pwd) /bin/true
 '
 
+test_expect_success 'flux module stats content-sqlite is open to guests' '
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux module stats content-sqlite >/dev/null
+'
+
 test_expect_success 'remove content-sqlite module on rank 0' '
 	flux module remove content-sqlite
 '
