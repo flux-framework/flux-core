@@ -287,6 +287,11 @@ test_expect_success 'checkpoint-backing-get foo returns spoon' '
        wait_checkpoint_flush spoon
 '
 
+test_expect_success 'flux module stats content-files is open to guests' '
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux module stats content-files >/dev/null
+'
+
 test_expect_success 'remove content-files module on rank 0' '
        flux content flush &&
        flux module remove content-files
