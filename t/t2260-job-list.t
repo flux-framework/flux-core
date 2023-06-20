@@ -358,6 +358,11 @@ test_expect_success 'flux job list all jobs works' '
 	test_cmp all.ids list_all_jobids.out
 '
 
+test_expect_success 'flux module stats job-list is open to guests' '
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux module stats job-list >/dev/null
+'
+
 # with single anonymous queue, queues arrays should be zero length
 test_expect_success 'job stats lists jobs in correct state (mix)' '
 	flux job stats | jq -e ".job_states.depend == 0" &&
