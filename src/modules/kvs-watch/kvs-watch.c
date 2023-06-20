@@ -1075,7 +1075,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "kvs-watch.stats-get",
       .cb           = stats_cb,
-      .rolemask     = 0
+      .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "kvs-watch.lookup",
