@@ -38,6 +38,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/cleanup.h"
+#include "src/common/libutil/dirwalk.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/fsd.h"
@@ -1188,43 +1189,6 @@ static int mod_svc_cb (const flux_msg_t *msg, void *arg)
     return rc;
 }
 
-/* Find file <name>.ext in one of the colon-separated directories in
- * 'searchpath' and place its full path in 'path' (caller must free).
- * Return 0 on success, -1 on failure.  Errno is not set.
- */
-static int search_file_ext (const char *name,
-                            const char *ext,
-                            const char *searchpath,
-                            char **path)
-{
-    char *argz = NULL;
-    size_t argz_len = 0;
-    char *entry = NULL;
-    char *fullpath = NULL;
-    int e;
-    int rc = -1;
-
-    if ((e = argz_create_sep (searchpath, ':', &argz, &argz_len)) != 0)
-        return -1;
-    while ((entry = argz_next (argz, argz_len, entry))) {
-        char *s;
-        if (asprintf (&s, "%s/%s%s", entry, name, ext) < 0)
-            goto out;
-        if (access (s, F_OK | R_OK) == 0) {
-            fullpath = s;
-            break;
-        }
-        free (s);
-    }
-    if (fullpath) {
-        *path = fullpath;
-        rc = 0;
-    }
-out:
-    free (argz);
-    return rc;
-}
-
 /* Load broker module.
  * 'name' is the name to use for the module (NULL = use dso basename minus .so)
  * 'path' is either a dso path or a dso basename (e.g. "kvs" or "/a/b/kvs.so".
@@ -1237,7 +1201,8 @@ static int load_module (broker_ctx_t *ctx,
                         flux_error_t *error)
 {
     const char *searchpath;
-    char *fullpath = NULL;
+    char *pattern = NULL;
+    zlist_t *files = NULL;
     module_t *p;
 
     if (!strchr (path, '/')) {
@@ -1246,12 +1211,22 @@ static int load_module (broker_ctx_t *ctx,
             errno = EINVAL;
             return -1;
         }
-        if (search_file_ext (path, ".so", searchpath, &fullpath) < 0) {
-            errprintf (error, "module not found in search path");
-            errno = ENOENT;
+        if (asprintf (&pattern, "%s.so", path) < 0) {
+            errprintf (error, "out of memory");
             return -1;
         }
-        path = fullpath;
+        if (!(files = dirwalk_find (searchpath,
+                                    DIRWALK_REALPATH,
+                                    pattern,
+                                    1,
+                                    NULL,
+                                    NULL))
+            || zlist_size (files) == 0) {
+            errprintf (error, "module not found in search path");
+            errno = ENOENT;
+            goto error;
+        }
+        path = zlist_first (files);
     }
     if (!(p = module_add (ctx->modhash, name, path, args, error)))
         goto error;
@@ -1274,15 +1249,16 @@ static int load_module (broker_ctx_t *ctx,
         goto service_remove;
     }
     flux_log (ctx->h, LOG_DEBUG, "insmod %s", module_get_name (p));
-    free (fullpath);
-
+    zlist_destroy (&files);
+    free (pattern);
     return 0;
 service_remove:
     service_remove_byuuid (ctx->services, module_get_uuid (p));
 module_remove:
     module_remove (ctx->modhash, p);
 error:
-    ERRNO_SAFE_WRAP (free, fullpath);
+    ERRNO_SAFE_WRAP (zlist_destroy, &files);
+    ERRNO_SAFE_WRAP (free, pattern);
     return -1;
 }
 
