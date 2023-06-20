@@ -12,6 +12,7 @@
 python bindings to flux-core, the main core of the flux resource manager
 """
 import flux.core.handle
+from flux.core.version import __version__
 
 
 # Manually lazy
@@ -20,4 +21,4 @@ def Flux(*args, **kwargs):
     return flux.core.handle.Flux(*args, **kwargs)
 
 
-__all__ = ["core", "kvs", "rpc", "constants", "Flux"]
+__all__ = ["core", "kvs", "rpc", "constants", "Flux", "__version__"]

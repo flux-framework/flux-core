@@ -24,6 +24,7 @@ nobase_fluxpy_PYTHON = \
 	core/inner.py \
 	core/handle.py \
 	core/trampoline.py \
+	core/version.py \
 	job/__init__.py \
 	job/JobID.py \
 	job/Jobspec.py \
