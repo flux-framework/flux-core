@@ -97,6 +97,7 @@ EXTRA_DIST = \
 	test/jobspec/queue_specified.jobspec \
 	test/jobspec/cwd_not_specified.jobspec \
 	test/jobspec/invalid_attributes_system_job.jobspec \
+	test/jobspec/invalid_attributes_system_missing_duration.jobspec \
 	test/jobspec/invalid_command_array.jobspec \
 	test/jobspec/invalid_command_string.jobspec \
 	test/jobspec/invalid_json.jobspec \
