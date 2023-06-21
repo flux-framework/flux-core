@@ -604,7 +604,8 @@ static int process_config (struct job_archive_ctx *ctx)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job-archive.stats-get", stats_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job-archive.stats-get",
+      stats_get_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

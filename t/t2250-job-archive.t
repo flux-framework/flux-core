@@ -280,6 +280,11 @@ test_expect_success 'job-archive: get module stats' '
         flux module stats job-archive
 '
 
+test_expect_success 'flux module stats job-archive is open to guests' '
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux module stats job-archive >/dev/null
+'
+
 test_expect_success 'job-archive: unload module' '
         flux module unload job-archive
 '

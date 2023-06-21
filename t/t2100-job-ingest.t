@@ -164,6 +164,11 @@ test_expect_success 'job-ingest: handle total batch failure in job-ingest' '
 	test_must_fail flux submit --cc=1-4 hostname
 '
 
+test_expect_success 'flux module stats job-ingest is open to guests' '
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux module stats job-ingest >/dev/null
+'
+
 test_expect_success 'job-ingest: remove modules' '
 	flux module remove job-manager &&
 	flux exec -r all flux module remove job-ingest

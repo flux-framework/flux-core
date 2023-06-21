@@ -739,7 +739,8 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.submit", submit_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.shutdown", shutdown_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.config-reload", reload_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "job-ingest.stats-get",  stats_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "job-ingest.stats-get",
+      stats_get_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
