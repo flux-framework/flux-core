@@ -78,7 +78,7 @@ test_expect_success 'sched-simple: invalid minimal jobspec is canceled' '
 	${Y2J}<${SPEC} | jq ".version = 1" | flux job submit >job00.id &&
 	jobid=$(cat job00.id) &&
 	flux job wait-event --timeout=5.0 $jobid exception &&
-	flux job eventlog $jobid | grep "Unable to determine slot size"
+	flux job eventlog $jobid | grep "getting duration: Object item not found: system"
 '
 test_expect_success 'sched-simple: submit 5 jobs' '
 	flux job submit basic.json >job1.id &&

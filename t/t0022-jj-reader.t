@@ -66,7 +66,7 @@ test_expect_success 'jj-reader: wrong count type throws error' '
 # jobspec.yaml ==<expected error>
 #
 cat <<EOF>invalid.txt
-jobspec/valid/basic.yaml        ==jj-reader: Unable to determine slot size
+jobspec/valid/basic.yaml        ==jj-reader: at top level: getting duration: Object item not found: system
 jobspec/valid/example2.yaml     ==jj-reader: Unable to determine slot size
 jobspec/valid/use_case_1.2.yaml ==jj-reader: level 0: Expected integer, got object
 jobspec/valid/use_case_1.3.yaml ==jj-reader: level 2: Expected integer, got object
