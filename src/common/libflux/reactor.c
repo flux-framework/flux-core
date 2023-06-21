@@ -463,6 +463,18 @@ const char *flux_buffer_read_watcher_get_data (flux_watcher_t *w, int *lenp)
     return NULL;
 }
 
+void flux_buffer_read_watcher_incref (flux_watcher_t *w)
+{
+    if (w)
+        ev_buffer_read_incref ((struct ev_buffer_read *)w->data);
+}
+
+void flux_buffer_read_watcher_decref (flux_watcher_t *w)
+{
+    if (w)
+        ev_buffer_read_decref ((struct ev_buffer_read *)w->data);
+}
+
 static void buffer_write_start (flux_watcher_t *w)
 {
     struct ev_buffer_write *ebw = (struct ev_buffer_write *)w->data;

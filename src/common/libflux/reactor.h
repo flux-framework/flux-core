@@ -115,6 +115,12 @@ flux_buffer_t *flux_buffer_read_watcher_get_buffer (flux_watcher_t *w);
 const char *flux_buffer_read_watcher_get_data (flux_watcher_t *w,
                                                int *lenp);
 
+/* Take a reference on read watcher to prevent read of EOF
+ * EOF will be delayed until decref drops refcount to 0.
+ */
+void flux_buffer_read_watcher_incref (flux_watcher_t *w);
+void flux_buffer_read_watcher_decref (flux_watcher_t *w);
+
 /* 'cb' only called after fd closed (FLUX_POLLOUT) or error (FLUX_POLLERR) */
 flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r, int fd,
                                                   int size, flux_watcher_f cb,

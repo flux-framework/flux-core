@@ -36,6 +36,7 @@ struct iochan_ctx {
     int recvcount;
     int sendcount;
     int count;
+    int refcount;
     const char *name;
 };
 
@@ -108,6 +109,11 @@ static void iochan_state_cb (flux_subprocess_t *p,
                 diag ("%s: %s", ctx->name, strsignal (WTERMSIG (status)));
             // completion callback will exit the reactor, but just in case
             iochan_start_doomsday (ctx, 2.);
+            // if testing refcnt, release stdout reference now
+            if (streq (ctx->name, "refcnt")) {
+                ctx->refcount--;
+                flux_subprocess_channel_decref (ctx->p, "stdout");
+            }
             break;
         }
         case FLUX_SUBPROCESS_FAILED:
@@ -200,6 +206,10 @@ bool iochan_run_check (flux_t *h, const char *name, int count)
                                  tap_logger,
                                  NULL)))
         BAIL_OUT ("flux_rexec_ex failed");
+    if (streq (ctx.name, "refcnt")) {
+        ctx.refcount++;
+        flux_subprocess_channel_incref (ctx.p, "stdout");
+    }
     if (flux_subprocess_aux_set (ctx.p, "ctx", &ctx, NULL) < 0)
         BAIL_OUT ("flux_subprocess_aux_set failed");
 
@@ -224,6 +234,12 @@ bool iochan_run_check (flux_t *h, const char *name, int count)
     if (ctx.recvcount < ctx.sendcount)
         ret = false;
 
+    if (streq (ctx.name, "refcnt")) {
+        diag ("%s: final refcount: %d", ctx.name, ctx.refcount);
+        if (ctx.refcount != 0)
+            ret = false;
+    }
+
     flux_watcher_destroy (ctx.source);
     flux_watcher_destroy (ctx.timer);
     diag ("%s: destroying subprocess", name);
@@ -247,6 +263,8 @@ int main (int argc, char *argv[])
         "medium check worked");
     ok (iochan_run_check (h, "simple", linesize * 10000),
         "large check worked");
+    ok (iochan_run_check (h, "refcnt", linesize * 10),
+        "refcount check worked");
     test_server_stop (h);
     flux_close (h);
 

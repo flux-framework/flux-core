@@ -425,6 +425,12 @@ void pty_client_send_data (struct flux_pty *pty, void *data, int len)
     }
 }
 
+void pty_client_monitor_send_eof (struct flux_pty *pty)
+{
+    if (pty->monitor)
+        (*pty->monitor) (pty, NULL, 0);
+}
+
 static void pty_read (flux_reactor_t *r,
                       flux_watcher_t *w,
                       int revents,
@@ -452,6 +458,7 @@ static void pty_read (flux_reactor_t *r,
             flux_watcher_stop (pty->fdw);
             pty->wait_on_close = false;
             check_pty_complete (pty);
+            pty_client_monitor_send_eof (pty);
             return;
         }
         llog_error (pty, "read: %s", strerror (errno));

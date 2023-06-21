@@ -87,7 +87,7 @@ static void buffer_read_cb (struct ev_loop *loop, ev_io *iow, int revents)
             return;
 
         if (!ret) {
-            ebr->eof_read = true;
+            ev_buffer_read_decref (ebr);
             (void)flux_buffer_readonly (ebr->fb);
             ev_io_stop (ebr->loop, iow);
         }
@@ -138,6 +138,7 @@ int ev_buffer_read_init (struct ev_buffer_read *ebr,
     ebr->start = false;
     ebr->eof_read = false;
     ebr->eof_sent = false;
+    ebr->refcnt = 1;
 
     if (!(ebr->fb = flux_buffer_create (size)))
         goto cleanup;
@@ -193,6 +194,17 @@ void ev_buffer_read_stop (struct ev_loop *loop, struct ev_buffer_read *ebr)
         ev_idle_stop (loop, &ebr->idle_w);
         ebr->start = false;
     }
+}
+
+void ev_buffer_read_incref (struct ev_buffer_read *ebr)
+{
+    ebr->refcnt++;
+}
+
+void ev_buffer_read_decref (struct ev_buffer_read *ebr)
+{
+    if (--ebr->refcnt == 0)
+        ebr->eof_read = true;
 }
 
 /*
