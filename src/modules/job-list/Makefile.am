@@ -113,7 +113,6 @@ EXTRA_DIST = \
 	test/jobspec/invalid_version.jobspec \
 	test/jobspec/job_name_alt.jobspec \
 	test/jobspec/missing_attributes.jobspec \
-	test/jobspec/missing_attributes_system.jobspec \
 	test/jobspec/missing_resources.jobspec \
 	test/jobspec/missing_tasks.jobspec \
 	test/jobspec/missing_version.jobspec
