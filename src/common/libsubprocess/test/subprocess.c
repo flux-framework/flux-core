@@ -75,77 +75,7 @@ void completion_cb (flux_subprocess_t *p)
     completion_cb_count++;
 }
 
-void test_basic (flux_reactor_t *r)
-{
-    char *av[] = { "/bin/true", NULL };
-    flux_cmd_t *cmd, *cmd2;
-    flux_reactor_t *r2;
-    flux_subprocess_t *p = NULL;
-
-    ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
-
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_cb
-    };
-    completion_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops);
-    ok (p != NULL, "flux_local_exec");
-
-    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
-        "subprocess state == RUNNING after flux_local_exec");
-    ok ((flux_subprocess_pid (p) > (pid_t) 0),
-        "flux_local_exec() started pid %ld", (pid_t) flux_subprocess_pid (p));
-    ok ((cmd2 = flux_subprocess_get_cmd (p)) != NULL,
-        "flux_subprocess_get_cmd success");
-    ok ((r2 = flux_subprocess_get_reactor (p)) != NULL,
-        "flux_subprocess_get_reactor success");
-    ok (r == r2,
-        "flux_subprocess_get_reactor returns correct reactor");
-
-    int rc = flux_reactor_run (r, 0);
-    ok (rc == 0, "flux_reactor_run returned zero status");
-    ok (completion_cb_count == 1, "completion callback called 1 time");
-    flux_subprocess_destroy (p);
-    flux_cmd_destroy (cmd);
-}
-
-void completion_fail_cb (flux_subprocess_t *p)
-{
-    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED,
-        "subprocess state == EXITED in completion handler");
-    ok (flux_subprocess_status (p) != -1,
-        "subprocess status is valid");
-    ok (flux_subprocess_exit_code (p) == 1,
-        "subprocess exit code is 1");
-    completion_fail_cb_count++;
-}
-
-void test_basic_fail (flux_reactor_t *r)
-{
-    char *av[] = { "/bin/false", NULL };
-    flux_cmd_t *cmd;
-    flux_subprocess_t *p = NULL;
-
-    ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
-
-    flux_subprocess_ops_t ops = {
-        .on_completion = completion_fail_cb
-    };
-    completion_fail_cb_count = 0;
-    p = flux_local_exec (r, 0, cmd, &ops);
-    ok (p != NULL, "flux_local_exec");
-
-    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
-        "subprocess state == RUNNING after flux_local_exec");
-
-    int rc = flux_reactor_run (r, 0);
-    ok (rc == 0, "flux_reactor_run returned zero status");
-    ok (completion_fail_cb_count == 1, "completion fail callback called 1 time");
-    flux_subprocess_destroy (p);
-    flux_cmd_destroy (cmd);
-}
-
-void test_basic_errors (flux_reactor_t *r)
+void test_corner_cases (flux_reactor_t *r)
 {
     flux_t *h = NULL;
     char *avgood[] = { "/bin/true", NULL };
@@ -271,7 +201,7 @@ void test_basic_errors (flux_reactor_t *r)
     flux_close (h);
 }
 
-void test_errors (flux_reactor_t *r)
+void test_post_exec_errors (flux_reactor_t *r)
 {
     char *av[] = { "/bin/true", NULL };
     flux_cmd_t *cmd;
@@ -343,6 +273,76 @@ void test_errors (flux_reactor_t *r)
         && errno == EPIPE,
         "flux_subprocess_write returns EPIPE b/c process already completed");
 
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void test_basic (flux_reactor_t *r)
+{
+    char *av[] = { "/bin/true", NULL };
+    flux_cmd_t *cmd, *cmd2;
+    flux_reactor_t *r2;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb
+    };
+    completion_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+    ok ((flux_subprocess_pid (p) > (pid_t) 0),
+        "flux_local_exec() started pid %ld", (pid_t) flux_subprocess_pid (p));
+    ok ((cmd2 = flux_subprocess_get_cmd (p)) != NULL,
+        "flux_subprocess_get_cmd success");
+    ok ((r2 = flux_subprocess_get_reactor (p)) != NULL,
+        "flux_subprocess_get_reactor success");
+    ok (r == r2,
+        "flux_subprocess_get_reactor returns correct reactor");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void completion_fail_cb (flux_subprocess_t *p)
+{
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED,
+        "subprocess state == EXITED in completion handler");
+    ok (flux_subprocess_status (p) != -1,
+        "subprocess status is valid");
+    ok (flux_subprocess_exit_code (p) == 1,
+        "subprocess exit code is 1");
+    completion_fail_cb_count++;
+}
+
+void test_basic_fail (flux_reactor_t *r)
+{
+    char *av[] = { "/bin/false", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_fail_cb
+    };
+    completion_fail_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_fail_cb_count == 1, "completion fail callback called 1 time");
     flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
 }
@@ -2734,14 +2734,15 @@ int main (int argc, char *argv[])
 
     start_fdcount = fdcount ();
 
+    diag ("corner_cases");
+    test_corner_cases (r);
+    diag ("post_exec_errors");
+    test_post_exec_errors (r);
+
     diag ("basic");
     test_basic (r);
     diag ("basic_fail");
     test_basic_fail (r);
-    diag ("basic_errors");
-    test_basic_errors (r);
-    diag ("errors");
-    test_errors (r);
     diag ("basic_stdout");
     test_basic_stdout (r);
     diag ("basic_stderr");
