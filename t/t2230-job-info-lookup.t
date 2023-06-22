@@ -33,6 +33,14 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
 	flux run --dry-run -n1 -N1 sleep 300 > sleeplong.json
 '
 
+test_expect_success 'job-info.lookup returns jobid in response' '
+	jobid=$(submit_job) &&
+	id=$(flux job id --to=dec ${jobid}) &&
+        $jq -j -c -n  "{id:${id}, keys:[\"jobspec\"], flags:0}" \
+          | $RPC job-info.lookup > job_info_lookup.out &&
+        cat job_info_lookup.out | $jq -e ".id == ${id}"
+'
+
 #
 # job info lookup list w/o jobid & keys
 #

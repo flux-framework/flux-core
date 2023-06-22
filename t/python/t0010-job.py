@@ -689,8 +689,8 @@ class TestJob(unittest.TestCase):
     def test_33_get_job(self):
         self.sleep_jobspec = JobspecV1.from_command(["sleep", "5"])
         jobid = job.submit(self.fh, self.sleep_jobspec)
-        meta = job.get_job(self.fh, jobid)
-        self.assertIsInstance(meta, dict)
+        info = job.get_job(self.fh, jobid)
+        self.assertIsInstance(info, dict)
         for key in [
             "id",
             "userid",
@@ -712,17 +712,17 @@ class TestJob(unittest.TestCase):
             "nodelist",
             "exception",
         ]:
-            self.assertIn(key, meta)
+            self.assertIn(key, info)
 
-        self.assertEqual(meta["id"], jobid)
-        self.assertEqual(meta["name"], "sleep")
-        self.assertTrue(meta["state"] in ["SCHED", "DEPEND", "RUN"])
-        self.assertEqual(meta["ntasks"], 1)
-        self.assertEqual(meta["ncores"], 1)
+        self.assertEqual(info["id"], jobid)
+        self.assertEqual(info["name"], "sleep")
+        self.assertTrue(info["state"] in ["SCHED", "DEPEND", "RUN"])
+        self.assertEqual(info["ntasks"], 1)
+        self.assertEqual(info["ncores"], 1)
 
         # Test a job that does not exist
-        meta = job.get_job(self.fh, 123456)
-        self.assertIsNone(meta)
+        info = job.get_job(self.fh, 123456)
+        self.assertIsNone(info)
 
     def test_34_timeleft(self):
         spec = JobspecV1.from_command(

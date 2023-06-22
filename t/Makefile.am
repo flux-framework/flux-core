@@ -260,6 +260,7 @@ TESTSCRIPTS = \
 	python/t0010-job.py \
 	python/t0012-futures.py \
 	python/t0013-job-list.py \
+	python/t0014-job-kvslookup.py \
 	python/t0020-hostlist.py \
 	python/t0021-idset.py \
 	python/t0022-resource-set.py \

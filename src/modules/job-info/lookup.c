@@ -160,6 +160,7 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
     size_t index;
     json_t *key;
     json_t *o = NULL;
+    json_t *tmp = NULL;
     char *data = NULL;
 
     if (!l->allow) {
@@ -183,6 +184,12 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
 
     if (!(o = json_object ()))
         goto enomem;
+
+    tmp = json_integer (l->id);
+    if (json_object_set_new (o, "id", tmp) < 0) {
+        json_decref (tmp);
+        goto enomem;
+    }
 
     json_array_foreach(l->keys, index, key) {
         flux_future_t *f;
