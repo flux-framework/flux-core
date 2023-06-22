@@ -339,8 +339,23 @@ static int pty_init (flux_plugin_t *p,
                                               0,
                                               "{s:s}",
                                               "pty", "terminus.0") < 0) {
-                shell_log_errno ("flux_shell_service_register");
+                shell_log_errno ("flux_shell_add_event_context (pty)");
                 goto error;
+            }
+            if (capture) {
+                /*
+                 * If also capturing the pty output for an interactive
+                 *  pty, note this in the shell.init event context. This
+                 *  will hint to the pty reader that the terminal output
+                 *  is duplicated for rank 0.
+                 */
+                if (flux_shell_add_event_context (shell,
+                                                  "shell.init",
+                                                  0,
+                                                  "{s:i}",
+                                                  "capture", 1) < 0) {
+                    shell_log_errno ("flux_shell_add_event_context (capture)");
+                }
             }
             /*  Ensure that rank 0 pty waits for client to attach
              *   in pty.interactive mode, even if pty.capture is also
