@@ -250,7 +250,7 @@ static int shell_input_parse_type (struct shell_input *in)
     int ret;
 
     if ((ret = flux_shell_getopt_unpack (in->shell, "input",
-                                         "{s?:{s?:s}}",
+                                         "{s?{s?s}}",
                                          "stdin", "type", &typestr)) < 0)
         return -1;
 
@@ -265,7 +265,7 @@ static int shell_input_parse_type (struct shell_input *in)
         in->stdin_type = FLUX_INPUT_TYPE_FILE;
 
         if (flux_shell_getopt_unpack (in->shell, "input",
-                                      "{s:{s?:s}}",
+                                      "{s:{s?s}}",
                                       "stdin", "path", &(fp->path)) < 0)
             return -1;
 

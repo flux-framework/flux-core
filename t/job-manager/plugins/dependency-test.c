@@ -132,7 +132,7 @@ static int depend_cb (flux_plugin_t *p,
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
-                                "{s:I s:{s:{s:{s?s}}}}",
+                                "{s:I s:{s:{s?{s?s}}}}",
                                 "id", &id,
                                 "jobspec",
                                 "attributes",

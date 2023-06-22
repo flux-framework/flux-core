@@ -29,7 +29,7 @@ static int validate (flux_plugin_t *p,
      */
     if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
                                 "{s:I s:{s:{s:{s:{s:i}}}}}",
-				"id", &jobid,
+                                "id", &jobid,
                                 "jobspec",
                                  "attributes", "system", "jobtap",
                                   "validate-test-id", &i) < 0)

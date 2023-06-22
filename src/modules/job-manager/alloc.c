@@ -209,7 +209,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto teardown; // ENOSYS here if scheduler not loaded/shutting down
-    if (flux_msg_unpack (msg, "{s:I s:i s?:s s?:o}",
+    if (flux_msg_unpack (msg, "{s:I s:i s?s s?o}",
                               "id", &id,
                               "type", &type,
                               "note", &note,
@@ -415,7 +415,7 @@ static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
     struct job *job;
     const char *sender;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s?:i}",
+    if (flux_request_unpack (msg, NULL, "{s:s s?i}",
                                         "mode", &mode,
                                         "limit", &limit) < 0)
         goto error;

@@ -114,7 +114,7 @@ void raise_handle_request (flux_t *h,
     const char *note = NULL;
     const char *errstr = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:i s:s s?:s}",
+    if (flux_request_unpack (msg, NULL, "{s:I s:i s:s s?s}",
                                         "id", &id,
                                         "severity", &severity,
                                         "type", &type,
@@ -215,7 +215,7 @@ void raiseall_handle_request (flux_t *h,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:b s:i s:i s:i s:s s?:s}",
+                             "{s:b s:i s:i s:i s:s s?s}",
                              "dry_run",
                              &dry_run,
                              "userid",

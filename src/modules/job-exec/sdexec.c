@@ -262,7 +262,7 @@ static struct sdexec *sdexec_create (flux_t *h,
     se->stderrlog = SDEXEC_LOG_EVENTLOG;
 
     (void) json_unpack_ex (job->jobspec, NULL, 0,
-                           "{s:{s:{s:{s:{s?b s?s s?s s?b}}}}}",
+                           "{s:{s?{s?{s?{s?b s?s s?s s?b}}}}}",
                            "attributes", "system", "exec", "sd",
                            "test_exec_fail", &se->test_exec_fail,
                            "stdoutlog", &stdoutlog,
@@ -301,7 +301,7 @@ static int sdexec_init (struct jobinfo *job)
         const char *method = NULL;
         if (flux_conf_unpack (flux_get_conf (h),
                               &err,
-                              "{s?:{s?s}}",
+                              "{s?{s?s}}",
                               "exec",
                                 "method", &method) < 0) {
             flux_log (h, LOG_ERR,

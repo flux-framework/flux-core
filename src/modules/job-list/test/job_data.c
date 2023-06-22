@@ -28,8 +28,8 @@ struct test_jobspec_corner_case {
 } jobspec_corner_case_tests[] = {
     { TEST_SRCDIR "/jobspec/invalid_json.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/missing_attributes.jobspec", -1 },
-    { TEST_SRCDIR "/jobspec/missing_attributes_system.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/invalid_attributes_system_job.jobspec", -1 },
+    { TEST_SRCDIR "/jobspec/invalid_attributes_system_missing_duration.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/missing_tasks.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/invalid_tasks_array.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/invalid_tasks_missing_command.jobspec", -1 },

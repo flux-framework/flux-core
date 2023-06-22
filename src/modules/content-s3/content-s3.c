@@ -155,7 +155,7 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s:{s:s, s:s, s:s, s?:b !} }",
+                          "{s:{s:s, s:s, s:s, s?b !} }",
                           "content-s3",
                           "credential-file",
                           &cred_file,

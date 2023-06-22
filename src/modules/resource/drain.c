@@ -372,7 +372,7 @@ static void drain_cb (flux_t *h,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s?:s s?:s}",
+                             "{s:s s?s s?s}",
                              "targets", &s,
                              "reason", &reason,
                              "mode", &mode) < 0)

@@ -272,7 +272,7 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
 
     monotime (&t0);
 
-    if (flux_rpc_get_unpack (f, "{s:s s:s s?:s}",
+    if (flux_rpc_get_unpack (f, "{s:s s:s s?s}",
                              "eventlog", &eventlog,
                              "jobspec", &jobspec,
                              "R", &R) < 0) {
@@ -292,7 +292,7 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
     }
 
     if (json_unpack_ex (job, &error, 0,
-                        "{s:i s?:s s:f s?:f s?:f s:f}",
+                        "{s:i s?s s:f s?f s?f s:f}",
                         "userid", &userid,
                         "ranks", &ranks,
                         "t_submit", &t_submit,
@@ -420,7 +420,7 @@ int job_info_lookup (struct job_archive_ctx *ctx, json_t *job)
     json_t *keys = NULL;
     double t_run = 0.0;
 
-    if (json_unpack (job, "{s:I s?:f}", "id", &id, "t_run", &t_run) < 0) {
+    if (json_unpack (job, "{s:I s?f}", "id", &id, "t_run", &t_run) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: parse t_run", __FUNCTION__);
         goto error;
     }

@@ -409,7 +409,7 @@ static int gethostentry (json_t *hosts,
     /* N.B. entry already validated by boot_config_parse().
      */
     (void)json_unpack (entry,
-                      "{s:s s?:s s?:s}",
+                      "{s:s s?s s?s}",
                       "host", host,
                       "bind", bind,
                       "connect", uri);

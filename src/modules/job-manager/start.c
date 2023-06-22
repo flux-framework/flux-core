@@ -245,9 +245,9 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         int xseverity;
         const char *xtype;
         const char *xnote = NULL;
-        if (json_unpack (data, "{s:i s:s s?:s}", "severity", &xseverity,
-                                                 "type", &xtype,
-                                                 "note", &xnote) < 0) {
+        if (json_unpack (data, "{s:i s:s s?s}", "severity", &xseverity,
+                                                "type", &xtype,
+                                                "note", &xnote) < 0) {
             errno = EPROTO;
             flux_log_error (h, "start: exception response: malformed data");
             goto error;

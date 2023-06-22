@@ -393,7 +393,7 @@ static int validate_cb (flux_plugin_t *p,
     if (json_unpack_ex (jobspec,
                         &jerror,
                         0,
-                        "{s?{s?{s?s}}}",
+                        "{s:{s?{s?s}}}",
                         "attributes",
                           "system",
                             "queue", &queue) < 0) {

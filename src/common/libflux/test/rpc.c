@@ -85,7 +85,7 @@ void rpctest_echo_error_cb (flux_t *h, flux_msg_handler_t *mh,
     int errnum;
     const char *errstr = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s?:s}",
+    if (flux_request_unpack (msg, NULL, "{s:i s?s}",
                              "errnum", &errnum, "errstr", &errstr) < 0)
         goto error;
     if (errstr) {

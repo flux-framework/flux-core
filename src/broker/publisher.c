@@ -102,7 +102,7 @@ static void publish_cb (flux_t *h,
     flux_msg_t *event = NULL;
     const char *errmsg = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s:i s?:s}",
+    if (flux_request_unpack (msg, NULL, "{s:s s:i s?s}",
                                         "topic", &topic,
                                         "flags", &flags,
                                         "payload", &payload) < 0)

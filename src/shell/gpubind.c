@@ -40,7 +40,7 @@ int get_shell_gpus (flux_shell_t *shell,
 
     if (flux_shell_rank_info_unpack (shell,
                                      -1,
-                                     "{s:i s:{s?:s}}",
+                                     "{s:i s:{s?s}}",
                                      "ntasks", ntasks,
                                      "resources",
                                        "gpus", &gpu_list) < 0) {

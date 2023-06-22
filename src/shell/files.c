@@ -83,7 +83,7 @@ static int files_init (flux_plugin_t *p,
         return shell_log_errno ("flux_shell_getenv");
 
     if (flux_shell_info_unpack (shell,
-                               "{s:{s:{s:{s?o}}}}",
+                               "{s:{s:{s?{s?o}}}}",
                                "jobspec",
                                  "attributes",
                                    "system",

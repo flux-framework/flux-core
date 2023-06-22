@@ -102,7 +102,7 @@ static int parse_jobspec_job_name (struct job *job,
 
     if (jobspec_job) {
         if (json_unpack_ex (jobspec_job, &error, 0,
-                            "{s?:s}",
+                            "{s?s}",
                             "name", &job->name) < 0) {
             flux_log (job->h, LOG_ERR,
                       "%s: job %s invalid job dictionary: %s",
@@ -175,7 +175,7 @@ static int parse_per_resource (struct job *job,
     json_t *o = NULL;
 
     if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:{s:{s?:{s?:{s?:o}}}}}",
+                        "{s:{s?{s?{s?{s?o}}}}}",
                         "attributes",
                           "system",
                             "shell",
@@ -190,7 +190,7 @@ static int parse_per_resource (struct job *job,
     (*count) = 1;
     if (o) {
         if (json_unpack_ex (o, &error, 0,
-                            "{s:s s?:i}",
+                            "{s:s s?i}",
                             "type", type,
                             "count", count) < 0) {
             flux_log (job->h, LOG_ERR,
@@ -276,7 +276,7 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
     }
 
     if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:{s:{s?:o}}}",
+                        "{s:{s?{s?o}}}",
                         "attributes",
                         "system",
                         "job",
@@ -309,7 +309,7 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
         goto nonfatal_error;
 
     if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:{s:{s?:s s?s}}}",
+                        "{s:{s?{s?s s?s}}}",
                         "attributes",
                         "system",
                         "cwd", &job->cwd,

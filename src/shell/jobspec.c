@@ -235,7 +235,7 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
      *  json_t * objects)
      */
     if (json_unpack_ex (job->jobspec, error, 0,
-                        "{s:i s:o s:o s:{s:{s?:s s?:O s?:{s?:O}}}}",
+                        "{s:i s:o s:o s:{s?{s?s s?O s?{s?O}}}}",
                         "version", &job->version,
                         "resources", &resources,
                         "tasks", &tasks,
