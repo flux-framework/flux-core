@@ -2721,6 +2721,110 @@ void test_destroy_in_completion (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 }
 
+void fail_completion_cb (flux_subprocess_t *p)
+{
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED,
+        "subprocess state == EXITED in completion handler");
+    ok (flux_subprocess_status (p) != -1,
+        "subprocess status is valid");
+    ok (flux_subprocess_exit_code (p) == 127,
+        "subprocess exit code is 127, got %d", flux_subprocess_exit_code (p));
+    completion_cb_count++;
+}
+
+void fail_output_cb (flux_subprocess_t *p, const char *stream)
+{
+    const char *ptr;
+    int lenp = 0;
+    int *counter;
+
+    if (!strcasecmp (stream, "stdout"))
+        counter = &stdout_output_cb_count;
+    else if (!strcasecmp (stream, "stderr"))
+        counter = &stderr_output_cb_count;
+    else {
+        ok (false, "unexpected stream %s", stream);
+        return;
+    }
+
+    if ((*counter) == 0) {
+        ok (flux_subprocess_read_stream_closed (p, stream) > 0,
+            "flux_subprocess_read_stream_closed saw EOF on %s", stream);
+
+        ptr = flux_subprocess_read (p, stream, -1, &lenp);
+        ok (ptr != NULL
+            && lenp == 0,
+            "flux_subprocess_read on %s read EOF", stream);
+    }
+    else
+        ok (false, "fail_output_cb called multiple times");
+
+    (*counter)++;
+}
+
+void test_fail_notacommand (flux_reactor_t *r)
+{
+    char *av[] = { "notacommand", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = fail_completion_cb,
+        .on_stdout = fail_output_cb,
+        .on_stderr = fail_output_cb
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    stderr_output_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops);
+    /* Per manpage:
+     *
+     * If posix_spawn() or posix_spawnp() fail for any of the reasons
+     *  that would cause fork() or one of the exec family of functions
+     *  to fail, an error value shall be returned as described by
+     *  fork() and exec, respectively (or, if the error occurs after
+     *  the calling process successfully returns, the child process
+     *  shall exit with exit status 127).
+     *
+     * So we can't assume flux_local_exec() returns an error on posix_spawn().
+     */
+    if (p == NULL) {
+        ok (p == NULL, "flux_local_exec failed");
+        ok (errno == ENOENT, "flux_local_exec returned ENOENT");
+    }
+    else {
+        ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+            "subprocess state == RUNNING after flux_local_exec");
+
+        int rc = flux_reactor_run (r, 0);
+        ok (rc == 0, "flux_reactor_run returned zero status");
+        ok (completion_cb_count == 1, "completion callback called 1 time");
+        ok (stdout_output_cb_count == 1, "stdout output callback called 1 times");
+        ok (stderr_output_cb_count == 1, "stderr output callback called 1 times");
+        flux_subprocess_destroy (p);
+    }
+    flux_cmd_destroy (cmd);
+}
+
+void test_fail_notacommand_fork (flux_reactor_t *r)
+{
+    char *av[] = { "notacommand", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = fail_completion_cb,
+    };
+    p = flux_local_exec (r, FLUX_SUBPROCESS_FLAGS_FORK_EXEC, cmd, &ops);
+    ok (p == NULL, "flux_local_exec failed");
+    ok (errno == ENOENT, "flux_local_exec returned ENOENT");
+    flux_cmd_destroy (cmd);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *r;
@@ -2833,6 +2937,10 @@ int main (int argc, char *argv[])
     test_post_fork_hook (r);
     diag ("test_destroy_in_completion");
     test_destroy_in_completion (r);
+    diag ("fail_notacommand");
+    test_fail_notacommand (r);
+    diag ("fail_notacommand_fork");
+    test_fail_notacommand_fork (r);
 
     end_fdcount = fdcount ();
 
