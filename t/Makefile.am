@@ -180,6 +180,7 @@ TESTSCRIPTS = \
 	t2408-sdbus-recovery.t \
 	t2409-sdexec.t \
 	t2410-exec-systemd.t \
+	t2411-sdexec-job.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
 	t2600-job-shell-rcalc.t \
