@@ -173,6 +173,8 @@ void test_corner_cases (flux_reactor_t *r)
     ok (flux_subprocess_fail_errno (NULL) < 0
         && errno == EINVAL,
         "flux_subprocess_fail_errno fails with NULL pointer input");
+    ok (flux_subprocess_fail_error (NULL) != NULL,
+        "flux_subprocess_fail_error works with NULL pointer input");
     ok (flux_subprocess_status (NULL) < 0
         && errno == EINVAL,
         "flux_subprocess_status fails with NULL pointer input");
@@ -258,6 +260,8 @@ void test_post_exec_errors (flux_reactor_t *r)
         "flux_subprocess_rank fails b/c subprocess is local");
     ok (flux_subprocess_fail_errno (p) < 0,
         "subprocess fail errno fails b/c subprocess not failed");
+    ok (flux_subprocess_fail_error (p) != NULL,
+        "subprocess fail error works when subprocess not failed");
     ok (flux_subprocess_status (p) < 0,
         "subprocess status fails b/c subprocess not yet exited");
     ok (flux_subprocess_exit_code (p) < 0,

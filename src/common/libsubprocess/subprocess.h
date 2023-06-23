@@ -457,6 +457,12 @@ int flux_subprocess_rank (flux_subprocess_t *p);
  */
 int flux_subprocess_fail_errno (flux_subprocess_t *p);
 
+/* Returns error message describing why FLUX_SUBPROCESS_FAILED state was
+ * reached.  If error message was not set, will return strerror() of
+ * errno returned from flux_subprocess_fail_errno().
+ */
+const char *flux_subprocess_fail_error (flux_subprocess_t *p);
+
 /* Returns exit status as returned from wait(2).  Works only for
  * FLUX_SUBPROCESS_EXITED state. */
 int flux_subprocess_status (flux_subprocess_t *p);
