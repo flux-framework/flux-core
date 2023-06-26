@@ -120,14 +120,23 @@ def join(args):
     """
     h = flux.Flux()
 
-    h.rpc("groups.join", {"name": args.name}).get()
+    h.rpc("groups.join", {"name": args.name}, nodeid=args.rank).get()
     if args.dubjoin:
-        h.rpc("groups.join", {"name": args.name}).get()
+        h.rpc("groups.join", {"name": args.name}, nodeid=args.rank).get()
 
     if args.leave:
-        h.rpc("groups.leave", {"name": args.name}).get()
+        h.rpc("groups.leave", {"name": args.name}, nodeid=args.rank).get()
         if args.dubleave:
             h.rpc("groups.leave", {"name": args.name}).get()
+
+
+def leave(args):
+    """
+    Leave group.
+    """
+    h = flux.Flux()
+
+    h.rpc("groups.leave", {"name": args.name}, nodeid=args.rank).get()
 
 
 LOGGER = logging.getLogger("groups")
@@ -183,14 +192,27 @@ def main():
     # join
     join_parser = subparsers.add_parser(
         "join",
-        usage="groups join [--dubjoin] [--leave] [--dubleave] name",
+        usage="groups join [--rank N] [--dubjoin] [--leave] [--dubleave] name",
         formatter_class=flux.util.help_formatter(),
     )
     join_parser.add_argument("--dubjoin", action="store_true")
     join_parser.add_argument("--leave", action="store_true")
     join_parser.add_argument("--dubleave", action="store_true")
+    join_parser.add_argument("--rank", type=int, default=flux.constants.FLUX_NODEID_ANY)
     join_parser.add_argument("name")
     join_parser.set_defaults(func=join)
+
+    # leave
+    leave_parser = subparsers.add_parser(
+        "leave",
+        usage="groups leave [--rank N] name",
+        formatter_class=flux.util.help_formatter(),
+    )
+    leave_parser.add_argument(
+        "--rank", type=int, default=flux.constants.FLUX_NODEID_ANY
+    )
+    leave_parser.add_argument("name")
+    leave_parser.set_defaults(func=leave)
 
     args = parser.parse_args()
     args.func(args)
