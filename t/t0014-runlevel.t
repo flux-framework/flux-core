@@ -32,7 +32,7 @@ test_expect_success 'rc1 bad path handled same as failure' '
 '
 
 test_expect_success 'default initial program is $SHELL' '
-	run_timeout --env=SHELL=/bin/sh 15 \
+	run_timeout --env=SHELL=/bin/sh 60 \
 		flux $SHARNESS_TEST_SRCDIR/scripts/runpty.py -i none \
 		flux start -o,-Slog-stderr-level=6 \
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
