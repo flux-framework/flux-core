@@ -121,11 +121,14 @@ test_expect_success 'flux exec exits with code 127 for file not found' '
 
 test_expect_success 'flux exec outputs appropriate error message for file not found' '
 	test_expect_code 127 flux exec -n ./nosuchprocess 2> exec.stderr &&
-        grep "No such file or directory" exec.stderr
+	grep "error launching process" exec.stderr &&
+	grep "No such file or directory" exec.stderr
 '
 
 test_expect_success 'flux exec exits with code 126 for non executable' '
-	test_expect_code 126 flux exec -n /dev/null
+	test_expect_code 126 flux exec -n /dev/null 2> exec.stderr2 &&
+	grep "error launching process" exec.stderr2 &&
+	grep "Permission denied" exec.stderr2
 '
 
 test_expect_success 'flux exec exits with code 68 (EX_NOHOST) for rank not found' '
