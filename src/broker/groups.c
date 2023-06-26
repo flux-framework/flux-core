@@ -441,6 +441,11 @@ static void join_request_cb (flux_t *h,
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
+    if (!flux_msg_is_local (msg)) {
+        errno = EPROTO;
+        errmsg = "groups.join is restricted to the local broker";
+        goto error;
+    }
     if (!(group = group_lookup (g, name, true)))
         goto error;
     if (group->join_request) {
@@ -485,6 +490,11 @@ static void leave_request_cb (flux_t *h,
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
+    if (!flux_msg_is_local (msg)) {
+        errno = EPROTO;
+        errmsg = "groups.leave is restricted to the local broker";
+        goto error;
+    }
     if (!(group = group_lookup (g, name, false))
         || !group->join_request) {
         snprintf (errbuf,
