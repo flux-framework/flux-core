@@ -30,6 +30,18 @@
  * Optimization: collect contemporaneous JOIN/LEAVE requests at each
  * rank for a short time before applying them and sending them upstream.
  * During that time, JOINs/LEAVEs of the same key may be combined.
+ *
+ * broker.online use case:
+ * Groups are used for instance quorum detection.  The state machine calls
+ * groups.join broker.online in the QUORUM state on all ranks.  Rank 0 calls
+ * groups.get broker.online which notifies the broker as membership evolves,
+ * and when the quorum condition is satisfied, the state transitions
+ * to RUN.  The 'broker.online' group is also monitored by the resource module
+ * so that it can inform the scheduler as execution targets go up/down.
+ *
+ * broker.torpid use case:
+ * A broker.torpid group is maintained by the broker overlay (see overlay.c).
+ * The resource module also monitors broker.torpid and drains torpid nodes.
  */
 
 #if HAVE_CONFIG_H
@@ -50,6 +62,10 @@
 
 static const double batch_timeout = 0.1;
 
+/* N.B. only one client can join a group per broker.  That client
+ * join request is cached in group->join_request so that when the client
+ * disconnects, we can identify its groups and force it to leave.
+ */
 struct group {
     char *name; // used directly as zhashx key
     struct idset *members;
