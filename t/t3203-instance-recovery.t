@@ -9,9 +9,12 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 
 runpty="flux ${SHARNESS_TEST_SRCDIR}/scripts/runpty.py"
 
+# N.B. Increase test-exit-timeout from default of 20s, on slower / busy
+# systems timeout can trigger and kill broker.
 test_expect_success 'start a persistent instance of size 4' '
 	mkdir -p test1 &&
-	flux start --test-size=4 -o,-Sstatedir=$(pwd)/test1 /bin/true
+	flux start --test-size=4 --test-exit-timeout=300s \
+		-o,-Sstatedir=$(pwd)/test1 /bin/true
 '
 test_expect_success 'expected broker attributes are set in recovery mode' '
 	cat >recov_attrs.exp <<-EOT &&
