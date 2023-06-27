@@ -90,7 +90,7 @@ void test_corner_cases (flux_reactor_t *r)
         "subprocess_server_create fails with NULL pointer inputs");
     ok (subprocess_server_shutdown (NULL, 0) == NULL
         && errno == EINVAL,
-        "subprocess_server_shutdown fails with NULL pointer inputs");
+        "subprocess_server_shutdown fails with NULL pointer input");
 
     ok (flux_local_exec (NULL, 0, NULL, NULL) == NULL
         && errno == EINVAL,
@@ -145,10 +145,10 @@ void test_corner_cases (flux_reactor_t *r)
 
     ok (flux_subprocess_write (NULL, "stdin", "foo", 3) < 0
         && errno == EINVAL,
-        "flux_subprocess_write fails with NULL pointer inputs");
+        "flux_subprocess_write fails with NULL pointer input");
     ok (flux_subprocess_close (NULL, "stdin") < 0
         && errno == EINVAL,
-        "flux_subprocess_close fails with NULL pointer inputs");
+        "flux_subprocess_close fails with NULL pointer input");
     ok (flux_subprocess_read (NULL, "stdout", -1, NULL) == NULL
         && errno == EINVAL,
         "flux_subprocess_read fails with NULL pointer inputs");
@@ -160,43 +160,43 @@ void test_corner_cases (flux_reactor_t *r)
         "flux_subprocess_read_trimmed_line fails with NULL pointer inputs");
     ok (flux_subprocess_read_stream_closed (NULL, "stdout") < 0
         && errno == EINVAL,
-        "flux_subprocess_read_stream_closed fails with NULL pointer inputs");
+        "flux_subprocess_read_stream_closed fails with NULL pointer input");
     ok (flux_subprocess_kill (NULL, 0) == NULL
         && errno == EINVAL,
-        "flux_subprocess_kill fails with NULL pointer inputs");
+        "flux_subprocess_kill fails with NULL pointer input");
     ok ((int)flux_subprocess_state (NULL) < 0
         && errno == EINVAL,
-        "flux_subprocess_state fails with NULL pointer inputs");
+        "flux_subprocess_state fails with NULL pointer input");
     ok (flux_subprocess_rank (NULL) < 0
         && errno == EINVAL,
-        "flux_subprocess_rank fails with NULL pointer inputs");
+        "flux_subprocess_rank fails with NULL pointer input");
     ok (flux_subprocess_fail_errno (NULL) < 0
         && errno == EINVAL,
-        "flux_subprocess_fail_errno fails with NULL pointer inputs");
+        "flux_subprocess_fail_errno fails with NULL pointer input");
     ok (flux_subprocess_status (NULL) < 0
         && errno == EINVAL,
-        "flux_subprocess_status fails with NULL pointer inputs");
+        "flux_subprocess_status fails with NULL pointer input");
     ok (flux_subprocess_exit_code (NULL) < 0
         && errno == EINVAL,
-        "flux_subprocess_exit_code fails with NULL pointer inputs");
+        "flux_subprocess_exit_code fails with NULL pointer input");
     ok (flux_subprocess_signaled (NULL) < 0
         && errno == EINVAL,
-        "flux_subprocess_signaled fails with NULL pointer inputs");
+        "flux_subprocess_signaled fails with NULL pointer input");
     ok (flux_subprocess_pid (NULL) < 0
         && errno == EINVAL,
-        "flux_subprocess_pid fails with NULL pointer inputs");
+        "flux_subprocess_pid fails with NULL pointer input");
     ok (flux_subprocess_get_cmd (NULL) == NULL
         && errno == EINVAL,
-        "flux_subprocess_get_cmd fails with NULL pointer inputs");
+        "flux_subprocess_get_cmd fails with NULL pointer input");
     ok (flux_subprocess_get_reactor (NULL) == NULL
         && errno == EINVAL,
-        "flux_subprocess_get_reactor fails with NULL pointer inputs");
+        "flux_subprocess_get_reactor fails with NULL pointer input");
     ok (flux_subprocess_aux_set (NULL, "foo", "bar", NULL) < 0
         && errno == EINVAL,
-        "flux_subprocess_aux_set fails with NULL pointer inputs");
+        "flux_subprocess_aux_set fails with NULL pointer input");
     ok (flux_subprocess_aux_get (NULL, "foo") == NULL
         && errno == EINVAL,
-        "flux_subprocess_aux_get fails with NULL pointer inputs");
+        "flux_subprocess_aux_get fails with NULL pointer input");
 
     flux_close (h);
 }
