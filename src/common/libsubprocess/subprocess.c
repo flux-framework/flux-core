@@ -1121,6 +1121,17 @@ int flux_subprocess_fail_errno (flux_subprocess_t *p)
     return p->failed_errno;
 }
 
+const char *flux_subprocess_fail_error (flux_subprocess_t *p)
+{
+    if (!p)
+        return "internal error: subprocess is NULL";
+    if (p->state != FLUX_SUBPROCESS_FAILED)
+        return "internal error: subprocess is not in FAILED state";
+    if (p->failed_error.text[0] == '\0')
+        return strerror (p->failed_errno);
+    return p->failed_error.text;
+}
+
 int flux_subprocess_status (flux_subprocess_t *p)
 {
     if (!p) {

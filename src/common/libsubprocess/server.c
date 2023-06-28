@@ -19,6 +19,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/llog.h"
 #include "src/common/libioencode/ioencode.h"
 #include "ccan/str/str.h"
@@ -136,6 +137,7 @@ static void proc_internal_fatal (flux_subprocess_t *p)
      */
     p->state = FLUX_SUBPROCESS_FAILED;
     p->failed_errno = errno;
+    errprintf (&p->failed_error, "internal fatal error: %s", strerror (errno));
     state_change_start (p);
 
     /* if we fail here, probably not much can be done */
@@ -177,7 +179,13 @@ static void proc_state_change_cb (flux_subprocess_t *p,
                                 "type", "stopped");
     }
     else if (state == FLUX_SUBPROCESS_FAILED) {
-        rc = flux_respond_error (s->h, request, p->failed_errno, NULL);
+        const char *errmsg = NULL;
+        if (p->failed_error.text[0] != '\0')
+            errmsg = p->failed_error.text;
+        rc = flux_respond_error (s->h,
+                                 request,
+                                 p->failed_errno,
+                                 errmsg);
         proc_delete (s, p); // N.B. proc_delete preserves errno
     } else {
         errno = EPROTO;
@@ -333,8 +341,11 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
                                   &ops,
                                   NULL,
                                   s->llog,
-                                  s->llog_data)))
+                                  s->llog_data))) {
+        errprintf (&error, "error launching process: %s", strerror (errno));
+        errmsg = error.text;
         goto error;
+    }
 
     if (flux_subprocess_aux_set (p,
                                 msgkey,

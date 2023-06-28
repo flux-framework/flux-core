@@ -248,7 +248,12 @@ static int local_release_child (flux_subprocess_t *p)
 
 static int local_exec (flux_subprocess_t *p)
 {
-    if ((p->exec_failed_errno = local_release_child (p)) != 0) {
+    int ret;
+    /* N.B. We don't set p->failed_errno here, if locally launched via
+     * flux_local_exec(), will return -1 and errno to caller.  If
+     * called via server, p->failed_errno will be set by remote
+     * handler. */
+    if ((ret = local_release_child (p)) != 0) {
         /*
          *  Reap child immediately. Expectation from caller is that
          *   failure to exec will not require subsequent reaping of
@@ -260,7 +265,7 @@ static int local_exec (flux_subprocess_t *p)
             return -1;
         p->status = status;
 
-        errno = p->exec_failed_errno;
+        errno = ret;
         return -1;
     }
     return 0;
