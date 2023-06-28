@@ -553,6 +553,7 @@ AC_CONFIG_FILES( \
   src/common/libzmqutil/Makefile \
   src/common/libtaskmap/Makefile \
   src/common/libfilemap/Makefile \
+  src/common/libsdexec/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
