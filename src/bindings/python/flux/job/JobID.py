@@ -81,6 +81,11 @@ class JobID(int):
         return self.encode("f58")
 
     @property
+    def f58plain(self):
+        """Return RFC19 F58 representation of a JobID with ASCII prefix"""
+        return self.encode("f58plain")
+
+    @property
     def hex(self):
         """Return 0x-prefixed hexadecimal representation of a JobID"""
         return self.encode("hex")
