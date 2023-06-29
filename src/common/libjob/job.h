@@ -84,7 +84,7 @@ int flux_job_id_parse (const char *s, flux_jobid_t *id);
 /*  Encode a jobid into encoding "type", writing the result to buffer
  *   buf of size bufsz.
  *  Supported encoding types include:
- *   "dec", "hex", "kvs", "dothex", "words", or "f58".
+ *   "dec", "hex", "kvs", "dothex", "words", "f58", or "f58plain"
  *  Returns 0 on success, -1 on failure with errno set:
  *   EPROTO: Invalid encoding type
  *   EINVAL: Invalid other argument

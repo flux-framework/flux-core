@@ -88,6 +88,8 @@ int flux_job_id_encode (flux_jobid_t id,
         t = FLUID_STRING_MNEMONIC;
     else if (strcasecmp (type, "f58") == 0)
         t = FLUID_STRING_F58;
+    else if (strcasecmp (type, "f58plain") == 0)
+        t = FLUID_STRING_F58_PLAIN;
     else if (strcasecmp (type, "emoji") == 0)
         t = FLUID_STRING_EMOJI;
     else {
