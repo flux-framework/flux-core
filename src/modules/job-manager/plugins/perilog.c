@@ -512,11 +512,11 @@ static int conf_init (flux_t *h, struct perilog_conf *conf)
                           &error,
                           "{s?{s?{s?o s?F !} s?{s?o !}}}",
                           "job-manager",
-                          "prolog",
-                            "command", &prolog,
-                            "kill-timeout", &conf->prolog_kill_timeout,
-                          "epilog",
-                            "command", &epilog) < 0) {
+                            "prolog",
+                              "command", &prolog,
+                              "kill-timeout", &conf->prolog_kill_timeout,
+                            "epilog",
+                              "command", &epilog) < 0) {
         flux_log (h, LOG_ERR,
                   "prolog/epilog configuration error: %s",
                   error.text);
