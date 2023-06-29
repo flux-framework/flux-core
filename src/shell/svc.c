@@ -61,16 +61,25 @@ static int lookup_rank (struct shell_svc *svc, int shell_rank, int *rank)
     return 0;
 }
 
+/* Avoid locale-specific encoding for the shell service name.
+ * See flux-framework/flux-core#5257.
+ */
 static int build_topic (struct shell_svc *svc,
                         const char *method,
                         char *buf,
                         int len)
 {
+    char idbuf[21];
+    if (flux_job_id_encode (svc->shell->info->jobid,
+                            "f58plain",
+                            idbuf,
+                            sizeof (idbuf)) < 0)
+        return -1;
     if (snprintf (buf,
                   len,
                   "%ju-shell-%s%s%s",
                   (uintmax_t)svc->uid,
-                  idf58 (svc->shell->info->jobid),
+                  idbuf,
                   method ? "." : "",
                   method ? method : "") >= len) {
         errno = EINVAL;
