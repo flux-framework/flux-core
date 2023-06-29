@@ -24,6 +24,7 @@ typedef enum {
     FLUID_STRING_MNEMONIC = 2,  // mnemonicode x-x-x--x-x-x
     FLUID_STRING_F58 = 3,       // FLUID base58 enc: ƒXXXX or fXXXX
     FLUID_STRING_EMOJI = 4,     // FLUID basemoji enc: 😪🏭🐭🍑👨
+    FLUID_STRING_F58_PLAIN = 5, // FLUID base58 enc: fXXXX
 } fluid_string_type_t;
 
 struct fluid_generator {

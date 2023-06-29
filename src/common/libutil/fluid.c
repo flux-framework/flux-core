@@ -189,7 +189,7 @@ static inline int is_utf8_locale (void)
     return 0;
 }
 
-static int fluid_f58_encode (char *buf, int bufsz, fluid_t id)
+static int fluid_f58_encode (char *buf, int bufsz, fluid_t id, bool plain)
 {
     int count;
     const char *prefix = f58_prefix;
@@ -203,7 +203,7 @@ static int fluid_f58_encode (char *buf, int bufsz, fluid_t id)
 
 #if !ASSUME_BROKEN_LOCALE
     /* Use alternate "f" prefix if locale is not multibyte */
-    if (!is_utf8_locale())
+    if (!is_utf8_locale() || plain)
         prefix = f58_alt_prefix;
 #endif
 
@@ -332,7 +332,11 @@ int fluid_encode (char *buf, int bufsz, fluid_t fluid,
                 return -1;
             break;
         case FLUID_STRING_F58:
-            if (fluid_f58_encode (buf, bufsz, fluid) < 0)
+            if (fluid_f58_encode (buf, bufsz, fluid, false) < 0)
+                return -1;
+            break;
+        case FLUID_STRING_F58_PLAIN:
+            if (fluid_f58_encode (buf, bufsz, fluid, true) < 0)
                 return -1;
             break;
         case FLUID_STRING_EMOJI:
