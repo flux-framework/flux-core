@@ -18,6 +18,7 @@ noinst_LTLIBRARIES = \
 jobtap_plugin_LTLIBRARIES = \
 	plugins/submit-hold.la \
 	plugins/alloc-bypass.la \
+	plugins/alloc-check.la \
 	plugins/perilog.la
 
 libjob_manager_la_SOURCES = \
@@ -87,6 +88,15 @@ plugins_alloc_bypass_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/librlist/librlist.la
 plugins_alloc_bypass_la_LDFLAGS = \
+	$(fluxplugin_ldflags) \
+	-module
+
+plugins_alloc_check_la_SOURCES = \
+	plugins/alloc-check.c
+plugins_alloc_check_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/librlist/librlist.la
+plugins_alloc_check_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
 
