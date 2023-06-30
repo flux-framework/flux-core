@@ -171,12 +171,14 @@ flux_future_t *jobinfo_shell_rpc_pack (struct jobinfo *job,
     char *shell_topic = NULL;
     flux_future_t *f = NULL;
     uint32_t rank;
+    char idbuf[21];
 
-    if (asprintf (&shell_topic,
-                  "%ju-shell-%s.%s",
-                  (uintmax_t) job->userid,
-                  idf58 (job->id),
-                  topic) < 0
+    if (flux_job_id_encode (job->id, "f58plain", idbuf, sizeof (idbuf)) < 0
+        || asprintf (&shell_topic,
+                     "%ju-shell-%s.%s",
+                     (uintmax_t) job->userid,
+                     idbuf,
+                     topic) < 0
         || ((rank = resource_set_nth_rank (job->R, 0)) == IDSET_INVALID_ID))
         goto out;
     va_start (ap, fmt);

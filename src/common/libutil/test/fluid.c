@@ -103,6 +103,14 @@ void test_f58 (void)
         "fluid_encode with FLUX_F58_FORCE_ASCII used ascii prefix");
     if (unsetenv ("FLUX_F58_FORCE_ASCII") < 0)
         BAIL_OUT ("Failed to unsetenv FLUX_F58_FORCE_ASCII");
+
+    ok (fluid_encode (buf,
+                      sizeof (buf),
+                      f58_tests->id,
+                      FLUID_STRING_F58_PLAIN) == 0,
+        "fluid_encode FLUX_STRING_F58_PLAIN works");
+    is (buf, f58_tests->f58_alt,
+        "fluid_encode FLUID_STRING_F58_PLAIN used ascii prefix");
 #endif
 
     ok (fluid_encode (buf, 1, 1, type) < 0 && errno == EOVERFLOW,
