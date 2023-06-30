@@ -24,7 +24,9 @@
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/grudgeset.h"
 #include "src/common/libjob/job_hash.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/libidset/idset.h"
+#include "ccan/str/str.h"
 
 #include "job-list.h"
 #include "job_state.h"
@@ -266,6 +268,8 @@ static void update_job_state_and_list (struct job_state_ctx *jsctx,
         zlistx_reorder (jsctx->pending,
                         job->list_handle,
                         search_direction (job));
+
+    idsync_check_waiting_id (jsctx->isctx, job);
 }
 
 static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
@@ -279,8 +283,8 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
     assert (jsctx);
 
     if (flux_rpc_get_unpack (f, "{s:s}", "jobspec", &s) < 0) {
-        flux_log_error (jsctx->h, "%s: error jobspec for %ju",
-                        __FUNCTION__, (uintmax_t)job->id);
+        flux_log_error (jsctx->h, "%s: error jobspec for %s",
+                        __FUNCTION__, idf58 (job->id));
         goto out;
     }
 
@@ -290,7 +294,6 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
     st = zlist_head (job->next_states);
     assert (st);
     update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-    idsync_check_waiting_id (jsctx->isctx, job);
     zlist_remove (job->next_states, st);
     process_next_state (jsctx, job);
 
@@ -330,8 +333,8 @@ static void state_run_lookup_continuation (flux_future_t *f, void *arg)
     assert (jsctx);
 
     if (flux_rpc_get_unpack (f, "{s:s}", "R", &s) < 0) {
-        flux_log_error (jsctx->h, "%s: error eventlog for %ju",
-                        __FUNCTION__, (uintmax_t)job->id);
+        flux_log_error (jsctx->h, "%s: error eventlog for %s",
+                        __FUNCTION__, idf58 (job->id));
         goto out;
     }
 
@@ -377,9 +380,9 @@ static void eventlog_inactive_complete (struct job *job)
     if (job->success)
         job->result = FLUX_JOB_RESULT_COMPLETED;
     else if (job->exception_occurred) {
-        if (!strcmp (job->exception_type, "cancel"))
+        if (streq (job->exception_type, "cancel"))
             job->result = FLUX_JOB_RESULT_CANCELED;
-        else if (!strcmp (job->exception_type, "timeout"))
+        else if (streq (job->exception_type, "timeout"))
             job->result = FLUX_JOB_RESULT_TIMEOUT;
     }
 }
@@ -553,8 +556,8 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
         goto error;
 
     if (!(a = eventlog_decode (eventlog))) {
-        flux_log_error (jsctx->h, "%s: error parsing eventlog for %ju",
-                        __FUNCTION__, (uintmax_t)job->id);
+        flux_log_error (jsctx->h, "%s: error parsing eventlog for %s",
+                        __FUNCTION__, idf58 (job->id));
         goto error;
     }
 
@@ -564,41 +567,41 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
         json_t *context = NULL;
 
         if (eventlog_entry_parse (value, &timestamp, &name, &context) < 0) {
-            flux_log_error (jsctx->h, "%s: error parsing entry for %ju",
-                            __FUNCTION__, (uintmax_t)job->id);
+            flux_log_error (jsctx->h, "%s: error parsing entry for %s",
+                            __FUNCTION__, idf58 (job->id));
             goto error;
         }
 
         job->eventlog_seq++;
-        if (!strcmp (name, "submit")) {
+        if (streq (name, "submit")) {
             if (submit_context_parse (jsctx->h, job, context) < 0)
                 goto error;
             set_submit_timestamp (job, timestamp);
         }
-        else if (!strcmp (name, "validate")) {
+        else if (streq (name, "validate")) {
             update_job_state (jsctx, job, FLUX_JOB_STATE_DEPEND, timestamp);
         }
-        else if (!strcmp (name, "depend")) {
+        else if (streq (name, "depend")) {
             update_job_state (jsctx, job, FLUX_JOB_STATE_PRIORITY, timestamp);
         }
-        else if (!strcmp (name, "priority")) {
+        else if (streq (name, "priority")) {
             if (priority_context_parse (jsctx->h, job, context) < 0)
                 goto error;
             if (job->state == FLUX_JOB_STATE_PRIORITY)
                 update_job_state (jsctx, job, FLUX_JOB_STATE_SCHED, timestamp);
         }
-        else if (!strcmp (name, "urgency")) {
+        else if (streq (name, "urgency")) {
             if (urgency_context_parse (jsctx->h, job, context) < 0)
                 goto error;
         }
-        else if (!strcmp (name, "exception")) {
+        else if (streq (name, "exception")) {
             int severity;
             if (exception_context_parse (jsctx->h, job, context, &severity) < 0)
                 goto error;
             if (severity == 0)
                 update_job_state (jsctx, job, FLUX_JOB_STATE_CLEANUP, timestamp);
         }
-        else if (!strcmp (name, "alloc")) {
+        else if (streq (name, "alloc")) {
             /* context not required if no annotations */
             if (context) {
                 json_t *annotations;
@@ -611,23 +614,23 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
             if (job->state == FLUX_JOB_STATE_SCHED)
                 update_job_state (jsctx, job, FLUX_JOB_STATE_RUN, timestamp);
         }
-        else if (!strcmp (name, "finish")) {
+        else if (streq (name, "finish")) {
             if (finish_context_parse (jsctx->h, job, context) < 0)
                 goto error;
             if (job->state == FLUX_JOB_STATE_RUN)
                 update_job_state (jsctx, job, FLUX_JOB_STATE_CLEANUP, timestamp);
         }
-        else if (!strcmp (name, "clean")) {
+        else if (streq (name, "clean")) {
             update_job_state (jsctx, job, FLUX_JOB_STATE_INACTIVE, timestamp);
         }
-        else if (!strcmp (name, "flux-restart")) {
+        else if (streq (name, "flux-restart")) {
             revert_job_state (jsctx, job, timestamp);
         }
-        else if (!strncmp (name, "dependency-", 11)) {
+        else if (strstarts (name, "dependency-")) {
             if (dependency_context_parse (jsctx->h, job, name+11, context) < 0)
                 goto error;
         }
-        else if (!strcmp (name, "memo")) {
+        else if (streq (name, "memo")) {
             if (context && memo_update (jsctx->h, job, context) < 0)
                 goto error;
         }
@@ -672,7 +675,7 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
     flux_future_t *f3 = NULL;
     const char *eventlog, *jobspec, *R;
     char path[64];
-    int rc = -1;
+    int rc = 0; // non-fatal error
 
     if (strlen (key) <= dirskip) {
         errno = EINVAL;
@@ -713,7 +716,7 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
     if (job->states_mask & FLUX_JOB_STATE_RUN) {
         if (flux_job_kvs_key (path, sizeof (path), id, "R") < 0) {
             errno = EINVAL;
-            return -1;
+            goto done;
         }
         if (!(f3 = flux_kvs_lookup (jsctx->h, NULL, 0, path)))
             goto done;
@@ -727,15 +730,17 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
     if (job->states_mask & FLUX_JOB_STATE_INACTIVE)
         eventlog_inactive_complete (job);
 
-    if (zhashx_insert (jsctx->index, &job->id, job) < 0)
+    if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
+        errno = EEXIST;
         goto done;
+    }
 
     if (job_insert_list (jsctx, job, job->state) < 0)
         goto done;
 
     rc = 1;
 done:
-    if (rc < 0)
+    if (rc == 0)
         job_destroy (job);
     flux_future_destroy (f1);
     flux_future_destroy (f2);
@@ -835,15 +840,15 @@ static int job_update_eventlog_seq (struct job_state_ctx *jsctx,
         return 0;
     if (latest_eventlog_seq <= job->eventlog_seq) {
         flux_log (jsctx->h, LOG_INFO,
-                  "%s: job %ju duplicate event (last = %d, latest = %d)",
-                  __FUNCTION__, (uintmax_t)job->id,
+                  "%s: job %s duplicate event (last = %d, latest = %d)",
+                  __FUNCTION__, idf58 (job->id),
                   job->eventlog_seq, latest_eventlog_seq);
         return 1;
     }
     if (latest_eventlog_seq > (job->eventlog_seq + 1))
         flux_log (jsctx->h, LOG_INFO,
-                  "%s: job %ju missed event (last = %d, latest = %d)",
-                  __FUNCTION__, (uintmax_t)job->id,
+                  "%s: job %s missed event (last = %d, latest = %d)",
+                  __FUNCTION__, idf58 (job->id),
                   job->eventlog_seq, latest_eventlog_seq);
     job->eventlog_seq = latest_eventlog_seq;
     return 0;
@@ -908,8 +913,8 @@ static int submit_context_parse (flux_t *h,
                         "urgency", &urgency,
                         "userid", &userid,
                         "version", &version) < 0) {
-        flux_log (h, LOG_ERR, "%s: submit context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)job->id);
+        flux_log (h, LOG_ERR, "%s: submit context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -932,7 +937,7 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
             return -1;
         if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
             job_destroy (job);
-            errno = ENOMEM;
+            errno = EEXIST;
             return -1;
         }
         /* job always starts off on processing list */
@@ -959,8 +964,8 @@ static int priority_context_parse (flux_t *h,
         || json_unpack (context,
                         "{ s:I }",
                         "priority", (json_int_t *)&job->priority) < 0) {
-        flux_log (h, LOG_ERR, "%s: priority context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)job->id);
+        flux_log (h, LOG_ERR, "%s: priority context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -999,8 +1004,8 @@ static int finish_context_parse (flux_t *h,
         || json_unpack (context,
                         "{ s:i }",
                         "status", &job->wait_status) < 0) {
-        flux_log (h, LOG_ERR, "%s: finish context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)job->id);
+        flux_log (h, LOG_ERR, "%s: finish context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -1041,8 +1046,8 @@ static int urgency_context_parse (flux_t *h,
         || json_unpack (context, "{ s:i }", "urgency", &urgency) < 0
         || (urgency < FLUX_JOB_URGENCY_MIN
             || urgency > FLUX_JOB_URGENCY_MAX)) {
-        flux_log (h, LOG_ERR, "%s: urgency context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)job->id);
+        flux_log (h, LOG_ERR, "%s: urgency context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -1069,12 +1074,12 @@ static int exception_context_parse (flux_t *h,
 
     if (!context
         || json_unpack (context,
-                        "{s:s s:i s?:s}",
+                        "{s:s s:i s?s}",
                         "type", &type,
                         "severity", &severity,
                         "note", &note) < 0) {
-        flux_log (h, LOG_ERR, "%s: exception context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)job->id);
+        flux_log (h, LOG_ERR, "%s: exception context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -1102,8 +1107,8 @@ static int dependency_add (struct job *job,
         && errno != EEXIST)
         /*  Log non-EEXIST errors, but it is not fatal */
         flux_log_error (job->h,
-                        "job %ju: dependency-add",
-                         (uintmax_t) job->id);
+                        "job %s: dependency-add",
+                         idf58 (job->id));
     return 0;
 }
 
@@ -1115,8 +1120,8 @@ static int dependency_remove (struct job *job,
         /*  No matching dependency is non-fatal error */
         flux_log (job->h,
                   LOG_DEBUG,
-                  "job %ju: dependency-remove '%s' not found",
-                  (uintmax_t) job->id,
+                  "job %s: dependency-remove '%s' not found",
+                  idf58 (job->id),
                   description);
         rc = 0;
     }
@@ -1136,21 +1141,21 @@ static int dependency_context_parse (flux_t *h,
                         "{s:s}",
                         "description", &description) < 0) {
         flux_log (h, LOG_ERR,
-                  "job %ju: dependency-%s context invalid",
-                  (uintmax_t) job->id,
+                  "job %s: dependency-%s context invalid",
+                  idf58 (job->id),
                   cmd);
         errno = EPROTO;
         return -1;
     }
 
-    if (strcmp (cmd, "add") == 0)
+    if (streq (cmd, "add"))
         rc = dependency_add (job, description);
-    else if (strcmp (cmd, "remove") == 0)
+    else if (streq (cmd, "remove"))
         rc = dependency_remove (job, description);
     else {
         flux_log (h, LOG_ERR,
-                  "job %ju: invalid dependency event: dependency-%s",
-                  (uintmax_t) job->id,
+                  "job %s: invalid dependency event: dependency-%s",
+                  idf58 (job->id),
                   cmd);
         return -1;
     }
@@ -1162,7 +1167,7 @@ static int memo_update (flux_t *h,
                         json_t *o)
 {
     if (!o) {
-        flux_log (h, LOG_ERR, "%ju: invalid memo context", (uintmax_t) job->id);
+        flux_log (h, LOG_ERR, "%s: invalid memo context", idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -1210,8 +1215,8 @@ static int journal_annotations_event (struct job_state_ctx *jsctx,
     if (!context
         || json_unpack (context, "{ s:o }", "annotations", &annotations) < 0) {
         flux_log (jsctx->h, LOG_ERR,
-                  "%s: annotations event context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)job->id);
+                  "%s: annotations event context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
         errno = EPROTO;
         return -1;
     }
@@ -1265,7 +1270,7 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
      */
     if ((job = zhashx_lookup (jsctx->index, &id))
          && (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1
-             && strcmp (name, "memo") != 0))
+             && !streq (name, "memo")))
             return 0;
 
     /* The "submit" event is now posted before the job transitions out of NEW
@@ -1273,7 +1278,7 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
      * submission failed and the job is removed from the KVS.  Drop the
      * nascent job info.
      */
-    if (job && !strcmp (name, "invalidate")) {
+    if (job && streq (name, "invalidate")) {
         if (job->list_handle) {
             zlistx_detach (jsctx->processing, job->list_handle);
             job->list_handle = NULL;
@@ -1292,16 +1297,16 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
      *  No need to proceed unless this is the first event (submit),
      *   but log an error since this is an unexpected condition.
      */
-    if (!job && strcmp (name, "submit") != 0) {
+    if (!job && !streq (name, "submit")) {
         flux_log (jsctx->h,
                   LOG_ERR,
-                  "event %s: job %ju not in hash",
+                  "event %s: job %s not in hash",
                   name,
-                  (uintmax_t) id);
+                  idf58 (id));
         return 0;
     }
 
-    if (!strcmp (name, "submit")) {
+    if (streq (name, "submit")) {
         if (journal_submit_event (jsctx,
                                   job,
                                   id,
@@ -1310,28 +1315,28 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
                                   context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "validate")) {
+    else if (streq (name, "validate")) {
         if (journal_advance_job (jsctx,
                                  job,
                                  FLUX_JOB_STATE_DEPEND,
                                  timestamp) < 0)
             return -1;
     }
-    else if (!strcmp (name, "depend")) {
+    else if (streq (name, "depend")) {
         if (journal_advance_job (jsctx,
                                  job,
                                  FLUX_JOB_STATE_PRIORITY,
                                  timestamp) < 0)
             return -1;
     }
-    else if (!strcmp (name, "priority")) {
+    else if (streq (name, "priority")) {
         if (journal_priority_event (jsctx,
                                     job,
                                     timestamp,
                                     context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "alloc")) {
+    else if (streq (name, "alloc")) {
         /* alloc event contains annotations, but we only update
          * annotations via "annotations" events */
         if (journal_advance_job (jsctx,
@@ -1340,48 +1345,48 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
                                  timestamp) < 0)
             return -1;
     }
-    else if (!strcmp (name, "finish")) {
+    else if (streq (name, "finish")) {
         if (journal_finish_event (jsctx,
                                   job,
                                   timestamp,
                                   context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "clean")) {
+    else if (streq (name, "clean")) {
         if (journal_advance_job (jsctx,
                                  job,
                                  FLUX_JOB_STATE_INACTIVE,
                                  timestamp) < 0)
             return -1;
     }
-    else if (!strcmp (name, "urgency")) {
+    else if (streq (name, "urgency")) {
         if (journal_urgency_event (jsctx,
                                    job,
                                    context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "exception")) {
+    else if (streq (name, "exception")) {
         if (journal_exception_event (jsctx,
                                      job,
                                      timestamp,
                                      context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "annotations")) {
+    else if (streq (name, "annotations")) {
         if (journal_annotations_event (jsctx,
                                        job,
                                        context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "memo")) {
+    else if (streq (name, "memo")) {
         if (memo_update (jsctx->h, job, context) < 0)
             return -1;
     }
-    else if (!strncmp (name, "dependency-", 11)) {
+    else if (strstarts (name, "dependency-")) {
         if (journal_dependency_event (jsctx, job, name+11, context) < 0)
             return -1;
     }
-    else if (!strcmp (name, "flux-restart")) {
+    else if (streq (name, "flux-restart")) {
         /* Presently, job-list depends on job-manager.events-journal
          * service.  So if job-manager reloads, job-list must be
          * reloaded, making the probability of reaching this

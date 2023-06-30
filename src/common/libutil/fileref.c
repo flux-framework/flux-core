@@ -57,8 +57,10 @@ static int blobvec_append (json_t *blobvec,
 
 static bool file_has_no_data (int fd)
 {
+#ifdef SEEK_DATA
     if (lseek (fd, 0, SEEK_DATA) == (off_t)-1 && errno == ENXIO)
         return true;
+#endif
     return false;
 }
 
@@ -83,19 +85,26 @@ static json_t *blobvec_create (int fd,
         goto error;
     }
     while (offset < size) {
+#ifdef SEEK_DATA
         // N.B. fails with ENXIO if there is no more data
         if ((offset = lseek (fd, offset, SEEK_DATA)) == (off_t)-1) {
             if (errno == ENXIO)
                 break;
             goto error;
         }
+#endif
         if (offset < size) {
             off_t notdata;
             int blobsize;
 
+#ifdef SEEK_HOLE
             // N.B. returns size if there are no more holes
             if ((notdata = lseek (fd, offset, SEEK_HOLE)) == (off_t)-1)
                 goto error;
+#else
+            notdata = size;
+#endif /* SEEK_HOLE */
+
             blobsize = notdata - offset;
             if (blobsize > chunksize)
                 blobsize = chunksize;
@@ -274,7 +283,7 @@ static json_t *fileref_create_directory (const char *path,
                          "mtime", (json_int_t)sb->st_mtime,
                          "ctime", (json_int_t)sb->st_ctime,
                          "mode", sb->st_mode))) {
-        errprintf (error, "%s: error packing directry file object", path);
+        errprintf (error, "%s: error packing directory file object", path);
         errno = ENOMEM;
         return NULL;
     }

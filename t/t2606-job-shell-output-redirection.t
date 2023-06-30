@@ -164,6 +164,20 @@ test_expect_success 'flux-shell: run 1-task echo job (mustache id stdout & stder
         grep stdout:baz out${id} &&
         grep stderr:baz out${id}
 '
+test_expect_success 'flux-shell: run 1-task echo job (mustache job name)' '
+	id=$(flux submit --wait -n1 --job-name=thisname \
+	     --output="out.{{name}}" \
+             ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
+	grep stdout:baz out.thisname &&
+	grep stderr:baz out.thisname
+'
+test_expect_success 'flux-shell: run 1-task echo job (mustache job name)' '
+	id=$(flux submit --wait -n1 \
+	     --output="out.{{name}}" \
+             ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
+	grep stdout:baz out.test_echo &&
+	grep stderr:baz out.test_echo
+'
 
 test_expect_success 'flux-shell: bad mustache template still writes output' '
         id=$(flux submit -n1 \
@@ -333,5 +347,16 @@ test_expect_success 'job-shell: shell errors are captured in output file' '
 test_expect_success 'job-shell: shell errors are captured in error file' '
 	test_expect_code 127  flux run --error=test.err nosuchcommand &&
 	grep "nosuchcommand: No such file or directory" test.err
+'
+test_expect_success LONGTEST 'job-shell: output to kvs is truncated at 10MB' '
+	dd if=/dev/urandom bs=10240 count=800 | base64 --wrap 79 >expected &&
+	flux run cat expected >output 2>truncate.error &&
+	test_debug "cat truncate.error" &&
+	grep "stdout.*truncated" truncate.error
+'
+test_expect_success LONGTEST 'job-shell: stderr to kvs is truncated at 10MB' '
+	dd if=/dev/urandom bs=10240 count=800 | base64 --wrap 79 >expected &&
+	flux run sh -c "cat expected >&2"  >truncate2.error 2>&1 &&
+	grep "stderr.*truncated" truncate2.error
 '
 test_done

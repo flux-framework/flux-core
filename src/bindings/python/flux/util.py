@@ -9,6 +9,7 @@
 ###############################################################
 
 import argparse
+import base64
 import copy
 import errno
 import glob
@@ -19,6 +20,7 @@ import os
 import re
 import shutil
 import signal
+import stat
 import sys
 import threading
 import traceback
@@ -30,8 +32,10 @@ from typing import Mapping
 
 import yaml
 
+# tomllib added to standard library in Python 3.11
+# flux-core minimum is Python 3.6.
 try:
-    import tomllib
+    import tomllib  # novermin
 except ModuleNotFoundError:
     from flux.utils import tomli as tomllib
 
@@ -144,7 +148,7 @@ def help_formatter(argwidth=40):
             optstring = ", ".join(opts)
 
             #  If only a long option is supported, then prefix with
-            #   whitepsace by the width of a short option so that all
+            #   whitespace by the width of a short option so that all
             #   long opts start in the same column:
             if len(opts) == 1 and len(opts[0]) > 2:
                 optstring = "    " + opts[0]
@@ -310,18 +314,30 @@ class UtilDatetime(datetime):
     """
 
     def __format__(self, fmt):
-        # The string "::" is used to split the strftime() fromat from
+        # The string "::" is used to split the strftime() format from
         # any Python format spec:
-        vals = fmt.split("::", 1)
+        timefmt, *spec = fmt.split("::", 1)
 
-        # Call strftime() to get the formatted datetime as a string
-        result = self.strftime(vals[0])
+        if self == datetime.fromtimestamp(0.0):
+            result = ""
+        else:
+            # Call strftime() to get the formatted datetime as a string
+            result = self.strftime(timefmt or "%FT%T")
+
+        spec = spec[0] if spec else ""
+
+        # Handling of the 'h' suffix on spec is required here, since the
+        # UtilDatetime format() is called _after_ UtilFormatter.format_field()
+        # (where this option is handled for other types)
+        if spec.endswith("h"):
+            if not result:
+                result = "-"
+            spec = spec[:-1] + "s"
 
         # If there was a format spec, apply it here:
-        try:
-            return f"{{0:{vals[1]}}}".format(result)
-        except IndexError:
-            return result
+        if spec:
+            return f"{{0:{spec}}}".format(result)
+        return result
 
 
 def fsd(secs):
@@ -344,6 +360,12 @@ def fsd(secs):
     else:
         strtmp = "%.4gd" % (secs / (60.0 * 60.0 * 24.0))
     return strtmp
+
+
+def empty_outputs():
+    localepoch = datetime.fromtimestamp(0.0).strftime("%FT%T")
+    empty = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00", localepoch)
+    return empty
 
 
 class UtilFormatter(Formatter):
@@ -421,8 +443,11 @@ class UtilFormatter(Formatter):
             denote_truncation = True
             spec = spec[:-1]
 
-        if spec.endswith("h"):
-            basecases = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00")
+        # Note: handling of the 'h' suffix for UtilDatetime objects
+        # must be deferred to the UtilDatetetime format() method, since
+        # that method will be called after this one:
+        if spec.endswith("h") and not isinstance(value, UtilDatetime):
+            basecases = empty_outputs()
             value = "-" if str(value) in basecases else str(value)
             spec = spec[:-1] + "s"
         retval = super().format_field(value, spec)
@@ -621,7 +646,7 @@ class OutputFormat:
 
         #  Iterate over all items, rebuilding lst each time to contain
         #  only those fields that resulted in non-"empty" strings:
-        empty = ("", "0", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00")
+        empty = empty_outputs()
         for item in items:
             lst = [x for x in lst if formatter.format(x["fmt"], item) in empty]
 
@@ -631,14 +656,14 @@ class OutputFormat:
                 break
 
         #  Remove any entries that were empty from self.format_list
-        #  (use index field of lst to remove by postition in self.format_list)
+        #  (use index field of lst to remove by position in self.format_list)
         format_list = [
             x
             for i, x in enumerate(self.format_list)
             if i not in [x["index"] for x in lst]
         ]
 
-        #  Remove "?:" from remaining entries so they disappear in ouput.
+        #  Remove "?:" from remaining entries so they disappear in output.
         for entry in format_list:
             if entry[0].endswith("?:"):
                 entry[0] = entry[0][:-2]
@@ -673,11 +698,11 @@ class OutputFormat:
         if not no_header:
             print(formatter.header())
         for item in items:
-            if callable(pre):
-                pre(item)
             line = formatter.format(item)
             if not line:
                 continue
+            if callable(pre):
+                pre(item)
             try:
                 print(line)
             except UnicodeEncodeError:
@@ -962,6 +987,23 @@ def dict_merge(src, new):
     return src
 
 
+def xdg_searchpath(subdir=""):
+    """
+    Build standard Flux config search path based on XDG specification
+    """
+    #  Start with XDG_CONFIG_HOME (or ~/.config) since it is the
+    #  highest precedence:
+    confdirs = [os.getenv("XDG_CONFIG_HOME") or f"{Path.home()}/.config"]
+
+    #  Append XDG_CONFIG_DIRS as colon separated path (or /etc/xdg)
+    #  Note: colon separated paths are in order of precedence.
+    confdirs += (os.getenv("XDG_CONFIG_DIRS") or "/etc/xdg").split(":")
+
+    #  Append "/flux" (with optional subdir) to all members of
+    #  confdirs to build searchpath:
+    return [Path(directory, "flux", subdir) for directory in confdirs]
+
+
 class UtilConfig:
     """
     Very simple class for loading hierarchical configuration for Flux
@@ -974,7 +1016,10 @@ class UtilConfig:
     in glob(3) order.
 
     Args:
-        name: name of utility, used as the stem of config file to load
+        name: config name, used as the stem of config file to load
+              this is typically the name of the tool
+        toolname (optional): actual name of the tool/utility if "name" is
+                             different.  used in environment variable lookup.
         subcommand (optional): name of subcommand. Used as name of subtable
                                in configuration to use.
         initial_dict: Set of default values (optional)
@@ -989,8 +1034,9 @@ class UtilConfig:
 
     builtin_formats = {}
 
-    def __init__(self, name, subcommand=None, initial_dict=None):
+    def __init__(self, name, toolname=None, subcommand=None, initial_dict=None):
         self.name = name
+        self.toolname = toolname
         self.dict = {}
         if initial_dict:
             self.dict = copy.deepcopy(initial_dict)
@@ -1003,17 +1049,7 @@ class UtilConfig:
         #  specification. Later this will be reversed since we want
         #  to traverse the paths in _reverse_ precedence order in this
         #  implementation.
-        #
-        #  Start with XDG_CONFIG_HOME (or ~/.config) since it is the
-        #  highest precedence:
-        confdirs = [os.getenv("XDG_CONFIG_HOME") or f"{Path.home()}/.config"]
-
-        #  Append XDG_CONFIG_DIRS as colon separated path (or /etc/xdg)
-        #  Note: colon separated paths are in order of precedence.
-        confdirs += (os.getenv("XDG_CONFIG_DIRS") or "/etc/xdg").split(":")
-
-        #  Append "/flux" to all members of confdirs to build searchpath:
-        self.searchpath = [Path(directory, "flux") for directory in confdirs]
+        self.searchpath = xdg_searchpath()
 
         #  Reorder searchpath into reverse precedence order
         self.searchpath.reverse()
@@ -1037,7 +1073,7 @@ class UtilConfig:
                     continue
 
                 try:
-                    with open(filepath) as ofile:
+                    with open(filepath, "rb") as ofile:
                         conf = self.extension_handlers[ppath.suffix](ofile)
                 except (
                     tomllib.TOMLDecodeError,
@@ -1104,6 +1140,16 @@ class UtilConfig:
         subclasses may define it to implement higher level validation.
         """
 
+    def _default_env_name(self):
+        """
+        Get tool default environment variable (name upper case, s/-/_/g)
+        """
+        name = self.toolname if self.toolname else self.name
+        prefix = name.upper().replace("-", "_")
+        if self.subtable:
+            prefix += "_" + self.subtable.upper().replace("-", "_")
+        return prefix + "_FORMAT_DEFAULT"
+
     def get_format_string(self, format_name):
         """
         Convenience function to fetch a format string from the current
@@ -1144,6 +1190,16 @@ class UtilConfig:
                 print(f"description = \"{entry['description']}\"")
             print(f"format = \"{entry['format']}\"")
             sys.exit(0)
+        elif format_name == "default":
+            # Default can be overridden by environment variable
+            try:
+                format_name = os.environ[self._default_env_name()]
+                if "{" in format_name:
+                    return format_name
+            except KeyError:
+                # no environment var, fallthrough
+                pass
+
         try:
             return formats[format_name]["format"]
         except KeyError:
@@ -1151,3 +1207,47 @@ class UtilConfig:
 
     def __getattr__(self, attr):
         return self.config[attr]
+
+
+class Fileref(dict):
+    """
+    Construct a RFC 37 data file object from a data parameter and optional
+    permissions and encoding. ``Fileref`` is a subclass of ``dict`` so it
+    may be used in place of a dict and is directly serializable to JSON.
+
+    If ``data`` is a dict, then a file object with no encoding is created
+    and the dict is stored in ``data`` for eventual encoding as JSON
+    content. Otherwise, if ``encoding`` is set, then data is presumed to
+    already be encoded and is stored verbatim.  If data is not a dict,
+    and encoding is not set, then data is assumed to be the path to file
+    in the filesystem, in which case the encoding will be 'utf-8' if the
+    file contents can be encoded as such, otherwise 'base64'.
+
+    Args:
+        data (dict, str, bytes): File data or path as explained above.
+        perms: File permissions (default 0600 octal)
+        encoding: Explicit encoding if `data` is not a dict or filename.
+    """
+
+    def __init__(self, data, perms=0o0600, encoding=None):
+        ref = {"mode": perms | stat.S_IFREG}
+        if isinstance(data, dict):
+            ref["data"] = data
+        elif encoding is not None:
+            if encoding not in ("base64", "utf-8"):
+                raise ValueError("invalid encoding: {encoding}")
+            ref["data"] = data
+            ref["encoding"] = encoding
+        else:
+            st = os.stat(data)
+            ref["size"] = st.st_size
+            ref["mode"] = st.st_mode
+            with open(data, "rb") as infp:
+                try:
+                    ref["data"] = infp.read().decode("utf-8")
+                    ref["encoding"] = "utf-8"
+                except UnicodeError:
+                    infp.seek(0)
+                    ref["data"] = base64.b64encode(infp.read()).decode("utf-8")
+                    ref["encoding"] = "base64"
+        super().__init__(**ref)

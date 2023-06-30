@@ -1,6 +1,9 @@
 #!/bin/sh
 #
 
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
+
 test_description='Test config file overlay bootstrap'
 
 . `dirname $0`/sharness.sh
@@ -14,6 +17,11 @@ if flux broker ${ARGS} flux getattr tbon.tcp_user_timeout >/dev/null 2>&1; then
 	test_set_prereq MAXRT
 else
 	test_set_prereq NOMAXRT
+fi
+if flux broker ${ARGS} flux getattr tbon.connect_timeout >/dev/null 2>&1; then
+	test_set_prereq CONNTO
+else
+	test_set_prereq NOCONNTO
 fi
 
 #
@@ -80,7 +88,7 @@ test_expect_success 'broker fails with invalid TOML file' '
 #
 # [bootstrap] tests
 #
-test_expect_success 'generate curve certficate for configuration' '
+test_expect_success 'generate curve certificate for configuration' '
 	flux keygen testcert
 '
 
@@ -253,6 +261,43 @@ test_expect_success 'start size=3 instance with ipc:// and custom topology' '
 		flux getattr tbon.maxlevel >conf8a.out &&
 	echo 2 >conf8a.exp &&
 	test_cmp conf8a.exp conf8a.out
+'
+
+waitgrep() {
+	local pattern=$1
+	local file=$2
+	local iter=$3
+	while test $iter -gt 0; do
+		grep "$pattern" $file 2>/dev/null && return 0
+		sleep 0.3
+		iter=$(($iter-1))
+	done
+	return 1
+}
+
+# RFC 2606 reserves the .invalid domain for testing
+test_expect_success NO_CHAIN_LINT 'a warning is printed when upstream URI has unknown host' '
+	mkdir conf8b &&
+	cat <<-EOT >conf8b/bootstrap.toml &&
+	[bootstrap]
+	curve_cert = "testcert"
+	[[bootstrap.hosts]]
+	host = "fake0"
+	connect = "tcp://foo.invalid:1234"
+	[[bootstrap.hosts]]
+	host = "fake1"
+	EOT
+	FLUX_FAKE_HOSTNAME=fake1 \
+		flux broker -vv -Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		--config-path=conf8b 2>warn.err &
+	echo $! >warn.pid &&
+	waitgrep "unable to resolve upstream peer" warn.err 30
+'
+# In case warn.pid actually refers to a libtool wrapper, try pkill(1) -P
+# first to kill its children, then kill(1).  See flux-framework/flux-core#5275.
+test_expect_success NO_CHAIN_LINT 'clean up broker from previous test' '
+	warnpid=$(cat warn.pid) &&
+	pkill -15 -P $warnpid || kill -15 $warnpid
 '
 
 getport() {
@@ -525,6 +570,70 @@ test_expect_success 'tbon.topo is custom when bootstrap is configured' '
 		flux getattr tbon.topo >topo4.out &&
 	test_cmp topo4.exp topo4.out
 '
-
+test_expect_success CONNTO 'tbon.connect_timeout is 30s by default' '
+	cat <<-EOT >connto.exp &&
+	30s
+	EOT
+	flux broker ${ARGS} \
+		flux getattr tbon.connect_timeout >connto.out &&
+	test_cmp connto.exp connto.out
+'
+test_expect_success CONNTO 'tbon.connect_timeout can be configured' '
+	mkdir conf26 &&
+	cat <<-EOT2 >connto2.exp &&
+	10s
+	EOT2
+	cat <<-EOT >conf26/tbon.toml &&
+	[tbon]
+	connect_timeout = "10s"
+	EOT
+	flux broker ${ARGS} -c conf26 flux getattr tbon.connect_timeout \
+		>connto2.out &&
+	test_cmp connto2.exp connto2.out
+'
+test_expect_success CONNTO 'tbon.connect_timeout command line overrides config' '
+	cat <<-EOT >connto3.exp &&
+	1h
+	EOT
+	flux broker ${ARGS} -c conf26 \
+		-Stbon.connect_timeout=1h \
+		flux getattr tbon.connect_timeout >connto3.out &&
+	test_cmp connto3.exp connto3.out
+'
+test_expect_success NOCONNTO 'tbon.connect_timeout config cannot be set with old zeromq' '
+	mkdir conf27 &&
+	cat <<-EOT >conf27/tbon.toml &&
+	[tbon]
+	connect_timeout = "35s"
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf27 \
+		/bin/true 2>noconnto_conf.err &&
+	grep "unsupported by this zeromq version" noconnto_conf.err
+'
+test_expect_success NOCONNTO 'tbon.connect_timeout attr cannot be set with old zeromq' '
+	test_must_fail flux broker ${ARGS} \
+		-Stbon.connect_timeout=10s \
+		/bin/true 2>noconnto_attr.err &&
+	grep "unsupported by this zeromq version" noconnto_attr.err
+'
+test_expect_success CONNTO 'tbon.connect_timeout config can be set to 0' '
+	mkdir conf28 &&
+	cat <<-EOT2 >connto_0.exp &&
+	0s
+	EOT2
+	cat <<-EOT >conf28/tbon.toml &&
+	[tbon]
+	connect_timeout = "0"
+	EOT
+	flux broker ${ARGS} -c conf28 flux getattr tbon.connect_timeout \
+		>connto_conf_0.out &&
+	test_cmp connto_0.exp connto_conf_0.out
+'
+test_expect_success CONNTO 'tbon.connect_timeout attr can be set to 0' '
+	flux broker ${ARGS} \
+		-Stbon.connect_timeout=0 \
+		flux getattr tbon.connect_timeout >connto_attr_0.out &&
+	test_cmp connto_0.exp connto_attr_0.out
+'
 
 test_done

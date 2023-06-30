@@ -25,6 +25,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libcontent/content.h"
+#include "ccan/str/str.h"
 
 #include "builtin.h"
 
@@ -36,6 +37,7 @@ static int content_flags;
 static time_t restore_timestamp;
 static int blobcount;
 static int keycount;
+static int blob_size_limit;
 
 static void progress (int delta_blob, int delta_keys)
 {
@@ -70,7 +72,7 @@ static struct archive *restore_create (const char *infile)
     if (archive_read_support_format_all (ar) != ARCHIVE_OK
         || archive_read_support_filter_all (ar) != ARCHIVE_OK)
         log_msg_exit ("%s", archive_error_string (ar));
-    if (!strcmp (infile, "-")) {
+    if (streq (infile, "-")) {
         if (archive_read_open_FILE (ar, stdin) != ARCHIVE_OK)
             log_msg_exit ("%s", archive_error_string (ar));
     }
@@ -269,6 +271,17 @@ static json_t *restore_snapshot (struct archive *ar, flux_t *h)
         else if (type == AE_IFREG) {
             int size = archive_entry_size (entry);
 
+            if (blob_size_limit > 0 && size > blob_size_limit) {
+                fprintf (stderr,
+                         "%s%s size %d exceeds %d limit, skipping\n",
+                         (!quiet && !verbose) ? "\r" : "",
+                         path,
+                         size,
+                         blob_size_limit);
+                // N.B.  archive_read_next_header() skips unconsumed data
+                //   automatically so it is safe to "continue" here.
+                continue;
+            }
             if (size > bufsize) {
                 void *newbuf;
                 if (!(newbuf = realloc (buf, size)))
@@ -353,6 +366,7 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
         content_flags |= CONTENT_FLAG_CACHE_BYPASS;
         kvs_checkpoint_flags |= KVS_CHECKPOINT_FLAG_CACHE_BYPASS;
     }
+    blob_size_limit = optparse_get_size_int (p, "size-limit", "0");
 
     h = builtin_get_flux_handle (p);
     ar = restore_create (infile);
@@ -456,6 +470,9 @@ static struct optparse_option restore_opts[] = {
     },
     { .name = "no-cache", .has_arg = 0,
       .usage = "Bypass the broker content cache",
+    },
+    { .name = "size-limit", .has_arg = 1, .arginfo = "SIZE",
+      .usage = "Do not restore blobs greater than SIZE bytes",
     },
     OPTPARSE_TABLE_END
 };

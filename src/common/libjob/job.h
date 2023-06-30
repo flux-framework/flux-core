@@ -76,7 +76,7 @@ typedef enum {
 
 typedef uint64_t flux_jobid_t;
 
-/*  Parse a jobid from NULL-teminated string 's' in any supported encoding.
+/*  Parse a jobid from NULL-terminated string 's' in any supported encoding.
  *  Returns 0 on success, -1 on failure.
  */
 int flux_job_id_parse (const char *s, flux_jobid_t *id);
@@ -136,36 +136,16 @@ int flux_job_wait_get_status (flux_future_t *f,
                               const char **errstr);
 int flux_job_wait_get_id (flux_future_t *f, flux_jobid_t *id);
 
-/* Request a list of jobs.
- * If 'max_entries' > 0, fetch at most that many jobs.
- * 'attrs_json_str' is an encoded JSON array of attribute strings, e.g.
- * ["id","userid",...] that will be returned in response.
- *
- * Process the response payload with flux_rpc_get() or flux_rpc_get_unpack().
- * It is a JSON object containing an array of job objects, e.g.
- * { "jobs":[
- *   {"id":m, "userid":n},
- *   {"id":m, "userid":n},
- *   ...
- * ])
- *
- * states can be set to an OR of any job state or any virtual job
- * states to retrieve jobs of only those states.  Specify 0 for all
- * states.
- */
-flux_future_t *flux_job_list (flux_t *h,
-                              int max_entries,
-                              const char *attrs_json_str,
-                              uint32_t userid,
-                              int states);
+FLUX_DEPRECATED(flux_future_t *flux_job_list (flux_t *,
+                                              int,
+                                              const char *,
+                                              uint32_t,
+                                              int));
 
-/* Similar to flux_job_list(), but retrieve inactive jobs newer
- * than a timestamp.
- */
-flux_future_t *flux_job_list_inactive (flux_t *h,
-                                       int max_entries,
-                                       double since,
-                                       const char *attrs_json_str);
+FLUX_DEPRECATED(flux_future_t *flux_job_list_inactive (flux_t *,
+                                                       int,
+                                                       double,
+                                                       const char *));
 
 /* Similar to flux_job_list(), but retrieve job info for a single
  * job id */
@@ -263,7 +243,7 @@ int flux_job_result_get_unpack (flux_future_t *f, const char *fmt, ...);
  *  no timelimit), then timeleft is set to infinity. If the job is not
  *  in RUN state, or the job has expired, then timeleft is set to 0.
  *
- *  Returns -1 with error string assinged to 'errp' on failure.
+ *  Returns -1 with error string assigned to 'errp' on failure.
  */
 int flux_job_timeleft (flux_t *h, flux_error_t *errp, double *timeleft);
 

@@ -46,6 +46,13 @@ tcp_user_timeout
    ``tbon.tcp_user_timeout`` broker attribute.  See also: :linux:man7:`tcp`,
    TCP_USER_TIMEOUT socket option.  Default: 20s.
 
+connect_timeout
+   (optional) The amount of time (in RFC 23 Flux Standard Duration format)
+   that a broker waits for a :linux:man1:`connect` attempt to its TBON parent
+   to succeed before before retrying.  A value of 0 means use the system
+   default.  The configured value may be overridden by setting the
+   ``tbon.connect_timeout`` broker attribute.  Default: 30s.
+
 zmqdebug
    (optional) Integer value indicating whether ZeroMQ socket debug logging
    should be enabled: 0=disabled, 1=enabled.  Default: ``0``.  This configured

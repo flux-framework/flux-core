@@ -95,7 +95,7 @@ printf " Installing poison flux commands...\n"
 mkdir -p -m 0755 $CMDDIR
 for cmd in \
 	terminus ping keygen logger event module kvs start job queue exec \
-	cron mini jobs reosurce admin jobtap job-validator \
+	cron mini jobs resource admin jobtap job-validator \
 	job-exec-override perilog-run uri pstree; do
 	cat <<-EOF >${CMDDIR}/flux-${cmd}
 	#!/bin/sh

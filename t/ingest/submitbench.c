@@ -29,6 +29,7 @@
 #include "src/common/libutil/fluid.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/read_all.h"
+#include "ccan/str/str.h"
 
 int cmd_submitbench (optparse_t *p, int argc, char **argv);
 
@@ -114,7 +115,7 @@ size_t read_jobspec (const char *name, void **bufp)
     ssize_t size;
     void *buf;
 
-    if (!strcmp (name, "-"))
+    if (streq (name, "-"))
         fd = STDIN_FILENO;
     else {
         if ((fd = open (name, O_RDONLY)) < 0)
@@ -220,7 +221,7 @@ int cmd_submitbench (optparse_t *p, int argc, char **argv)
     if (optparse_hasopt (p, "flags")) {
         const char *name;
         while ((name = optparse_getopt_next (p, "flags"))) {
-            if (!strcmp (name, "debug"))
+            if (streq (name, "debug"))
                 ctx.flags |= FLUX_JOB_DEBUG;
             else
                 log_msg_exit ("unknown flag: %s", name);

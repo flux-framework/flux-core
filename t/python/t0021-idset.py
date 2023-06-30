@@ -10,9 +10,10 @@
 ###############################################################
 
 import unittest
-import subflux
-from pycotap import TAPTestRunner
+
 import flux.idset as idset
+import subflux  # noqa: F401
+from pycotap import TAPTestRunner
 
 
 class TestIDsetMethods(unittest.TestCase):

@@ -14,6 +14,7 @@
 #include <dlfcn.h>
 #include <argz.h>
 #include <czmq.h>
+#undef streq // redefined by ccan/str/str.h below
 #include <uuid.h>
 #include <flux/core.h>
 #include <jansson.h>
@@ -27,7 +28,9 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
-#include "src/common/libutil/digest.h"
+#include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "module.h"
 #include "modservice.h"
@@ -52,9 +55,8 @@ struct broker_module {
     pthread_t t;            /* module thread */
     mod_main_f *main;       /* dlopened mod_main() */
     char *name;
+    char *path;             /* retain the full path as a key for lookup */
     void *dso;              /* reference on dlopened module */
-    int size;               /* size of .so file for lsmod */
-    char *digest;           /* digest of .so file for lsmod */
     size_t argz_len;
     char *argz;
     int status;
@@ -300,7 +302,7 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
      */
     if (p->muted) {
         if (type != FLUX_MSGTYPE_RESPONSE
-            || strcmp (topic, "broker.module-status") != 0) {
+            || !streq (topic, "broker.module-status")) {
             errno = ENOSYS;
             return -1;
         }
@@ -401,9 +403,9 @@ static void module_destroy (module_t *p)
 #ifndef __SANITIZE_ADDRESS__
     dlclose (p->dso);
 #endif
-    free (p->digest);
     free (p->argz);
     free (p->name);
+    free (p->path);
     if (p->rmmod) {
         flux_msg_t *msg;
         while ((msg = zlist_pop (p->rmmod)))
@@ -468,26 +470,6 @@ int module_start (module_t *p)
     rc = 0;
 done:
     return rc;
-}
-
-void module_set_args (module_t *p, int argc, char * const argv[])
-{
-    int e;
-
-    if (p->argz) {
-        free (p->argz);
-        p->argz_len = 0;
-    }
-    if (argv && (e = argz_create (argv, &p->argz, &p->argz_len)) != 0)
-        log_errn_exit (e, "argz_create");
-}
-
-void module_add_arg (module_t *p, const char *arg)
-{
-    int e;
-
-    if ((e = argz_add (&p->argz, &p->argz_len, arg)) != 0)
-        log_errn_exit (e, "argz_add");
 }
 
 void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg)
@@ -564,60 +546,102 @@ flux_msg_t *module_pop_insmod (module_t *p)
     return msg;
 }
 
-module_t *module_add (modhash_t *mh, const char *path)
+static char *module_name_from_path (const char *s)
+{
+    char *path, *name, *cpy;
+    char *cp;
+
+    if (!(path = strdup (s))
+        || !(name = basename (path)))
+        goto error;
+    if ((cp = strstr (name, ".so")))
+        *cp = '\0';
+    if (!(cpy = strdup (name)))
+        goto error;
+    free (path);
+    return cpy;
+error:
+    ERRNO_SAFE_WRAP (free, path);
+    return NULL;
+}
+
+module_t *module_add (modhash_t *mh,
+                      const char *name,
+                      const char *path,
+                      json_t *args,
+                      flux_error_t *error)
 {
     module_t *p;
     void *dso;
     const char **mod_namep;
     mod_main_f *mod_main;
-    size_t size;
     int rc;
 
     dlerror ();
     if (!(dso = dlopen (path, RTLD_NOW | RTLD_GLOBAL | FLUX_DEEPBIND))) {
-        log_msg ("%s", dlerror ());
+        errprintf (error, "%s", dlerror ());
         errno = ENOENT;
         return NULL;
     }
-    mod_main = dlsym (dso, "mod_main");
-    mod_namep = dlsym (dso, "mod_name");
-    if (!mod_main || !mod_namep || !*mod_namep) {
+    if (!(mod_main = dlsym (dso, "mod_main"))) {
+        errprintf (error, "module does not define mod_main()");
         dlclose (dso);
-        errno = ENOENT;
+        errno = EINVAL;
         return NULL;
     }
     if (!(p = calloc (1, sizeof (*p)))) {
-        int saved_errno = errno;
         dlclose (dso);
-        errno = saved_errno;
-        return NULL;
+        goto nomem;
     }
     p->main = mod_main;
     p->dso = dso;
-    if (!(p->name = strdup (*mod_namep)))
-        goto cleanup;
-    if (!(p->digest = digest_file (path, &size)))
-        goto cleanup;
-    p->size = (int)size;
+    if (args) {
+        size_t index;
+        json_t *entry;
+
+        json_array_foreach (args, index, entry) {
+            const char *s = json_string_value (entry);
+            if (s && (argz_add (&p->argz, &p->argz_len, s) != 0))
+                goto nomem;
+        }
+    }
+    if (!(p->path = strdup (path))
+        || !(p->rmmod = zlist_new ())
+        || !(p->subs = zlist_new ()))
+        goto nomem;
+    if (name) {
+        if (!(p->name = strdup (name)))
+            goto nomem;
+    }
+    else {
+        if (!(p->name = module_name_from_path (path)))
+            goto nomem;
+    }
+    /* Handle legacy 'mod_name' symbol - not recommended for new modules
+     * but double check that it's sane if present.
+     */
+    if ((mod_namep = dlsym (p->dso, "mod_name")) && *mod_namep != NULL) {
+        if (!streq (*mod_namep, p->name)) {
+            errprintf (error, "mod_name %s != name %s", *mod_namep, name);
+            errno = EINVAL;
+            goto cleanup;
+        }
+    }
     uuid_generate (p->uuid);
     uuid_unparse (p->uuid, p->uuid_str);
-    if (!(p->rmmod = zlist_new ()))
-        goto nomem;
-    if (!(p->subs = zlist_new ()))
-        goto nomem;
 
     p->modhash = mh;
 
     /* Broker end of PAIR socket is opened here.
      */
     if (!(p->sock = zsock_new_pair (NULL))) {
-        log_err ("zsock_new_pair");
+        errprintf (error, "could not create zsock for %s", p->name);
         goto cleanup;
     }
     zsock_set_unbounded (p->sock);
     zsock_set_linger (p->sock, 5);
     if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0) {
-        log_err ("zsock_bind inproc://%s", module_get_uuid (p));
+        errprintf (error, "zsock_bind inproc://%s", module_get_uuid (p));
         goto cleanup;
     }
     if (!(p->broker_w = zmqutil_watcher_create (
@@ -626,7 +650,7 @@ module_t *module_add (modhash_t *mh, const char *path)
                                         FLUX_POLLIN,
                                         module_cb,
                                         p))) {
-        log_err ("zmqutil_watcher_create");
+        errprintf (error, "could not create %s zsock watcher", p->name);
         goto cleanup;
     }
     /* Set creds for connection.
@@ -634,7 +658,7 @@ module_t *module_add (modhash_t *mh, const char *path)
      * credentials are always those of the instance owner.
      */
     p->cred.userid = getuid ();
-    p->cred.rolemask = FLUX_ROLE_OWNER;
+    p->cred.rolemask = FLUX_ROLE_OWNER | FLUX_ROLE_LOCAL;
 
     /* Update the modhash.
      */
@@ -644,6 +668,7 @@ module_t *module_add (modhash_t *mh, const char *path)
                   (zhash_free_fn *)module_destroy);
     return p;
 nomem:
+    errprintf (error, "out of memory");
     errno = ENOMEM;
 cleanup:
     module_destroy (p);
@@ -720,13 +745,12 @@ json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw)
 
             if (!(svcs  = service_list_byuuid (sw, uuid)))
                 goto nomem;
-            if (!(entry = json_pack ("{s:s s:i s:s s:i s:i s:o}",
+            if (!(entry = json_pack ("{s:s s:s s:i s:i s:o}",
                                      "name", module_get_name (p),
-                                     "size", p->size,
-                                     "digest", p->digest,
-                                      "idle", module_get_idle (p),
-                                      "status", p->status,
-                                      "services", svcs))) {
+                                     "path", p->path,
+                                     "idle", module_get_idle (p),
+                                     "status", p->status,
+                                     "services", svcs))) {
                 json_decref (svcs);
                 goto nomem;
             }
@@ -770,13 +794,14 @@ module_t *module_lookup_byname (modhash_t *mh, const char *name)
     uuid = zlist_first (uuids);
     while (uuid) {
         module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
-        assert (p != NULL);
-        if (!strcmp (module_get_name (p), name)) {
-            result = p;
-            break;
+        if (p) {
+            if (streq (module_get_name (p), name)
+                || streq (p->path, name)) {
+                result = p;
+                break;
+            }
         }
         uuid = zlist_next (uuids);
-        p = NULL;
     }
     zlist_destroy (&uuids);
     return result;
@@ -816,7 +841,7 @@ int module_unsubscribe (modhash_t *mh, const char *uuid, const char *topic)
     }
     s = zlist_first (p->subs);
     while (s) {
-        if (!strcmp (topic, s)) {
+        if (streq (topic, s)) {
             zlist_remove (p->subs, s);
             free (s);
             break;
@@ -833,7 +858,7 @@ static bool match_sub (module_t *p, const char *topic)
     char *s = zlist_first (p->subs);
 
     while (s) {
-        if (!strncmp (topic, s, strlen (s)))
+        if (strstarts (topic, s))
             return true;
         s = zlist_next (p->subs);
     }

@@ -34,6 +34,33 @@ struct entry basic [] = {
     { NULL, NULL, 0, 0 }
 };
 
+struct entry leadingzeros [] = {
+    { "foo00", "myapp", 0, 1234 },
+    { "foo00", "myapp", 1, 1235 },
+    { "foo00", "myapp", 2, 1236 },
+    { "foo00", "myapp", 3, 1237 },
+    { "foo01", "myapp", 4, 4589 },
+    { "foo01", "myapp", 5, 4590 },
+    { "foo01", "myapp", 6, 4591 },
+    { "foo01", "myapp", 7, 4592 },
+    { NULL, NULL, 0, 0 }
+};
+
+struct entry moreleadingzeros [] = {
+    { "foo008", "myapp", 0, 1234 },
+    { "foo008", "myapp", 1, 1235 },
+    { "foo009", "myapp", 2, 2689 },
+    { "foo009", "myapp", 3, 2690 },
+    { "foo010", "myapp", 4, 1236 },
+    { "foo010", "myapp", 5, 1237 },
+    { "foo011", "myapp", 6, 4589 },
+    { "foo011", "myapp", 7, 4590 },
+    { "foo012", "myapp", 8, 8591 },
+    { "foo012", "myapp", 9, 8592 },
+    { NULL, NULL, 0, 0 }
+};
+
+
 struct entry append1 [] = {
     { "foo0", "myapp", 0, 1234 },
     { "foo0", "myapp", 1, 1235 },
@@ -71,16 +98,27 @@ static struct proctable * proctable_test_create (struct entry e[])
     return p;
 }
 
-static void proctable_check (struct proctable *p, struct entry e[])
+static int entry_count (const struct entry *e)
+{
+    int count = 0;
+    while (e->host) {
+        count++;
+        ++e;
+    }
+    return count;
+}
+
+static void proctable_check (struct proctable *p, const struct entry e[])
 {
     MPIR_PROCDESC *table = NULL;
     int size = 0;
+    int expected_size = entry_count (e);
 
     ok ((table = proctable_get_mpir_proctable (p, &size)) != NULL,
         "proctable_get_mpir_proctable");
-    ok (size == 8,
-        "proctable_get_mpir_proctable returned expected size");
-    ok ((size = proctable_get_size (p)) == 8,
+    ok (size == expected_size,
+        "proctable_get_mpir_proctable returned expected size=%d", size);
+    ok ((size = proctable_get_size (p)) == expected_size,
         "proctable is of expected size");
     ok (proctable_first_task (p) == e[0].taskid,
         "proctable_first_task works");
@@ -102,11 +140,11 @@ static void dump_json (json_t *o)
     free (s);
 }
 
-static void test_basic (void)
+static void test_proctable (struct entry entries[])
 {
     json_t *o = NULL;
     struct proctable *p2 = NULL;
-    struct proctable *p = proctable_test_create (basic);
+    struct proctable *p = proctable_test_create (entries);
     if (!p)
         BAIL_OUT ("proctable_test_create failed");
     if (!(o = proctable_to_json (p)))
@@ -115,9 +153,11 @@ static void test_basic (void)
     if (!(p2 = proctable_from_json (o)))
         BAIL_OUT ("proctable_from_json failed");
 
-    proctable_check (p, basic);
-    proctable_check (p2, basic);
+    proctable_check (p, entries);
+    proctable_check (p2, entries);
 
+    proctable_destroy (p);
+    proctable_destroy (p2);
     json_decref (o);
 }
 
@@ -137,7 +177,9 @@ static void test_append (void)
 int main (int argc, char **argv)
 {
     plan (NO_PLAN);
-    test_basic ();
+    test_proctable (basic);
+    test_proctable (leadingzeros);
+    test_proctable (moreleadingzeros);
     test_append ();
     done_testing ();
     return 0;

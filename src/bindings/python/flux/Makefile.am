@@ -6,6 +6,7 @@ nobase_fluxpy_PYTHON = \
 	message.py \
 	constants.py \
 	util.py \
+	compat36.py \
 	future.py \
 	memoized_property.py \
 	debugged.py \
@@ -30,6 +31,7 @@ nobase_fluxpy_PYTHON = \
 	job/kill.py \
 	job/kvs.py \
 	job/list.py \
+	job/kvslookup.py \
 	job/info.py \
 	job/wait.py \
 	job/submit.py \

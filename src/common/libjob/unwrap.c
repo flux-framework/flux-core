@@ -76,12 +76,17 @@ char *unwrap_string (const char *s,
     int64_t userid64;
     int flags = verify ? 0 : FLUX_SIGN_NOVERIFY;
 
-    if (!(sec = flux_security_create (0))
-        || flux_security_configure (sec, NULL) < 0) {
+    if (!(sec = flux_security_create (0))) {
         errprintf (errp,
-                   "failed to initialize security context: %s",
+                   "failed to create security context: %s",
                    strerror (errno));
         return NULL;
+    }
+    if (flux_security_configure (sec, NULL) < 0) {
+        errprintf (errp,
+                   "failed to configure security context: %s",
+                   flux_security_last_error (sec));
+        goto done;
     }
     if (flux_sign_unwrap_anymech (sec,
                                   s,

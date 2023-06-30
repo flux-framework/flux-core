@@ -46,6 +46,7 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "worker.h"
 
@@ -88,7 +89,7 @@ static void worker_cleanup_process (struct worker *w, flux_subprocess_t *p)
 }
 
 /* Subprocess completed.
- * Destroy the subprocess, but don't use w->p since that may be a diferent
+ * Destroy the subprocess, but don't use w->p since that may be a different
  * one, if worker_stop() was followed immediately by worker_start().
  * Remove from w->trash to avoid double-free in worker_destroy()
  */
@@ -172,9 +173,9 @@ static void worker_fulfill_future (struct worker *w, flux_future_t *f, const cha
         errnum = EINVAL;
         goto error;
     }
-    if (json_unpack (o, "{s:i s?:s s?:o}", "errnum", &errnum,
-                                           "errstr", &errstr,
-                                           "data", &data) < 0) {
+    if (json_unpack (o, "{s:i s?s s?o}", "errnum", &errnum,
+                                         "errstr", &errstr,
+                                         "data", &data) < 0) {
         flux_log (w->h, LOG_ERR, "%s: json_unpack '%s' failed", w->name, s);
         errnum = EINVAL;
         goto error;
@@ -242,12 +243,12 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
          * all output complete.
          */
         if (w->p == p &&
-            !strcmp (stream, "stdout") &&
+            streq (stream, "stdout") &&
             worker_queue_depth (w) > 0)
             worker_unexpected_exit (w);
         return;
     }
-    if (!strcmp (stream, "stdout")) {
+    if (streq (stream, "stdout")) {
         flux_future_t *f;
 
         if (!(f = zlist_pop (w->queue))) {
@@ -260,7 +261,7 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
         if (zlist_size (w->queue) == 0)
             worker_inactive (w);
     }
-    else if (!strcmp (stream, "stderr")) {
+    else if (streq (stream, "stderr")) {
         flux_log (w->h, LOG_DEBUG, "%s: %s", w->name, s ? s : "");
     }
 }

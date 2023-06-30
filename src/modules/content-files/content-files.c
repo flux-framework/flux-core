@@ -59,6 +59,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/dirwalk.h"
 #include "src/common/libutil/unlink_recursive.h"
+#include "ccan/str/str.h"
 
 #include "src/common/libcontent/content-util.h"
 
@@ -299,7 +300,8 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-get", checkpoint_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-put", checkpoint_put_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-files.stats-get", stats_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-files.stats-get",
+      stats_get_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -358,9 +360,9 @@ static int parse_args (flux_t *h,
 {
     int i;
     for (i = 0; i < argc; i++) {
-        if (!strcmp (argv[i], "testing"))
+        if (streq (argv[i], "testing"))
             *testing = true;
-        else if (!strcmp (argv[i], "truncate"))
+        else if (streq (argv[i], "truncate"))
             *truncate = true;
         else {
             flux_log (h, LOG_ERR, "Unknown module option: %s", argv[i]);
@@ -413,8 +415,6 @@ done:
     content_files_destroy (ctx);
     return rc;
 }
-
-MOD_NAME ("content-files");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

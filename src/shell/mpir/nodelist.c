@@ -8,6 +8,30 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* nodelist.c - compressed encoding of a list of hostnames
+ *
+ * A nodelist is a pure JSON representation of a list of possibly
+ * repeating hostnames. The implementation takes advantage of the
+ * tendency to place a numeric suffix on hostanmes of large HPC
+ * clusters and uses the rangelist implementation to encode the
+ * suffixes of a common hostname prefix.
+ *
+ * A JSON nodelist is an array of entries (entries are called a
+ * "prefix list" in the code below), where each entry represents
+ *  one or more hosts. Entries can have the following form:
+ *
+ * - a single string represents one hostname
+ * - an array entry has 2 elements:
+ *   1. a common hostname prefix
+ *   2. a rangelist representing the set of suffixes
+ *      (see rangelist.c).
+ *      An empty string (no suffix) is represented as -1.
+ *
+ * For each prefix list the common prefix is combined with the
+ * rangelist-encoded suffixes to form the list of hosts.
+ *
+ */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -19,6 +43,7 @@
 #include <ctype.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "nodelist.h"
 #include "rangelist.h"
@@ -134,6 +159,12 @@ static int hostname_split (char *name, int *suffix)
     int n = len - 1;
     while (n >= 0 && isdigit (name[n]))
         n--;
+    /*  Now advance past leading zeros (not including a final zero)
+     *  These will not be part of the suffix since they can't be represented
+     *  as an integer.
+     */
+    while (name[n+1] == '0' && name[n+2] != '\0')
+        n++;
     if (++n == len)
         return 0;
     *suffix = (int) strtol (name+n, NULL, 10);
@@ -163,7 +194,7 @@ int nodelist_append (struct nodelist *nl, const char *host)
     strcpy (name, host);
     hostname_split (name, &suffix);
 
-    if (pl && strcmp (name, pl->prefix) == 0)
+    if (pl && streq (name, pl->prefix))
         return rangelist_append (pl->suffixes, suffix);
 
     if (!(pl = prefix_list_create (name, suffix))
@@ -178,7 +209,7 @@ int nodelist_append_list_destroy (struct nodelist *nl1, struct nodelist *nl2)
 {
     struct prefix_list *pl1 = zlist_tail (nl1->list);
     struct prefix_list *pl2 = zlist_pop (nl2->list);
-    if (strcmp (pl1->prefix, pl2->prefix) == 0) {
+    if (streq (pl1->prefix, pl2->prefix)) {
         rangelist_append_list (pl1->suffixes, pl2->suffixes);
         prefix_list_destroy (pl2);
         pl2 = zlist_pop (nl2->list);

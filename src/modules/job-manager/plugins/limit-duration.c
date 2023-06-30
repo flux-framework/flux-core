@@ -91,13 +91,9 @@ static double queues_lookup (zhashx_t *queues, const char *name)
     return DURATION_INVALID;
 }
 
-static int queues_insert (zhashx_t *queues, const char *name, double duration)
+static void queues_insert (zhashx_t *queues, const char *name, double duration)
 {
-    if (zhashx_insert (queues, name, &duration) < 0) { // dups duration
-        errno = ENOMEM;
-        return -1;
-    }
-    return 0;
+    (void)zhashx_insert (queues, name, &duration); // dups duration
 }
 
 static void limit_duration_destroy (struct limit_duration *ctx)
@@ -180,10 +176,7 @@ static int queues_parse (zhashx_t **zhp,
                 errprintf (error, "queues.%s.%s", name, e.text);
                 goto error;
             }
-            if (queues_insert (zh, name, duration) < 0) {
-                errprintf (error, "out of memory parsing [queues]");
-                goto error;
-            }
+            queues_insert (zh, name, duration);
         }
     }
     *zhp = zh;

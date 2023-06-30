@@ -20,6 +20,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/read_all.h"
 #include "src/modules/job-list/job_data.h"
+#include "ccan/str/str.h"
 
 struct test_jobspec_corner_case {
     const char *filename;
@@ -27,8 +28,8 @@ struct test_jobspec_corner_case {
 } jobspec_corner_case_tests[] = {
     { TEST_SRCDIR "/jobspec/invalid_json.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/missing_attributes.jobspec", -1 },
-    { TEST_SRCDIR "/jobspec/missing_attributes_system.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/invalid_attributes_system_job.jobspec", -1 },
+    { TEST_SRCDIR "/jobspec/invalid_attributes_system_missing_duration.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/missing_tasks.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/invalid_tasks_array.jobspec", -1 },
     { TEST_SRCDIR "/jobspec/invalid_tasks_missing_command.jobspec", -1 },
@@ -54,6 +55,24 @@ struct test_jobspec_job_name {
 } jobspec_job_name_tests[] = {
     { TEST_SRCDIR "/jobspec/1slot.jobspec", "hostname" },
     { TEST_SRCDIR "/jobspec/job_name_alt.jobspec", "altname" },
+    { NULL, 0 },
+};
+
+struct test_jobspec_cwd {
+    const char *filename;
+    const char *cwd;
+} jobspec_cwd_tests[] = {
+    { TEST_SRCDIR "/jobspec/1slot.jobspec", "/tmp/job" },
+    { TEST_SRCDIR "/jobspec/cwd_not_specified.jobspec", NULL },
+    { NULL, 0 },
+};
+
+struct test_jobspec_queue {
+    const char *filename;
+    const char *queue;
+} jobspec_queue_tests[] = {
+    { TEST_SRCDIR "/jobspec/1slot.jobspec", NULL },
+    { TEST_SRCDIR "/jobspec/queue_specified.jobspec", "batch" },
     { NULL, 0 },
 };
 
@@ -337,9 +356,71 @@ static void test_jobspec_job_name (void)
 
         ret = parse_jobspec (job, filename);
         ok (ret == 0, "job_parse_jobspec parsed %s", filename);
-        ok (strcmp (job_name, job->name) == 0,
+        ok (streq (job_name, job->name),
             "job_parse_jobspec correctly parsed job name %s=%s",
             job_name, job->name);
+
+        job_destroy (job);
+        test++;
+    }
+}
+
+static void test_jobspec_cwd (void)
+{
+    struct test_jobspec_cwd *test;
+
+    test = jobspec_cwd_tests;
+    while (test->filename) {
+        struct job *job = job_create (NULL, FLUX_JOBID_ANY);
+        const char *filename = test->filename;
+        const char *cwd = test->cwd;
+        int ret;
+
+        if (!job)
+            BAIL_OUT ("job_create failed");
+
+        ret = parse_jobspec (job, filename);
+        ok (ret == 0, "job_parse_jobspec parsed %s", filename);
+        if (cwd) {
+            ok (streq (cwd, job->cwd),
+                "job_parse_jobspec correctly parsed job cwd %s=%s",
+                cwd, job->cwd);
+        }
+        else {
+            ok (job->cwd == NULL,
+                "job_parse_jobspec correctly parsed no job cwd");
+        }
+
+        job_destroy (job);
+        test++;
+    }
+}
+
+static void test_jobspec_queue (void)
+{
+    struct test_jobspec_queue *test;
+
+    test = jobspec_queue_tests;
+    while (test->filename) {
+        struct job *job = job_create (NULL, FLUX_JOBID_ANY);
+        const char *filename = test->filename;
+        const char *queue = test->queue;
+        int ret;
+
+        if (!job)
+            BAIL_OUT ("job_create failed");
+
+        ret = parse_jobspec (job, filename);
+        ok (ret == 0, "job_parse_jobspec parsed %s", filename);
+        if (queue) {
+            ok (streq (queue, job->queue),
+                "job_parse_jobspec correctly parsed job queue %s=%s",
+                queue, job->queue);
+        }
+        else {
+            ok (job->queue == NULL,
+                "job_parse_jobspec correctly parsed no job queue");
+        }
 
         job_destroy (job);
         test++;
@@ -409,7 +490,7 @@ static void test_R_ranks (void)
 
         ret = parse_R (job, filename);
         ok (ret == 0, "job_parse_R parsed %s", filename);
-        ok (strcmp (ranks, job->ranks) == 0,
+        ok (streq (ranks, job->ranks),
             "job_parse_jobspec correctly parsed job ranks %s=%s",
             ranks, job->ranks);
 
@@ -434,7 +515,7 @@ static void test_R_nodelist (void)
 
         ret = parse_R (job, filename);
         ok (ret == 0, "job_parse_R parsed %s", filename);
-        ok (strcmp (nodelist, job->nodelist) == 0,
+        ok (streq (nodelist, job->nodelist),
             "job_parse_jobspec correctly parsed job nodelist %s=%s",
             nodelist, job->nodelist);
 
@@ -554,6 +635,8 @@ int main (int argc, char *argv[])
 
     test_jobspec_corner_case ();
     test_jobspec_job_name ();
+    test_jobspec_cwd ();
+    test_jobspec_queue ();
     test_jobspec_duration ();
     test_R_corner_case ();
     test_R_ranks ();

@@ -96,6 +96,11 @@ test_expect_success FLUX_SECURITY \
 	test_debug "cat recurse-all.out"  &&
 	grep $(cat altid): recurse-all.out
 '
+test_expect_success 'flux jobs --json works with recursive jobs' '
+	flux jobs -A --recursive --json > recursive.json &&
+	jq -e ".jobs[] | select(.uri)" < recursive.json &&
+	jq -e ".jobs[] | select(.uri) | .jobs[0].id > 0" < recursive.json
+'
 test_expect_success FLUX_SECURITY 'cancel alternate user job' '
 	flux cancel $(cat altid)
 '

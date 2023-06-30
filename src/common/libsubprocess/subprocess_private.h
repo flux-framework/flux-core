@@ -77,14 +77,13 @@ struct flux_subprocess {
 
     flux_cmd_t *cmd;                /* readonly/o copy of the command     */
 
-    struct aux_item *aux;           /* auxillary data                     */
+    struct aux_item *aux;           /* auxiliary data                     */
 
     zhash_t *channels;              /* hash index by name to channel info */
     int channels_eof_expected;      /* number of eofs to expect */
     int channels_eof_sent;          /* counter to avoid loop checks */
 
     int status;      /* Raw status from waitpid(2), valid if exited       */
-    int exec_failed_errno;  /* Holds errno from exec(2) if exec() failed  */
 
     flux_subprocess_state_t state;
     flux_subprocess_state_t state_reported; /* for on_state_change */
@@ -111,6 +110,7 @@ struct flux_subprocess {
     flux_future_t *f;           /* primary future reactor */
     bool remote_completed;      /* if remote has completed */
     int failed_errno;           /* Holds errno if FAILED state reached */
+    flux_error_t failed_error;  /* Holds detailed message for failed_errno */
     int signal_pending;         /* signal sent while starting */
 };
 

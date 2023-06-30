@@ -17,6 +17,7 @@
 #include "src/common/libpmi/dgetline.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libflux/reactor.h"
+#include "ccan/str/str.h"
 
 #include "src/common/libtap/tap.h"
 
@@ -274,7 +275,7 @@ int main (int argc, char *argv[])
         "PMI_KVS_Get length=-1 fails with PMI_ERR_INVALID_ARG");
 
     result = PMI_KVS_Get (kvsname, "foo", val, vallen_max);
-    ok (result == PMI_SUCCESS && !strcmp (val, "bar"),
+    ok (result == PMI_SUCCESS && streq (val, "bar"),
         "PMI_KVS_Get works and got expected value");
 
     /* clique
@@ -339,49 +340,49 @@ int main (int argc, char *argv[])
 
     result = PMI_KVS_Create (buf, sizeof (buf));
     ok (result == PMI_FAIL,
-        "PMI_KVS_Create (unimplemented) resturns PMI_FAIL");
+        "PMI_KVS_Create (unimplemented) returns PMI_FAIL");
 
     result = PMI_KVS_Destroy ("foo");
     ok (result == PMI_FAIL,
-        "PMI_KVS_Destroy (unimplemented) resturns PMI_FAIL");
+        "PMI_KVS_Destroy (unimplemented) returns PMI_FAIL");
 
     result = PMI_KVS_Iter_first ("foo", buf, sizeof (buf), buf, sizeof (buf));
     ok (result == PMI_FAIL,
-        "PMI_KVS_Iter_first (unimplemented) resturns PMI_FAIL");
+        "PMI_KVS_Iter_first (unimplemented) returns PMI_FAIL");
 
     result = PMI_KVS_Iter_next ("foo", buf, sizeof (buf), buf, sizeof (buf));
     ok (result == PMI_FAIL,
-        "PMI_KVS_Iter_next (unimplemented) resturns PMI_FAIL");
+        "PMI_KVS_Iter_next (unimplemented) returns PMI_FAIL");
 
     result = PMI_Parse_option (0, NULL, NULL, NULL, NULL);
     ok (result == PMI_FAIL,
-        "PMI_Parse_option (unimplemented) resturns PMI_FAIL");
+        "PMI_Parse_option (unimplemented) returns PMI_FAIL");
 
     result = PMI_Args_to_keyval (NULL, NULL, NULL, NULL);
     ok (result == PMI_FAIL,
-        "PMI_Args_to_keyval (unimplemented) resturns PMI_FAIL");
+        "PMI_Args_to_keyval (unimplemented) returns PMI_FAIL");
 
     result = PMI_Free_keyvals (NULL, 0);
     ok (result == PMI_FAIL,
-        "PMI_Free_keyvals (unimplemented) resturns PMI_FAIL");
+        "PMI_Free_keyvals (unimplemented) returns PMI_FAIL");
 
     result = PMI_Get_options (NULL, NULL);
     ok (result == PMI_FAIL,
-        "PMI_Get_options (unimplemented) resturns PMI_FAIL");
+        "PMI_Get_options (unimplemented) returns PMI_FAIL");
 
 
     /* aliases
      */
     result = PMI_Get_id_length_max (&n);
     ok (result == PMI_SUCCESS && n == kvsname_max,
-        "PMI_Get_id_lenght_max works and set idlen to kvsname_max");
+        "PMI_Get_id_length_max works and set idlen to kvsname_max");
 
     result = PMI_Get_id (buf, sizeof (buf));
-    ok (result == PMI_SUCCESS && !strcmp (buf, kvsname),
+    ok (result == PMI_SUCCESS && streq (buf, kvsname),
         "PMI_Get_id works and set buf to kvsname");
 
     result = PMI_Get_kvs_domain_id (buf, sizeof (buf));
-    ok (result == PMI_SUCCESS && !strcmp (buf, kvsname),
+    ok (result == PMI_SUCCESS && streq (buf, kvsname),
         "PMI_Get_kvs_domain_id works and set buf to kvsname");
 
     /* finalize

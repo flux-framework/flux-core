@@ -26,6 +26,21 @@ for input in ${INPUTDIR}/*.json; do
     '
 done
 
+#  Ensure all tested inputs can also work with --include
+#  We simply restrict to rank 0 and then ensure {ranks} returns only 0
+for input in ${INPUTDIR}/*.json; do
+    name=$(basename ${input%%.json})
+    test_expect_success "flux-resource status input --include check: $name" '
+        base=${input%%.json} &&
+        name=$(basename $base)-i &&
+        flux resource status -o "{ranks} {nodelist}" --include=0 \
+            --from-stdin < $input > $name.output 2>&1 &&
+        test_debug "cat $name.output" &&
+	grep "^0[^,-]" $name.output
+    '
+done
+
+
 test_expect_success 'flux-resource status: header included with all formats' '
 	cat <<-EOF >headers.expected &&
 	state==STATE
@@ -40,6 +55,18 @@ test_expect_success 'flux-resource status: header included with all formats' '
         flux resource status --from-stdin --format="$(cat headers.fmt)" \
             > headers.output < /dev/null &&
         test_cmp headers.expected headers.output
+'
+
+test_expect_success 'flux resource status: FLUX_RESOURCE_STATUS_FORMAT_DEFAULT works' '
+	FLUX_RESOURCE_STATUS_FORMAT_DEFAULT="{nodelist} {nodelist}" \
+		flux resource status --from-stdin > default_override.out < /dev/null &&
+	grep "NODELIST NODELIST" default_override.out
+'
+
+test_expect_success 'flux resource status: FLUX_RESOURCE_STATUS_FORMAT_DEFAULT works w/ named format' '
+	FLUX_RESOURCE_STATUS_FORMAT_DEFAULT=long \
+		flux resource status --from-stdin > default_override_named.out < /dev/null &&
+	grep "REASON" default_override_named.out
 '
 
 test_expect_success 'flux-resource status: --no-header works' '
@@ -179,5 +206,25 @@ test_expect_success 'flux-resource status: lines are combined based on format' '
 	2020-12-09    drained 2
 	EOF
 	test_cmp ts-detailed2.expected ts-detailed2.out
+'
+test_expect_success 'flux-resource status: --include works with ranks' '
+	INPUT=${INPUTDIR}/drain.json &&
+	flux resource status --include=1,3 --from-stdin \
+		-no "{nnodes}" <$INPUT >drain-include.out &&
+	test_debug "cat drain-include.out" &&
+	test "$(cat drain-include.out)" = "2"
+'
+test_expect_success 'flux-resource status: --include works with hostnames' '
+	INPUT=${INPUTDIR}/drain.json &&
+	flux resource status --include=foo[1,3] --from-stdin \
+		-no "{nodelist}" <$INPUT >drain-include-host.out &&
+	test_debug "cat drain-include-host.out" &&
+	test "$(cat drain-include-host.out)" = "foo[1,3]"
+'
+test_expect_success 'flux-resource status: --include works with invalid host' '
+	INPUT=${INPUTDIR}/drain.json &&
+	flux resource status --include=foo7 --from-stdin \
+		-no "{nodelist}" <$INPUT >drain-empty.out 2>&1 &&
+	test_must_be_empty drain-fail.out
 '
 test_done

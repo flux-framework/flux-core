@@ -8,6 +8,7 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
+	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux
 
 noinst_LTLIBRARIES = libeventlog.la
@@ -37,4 +38,5 @@ test_eventlog_t_LDADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libeventlog/libeventlog.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
-	$(JANSSON_LIBS)
+	$(JANSSON_LIBS) \
+	$(LIBRT)

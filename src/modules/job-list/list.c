@@ -32,6 +32,7 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
                        const flux_msg_t *msg,
                        flux_jobid_t id,
                        json_t *attrs,
+                       flux_job_state_t state,
                        bool *stall);
 
 /* Filter test to determine if job desired by caller */
@@ -79,9 +80,13 @@ int get_jobs_from_list (json_t *jobs,
     job = zlistx_first (list);
     while (job) {
 
-        /*  If job->t_inactive > 0. (we're on the inactive jobs list),
-         *   and job->t_inactive > since, then we're done since inactive
-         *   jobs are sorted by inactive time.
+        /*  If job->t_inactive > 0. we're on the inactive jobs list and jobs are
+         *  sorted on the inactive list, larger t_inactive first.
+         *
+         *  If job->t_inactive > since, this is a job that could potentially be returned
+         *
+         *  So if job->t_inactive <= since, then we're done b/c the rest of the inactive
+         *   jobs cannot be returned.
          */
         if (job->t_inactive > 0. && job->t_inactive <= since)
             break;
@@ -226,6 +231,11 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
+    if (since < 0.) {
+        seterror (&err, "invalid payload: since < 0.0 not allowed");
+        errno = EPROTO;
+        goto error;
+    }
     if (!json_is_array (attrs)) {
         seterror (&err, "invalid payload: attrs must be an array");
         errno = EPROTO;
@@ -285,7 +295,7 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
         else {
             json_t *o;
             if (!(o = get_job_by_id (jsctx, NULL, isd->msg,
-                                     isd->id, isd->attrs, NULL))) {
+                                     isd->id, isd->attrs, isd->state, NULL))) {
                 flux_log_error (jsctx->h, "%s: get_job_by_id", __FUNCTION__);
                 goto cleanup;
             }
@@ -305,14 +315,16 @@ cleanup:
 int check_id_valid (struct job_state_ctx *jsctx,
                     const flux_msg_t *msg,
                     flux_jobid_t id,
-                    json_t *attrs)
+                    json_t *attrs,
+                    flux_job_state_t state)
 {
     struct idsync_data *isd = NULL;
 
     if (!(isd = idsync_check_id_valid (jsctx->isctx,
                                        id,
                                        msg,
-                                       attrs))
+                                       attrs,
+                                       state))
         || flux_future_aux_set (isd->f_lookup,
                                 "job_state_ctx",
                                 jsctx,
@@ -340,13 +352,14 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
                        const flux_msg_t *msg,
                        flux_jobid_t id,
                        json_t *attrs,
+                       flux_job_state_t state,
                        bool *stall)
 {
     struct job *job;
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
         if (stall) {
-            if (check_id_valid (jsctx, msg, id, attrs) < 0) {
+            if (check_id_valid (jsctx, msg, id, attrs, state) < 0) {
                 flux_log_error (jsctx->h, "%s: check_id_valid", __FUNCTION__);
                 return NULL;
             }
@@ -358,7 +371,7 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
     if (job->state == FLUX_JOB_STATE_NEW) {
         if (stall) {
             /* Must wait for job-list to see state change */
-            if (idsync_wait_valid_id (jsctx->isctx, id, msg, attrs) < 0) {
+            if (idsync_wait_valid_id (jsctx->isctx, id, msg, attrs, state) < 0) {
                 flux_log_error (jsctx->h, "%s: idsync_wait_valid_id",
                                 __FUNCTION__);
                 return NULL;
@@ -379,11 +392,14 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *job;
     flux_jobid_t id;
     json_t *attrs;
+    int state = 0;
+    int valid_states = FLUX_JOB_STATE_ACTIVE | FLUX_JOB_STATE_INACTIVE;
     bool stall = false;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:o}",
+    if (flux_request_unpack (msg, NULL, "{s:I s:o s?i}",
                              "id", &id,
-                             "attrs", &attrs) < 0) {
+                             "attrs", &attrs,
+                             "state", &state) < 0) {
         seterror (&err, "invalid payload: %s", flux_msg_last_error (msg));
         errno = EPROTO;
         goto error;
@@ -395,7 +411,19 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(job = get_job_by_id (ctx->jsctx, &err, msg, id, attrs, &stall))) {
+    if (state && (state & ~valid_states)) {
+        seterror (&err, "invalid payload: invalid state specified");
+        errno = EPROTO;
+        goto error;
+    }
+
+    if (!(job = get_job_by_id (ctx->jsctx,
+                               &err,
+                               msg,
+                               id,
+                               attrs,
+                               state,
+                               &stall))) {
         /* response handled after KVS lookup complete */
         if (stall)
             goto stall;

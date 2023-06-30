@@ -12,6 +12,7 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS) \
 	$(LIBUUID_CFLAGS) \
 	$(JANSSON_CFLAGS) \
+	$(LIBSYSTEMD_CFLAGS) \
 	$(VALGRIND_CFLAGS)
 
 fluxcmd_PROGRAMS = flux-broker
@@ -77,6 +78,7 @@ flux_broker_LDADD = \
 	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(JANSSON_LIBS) \
+	$(LIBSYSTEMD_LIBS) \
 	$(LIBDL)
 
 flux_broker_LDFLAGS =
@@ -96,6 +98,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(ZMQ_LIBS) \
+	$(LIBSYSTEMD_LIBS) \
 	$(JANSSON_LIBS)
 
 test_ldflags = \

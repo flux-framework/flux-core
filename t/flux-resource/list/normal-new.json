@@ -1,0 +1,25 @@
+{
+  "all": {
+    "execution": {
+      "R_lite": [
+        {
+          "children": {
+            "core": "0-3"
+          },
+          "rank": "0-4"
+        }
+      ],
+      "expiration": 0,
+      "nodelist": [
+        "pi[3,0-2,4]"
+      ],
+      "properties": {
+        "8g": "0-2"
+      },
+      "starttime": 0
+    },
+    "version": 1
+  },
+  "allocated": null,
+  "down": null
+}

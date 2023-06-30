@@ -179,7 +179,7 @@ void test_basic (flux_t *h)
      */
     if (!(request = flux_request_encode ("rtest.hello", NULL)))
         BAIL_OUT ("flux_request_encode failed");
-    router_entry_recv (entry, request); // router recives message from abcd
+    router_entry_recv (entry, request); // router receives message from abcd
     diag ("basic: sent rtest.hello request");
     flux_msg_destroy (request);
     ok (flux_reactor_run (r, 0) >= 0,
@@ -195,7 +195,7 @@ void test_basic (flux_t *h)
     if (!(request = flux_request_encode ("event.subscribe",
                                          "{\"topic\":\"rtest\"}")))
         BAIL_OUT ("flux_request_encode failed");
-    router_entry_recv (entry, request); // router recives message from abcd
+    router_entry_recv (entry, request); // router receives message from abcd
     diag ("basic: sent event.subscribe request");
     flux_msg_destroy (request);
 
@@ -204,7 +204,7 @@ void test_basic (flux_t *h)
      */
     if (!(request = flux_request_encode ("rtest.pub", NULL)))
         BAIL_OUT ("flux_request_encode failed");
-    router_entry_recv (entry, request); // router recives message from abcd
+    router_entry_recv (entry, request); // router receives message from abcd
     diag ("basic: sent rtest.pub request");
     flux_msg_destroy (request);
     ok (flux_reactor_run (r, 0) >= 0,
@@ -215,7 +215,7 @@ void test_basic (flux_t *h)
     if (!(request = flux_request_encode ("event.unsubscribe",
                                          "{\"topic\":\"rtest\"}")))
         BAIL_OUT ("flux_request_encode failed");
-    router_entry_recv (entry, request); // router recives message from abcd
+    router_entry_recv (entry, request); // router receives message from abcd
     diag ("basic: sent event.unsubscribe request");
     flux_msg_destroy (request);
 
@@ -238,7 +238,7 @@ void test_basic (flux_t *h)
      */
     if (!(request = flux_request_encode ("testfu.bar", NULL)))
         BAIL_OUT ("flux_request_encode failed");
-    router_entry_recv (entry, request); // router recives message from abcd
+    router_entry_recv (entry, request); // router receives message from abcd
     diag ("basic: sent testfu.bar request");
     flux_msg_destroy (request);
     ok (flux_reactor_run (r, 0) >= 0,
@@ -249,7 +249,7 @@ void test_basic (flux_t *h)
     if (!(request = flux_request_encode ("service.remove",
                                          "{\"service\":\"testfu\"}")))
         BAIL_OUT ("flux_request_encode failed");
-    router_entry_recv (entry, request); // router recives message from abcd
+    router_entry_recv (entry, request); // router receives message from abcd
     ok (flux_reactor_run (r, 0) >= 0, "basic: reactor processed one message");
     flux_msg_destroy (request);
 

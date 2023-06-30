@@ -25,7 +25,7 @@
 This software is licensed under the terms of the MIT license. Please see each
 source file for the related copyright notice and license.
 
-If a file does not contain a copright notice, the following license shall
+If a file does not contain a copyright notice, the following license shall
 apply:
 
 	Copyright (c) 2011-2013 David Herrmann <dh.herrmann@gmail.com>

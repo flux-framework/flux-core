@@ -10,27 +10,24 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import os
-import errno
-import sys
-import json
-import unittest
 import datetime
-import signal
+import errno
+import json
 import locale
+import os
 import pathlib
+import signal
 import subprocess
+import unittest
 from glob import glob
 
-import yaml
-
 import flux
-import flux.kvs
 import flux.constants
+import flux.kvs
+import yaml
 from flux import job
-from flux.job import Jobspec, JobspecV1, ffi, JobID, JobInfo
+from flux.job import JobInfo, Jobspec, JobspecV1, ffi
 from flux.job.stats import JobStats
-from flux.future import Future
 
 
 def __flux_size():
@@ -49,7 +46,7 @@ class TestJob(unittest.TestCase):
         self.fh = flux.Flux()
         self.use_ascii = False
         build_opts = subprocess.check_output(["flux", "version"]).decode()
-        if  locale.getlocale()[1] != "UTF-8" or "ascii-only" in build_opts:
+        if locale.getlocale()[1] != "UTF-8" or "ascii-only" in build_opts:
             self.use_ascii = True
 
         self.jobspec_dir = os.path.abspath(
@@ -90,7 +87,7 @@ class TestJob(unittest.TestCase):
             ):
                 with self.assertRaises(
                     (ValueError, TypeError, yaml.scanner.ScannerError)
-                ) as cm:
+                ):
                     cls.from_yaml_file(invalid_jobspec_filepath)
 
     def test_04_valid_construction(self):
@@ -332,7 +329,7 @@ class TestJob(unittest.TestCase):
             events.append(event.name)
 
         future.then(cb, events)
-        rc = self.fh.reactor_run()
+        self.fh.reactor_run()
 
         # Last event should be "start"
         self.assertEqual(events[-1], "start")
@@ -415,6 +412,7 @@ class TestJob(unittest.TestCase):
                 "kvs": "job.0000.0000.0000.0000",
                 "f58": "ƒ1",
                 "words": "academy-academy-academy--academy-academy-academy",
+                "emoji": "😃",
             },
             {
                 "int": 1,
@@ -424,6 +422,7 @@ class TestJob(unittest.TestCase):
                 "kvs": "job.0000.0000.0000.0001",
                 "f58": "ƒ2",
                 "words": "acrobat-academy-academy--academy-academy-academy",
+                "emoji": "😄",
             },
             {
                 "int": 65535,
@@ -433,6 +432,7 @@ class TestJob(unittest.TestCase):
                 "kvs": "job.0000.0000.0000.ffff",
                 "f58": "ƒLUv",
                 "words": "nevada-archive-academy--academy-academy-academy",
+                "emoji": "💁📚",
             },
             {
                 "int": 6787342413402046,
@@ -442,6 +442,7 @@ class TestJob(unittest.TestCase):
                 "kvs": "job.0018.1d0d.4d85.0fbe",
                 "f58": "ƒuzzybunny",
                 "words": "cake-plume-nepal--neuron-pencil-academy",
+                "emoji": "👴😱🔚🎮🕙🚩",
             },
             {
                 "int": 18446744073709551614,
@@ -451,6 +452,7 @@ class TestJob(unittest.TestCase):
                 "kvs": "job.ffff.ffff.ffff.fffe",
                 "f58": "ƒjpXCZedGfVP",
                 "words": "mustang-analyze-verbal--natural-analyze-verbal",
+                "emoji": "🚹💗💧👗😷📷📙",
             },
         ]
         for test in parse_tests:
@@ -466,6 +468,12 @@ class TestJob(unittest.TestCase):
                     # Ensure encode back to same type works
                     self.assertEqual(getattr(jobid, key), test[key])
 
+        # JobID can also take a JobID
+        jobid1 = job.JobID(1234)
+        jobid2 = job.JobID(jobid1)
+        self.assertEqual(jobid1, jobid2)
+        self.assertEqual(jobid2.orig, "1234")
+
     def test_25_job_list_attrs(self):
         expected_attrs = [
             "userid",
@@ -478,6 +486,7 @@ class TestJob(unittest.TestCase):
             "t_inactive",
             "state",
             "name",
+            "cwd",
             "queue",
             "ntasks",
             "ncores",
@@ -485,7 +494,6 @@ class TestJob(unittest.TestCase):
             "nnodes",
             "ranks",
             "nodelist",
-            "waitstatus",
             "success",
             "exception_occurred",
             "exception_type",
@@ -494,6 +502,7 @@ class TestJob(unittest.TestCase):
             "result",
             "expiration",
             "annotations",
+            "waitstatus",
             "dependencies",
             "all",
         ]
@@ -680,37 +689,40 @@ class TestJob(unittest.TestCase):
     def test_33_get_job(self):
         self.sleep_jobspec = JobspecV1.from_command(["sleep", "5"])
         jobid = job.submit(self.fh, self.sleep_jobspec)
-        meta = job.get_job(self.fh, jobid)
-        self.assertIsInstance(meta, dict)
-        for key in ['id',
-                    'userid',
-                    'urgency',
-                    'priority',
-                    't_submit',
-                    't_depend',
-                    'state',
-                    'name',
-                    'ntasks',
-                    'ncores',
-                    'duration',
-                    'nnodes',
-                    'result',
-                    'runtime',
-                    'returncode',
-                    'waitstatus',
-                    'nodelist',
-                    'exception']:
-            self.assertIn(key, meta)
+        info = job.get_job(self.fh, jobid)
+        self.assertIsInstance(info, dict)
+        for key in [
+            "id",
+            "userid",
+            "urgency",
+            "priority",
+            "t_submit",
+            "t_depend",
+            "state",
+            "name",
+            "cwd",
+            "ntasks",
+            "ncores",
+            "duration",
+            "nnodes",
+            "result",
+            "runtime",
+            "returncode",
+            "waitstatus",
+            "nodelist",
+            "exception",
+        ]:
+            self.assertIn(key, info)
 
-        self.assertEqual(meta['id'], jobid)
-        self.assertEqual(meta['name'], "sleep")
-        self.assertTrue(meta['state'] in ["SCHED", "DEPEND", "RUN"])
-        self.assertEqual(meta['ntasks'], 1)
-        self.assertEqual(meta['ncores'], 1)
+        self.assertEqual(info["id"], jobid)
+        self.assertEqual(info["name"], "sleep")
+        self.assertTrue(info["state"] in ["SCHED", "DEPEND", "RUN"])
+        self.assertEqual(info["ntasks"], 1)
+        self.assertEqual(info["ncores"], 1)
 
         # Test a job that does not exist
-        meta = job.get_job(self.fh, 123456)
-        self.assertIsNone(meta)
+        info = job.get_job(self.fh, 123456)
+        self.assertIsNone(info)
 
     def test_34_timeleft(self):
         spec = JobspecV1.from_command(
@@ -720,11 +732,12 @@ class TestJob(unittest.TestCase):
         jobid = job.submit(self.fh, spec, waitable=True)
         job.wait(self.fh, jobid=jobid)
         try:
-            dt = job.timeleft()
-            dt = job.timeleft(self.fh)
+            job.timeleft()
+            job.timeleft(self.fh)
         except OSError:
             pass
-        
+
+
 if __name__ == "__main__":
     from subflux import rerun_under_flux
 

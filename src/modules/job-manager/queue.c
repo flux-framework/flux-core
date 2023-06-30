@@ -20,7 +20,9 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "alloc.h"
 #include "job-manager.h"
@@ -403,8 +405,8 @@ bool queue_started (struct queue *queue, struct job *job)
             return false;
         if (!(q = zhashx_lookup (queue->named, job->queue))) {
             flux_log (queue->ctx->h, LOG_ERR,
-                      "%s: job %ju invalid queue: %s",
-                      __FUNCTION__, (uintmax_t)job->id, job->queue);
+                      "%s: job %s invalid queue: %s",
+                      __FUNCTION__, idf58 (job->id), job->queue);
             return false;
         }
         return q->start;
@@ -457,11 +459,9 @@ static int queue_configure (const flux_conf_t *conf,
          */
         json_object_foreach (queues, name, value) {
             if (!zhashx_lookup (queue->named, name)) {
-                if (!(q = jobq_create (name))
-                    || zhashx_insert (queue->named, name, q) < 0) {
-                    jobq_destroy (q);
+                if (!(q = jobq_create (name)))
                     goto nomem;
-                }
+                (void)zhashx_insert (queue->named, name, q);
             }
         }
     }
@@ -631,7 +631,7 @@ static int queue_start (struct queue *queue, const char *name)
 {
     struct job *job = zhashx_first (queue->ctx->active_jobs);
     while (job) {
-        if (!name || (job->queue && !strcmp (job->queue, name))) {
+        if (!name || (job->queue && streq (job->queue, name))) {
             if (!job->alloc_queued
                 && !job->alloc_pending
                 && job->state == FLUX_JOB_STATE_SCHED) {
@@ -652,7 +652,7 @@ static void queue_stop (struct queue *queue, const char *name)
         || alloc_pending_count (queue->ctx->alloc) > 0) {
         struct job *job = zhashx_first (queue->ctx->active_jobs);
         while (job) {
-            if (!name || (job->queue && !strcmp (job->queue, name))) {
+            if (!name || (job->queue && streq (job->queue, name))) {
                 if (job->alloc_queued)
                     alloc_dequeue_alloc_request (queue->ctx->alloc, job);
                 else if (job->alloc_pending)

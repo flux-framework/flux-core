@@ -18,6 +18,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/broker/boot_config.h"
+#include "ccan/str/str.h"
 
 
 static void
@@ -87,9 +88,9 @@ void test_parse (const char *dir)
 
     ok (conf.default_port == 42,
         "set default_port correctly");
-    ok (!strcmp (conf.default_bind, "tcp://en0:42"),
+    ok (streq (conf.default_bind, "tcp://en0:42"),
         "and set default_bind correctly (with %%p substitution)");
-    ok (!strcmp (conf.default_connect, "tcp://x%h:42"),
+    ok (streq (conf.default_connect, "tcp://x%h:42"),
         "and set default_connect correctly (with %%p substitution)");
 
     ok (boot_config_getrankbyname (hosts, "foo0", &rank) == 0
@@ -105,25 +106,25 @@ void test_parse (const char *dir)
        "boot_config_getrankbyname fails on unknown entry");
 
     ok (boot_config_getbindbyrank (hosts, &conf, 0, uri, sizeof (uri)) == 0
-        && !strcmp (uri, "tcp://en0:42"),
+        && streq (uri, "tcp://en0:42"),
         "boot_config_getbindbyrank 0 works with expected value");
     ok (boot_config_getbindbyrank (hosts, &conf, 1, uri, sizeof (uri)) == 0
-        && !strcmp (uri, "tcp://en0:42"),
+        && streq (uri, "tcp://en0:42"),
         "boot_config_getbindbyrank 1 works with expected value");
     ok (boot_config_getbindbyrank (hosts, &conf, 63, uri, sizeof (uri)) == 0
-        && !strcmp (uri, "tcp://en0:42"),
+        && streq (uri, "tcp://en0:42"),
         "boot_config_getbindbyrank 63 works with expected value");
     ok (boot_config_getbindbyrank (hosts, &conf, 64, uri, sizeof (uri))  < 0,
         "boot_config_getbindbyrank 64 fails");
 
     ok (boot_config_geturibyrank (hosts, &conf, 0, uri, sizeof (uri)) == 0
-        && !strcmp (uri, "tcp://xfoo0:42"),
+        && streq (uri, "tcp://xfoo0:42"),
         "boot_config_geturibyrank 0 works with expected value");
     ok (boot_config_geturibyrank (hosts, &conf, 1, uri, sizeof (uri)) == 0
-        && !strcmp (uri, "tcp://xfoo1:42"),
+        && streq (uri, "tcp://xfoo1:42"),
         "boot_config_geturibyrank 1 works with expected value");
     ok (boot_config_geturibyrank (hosts, &conf, 63, uri, sizeof (uri)) == 0
-        && !strcmp (uri, "tcp://xfoo63:42"),
+        && streq (uri, "tcp://xfoo63:42"),
         "boot_config_geturibyrank 63 works with expected value");
     ok (boot_config_geturibyrank (hosts, &conf, 64, uri, sizeof (uri))  < 0,
         "boot_config_geturibyrank 64 fails");
@@ -407,44 +408,44 @@ void test_format (void)
     char buf[MAX_URI + 1];
 
     ok (boot_config_format_uri (buf, sizeof (buf), "abcd", NULL, 0) == 0
-        && !strcmp (buf, "abcd"),
+        && streq (buf, "abcd"),
         "format: plain string copy works");
     ok (boot_config_format_uri (buf, sizeof (buf), "abcd:%p", NULL, 42) == 0
-        && !strcmp (buf, "abcd:42"),
+        && streq (buf, "abcd:42"),
         "format: %%p substitution works end string");
     ok (boot_config_format_uri (buf, sizeof (buf), "a%pb", NULL, 42) == 0
-        && !strcmp (buf, "a42b"),
+        && streq (buf, "a42b"),
         "format: %%p substitution works mid string");
     ok (boot_config_format_uri (buf, sizeof (buf), "%p:abcd", NULL, 42) == 0
-        && !strcmp (buf, "42:abcd"),
+        && streq (buf, "42:abcd"),
         "format: %%p substitution works begin string");
     ok (boot_config_format_uri (buf, sizeof (buf), "%h", NULL, 0) == 0
-        && !strcmp (buf, "%h"),
+        && streq (buf, "%h"),
         "format: %%h passes through when host=NULL");
     ok (boot_config_format_uri (buf, sizeof (buf), "%h", "foo", 0) == 0
-        && !strcmp (buf, "foo"),
+        && streq (buf, "foo"),
         "format: %%h substitution works");
     ok (boot_config_format_uri (buf, sizeof (buf), "%%", NULL, 0) == 0
-        && !strcmp (buf, "%"),
+        && streq (buf, "%"),
         "format: %%%% literal works");
     ok (boot_config_format_uri (buf, sizeof (buf), "a%X", NULL, 0) == 0
-        && !strcmp (buf, "a%X"),
+        && streq (buf, "a%X"),
         "format: unknown token passes through");
 
     ok (boot_config_format_uri (buf, 5, "abcd", NULL, 0) == 0
-        && !strcmp (buf, "abcd"),
+        && streq (buf, "abcd"),
         "format: copy abcd to buf[5] works");
     ok (boot_config_format_uri (buf, 4, "abcd", NULL, 0) < 0,
         "format: copy abcd to buf[4] fails");
 
     ok (boot_config_format_uri (buf, 5, "a%p", NULL, 123) == 0
-        && !strcmp (buf, "a123"),
+        && streq (buf, "a123"),
         "format: %%p substitution into exact size buf works");
     ok (boot_config_format_uri (buf, 4, "a%p", NULL, 123) < 0,
         "format: %%p substitution overflow detected");
 
     ok (boot_config_format_uri (buf, 5, "a%h", "abc", 0) == 0
-        && !strcmp (buf, "aabc"),
+        && streq (buf, "aabc"),
         "format: %%h substitution into exact size buf works");
     ok (boot_config_format_uri (buf, 4, "a%h", "abc", 0) < 0,
         "format: %%h substitution overflow detected");
@@ -515,7 +516,7 @@ void test_attr (const char *dir)
     ok (rc == 0,
         "boot_config_attr works on input hosts");
     ok (attr_get (attrs, "hostlist", &val, &flags) == 0
-        && !strcmp (val, "foo[0,4,1-3,5,14,6-9]")
+        && streq (val, "foo[0,4,1-3,5,14,6-9]")
         && flags == ATTR_IMMUTABLE,
         "attr_get returns correct value and flags");
 
@@ -543,7 +544,7 @@ void test_curve_cert (const char *dir)
 
     ok (boot_config_parse (cf, &conf, &hosts) == 0 && hosts == NULL,
         "boot_config_parse works with curve_cert");
-    ok (conf.curve_cert != NULL && !strcmp (conf.curve_cert, "meep"),
+    ok (conf.curve_cert != NULL && streq (conf.curve_cert, "meep"),
         "and curve_cert has expected value");
 
     if (unlink (path) < 0)
@@ -608,13 +609,13 @@ void test_dup_hosts (const char *dir)
     ok (hosts != NULL && json_array_size (hosts) == 128,
         "and post-processed hosts array has expected size");
     ok (json_unpack (json_array_get (hosts, 0), "{s:s}", "host", &host) == 0
-        && !strcmp (host, "test0"),
+        && streq (host, "test0"),
         "test0 has rank 0");
     ok (json_unpack (json_array_get (hosts, 65), "{s:s}", "host", &host) == 0
-        && !strcmp (host, "test65"),
+        && streq (host, "test65"),
         "test65 has rank 65");
     ok (json_unpack (json_array_get (hosts, 127), "{s:s}", "host", &host) == 0
-        && !strcmp (host, "test127"),
+        && streq (host, "test127"),
         "test127 has rank 127");
 
     if (unlink (path) < 0)

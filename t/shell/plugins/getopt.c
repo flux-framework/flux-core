@@ -18,6 +18,7 @@
 #include <flux/shell.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 static int die (const char *fmt, ...)
 {
@@ -73,7 +74,7 @@ static int check_getopt (flux_plugin_t *p,
         && result == 42,
         "setopt worked and set integer value");
 
-    if (strcmp (topic, "shell.exit") == 0 || strcmp (topic, "task.exec") == 0)
+    if (streq (topic, "shell.exit") || streq (topic, "task.exec"))
         return exit_status () == 0 ? 0 : -1;
     return 0;
 }

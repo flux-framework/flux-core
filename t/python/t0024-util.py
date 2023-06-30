@@ -11,11 +11,11 @@
 ###############################################################
 
 import unittest
-import subflux  # To set up PYTHONPATH
-from pycotap import TAPTestRunner
+from datetime import datetime
 
-from datetime import datetime, timedelta
-from flux.util import parse_datetime
+import subflux  # noqa: F401 - To set up PYTHONPATH
+from flux.util import UtilDatetime, parse_datetime
+from pycotap import TAPTestRunner
 
 
 def ts(year, month, day, hour=0, minute=0, sec=0, us=0):
@@ -69,6 +69,27 @@ class TestParseDatetime(unittest.TestCase):
         self.assertEqual(self.parse("tomorrow"), ts(2021, 6, 11))
         self.assertEqual(self.parse("noon tomorrow"), ts(2021, 6, 11, 12))
         self.assertEqual(self.parse("last wed"), ts(2021, 6, 9))
+
+
+class TestUtilDatetime(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        self.zero = UtilDatetime.fromtimestamp(0.0)
+        self.ts = UtilDatetime(2021, 6, 10, 8, 0, 0)
+
+    def test_zero(self):
+        self.assertEqual(f"{self.zero}", "")
+        self.assertEqual(f"{self.zero:::h}", "-")
+        self.assertEqual(f"{self.zero:%FT%T::<6}", "      ")
+        self.assertEqual(f"{self.zero:%FT%T::<6h}", "-     ")
+
+    def test_fmt(self):
+        self.assertEqual(f"{self.ts}", "2021-06-10T08:00:00")
+        self.assertEqual(f"{self.ts:::h}", "2021-06-10T08:00:00")
+        self.assertEqual(f"{self.ts:%b%d %R}", "Jun10 08:00")
+        self.assertEqual(f"{self.ts:%b%d %R::h}", "Jun10 08:00")
+        self.assertEqual(f"{self.ts:%b%d %R::>12}", " Jun10 08:00")
+        self.assertEqual(f"{self.ts:%b%d %R::>12h}", " Jun10 08:00")
 
 
 if __name__ == "__main__":

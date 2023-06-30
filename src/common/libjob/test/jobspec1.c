@@ -19,6 +19,7 @@
 
 #include "src/common/libjob/jobspec1.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 #include "ccan/array_size/array_size.h"
 
 extern char **environ;
@@ -42,7 +43,7 @@ void check_stdio_cwd (void)
     ok (flux_jobspec1_set_cwd (jobspec, "/foo/bar/baz") == 0
             && (flux_jobspec1_attr_unpack (jobspec, "system.cwd", "s", &path) == 0)
 
-            && (strcmp ("/foo/bar/baz", path) == 0),
+            && streq ("/foo/bar/baz", path),
         "flux_jobspec1_set_cwd works");
     ok (flux_jobspec1_set_stdin (NULL, "/foo/bar/baz") < 0 && errno == EINVAL,
         "flux_jobspec1_set_stdin catches NULL jobspec");
@@ -57,14 +58,14 @@ void check_stdio_cwd (void)
                                            &path)
                 == 0)
 
-            && (strcmp ("/foo/bar/stdin.txt", path) == 0),
+            && streq ("/foo/bar/stdin.txt", path),
         "flux_jobspec1_set_stdin sets right path");
     ok ((flux_jobspec1_attr_unpack (jobspec,
                                     "system.shell.options.input.stdin.type",
                                     "s",
                                     &path)
          == 0)
-            && (strcmp ("file", path) == 0),
+            && streq ("file", path),
         "flux_jobspec1_set_stdin sets right type");
     ok (flux_jobspec1_set_stdout (NULL, "/foo/bar/baz") < 0 && errno == EINVAL,
         "flux_jobspec1_set_stdout catches NULL jobspec");
@@ -79,14 +80,14 @@ void check_stdio_cwd (void)
                                            &path)
                 == 0)
 
-            && (strcmp ("/foo/bar/stdout.txt", path) == 0),
+            && streq ("/foo/bar/stdout.txt", path),
         "flux_jobspec1_set_stdout sets right path");
     ok ((flux_jobspec1_attr_unpack (jobspec,
                                     "system.shell.options.output.stdout.type",
                                     "s",
                                     &path)
          == 0)
-            && (strcmp ("file", path) == 0),
+            && streq ("file", path),
         "flux_jobspec1_set_stdout sets right type");
     ok (flux_jobspec1_set_stderr (NULL, "/foo/bar/baz") < 0 && errno == EINVAL,
         "flux_jobspec1_set_stderr catches NULL jobspec");
@@ -101,14 +102,14 @@ void check_stdio_cwd (void)
                                            &path)
                 == 0)
 
-            && (strcmp ("/foo/bar/stderr.txt", path) == 0),
+            && streq ("/foo/bar/stderr.txt", path),
         "flux_jobspec1_set_stderr sets right path");
     ok ((flux_jobspec1_attr_unpack (jobspec,
                                     "system.shell.options.output.stderr.type",
                                     "s",
                                     &path)
          == 0)
-            && (strcmp ("file", path) == 0),
+            && streq ("file", path),
         "flux_jobspec1_set_stderr sets right type");
     flux_jobspec1_destroy (jobspec);
 }
@@ -145,7 +146,7 @@ void check_env (void)
                                            "s",
                                            &val)
                 == 0)
-            && (strcmp ("BAR1", val) == 0),
+            && streq ("BAR1", val),
         "jobspec_setenv FOO1=BAR1 works");
     ok (flux_jobspec1_setenv (jobspec, "FOO1", "BAZ1", 1) == 0
             && (flux_jobspec1_attr_unpack (jobspec,
@@ -153,7 +154,7 @@ void check_env (void)
                                            "s",
                                            &val)
                 == 0)
-            && (strcmp ("BAZ1", val) == 0),
+            && streq ("BAZ1", val),
         "jobspec_setenv FOO1=BAZ1 works (overwrite=1)");
     ok (flux_jobspec1_setenv (jobspec, "FOO1", "BAZ2", 0) == 0
             && (flux_jobspec1_attr_unpack (jobspec,
@@ -161,7 +162,7 @@ void check_env (void)
                                            "s",
                                            &val)
                 == 0)
-            && (strcmp ("BAZ1", val) == 0),
+            && streq ("BAZ1", val),
         "jobspec_setenv FOO1=BAZ2 works (overwrite=0)");
     ok (flux_jobspec1_unsetenv (jobspec, "FOO1") == 0
             && (flux_jobspec1_attr_unpack (jobspec,
@@ -176,7 +177,7 @@ void check_env (void)
                                            "s",
                                            &val)
                 == 0)
-            && (strcmp ("BAR2", val) == 0),
+            && streq ("BAR2", val),
         "jobspec_setenv FOO2=BAR2 works");
 
     // ensure empty ("") value works
@@ -187,7 +188,7 @@ void check_env (void)
                                   "s",
                                   &val) == 0
         && val != NULL
-        && !strcmp (val, ""),
+        && streq (val, ""),
         "empty string value was correctly represented in object");
     // test functions when environment object is deleted
     ok (flux_jobspec1_attr_del (jobspec, "system.environment") == 0,
@@ -238,7 +239,7 @@ void check_attr (void)
 
     ok (flux_jobspec1_attr_pack (jobspec, "foo.bar", "s", "baz") == 0
             && (flux_jobspec1_attr_unpack (jobspec, "foo.bar", "s", &char_ptr) == 0)
-            && strcmp ("baz", char_ptr) == 0,
+            && streq ("baz", char_ptr),
         "flux_jobspec1_attr_pack works on strings");
     ok (flux_jobspec1_attr_pack (jobspec, "foo.bar", "i", 19) == 0
             && (flux_jobspec1_attr_unpack (jobspec, "foo.bar", "i", &int_val) == 0)
@@ -247,7 +248,7 @@ void check_attr (void)
     ok (flux_jobspec1_attr_pack (jobspec, "foo", "{s:s}", "bar", "baz") == 0
             && (flux_jobspec1_attr_unpack (jobspec, "foo", "{s:s}", "bar", &char_ptr)
                 == 0)
-            && strcmp ("baz", char_ptr) == 0,
+            && streq ("baz", char_ptr),
         "flux_jobspec1_attr_pack works on objects");
     ok (flux_jobspec1_attr_del (jobspec, "foo.bar.baz") == 0
             && (flux_jobspec1_attr_unpack (jobspec, "foo.bar.baz", "o", &json_ptr) < 0),

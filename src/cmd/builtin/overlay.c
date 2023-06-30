@@ -21,6 +21,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/librlist/rlist.h"
+#include "ccan/str/str.h"
 
 #include "builtin.h"
 
@@ -514,7 +515,7 @@ static flux_future_t *health_rpc (struct status *ctx,
             flux_future_destroy (f);
             return NULL;
         }
-        if (!wait || strcmp (wait, status) == 0)
+        if (!wait || streq (wait, status))
             break;
         flux_future_reset (f);
     } while (1);
@@ -667,11 +668,11 @@ static bool show_all (struct status *ctx,
 static bool validate_wait (const char *wait)
 {
     if (wait
-        && strcmp (wait, "full") != 0
-        && strcmp (wait, "partial") != 0
-        && strcmp (wait, "degraded") != 0
-        && strcmp (wait, "lost") != 0
-        && strcmp (wait, "offline") != 0)
+        && !streq (wait, "full")
+        && !streq (wait, "partial")
+        && !streq (wait, "degraded")
+        && !streq (wait, "lost")
+        && !streq (wait, "offline"))
         return false;
     return true;
 }

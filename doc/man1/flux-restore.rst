@@ -53,6 +53,11 @@ OPTIONS
    Bypass the broker content cache and interact directly with the backing
    store.  Performance will vary depending on the content of the archive.
 
+**--size-limit**\ =\ *SIZE*
+   Skip restoring keys that exceed SIZE bytes (default: no limit). SIZE may
+   be specified as a floating point number with an optional multiplicative
+   suffix k or K=1024, M=1024\*1024, or G=1024\*1024\*1024 (up to
+   ``INT_MAX``).
 
 RESOURCES
 =========

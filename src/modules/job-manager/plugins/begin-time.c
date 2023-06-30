@@ -10,12 +10,17 @@
 
 /*  begin-time: Builtin job-manager begin-time dependency plugin */
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <time.h>
 #include <math.h>
 #include <jansson.h>
 
 #include <flux/core.h>
 #include <flux/jobtap.h>
+
+#include "src/common/libjob/idf58.h"
 
 struct begin_time_arg {
     flux_plugin_t *p;
@@ -91,7 +96,7 @@ static int add_begin_time (flux_plugin_t *p,
     flux_watcher_start (arg->w);
 
     if (flux_jobtap_dependency_add (p, id, arg->desc) < 0) {
-        flux_log_error (h, "%ju: flux_jobtap_dependency_add", (uintmax_t) id);
+        flux_log_error (h, "%s: flux_jobtap_dependency_add", idf58 (id));
         goto error;
     }
 
@@ -135,7 +140,7 @@ static int parse_timestamp (const char *s, double *dp)
     return 0;
 }
 
-/*  Handle job.dependnecy.begin-time requests
+/*  Handle job.dependency.begin-time requests
  */
 static int depend_cb (flux_plugin_t *p,
                       const char *topic,

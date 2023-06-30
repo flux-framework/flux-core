@@ -11,14 +11,13 @@
 #
 #  Follow Flux dmesg output until a line matches a pattern
 #
-import sys
 import argparse
 import re
+import sys
 
 import flux
-from flux.core.watchers import TimerWatcher
 from flux.constants import FLUX_RPC_STREAMING
-
+from flux.core.watchers import TimerWatcher
 
 parser = argparse.ArgumentParser(
     description="watch the flux dmesg log for a given pattern"

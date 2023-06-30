@@ -28,6 +28,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libjob/idf58.h"
 
 #define BUSY_TIMEOUT_DEFAULT 50
 #define BUFSIZE              1024
@@ -271,7 +272,7 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
 
     monotime (&t0);
 
-    if (flux_rpc_get_unpack (f, "{s:s s:s s?:s}",
+    if (flux_rpc_get_unpack (f, "{s:s s:s s?s}",
                              "eventlog", &eventlog,
                              "jobspec", &jobspec,
                              "R", &R) < 0) {
@@ -291,15 +292,15 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
     }
 
     if (json_unpack_ex (job, &error, 0,
-                        "{s:i s?:s s:f s?:f s?:f s:f}",
+                        "{s:i s?s s:f s?f s?f s:f}",
                         "userid", &userid,
                         "ranks", &ranks,
                         "t_submit", &t_submit,
                         "t_run", &t_run,
                         "t_cleanup", &t_cleanup,
                         "t_inactive", &t_inactive) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: parse job %ju error: %s",
-                  __FUNCTION__, (uintmax_t)id, error.text);
+        flux_log (ctx->h, LOG_ERR, "%s: parse job %s error: %s",
+                  __FUNCTION__, idf58 (id), error.text);
         goto out;
     }
 
@@ -376,7 +377,7 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
     }
     while (sqlite3_step (ctx->store_stmt) != SQLITE_DONE) {
         /* due to rounding errors in sqlite, duplicate entries could be
-         * written out on occassion leading to a SQLITE_CONSTRAINT error.
+         * written out on occasion leading to a SQLITE_CONSTRAINT error.
          * We accept this and move on.
          */
         int err = sqlite3_errcode (ctx->db);
@@ -419,7 +420,7 @@ int job_info_lookup (struct job_archive_ctx *ctx, json_t *job)
     json_t *keys = NULL;
     double t_run = 0.0;
 
-    if (json_unpack (job, "{s:I s?:f}", "id", &id, "t_run", &t_run) < 0) {
+    if (json_unpack (job, "{s:I s?f}", "id", &id, "t_run", &t_run) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s: parse t_run", __FUNCTION__);
         goto error;
     }
@@ -499,12 +500,26 @@ void job_archive_cb (flux_reactor_t *r,
                      void *arg)
 {
     struct job_archive_ctx *ctx = arg;
-    char *attrs = "[\"userid\", \"ranks\", \"t_submit\", " \
-                   "\"t_run\", \"t_cleanup\", \"t_inactive\"]";
     flux_future_t *f;
 
-    if (!(f = flux_job_list_inactive (ctx->h, 0, ctx->since, attrs))) {
-        flux_log_error (ctx->h, "%s: flux_job_list_inactive", __FUNCTION__);
+    if (!(f = flux_rpc_pack (ctx->h,
+                             "job-list.list",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:i s:f s:i s:i s:i s:[ssssss]}",
+                             "max_entries", 0,
+                             "since", ctx->since,
+                             "userid", FLUX_USERID_UNKNOWN,
+                             "states", FLUX_JOB_STATE_INACTIVE,
+                             "results", 0,
+                             "attrs",
+                               "userid",
+                               "ranks",
+                               "t_submit",
+                               "t_run",
+                               "t_cleanup",
+                               "t_inactive"))) {
+        flux_log_error (ctx->h, "%s: flux_rpc_pack", __FUNCTION__);
         return;
     }
     if (flux_future_then (f, -1, job_list_inactive_continuation, ctx) < 0) {
@@ -589,7 +604,8 @@ static int process_config (struct job_archive_ctx *ctx)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job-archive.stats-get", stats_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job-archive.stats-get",
+      stats_get_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -632,8 +648,6 @@ done:
     job_archive_ctx_destroy (ctx);
     return rc;
 }
-
-MOD_NAME ("job-archive");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -139,7 +139,7 @@ int msg_to_iovec (const flux_msg_t *msg,
     }
     if (msg_has_route (msg)) {
         struct route_id *r = NULL;
-        /* delimeter */
+        /* delimiter */
         index--;
         assert (index >= 0);
         iov[index].data = NULL;

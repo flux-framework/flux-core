@@ -1,13 +1,13 @@
 #!/bin/sh
 #
-test_description='Test flux-mini/flux-shell taskmap plugin support'
+test_description='Test flux-submit/flux-shell taskmap plugin support'
 
 . `dirname $0`/sharness.sh
 
 test_under_flux 4 job
 
 # Test that actual task ranks match expected ranks.
-# Assumes job ouptut is `echo $FLUX_TASK_RANK: $(flux getattr rank)`
+# Assumes job output is `echo $FLUX_TASK_RANK: $(flux getattr rank)`
 test_check_taskmap() {
 	local id=$1
 	flux job attach $id | sort -n >$id.output &&

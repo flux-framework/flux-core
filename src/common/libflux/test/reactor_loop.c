@@ -20,6 +20,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
+#include "ccan/str/str.h"
 
 static int send_request (flux_t *h, const char *topic)
 {
@@ -41,7 +42,7 @@ static void multmatch1 (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     const char *topic;
-    if (flux_msg_get_topic (msg, &topic) < 0 || strcmp (topic, "foo.baz"))
+    if (flux_msg_get_topic (msg, &topic) < 0 || !streq (topic, "foo.baz"))
         flux_reactor_stop_error (flux_get_reactor (h));
     flux_msg_handler_stop (mh);
     multmatch_count++;
@@ -51,7 +52,7 @@ static void multmatch2 (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     const char *topic;
-    if (flux_msg_get_topic (msg, &topic) < 0 || strcmp (topic, "foo.bar"))
+    if (flux_msg_get_topic (msg, &topic) < 0 || !streq (topic, "foo.bar"))
         flux_reactor_stop_error (flux_get_reactor (h));
     flux_msg_handler_stop (mh);
     multmatch_count++;

@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <flux/core.h>
 
+#include "src/common/libjob/idf58.h"
 #include "src/common/libutil/fluid.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -46,7 +47,10 @@ int restart_count_char (const char *s, char c)
     return count;
 }
 
-static struct job *lookup_job (flux_t *h, flux_jobid_t id, flux_error_t *error)
+static struct job *lookup_job (flux_t *h,
+                               flux_jobid_t id,
+                               flux_error_t *error,
+                               bool *fatal)
 {
     flux_future_t *f1 = NULL;
     flux_future_t *f2 = NULL;
@@ -60,27 +64,36 @@ static struct job *lookup_job (flux_t *h, flux_jobid_t id, flux_error_t *error)
         || !(f1 = flux_kvs_lookup (h, NULL, 0, k1))
         || !(f2 = flux_kvs_lookup (h, NULL, 0, k2))) {
         errprintf (error,
-                   "cannot send lookup requests for job %ju: %s",
-                   (uintmax_t)id,
+                   "cannot send lookup requests for job %s: %s",
+                   idf58 (id),
                    strerror (errno));
+        *fatal = true;
         goto done;
     }
     if (flux_kvs_lookup_get (f1, &eventlog) < 0) {
         errprintf (error, "lookup %s: %s", k1, strerror (errno));
+        *fatal = false;
         goto done;
     }
     if (flux_kvs_lookup_get (f2, &jobspec) < 0) {
         errprintf (error, "lookup %s: %s", k2, strerror (errno));
+        *fatal = false;
         goto done;
     }
-    if (!(job = job_create_from_eventlog (id, eventlog, jobspec, &e)))
+    if (!(job = job_create_from_eventlog (id, eventlog, jobspec, &e))) {
         errprintf (error, "replay %s: %s", k1, e.text);
+        *fatal = true;
+    }
 done:
     flux_future_destroy (f1);
     flux_future_destroy (f2);
     return job;
 }
 
+/* Create a 'struct job' from the KVS, using synchronous KVS RPCs.
+ * Return 1 on success, 0 on non-fatal error, or -1 on a fatal error,
+ * where a fatal error will prevent flux from starting.
+ */
 static int depthfirst_map_one (flux_t *h,
                                const char *key,
                                int dirskip,
@@ -101,8 +114,22 @@ static int depthfirst_map_one (flux_t *h,
         errprintf (error, "could not decode %s to job ID", key + dirskip + 1);
         return -1;
     }
-    if (!(job = lookup_job (h, id, error)))
-        return -1;
+
+    flux_error_t lookup_error;
+    bool fatal = false;
+    if (!(job = lookup_job (h, id, &lookup_error, &fatal))) {
+        if (fatal) {
+            errprintf (error, "%s", lookup_error.text);
+            return -1;
+        }
+        flux_log (h,
+                  LOG_ERR,
+                  "job %s not replayed: %s",
+                  idf58 (id),
+                  lookup_error.text);
+        return 0;
+    }
+
     if (cb (job, arg, error) < 0)
         goto done;
     rc = 1;
@@ -196,8 +223,8 @@ static int restart_map_cb (struct job *job, void *arg, flux_error_t *error)
 
     if (zhashx_insert (ctx->active_jobs, &job->id, job) < 0) {
         errprintf (error,
-                   "could not insert job %ju into active job hash",
-                   (uintmax_t)job->id);
+                   "could not insert job %s into active job hash",
+                   idf58 (job->id));
         return -1;
     }
     if (ctx->max_jobid < job->id)
@@ -206,9 +233,9 @@ static int restart_map_cb (struct job *job, void *arg, flux_error_t *error)
         wait_notify_active (ctx->wait, job);
     if (event_job_action (ctx->event, job) < 0) {
         flux_log_error (ctx->h,
-                        "replay warning: %s action failed on job %ju",
+                        "replay warning: %s action failed on job %s",
                         flux_job_statetostr (job->state, "L"),
-                        (uintmax_t)job->id);
+                        idf58 (job->id));
     }
     return 0;
 }
@@ -320,8 +347,8 @@ int restart_from_kvs (struct job_manager *ctx)
                                            true,
                                            &errmsg) < 0) {
                 flux_log (ctx->h, LOG_ERR,
-                          "restart: id=%ju: dependency check failed: %s",
-                          (uintmax_t) job->id, errmsg);
+                          "restart: id=%s: dependency check failed: %s",
+                          idf58 (job->id), errmsg);
             }
             free (errmsg);
         }
@@ -337,11 +364,11 @@ int restart_from_kvs (struct job_manager *ctx)
          *   after this one. (job.priority, job.sched...)
          */
         if (jobtap_call (ctx->jobtap, job, "job.create", NULL) < 0)
-            flux_log_error (ctx->h, "jobtap_call (id=%ju, create)",
-                                (uintmax_t) job->id);
+            flux_log_error (ctx->h, "jobtap_call (id=%s, create)",
+                            idf58 (job->id));
         if (jobtap_call (ctx->jobtap, job, "job.new", NULL) < 0)
-            flux_log_error (ctx->h, "jobtap_call (id=%ju, new)",
-                                (uintmax_t) job->id);
+            flux_log_error (ctx->h, "jobtap_call (id=%s, new)",
+                            idf58 (job->id));
 
         if (job->state == FLUX_JOB_STATE_SCHED) {
             /*
@@ -357,8 +384,8 @@ int restart_from_kvs (struct job_manager *ctx)
                                      "flux-restart",
                                      0,
                                      NULL) < 0) {
-                flux_log_error (ctx->h, "%s: event_job_post_pack id=%ju",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log_error (ctx->h, "%s: event_job_post_pack id=%s",
+                                __FUNCTION__, idf58 (job->id));
             }
         }
         else if ((job->state & FLUX_JOB_STATE_RUNNING) != 0) {
@@ -370,9 +397,9 @@ int restart_from_kvs (struct job_manager *ctx)
                                          "debug.exec-reattach-start",
                                          0,
                                          "{s:I}",
-                                         "id", (uintmax_t)job->id) < 0)
-                    flux_log_error (ctx->h, "%s: event_job_post_pack id=%ju",
-                                    __FUNCTION__, (uintmax_t)job->id);
+                                         "id", idf58 (job->id)) < 0)
+                    flux_log_error (ctx->h, "%s: event_job_post_pack id=%s",
+                                    __FUNCTION__, idf58 (job->id));
             }
         }
         job = zhashx_next (ctx->active_jobs);
@@ -396,8 +423,8 @@ int restart_from_kvs (struct job_manager *ctx)
     }
     flux_log (ctx->h,
               LOG_DEBUG,
-              "restart: max_jobid=%ju",
-              (uintmax_t)ctx->max_jobid);
+              "restart: max_jobid=%s",
+              idf58 (ctx->max_jobid));
     return 0;
 }
 

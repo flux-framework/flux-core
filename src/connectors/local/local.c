@@ -16,6 +16,7 @@
 
 #include "src/common/librouter/usock.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/str/str.h"
 
 struct local_connector {
     struct usock_client *uclient;
@@ -77,7 +78,7 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
     struct local_connector *ctx = impl;
 
     if (ctx->testing_userid != FLUX_USERID_UNKNOWN
-                                || ctx->testing_rolemask != FLUX_ROLE_NONE)
+        || ctx->testing_rolemask != FLUX_ROLE_NONE)
         return send_testing (ctx, msg, flags);
 
     return usock_client_send (ctx->uclient, msg, flags);
@@ -97,21 +98,23 @@ static int op_setopt (void *impl, const char *option,
     size_t val_size;
     int rc = -1;
 
-    if (option && !strcmp (option, FLUX_OPT_TESTING_USERID)) {
+    if (option && streq (option, FLUX_OPT_TESTING_USERID)) {
         val_size = sizeof (ctx->testing_userid);
         if (size != val_size) {
             errno = EINVAL;
             goto done;
         }
         memcpy (&ctx->testing_userid, val, val_size);
-    } else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
+    }
+    else if (option && streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
         val_size = sizeof (ctx->testing_rolemask);
         if (size != val_size) {
             errno = EINVAL;
             goto done;
         }
         memcpy (&ctx->testing_rolemask, val, val_size);
-    } else {
+    }
+    else {
         errno = EINVAL;
         goto done;
     }
@@ -127,14 +130,15 @@ static int op_getopt (void *impl, const char *option,
     size_t val_size;
     int rc = -1;
 
-    if (option && !strcmp (option, "flux::owner")) {
+    if (option && streq (option, "flux::owner")) {
         val_size = sizeof (ctx->owner);
         if (size != val_size) {
             errno = EINVAL;
             goto done;
         }
         memcpy (val, &ctx->owner, val_size);
-    } else {
+    }
+    else {
         errno = EINVAL;
         goto done;
     }

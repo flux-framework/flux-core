@@ -20,6 +20,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
+#include "src/common/libjob/idf58.h"
 #include "bulk-exec.h"
 
 struct exec_cmd {
@@ -122,7 +123,7 @@ static void exit_batch_cb (flux_reactor_t *r, flux_watcher_t *w,
  *   then start a timer which will fire and call the function to
  *   notify bulk_exec user of the batch of subprocess exits.
  *
- *  This appraoch avoids unecessarily calling into user's callback
+ *  This approach avoids unnecessarily calling into user's callback
  *   multiple times when all tasks exit within 0.01s.
  */
 static void exit_batch_append (struct bulk_exec *exec, flux_subprocess_t *p)
@@ -491,8 +492,8 @@ void bulk_exec_kill_log_error (flux_future_t *f, flux_jobid_t id)
         if (flux_future_get (cf, NULL) < 0) {
             uint32_t rank = flux_rpc_get_nodeid (cf);
             flux_log_error (h,
-                            "%ju: exec_kill: %s (rank %lu)",
-                            (uintmax_t) id,
+                            "%s: exec_kill: %s (rank %lu)",
+                            idf58 (id),
                             flux_get_hostbyrank (h, rank),
                             (unsigned long)rank);
         }

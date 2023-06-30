@@ -26,7 +26,8 @@ SUBDIRS = \
 	libczmqcontainers \
 	libccan \
 	libzmqutil \
-	libtaskmap
+	libtaskmap \
+	libfilemap
 
 if HAVE_LIBSYSTEMD
 SUBDIRS += libsdprocess
@@ -110,6 +111,7 @@ libflux_optparse_la_LIBADD = \
 	$(builddir)/libczmqcontainers/libczmqcontainers.la \
 	$(builddir)/liblsd/liblsd.la \
 	$(builddir)/libutil/fsd.lo \
+	$(builddir)/libutil/parse_size.lo \
 	$(LIBPTHREAD)
 libflux_optparse_la_LDFLAGS = \
 	-Wl,--version-script=$(srcdir)/libflux-optparse.map \

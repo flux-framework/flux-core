@@ -45,7 +45,7 @@
 #include "src/common/librouter/usock.h"
 #include "src/common/librouter/auth.h"
 
-/* Usock client encouters an error.
+/* Usock client encounters an error.
  */
 static void uconn_error (struct usock_conn *uconn, int errnum, void *arg)
 {
@@ -133,14 +133,14 @@ static int cmd_relay (optparse_t *p, int ac, char *av[])
     char *uri;
     char hostname [HOST_NAME_MAX + 1];
 
-    /*  If possible, initalize logging prefix as local hostname. (In the
-     *  unlikely event gethostname(3) fails, use "uknown-host".)
+    /*  If possible, initialize logging prefix as local hostname. (In the
+     *  unlikely event gethostname(3) fails, use "unknown-host".)
      *
      *  This will be more helpful than a literal "flux-relay" logging prefix
-     *  for end users that may be uknowningly using flux-relay as part of
+     *  for end users that may be unknowningly using flux-relay as part of
      *  the ssh connector.
      */
-    log_init ("uknown-host");
+    log_init ("unknown-host");
     if (gethostname (hostname, sizeof (hostname)) == 0)
         log_init (hostname);
 

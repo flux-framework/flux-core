@@ -37,6 +37,7 @@
 
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "servhash.h"
 
@@ -237,7 +238,7 @@ int servhash_remove (struct servhash *sh,
         return -1;
     }
     if (!(entry = zhashx_lookup (sh->services, name))
-            || strcmp (entry->uuid, uuid) != 0
+            || !streq (entry->uuid, uuid)
             || entry->f_remove != NULL) {
         errno = ENOENT;
         return -1;
@@ -267,7 +268,7 @@ void servhash_disconnect (struct servhash *sh, const char *uuid)
         key = zlistx_first (keys);
         while (key) {
             entry = zhashx_lookup (sh->services, key);
-            if (!strcmp (entry->uuid, uuid))
+            if (streq (entry->uuid, uuid))
                 zhashx_delete (sh->services, key);
             key = zlistx_next (keys);
         }

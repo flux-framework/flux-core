@@ -16,6 +16,8 @@
 #include <string.h>
 #include <jansson.h>
 
+#include "ccan/str/str.h"
+
 #include "jj.h"
 
 static int jj_read_level (json_t *o, int level, struct jj_counts *jj);
@@ -44,16 +46,16 @@ static int jj_read_vertex (json_t *o, int level, struct jj_counts *jj)
         errno = EINVAL;
         return -1;
     }
-    if (strcmp (type, "node") == 0) {
+    if (streq (type, "node")) {
         jj->nnodes = count;
         if (exclusive)
             jj->exclusive = true;
     }
-    else if (strcmp (type, "slot") == 0)
+    else if (streq (type, "slot"))
         jj->nslots = count;
-    else if (strcmp (type, "core") == 0)
+    else if (streq (type, "core"))
         jj->slot_size = count;
-    else if (strcmp (type, "gpu") == 0)
+    else if (streq (type, "gpu"))
         jj->slot_gpus = count;
     else {
         sprintf (jj->error, "Unsupported resource type '%s'", type);
@@ -122,18 +124,20 @@ int jj_get_counts_json (json_t *jobspec, struct jj_counts *jj)
         errno = EINVAL;
         return -1;
     }
-    if (json_unpack_ex (jobspec, &error, 0, "{s:{s?{s?F}}}",
+    if (version != 1) {
+        snprintf (jj->error, sizeof (jj->error) - 1,
+                 "Invalid version: expected 1, got %d", version);
+        errno = EINVAL;
+        return -1;
+    }
+    /* N.B. attributes.system is generally optional, but
+     * attributes.system.duration is required in jobspec version 1 */
+    if (json_unpack_ex (jobspec, &error, 0, "{s:{s:{s:F}}}",
                         "attributes",
                           "system",
                             "duration", &jj->duration) < 0) {
         snprintf (jj->error, sizeof (jj->error) - 1,
                   "at top level: getting duration: %s", error.text);
-        errno = EINVAL;
-        return -1;
-    }
-    if (version != 1) {
-        snprintf (jj->error, sizeof (jj->error) - 1,
-                 "Invalid version: expected 1, got %d", version);
         errno = EINVAL;
         return -1;
     }

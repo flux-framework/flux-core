@@ -20,6 +20,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "ccan/str/str.h"
 
 #include "job-info.h"
 #include "watch.h"
@@ -226,7 +227,7 @@ static int check_eventlog_end (struct watch_ctx *w,
         goto error;
     }
 
-    if (!strcmp (name, "clean"))
+    if (streq (name, "clean"))
         rc = 1;
     else
         rc = 0;
@@ -291,7 +292,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
          * An alternate main KVS namespace eventlog does not have a
          * known ruleset, so it will hang.
          */
-        if (!w->guest && !strcmp (w->path, "eventlog")) {
+        if (!w->guest && streq (w->path, "eventlog")) {
             if (check_eventlog_end (w, tok, toklen) > 0) {
                 if (flux_kvs_lookup_cancel (w->watch_f) < 0) {
                     flux_log_error (ctx->h, "%s: flux_kvs_lookup_cancel",
@@ -420,7 +421,7 @@ void watch_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* if watching a "guest" path, forward to guest watcher for
      * handling */
-    if (!strncmp (path, "guest.", 6)) {
+    if (strstarts (path, "guest.")) {
         if (guest_watch (ctx, msg, id, path + 6, flags) < 0)
             goto error;
     }

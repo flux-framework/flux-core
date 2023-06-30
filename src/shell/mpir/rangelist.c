@@ -8,6 +8,35 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* rangelist.c - compressed encoding of a list of integers
+ *
+ * The rangelist encoding uses a combination of run-length, range
+ * and delta encoding to compress a possibly large set of integers
+ * into a somewhat compact JSON array.
+ *
+ * This implementation is meant for encoding data for the MPIR
+ * process table in a space efficient manner, and takes advantage
+ * of the fact that multiple PIDs and hostnames with numeric
+ * suffixes are usually adjacent (or repeated in the case of hostnames)
+ *
+ * A rangelist is an array of entries that follow these rules:
+ *
+ * - If an entry is a single integer then it represents a single number
+ *   which is delta encoded from the previous entry (or 0 if this is the
+ *   first entry in the rangelist).
+ *
+ * - If an entry is an array, it will have two elements. The fist element
+ *   is delta encoded from the previous entry (or 0 if no previous entry)
+ *   and represents the start value for a set of integers.
+ *
+ *   - if the second element is > 0, then it represents a run-length
+ *     encoded set of integers beginning at start. E.g. [1234,4] represents
+ *     1234, 1235, 1236, 1237.
+ *
+ *   - if the second element is < 0, then it represents a number of
+ *     repeats of the same value, e.g. [18, -3] represents [18, 18, 18].
+ */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif

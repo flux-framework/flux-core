@@ -17,6 +17,7 @@
 #include "attr.h"
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 void basic (void)
 {
@@ -47,7 +48,7 @@ void basic (void)
         "attr_get on new attr works with NULL args");
     val = NULL;
     flags = 0;
-    ok (attr_get (attrs, "foo", &val, &flags) == 0 && !strcmp (val, "bar")
+    ok (attr_get (attrs, "foo", &val, &flags) == 0 && streq (val, "bar")
         && flags == 0,
         "attr_get on new attr works returns correct val,flags");
 
@@ -66,7 +67,7 @@ void basic (void)
         "attr_add ATTR_IMMUTABLE works");
     flags = 0;
     val = NULL;
-    ok (attr_get (attrs, "foo", &val, &flags) == 0 && !strcmp (val, "baz")
+    ok (attr_get (attrs, "foo", &val, &flags) == 0 && streq (val, "baz")
         && flags == ATTR_IMMUTABLE,
         "attr_get returns correct value and flags");
     errno = 0;
@@ -86,7 +87,7 @@ void basic (void)
      * initial hash contents: foo=bar
      */
     val = attr_first (attrs);
-    ok (val && !strcmp (val, "foo"),
+    ok (val && streq (val, "foo"),
         "attr_first returned foo");
     ok (attr_next (attrs) == NULL,
         "attr_next returned NULL");
@@ -96,19 +97,19 @@ void basic (void)
         && attr_add (attrs, "foo4", "44", 0) == 0,
         "attr_add foo1, foo2, foo3, foo4 works");
     val = attr_first (attrs);
-    ok (val && !strncmp (val, "foo", 3),
+    ok (val && strstarts (val, "foo"),
         "attr_first returned foo-prefixed attr");
     val = attr_next (attrs);
-    ok (val && !strncmp (val, "foo", 3),
+    ok (val && strstarts (val, "foo"),
         "attr_next returned foo-prefixed attr");
     val = attr_next (attrs);
-    ok (val && !strncmp (val, "foo", 3),
+    ok (val && strstarts (val, "foo"),
         "attr_next returned foo-prefixed attr");
     val = attr_next (attrs);
-    ok (val && !strncmp (val, "foo", 3),
+    ok (val && strstarts (val, "foo"),
         "attr_next returned foo-prefixed attr");
     val = attr_next (attrs);
-    ok (val && !strncmp (val, "foo", 3),
+    ok (val && strstarts (val, "foo"),
         "attr_next returned foo-prefixed attr");
     ok (attr_next (attrs) == NULL,
         "attr_next returned NULL");
@@ -131,13 +132,13 @@ void active (void)
     ok (attr_add_active_int (attrs, "a", &a, 0) == 0,
         "attr_add_active_int works");
     a = 0;
-    ok (attr_get (attrs, "a", &val, NULL) == 0 && val && !strcmp (val, "0"),
+    ok (attr_get (attrs, "a", &val, NULL) == 0 && val && streq (val, "0"),
         "attr_get on active int tracks val=0");
     a = 1;
-    ok (attr_get (attrs, "a", &val, NULL) == 0 && !strcmp (val, "1"),
+    ok (attr_get (attrs, "a", &val, NULL) == 0 && streq (val, "1"),
         "attr_get on active int tracks val=1");
     a = -1;
-    ok (attr_get (attrs, "a", &val, NULL) == 0 && !strcmp (val, "-1"),
+    ok (attr_get (attrs, "a", &val, NULL) == 0 && streq (val, "-1"),
         "attr_get on active int tracks val=-1");
     a = INT_MAX - 1;
     ok (attr_get (attrs, "a", &val, NULL) == 0
@@ -162,10 +163,10 @@ void active (void)
     ok (attr_add_active_uint32 (attrs, "b", &b, 0) == 0,
         "attr_add_active_uint32 works");
     b = 0;
-    ok (attr_get (attrs, "b", &val, NULL) == 0 && val && !strcmp (val, "0"),
+    ok (attr_get (attrs, "b", &val, NULL) == 0 && val && streq (val, "0"),
         "attr_get on active uin32_t tracks val=0");
     b = 1;
-    ok (attr_get (attrs, "b", &val, NULL) == 0 && !strcmp (val, "1"),
+    ok (attr_get (attrs, "b", &val, NULL) == 0 && streq (val, "1"),
         "attr_get on active uint32_t tracks val=1");
     b = UINT_MAX - 1;
     ok (attr_get (attrs, "b", &val, NULL) == 0
@@ -184,10 +185,10 @@ void active (void)
     ok (attr_add_active_int (attrs, "c", &c, ATTR_IMMUTABLE) == 0,
         "attr_add_active_int ATTR_IMMUTABLE works");
     c = 42;
-    ok (attr_get (attrs, "c", &val, NULL) == 0 && val && !strcmp (val, "42"),
+    ok (attr_get (attrs, "c", &val, NULL) == 0 && val && streq (val, "42"),
         "attr_get returns initial val=42");
     c = 43;
-    ok (attr_get (attrs, "c", &val, NULL) == 0 && val && !strcmp (val, "42"),
+    ok (attr_get (attrs, "c", &val, NULL) == 0 && val && streq (val, "42"),
         "attr_get ignores value changes");
     errno = 0;
     ok (attr_delete (attrs, "c", true) < 0 && errno == EPERM,

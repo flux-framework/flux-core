@@ -28,7 +28,7 @@
  *         }
  *
  * - Kill terminal sessions by ID: *terminus.kill
- *   If 'wait', then reponse will be delayed until session exits
+ *   If 'wait', then response will be delayed until session exits
  *
  *   IN:   { "id":i "signal":i "wait"?i }
  *   OUT:  {}
@@ -45,6 +45,9 @@
  * in pty.c.
  */
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>

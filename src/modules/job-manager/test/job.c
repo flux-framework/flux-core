@@ -17,6 +17,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/modules/job-manager/job.h"
+#include "ccan/str/str.h"
 
 void test_create (void)
 {
@@ -381,7 +382,7 @@ void test_create_from_json (void)
         && job->urgency == 10
         && job->userid == 42
         && job->t_submit == 1.0
-        && job->queue && !strcmp (job->queue, "foo")
+        && job->queue && streq (job->queue, "foo")
         && job->flags == 0,
         "job json object was properly decoded w/ queue");
     json_decref (o);
@@ -540,7 +541,7 @@ static void test_event_queue (void)
     ok (job_event_peek (job, &flags, &entry) == 0,
         "job_event_peek works");
     ok (eventlog_entry_parse (entry, NULL, &name, &context) == 0
-        && !strcmp (name, "foo")
+        && streq (name, "foo")
         && json_unpack (context, "{s:i}", "bar", &i) == 0
         && i == 42,
         "eventlog entry is correct");
@@ -556,7 +557,7 @@ static void test_event_queue (void)
     ok (json_array_size (job->event_queue) == 1,
         "queue size is now 1");
     ok (eventlog_entry_parse (entry, NULL, &name, &context) == 0
-        && !strcmp (name, "foo")
+        && streq (name, "foo")
         && json_unpack (context, "{s:i}", "bar", &i) == 0
         && i == 42,
         "eventlog entry is correct");
@@ -572,7 +573,7 @@ static void test_event_queue (void)
     ok (job_event_peek (job, &flags, &entry) == 0,
         "job_event_peek works");
     ok (eventlog_entry_parse (entry, NULL, &name, &context) == 0
-        && !strcmp (name, "bar")
+        && streq (name, "bar")
         && json_unpack (context, "{s:i}", "baz", &i) == 0
         && i == 43,
         "eventlog entry is correct");

@@ -8,12 +8,15 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
+#include <string.h>
+#include <ctype.h>
+
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"
-
-#include <string.h>
-#include <ctype.h>
 
 int main(int argc, char** argv)
 {

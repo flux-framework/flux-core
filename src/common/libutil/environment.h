@@ -42,11 +42,24 @@ const char *environment_next (struct environment *e);
  * @brief Get the value of the current cursor element, matching the key from
  * either *_first or *_next
  *
- * @param e the envirnoment to operate on
+ * @param e the environment to operate on
  *
  * @return The value of the current environment element
  */
 const char *environment_cursor (struct environment *e);
+
+/**
+ * @brief Iterate over a multi-element environment variable *_key
+ *
+ * @param e the environment to operate on
+ * @param key the environment variable to iterate over
+ * @param entry the current entry, set to NULL to begin iteration
+ *
+ * @return The value of the current environment variable element
+ */
+const char *environment_var_next (struct environment *e,
+                                  const char *key,
+                                  const char *entry);
 
 /**
  * @brief Apply the changes encoded in this environment to the environment of
@@ -85,6 +98,22 @@ void environment_push (struct environment *e,
 void environment_push_back (struct environment *e,
                             const char *key,
                             const char *value);
+
+/**
+ * @brief Push "value" before position "before" in the environment variable
+ *  "key."
+ *
+ * @param e the environment in which to add this element
+ * @param key the environment variable name
+ * @param before the element before which to insert this value
+ * @param value the value to insert
+ *
+ * @return 0 on success -1 with errno set on failure.
+ */
+int environment_insert (struct environment *e,
+                        const char *key,
+                        char *before,
+                        const char *value);
 
 /**
  * @brief Add the specified value to the front of the target key without

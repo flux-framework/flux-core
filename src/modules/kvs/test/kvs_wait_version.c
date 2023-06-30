@@ -22,6 +22,7 @@
 #include "src/modules/kvs/kvsroot.h"
 #include "src/modules/kvs/kvs_wait_version.h"
 #include "src/modules/kvs/cache.h"
+#include "ccan/str/str.h"
 
 const char *root_ref = "1234";  /* random string, doesn't matter for tests */
 int count = 0;
@@ -168,11 +169,11 @@ bool msgcmp (const flux_msg_t *msg, void *arg)
     const char *id;
     bool match = false;
     if ((id = flux_msg_route_first (msg))
-        && (!strcmp (id, "1")
-            || !strcmp (id, "2")
-            || !strcmp (id, "3")
-            || !strcmp (id, "4")
-            || !strcmp (id, "5")))
+        && (streq (id, "1")
+            || streq (id, "2")
+            || streq (id, "3")
+            || streq (id, "4")
+            || streq (id, "5")))
         match = true;
     return match;
 }

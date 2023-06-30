@@ -16,6 +16,7 @@
 #include "src/common/libflux/reactor.h"
 #include "src/common/libflux/future.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 static bool init_and_fulfill_called = false;
 static bool init_no_fulfill_called = false;
@@ -73,18 +74,18 @@ static void test_composite_basic_any (flux_reactor_t *r, bool with_error)
         "flux_future_get_child (any, 'f1') == f1");
 
     s = flux_future_first_child (any);
-    ok ((s != NULL) && !strcmp (s, "f1"),
+    ok ((s != NULL) && streq (s, "f1"),
         "flux_future_first_child() == 'f1'");
 
     ok (flux_future_push (any, "f2", f2) == 0,
         "flux_future_push (any, 'f2', f2)");
 
     s = flux_future_first_child (any);
-    ok (s != NULL && (!strcmp (s, "f1") || !strcmp (s, "f2")),
+    ok (s != NULL && (streq (s, "f1") || streq (s, "f2")),
         "flux_future_first_child (any) returns one of two children");
     p = flux_future_next_child (any);
-    ok ((p != NULL) && (!strcmp (p, "f1") || !strcmp (p, "f2"))
-        && (strcmp (p, s) != 0),
+    ok ((p != NULL) && (streq (p, "f1") || streq (p, "f2"))
+        && (!streq (p, s)),
         "flux_future_next_child (any) returns different child (%s)", s);
     ok (flux_future_next_child (any) == NULL,
         "flux_future_next_child (any) == NULL signifies end of list");
@@ -135,7 +136,7 @@ static void test_composite_basic_all (flux_reactor_t *r, bool with_error)
         "flux_future_get_child (all, 'f1') == f1");
 
     s = flux_future_first_child (all);
-    ok ((s != NULL) && !strcmp (s, "f1"),
+    ok ((s != NULL) && streq (s, "f1"),
         "flux_future_first_child() == 'f1'");
 
     ok (flux_future_push (all, "f2", f2) == 0,

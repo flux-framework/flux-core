@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
 #include <flux/core.h>
 #include <inttypes.h>
@@ -235,7 +238,7 @@ static void check_rpc_open_policy (flux_t *h)
     flux_msg_handler_destroy (mh);
 }
 
-static void check_rpc_targetted_policy (flux_t *h)
+static void check_rpc_targeted_policy (flux_t *h)
 {
     flux_future_t *f;
     flux_msg_handler_t *mh;
@@ -244,7 +247,7 @@ static void check_rpc_targetted_policy (flux_t *h)
     int rc;
 
     ok ((mh = testrpc1_handler_create (h)) != NULL,
-        "created message handler with targetted policy");
+        "created message handler with targeted policy");
     if (mh == NULL)
         BAIL_OUT ("flux_msg_handler_create: %s", flux_strerror (errno));
     flux_msg_handler_deny_rolemask (mh, FLUX_ROLE_ALL);
@@ -333,7 +336,7 @@ int main (int argc, char *argv[])
     check_rpc_oneway_faked (h);
     check_rpc_default_policy (h);
     check_rpc_open_policy (h);
-    check_rpc_targetted_policy (h);
+    check_rpc_targeted_policy (h);
 
     flux_close (h);
     done_testing();

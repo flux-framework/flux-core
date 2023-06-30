@@ -32,10 +32,10 @@ void job_constraint_destroy (struct job_constraint *c);
 /*  Return true if rnode 'n' matches constraints in RFC 31 constraint
  *   specification 'constraint'.
  */
-bool rnode_match (const struct rnode *n, struct job_constraint *c);
+bool rnode_match (const struct rnode *n, struct job_constraint *constraint);
 
 /*  Copy an rnode only if it matches the RFC 31 constraints in `constraint` */
 struct rnode *rnode_copy_match (const struct rnode *n,
-                                struct job_constraint *c);
+                                struct job_constraint *constraint);
 
-#endif /* !HAVE_SCHED_RLIST_MATCH */
+#endif /* !HAVE_RLIST_MATCH_H */

@@ -18,6 +18,7 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "kvs_dir_private.h"
 #include "treeobj.h"
@@ -203,7 +204,7 @@ char *flux_kvsdir_key_at (const flux_kvsdir_t *dir, const char *name)
     char *s;
     int len;
 
-    if (!strcmp (dir->key, ".")) {
+    if (streq (dir->key, ".")) {
         if (!(s = strdup (name)))
             goto nomem;
     }

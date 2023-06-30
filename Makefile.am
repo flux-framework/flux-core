@@ -6,6 +6,7 @@ EXTRA_DIST = \
 	config/tap-driver.sh \
 	config/tap-driver.py \
 	NOTICE.LLNS \
+	LICENSE \
 	README.md \
 	vscode.md \
 	NEWS.md \
@@ -52,3 +53,10 @@ check-prep: all
 	cd src && $(MAKE) check
 	cd doc && $(MAKE) check
 	cd t && $(MAKE) check-prep
+
+export DEB_BUILD_OPTIONS ?= nocheck terse
+deb: debian scripts/debbuild.sh
+	+@$(top_srcdir)/scripts/debbuild.sh $(abs_top_srcdir)
+
+clean-local:
+	@rm -rf debbuild

@@ -24,8 +24,10 @@
 #include <langinfo.h>
 #include <locale.h>
 
+#include "ccan/str/str.h"
 #include "fluid.h"
 #include "mnemonic.h"
+#include "basemoji.h"
 
 /* fluid: [ts:40 id:14 seq:10] */
 static const int bits_per_ts = 40;
@@ -181,7 +183,7 @@ static inline int is_utf8_locale (void)
      * or similar), but allow ascii encoding to be enforced if
      * FLUX_F58_FORCE_ASCII is set.
      */
-    if (MB_CUR_MAX > 1 && !strcmp (nl_langinfo (CODESET), "UTF-8")
+    if (MB_CUR_MAX > 1 && streq (nl_langinfo (CODESET), "UTF-8")
         && !getenv ("FLUX_F58_FORCE_ASCII"))
         return 1;
     return 0;
@@ -254,15 +256,12 @@ static int b58decode (const char *str, uint64_t *idp)
 
 static int fluid_is_f58 (const char *str)
 {
-    int len = 0;
     if (str == NULL || str[0] == '\0')
         return 0;
-    len = strlen (f58_prefix);
-    if (strncmp (str, f58_prefix, len) == 0)
-        return len;
-    len = strlen (f58_alt_prefix);
-    if (strncmp (str, f58_alt_prefix, len) == 0)
-        return len;
+    if (strstarts (str, f58_prefix))
+        return strlen (f58_prefix);
+    if (strstarts (str, f58_alt_prefix))
+        return strlen (f58_alt_prefix);
     return 0;
 }
 
@@ -336,6 +335,10 @@ int fluid_encode (char *buf, int bufsz, fluid_t fluid,
             if (fluid_f58_encode (buf, bufsz, fluid) < 0)
                 return -1;
             break;
+        case FLUID_STRING_EMOJI:
+            if (uint64_basemoji_encode (fluid, buf, bufsz) < 0)
+                return -1;
+            break;
     }
     return 0;
 }
@@ -382,6 +385,10 @@ int fluid_decode (const char *s, fluid_t *fluidp, fluid_string_type_t type)
             if (fluid_f58_decode (&fluid, s) < 0)
                 return -1;
             break;
+        case FLUID_STRING_EMOJI:
+            if (uint64_basemoji_decode (s, &fluid) < 0)
+                return -1;
+            break;
         default:
             errno = EINVAL;
             return -1;
@@ -415,6 +422,8 @@ fluid_string_type_t fluid_string_detect_type (const char *s)
         return FLUID_STRING_MNEMONIC;
     if (fluid_is_f58 (s) > 0)
         return FLUID_STRING_F58;
+    if (is_basemoji_string (s))
+        return FLUID_STRING_EMOJI;
     return 0;
 }
 
@@ -437,7 +446,7 @@ int fluid_parse (const char *s, fluid_t *fluidp)
         return -1;
     }
 
-    /*  Skip leading whitepsace
+    /*  Skip leading whitespace
      */
     while (*s != '\0' && isspace (*s))
         s++;
@@ -448,7 +457,7 @@ int fluid_parse (const char *s, fluid_t *fluidp)
     /* O/w, FLUID encoded as an integer, either base16 (prefix="0x")
      *  or base10 (no prefix).
      */
-    if (strncmp (s, "0x", 2) == 0)
+    if (strstarts (s, "0x"))
         base = 16;
     errno = 0;
     l = strtoull (s, &endptr, base);

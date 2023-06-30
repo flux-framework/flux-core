@@ -10,8 +10,8 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import gc
 import errno
+import gc
 import unittest
 
 import flux
@@ -86,8 +86,8 @@ class TestHandle(unittest.TestCase):
             raise RuntimeError("this is a test")
 
         self.f.rpc("broker.ping", self.ping_payload).then(then_cb)
-        with self.assertRaises(RuntimeError) as cm:
-            rc = self.f.reactor_run()
+        with self.assertRaises(RuntimeError):
+            self.f.reactor_run()
 
     def test_03_future_then_varargs(self):
         cb_ran = [False]
@@ -212,7 +212,7 @@ class TestHandle(unittest.TestCase):
             {"count": arg["target"]},
             flags=flux.constants.FLUX_RPC_STREAMING,
         ).then(continuation_cb, arg=arg)
-        ret = self.f.reactor_run()
+        self.f.reactor_run()
         self.assertEqual(arg["count"], arg["target"])
 
         watcher.stop()
@@ -230,7 +230,7 @@ class TestHandle(unittest.TestCase):
         orig_fut = self.f.rpc("broker.ping", payload=self.ping_payload)
         new_fut = Future(orig_fut)
         del orig_fut
-        resp_payload = new_fut.get()
+        new_fut.get()
         # Future's `get` returns `None`, so just test that it is fulfilled
         self.assertTrue(new_fut.is_ready())
 
@@ -238,7 +238,7 @@ class TestHandle(unittest.TestCase):
         new_fut = Future(orig_fut)
         del orig_fut
         with self.assertRaises(EnvironmentError):
-            resp_payload = new_fut.get()
+            new_fut.get()
 
 
 if __name__ == "__main__":

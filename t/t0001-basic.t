@@ -196,12 +196,19 @@ test_expect_success 'flux-start test exec fails on bad broker shell script' "
 	#
 	# We can't use test_must_fail here because on some OSes this command
 	# might fail with exit code 127, which test_must_fail does not
-	# acccept, so we use ! here since any failure is acceptable here
+	# accept, so we use ! here since any failure is acceptable here
 	#
 	! bash -c 'FLUX_EXEC_PATH_PREPEND=. flux start -s1 true'
 "
 test_expect_success 'flux-start -s1 works' "
 	flux start ${ARGS} -s1 true
+"
+test_expect_success 'flux-start -s1 sets broker.mapping to expected value' "
+	cat >mapping_1.exp <<-EOT &&
+	[[0,1,1,1]]
+	EOT
+	flux start ${ARGS} -s1 flux getattr broker.mapping >mapping_1.out &&
+	test_cmp mapping_1.exp mapping_1.out
 "
 test_expect_success 'flux-start --test-rundir without --test-size fails' "
 	test_must_fail flux start ${ARGS} --test-rundir=$(pwd) true
@@ -399,7 +406,7 @@ test_expect_success 'hostlist attr is set on size 1 instance' '
 test_expect_success 'hostlist attr is set on all ranks of size 4 instance' '
 	flux start ${ARGS} -s4 flux exec flux getattr hostlist
 '
-test_expect_success 'flux start (singlton) cleans up rundir' '
+test_expect_success 'flux start (singleton) cleans up rundir' '
 	flux start ${ARGS} \
 		flux getattr rundir >rundir_pmi.out &&
 	RUNDIR=$(cat rundir_pmi.out) &&
@@ -612,7 +619,8 @@ test_expect_success 'flux-help command list can be extended' '
 	grep "^test two commands" help2.out &&
 	grep "a test two" help2.out
 '
-test_expect_success 'flux-help command can display manpages for subcommands' '
+command -v man >/dev/null && test_set_prereq HAVE_MAN
+test_expect_success HAVE_MAN 'flux-help command can display manpages for subcommands' '
 	PWD=$(pwd) &&
 	mkdir -p man/man1 &&
 	cat <<-EOF > man/man1/flux-foo.1 &&
@@ -622,7 +630,7 @@ test_expect_success 'flux-help command can display manpages for subcommands' '
 	EOF
 	MANPATH=${PWD}/man FLUX_IGNORE_NO_DOCS=y flux help foo | grep "^FOO(1)"
 '
-test_expect_success 'flux-help command can display manpages for api calls' '
+test_expect_success HAVE_MAN 'flux-help command can display manpages for api calls' '
 	PWD=$(pwd) &&
 	mkdir -p man/man3 &&
 	cat <<-EOF > man/man3/flux_foo.3 &&
@@ -637,7 +645,7 @@ missing_man_code()
 	man notacommand >/dev/null 2>&1
 	echo $?
 }
-test_expect_success 'flux-help returns nonzero exit code from man(1)' '
+test_expect_success HAVE_MAN 'flux-help returns nonzero exit code from man(1)' '
 	test_expect_code $(missing_man_code) \
 		eval FLUX_IGNORE_NO_DOCS=y flux help notacommand
 '

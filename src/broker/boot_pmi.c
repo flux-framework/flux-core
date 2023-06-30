@@ -23,6 +23,7 @@
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libpmi/upmi.h"
+#include "ccan/str/str.h"
 
 #include "attr.h"
 #include "overlay.h"
@@ -35,7 +36,7 @@
  *  the booting instance at what "level" it will be running, i.e. the
  *  number of parents. If the PMI key is missing, this is not an error,
  *  instead the level of this instance is considered to be zero.
- *  Additonally, if level > 0, the shell will have put the instance's
+ *  Additionally, if level > 0, the shell will have put the instance's
  *  jobid in the PMI kvsname for us as well, so populate the 'jobid' attr.
  */
 static int set_instance_level_attr (struct upmi *upmi,
@@ -84,11 +85,10 @@ static int set_broker_mapping_attr (struct upmi *upmi,
     int rc;
 
     if (size == 1)
-        val = strdup ("{\"version\":1,\"map\":[[0,1,1,1]]}");
+        val = strdup ("[[0,1,1,1]]");
     else {
         /* First attempt to get flux.taskmap, falling back to
          * PMI_process_mapping if this key is not available.
-         * This should be replaced when #4800 is fixed.
          */
         char *s;
         if (upmi_get (upmi, "flux.taskmap", -1, &s, NULL) == 0
@@ -115,7 +115,7 @@ static bool use_ipc (attr_t *attrs)
     const char *val;
 
     if (attr_get (attrs, "tbon.prefertcp", &val, NULL) == 0
-        && strcmp (val, "0") != 0)
+        && !streq (val, "0"))
         goto done;
     if (attr_get (attrs, "broker.mapping", &val, NULL) < 0 || !val)
         goto done;

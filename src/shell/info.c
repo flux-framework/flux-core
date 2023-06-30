@@ -24,6 +24,7 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/librlist/rhwloc.h"
 #include "src/common/libjob/unwrap.h"
+#include "ccan/str/str.h"
 
 #include "internal.h"
 #include "info.h"
@@ -109,7 +110,7 @@ static char *parse_arg_file (const char *optarg)
     ssize_t size;
     void *buf = NULL;
 
-    if (!strcmp (optarg, "-"))
+    if (streq (optarg, "-"))
         fd = STDIN_FILENO;
     else {
         if ((fd = open (optarg, O_RDONLY)) < 0) {
@@ -159,7 +160,7 @@ static int shell_init_jobinfo (flux_shell_t *shell,
     if (jobspec_provided && !(jobspec = strdup (jobspec_provided)))
         shell_die (1, "Out of memory copying provided jobspec");
 
-    /*  If shell is not running standlone, fetch hwloc topology
+    /*  If shell is not running standalone, fetch hwloc topology
      *   from resource module to avoid having to load from scratch
      *   here. The topology XML is then cached for future shell plugin
      *   use.

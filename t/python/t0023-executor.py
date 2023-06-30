@@ -10,21 +10,21 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import unittest
 import collections
-import threading
-import os
-import types
-import itertools
 import concurrent.futures as cf
+import itertools
+import os
+import threading
+import types
+import unittest
 
-from flux.job import JobspecV1, EventLogEvent, JobException
+from flux.job import EventLogEvent, JobException, JobspecV1
 from flux.job.executor import (
     FluxExecutor,
     FluxExecutorFuture,
+    _AttachPackage,
     _FluxExecutorThread,
     _SubmitPackage,
-    _AttachPackage,
 )
 
 
@@ -291,7 +291,6 @@ class TestFluxExecutorThread(unittest.TestCase):
                 fut.jobid()
 
     def test_exception_completion(self):
-        jobspec = JobspecV1.from_command(["false"])
         thread = _FluxExecutorThread(
             threading.Event(), threading.Event(), collections.deque(), 0.01, (), {}
         )
@@ -532,7 +531,10 @@ class TestFluxExecutorFuture(unittest.TestCase):
     def test_adding_callbacks_from_callbacks(self):
         fut = FluxExecutorFuture(threading.get_ident())
         flag = threading.Event()
-        nested_callback = lambda fut, event: flag.set()
+
+        def nested_callback(fut, event):
+            flag.set()
+
         fut.add_event_callback(
             "start", lambda fut, event: fut.add_event_callback("start", nested_callback)
         )

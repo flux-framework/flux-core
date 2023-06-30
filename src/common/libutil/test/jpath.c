@@ -18,6 +18,7 @@
 #include <string.h>
 
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 #include "src/common/libtap/tap.h"
 #include "jpath.h"
 
@@ -111,13 +112,13 @@ void basic (void)
     tmp = jpath_get (o, "a.b");
     ok (tmp
         && json_is_string (tmp)
-        && !strcmp (json_string_value (tmp), "foo"),
+        && streq (json_string_value (tmp), "foo"),
         "jpath_get a.b returned expected value");
 
     tmp = jpath_get (o, "a.c.f");
     ok (tmp
         && json_is_string (tmp)
-        && !strcmp (json_string_value (tmp), "bar"),
+        && streq (json_string_value (tmp), "bar"),
         "jpath_get a.c.f returned expected value");
 
     diag_json (o);

@@ -66,7 +66,6 @@ static struct builtin builtin_tab[] = {
     { "upmi_pluginpath",INSTALLED_UPMI_PLUGINPATH,  INTREE_UPMI_PLUGINPATH },
     { "no_docs_path",   INSTALLED_NO_DOCS_PATH,     INTREE_NO_DOCS_PATH },
     { "rundir",         INSTALLED_RUNDIR,           NULL },
-    { "bindir",         INSTALLED_BINDIR,           INTREE_BINDIR },
     { NULL, NULL, NULL },
 };
 

@@ -8,10 +8,6 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#if HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #ifndef _SUBPROCESS_TEST_RCMDSRV_H
 #define _SUBPROCESS_TEST_RCMDSRV_H
 

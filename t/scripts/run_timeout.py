@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """run command with a timeout, timeout as a float is first argument, rest are command"""
-import sys
+import argparse
 import os
 import signal
-import argparse
 import subprocess as s
+import sys
 
 parser = argparse.ArgumentParser(description="run command with a timeout")
 parser.add_argument(

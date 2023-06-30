@@ -15,6 +15,7 @@
 
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libfluxutil/method.h"
+#include "ccan/str/str.h"
 
 #include "module.h"
 #include "modservice.h"
@@ -73,13 +74,13 @@ static void debug_cb (flux_t *h, flux_msg_handler_t *mh,
         }
         flux_aux_set (h, "flux::debug_flags", debug_flags, free);
     }
-    if (!strcmp (op, "setbit"))
+    if (streq (op, "setbit"))
         *debug_flags |= flags;
-    else if (!strcmp (op, "clrbit"))
+    else if (streq (op, "clrbit"))
         *debug_flags &= ~flags;
-    else if (!strcmp (op, "set"))
+    else if (streq (op, "set"))
         *debug_flags = flags;
-    else if (!strcmp (op, "clr"))
+    else if (streq (op, "clr"))
         *debug_flags = 0;
     else {
         errno = EPROTO;
@@ -136,7 +137,7 @@ static struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,
       "rusage",
       method_rusage_cb,
-      0,
+      FLUX_ROLE_USER,
     },
     { FLUX_MSGTYPE_REQUEST,
       "ping",
@@ -170,6 +171,11 @@ int modservice_register (flux_t *h, module_t *p)
     if (flux_aux_set (h,
                       "flux::uuid",
                       (char *)module_get_uuid (ctx->p),
+                      NULL) < 0)
+        return -1;
+    if (flux_aux_set (h,
+                      "flux::name",
+                      (char *)module_get_name (ctx->p),
                       NULL) < 0)
         return -1;
 

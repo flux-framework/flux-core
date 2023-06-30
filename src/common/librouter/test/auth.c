@@ -21,7 +21,7 @@ int checkcred (const flux_msg_t *msg, struct flux_msg_cred *cred)
     struct flux_msg_cred msgcred;
 
     if (flux_msg_get_cred (msg, &msgcred) < 0)
-        BAIL_OUT ("flux_msg_get_cred faild");
+        BAIL_OUT ("flux_msg_get_cred failed");
     if (msgcred.rolemask != cred->rolemask)
         return -1;
     if (msgcred.userid != cred->userid)

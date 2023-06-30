@@ -11,13 +11,12 @@
 
 import io
 import os
-import sys
 import unittest
 import unittest.mock
-import platform
-import subflux  # To set up PYTHONPATH
-from pycotap import TAPTestRunner
+
+import subflux  # noqa: F401 - To set up PYTHONPATH
 from flux.util import Tree
+from pycotap import TAPTestRunner
 
 
 class TestTree(unittest.TestCase):

@@ -19,6 +19,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/modules/kvs/waitqueue.h"
 #include "src/modules/kvs/cache.h"
+#include "ccan/str/str.h"
 
 static int cache_entry_set_treeobj (struct cache_entry *entry, const json_t *o)
 {
@@ -195,7 +196,7 @@ void cache_entry_raw_tests (void)
 
     ok (cache_entry_get_raw (e, (const void **)&datatmp, &len) == 0,
         "raw data retrieved from cache entry");
-    ok (datatmp && strcmp (datatmp, data) == 0,
+    ok (datatmp && streq (datatmp, data),
         "raw data matches expected string");
     ok (datatmp && (len == strlen (data) + 1),
         "raw data length matches expected length");
@@ -203,21 +204,21 @@ void cache_entry_raw_tests (void)
     ok (cache_entry_set_dirty (e, true) == 0,
         "cache_entry_set_dirty success");
     ok (cache_entry_get_dirty (e) == true,
-        "cache entry succcessfully set dirty");
+        "cache entry successfully set dirty");
 
     ok (cache_entry_clear_dirty (e) == 0,
         "cache_entry_clear_dirty success");
     ok (cache_entry_get_dirty (e) == false,
-        "cache entry succcessfully now not dirty, b/c no waiters");
+        "cache entry successfully now not dirty, b/c no waiters");
 
     ok (cache_entry_set_dirty (e, true) == 0,
         "cache_entry_set_dirty success");
     ok (cache_entry_get_dirty (e) == true,
-        "cache entry succcessfully set dirty");
+        "cache entry successfully set dirty");
     ok (cache_entry_force_clear_dirty (e) == 0,
         "cache_entry_force_clear_dirty success");
     ok (cache_entry_get_dirty (e) == false,
-        "cache entry succcessfully now not dirty");
+        "cache entry successfully now not dirty");
 
     cache_entry_destroy (e); /* destroys data */
     free (data);
@@ -471,7 +472,7 @@ void cache_blobref_tests (void)
         "cache_insert works");
     ok ((ref = cache_entry_get_blobref (e)) != NULL,
         "cache_entry_get_blobref success");
-    ok (!strcmp (ref, "abcd"),
+    ok (streq (ref, "abcd"),
         "cache_entry_get_blobref returned correct ref");
 
     cache_destroy (cache);

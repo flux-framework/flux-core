@@ -11,6 +11,7 @@
 import json
 from collections.abc import Mapping
 
+from flux.hostlist import Hostlist
 from flux.idset import IDset
 from flux.resource import Rlist
 from flux.resource.ResourceSetImplementation import ResourceSetImplementation
@@ -189,7 +190,7 @@ class ResourceSet:
                       to remove
         """
         if not isinstance(ranks, IDset):
-            ranks = IDset(str(ranks))
+            ranks = IDset(ranks)
         self.impl.remove_ranks(ranks)
         return self
 
@@ -202,12 +203,31 @@ class ResourceSet:
                       to copy
         """
         if not isinstance(ranks, IDset):
-            ranks = IDset(str(ranks))
+            ranks = IDset(ranks)
         rset = ResourceSet(self.impl.copy_ranks(ranks))
 
         #  Preserve current state
         rset.state = self.state
         return rset
+
+    def host_ranks(self, hosts, ignore_nomatch=False):
+        """
+        Translate a set of hostnames to broker ranks using the current
+        ResourceSet.
+
+        Args:
+            ignore_nomatch (bool): If True, then hosts that are not in
+                the current ResourceSet are ignored, and only matching
+                hosts result in a returned rank. O/w, FileNotFound error
+                 is raised.
+        Returns:
+            list of rank ids in order of provided hosts
+        """
+        if not isinstance(hosts, Hostlist):
+            hosts = Hostlist(hosts)
+        ranks = list(self.ranks)
+        index = self.nodelist.index(hosts, ignore_nomatch=ignore_nomatch)
+        return [ranks[i] for i in index]
 
     @property
     def nodelist(self):

@@ -85,8 +85,6 @@ libutil_la_SOURCES = \
 	llog.h \
 	grudgeset.c \
 	grudgeset.h \
-	digest.c \
-	digest.h \
 	jpath.c \
 	jpath.h \
 	uri.c \
@@ -100,7 +98,13 @@ libutil_la_SOURCES = \
 	slice.c \
 	slice.h \
 	strstrip.c \
-	strstrip.h
+	strstrip.h \
+	basemoji.h \
+	basemoji.c \
+	sigutil.h \
+	sigutil.c \
+	parse_size.h \
+	parse_size.c
 
 EXTRA_DIST = veb_mach.c
 
@@ -127,13 +131,17 @@ TESTS = test_sha1.t \
 	test_intree.t \
 	test_fdwalk.t \
 	test_grudgeset.t \
-	test_digest.t \
 	test_jpath.t \
 	test_errprintf.t \
 	test_fileref.t \
 	test_hola.t \
 	test_strstrip.t \
-	test_slice.t
+	test_slice.t \
+	test_timestamp.t \
+	test_environment.t \
+	test_basemoji.t \
+	test_sigutil.t \
+	test_parse_size.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -253,10 +261,6 @@ test_grudgeset_t_SOURCES = test/grudgeset.c
 test_grudgeset_t_CPPFLAGS = $(test_cppflags)
 test_grudgeset_t_LDADD = $(test_ldadd)
 
-test_digest_t_SOURCES = test/digest.c
-test_digest_t_CPPFLAGS = $(test_cppflags)
-test_digest_t_LDADD = $(test_ldadd)
-
 test_jpath_t_SOURCES = test/jpath.c
 test_jpath_t_CPPFLAGS = $(test_cppflags)
 test_jpath_t_LDADD = $(test_ldadd)
@@ -280,3 +284,23 @@ test_hola_t_LDADD = $(test_ldadd)
 test_slice_t_SOURCES = test/slice.c
 test_slice_t_CPPFLAGS = $(test_cppflags)
 test_slice_t_LDADD = $(test_ldadd)
+
+test_timestamp_t_SOURCES = test/timestamp.c
+test_timestamp_t_CPPFLAGS = $(test_cppflags)
+test_timestamp_t_LDADD = $(test_ldadd)
+
+test_environment_t_SOURCES = test/environment.c
+test_environment_t_CPPFLAGS = $(test_cppflags)
+test_environment_t_LDADD = $(test_ldadd)
+
+test_basemoji_t_SOURCES = test/basemoji.c
+test_basemoji_t_CPPFLAGS = $(test_cppflags)
+test_basemoji_t_LDADD = $(test_ldadd)
+
+test_sigutil_t_SOURCES = test/sigutil.c
+test_sigutil_t_CPPFLAGS = $(test_cppflags)
+test_sigutil_t_LDADD = $(test_ldadd)
+
+test_parse_size_t_SOURCES = test/parse_size.c
+test_parse_size_t_CPPFLAGS = $(test_cppflags)
+test_parse_size_t_LDADD = $(test_ldadd)

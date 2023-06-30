@@ -271,6 +271,7 @@ static int channel_local_setup (flux_subprocess_t *p,
 
     if (zhash_insert (p->channels, name, c) < 0) {
         llog_debug (p, "zhash_insert failed");
+        errno = EEXIST;
         goto error;
     }
     if (!zhash_freefn (p->channels, name, channel_destroy)) {

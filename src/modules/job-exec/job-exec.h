@@ -68,7 +68,6 @@ struct jobinfo {
 
     struct resource_set * R;         /* Fetched and parsed resource set R */
     json_t *              jobspec;   /* Fetched jobspec */
-    char *                J;         /* Signed jobspec */
 
     struct idset *        critical_ranks;  /* critical shell ranks */
 
@@ -87,6 +86,7 @@ struct jobinfo {
 
     double                kill_timeout; /* grace time between sigterm,kill */
     flux_watcher_t       *kill_timer;
+    flux_watcher_t       *kill_shell_timer;
     flux_watcher_t       *expiration_timer;
 
     /* Exec implementation for this job */

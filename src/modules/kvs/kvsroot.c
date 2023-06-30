@@ -23,6 +23,7 @@
 #include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "kvsroot.h"
 
@@ -122,7 +123,7 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
         goto error;
     }
 
-    if (!strcmp (root->ns_name, KVS_PRIMARY_NAMESPACE))
+    if (streq (root->ns_name, KVS_PRIMARY_NAMESPACE))
         root->is_primary = true;
 
     if (!(root->ktm = kvstxn_mgr_create (cache,
@@ -149,6 +150,7 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
     root->remove = false;
 
     if (zhash_insert (krm->roothash, ns, root) < 0) {
+        errno = EEXIST;
         flux_log_error (krm->h, "zhash_insert");
         goto error;
     }

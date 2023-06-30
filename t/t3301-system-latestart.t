@@ -10,15 +10,15 @@ and ensure that it wires up.
 
 . `dirname $0`/sharness.sh
 
-export TEST_UNDER_FLUX_QUORUM=0
+export TEST_UNDER_FLUX_QUORUM=1
 export TEST_UNDER_FLUX_START_MODE=leader
 
 test_under_flux 2 system
 
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
-test_expect_success 'broker.quorum was set to 0 by system test personality' '
-	echo 0 >quorum.exp &&
+test_expect_success 'broker.quorum was set to 1 by system test personality' '
+	echo 1 >quorum.exp &&
 	flux getattr broker.quorum >quorum.out &&
 	test_cmp quorum.exp quorum.out
 '

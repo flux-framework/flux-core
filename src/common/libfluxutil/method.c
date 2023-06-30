@@ -20,10 +20,12 @@
 
 #include "method.h"
 
-static char *make_json_response_payload (const char *request_payload,
+static char *make_json_response_payload (flux_t *h,
+                                         const char *request_payload,
                                          const char *route,
                                          struct flux_msg_cred cred)
 {
+    uint32_t rank;
     json_t *o = NULL;
     json_t *add = NULL;
     char *result = NULL;
@@ -32,9 +34,13 @@ static char *make_json_response_payload (const char *request_payload,
         errno = EPROTO;
         goto done;
     }
-    if (!(add = json_pack ("{s:s s:i s:i}", "route", route,
-                                            "userid", cred.userid,
-                                            "rolemask", cred.rolemask))) {
+    if (flux_get_rank (h, &rank) < 0)
+        goto done;
+    if (!(add = json_pack ("{s:s s:i s:i s:i}",
+                           "route", route,
+                           "userid", cred.userid,
+                           "rolemask", cred.rolemask,
+                           "rank", rank))) {
         errno = ENOMEM;
         goto done;
     }
@@ -99,7 +105,7 @@ void method_ping_cb (flux_t *h,
     strcat (route_str, "!");
     strcat (route_str, uuid);
 
-    if (!(resp_str = make_json_response_payload (json_str, route_str, cred)))
+    if (!(resp_str = make_json_response_payload (h, json_str, route_str, cred)))
         goto error;
     if (flux_respond (h, msg, resp_str) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);

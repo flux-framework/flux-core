@@ -27,7 +27,8 @@
 
 #include "src/common/libterminus/pty.h"
 #include "src/common/libterminus/terminus.h"
-#include "src/common/libccan/ccan/ptrint/ptrint.h"
+#include "ccan/ptrint/ptrint.h"
+#include "ccan/str/str.h"
 #include "builtins.h"
 #include "log.h"
 
@@ -70,9 +71,15 @@ static void pty_monitor (struct flux_pty *pty, void *data, int len)
     flux_plugin_arg_t *args;
     int rank;
 
-    /* Don't bother sending 0 length output */
-    if (len == 0)
+    /*  len == 0 indicates pty is closed. If there's a reference on
+     *  stdout, release it here
+     */
+    if (len == 0) {
+        flux_subprocess_t *p;
+        if ((p = flux_pty_aux_get (pty, "subprocess")))
+            flux_subprocess_channel_decref (p, "stdout");
         return;
+    }
 
     rank = ptr2int (flux_pty_aux_get (pty, "rank"));
     if (!(args = flux_plugin_arg_create ())
@@ -110,7 +117,7 @@ static struct idset *shell_taskids_intersect (flux_shell_t *shell,
         return NULL;
     if (!(localids = idset_decode (taskids)))
         return NULL;
-    if (strcmp (ids, "all") == 0)
+    if (streq (ids, "all"))
         return localids;
     if (!(idset = idset_decode (ids)))
         goto out;
@@ -175,7 +182,7 @@ static int pty_getopt (flux_shell_t *shell,
         if (json_unpack_ex (o,
                             &error,
                             JSON_STRICT,
-                            "{s?:o s?i s?i}",
+                            "{s?o s?i s?i}",
                             "ranks", &ranks_obj,
                             "capture", capture,
                             "interactive", interactive) < 0) {
@@ -332,8 +339,23 @@ static int pty_init (flux_plugin_t *p,
                                               0,
                                               "{s:s}",
                                               "pty", "terminus.0") < 0) {
-                shell_log_errno ("flux_shell_service_register");
+                shell_log_errno ("flux_shell_add_event_context (pty)");
                 goto error;
+            }
+            if (capture) {
+                /*
+                 * If also capturing the pty output for an interactive
+                 *  pty, note this in the shell.init event context. This
+                 *  will hint to the pty reader that the terminal output
+                 *  is duplicated for rank 0.
+                 */
+                if (flux_shell_add_event_context (shell,
+                                                  "shell.init",
+                                                  0,
+                                                  "{s:i}",
+                                                  "capture", 1) < 0) {
+                    shell_log_errno ("flux_shell_add_event_context (capture)");
+                }
             }
             /*  Ensure that rank 0 pty waits for client to attach
              *   in pty.interactive mode, even if pty.capture is also
@@ -350,7 +372,11 @@ static int pty_init (flux_plugin_t *p,
          */
         if (capture || rank != 0) {
             if (flux_pty_aux_set (pty, "shell", shell, NULL) < 0
-                || flux_pty_aux_set (pty, "rank", int2ptr (rank), NULL) < 0) {
+                || flux_pty_aux_set (pty, "rank", int2ptr (rank), NULL) < 0
+                || flux_pty_aux_set (pty,
+                                     "capture",
+                                     int2ptr (capture),
+                                     NULL) < 0) {
                 shell_log_errno ("flux_pty_aux_set");
                 goto error;
             }
@@ -407,6 +433,38 @@ static int pty_task_exec (flux_plugin_t *p,
     return (0);
 }
 
+static int pty_task_fork (flux_plugin_t *p,
+                          const char *topic,
+                          flux_plugin_arg_t *args,
+                          void *arg)
+{
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+    flux_shell_task_t *task;
+    struct flux_pty *pty;
+    int rank;
+
+    if (!shell)
+        return shell_log_errno ("failed to get shell object");
+
+    if (flux_shell_getopt (shell, "pty", NULL) != 1)
+        return 0;
+
+    if (!(task = flux_shell_current_task (shell))
+        || flux_shell_task_info_unpack (task, "{s:i}", "rank", &rank) < 0)
+        return shell_log_errno ("unable to get task rank");
+
+    /*  If pty is in capture mode, then take a reference on subprocess
+     *  stdout so that EOF is not read until pty exits.
+     */
+   if ((pty = pty_lookup (shell, rank))
+       && ptr2int (flux_pty_aux_get (pty, "capture"))) {
+       flux_subprocess_t *sp = flux_shell_task_subprocess (task);
+       flux_subprocess_channel_incref (sp, "stdout");
+       flux_pty_aux_set (pty, "subprocess", sp, NULL);
+   }
+   return (0);
+}
+
 static int pty_task_exit (flux_plugin_t *p,
                           const char *topic,
                           flux_plugin_arg_t *args,
@@ -445,6 +503,7 @@ struct shell_builtin builtin_pty = {
     .name = FLUX_SHELL_PLUGIN_NAME,
     .init = pty_init,
     .task_exec = pty_task_exec,
+    .task_fork = pty_task_fork,
     .task_exit = pty_task_exit,
 };
 

@@ -25,7 +25,7 @@
 static const char *attrs[] = {
     "userid", "urgency", "priority", "t_submit",
     "t_depend", "t_run", "t_cleanup", "t_inactive",
-    "state", "name", "queue", "ntasks", "ncores", "duration", "nnodes",
+    "state", "name", "cwd", "queue", "ntasks", "ncores", "duration", "nnodes",
     "ranks", "nodelist", "success", "exception_occurred",
     "exception_type", "exception_severity",
     "exception_note", "result", "expiration",
@@ -146,7 +146,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-list.stats-get",
       .cb           = stats_cb,
-      .rolemask     = 0
+      .rolemask     = FLUX_ROLE_USER,
     },
     { .typemask     = FLUX_MSGTYPE_EVENT,
       .topic_glob   = "job-purge-inactive",
@@ -210,8 +210,6 @@ done:
     list_ctx_destroy (ctx);
     return rc;
 }
-
-MOD_NAME ("job-list");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

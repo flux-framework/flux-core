@@ -25,6 +25,7 @@
 #include "src/common/libutil/tomltk.h"
 
 #include "src/common/libyuarel/yuarel.h"
+#include "ccan/str/str.h"
 
 #include "s3.h"
 
@@ -154,7 +155,7 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s:{s:s, s:s, s:s, s?:b !} }",
+                          "{s:{s:s, s:s, s:s, s?b !} }",
                           "content-s3",
                           "credential-file",
                           &cred_file,
@@ -186,7 +187,7 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
     if (!(cfg->bucket = strdup (bucket)))
         goto error;
 
-    if (!strncmp (yuri.scheme, "https", 5))
+    if (strstarts (yuri.scheme, "https"))
         cfg->is_secure = 1;
 
     cfg->is_virtual_host = is_virtual_host;
@@ -435,7 +436,7 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-/* Create the s3 context, initalize the connection, and
+/* Create the s3 context, initialize the connection, and
  * create the working bucket
  */
 static struct content_s3 *content_s3_create (flux_t *h)
@@ -483,7 +484,7 @@ error:
 static int parse_args (flux_t *h, int argc, char **argv)
 {
     for (int i = 0; i < argc; i++) {
-        if (!strcmp (argv[i], "truncate")) {
+        if (streq (argv[i], "truncate")) {
             flux_log (h,
                       LOG_ERR,
                       "truncate is not implemented.  Use S3 console"
@@ -524,8 +525,6 @@ done:
     content_s3_destroy (ctx);
     return rc;
 }
-
-MOD_NAME ("content-s3");
 
 /*
  * vi:ts=4 sw=4 expandtab

@@ -22,6 +22,7 @@
  *    . FLUX_JOB_NNODES
  *    . FLUX_JOB_ID
  *    . FLUX_URI (if not running standalone)
+ *    . correct HOSTNAME if set in job environment
  *
  * Current working directory
  *    Ignore - shell should already be in it.
@@ -42,6 +43,7 @@
 #include <flux/core.h>
 #include <flux/shell.h>
 
+#include "src/common/libjob/idf58.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "internal.h"
@@ -90,15 +92,15 @@ error:
     return NULL;
 }
 
-struct shell_task *shell_task_create (struct shell_info *info,
+struct shell_task *shell_task_create (flux_shell_t *shell,
                                       int index,
                                       int taskid)
 {
+    struct shell_info *info = shell->info;
     struct shell_task *task;
     const char *key;
     json_t *entry;
     size_t i;
-    char buf[64];
 
     if (!(task = shell_task_new ()))
         return NULL;
@@ -130,12 +132,17 @@ struct shell_task *shell_task_create (struct shell_info *info,
                           info->shell_size) < 0)
         goto error;
 
-    /* Attempt to encode jobid as F58 by default */
-    if (flux_job_id_encode (info->jobid, "f58", buf, sizeof (buf)) < 0)
-       snprintf (buf, sizeof (buf), "%ju", (uintmax_t)info->jobid);
-    if (flux_cmd_setenvf (task->cmd, 1, "FLUX_JOB_ID", "%s", buf) < 0)
+    if (flux_cmd_setenvf (task->cmd,
+                          1,
+                          "FLUX_JOB_ID",
+                          "%s",
+                          idf58 (info->jobid)) < 0)
         goto error;
 
+    /* Always unset FLUX_PROXY_REMOTE since this never makes sense
+     * in the environment of a job task.
+     */
+    flux_cmd_unsetenv (task->cmd, "FLUX_PROXY_REMOTE");
     flux_cmd_unsetenv (task->cmd, "FLUX_URI");
     if (getenv ("FLUX_URI")) {
         if (flux_cmd_setenvf (task->cmd, 1, "FLUX_URI", "%s",
@@ -148,6 +155,17 @@ struct shell_task *shell_task_create (struct shell_info *info,
                               getenv ("FLUX_KVS_NAMESPACE")) < 0)
             goto error;
     }
+
+    /* If HOSTNAME is set in job environment it is almost certain to be
+     * incorrect. Overwrite with the correct hostname.
+     */
+    if (flux_cmd_getenv (task->cmd, "HOSTNAME")
+        && flux_cmd_setenvf (task->cmd,
+                             1,
+                             "HOSTNAME",
+                             "%s",
+                             shell->hostname) < 0)
+        goto error;
     return task;
 error:
     shell_task_destroy (task);

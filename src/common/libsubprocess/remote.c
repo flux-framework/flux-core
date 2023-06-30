@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <wait.h>
 #include <unistd.h>
+#include <stdarg.h>
 #include <errno.h>
 #include <assert.h>
 
@@ -22,6 +23,7 @@
 
 #include "ccan/str/str.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/macros.h"
@@ -36,6 +38,15 @@
 #include "client.h"
 
 static void remote_kill_nowait (flux_subprocess_t *p, int signum);
+
+static void set_failed (flux_subprocess_t *p, const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    verrprintf (&p->failed_error, fmt, ap);
+    p->failed_errno = errno;
+    va_end (ap);
+}
 
 static void start_channel_watchers (flux_subprocess_t *p)
 {
@@ -169,6 +180,7 @@ static int remote_write (struct subprocess_channel *c)
 
     if (!(ptr = flux_buffer_read (c->write_buffer, -1, &lenp))) {
         llog_debug (c->p, "flux_buffer_read: %s", strerror (errno));
+        set_failed (c->p, "internal buffer read error");
         goto error;
     }
 
@@ -192,6 +204,7 @@ static int remote_write (struct subprocess_channel *c)
         llog_debug (c->p,
                     "error sending rexec.write request: %s",
                     strerror (errno));
+        set_failed (c->p, "internal write error");
         goto error;
     }
 
@@ -215,6 +228,7 @@ static int remote_close (struct subprocess_channel *c)
         llog_debug (c->p,
                     "error sending rexec.write request: %s",
                     strerror (errno));
+        set_failed (c->p, "internal close error");
         return -1;
     }
     /* No need to do a "channel_flush", normal io reactor will handle
@@ -254,7 +268,9 @@ static void remote_in_check_cb (flux_reactor_t *r,
     return;
 
 error:
-    c->p->failed_errno = errno;
+    /* c->p->failed_errno and c->p->failed_error expected to be
+     * set before this point (typically via set_failed())
+     */
     process_new_state (c->p, FLUX_SUBPROCESS_FAILED);
     remote_kill_nowait (c->p, SIGKILL);
     flux_future_destroy (c->p->f);
@@ -414,6 +430,7 @@ static int remote_channel_setup (flux_subprocess_t *p,
 
     if (zhash_insert (p->channels, name, c) < 0) {
         llog_debug (p, "zhash_insert failed");
+        errno = EEXIST;
         goto error;
     }
     if (!zhash_freefn (p->channels, name, channel_destroy)) {
@@ -519,6 +536,7 @@ static int remote_output (flux_subprocess_t *p,
                     (int)flux_subprocess_pid (p),
                     stream);
         errno = EPROTO;
+        set_failed (p, "error buffering unknown channel %s", stream);
         return -1;
     }
 
@@ -538,6 +556,7 @@ static int remote_output (flux_subprocess_t *p,
                         (int)flux_subprocess_pid (p),
                         stream,
                         strerror (errno));
+            set_failed (p, "error buffering %d bytes of data", len);
             return -1;
         }
     }
@@ -569,8 +588,9 @@ static void rexec_continuation (flux_future_t *f, void *arg)
     if (subprocess_rexec_get (f) < 0) {
         if (errno == ENODATA) {
             remote_completion (p);
-            goto complete;
+            return;
         }
+        set_failed (p, "%s", future_strerror (f, errno));
         goto error;
     }
     if (subprocess_rexec_is_started (f, &p->pid)) {
@@ -591,12 +611,11 @@ static void rexec_continuation (flux_future_t *f, void *arg)
     return;
 
 error:
-    p->failed_errno = errno;
+    /* c->p->failed_errno and c->p->failed_error expected to be
+     * set before this point (typically via set_failed())
+     */
     process_new_state (p, FLUX_SUBPROCESS_FAILED);
     remote_kill_nowait (p, SIGKILL);
-complete:
-    flux_future_destroy (f);
-    p->f = NULL;
 }
 
 int remote_exec (flux_subprocess_t *p)
@@ -604,7 +623,7 @@ int remote_exec (flux_subprocess_t *p)
     flux_future_t *f;
     int flags = 0;
 
-    if (p->ops.on_channel_out)
+    if (zlist_size (cmd_channel_list (p->cmd)) > 0)
         flags |= SUBPROCESS_REXEC_CHANNEL;
     if (p->ops.on_stdout)
         flags |= SUBPROCESS_REXEC_STDOUT;
@@ -619,6 +638,7 @@ int remote_exec (flux_subprocess_t *p)
         flux_future_destroy (f);
         return -1;
     }
+    p->f = f;
     return 0;
 }
 

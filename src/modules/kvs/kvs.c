@@ -507,7 +507,7 @@ done:
     flux_future_destroy (f);
 }
 
-/* Send content load request and setup contination to handle response.
+/* Send content load request and setup continuation to handle response.
  */
 static int content_load_request_send (struct kvs_ctx *ctx, const char *ref)
 {
@@ -581,7 +581,7 @@ static int load (struct kvs_ctx *ctx, const char *ref, wait_t *wait, bool *stall
          * multiple times from the same kvstxn and on the same
          * reference, we're effectively adding identical waiters onto
          * this cache entry.  This is far better than sending multiple
-         * RPCs (the cache entry chck above protects against this),
+         * RPCs (the cache entry check above protects against this),
          * but could be improved later.  See Issue #1751.
          */
         if (cache_entry_wait_valid (entry, wait) < 0) {
@@ -625,7 +625,7 @@ static void content_store_completion (flux_future_t *f, void *arg)
      * location we calculated.
      * N.B. perhaps this check is excessive and could be removed
      */
-    if (strcmp (blobref, cache_blobref)) {
+    if (!streq (blobref, cache_blobref)) {
         flux_log (ctx->h, LOG_ERR, "%s: inconsistent blobref returned",
                   __FUNCTION__);
         errno = EPROTO;
@@ -1992,7 +1992,7 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
     }
     else {
-        /* If root is not initialized, we have to intialize ourselves
+        /* If root is not initialized, we have to initialize ourselves
          * first.
          */
         bool stall = false;
@@ -2754,7 +2754,7 @@ static void config_reload_cb (flux_t *h,
 /* see comments above in event_subscribe() regarding event
  * subscriptions to kvs.namespace */
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "kvs.stats-get",  stats_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs.stats-get",  stats_get_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.stats-clear",stats_clear_request_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.stats-clear",stats_clear_event_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.namespace-*-setroot",  setroot_event_cb, 0 },
@@ -2809,7 +2809,7 @@ static void process_args (struct kvs_ctx *ctx, int ac, char **av)
     int i;
 
     for (i = 0; i < ac; i++) {
-        if (strncmp (av[i], "transaction-merge=", 13) == 0)
+        if (strstarts (av[i], "transaction-merge="))
             ctx->transaction_merge = strtoul (av[i]+13, NULL, 10);
         else
             flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
@@ -2924,7 +2924,7 @@ static int store_initial_rootdir (struct kvs_ctx *ctx, char *ref, int ref_len)
         /* Sanity check that content cache is using the same hash alg as KVS.
          * It should suffice to do this once at startup.
          */
-        if (strcmp (newref, ref) != 0) {
+        if (!streq (newref, ref)) {
             errno = EPROTO;
             flux_log_error (ctx->h, "%s: hash mismatch kvs=%s content=%s",
                             __FUNCTION__, ref, newref);
@@ -3051,8 +3051,6 @@ done:
     kvs_ctx_destroy (ctx);
     return rc;
 }
-
-MOD_NAME ("kvs");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -54,21 +54,52 @@ class ResourceStatus:
         if allocated_ranks is None:
             allocated_ranks = IDset()
 
+        self.rstatus = rstatus
         self.rset = ResourceSet(rstatus["R"])
-
-        # get idset of all ranks and nodelist:
-        self.all = self.rset.ranks
         self.nodelist = self.rset.nodelist
+        self.allocated_ranks = allocated_ranks
+
+        self._recalculate()
+
+    def filter(self, include):
+        """
+        Filter the reported resources in a ResourceStatus object
+        Args:
+            include (str, IDset, Hostlist): restrict the current set of
+             reported ranks to the given ranks or hosts.
+        """
+        try:
+            include_ranks = IDset(include)
+        except ValueError:
+            include_ranks = self.nodelist.index(include, ignore_nomatch=True)
+        self._recalculate(include_ranks)
+
+    def _recalculate(self, include_ranks=None):
+        """
+        Recalculate derived idsets and drain_info, only including ranks
+        in the IDset 'include_ranks' if given.
+        Args:
+            include_ranks (IDset): restrict the current set of reported ranks.
+        """
+        # get idset of all ranks:
+        self.all = self.rset.ranks
 
         # offline/online
-        self.offline = IDset(rstatus["offline"])
-        self.online = IDset(rstatus["online"])
+        self.offline = IDset(self.rstatus["offline"])
+        self.online = IDset(self.rstatus["online"])
 
         # excluded: excluded by configuration
-        self.exclude = IDset(rstatus["exclude"])
+        self.exclude = IDset(self.rstatus["exclude"])
 
         # allocated: online and allocated by scheduler
-        self.allocated = allocated_ranks
+        self.allocated = self.allocated_ranks
+
+        # If include_ranks was provided, filter all idsets to only those
+        # that intersect the provided idset
+        if include_ranks is not None:
+            for name in ("all", "offline", "online", "exclude", "allocated"):
+                result = getattr(self, name).intersect(include_ranks)
+                setattr(self, name, result)
 
         # drained: free+drain
         self.drained = IDset()
@@ -77,8 +108,10 @@ class ResourceStatus:
 
         # drain_info: ranks, timestamp, reason tuples for all drained resources
         self.drain_info = []
-        for drain_ranks, entry in rstatus["drain"].items():
+        for drain_ranks, entry in self.rstatus["drain"].items():
             ranks = IDset(drain_ranks)
+            if include_ranks is not None:
+                ranks = ranks.intersect(include_ranks)
             self.drained += ranks - self.allocated
             self.draining += ranks - self.drained
             info = DrainInfo(ranks, entry["timestamp"], entry["reason"])

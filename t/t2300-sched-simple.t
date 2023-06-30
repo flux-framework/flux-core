@@ -43,6 +43,9 @@ test_expect_success 'sched-simple: generate jobspec for simple test job' '
 	flux run --dry-run hostname >basic.json
 '
 
+test_expect_success 'sched-simple cannot be loaded again under a new name' '
+	test_must_fail flux module load --name=newsched sched-simple
+'
 test_expect_success 'job-manager: load sched-simple w/ an illegal mode' '
 	flux module unload sched-simple &&
 	flux module load sched-simple mode=foobar
@@ -75,7 +78,7 @@ test_expect_success 'sched-simple: invalid minimal jobspec is canceled' '
 	${Y2J}<${SPEC} | jq ".version = 1" | flux job submit >job00.id &&
 	jobid=$(cat job00.id) &&
 	flux job wait-event --timeout=5.0 $jobid exception &&
-	flux job eventlog $jobid | grep "Unable to determine slot size"
+	flux job eventlog $jobid | grep "getting duration: Object item not found: system"
 '
 test_expect_success 'sched-simple: submit 5 jobs' '
 	flux job submit basic.json >job1.id &&

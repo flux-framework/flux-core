@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
 
 #include "src/common/libtap/tap.h"
@@ -144,7 +147,7 @@ static void test_add_child ()
     ok (rnode_count (a) == 8,
         "core count is now 8");
     ok (rnode_avail_total (a) == 9,
-        "total available reosurces is 9");
+        "total available resources is 9");
 
     ok (rnode_add_child (a, "gpu", "0-1") == NULL && errno == EEXIST,
         "rnode_add_child fails with EEXIST if ids already exist in set");

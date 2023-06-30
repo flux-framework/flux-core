@@ -339,6 +339,9 @@ if test "$have_libsystemd" = yes -a "$have_sd_bus_h" = yes; then
     AC_CHECK_LIB(systemd, sd_bus_set_method_call_timeout,
                  AC_DEFINE([HAVE_SD_BUS_SET_METHOD_CALL_TIMEOUT], [1],
                            [Define if you have sd_bus_set_method_call_timeout]))
+    AC_CHECK_LIB(systemd, sd_bus_message_dump,
+                 AC_DEFINE([HAVE_SD_BUS_MESSAGE_DUMP], [1],
+                           [Define if you have sd_bus_message_dump]))
 fi
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.11.1], [], [])
 PKG_CHECK_MODULES([LZ4], [liblz4], [], [])
@@ -370,7 +373,7 @@ AS_IF([test x$enable_code_coverage = xyes], [
 AC_ARG_WITH([flux-security], AS_HELP_STRING([--with-flux-security],
              [Build with flux-security]))
 AS_IF([test "x$with_flux_security" = "xyes"], [
-    PKG_CHECK_MODULES([FLUX_SECURITY], [flux-security],
+    PKG_CHECK_MODULES([FLUX_SECURITY], [flux-security >= 0.9.0],
                       [flux_sec_incdir=`$PKG_CONFIG --variable=includedir flux-security`],
                       [flux_sec_incdir=;])
     AS_IF([test "x$flux_sec_incdir" = x],
@@ -503,7 +506,7 @@ AC_SUBST(fluxbindingincludedir)
 ##
 # Macros to avoid repetition in Makefiles.am's
 ##
-fluxmod_ldflags="$san_ld_zdef_flag -avoid-version -export-symbols-regex '^mod_(main|name|service)\$\$' --disable-static -shared -export-dynamic"
+fluxmod_ldflags="$san_ld_zdef_flag -avoid-version -export-symbols-regex '^mod_(main|name)\$\$' --disable-static -shared -export-dynamic"
 AC_SUBST(fluxmod_ldflags)
 
 fluxplugin_ldflags="-avoid-version -export-symbols-regex '^flux_plugin_init\$\$' --disable-static -shared -export-dynamic"
@@ -549,6 +552,7 @@ AC_CONFIG_FILES( \
   src/common/libccan/Makefile \
   src/common/libzmqutil/Makefile \
   src/common/libtaskmap/Makefile \
+  src/common/libfilemap/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
@@ -563,23 +567,15 @@ AC_CONFIG_FILES( \
   src/connectors/loop/Makefile \
   src/connectors/ssh/Makefile \
   src/modules/Makefile \
-  src/modules/connector-local/Makefile \
   src/modules/kvs/Makefile \
-  src/modules/kvs-watch/Makefile \
-  src/modules/content-sqlite/Makefile \
   src/modules/content-files/Makefile \
   src/modules/content-s3/Makefile \
-  src/modules/barrier/Makefile \
-  src/modules/heartbeat/Makefile \
-  src/modules/cron/Makefile \
   src/modules/job-ingest/Makefile \
   src/modules/job-manager/Makefile \
-  src/modules/job-info/Makefile \
   src/modules/job-list/Makefile \
   src/modules/job-exec/Makefile \
-  src/modules/job-archive/Makefile \
-  src/modules/sched-simple/Makefile \
   src/modules/resource/Makefile \
+  src/modules/sdbus/Makefile \
   src/test/Makefile \
   etc/Makefile \
   etc/flux-core.pc \

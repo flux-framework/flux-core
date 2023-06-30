@@ -13,6 +13,13 @@ jobs:
     - run: git fetch origin master
     - uses: flux-framework/pr-validator@master
 
+  spelling:
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v3
+    - name: Check Spelling
+      uses: crate-ci/typos@7ad296c72fa8265059cc03d1eda562fbdfcd6df2 # v1.9.0
+
   python-lint:
     name: python linting
     runs-on: ubuntu-20.04
@@ -80,6 +87,30 @@ jobs:
     - run: echo "GITHUB_BRANCH=${GITHUB_REF#refs/heads}" >> $GITHUB_OUTPUT
     - run: echo "GITHUB_TAG=${GITHUB_REF#refs/tags}" >> $GITHUB_OUTPUT
     - run: echo "EVENT_NAME=${{ github.event_name }}" >> $GITHUB_OUTPUT
+
+  ci-check-nix:
+    runs-on: ubuntu-20.04
+    env:
+      TAP_DRIVER_QUIET: 1
+      FLUX_TEST_TIMEOUT: 300
+      DOCKER_REPO: fluxrm/flux-core
+      DOCKER_USERNAME: travisflux
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_HUB_TRAVISFLUX_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: 60
+    name: nixos
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@v4
+    - name: Run the Magic Nix Cache
+      uses: DeterminateSystems/magic-nix-cache-action@v1
+    - name: Build and installcheck with checked target
+      run: nix build '.#checked'
 
   ci-checks:
     needs: [generate-matrix]

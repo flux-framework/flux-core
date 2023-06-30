@@ -46,10 +46,11 @@ OPTIONS
    Limit output to N jobs (default 1000)
 
 **--since**\ *WHEN*
-   Limit output to jobs that completed or have become inactive since a
-   given timestamp. This option implies ``-a`` if no other ``--filter``
-   options are specified. If *WHEN* begins with ``-`` character, then
-   the remainder is considered to be a an offset in Flux standard duration
+   Limit output to jobs that have been active since a given timestamp.  In other
+   words, jobs that are currently pending, currently running, or became inactive
+   since the given timestamp.  This option implies ``-a`` if no other
+   ``--filter`` options are specified.  If *WHEN* begins with ``-`` character,
+   then the remainder is considered to be a an offset in Flux standard duration
    (RFC 23). Otherwise, any datetime expression accepted by the Python
    `parsedatetime <https://github.com/bear/parsedatetime>`_ module is
    accepted. Examples: "-6h", "-1d", "yesterday", "2021-06-21 6am",
@@ -64,10 +65,29 @@ OPTIONS
 **-o, --format**\ *=NAME|FORMAT*
    Specify a named output format *NAME* or a format string using Python's
    format syntax. See OUTPUT FORMAT below for field names. Named formats
-   may be listed via ``--format=help``. Additional named formats may be
-   registered with ``flux jobs`` via configuration. See the CONFIGURATION
-   section for more details. A configuration snippet for an existing
-   named format may be generated with ``--format=get-config=NAME``.
+   may be listed via ``--format=help``.  An alternate default format can be set
+   via the FLUX_JOBS_FORMAT_DEFAULT environment variable.  Additional named
+   formats may be registered with ``flux jobs`` via configuration. See the
+   CONFIGURATION section for more details. A configuration snippet for an
+   existing named format may be generated with ``--format=get-config=NAME``.
+
+**--json**
+   Emit data for selected jobs in JSON format. The data for multiple
+   matching jobs is contained in a ``jobs`` array in the emitted JSON
+   object, unless a single job was selected by jobid on the command
+   line, in which case a JSON object representing that job is emitted on
+   success. With ``-R, --recursive``, each job which is also an instance
+   of Flux will will have any recursively listed jobs in a ``jobs`` array,
+   and so on for each sub-child.
+
+   Only the attributes which are available at the time of the flux-jobs
+   query will be present in the returned JSON object for a job. For
+   instance a pending job will not have ``runtime``, ``waitstatus`` or
+   ``result`` keys, among others. A missing key should be considered
+   unavailable.
+
+   The ``--json`` option is incompatible with ``--stats`` and
+   ``--stats-only``, and any ``--format`` is ignored.
 
 **--color**\ *[=WHEN]*
    Control output coloring.  The optional argument *WHEN* can be
@@ -85,6 +105,9 @@ OPTIONS
    will display a summary of statistics along with the top 25
    running jobs, updated every 2 seconds.
 
+   Note that all job failures, including canceled and timeout jobs,
+   are collectively counted as "failed" in ``--stats``.
+
 **--stats-only**
    Output a summary of job statistics and exit.  By default shows
    global statistics.  If ``--queue`` is specified, shows statistics
@@ -96,6 +119,9 @@ OPTIONS
 
    All options other than ``--queue`` are ignored when
    ``--stats-only`` is used.
+
+   Note that all job failures, including canceled and timeout jobs,
+   are collectively counted as "failed" in ``--stats-only``.
 
 **-R, --recursive**
    List jobs recursively. Each child job which is also an instance of
@@ -137,7 +163,7 @@ states also exist: "pending", an alias for DEPEND,SCHED; "running", an
 alias for RUN,CLEANUP; "active", an alias for "pending,running".
 
 After a job has finished and is in the INACTIVE state, it can be
-marked with one of three possible results: COMPLETED, FAILED,
+marked with one of the possible results: COMPLETED, FAILED,
 CANCELED, TIMEOUT. Under the *result_abbrev* field name, these are
 abbreviated as CD, F, CA, and TO respectively.
 
@@ -174,7 +200,7 @@ As a reminder to the reader, some shells will interpret braces
 (``{`` and ``}``) in the format string.  They may need to be quoted.
 
 The special presentation type *h* can be used to convert an empty
-string, "0s", "0.0", or "0:00:00" to a hyphen. For example, normally
+string, "0s", "0.0", "0:00:00", or epoch time to a hyphen. For example, normally
 "{nodelist}" would output an empty string if the job has not yet run.
 By specifying, "{nodelist:h}", a hyphen would be presented instead.
 
@@ -195,8 +221,8 @@ the following conversion flags are supported by *flux-jobs*:
    convert a timestamp to a Python datetime object. This allows datetime
    specific format to be used, e.g. *{t_inactive!d:%H:%M:%S}*. Additionally,
    width and alignment can be specified after the time format by using
-   two colons (``::``), e.g. *{t_inactive:%H:%M:%S::>20}*. Defaults to
-   datetime of epoch if timestamp field does not exist.
+   two colons (``::``), e.g. *{t_inactive!d:%H:%M:%S::>20}*. Returns an
+   empty string (or "-" if the *h* suffix is used) for an unset timestamp.
 
 **!F**
    convert a time duration in floating point seconds to Flux Standard
@@ -248,6 +274,9 @@ The field names that can be specified are:
 **id.words**
   job ID in mnemonic encoding
 
+**id.emoji**
+  job ID in emoji encoding
+
 **userid**
    job submitter's userid
 
@@ -275,6 +304,9 @@ The field names that can be specified are:
 
 **name**
    job name
+
+**cwd**
+   job current working directory
 
 **queue**
    job queue
@@ -424,6 +456,13 @@ the state of the job or other context:
    Returns the job runtime for jobs in RUN state or later, otherwise the
    job duration (if set) is returned.
 
+**inactive_reason**
+   If the job is inactive, returns the reason that the job is no
+   longer active.  Generally speaking, will output "Exit", "Timeout",
+   "Canceled", or signal.  If available, other contextual information
+   will also be provided such as the exit ``returncode`` or
+   cancellation message.
+
 CONFIGURATION
 =============
 
@@ -431,7 +470,7 @@ The ``flux-jobs`` command supports registration of named output formats
 in configuration files. The command loads configuration files from
 ``flux-jobs.EXT`` from the following paths in order of increasing precedence:
 
- * ``$XDG_CONFIG_DIRS/flux`` or ``/etc/flux/xdg`` if ``XDG_CONFIG_DIRS`` is
+ * ``$XDG_CONFIG_DIRS/flux`` or ``/etc/xdg/flux`` if ``XDG_CONFIG_DIRS`` is
    not set. Note that ``XDG_CONFIG_DIRS`` is traversed in reverse order
    such that entries first in the colon separated path are highest priority.
 

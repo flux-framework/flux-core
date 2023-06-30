@@ -21,6 +21,7 @@ typedef void (*ev_buffer_read_f)(struct ev_loop *loop,
                                  int revents);
 
 struct ev_buffer_read {
+    int              refcnt;
     ev_io            io_w;
     ev_prepare       prepare_w;
     ev_idle          idle_w;
@@ -44,5 +45,7 @@ int ev_buffer_read_init (struct ev_buffer_read *ebr,
 void ev_buffer_read_cleanup (struct ev_buffer_read *ebr);
 void ev_buffer_read_start (struct ev_loop *loop, struct ev_buffer_read *ebr);
 void ev_buffer_read_stop (struct ev_loop *loop, struct ev_buffer_read *ebr);
+void ev_buffer_read_incref (struct ev_buffer_read *ebr);
+void ev_buffer_read_decref (struct ev_buffer_read *ebr);
 
 #endif /* !_EV_BUFFER_READ_H */

@@ -19,6 +19,7 @@
 #include "src/common/libutil/unlink_recursive.h"
 #include "src/common/libtestutil/util.h"
 #include "src/common/librouter/usock.h"
+#include "ccan/str/str.h"
 
 #include "usock_util.h"
 
@@ -74,7 +75,7 @@ static void server_recv_cb (struct usock_conn *conn, flux_msg_t *msg, void *arg)
     if (flux_request_decode (msg, &topic, NULL) < 0)
         diag ("usock_conn_send failed: %s", flux_strerror (errno));
 
-    if (topic && strcmp (topic, "init") == 0) {
+    if (topic && streq (topic, "init")) {
         if (flux_msg_unpack (msg, "{s:i}", "expected", &tp->expected) < 0)
             diag ("flux_msg_pack: %s", flux_strerror (errno));
         diag ("connection: uuid=%.5s: expect %d messages",

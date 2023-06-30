@@ -325,17 +325,22 @@ options are supported by the builtin plugins of ``flux-shell``:
   be set by the :man1:`flux-submit` and related commands --taskmap`` option.
 
 **pmi=off**
-  Disable the process management interface (PMI-1) which is required for
-  bootstrapping most parallel program environments.
+  Disable the process management interface for parallel jobs (see below).
 
-**pmi.nomap**
+**pmi=LIST**
+  Specify a comma-separated list of PMI implementations to enable.  If the
+  option is unspecified, the ``simple`` PMI-1 wire protocol implementation
+  is enabled.  Other options such as ``cray-pals`` or ``pmix`` may be
+  installed on your system.
+
+**pmi-simple.nomap**
   Skip populating the PMI ``flux.taskmap`` and ``PMI_process_mapping`` keys.
 
-**pmi.kvs=native**
+**pmi-simple.kvs=native**
   Use the native Flux KVS instead of the PMI plugin's built-in key exchange
   algorithm.
 
-**pmi.exchange.k=N**
+**pmi-simple.exchange.k=N**
   Configure the PMI plugin's built-in key exchange algorithm to use a
   virtual tree fanout of ``N`` for key gather/broadcast.  The default is 2.
 
@@ -357,6 +362,19 @@ options are supported by the builtin plugins of ``flux-shell``:
   ``global`` denotes a global file system.  The copy takes place on all the
   job's nodes if the scope is local, versus only the first node of the
   job if the scope is global.
+
+**signal=OPTION**
+  Deliver signal ``SIGUSR1`` to the job 60s before job expiration.
+  To customize the signal number or amount of time before expiration to
+  deliver the signal, the ``signal`` option may be an object with one
+  or both of the keys ``signum`` or ``timeleft``. (See below)
+
+**signal.signum**\ =\ *NUMBER*
+  Send signal *NUMBER* to the job ``signal.timeleft`` seconds before
+  the time limit.
+
+**signal.timeleft**\ =\ *TIME*
+  Send signal ``signal.signum`` *TIME* seconds before job expiration.
 
 .. warning::
   The $FLUX_JOB_TMPDIR is cleaned up when the job ends, is guaranteed to

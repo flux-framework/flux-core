@@ -87,9 +87,10 @@ void rmfile (const char *name)
  */
 bool test_sparse (void)
 {
+    bool result = false;
+#ifdef SEEK_DATA
     int fd;
     struct stat sb;
-    bool result = false;
 
     fd = open (mkpath ("testhole"), O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (fd < 0)
@@ -104,6 +105,7 @@ bool test_sparse (void)
         result = true;
     close (fd);
     rmfile ("testhole");
+#endif /* SEEK_DATA */
     return result;
 }
 
@@ -581,6 +583,10 @@ void test_empty (void)
     json_decref (o);
     rmfile ("testempty");
 
+    if (!have_sparse) {
+        tap_skip (3, "test directory does not support sparse files");
+        return;
+    }
     mkfile_empty ("testempty2", 1024);
     o = xfileref_create (mkpath ("testempty2"));
     ok (o != NULL && json_object_get (o, "data") == NULL,

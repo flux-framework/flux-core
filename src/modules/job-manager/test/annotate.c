@@ -45,7 +45,7 @@ void basic (void)
 
     rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
-        "update_annotation_recursive does nothing removing non-existant key");
+        "update_annotation_recursive does nothing removing non-existent key");
 
     json_decref (new);
     json_decref (cmp);
@@ -129,7 +129,7 @@ void recursive (void)
     rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive recursively does nothing "
-        "removing non-existant key");
+        "removing non-existent key");
 
     json_decref (new);
     json_decref (cmp);

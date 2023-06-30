@@ -40,6 +40,21 @@
  * This can be configured via TOML and on the broker command line.
  */
 static const double default_tcp_user_timeout = 20.;
+#ifdef ZMQ_TCP_MAXRT
+static bool have_tcp_maxrt = true;
+#else
+static bool have_tcp_maxrt = false;
+#endif
+
+/* How long to wait (seconds) for a connect attempt to time out before
+ * reconnecting.
+ */
+static const double default_connect_timeout = 30.;
+#ifdef ZMQ_CONNECT_TIMEOUT
+static bool have_connect_timeout = true;
+#else
+static bool have_connect_timeout = false;
+#endif
 
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers
@@ -142,6 +157,7 @@ struct overlay {
     double torpid_min;
     double torpid_max;
     double tcp_user_timeout;
+    double connect_timeout;
 
     struct parent parent;
 
@@ -435,14 +451,6 @@ static struct child *child_lookup (struct overlay *ov, const char *id)
             return child;
     }
     return NULL;
-}
-
-bool overlay_msg_is_local (const flux_msg_t *msg)
-{
-    /*  Return true only if msg is non-NULL and the message does not
-     *  have the overlay supplied "remote" tag.
-     */
-    return (msg && flux_msg_aux_get (msg, "overlay::remote") == NULL);
 }
 
 /* Lookup (direct) child peer by rank.
@@ -852,6 +860,18 @@ static void logdrop (struct overlay *ov,
               reason);
 }
 
+static int clear_msg_role (flux_msg_t *msg, uint32_t role)
+{
+    uint32_t rolemask;
+
+    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+        return -1;
+    rolemask &= ~role;
+    if (flux_msg_set_rolemask (msg, rolemask) < 0)
+        return -1;
+    return 0;
+}
+
 /* Handle a message received from TBON child (downstream).
  */
 static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -866,11 +886,8 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     if (!(msg = zmqutil_msg_recv (ov->bind_zsock)))
         return;
-    /* Flag this message as remotely received. This allows efficient
-     * operation of the overlay_msg_is_local() function.
-     */
-    if (flux_msg_aux_set (msg, "overlay::remote", int2ptr (1), NULL) < 0) {
-        logdrop (ov, OVERLAY_DOWNSTREAM, msg, "failed to tag msg as remote");
+    if (clear_msg_role (msg, FLUX_ROLE_LOCAL) < 0) {
+        logdrop (ov, OVERLAY_DOWNSTREAM, msg, "failed to clear local role");
         goto done;
     }
     if (flux_msg_get_type (msg, &type) < 0
@@ -975,11 +992,8 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     if (!(msg = zmqutil_msg_recv (ov->parent.zsock)))
         return;
-    /* Flag this message as remotely received. This allows efficient
-     * operation of the overlay_msg_is_local() function.
-     */
-    if (flux_msg_aux_set (msg, "overlay::remote", int2ptr (1), NULL) < 0) {
-        logdrop (ov, OVERLAY_UPSTREAM, msg, "failed to tag msg as remote");
+    if (clear_msg_role (msg, FLUX_ROLE_LOCAL) < 0) {
+        logdrop (ov, OVERLAY_UPSTREAM, msg, "failed to clear local role");
         goto done;
     }
     if (flux_msg_get_type (msg, &type) < 0) {
@@ -1267,6 +1281,12 @@ int overlay_connect (struct overlay *ov)
                                                          parent_monitor_cb,
                                                          ov);
         }
+#ifdef ZMQ_CONNECT_TIMEOUT
+        if (ov->connect_timeout > 0) {
+            zsock_set_connect_timeout (ov->parent.zsock,
+                                       ov->connect_timeout* 1000);
+        }
+#endif
         zsock_set_unbounded (ov->parent.zsock);
         zsock_set_linger (ov->parent.zsock, 5);
         zsock_set_ipv6 (ov->parent.zsock, ov->enable_ipv6);
@@ -1778,9 +1798,9 @@ static int set_torpid (const char *name, const char *val, void *arg)
 
     if (fsd_parse_duration (val, &d) < 0)
         return -1;
-    if (!strcmp (name, "tbon.torpid_max"))
+    if (streq (name, "tbon.torpid_max"))
         ov->torpid_max = d;
-    else if (!strcmp (name, "tbon.torpid_min")) {
+    else if (streq (name, "tbon.torpid_min")) {
         if (d == 0)
             goto error;
         ov->torpid_min = d;
@@ -1799,9 +1819,9 @@ static int get_torpid (const char *name, const char **val, void *arg)
     static char buf[64];
     double d;
 
-    if (!strcmp (name, "tbon.torpid_max"))
+    if (streq (name, "tbon.torpid_max"))
         d = ov->torpid_max;
-    else if (!strcmp (name, "tbon.torpid_min"))
+    else if (streq (name, "tbon.torpid_min"))
         d = ov->torpid_min;
     else
         goto error;
@@ -1874,69 +1894,61 @@ static int overlay_configure_torpid (struct overlay *ov)
     return 0;
 }
 
-static int overlay_configure_tcp_user_timeout (struct overlay *ov)
+static int overlay_configure_timeout (struct overlay *ov,
+                                      const char *table,
+                                      const char *name,
+                                      bool enabled,
+                                      double default_value,
+                                      double *valuep)
 {
     const flux_conf_t *cf;
     const char *fsd = NULL;
     bool override = false;
-#ifdef ZMQ_TCP_MAXRT
-    bool have_tcp_maxrt = true;
-#else
-    bool have_tcp_maxrt = false;
-#endif
+    double value = default_value;
+    char long_name[128];
 
-    ov->tcp_user_timeout = default_tcp_user_timeout;
+    (void)snprintf (long_name, sizeof (long_name), "%s.%s", table, name);
 
     if ((cf = flux_get_conf (ov->h))) {
         flux_error_t error;
 
-        if (flux_conf_unpack (cf,
-                              &error,
-                              "{s?{s?s}}",
-                              "tbon",
-                                "tcp_user_timeout", &fsd) < 0) {
-            log_msg ("Config file error [tbon]: %s", error.text);
+        if (flux_conf_unpack (cf, &error, "{s?{s?s}}", table, name, &fsd) < 0) {
+            log_msg ("Config file error [%s]: %s", table, error.text);
             return -1;
         }
         if (fsd) {
-            if (fsd_parse_duration (fsd, &ov->tcp_user_timeout) < 0
-                || ov->tcp_user_timeout <= 0) {
-                log_msg ("Config file error parsing tbon.tcp_user_timeout");
+            if (fsd_parse_duration (fsd, &value) < 0) {
+                log_msg ("Config file error parsing %s", long_name);
                 return -1;
             }
             override = true;
         }
     }
-
     /* Override with broker attribute (command line only) settings, if any.
      */
-    if (attr_get (ov->attrs, "tbon.tcp_user_timeout", &fsd, NULL) == 0) {
-        if (fsd_parse_duration (fsd, &ov->tcp_user_timeout) < 0
-            || ov->tcp_user_timeout < 0) {
-            log_msg ("Error parsing tbon.tcp_user_timeout attribute");
+    if (attr_get (ov->attrs, long_name, &fsd, NULL) == 0) {
+        if (fsd_parse_duration (fsd, &value) < 0) {
+            log_msg ("Error parsing %s attribute", long_name);
             return -1;
         }
-        if (attr_delete (ov->attrs, "tbon.tcp_user_timeout", true) < 0)
+        if (attr_delete (ov->attrs, long_name, true) < 0)
             return -1;
         override = true;
     }
-    if (have_tcp_maxrt) {
+    if (enabled) {
         char buf[64];
-        if (fsd_format_duration (buf, sizeof (buf), ov->tcp_user_timeout) < 0)
+        if (fsd_format_duration (buf, sizeof (buf), value) < 0)
             return -1;
-        if (attr_add (ov->attrs,
-                      "tbon.tcp_user_timeout",
-                      buf,
-                      ATTR_IMMUTABLE) < 0)
+        if (attr_add (ov->attrs, long_name, buf, ATTR_IMMUTABLE) < 0)
             return -1;
     }
     else {
         if (override) {
-            log_msg ("tbon.tcp_user_timeout unsupported by this zeromq "
-                     "version");
+            log_msg ("%s unsupported by this zeromq version", long_name);
             return -1;
         }
     }
+    *valuep = value;
     return 0;
 }
 
@@ -2114,7 +2126,19 @@ struct overlay *overlay_create (flux_t *h,
         goto error;
     if (overlay_configure_torpid (ov) < 0)
         goto error;
-    if (overlay_configure_tcp_user_timeout (ov) < 0)
+    if (overlay_configure_timeout (ov,
+                                   "tbon",
+                                   "tcp_user_timeout",
+                                   have_tcp_maxrt,
+                                   default_tcp_user_timeout,
+                                   &ov->tcp_user_timeout) < 0)
+        goto error;
+    if (overlay_configure_timeout (ov,
+                                   "tbon",
+                                   "connect_timeout",
+                                   have_connect_timeout,
+                                   default_connect_timeout,
+                                   &ov->connect_timeout) < 0)
         goto error;
     if (overlay_configure_zmqdebug (ov) < 0)
         goto error;

@@ -278,4 +278,9 @@ test_expect_success NO_CHAIN_LINT 'ps, kill fail remotely on rank 0' '
 	wait_rexec_process_count 0 0
 '
 
+test_expect_success NO_CHAIN_LINT 'kill fails with ESRCH when pid is unknown' '
+	test_must_fail $rexec_script kill 15 12345678 2>kill.err &&
+	grep "No such process" kill.err
+'
+
 test_done

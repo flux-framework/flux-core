@@ -32,6 +32,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libtaskmap/taskmap_private.h"
+#include "ccan/str/str.h"
 
 #include "internal.h"
 #include "builtins.h"
@@ -416,11 +417,14 @@ int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
 
 int flux_shell_unsetenv (flux_shell_t *shell, const char *name)
 {
+    int rc;
     if (!shell || !name) {
         errno = EINVAL;
         return -1;
     }
-    return json_object_del (shell->info->jobspec->environment, name);
+    if ((rc = json_object_del (shell->info->jobspec->environment, name)) < 0)
+        errno = ENOENT;
+    return rc;
 }
 
 int flux_shell_get_hwloc_xml (flux_shell_t *shell, const char **xmlp)
@@ -970,16 +974,53 @@ static int get_protocol_fd (int *pfd)
         }
         if (fd_set_cloexec (fd) < 0)
             return -1;
-        *pfd = fd;
+        pfd[0] = fd;
+        pfd[1] = fd;
         return 0;
     }
-    *pfd = -1;
+    pfd[0] = STDIN_FILENO;
+    pfd[1] = STDOUT_FILENO;
     return 0;
 }
 
-char *shell_mustache_render (flux_shell_t *shell, const char *fmt)
+char *flux_shell_mustache_render (flux_shell_t *shell, const char *fmt)
 {
+    if (!shell) {
+        /* Note: shell->mr and fmt checked in mustache_render */
+        errno = EINVAL;
+        return NULL;
+    }
     return mustache_render (shell->mr, fmt);
+}
+
+static int mustache_render_name (flux_shell_t *shell,
+                                 const char *name,
+                                 FILE *fp)
+{
+    const char *jobname = NULL;
+    json_error_t error;
+    if (json_unpack_ex (shell->info->jobspec->jobspec, &error, 0,
+                        "{s:{s:{s?{s?s}}}}",
+                        "attributes",
+                         "system",
+                          "job",
+                           "name", &jobname) < 0) {
+        shell_log_error ("render_name: %s", error.text);
+        jobname = NULL;
+    }
+    if (!jobname) {
+        json_t *cmd = json_array_get (shell->info->jobspec->command, 0);
+        if (!cmd
+            || !(jobname = json_string_value (cmd))
+            || !(jobname = basename (jobname)))
+            jobname = "unknown";
+    }
+    if (fputs (jobname, fp) == EOF) {
+        shell_log_error ("memstream write failed for %s: %s",
+                         name,
+                         strerror (errno));
+    }
+    return 0;
 }
 
 static int mustache_render_jobid (flux_shell_t *shell,
@@ -1023,10 +1064,12 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
     char topic[128];
 
     /*  "jobid" is a synonym for "id" */
-    if (strncmp (name, "jobid", 5) == 0)
+    if (strstarts (name, "jobid"))
         name += 3;
-    if (strncmp (name, "id", 2) == 0)
+    if (strstarts (name, "id"))
         return mustache_render_jobid (shell, name, fp);
+    if (streq (name, "name"))
+        return mustache_render_name (shell, name, fp);
 
     if (snprintf (topic,
                   sizeof (topic),
@@ -1071,7 +1114,7 @@ static void shell_initialize (flux_shell_t *shell)
     if (gethostname (shell->hostname, sizeof (shell->hostname)) < 0)
         shell_die_errno (1, "gethostname");
 
-    if (get_protocol_fd (&shell->protocol_fd) < 0)
+    if (get_protocol_fd (shell->protocol_fd) < 0)
         shell_die_errno (1, "Failed to parse FLUX_EXEC_PROTOCOL_FD");
 
     if (!(shell->completion_refs = zhashx_new ()))
@@ -1199,10 +1242,10 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
     if (shell->standalone || shell->info->shell_size == 1)
         return 0; // NO-OP
 
-    if (shell->protocol_fd < 0)
+    if (shell->protocol_fd[1] < 0)
         shell_die (1, "required FLUX_EXEC_PROTOCOL_FD not set");
 
-    if (dprintf (shell->protocol_fd, "enter\n") != 6)
+    if (dprintf (shell->protocol_fd[1], "enter\n") != 6)
         shell_die_errno (1, "shell_barrier: dprintf");
 
     /*  Note: The only expected values currently are "exit=0\n"
@@ -1213,9 +1256,9 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
      *   elsewhere.
      */
     memset (buf, 0, sizeof (buf));
-    if (read (shell->protocol_fd, buf, 7) < 0)
+    if (read (shell->protocol_fd[0], buf, 7) < 0)
         shell_die_errno (1, "shell_barrier: read");
-    if (strcmp (buf, "exit=0\n") != 0)
+    if (!streq (buf, "exit=0\n"))
         exit (1);
     return 0;
 }
@@ -1225,7 +1268,7 @@ static int load_initrc (flux_shell_t *shell, const char *default_rcfile)
     bool required = false;
     const char *rcfile = NULL;
 
-    /* If initrc is set on commmand line or in jobspec, then
+    /* If initrc is set on command line or in jobspec, then
      *  it is required, O/w initrc is treated as empty file.
      */
     if (optparse_getopt (shell->p, "initrc", &rcfile) > 0
@@ -1311,14 +1354,14 @@ static int shell_taskmap (flux_shell_t *shell)
         return -1;
     }
     if (rc == 0
-        || strcmp (scheme, "block") == 0)
+        || streq (scheme, "block"))
         return 0;
 
     shell_trace ("remapping tasks with scheme=%s value=%s",
                  scheme,
                  value);
 
-    if (strcmp (scheme, "manual") == 0) {
+    if (streq (scheme, "manual")) {
         if (!(taskmap = taskmap_decode (value, &error)))
             shell_die (1, "taskmap=%s: %s", value, error.text);
         if (shell_info_set_taskmap (shell->info, taskmap) < 0)
@@ -1502,7 +1545,8 @@ static int frob_command (flux_shell_t *shell, flux_cmd_t *cmd)
     for (int i = 0; i < flux_cmd_argc (cmd); i++) {
         if (strstr (flux_cmd_arg (cmd, i), "{{")) { // possibly mustachioed
             char *narg;
-            if (!(narg = shell_mustache_render (shell, flux_cmd_arg (cmd, i)))
+            if (!(narg = flux_shell_mustache_render (shell,
+                                                     flux_cmd_arg (cmd, i)))
                 || flux_cmd_argv_insert (cmd, i, narg) < 0) {
                 free (narg);
                 return -1;
@@ -1624,7 +1668,7 @@ int main (int argc, char *argv[])
     while (taskid != IDSET_INVALID_ID) {
         struct shell_task *task;
 
-        if (!(task = shell_task_create (shell.info, i, taskid)))
+        if (!(task = shell_task_create (&shell, i, taskid)))
             shell_die (1, "shell_task_create index=%d", i);
 
         task->pre_exec_cb = shell_task_exec;

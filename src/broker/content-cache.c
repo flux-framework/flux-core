@@ -24,6 +24,7 @@
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libcontent/content.h"
+#include "ccan/str/str.h"
 
 #include "attr.h"
 #include "content-cache.h"
@@ -748,7 +749,7 @@ static void content_register_backing_request (flux_t *h,
         if (!(cache->backing_name = strdup (name)))
             goto error;
     }
-    if (strcmp (cache->backing_name, name) != 0) {
+    if (!streq (cache->backing_name, name)) {
         errno = EINVAL;
         errstr = "content backing store cannot be changed on the fly";
         goto error;
@@ -801,7 +802,7 @@ error:
 }
 
 /* Forcibly drop all entries from the cache that can be dropped
- * without data loss.  Use the LRU for this since all entires are
+ * without data loss.  Use the LRU for this since all entries are
  * valid and clean.
  */
 
@@ -999,7 +1000,7 @@ static int content_cache_getattr (const char *name, const char **val, void *arg)
 {
     struct content_cache *cache = arg;
 
-    if (!strcmp (name, "content.backing-module"))
+    if (streq (name, "content.backing-module"))
         *val = cache->backing_name;
     else
         return -1;

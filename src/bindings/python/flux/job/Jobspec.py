@@ -19,7 +19,7 @@ import os
 import yaml
 from _flux._core import ffi
 from flux import hostlist, idset
-from flux.util import parse_fsd, set_treedict
+from flux.util import Fileref, parse_fsd, set_treedict
 
 
 def _convert_jobspec_arg_to_string(jobspec):
@@ -90,7 +90,7 @@ def _validate_constraint_op(operator, args):
         for ranks in args:
             idset.decode(ranks)
     else:
-        raise TypeError(f"uknown constraint operator '{operator}'")
+        raise TypeError(f"unknown constraint operator '{operator}'")
 
 
 def _validate_constraint(constraints):
@@ -503,6 +503,36 @@ class Jobspec(object):
         self.setattr_shell_option("{}.{}.type".format(iotype, stream_name), "file")
         self.setattr_shell_option("{}.{}.path".format(iotype, stream_name), path)
 
+    def add_file(self, path, data, perms=0o0600, encoding=None):
+        """
+        Add a file to the RFC 14 "files" dictionary in Jobspec. If
+        ``data`` contains newlines or an encoding is explicitly provided,
+        then it is presumed to be the file content. Otherwise, ``data``
+        is a local filesystem path, the contents of which are to be loaded
+        into jobspec. For filesystem
+
+        Args:
+            path (str): path or file name to encode ``data`` as in Jobspec
+            data (dict, str): content of file or a local path to load
+            perms (int): file pemissions, default 0o0600 (octal). If ``data``
+                is a file system path, then permissions of the local file
+                system object will be used.
+            encoding (str): RFC 37 compatible encoding for ``data``. None
+                if ``data`` is a dict or to determine encoding from a file
+                when ``data`` specifies a filesystem path.  O/w, if encoding
+                set, data is a string encoded in specified ``encoding``.
+        """
+        if not (isinstance(data, abc.Mapping) or isinstance(data, str)):
+            raise TypeError("data must be a Mapping or string")
+
+        files = self.jobspec["attributes"]["system"].get("files", {})
+        if "\n" in data and encoding is None:
+            #  Use default encoding of utf-8 if data contains newlines,
+            #  since this is presumed to be file content.
+            encoding = "utf-8"
+        files[path] = Fileref(data, perms=perms, encoding=encoding)
+        self.jobspec["attributes"]["system"]["files"] = files
+
     def setattr(self, key, val):
 
         """
@@ -867,6 +897,7 @@ class JobspecV1(Jobspec):
         num_nodes=None,
         broker_opts=None,
         exclusive=False,
+        conf=None,
     ):
         """
         Create a Jobspec describing a nested Flux instance controlled by
@@ -898,6 +929,11 @@ class JobspecV1(Jobspec):
                 individual nodes
             broker_opts (iterable of `str`): options to pass to the new Flux
                 broker
+            conf (dict): optional broker configuration to pass to the
+                child instance brokers. If set, `conf` will be set in the
+                jobspec 'files' (RFC 37 File Archive) attribute as `conf.json`,
+                and broker_opts will be extended to add
+                `-c{{tmpdir}}/conf.json`
         """
         if not script.startswith("#!"):
             raise ValueError(f"{jobname} does not appear to start with '#!'")
@@ -910,9 +946,10 @@ class JobspecV1(Jobspec):
             num_nodes=num_nodes,
             broker_opts=broker_opts,
             exclusive=exclusive,
+            conf=conf,
         )
         #  Copy script contents into jobspec
-        jobspec.setattr("system.batch.script", script)
+        jobspec.add_file("script", script, perms=0o700, encoding="utf-8")
         jobspec.setattr("system.job.name", jobname)
         return jobspec
 
@@ -926,6 +963,7 @@ class JobspecV1(Jobspec):
         num_nodes=None,
         broker_opts=None,
         exclusive=False,
+        conf=None,
     ):
         """
         Create a Jobspec describing a nested Flux instance controlled by
@@ -951,8 +989,15 @@ class JobspecV1(Jobspec):
                 individual nodes
             broker_opts (iterable of `str`): options to pass to the new Flux
                 broker
+            conf (dict): optional broker configuration to pass to the
+                child instance brokers. If set, `conf` will be set in the
+                jobspec 'files' (RFC 37 File Archive) attribute as `conf.json`,
+                and broker_opts will be extended to add
+                `-c{{tmpdir}}/conf.json`
         """
-        broker_opts = () if broker_opts is None else broker_opts
+        broker_opts = [] if broker_opts is None else broker_opts
+        if conf is not None:
+            broker_opts.append("-c{{tmpdir}}/conf.json")
         jobspec = cls.from_command(
             command=["flux", "broker", *broker_opts, *command],
             num_tasks=num_slots,
@@ -963,4 +1008,6 @@ class JobspecV1(Jobspec):
         )
         jobspec.setattr_shell_option("per-resource.type", "node")
         jobspec.setattr_shell_option("mpi", "none")
+        if conf is not None:
+            jobspec.add_file("conf.json", conf)
         return jobspec

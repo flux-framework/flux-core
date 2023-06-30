@@ -69,7 +69,7 @@ void check_attr (struct context *ctx, const char *k, const char *v)
 
     ok (attr_get (ctx->attrs, k, &val, NULL)  == 0
         && ((v == NULL && val == NULL)
-            || (v != NULL && val != NULL && !strcmp (v, val))),
+            || (v != NULL && val != NULL && streq (v, val))),
         "%s: %s=%s", ctx->name, k, v ? v : "NULL");
 }
 
@@ -303,7 +303,7 @@ void trio (flux_t *h)
     ok (overlay_set_parent_uri (ctx[1]->ov, parent_uri) == 0,
         "%s: overlay_set_parent_uri %s works", ctx[1]->name, parent_uri);
     tmp = overlay_get_parent_uri (ctx[1]->ov);
-    ok (tmp != NULL && !strcmp (tmp, parent_uri),
+    ok (tmp != NULL && streq (tmp, parent_uri),
         "%s: overlay_get_parent_uri returns same string", ctx[1]->name);
     ok (overlay_set_parent_pubkey (ctx[1]->ov, server_pubkey) == 0,
         "%s: overlay_set_parent_pubkey works", ctx[1]->name);
@@ -330,13 +330,13 @@ void trio (flux_t *h)
     rmsg = recvmsg_timeout (ctx[0], 5);
     ok (rmsg != NULL,
         "%s: request was received by overlay", ctx[0]->name);
-    ok (!overlay_msg_is_local (rmsg),
-        "%s: overlay_msg_is_local fails on parent from child",
+    ok (!flux_msg_is_local (rmsg),
+        "%s: flux_msg_is_local fails on parent from child",
         ctx[1]->name);
-    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "meep"),
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "meep"),
         "%s: received message has expected topic", ctx[0]->name);
     ok ((sender = flux_msg_route_first (rmsg)) != NULL
-        && !strcmp (sender, ctx[1]->uuid),
+        && streq (sender, ctx[1]->uuid),
         "%s: received message sender is rank 1", ctx[0]->name);
 
     /* Send request 0->1
@@ -354,13 +354,13 @@ void trio (flux_t *h)
     rmsg = recvmsg_timeout (ctx[1], 5);
     ok (rmsg != NULL,
         "%s: request was received by overlay", ctx[1]->name);
-    ok (!overlay_msg_is_local (rmsg),
-        "%s: overlay_msg_is_local fails on child from parent",
+    ok (!flux_msg_is_local (rmsg),
+        "%s: flux_msg_is_local fails on child from parent",
         ctx[1]->name);
-    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "errr"),
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "errr"),
         "%s: request has expected topic", ctx[1]->name);
     ok ((sender = flux_msg_route_first (rmsg)) != NULL
-        && !strcmp (sender, ctx[0]->uuid),
+        && streq (sender, ctx[0]->uuid),
         "%s: request sender is rank 0", ctx[1]->name);
 
     /* Response 1->0
@@ -376,9 +376,9 @@ void trio (flux_t *h)
     rmsg = recvmsg_timeout (ctx[0], 5);
     ok (rmsg != NULL,
         "%s: response was received by overlay", ctx[0]->name);
-    ok (!overlay_msg_is_local (rmsg),
-        "%s: overlay_msg_is_local returns false for response from child");
-    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "m000"),
+    ok (!flux_msg_is_local (rmsg),
+        "%s: flux_msg_is_local returns false for response from child");
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "m000"),
         "%s: received message has expected topic", ctx[0]->name);
     ok (flux_msg_route_count (rmsg) == 0,
         "%s: received message has no routes", ctx[0]->name);
@@ -394,10 +394,10 @@ void trio (flux_t *h)
     rmsg = recvmsg_timeout (ctx[0], 5);
     ok (rmsg != NULL,
         "%s: event was received by overlay", ctx[0]->name);
-    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "eeek"),
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "eeek"),
         "%s: received message has expected topic", ctx[0]->name);
-    ok (!overlay_msg_is_local (rmsg),
-        "%s: overlay_msg_is_local returns false for event from child");
+    ok (!flux_msg_is_local (rmsg),
+        "%s: flux_msg_is_local returns false for event from child");
 
     /* Response 0->1
      */
@@ -412,7 +412,7 @@ void trio (flux_t *h)
     rmsg = recvmsg_timeout (ctx[1], 5);
     ok (msg != NULL,
         "%s: response was received by overlay", ctx[1]->name);
-    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "moop"),
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "moop"),
         "%s: response has expected topic", ctx[1]->name);
     ok (flux_msg_route_count (rmsg) == 0,
         "%s: response has no routes", ctx[1]->name);
@@ -428,7 +428,7 @@ void trio (flux_t *h)
     rmsg = recvmsg_timeout (ctx[1], 5);
     ok (rmsg != NULL,
         "%s: event was received by overlay", ctx[1]->name);
-    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "eeeb"),
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && streq (topic, "eeeb"),
         "%s: received message has expected topic", ctx[1]->name);
 
     /* Cover some error code in overlay_bind() where the ZAP handler
@@ -466,7 +466,7 @@ void trio (flux_t *h)
     ok (zmqutil_msg_send (zsock_none, msg) == 0,
         "none-2: zsock_msg_sendzsock works");
 
-    /* 2) Curve, and correct server publc key, but client public key
+    /* 2) Curve, and correct server public key, but client public key
      * was not authorized
      */
     if (!(zsock_curve = zsock_new_dealer (NULL)))
@@ -559,10 +559,10 @@ void monitor_cb (struct overlay *ov, uint32_t rank, void *arg)
     const char *status = overlay_get_subtree_status (ov, rank);
     monitor_diag_cb (ov, rank, arg);
     if (overlay_parent_error (ov)
-        || !strcmp (status, "full")
-        || !strcmp (status, "partial")
-        || !strcmp (status, "lost")
-        || !strcmp (status, "offline"))
+        || streq (status, "full")
+        || streq (status, "partial")
+        || streq (status, "lost")
+        || streq (status, "offline"))
         flux_reactor_stop (flux_get_reactor (ctx->h));
 }
 
@@ -664,8 +664,8 @@ void wrongness (flux_t *h)
     ok (overlay_bind (ov, "ipc://@foobar") < 0 && errno == EINVAL,
         "overlay_bind fails if called before rank is known");
 
-    ok (!overlay_msg_is_local (NULL),
-        "overlay_msg_is_local (NULL) returns false");
+    ok (!flux_msg_is_local (NULL),
+        "flux_msg_is_local (NULL) returns false");
 
     overlay_destroy (ov);
     attr_destroy (attrs);

@@ -34,15 +34,86 @@ OTHER OPTIONS
    character, then VAL is interpreted as a file, which must be valid JSON,
    to use as the attribute value.
 
-**--begin-time=DATETIME**
+**--add-file=[NAME=]ARG**
+   Add a file to the RFC 37 file archive in jobspec before submission. Both
+   the file metadata and content are stored in the archive, so modification
+   or deletion of a file after being processed by this option will have no
+   effect on the job. If no ``NAME`` is provided, then ``ARG`` is assumed to
+   be the path to a local file and the basename of the file will be used as
+   ``NAME``.  Otherwise, if ``ARG`` contains a newline, then it is assumed
+   to be the raw file data to encode. The file will be extracted by the
+   job shell into the job temporary directory and may be referenced as
+   ``{{tmpdir}}/NAME`` on the command line, or ``$FLUX_JOB_TMPDIR/NAME``
+   in a batch script.  This option may be specified multiple times to
+   encode multiple files.  Note: As documented in RFC 14, the file names
+   ``script`` and ``conf.json`` are both reserved.
+
+   .. note::
+      This option should only be used for small files such as program input
+      parameters, configuration, scripts, and so on. For broadcast of large
+      files, binaries, and directories, the :man1:`flux-shell` ``stage-in``
+      plugin will be more appropriate.
+
+**--conf=FILE|KEY=VAL|STRING|NAME**
+   The ``--conf`` option allows configuration for a Flux instance started
+   via ``flux-batch(1)`` or ``flux-alloc(1)`` to be iteratively built on
+   the command line. On first use, a ``conf.json`` entry is added to the
+   internal jobspec file archive, and ``-c{{tmpdir}}/conf.json`` is added
+   to the flux broker command line. Each subsequent use of the ``--conf``
+   option updates this configuration.
+
+   The argument to ``--conf`` may be in one of several forms:
+
+   * A multiline string, e.g. from a batch directive. In this case the string
+     is parsed as JSON or TOML::
+
+      # flux: --conf="""
+      # flux: [resource]
+      # flux: exclude = "0"
+      # flux: """
+
+   * A string containing a ``=`` character, in which case the argument is
+     parsed as ``KEY=VAL``, where ``VAL`` is parsed as JSON, e.g.::
+
+      --conf=resource.exclude=\"0\"
+
+   * A string ending in ``.json`` or ``.toml``, in which case configuration
+     is loaded from a JSON or TOML file.
+
+   * If none of the above conditions match, then the argument ``NAME`` is
+     assumed to refer to a "named" config file ``NAME.toml`` or ``NAME.json``
+     within the following search path, in order of precedence:
+
+     - ``XDG_CONFIG_HOME/flux/config`` or ``$HOME/.config/flux/config`` if
+       ``XDG_CONFIG_HOME`` is not set
+
+     - ``$XDG_CONFIG_DIRS/flux/config`` or ``/etc/xdg/flux/config`` if
+       ``XDG_CONFIG_DIRS`` is not set. Note that ``XDG_CONFIG_DIRS`` may
+       be a colon-separated path.
+
+**--begin-time=+FSD|DATETIME**
    Convenience option for setting a ``begin-time`` dependency for a job.
    The job is guaranteed to start after the specified date and time.
-   If *DATETIME* begins with a ``+`` character, then the remainder is
+   If argument begins with a ``+`` character, then the remainder is
    considered to be an offset in Flux standard duration (RFC 23), otherwise,
    any datetime expression accepted by the Python 
    `parsedatetime <https://github.com/bear/parsedatetime>`_ module
    is accepted, e.g. ``2021-06-21 8am``, ``in an hour``,
    ``tomorrow morning``, etc.
+
+**--signal=SIG@TIME**
+   Send signal ``SIG`` to job ``TIME`` before the job time limit. ``SIG``
+   can specify either an integer signal number or a full or abbreviated
+   signal name, e.g. ``SIGUSR1`` or ``USR1`` or ``10``. ``TIME`` is
+   specified in Flux Standard Duration, e.g. ``30`` for 30s or ``1h`` for
+   1 hour. Either parameter may be omitted, with defaults of ``SIGUSR1``
+   and 60s.  For example, ``--signal=USR2`` will send ``SIGUSR2`` to
+   the job 60 seconds before expiration, and ``--signal=@3m`` will send
+   ``SIGUSR1`` 3 minutes before expiration. Note that if ``TIME`` is
+   greater than the remaining time of a job as it starts, the job will
+   be signaled immediately.
+
+   The default behavior is to not send any warning signal to jobs.
 
 **--taskmap=SCHEME[:VALUE]**
    Choose an alternate method for mapping job task IDs to nodes of the

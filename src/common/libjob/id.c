@@ -16,6 +16,7 @@
 
 #include "job.h"
 
+#include "ccan/str/str.h"
 #include "src/common/libutil/fluid.h"
 
 int flux_job_id_parse (const char *s, flux_jobid_t *idp)
@@ -35,7 +36,7 @@ int flux_job_id_parse (const char *s, flux_jobid_t *idp)
     /*  Ignore any `job.` prefix. This allows a "kvs" encoding
      *   created by flux_job_id_encode(3) to properly decode.
      */
-    if (strncmp (p, "job.", 4) == 0)
+    if (strstarts (p, "job."))
         p += 4;
     return fluid_parse (p, idp);
 }
@@ -87,6 +88,8 @@ int flux_job_id_encode (flux_jobid_t id,
         t = FLUID_STRING_MNEMONIC;
     else if (strcasecmp (type, "f58") == 0)
         t = FLUID_STRING_F58;
+    else if (strcasecmp (type, "emoji") == 0)
+        t = FLUID_STRING_EMOJI;
     else {
         /*  Return EPROTO for invalid type to differentiate from
          *   other invalid arguments.

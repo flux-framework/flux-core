@@ -1,3 +1,196 @@
+flux-core version 0.51.0 - 2023-06-09
+-------------------------------------
+
+This release adds the flux-batch(1) and flux-alloc(1) `--conf` option,
+which makes subinstance configuration significantly easier.  Sys admins
+may note that _named configurations_ can be added to `/etc/xdg/flux/config`
+for configurations that are anticipated to be commonly needed such as
+node-exclusive scheduling.
+
+For example, `/etc/xdg/flux/config/node-exclusive.toml` could contain:
+```toml
+[sched-fluxion-resource]
+match-policy = "lonodex"
+```
+And then users could request this in a batch subinstance with:
+```
+flux batch --conf=node-exclusive ...
+```
+
+## New Features
+
+ * add `--conf` option for registering instance config in `flux-batch` and
+   `flux-alloc` (#5232)
+ * support RFC 14 `files` file archive in jobspec, add `--add-file` option
+   to cli submission commands (#5228, #5239)
+ * support option to signal a job a configurable time before expiration (#5212)
+ * flux-resource: add `-i, --include` option to filter hosts for `status`
+   and `drain` commands (#5219)
+ * flux-resource: add `-i, --include=TARGETS` option to `list`  and `info`
+   subcommands (#5236)
+ * broker: forward nonfatal signals to all running jobs (#5202)
+ * broker: unset `SLURM_*` in initial program environment (#5237)
+ * sdbus: add subscription filtering (#5227)
+ * job-exec: provide IMP exec helper when possible and use stdin/out for
+   shell exec protocol (#5186)
+ * support emoji encoding for Flux jobids (#5174)
+ * job-list: support retrieving current working directory for jobs (#5156)
+ * job-list: allow list-id to wait for job state (#5213)
+ * flux-jobs: support new `inactive_reason` output field and `endreason`
+   format (#5055)
+ * broker: redefine broker.quorum as a size (#5153)
+ * broker: signal readiness to systemd in JOIN state (#5152)
+
+## Fixes
+
+ * completions: update bash completions with recent command changes (#5241)
+ * shell/pmi: accept pmi1 and pmi2 as aliases for "simple" pmi (#5242)
+ * `zhash_insert()`/`zhashx_insert()` return EEXIST  (#5217)
+ * restrict remote access to sdbus on rank 0 (#5162)
+ * flux-job: submit: strip unnecessary whitespace from pre-signed jobspec
+   (#5185)
+ * libsubprocess: fail with ESRCH when pid cannot be found (#5229)
+ * flux-jobs: reduce likelihood of leaving bad terminal color state on
+   empty output (#5211)
+ * python: support non-JSON formatted data in KVS (#5204)
+ * Add missing include of config.h (#5182)
+ * liboptparse: correct message on missing argument (#5180)
+ * python: improve handling of `!d` conversion specifier in output formats
+   (#5169)
+ * libioencode: fix memleaks on error paths (#5159)
+ * shell: add missing `flux_` prefix to `shell_mustache_render(3)` (#5161)
+ * shell: truncate output to KVS after 10MB (#5155)
+ * python: open UtilConfig files as binary (#5157)
+ * job-manager: make some replay errors non-fatal (#5150)
+ * doc: fix python example (#5191)
+ * flux-job: ignore stdin instead of aborting when unable to create stdin
+   watcher (#5183)
+
+## Cleanup
+ * cleanup: use ccan/str in place of strcmp(), strncmp() (#5163)
+ * job-list: misc cleanup (#5144)
+
+## Testsuite/CI
+ * testsuite: fix potential flux-top race (#5224)
+ * testsuite: fix tests when run in debug mode (#5231)
+ * testsuite: increase test expiration (#5222)
+ * testsuite: fix race in flux top tests (#5194)
+ * testsuite: skip tests that expect COLUMNS to be inherited across calls
+   to flux(1) when that isn't true (#5166)
+ * pre-commit: increase vermin version (#5173)
+ * ci: fix pre-commit config to lint python files in testsuite (#5221)
+ * ci: add fedora38 builder, update flux-security default to 0.8.0 (#5160)
+
+flux-core version 0.50.0 - 2023-05-03
+-------------------------------------
+
+## New Features
+ * broker: make `tbon.connect_timeout` configurable (#5140)
+ * flux-job: support job ids to purge (#5047)
+ * sdbus: enable flux to communicate with a systemd user instance (#5070, #5131)
+ * shell: support `{{name}}` tag in output file templates (#5128)
+ * flux-top: support ability to flip through queues via left/right arrow keys
+   (#5052)
+ * flux-ping: output header before output of main ping output (#5034)
+ * broker: improve systemd integration with `sd_notify(3)` (#5078)
+
+## Fixes
+ * `flux(1)`: avoid prepending to PATH when unnecessary (#5138)
+ * python: make `SchedResourceList` optional in `flux.job.info` (#5141)
+ * fix parent-uri attribute under remote `flux-proxy(1)` (#5133)
+ * job-list: make job stats consistent to job results (#5048)
+ * fileref: fix compile on systems without `SEEK_DATA`/`SEEK_HOLE` (#5114)
+ * fixes for build/test on Fedora 36 (GCC 12) (#5107)
+ * shell: fix improper encoding of some hostnames in MPIR proctable (#5117)
+ * python: fix parsing of special characters in submission directives (#5125)
+ * job-validator: fix empty plugins list when one plugin fails to import
+   (#5124)
+ * broker: use human readable timestamp in local time when logging to stderr
+   (#5129)
+ * improve error on plugin load if `flux_plugin_init()` returns an error
+   (#5135)
+ * librlist: fix memleak + misc cleanup (#5110)
+ * sched-simple: avoid assertion failure when trying to load scheduler twice
+   (#5109)
+ * job-manager: improve errors from jobtap initialization (#5099)
+ * libsubprocess: avoid segfault on error path (#5096)
+ * job-exec: improve error message when job shell/imp execution fails (#5088)
+ * systemd: avoid leaving unit in failed state after flux-shutdown(1) (#5077)
+
+## Cleanup
+ * libjob: deprecate `flux_job_list()` and `flux_job_list_inactive()` (#4855)
+ * broker: clean up module infrastructure (#5085)
+ * libsubprocess: remove use of assert(0) (#5084)
+
+## Testsuite/CI/Development
+ * ensure license and other informational files appear in distribution
+   tarball (#5113)
+ * mergify: add spelling check to required checks (#5112)
+ * Add false positives typos config (#5106)
+ * Fix minor typos and formatting (#5019)
+ * testsuite: fix test issues under nix (#5015)
+ * testsuite: fix column width output corner case (#5103)
+ * testsuite: fix setup error in system tests (#5102)
+ * build: add `make deb` target to build test debian package (#5101)
+ * build: applicable build and test fixes for conda (#5093)
+ * testsuite: skip failing test on RHEL7 (#5090)
+ * add spell check for news, readme, and user facing code (#5074)
+
+
+flux-core version 0.49.0 - 2023-04-05
+-------------------------------------
+
+## New Features
+ * libpmi: improve error messages from upmi plugins (#5066)
+ * shell: support -o pmi=LIST (#5069)
+ * flux-jobs: add --json option (#5054)
+ * flux-job: add special exit code to flux job wait when not waitable (#5049)
+ * libpmi: enable flux to bootstrap with cray libpmi2.so (#5051)
+ * libpmi: improve tracing of dlopened PMI libraries (#5053)
+ * resource: do not allow ranks to be both drained and excluded (#5039)
+ * Support environment variable to override default output formats (#5028)
+ * improve broker debugging on overlay connect failure (#5014)
+ * rewrite flux-resource status (#4997)
+ * flux-resource: support overwrite of drain timestamp with `--force --force`
+   (#5000)
+ * python: improve Hostlist class indexing (#4993)
+
+## Fixes
+ * openmpi: don't force flux MCA plugins (#5067)
+ * PMI: ensure fallthrough when PMI library fails to initialize (#5058)
+ * flux-top: fix queue specific output display (#5032)
+ * flux-pgrep: fix warning about `sre_constants` on Python 3.11+ (#5043)
+ * prevent orphaned job processes when terminating jobs due to exception
+   (#4990)
+ * python: recognize local timezone epoch adjustment (#5025)
+ * fix rare `Unable to connect to JOBID` error from `flux alloc --bg` (#5012)
+ * job-manager: ensure epilog-start event prevents resource release for
+   job that never started (#5011)
+ * librlist: drop V1 flag from hwloc XML generation (#5007)
+ * fix: warning message to user should be actual command (#5002)
+ * flux-mini: improve deprecation warning (#4989)
+
+## Cleanup
+ * job-list: minor code consistency cleanup (#5031)
+ * mpi: drop mvapich.lua plugin (#5045)
+ * libflux: remove extraneous +1s used in buffers (#5020)
+ * cleanup: improve interface for subprocess logging (#5006)
+ * cleanup: simplify remote subprocess protocol (#5004)
+ * cleanup: allow subprocess service name to be configured (#5003)
+ * cleanup: improve reusability of common message handlers (#5001)
+
+## Documentation
+ * flux-job(1): update WAIT section (#5042)
+ * doc: document job environment variables (#5024)
+ * doc: document `FLUX_URI_RESOLVE_LOCAL` (#5023)
+ * cli: adjust description of `--begin-time` submission option (#5018)
+
+## Testsuite/CI/Development
+ * testsuite: increase test timeouts (#5017)
+ * testsuite: speed up t4000-issues-test-driver.t (#5010)
+ * testsuite: require jq(1) (#4995)
+
+
 flux-core version 0.48.0 - 2023-03-07
 -------------------------------------
 
@@ -865,7 +1058,7 @@ tool, and a critical fix for system deployments of Flux (#3958).
  * broker: record child instance URIs as job memo (#3986)
  * Support job memo events (#3984)
  * job-exec: checkpoint/restore KVS namespaces of running jobs (#3947)
- * set hostlist broker attribute when boostrapped by PMI (#3966)
+ * set hostlist broker attribute when bootstrapped by PMI (#3966)
  * add `flux_get_hostbyrank()` and improve broker attribute caching (#3971)
  * broker: log slow nodes during startup (#3980)
  * add flux-top command (#3979)
@@ -1062,7 +1255,7 @@ DEPENDENCIES section.
 flux-core version 0.27.0 - 2021-05-28
 -------------------------------------
 
-This release features additonal performance improvements that affect
+This release features additional performance improvements that affect
 job throughput over time (see issue #3583).
 
 ### Fixes
@@ -2283,7 +2476,7 @@ flux-core version 0.6.0 - 2016-11-29
  * Fix for possible unconstrained memory growth in modules/libjsc (#891)
  * Fix error message on flux-help failure (#887)
  * Issue fatal error in wrexecd for invalid tasks on node (#901)
- * Fix barrier protocol incompatability with older jansson versions (#889)
+ * Fix barrier protocol incompatibility with older jansson versions (#889)
 
 #### New Features
 
@@ -2415,7 +2608,7 @@ flux-core version 0.4.0 - 2016-08-11
 
 * Sophia content backing store module (#727)
 
-* mrpc KVS based muti-RPC interface (#689)
+* mrpc KVS based multi-RPC interface (#689)
 
 * ZPL config file (#674)
 
@@ -2455,7 +2648,7 @@ flux-core version 0.3.0 - 2016-04-26
 
 * Add module status reporting via keepalive messages.
   `flux module list` now reports live module status:
-  - I = intializing
+  - I = initializing
   - S = sleeping
   - X = exited
   - R = running

@@ -19,6 +19,7 @@
 
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/fsd.h"
+#include "ccan/str/str.h"
 
 #include "builtin.h"
 
@@ -281,7 +282,7 @@ static void default_summary (flux_t *h)
                                 "state", &broker_state,
                                 "duration", &duration) < 0)
         log_err_exit ("Error fetching broker state");
-    if (!strcmp (broker_state, "run")) {
+    if (streq (broker_state, "run")) {
         duration = t_now - attr_get_starttime (h);
         drained = resource_status_drained (h);
         offline = size - groups_get_count (h, "broker.online");

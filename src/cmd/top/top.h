@@ -31,11 +31,10 @@ struct top {
     flux_t *h;
     char *title;
     json_t *flux_config;
-    const char *queue;
-    json_t *queue_constraint;
+    struct queues *queues;
     flux_jobid_t id;
 
-    unsigned int test_exit:1;    /*  Exit after first joblist pane update */
+    unsigned int test_exit:1;    /*  Exit after first output of all panes */
     unsigned int test_exit_count;
     FILE *testf;
     const char *f_char;
@@ -74,12 +73,13 @@ void summary_pane_heartbeat (struct summary_pane *sum);
 void summary_pane_toggle_details (struct summary_pane *sum);
 
 struct joblist_pane *joblist_pane_create (struct top *top);
-void joblist_pane_destroy (struct joblist_pane *sum);
-void joblist_pane_draw (struct joblist_pane *sum);
-void joblist_pane_refresh (struct joblist_pane *sum);
-void joblist_pane_query (struct joblist_pane *sum);
+void joblist_pane_destroy (struct joblist_pane *joblist);
+void joblist_pane_draw (struct joblist_pane *joblist);
+void joblist_pane_refresh (struct joblist_pane *joblist);
+void joblist_pane_query (struct joblist_pane *joblist);
 void joblist_pane_set_current (struct joblist_pane *joblist, bool next);
 void joblist_pane_enter (struct joblist_pane *joblist);
+void joblist_filter_jobs (struct joblist_pane *joblist);
 
 struct keys *keys_create (struct top *top);
 void keys_destroy (struct keys *keys);
@@ -87,6 +87,15 @@ void keys_destroy (struct keys *keys);
 struct ucache *ucache_create (void);
 void ucache_destroy (struct ucache *ucache);
 const char *ucache_lookup (struct ucache *ucache, uid_t userid);
+
+void queues_destroy (struct queues *queues);
+struct queues *queues_create (json_t *flux_config);
+bool queues_configured (struct queues *queues);
+void queues_set_queue (struct queues *queues, const char *name);
+void queues_next (struct queues *queues);
+void queues_prev (struct queues *queues);
+void queues_get_queue_name (struct queues *queues, const char **name);
+void queues_get_queue_constraint (struct queues *queues, json_t **constraint);
 
 void fatal (int errnum, const char *fmt, ...)
     __attribute__ ((format (printf, 2, 3)));

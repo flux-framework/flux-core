@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <string.h>
 #include <errno.h>
 #include <pthread.h>
@@ -62,7 +65,7 @@ int main (int argc, char *argv[])
     }
 
     ok (pass == 1,
-        "%d threads ran executable_is_intree sucessfully", NTHREADS);
+        "%d threads ran executable_is_intree successfully", NTHREADS);
 
     pthread_barrier_destroy (&barrier);
     done_testing ();

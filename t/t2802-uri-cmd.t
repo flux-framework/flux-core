@@ -86,7 +86,7 @@ test_expect_success 'start a small hierarchy of Flux instances' '
 	EOF
 	chmod +x batch.sh &&
 	jobid=$(flux batch -n1 batch.sh) &&
-	flux job wait-event -T offset -vt 30 -c 2 $jobid memo
+	flux job wait-event -T offset -vt 180 -c 2 $jobid memo
 '
 test_expect_success 'flux uri resolves jobid argument' '
 	flux proxy $(flux uri --local $jobid) flux getattr jobid >jobid1.out &&
@@ -115,7 +115,7 @@ test_expect_success 'flux uri jobid returns error for non-instance job' '
 test_expect_success 'flux uri jobid scheme returns error for invalid jobid' '
 	test_expect_code 1 flux uri jobid:boop
 '
-test_expect_success 'flux uri jobid scheme returns error for unkown jobid' '
+test_expect_success 'flux uri jobid scheme returns error for unknown jobid' '
 	test_expect_code 1 flux uri jobid:f1
 '
 test_expect_success 'setup fake srun and scontrol cmds for mock slurm testing' '

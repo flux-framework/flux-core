@@ -27,6 +27,7 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/log.h"
+#include "ccan/str/str.h"
 
 static struct optparse_option cmdopts[] = {
     { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "IDSET",
@@ -115,10 +116,8 @@ void completion_cb (flux_subprocess_t *p)
         if (!(idset = zhashx_lookup (exitsets, buf))) {
             if (!(idset = idset_create (rank_range, 0)))
                 log_err_exit ("idset_create");
-            if (zhashx_insert (exitsets, buf, idset) < 0)
-                log_err_exit ("zhashx_insert");
-            if (!zhashx_freefn (exitsets, buf, idset_destroy_wrapper))
-                log_err_exit ("zhashx_freefn");
+            (void)zhashx_insert (exitsets, buf, idset);
+            (void)zhashx_freefn (exitsets, buf, idset_destroy_wrapper);
         }
 
         if (idset_set (idset, rank) < 0)
@@ -158,12 +157,17 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
     if (state == FLUX_SUBPROCESS_FAILED) {
         flux_cmd_t *cmd = flux_subprocess_get_cmd (p);
         int errnum = flux_subprocess_fail_errno (p);
+        const char *errmsg = flux_subprocess_fail_error (p);
         int ec = 1;
 
+        /* N.B. if no error message available from
+         * flux_subprocess_fail_error(), errmsg is set to strerror of
+         * subprocess errno.
+         */
         log_msg ("Error: rank %d: %s: %s",
                  flux_subprocess_rank (p),
                  flux_cmd_arg (cmd, 0),
-                 strerror (errnum));
+                 errmsg);
 
         /* bash standard, 126 for permission/access denied, 127 for
          * command not found.  68 (EX_NOHOST) for No route to host.
@@ -182,7 +186,7 @@ void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 
 void output_cb (flux_subprocess_t *p, const char *stream)
 {
-    FILE *fstream = !strcmp (stream, "stderr") ? stderr : stdout;
+    FILE *fstream = streq (stream, "stderr") ? stderr : stdout;
     const char *ptr;
     int lenp;
 
@@ -331,6 +335,8 @@ int main (int argc, char *argv[])
     if (!(cmd = flux_cmd_create (argc - optindex, &argv[optindex], environ)))
         log_err_exit ("flux_cmd_create");
 
+    flux_cmd_unsetenv (cmd, "FLUX_PROXY_REMOTE");
+
     if (optparse_getopt (opts, "dir", &optargp) > 0) {
         if (!(cwd = strdup (optargp)))
             log_err_exit ("strdup");
@@ -340,7 +346,7 @@ int main (int argc, char *argv[])
             log_err_exit ("get_current_dir_name");
     }
 
-    if (strcmp (cwd, "none") != 0) {
+    if (!streq (cwd, "none")) {
         if (flux_cmd_setcwd (cmd, cwd) < 0)
             log_err_exit ("flux_cmd_setcwd");
     }
@@ -355,7 +361,7 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_get_size");
 
     if (optparse_getopt (opts, "rank", &optargp) > 0
-        && strcmp (optargp, "all")) {
+        && !streq (optargp, "all")) {
         if (!(ns = idset_decode (optargp)))
             log_err_exit ("idset_decode");
         if (!(rank_count = idset_count (ns)))

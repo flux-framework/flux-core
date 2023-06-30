@@ -19,6 +19,7 @@
 #include <flux/optparse.h>
 
 #include "src/common/libutil/log.h"
+#include "ccan/str/str.h"
 
 
 static int event_pub (optparse_t *p, int argc, char **argv);
@@ -65,7 +66,7 @@ static bool match_payload (const char *s1, const char *s2)
         return true;
     if (!s2 || !s1)
         return false;
-    return !strcmp (s1, s2);
+    return streq (s1, s2);
 }
 
 static bool match_payload_raw (const void *p1, int p1sz,

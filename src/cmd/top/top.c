@@ -17,6 +17,7 @@
 
 #include "src/common/libutil/uri.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
 #include "top.h"
 
@@ -200,7 +201,7 @@ void top_destroy (struct top *top)
         joblist_pane_destroy (top->joblist_pane);
         summary_pane_destroy (top->summary_pane);
         keys_destroy (top->keys);
-        json_decref (top->queue_constraint);
+        queues_destroy (top->queues);
         json_decref (top->flux_config);
         if (top->testf)
             fclose (top->testf);
@@ -224,18 +225,8 @@ static flux_jobid_t get_jobid (flux_t *h)
 
 static char * build_title (struct top *top, const char *title)
 {
-    if (!title) {
-        char jobid [24];
-        title = "";
-        if (top->id != FLUX_JOBID_ANY) {
-            if (flux_job_id_encode (top->id,
-                                    "f58",
-                                    jobid,
-                                    sizeof (jobid)) < 0)
-                fatal (errno, "failed to build jobid");
-            title = jobid;
-        }
-    }
+    if (!title)
+        title = idf58 (top->id);
     return strdup (title);
 }
 
@@ -250,31 +241,6 @@ static void get_config (struct top *top)
 
     top->flux_config = json_incref (o);
     flux_future_destroy (f);
-}
-
-static void setup_constraint (struct top *top)
-{
-    json_t *tmp;
-    json_t *requires = NULL;
-
-    /* first verify queue legit */
-    if (json_unpack (top->flux_config,
-                     "{s:{s:o}}",
-                     "queues", top->queue, &tmp) < 0)
-        fatal (0, "queue %s not configured", top->queue);
-
-    /* not required to be configured */
-    (void) json_unpack (top->flux_config,
-                        "{s:{s:{s:o}}}",
-                        "queues",
-                          top->queue,
-                            "requires",
-                            &requires);
-    if (requires) {
-        if (!(top->queue_constraint = json_pack ("{s:O}",
-                                                 "properties", requires)))
-            fatal (0, "Error creating queue constraints");
-    }
 }
 
 struct top *top_create (const char *uri,
@@ -293,12 +259,13 @@ struct top *top_create (const char *uri,
 
     get_config (top);
 
-    /* setup / configure before calls to joblist_pane_create() and
+    if (!(top->queues = queues_create (top->flux_config)))
+        goto fail;
+
+    /* setup / configure queue before calls to joblist_pane_create() and
      * summary_pane_create() below */
-    if (queue) {
-        top->queue = queue;
-        setup_constraint (top);
-    }
+    if (queue)
+        queues_set_queue (top->queues, queue);
 
     flux_comms_error_set (top->h, comms_error, &top);
     top->refresh = flux_prepare_watcher_create (flux_get_reactor (top->h),
@@ -409,6 +376,11 @@ int main (int argc, char *argv[])
                             optparse_get_str (opts, "queue", NULL),
                             &error)))
         fatal (0, "%s", error.text);
+    /* top_create() call above will call initial "draw" routines.  We
+     * do not want those draws to output anything during testing with
+     * the --test-exit-dump option.  Thus we handle --test-exit and
+     * --test-exit-dump setup after the top_create() call.
+     */
     if (optparse_hasopt (opts, "test-exit")) {
         const char *file;
         top->test_exit = 1;

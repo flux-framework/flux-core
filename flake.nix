@@ -2,7 +2,7 @@
   description = "flux-core";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-22.11";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-23.05";
     flake-utils.url = "github:numtide/flake-utils";
     # flake-compat = {
     #   url = "github:edolstra/flake-compat";
@@ -125,6 +125,10 @@
               patchShebangs etc
             '';
           };
+          packages.checked = self.packages.${system}.default.overrideAttrs (
+            final: prev: {
+              doInstallCheck = true;
+          });
         }
       );
 }

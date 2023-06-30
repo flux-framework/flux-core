@@ -13,6 +13,8 @@
 #endif
 #include <flux/core.h>
 
+#include "ccan/str/str.h"
+
 #include "strtab.h"
 
 static const char *format_entry (struct strtab *entry, const char *fmt)
@@ -47,10 +49,10 @@ int strtab_strtonum (const char *s, struct strtab *strtab, size_t count)
 {
     if (s) {
         for (int i = 0; i < count; i++) {
-            if (!strcmp (strtab[i].short_lower, s)
-                || !strcmp (strtab[i].short_upper, s)
-                || !strcmp (strtab[i].long_lower, s)
-                || !strcmp (strtab[i].long_upper, s))
+            if (streq (strtab[i].short_lower, s)
+                || streq (strtab[i].short_upper, s)
+                || streq (strtab[i].long_lower, s)
+                || streq (strtab[i].long_upper, s))
                 return strtab[i].num;
         }
     }

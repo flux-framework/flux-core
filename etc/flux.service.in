@@ -3,6 +3,8 @@ Description=Flux message broker
 Wants=munge.service
 
 [Service]
+Type=notify
+NotifyAccess=main
 TimeoutStopSec=90
 KillMode=mixed
 ExecStart=/bin/sh -c '\
@@ -17,9 +19,10 @@ ExecStart=/bin/sh -c '\
   -Slog-stderr-level=6 \
   -Slog-stderr-mode=local \
   -Sbroker.rc2_none \
-  -Sbroker.quorum=0 \
+  -Sbroker.quorum=1 \
   -Sbroker.quorum-timeout=none \
   -Sbroker.exit-norestart=42 \
+  -Sbroker.sd-notify=1 \
   -Scontent.restore=auto \
 '
 SyslogIdentifier=flux
@@ -27,6 +30,7 @@ ExecReload=@X_BINDIR@/flux config reload
 Restart=always
 RestartSec=5s
 RestartPreventExitStatus=42
+SuccessExitStatus=42
 User=flux
 Group=flux
 RuntimeDirectory=flux

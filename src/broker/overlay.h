@@ -61,7 +61,7 @@ int overlay_sendmsg (struct overlay *ov,
  * and overlay_set_parent_pubkey() with the public key of the parent
  * before calling overlay_connect().
  * NOTE: if bootstrapping with PMI, unique public keys are generated for
- * each broker and shared via PMI exchange.  If boostrapping with config
+ * each broker and shared via PMI exchange.  If bootstrapping with config
  * files, each broker loads an (assumed) identical key-pair from a file.
  * Only the public key may be shared over the network, never the private key.
  */
@@ -141,11 +141,6 @@ int overlay_set_monitor_cb (struct overlay *ov,
 /* Register overlay-related broker attributes.
  */
 int overlay_register_attrs (struct overlay *overlay);
-
-/* Return true if this message was routed locally, i.e. wasn't delivered
- *  via an overlay parent or child.
- */
-bool overlay_msg_is_local (const flux_msg_t *msg);
 
 /* Stop allowing new connections from downstream peers.
  */

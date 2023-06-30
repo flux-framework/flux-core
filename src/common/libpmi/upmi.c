@@ -13,6 +13,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <jansson.h>
 #include <flux/core.h>
 #include <assert.h>
 #include <argz.h>
@@ -45,19 +46,22 @@ void upmi_trace (struct upmi *upmi, const char *fmt, ...);
 static int upmi_preinit (struct upmi *upmi,
                          int flags,
                          const char *path,
+                         const char **note,
                          flux_error_t *error);
 
 int upmi_simple_init (flux_plugin_t *p);
+int upmi_libpmi2_init (flux_plugin_t *p);
 int upmi_libpmi_init (flux_plugin_t *p);
 int upmi_single_init (flux_plugin_t *p);
 
 static flux_plugin_init_f builtins[] = {
     &upmi_simple_init,
+    &upmi_libpmi2_init,
     &upmi_libpmi_init,
     &upmi_single_init,
 };
 
-static const char *default_methods = "simple libpmi single";
+static const char *default_methods = "simple libpmi2 libpmi single";
 
 void upmi_destroy (struct upmi *upmi)
 {
@@ -151,7 +155,7 @@ static int upmi_register_builtin (struct upmi *upmi)
     return 0;
 }
 
-/* Instantate 'struct upmi' without selecting a plugin.
+/* Instantiate 'struct upmi' without selecting a plugin.
  */
 static struct upmi *upmi_create_uninit (const char *methods,
                                         const char *searchpath,
@@ -162,7 +166,7 @@ static struct upmi *upmi_create_uninit (const char *methods,
 {
     struct upmi *upmi;
 
-    if (flags & ~(UPMI_TRACE | UPMI_LIBPMI_NOFLUX)) {
+    if (flags & ~(UPMI_TRACE | UPMI_LIBPMI_NOFLUX | UPMI_LIBPMI2_CRAY)) {
         errprintf (error, "invalid argument");
         return NULL;
     }
@@ -197,7 +201,7 @@ static bool match_scheme (const char *scheme, const char *uri)
     size_t slen = strlen (scheme);
     if (slen < strlen (uri)
         && uri[slen] == ':'
-        && strncmp (uri, scheme, slen) == 0)
+        && strstarts (uri, scheme))
             return true;
     return streq (uri, scheme);
 }
@@ -255,21 +259,27 @@ struct upmi *upmi_create (const char *uri,
 
     if (uri) {
         const char *path;
+        const char *note;
+
         if (!(upmi->plugin = lookup_plugin (upmi, uri, errp)))
             goto error;
         if ((path = strchr (uri, ':')))
             path++;
-        if (upmi_preinit (upmi, upmi->flags, path, errp) < 0)
+        if (upmi_preinit (upmi, upmi->flags, path, &note, errp) < 0)
             goto error;
+        if (note != NULL)
+            upmi_trace (upmi, "%s", note);
     }
     else {
         flux_error_t error;
+        const char *note;
+
         uri = argz_next (upmi->methods, upmi->methods_len, NULL);
         while (uri) {
             upmi_trace (upmi, "trying '%s'", uri);
             if ((upmi->plugin = lookup_plugin (upmi, uri, &error))
-                && upmi_preinit (upmi, upmi->flags, NULL, &error) == 0) {
-                upmi_trace (upmi, "selected");
+                && upmi_preinit (upmi, upmi->flags, NULL, &note, &error) == 0) {
+                upmi_trace (upmi, "%s", note ? note : "selected");
                 break;
             }
             upmi_trace (upmi, "%s", error.text);
@@ -353,30 +363,48 @@ static int upmi_call (struct upmi *upmi,
     return rc;
 }
 
-static int upmi_preinit_path (struct upmi *upmi,
-                              int noflux,
-                              const char *path,
-                              flux_error_t *error)
-{
-    return upmi_call (upmi,
-                      "upmi.preinit",
-                      error,
-                      "{s:s s:b}",
-                      "path", path,
-                      "noflux", noflux);
-}
-
 static int upmi_preinit (struct upmi *upmi,
                          int flags,
                          const char *path,
+                         const char **notep,
                          flux_error_t *error)
 {
-    int noflux = 0;
-    if ((flags & UPMI_LIBPMI_NOFLUX))
-        noflux = 1;
-    if (path)
-        return upmi_preinit_path (upmi, noflux, path, error);
-    return upmi_call (upmi, "upmi.preinit", error, "{s:b}", "noflux", noflux);
+    json_t *payload;
+    int rc;
+
+    if (!(payload = json_object ()))
+        goto nomem;
+    if ((flags & UPMI_LIBPMI_NOFLUX)) {
+        if (json_object_set (payload, "noflux", json_true ()) < 0)
+            goto nomem;
+    }
+    if ((flags & UPMI_LIBPMI2_CRAY)) {
+        if (json_object_set (payload, "craycray", json_true ()) < 0)
+            goto nomem;
+    }
+    if (path) {
+        json_t *o;
+        if (!(o = json_string (path))
+            || json_object_set_new (payload, "path", o) < 0) {
+            json_decref (o);
+            goto nomem;
+        }
+    }
+    rc = upmi_call (upmi, "upmi.preinit", error, "O", payload);
+    json_decref (payload);
+    if (rc == 0 && notep) {
+        const char *note = NULL;
+        (void)flux_plugin_arg_unpack (upmi->args,
+                                      FLUX_PLUGIN_ARG_OUT,
+                                      "{s:s}",
+                                      "note", &note);
+        *notep = note;
+    }
+    return rc;
+nomem:
+    json_decref (payload);
+    errno = ENOMEM;
+    return -1;
 }
 
 int upmi_initialize (struct upmi *upmi,

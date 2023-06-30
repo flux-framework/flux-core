@@ -34,7 +34,7 @@ enum {
  *    last tuple in the input string.
  *
  * Functions return EKV_SUCCESS on success, one of the negative EKV_
- * values on falure.
+ * values on failure.
  */
 
 int keyval_parse_int (const char *s, const char *key, int *val);

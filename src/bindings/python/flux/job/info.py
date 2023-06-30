@@ -15,14 +15,26 @@ import string
 import sys
 import time
 from collections import namedtuple
+from itertools import chain
 
 import flux.constants
 from flux.core.inner import raw
 from flux.job.JobID import JobID
 from flux.job.stats import JobStats
 from flux.memoized_property import memoized_property
-from flux.resource import SchedResourceList
 from flux.uri import JobURI
+
+try:
+    from flux.resource import SchedResourceList
+except ImportError:
+    SchedResourceList = None
+
+# strsignal() is only available in Python 3.8 and up.
+# flux-core's minimum is 3.6.  Use compat library if not available.
+try:
+    from signal import strsignal  # novermin
+except ImportError:
+    from flux.compat36 import strsignal
 
 
 def statetostr(stateid, fmt="L"):
@@ -211,7 +223,7 @@ class InstanceInfo:
     def __init__(self, uri=None):
         self.initialized = False
         try:
-            if not uri:
+            if not uri or SchedResourceList is None:
                 raise ValueError
             handle = flux.Flux(str(uri))
             future = handle.rpc("sched.resource-status")
@@ -276,6 +288,7 @@ class JobInfo:
         "duration": 0.0,
         "expiration": 0.0,
         "name": "",
+        "cwd": "",
         "queue": "",
         "ntasks": "",
         "ncores": "",
@@ -287,6 +300,22 @@ class JobInfo:
         "result": "",
         "waitstatus": "",
     }
+
+    #  Other properties (used in to_dict())
+    properties = (
+        "id",
+        "t_submit",
+        "t_remaining",
+        "state",
+        "result",
+        "username",
+        "userid",
+        "urgency",
+        "runtime",
+        "status",
+        "returncode",
+        "dependencies",
+    )
 
     def __init__(self, info_resp):
         #  Set defaults, then update with job-list.list response items:
@@ -473,6 +502,101 @@ class JobInfo:
             return self.duration
         return self.runtime
 
+    def to_dict(self, filtered=True):
+        """
+        Return a set of job attributes as a dict
+        By default, empty or unset values are filtered from the result,
+        so these keys will be missing. Set ``filtered=False`` to get the
+        unfiltered dict, which has these uninitialized values set to
+        an empty string or 0, key dependent.
+        """
+        result = {}
+        for attr in chain(self.defaults.keys(), self.properties):
+            val = getattr(self, attr)
+            if val is not None:
+                result[attr] = val
+
+        #  The following attributes all need special handling to
+        #  be converted to a dict:
+        result["annotations"] = self.annotations.annotationsDict
+        result["exception"] = self.exception.__dict__
+        if self.uri is not None:
+            result["uri"] = str(self.uri)
+
+        if not filtered:
+            return result
+
+        #  Now clear empty/unset values to avoid confusion:
+        #  - Remove any empty values (empty string).
+        #  - Remove any unset timestamp values (key t_*, value 0)
+        #  - Remove runtime and expiration if 0
+        def zero_remove(key):
+            return key.startswith("t_") or key in ("runtime", "expiration")
+
+        for key in list(result.keys()):
+            val = result[key]
+            if val == "" or (zero_remove(key) and val == 0):
+                del result[key]
+            if key == "exception" and not val["occurred"]:
+                result["exception"] = {"occurred": False}
+
+        #  Remove duplicate annotations.user.uri if necessary:
+        if self.uri is not None:
+            del result["annotations"]["user"]["uri"]
+            if not result["annotations"]["user"]:
+                del result["annotations"]["user"]
+
+        return result
+
+    @memoized_property
+    def inactive_reason(self):
+        """
+        Generate contextual exit reason based on how the job ended
+        """
+        state = str(self.state)
+        if state != "INACTIVE":
+            return ""
+        result = str(self.result)
+        if result == "CANCELED":
+            if (
+                self.exception.occurred
+                and self.exception.type == "cancel"
+                and self.exception.note
+            ):
+                return f"Canceled: {self.exception.note}"
+            else:
+                return "Canceled"
+        elif result == "FAILED":
+            # exception.type == "exec" is special case, handled by returncode
+            if (
+                self.exception.occurred
+                and self.exception.type != "exec"
+                and self.exception.severity == 0
+            ):
+                note = None
+                if self.exception.note:
+                    note = f" note={self.exception.note}"
+                return f'Exception: type={self.exception.type}{note or ""}'
+            elif self.returncode > 128:
+                signum = self.returncode - 128
+                try:
+                    sigdesc = strsignal(signum)
+                except ValueError:
+                    sigdesc = f"Signaled {signum}"
+                return sigdesc
+            elif self.returncode == 126:
+                return "Command invoked cannot execute"
+            elif self.returncode == 127:
+                return "command not found"
+            elif self.returncode == 128:
+                return "Invalid argument to exit"
+            else:
+                return f"Exit {self.returncode}"
+        elif result == "TIMEOUT":
+            return "Timeout"
+        else:
+            return f"Exit {self.returncode}"
+
 
 def job_fields_to_attrs(fields):
     # Note there is no attr for "id", it is always returned
@@ -481,6 +605,7 @@ def job_fields_to_attrs(fields):
         "id.dec": (),
         "id.hex": (),
         "id.f58": (),
+        "id.emoji": (),
         "id.kvs": (),
         "id.words": (),
         "id.dothex": (),
@@ -492,6 +617,7 @@ def job_fields_to_attrs(fields):
         "state_single": ("state",),
         "state_emoji": ("state",),
         "name": ("name",),
+        "cwd": ("cwd",),
         "queue": ("queue",),
         "ntasks": ("ntasks",),
         "ncores": ("ncores",),
@@ -524,6 +650,15 @@ def job_fields_to_attrs(fields):
         "dependencies": ("dependencies",),
         "contextual_info": ("state", "dependencies", "annotations", "nodelist"),
         "contextual_time": ("state", "t_run", "t_cleanup", "duration"),
+        "inactive_reason": (
+            "state",
+            "result",
+            "waitstatus",
+            "exception_occurred",
+            "exception_severity",
+            "exception_type",
+            "exception_note",
+        ),
         # Special cases, pointers to sub-dicts in annotations
         "sched": ("annotations",),
         "user": ("annotations",),
@@ -563,6 +698,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "id.dec": "JOBID",
         "id.hex": "JOBID",
         "id.f58": "JOBID",
+        "id.emoji": "JOBID",
         "id.kvs": "JOBID",
         "id.words": "JOBID",
         "id.dothex": "JOBID",
@@ -574,6 +710,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "state_single": "S",
         "state_emoji": "STATE",
         "name": "NAME",
+        "cwd": "CWD",
         "queue": "QUEUE",
         "ntasks": "NTASKS",
         "ncores": "NCORES",
@@ -606,6 +743,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "dependencies": "DEPENDENCIES",
         "contextual_info": "INFO",
         "contextual_time": "TIME",
+        "inactive_reason": "INACTIVE-REASON",
         # The following are special pre-defined cases per RFC27
         "annotations.sched.t_estimate": "T_ESTIMATE",
         "annotations.sched.reason_pending": "REASON",

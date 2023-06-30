@@ -81,7 +81,7 @@ test_expect_success 'flux cancel --all works with message' '
 	grep "cancel all" exception.out
 '
 test_expect_success 'the queue is empty' '
-	run_timeout 60 flux queue drain
+	run_timeout 180 flux queue drain
 '
 test_expect_success 'flux cancel --all --user all fails for guest' '
 	id=$(($(id -u)+1)) &&

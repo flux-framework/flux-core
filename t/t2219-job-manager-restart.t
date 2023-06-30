@@ -19,6 +19,16 @@ restart_flux() {
 		flux module stats job-manager
 }
 
+# Returns 0 if dump file is replayed successfully AND one or more
+# "not replayed" warnings were logged
+restart_with_job_warning() {
+	local out=$(basename $1).dmesg
+	flux start -o,-Scontent.restore=$1 /bin/true 2>$out
+	result=$?
+	cat $out
+	test $result -eq 0 && grep -q "not replayed:" $out
+}
+
 test_expect_success 'verify that job manager can restart with current dump' '
 	restart_flux dump.tar >stats.out
 '
@@ -191,6 +201,11 @@ test_expect_success 'new queue configured on restart uses defaults' '
 for dump in ${DUMPS}/valid/*.tar.bz2; do
     testname=$(basename $dump)
     test_expect_success 'successfully started from '$testname "restart_flux $dump"
+done
+
+for dump in ${DUMPS}/warn/*.tar.bz2; do
+    testname=$(basename $dump)
+    test_expect_success 'successfully started with warning from '$testname "restart_with_job_warning $dump"
 done
 
 for dump in ${DUMPS}/invalid/*.tar.bz2; do

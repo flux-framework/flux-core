@@ -152,7 +152,11 @@ static void draw_stats (struct summary_pane *sum)
     }
 
     if (sum->show_details) {
-        int failed = sum->stats.failed;
+        /* flux-top reports the total number of unsuccessful jobs in
+         * the 'failed' display, not just the count of jobs that ran
+         * to completion with nonzero exit code
+         */
+        int failed = sum->stats.failed + sum->stats.timeout + sum->stats.canceled;
         int complete = sum->stats.successful;
 
         if (complete)
@@ -408,24 +412,27 @@ static void resource_continuation (flux_future_t *f, void *arg)
             fatal (errno, "sched.resource-status RPC failed");
     }
     else {
+        json_t *queue_constraint;
+        /* can return NULL constraint for "none" */
+        queues_get_queue_constraint (sum->top->queues, &queue_constraint);
         if (resource_count (o,
                             "all",
                             &sum->node.total,
                             &sum->core.total,
                             &sum->gpu.total,
-                            sum->top->queue_constraint) < 0
+                            queue_constraint) < 0
             || resource_count (o,
                                "allocated",
                                &sum->node.used,
                                &sum->core.used,
                                &sum->gpu.used,
-                               sum->top->queue_constraint) < 0
+                               queue_constraint) < 0
             || resource_count (o,
                                "down",
                                &sum->node.down,
                                &sum->core.down,
                                &sum->gpu.down,
-                               sum->top->queue_constraint) < 0)
+                               queue_constraint) < 0)
             fatal (0, "error decoding sched.resource-status RPC response");
     }
     flux_future_destroy (f);
@@ -465,15 +472,18 @@ static void stats_continuation (flux_future_t *f, void *arg)
 {
     struct summary_pane *sum = arg;
     json_t *o = NULL;
+    const char *filter_queue;
 
     if (flux_rpc_get_unpack (f, "o", &o) < 0) {
         if (errno != ENOSYS)
             fatal (errno, "error getting job-list.job-stats RPC response");
     }
 
-    if (sum->top->queue) {
+    /* can return NULL filter_queue for "all" queues */
+    queues_get_queue_name (sum->top->queues, &filter_queue);
+    if (filter_queue) {
         json_t *qstats = NULL;
-        if (get_queue_stats (o, sum->top->queue, &qstats) < 0)
+        if (get_queue_stats (o, filter_queue, &qstats) < 0)
             fatal (EPROTO, "error parsing queue stats");
         /* stats may not yet exist if no jobs submitted to the queue */
         if (!qstats)

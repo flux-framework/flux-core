@@ -8,12 +8,16 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <string.h>
 #include <errno.h>
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
+#include "ccan/str/str.h"
 
 int main (int argc, char *argv[])
 {
@@ -45,7 +49,7 @@ int main (int argc, char *argv[])
 
     topic = NULL;
     ok (flux_response_decode (msg, &topic, NULL) == 0
-        && topic != NULL && !strcmp (topic, "foo.bar"),
+        && topic != NULL && streq (topic, "foo.bar"),
         "flux_response_decode returns encoded topic");
     ok (flux_response_decode (msg, NULL, NULL) == 0,
         "flux_response_decode topic is optional");
@@ -62,7 +66,7 @@ int main (int argc, char *argv[])
 
     topic = NULL;
     ok (flux_response_decode_raw (msg, &topic, &d, &l) == 0
-        && topic != NULL && !strcmp (topic, "foo.bar"),
+        && topic != NULL && streq (topic, "foo.bar"),
         "flux_response_decode_raw returns encoded topic");
     ok (flux_response_decode_raw (msg, NULL, &d, &l) == 0,
         "flux_response_decode_raw topic is optional");
@@ -81,7 +85,7 @@ int main (int argc, char *argv[])
 
     s = NULL;
     ok (flux_response_decode (msg, NULL, &s) == 0
-        && s != NULL && !strcmp (s, json_str),
+        && s != NULL && streq (s, json_str),
         "flux_response_decode returns encoded payload");
     ok (flux_response_decode (msg, NULL, NULL) == 0,
         "flux_response_decode works with payload but don't want the payload");
@@ -125,7 +129,7 @@ int main (int argc, char *argv[])
     ok (flux_response_decode (msg, NULL, NULL) < 0
         && errno == 42,
         "flux_response_decode fails with encoded errnum");
-    ok (flux_response_decode_error (msg, &s) == 0 && !strcmp (s, "My Error"),
+    ok (flux_response_decode_error (msg, &s) == 0 && streq (s, "My Error"),
         "flux_response_decode_error includes error message");
     flux_msg_destroy (msg);
 

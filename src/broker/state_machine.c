@@ -10,6 +10,10 @@
 
 #if HAVE_CONFIG_H
 #include "config.h"
+#include <signal.h>
+#endif
+#if HAVE_LIBSYSTEMD
+#include <systemd/sd-daemon.h>
 #endif
 #include <flux/core.h>
 
@@ -23,6 +27,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libsubprocess/server.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #include "state_machine.h"
 
@@ -34,8 +39,9 @@
 #include "shutdown.h"
 
 struct quorum {
-    struct idset *want;
-    struct idset *have; // cumulative on rank 0, batch buffer on rank > 0
+    uint32_t size;
+    struct idset *all;
+    struct idset *online; // cumulative on rank 0, batch buffer on rank > 0
     flux_future_t *f;
     double timeout;
     bool warned;
@@ -172,25 +178,11 @@ static broker_state_t state_next (broker_state_t current, const char *event)
 {
     int i;
     for (i = 0; i < ARRAY_SIZE (nexttab); i++) {
-        if (nexttab[i].current == current && !strcmp (event, nexttab[i].event))
+        if (nexttab[i].current == current
+            && streq (event, nexttab[i].event))
             return nexttab[i].next;
     }
     return current;
-}
-
-/* return true if a is a subset of b */
-static bool is_subset_of (const struct idset *a, const struct idset *b)
-{
-    struct idset *ids;
-    int count;
-
-    if (!(ids = idset_difference (a, b)))
-        return false;
-    count = idset_count (ids);
-    idset_destroy (ids);
-    if (count > 0)
-        return false;
-    return true;
 }
 
 static void action_init (struct state_machine *s)
@@ -210,8 +202,19 @@ static void action_join (struct state_machine *s)
 {
     if (s->ctx->rank == 0)
         state_machine_post (s, "parent-none");
-    else
+    else {
+#if HAVE_LIBSYSTEMD
+        if (s->ctx->sd_notify) {
+            sd_notifyf (0,
+                        "STATUS=Joining Flux instance via %s",
+                        overlay_get_parent_uri (s->ctx->overlay));
+        }
+#endif
         join_check_parent (s);
+    }
+#if HAVE_LIBSYSTEMD
+    sd_notify (0, "READY=1");
+#endif
 }
 
 static void quorum_timer_cb (flux_reactor_t *r,
@@ -230,7 +233,7 @@ static void quorum_timer_cb (flux_reactor_t *r,
     if (s->state != STATE_QUORUM)
         return;
 
-    if (!(ids = idset_difference (s->quorum.want, s->quorum.have))
+    if (!(ids = idset_difference (s->quorum.all, s->quorum.online))
         || !(rankstr = idset_encode (ids, IDSET_FLAG_RANGE))
         || !(hl = hostlist_create ())) {
         flux_log_error (h, "error computing slow brokers");
@@ -276,6 +279,10 @@ static void action_quorum (struct state_machine *s)
 {
     flux_future_t *f;
 
+#if HAVE_LIBSYSTEMD
+    if (s->ctx->sd_notify)
+        sd_notify (0, "STATUS=Waiting for instance quorum");
+#endif
     if (!(f = flux_rpc_pack (s->ctx->h,
                              "groups.join",
                              FLUX_NODEID_ANY,
@@ -340,6 +347,15 @@ static void action_run (struct state_machine *s)
         run_check_parent (s);
     else
         state_machine_post (s, "rc2-none");
+
+#if HAVE_LIBSYSTEMD
+    if (s->ctx->sd_notify) {
+        sd_notifyf (0,
+                    "STATUS=Running as %s of %d node Flux instance",
+                    s->ctx->rank == 0 ? "leader" : "member",
+                    (int)s->ctx->size);
+    }
+#endif
 }
 
 static void action_cleanup (struct state_machine *s)
@@ -371,6 +387,13 @@ static void action_shutdown (struct state_machine *s)
 {
     if (overlay_get_child_peer_count (s->ctx->overlay) == 0)
         state_machine_post (s, "children-none");
+#if HAVE_LIBSYSTEMD
+    if (s->ctx->sd_notify) {
+        sd_notifyf (0,
+                    "STATUS=Waiting for %d peers to shutdown",
+                    overlay_get_child_peer_count (s->ctx->overlay));
+    }
+#endif
 }
 
 static void rmmod_continuation (flux_future_t *f, void *arg)
@@ -434,6 +457,10 @@ static void action_exit (struct state_machine *s)
         flux_reactor_stop (flux_get_reactor (h));
         flux_future_destroy (f);
     }
+#if HAVE_LIBSYSTEMD
+    if (s->ctx->sd_notify)
+        sd_notify (0, "STATUS=Exiting");
+#endif
 }
 
 static void process_event (struct state_machine *s, const char *event)
@@ -552,7 +579,7 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
     if (runat_get_exit_code (r, name, &rc) < 0)
         log_err ("runat_get_exit_code %s", name);
 
-    if (!strcmp (name, "rc1")) {
+    if (streq (name, "rc1")) {
         if (rc == 0)
             state_machine_post (s, "rc1-success");
         else if (attr_get (s->ctx->attrs,
@@ -571,17 +598,17 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
             state_machine_post (s, "rc1-fail");
         }
     }
-    else if (!strcmp (name, "rc2")) {
+    else if (streq (name, "rc2")) {
         if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "rc2-success" : "rc2-fail");
     }
-    else if (!strcmp (name, "cleanup")) {
+    else if (streq (name, "cleanup")) {
         if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "cleanup-success" : "cleanup-fail");
     }
-    else if (!strcmp (name, "rc3")) {
+    else if (streq (name, "rc3")) {
         if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "rc3-success" : "rc3-fail");
@@ -710,43 +737,54 @@ static void quorum_check_parent (struct state_machine *s)
     }
 }
 
-/* Configure the set of broker ranks needed for quorum (default=all).
+/* For backwards compatibility, translate "0" and "0-<size-1>" to 1 and <size>,
+ * respectively, but print a warning on stderr.
+ */
+static bool quorum_configure_deprecated (struct state_machine *s,
+                                         const char *val)
+{
+    char all[64];
+    snprintf (all, sizeof (all), "0-%lu", (unsigned long)s->ctx->size - 1);
+    if (streq (val, all))
+        s->quorum.size = s->ctx->size;
+    else if (streq (val, "0"))
+        s->quorum.size = 1;
+    else
+        return false;
+    if (s->ctx->rank == 0) {
+        log_msg ("warning: broker.quorum is now a size - assuming %lu",
+                 (unsigned long)s->quorum.size);
+    }
+    return true;
+}
+
+/* Configure the count of broker ranks needed for quorum (default=<size>).
  */
 static int quorum_configure (struct state_machine *s)
 {
     const char *val;
-    char *tmp;
-    unsigned long id;
-
     if (attr_get (s->ctx->attrs, "broker.quorum", &val, NULL) == 0) {
-        if (!(s->quorum.want = idset_decode (val))) {
-            log_msg ("Error parsing broker.quorum attribute");
-            return -1;
+        if (!quorum_configure_deprecated (s, val)) {
+            errno = 0;
+            s->quorum.size = strtoul (val, NULL, 10);
+            if (errno != 0
+                || s->quorum.size < 1
+                || s->quorum.size > s->ctx->size) {
+                log_msg ("Error parsing broker.quorum attribute");
+                errno = EINVAL;
+                return -1;
+            }
         }
-        id = idset_last (s->quorum.want);
-        if (id != IDSET_INVALID_ID && id >= s->ctx->size) {
-            log_msg ("Error parsing broker.quorum attribute: exceeds size");
-            return -1;
-        }
-        if (attr_delete (s->ctx->attrs, "broker.quorum", true) < 0)
+        if (attr_set_flags (s->ctx->attrs, "broker.quorum", ATTR_IMMUTABLE) < 0)
             return -1;
     }
     else {
-        if (!(s->quorum.want = idset_create (s->ctx->size, 0)))
-            return -1;
-        if (idset_range_set (s->quorum.want, 0, s->ctx->size - 1) < 0)
+        s->quorum.size = s->ctx->size;
+        char buf[16];
+        snprintf (buf, sizeof (buf), "%lu", (unsigned long)s->quorum.size);
+        if (attr_add (s->ctx->attrs, "broker.quorum", buf, ATTR_IMMUTABLE) < 0)
             return -1;
     }
-    if (!(tmp = idset_encode (s->quorum.want, IDSET_FLAG_RANGE)))
-        return -1;
-    if (attr_add (s->ctx->attrs,
-                  "broker.quorum",
-                  tmp,
-                  ATTR_IMMUTABLE) < 0) {
-        ERRNO_SAFE_WRAP (free, tmp);
-        return -1;
-    }
-    free (tmp);
     return 0;
 }
 
@@ -757,7 +795,7 @@ static int quorum_timeout_configure (struct state_machine *s)
     char fsd[32];
 
     if (attr_get (s->ctx->attrs, name, &val, NULL) == 0) {
-        if (!strcmp (val, "none"))
+        if (streq (val, "none"))
             s->quorum.timeout = -1;
         else {
             if (fsd_parse_duration (val, &s->quorum.timeout) < 0) {
@@ -798,11 +836,10 @@ static void broker_online_cb (flux_future_t *f, void *arg)
         return;
     }
 
-    idset_destroy (s->quorum.have);
-    s->quorum.have = ids;
-    if (is_subset_of (s->quorum.want, s->quorum.have)) {
+    idset_destroy (s->quorum.online);
+    s->quorum.online = ids;
+    if (idset_count (s->quorum.online) >= s->quorum.size)
         quorum_reached = true;
-    }
 
     if (strlen (members) > 0
         && (quorum_reached || now - last_update > 5)) {
@@ -1111,8 +1148,8 @@ void state_machine_destroy (struct state_machine *s)
         flux_msglist_destroy (s->wait_requests);
         flux_future_destroy (s->monitor.f);
         flux_msglist_destroy (s->monitor.requests);
-        idset_destroy (s->quorum.want);
-        idset_destroy (s->quorum.have);
+        idset_destroy (s->quorum.all);
+        idset_destroy (s->quorum.online);
         flux_watcher_destroy (s->quorum.timer);
         flux_future_destroy (s->quorum.f);
         free (s);
@@ -1151,8 +1188,12 @@ struct state_machine *state_machine_create (struct broker *ctx)
         if (!(s->monitor.f = monitor_parent (ctx->h, s)))
             goto error;
     }
-    if (!(s->quorum.have = idset_create (ctx->size, 0)))
+    if (!(s->quorum.online = idset_create (ctx->size, 0)))
         goto error;
+    if (!(s->quorum.all = idset_create (s->ctx->size, 0))
+        || idset_range_set (s->quorum.all, 0, s->ctx->size - 1) < 0)
+        goto error;
+
     if (quorum_configure (s) < 0
         || quorum_timeout_configure (s) < 0) {
         log_err ("error configuring quorum attributes");

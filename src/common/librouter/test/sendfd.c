@@ -22,6 +22,7 @@
 #include "src/common/librouter/sendfd.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 /* Send a small message over a blocking pipe.
  * We assume that there's enough buffer to do this in one go.
@@ -43,7 +44,7 @@ void test_basic (void)
         "recvfd works");
     ok (flux_request_decode (msg2, &topic, &payload) == 0,
         "received request can be decoded");
-    ok (!strcmp (topic, "foo.bar"),
+    ok (streq (topic, "foo.bar"),
         "decoded request has expected topic string");
     ok (payload == NULL,
         "decoded request has expected (lack of) payload");
@@ -77,7 +78,7 @@ void test_large (void)
         "recvfd works");
     ok (flux_request_decode_raw (msg2, &topic, &buf2, &buf2len) == 0,
         "received request can be decoded");
-    ok (!strcmp (topic, "foo.bar"),
+    ok (streq (topic, "foo.bar"),
         "decoded request has expected topic string");
     ok (buf2 != NULL
         && buf2len == sizeof (buf)
@@ -209,7 +210,7 @@ error:
  * Set up nonblocking sender and receiver.
  * Run the reactor:
  * - sender sends all enqueued messages
- * - receiver enqueues all recived messages
+ * - receiver enqueues all received messages
  * Verify that messages are all received intact.
  */
 void test_nonblock (int size, int count)
@@ -265,7 +266,7 @@ void test_nonblock (int size, int count)
             errors++;
             goto next;
         }
-        if (strcmp (topic, "foo.bar") != 0) {
+        if (!streq (topic, "foo.bar")) {
             diag ("decoded wrong topic: %s", topic);
             errors++;
             goto next;

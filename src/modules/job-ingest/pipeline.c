@@ -18,6 +18,7 @@
 
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "util.h"
 #include "workcrew.h"
@@ -309,15 +310,15 @@ int pipeline_configure (struct pipeline *pl,
     /* Process module command line
      */
     for (int i = 0; i < argc; i++) {
-        if (!strncmp (argv[i], "validator-args=", 15)) {
+        if (strstarts (argv[i], "validator-args=")) {
             free (validator_args);
             validator_args = strdup (argv[i] + 15);
         }
-        else if (!strncmp (argv[i], "validator-plugins=", 18)) {
+        else if (strstarts (argv[i], "validator-plugins=")) {
             free (validator_plugins);
             validator_plugins = strdup (argv[i] + 18);
         }
-        else if (!strcmp (argv[i], "disable-validator"))
+        else if (streq (argv[i], "disable-validator"))
             pl->validator_bypass = true;
     }
 

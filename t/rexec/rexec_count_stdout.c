@@ -23,6 +23,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/read_all.h"
+#include "ccan/str/str.h"
 
 extern char **environ;
 
@@ -49,7 +50,7 @@ void completion_cb (flux_subprocess_t *p)
 
 void output_cb (flux_subprocess_t *p, const char *stream)
 {
-    FILE *fstream = !strcmp (stream, "stderr") ? stderr : stdout;
+    FILE *fstream = streq (stream, "stderr") ? stderr : stdout;
     const char *ptr;
     int lenp;
 

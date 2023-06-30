@@ -31,6 +31,7 @@
 #include "src/common/libutil/monotime.h"
 
 #include "src/common/libcontent/content-util.h"
+#include "ccan/str/str.h"
 
 const size_t lzo_buf_chunksize = 1024*1024;
 const size_t compression_threshold = 256; /* compress blobs >= this size */
@@ -110,7 +111,7 @@ static void set_errno_from_sqlite_error (struct content_sqlite *ctx)
         case SQLITE_NOMEM:      /* cannot allocate memory */
             errno = ENOMEM;
             break;
-        case SQLITE_ABORT:      /* statment is not authorized */
+        case SQLITE_ABORT:      /* statement is not authorized */
         case SQLITE_PERM:       /* access mode for new db cannot be provided */
         case SQLITE_READONLY:   /* attempt to alter data with no permission */
             errno = EPERM;
@@ -737,7 +738,8 @@ static const struct flux_msg_handler_spec htab[] = {
                             checkpoint_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-put",
                             checkpoint_put_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-sqlite.stats-get", stats_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-sqlite.stats-get",
+                            stats_get_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -808,13 +810,13 @@ static int process_args (struct content_sqlite *ctx,
 {
     int i;
     for (i = 0; i < argc; i++) {
-        if (strncmp ("journal_mode=", argv[i], 13) == 0) {
+        if (strstarts (argv[i], "journal_mode=")) {
             ctx->journal_mode = argv[i] + 13;
         }
-        else if (strncmp ("synchronous=", argv[i], 12) == 0) {
+        else if (strstarts (argv[i], "synchronous=")) {
             ctx->synchronous = argv[i] + 12;
         }
-        else if (strcmp ("truncate", argv[i]) == 0) {
+        else if (streq ("truncate", argv[i])) {
             *truncate = true;
         }
         else {
@@ -856,8 +858,6 @@ done:
     content_sqlite_destroy (ctx);
     return rc;
 }
-
-MOD_NAME ("content-sqlite");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

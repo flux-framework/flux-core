@@ -23,6 +23,7 @@
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/str/str.h"
 
 #include "rnode.h"
 #include "match.h"
@@ -238,7 +239,7 @@ static struct rlist *rlist_copy_internal (const struct rlist *orig,
         rl->scheduling = scheduling_key_append (orig->scheduling, NULL);
 
 
-    /*  Copy noremap hash from orignal rlist
+    /*  Copy noremap hash from original rlist
      */
     zhashx_destroy (&rl->noremap);
     rl->noremap = zhashx_dup (orig->noremap);
@@ -302,7 +303,7 @@ struct rlist *rlist_copy_down (const struct rlist *orig)
     if (rlist_nnodes (rl) > 0)
         rl->scheduling = scheduling_key_append (orig->scheduling, NULL);
 
-    /*  Copy noremap hash from orignal rlist
+    /*  Copy noremap hash from original rlist
      */
     zhashx_destroy (&rl->noremap);
     rl->noremap = zhashx_dup (orig->noremap);
@@ -340,7 +341,7 @@ struct rlist * rlist_copy_ranks (const struct rlist *rl, struct idset *ranks)
     if (rlist_nnodes (result) > 0)
         result->scheduling = scheduling_key_append (rl->scheduling, NULL);
 
-    /*  Copy noremap hash from orignal rlist
+    /*  Copy noremap hash from original rlist
      */
     zhashx_destroy (&result->noremap);
     result->noremap = zhashx_dup (rl->noremap);
@@ -442,7 +443,7 @@ struct rnode * rlist_find_host (const struct rlist *rl, const char *host)
 {
     struct rnode *n = zlistx_first (rl->nodes);
     while (n) {
-        if (n->hostname && strcmp (n->hostname, host) == 0)
+        if (n->hostname && streq (n->hostname, host))
             return n;
         n = zlistx_next (rl->nodes);
     }
@@ -700,9 +701,9 @@ static int rnode_namecmp (const void *s1, const void *s2)
     const char *a = s1;
     const char *b = s2;
 
-    if (strcmp (a, "core") == 0)
+    if (streq (a, "core"))
         return -1;
-    else if (strcmp (b, "core") == 0)
+    else if (streq (b, "core"))
         return 1;
     else return strcmp (a, b);
 }
@@ -1492,7 +1493,7 @@ static int rlist_idset_set_by_host (const struct rlist *rl,
     int count = 0;
     struct rnode *n = zlistx_first (rl->nodes);
     while (n) {
-        if (n->hostname && strcmp (n->hostname, host) == 0) {
+        if (n->hostname && streq (n->hostname, host)) {
             if (idset_set (ids, n->rank) < 0)
                 return -1;
             count++;
@@ -1604,16 +1605,7 @@ static zhashx_t *rlist_properties (struct rlist *rl)
                         errno = ENOMEM;
                         goto error;
                     }
-                    /* This zhashx_insert() cannot fail since we are
-                     *  guaranteed that `name` is not set in properties
-                     *  hash. However, check for error return in case
-                     *  zhashx_insert() returns -1 on ENOMEM in the future.
-                     */
-                    if (zhashx_insert (properties, name, ids) < 0) {
-                        idset_destroy (ids);
-                        errno = ENOMEM;
-                        goto error;
-                    }
+                    (void)zhashx_insert (properties, name, ids);
                 }
                 if (idset_set (ids, n->rank) < 0)
                     goto error;
@@ -2046,11 +2038,11 @@ static struct rlist *rlist_try_alloc (struct rlist *rl,
 
     if (ai->nnodes > 0)
         result = rlist_alloc_nnodes (rl, ai);
-    else if (mode == NULL || strcmp (mode, "worst-fit") == 0)
+    else if (mode == NULL || streq (mode, "worst-fit"))
         result = rlist_alloc_worst_fit (rl, ai->slot_size, ai->nslots);
-    else if (mode && strcmp (mode, "best-fit") == 0)
+    else if (mode && streq (mode, "best-fit"))
         result = rlist_alloc_best_fit (rl, ai->slot_size, ai->nslots);
-    else if (mode && strcmp (mode, "first-fit") == 0)
+    else if (mode && streq (mode, "first-fit"))
         result = rlist_alloc_first_fit (rl, ai->slot_size, ai->nslots);
     else
         errno = EINVAL;
@@ -2330,7 +2322,7 @@ static int rlist_mark_state (struct rlist *rl, bool up, const char *ids)
 int rlist_mark_down (struct rlist *rl, const char *ids)
 {
     int count;
-    if (strcmp (ids, "all") == 0)
+    if (streq (ids, "all"))
         count = rlist_mark_all (rl, false);
     else
         count = rlist_mark_state (rl, false, ids);
@@ -2341,7 +2333,7 @@ int rlist_mark_down (struct rlist *rl, const char *ids)
 int rlist_mark_up (struct rlist *rl, const char *ids)
 {
     int count;
-    if (strcmp (ids, "all") == 0)
+    if (streq (ids, "all"))
         count = rlist_mark_all (rl, true);
     else
         count = rlist_mark_state (rl, true, ids);

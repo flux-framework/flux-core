@@ -27,6 +27,7 @@ fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(top_builddir)/src/common/libccan/libccan.la \
+	$(top_builddir)/src/common/libfilemap/libfilemap.la \
 	$(FLUX_SECURITY_LIBS) \
 	$(LIBPTHREAD) \
 	$(HWLOC_LIBS) \
@@ -112,7 +113,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-pstree.py \
 	flux-pgrep.py \
 	flux-queue.py \
-	flux-cancel.py
+	flux-cancel.py \
+	flux-imp-exec-helper
 
 fluxcmd_PROGRAMS = \
 	flux-terminus \
@@ -173,7 +175,8 @@ flux_top_SOURCES = \
 	top/keys.c \
 	top/joblist_pane.c \
 	top/summary_pane.c \
-	top/ucache.c
+	top/ucache.c \
+	top/queues.c
 flux_top_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
 	$(CURSES_CFLAGS)

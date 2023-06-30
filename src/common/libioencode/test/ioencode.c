@@ -8,11 +8,15 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <jansson.h>
 #include <errno.h>
 
+#include "ccan/str/str.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libioencode/ioencode.h"
 
@@ -42,8 +46,8 @@ void basic (void)
         "ioencode success (data, eof = false)");
     ok (!iodecode (o, &stream, &rank, &data, &len, &eof),
         "iodecode success");
-    ok (!strcmp (stream, "stdout")
-        && !strcmp (rank, "1")
+    ok (streq (stream, "stdout")
+        && streq (rank, "1")
         && len == 3
         && !strncmp (data, "foo", len)
         && eof == false,
@@ -55,26 +59,42 @@ void basic (void)
         "ioencode success (data, eof = true)");
     ok (!iodecode (o, &stream, &rank, &data, &len, &eof),
         "iodecode success");
-    ok (!strcmp (stream, "stdout")
-        && !strcmp (rank, "[0-8]")
+    ok (streq (stream, "stdout")
+        && streq (rank, "[0-8]")
         && len == 3
         && !strncmp (data, "bar", len)
         && eof == true,
         "iodecode returned correct info");
     free (data);
+
+    ok (iodecode (o, &stream, &rank, NULL, &len, &eof) == 0,
+        "iodecode can be passed NULL data to query len");
+    ok (streq (stream, "stdout")
+        && streq (rank, "[0-8]")
+        && len == 3
+        && eof == true,
+        "iodecode returned correct info");
     json_decref (o);
 
     ok ((o = ioencode ("stderr", "[4,5]", NULL, 0, true)) != NULL,
         "ioencode success (no data, eof = true)");
     ok (!iodecode (o, &stream, &rank, &data, &len, &eof),
         "iodecode success");
-    ok (!strcmp (stream, "stderr")
-        && !strcmp (rank, "[4,5]")
+    ok (streq (stream, "stderr")
+        && streq (rank, "[4,5]")
         && data == NULL
         && len == 0
         && eof == true,
         "iodecode returned correct info");
     free (data);
+
+    ok (iodecode (o, &stream, &rank, NULL, &len, &eof) == 0,
+        "iodecode can be passed NULL data to query len");
+    ok (streq (stream, "stderr")
+        && streq (rank, "[4,5]")
+        && len == 0
+        && eof == true,
+        "iodecode returned correct info");
     json_decref (o);
 }
 
@@ -108,6 +128,10 @@ static void binary_data (void)
     ok (memcmp (data, buffer, len) == 0,
         "data matches");
     free (data);
+    ok (iodecode (o, &stream, &rank, NULL, &len, &eof) == 0,
+        "iodecode can be passed NULL data to query len");
+    ok (len == sizeof (buffer),
+        "len is correct");
     json_decref (o);
 }
 

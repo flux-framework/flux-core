@@ -116,6 +116,7 @@ class BatchCmd(base.MiniCmd):
             num_nodes=args.nodes,
             broker_opts=base.list_split(args.broker_opts),
             exclusive=args.exclusive,
+            conf=args.conf.config,
         )
 
         # Default output is flux-{{jobid}}.out

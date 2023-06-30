@@ -22,6 +22,7 @@
 #include "src/common/libflux/message_proto.h"
 #include "src/common/libtap/tap.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 static bool verbose = false;
 
@@ -577,7 +578,7 @@ void check_payload_json_formatted (void)
        "flux_msg_unpack object works");
     ok (strlen (flux_msg_last_error (msg)) == 0,
         "flux_msg_last_error is empty string after ok unpack");
-    ok (i == 42 && s != NULL && !strcmp (s, "baz"),
+    ok (i == 42 && s != NULL && streq (s, "baz"),
         "decoded content matches encoded content");
 
     /* reset payload */
@@ -587,14 +588,14 @@ void check_payload_json_formatted (void)
     s = NULL;
     ok (flux_msg_unpack (msg, "{s:i, s:s}", "foo", &i, "bar", &s) == 0,
        "flux_msg_unpack object works");
-    ok (i == 43 && s != NULL && !strcmp (s, "smurf"),
+    ok (i == 43 && s != NULL && streq (s, "smurf"),
         "decoded content matches new encoded content");
 
     i = 0;
     s = NULL;
     ok (flux_msg_unpack (msg, "{s:s, s:i}", "bar", &s, "foo", &i) == 0,
        "flux_msg_unpack object works out of order");
-    ok (i == 43 && s != NULL && !strcmp (s, "smurf"),
+    ok (i == 43 && s != NULL && streq (s, "smurf"),
         "decoded content matches new encoded content");
 
     ok (strlen (flux_msg_last_error (msg)) == 0,
@@ -966,7 +967,7 @@ void check_encode (void)
     free (buf);
     ok (flux_msg_get_type (msg2, &type) == 0 && type == FLUX_MSGTYPE_REQUEST,
         "decoded expected message type");
-    ok (flux_msg_get_topic (msg2, &topic) == 0 && !strcmp (topic, "foo.bar"),
+    ok (flux_msg_get_topic (msg2, &topic) == 0 && streq (topic, "foo.bar"),
         "decoded expected topic string");
     ok (flux_msg_has_payload (msg2) == false,
         "decoded expected (lack of) payload");
@@ -993,7 +994,7 @@ void check_aux (void)
     ok (flux_msg_aux_get (msg, "incorrect") == NULL,
         "flux_msg_aux_get for unknown key returns NULL");
     ok (flux_msg_aux_get (msg, "test") == test_data,
-        "flux_msg_aux_get aux data memeber key returns orig pointer");
+        "flux_msg_aux_get aux data member key returns orig pointer");
     flux_msg_destroy (msg);
     ok (myfree_arg == test_data,
         "destroyed message and aux destructor was called");
@@ -1041,7 +1042,7 @@ void check_copy (void)
              && flux_msg_get_payload (cpy, &cpybuf, &cpylen) == 0
              && cpylen == sizeof (buf) && memcmp (cpybuf, buf, cpylen) == 0
              && flux_msg_route_count (cpy) == 2
-             && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic,"foo"),
+             && flux_msg_get_topic (cpy, &topic) == 0 && streq (topic,"foo"),
         "copy is request: w/routes, topic, and payload");
 
     ok ((s = flux_msg_route_last (cpy)) != NULL,
@@ -1066,7 +1067,7 @@ void check_copy (void)
     ok (flux_msg_get_type (cpy, &type) == 0 && type == FLUX_MSGTYPE_REQUEST
              && !flux_msg_has_payload (cpy)
              && flux_msg_route_count (cpy) == 2
-             && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic,"foo"),
+             && flux_msg_get_topic (cpy, &topic) == 0 && streq (topic,"foo"),
         "copy is request: w/routes, topic, and no payload");
     flux_msg_destroy (cpy);
     flux_msg_destroy (msg);
@@ -1159,6 +1160,29 @@ void check_print (void)
     flux_msg_destroy (msg);
 
     fclose (f);
+}
+
+void check_print_rolemask (void)
+{
+    flux_msg_t *msg;
+    FILE *fp;
+    uint32_t rolemask;
+    char *buf = NULL;
+    size_t size = 0;
+
+    rolemask = FLUX_ROLE_LOCAL | FLUX_ROLE_USER | 0x10;
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST))
+        || flux_msg_set_rolemask (msg, rolemask) < 0)
+        BAIL_OUT ("failed to create test request");
+    if (!(fp = open_memstream (&buf, &size)))
+        BAIL_OUT ("open_memstream failed");
+    flux_msg_fprint (fp, msg);
+    fclose (fp); // close flushes content
+    diag ("%s", buf);
+    ok (buf && strstr (buf, "rolemask=user,local,0x10") != NULL,
+        "flux_msg_fprint() rolemask string is correct");
+    free (buf);
+    flux_msg_destroy (msg);
 }
 
 void check_flags (void)
@@ -1404,6 +1428,7 @@ int main (int argc, char *argv[])
     check_refcount();
 
     check_print ();
+    check_print_rolemask ();
 
     check_proto_internal ();
 

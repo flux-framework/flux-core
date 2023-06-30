@@ -9,7 +9,7 @@ Each broker executes a bootstrap sequence to
 6. get URI(s) of peers
 7. get public key(s) of peers to initialize secure communication
 
-An instance bootstraps using one of two mechansims:  PMI or Config File.
+An instance bootstraps using one of two mechanisms:  PMI or Config File.
 
 ### PMI
 

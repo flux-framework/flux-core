@@ -11,19 +11,13 @@
 ###############################################################
 
 import os
-import errno
 import sys
-import json
-import unittest
-import datetime
 import time
-from glob import glob
-
-import yaml
+import unittest
 
 import flux
-from flux import job
-from flux.job import Jobspec, JobspecV1, ffi
+import subflux  # noqa: F401 - for PYTHONPATH
+from flux.job import JobspecV1
 
 
 def __flux_size():
@@ -164,7 +158,7 @@ class TestJob(unittest.TestCase):
     def test_06_list_multiple_inactive(self):
         # submit a bundle of sleep 0 jobs
         for i in range(10):
-            jobid = self.submitJob()
+            self.submitJob()
 
         # 11 = 10 + 1 in previous tests
         self.waitForConsistency(11)
@@ -275,7 +269,7 @@ class TestJob(unittest.TestCase):
     def test_15_list_inactive_name_filter(self):
         # submit a bundle of hostname jobs
         for i in range(5):
-            jobid = self.submitJob(["hostname"])
+            self.submitJob(["hostname"])
 
         # 16 = 5 + 11 in previous tests
         self.waitForConsistency(16)
@@ -326,7 +320,7 @@ class TestJob(unittest.TestCase):
         notfound = False
 
         try:
-            jobinfo = rpc_handle.get_jobinfo()
+            rpc_handle.get_jobinfo()
         except FileNotFoundError:
             notfound = True
 

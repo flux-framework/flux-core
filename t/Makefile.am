@@ -174,6 +174,9 @@ TESTSCRIPTS = \
 	t2403-job-exec-conf.t \
 	t2404-job-exec-multiuser.t \
 	t2405-job-exec-sdexec.t \
+	t2406-job-exec-cleanup.t \
+	t2407-sdbus.t \
+	t2408-sdbus-recovery.t \
 	t2410-exec-systemd.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
@@ -195,6 +198,7 @@ TESTSCRIPTS = \
 	t2615-job-shell-rlimit.t \
 	t2616-job-shell-taskmap.t \
 	t2617-job-shell-stage-in.t \
+	t2618-job-shell-signal.t \
 	t2700-mini-cmd.t \
 	t2701-mini-batch.t \
 	t2702-mini-alloc.t \
@@ -205,6 +209,7 @@ TESTSCRIPTS = \
 	t2713-python-cli-bulksubmit.t \
 	t2714-python-cli-batch.t \
 	t2715-python-cli-cancel.t \
+	t2716-python-cli-batch-conf.t \
 	t2800-jobs-cmd.t \
 	t2800-jobs-recursive.t \
 	t2800-jobs-instance-info.t \
@@ -255,6 +260,7 @@ TESTSCRIPTS = \
 	python/t0010-job.py \
 	python/t0012-futures.py \
 	python/t0013-job-list.py \
+	python/t0014-job-kvslookup.py \
 	python/t0020-hostlist.py \
 	python/t0021-idset.py \
 	python/t0022-resource-set.py \
@@ -263,6 +269,8 @@ TESTSCRIPTS = \
 	python/t0025-uri.py \
 	python/t0026-tree.py \
 	python/t0027-constraint-parser.py \
+	python/t0028-compat36.py \
+	python/t0029-fileref.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY
@@ -340,6 +348,7 @@ dist_check_SCRIPTS = \
 	issues/t4711-job-list-purge-inactive.sh \
 	issues/t4771-flux-start-bash.sh \
 	issues/t4852-t_submit-legacy.sh \
+	issues/t5105-signal-propagation.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
@@ -443,11 +452,11 @@ check_PROGRAMS += \
 endif
 
 check_LTLIBRARIES = \
-	module/parent.la \
-	module/child.la \
+	module/testmod.la \
 	module/running.la \
+	module/legacy.la \
 	request/req.la \
-	ingest/job-manager-dummy.la \
+	ingest/job-manager.la \
 	disconnect/watcher.la \
 	shell/plugins/dummy.la \
 	shell/plugins/conftest.la \
@@ -671,20 +680,20 @@ request_rpc_stream_CPPFLAGS = $(test_cppflags)
 request_rpc_stream_LDADD = $(test_ldadd)
 request_rpc_stream_LDFLAGS = $(test_ldflags)
 
-module_parent_la_SOURCES = module/parent.c
-module_parent_la_CPPFLAGS = $(test_cppflags)
-module_parent_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
-module_parent_la_LIBADD = $(test_ldadd) $(LIBDL)
-
-module_child_la_SOURCES = module/child.c
-module_child_la_CPPFLAGS = $(test_cppflags)
-module_child_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
-module_child_la_LIBADD = $(test_ldadd)
+module_testmod_la_SOURCES = module/testmod.c
+module_testmod_la_CPPFLAGS = $(test_cppflags)
+module_testmod_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+module_testmod_la_LIBADD = $(test_ldadd) $(LIBDL)
 
 module_running_la_SOURCES = module/running.c
 module_running_la_CPPFLAGS = $(test_cppflags)
 module_running_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 module_running_la_LIBADD = $(test_ldadd)
+
+module_legacy_la_SOURCES = module/legacy.c
+module_legacy_la_CPPFLAGS = $(test_cppflags)
+module_legacy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+module_legacy_la_LIBADD = $(test_ldadd) $(LIBDL)
 
 barrier_tbarrier_SOURCES = barrier/tbarrier.c
 barrier_tbarrier_CPPFLAGS = $(test_cppflags)
@@ -737,10 +746,10 @@ rexec_rexec_getline_CPPFLAGS = $(test_cppflags)
 rexec_rexec_getline_LDADD = $(test_ldadd)
 rexec_rexec_getline_LDFLAGS = $(test_ldflags)
 
-ingest_job_manager_dummy_la_SOURCES = ingest/job-manager-dummy.c
-ingest_job_manager_dummy_la_CPPFLAGS = $(test_cppflags)
-ingest_job_manager_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
-ingest_job_manager_dummy_la_LIBADD = $(test_ldadd)
+ingest_job_manager_la_SOURCES = ingest/job-manager.c
+ingest_job_manager_la_CPPFLAGS = $(test_cppflags)
+ingest_job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
+ingest_job_manager_la_LIBADD = $(test_ldadd)
 
 ingest_submitbench_SOURCES = ingest/submitbench.c
 ingest_submitbench_CPPFLAGS = $(test_cppflags)

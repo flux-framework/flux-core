@@ -140,7 +140,7 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "job-manager.stats-get",
         stats_cb,
-        0
+        FLUX_ROLE_USER,
     },
 
     FLUX_MSGHANDLER_TABLE_END,
@@ -217,7 +217,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
     if (!(ctx.jobtap = jobtap_create (&ctx))) {
-        flux_log_error (h, "error creating jobtap interface");
+        flux_log (h, LOG_ERR, "error creating jobtap interface");
         goto done;
     }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
@@ -260,8 +260,6 @@ done:
     zhashx_destroy (&ctx.inactive_jobs);
     return rc;
 }
-
-MOD_NAME ("job-manager");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

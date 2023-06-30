@@ -13,7 +13,9 @@
  *  owner use only)
  */
 
-
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <unistd.h>
 #include <sys/types.h>
 
@@ -22,6 +24,7 @@
 #include <flux/jobtap.h>
 
 #include "src/common/librlist/rlist.h"
+#include "src/common/libjob/idf58.h"
 
 static void alloc_continuation (flux_future_t *f, void *arg)
 {
@@ -54,8 +57,8 @@ static void alloc_continuation (flux_future_t *f, void *arg)
      */
     if (flux_jobtap_job_aux_set (p, *idptr, "alloc-bypass::free", p, NULL) < 0)
         flux_log_error (flux_jobtap_get_flux (p),
-                        "id=%ju: Failed to set alloc-bypass::free",
-                        *idptr);
+                        "id=%s: Failed to set alloc-bypass::free",
+                        idf58 (*idptr));
 
 done:
     flux_future_destroy (f);
@@ -179,7 +182,7 @@ static int validate_cb (flux_plugin_t *p,
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
-                                "{s:i s:{s:{s:{s?{s?o}}}}}",
+                                "{s:i s:{s:{s?{s?{s?o}}}}}",
                                 "userid", &userid,
                                 "jobspec",
                                  "attributes",

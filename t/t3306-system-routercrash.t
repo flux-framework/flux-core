@@ -8,7 +8,7 @@ and then starts back up, the children will reconnect and try to resume
 communications.  From the router perspective, the child uuid is
 unknown, so it forces a subtree panic in the child.  The maintains the
 invariant that when a router restarts, its children always restart too.
-This test verifies that the invariant holds when ther router crashes.
+This test verifies that the invariant holds when the router crashes.
 '
 
 . `dirname $0`/sharness.sh

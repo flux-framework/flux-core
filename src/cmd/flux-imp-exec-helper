@@ -1,0 +1,20 @@
+#!/bin/sh
+##############################################################
+# Copyright 2023 Lawrence Livermore National Security, LLC
+# (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+#
+# This file is part of the Flux resource manager framework.
+# For details, see https://github.com/flux-framework.
+#
+# SPDX-License-Identifier: LGPL-3.0
+##############################################################
+#
+# Helper for flux-imp exec functionality.
+# Emit input to IMP for jobid on stdout given jobid in $1
+#
+JOBID=${1:-$FLUX_JOB_ID}
+if test -z "$JOBID"; then
+    echo "flux-imp-exec-helper: Unable to determine jobid" >&2
+    exit 1
+fi
+printf '{"J": "%s"}' $(flux job info --orig $JOBID J)

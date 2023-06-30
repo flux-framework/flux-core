@@ -52,7 +52,7 @@ class AllocCmd(base.MiniCmd):
             args.nslots = args.nodes
             args.exclusive = True
 
-        #  For --bg, do not run an rc2 (inital program) unless
+        #  For --bg, do not run an rc2 (initial program) unless
         #    the user explicitly specified COMMAND:
         if args.bg and not args.COMMAND:
             args.broker_opts = args.broker_opts or []
@@ -70,6 +70,7 @@ class AllocCmd(base.MiniCmd):
             num_nodes=args.nodes,
             broker_opts=base.list_split(args.broker_opts),
             exclusive=args.exclusive,
+            conf=args.conf.config,
         )
 
         #  For --bg, always allocate a pty, but not interactive,

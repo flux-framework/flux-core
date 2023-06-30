@@ -403,12 +403,12 @@ static int loopback_connector_getopt (void *impl, const char *option,
 {
     struct loopback_connector *lcon = impl;
 
-    if (option && !strcmp (option, FLUX_OPT_TESTING_USERID)) {
+    if (option && streq (option, FLUX_OPT_TESTING_USERID)) {
         if (size != sizeof (lcon->cred.userid))
             goto error;
         memcpy (val, &lcon->cred.userid, size);
     }
-    else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
+    else if (option && streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
         if (size != sizeof (lcon->cred.rolemask))
             goto error;
         memcpy (val, &lcon->cred.rolemask, size);
@@ -427,13 +427,13 @@ static int loopback_connector_setopt (void *impl, const char *option,
     struct loopback_connector *lcon = impl;
     size_t val_size;
 
-    if (option && !strcmp (option, FLUX_OPT_TESTING_USERID)) {
+    if (option && streq (option, FLUX_OPT_TESTING_USERID)) {
         val_size = sizeof (lcon->cred.userid);
         if (size != val_size)
             goto error;
         memcpy (&lcon->cred.userid, val, val_size);
     }
-    else if (option && !strcmp (option, FLUX_OPT_TESTING_ROLEMASK)) {
+    else if (option && streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
         val_size = sizeof (lcon->cred.rolemask);
         if (size != val_size)
             goto error;

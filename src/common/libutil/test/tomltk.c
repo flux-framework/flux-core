@@ -21,6 +21,7 @@
 #include <jansson.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 #include "src/common/libtomlc99/toml.h"
 #include "tomltk.h"
 
@@ -75,7 +76,7 @@ static bool check_ts (json_t *ts, const char *timestr)
     if (strftime (buf, sizeof (buf), "%FT%TZ", &tm) == 0)
         return false;
     diag ("%s: %s ?= %s", __FUNCTION__, buf, timestr);
-    return !strcmp (buf, timestr);
+    return streq (buf, timestr);
 }
 
 void test_json_ts(void)
@@ -126,7 +127,7 @@ void test_tojson_t1 (void)
                      "ts", &ts);
     ok (rc == 0,
         "t1: unpack successful");
-    ok (i == 1 && d == 3.14 && s != NULL && !strcmp (s, "foo") && b != 0
+    ok (i == 1 && d == 3.14 && s != NULL && streq (s, "foo") && b != 0
         && check_ts (ts, "1979-05-27T07:32:00Z"),
         "t1: has expected values");
     json_decref (obj);
@@ -209,7 +210,7 @@ void test_parse_lineno (void)
     ok (error.lineno == 4,
         "bad1: error.lineno is 4");
     const char *msg = "unterminated s-quote";
-    ok (!strcmp (error.errbuf, msg),
+    ok (streq (error.errbuf, msg),
         "bad1: error is \"%s\"", msg); // no "line %d: " prefix
 }
 

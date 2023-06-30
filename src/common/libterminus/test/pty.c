@@ -321,7 +321,7 @@ static void test_basic_protocol (void)
                             "{s:s s:s}",
                             "type", "data",
                             "foo", "")) != NULL,
-        "request: type data, invald payload");
+        "request: type data, invalid payload");
     ok (flux_rpc_get (f, NULL) < 0 && errno == EPROTO,
         "response: EPROTO");
     flux_future_destroy (f);
@@ -332,7 +332,7 @@ static void test_basic_protocol (void)
                             "{s:s s:i}",
                             "type", "data",
                             "data", 2)) != NULL,
-        "request: type data, invald data type");
+        "request: type data, invalid data type");
     ok (flux_rpc_get (f, NULL) < 0 && errno == EPROTO,
         "response: EPROTO");
     flux_future_destroy (f);
@@ -358,7 +358,7 @@ static void test_basic_protocol (void)
     flux_future_destroy (f);
 
 
-    /* detatch client */
+    /* detach client */
     ok ((f = flux_rpc_pack (h, "pty", 0, 0,
                             "{s:s}",
                             "type", "detach")) != NULL,

@@ -13,6 +13,7 @@
 #endif
 #include <stdio.h>
 #include <flux/core.h>
+#include "ccan/str/str.h"
 
 int main (int argc, char *argv[])
 {
@@ -20,7 +21,7 @@ int main (int argc, char *argv[])
         fprintf (stderr, "Usage: print-constants NAME\n");
         return 1;
     }
-    if (!strcmp (argv[1], "FLUX_JOBID_ANY")) {
+    if (streq (argv[1], "FLUX_JOBID_ANY")) {
         printf ("%llx\n", (long long unsigned)FLUX_JOBID_ANY);
     }
     else {

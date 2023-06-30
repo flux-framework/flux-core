@@ -20,6 +20,7 @@
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libidset/idset.h"
+#include "ccan/str/str.h"
 
 #include "src/modules/resource/rutil.h"
 
@@ -134,12 +135,12 @@ void test_set_json_idset (void)
     ok (rutil_set_json_idset (o, "foo", NULL) == 0
             && (o2 = json_object_get (o, "foo"))
             && (s = json_string_value (o2))
-            && !strcmp (s, ""),
+            && streq (s, ""),
         "rutil_set_json_idset ids=NULL sets empty string value");
     ok (rutil_set_json_idset (o, "bar", ids) == 0
             && (o2 = json_object_get (o, "bar"))
             && (s = json_string_value (o2))
-            && !strcmp (s, "42"),
+            && streq (s, "42"),
         "rutil_set_json_idset ids=[42] sets encoded value");
 
     json_decref (o);
@@ -193,7 +194,7 @@ void test_read_file (void)
     diag ("%s", error.text);
 
     s = rutil_read_file (tmp, &error);
-    ok (s != NULL && !strcmp (s, "XXX"),
+    ok (s != NULL && streq (s, "XXX"),
         "rutil_read_file works");
     free (s);
 

@@ -20,7 +20,6 @@ shellrcdir = \
 
 nobase_dist_shellrc_SCRIPTS = \
 	initrc.lua \
-	lua.d/mvapich.lua \
 	lua.d/intel_mpi.lua \
 	lua.d/openmpi.lua \
 	lua.d/mpi/spectrum.lua
@@ -90,7 +89,9 @@ flux_shell_SOURCES = \
 	doom.c \
 	exception.c \
 	rlimit.c \
-	cyclic.c
+	cyclic.c \
+	signal.c \
+	files.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \
@@ -100,13 +101,15 @@ flux_shell_LDADD = \
 	$(top_builddir)/src/bindings/lua/libfluxlua.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-taskmap.la \
+	$(top_builddir)/src/common/libflux-idset.la \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(top_builddir)/src/common/libpmi/libpmi_common.la \
 	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
-	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(top_builddir)/src/common/libterminus/libterminus.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/libfilemap/libfilemap.la \
+	$(top_builddir)/src/common/libflux-internal.la \
 	$(LUA_LIB) \
 	$(HWLOC_LIBS) \
 	$(JANSSON_LIBS) \

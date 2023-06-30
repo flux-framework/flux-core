@@ -19,7 +19,8 @@
 #include <stdbool.h>
 #include <jansson.h>
 
-#include "src/common/libccan/ccan/base64/base64.h"
+#include "ccan/base64/base64.h"
+#include "ccan/str/str.h"
 #include "src/common/libutil/blobref.h"
 
 #include "treeobj.h"
@@ -79,7 +80,7 @@ int treeobj_validate (const json_t *obj)
 
     if (treeobj_peek (obj, &type, &data) < 0)
         goto inval;
-    if (!strcmp (type, "valref") || !strcmp (type, "dirref")) {
+    if (streq (type, "valref") || streq (type, "dirref")) {
         int i, len;
         if (!json_is_array (data))
             goto inval;
@@ -91,7 +92,7 @@ int treeobj_validate (const json_t *obj)
                 goto inval;
         }
     }
-    else if (!strcmp (type, "dir")) {
+    else if (streq (type, "dir")) {
         const char *key;
         if (!json_is_object (data))
             goto inval;
@@ -103,7 +104,7 @@ int treeobj_validate (const json_t *obj)
                 goto inval;
         }
     }
-    else if (!strcmp (type, "symlink")) {
+    else if (streq (type, "symlink")) {
         json_t *o;
         if (!json_is_object (data))
             goto inval;
@@ -117,7 +118,7 @@ int treeobj_validate (const json_t *obj)
                 goto inval;
         }
     }
-    else if (!strcmp (type, "val")) {
+    else if (streq (type, "val")) {
         /* is base64, should always be a string */
         if (!json_is_string (data))
             goto inval;
@@ -141,31 +142,31 @@ const char *treeobj_get_type (const json_t *obj)
 bool treeobj_is_symlink (const json_t *obj)
 {
     const char *type = treeobj_get_type (obj);
-    return type && !strcmp (type, "symlink");
+    return type && streq (type, "symlink");
 }
 
 bool treeobj_is_val (const json_t *obj)
 {
     const char *type = treeobj_get_type (obj);
-    return type && !strcmp (type, "val");
+    return type && streq (type, "val");
 }
 
 bool treeobj_is_valref (const json_t *obj)
 {
     const char *type = treeobj_get_type (obj);
-    return type && !strcmp (type, "valref");
+    return type && streq (type, "valref");
 }
 
 bool treeobj_is_dir (const json_t *obj)
 {
     const char *type = treeobj_get_type (obj);
-    return type && !strcmp (type, "dir");
+    return type && streq (type, "dir");
 }
 
 bool treeobj_is_dirref (const json_t *obj)
 {
     const char *type = treeobj_get_type (obj);
-    return type && !strcmp (type, "dirref");
+    return type && streq (type, "dirref");
 }
 
 json_t *treeobj_get_data (json_t *obj)
@@ -186,7 +187,7 @@ int treeobj_get_symlink (const json_t *obj,
     const char *n_str = NULL, *t_str = NULL;
 
     if (treeobj_peek (obj, &type, &data) < 0
-            || strcmp (type, "symlink") != 0) {
+            || !streq (type, "symlink")) {
         errno = EINVAL;
         return -1;
     }
@@ -221,7 +222,7 @@ int treeobj_decode_val (const json_t *obj, void **dp, int *lp)
     char *data;
 
     if (treeobj_peek (obj, &type, &xdata) < 0
-            || strcmp (type, "val") != 0) {
+            || !streq (type, "val")) {
         errno = EINVAL;
         return -1;
     }
@@ -259,13 +260,13 @@ int treeobj_get_count (const json_t *obj)
 
     if (treeobj_peek (obj, &type, &data) < 0)
         goto done;
-    if (!strcmp (type, "valref") || !strcmp (type, "dirref")) {
+    if (streq (type, "valref") || streq (type, "dirref")) {
         count = json_array_size (data);
     }
-    else if (!strcmp (type, "dir")) {
+    else if (streq (type, "dir")) {
         count = json_object_size (data);
     }
-    else if (!strcmp (type, "symlink") || !strcmp (type, "val")) {
+    else if (streq (type, "symlink") || streq (type, "val")) {
         count = 1;
     } else {
         errno = EINVAL; // unknown type
@@ -281,7 +282,7 @@ json_t *treeobj_get_entry (json_t *obj, const char *name)
     json_t *data, *obj2;
 
     if (treeobj_unpack (obj, &type, &data) < 0
-            || strcmp (type, "dir") != 0) {
+            || !streq (type, "dir")) {
         errno = EINVAL;
         return NULL;
     }
@@ -298,7 +299,7 @@ int treeobj_delete_entry (json_t *obj, const char *name)
     json_t *data;
 
     if (treeobj_unpack (obj, &type, &data) < 0
-            || strcmp (type, "dir") != 0) {
+            || !streq (type, "dir")) {
         errno = EINVAL;
         return -1;
     }
@@ -315,7 +316,7 @@ int treeobj_insert_entry (json_t *obj, const char *name, json_t *obj2)
     json_t *data;
 
     if (!name || !obj2 || treeobj_unpack (obj, &type, &data) < 0
-            || strcmp (type, "dir") != 0
+            || !streq (type, "dir")
             || treeobj_validate (obj2) < 0) {
         errno = EINVAL;
         return -1;
@@ -337,7 +338,7 @@ int treeobj_insert_entry_novalidate (json_t *obj,
     json_t *data;
 
     if (!name || !obj2 || treeobj_unpack (obj, &type, &data) < 0
-            || strcmp (type, "dir") != 0
+            || !streq (type, "dir")
             || treeobj_peek (obj2, NULL, NULL) < 0) {
         errno = EINVAL;
         return -1;
@@ -355,7 +356,7 @@ const json_t *treeobj_peek_entry (const json_t *obj, const char *name)
     const json_t *data, *obj2;
 
     if (treeobj_peek (obj, &type, &data) < 0
-            || strcmp (type, "dir") != 0) {
+            || !streq (type, "dir")) {
         errno = EINVAL;
         return NULL;
     }
@@ -418,8 +419,8 @@ int treeobj_append_blobref (json_t *obj, const char *blobref)
 
     if (!blobref || blobref_validate (blobref) < 0
                  || treeobj_unpack (obj, &type, &data) < 0
-                 || (strcmp (type, "dirref") != 0
-                    && strcmp (type, "valref") != 0)) {
+                 || (!streq (type, "dirref")
+                    && !streq (type, "valref"))) {
         errno = EINVAL;
         goto done;
     }
@@ -444,8 +445,8 @@ const char *treeobj_get_blobref (const json_t *obj, int index)
     const char *type, *blobref = NULL;
 
     if (treeobj_peek (obj, &type, &data) < 0
-            || (strcmp (type, "dirref") != 0
-                && strcmp (type, "valref") != 0)) {
+            || (!streq (type, "dirref")
+                && !streq (type, "valref"))) {
         errno = EINVAL;
         goto done;
     }

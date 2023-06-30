@@ -32,7 +32,6 @@ test_expect_success 'flux-shell: per-resource with count works' '
 	foo
 	EOF
 	test_cmp 4-per-core.expected 4-per-core.out
-	
 '
 test_expect_success 'flux-shell: per-resource type=node works' '
 	ncores=$(flux resource list -s up -no {ncores}) &&
@@ -51,9 +50,9 @@ test_expect_success 'flux-shell: historical batch jobspec still work' '
 	for spec in $SHARNESS_TEST_SRCDIR/batch/jobspec/*.json; do
 		input=$(basename $spec) &&
 		cat $spec |
-		    jq -S ".attributes.system.environment.PATH=\"$PATH\"" |
-		    jq -S ".attributes.system.environment.PATH=\"$PATH\"" |
-		    jq -S ".attributes.system.environment.PYTHONPATH=\"$PYTHONPATH\"" \
+		    jq -S ".attributes.system.environment.PYTHONPATH=\"$PYTHONPATH\"" |
+		    jq -S ".attributes.system.environment.HOME=\"$HOME\"" |
+		    jq -S ".attributes.system.cwd=\"$(pwd)\"" \
 		    >$input &&
 		flux job submit --flags=waitable $input
 	done &&

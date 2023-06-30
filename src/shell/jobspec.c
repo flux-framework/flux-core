@@ -13,6 +13,7 @@
 #endif
 #include <flux/core.h>
 #include <jansson.h>
+#include "ccan/str/str.h"
 
 #include "jobspec.h"
 
@@ -95,7 +96,7 @@ static int recursive_parse_helper (struct jobspec *job,
 
         curr_multiplier = with_multiplier * res.count;
 
-        if (!strcmp (res.type, "node")) {
+        if (streq (res.type, "node")) {
             if (job->slot_count > 0) {
                 set_error (error, "node resource encountered after slot resource");
                 return -1;
@@ -110,7 +111,7 @@ static int recursive_parse_helper (struct jobspec *job,
             }
 
             job->node_count = curr_multiplier;
-        } else if (!strcmp (res.type, "slot")) {
+        } else if (streq (res.type, "slot")) {
             if (job->cores_per_slot > 0) {
                 set_error (error, "slot resource encountered after core resource");
                 return -1;
@@ -134,7 +135,7 @@ static int recursive_parse_helper (struct jobspec *job,
                 // (i.e., job->slot_count % job->node_count == 0)
                 job->slots_per_node = job->slot_count / job->node_count;
             }
-        } else if (!strcmp (res.type, "core")) {
+        } else if (streq (res.type, "core")) {
             if (job->slot_count < 1) {
                 set_error (error, "core resource encountered before slot resource");
                 return -1;
@@ -162,13 +163,13 @@ static int recursive_parse_helper (struct jobspec *job,
             }
         }
 
-        if (!strcmp (res.type, "node")) {
+        if (streq (res.type, "node")) {
             if ((job->slot_count <= 0) || (job->cores_per_slot <= 0)) {
                 set_error (error,
                            "node encountered without slot&core below it");
                 return -1;
             }
-        } else if (!strcmp (res.type, "slot")) {
+        } else if (streq (res.type, "slot")) {
             if (job->cores_per_slot <= 0) {
                 set_error (error, "slot encountered without core below it");
                 return -1;
@@ -234,7 +235,7 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
      *  json_t * objects)
      */
     if (json_unpack_ex (job->jobspec, error, 0,
-                        "{s:i s:o s:o s:{s:{s?:s s?:O s?:{s?:O}}}}",
+                        "{s:i s:o s:o s:{s?{s?s s?O s?{s?O}}}}",
                         "version", &job->version,
                         "resources", &resources,
                         "tasks", &tasks,

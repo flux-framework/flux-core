@@ -377,6 +377,11 @@ test_expect_success 'job-manager stats works' '
 	cat stats.out | $jq -e .journal.listeners
 '
 
+test_expect_success 'flux module stats job-manager is open to guests' '
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux module stats job-manager >/dev/null
+'
+
 test_expect_success 'job-manager: remove job-info, job-manager, job-ingest' '
 	flux module remove job-info &&
 	flux module remove job-manager &&

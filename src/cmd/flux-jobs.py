@@ -60,6 +60,13 @@ class FluxJobsConfig(UtilConfig):
                 "{priority:<12} {state:<8.8} {dependencies}"
             ),
         },
+        "endreason": {
+            "description": "Show why each job ended",
+            "format": (
+                "{id.f58:>12} ?:{queue:<8.8} {username:<8.8} {name:<10.10+} "
+                "{status_abbrev:>2.2} {t_inactive!d:%b%d %R::>12h} {inactive_reason}"
+            ),
+        },
     }
 
     def __init__(self):
@@ -111,6 +118,9 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         attrs.update(job_fields_to_attrs(["result", "annotations"]))
     if args.recursive:
         attrs.update(job_fields_to_attrs(["annotations", "status", "userid"]))
+    if args.json:
+        args.no_header = True
+        attrs.add("all")
 
     if args.A:
         args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
@@ -301,6 +311,11 @@ def parse_args():
         + " or a defined format by name (use 'help' to get a list of names)",
     )
     parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output jobs in JSON instead of formatted output",
+    )
+    parser.add_argument(
         "--color",
         type=str,
         metavar="WHEN",
@@ -412,6 +427,10 @@ def get_jobs_recursive(job, args, fields):
 
 def print_jobs(jobs, args, formatter, path="", level=0):
     children = []
+    # Array of jobs as dict
+    result = []
+    # Convenience dict for looking up job in result by jobid:
+    job_dict = {}
 
     def pre(job):
         job.color_set = color_setup(args, job)
@@ -421,10 +440,22 @@ def print_jobs(jobs, args, formatter, path="", level=0):
         if args.recursive and is_user_instance(job, args):
             children.append(job)
 
-    formatter.print_items(jobs, no_header=True, pre=pre, post=post)
+    if args.json:
+        for job in jobs:
+            jdict = job.to_dict()
+            result.append(jdict)
+            job_dict[job.id] = jdict
+            #  Normally, print_items() handles collection of any children
+            #  in this job as a side effect of printing each line of output.
+            #  So, when generating JSON output instead, do that explicitly
+            #  here:
+            if args.recursive and is_user_instance(job, args):
+                children.append(job)
+    else:
+        formatter.print_items(jobs, no_header=True, pre=pre, post=post)
 
     if not args.recursive or args.level == level:
-        return
+        return result
 
     #  Reset args.jobids since it won't apply recursively:
     args.jobids = None
@@ -441,6 +472,14 @@ def print_jobs(jobs, args, formatter, path="", level=0):
 
     for future in futures:
         (job, jobs, stats) = future.result()
+
+        #  If generating JSON, just add this job's children to a job["jobs"]
+        #  array and continue:
+        if args.json:
+            job_dict[job.id]["jobs"] = [x.to_dict() for x in jobs]
+            continue
+
+        #  Otherwise generate a header for this jobs children and print them:
         thispath = f"{path}{job.id.f58}"
         print(f"\n{thispath}:")
         if stats:
@@ -448,8 +487,9 @@ def print_jobs(jobs, args, formatter, path="", level=0):
                 f"{stats.running} running, {stats.successful} completed, "
                 f"{stats.failed} failed, {stats.pending} pending"
             )
-
         print_jobs(jobs, args, formatter, path=thispath, level=level + 1)
+
+    return result
 
 
 @flux.util.CLIMain(LOGGER)
@@ -458,6 +498,10 @@ def main():
     sys.stdout = open(sys.stdout.fileno(), "w", encoding="utf8")
 
     args = parse_args()
+
+    if args.json and (args.stats or args.stats_only):
+        LOGGER.error("--json incompatible with --stats or --stats-only")
+        sys.exit(1)
 
     if args.jobids and args.filtered and not args.recursive:
         LOGGER.warning("Filtering options ignored with jobid list")
@@ -492,7 +536,14 @@ def main():
     if not args.no_header:
         print(sformatter.header())
 
-    print_jobs(jobs, args, sformatter)
+    result = print_jobs(jobs, args, sformatter)
+    if args.json:
+        # Only emit single JSON object if user asked for one specific job
+        if args.jobids and len(args.jobids) == 1:
+            if result:
+                print(json.dumps(result[0]))
+        else:
+            print(json.dumps({"jobs": result}))
 
 
 if __name__ == "__main__":

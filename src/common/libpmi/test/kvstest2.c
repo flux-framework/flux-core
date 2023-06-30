@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -20,6 +23,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libpmi/pmi2.h"
 #include "src/common/libpmi/pmi_strerror.h"
+#include "ccan/str/str.h"
 
 /* We don't have a pmi2_strerror() but the codes are mostly the same as PMI-1
  */
@@ -117,7 +121,7 @@ int main(int argc, char *argv[])
     if (e != PMI2_SUCCESS)
         log_msg_exit ("%d: PMI2_Info_GetNodeAttr %s: %s",
                       rank, key, pmi2_strerror (e));
-    if (strcmp (attr, expected_attr) != 0)
+    if (!streq (attr, expected_attr))
         log_msg_exit ("%d: PMI_Info_GetNodeAttr %s: exp %s got %s\n",
                       rank, key, expected_val, val);
 
@@ -141,7 +145,7 @@ int main(int argc, char *argv[])
             log_msg_exit ("%d: PMI2_KVS_Get: %s", rank, pmi2_strerror (e));
         snprintf (expected_val, sizeof (expected_val), "val-%d.%d",
                   rank > 0 ? rank - 1 : size - 1, i);
-        if (strcmp (val, expected_val) != 0)
+        if (!streq (val, expected_val))
             log_msg_exit ("%d: PMI_KVS_Get: exp %s got %s\n",
                           rank, expected_val, val);
         if (length != strlen (val))

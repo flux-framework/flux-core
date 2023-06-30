@@ -19,9 +19,12 @@
 #include <ctype.h>
 #include <stdarg.h>
 #include <argz.h>
+#include <math.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/parse_size.h"
+#include "ccan/str/str.h"
 
 #include "optparse.h"
 #include "getopt.h"
@@ -73,7 +76,7 @@ struct option_info {
     struct optparse_option * p_opt;   /* Copy of program option structure  */
     zlist_t *               optargs;  /* If non-NULL, the option argument(s) */
     const char *            optarg;   /* Pointer to last element in optargs */
-    int                     seq;      /* Sequence in which option was addd  */
+    int                     seq;      /* Sequence in which option was added  */
 
     unsigned int            found;    /* number of times we saw this option */
 
@@ -170,9 +173,9 @@ static int option_info_cmp (void *arg1, void *arg2)
             return (-1);
         else if (y->isdoc)
             return (1);
-        else if (strcmp (o1->name, "help") == 0)
+        else if (streq (o1->name, "help"))
             return -1;
-        else if (strcmp (o2->name, "help") == 0)
+        else if (streq (o2->name, "help"))
             return 1;
         else if (isalnum (o1->key) && isalnum (o2->key))
             return (o1->key - o2->key);
@@ -217,7 +220,7 @@ static struct option_info *find_option_info (optparse_t *p, const char *name)
     o = zlist_first (p->option_list);
     while (o) {
         if (o->p_opt->name != NULL
-            && strcmp (o->p_opt->name, name) == 0)
+            && streq (o->p_opt->name, name))
             return o;
         o = zlist_next (p->option_list);
     }
@@ -305,7 +308,7 @@ static int log_stderr (const char *fmt, ...)
 }
 
 /*
- * Default fatalerr funciton.
+ * Default fatalerr function.
  */
 static int fatal_exit (void *h, int exit_code)
 {
@@ -949,6 +952,59 @@ double optparse_get_duration (optparse_t *p, const char *name,
     return d;
 }
 
+uint64_t optparse_get_size (optparse_t *p,
+                            const char *name,
+                            const char *default_value)
+{
+    int n;
+    uint64_t result;
+    const char *s = NULL;
+
+    if (default_value == NULL)
+        default_value = "0";
+
+    if ((n = optparse_getopt (p, name, &s)) < 0) {
+        optparse_fatalmsg (p, 1,
+                           "%s: optparse error: no such argument '%s'\n",
+                           p->program_name, name);
+        return (uint64_t) -1;
+    }
+    if (n == 0)
+        s = default_value;
+    if (parse_size (s, &result) < 0) {
+        optparse_fatalmsg (p, 1,
+                          "%s: invalid argument for option '%s': %s: %s\n",
+                          p->program_name,
+                          name,
+                          s,
+                          strerror (errno));
+        return (uint64_t) -1;
+    }
+    return result;
+}
+
+int optparse_get_size_int (optparse_t *p,
+                           const char *name,
+                           const char *default_value)
+{
+    uint64_t val = optparse_get_size (p, name, default_value);
+    if (val == (uint64_t)-1)
+        return -1;
+    if (val > INT_MAX) {
+        const char *s;
+        optparse_getopt (p, name, &s);
+        optparse_fatalmsg (p,
+                           1,
+                           "%s: %s: value %s too large (must be < %s)\n",
+                           p->program_name,
+                           name,
+                           s,
+                           encode_size (INT_MAX+1UL));
+        return -1;
+    }
+    return (int)val;
+}
+
 const char *optparse_get_str (optparse_t *p, const char *name,
                               const char *default_value)
 {
@@ -1196,7 +1252,14 @@ static char * optstring_create ()
     char *optstring = calloc (4, 1);
     if (optstring == NULL)
         return (NULL);
-    optstring[0] = '\0';
+    /* Per getopt(3) manpage
+     *
+     * "If the first character ... of optstring is a colon (':'), then
+     * getopt() returns ':' instead of '?' to indicate a missing
+     * option argument"
+     */
+    optstring[0] = ':';
+    optstring[1] = '\0';
     return (optstring);
 }
 
@@ -1364,7 +1427,13 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
                                &li, &d, p->posixly_correct)) >= 0) {
         struct option_info *opt;
         struct optparse_option *o;
-        if (c == '?') {
+        if (c == ':') {
+            (*p->log_fn) ("%s: '%s' missing argument\n",
+                          fullname, argv[d.optind-1]);
+            d.optind = -1;
+            break;
+        }
+        else if (c == '?') {
             if (d.optopt != '\0')
                 (*p->log_fn) ("%s: unrecognized option '-%c'\n",
                               fullname,  d.optopt);

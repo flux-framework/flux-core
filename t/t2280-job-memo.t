@@ -22,7 +22,7 @@ test_expect_success 'memo: error on insufficient arguments' '
 	test_expect_code 1 flux job memo 1234 &&
 	test_expect_code 1 flux job memo
 '
-test_expect_success 'memo: error on invalide jobid' '
+test_expect_success 'memo: error on invalid jobid' '
 	test_expect_code 1 flux job memo f1 foo=bar
 '
 test_expect_success 'memo: create one inactive job' '

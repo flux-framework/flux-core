@@ -95,12 +95,12 @@ test_expect_success 'simulated local connector auth failure returns EPERM' '
 
 test_expect_success 'flux ping --userid displays userid' '
 	flux ping --count=1 --userid broker >ping.out &&
-	grep -q "userid=$(id -u) rolemask=0x1" ping.out
+	grep -q "userid=$(id -u) rolemask=0x5" ping.out
 '
 
 test_expect_success 'FLUX_HANDLE_USERID can spoof userid in message' '
 	FLUX_HANDLE_USERID=9999 flux ping --count=1 --userid broker >ping2.out &&
-	grep -q "userid=9999 rolemask=0x1" ping2.out
+	grep -q "userid=9999 rolemask=0x5" ping2.out
 '
 
 test_expect_success 'FLUX_HANDLE_ROLEMASK can spoof rolemask in message' '
@@ -340,6 +340,18 @@ test_expect_success 'flux content store not allowed for guest user' '
 	test_must_fail bash -c "FLUX_HANDLE_ROLEMASK=0x2 \
 	    flux content store <content.blob 2>content-store.err" &&
 	    grep "Request requires owner credentials" content-store.err
+'
+
+test_expect_success 'flux module list is open to guests' '
+	FLUX_HANDLE_ROLEMASK=0x2 flux module list >/dev/null
+'
+test_expect_success 'flux module stats --rusage is open to guests (broker)' '
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux module stats --rusage broker >/dev/null
+'
+test_expect_success 'flux module stats --rusage is open to guests (module)' '
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux module stats --rusage connector-local >/dev/null
 '
 
 test_done

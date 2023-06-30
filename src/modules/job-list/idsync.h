@@ -28,6 +28,7 @@ struct idsync_data {
     flux_jobid_t id;
     flux_msg_t *msg;
     json_t *attrs;
+    flux_job_state_t state;
 
     flux_future_t *f_lookup;
 };
@@ -45,7 +46,8 @@ void idsync_data_destroy (void *data);
 struct idsync_data *idsync_check_id_valid (struct idsync_ctx *isctx,
                                            flux_jobid_t id,
                                            const flux_msg_t *msg,
-                                           json_t *attrs);
+                                           json_t *attrs,
+                                           flux_job_state_t state);
 
 
 /* free / cleanup 'struct idsync_data' after
@@ -65,7 +67,8 @@ int idsync_wait_valid (struct idsync_ctx *isctx, struct idsync_data *isd);
 int idsync_wait_valid_id (struct idsync_ctx *isctx,
                           flux_jobid_t id,
                           const flux_msg_t *msg,
-                          json_t *attrs);
+                          json_t *attrs,
+                          flux_job_state_t state);
 
 /* check if 'job' is in waits list, if so respond to original
  * message */

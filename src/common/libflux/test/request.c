@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
 #include <string.h>
 
@@ -15,6 +18,7 @@
 #include "request.h"
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 int main (int argc, char *argv[])
 {
@@ -41,7 +45,7 @@ int main (int argc, char *argv[])
         "flux_request_encode works with NULL payload");
     topic = NULL;
     ok (flux_request_decode (msg, &topic, NULL) == 0
-        && topic != NULL && !strcmp (topic, "foo.bar"),
+        && topic != NULL && streq (topic, "foo.bar"),
         "flux_request_decode returns encoded topic");
     ok (flux_request_decode (msg, NULL, NULL) == 0,
         "flux_request_decode topic is optional");
@@ -56,12 +60,12 @@ int main (int argc, char *argv[])
 
     s = NULL;
     ok (flux_request_decode (msg, NULL, &s) == 0
-        && s != NULL && !strcmp (s, json_str),
+        && s != NULL && streq (s, json_str),
         "flux_request_decode returns encoded payload");
     topic = NULL;
     i = 0;
     ok (flux_request_unpack (msg, &topic, "{s:i}", "a", &i) == 0
-        && i == 42 && topic != NULL && !strcmp (topic, "foo.bar"),
+        && i == 42 && topic != NULL && streq (topic, "foo.bar"),
         "flux_request_unpack returns encoded payload");
 
     errno = 0;
@@ -74,7 +78,7 @@ int main (int argc, char *argv[])
         "flux_request_encode_raw works with NULL payload");
     topic = NULL;
     ok (flux_request_decode_raw (msg, &topic, &d, &l) == 0
-        && topic != NULL && !strcmp (topic, "foo.bar"),
+        && topic != NULL && streq (topic, "foo.bar"),
         "flux_request_decode_raw returns encoded topic");
     ok (flux_request_decode_raw (msg, NULL, &d, &l) == 0,
         "flux_request_decode_raw topic is optional");

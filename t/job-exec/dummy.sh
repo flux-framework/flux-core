@@ -28,8 +28,8 @@
 #  drive tests of expected execution behavior.
 #
 
-die() { echo "dummy-shell: $@" >&2; exit 1; }
-log() { echo "dummy-shell: $@" >&2; }
+die() { echo "dummy-shell[$BROKER_RANK]: $@" >&2; exit 1; }
+log() { echo "dummy-shell[$BROKER_RANK]: $@" >&2; }
 
 #
 #  Declare globals:
@@ -104,10 +104,10 @@ get_command() {
 }
 
 get_traps() {
-    trap "/bin/echo got SIGTERM" 15
+    trap "log got SIGTERM" 15
     TRAP=$(json_get "$JOBSPEC" '.attributes.system.environment.TRAP')
     if test "x$TRAP" != "xnull" ; then
-        trap "/bin/echo got signal $TRAP" $TRAP
+        trap "log got signal $TRAP" $TRAP
     fi
 }
 
@@ -135,7 +135,7 @@ test_mock_failure() {
             #   entered the barrier before rank 1 unexpectedly exits.
             #   See caveats about best effort above.
             #
-            echo "after_barrier_entry: rank=$JOB_SHELL_RANK"
+            log "after_barrier_entry: rank=$JOB_SHELL_RANK"
             if test $JOB_SHELL_RANK -eq 1; then
                 log "after_barrier: exiting early on job shell rank 1"
                 sleep 1
@@ -149,9 +149,9 @@ test_mock_failure() {
 }
 
 barrier() {
-    if [[ ${NNODES} -gt 1 && -n ${FLUX_EXEC_PROTOCOL_FD} ]]; then
-        echo enter >&${FLUX_EXEC_PROTOCOL_FD}
-        read -u ${FLUX_EXEC_PROTOCOL_FD} line
+    if [[ ${NNODES} -gt 1 ]]; then
+        echo enter >&${FLUX_EXEC_PROTOCOL_FD:-1}
+        read -u ${FLUX_EXEC_PROTOCOL_FD:-0} line
         if [[ ${line##*=} -ne 0 ]]; then
             exit ${line##*=}
         fi

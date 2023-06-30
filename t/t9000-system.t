@@ -3,8 +3,15 @@
 
 test_description='Run tests against a system instance of Flux'
 
-if test -n "$FLUX_ENABLE_SYSTEM_TESTS" || test -n "$debug"; then
-	FLUX_TEST_INSTALLED_PATH=${FLUX_TEST_INSTALLED_PATH:-/usr/bin}
+#  If FLUX_TEST_INSTALLED_PATH is not set and /usr/bin/flux exists,
+#  set FLUX_TEST_INSTALLED_PATH to /usr/bin.
+#
+#  Must set FLUX_TEST_INSTALLED_PATH before sourcing sharness,
+#  otherwise correct flux may not be used in tests.
+if test -n "$FLUX_ENABLE_SYSTEM_TESTS"; then
+	if test -x ${FLUX_TEST_INSTALLED_PATH:-/usr/bin}/flux; then
+		FLUX_TEST_INSTALLED_PATH=${FLUX_TEST_INSTALLED_PATH:-/usr/bin}
+	fi
 fi
 . `dirname $0`/sharness.sh
 
@@ -53,7 +60,7 @@ alias test_expect_success='expect_success_wrap'
 
 #
 #  All system instance tests are defined in t/system/*
-#  We run them serially to avoid conficted requests for resources
+#  We run them serially to avoid conflicted requests for resources
 #   to the enclosing system instance, which in CI may be limited.
 #
 for testscript in ${FLUX_SOURCE_DIR}/t/system/${T9000_SYSTEM_GLOB}; do

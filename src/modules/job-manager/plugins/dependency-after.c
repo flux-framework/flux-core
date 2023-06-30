@@ -20,6 +20,7 @@
 #include <flux/jobtap.h>
 
 #include "src/common/libutil/iterators.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
@@ -413,8 +414,8 @@ static int dependency_after_cb (flux_plugin_t *p,
         && flux_jobtap_job_subscribe (p, afterid) < 0) {
         after_info_destroy (after);
         after_ref_destroy (ref);
-        return flux_jobtap_reject_job (p, args, "failed to subscribe to %ju",
-                                       (uintmax_t) id);
+        return flux_jobtap_reject_job (p, args, "failed to subscribe to %s",
+                                       idf58 (id));
     }
 
     return 0;
@@ -437,8 +438,8 @@ static void remove_jobid_dependency (flux_plugin_t *p,
                                          "Failed to remove dependency %s",
                                          after->description) < 0) {
             flux_log_error (flux_jobtap_get_flux (p),
-                            "flux_jobtap_raise_exception: id=%ju",
-                            (uintmax_t) after->depid);
+                            "flux_jobtap_raise_exception: id=%s",
+                            idf58 (after->depid));
         }
     }
 }
@@ -486,8 +487,8 @@ static void raise_exceptions (flux_plugin_t *p, zlistx_t *l)
                                              "dependency",
                                              after->description) < 0)
                 flux_log_error (flux_jobtap_get_flux (p),
-                                "id=%ju: unable to raise exception for %s",
-                                (uintmax_t) after->depid,
+                                "id=%s: unable to raise exception for %s",
+                                idf58 (after->depid),
                                 after->description);
         }
         /*  N.B. = entry will be deleted at list destruction */

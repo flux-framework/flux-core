@@ -8,12 +8,16 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
 #include <string.h>
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
+#include "ccan/str/str.h"
 
 int main (int argc, char *argv[])
 {
@@ -41,9 +45,9 @@ int main (int argc, char *argv[])
     ok (flux_request_unpack (msg, &topic, "{s:s s:i}",
                              "reason", &reason, "flags", &flags) == 0,
         "flux_request_unpack worked on panic request");
-    ok (topic != NULL && !strcmp (topic, "broker.panic"),
+    ok (topic != NULL && streq (topic, "broker.panic"),
         "topic string is correct");
-    ok (!strcmp (reason, "fubar"),
+    ok (streq (reason, "fubar"),
         "reason is correct");
     ok (flags == 0,
         "flags is correct");

@@ -17,7 +17,7 @@
  * At startup this module is registered as a builtin shell plugin under
  * the name "pmi" via an entry in builtins.c builtins array.
  *
- * At shell "init", the plugin intiailizes a PMI object including the
+ * At shell "init", the plugin initializes a PMI object including the
  * pmi simple server and empty local kvs cache.
  *
  * During each task's "task init" callback, the pmi plugin sets up the
@@ -50,7 +50,7 @@
  * - Teardown of the subprocess channel is deferred until task completion,
  *   although client closes its end after PMI_Finalize().
  */
-#define FLUX_SHELL_PLUGIN_NAME "pmi"
+#define FLUX_SHELL_PLUGIN_NAME "pmi-simple"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -58,6 +58,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <argz.h>
 #include <flux/core.h>
 #include <jansson.h>
 
@@ -205,7 +206,7 @@ static int native_kvs_put (void *arg,
 
     /* Hack to support "node scope" for partial PMI2 impl needed for Cray.
      */
-    if (strncmp (key, "local::", 7) == 0)
+    if (strstarts (key, "local::"))
         return put_dict (pmi->locals, key, val);
     return put_dict (pmi->pending, key, val);
 }
@@ -320,7 +321,7 @@ static int exchange_kvs_put (void *arg,
 
     /* Hack to support "node scope" for partial PMI2 impl needed for Cray.
      */
-    if (strncmp (key, "local::", 7) == 0)
+    if (strstarts (key, "local::"))
         return put_dict (pmi->locals, key, val);
     return put_dict (pmi->pending, key, val);
 }
@@ -513,14 +514,14 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell, json_t *config)
 
     if (parse_args (config, &exchange_k, &kvs, &nomap) < 0)
         goto error;
-    if (!strcmp (kvs, "native")) {
+    if (streq (kvs, "native")) {
         shell_pmi_ops.kvs_put = native_kvs_put;
         shell_pmi_ops.kvs_get = native_kvs_get;
         shell_pmi_ops.barrier_enter = native_barrier_enter;
         if (shell->info->shell_rank == 0)
             shell_warn ("using native Flux kvs implementation");
     }
-    else if (!strcmp (kvs, "exchange")) {
+    else if (streq (kvs, "exchange")) {
         shell_pmi_ops.kvs_put = exchange_kvs_put;
         shell_pmi_ops.kvs_get = exchange_kvs_get;
         shell_pmi_ops.barrier_enter = exchange_barrier_enter;
@@ -570,6 +571,25 @@ error:
     return NULL;
 }
 
+static bool member_of_csv (const char *list, const char *name)
+{
+    char *argz = NULL;
+    size_t argz_len;
+
+    if (argz_create_sep (list, ',', &argz, &argz_len) == 0) {
+        const char *entry = NULL;
+
+        while ((entry = argz_next (argz, argz_len, entry))) {
+            if (streq (entry, name)) {
+                free (argz);
+                return true;
+            }
+        }
+        free (argz);
+    }
+    return false;
+}
+
 static int shell_pmi_init (flux_plugin_t *p,
                            const char *topic,
                            flux_plugin_arg_t *arg,
@@ -578,15 +598,38 @@ static int shell_pmi_init (flux_plugin_t *p,
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct shell_pmi *pmi;
     json_t *config = NULL;
+    const char *pmi_opt = NULL;
+    bool enable = false;
 
-    if (flux_shell_getopt_unpack (shell, "pmi", "o", &config) < 0)
-        return -1;
-    if (config && json_is_string (config)) {
-        if (streq (json_string_value (config), "off"))
-            return 0; // plugin disabled
-        shell_log_error ("unknown option: '%s'", json_string_value (config));
+    if (flux_shell_getopt_unpack (shell, "pmi", "s", &pmi_opt) < 0) {
+        shell_log_error ("pmi shell option must be a string");
         return -1;
     }
+    if (flux_shell_getopt_unpack (shell, "pmi-simple", "o", &config) < 0) {
+        shell_log_error ("error parsing pmi-simple shell option");
+        return -1;
+    }
+    /* This plugin is disabled _only_ if '-opmi=LIST' was specified without
+     * "simple" in LIST.  "pmi1" and "pmi2" are considered aliases for
+     * "simple" - see flux-framework/flux-core#5226.
+     */
+    if (pmi_opt) {
+        if (member_of_csv (pmi_opt, "simple"))
+            enable = true;
+        else if (member_of_csv (pmi_opt, "pmi2")) {
+            shell_debug ("pmi2 is interpreted as an alias for simple");
+            enable = true;
+        }
+        else if (member_of_csv (pmi_opt, "pmi1")) {
+            shell_debug ("pmi1 is interpreted as an alias for simple");
+            enable = true;
+        }
+    }
+    else
+        enable = true;
+    if (!enable)
+        return 0; // plugin disabled
+    shell_debug ("simple wire protocol is enabled");
 
     if (!(pmi = pmi_create (shell, config)))
         return -1;

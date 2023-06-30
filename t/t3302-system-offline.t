@@ -12,7 +12,7 @@ confirm that the user gets a reasonable error.
 . `dirname $0`/sharness.sh
 
 export TEST_UNDER_FLUX_TOPO=kary:1
-export TEST_UNDER_FLUX_QUORUM=0
+export TEST_UNDER_FLUX_QUORUM=1
 export TEST_UNDER_FLUX_START_MODE=leader
 
 test_under_flux 3 system
@@ -39,6 +39,12 @@ test_expect_success 'flux uptime on rank 2 reports join state' '
 		"FLUX_URI=$(echo $FLUX_URI | sed s/local-0/local-2/) \
 			flux uptime" >uptime.out &&
 	grep join uptime.out
+'
+
+test_expect_success 'flux dmesg on rank 2 works' '
+	bash -c \
+		"FLUX_URI=$(echo $FLUX_URI | sed s/local-0/local-2/) \
+			flux dmesg" >/dev/null
 '
 
 test_done

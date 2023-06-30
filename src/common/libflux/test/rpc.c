@@ -17,6 +17,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
 #include "src/common/libtestutil/util_rpc.h"
+#include "ccan/str/str.h"
 
 /* increment integer and send it back */
 void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -84,7 +85,7 @@ void rpctest_echo_error_cb (flux_t *h, flux_msg_handler_t *mh,
     int errnum;
     const char *errstr = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s?:s}",
+    if (flux_request_unpack (msg, NULL, "{s:i s?s}",
                              "errnum", &errnum, "errstr", &errstr) < 0)
         goto error;
     if (errstr) {
@@ -307,7 +308,7 @@ void test_service (flux_t *h)
     ok (msg != NULL,
         "flux_recv matched response");
     rc = flux_msg_get_topic (msg, &topic);
-    ok (rc == 0 && !strcmp (topic, "rpctest.hello"),
+    ok (rc == 0 && streq (topic, "rpctest.hello"),
         "response has expected topic %s", topic);
     rc = flux_msg_get_matchtag (msg, &matchtag);
     ok (rc == 0 && matchtag == 1,
@@ -377,7 +378,7 @@ void test_error (flux_t *h)
     ok (flux_rpc_get (f, NULL) < 0 && errno == 69,
         "flux_rpc_get failed with expected errno");
     errstr = flux_future_error_string (f);
-    ok (errstr != NULL && !strcmp (errstr, "Hello world"),
+    ok (errstr != NULL && streq (errstr, "Hello world"),
         "flux_rpc_get_error returned expected error string");
     flux_future_destroy (f);
 
@@ -395,7 +396,7 @@ void test_error (flux_t *h)
     ok (flux_rpc_get (f, NULL) < 0 && errno == ENOTDIR,
         "flux_rpc_get failed with expected errno");
     errstr = flux_future_error_string (f);
-    ok (errstr != NULL && !strcmp (errstr, "Not a directory"),
+    ok (errstr != NULL && streq (errstr, "Not a directory"),
         "flux_future_error_string returned ENOTDIR strerror string");
     flux_future_destroy (f);
 }
@@ -455,7 +456,7 @@ void test_encoding (flux_t *h)
         "flux_rpc with payload when payload is expected works");
     json_str = NULL;
     ok (flux_rpc_get (r, &json_str) == 0
-        && json_str && !strcmp (json_str, "{}"),
+        && json_str && streq (json_str, "{}"),
         "flux_rpc_get works and returned expected payload");
     flux_future_destroy (r);
 
@@ -529,7 +530,7 @@ static void then_cb (flux_future_t *r, void *arg)
         "flux_future_wait_for works (ready) in continuation");
     json_str = NULL;
     ok (flux_rpc_get (r, &json_str) == 0
-        && json_str && !strcmp (json_str, "{}"),
+        && json_str && streq (json_str, "{}"),
         "flux_rpc_get works and returned expected payload in continuation");
     flux_reactor_stop (flux_get_reactor (h));
 }
@@ -547,13 +548,13 @@ void test_then (flux_t *h)
         "reactor completed normally");
     flux_future_destroy (r);
 
-    /* ensure contination is called if "get" called before "then"
+    /* ensure continuation is called if "get" called before "then"
      */
     ok ((r = flux_rpc (h, "rpctest.echo", "{}", FLUX_NODEID_ANY, 0)) != NULL,
         "flux_rpc with payload when payload is expected works");
     json_str = NULL;
     ok (flux_rpc_get (r, &json_str) == 0
-        && json_str && !strcmp (json_str, "{}"),
+        && json_str && streq (json_str, "{}"),
         "flux_rpc_get works synchronously and returned expected payload");
     ok (flux_future_then (r, -1., then_cb, h) == 0,
         "flux_future_then works");
@@ -900,7 +901,7 @@ static int fake_server (flux_t *h, void *arg)
     while ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL) {
         const char *topic = "unknown";
         (void)flux_msg_get_topic (msg, &topic);
-        if (!strcmp (topic, "shutdown"))
+        if (streq (topic, "shutdown"))
             break;
         flux_msg_destroy (msg);
     }

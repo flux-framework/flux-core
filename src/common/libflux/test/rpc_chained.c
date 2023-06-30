@@ -14,6 +14,7 @@
 #include <flux/core.h>
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
+#include "ccan/str/str.h"
 
 void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
@@ -300,7 +301,7 @@ void test_or_then (flux_t *h)
     cmp_ok (rc, "<", 0, "or-then: flux_future_get on composite returns < 0");
     cmp_ok (errno, "==", EPROTO, "or-then: errno is expected");
     errmsg = flux_future_error_string (f2);
-    ok (!strcmp (errmsg, "Protocol error"),
+    ok (streq (errmsg, "Protocol error"),
         "or-then: error string reported correctly");
     flux_future_destroy (f2);
 }
@@ -336,7 +337,7 @@ void test_or_then_error_string (flux_t *h)
     cmp_ok (rc, "<", 0, "or-then: flux_future_get on composite returns < 0");
     cmp_ok (errno, "==", EPROTO, "or-then: errno is expected");
     errmsg = flux_future_error_string (f2);
-    ok (!strcmp (errmsg, "my errstr"),
+    ok (streq (errmsg, "my errstr"),
         "or-then: error string reported correctly");
     flux_future_destroy (f2);
 }

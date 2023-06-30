@@ -20,7 +20,7 @@
  * attributes.system.exec.bulkexec object. Supported keys include
  *
  * {
- *    "mock_exception":s       - Generate a mock execption in phase:
+ *    "mock_exception":s       - Generate a mock exception in phase:
  *                               "init", or "starting"
  * }
  *
@@ -31,6 +31,9 @@
 #endif
 
 #include <unistd.h>
+
+#include "src/common/libjob/idf58.h"
+#include "ccan/str/str.h"
 
 #include "job-exec.h"
 #include "exec_config.h"
@@ -53,7 +56,11 @@ struct exec_ctx {
 
 static void exec_ctx_destroy (struct exec_ctx *tc)
 {
-    free (tc);
+    if (tc) {
+        int saved_errno = errno;
+        free (tc);
+        errno = saved_errno;
+    }
 }
 
 static struct exec_ctx *exec_ctx_create (json_t *jobspec)
@@ -81,27 +88,6 @@ static void start_cb (struct bulk_exec *exec, void *arg)
 {
     struct jobinfo *job = arg;
     jobinfo_started (job);
-    /*  This is going to be really slow. However, it should at least
-     *   work for now. We wait for all imp's to start, then send input
-     */
-    if (job->multiuser) {
-        char *input = NULL;
-        json_t *o = json_pack ("{s:s}", "J", job->J);
-        if (!o || !(input = json_dumps (o, JSON_COMPACT))) {
-            jobinfo_fatal_error (job, errno, "Failed to get input to IMP");
-            goto out;
-        }
-        if (bulk_exec_write (exec, "stdin", input, strlen (input)) < 0)
-            jobinfo_fatal_error (job,
-                                 errno,
-                                 "Failed to write %ld bytes input to IMP",
-                                 strlen (input));
-        (void) bulk_exec_close (exec, "stdin");
-out:
-        json_decref (o);
-        free (input);
-    }
-
 }
 
 static void complete_cb (struct bulk_exec *exec, void *arg)
@@ -115,13 +101,11 @@ static void complete_cb (struct bulk_exec *exec, void *arg)
 static int exec_barrier_enter (struct bulk_exec *exec)
 {
     struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
+
     if (!ctx)
         return -1;
     if (++ctx->barrier_enter_count == bulk_exec_total (exec)) {
-        if (bulk_exec_write (exec,
-                             "FLUX_EXEC_PROTOCOL_FD",
-                             "exit=0\n",
-                             7) < 0)
+        if (bulk_exec_write (exec, "stdin", "exit=0\n", 7) < 0)
             return -1;
         ctx->barrier_enter_count = 0;
         ctx->barrier_completion_count++;
@@ -133,10 +117,7 @@ static int exec_barrier_enter (struct bulk_exec *exec)
          *   case where a shell exits while a barrier is already in progress
          *   is handled in exit_cb().
          */
-        if (bulk_exec_write (exec,
-                             "FLUX_EXEC_PROTOCOL_FD",
-                             "exit=1\n",
-                             7) < 0)
+        if (bulk_exec_write (exec, "stdin", "exit=1\n", 7) < 0)
             return -1;
     }
     return 0;
@@ -151,8 +132,8 @@ static void output_cb (struct bulk_exec *exec, flux_subprocess_t *p,
     struct jobinfo *job = arg;
     const char *cmd = flux_cmd_arg (flux_subprocess_get_cmd (p), 0);
 
-    if (strcmp (stream, "FLUX_EXEC_PROTOCOL_FD") == 0) {
-        if (strcmp (data, "enter\n") == 0
+    if (streq (stream, "stdout")) {
+        if (streq (data, "enter\n")
             && exec_barrier_enter (exec) < 0) {
             jobinfo_fatal_error (job,
                                  errno,
@@ -221,23 +202,26 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
      *   create flux_cmd_t
      */
     if (cmd) {
-        const char *errmsg = "job shell execution error";
         if (errnum == EHOSTUNREACH) {
             if (!idset_test (job->critical_ranks, shell_rank)
                 && lost_shell (job, shell_rank, hostname) == 0)
                 return;
-            errmsg = "lost contact with job shell";
-            errnum = 0;
+            jobinfo_fatal_error (job,
+                                0,
+                                "%s on broker %s (rank %d)",
+                                "lost contact with job shell",
+                                hostname,
+                                rank);
         }
-        else
-            errmsg = "job shell exec error";
-
-        jobinfo_fatal_error (job,
-                             errnum,
-                             "%s on broker %s (rank %d)",
-                             errmsg,
-                             hostname,
-                             rank);
+        else {
+            jobinfo_fatal_error (job,
+                                 errnum,
+                                 "%s on broker %s (rank %d): %s",
+                                 "job shell exec error",
+                                 hostname,
+                                 rank,
+                                 flux_cmd_arg (cmd, 0));
+        }
     }
     else
         jobinfo_fatal_error (job,
@@ -288,10 +272,7 @@ static void exit_cb (struct bulk_exec *exec,
      */
     if (ctx->barrier_completion_count == 0
         || ctx->barrier_enter_count > 0) {
-        if (bulk_exec_write (exec,
-                             "FLUX_EXEC_PROTOCOL_FD",
-                             "exit=1\n",
-                             7) < 0)
+        if (bulk_exec_write (exec, "stdin", "exit=1\n", 7) < 0)
             jobinfo_fatal_error (job, 0,
                                  "failed to terminate barrier: %s",
                                  strerror (errno));
@@ -334,6 +315,7 @@ static int exec_init (struct jobinfo *job)
     }
     if (bulk_exec_aux_set (exec, "ctx", ctx,
                           (flux_free_f) exec_ctx_destroy) < 0) {
+        exec_ctx_destroy (ctx);
         flux_log_error (job->h, "exec_init: bulk_exec_aux_set");
         goto err;
     }
@@ -346,6 +328,14 @@ static int exec_init (struct jobinfo *job)
         goto err;
     }
     if (job->multiuser) {
+        if (flux_cmd_setenvf (cmd,
+                              1,
+                              "FLUX_IMP_EXEC_HELPER",
+                              "flux imp-exec-helper %ju",
+                              (uintmax_t) job->id) < 0) {
+            flux_log_error (job->h, "exec_init: flux_cmd_setenvf");
+            goto err;
+        }
         if (flux_cmd_argv_append (cmd, config_get_imp_path ()) < 0
             || flux_cmd_argv_append (cmd, "exec") < 0) {
             flux_log_error (job->h, "exec_init: flux_cmd_argv_append");
@@ -356,19 +346,6 @@ static int exec_init (struct jobinfo *job)
         || flux_cmd_argv_appendf (cmd, "%ju", (uintmax_t) job->id) < 0) {
         flux_log_error (job->h, "exec_init: flux_cmd_argv_append");
         goto err;
-    }
-
-    /*  If more than one shell is involved in this job, set up a channel
-     *   for exec system based barrier:
-     */
-    if (idset_count (ranks) > 1) {
-        if (flux_cmd_add_channel (cmd, "FLUX_EXEC_PROTOCOL_FD") < 0
-            || flux_cmd_setopt (cmd,
-                                "FLUX_EXEC_PROTOCOL_FD_LINE_BUFFER",
-                                "true") < 0) {
-            flux_log_error (job->h, "exec_init: flux_cmd_add_channel");
-            goto err;
-        }
     }
     if (bulk_exec_push_cmd (exec, ranks, cmd, 0) < 0) {
         flux_log_error (job->h, "exec_init: bulk_exec_push_cmd");
@@ -403,7 +380,7 @@ static int exec_start (struct jobinfo *job)
 {
     struct bulk_exec *exec = job->data;
 
-    if (strcmp (exec_mock_exception (exec), "init") == 0) {
+    if (streq (exec_mock_exception (exec), "init")) {
         /* If creating an "init" mock exception, generate it and
          *  then return to simulate an exception that came in before
          *  we could actually start the job
@@ -411,7 +388,7 @@ static int exec_start (struct jobinfo *job)
         jobinfo_fatal_error (job, 0, "mock init exception generated");
         return 0;
     }
-    else if (strcmp (exec_mock_exception (exec), "starting") == 0) {
+    else if (streq (exec_mock_exception (exec), "starting")) {
         /*  If we're going to mock an exception in "starting" phase, then
          *   set up a check watcher to cancel the job when some shells have
          *   started but (potentially) not all.
@@ -445,18 +422,20 @@ static int exec_kill (struct jobinfo *job, int signum)
         f = bulk_exec_kill (exec, signum);
     if (!f) {
         if (errno != ENOENT)
-            flux_log_error (job->h, "%ju: bulk_exec_kill", job->id);
+            flux_log_error (job->h, "%s: bulk_exec_kill", idf58 (job->id));
         return 0;
     }
 
     flux_log (job->h, LOG_DEBUG,
-              "exec_kill: %ju: signal %d",
-              (uintmax_t) job->id,
+              "exec_kill: %s: signal %d",
+              idf58 (job->id),
               signum);
 
     jobinfo_incref (job);
     if (flux_future_then (f, 3., exec_kill_cb, job) < 0) {
-        flux_log_error (job->h, "%ju: exec_kill: flux_future_then", job->id);
+        flux_log_error (job->h,
+                        "%s: exec_kill: flux_future_then",
+                        idf58 (job->id));
         flux_future_destroy (f);
         return -1;
     }

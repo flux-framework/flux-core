@@ -20,6 +20,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libidset/idset_private.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 struct inout {
     const char *in;
@@ -115,7 +116,7 @@ void test_codec (void)
                 "idset_decode '%s' works", ip->in);
             if (idset != NULL) {
                 char *s = idset_encode (idset, ip->flags);
-                bool match = (s && !strcmp (s, ip->out));
+                bool match = (s && streq (s, ip->out));
                 ok (match == true,
                     "idset_encode flags=0x%x '%s'->'%s' works",
                     ip->flags, ip->in, ip->out);
@@ -690,13 +691,13 @@ void test_format_first (void)
     char buf[64];
 
     ok (format_first (buf, sizeof (buf), "[]xyz", 42) == 0
-        && !strcmp (buf, "42xyz"),
+        && streq (buf, "42xyz"),
         "format_first works with leading idset");
     ok (format_first (buf, sizeof (buf), "abc[]xyz", 42) == 0
-        && !strcmp (buf, "abc42xyz"),
+        && streq (buf, "abc42xyz"),
         "format_first works with mid idset");
     ok (format_first (buf, sizeof (buf), "abc[]", 42) == 0
-        && !strcmp (buf, "abc42"),
+        && streq (buf, "abc42"),
         "format_first works with end idset");
 
     errno = 0;

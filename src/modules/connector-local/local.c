@@ -90,6 +90,11 @@ static int client_authenticate (struct connector_local *ctx,
         errno = EPERM;
         goto error;
     }
+    /* Tack on FLUX_ROLE_LOCAL to indicate that this message was
+     * accepted by the local connector.  This role is cleared when
+     * the message is received by another broker.
+     */
+    rolemask |= FLUX_ROLE_LOCAL;
     /* Test hook: drop owner cred for one connection.
      */
     if (flux_module_debug_test (ctx->h, DEBUG_OWNERDROP_ONESHOT, true)) {
@@ -106,7 +111,7 @@ error:
     return -1;
 }
 
-/* Usock client encouters an error.
+/* Usock client encounters an error.
  */
 static void uconn_error (struct usock_conn *uconn, int errnum, void *arg)
 {
@@ -213,7 +218,7 @@ int parse_config (struct connector_local *ctx,
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?:{s?:b s?:b !}}",
+                          "{s?{s?b s?b !}}",
                           "access",
                             "allow-guest-user",
                             &allow_guest_user,
@@ -337,8 +342,6 @@ done:
     router_destroy (ctx.router);
     return rc;
 }
-
-MOD_NAME ("connector-local");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

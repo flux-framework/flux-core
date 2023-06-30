@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -705,9 +708,71 @@ static void test_buffer (flux_reactor_t *reactor)
 
 struct buffer_fd_close
 {
+    flux_watcher_t *w;
     int count;
     int fd;
 };
+
+static void buffer_decref (flux_reactor_t *r,
+                           flux_watcher_t *w,
+                           int revents,
+                           void *arg)
+{
+    struct buffer_fd_close *bfc = arg;
+    bfc->count++;
+    flux_buffer_read_watcher_decref (bfc->w);
+    ok (true, "flux_buffer_read_watcher_decref");
+    flux_watcher_destroy (w);
+}
+
+static void buffer_read_fd_decref (flux_reactor_t *r,
+                                   flux_watcher_t *w,
+                                   int revents,
+                                   void *arg)
+{
+    struct buffer_fd_close *bfc = arg;
+    flux_buffer_t *fb;
+    const void *ptr;
+    int len;
+
+    if (revents & FLUX_POLLERR) {
+        fail ("buffer decref: got FLUX_POLLERR");
+        return;
+    }
+    if (!(revents & FLUX_POLLIN)) {
+        fail ("buffer decref: got FLUX_POLLERR");
+        return;
+    }
+
+    fb = flux_buffer_read_watcher_get_buffer (w);
+    ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
+        "buffer decref: read from buffer success");
+    if (!bfc->count) {
+        flux_watcher_t *w;
+        ok (len == 6,
+            "buffer decref: read returned correct length");
+        ok (!memcmp (ptr, "foobar", 6),
+            "buffer decref: read returned correct data");
+        diag ("closing write side of read buffer");
+        close (bfc->fd);
+
+        /* Schedule decref of read buffer
+         */
+        w = flux_timer_watcher_create (r, 0.01, 0., buffer_decref, bfc);
+        flux_watcher_start (w);
+    }
+    else {
+        ok (bfc->count == 2,
+            "buffer decref: EOF called only after manual decref");
+        ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
+            "buffer decref: read from buffer success");
+
+        ok (len == 0,
+            "buffer decref: read returned 0, socketpair is closed");
+        flux_watcher_stop (w);
+    }
+    bfc->count++;
+}
 
 static void buffer_read_fd_close (flux_reactor_t *r, flux_watcher_t *w,
                                   int revents, void *arg)
@@ -860,6 +925,49 @@ static void buffer_read_line_fd_close_and_left_over_data (flux_reactor_t *r,
     if (bfc->count == 3)
         flux_watcher_stop (w);
     return;
+}
+
+static void test_buffer_refcnt (flux_reactor_t *reactor)
+{
+    int fd[2];
+    flux_watcher_t *w;
+    struct buffer_fd_close bfc;
+
+    /* read buffer decref test - other end closes stream */
+
+    ok (socketpair (PF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0, fd) == 0,
+        "buffer decref: successfully created socketpair");
+
+    bfc.count = 0;
+    bfc.fd = fd[1];
+    w = flux_buffer_read_watcher_create (reactor,
+                                         fd[0],
+                                         1024,
+                                         buffer_read_fd_decref,
+                                         0,
+                                         &bfc);
+    ok (w != NULL,
+        "buffer decref: read created");
+    bfc.w = w;
+
+    ok (write (fd[1], "foobar", 6) == 6,
+        "buffer decref: write to socketpair success");
+
+    flux_watcher_start (w);
+
+    diag ("calling flux_buffer_read_watcher_incref");
+    flux_buffer_read_watcher_incref (w);
+
+    ok (flux_reactor_run (reactor, 0) == 0,
+        "buffer decref: reactor ran to completion");
+
+    ok (bfc.count == 3,
+        "buffer decref: read callback successfully called thrice");
+
+    flux_watcher_stop (w);
+    flux_watcher_destroy (w);
+
+    close (fd[0]);
 }
 
 static void test_buffer_corner_case (flux_reactor_t *reactor)
@@ -1518,6 +1626,7 @@ int main (int argc, char *argv[])
     test_periodic (reactor);
     test_fd (reactor);
     test_buffer (reactor);
+    test_buffer_refcnt (reactor);
     test_buffer_corner_case (reactor);
     test_idle (reactor);
     test_prepcheck (reactor);

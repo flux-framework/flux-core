@@ -18,7 +18,8 @@
 #include <assert.h>
 #include <stdio.h>
 
-#include "src/common/libccan/ccan/str/hex/hex.h"
+#include "ccan/str/str.h"
+#include "ccan/str/hex/hex.h"
 
 #include "blobref.h"
 #include "sha1.h"
@@ -88,12 +89,14 @@ static void sha256_hash (const void *data, int data_len, void *hash, int hash_le
 
 /* true if s1 contains "s2-" prefix
  */
-static int prefixmatch (const char *s1, const char *s2)
+static bool prefixmatch (const char *s1, const char *s2)
 {
-    int len = strlen (s2);
-    if (strlen (s1) < len + 1 || s1[len] != '-')
-        return 0;
-    return !strncmp (s1, s2, len);
+    if (!strstarts (s1, s2))
+        return false;
+    s1 += strlen (s2);
+    if (*s1 != '-')
+        return false;
+    return true;
 }
 
 static struct blobhash *lookup_blobhash (const char *name)
@@ -101,7 +104,7 @@ static struct blobhash *lookup_blobhash (const char *name)
     struct blobhash *bh;
 
     for (bh = &blobtab[0]; bh->name != NULL; bh++)
-        if (!strcmp (name, bh->name) || prefixmatch (name, bh->name))
+        if (streq (name, bh->name) || prefixmatch (name, bh->name))
             return bh;
     return NULL;
 }

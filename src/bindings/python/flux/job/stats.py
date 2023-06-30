@@ -78,6 +78,12 @@ class JobStats:
         self.running = self.run + self.cleanup
         self.active = self.total - self.inactive
 
+        # This class reports the total number of unsuccessful jobs in
+        # the 'failed' attribute, not just the count of jobs that ran
+        # to completion with nonzero exit code
+        self.failed += self.timeout
+        self.failed += self.canceled
+
         if self.callback:
             self.callback(self, **self.cb_kwargs)
 

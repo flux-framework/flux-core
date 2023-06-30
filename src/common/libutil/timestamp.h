@@ -22,6 +22,17 @@ int timestamp_tostr (time_t t, char *buf, int size);
  */
 int timestamp_fromstr (const char *s, time_t *tp);
 
+/* Convert from ISO 8601 timestamp string, including optional
+ * microsecond precision, to struct tm, timeval pair.
+ *
+ * e.g. "2022-10-15T14:43:18.159009Z"
+ *
+ * At least one of 'tm' or 'tv' must be provided.
+ */
+int timestamp_parse (const char *s,
+                     struct tm *tm,
+                     struct timeval *tv);
+
 
 #endif /* !_UTIL_TIMESTAMP_H */
 

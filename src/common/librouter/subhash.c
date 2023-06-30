@@ -18,7 +18,7 @@
  * its subscriptions.
  *
  * The router entry (client) has its sh->sub() / sh->unsub() callbacks wired
- * to the router's subhash_subcribe() / subhash_unsubscribe() functions,
+ * to the router's subhash_subscribe() / subhash_unsubscribe() functions,
  * while the router's sh->sub() / sh->unsub() callbacks are wired to the
  * real flux_event_subscribe() / flux_event_unsubscribe().
  *
@@ -40,6 +40,7 @@
 
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "subhash.h"
 
@@ -94,18 +95,6 @@ error:
     return NULL;
 }
 
-/* sub="" matches all
- * sub="foo" matches "foo", "foobar", "foo.bar"
- */
-static bool match_event (const char *sub_topic, const char *msg_topic)
-{
-    int len = strlen (sub_topic);
-
-    if (!strncmp (sub_topic, msg_topic, len))
-        return true;
-    return false;
-}
-
 bool subhash_topic_match (struct subhash *sh, const char *topic)
 {
     struct subhash_entry *entry;
@@ -113,7 +102,10 @@ bool subhash_topic_match (struct subhash *sh, const char *topic)
     if (sh && topic) {
         entry = zhashx_first (sh->subs);
         while (entry) {
-            if (match_event  (entry->topic, topic))
+            /* entry->topic="" matches all
+             * entry->topic="foo" matches "foo", "foobar", "foo.bar"
+             */
+            if (strstarts (topic, entry->topic))
                 return true;
             entry = zhashx_next (sh->subs);
         }

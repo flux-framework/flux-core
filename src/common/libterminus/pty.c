@@ -16,14 +16,14 @@
  *  PROTOCOL:
  *
  *  Client attach to server:
- *  { "type":"attach", "mode":s, "winsize":{"rows":i,"colums":i}}
+ *  { "type":"attach", "mode":s, "winsize":{"rows":i,"columns":i}}
  *  where mode is one of "rw", "ro", or "rw"
  *
  *  Server response to attach:
  *  { "type":"attach" }
  *
  *  Resize request: (client->server or server->client)
- *  { "type":"resize", "winsize"?{"rows":i,"colums":i} }
+ *  { "type":"resize", "winsize"?{"rows":i,"columns":i} }
  *
  *  Client/server write raw data to tty (string is utf-8)
  *  { "type":"data", "data":s% }
@@ -56,6 +56,7 @@
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/aux.h"
+#include "ccan/str/str.h"
 
 #define LLOG_SUBSYSTEM "pty"
 #include "src/common/libutil/llog.h"
@@ -128,7 +129,7 @@ static struct pty_client *pty_client_find (struct flux_pty *pty,
 {
     struct pty_client *c = zlist_first (pty->clients);
     while (c) {
-        if (strcmp (c->uuid, uuid) == 0)
+        if (streq (c->uuid, uuid))
             break;
         c = zlist_next (pty->clients);
     }
@@ -208,9 +209,11 @@ int flux_pty_kill (struct flux_pty *pty, int sig)
         pty->wait_for_client = false;
         pty->wait_on_close = false;
     }
+#ifdef TIOCSIG
     if (ioctl (pty->leader, TIOCSIG, sig) >= 0)
         return 0;
     llog_debug (pty, "ioctl (TIOCSIG): %s", strerror (errno));
+#endif
     if (ioctl (pty->leader, TIOCGPGRP, &pgrp) >= 0
         && pgrp > 0
         && kill (-pgrp, sig) >= 0)
@@ -422,6 +425,12 @@ void pty_client_send_data (struct flux_pty *pty, void *data, int len)
     }
 }
 
+void pty_client_monitor_send_eof (struct flux_pty *pty)
+{
+    if (pty->monitor)
+        (*pty->monitor) (pty, NULL, 0);
+}
+
 static void pty_read (flux_reactor_t *r,
                       flux_watcher_t *w,
                       int revents,
@@ -449,6 +458,7 @@ static void pty_read (flux_reactor_t *r,
             flux_watcher_stop (pty->fdw);
             pty->wait_on_close = false;
             check_pty_complete (pty);
+            pty_client_monitor_send_eof (pty);
             return;
         }
         llog_error (pty, "read: %s", strerror (errno));
@@ -510,11 +520,11 @@ static int pty_client_set_mode (struct flux_pty *pty,
     if (flux_msg_unpack (msg, "{s:s}", "mode", &mode) < 0)
         return -1;
     /*  Valid modes are currently only "ro", "wo", "rw" */
-    if (strcmp (mode, "rw") == 0)
+    if (streq (mode, "rw"))
         c->read_enabled = c->write_enabled = true;
-    else if (strcmp (mode, "wo") == 0)
+    else if (streq (mode, "wo"))
         c->write_enabled = true;
-    else if (strcmp (mode, "ro") == 0)
+    else if (streq (mode, "ro"))
         c->read_enabled = true;
     else {
         llog_error (pty, "client=%s: invalid mode: %s", c->uuid, mode);
@@ -598,7 +608,7 @@ int flux_pty_sendmsg (struct flux_pty *pty, const flux_msg_t *msg)
     llog_debug (pty, "msg: userid=%u type=%s", userid, type);
     c = pty_client_find_sender (pty, msg);
 
-    if (strcmp (type, "attach") == 0) {
+    if (streq (type, "attach")) {
         /* It is an error for the same client to attach more than once */
         if (c != NULL) {
             errno = EEXIST;
@@ -620,17 +630,17 @@ int flux_pty_sendmsg (struct flux_pty *pty, const flux_msg_t *msg)
         errno = ENOENT;
         goto err;
     }
-    else if (strcmp (type, "resize") == 0) {
+    else if (streq (type, "resize")) {
        if (pty_resize (pty, msg) < 0)
             goto err;
     }
-    else if (strcmp (type, "data") == 0) {
+    else if (streq (type, "data")) {
         if (c->write_enabled && pty_write (pty, msg) < 0) {
             llog_error (pty, "pty_write: %s", strerror (errno));
             goto err;
         }
     }
-    else if (strcmp (type, "detach") == 0) {
+    else if (streq (type, "detach")) {
         if (pty_client_detach (pty, c) < 0)
             goto err;
         if (zlist_size (pty->clients) == 0)

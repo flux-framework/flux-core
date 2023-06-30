@@ -108,6 +108,12 @@ test_expect_success 'logged non-ascii characters handled ok' '
 	echo -n -e "\xFF\xFE\x82\x00" | flux logger &&
 	flux dmesg
 '
+test_expect_success 'logged non-ascii printable characters are unmodified' '
+	flux logger ƒ Φ Ψ Ω Ö &&
+	flux dmesg | tail -1 > dmesg.utf-8 &&
+	test_debug "cat dmesg.utf-8" &&
+	grep "ƒ Φ Ψ Ω Ö" dmesg.utf-8
+'
 test_expect_success 'dmesg request with empty payload fails with EPROTO(71)' '
 	${RPC} log.dmesg 71 </dev/null
 '

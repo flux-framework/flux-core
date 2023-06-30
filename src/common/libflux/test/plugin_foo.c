@@ -36,9 +36,11 @@ static const struct flux_plugin_handler tab []= {
 
 int flux_plugin_init (flux_plugin_t *p)
 {
+    int fail = 0;
     if (flux_plugin_register (p, "plugin-test", tab) < 0)
         return -1;
-    return 0;
+    (void) flux_plugin_conf_unpack (p, "{s?i}", "fail", &fail);
+    return fail ? -1 : 0;
 }
 
 /* vi: ts=4 sw=4 expandtab

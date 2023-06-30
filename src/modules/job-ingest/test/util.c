@@ -16,6 +16,7 @@
 #include <errno.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 #include "util.h"
 
@@ -27,7 +28,7 @@ void test_join (void)
     if (!(o = json_pack ("[s]", "foo")))
         BAIL_OUT ("could not create json array");
     s = util_join_arguments (o);
-    ok (s && !strcmp (s, "foo"),
+    ok (s && streq (s, "foo"),
         "util_join_arguments [foo] works");
     free (s);
     json_decref (o);
@@ -35,7 +36,7 @@ void test_join (void)
     if (!(o = json_pack ("[sss]", "foo", "bar", "baz")))
         BAIL_OUT ("could not create json array");
     s = util_join_arguments (o);
-    ok (s && !strcmp (s, "foo,bar,baz"),
+    ok (s && streq (s, "foo,bar,baz"),
         "util_join_arguments [foo,bar,baz] works");
     free (s);
     json_decref (o);
@@ -43,7 +44,7 @@ void test_join (void)
     if (!(o = json_array ()))
         BAIL_OUT ("could not create json array");
     s = util_join_arguments (o);
-    ok (s && !strcmp (s, ""),
+    ok (s && streq (s, ""),
         "util_join_arguments [] works");
     free (s);
     json_decref (o);

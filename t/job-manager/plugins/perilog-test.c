@@ -17,6 +17,7 @@
 
 #include <flux/core.h>
 #include <flux/jobtap.h>
+#include "ccan/str/str.h"
 
 struct perilog_data {
     flux_plugin_t *p;
@@ -90,7 +91,7 @@ static int cb (flux_plugin_t *p,
     flux_jobid_t id;
     struct perilog_data *d;
     int rc;
-    int prolog = strcmp (topic, "job.state.run") == 0;
+    int prolog = streq (topic, "job.state.run");
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,

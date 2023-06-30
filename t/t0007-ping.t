@@ -17,23 +17,23 @@ test_expect_success 'ping: 10K 1K byte echo requests' '
 '
 
 test_expect_success 'ping: 1K 10K byte echo requests' '
-	run_timeout 15 flux ping --pad 10240 --count 1024 --interval 0 0
+	run_timeout 15 flux ping --pad 10K --count 1024 --interval 0 0
 '
 
 test_expect_success 'ping: 100 100K byte echo requests' '
-	run_timeout 15 flux ping --pad 102400 --count 100 --interval 0 0
+	run_timeout 15 flux ping --pad 100K --count 100 --interval 0 0
 '
 
 test_expect_success 'ping: 10 1M byte echo requests' '
-	run_timeout 15 flux ping --pad 1048576 --count 10 --interval 0 0
+	run_timeout 15 flux ping --pad 1M --count 10 --interval 0 0
 '
 
 test_expect_success 'ping: 10 1M byte echo requests (batched)' '
-	run_timeout 15 flux ping --pad 1048576 --count 10 --batch --interval 0 0
+	run_timeout 15 flux ping --pad 1M --count 10 --batch --interval 0 0
 '
 
 test_expect_success 'ping: 1K 10K byte echo requests (batched)' '
-	run_timeout 20 flux ping --pad 10240 --count 1024 --batch --interval 0 0
+	run_timeout 20 flux ping --pad 10K --count 1024 --batch --interval 0 0
 '
 
 test_expect_success 'ping --rank 1 works' '
@@ -65,25 +65,29 @@ test_expect_success 'ping fails on invalid target' '
 
 test_expect_success 'ping output format for "any" rank is correct (default)' '
 	run_timeout 15 flux ping --count 1 broker 1>stdout &&
-        grep -q "^broker.ping" stdout &&
+        head -n 1 stdout | grep -q "any!broker" &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for "any" rank is correct (format 1)' '
 	run_timeout 15 flux ping --count 1 --rank any broker 1>stdout &&
-        grep -q "^broker.ping" stdout &&
+        head -n 1 stdout | grep -q "any!broker" &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for "any" rank is correct (format 2)' '
 	run_timeout 15 flux ping --count 1 any!broker 1>stdout &&
-        grep -q "^broker.ping" stdout &&
+        head -n 1 stdout | grep -q "any!broker" &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for "any" rank is correct (format 3)' '
 	run_timeout 15 flux ping --count 1 any 1>stdout &&
-        grep -q "^broker.ping" stdout &&
+        head -n 1 stdout | grep -q "any!broker" &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
@@ -116,19 +120,19 @@ test_expect_success 'ping with "upstream" fails on rank 0' '
 
 test_expect_success 'ping with "upstream" works (format 1)' '
         run_timeout 15 flux exec -n --rank 1 flux ping --count 1 --rank upstream broker 1>stdout &&
-        grep -q "^upstream!broker.ping" stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping with "upstream" works (format 2)' '
         run_timeout 15 flux exec -n --rank 1 flux ping --count 1 upstream!broker 1>stdout &&
-        grep -q "^upstream!broker.ping" stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping with "upstream" works (format 3)' '
         run_timeout 15 flux exec -n --rank 1 flux ping --count 1 upstream 1>stdout &&
-        grep -q "^upstream!broker.ping" stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
@@ -138,10 +142,16 @@ test_expect_success 'ping help output works' '
 '
 
 test_expect_success 'ping works with hostname' '
-        flux ping --count=1 $(hostname)
+        hostname=$(hostname) &&
+        flux ping --count=1 ${hostname} 1>stdout &&
+        head -n 1 stdout | grep -q "${hostname}!broker" &&
+        head -n 1 stdout | grep -q "(rank 0)"
 '
 test_expect_success 'ping works with hostname!service' '
-        flux ping --count=1 "$(hostname)!broker"
+        hostname=$(hostname) &&
+        flux ping --count=1 "${hostname}!broker" 1>stdout &&
+        head -n 1 stdout | grep -q "${hostname}!broker" &&
+        head -n 1 stdout | grep -q "(rank 0)"
 '
 test_expect_success 'ping fails with unknown hostname' '
         test_must_fail flux ping --count=1 "notmyhost!broker"

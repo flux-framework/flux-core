@@ -10,9 +10,9 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import errno
 import unittest
 
-import errno
 import flux
 from subflux import rerun_under_flux
 

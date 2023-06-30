@@ -33,7 +33,7 @@
 typedef struct {
     char appname[STDLOG_MAX_APPNAME + 1];
     char procid[STDLOG_MAX_PROCID + 1];
-    char buf[FLUX_MAX_LOGBUF + 1];
+    char buf[FLUX_MAX_LOGBUF];
     flux_log_f cb;
     void *cb_arg;
 } logctx_t;
@@ -128,7 +128,7 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     char *xtra = NULL;
 
     if (!h) {
-        char buf[FLUX_MAX_LOGBUF + 1];
+        char buf[FLUX_MAX_LOGBUF];
         const char *lstr = stdlog_severity_to_string (LOG_PRI (level));
 
         (void)vsnprintf (buf, sizeof (buf), fmt, ap);
@@ -193,7 +193,7 @@ int flux_log (flux_t *h, int lev, const char *fmt, ...)
 void flux_log_verror (flux_t *h, const char *fmt, va_list ap)
 {
     int saved_errno = errno;
-    char buf[FLUX_MAX_LOGBUF + 1];
+    char buf[FLUX_MAX_LOGBUF];
 
     (void)vsnprintf (buf, sizeof (buf), fmt, ap);
     flux_log (h, LOG_ERR, "%s: %s", buf, flux_strerror (saved_errno));

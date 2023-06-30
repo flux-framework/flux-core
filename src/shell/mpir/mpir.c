@@ -263,7 +263,7 @@ static int proctable_gather_insert (struct proctable_gather *pg,
                                     struct proctable *p)
 {
     /*  Insert one proctable into sorted position on the proctables list.
-     *   Then, check to determine if all proctables have been receieved
+     *   Then, check to determine if all proctables have been received
      *   and send response.
      */
     if (!zlistx_insert (pg->proctables, p, false))

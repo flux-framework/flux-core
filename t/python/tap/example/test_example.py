@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # pylint: disable=C0325
 
-import sys, os
+import os
+import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 import unittest
-from pycotap import TAPTestRunner, LogMode
+
+from pycotap import LogMode, TAPTestRunner
 
 
 class MyTests(unittest.TestCase):

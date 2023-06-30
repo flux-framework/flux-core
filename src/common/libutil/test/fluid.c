@@ -8,12 +8,16 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
 #include <string.h>
 #include <locale.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/fluid.h"
+#include "ccan/str/str.h"
 
 struct f58_test {
     fluid_t id;
@@ -69,8 +73,8 @@ void test_f58 (void)
     while (tp->f58 != NULL) {
         ok (fluid_encode (buf, sizeof(buf), tp->id, type) == 0,
             "f58_encode (%ju)", tp->id);
-        if (strcmp (buf, tp->f58) == 0
-            || strcmp (buf, tp->f58_alt) == 0)
+        if (streq (buf, tp->f58)
+            || streq (buf, tp->f58_alt))
             pass ("f58_encode %ju -> %s", tp->id, buf);
         else
             fail ("f58_encode %ju: got %s expected %s",
@@ -90,6 +94,7 @@ void test_f58 (void)
         tp++;
     }
 
+#if !ASSUME_BROKEN_LOCALE
     if (setenv ("FLUX_F58_FORCE_ASCII", "1", 1) < 0)
         BAIL_OUT ("Failed to setenv FLUX_F58_FORCE_ASCII");
     ok (fluid_encode (buf, sizeof (buf), f58_tests->id, type) == 0,
@@ -98,6 +103,7 @@ void test_f58 (void)
         "fluid_encode with FLUX_F58_FORCE_ASCII used ascii prefix");
     if (unsetenv ("FLUX_F58_FORCE_ASCII") < 0)
         BAIL_OUT ("Failed to unsetenv FLUX_F58_FORCE_ASCII");
+#endif
 
     ok (fluid_encode (buf, 1, 1, type) < 0 && errno == EOVERFLOW,
         "fluid_encode (buf, 1, 1, F58) returns EOVERFLOW");
@@ -176,6 +182,15 @@ struct fluid_parse_test fluid_parse_tests [] = {
     { 65535, "0.0.0.ffff" },
     { 4294967295, "0000.0000.ffff.ffff" },
     { 18446744073709551615UL, "ffff.ffff.ffff.ffff" },
+    { 0, "😃" },
+    { 1, "😄" },
+    { 57, "🙊" },
+    { 1234, "😁👌" },
+    { 1888, "😆🐻" },
+    { 4369, "😊🌀" },
+    { 65535, "💁📚" },
+    { 4294967295, "😳🏪🍖🍸" },
+    { 18446744073709551615UL, "🚹💗💧👗😷📷📚" },
     { 0, NULL },
 };
 
@@ -230,13 +245,19 @@ void test_basic (void)
     ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_DOTHEX) == 0,
         "fluid_encode type=DOTHEX works");
     ok (fluid_decode (buf, &id2, FLUID_STRING_DOTHEX) == 0 && id == id2,
-        "fluid_decode type=MNEMONIC works");
+        "fluid_decode type=DOTHEX works");
     diag ("%s", buf);
 
     ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_MNEMONIC) == 0,
         "fluid_encode type=MNEMONIC works");
     ok (fluid_decode (buf, &id2, FLUID_STRING_MNEMONIC) == 0 && id == id2,
         "fluid_decode type=MNEMONIC works");
+    diag ("%s", buf);
+
+    ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_EMOJI) == 0,
+        "fluid_encode type=EMOJI works");
+    ok (fluid_decode (buf, &id2, FLUID_STRING_EMOJI) == 0 && id == id2,
+        "fluid_decode type=EMOJI works");
     diag ("%s", buf);
 
     /* With artificially tweaked generator state
@@ -251,7 +272,7 @@ void test_basic (void)
     ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_DOTHEX) == 0,
         "fluid_encode type=DOTHEX works");
     ok (fluid_decode (buf, &id2, FLUID_STRING_DOTHEX) == 0 && id == id2,
-        "fluid_decode type=MNEMONIC works");
+        "fluid_decode type=DOTHEX works");
     diag ("%s", buf);
 
     ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_MNEMONIC) == 0,
@@ -259,6 +280,13 @@ void test_basic (void)
     ok (fluid_decode (buf, &id2, FLUID_STRING_MNEMONIC) == 0 && id == id2,
         "fluid_decode type=MNEMONIC works");
     diag ("%s", buf);
+
+    ok (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_EMOJI) == 0,
+        "fluid_encode type=EMOJI works");
+    ok (fluid_decode (buf, &id2, FLUID_STRING_EMOJI) == 0 && id == id2,
+        "fluid_decode type=EMOJI works");
+    diag ("%s", buf);
+
 
     /* Generate 64K id's as rapidly as possible.
      * Probably will cover running out of seq bits.
@@ -301,6 +329,27 @@ void test_basic (void)
     ok (decode_errors == 0,
         "fluid_decode type=MNEMONIC worked 4K times");
 
+    /* Continue for another 4K with EMOJI encoding (slower).
+     */
+    generate_errors = 0;
+    encode_errors = 0;
+    decode_errors = 0;
+    for (i = 0; i < 4096; i++) {
+        if (fluid_generate (&gen, &id) < 0)
+            generate_errors++;
+        if (fluid_encode (buf, sizeof (buf), id, FLUID_STRING_EMOJI) < 0)
+            encode_errors++;
+        if (fluid_decode (buf, &id2, FLUID_STRING_EMOJI) < 0 || id != id2)
+            decode_errors++;
+    }
+    ok (generate_errors == 0,
+        "fluid_generate worked 4K times");
+    ok (encode_errors == 0,
+        "fluid_encode type=EMOJI worked 4K times");
+    ok (decode_errors == 0,
+        "fluid_decode type=EMOJI worked 4K times");
+
+
     /* Generate 64K FLUIDs, restarting generator each time from timestamp
      * extracted from generated FLUID + 1.  Verify number always increases.
      */
@@ -333,6 +382,8 @@ void test_basic (void)
         "fluid_decode type=MNEMONIC fails on input=bogus");
     ok (fluid_decode ("a-a-a--a-a-a", &id, FLUID_STRING_MNEMONIC) < 0,
         "fluid_decode type=MNEMONIC fails on unknown words xx-xx-xx--xx-xx-xx");
+    ok (fluid_decode ("bogus", &id, FLUID_STRING_EMOJI) < 0,
+        "fluid_decode type=EMOJI fails on ascii string");
 }
 
 int main (int argc, char *argv[])

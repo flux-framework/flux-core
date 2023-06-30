@@ -16,6 +16,7 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libtestutil/util.h"
+#include "ccan/str/str.h"
 #include "src/common/librouter/servhash.h"
 
 /*
@@ -235,7 +236,7 @@ void test_basic (flux_t *h)
     uuid = NULL;
     ok (servhash_match (sh, req, &uuid) == 0,
         "servhash_match matched request");
-    ok (uuid != NULL && !strcmp (uuid, "basic-uuid"),
+    ok (uuid != NULL && streq (uuid, "basic-uuid"),
         "and matched it to the correct uuid");
     errno = 0;
     ok (servhash_match (sh, req2, &uuid) < 0 && errno == ENOENT,

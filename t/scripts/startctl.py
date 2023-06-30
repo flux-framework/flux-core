@@ -10,10 +10,11 @@
 
 # startctl - tell flux-start to do things
 
+import argparse
+import logging
 import os
 import sys
-import logging
-import argparse
+
 import flux
 
 

@@ -8,12 +8,16 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
 #include <string.h>
 #include <stdarg.h>
 #include <stdbool.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 #include "src/common/libeventlog/eventlog.h"
 
 void eventlog_entry_parsing (void)
@@ -62,7 +66,7 @@ void eventlog_entry_parsing (void)
 
     ok (eventlog_entry_parse (event, &timestamp, &name, &context) == 0
         && timestamp == 42.0
-        && !strcmp (name, "foo")
+        && streq (name, "foo")
         && !context,
         "eventlog_entry_parse on event w/o context works");
     json_decref (event);
@@ -77,12 +81,12 @@ void eventlog_entry_parsing (void)
 
     ok (eventlog_entry_parse (event, &timestamp, &name, &context) == 0
         && timestamp == 52.0
-        && !strcmp (name, "bar")
+        && streq (name, "bar")
         && context
         && json_is_object (context)
         && (jstr = json_object_get (context, "foo"))
         && (str = json_string_value (jstr))
-        && !strcmp (str, "bar"),
+        && streq (str, "bar"),
         "eventlog_entry_parse on event w/ context works");
     json_decref (event);
 }
@@ -172,7 +176,7 @@ void eventlog_decoding (void)
             "eventlog_decode input=\"%s\" success",
             printable (buf, goodevent[i]));
         s = eventlog_encode (o);
-        ok (s != NULL && !strcmp (s, goodevent[i]),
+        ok (s != NULL && streq (s, goodevent[i]),
             "eventlog_encode reversed it");
         json_decref (o);
         free (s);
@@ -184,7 +188,7 @@ void eventlog_decoding (void)
             "eventlog_decode input=\"%s\" success",
             printable (buf, goodlog[i]));
         s = eventlog_encode (o);
-        ok (s != NULL && !strcmp (s, goodlog[i]),
+        ok (s != NULL && streq (s, goodlog[i]),
             "eventlog_encode reversed it");
         json_decref (o);
         free (s);
@@ -289,9 +293,9 @@ void eventlog_entry_check (json_t *entry, double xtimestamp, const char *xname,
         context_str = json_dumps (context, JSON_COMPACT);
 
     ok ((xtimestamp == 0. || timestamp == xtimestamp)
-        && (!xname || !strcmp (name, xname))
+        && (!xname || streq (name, xname))
         && ((!xcontext && !context)
-            || (context_str && !strcmp (context_str, xcontext))),
+            || (context_str && streq (context_str, xcontext))),
         "eventlog_entry_parse time=%llu name=%s context=%s",
         (unsigned long long)xtimestamp, xname, xcontext);
 

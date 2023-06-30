@@ -83,16 +83,51 @@ test_expect_success 'cmddriver removes multiple contiguous separators in input' 
 		flux env sh -c 'echo \$LUA_PATH' | grep -v ';;;;')
 "
 readlink --version >/dev/null && test_set_prereq READLINK
-test_expect_success READLINK 'cmddriver adds its own path to PATH if called with relative path' "
-	fluxcmd=\$(readlink -f \$(which flux)) &&
-	fluxdir=\$(dirname \$fluxcmd) &&
-	PATH='/bin:/usr/bin' \$fluxcmd env sh -c 'echo \$PATH' | grep ^\$fluxdir
-"
-test_expect_success READLINK 'cmddriver moves its own path to the front of PATH' "
-	fluxcmd=\$(readlink -f \$(which flux)) &&
-	fluxdir=\$(dirname \$fluxcmd) &&
-	PATH=/bin:\$fluxdir \$fluxcmd env sh -c 'echo \$PATH' | grep ^\$fluxdir
-"
+
+
+# N.B.: In the tests below we need to ensure that /bin:/usr/bin appear
+# in PATH so that core utilities like `ls` can be found by the libtool
+# wrappers or other processes invoked by calling `flux`. However, this
+# means the results of the test can be influenced by whether or not a
+# flux executable appears in /bin or /usr/bin. Therefore, care must be
+# taken to ensure consistent results no matter what is in these paths.
+#
+# Ensure a bogus 'flux' executable occurs first in path, then make sure
+# command -v flux finds the right flux:
+#
+test_expect_success 'cmddriver adds its own path to PATH' '
+	mkdir bin &&
+	cat <<-EOF >bin/flux &&
+	#!/bin/sh
+	true
+	EOF
+	chmod +x bin/flux &&
+	fluxcmd=$(command -v flux) &&
+	result=$(PATH=$(pwd)/bin:/bin:/usr/bin \
+	         $fluxcmd env sh -c "command -v flux") &&
+	test_debug "echo result=$result" &&
+	test "$result" = "$fluxcmd"
+'
+# Use bogus flux in PATH and ensure flux cmddriver inserts its own path
+# just before this path, not at front of PATH.
+test_expect_success 'cmddriver inserts its path at end of PATH' '
+	fluxdir=$(dirname $fluxcmd) &&
+	PRINTENV=$(which printenv) &&
+	result=$(PATH=/foo:$(pwd)/bin:/bin:/usr/bin \
+	         $fluxcmd env $PRINTENV PATH) &&
+	test_debug "echo result=$result" &&
+	test "$result" = "/foo:$fluxdir:$(pwd)/bin:/bin:/usr/bin"
+'
+# Ensure a PATH that already returns current flux first is not modified
+# by flux(1)
+test_expect_success READLINK 'cmddriver does not adjust PATH if unnecessary' '
+	fluxdir=$(dirname $fluxcmd) &&
+	printenv=$(command -v printenv) &&
+	mypath=/foo:/bar:$fluxdir:/usr/bin:/bin &&
+	newpath=$(PATH=$mypath $fluxcmd env $printenv PATH) &&
+	test_debug "echo PATH=$newpath" &&
+	test "$newpath" = "$mypath"
+'
 test_expect_success 'FLUX_*_PREPEND environment variables work' '
 	( FLUX_CONNECTOR_PATH_PREPEND=/foo \
 	  flux $printenv | grep "FLUX_CONNECTOR_PATH=/foo" &&

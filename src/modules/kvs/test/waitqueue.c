@@ -8,9 +8,14 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include "src/modules/kvs/waitqueue.h"
 #include "src/common/libflux/message.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 void wait_cb (void *arg)
 {
@@ -46,7 +51,7 @@ bool msgcmp (const flux_msg_t *msg, void *arg)
     const char *id;
     bool match = false;
     if ((id = flux_msg_route_first (msg))
-        && (!strcmp (id, "19") || !strcmp (id, "18") || !strcmp (id, "17")))
+        && (streq (id, "19") || streq (id, "18") || streq (id, "17")))
         match = true;
     return match;
 }
@@ -103,7 +108,7 @@ int main (int argc, char *argv[])
     ok (wait_msg_aux_set (w, "aux", "val", NULL) == 0,
         "wait_msg_aux_set works");
     str = wait_msg_aux_get (w, "aux");
-    ok (str && !strcmp (str, "val"),
+    ok (str && streq (str, "val"),
         "wait_msg_aux_get works and returns correct value");
     flux_msg_destroy (msg);
     wait_destroy (w);

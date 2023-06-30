@@ -18,6 +18,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdio.h>
+#include <signal.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,6 +43,7 @@ struct proxy_command {
     flux_subprocess_t *p;
     int exit_code;
     uid_t proxy_user;
+    char *remote_uri_authority;
 };
 
 static const char *route_auxkey = "flux::route";
@@ -140,6 +142,12 @@ static int child_create (struct proxy_command *ctx,
 
     if (flux_cmd_setenvf (cmd, 1, "FLUX_URI", "local://%s", sockpath) < 0)
         goto error;
+    if (ctx->remote_uri_authority
+        && flux_cmd_setenvf (cmd, 1,
+                             "FLUX_PROXY_REMOTE",
+                             "%s",
+                             ctx->remote_uri_authority) < 0)
+        goto error;
 
     /* We want stdio fallthrough so subprocess can capture tty if
      * necessary (i.e. an interactive shell)
@@ -164,7 +172,7 @@ error:
     return -1;
 }
 
-/* Usock client encouters an error.
+/* Usock client encounters an error.
  */
 static void uconn_error (struct usock_conn *uconn, int errnum, void *arg)
 {
@@ -313,6 +321,7 @@ static void proxy_command_destroy_usock_and_router (struct proxy_command *ctx)
     ctx->server = NULL;
     router_destroy (ctx->router);
     ctx->router = NULL;
+    free (ctx->remote_uri_authority);
 }
 
 /* Attempt to reconnect to broker.  If successful, wait for for broker to
@@ -395,6 +404,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 
     if (!(ctx.h = flux_open (uri, flags)))
         log_err_exit ("%s", uri);
+    ctx.remote_uri_authority = uri_remote_get_authority (uri);
     free (uri);
     flux_log_set_appname (ctx.h, "proxy");
     ctx.proxy_user = getuid ();

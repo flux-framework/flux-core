@@ -12,31 +12,19 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-module(1) manages dynamically loadable Flux modules.
-It can load/remove/list modules for the :man1:`flux-broker`, and for other
-Flux services that support dynamic module extensions.
+flux-module(1) manages dynamically loadable :man1:`flux-broker` modules.
 
 
 COMMANDS
 ========
 
-**info** [*name*]
-   Display information about module *name*.
-   If *name* includes a slash */* character, it is interpreted as a
-   file path, and the module name is then determined by reading the
-   **mod_name** symbol. Otherwise, FLUX_MODULE_PATH is searched for a module
-   with **mod_name** equal to *name*.
-
 **load** *name* [*module-arguments* …​]
-   Load module *name*, interpreted as described above.
-   The service that will load the module is inferred
-   from the module name. When the load command completes successfully,
-   the new module is ready to accept messages on all targeted ranks.
+   Load module *name*.  When the load command completes successfully,
+   the new module has entered the running state (see LIST OUTPUT below).
 
 **remove** [--force] *name*
-   Remove module *name*. The service that will unload the module is
-   inferred from the name specified on the command line. If *-f, --force*
-   is used, then do not error if module *name* is not loaded.
+   Remove module *name*.  If *-f, --force* is used, then do not fail if
+   module *name* is not loaded.
 
 **reload** [--force] *name* [*module-arguments* …​]
    Reload module *name*. This is equivalent to running *flux module remove*
@@ -44,7 +32,7 @@ COMMANDS
    not loaded during removal unless the ``-f, --force`` option is specified.
 
 **list** [*service*]
-   List modules loaded by *service*, or by :man1:`flux-broker` if *service* is unspecified.
+   List loaded :man1:`flux-broker` modules.
 
 **stats** [*OPTIONS*] [*name*]
    Request statistics from module *name*. A JSON object containing a set of
@@ -106,23 +94,28 @@ LIST OUTPUT
 ===========
 
 The *list* command displays one line for each unique (as determined by
-SHA1 hash) module loaded by a service.
+SHA1 hash) loaded module.
 
 **Module**
    The value of the **mod_name** symbol for this module.
 
-**Size**
-   The size in bytes of the module .so file.
-
-**Digest**
-   The last 7 characters of the SHA1 digest of the contents of
-   the module .so file.
-
 **Idle**
-   Idle times are defined for :man1:`flux-broker` modules as the number of
-   seconds since the module last sent a request or response message.
-   The idle time may be defined differently for other services, or have no
-   meaning.
+   Idle times are defined as the number of seconds since the module last sent
+   a request or response message.
+
+**State**
+   The state of the module is shown as a single character: *I* initializing,
+   *R* running, *F* finalizing, *E* exited.  A module automatically enters
+   running state when it calls :man3:`flux_reactor_run`.  It can transition
+   earlier by calling `flux_module_set_running()`.
+
+**Service**
+   If the module has registered additional services, the service names are
+   displayed in a comma-separated list.
+
+**Path**
+   The full path to the broker module shared object file (only shown with
+   the **-l, --long** option).
 
 
 MODULE SYMBOLS
@@ -132,9 +125,6 @@ All Flux modules define the following global symbols:
 
 **const char \*mod_name;**
    A null-terminated string defining the module name.
-   Module names are words delimited by periods, with the service that
-   will load the module indicated by the words that prefix the final one.
-   If there is no prefix, the module is loaded by :man1:`flux-broker`.
 
 **int mod_main (void \*context, int argc, char \**argv);**
    An entry function.

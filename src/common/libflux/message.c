@@ -34,12 +34,12 @@
 #include <assert.h>
 #include <fnmatch.h>
 #include <inttypes.h>
-#include <czmq.h>
 #include <jansson.h>
 
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/errno_safe.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #include "message.h"
 
@@ -180,7 +180,7 @@ ssize_t flux_msg_encode_size (const flux_msg_t *msg)
         encode_count (&size, strlen (msg->topic));
     if (msg_has_route (msg)) {
         struct route_id *r = NULL;
-        /* route delimeter */
+        /* route delimiter */
         encode_count (&size, 0);
         list_for_each (&msg->routes, r, route_id_node)
             encode_count (&size, strlen (r->id));
@@ -239,7 +239,7 @@ int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size)
                 return -1;
             total += n;
         }
-        /* route delimeter */
+        /* route delimiter */
         if ((n = encode_frame (buf + total,
                                size - total,
                                NULL,
@@ -507,6 +507,15 @@ int flux_msg_authorize (const flux_msg_t *msg, uint32_t userid)
     return 0;
 }
 
+bool flux_msg_is_local (const flux_msg_t *msg)
+{
+    uint32_t rolemask;
+    if (flux_msg_get_rolemask (msg, &rolemask) == 0
+        && (rolemask & FLUX_ROLE_LOCAL))
+        return true;
+    return false;
+}
+
 int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid)
 {
     if (msg_validate (msg) < 0)
@@ -655,7 +664,7 @@ static bool isa_matchany (const char *s)
 {
     if (!s || strlen(s) == 0)
         return true;
-    if (!strcmp (s, "*"))
+    if (streq (s, "*"))
         return true;
     return false;
 }
@@ -688,7 +697,7 @@ bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match)
             if (fnmatch (match.topic_glob, topic, 0) != 0)
                 return false;
         } else {
-            if (strcmp (match.topic_glob, topic) != 0)
+            if (!streq (match.topic_glob, topic))
                 return false;
         }
     }
@@ -1238,26 +1247,39 @@ static void userid2str (uint32_t userid, char *buf, int buflen)
     assert (n < buflen);
 }
 
-static void rolemask2str (uint32_t rolemask, char *buf, int buflen)
+static int roletostr (uint32_t role, const char *sep, char *buf, int buflen)
 {
     int n;
-    switch (rolemask) {
-        case FLUX_ROLE_NONE:
-            n = snprintf (buf, buflen, "none");
-            break;
-        case FLUX_ROLE_OWNER:
-            n = snprintf (buf, buflen, "owner");
-            break;
-        case FLUX_ROLE_USER:
-            n = snprintf (buf, buflen, "user");
-            break;
-        case FLUX_ROLE_ALL:
-            n = snprintf (buf, buflen, "all");
-            break;
-        default:
-            n = snprintf (buf, buflen, "unknown");
+    if (role == FLUX_ROLE_OWNER)
+        n = snprintf (buf, buflen, "%sowner", sep);
+    else if (role == FLUX_ROLE_USER)
+        n = snprintf (buf, buflen, "%suser", sep);
+    else if (role == FLUX_ROLE_LOCAL)
+        n = snprintf (buf, buflen, "%slocal", sep);
+    else
+        n = snprintf (buf, buflen, "%s0x%x", sep, role);
+    if (n >= buflen)
+        n = buflen;
+    return n;
+}
+
+static void rolemask2str (uint32_t rolemask, char *buf, int buflen)
+{
+    if (rolemask == FLUX_ROLE_NONE)
+        snprintf (buf, buflen, "none");
+    else if (rolemask == FLUX_ROLE_ALL)
+        snprintf (buf, buflen, "all");
+    else {
+        int offset = 0;
+        for (int i = 0; i < sizeof (rolemask)*8; i++) {
+            if (rolemask & 1<<i) {
+                offset += roletostr (rolemask & 1<<i,
+                                     offset > 0 ? "," : "",
+                                     buf + offset,
+                                     buflen - offset);
+            }
+        }
     }
-    assert (n < buflen);
 }
 
 static void nodeid2str (uint32_t nodeid, char *buf, int buflen)
@@ -1391,7 +1413,7 @@ int flux_msg_frames (const flux_msg_t *msg)
     if (msg_has_topic (msg))
         n++;
     if (msg_has_route (msg)) {
-        /* +1 for routes delimeter frame */
+        /* +1 for routes delimiter frame */
         n += msg->routes_len + 1;
     }
     return n;
@@ -1433,7 +1455,7 @@ bool flux_msg_route_match_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
 
     if (!id1 && !id2)
         return true;
-    if (id1 && id2 && strcmp (id1, id2) == 0)
+    if (id1 && id2 && streq (id1, id2))
         return true;
     return false;
 }

@@ -17,7 +17,12 @@
 #include <jansson.h>
 #include <unistd.h>
 
+#if HAVE_FLUX_SECURITY
+#include <flux/security/version.h>
+#endif
+
 #include "exec_config.h"
+#include "ccan/str/str.h"
 
 static const char *default_cwd = "/tmp";
 static const char *default_job_shell = NULL;
@@ -82,7 +87,7 @@ int config_init (flux_t *h, int argc, char **argv)
     /*  Check configuration for exec.job-shell */
     if (flux_conf_unpack (flux_get_conf (h),
                           &err,
-                          "{s?:{s?s}}",
+                          "{s?{s?s}}",
                           "exec",
                             "job-shell", &default_job_shell) < 0) {
         flux_log (h, LOG_ERR,
@@ -94,7 +99,7 @@ int config_init (flux_t *h, int argc, char **argv)
     /*  Check configuration for exec.imp */
     if (flux_conf_unpack (flux_get_conf (h),
                           &err,
-                          "{s?:{s?s}}",
+                          "{s?{s?s}}",
                           "exec",
                             "imp", &flux_imp_path) < 0) {
         flux_log (h, LOG_ERR,
@@ -106,16 +111,20 @@ int config_init (flux_t *h, int argc, char **argv)
     if (argv && argc) {
         /* Finally, override values on cmdline */
         for (int i = 0; i < argc; i++) {
-            if (strncmp (argv[i], "job-shell=", 10) == 0)
+            if (strstarts (argv[i], "job-shell="))
                 default_job_shell = argv[i]+10;
-            else if (strncmp (argv[i], "imp=", 4) == 0)
+            else if (strstarts (argv[i], "imp="))
                 flux_imp_path = argv[i]+4;
         }
     }
 
     flux_log (h, LOG_DEBUG, "using default shell path %s", default_job_shell);
-    if (flux_imp_path)
-        flux_log (h, LOG_DEBUG, "using imp path %s", flux_imp_path);
+    if (flux_imp_path) {
+        flux_log (h,
+                  LOG_DEBUG,
+                  "using imp path %s (with helper)",
+                  flux_imp_path);
+    }
     return 0;
 }
 

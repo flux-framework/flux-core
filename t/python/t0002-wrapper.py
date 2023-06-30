@@ -13,8 +13,8 @@
 import unittest
 
 import flux
-from flux.core.inner import ffi, raw
 import flux.wrapper
+from flux.core.inner import ffi, raw
 from subflux import rerun_under_flux
 
 
@@ -23,10 +23,10 @@ def __flux_size():
 
 
 class TestWrapper(unittest.TestCase):
-    def test_call_non_existant(self):
+    def test_call_non_existent(self):
         f = flux.Flux("loop://")
         with self.assertRaises(flux.wrapper.MissingFunctionError):
-            f.non_existant_function_that_should_die("stuff")
+            f.non_existent_function_that_should_die("stuff")
 
     def test_call_insufficient_arguments(self):
         f = flux.Flux("loop://")
@@ -42,12 +42,12 @@ class TestWrapper(unittest.TestCase):
         f = flux.Flux()
         payload = {"seq": 1, "pad": "stuff"}
         future = f.rpc("broker.ping", payload)
-        resp = future.get()
+        future.get()
         future.pimpl.handle = None
         with self.assertRaisesRegex(
             ValueError, r"Attempting to call a cached, bound method.*NULL handle"
         ):
-            resp = future.get()
+            future.get()
 
     def test_automatic_unwrapping(self):
         flux.core.inner.raw.flux_log(flux.Flux("loop://"), 0, "stuff")

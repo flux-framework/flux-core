@@ -22,6 +22,7 @@
 #include <flux/optparse.h>
 #include <pwd.h>
 
+#include "ccan/str/str.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/environment.h"
@@ -214,14 +215,14 @@ int main (int argc, char *argv[])
                           flux_conf_builtin_get ("pmi_library_path", flags), 0);
 
     /*  Deduplicate any other FLUX_* PATH-type environment variables by
-     *   calling enviornment_from_env() on them
+     *   calling environment_from_env() on them
      */
     environment_from_env (env, "FLUX_RC_EXTRA", NULL, ':');
     environment_from_env (env, "FLUX_SHELL_RC_PATH", NULL, ':');
 
     environment_apply (env);
 
-    /* If --parent, push parent environment for each occurence
+    /* If --parent, push parent environment for each occurrence
      */
     for (int n = optparse_getopt (p, "parent", NULL); n > 0; n--) {
         push_parent_environment (p, env);
@@ -256,6 +257,41 @@ bool flux_is_installed (void)
     return (rc == 0);
 }
 
+void ensure_self_first_in_path (struct environment *e, const char *selfdir)
+{
+    const char *entry = NULL;
+    char realdir[PATH_MAX+1];
+    char path[PATH_MAX+1];
+
+    while ((entry = environment_var_next (e, "PATH", entry))) {
+        /*  Attempt to canonicalize path, skipping eny elements that
+         *  can't be resolved.
+         */
+        if (!(realpath (entry, realdir)))
+            continue;
+        /*  If this path matches "selfdir", then the current flux
+         *  executable already appears first in path. Return.
+         */
+        if (streq (realdir, selfdir))
+            return;
+        /*  Otherwise, check for a flux in this path element, if it
+         *  is present and executable, then the current flux is not
+         *  first in path, insert selfdir before this element.
+         */
+        if (snprintf (path,
+                      sizeof (path),
+                      "%s/flux",
+                      realpath (entry, realdir)) >= sizeof (path)
+            || access (path, R_OK|X_OK) == 0) {
+            if (environment_insert (e, "PATH", (char *) entry, selfdir) < 0)
+                break;
+            return;
+        }
+    }
+    /* No flux(1) found in current PATH, we can insert selfdir at back */
+    environment_push_back (e, "PATH", selfdir);
+}
+
 /*
  * If flux command was run with relative or absolute path, then
  *  prepend the directory for the flux executable to PATH. This
@@ -269,11 +305,11 @@ void setup_path (struct environment *env, const char *argv0)
     assert (argv0);
 
     /*  If argv[0] was explicitly "flux" then assume PATH is already set */
-    if (strcmp (argv0, "flux") == 0)
+    if (streq (argv0, "flux"))
         return;
     if ((selfdir = executable_selfdir ())) {
         environment_from_env (env, "PATH", "/bin:/usr/bin", ':');
-        environment_push (env, "PATH", executable_selfdir ());
+        ensure_self_first_in_path (env, selfdir);
     }
     else
         log_msg_exit ("Unable to determine flux executable dir");

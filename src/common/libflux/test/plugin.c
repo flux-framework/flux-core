@@ -8,11 +8,15 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <string.h>
 #include <errno.h>
 
 #include "src/common/libflux/plugin.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 
 /* function prototype for invalid args testing below */
@@ -281,9 +285,9 @@ int op1 (flux_plugin_t *p, const char *topic,
     int a, b;
     if (flux_plugin_arg_unpack (args, 0, "{s:i s:i}", "a", &a, "b", &b) < 0)
         return -1;
-    if (strcmp (topic, "op.add") == 0)
+    if (streq (topic, "op.add"))
         a += b;
-    else if (strcmp (topic, "op.multiply") == 0)
+    else if (streq (topic, "op.multiply"))
         a *= b;
     else {
         errno = ENOTSUP;
@@ -503,12 +507,24 @@ void test_uuid (void)
         BAIL_OUT ("flux_plugin_create failed");
     uuid = flux_plugin_get_uuid (p);
 
-    ok (uuid != NULL && strcmp (ouuid, uuid) != 0,
+    ok (uuid != NULL && !streq (ouuid, uuid),
         "second plugin instance has different uuid");
     flux_plugin_destroy (p);
     free (ouuid);
 }
 
+void test_plugin_init_failure (void)
+{
+    flux_plugin_t *p = flux_plugin_create ();
+    if (!p || flux_plugin_set_conf (p, "{\"fail\": 1}") < 0)
+        BAIL_OUT ("flux_plugin_create/set_conf");
+    ok (flux_plugin_load_dso (p, "test/.libs/plugin_foo.so") < 0,
+        "flux_plugin_load fails if plugin init callback fails");
+    diag("%s", flux_plugin_strerror (p));
+    like (flux_plugin_strerror (p), "flux_plugin_init failed",
+        "flux_plugin_strerror() notes that plugin init failed");
+    flux_plugin_destroy (p);
+}
 
 int main (int argc, char *argv[])
 {
@@ -520,6 +536,7 @@ int main (int argc, char *argv[])
     test_load ();
     test_load_rtld_now ();
     test_uuid ();
+    test_plugin_init_failure ();
     done_testing();
     return (0);
 }

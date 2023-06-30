@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 ###############################################################
 # Copyright 2014 Lawrence Livermore National Security, LLC
 # (c.f. AUTHORS, NOTICE.LLNS, COPYING)
@@ -10,10 +8,10 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import os
-import sys
-import subprocess
 import argparse
+import os
+import subprocess
+import sys
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 

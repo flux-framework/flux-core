@@ -204,8 +204,10 @@ int flux_future_push (flux_future_t *f, const char *name, flux_future_t *child)
             return -1;
         name = anon;
     }
-    if (zhash_insert (cf->children, name, child) < 0)
+    if (zhash_insert (cf->children, name, child) < 0) {
+        errno = EEXIST;
         goto done;
+    }
     zhash_freefn (cf->children, name, (flux_free_f) flux_future_destroy);
     if (flux_future_aux_set (child, "flux::parent", f, NULL) < 0) {
         zhash_delete (cf->children, name);

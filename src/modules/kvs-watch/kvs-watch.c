@@ -926,10 +926,7 @@ struct ns_monitor *namespace_monitor (struct watch_ctx *ctx,
     if (!(nsm = zhash_lookup (ctx->namespaces, ns))) {
         if (!(nsm = namespace_create (ctx, ns)))
             return NULL;
-        if (zhash_insert (ctx->namespaces, ns, nsm) < 0) {
-            namespace_destroy (nsm);
-            return NULL;
-        }
+        (void)zhash_insert (ctx->namespaces, ns, nsm);
         zhash_freefn (ctx->namespaces, ns,
                       (zhash_free_fn *)namespace_destroy);
         /* store future in namespace, so namespace can be destroyed
@@ -1078,7 +1075,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "kvs-watch.stats-get",
       .cb           = stats_cb,
-      .rolemask     = 0
+      .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "kvs-watch.lookup",
@@ -1141,8 +1138,6 @@ done:
     watch_ctx_destroy (ctx);
     return rc;
 }
-
-MOD_NAME ("kvs-watch");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -160,15 +160,11 @@ static zhashx_t *queues_create (void)
     return queues;
 }
 
-static int queues_insert (zhashx_t *queues,
-                          const char *name,
-                          struct limits *limits)
+static void queues_insert (zhashx_t *queues,
+                           const char *name,
+                           struct limits *limits)
 {
-    if (zhashx_insert (queues, name, limits) < 0) { // dups limits
-        errno = ENOMEM;
-        return -1;
-    }
-    return 0;
+    (void)zhashx_insert (queues, name, limits); // dups limits
 }
 
 static struct limits *queues_lookup (zhashx_t *queues, const char *name)
@@ -291,10 +287,7 @@ static int queues_parse (zhashx_t **zhp,
                 errprintf (error, "queues.%s.%s", name, e.text);
                 goto error;
             }
-            if (queues_insert (zh, name, &limits) < 0) {
-                errprintf (error, "out of memory parsing [queues]");
-                goto error;
-            }
+            queues_insert (zh, name, &limits);
         }
     }
     *zhp = zh;
@@ -400,7 +393,7 @@ static int validate_cb (flux_plugin_t *p,
     if (json_unpack_ex (jobspec,
                         &jerror,
                         0,
-                        "{s?{s?{s?s}}}",
+                        "{s:{s?{s?s}}}",
                         "attributes",
                           "system",
                             "queue", &queue) < 0) {

@@ -13,7 +13,8 @@ import pwd
 
 import flux.constants
 from flux.future import WaitAllFuture
-from flux.job.info import JobInfo, statetostr
+from flux.job import JobID
+from flux.job.info import JobInfo
 from flux.rpc import RPC
 
 
@@ -112,30 +113,13 @@ def get_job(flux_handle, jobid):
     payload = {"id": int(jobid), "attrs": ["all"]}
     rpc = JobListIdRPC(flux_handle, "job-list.list-id", payload)
     try:
-        jobinfo = rpc.get()
+        jobinfo = rpc.get_jobinfo()
 
     # The job does not exist!
     except FileNotFoundError:
         return None
 
-    jobinfo = jobinfo["job"]
-
-    # User friendly string from integer
-    state = jobinfo["state"]
-    jobinfo["state"] = statetostr(state)
-
-    # Get job info to add to result
-    info = rpc.get_jobinfo()
-    jobinfo["nnodes"] = info._nnodes
-    jobinfo["result"] = info.result
-    jobinfo["returncode"] = info.returncode
-    jobinfo["runtime"] = info.runtime
-    jobinfo["priority"] = info._priority
-    jobinfo["waitstatus"] = info._waitstatus
-    jobinfo["nodelist"] = info._nodelist
-    jobinfo["nodelist"] = info._nodelist
-    jobinfo["exception"] = info._exception.__dict__
-    return jobinfo
+    return jobinfo.to_dict(filtered=False)
 
 
 class JobListIdsFuture(WaitAllFuture):
@@ -228,7 +212,7 @@ class JobList:
         self.since = since
         self.name = name
         self.queue = queue
-        self.ids = ids
+        self.ids = list(map(JobID, ids)) if ids else None
         self.errors = []
         for fname in filters:
             for x in fname.split(","):
@@ -253,11 +237,6 @@ class JobList:
     def add_filter(self, fname):
         """Append a state or result filter to JobList query"""
         fname = fname.lower()
-        if fname == "all":
-            self.states |= self.STATES["pending"]
-            self.states |= self.STATES["running"]
-            return
-
         if fname in self.STATES:
             self.states |= self.STATES[fname]
         elif fname in self.RESULTS:

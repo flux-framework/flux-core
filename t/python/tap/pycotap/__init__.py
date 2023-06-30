@@ -6,9 +6,9 @@
 # See COPYING for details
 
 
-import unittest
-import sys
 import base64
+import sys
+import unittest
 
 if sys.hexversion >= 0x03000000:
     from io import StringIO

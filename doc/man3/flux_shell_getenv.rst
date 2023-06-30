@@ -65,6 +65,8 @@ EINVAL
 EEXIST
    The variable already exists and ``overwrite`` was not non-zero (``flux_shell_setenvf()``).
 
+ENOENT
+   With ``flux_shell_unsetenv()``, the target variable does not exist.
 
 RESOURCES
 =========

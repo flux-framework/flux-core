@@ -13,6 +13,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 #include <unistd.h>
 #include <stdbool.h>
 #include <assert.h>
@@ -22,8 +25,10 @@
 #include <flux/hostlist.h>
 #include <flux/taskmap.h>
 
+#include "src/common/libyuarel/yuarel.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/str/str.h"
 
 #include "attr.h"
 #include "overlay.h"
@@ -107,7 +112,7 @@ static int set_string (json_t *o, const char *key, const char *s)
     return 0;
 }
 
-/* Make a copy of 'entry', set host key to the specificed value, and append
+/* Make a copy of 'entry', set host key to the specified value, and append
  * to 'hosts' array.
  */
 static int boot_config_append_host (json_t *hosts,
@@ -378,7 +383,7 @@ int boot_config_getrankbyname (json_t *hosts, const char *name, uint32_t *rank)
         /* N.B. entry already validated by boot_config_parse().
          */
         if (json_unpack (entry, "{s:s}", "host", &host) == 0
-                    && !strcmp (name, host)) {
+            && streq (name, host)) {
             *rank = index;
             return 0;
         }
@@ -404,7 +409,7 @@ static int gethostentry (json_t *hosts,
     /* N.B. entry already validated by boot_config_parse().
      */
     (void)json_unpack (entry,
-                      "{s:s s?:s s?:s}",
+                      "{s:s s?s s?s}",
                       "host", host,
                       "bind", bind,
                       "connect", uri);
@@ -492,6 +497,38 @@ static int set_broker_boot_method_attr (attr_t *attrs, const char *value)
         return -1;
     }
     return 0;
+}
+
+/* Zeromq treats failed hostname resolution as a transient error, and silently
+ * retries in the background, which can make config problems hard to diagnose.
+ * Parse the URI in advance, and if the host portion is invalid, log it.
+ * Ref: flux-framework/flux-core#5009
+ */
+static void warn_of_invalid_host (flux_t *h, const char *uri)
+{
+    char *cpy;
+    struct yuarel u = { 0 };
+    struct addrinfo *result;
+    int e;
+
+    if (!(cpy = strdup (uri))
+        || yuarel_parse (&u, cpy) < 0
+        || !u.scheme
+        || !u.host
+        || !streq (u.scheme, "tcp"))
+        goto done;
+    /* N.B. this URI will be used for zmq_connect(), therefore it must
+     * be a valid peer address, not an interface name or wildcard.
+     */
+    if ((e = getaddrinfo (u.host, NULL, NULL, &result)) == 0) {
+        freeaddrinfo (result);
+        goto done;
+    }
+    log_msg ("Warning: unable to resolve upstream peer %s: %s",
+             u.host,
+             gai_strerror (e));
+done:
+    free (cpy);
 }
 
 int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
@@ -622,6 +659,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
                                       parent_uri,
                                       sizeof (parent_uri)) < 0)
             goto error;
+        warn_of_invalid_host (h, parent_uri);
         if (overlay_set_parent_uri (overlay, parent_uri) < 0) {
             log_err ("overlay_set_parent_uri %s", parent_uri);
             goto error;

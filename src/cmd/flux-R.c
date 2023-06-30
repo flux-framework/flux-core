@@ -30,6 +30,7 @@
 #include "src/common/librlist/rlist.h"
 #include "src/common/librlist/rhwloc.h"
 #include "src/common/libtomlc99/toml.h"
+#include "ccan/str/str.h"
 
 #define RSET_DOC "\
 Read, generate, and process RFC 20 Resource Set objects.\n\
@@ -193,7 +194,7 @@ static struct optparse_subcommand subcommands[] = {
     },
     { "rerank",
       "HOSTLIST",
-      "Retrun the union of all R objects on stdin with ranks re-mapped "
+      "Return the union of all R objects on stdin with ranks re-mapped "
       " based on their index in HOSTLIST.",
       cmd_rerank,
       0,
@@ -350,7 +351,7 @@ static ssize_t fread_all (const char *path, char **bufp)
     ssize_t size;
     void *buf;
 
-    if (!strcmp (path, "-"))
+    if (streq (path, "-"))
         fd = STDIN_FILENO;
     else {
         if ((fd = open (path, O_RDONLY)) < 0)
@@ -771,9 +772,9 @@ int cmd_decode (optparse_t *p, int argc, char **argv)
     }
     if (optparse_getopt (p, "count", &type)) {
         int count;
-        if (strcmp (type, "node") == 0)
+        if (streq (type, "node"))
             count = rlist_nnodes (rl);
-        else if (strcmp (type, "core") == 0)
+        else if (streq (type, "core"))
             count = rl->avail;
         else
             count = rlist_count (rl, type);

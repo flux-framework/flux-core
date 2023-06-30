@@ -15,6 +15,8 @@
 #include <ctype.h>
 #include <flux/core.h>
 
+#include "ccan/str/str.h"
+
 #include "stats.h"
 #include "job_data.h"
 
@@ -67,14 +69,7 @@ static struct job_stats *queue_stats_lookup (struct job_stats_ctx *statsctx,
     if (!stats) {
         if (!(stats = calloc (1, sizeof (*stats))))
             return NULL;
-        if (zhashx_insert (statsctx->queue_stats, job->queue, stats) < 0) {
-            flux_log (statsctx->h,
-                      LOG_ERR,
-                      "%s: zhashx_insert: out of memory",
-                      __FUNCTION__);
-            free (stats);
-            return NULL;
-        }
+        (void)zhashx_insert (statsctx->queue_stats, job->queue, stats);
     }
     return stats;
 }
@@ -110,13 +105,16 @@ static void stats_add (struct job_stats *stats,
 
     if (state == FLUX_JOB_STATE_INACTIVE) {
         if (!job->success) {
-            stats->failed++;
             if (job->exception_occurred) {
-                if (strcmp (job->exception_type, "cancel") == 0)
+                if (streq (job->exception_type, "cancel"))
                     stats->canceled++;
-                else if (strcmp (job->exception_type, "timeout") == 0)
+                else if (streq (job->exception_type, "timeout"))
                     stats->timeout++;
+                else
+                    stats->failed++;
             }
+            else
+                stats->failed++;
         }
         else
             stats->successful++;
@@ -160,13 +158,16 @@ static void stats_purge (struct job_stats *stats, struct job *job)
     stats->state_count[state_index (job->state)]--;
 
     if (!job->success) {
-        stats->failed--;
         if (job->exception_occurred) {
-            if (strcmp (job->exception_type, "cancel") == 0)
+            if (streq (job->exception_type, "cancel"))
                 stats->canceled--;
-            else if (strcmp (job->exception_type, "timeout") == 0)
+            else if (streq (job->exception_type, "timeout"))
                 stats->timeout--;
+            else
+                stats->failed--;
         }
+        else
+            stats->failed--;
     }
     else
         stats->successful--;

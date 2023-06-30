@@ -31,7 +31,7 @@ SYNOPSIS
 
 **flux** **job** **timeleft** [*OPTIONS*] [*id*]
 
-**flux** **job** **purge** [*OPTIONS*]
+**flux** **job** **purge** [*OPTIONS*] [*id...*]
 
 DESCRIPTION
 ===========
@@ -103,24 +103,38 @@ Wait for job(s) to complete and exit with the largest exit code.
 WAIT
 ====
 
-A waitable job may be waited on with ``flux job wait``.  A specific job
-can be waited on by specifying a jobid.  If no jobid is specified, the
-command will wait for any waitable user job to complete, outputting that
-jobid before exiting.  This command will exit with error if the job is not
-successful.
+``flux job wait`` behaves like the UNIX :linux:man2:`wait` system call,
+for jobs submitted with the ``waitable`` flag.  Compared to other methods
+of synchronizing on job completion and obtaining results, it is very
+lightweight.
 
-Compared to ``flux job status``, there are several advantages /
-disadvantages of using ``flux job wait``.  For a large number of jobs,
-``flux job wait`` is far more efficient, especially when used with the
-``--all`` option below.  In addition, job ids do not have to be specified
-to ``flux job wait``.
+The result of a waitable job may only be consumed once.  This is a design
+feature that makes it possible to call ``flux job wait`` in a loop until all
+results are consumed.
 
-The two major limitations are that jobs must be submitted with the
-waitable flag, which can only be done in user instances.  In addition,
-``flux job wait`` can only be called once per job.
+.. note::
+  Only the instance owner is permitted to submit jobs with the ``waitable``
+  flag.
+
+When run with a jobid argument, ``flux job wait`` blocks until the specified
+job completes.  If the job was successful, it silently exits with a code of
+zero.  If the job has failed, an error is printed on stderr, and it exits with
+a code of one.  If the jobid is invalid or the job is not waitable, ``flux job wait``
+exits with a code of two.  This special exit code of two is used to differentiate
+between a failed job and not being able to wait on the job.
+
+When run without arguments, ``flux job wait`` blocks until the next waitable
+job completes and behaves as above except that the jobid is printed to stdout.
+When there are no more waitable jobs, it exits with a code of two.  The exit code
+of two can be used to determine when no more jobs are waitable when using
+``flux job wait`` in a loop.
+
+``flux job wait --all`` loops through all the waitable jobs as they complete,
+printing their jobids.  If all jobs are successful, it exits with a code of zero.
+If any jobs have failed, it exits with a code of one.
 
 **-a, --all**
-   Wait for all waitable jobs.  Will exit with error if any jobs are
+   Wait for all waitable jobs and exit with error if any jobs are
    not successful.
 
 **-v, --verbose**
@@ -233,7 +247,8 @@ PURGE
 =====
 
 Inactive job data may be purged from the Flux instance with ``flux job purge``.
-The following options may be used to add selection criteria:
+Specific job ids may be specified for purging.  If no job ids are
+specified, the following options may be used for selection criteria:
 
 **--age-limit=FSD**
    Purge inactive jobs older than the specified Flux Standard Duration.

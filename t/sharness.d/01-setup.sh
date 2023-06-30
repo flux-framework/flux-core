@@ -10,6 +10,14 @@ unset FLUX_MODULE_PATH
 unset FLUX_PMI_CLIENT_SEARCHPATH
 unset FLUX_PMI_CLIENT_METHODS
 
+# Unset any user defined output defaults, since that may mess up tests
+unset FLUX_JOBS_FORMAT_DEFAULT
+unset FLUX_RESOURCE_LIST_FORMAT_DEFAULT
+unset FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT
+unset FLUX_RESOURCE_STATUS_FORMAT_DEFAULT
+unset FLUX_QUEUE_LIST_FORMAT_DEFAULT
+unset FLUX_PGREP_FORMAT_DEFAULT
+
 #
 #  FLUX_BUILD_DIR and FLUX_SOURCE_DIR are set to build and source paths
 #  (based on current directory)
@@ -39,6 +47,15 @@ if test -n "$FLUX_TEST_INSTALLED_PATH"; then
     PATH=$FLUX_TEST_INSTALLED_PATH:$PATH
     fluxbin=$FLUX_TEST_INSTALLED_PATH/flux
 else # normal case, use ${top_builddir}/src/cmd/flux
+    #
+    #  Ensure that the path to the configured Python is first in PATH
+    #  so the correct version is found by '#!/usr/bin/env python3' in
+    #  several test scripts that use this shebang line.
+    #  N.B.: This is not a complete fix. See flux-core #5091 for details
+    #
+    PATH=$($FLUX_BUILD_DIR/src/cmd/flux python -c \
+           'import os,sys; print(os.path.dirname(sys.executable))'):$PATH
+
     PATH=$FLUX_BUILD_DIR/src/cmd:$PATH
     fluxbin=$FLUX_BUILD_DIR/src/cmd/flux
 

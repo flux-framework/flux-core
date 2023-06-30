@@ -196,6 +196,7 @@ int flux_cmd_setenvf (flux_cmd_t *cmd, int overwrite,
 
 /*
  *  Unset environment variable `name` in the command object `cmd`.
+ *   If `name` is a glob pattern, unset all matching variables.
  */
 void flux_cmd_unsetenv (flux_cmd_t *cmd, const char *name);
 
@@ -452,9 +453,15 @@ const char *flux_subprocess_state_string (flux_subprocess_state_t state);
 
 int flux_subprocess_rank (flux_subprocess_t *p);
 
-/* Returns the errno causing the FLUX_SUBPROCESS_FAILED states to be reached.
+/* Returns the errno causing the FLUX_SUBPROCESS_FAILED state to be reached.
  */
 int flux_subprocess_fail_errno (flux_subprocess_t *p);
+
+/* Returns error message describing why FLUX_SUBPROCESS_FAILED state was
+ * reached.  If error message was not set, will return strerror() of
+ * errno returned from flux_subprocess_fail_errno().
+ */
+const char *flux_subprocess_fail_error (flux_subprocess_t *p);
 
 /* Returns exit status as returned from wait(2).  Works only for
  * FLUX_SUBPROCESS_EXITED state. */
@@ -492,6 +499,13 @@ int flux_subprocess_aux_set (flux_subprocess_t *p,
  */
 void *flux_subprocess_aux_get (flux_subprocess_t *p, const char *name);
 
+/*
+ *  Take/drop a reference on a subprocess output channel `name` (e.g. "stdout"
+ *   or "stderr"). EOF will not be produced from this channel the reference
+ *   count drops to zero.
+ */
+void flux_subprocess_channel_incref (flux_subprocess_t *p, const char *name);
+void flux_subprocess_channel_decref (flux_subprocess_t *p, const char *name);
 
 #ifdef __cplusplus
 }

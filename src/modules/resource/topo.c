@@ -27,6 +27,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/librlist/rhwloc.h"
 #include "src/common/librlist/rlist.h"
+#include "ccan/str/str.h"
 
 #include "resource.h"
 #include "inventory.h"
@@ -299,7 +300,7 @@ struct topo *topo_create (struct resource_ctx *ctx,
         const char *method = inventory_get_method (ctx->inventory);
         bool nodrain = false;
 
-        if (method && !strcmp (method, "job-info"))
+        if (method && streq (method, "job-info"))
             nodrain = true;
         if (!no_verify && topo_verify (topo, R, nodrain) < 0)
             goto error;

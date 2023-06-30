@@ -61,12 +61,13 @@ OPTIONS
 
 **-o, --format**\ *=NAME|FORMAT*
    Specify a named output format *NAME* or a format string using Python's
-   format syntax. For full documentation of this option, including supported
-   field names and format configuration options, see :man1:flux-jobs. This
-   command shares configured named formats with *flux-jobs* by reading
-   *flux-jobs* configuration files. Supported builtin named formats include
-   *default*, *full*, *long*, and *deps*. The default format emits the matched
-   jobids only. (pgrep only)
+   format syntax.  An alternate default format can be set via the
+   FLUX_PGREP_FORMAT_DEFAULT environment variable.  For full documentation of
+   this option, including supported field names and format configuration
+   options, see :man1:flux-jobs. This command shares configured named formats
+   with *flux-jobs* by reading *flux-jobs* configuration files. Supported
+   builtin named formats include *default*, *full*, *long*, and *deps*. The
+   default format emits the matched jobids only. (pgrep only)
 
 **-n, --no-header**
    Suppress printing of the header line. (pgrep only)

@@ -52,6 +52,11 @@ all *TARGET* URIs support the special query arguments ``local`` or
 
 would return the ``local://`` URI for *JOBID* (if the URI can be resolved).
 
+A special environment variable FLUX_URI_RESOLVE_LOCAL will force
+``flux uri`` to always resolve URIs to local form.  This is often useful if
+the local connector is known to be on the local system (i.e. within a test
+Flux instance), and ssh to localhost does not work.
+
 A list of supported URI schemes will be listed at the bottom of
 ``flux uri --help`` message. For a description of the URI resolver schemes
 included with Flux, see the URI SCHEMES and EXAMPLES sections below.

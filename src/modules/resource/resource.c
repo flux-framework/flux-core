@@ -23,6 +23,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/librlist/rlist.h"
+#include "ccan/str/str.h"
 
 #include "resource.h"
 #include "inventory.h"
@@ -69,7 +70,7 @@ static int parse_config (struct resource_ctx *ctx,
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?:{s?:s s?:o s?:s s?:b s?b !}}",
+                          "{s?{s?s s?o s?s s?b s?b !}}",
                           "resource",
                             "path", &path,
                             "config", &config,
@@ -340,7 +341,7 @@ static int prune_eventlog (json_t *eventlog)
 
     json_array_foreach (eventlog, index, entry) {
         if (eventlog_entry_parse (entry, NULL, &name, NULL) == 0
-                && !strcmp (name, "resource-init"))
+                && streq (name, "resource-init"))
             last_entry = index;
     }
     if (last_entry < json_array_size (eventlog)) {
@@ -401,9 +402,9 @@ int parse_args (flux_t *h,
         /* Test option to force all ranks to be marked online in the initial
          * 'restart' event posted to resource.eventlog.
          */
-        if (!strcmp (argv[i], "monitor-force-up"))
+        if (streq (argv[i], "monitor-force-up"))
             *monitor_force_up = true;
-        else if (!strcmp (argv[i], "noverify"))
+        else if (streq (argv[i], "noverify"))
             *noverify = true;
         else  {
             flux_log (h, LOG_ERR, "unknown option: %s", argv[i]);
@@ -446,19 +447,41 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto error;
     if (flux_attr_get (ctx->h, "broker.recovery-mode"))
         noverify = true;
-    if (ctx->rank == 0) {
-        if (!(ctx->reslog = reslog_create (h)))
-            goto error;
-        if (reload_eventlog (h, &eventlog) < 0)
-            goto error;
-        if (!(ctx->drain = drain_create (ctx, eventlog)))
-            goto error;
-    }
+
+    /*  Note: Order of creation of resource subsystems is important.
+     *  Create inventory on all ranks first, since it is required by
+     *  the exclude and drain subsystems on rank 0.
+     */
     if (!(ctx->inventory = inventory_create (ctx, R_from_config)))
         goto error;
     /*  Done with R_from_config now, so free it.
      */
     json_decref (R_from_config);
+    if (ctx->rank == 0) {
+        /*  Create reslog and reload eventlog before initializing
+         *  acquire, exclude, and drain subsystems, since these
+         *  are required by acquire and exclude.
+         */
+        if (!(ctx->reslog = reslog_create (h)))
+            goto error;
+        if (reload_eventlog (h, &eventlog) < 0)
+            goto error;
+        if (!(ctx->acquire = acquire_create (ctx)))
+            goto error;
+
+        /*  Initialize exclude subsystem before drain since drain uses
+         *  the exclude idset to ensure drained ranks that are now
+         *  excluded are ignored.
+         */
+        if (!(ctx->exclude = exclude_create (ctx, exclude_idset)))
+            goto error;
+        if (!(ctx->drain = drain_create (ctx, eventlog)))
+            goto error;
+    }
+
+    /*  topology is initialized after exclude/drain etc since this
+     *  rank may attempt to drain itself due to a topology mismatch.
+     */
     if (!(ctx->topology = topo_create (ctx, noverify, norestrict)))
         goto error;
     if (!(ctx->monitor = monitor_create (ctx,
@@ -466,10 +489,6 @@ int mod_main (flux_t *h, int argc, char **argv)
                                          monitor_force_up)))
         goto error;
     if (ctx->rank == 0) {
-        if (!(ctx->acquire = acquire_create (ctx)))
-            goto error;
-        if (!(ctx->exclude = exclude_create (ctx, exclude_idset)))
-            goto error;
         if (post_restart_event (ctx, eventlog ? 1 : 0) < 0)
             goto error;
         if (reslog_sync (ctx->reslog) < 0)
@@ -489,8 +508,6 @@ error:
     ERRNO_SAFE_WRAP (json_decref, eventlog);
     return -1;
 }
-
-MOD_NAME ("resource");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

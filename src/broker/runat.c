@@ -24,11 +24,15 @@
 #include <assert.h>
 #include <argz.h>
 #include <jansson.h>
+#if HAVE_LIBSYSTEMD
+#include <systemd/sd-daemon.h>
+#endif
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/monotime.h"
+#include "ccan/str/str.h"
 
 #include "runat.h"
 
@@ -56,6 +60,7 @@ struct runat {
     const char *local_uri;
     zhashx_t *entries;
     flux_msg_handler_t **handlers;
+    bool sd_notify;
 };
 
 static void runat_command_destroy (struct runat_command *cmd);
@@ -72,9 +77,9 @@ static const char *env_blocklist[] = {
     "FLUX_TASK_LOCAL_ID",
     "FLUX_URI",
     "FLUX_KVS_NAMESPACE",
-    "PMI_FD",
-    "PMI_RANK",
-    "PMI_SIZE",
+    "FLUX_PROXY_REMOTE",
+    "PMI_*",
+    "SLURM_*",  // flux-framework/flux-core#5206
     NULL,
 };
 
@@ -98,8 +103,8 @@ static char *get_cmdline (flux_cmd_t *cmd)
     /* Drop the "/bin/bash -c" from logging for brevity.
      */
     if (flux_cmd_argc (cmd) > 2
-        && !strcmp (flux_cmd_arg (cmd, 0), get_shell ())
-        && !strcmp (flux_cmd_arg (cmd, 1), "-c"))
+        && streq (flux_cmd_arg (cmd, 0), get_shell ())
+        && streq (flux_cmd_arg (cmd, 1), "-c"))
         start += 2;
     for (i = start; i < flux_cmd_argc (cmd); i++) {
         if (argz_add (&buf, &len, flux_cmd_arg (cmd, i)) != 0) {
@@ -214,7 +219,7 @@ static void stdio_cb (flux_subprocess_t *p, const char *stream)
     int len;
 
     if ((line = flux_subprocess_getline (p, stream, &len)) && len > 0) {
-        if (!strcmp (stream, "stderr"))
+        if (streq (stream, "stderr"))
             flux_log (r->h, LOG_ERR, "%s.%d: %s", entry->name, index, line);
         else
             flux_log (r->h, LOG_INFO, "%s.%d: %s", entry->name, index, line);
@@ -272,6 +277,13 @@ static void start_next_command (struct runat *r, struct runat_entry *entry)
     }
     else {
         while (!started && (cmd = zlist_head (entry->commands))) {
+#if HAVE_LIBSYSTEMD
+            if (r->sd_notify) {
+                char *s = get_cmdline (cmd->cmd);
+                sd_notifyf (0, "STATUS=Running %s", s ? s : "unknown command");
+                free (s);
+            }
+#endif
             if (!(cmd->p = start_command (r, entry, cmd))) {
                 log_command (r->h, entry, 1, 0, "error starting command");
                 if (entry->exit_code == 0)
@@ -419,10 +431,7 @@ static int runat_push (struct runat *r,
     if (!(entry = zhashx_lookup (r->entries, name))) {
         if (!(entry = runat_entry_create (name)))
             return -1;
-        if (zhashx_insert (r->entries, name, entry) < 0) {
-            runat_entry_destroy (entry);
-            return -1;
-        }
+        (void)zhashx_insert (r->entries, name, entry);
     }
     if (zlist_push (entry->commands, cmd) < 0) {
         if (zlist_size (entry->commands) == 0)
@@ -452,9 +461,9 @@ int runat_push_shell_command (struct runat *r,
 
     /*   For shell commands run the target cmdline in a separate process
      *   group so that any processes spawned by the shell will be signaled
-     *   in runat_abort(). This is probably unnecessary for single commands,
-     *   and does not work for an interactive shell (seems to disable access
-     *   to the pty), so we set the flag only here for now.
+     *   in runat_abort(). This does not work for an interactive shell
+     *   (seems to disable access to the pty), so this flag is not set in
+     *   runat_push_shell().
      */
     cmd->flags |= FLUX_SUBPROCESS_FLAGS_SETPGRP;
 
@@ -509,6 +518,13 @@ int runat_push_command (struct runat *r,
     }
     if (!(cmd = runat_command_create (environ, flags)))
         return -1;
+
+    /*   Run the target cmdline in a separate process group so that any
+     *   processes spawned by the new process are also signaled in
+     *   runat_abort().
+     */
+    cmd->flags |= FLUX_SUBPROCESS_FLAGS_SETPGRP;
+
     if (runat_command_set_argz (cmd, argz, argz_len) < 0)
         goto error;
     if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
@@ -658,7 +674,7 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-struct runat *runat_create (flux_t *h, const char *local_uri)
+struct runat *runat_create (flux_t *h, const char *local_uri, bool sdnotify)
 {
     struct runat *r;
 
@@ -671,6 +687,7 @@ struct runat *runat_create (flux_t *h, const char *local_uri)
     zhashx_set_destructor (r->entries, runat_entry_destroy_wrapper);
     r->h = h;
     r->local_uri = local_uri;
+    r->sd_notify = sdnotify;
     return r;
 error:
     runat_destroy (r);

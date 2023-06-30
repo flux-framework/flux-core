@@ -8,13 +8,14 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
+	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux \
 	$(JANSSON_CFLAGS) \
 	$(HWLOC_CFLAGS)
 
-fluxmod_LTLIBRARIES = resource.la
+noinst_LTLIBRARIES = libresource.la
 
-resource_la_SOURCES = \
+libresource_la_SOURCES = \
 	resource.c \
 	resource.h \
 	monitor.c \
@@ -34,21 +35,14 @@ resource_la_SOURCES = \
 	rutil.c \
 	rutil.h
 
-resource_la_LDFLAGS = $(fluxmod_ldflags) -module
-resource_la_LIBADD = \
-	$(top_builddir)/src/common/librlist/librlist.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(JANSSON_LIBS) \
-	$(HWLOC_LIBS)
-
 TESTS = test_rutil.t
 
 test_ldadd = \
-        $(top_builddir)/src/common/librlist/librlist.la \
-        $(top_builddir)/src/common/libflux-core.la \
-        $(top_builddir)/src/common/libflux-internal.la \
-        $(top_builddir)/src/common/libtap/libtap.la \
+	$(builddir)/libresource.la \
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libtap/libtap.la \
 	$(HWLOC_LIBS) \
 	$(JANSSON_LIBS) \
 	$(LIBPTHREAD)
@@ -68,9 +62,5 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 
 test_rutil_t_SOURCES = test/rutil.c
 test_rutil_t_CPPFLAGS = $(test_cppflags)
-test_rutil_t_LDADD = \
-        $(top_builddir)/src/modules/resource/rutil.o \
-        $(test_ldadd)
-test_rutil_t_LDFLAGS = \
-        $(test_ldflags)
-
+test_rutil_t_LDADD = $(test_ldadd)
+test_rutil_t_LDFLAGS = $(test_ldflags)

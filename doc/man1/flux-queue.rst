@@ -116,10 +116,11 @@ OUTPUT FORMAT
 
 The *--format* option can be used to specify an output format using Python's
 string format syntax or a defined format by name. For a list of built-in and
-configured formats use ``-o help``.  A configuration snippet for an existing
-named format may be generated with ``--format=get-config=NAME``.  See
-:man1:`flux-jobs` *OUTPUT FORMAT* section for a detailed description of this
-syntax.
+configured formats use ``-o help``.  An alternate default format can be set via
+the FLUX_QUEUE_LIST_FORMAT_DEFAULT environment variable.  A configuration
+snippet for an existing named format may be generated with
+``--format=get-config=NAME``.  See :man1:`flux-jobs` *OUTPUT FORMAT* section for
+a detailed description of this syntax.
 
 The following field names can be specified:
 

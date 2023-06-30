@@ -8,10 +8,14 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
+#include <string.h>
+
 #include "src/common/libflux/version.h"
 #include "src/common/libtap/tap.h"
-
-#include <string.h>
+#include "ccan/str/str.h"
 
 int main (int argc, char *argv[])
 {
@@ -30,7 +34,7 @@ int main (int argc, char *argv[])
 
     snprintf (vs, sizeof (vs), "%d.%d.%d", a,b,c);
     s = flux_core_version_string ();
-    ok (s != NULL && !strncmp (s, vs, strlen (vs)),
+    ok (s != NULL && strstarts (s, vs),
         "flux_core_version_string returned expected string");
     diag (s);
 

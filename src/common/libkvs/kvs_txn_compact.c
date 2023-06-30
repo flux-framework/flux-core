@@ -26,7 +26,7 @@
  * performance issues.
  *
  * One way to improve performance is to "compact" these appends in KVS
- * transactions before they are commited to the KVS.  If multiple
+ * transactions before they are committed to the KVS.  If multiple
  * appends to the same key exist in a KVS transaction, combine them
  * into a single append.  For example, an append of "A" to the key
  * "foo", followed by an append of "B" to the key "foo", could be
@@ -275,7 +275,7 @@ int txn_compact (flux_kvs_txn_t *txn)
                     goto error;
                 }
                 if (zhash_insert (append_keys, key, ck) < 0) {
-                    errno = ENOMEM;
+                    errno = EEXIST;
                     goto error;
                 }
                 zhash_freefn (append_keys, key, compact_key_destroy);

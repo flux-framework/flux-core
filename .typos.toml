@@ -1,0 +1,27 @@
+# do not check code copied into the project
+# do not check sha code, lots of hashing false positives
+# do not check testing data
+[files]
+extend-exclude = [
+  "config/*",
+  "src/common/libev/*",
+  "src/common/libccan/*",
+  "src/common/liblsd/*",
+  "src/common/libtomlc99/*",
+  "src/bindings/python/flux/utils/parsedatetime/*",
+  "t/sharness.sh",
+  "src/common/libutil/sha1.c",
+  "src/common/libutil/test/sha1.c",
+  "t/hwloc-data/*",
+]
+
+[default.extend-words]
+# in hwloc output
+hsi = "hsi"
+# commonly used names/variables that aren't typos
+fo = "fo"
+ba = "ba"
+inout = "inout"
+trun = "trun"
+fullset = "fullset"
+mone = "mone"

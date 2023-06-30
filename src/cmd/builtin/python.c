@@ -26,7 +26,7 @@ static int cmd_python (optparse_t *p, int ac, char *av[])
      *  that symlink'd binaries in virtualenvs are respected.
      */
     av[0] = PYTHON_INTERPRETER;
-    execv (PYTHON_INTERPRETER, av); /* no return if sucessful */
+    execv (PYTHON_INTERPRETER, av); /* no return if successful */
     log_err_exit ("execvp (%s)", PYTHON_INTERPRETER);
     return (0);
 }

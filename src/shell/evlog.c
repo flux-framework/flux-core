@@ -38,6 +38,7 @@
 #include <flux/shell.h>
 
 #include "src/common/libeventlog/eventlogger.h"
+#include "ccan/str/str.h"
 
 #include "info.h"
 #include "internal.h"
@@ -177,7 +178,7 @@ static int log_eventlog_setlevel (flux_plugin_t *p,
                          flux_plugin_arg_strerror (args));
         return -1;
     }
-    if (strcmp (name, "any") == 0 || strcmp (name, "eventlog") == 0)
+    if (streq (name, "any") || streq (name, "eventlog"))
         evlog->level = level;
     return 0;
 }
@@ -209,7 +210,7 @@ static int log_eventlog_start (flux_plugin_t *p,
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct evlog *evlog = NULL;
 
-    /*  Do not activate eventlogger in standlone mode */
+    /*  Do not activate eventlogger in standalone mode */
     if (shell->standalone)
         return 0;
 

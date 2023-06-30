@@ -17,6 +17,7 @@
 #endif
 #include <flux/core.h>
 
+#include "src/common/libjob/idf58.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "job.h"
@@ -53,7 +54,9 @@ static int sched_prioritize_one (struct job_manager *ctx, struct job *job)
         return -1;
     }
     if (sched_prioritize (ctx->h, priorities) < 0) {
-        flux_log_error (ctx->h, "rpc: sched.priority: id=%ju", job->id);
+        flux_log_error (ctx->h,
+                        "rpc: sched.priority: id=%s",
+                        idf58 (job->id));
         json_decref (priorities);
         return -1;
     }
@@ -189,8 +192,8 @@ int reprioritize_all (struct job_manager *ctx)
         /*  Call plugin to get immediate priority calculation
          */
         if (jobtap_get_priority (ctx->jobtap, job, &priority) < 0) {
-            flux_log_error (h, "jobtap_get_priority: %ju",
-                            (uintmax_t) job->id);
+            flux_log_error (h, "jobtap_get_priority: %s",
+                            idf58 (job->id));
             continue;
         }
 
@@ -203,8 +206,8 @@ int reprioritize_all (struct job_manager *ctx)
              *   post a priority event if the priority changes
              */
             if (reprioritize_one (ctx, job, priority, false) < 0) {
-                flux_log_error (h, "reprioritize_one: %ju",
-                                (uintmax_t) job->id);
+                flux_log_error (h, "reprioritize_one: %s",
+                                idf58 (job->id));
                 goto error;
             }
 

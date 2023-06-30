@@ -19,7 +19,9 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libjob/jj.h"
+#include "src/common/libjob/idf58.h"
 #include "src/common/librlist/rlist.h"
+#include "ccan/str/str.h"
 
 // e.g. flux module debug --setbit 0x1 sched-simple
 // e.g. flux module debug --clearbit 0x1 sched-simple
@@ -125,7 +127,7 @@ jobreq_create (const flux_msg_t *msg)
         job->errnum = errno;
     }
     if (json_unpack (jobspec,
-                     "{s?{s?{s?O}}}",
+                     "{s:{s?{s?O}}}",
                      "attributes",
                      "system",
                      "constraints", &job->constraints) < 0) {
@@ -141,21 +143,30 @@ err:
 
 static void simple_sched_destroy (flux_t *h, struct simple_sched *ss)
 {
-    struct jobreq *job = zlistx_first (ss->queue);
-    while (job) {
-        flux_respond_error (h, job->msg, ENOSYS, "simple sched exiting");
-        job = zlistx_next (ss->queue);
+    if (ss) {
+        int saved_errno = errno;
+        if (ss->queue) {
+            struct jobreq *job = zlistx_first (ss->queue);
+            while (job) {
+                flux_respond_error (h,
+                                    job->msg,
+                                    ENOSYS,
+                                    "simple sched exiting");
+                job = zlistx_next (ss->queue);
+            }
+            zlistx_destroy (&ss->queue);
+        }
+        flux_future_destroy (ss->acquire_f);
+        flux_watcher_destroy (ss->prep);
+        flux_watcher_destroy (ss->check);
+        flux_watcher_destroy (ss->idle);
+        schedutil_destroy (ss->util_ctx);
+        rlist_destroy (ss->rlist);
+        free (ss->alloc_mode);
+        free (ss->mode);
+        free (ss);
+        errno = saved_errno;
     }
-    flux_future_destroy (ss->acquire_f);
-    zlistx_destroy (&ss->queue);
-    flux_watcher_destroy (ss->prep);
-    flux_watcher_destroy (ss->check);
-    flux_watcher_destroy (ss->idle);
-    schedutil_destroy (ss->util_ctx);
-    rlist_destroy (ss->rlist);
-    free (ss->alloc_mode);
-    free (ss->mode);
-    free (ss);
 }
 
 static struct simple_sched * simple_sched_create (void)
@@ -262,7 +273,7 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
                                               "jobs_ahead") < 0)
         flux_log_error (h, "schedutil_alloc_respond_success_pack");
 
-    flux_log (h, LOG_DEBUG, "alloc: %ju: %s", (uintmax_t) job->id, s);
+    flux_log (h, LOG_DEBUG, "alloc: %s: %s", idf58 (job->id), s);
     rc = 0;
 
 out:
@@ -392,8 +403,8 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg, void *arg)
         jobreq_destroy (job);
         return;
     }
-    flux_log (h, LOG_DEBUG, "req: %ju: spec={%d,%d,%d} duration=%.1f",
-                            (uintmax_t) job->id, job->jj.nnodes,
+    flux_log (h, LOG_DEBUG, "req: %s: spec={%d,%d,%d} duration=%.1f",
+                            idf58 (job->id), job->jj.nnodes,
                             job->jj.nslots, job->jj.slot_size,
                             job->jj.duration);
     search_dir = job->priority > FLUX_JOB_URGENCY_DEFAULT;
@@ -471,7 +482,7 @@ static void prioritize_cb (flux_t *h,
         zlistx_sort (ss->queue);
 
         /*  zlistx handles are invalidated after a zlistx_sort(),
-         *   so reaquire them now
+         *   so reacquire them now
          */
         job = zlistx_first (ss->queue);
         while (job) {
@@ -511,8 +522,8 @@ static int hello_cb (flux_t *h,
     }
 
     flux_log (h, LOG_DEBUG,
-              "hello: id=%ju priority=%u userid=%u t_submit=%0.1f",
-              (uintmax_t)id,
+              "hello: id=%s priority=%u userid=%u t_submit=%0.1f",
+              idf58 (id),
               priority,
               (unsigned int)userid,
               t_submit);
@@ -607,7 +618,7 @@ static void feasibility_cb (flux_t *h,
                             "jobspec", &jobspec) < 0)
         goto err;
     if (json_unpack (jobspec,
-                     "{s?{s?{s?o}}}",
+                     "{s:{s?{s?o}}}",
                      "attributes",
                      "system",
                      "constraints", &constraints) < 0)
@@ -789,9 +800,9 @@ out:
 
 static char * get_alloc_mode (flux_t *h, const char *alloc_mode)
 {
-    if (strcmp (alloc_mode, "worst-fit") == 0
-        || strcmp (alloc_mode, "first-fit") == 0
-        || strcmp (alloc_mode, "best-fit") == 0)
+    if (streq (alloc_mode, "worst-fit")
+        || streq (alloc_mode, "first-fit")
+        || streq (alloc_mode, "best-fit"))
         return strdup (alloc_mode);
     flux_log (h, LOG_ERR, "unknown allocation mode: %s", alloc_mode);
     return NULL;
@@ -799,7 +810,7 @@ static char * get_alloc_mode (flux_t *h, const char *alloc_mode)
 
 static void set_mode (struct simple_sched *ss, const char *mode)
 {
-    if (!strncmp (mode, "limited=", 8)) {
+    if (strstarts (mode, "limited=")) {
         char *endptr;
         int n = strtol (mode+8, &endptr, 0);
         if (*endptr != '\0' || n <= 0) {
@@ -833,14 +844,14 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 {
     int i;
     for (i = 0; i < argc; i++) {
-        if (strncmp ("alloc-mode=", argv[i], 11) == 0) {
+        if (strstarts (argv[i], "alloc-mode=")) {
             free (ss->alloc_mode);
             ss->alloc_mode = get_alloc_mode (h, argv[i]+11);
         }
-        else if (strncmp ("mode=", argv[i], 5) == 0) {
+        else if (strstarts (argv[i], "mode=")) {
             set_mode (ss, argv[i]+5);
         }
-        else if (strcmp ("test-free-nolookup", argv[i]) == 0) {
+        else if (streq (argv[i], "test-free-nolookup")) {
             ss->schedutil_flags |= SCHEDUTIL_FREE_NOLOOKUP;
         }
         else {
@@ -915,8 +926,6 @@ done:
     flux_msg_handler_delvec (handlers);
     return rc;
 }
-
-MOD_NAME ("sched-simple");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

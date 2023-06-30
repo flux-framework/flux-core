@@ -14,6 +14,7 @@
 #include <flux/core.h>
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
+#include "ccan/str/str.h"
 
 void test_codec (void)
 {
@@ -41,7 +42,7 @@ void test_codec (void)
 
     topic = NULL;
     ok (flux_event_decode (msg, &topic, NULL) == 0
-        && topic != NULL && !strcmp (topic, "foo.bar"),
+        && topic != NULL && streq (topic, "foo.bar"),
         "flux_event_decode returns encoded topic");
     ok (flux_event_decode (msg, NULL, NULL) == 0,
         "flux_event_decode topic is optional");
@@ -56,7 +57,7 @@ void test_codec (void)
 
     s = NULL;
     ok (flux_event_decode (msg, NULL, &s) == 0
-        && s != NULL && !strcmp (s, json_str),
+        && s != NULL && streq (s, json_str),
         "flux_event_decode returns encoded payload");
     errno = 0;
     ok (flux_event_decode (msg, NULL, NULL) == 0,
@@ -69,7 +70,7 @@ void test_codec (void)
     i = 0;
     ok (flux_event_unpack (msg, &topic, "{s:i}", "foo", &i) == 0,
         "flux_event_unpack unpacked payload object");
-    ok (i == 42 && topic != NULL && !strcmp (topic, "foo.bar"),
+    ok (i == 42 && topic != NULL && streq (topic, "foo.bar"),
         "unpacked payload matched packed");
     flux_msg_destroy (msg);
 
@@ -80,7 +81,7 @@ void test_codec (void)
     l = 0;
     topic = NULL;
     ok (flux_event_decode_raw (msg, &topic, &d, &l) == 0
-        && topic != NULL && strcmp (topic, "foo.bar") == 0
+        && topic != NULL && streq (topic, "foo.bar")
         && d != NULL && len == len && memcmp (d, data, len) == 0,
         "flux_event_decode_raw returns encoded topic and payload");
     ok (flux_event_decode_raw (msg, NULL, &d, &l) == 0

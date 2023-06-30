@@ -41,10 +41,11 @@ class JobID(int):
     encoding, including:
 
      - decimal integer (no prefix)
-     - hexidecimal integer (prefix 0x)
+     - hexadecimal integer (prefix 0x)
      - dotted hex (dothex) (xxxx.xxxx.xxxx.xxxx)
      - kvs dir (dotted hex with `job.` prefix)
      - RFC19 F58: (Base58 encoding with prefix `ƒ` or `f`)
+     - basemoji (emoji encoding)
 
     A JobID object also has properties for encoding a JOBID into each
     of the above representations, e.g. jobid.f85, jobid.words, jobid.dothex...
@@ -52,6 +53,8 @@ class JobID(int):
     """
 
     def __new__(cls, value):
+        if isinstance(value, JobID):
+            return cls(value.orig_str)
         if isinstance(value, int):
             jobid = value
         else:
@@ -79,18 +82,23 @@ class JobID(int):
 
     @property
     def hex(self):
-        """Return 0x-prefixed hexidecimal representation of a JobID"""
+        """Return 0x-prefixed hexadecimal representation of a JobID"""
         return self.encode("hex")
 
     @property
     def dothex(self):
-        """Return dotted hexidecimal representation of a JobID"""
+        """Return dotted hexadecimal representation of a JobID"""
         return self.encode("dothex")
 
     @property
     def words(self):
         """Return words (mnemonic) representation of a JobID"""
         return self.encode("words")
+
+    @property
+    def emoji(self):
+        """Return emoji representation of a JobID"""
+        return self.encode("emoji")
 
     @property
     def kvs(self):

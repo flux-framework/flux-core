@@ -81,6 +81,14 @@ chmod +x make-faketime.sh
 set_faketime=$(pwd)/make-faketime.sh
 event_trace="run_timeout 5 $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua"
 
+within_two() {
+    local result=$1
+    shift
+    local exact=$1
+    local two_after=$(($exact + 2))
+    test "$result" -ge $exact && test "$result" -le $two_after
+}
+
 #  Why does date need to be set 1s in the future??
 test_expect_success 'libfaketime works' '
     now=$(date +"@%Y-%m-%d %H:%M:%S") &&

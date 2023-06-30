@@ -28,6 +28,30 @@ test_expect_success 'wait for monitor to declare all ranks are up' '
 	waitdown 0
 '
 
+test_expect_success 'flux resource drain: default lists some expected fields' '
+	flux resource drain > default.out &&
+	grep STATE default.out &&
+	grep REASON default.out
+'
+
+test_expect_success 'flux resource drain: FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT works' '
+	FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT="{nodelist} {nodelist}" \
+		flux resource drain > default_override.out &&
+	grep "NODELIST NODELIST" default_override.out
+'
+
+test_expect_success 'flux resource drain: FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT works w/ named format' '
+	FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT=long \
+		flux resource drain > default_override_named.out &&
+	grep "RANKS" default_override_named.out
+'
+
+test_expect_success 'flux resource drain: --no-header works' '
+	flux resource drain --no-header > default_no_header.out &&
+	test_must_fail grep STATE default_no_header.out &&
+	test_must_fail grep REASON default_no_header.out
+'
+
 test_expect_success 'drain works with no reason' '
 	flux resource drain 1 &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 1
@@ -147,6 +171,65 @@ test_expect_success 'no nodes remain drained after restart' '
 	test $(flux resource status -s drain -no {nnodes}) -eq 0
 '
 
+test_expect_success 'drain one node' '
+	flux resource drain 0 testing
+'
+
+test_expect_success 'exclude one node via configuration' '
+	echo "resource.exclude = \"0\"" | flux config load
+'
+
+test_expect_success 'excluded node is no longer drained' '
+	test $(flux resource status -s drain -no {nnodes}) -eq 0
+'
+
+test_expect_success 'excluded node cannot be forcibly drained' '
+	test_must_fail flux resource drain 0 reason
+'
+
+test_expect_success 'drain of idset with excluded and drained nodes fails' '
+	flux resource drain 1 reason &&
+	test_must_fail flux resource drain 0-1 another reason 2>multi.err &&
+	test_debug "cat multi.err" &&
+	grep "drained or excluded" multi.err
+'
+
+test_expect_success 'undrain/unexclude ranks' '
+	flux resource undrain 1 &&
+	echo "resource.exclude = \"\"" | flux config load
+'
+
+test_expect_success 'no nodes remain drained or excluded' '
+	test $(flux resource status -s drain -no {nnodes}) -eq 0 &&
+	test $(flux resource status -s exclude -no {nnodes}) -eq 0
+'
+
+test_expect_success 'drained rank subsequently excluded is ignored' '
+	flux resource drain 1 this will be ignored &&
+	test $(flux resource status -s drain -no {nnodes}) -eq 1 &&
+	flux module remove sched-simple &&
+	flux module remove resource &&
+	echo resource.exclude = \"1\" | flux config load &&
+	flux module load resource &&
+	waitdown 0 &&
+	flux module load sched-simple &&
+	test $(flux resource status -s drain -no {nnodes}) -eq 0 &&
+	flux resource list
+'
+
+test_expect_success 'unexclude ranks' '
+	echo "resource.exclude = \"\"" | flux config load
+'
+
+test_expect_success 'no nodes remain drained or excluded' '
+	test $(flux resource status -s drain -no {nnodes}) -eq 0 &&
+	test $(flux resource status -s exclude -no {nnodes}) -eq 0
+'
+
+test_expect_success 'reload scheduler so it seems all ranks' '
+	flux module reload sched-simple
+'
+
 test_expect_success 'undrain fails if rank not drained' '
 	test_must_fail flux resource undrain 1 2>undrain_not.err &&
 	grep "rank 1 not drained" undrain_not.err
@@ -233,6 +316,12 @@ test_expect_success 'flux resource drain differentiates drain/draining' '
 	flux cancel $id &&
 	flux job wait-event $id clean &&
 	test $(flux resource status -s drain -no {nnodes}) -eq ${SIZE}
+'
+
+test_expect_success 'flux resource drain supports --include' '
+	flux resource drain -ni 0 >drain-include.output &&
+	test_debug "cat drain-include.output" &&
+	test $(wc -l <drain-include.output) -eq 1
 '
 
 test_expect_success 'flux resource drain works without scheduler loaded' '

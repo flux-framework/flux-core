@@ -24,6 +24,8 @@
 #include <flux/shell.h>
 #include <flux/idset.h>
 
+#include "ccan/str/str.h"
+
 #include "builtins.h"
 
 int ngpus_per_task = -1;
@@ -38,7 +40,7 @@ int get_shell_gpus (flux_shell_t *shell,
 
     if (flux_shell_rank_info_unpack (shell,
                                      -1,
-                                     "{s:i s:{s?:s}}",
+                                     "{s:i s:{s?s}}",
                                      "ntasks", ntasks,
                                      "resources",
                                        "gpus", &gpu_list) < 0) {
@@ -110,7 +112,7 @@ static int gpubind_init (flux_plugin_t *p,
         /* gpu-affinity defaults to "on" */
         opt = "on";
     }
-    if (strcmp (opt, "off") == 0) {
+    if (streq (opt, "off")) {
         shell_debug ("disabling affinity due to gpu-affinity=off");
         return 0;
     }
@@ -133,7 +135,7 @@ static int gpubind_init (flux_plugin_t *p,
 
     flux_shell_setenvf (shell, 0, "CUDA_DEVICE_ORDER", "PCI_BUS_ID");
 
-    if (strcmp (opt, "per-task") == 0) {
+    if (streq (opt, "per-task")) {
         /*  Set global ngpus_per_task to use in task.init callback:
          */
         ngpus_per_task = ngpus / ntasks;

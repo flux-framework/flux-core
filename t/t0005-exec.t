@@ -101,7 +101,7 @@ test_expect_success 'flux exec -d none works' '
 #  rank id to a file. After successful completion, the contents of the files
 #  are verfied to ensure each rank connected to the right broker.
 test_expect_success 'test_on_rank works on multiple ranks' '
-	ouput_dir=$(pwd) &&
+	output_dir=$(pwd) &&
 	rm -f rank_output.* &&
 	cat >multiple_rank_test <<EOF &&
 rank=\`flux getattr rank\`
@@ -121,11 +121,14 @@ test_expect_success 'flux exec exits with code 127 for file not found' '
 
 test_expect_success 'flux exec outputs appropriate error message for file not found' '
 	test_expect_code 127 flux exec -n ./nosuchprocess 2> exec.stderr &&
-        grep "No such file or directory" exec.stderr
+	grep "error launching process" exec.stderr &&
+	grep "No such file or directory" exec.stderr
 '
 
 test_expect_success 'flux exec exits with code 126 for non executable' '
-	test_expect_code 126 flux exec -n /dev/null
+	test_expect_code 126 flux exec -n /dev/null 2> exec.stderr2 &&
+	grep "error launching process" exec.stderr2 &&
+	grep "Permission denied" exec.stderr2
 '
 
 test_expect_success 'flux exec exits with code 68 (EX_NOHOST) for rank not found' '

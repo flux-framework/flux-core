@@ -62,6 +62,9 @@ exclude
    the scheduler, but will still be used to determine satisfiability of job
    requests until the instance is restarted.
 
+   If a drained node is subsequently excluded, the drain state of the node
+   is cleared since nodes cannot be both excluded and drained.
+
 norestrict
    (optional) Disable restricting of the loaded HWLOC topology XML to the
    current cpu affinity mask of the Flux broker. This option should be used

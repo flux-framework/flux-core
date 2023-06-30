@@ -110,7 +110,121 @@ static int purge_eligible_count (struct purge *purge,
     return count;
 }
 
+/* handle common purging work
+ * - unlink job in kvs txn
+ * - check if max_jobid needs to be updated
+ * - add job id to jobs array for later publishing
+ * - jobtap call "job.inactive-remove"
+ * - delete job from purge->queue and purge->ctx->inactive_jobs
+ */
+static int process_job_purge (struct purge *purge,
+                              struct job *job,
+                              flux_kvs_txn_t *txn,
+                              json_t *jobs)
+{
+    char key[64];
+
+    if (flux_job_kvs_key (key, sizeof (key), job->id, NULL) < 0
+        || flux_kvs_txn_unlink (txn, 0, key) < 0)
+        return -1;
+
+    /* Update max_jobid kvs entry if we are purging it.
+     * See also flux-framework/flux-core#4300.
+     */
+    if (job->id == purge->ctx->max_jobid) {
+        if (restart_save_state_to_txn (purge->ctx, txn) < 0)
+            flux_log_error (purge->ctx->h,
+                            "Error adding job-manager state to purge transaction");
+    }
+
+    json_t *o = json_integer (job->id);
+    if (!o || json_array_append_new (jobs, o)) {
+        json_decref (o);
+        errno = ENOMEM;
+        return -1;
+    }
+
+    (void)jobtap_call (purge->ctx->jobtap,
+                       job,
+                       "job.inactive-remove",
+                       NULL);
+
+    (void)zlistx_delete (purge->queue, job->handle);
+    job->handle = NULL;
+    zhashx_delete (purge->ctx->inactive_jobs, &job->id);
+    return 0;
+}
+
+static struct job *find_purge_candidate (struct purge *purge,
+                                         flux_jobid_t id,
+                                         const char **errmsg)
+{
+    struct job *job = zlistx_first (purge->queue);
+    while (job) {
+        if (job->id == id)
+            break;
+        job = zlistx_next (purge->queue);
+    }
+    if (!job) {
+        if (!(job = zhashx_lookup (purge->ctx->active_jobs, &id))) {
+            (*errmsg) = "id not found";
+            errno = ENOENT;
+        }
+        else {
+            (*errmsg) = "cannot purge active job";
+            errno = EINVAL;
+        }
+        return NULL;
+    }
+    return job;
+}
+
+static int purge_job_id (struct purge *purge,
+                         flux_jobid_t id,
+                         flux_kvs_txn_t *txn,
+                         json_t *jobs,
+                         const char **errmsg)
+{
+    struct job *job = find_purge_candidate (purge, id, errmsg);
+    if (!job)
+        return -1;
+    if (process_job_purge (purge, job, txn, jobs) < 0)
+        return -1;
+    return 0;
+}
+
+static int purge_jobs (struct purge *purge,
+                       double age_limit,
+                       int num_limit,
+                       int max_purge_count,
+                       flux_kvs_txn_t *txn,
+                       json_t *jobs,
+                       int *countp)
+{
+    double now = flux_reactor_now (flux_get_reactor (purge->ctx->h));
+    struct job *job;
+    int count = 0;
+
+    while ((job = zlistx_first (purge->queue)) && count < max_purge_count) {
+        if (!purge_eligible (now - job->t_clean,
+                             age_limit,
+                             zlistx_size (purge->queue),
+                             num_limit))
+            break;
+        if (process_job_purge (purge, job, txn, jobs) < 0)
+            return -1;
+        count++;
+    }
+    if (count == 0) {
+        errno = ENODATA;
+        return -1;
+    }
+    (*countp) = count;
+    return 0;
+}
+
 /* Send a KVS commit containing unlinks for one or more inactive jobs.
+ * (only one if jobid specified).
  * Return future if successful, with 'count' added to aux hash.
  * Return NULL on failure with errno set.
  * N.B. Failure with errno=ENODATA just means there were no eligible jobs.
@@ -118,13 +232,12 @@ static int purge_eligible_count (struct purge *purge,
 static flux_future_t *purge_inactive_jobs (struct purge *purge,
                                            double age_limit,
                                            int num_limit,
-                                           int max_purge_count)
+                                           int max_purge_count,
+                                           flux_jobid_t id,
+                                           const char **errmsg)
 {
-    double now = flux_reactor_now (flux_get_reactor (purge->ctx->h));
-    struct job *job;
     flux_kvs_txn_t *txn;
     json_t *jobs = NULL;
-    char key[64];
     flux_future_t *f = NULL;
     int count = 0;
 
@@ -134,45 +247,20 @@ static flux_future_t *purge_inactive_jobs (struct purge *purge,
         errno = ENOMEM;
         goto error;
     }
-    while ((job = zlistx_first (purge->queue)) && count < max_purge_count) {
-        if (!purge_eligible (now - job->t_clean,
-                             age_limit,
-                             zlistx_size (purge->queue),
-                             num_limit))
-            break;
-        if (flux_job_kvs_key (key, sizeof (key), job->id, NULL) < 0
-            || flux_kvs_txn_unlink (txn, 0, key) < 0)
+    if (!id) {
+        if (purge_jobs (purge,
+                        age_limit,
+                        num_limit,
+                        max_purge_count,
+                        txn,
+                        jobs,
+                        &count) < 0)
             goto error;
-
-        /* Update max_jobid kvs entry if we are purging it.
-         * See also flux-framework/flux-core#4300.
-         */
-        if (job->id == purge->ctx->max_jobid) {
-            if (restart_save_state_to_txn (purge->ctx, txn) < 0)
-                flux_log_error (purge->ctx->h,
-                    "Error adding job-manager state to purge transaction");
-        }
-
-        json_t *o = json_integer (job->id);
-        if (!o || json_array_append_new (jobs, o)) {
-            json_decref (o);
-            errno = ENOMEM;
-            goto error;
-        }
-
-        (void)jobtap_call (purge->ctx->jobtap,
-                           job,
-                           "job.inactive-remove",
-                           NULL);
-
-        (void)zlistx_delete (purge->queue, job->handle);
-        job->handle = NULL;
-        zhashx_delete (purge->ctx->inactive_jobs, &job->id);
-        count++;
     }
-    if (count == 0) {
-        errno = ENODATA;
-        goto error;
+    else {
+        if (purge_job_id (purge, id, txn, jobs, errmsg) < 0)
+            goto error;
+        count = 1;
     }
     if (!(f = flux_kvs_commit (purge->ctx->h, NULL, 0, txn))
         || flux_future_aux_set (f, "count", int2ptr (count), NULL) < 0
@@ -234,7 +322,9 @@ static void sync_cb (flux_future_t *f_sync, void *arg)
         if (!(f = purge_inactive_jobs (purge,
                                        purge->age_limit,
                                        purge->num_limit,
-                                       purge_batch_max))
+                                       purge_batch_max,
+                                       0,
+                                       NULL)) /* 0 == do not purge single job id */
             || flux_future_then (f, -1, purge_continuation, purge) < 0) {
             flux_future_destroy (f);
             if (errno != ENODATA)
@@ -354,7 +444,9 @@ static void purge_request_cb (flux_t *h,
     if (!(f = purge_inactive_jobs (purge,
                                    age_limit,
                                    num_limit,
-                                   batch))
+                                   batch,
+                                   0,
+                                   NULL)) /* 0 == do not purge single job id */
         || flux_future_then (f, -1, purge_request_continuation, purge) < 0) {
         flux_future_destroy (f);
         if (errno == ENODATA) // ENODATA means zero jobs can be purged
@@ -378,6 +470,65 @@ done:
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "error responding to purge request");
+}
+
+static void purge_id_request_cb (flux_t *h,
+                                 flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg,
+                                 void *arg)
+{
+    struct purge *purge = arg;
+    flux_jobid_t id;
+    int force;
+    flux_future_t *f;
+    const char *errmsg = NULL;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:i}",
+                             "id", &id,
+                             "force", &force) < 0)
+        goto error;
+
+    if (id == FLUX_JOBID_ANY) {
+        errno = EINVAL;
+        goto error;
+    }
+
+    if (!force) { // just return if job eligible to be purged
+        struct job *job = find_purge_candidate (purge, id, &errmsg);
+        if (!job)
+            goto error;
+        goto done;
+    }
+
+    if (!(f = purge_inactive_jobs (purge,
+                                   0,
+                                   0,
+                                   0,
+                                   id,
+                                   &errmsg))
+        || flux_future_then (f, -1, purge_request_continuation, purge) < 0) {
+        flux_future_destroy (f);
+        goto error;
+    }
+    if (flux_msg_aux_set (msg,
+                          "future",
+                          f,
+                          (flux_free_f)flux_future_destroy) < 0) {
+        flux_future_destroy (f);
+        goto error;
+    }
+    if (flux_msglist_append (purge->requests, msg) < 0)
+        goto error; // future destroyed with msg by dispatcher
+    return;
+done:
+    if (flux_respond_pack (h, msg, "{s:i}", "count", 1) < 0)
+        flux_log_error (h, "error responding to purge request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to purge id request");
 }
 
 static int purge_parse_config (const flux_conf_t *conf,
@@ -419,6 +570,7 @@ static int purge_parse_config (const flux_conf_t *conf,
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "job-manager.purge", purge_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job-manager.purge-id", purge_id_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

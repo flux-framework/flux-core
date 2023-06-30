@@ -43,6 +43,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "overlay.h"
 #include "groups.h"
@@ -120,18 +121,14 @@ static struct group *group_lookup (struct groups *g,
         }
         if (!(group = group_create (name)))
             return NULL;
-        if (zhashx_insert (g->groups, group->name, group) < 0) {
-            group_destroy (group);
-            errno = ENOMEM;
-            return NULL;
-        }
+        (void)zhashx_insert (g->groups, group->name, group);
     }
     return group;
 }
 
 /* Decode batch update object.
  * Caller must idset_destroy 'ranks' on success.
- * Returns 0 on success, -1 on failure with erro set.
+ * Returns 0 on success, -1 on failure with error set.
  */
 static int update_decode (json_t *o, struct idset **ranksp, bool *set_flagp)
 {
@@ -727,15 +724,16 @@ static void overlay_monitor_cb (struct overlay *ov, uint32_t rank, void *arg)
     /* Generate LEAVEs for any groups 'rank' (and subtree) may be a member
      * of if transitioning to lost (crashed) or offline (shutdown).
      */
-    if (!strcmp (status, "lost") || !strcmp (status, "offline")) {
+    if (streq (status, "lost")
+        || streq (status, "offline")) {
         auto_leave (g, status, rank, ids);
     }
     /* Update broker.torpid if torpidity has changed while subtree is in
      * one of the "online" states.
      */
-    else if (!strcmp (status, "full")
-        || !strcmp (status, "partial")
-        || !strcmp (status, "degraded")) {
+    else if (streq (status, "full")
+        || streq (status, "partial")
+        || streq (status, "degraded")) {
         torpid_update (g, rank, ids, overlay_peer_is_torpid (ov, rank));
     }
 

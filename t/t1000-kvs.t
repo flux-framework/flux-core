@@ -662,10 +662,11 @@ test_expect_success 'kvs: ls -1RF shows directory titles' '
 	EOF
 	test_cmp expected output
 '
+# test assumes COLUMNS environment not set, clear in a subshell just in case
 test_expect_success 'kvs: ls with no options adjusts output width to 80' '
 	flux kvs unlink -Rf $DIR &&
 	${FLUX_BUILD_DIR}/t/kvs/dtree -p$DIR -h1 -w50 &&
-	flux kvs ls $DIR | wc -wl >output &&
+	$(unset COLUMNS; flux kvs ls $DIR | wc -wl >output) &&
 	cat >expected <<-EOF &&
 	      5      50
 	EOF
@@ -680,7 +681,8 @@ test_expect_success 'kvs: ls -w40 adjusts output width to 40' '
 	EOF
 	test_cmp expected output
 '
-test_expect_success 'kvs: ls with COLUMNS=20 adjusts output width to 20' '
+test_columns_variable_preserved && test_set_prereq USE_COLUMNS
+test_expect_success USE_COLUMNS 'kvs: ls with COLUMNS=20 adjusts output width to 20' '
 	flux kvs unlink -Rf $DIR &&
 	${FLUX_BUILD_DIR}/t/kvs/dtree -p$DIR -h1 -w50 &&
 	COLUMNS=20 flux kvs ls $DIR | wc -wl >output &&

@@ -8,6 +8,32 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 
 test_under_flux 4 full
 
+test_expect_success 'flux resource list: default lists some expected fields' '
+	flux resource list > default.out &&
+	grep STATE default.out &&
+	grep NNODES default.out &&
+	grep NCORES default.out
+'
+
+test_expect_success 'flux resource list: FLUX_RESOURCE_LIST_FORMAT_DEFAULT works' '
+	FLUX_RESOURCE_LIST_FORMAT_DEFAULT="{nodelist} {nodelist}" \
+		flux resource list > default_override.out &&
+	grep "NODELIST NODELIST" default_override.out
+'
+
+test_expect_success 'flux resource list: FLUX_RESOURCE_LIST_FORMAT_DEFAULT works w/ named format' '
+	FLUX_RESOURCE_LIST_FORMAT_DEFAULT=rlist \
+		flux resource list > default_override_named.out &&
+	grep -w "LIST" default_override_named.out
+'
+
+test_expect_success 'flux resource list: --no-header works' '
+	flux resource list --no-header > default_no_header.out &&
+	test_must_fail grep STATE default_no_header.out &&
+	test_must_fail grep NNODES default_no_header.out &&
+	test_must_fail grep NCORES default_no_header.out
+'
+
 # Use a static format to avoid breaking output if default flux-resource list
 #  format ever changes
 FORMAT="{state:>10} {properties:<10} {nnodes:>6} {ncores:>8} {ngpus:>8}"
@@ -27,8 +53,149 @@ for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
         test_debug "cat ${name}-info.output" &&
         test_cmp ${base}-info.expected ${name}-info.output
     '
+    test_expect_success "flux-resource R input check: $testname" '
+        flux resource R --from-stdin < $input > ${name}-R.output 2>&1 &&
+        test_debug "cat ${name}-info.output" &&
+        test_cmp ${base}.R ${name}-R.output
+    '
 done
 
+#  Ensure all tested inputs can also work with --include
+#  Simply restrict to rank 0 then ensure {ranks} returns only 0
+for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
+    testname=$(basename ${input%%.json}) &&
+    base=${input%%.json} &&
+    name=$(basename $base) &&
+    test_expect_success "flux-resource list input --include check: $name" '
+        flux resource list -o "{ranks} {nodelist}" --include=0 \
+            --from-stdin < $input >$name-include.output 2>&1 &&
+        test_debug "cat $name-include.output" &&
+        grep "^0[^,-]" $name-include.output
+    '
+    test_expect_success "flux-resource info input --include check: $testname" '
+        flux resource info --from-stdin -i0 < $input \
+            > ${name}-info-include.output 2>&1 &&
+        test_debug "cat ${name}-info-include.output" &&
+	grep "1 Node" ${name}-info-include.output
+    '
+    test_expect_success "flux-resource R input ---include check: $testname" '
+        flux resource R --from-stdin -i0 < $input \
+           > ${name}-info-R.output &&
+        test "$(flux R decode --count=node <${name}-info-R.output)" -eq 1
+    '
+done
+
+test_expect_success 'flux-resource list supports --include' '
+	flux resource list -s all -ni 0 >list-include.output &&
+	test_debug "cat list-include.output" &&
+	test $(wc -l <list-include.output) -eq 1
+'
+INPUT=${SHARNESS_TEST_SRCDIR}/flux-resource/list/normal-new.json
+test_expect_success 'flux-resource list: --include works with ranks' '
+	flux resource list -s all -o "{nnodes} {ranks}" -ni 0,3 --from-stdin \
+		< $INPUT >include-ranks.out &&
+	test_debug "cat include-ranks.out" &&
+	grep "^2 0,3" include-ranks.out
+'
+test_expect_success 'flux-resource list: --include works with hostnames' '
+	flux resource list -s all -o "{nnodes} {nodelist}" -ni pi[0,3] \
+		--from-stdin < $INPUT >include-hosts.out &&
+	test_debug "cat include-hosts.out" &&
+	grep "^2 pi\[3,0\]" include-hosts.out
+'
+test_expect_success 'flux-resource list: -i works with excluded hosts #5266' '
+	cat <<-'EOF' >corona.json &&
+	{
+	  "all": {
+	    "execution": {
+	      "R_lite": [
+	        {
+	          "children": {
+	            "core": "0-47",
+	            "gpu": "0-7"
+	          },
+	          "rank": "4-124"
+	        }
+	      ],
+	      "expiration": 0,
+	      "nodelist": [
+	        "corona[171-207,213-296]"
+	      ],
+	      "properties": {
+	        "pbatch": "20-124",
+	        "pdebug": "4-19"
+	      },
+	      "starttime": 0
+	    },
+	    "version": 1
+	  },
+	  "allocated": {
+	    "execution": {
+	      "R_lite": [
+	        {
+	          "children": {
+	            "core": "0-47",
+	            "gpu": "0-7"
+	          },
+	          "rank": "20-27,29-34,36-75,78-84,86-87,90-97,99-111,113-124"
+	        }
+	      ],
+	      "expiration": 0,
+	      "nodelist": [
+	        "corona[187-194,196-201,203-207,213-247,250-256,258-259,262-269,271-283,285-296]"
+	      ],
+	      "properties": {
+	        "pbatch": "20-27,29-34,36-75,78-84,86-87,90-97,99-111,113-124"
+	      },
+	      "starttime": 0
+	    },
+	    "version": 1
+	  },
+	  "down": {
+	    "execution": {
+	      "R_lite": [
+	        {
+	          "children": {
+	            "core": "0-47",
+	            "gpu": "0-7"
+	          },
+	          "rank": "5,9,28,35,76-77,85,88-89,98,112"
+	        }
+	      ],
+	      "expiration": 0,
+	      "nodelist": [
+	        "corona[172,176,195,202,248-249,257,260-261,270,284]"
+	      ],
+	      "properties": {
+	        "pbatch": "28,35,76-77,85,88-89,98,112",
+	        "pdebug": "5,9"
+	      },
+	      "starttime": 0
+	    },
+	    "version": 1
+	  }
+	}
+	EOF
+	NODELIST="corona[176,249,260-261,270,284]" &&
+	flux resource list -s all -o "{nodelist}" -ni $NODELIST \
+		--from-stdin < corona.json >corona.output &&
+	test_debug "cat corona.output" &&
+	test "$(cat corona.output)" = "$NODELIST"
+'
+test_expect_success 'flux-resource list: --include works with invalid host' '
+	flux resource list -s all -o "{nnodes} {nodelist}" -ni pi7 \
+		--from-stdin < $INPUT >include-invalid-hosts.out &&
+	test_debug "cat include-invalid-hosts.out" &&
+	grep "^0" include-invalid-hosts.out
+'
+test_expect_success 'flux-resource R supports --states' '
+	flux resource R --from-stdin -s all <$INPUT >all.R &&
+	test $(flux R decode --count=node <all.R) -eq 5 &&
+	flux resource R --from-stdin -s up <$INPUT >up.R &&
+	test $(flux R decode --count=node <up.R) -eq 5 &&
+	flux resource R --from-stdin -s down <$INPUT >down.R &&
+	test $(flux R decode --count=node <down.R) -eq 0
+'
 test_expect_success 'create test input with properties' '
 	cat <<-EOF >properties-test.in
 	{

@@ -173,10 +173,7 @@ int disconnect_arm (struct disconnect *dcon, const flux_msg_t *msg)
         flux_msg_t *dmsg;
         if (!(dmsg = disconnect_msg (msg)))
             return -1;
-        if (zhashx_insert (dcon->hash, key, dmsg) < 0) {
-            flux_msg_destroy (dmsg);
-            return -1;
-        }
+        (void)zhashx_insert (dcon->hash, key, dmsg);
     }
     return 0;
 }

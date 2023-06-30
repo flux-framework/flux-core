@@ -30,6 +30,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/aux.h"
+#include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
 
 #include "annotate.h"
@@ -190,8 +191,8 @@ static int plugin_check_dependencies (struct jobtap *jobtap,
     if (dependencies_unpack (jobtap, job, &error, &dependencies) < 0) {
         flux_log (jobtap->ctx->h,
                   LOG_ERR,
-                  "id=%ju: plugin_register_dependencies: %s",
-                  (uintmax_t) job->id,
+                  "id=%s: plugin_register_dependencies: %s",
+                  idf58 (job->id),
                   error);
         free (error);
         return -1;
@@ -280,8 +281,8 @@ static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
         if (job->state == FLUX_JOB_STATE_DEPEND) {
             if (plugin_check_dependencies (jobtap, p, job, args) < 0)
                 errprintf (errp,
-                           "failed to check dependencies for job %ju",
-                           job->id);
+                           "failed to check dependencies for job %s",
+                           idf58 (job->id));
             (void) flux_plugin_call (p, "job.state.depend", args);
         }
 
@@ -375,7 +376,7 @@ static int jobtap_conf_entry (struct jobtap *jobtap,
     json_t *conf = NULL;
 
     if (json_unpack_ex (entry, &json_err, 0,
-                        "{s?:s s?:o s?:s}",
+                        "{s?s s?o s?s}",
                         "load", &load,
                         "conf", &conf,
                         "remove", &remove) < 0) {
@@ -393,9 +394,8 @@ static int jobtap_conf_entry (struct jobtap *jobtap,
     }
     if (load && !jobtap_load_plugin (jobtap, load, conf, &jobtap_err)) {
         return errprintf (errp,
-                          "[job-manager.plugins][%d]: load %s: %s",
+                          "[job-manager.plugins][%d]: load: %s",
                           index,
-                          load,
                           jobtap_err.text);
     }
     return 0;
@@ -471,7 +471,7 @@ static int jobtap_parse_config (const flux_conf_t *conf,
     if (!jobtap->configured) {
         if (flux_conf_unpack (conf,
                               &error,
-                              "{s?:{s?:o}}",
+                              "{s?{s?o}}",
                               "job-manager",
                                 "plugins", &plugins) < 0) {
             return errprintf (errp,
@@ -697,8 +697,8 @@ int jobtap_get_priority (struct jobtap *jobtap,
              */
             if (job->state == FLUX_JOB_STATE_SCHED)
                 flux_log (jobtap->ctx->h, LOG_ERR,
-                          "jobtap: %ju: BUG: plugin didn't return priority",
-                          (uintmax_t) job->id);
+                          "jobtap: %s: BUG: plugin didn't return priority",
+                          idf58 (job->id));
         }
         /*
          *   O/w, plugin provided a new priority.
@@ -728,8 +728,8 @@ static void error_asprintf (struct jobtap *jobtap,
     va_start (ap, fmt);
     if (vasprintf (errp, fmt, ap) < 0)
         flux_log_error (jobtap->ctx->h,
-                        "id=%ju: failed to create error string: fmt=%s",
-                        (uintmax_t) job->id, fmt);
+                        "id=%s: failed to create error string: fmt=%s",
+                        idf58 (job->id), fmt);
     va_end (ap);
 }
 
@@ -849,7 +849,7 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
                               "dependency", entry) < 0
         || flux_plugin_arg_set (args, FLUX_PLUGIN_ARG_OUT, "{}") < 0) {
         flux_log_error (jobtap->ctx->h,
-                        "jobtap_check_depedency: failed to prepare args");
+                        "jobtap_check_dependency: failed to prepare args");
         return -1;
     }
 
@@ -956,8 +956,8 @@ int jobtap_check_dependencies (struct jobtap *jobtap,
                                   "%s (job may be stuck in DEPEND state)",
                                   *errp) < 0)
                 flux_log_error (jobtap->ctx->h,
-                                "id=%ju: failed to raise dependency exception",
-                                (uintmax_t) job->id);
+                                "id=%s: failed to raise dependency exception",
+                                idf58 (job->id));
             free (*errp);
             *errp = NULL;
         }
@@ -985,9 +985,9 @@ int jobtap_notify_subscribers (struct jobtap *jobtap,
 
     if (snprintf (topic, topiclen, "job.event.%s", name) >= topiclen) {
         flux_log (jobtap->ctx->h, LOG_ERR,
-                  "jobtap: %s: %ju: event topic name too long",
+                  "jobtap: %s: %s: event topic name too long",
                   name,
-                  (uintmax_t) job->id);
+                  idf58 (job->id));
         return -1;
     }
 
@@ -996,9 +996,9 @@ int jobtap_notify_subscribers (struct jobtap *jobtap,
     va_end (ap);
     if (!args) {
         flux_log (jobtap->ctx->h, LOG_ERR,
-                  "jobtap: %s: %ju: failed to create plugin args",
+                  "jobtap: %s: %s: failed to create plugin args",
                   topic,
-                  (uintmax_t) job->id);
+                  idf58 (job->id));
         return -1;
     }
 
@@ -1025,9 +1025,9 @@ int jobtap_call (struct jobtap *jobtap,
     va_start (ap, fmt);
     if (!(args = jobtap_args_vcreate (jobtap, job, fmt, ap))) {
         flux_log (jobtap->ctx->h, LOG_ERR,
-                  "jobtap: %s: %ju: failed to create plugin args",
+                  "jobtap: %s: %s: failed to create plugin args",
                   topic,
-                  (uintmax_t) job->id);
+                  idf58 (job->id));
     }
     va_end (ap);
 
@@ -1072,9 +1072,9 @@ int jobtap_call (struct jobtap *jobtap,
             rc = annotations_update_and_publish (jobtap->ctx, job, note);
         if (rc < 0)
             flux_log_error (jobtap->ctx->h,
-                            "jobtap: %s: %ju: annotations_update",
+                            "jobtap: %s: %s: annotations_update",
                             topic,
-                            (uintmax_t) job->id);
+                            idf58 (job->id));
     }
     if (priority >= FLUX_JOB_PRIORITY_MIN) {
         /*
@@ -1299,8 +1299,12 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
         goto error;
 
     char *uuid = (char *)flux_plugin_get_uuid (p);
-    if (zhashx_insert (jobtap->plugins_byuuid, uuid, p) < 0
-        || !zlistx_add_end (jobtap->plugins, p)) {
+    if (zhashx_insert (jobtap->plugins_byuuid, uuid, p) < 0) {
+        errprintf (errp, "Error adding plugin to list");
+        errno = EEXIST;
+        goto error;
+    }
+    if (!zlistx_add_end (jobtap->plugins, p)) {
         zhashx_delete (jobtap->plugins_byuuid, uuid);
         errprintf (errp, "Out of memory adding plugin to list");
         errno = ENOMEM;

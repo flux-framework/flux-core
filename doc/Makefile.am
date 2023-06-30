@@ -334,6 +334,7 @@ $(RST_FILES): \
 	man1/common/submit-constraints.rst \
 	man1/common/submit-dependencies.rst \
 	man1/common/submit-environment.rst \
+	man1/common/submit-job-environment-variables.rst \
 	man1/common/submit-process-resource-limits.rst \
 	man1/common/submit-exit-status.rst \
 	man1/common/submit-other-options.rst \
@@ -396,6 +397,7 @@ EXTRA_DIST = \
 	man1/common/submit-constraints.rst \
 	man1/common/submit-dependencies.rst \
 	man1/common/submit-environment.rst \
+	man1/common/submit-job-environment-variables.rst \
 	man1/common/submit-process-resource-limits.rst \
 	man1/common/submit-exit-status.rst \
 	man1/common/submit-other-options.rst \

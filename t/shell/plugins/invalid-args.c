@@ -19,6 +19,7 @@
 #include <flux/shell.h>
 
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 static int die (const char *fmt, ...)
 {
@@ -74,6 +75,8 @@ static int shell_cb (flux_plugin_t *p,
         "flux_shell_unsetenv (NULL, 'foo') returns EINVAL");
     ok (flux_shell_unsetenv (shell, NULL) < 0 && errno == EINVAL,
         "flux_shell_unsetenv (shell, NULL) returns EINVAL");
+    ok (flux_shell_unsetenv (shell, "MissingEnvVar") < 0 && errno == ENOENT,
+        "flux_shell_unsetenv (shell, MissingEnvVar) returns ENOENT");
 
     ok (flux_shell_setenvf (NULL, 0, "foo", "bar") < 0 && errno == EINVAL,
         "flux_shell_setenvf (NULL, ...) returns EINVAL");
@@ -192,7 +195,12 @@ static int shell_cb (flux_plugin_t *p,
     ok (flux_shell_task_next (NULL) == NULL && errno == EINVAL,
         "flux_shell_task_next (NULL) returns EINVAL");
 
-    if (strcmp (topic, "shell.init") == 0) {
+    ok (flux_shell_mustache_render (NULL, NULL) == NULL && errno == EINVAL,
+        "flux_shell_mustache_render (NULL, NULL) returns EINVAL");
+    ok (flux_shell_mustache_render (shell, NULL) == NULL && errno == EINVAL,
+        "flux_shell_mustache_render (shell, NULL) returns EINVAL");
+
+    if (streq (topic, "shell.init")) {
         ok (flux_shell_current_task (NULL) == NULL && errno == EINVAL,
             "flux_shell_current_task with NULL shell returns EINVAL");
         errno = 0;
@@ -203,7 +211,7 @@ static int shell_cb (flux_plugin_t *p,
         ok (flux_shell_task_next (shell) == NULL && errno == EAGAIN,
             "flux_shell_task_next (shell) in shell.init returns EAGAIN");
     }
-    if (strcmp (topic, "shell.exit") == 0)
+    if (streq (topic, "shell.exit"))
         return exit_status () == 0 ? 0 : -1;
     return 0;
 }
@@ -240,7 +248,7 @@ static int task_cb (flux_plugin_t *p,
         && errno == EINVAL,
         "flux_shell_task_channel_subscribe with NULL args returns EINVAL");
 
-    if (strcmp (topic, "task.exec") == 0)
+    if (streq (topic, "task.exec"))
         return exit_status () == 0 ? 0 : -1;
     return 0;
 }

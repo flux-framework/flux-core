@@ -18,7 +18,7 @@ enum {
     ATTR_IMMUTABLE = 1,    /* attribute is cacheable */
 };
 
-/* Callbacks for active values.  Return 0 on succes, -1 on eror with
+/* Callbacks for active values.  Return 0 on success, -1 on error with
  * errno set.  Errors are propagated to the return of attr_set() and attr_get().
  */
 typedef int (*attr_get_f)(const char *name, const char **val, void *arg);

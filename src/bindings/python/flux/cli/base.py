@@ -18,13 +18,21 @@ import fnmatch
 import json
 import logging
 import os
+import pathlib
 import re
 import resource
+import signal
 import sys
 from collections import ChainMap
 from itertools import chain
+from os.path import basename
 from string import Template
 from urllib.parse import parse_qs, urlparse
+
+try:
+    import tomllib  # novermin
+except ModuleNotFoundError:
+    from flux.utils import tomli as tomllib
 
 import flux
 from flux import debugged, job, util
@@ -32,8 +40,74 @@ from flux.constraint.parser import ConstraintParser, ConstraintSyntaxError
 from flux.idset import IDset
 from flux.job import JobspecV1
 from flux.progress import ProgressBar
+from flux.util import dict_merge, set_treedict
 
 LOGGER = logging.getLogger("flux")
+
+
+def decode_signal(val):
+    """
+    Decode a signal as string or number
+    A string can be of the form 'SIGUSR1' or just 'USR1'
+    """
+    if isinstance(val, int):
+        return val
+    try:
+        return int(val)
+    except ValueError:
+        pass  # Fall back to signal name
+    try:
+        return getattr(signal, val)
+    except AttributeError:
+        pass  # Fall back SIG{name}
+    try:
+        return getattr(signal, f"SIG{val}")
+    except AttributeError:
+        pass
+    raise ValueError(f"signal '{val}' is invalid")
+
+
+def decode_duration(val):
+    """
+    Decode a duration as a number or string in FSD
+    """
+    if isinstance(val, (float, int)):
+        return val
+    try:
+        return float(val)
+    except ValueError:
+        pass  # Fall back to fsd
+    return util.parse_fsd(val)
+
+
+def parse_signal_option(arg):
+    """
+    Parse the --signal= option argument of the form SIG@TIME, where
+    both signal and time are optional.
+
+    Returns a dict with signal and timeleft members
+    """
+    signo = signal.SIGUSR1
+    tleft = 60
+    if arg is not None:
+        sig, _, time = arg.partition("@")
+        if time:
+            tleft = time
+        if sig:
+            signo = sig
+    try:
+        signum = decode_signal(signo)
+        if signum <= 0:
+            raise ValueError("signal must be > 0")
+    except ValueError as exc:
+        raise ValueError(f"--signal={arg}: {exc}") from None
+
+    try:
+        timeleft = decode_duration(tleft)
+    except ValueError as exc:
+        raise ValueError(f"--signal={arg}: {exc}") from None
+
+    return {"signum": signum, "timeleft": timeleft}
 
 
 class MiniConstraintParser(ConstraintParser):
@@ -306,6 +380,122 @@ class EnvFilterAction(argparse.Action):
             items = []
         items.append("-" + values)
         setattr(namespace, "env", items)
+
+
+class BatchConfig:
+    """Convenience class for handling a --conf=[FILE|KEY=VAL] option
+
+    Iteratively build a "config" dict from successive updates.
+    """
+
+    loaders = {".toml": tomllib.load, ".json": json.load}
+
+    def __init__(self):
+        self.config = None
+
+    def update_string(self, value):
+        # Update config with JSON or TOML string
+        try:
+            conf = json.loads(value)
+        except json.decoder.JSONDecodeError:
+            # Try TOML
+            try:
+                conf = tomllib.loads(value)
+            except tomllib.TOMLDecodeError:
+                raise ValueError(
+                    "--conf: failed to parse multiline as TOML or JSON"
+                ) from None
+        self.config = dict_merge(self.config, conf)
+        return self
+
+    def update_keyval(self, keyval):
+        # dotted key (e.g. resource.noverify=true)
+        key, _, value = keyval.partition("=")
+        try:
+            value = json.loads(value)
+        except json.decoder.JSONDecodeError:
+            value = str(value)
+        set_treedict(self.config, key, value)
+        return self
+
+    def update_file(self, path, extension=".toml"):
+        # Update from file in the filesystem
+        try:
+            loader = self.loaders[extension]
+        except KeyError:
+            raise ValueError("--conf: {path} must end in .toml or .json")
+        try:
+            with open(path, "rb") as fp:
+                conf = loader(fp)
+        except OSError as exc:
+            raise ValueError(f"--conf: {exc}") from None
+        except (json.decoder.JSONDecodeError, tomllib.TOMLDecodeError) as exc:
+            raise ValueError(f"--conf: parse error: {path}: {exc}") from None
+        self.config = dict_merge(self.config, conf)
+        return self
+
+    def _find_config(self, name):
+        # Find a named config as either TOML or JSON in XDG search path
+        for path in util.xdg_searchpath(subdir="config"):
+            # Take the first matching filename preferring TOML:
+            for ext in (".toml", ".json"):
+                filename = f"{path}/{name}{ext}"
+                if os.path.exists(filename):
+                    return filename, self.loaders[ext]
+        return None, None
+
+    def update_named_config(self, name):
+        # Update from a named configuration file in a standard path or paths.
+        filename, loader = self._find_config(name)
+        if filename is not None:
+            try:
+                with open(filename, "rb") as fp:
+                    self.config = dict_merge(self.config, loader(fp))
+                    return self
+            except (
+                OSError,
+                tomllib.TOMLDecodeError,
+                json.decoder.JSONDecodeError,
+            ) as exc:
+                raise ValueError(f"--conf={name}: {filename}: {exc}") from None
+        raise ValueError(f"--conf: named config '{name}' not found")
+
+    def update(self, value):
+        """
+        Update current config with value using the following rules:
+        - If value contains one or more newlines, parse it as a JSON or
+          TOML string.
+        - Otherwise, if value contains an ``=``, then parse it as a dotted
+          key and value, e.g. ``resource.noverify=true``. The value (part
+          after the ``=``) will be parsed as JSON.
+        - Otherwise, if value ends in ``.toml`` or ``.json`` treat value as
+          a path and attempt to parse contents of file as TOML or JSON.
+        - Otherwise, read a named config from a standard config search path.
+
+        Configuration can be updated iteratively. The end result is available
+        in the ``config`` attribute.
+        """
+        if self.config is None:
+            self.config = {}
+        if "\n" in value:
+            return self.update_string(value)
+        if "=" in value:
+            return self.update_keyval(value)
+        extension = pathlib.Path(value).suffix
+        if extension in (".toml", ".json"):
+            return self.update_file(value, extension)
+        return self.update_named_config(value)
+
+
+class ConfAction(argparse.Action):
+    """Handle batch/alloc --conf option"""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        conf = getattr(namespace, "conf", None)
+        if conf is None:
+            conf = BatchConfig()
+            setattr(namespace, "conf", conf)
+        conf.update(values)
 
 
 class Xcmd:
@@ -609,6 +799,15 @@ class MiniCmd:
             metavar="ATTR",
         )
         parser.add_argument(
+            "--add-file",
+            action="append",
+            help="Add a file at PATH with optional NAME to jobspec. The "
+            + "file will be extracted to {{tmpdir}}/NAME. If NAME is not "
+            + "specified, then the basename of PATH will be used. (multiple "
+            + "use OK)",
+            metavar="[NAME=]PATH",
+        )
+        parser.add_argument(
             "--dependency",
             action="append",
             help="Set an RFC 26 dependency URI for this job",
@@ -623,8 +822,9 @@ class MiniCmd:
         parser.add_argument(
             "--begin-time",
             action=BeginTimeAction,
-            metavar="TIME",
-            help="Set minimum begin time for job",
+            metavar="+FSD|TIME",
+            help="Set minimum start time as offset in FSD (e.g. +1h) or "
+            + 'an absolute TIME (e.g. "3pm") for job',
         )
         parser.add_argument(
             "--env",
@@ -714,6 +914,12 @@ class MiniCmd:
             metavar="FLAGS",
         )
         parser.add_argument(
+            "--signal",
+            help="Schedule delivery of signal SIG at a defined TIME before "
+            + "job expiration. Default SIG is SIGUSR1, default TIME is 60s.",
+            metavar="[SIG][@TIME]",
+        )
+        parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Don't actually submit job, just emit jobspec",
@@ -741,6 +947,9 @@ class MiniCmd:
         rlimits = get_filtered_rlimits(args.rlimit)
         if rlimits:
             jobspec.setattr_shell_option("rlimit", rlimits)
+        if args.signal:
+            entry = parse_signal_option(args.signal)
+            jobspec.setattr_shell_option("signal", entry)
 
         # --taskmap is only defined for run/submit, but we check
         # for it in the base jobspec_create() for convenience
@@ -833,6 +1042,20 @@ class MiniCmd:
                 #   to start at the top level (since .system is not applied
                 #   due to above conditional)
                 jobspec.setattr(key.lstrip("."), val)
+
+        if args.add_file is not None:
+            for arg in args.add_file:
+                name, _, data = arg.partition("=")
+                if not data:
+                    # No '=' implies path-only argument (no multiline allowed)
+                    if "\n" in name:
+                        raise ValueError("--add-file: file name missing")
+                    data = name
+                    name = basename(data)
+                try:
+                    jobspec.add_file(name, data)
+                except (TypeError, ValueError, OSError) as exc:
+                    raise ValueError(f"--add-file={arg}: {exc}") from None
 
         return jobspec
 
@@ -1268,7 +1491,7 @@ class SubmitBulkCmd(SubmitBaseCmd):
             ).then(self.exec_watch_cb, future, args, jobinfo, label)
         elif event.name == "finish":
             #
-            #  Collect exit status and adust self.exitcode if necesary:
+            #  Collect exit status and adust self.exitcode if necessary:
             #
             jobinfo["state"] = "done"
             status = self.status_to_exitcode(event.context["status"])
@@ -1495,6 +1718,17 @@ def add_batch_alloc_args(parser):
     Add "batch"-specific resource allocation arguments to parser object
     which deal in slots instead of tasks.
     """
+    parser.add_argument(
+        "--conf",
+        metavar="CONF",
+        default=BatchConfig(),
+        action=ConfAction,
+        help="Set configuration for a child Flux instance. CONF may be a "
+        + "multiline string in JSON or TOML, a configuration key=value, a "
+        + "path to a JSON or TOML file, or a configuration loaded by name "
+        + "from a standard search path. This option may specified multiple "
+        + "times, in which case the config is iteratively updated.",
+    )
     parser.add_argument(
         "--broker-opts",
         metavar="OPTS",

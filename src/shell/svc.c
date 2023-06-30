@@ -35,6 +35,8 @@
 #include <unistd.h>
 #include <flux/core.h>
 
+#include "src/common/libjob/idf58.h"
+
 #include "internal.h"
 #include "task.h"
 #include "svc.h"
@@ -66,9 +68,9 @@ static int build_topic (struct shell_svc *svc,
 {
     if (snprintf (buf,
                   len,
-                  "%ju-shell-%ju%s%s",
+                  "%ju-shell-%s%s%s",
                   (uintmax_t)svc->uid,
-                  (uintmax_t)svc->shell->info->jobid,
+                  idf58 (svc->shell->info->jobid),
                   method ? "." : "",
                   method ? method : "") >= len) {
         errno = EINVAL;

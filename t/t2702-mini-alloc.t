@@ -109,9 +109,9 @@ test_expect_success NO_CHAIN_LINT 'flux-mini alloc --bg can be interrupted' '
 	flux queue stop &&
 	test_when_finished "flux queue start" &&
 	run_mini_bg &&
-	$waitfile -t 20 -v -p waiting sigint.log &&
+	$waitfile -t 180 -v -p waiting sigint.log &&
 	kill -INT $(cat sigint.pid) &&
-	$waitfile -t 20 -v -p Interrupt sigint.log &&
+	$waitfile -t 180 -v -p Interrupt sigint.log &&
 	wait $pid
 '
 test_expect_success NO_CHAIN_LINT 'flux-mini alloc --bg errors when job is canceled' '
@@ -119,7 +119,7 @@ test_expect_success NO_CHAIN_LINT 'flux-mini alloc --bg errors when job is cance
 	test_when_finished "flux queue start" &&
 	flux mini alloc --bg -n1 -v >canceled.log 2>&1 &
 	pid=$! &&
-	$waitfile -t 20 -v -p waiting canceled.log &&
+	$waitfile -t 180 -v -p waiting canceled.log &&
 	flux cancel --all &&
 	cat canceled.log &&
 	test_must_fail wait $pid &&

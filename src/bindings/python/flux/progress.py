@@ -42,7 +42,7 @@ import time
 class ElapsedTime(float):
     """
     An ElapsedTime object is a floating point elapsed time in seconds
-    that comes with a convenient "dt" proerty that returns a
+    that comes with a convenient "dt" property that returns a
     datetime.timedelta object
     """
 
@@ -59,7 +59,7 @@ class Bottombar:
     positioned at the last line of vt100 capable terminals through the
     use of vt100 escape codes.
 
-    This class will only work propertly on vt100 compatible terminals, which
+    This class will only work properly on vt100 compatible terminals, which
     includes xterm, rxvt, and gnome-terminal and their derivatives on Linux,
     as well as iTerm and Terminal on OSX, and reportedly the new Windows
     Terminal on Windows.

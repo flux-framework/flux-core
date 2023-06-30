@@ -8,6 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+from flux.idset import IDset
 from flux.memoized_property import memoized_property
 from flux.resource import ResourceSet
 from flux.rpc import RPC
@@ -46,6 +47,20 @@ class SchedResourceList:
     #  Make class subscriptable, e.g. resources[state]
     def __getitem__(self, item):
         return getattr(self, item)
+
+    def filter(self, include):
+        """
+        Filter the reported resources in a ResourceList object
+        Args:
+            include(str, IDset, Hostlist): restrict the current set of
+                reported ranks to the given ranks or hosts.
+        """
+        try:
+            include_ranks = IDset(include)
+        except ValueError:
+            include_ranks = IDset(self["all"].host_ranks(include, ignore_nomatch=True))
+        for state in ["all", "down", "allocated"]:
+            setattr(self, state, self[state].copy_ranks(include_ranks))
 
     @memoized_property
     # pylint: disable=invalid-name

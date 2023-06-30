@@ -44,6 +44,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/jpath.h"
+#include "src/common/libjob/idf58.h"
 #include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
 
@@ -212,8 +213,8 @@ static void event_batch_destroy (struct event_batch *batch)
                 job->hold_events = 0;
                 if (event_job_post_deferred (batch->event, job) < 0)
                     flux_log_error (batch->event->ctx->h,
-                                    "%ju: error posting deferred events",
-                                    (uintmax_t) job->id);
+                                    "%s: error posting deferred events",
+                                    idf58 (job->id));
             }
             zlist_destroy (&batch->jobs);
         }
@@ -440,8 +441,8 @@ int event_job_action (struct event *event, struct job *job)
                 if (purge_enqueue_job (ctx->purge, job) < 0) {
                     flux_log (event->ctx->h,
                               LOG_ERR,
-                              "%ju: error adding inactive job to purge queue",
-                               (uintmax_t)job->id);
+                              "%s: error adding inactive job to purge queue",
+                               idf58 (job->id));
                 }
             }
             (void) jobtap_call (ctx->jobtap, job, "job.destroy", NULL);
@@ -665,11 +666,11 @@ int event_job_update (struct job *job, json_t *event)
     else if (streq (name, "validate")) {
         job->state = FLUX_JOB_STATE_DEPEND;
     }
-    else if (!strcmp (name, "jobspec-update")) {
+    else if (streq (name, "jobspec-update")) {
         if (event_handle_jobspec_update (job, context) < 0)
             goto inval;
     }
-    else if (!strncmp (name, "dependency-", 11)) {
+    else if (strstarts (name, "dependency-")) {
         if (job->state == FLUX_JOB_STATE_DEPEND
             || job->state == FLUX_JOB_STATE_NEW) {
             if (event_handle_dependency (job, name+11, context) < 0)
@@ -754,13 +755,13 @@ int event_job_update (struct job *job, json_t *event)
             job->t_clean = timestamp;
         }
     }
-    else if (!strncmp (name, "prolog-", 7)) {
+    else if (strstarts (name, "prolog-")) {
         if (!job->start_pending) {
             if (event_handle_perilog (job, name+7, context) < 0)
                 goto error;
         }
     }
-    else if (!strncmp (name, "epilog-", 7)) {
+    else if (strstarts (name, "epilog-")) {
         if (job->state == FLUX_JOB_STATE_CLEANUP) {
             if (event_handle_perilog (job, name+7, context) < 0)
                 goto error;
@@ -802,9 +803,9 @@ static int event_jobtap_call (struct event *event,
                                    "{s:O}",
                                    "entry", entry) < 0)
             flux_log (event->ctx->h, LOG_ERR,
-                      "jobtap: event.%s callback failed for job %ju",
+                      "jobtap: event.%s callback failed for job %s",
                       name,
-                      (uintmax_t) job->id);
+                      idf58 (job->id));
 
     if (job->state != old_state) {
         /*
@@ -1084,16 +1085,7 @@ int event_index (struct event *event, const char *name)
     void *entry = zhashx_lookup (event->evindex, name);
     if (!entry) {
         entry = int2ptr (((int) zhashx_size (event->evindex) + 1));
-        if (zhashx_insert (event->evindex, name, entry) < 0) {
-            /*
-             *  insertion only fails on duplicate entry, which we know
-             *   is not possible in this case. However, cover ENOMEM
-             *   case here in case assert-on-malloc failure is fixed
-             *   in the future for zhashx.
-             */
-            errno = ENOMEM;
-            return -1;
-        }
+        (void)zhashx_insert (event->evindex, name, entry);
     }
     return ptr2int (entry);
 }

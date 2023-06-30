@@ -18,6 +18,7 @@
 #include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "job-info.h"
 #include "lookup.h"
@@ -159,6 +160,7 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
     size_t index;
     json_t *key;
     json_t *o = NULL;
+    json_t *tmp = NULL;
     char *data = NULL;
 
     if (!l->allow) {
@@ -182,6 +184,12 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
 
     if (!(o = json_object ()))
         goto enomem;
+
+    tmp = json_integer (l->id);
+    if (json_object_set_new (o, "id", tmp) < 0) {
+        json_decref (tmp);
+        goto enomem;
+    }
 
     json_array_foreach(l->keys, index, key) {
         flux_future_t *f;
@@ -272,7 +280,7 @@ static int check_keys_for_eventlog (struct lookup_ctx *l)
             errno = EINVAL;
             return -1;
         }
-        if (!strcmp (keystr, "eventlog"))
+        if (streq (keystr, "eventlog"))
             return 0;
     }
 

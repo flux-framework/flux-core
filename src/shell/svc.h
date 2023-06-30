@@ -46,7 +46,7 @@ int shell_svc_register (struct shell_svc *svc,
  */
 int shell_svc_allowed (struct shell_svc *svc, const flux_msg_t *msg);
 
-/* Return the service name under which shell svc methods are registerd:
+/* Return the service name under which shell svc methods are registered:
  */
 const char *shell_svc_name (struct shell_svc *svc);
 

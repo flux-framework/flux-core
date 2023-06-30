@@ -21,7 +21,8 @@ common_libs = \
 	$(PYTHON_LIBS)
 
 PREPROC_FLAGS = \
-	-E '-D__attribute__(...)='
+	-E '-D__attribute__(...)=' \
+	-D "FLUX_DEPRECATED(...)="
 
 fluxpyso_LTLIBRARIES = \
 	_core.la \

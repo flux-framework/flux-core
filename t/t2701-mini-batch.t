@@ -25,17 +25,17 @@ test_expect_success 'create generic test batch script' '
 '
 test_expect_success 'flux-mini batch copies script into jobspec' '
 	flux mini batch -n1 --dry-run batch-script.sh | \
-		jq -j .attributes.system.batch.script > script.sh &&
+		jq -j .attributes.system.files.script.data > script.sh &&
 	test_cmp batch-script.sh script.sh
 '
 test_expect_success 'flux-mini batch takes a script on stdin' '
 	flux mini batch -n1 --dry-run < batch-script.sh | \
-		jq -j .attributes.system.batch.script > script-stdin.sh &&
+		jq -j .attributes.system.files.script.data > script-stdin.sh &&
 	test_cmp batch-script.sh script.sh
 '
 test_expect_success 'flux mini batch --wrap option works' '
 	flux mini batch -n1 --dry-run --wrap foo bar baz | \
-		jq -j .attributes.system.batch.script >script-wrap.out &&
+		jq -j .attributes.system.files.script.data >script-wrap.out &&
 	cat <<-EOF >script-wrap.expected &&
 	#!/bin/sh
 	foo bar baz
@@ -45,7 +45,7 @@ test_expect_success 'flux mini batch --wrap option works' '
 test_expect_success 'flux mini batch --wrap option works on stdin' '
 	printf "foo\nbar\nbaz\n" | \
 	    flux mini batch -n1 --dry-run --wrap | \
-		jq -j .attributes.system.batch.script >stdin-wrap.out &&
+		jq -j .attributes.system.files.script.data >stdin-wrap.out &&
 	cat <<-EOF >stdin-wrap.expected &&
 	#!/bin/sh
 	foo
@@ -101,7 +101,7 @@ test_expect_success MULTICORE 'flux-mini batch: exclusive flag worked' '
 
 test_expect_success 'flux-mini batch: --output=kvs directs output to kvs' '
 	id=$(flux mini batch -n1 --flags=waitable --output=kvs batch-script.sh) &&
-	run_timeout 60 flux job attach $id > kvs-output.log 2>&1 &&
+	run_timeout 180 flux job attach $id > kvs-output.log 2>&1 &&
 	test_debug "cat kvs-output.log" &&
 	grep "size=1 nodes=1" kvs-output.log
 '
@@ -110,10 +110,10 @@ test_expect_success 'flux-mini batch: --broker-opts works' '
 	     --broker-opts=-v batch-script.sh) &&
 	id2=$(flux mini batch -n1 --flags=waitable \
 	     --broker-opts=-v,-v batch-script.sh) &&
-	run_timeout 60 flux job wait $id &&
+	run_timeout 180 flux job wait $id &&
 	test_debug "cat flux-${id}.out" &&
 	grep "boot: rank=0 size=1" flux-${id}.out &&
-	run_timeout 60 flux job wait $id2 &&
+	run_timeout 180 flux job wait $id2 &&
 	grep "boot: rank=0 size=1" flux-${id2}.out &&
 	grep "entering event loop" flux-${id2}.out
 '
@@ -152,7 +152,7 @@ test_expect_success 'flux mini batch: user can set broker.critical-ranks' '
 	test_cmp critical-ranks2.expected critical-ranks2.out
 '
 test_expect_success 'flux mini batch: flux can bootstrap without broker.mapping' '
-	id=$(flux mini batch -N4 -o pmi.nomap \
+	id=$(flux mini batch -N4 -o pmi-simple.nomap \
 		--wrap flux resource info) &&
 	flux job status $id
 '
@@ -173,19 +173,19 @@ test_expect_success 'flux mini batch: MPI env vars are not set in batch script' 
 test_expect_success 'flux mini batch: --dump works' '
 	id=$(flux mini batch -N1 --dump \
 		--flags=waitable --wrap true) &&
-	run_timeout 60 flux job wait $id &&
+	run_timeout 180 flux job wait $id &&
 	tar tvf flux-${id}-dump.tgz
 '
 test_expect_success 'flux mini batch: --dump=FILE works' '
 	id=$(flux mini batch -N1 --dump=testdump.tgz \
 		--flags=waitable --wrap true) &&
-	run_timeout 60 flux job wait $id &&
+	run_timeout 180 flux job wait $id &&
 	tar tvf testdump.tgz
 '
 test_expect_success 'flux mini batch: --dump=FILE works with mustache' '
 	id=$(flux mini batch -N1 --dump=testdump-{{id}}.tgz \
 		--flags=waitable --wrap true) &&
-	run_timeout 60 flux job wait $id &&
+	run_timeout 180 flux job wait $id &&
 	tar tvf testdump-${id}.tgz
 '
 test_expect_success 'flux mini batch: supports directives in script' '

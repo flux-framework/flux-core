@@ -16,11 +16,13 @@
 #include <string.h>
 
 #include "src/common/libyuarel/yuarel.h"
+#include "ccan/str/str.h"
 #include "errprintf.h"
 #include "popen2.h"
 #include "read_all.h"
 #include "log.h"
 #include "strstrip.h"
+#include "errno_safe.h"
 #include "uri.h"
 
 static void nullify_newline (char *str)
@@ -40,6 +42,30 @@ static char *uri_to_local (struct yuarel *yuri)
     return uri;
 }
 
+char *uri_remote_get_authority (const char *uri)
+{
+    struct yuarel yuri;
+    char *cpy;
+    char *result = NULL;
+
+    if (!uri)
+        return NULL;
+
+    cpy = strdup (uri);
+    if (yuarel_parse (&yuri, cpy) == 0
+        && yuri.scheme
+        && streq (yuri.scheme, "ssh")) {
+        if (asprintf (&result,
+                      "%s%s%s",
+                      yuri.username ? yuri.username : "",
+                      yuri.username ? "@" : "",
+                      yuri.host) < 0)
+            result = NULL;
+    }
+    ERRNO_SAFE_WRAP (free, cpy);
+    return result;
+}
+
 char *uri_resolve (const char *uri, flux_error_t *errp)
 {
     struct popen2_child *child = NULL;
@@ -53,8 +79,8 @@ char *uri_resolve (const char *uri, flux_error_t *errp)
     if (!cpy)
         return NULL;
     if (yuarel_parse (&yuri, cpy) == 0 && yuri.scheme) {
-        if (strcmp (yuri.scheme, "ssh") == 0
-            || strcmp (yuri.scheme, "local") == 0) {
+        if (streq (yuri.scheme, "ssh")
+            || streq (yuri.scheme, "local")) {
             if (getenv ("FLUX_URI_RESOLVE_LOCAL"))
                 result = uri_to_local (&yuri);
             else

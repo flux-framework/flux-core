@@ -310,23 +310,21 @@ static void state_change_prep_cb (flux_reactor_t *r,
 
 static flux_subprocess_state_t state_change_next (flux_subprocess_t *p)
 {
-    assert (p->state != FLUX_SUBPROCESS_FAILED);
+    /* N.B. possible transition to FLUX_SUBPROCESS_STOPPED not handled
+     * here, see issue #5083
+     */
+    assert (p->state_reported != p->state);
+    assert (p->state_reported == FLUX_SUBPROCESS_INIT
+            || p->state_reported == FLUX_SUBPROCESS_RUNNING);
 
-    switch (p->state_reported) {
-    case FLUX_SUBPROCESS_INIT:
+    if (p->state_reported == FLUX_SUBPROCESS_INIT)
         /* next state must be RUNNING */
         return FLUX_SUBPROCESS_RUNNING;
-    case FLUX_SUBPROCESS_RUNNING:
+    else if (p->state_reported == FLUX_SUBPROCESS_RUNNING)
         /* next state is EXITED */
         return FLUX_SUBPROCESS_EXITED;
-    case FLUX_SUBPROCESS_EXITED:
-    case FLUX_SUBPROCESS_FAILED:
-    case FLUX_SUBPROCESS_STOPPED:
-        break;
-    }
-
     /* shouldn't be possible to reach here */
-    assert (0);
+    return p->state_reported;
 }
 
 static void state_change_check_cb (flux_reactor_t *r,
@@ -746,8 +744,9 @@ int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream)
     if (p->local)
         ret = c->buffer_read_w_started ? 1 : 0;
     else {
-        /* fb = c->read_buffer; */
-        assert (0);
+        /* not supported on remote right now */
+        errno = EINVAL;
+        return -1;
     }
 
     return ret;
@@ -1122,6 +1121,17 @@ int flux_subprocess_fail_errno (flux_subprocess_t *p)
     return p->failed_errno;
 }
 
+const char *flux_subprocess_fail_error (flux_subprocess_t *p)
+{
+    if (!p)
+        return "internal error: subprocess is NULL";
+    if (p->state != FLUX_SUBPROCESS_FAILED)
+        return "internal error: subprocess is not in FAILED state";
+    if (p->failed_error.text[0] == '\0')
+        return strerror (p->failed_errno);
+    return p->failed_error.text;
+}
+
 int flux_subprocess_status (flux_subprocess_t *p)
 {
     if (!p) {
@@ -1232,6 +1242,27 @@ int flux_set_default_subprocess_log (flux_t *h,
         return -1;
     return 0;
 }
+
+void flux_subprocess_channel_incref (flux_subprocess_t *p, const char *name)
+{
+    struct subprocess_channel *c;
+    if (!p || !p->local)
+        return;
+    if (!(c = zhash_lookup (p->channels, name)))
+        return;
+    flux_buffer_read_watcher_incref (c->buffer_read_w);
+}
+
+void flux_subprocess_channel_decref (flux_subprocess_t *p, const char *name)
+{
+    struct subprocess_channel *c;
+    if (!p || !p->local)
+        return;
+    if (!(c = zhash_lookup (p->channels, name)))
+        return;
+    flux_buffer_read_watcher_decref (c->buffer_read_w);
+}
+
 
 /*
  * vi: ts=4 sw=4 expandtab

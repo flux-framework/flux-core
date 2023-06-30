@@ -24,6 +24,9 @@ if test $RANK -gt 0; then
 fi
 
 modload all barrier
+if test "$(flux config get --default=false systemd.enable)" = "true"; then
+    modload all sdbus
+fi
 
 if test $RANK -eq 0; then
     backingmod=$(backing_module)
@@ -45,7 +48,7 @@ if test $RANK -eq 0; then
             flux module load ${backingmod} truncate
         fi
         echo "restoring content from ${dumpfile}"
-        flux restore --quiet --checkpoint ${dumpfile}
+        flux restore --quiet --checkpoint --size-limit=100M ${dumpfile}
         if test -n "${dumplink}"; then
             rm -f ${dumplink}
         fi
@@ -99,7 +102,7 @@ shopt -u nullglob
 
 # Print module that has registered 'sched' service, if any
 lookup_sched_module() {
-    flux module list | awk '$6 == "sched" { print $1 }'
+    flux module list | awk '$NF == "sched" { print $1 }'
 }
 
 if test $RANK -eq 0 -a "${FLUX_SCHED_MODULE}" != "none" \
