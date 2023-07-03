@@ -16,12 +16,12 @@ from flux.rpc import RPC
 
 
 # a few keys are special, decode them into dicts if you can
-def decode_special_metadata(metadata):
+def decode_special_data(data):
     for key in ("jobspec", "R"):
-        if key in metadata:
+        if key in data:
             try:
-                tmp = json.loads(metadata[key])
-                metadata[key] = tmp
+                tmp = json.loads(data[key])
+                data[key] = tmp
             except json.decoder.JSONDecodeError:
                 # Ignore if can't be decoded
                 pass
@@ -36,9 +36,9 @@ class JobInfoLookupRPC(RPC):
         return super().get()
 
     def get_decode(self):
-        metadata = super().get()
-        decode_special_metadata(metadata)
-        return metadata
+        data = super().get()
+        decode_special_data(data)
+        return data
 
 
 def job_info_lookup(flux_handle, jobid, keys=["jobspec"]):
