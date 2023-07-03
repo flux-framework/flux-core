@@ -15,6 +15,7 @@
  *
  * SIGINT  - forward to all local tasks
  * SIGTERM - forward
+ * SIGALRM - forward
  *
  */
 #define FLUX_SHELL_PLUGIN_NAME "signals"
