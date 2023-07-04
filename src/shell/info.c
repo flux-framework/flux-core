@@ -23,7 +23,6 @@
 
 #include "src/common/libutil/read_all.h"
 #include "src/common/librlist/rhwloc.h"
-#include "src/common/libjob/unwrap.h"
 #include "ccan/str/str.h"
 
 #include "internal.h"
@@ -57,7 +56,7 @@ static int lookup_job_info_get (flux_future_t *f,
         const char *J;
         if (flux_rpc_get_unpack (f, "{s:s}", "J", &J) < 0)
             goto error;
-        if (!(*jobspec = unwrap_string (J, true, NULL, &error))) {
+        if (!(*jobspec = flux_unwrap_string (J, true, NULL, &error))) {
             shell_log_error ("failed to unwrap J: %s", error.text);
             return -1;
         }

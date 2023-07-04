@@ -62,10 +62,10 @@ out:
     return result;
 }
 
-char *unwrap_string (const char *s,
-                     bool verify,
-                     uint32_t *userid,
-                     flux_error_t *errp)
+char *flux_unwrap_string (const char *s,
+                          bool verify,
+                          uint32_t *userid,
+                          flux_error_t *errp)
 {
 #if HAVE_FLUX_SECURITY
     flux_security_t *sec;

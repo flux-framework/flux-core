@@ -42,7 +42,6 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/jpath.h"
 #include "src/common/libjob/job.h"
-#include "src/common/libjob/unwrap.h"
 #include "src/common/libjob/idf58.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/monotime.h"
@@ -3329,7 +3328,7 @@ void info_output (flux_future_t *f, const char *suffix, struct info_ctx *ctx)
 
     if (ctx->original && streq (suffix, "J")) {
         flux_error_t error;
-        char *jobspec = unwrap_string (s, false, NULL, &error);
+        char *jobspec = flux_unwrap_string (s, false, NULL, &error);
         if (!jobspec)
             log_msg_exit ("Failed to unwrap jobspec: %s", error.text);
         printf ("%s\n", jobspec);
