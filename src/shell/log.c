@@ -364,6 +364,7 @@ int shell_log_init (flux_shell_t *shell, const char *progname)
     logger.level = FLUX_SHELL_NOTICE;
     logger.fp_level = FLUX_SHELL_NOTICE;
     logger.active = 0;
+    logger.exception_logged = 0;
     logger.fp = stderr;
     logger.rank = -1;
     if (progname && !(logger.prog = strdup (progname)))

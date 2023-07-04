@@ -15,7 +15,27 @@
  *
  * SIGINT  - forward to all local tasks
  * SIGTERM - forward
+ * SIGALRM - forward
  *
+ * Notes:
+ *
+ * By setting up the signal watchers during "shell.init", there is the
+ * potential for inconsistent exit codes if a signal is received before all
+ * tasks have started.  For example, this could be seen with something
+ * like:
+ *
+ * jobid=`flux submit -n1000 foo.sh`
+ * flux job raise --type=foo --severity=0 $jobid
+ *
+ * i.e. raise sends SIGTERM to job/shell immediately after starting,
+ * but due to the large task count of 1000, the signal is received
+ * before tasks are all setup.  Some tasks could receive SIGTERM while
+ * some (to be created ones) do not.
+ *
+ * Note that the shell should always return an error, but the error
+ * may not be consistent.  This situation is extremely rare and only
+ * seen is testing situations such as the above.  So we elect to not
+ * fix this race.
  */
 #define FLUX_SHELL_PLUGIN_NAME "signals"
 
