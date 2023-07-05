@@ -47,6 +47,15 @@ test_expect_success 'configure testing queues' '
 	flux queue start --all
 '
 
+test_expect_success 'create helper job submission script' '
+	cat >sleepinf.sh <<-EOT &&
+	#!/bin/sh
+	echo "job started"
+	sleep inf
+	EOT
+	chmod +x sleepinf.sh
+'
+
 test_expect_success 'submit jobs for job list testing' '
 	#  Create `hostname` and `sleep` jobspec
 	#  N.B. Used w/ `flux job submit` for serial job submission
@@ -82,7 +91,12 @@ test_expect_success 'submit jobs for job list testing' '
 	#  Run a job that we will end with a signal, copy its JOBID to both inactive and
 	#   failed and terminated lists.
 	#
-	jobid=`flux submit --wait-event=start sleep inf` &&
+	# N.B. sleepinf.sh and wait-event on job data to workaround
+	# rare job startup race.  See #5210
+	#
+	jobid=`flux submit ./sleepinf.sh` &&
+	flux job wait-event -p guest.exec.eventlog $jobid shell.init &&
+	flux job wait-event -p guest.output $jobid data &&
 	flux job kill $jobid &&
 	fj_wait_event $jobid clean &&
 	echo $jobid >> inactiveids &&
@@ -92,7 +106,12 @@ test_expect_success 'submit jobs for job list testing' '
 	#  Run a job that we will end with a user exception, copy its JOBID to both
 	#	inactive and failed and exception lists.
 	#
-	jobid=`flux submit --wait-event=start sleep inf` &&
+	# N.B. sleepinf.sh and wait-event on job data to workaround
+	# rare job startup race.  See #5210
+	#
+	jobid=`flux submit ./sleepinf.sh` &&
+	flux job wait-event -p guest.exec.eventlog $jobid shell.init &&
+	flux job wait-event -p guest.output $jobid data &&
 	flux job raise --type=myexception --severity=0 -m "myexception" $jobid &&
 	fj_wait_event $jobid clean &&
 	echo $jobid >> inactiveids &&
@@ -507,8 +526,8 @@ test_expect_success 'flux-jobs --format={name} works' '
 	flux jobs --filter=inactive -no "{name}" > jobnameI.out &&
 	echo "canceledjob" >> jobnameI.exp &&
 	echo "sleep" >> jobnameI.exp &&
-	echo "sleep" >> jobnameI.exp &&
-	echo "sleep" >> jobnameI.exp &&
+	echo "sleepinf.sh" >> jobnameI.exp &&
+	echo "sleepinf.sh" >> jobnameI.exp &&
 	echo "nosuchcommand" >> jobnameI.exp &&
 	count=$(($(job_list_state_count inactive) - 5)) &&
 	for i in `seq 1 $count`; do
