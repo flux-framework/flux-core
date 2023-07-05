@@ -52,13 +52,8 @@ test_expect_success 'load alloc-check plugin' '
 	flux jobtap load alloc-check.so
 '
 test_expect_success 'submit consecutive jobs that exceed their time limit' '
-	(for i in $(seq 5); \
-	    do flux submit -N1 -x -t1s sleep inf; \
-	done) >jobids
-'
-test_expect_success 'wait for jobs to complete and capture their stderr' '
-	(for id in $(cat jobids); do \
-	    flux job attach $id || true; \
+	(for i in $(seq 3); \
+	    do flux run -N1 -x -t1s sleep 30 || true; \
 	done) 2>joberr
 '
 test_expect_success 'some jobs received timeout exception' '
