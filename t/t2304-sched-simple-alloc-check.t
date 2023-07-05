@@ -42,13 +42,11 @@ test_expect_success 'unload plugins' '
 #   flux-framework/flux-sched#1043
 #
 test_expect_success 'configure epilog with 2s delay' '
-	flux config load <<-EOT
+	flux config load <<-EOT &&
 	[job-manager]
-	plugins = [
-	   { load = "perilog.so" },
-	]
 	epilog.command = [ "flux", "perilog-run", "epilog", "-e", "sleep,2" ]
 	EOT
+	flux jobtap load perilog.so
 '
 test_expect_success 'load alloc-check plugin' '
 	flux jobtap load alloc-check.so
@@ -73,6 +71,7 @@ test_expect_success 'remove alloc-check plugin' '
 	flux jobtap remove alloc-check.so
 '
 test_expect_success 'undo epilog config' '
+	flux jobtap remove perilog.so &&
 	flux config load </dev/null
 '
 
