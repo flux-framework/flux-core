@@ -67,6 +67,10 @@ test_expect_success 'some jobs received timeout exception' '
 test_expect_success 'no jobs received alloc-check exception' '
 	test_must_fail grep "job.exception type=alloc-check" joberr
 '
+test_expect_success 'clean up jobs' '
+	flux cancel --all &&
+	flux queue drain
+'
 test_expect_success 'remove alloc-check plugin' '
 	flux jobtap remove alloc-check.so
 '
