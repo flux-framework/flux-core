@@ -10,21 +10,26 @@
 import errno
 import json
 
+from _flux._core import ffi, lib
 from flux.future import WaitAllFuture
 from flux.job import JobID
 from flux.rpc import RPC
+
+
+def _decode_field(data, key):
+    try:
+        tmp = json.loads(data[key])
+        data[key] = tmp
+    except json.decoder.JSONDecodeError:
+        # Ignore if can't be decoded
+        pass
 
 
 # a few keys are special, decode them into dicts if you can
 def decode_special_data(data):
     for key in ("jobspec", "R"):
         if key in data:
-            try:
-                tmp = json.loads(data[key])
-                data[key] = tmp
-            except json.decoder.JSONDecodeError:
-                # Ignore if can't be decoded
-                pass
+            _decode_field(data, key)
 
 
 class JobInfoLookupRPC(RPC):
@@ -48,8 +53,37 @@ def job_info_lookup(flux_handle, jobid, keys=["jobspec"]):
     return rpc
 
 
+def _original_setup(keys, original):
+    jobspec_original = False
+    J_appended = False
+    if original and "jobspec" in keys:
+        keys.remove("jobspec")
+        jobspec_original = True
+        if "J" not in keys:
+            keys.append("J")
+            J_appended = True
+    return jobspec_original, J_appended
+
+
+def _get_original_jobspec(job_data):
+    J = bytes(job_data["J"], encoding="utf8")
+    val = lib.flux_unwrap_string(J, False, ffi.NULL, ffi.NULL)
+    result = ffi.string(val)
+    lib.free(val)
+    return result.decode("utf-8")
+
+
+def _original_update(job_data, decode, jobspec_original, J_appended):
+    if jobspec_original:
+        job_data["jobspec"] = _get_original_jobspec(job_data)
+        if decode:
+            _decode_field(job_data, "jobspec")
+        if J_appended:
+            job_data.pop("J")
+
+
 # jobs_kvs_lookup simple variant for one jobid
-def job_kvs_lookup(flux_handle, jobid, keys=["jobspec"], decode=True):
+def job_kvs_lookup(flux_handle, jobid, keys=["jobspec"], decode=True, original=False):
     """
     Lookup job kvs data based on a jobid
 
@@ -59,14 +93,18 @@ def job_kvs_lookup(flux_handle, jobid, keys=["jobspec"], decode=True):
     :decode: Optional flag to decode special data into Python data structures
              currently decodes "jobspec" and "R" into dicts
              (default True)
+    :original: For 'jobspec', return the original submitted jobspec
     """
-    payload = {"id": int(jobid), "keys": keys, "flags": 0}
+    keyscpy = list(keys)
+    jobspec_original, J_appended = _original_setup(keyscpy, original)
+    payload = {"id": int(jobid), "keys": keyscpy, "flags": 0}
     rpc = JobInfoLookupRPC(flux_handle, "job-info.lookup", payload)
     try:
         if decode:
             rsp = rpc.get_decode()
         else:
             rsp = rpc.get()
+        _original_update(rsp, decode, jobspec_original, J_appended)
     # The job does not exist!
     except FileNotFoundError:
         return None
@@ -122,6 +160,7 @@ class JobKVSLookup:
     :decode: Optional flag to decode special data into Python data structures
              currently decodes "jobspec" and "R" into dicts
              (default True)
+    :original: For 'jobspec', return the original submitted jobspec
     """
 
     def __init__(
@@ -130,12 +169,14 @@ class JobKVSLookup:
         ids=[],
         keys=["jobspec"],
         decode=True,
+        original=False,
     ):
         self.handle = flux_handle
         self.keys = list(keys)
         self.ids = list(map(JobID, ids)) if ids else []
         self.decode = decode
         self.errors = []
+        self.jobspec_original, self.J_appended = _original_setup(self.keys, original)
 
     def fetch_data(self):
         """Initiate the job info lookup to the Flux job-info module
@@ -168,4 +209,8 @@ class JobKVSLookup:
             data = rpc.get()
         if hasattr(rpc, "errors"):
             self.errors = rpc.errors
+        for job_data in data:
+            _original_update(
+                job_data, self.decode, self.jobspec_original, self.J_appended
+            )
         return data
