@@ -310,6 +310,8 @@ static bool match_and (struct job_constraint *c, const struct rnode *n)
 static bool match_or (struct job_constraint *c, const struct rnode *n)
 {
     struct job_constraint *cp = zlistx_first (c->values);
+    if (!cp)
+        return true;
     while (cp) {
         if (cp->match (cp, n))
             return true;

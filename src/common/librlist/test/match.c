@@ -33,6 +33,18 @@ struct validate_test {
  */
 struct match_test match_tests[] = {
     { "empty json object matches everything", "{}", true },
+    { "empty and object matches everything",
+      "{ \"and\": [] }",
+      true,
+    },
+    { "empty or object matches everything",
+      "{ \"or\": [] }",
+      true,
+    },
+    { "empty not object matches nothing",
+      "{ \"not\": [] }",
+      false,
+    },
     { "hostname property matches",
        "{\"properties\": [\"foo0\"]}",
        true
@@ -171,6 +183,11 @@ struct validate_test validate_tests[] = {
     },
     { "empty or object is valid constraint",
       "{ \"or\": [] }",
+      true,
+      NULL
+    },
+    { "empty not object is valid constraint",
+      "{ \"not\": [] }",
       true,
       NULL
     },
