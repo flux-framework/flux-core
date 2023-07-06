@@ -2527,8 +2527,6 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     if (ctx->timestamp_zero == 0.)
         ctx->timestamp_zero = timestamp;
 
-    attach_notify (ctx, name, timestamp);
-
     if (streq (name, "exception")) {
         const char *type;
         int severity;
@@ -2595,6 +2593,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                               name,
                               context);
     }
+
+    attach_notify (ctx, name, timestamp);
 
     if (streq (name, ctx->wait_event)) {
         flux_job_event_watch_cancel (f);
