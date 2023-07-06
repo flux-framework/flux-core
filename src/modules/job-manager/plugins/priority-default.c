@@ -30,7 +30,8 @@ static int priority_cb (flux_plugin_t *p,
 {
     int urgency = -1;
     flux_t *h = flux_jobtap_get_flux (p);
-    if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
                                 "{s:i}",
                                 "urgency", &urgency) < 0) {
         flux_log (h, LOG_ERR,
@@ -38,7 +39,8 @@ static int priority_cb (flux_plugin_t *p,
                  flux_plugin_arg_strerror (args));
         return -1;
     }
-    if (flux_plugin_arg_pack (args, FLUX_PLUGIN_ARG_OUT,
+    if (flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_OUT,
                              "{s:i}",
                              "priority", urgency) < 0) {
         flux_log (h, LOG_ERR,

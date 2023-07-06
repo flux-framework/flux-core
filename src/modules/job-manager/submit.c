@@ -44,7 +44,7 @@ static int submit_post_event (struct job_manager *ctx, struct job *job)
 
     entry = eventlog_entry_pack (job->t_submit,
                                  "submit",
-                                 "{ s:I s:i s:i s:i }",
+                                 "{s:I s:i s:i s:i}",
                                  "userid", (json_int_t) job->userid,
                                  "urgency", job->urgency,
                                  "flags", job->flags,

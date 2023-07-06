@@ -74,9 +74,11 @@ void kill_handle_request (flux_t *h,
     char topic [64];
     const char *errstr = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:i}",
-                                        "id", &id,
-                                        "signum", &sig) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:i}",
+                             "id", &id,
+                             "signum", &sig) < 0)
         goto error;
     if (kill_check_signal (sig) < 0) {
         errstr = "Invalid signal number";
@@ -137,12 +139,9 @@ void killall_handle_request (flux_t *h,
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:b s:i s:i}",
-                             "dry_run",
-                             &dry_run,
-                             "userid",
-                             &userid,
-                             "signum",
-                             &signum) < 0) {
+                             "dry_run", &dry_run,
+                             "userid", &userid,
+                             "signum", &signum) < 0) {
         errstr = "error decoding request";
         goto error;
     }
@@ -174,8 +173,7 @@ void killall_handle_request (flux_t *h,
                                                topic,
                                                0,
                                                "{s:i}",
-                                               "signum",
-                                               signum))) {
+                                               "signum", signum))) {
                 error_count++;
                 goto next;
             }
@@ -187,10 +185,8 @@ next:
     if (flux_respond_pack (h,
                            msg,
                            "{s:i s:i}",
-                           "count",
-                           count,
-                           "errors",
-                           error_count) < 0)
+                           "count", count,
+                           "errors", error_count) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:

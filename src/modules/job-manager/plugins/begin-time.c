@@ -161,7 +161,7 @@ static int depend_cb (flux_plugin_t *p,
                                 "{s:I s:{s:s}}",
                                 "id", &id,
                                 "dependency",
-                                "value", &s) < 0)
+                                  "value", &s) < 0)
         return flux_jobtap_reject_job (p,
                                        args,
                                        "error processing begin-time: %s",

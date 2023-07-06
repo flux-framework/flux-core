@@ -51,9 +51,11 @@ void urgency_handle_request (flux_t *h,
     int urgency, orig_urgency;
     const char *errstr = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:i}",
-                                        "id", &id,
-                                        "urgency", &urgency) < 0
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:i}",
+                             "id", &id,
+                             "urgency", &urgency) < 0
         || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (urgency < FLUX_JOB_URGENCY_MIN
@@ -94,9 +96,11 @@ void urgency_handle_request (flux_t *h,
      *  was a priority change.
      */
     orig_urgency = job->urgency;
-    if (event_job_post_pack (ctx->event, job,
-                             "urgency", 0,
-                             "{ s:I s:i }",
+    if (event_job_post_pack (ctx->event,
+                             job,
+                             "urgency",
+                             0,
+                             "{s:I s:i}",
                              "userid", (json_int_t) cred.userid,
                              "urgency", urgency) < 0)
         goto error;

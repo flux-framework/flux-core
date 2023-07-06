@@ -60,7 +60,8 @@ static int validate_duration (flux_plugin_t *p,
 {
     double duration = -1.;
 
-    if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
                                 "{s:{s:{s?{s?F}}}}",
                                 "jobspec",
                                  "attributes",
@@ -80,7 +81,7 @@ static void kvs_lookup_cb (flux_future_t *f, void *arg)
     if (flux_kvs_lookup_get_unpack (f,
                                     "{s:{s:F}}",
                                     "execution",
-                                    "expiration", &expiration) < 0) {
+                                      "expiration", &expiration) < 0) {
         flux_log_error (h, "flux_kvs_lookup_unpack");
     }
     flux_future_reset (f);

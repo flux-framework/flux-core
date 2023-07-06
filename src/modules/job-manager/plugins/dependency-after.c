@@ -221,7 +221,8 @@ static int lookup_job_uid_state (flux_plugin_t *p,
     int rc = 0;
     flux_plugin_arg_t *args = flux_jobtap_job_lookup (p, id);
     if (!args
-        || flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+        || flux_plugin_arg_unpack (args,
+                                   FLUX_PLUGIN_ARG_IN,
                                    "{s:i s:i}",
                                    "userid", puid,
                                    "state", pstate) < 0)
@@ -673,8 +674,7 @@ static int query_cb (flux_plugin_t *p,
     if (flux_plugin_arg_pack (args,
                               FLUX_PLUGIN_ARG_OUT,
                               "{s:O}",
-                              "dependencies",
-                              o) < 0)
+                              "dependencies", o) < 0)
         flux_log_error (flux_jobtap_get_flux (p),
                         "dependency-after: query_cb: flux_plugin_arg_pack: %s",
                         flux_plugin_arg_strerror (args));

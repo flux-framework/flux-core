@@ -93,10 +93,8 @@ static int decode_job_result (struct job *job,
 
         if (json_unpack (context,
                          "{s:s s?s}",
-                         "type",
-                         &type,
-                         "note",
-                         &note) < 0)
+                         "type", &type,
+                         "note", &note) < 0)
             return -1;
         errprintf (errp,
                    "Fatal exception type=%s %s",
@@ -156,12 +154,9 @@ static void wait_respond (struct waitjob *wait,
     if (flux_respond_pack (h,
                            msg,
                            "{s:I s:b s:s}",
-                           "id",
-                           job->id,
-                           "success",
-                           success ? 1 : 0,
-                           "errstr",
-                           error.text) < 0)
+                           "id", job->id,
+                           "success", success ? 1 : 0,
+                           "errstr", error.text) < 0)
         flux_log_error (h, "wait_respond id=%s", idf58 (job->id));
     return;
 error:
