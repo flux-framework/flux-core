@@ -33,6 +33,7 @@
 #include "event.h"
 #include "drain.h"
 #include "annotate.h"
+#include "raise.h"
 #include "queue.h"
 
 struct alloc {
@@ -286,12 +287,12 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                 __FUNCTION__,
                                 idf58 (id));
         }
-        if (event_job_post_pack (ctx->event, job, "exception", 0,
-                                 "{ s:s s:i s:I s:s }",
-                                 "type", "alloc",
-                                 "severity", 0,
-                                 "userid", (json_int_t) FLUX_USERID_UNKNOWN,
-                                 "note", note ? note : "") < 0)
+        if (raise_job_exception (ctx,
+                                 job,
+                                 "alloc",
+                                 0,
+                                 FLUX_USERID_UNKNOWN,
+                                 note) < 0)
             goto teardown;
         break;
     case FLUX_SCHED_ALLOC_CANCEL:

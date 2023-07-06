@@ -37,6 +37,7 @@
 #include "prioritize.h"
 #include "conf.h"
 #include "event.h"
+#include "raise.h"
 #include "jobtap.h"
 #include "jobtap-internal.h"
 
@@ -1931,13 +1932,12 @@ static int jobtap_job_vraise (struct jobtap *jobtap,
     char note [1024];
     if (vsnprintf (note, sizeof (note), fmt, ap) >= sizeof (note))
         note[sizeof(note) - 2] = '+';
-    return event_job_post_pack (jobtap->ctx->event,
-                                job, "exception", 0,
-                                "{ s:s s:i s:i s:s }",
-                                "type", type,
-                                "severity", severity,
-                                "userid", FLUX_USERID_UNKNOWN,
-                                "note", note);
+    return raise_job_exception (jobtap->ctx,
+                                job,
+                                type,
+                                severity,
+                                FLUX_USERID_UNKNOWN,
+                                note);
 }
 
 static int jobtap_job_raise (struct jobtap *jobtap,
