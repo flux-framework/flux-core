@@ -28,6 +28,7 @@ struct perilog_data {
 };
 
 static int prolog_exception = 0;
+static int prolog_count = 1;
 
 static struct perilog_data *
 perilog_data_create (flux_plugin_t *p,
@@ -117,8 +118,30 @@ static int cb (flux_plugin_t *p,
     }
 
     flux_watcher_start (tw);
-    if (prolog)
+    if (prolog) {
+        int count = prolog_count;
         rc = flux_jobtap_prolog_start (p, "test");
+        while (--count) {
+            char name[64];
+            (void) snprintf (name, sizeof (name), "test-%d", prolog_count);
+            if (!(d = perilog_data_create (p, id, prolog, name, 0))) {
+                flux_log_error (h, "perilog_data_create");
+                return -1;
+            }
+
+            tw = flux_timer_watcher_create (flux_get_reactor (h),
+                                            0.1,
+                                            0.0,
+                                            timer_cb,
+                                            d);
+            if (tw == NULL) {
+                flux_log_error (h, "timer_watcher_create");
+                return -1;
+            }
+            flux_watcher_start (tw);
+            rc = flux_jobtap_prolog_start (p, name);
+        }
+    }
     else
         rc = flux_jobtap_epilog_start (p, "test");
     if (rc < 0) {
@@ -148,8 +171,9 @@ int flux_plugin_init (flux_plugin_t *p)
 {
     if (flux_plugin_register (p, "perilog-test", tab) < 0)
         return -1;
-    flux_plugin_conf_unpack (p, "{s?i}",
-                             "prolog-exception", &prolog_exception);
+    flux_plugin_conf_unpack (p, "{s?i s?i}",
+                             "prolog-exception", &prolog_exception,
+                             "prolog-count", &prolog_count);
     return 0;
 }
 
