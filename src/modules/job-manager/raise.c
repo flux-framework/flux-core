@@ -28,11 +28,13 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
 #include <ctype.h>
 #include <flux/core.h>
 
 #include "src/common/libjob/idf58.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "job.h"
 #include "event.h"
@@ -63,31 +65,45 @@ int raise_check_severity (int severity)
     return 0;
 }
 
-/* NB: job object may be destroyed in event_job_post_pack().
- * Do not reference the object after calling this function.
- * Do not call this function and continue to iterate on the job hash
- * with zhash_next().
- */
-int raise_job (struct job_manager *ctx,
-               const char *type,
-               int severity,
-               uint32_t userid,
-               const char *note,
-               struct job *job)
+int raise_job_exception (struct job_manager *ctx,
+                         struct job *job,
+                         const char *type,
+                         int severity,
+                         uint32_t userid,
+                         const char *note)
 {
     flux_jobid_t id = job->id;
     flux_future_t *f;
+    json_t *evctx;
 
-    if (event_job_post_pack (ctx->event,
-                             job,
-                             "exception",
-                             0,
-                             "{ s:s s:i s:i s:s }",
-                             "type", type,
-                             "severity", severity,
-                             "userid", userid,
-                             "note", note ? note : "") < 0)
-        return -1;
+    // create exception event context with the required keys per RFC 21
+    if (!(evctx = json_pack ("{s:s s:i}", "type", type, "severity", severity)))
+        goto nomem;
+    // work around flux-framework/flux-core#5314
+    if (!note)
+        note = "";
+    // add optional userid key
+    if (userid != FLUX_USERID_UNKNOWN) {
+        json_t *val;
+        if (!(val = json_integer (userid))
+            || json_object_set_new (evctx, "userid", val) < 0) {
+            json_decref (val);
+            goto nomem;
+        }
+    }
+    // add optional note key
+    if (note) {
+        json_t *val;
+        if (!(val = json_string (note))
+            || json_object_set_new (evctx, "note", val) < 0) {
+            json_decref (val);
+            goto nomem;
+        }
+    }
+    // post exception to job eventlog
+    if (event_job_post_pack (ctx->event, job, "exception", 0, "O", evctx) < 0)
+        goto error;
+    // publish job-exception event
     if (!(f = flux_event_publish_pack (ctx->h,
                                        "job-exception",
                                        FLUX_MSGFLAG_PRIVATE,
@@ -95,9 +111,15 @@ int raise_job (struct job_manager *ctx,
                                        "id", id,
                                        "type", type,
                                        "severity", severity)))
-        return -1;
+        goto error;
     flux_future_destroy (f);
+    json_decref (evctx);
     return 0;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, evctx);
+    return -1;
 }
 
 void raise_handle_request (flux_t *h,
@@ -143,7 +165,7 @@ void raise_handle_request (flux_t *h,
         errstr = "guests can only raise exceptions on their own jobs";
         goto error;
     }
-    if (raise_job (ctx, type, severity, cred.userid, note, job) < 0)
+    if (raise_job_exception (ctx, job, type, severity, cred.userid, note) < 0)
         goto error;
     /* NB: job object may be destroyed in event_job_post_pack().
      * Do not reference the object after this point:
@@ -253,7 +275,12 @@ void raiseall_handle_request (flux_t *h,
     if (!dry_run) {
         job = zlistx_first (target_jobs);
         while (job) {
-            if (raise_job (ctx, type, severity, cred.userid, note, job) < 0) {
+            if (raise_job_exception (ctx,
+                                     job,
+                                     type,
+                                     severity,
+                                     cred.userid,
+                                     note) < 0) {
                 flux_log_error (h,
                                 "error raising exception on id=%s",
                                 idf58 (job->id));
