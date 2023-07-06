@@ -2401,42 +2401,62 @@ done:
 struct job_event_notifications {
     const char *event;
     const char *msg;
+    int count;
 };
 
 static struct job_event_notifications attach_notifications[] = {
     { "validate",
       "resolving dependencies",
+      0,
     },
     { "depend",
       "waiting for priority assignment",
+      0,
     },
     { "priority",
       "waiting for resources",
+      0,
     },
     { "alloc",
       "starting",
+      0,
     },
     { "prolog-start",
       "waiting for job prolog",
+      0,
     },
     { "prolog-finish",
       "starting",
+      0,
     },
     { "start",
-      "started"
+      "started",
+      0,
     },
     { "exception",
       "canceling due to exception",
+      0,
     },
-    { NULL, NULL},
+    { NULL, NULL, 0},
 };
 
 static const char *job_event_notify_string (const char *name)
 {
     struct job_event_notifications *t = attach_notifications;
     while (t->event) {
-        if (streq (t->event, name))
+        if (streq (t->event, name)) {
+            /*  Special handling for prolog-start and prolog-finish:
+             *  prolog-start adds a reference to prolog-finish, and
+             *  prolog-finish decrements its reference by 1. Only
+             *  print 'starting' if prolog-finish refcount is <= 0.
+             */
+            if (streq (name, "prolog-start"))
+                (t+1)->count++;
+            else if (streq (name, "prolog-finish")
+                    && --t->count > 0)
+                    t--;
             return t->msg;
+        }
         t++;
     }
     return NULL;
