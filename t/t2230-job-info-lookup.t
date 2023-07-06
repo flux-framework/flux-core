@@ -95,11 +95,17 @@ test_expect_success 'flux job info jobspec fails on bad id' '
 # job info lookup tests (multiple info requests)
 #
 
-test_expect_success 'flux job info multiple keys works' '
+test_expect_success 'flux job info multiple keys works (different keys)' '
 	jobid=$(submit_job) &&
 	flux job info $jobid eventlog jobspec J > all_info_a.out &&
 	grep submit all_info_a.out &&
 	grep sleep all_info_a.out
+'
+
+test_expect_success 'flux job info multiple keys works (same key)' '
+	jobid=$(submit_job) &&
+	flux job info $jobid eventlog eventlog eventlog > eventlog_3.out &&
+	test $(grep submit eventlog_3.out | wc -l) -eq 3
 '
 
 test_expect_success 'flux job info multiple keys fails on bad id' '
