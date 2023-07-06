@@ -8,6 +8,8 @@ test_under_flux 4
 
 flux setattr log-stderr-level 1
 
+runpty=$SHARNESS_TEST_SRCDIR/scripts/runpty.py
+
 test_expect_success 'attach: submit one job' '
 	flux submit echo foo >jobid1
 '
@@ -37,6 +39,25 @@ test_expect_success 'attach: --show-status shows job status line' '
 	grep "waiting for resources" jobid1.status &&
 	grep "starting" jobid1.status &&
 	grep "started" jobid1.status
+'
+test_expect_success 'attach: --show-status properly accounts prolog-start events' '
+	flux jobtap load ${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs/perilog-test.so prolog-count=4 &&
+	jobid2=$(flux submit hostname) &&
+	run_timeout 5 $runpty -f asciicast -o jobid2.out \
+		flux job attach -vEX --show-status $jobid2 &&
+	cat jobid2.out &&
+	grep "resolving dependencies" jobid2.out &&
+	grep "waiting for resources" jobid2.out &&
+	grep "starting" jobid2.out &&
+	grep "started" jobid2.out &&
+	last_prolog_finish_line=$(grep -n prolog-finish jobid2.out \
+		| tail -1 \
+		| cut -f1 -d:) &&
+	first_starting_line=$(grep -n flux-job:.*starting jobid2.out \
+		| tail -1 \
+		| cut -f1 -d:) &&
+	test $first_starting_line -ge $last_prolog_finish_line &&
+	flux jobtap remove perilog-test.so
 '
 test_expect_success 'attach: shows output from job' '
 	run_timeout 5 flux job attach $(cat jobid1) | grep foo
