@@ -3335,11 +3335,11 @@ struct info_ctx {
     bool original;
 };
 
-void info_output (flux_future_t *f, const char *suffix, struct info_ctx *ctx)
+void info_output (flux_future_t *f, const char *key, struct info_ctx *ctx)
 {
     const char *s;
 
-    if (flux_rpc_get_unpack (f, "{s:s}", suffix, &s) < 0) {
+    if (flux_rpc_get_unpack (f, "{s:s}", key, &s) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
             log_msg_exit ("job %s id or key not found", ctx->id_arg);
@@ -3348,7 +3348,7 @@ void info_output (flux_future_t *f, const char *suffix, struct info_ctx *ctx)
             log_err_exit ("flux_rpc_get_unpack");
     }
 
-    if (ctx->original && streq (suffix, "J")) {
+    if (ctx->original && streq (key, "J")) {
         flux_error_t error;
         char *jobspec = flux_unwrap_string (s, false, NULL, &error);
         if (!jobspec)
