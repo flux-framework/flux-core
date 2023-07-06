@@ -173,9 +173,9 @@ static void sign_security (void)
     }
 
     userid = 0;
-    result = unwrap_string (s, false, &userid, &error);
+    result = flux_unwrap_string (s, false, &userid, &error);
     ok (result && userid == 1000,
-        "unwrap_string() from flux-security signer");
+        "flux_unwrap_string() from flux-security signer");
     free (result);
 
     /* valid userid */
@@ -183,9 +183,9 @@ static void sign_security (void)
         BAIL_OUT ("flux_sign_wrap_as returned NULL: %s",
                   flux_security_last_error (sec));
     userid = 0;
-    result = unwrap_string (s, true, &userid, &error);
+    result = flux_unwrap_string (s, true, &userid, &error);
     ok (result && userid == getuid (),
-        "unwrap_string() with verify = true works");
+        "flux_unwrap_string() with verify = true works");
     free (result);
 
     /* Invalid userid */
@@ -194,24 +194,24 @@ static void sign_security (void)
                   flux_security_last_error (sec));
     userid = 0;
     memset (error.text, 0, sizeof (error.text));
-    result = unwrap_string (s, true, &userid, &error);
+    result = flux_unwrap_string (s, true, &userid, &error);
     ok (result == NULL,
-        "unwrap_string() with verify = true and incorrect userid fails");
+        "flux_unwrap_string() with verify = true and incorrect userid fails");
     ok (strlen (error.text),
-        "unwrap_string() expected error: %s",
+        "flux_unwrap_string() expected error: %s",
         error.text);
     free (result);
 
     /* Invalid userid (noverify) */
     userid = 0;
     memset (error.text, 0, sizeof (error.text));
-    result = unwrap_string (s, false, &userid, &error);
+    result = flux_unwrap_string (s, false, &userid, &error);
     ok (result != NULL,
-        "unwrap_string() with verify = false and incorrect userid succeeds");
+        "flux_unwrap_string() with verify = false and incorrect userid succeeds");
     ok (userid == getuid() - 1,
-        "unwrap_string() returned userid used for signing");
+        "flux_unwrap_string() returned userid used for signing");
     ok (strlen (error.text) == 0,
-        "unwrap_string() error.text still empty");
+        "flux_unwrap_string() error.text still empty");
     free (result);
 
 
@@ -223,13 +223,13 @@ int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
-    test_api (unwrap_string);
+    test_api (flux_unwrap_string);
     test_api (unwrap_string_sign_none);
 
-    decode_bad_other (unwrap_string);
+    decode_bad_other (flux_unwrap_string);
     decode_bad_other (unwrap_string_sign_none);
 
-    unwrap_sign_none (unwrap_string);
+    unwrap_sign_none (flux_unwrap_string);
     unwrap_sign_none (unwrap_string_sign_none);
 #if HAVE_FLUX_SECURITY
     sign_security ();

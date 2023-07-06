@@ -247,6 +247,25 @@ int flux_job_result_get_unpack (flux_future_t *f, const char *fmt, ...);
  */
 int flux_job_timeleft (flux_t *h, flux_error_t *errp, double *timeleft);
 
+/*  Unwrap signed data to a NUL terminated string, e.g. J -> jobspec.
+ *
+ *  If verify is true, then fail if signing mechanism is invalid or
+ *   signing user does not match current uid. On failure, error.text
+ *   is filled in with an error message. (errno not necessarily
+ *   guaranteed to be valid).
+ *
+ *  Works when flux-core is built with or without flux-security
+ *
+ *  Caller must free returned value if non-NULL.
+ *
+ *  Predominantly used by flux-core internally and associated
+ *  libraries/tools.
+ */
+char *flux_unwrap_string (const char *in,
+                          bool verify,
+                          uint32_t *userid,
+                          flux_error_t *error);
+
 #ifdef __cplusplus
 }
 #endif
