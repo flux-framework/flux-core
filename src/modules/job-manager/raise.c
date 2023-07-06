@@ -141,7 +141,7 @@ void raise_handle_request (flux_t *h,
                                         "severity", &severity,
                                         "type", &type,
                                         "note", &note) < 0
-                    || flux_msg_get_cred (msg, &cred) < 0)
+        || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (raise_check_severity (severity)) {
         errstr = "invalid exception severity";

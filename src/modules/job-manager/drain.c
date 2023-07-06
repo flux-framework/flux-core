@@ -50,7 +50,7 @@ void drain_check (struct drain *drain)
     if (zhashx_size (drain->ctx->active_jobs) == 0) {
         while ((msg = zlist_pop (drain->drain_requests))) {
             if (!(rsp = flux_response_derive (msg, 0))
-                        || event_batch_respond (drain->ctx->event, rsp) < 0)
+                || event_batch_respond (drain->ctx->event, rsp) < 0)
                 flux_log_error (drain->ctx->h,
                                 "error handing drain request off");
             flux_msg_decref (rsp);
@@ -61,13 +61,13 @@ void drain_check (struct drain *drain)
     /* Idle - no jobs in RUN or CLEANUP state, and no pending alloc requests.
      */
     if (alloc_pending_count (drain->ctx->alloc) == 0
-                                    && drain->ctx->running_jobs == 0) {
+        && drain->ctx->running_jobs == 0) {
         int pending = zhashx_size (drain->ctx->active_jobs)
                                  - drain->ctx->running_jobs;
         while ((msg = zlist_pop (drain->idle_requests))) {
             if (!(rsp = flux_response_derive (msg, 0))
-                        || flux_msg_pack (rsp, "{s:i}", "pending", pending) < 0
-                        || event_batch_respond (drain->ctx->event, rsp) < 0)
+                || flux_msg_pack (rsp, "{s:i}", "pending", pending) < 0
+                || event_batch_respond (drain->ctx->event, rsp) < 0)
                 flux_log_error (drain->ctx->h,
                                 "error handing idle request off");
             flux_msg_decref (rsp);
@@ -160,7 +160,7 @@ struct drain *drain_ctx_create (struct job_manager *ctx)
         return NULL;
     drain->ctx = ctx;
     if (!(drain->drain_requests = zlist_new ())
-            || !(drain->idle_requests = zlist_new ())) {
+        || !(drain->idle_requests = zlist_new ())) {
         errno = ENOMEM;
         goto error;
     }
