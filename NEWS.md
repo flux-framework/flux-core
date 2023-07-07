@@ -1,3 +1,60 @@
+flux-core version 0.52.0 - 2023-07-06
+-------------------------------------
+
+## New Features
+
+ * libjob: export `flux_unwrap_string(3)` function (#5312)
+ * job-manager: add alloc-check plugin (#5304)
+ * add f58plain job encoding (#5297)
+ * libsubprocess: support user friendly error string  (#5294)
+ * python: support convenience API for `job-info.lookup` RPC
+   and `flux job info` (#5265, #5311)
+ * support `[kKMG]` suffixes in command options that take a bytes argument
+   (#5277)
+ * libutil: add `parse_size()` (#5262)
+ * flux-resource: add `R` subcommand (#5246)
+ * job-exec: always use stdio for exec barrier (#5267)
+ * sdbus: make debug logging configurable (#5264)
+
+## Fixes
+
+ * job-manager: publish event on jobtap exception (#5310)
+ * librlist: fix RFC31 corner cases (#5137)
+ * testsuite: workaround job start signal race (#5302)
+ * shell: document signal race (#5299)
+ * testsuite: fix occasional broker kill error (#5291)
+ * do not suppress job shell and broker errors with `flux alloc` (#5274)
+ * allow guests to use flux module list, flux module stats (#5280)
+ * broker: load module with DSO version extension (#5283)
+ * shell: ensure captured pty data does not come after stdout EOF in output
+   eventlog (#5282)
+ * Parse jobspec attributes.system optionally  (#5279)
+ * broker: avoid spurious overlay peer warning (#5275)
+ * flux-resource: fix `-i, --include=HOSTS` in `list` command when some
+   hosts are excluded (#5268)
+ * python: allow JobID to take a JobID (#5259)
+ * flux-top: fix formatting with ASCII jobids (#5263)
+ * shell: set correct HOSTNAME in job environment if necessary (#5261)
+ * Ignore errors when starting flux from a restart dump containing giant
+   blobs (#5254)
+ * support utf-8 in broker logs (#5253)
+ * flux-config-bootstrap(5): fix TOML error (#5252)
+ * libjob: return on error in `unwrap_string()` (#5251)
+ * libjob: fix leak in `sign_unwrap()` (#5248)
+ * flux-job: fix attach notification with multiple prolog-start events (#5315)
+
+## Cleanup
+
+ * switch from decimal to f58 jobid encoding in most log messages and shell
+   service name (#5256)
+ * flux-job: add missing include of signal.h (#5247)
+ * testsuite: improve alloc-check test (#5309)
+ * fix assorted typos and adjust whitespace per project norms (#5298)
+
+## Build/Testsuite/CI
+
+ * build: require flux-security >= 0.9.0 (#5270)
+
 flux-core version 0.51.0 - 2023-06-09
 -------------------------------------
 
