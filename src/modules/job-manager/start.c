@@ -164,9 +164,12 @@ static void interface_teardown (struct start *start, char *s, int errnum)
         while (job) {
             if (job->start_pending) {
                 if ((job->flags & FLUX_JOB_DEBUG))
-                    (void)event_job_post_pack (ctx->event, job,
-                                               "debug.start-lost", 0,
-                                               "{ s:s }", "note", s);
+                    (void)event_job_post_pack (ctx->event,
+                                               job,
+                                               "debug.start-lost",
+                                               0,
+                                               "{s:s}",
+                                               "note", s);
                 job->start_pending = 0;
             }
             job = zhashx_next (ctx->active_jobs);
@@ -191,9 +194,11 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "start: topic=%s not registered", topic);
         goto error;
     }
-    if (flux_msg_unpack (msg, "{s:I s:s s:o}", "id", &id,
-                                               "type", &type,
-                                               "data", &data) < 0) {
+    if (flux_msg_unpack (msg,
+                         "{s:I s:s s:o}",
+                         "id", &id,
+                         "type", &type,
+                         "data", &data) < 0) {
         flux_log_error (h, "start response payload");
         goto error;
     }
@@ -227,16 +232,21 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
     else if (streq (type, "release")) {
         const char *idset;
         int final;
-        if (json_unpack (data, "{s:s s:b}", "ranks", &idset,
-                                            "final", &final) < 0) {
+        if (json_unpack (data,
+                         "{s:s s:b}",
+                         "ranks", &idset,
+                         "final", &final) < 0) {
             errno = EPROTO;
             flux_log_error (h, "start: release response: malformed data");
             goto error;
         }
         if (final) // final release is end-of-stream
             job->start_pending = 0;
-        if (event_job_post_pack (ctx->event, job, "release", 0,
-                                 "{ s:s s:b }",
+        if (event_job_post_pack (ctx->event,
+                                 job,
+                                 "release",
+                                 0,
+                                 "{s:s s:b}",
                                  "ranks", idset,
                                  "final", final) < 0)
             goto error_post;
@@ -245,15 +255,20 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         int xseverity;
         const char *xtype;
         const char *xnote = NULL;
-        if (json_unpack (data, "{s:i s:s s?s}", "severity", &xseverity,
-                                                "type", &xtype,
-                                                "note", &xnote) < 0) {
+        if (json_unpack (data,
+                         "{s:i s:s s?s}",
+                         "severity", &xseverity,
+                         "type", &xtype,
+                         "note", &xnote) < 0) {
             errno = EPROTO;
             flux_log_error (h, "start: exception response: malformed data");
             goto error;
         }
-        if (event_job_post_pack (ctx->event, job, "exception", 0,
-                                 "{ s:s s:i s:I s:s }",
+        if (event_job_post_pack (ctx->event,
+                                 job,
+                                 "exception",
+                                 0,
+                                 "{s:s s:i s:I s:s}",
                                  "type", xtype,
                                  "severity", xseverity,
                                  "userid", (json_int_t) FLUX_USERID_UNKNOWN,
@@ -267,8 +282,12 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
             flux_log_error (h, "start: finish response: malformed data");
             goto error;
         }
-        if (event_job_post_pack (ctx->event, job, "finish", 0,
-                                 "{ s:i }", "status", status) < 0)
+        if (event_job_post_pack (ctx->event,
+                                 job,
+                                 "finish",
+                                 0,
+                                 "{s:i}",
+                                 "status", status) < 0)
             goto error_post;
     }
     else {
@@ -296,19 +315,23 @@ int start_send_request (struct start *start, struct job *job)
     if (!job->start_pending && start->topic != NULL) {
         if (!(msg = flux_request_encode (start->topic, NULL)))
             return -1;
-        if (flux_msg_pack (msg, "{s:I s:i s:O s:b}",
-                                "id", job->id,
-                                "userid", (json_int_t) job->userid,
-                                "jobspec", job->jobspec_redacted,
-                                "reattach", job->reattach) < 0)
+        if (flux_msg_pack (msg,
+                           "{s:I s:i s:O s:b}",
+                           "id", job->id,
+                           "userid", (json_int_t) job->userid,
+                           "jobspec", job->jobspec_redacted,
+                           "reattach", job->reattach) < 0)
             goto error;
         if (flux_send (ctx->h, msg, 0) < 0)
             goto error;
         flux_msg_destroy (msg);
         job->start_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post_pack (ctx->event, job,
-                                       "debug.start-request", 0, NULL);
+            (void)event_job_post_pack (ctx->event,
+                                       job,
+                                       "debug.start-request",
+                                       0,
+                                       NULL);
     }
     return 0;
 error:

@@ -163,8 +163,8 @@ static int jobspec_redacted_parse_queue (struct job *job)
         if (json_unpack (job->jobspec_redacted,
                          "{s?{s?{s?s}}}",
                          "attributes",
-                         "system",
-                         "queue", &job->queue) < 0) {
+                           "system",
+                             "queue", &job->queue) < 0) {
             errno = EINVAL;
             return -1;
         }
@@ -266,13 +266,14 @@ struct job *job_create_from_json (json_t *o)
 
     if (!(job = job_create ()))
         return NULL;
-    if (json_unpack (o, "{s:I s:i s:i s:f s:i s:O}",
-                        "id", &job->id,
-                        "urgency", &job->urgency,
-                        "userid", &job->userid,
-                        "t_submit", &job->t_submit,
-                        "flags", &job->flags,
-                        "jobspec", &job->jobspec_redacted) < 0) {
+    if (json_unpack (o,
+                     "{s:I s:i s:i s:f s:i s:O}",
+                     "id", &job->id,
+                     "urgency", &job->urgency,
+                     "userid", &job->userid,
+                     "t_submit", &job->t_submit,
+                     "flags", &job->flags,
+                     "jobspec", &job->jobspec_redacted) < 0) {
         errno = EPROTO;
         job_decref (job);
         return NULL;

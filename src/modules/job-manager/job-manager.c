@@ -50,8 +50,7 @@ void getinfo_handle_request (flux_t *h,
     if (flux_respond_pack (h,
                            msg,
                            "{s:I}",
-                           "max_jobid",
-                           ctx->max_jobid) < 0)
+                           "max_jobid", ctx->max_jobid) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     return;
 error:
@@ -77,7 +76,9 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct job_manager *ctx = arg;
     int journal_listeners = journal_listeners_count (ctx->journal);
-    if (flux_respond_pack (h, msg, "{s:{s:i} s:i s:i s:I}",
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:{s:i} s:i s:i s:I}",
                            "journal",
                              "listeners", journal_listeners,
                            "active_jobs", zhashx_size (ctx->active_jobs),

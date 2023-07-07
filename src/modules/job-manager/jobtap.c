@@ -376,7 +376,9 @@ static int jobtap_conf_entry (struct jobtap *jobtap,
     const char *remove = NULL;
     json_t *conf = NULL;
 
-    if (json_unpack_ex (entry, &json_err, 0,
+    if (json_unpack_ex (entry,
+                        &json_err,
+                        0,
                         "{s?s s?o s?s}",
                         "load", &load,
                         "conf", &conf,
@@ -674,7 +676,8 @@ int jobtap_get_priority (struct jobtap *jobtap,
         /*
          *  A priority.get callback was run. Try to unpack a new priority
          */
-        if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
+        if (flux_plugin_arg_unpack (args,
+                                    FLUX_PLUGIN_ARG_OUT,
                                     "{s?I}",
                                     "priority", &priority) < 0) {
             flux_log (jobtap->ctx->h, LOG_ERR,
@@ -763,7 +766,8 @@ static int jobtap_call_early (struct jobtap *jobtap,
          *   If plugin did not provide an error message, then construct
          *   a generic error "rejected by plugin".
          */
-        if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
+        if (flux_plugin_arg_unpack (args,
+                                    FLUX_PLUGIN_ARG_OUT,
                                     "{s:s}",
                                     "errmsg", &errmsg) < 0)
                 errmsg = "rejected by job-manager plugin";
@@ -874,7 +878,8 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
          *   a generic error "rejected by plugin".
          */
         const char *errmsg;
-        if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
+        if (flux_plugin_arg_unpack (args,
+                                    FLUX_PLUGIN_ARG_OUT,
                                     "{s:s}",
                                     "errmsg", &errmsg) < 0) {
                 errmsg = "rejected by job-manager dependency plugin";
@@ -892,11 +897,13 @@ static int dependencies_unpack (struct jobtap * jobtap,
     json_t *dependencies = NULL;
     json_error_t error;
 
-    if (json_unpack_ex (job->jobspec_redacted, &error, 0,
+    if (json_unpack_ex (job->jobspec_redacted,
+                        &error,
+                        0,
                         "{s:{s?{s?o}}}",
                         "attributes",
-                        "system",
-                        "dependencies", &dependencies) < 0) {
+                          "system",
+                            "dependencies", &dependencies) < 0) {
         error_asprintf (jobtap, job, errp,
                         "unable to unpack dependencies: %s",
                         error.text);
@@ -1041,7 +1048,8 @@ int jobtap_call (struct jobtap *jobtap,
                   "jobtap: %s: callback returned error",
                   topic);
     }
-    if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_OUT,
                                 "{s?I s?o}",
                                 "priority", &priority,
                                 "annotations", &note) < 0) {
@@ -1387,8 +1395,9 @@ static void jobtap_handle_list_req (flux_t *h,
     json_t *o = jobtap_plugin_list (jobtap);
     if (o == NULL)
         flux_respond_error (h, msg, ENOMEM, "Failed to create plugin list");
-    else if (flux_respond_pack (h, msg,
-                                "{ s:o }",
+    else if (flux_respond_pack (h,
+                                msg,
+                                "{s:o}",
                                 "plugins", o) < 0)
         flux_log_error (h, "jobtap_handle_list: flux_respond");
 }
@@ -1918,8 +1927,7 @@ int flux_jobtap_job_set_flag (flux_plugin_t *p,
                                 "set-flags",
                                 0,
                                 "{s:[s]}",
-                                "flags",
-                                flag);
+                                "flags", flag);
 }
 
 static int jobtap_job_vraise (struct jobtap *jobtap,
@@ -2020,7 +2028,9 @@ int flux_jobtap_get_job_result (flux_plugin_t *p,
         errno = EINVAL;
         return -1;
     }
-    if (json_unpack_ex (job->end_event, &error, 0,
+    if (json_unpack_ex (job->end_event,
+                        &error,
+                        0,
                         "{s:s s:{s?i s?s s?i}}",
                         "name", &name,
                         "context",

@@ -142,10 +142,12 @@ void annotate_memo_request (flux_t *h,
     int no_commit = 0;
     json_t *tmp = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s?b s:o}",
-                                        "id", &id,
-                                        "volatile", &no_commit,
-                                        "memo", &memo) < 0
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s?b s:o}",
+                             "id", &id,
+                             "volatile", &no_commit,
+                             "memo", &memo) < 0
         || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {

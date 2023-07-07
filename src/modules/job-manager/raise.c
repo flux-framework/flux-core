@@ -136,12 +136,14 @@ void raise_handle_request (flux_t *h,
     const char *note = NULL;
     const char *errstr = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:i s:s s?s}",
-                                        "id", &id,
-                                        "severity", &severity,
-                                        "type", &type,
-                                        "note", &note) < 0
-                    || flux_msg_get_cred (msg, &cred) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:i s:s s?s}",
+                             "id", &id,
+                             "severity", &severity,
+                             "type", &type,
+                             "note", &note) < 0
+        || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (raise_check_severity (severity)) {
         errstr = "invalid exception severity";
@@ -238,18 +240,12 @@ void raiseall_handle_request (flux_t *h,
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:b s:i s:i s:i s:s s?s}",
-                             "dry_run",
-                             &dry_run,
-                             "userid",
-                             &userid,
-                             "states",
-                             &state_mask,
-                             "severity",
-                             &severity,
-                             "type",
-                             &type,
-                             "note",
-                             &note) < 0)
+                             "dry_run", &dry_run,
+                             "userid", &userid,
+                             "states", &state_mask,
+                             "severity", &severity,
+                             "type", &type,
+                             "note", &note) < 0)
         goto error;
     if (flux_msg_get_cred (msg, &cred) < 0)
         goto error;
@@ -292,10 +288,8 @@ void raiseall_handle_request (flux_t *h,
     if (flux_respond_pack (h,
                            msg,
                            "{s:i s:i}",
-                           "count",
-                           zlistx_size (target_jobs),
-                           "errors",
-                           error_count) < 0)
+                           "count", zlistx_size (target_jobs),
+                           "errors", error_count) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     zlistx_destroy (&target_jobs);
     return;

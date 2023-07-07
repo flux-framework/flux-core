@@ -75,9 +75,12 @@ static void requeue_pending (struct alloc *alloc, struct job *job)
     }
     annotations_sched_clear (job, &cleared);
     if (cleared) {
-        if (event_job_post_pack (ctx->event, job, "annotations",
+        if (event_job_post_pack (ctx->event,
+                                 job,
+                                 "annotations",
                                  EVENT_NO_COMMIT,
-                                 "{s:n}", "annotations") < 0)
+                                 "{s:n}",
+                                 "annotations") < 0)
             flux_log_error (ctx->h,
                             "%s: event_job_post_pack",
                             __FUNCTION__);
@@ -184,8 +187,7 @@ int cancel_request (struct alloc *alloc, struct job *job)
                              FLUX_NODEID_ANY,
                              FLUX_RPC_NORESPONSE,
                              "{s:I}",
-                             "id",
-                             job->id))) {
+                             "id", job->id))) {
         flux_log_error (h, "sending sched.cancel id=%s", idf58 (job->id));
         return -1;
     }
@@ -210,11 +212,12 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto teardown; // ENOSYS here if scheduler not loaded/shutting down
-    if (flux_msg_unpack (msg, "{s:I s:i s?s s?o}",
-                              "id", &id,
-                              "type", &type,
-                              "note", &note,
-                              "annotations", &annotations) < 0)
+    if (flux_msg_unpack (msg,
+                         "{s:I s:i s?s s?o}",
+                         "id", &id,
+                         "type", &type,
+                         "note", &note,
+                         "annotations", &annotations) < 0)
         goto teardown;
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         flux_log (h, LOG_ERR, "sched.alloc-response: id=%s not active",
@@ -251,8 +254,11 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
         if (job->annotations) {
-            if (event_job_post_pack (ctx->event, job, "alloc", 0,
-                                     "{ s:O }",
+            if (event_job_post_pack (ctx->event,
+                                     job,
+                                     "alloc",
+                                     0,
+                                     "{s:O}",
                                      "annotations", job->annotations) < 0)
                 goto teardown;
         }
@@ -279,9 +285,12 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         }
         annotations_clear (job, &cleared);
         if (cleared) {
-            if (event_job_post_pack (ctx->event, job, "annotations",
+            if (event_job_post_pack (ctx->event,
+                                     job,
+                                     "annotations",
                                      EVENT_NO_COMMIT,
-                                     "{s:n}", "annotations") < 0)
+                                     "{s:n}",
+                                     "annotations") < 0)
                 flux_log_error (ctx->h,
                                 "%s: event_job_post_pack: id=%s",
                                 __FUNCTION__,
@@ -309,9 +318,12 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         }
         job->alloc_pending = 0;
         if (cleared) {
-            if (event_job_post_pack (ctx->event, job, "annotations",
+            if (event_job_post_pack (ctx->event,
+                                     job,
+                                     "annotations",
                                      EVENT_NO_COMMIT,
-                                     "{s:n}", "annotations") < 0)
+                                     "{s:n}",
+                                     "annotations") < 0)
                 flux_log_error (ctx->h,
                                 "%s: event_job_post_pack: id=%s",
                                 __FUNCTION__,
@@ -345,12 +357,13 @@ int alloc_request (struct alloc *alloc, struct job *job)
 
     if (!(msg = flux_request_encode ("sched.alloc", NULL)))
         return -1;
-    if (flux_msg_pack (msg, "{s:I s:I s:I s:f s:O}",
-                            "id", job->id,
-                            "priority", (json_int_t)job->priority,
-                            "userid", (json_int_t) job->userid,
-                            "t_submit", job->t_submit,
-                            "jobspec", job->jobspec_redacted) < 0)
+    if (flux_msg_pack (msg,
+                       "{s:I s:I s:I s:f s:O}",
+                       "id", job->id,
+                       "priority", (json_int_t)job->priority,
+                       "userid", (json_int_t) job->userid,
+                       "t_submit", job->t_submit,
+                       "jobspec", job->jobspec_redacted) < 0)
         goto error;
     if (flux_send (alloc->ctx->h, msg, 0) < 0)
         goto error;
@@ -383,7 +396,8 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     job = zhashx_first (ctx->active_jobs);
     while (job) {
         if (job->has_resources) {
-            if (flux_respond_pack (h, msg,
+            if (flux_respond_pack (h,
+                                   msg,
                                    "{s:I s:I s:I s:f}",
                                    "id", job->id,
                                    "priority", job->priority,
@@ -416,9 +430,11 @@ static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
     struct job *job;
     const char *sender;
 
-    if (flux_request_unpack (msg, NULL, "{s:s s?i}",
-                                        "mode", &mode,
-                                        "limit", &limit) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s?i}",
+                             "mode", &mode,
+                             "limit", &limit) < 0)
         goto error;
     if (streq (mode, "limited")) {
         if (limit <= 0) {
@@ -541,8 +557,11 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     /* Post event for debugging if job was submitted FLUX_JOB_DEBUG flag.
      */
     if ((job->flags & FLUX_JOB_DEBUG))
-        (void)event_job_post_pack (ctx->event, job,
-                                   "debug.alloc-request", 0, NULL);
+        (void)event_job_post_pack (ctx->event,
+                                   job,
+                                   "debug.alloc-request",
+                                   0,
+                                   NULL);
 }
 
 /* called from event_job_action() FLUX_JOB_STATE_CLEANUP */
@@ -554,8 +573,11 @@ int alloc_send_free_request (struct alloc *alloc, struct job *job)
             return -1;
         job->free_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post_pack (alloc->ctx->event, job,
-                                       "debug.free-request", 0, NULL);
+            (void)event_job_post_pack (alloc->ctx->event,
+                                       job,
+                                       "debug.free-request",
+                                       0,
+                                       NULL);
         alloc->free_pending_count++;
     }
     return 0;
@@ -709,14 +731,10 @@ static void alloc_query_cb (flux_t *h,
     if (flux_respond_pack (h,
                            msg,
                            "{s:i s:i s:i s:i}",
-                           "queue_length",
-                           zlistx_size (alloc->queue),
-                           "alloc_pending",
-                           alloc->alloc_pending_count,
-                           "free_pending",
-                           alloc->free_pending_count,
-                           "running",
-                           alloc->ctx->running_jobs) < 0)
+                           "queue_length", zlistx_size (alloc->queue),
+                           "alloc_pending", alloc->alloc_pending_count,
+                           "free_pending", alloc->free_pending_count,
+                           "running", alloc->ctx->running_jobs) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 }

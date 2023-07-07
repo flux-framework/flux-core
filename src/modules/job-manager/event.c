@@ -419,10 +419,11 @@ int event_job_action (struct event *event, struct job *job)
 
             /* Post cleanup event when cleanup is complete.
              */
-            if (!job->alloc_queued && !job->alloc_pending
-                                   && !job->free_pending
-                                   && !job->start_pending
-                                   && !job->has_resources) {
+            if (!job->alloc_queued
+                && !job->alloc_pending
+                && !job->free_pending
+                && !job->start_pending
+                && !job->has_resources) {
 
                 if (event_job_post_pack (event, job, "clean", 0, NULL) < 0)
                     return -1;
@@ -459,7 +460,8 @@ static int event_submit_context_decode (json_t *context,
                                         uint32_t *userid,
                                         int *flags)
 {
-    if (json_unpack (context, "{ s:i s:i s:i }",
+    if (json_unpack (context,
+                     "{s:i s:i s:i}",
                      "urgency", urgency,
                      "userid", userid,
                      "flags", flags) < 0) {
@@ -498,7 +500,7 @@ static int event_exception_context_decode (json_t *context,
     const char *type;
 
     if (json_unpack (context,
-                     "{ s:i s:s }",
+                     "{s:i s:s}",
                      "severity", severity,
                      "type", &type) < 0) {
         errno = EPROTO;
@@ -902,7 +904,7 @@ int event_job_process_entry (struct event *event,
         && !(old_state & FLUX_JOB_STATE_RUNNING))
         event->ctx->running_jobs++;
     else if (!(job->state & FLUX_JOB_STATE_RUNNING)
-             && (old_state & FLUX_JOB_STATE_RUNNING))
+        && (old_state & FLUX_JOB_STATE_RUNNING))
         event->ctx->running_jobs--;
 
     /*  Note: Failure from the jobtap call is currently ignored, but will

@@ -379,7 +379,7 @@ static int brokercfg_set (flux_t *h,
 
 /* Parse config object from TOML config files if path is set;
  * otherwise, create an empty config object.  Store the object
- * in ctx->h for later access by flux_conf_get().
+ * in ctx->h for later access by flux_get_conf().
  */
 static int brokercfg_parse (flux_t *h,
                             const char *path,

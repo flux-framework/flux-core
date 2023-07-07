@@ -43,18 +43,12 @@ int list_append_job (json_t *jobs, struct job *job)
     /* We pack priority with I instead of i to avoid issue of
      * signed vs unsigned int */
     if (!(o = json_pack ("{s:I s:I s:i s:I s:f s:i}",
-                         "id",
-                         job->id,
-                         "userid",
-                         (json_int_t) job->userid,
-                         "urgency",
-                         job->urgency,
-                         "priority",
-                         job->priority,
-                         "t_submit",
-                         job->t_submit,
-                         "state",
-                         job->state))) {
+                         "id", job->id,
+                         "userid", (json_int_t) job->userid,
+                         "urgency", job->urgency,
+                         "priority", job->priority,
+                         "t_submit", job->t_submit,
+                         "state", job->state))) {
         errno = ENOMEM;
         return -1;
     }
@@ -94,8 +88,7 @@ void list_handle_request (flux_t *h,
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:i}",
-                             "max_entries",
-                             &max_entries) < 0)
+                             "max_entries", &max_entries) < 0)
         goto error;
     if (max_entries < 0) {
         errno = EPROTO;

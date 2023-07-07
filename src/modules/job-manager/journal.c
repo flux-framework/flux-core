@@ -107,8 +107,10 @@ int journal_process_event (struct journal *journal,
     msg = flux_msglist_first (journal->listeners);
     while (msg) {
         if (allow_deny_check (msg, name)) {
-            if (flux_respond_pack (journal->ctx->h, msg,
-                                   "{s:[O]}", "events", wrapped_entry) < 0)
+            if (flux_respond_pack (journal->ctx->h,
+                                   msg,
+                                   "{s:[O]}",
+                                   "events", wrapped_entry) < 0)
                 flux_log_error (journal->ctx->h, "%s: flux_respond_pack",
                                 __FUNCTION__);
         }
@@ -153,7 +155,9 @@ static void journal_handle_request (flux_t *h,
 
     if (!(filter = calloc (1, sizeof (*filter))))
         goto error;
-    if (flux_request_unpack (msg, NULL, "{s?o s?o}",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s?o s?o}",
                              "allow", &filter->allow,
                              "deny", &filter->deny) < 0
         || flux_msg_aux_set (msg, "filter", filter,
