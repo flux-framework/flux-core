@@ -65,6 +65,14 @@ class EventLogEvent(dict):
     def context(self):
         return self["context"]
 
+    @property
+    def context_string(self):
+        if not self.context:
+            return ""
+        return json.dumps(
+            self.context, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        )
+
 
 class JobEventWatchFuture(Future):
     """
