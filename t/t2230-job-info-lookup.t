@@ -126,6 +126,14 @@ test_expect_success 'flux job info multiple keys fails on 1 bad entry (no eventl
 	test_must_fail flux job info $jobid jobspec J > all_info_b.out
 '
 
+# N.B. Issue #5305, jobspec would be output twice, so we check for one
+# output of jobspec
+test_expect_success 'flux job info --original jobspec and J works' '
+	jobid=$(flux submit --env=ORIGINALTHING=t true) &&
+	flux job info --original $jobid J jobspec > J_jobspec_original.out &&
+	test $(grep ORIGINALTHING J_jobspec_original.out | wc -l) -eq 1
+'
+
 #
 # job info lookup tests (via eventlog)
 #
