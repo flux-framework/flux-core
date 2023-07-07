@@ -42,25 +42,18 @@ test_expect_success 'unload plugins' '
 #   flux-framework/flux-sched#1043
 #
 test_expect_success 'configure epilog with 2s delay' '
-	flux config load <<-EOT
+	flux config load <<-EOT &&
 	[job-manager]
-	plugins = [
-	   { load = "perilog.so" },
-	]
 	epilog.command = [ "flux", "perilog-run", "epilog", "-e", "sleep,2" ]
 	EOT
+	flux jobtap load perilog.so
 '
 test_expect_success 'load alloc-check plugin' '
 	flux jobtap load alloc-check.so
 '
 test_expect_success 'submit consecutive jobs that exceed their time limit' '
-	(for i in $(seq 5); \
-	    do flux submit -N1 -x -t1s sleep inf; \
-	done) >jobids
-'
-test_expect_success 'wait for jobs to complete and capture their stderr' '
-	(for id in $(cat jobids); do \
-	    flux job attach $id || true; \
+	(for i in $(seq 3); \
+	    do flux run -N1 -x -t1s sleep 30 || true; \
 	done) 2>joberr
 '
 test_expect_success 'some jobs received timeout exception' '
@@ -69,10 +62,15 @@ test_expect_success 'some jobs received timeout exception' '
 test_expect_success 'no jobs received alloc-check exception' '
 	test_must_fail grep "job.exception type=alloc-check" joberr
 '
+test_expect_success 'clean up jobs' '
+	flux cancel --all &&
+	flux queue drain
+'
 test_expect_success 'remove alloc-check plugin' '
 	flux jobtap remove alloc-check.so
 '
 test_expect_success 'undo epilog config' '
+	flux jobtap remove perilog.so &&
 	flux config load </dev/null
 '
 
