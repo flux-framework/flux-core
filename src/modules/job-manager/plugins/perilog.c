@@ -460,6 +460,7 @@ static int exception_cb (flux_plugin_t *p,
     if ((proc = flux_jobtap_job_aux_get (p,
                                         FLUX_JOBTAP_CURRENT_JOB,
                                         "perilog_proc"))
+        && proc->prolog
         && flux_subprocess_state (proc->sp) == FLUX_SUBPROCESS_RUNNING) {
         if (prolog_kill (proc) < 0
             || prolog_kill_timer_start (proc,
