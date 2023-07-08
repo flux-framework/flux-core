@@ -457,12 +457,23 @@ static int exception_cb (flux_plugin_t *p,
      *   Follow up with SIGKILL after 10s.
      */
     struct perilog_proc *proc;
-    if ((proc = flux_jobtap_job_aux_get (p,
-                                        FLUX_JOBTAP_CURRENT_JOB,
-                                        "perilog_proc"))
+    int severity;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:{s:{s:i}}}",
+                                "entry",
+                                "context",
+                                "severity", &severity) < 0)
+        return -1;
+    if (severity == 0
+        && (proc = flux_jobtap_job_aux_get (p,
+                                           FLUX_JOBTAP_CURRENT_JOB,
+                                           "perilog_proc"))
         && proc->prolog
         && flux_subprocess_state (proc->sp) == FLUX_SUBPROCESS_RUNNING) {
-        if (prolog_kill (proc) < 0
+
+       if (prolog_kill (proc) < 0
             || prolog_kill_timer_start (proc,
                                         perilog_config.prolog_kill_timeout) < 0)
             return -1;
