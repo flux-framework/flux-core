@@ -2837,6 +2837,7 @@ int cmd_status (optparse_t *p, int argc, char **argv)
         int status = -1;
         int exitcode;
         int exception = 0;
+        int exc_severity = 0;
         const char *exc_type = NULL;
 
         if (json) {
@@ -2847,9 +2848,10 @@ int cmd_status (optparse_t *p, int argc, char **argv)
         }
 
         if (flux_job_result_get_unpack (futures[i],
-                                        "{s:b s?s s?i}",
+                                        "{s:b s?s s?i s?i}",
                                         "exception_occurred", &exception,
                                         "exception_type", &exc_type,
+                                        "exception_severity", &exc_severity,
                                         "waitstatus", &status) < 0) {
             if (errno == ENOENT)
                 log_msg_exit ("%s: No such job", jobid);
@@ -2857,7 +2859,7 @@ int cmd_status (optparse_t *p, int argc, char **argv)
         }
         if ((exitcode = status_to_exitcode (status)) > exit_code)
             exit_code = exitcode;
-        if (exception && exception_exit_code > exit_code)
+        if (exception && exc_severity == 0 && exception_exit_code > exit_code)
             exit_code = exception_exit_code;
         if (optparse_hasopt (p, "verbose")) {
             if (WIFSIGNALED (status)) {
@@ -2866,14 +2868,14 @@ int cmd_status (optparse_t *p, int argc, char **argv)
                          WTERMSIG (status));
             }
             else if (verbose > 1 || exitcode != 0) {
-                if (!exception)
-                    log_msg ("%s: exited with exit code %d",
-                             jobid,
-                             exitcode);
-                else
+                if (exception && exc_severity == 0)
                     log_msg ("%s: exception type=%s",
                              jobid,
                              exc_type);
+                else
+                    log_msg ("%s: exited with exit code %d",
+                             jobid,
+                             exitcode);
             }
         }
         flux_future_destroy (futures[i]);
