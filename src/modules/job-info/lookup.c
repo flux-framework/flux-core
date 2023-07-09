@@ -87,6 +87,10 @@ static int lookup_key (struct lookup_ctx *l,
     flux_future_t *f = NULL;
     char path[64];
 
+    /* Check for duplicate key, return if already looked up */
+    if (flux_future_get_child (fall, key) != NULL)
+        return 0;
+
     if (flux_job_kvs_key (path, sizeof (path), l->id, key) < 0) {
         flux_log_error (l->ctx->h, "%s: flux_job_kvs_key", __FUNCTION__);
         goto error;
