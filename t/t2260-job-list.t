@@ -1966,7 +1966,7 @@ test_expect_success 'job-list can handle events with superfluous context data' '
 {"timestamp":1014.0,"name":"free","context":{"etc":1}}
 {"timestamp":1015.0,"name":"clean","context":{"etc":1}}
 EOF
-	jobid=`flux submit --wait --urgency 16 hostname` &&
+	jobid=`flux submit --wait --urgency=default hostname` &&
 	kvspath=`flux job id --to=kvs ${jobid}` &&
 	flux kvs put -r ${kvspath}.eventlog=- < eventlog_superfluous_context.out &&
 	flux module reload job-list &&
