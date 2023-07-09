@@ -114,9 +114,10 @@ class TestKVS(unittest.TestCase):
             kd.fill({"things": 1, "stuff": "strstuff", "dir.other_thing": "dirstuff"})
             kd.commit()
 
-            self.assertEqual(kd["things"], 1)
-            self.assertEqual(kd["stuff"], "strstuff")
-            self.assertEqual(kd["dir"]["other_thing"], "dirstuff")
+        with flux.kvs.get_dir(self.f) as kd2:
+            self.assertEqual(kd2["things"], 1)
+            self.assertEqual(kd2["stuff"], "strstuff")
+            self.assertEqual(kd2["dir"]["other_thing"], "dirstuff")
 
     def test_set_deep(self):
         self.set_and_check_context("a.b.c.e.f.j.k", 5, int)
