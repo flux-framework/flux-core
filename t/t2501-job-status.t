@@ -53,7 +53,7 @@ test_expect_success 'status: flux-job status --json works' '
 		jq -e ".waitstatus == 256"
 '
 test_expect_success 'status: returns most severe exception' '
-	jobid=$(flux submit --urgency=0 sleep 20) &&
+	jobid=$(flux submit --urgency=hold sleep 20) &&
 	flux job raise --severity=1 -t test $jobid &&
 	flux job raise --severity=0 -t cancel $jobid &&
 	flux job wait-event -v $jobid clean &&
@@ -62,16 +62,24 @@ test_expect_success 'status: returns most severe exception' '
 		jq -e ".exception_severity == 0"
 '
 test_expect_success 'status: returns most severe exception' '
-	jobid=$(flux submit --urgency=0 sleep 0) &&
+	jobid=$(flux submit --urgency=hold sleep 0) &&
 	flux job raise --severity=1 -t test $jobid &&
 	flux job raise --severity=2 -t test2 $jobid &&
-	flux job urgency ${jobid} 16 &&
+	flux job urgency ${jobid} default &&
 	flux job wait-event -v $jobid clean &&
 	flux job status --exception-exit-code=0 --json ${jobid} &&
 	flux job status --exception-exit-code=0 --json ${jobid} | \
 		jq -e ".exception_severity == 1" &&
 	flux job status --exception-exit-code=0 --json ${jobid} | \
 		jq -e ".exception_type == \"test\""
+'
+test_expect_success 'status: exit code ignores nonfatal exceptions' '
+	jobid=$(flux submit --urgency=hold sleep 0) &&
+	flux job raise --severity=1 -t test $jobid &&
+	flux job raise --severity=2 -t test2 $jobid &&
+	flux job urgency ${jobid} 16 &&
+	flux job wait-event -v $jobid clean &&
+	flux job status -vvv $jobid
 '
 test_expect_success 'status: returns 143 (SIGTERM) for canceled running job' '
 	flux job wait-event -p guest.exec.eventlog ${killed} shell.start &&
