@@ -73,6 +73,14 @@ test_expect_success 'status: returns most severe exception' '
 	flux job status --exception-exit-code=0 --json ${jobid} | \
 		jq -e ".exception_type == \"test\""
 '
+test_expect_success 'status: exit code ignores nonfatal exceptions' '
+	jobid=$(flux submit --urgency=0 sleep 0) &&
+	flux job raise --severity=1 -t test $jobid &&
+	flux job raise --severity=2 -t test2 $jobid &&
+	flux job urgency ${jobid} 16 &&
+	flux job wait-event -v $jobid clean &&
+	flux job status -vvv $jobid
+'
 test_expect_success 'status: returns 143 (SIGTERM) for canceled running job' '
 	flux job wait-event -p guest.exec.eventlog ${killed} shell.start &&
 	flux cancel ${killed} &&
