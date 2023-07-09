@@ -129,6 +129,21 @@ test_expect_success 'perilog: job can be canceled while prolog is running' '
 	flux job wait-event -t 15 $jobid exception &&
 	test_must_fail flux job attach -vE $jobid
 '
+test_expect_success 'perilog: nonfatal exception does not terminate prolog' '
+	cat <<-EOF >prolog.d/cancel.sh &&
+	#!/bin/sh
+	flux job raise --severity=1 --type=test \$FLUX_JOB_ID
+	flux job wait-event \$FLUX_JOB_ID exception
+	EOF
+	chmod +x prolog.d/cancel.sh &&
+	test_when_finished "rm -f prolog.d/cancel.sh" &&
+	jobid=$(flux submit --job-name=nocancel hostname) &&
+	flux job wait-event -t 15 $jobid prolog-start &&
+	flux job wait-event -t 15 $jobid prolog-finish &&
+	flux job wait-event -vt 15 $jobid clean &&
+	flux jobs $(flux job last) &&
+	flux job status -vvv $jobid
+'
 test_expect_success 'perilog: job can timeout after prolog' '
 	printf "#!/bin/sh\nsleep 1" > prolog.d/sleep.sh &&
 	chmod +x prolog.d/sleep.sh &&
