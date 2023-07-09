@@ -149,6 +149,75 @@ class TestKVS(unittest.TestCase):
         with flux.kvs.get_dir(self.f, "testkeyat") as kd:
             self.assertEqual(kd.key_at("meh"), "testkeyat.meh")
 
+    def test_key_initial_path(self):
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("initialpath")
+
+        kd2 = flux.kvs.KVSDir(self.f)
+        kd2["initialpath.a"] = 1
+        kd2["initialpath"]["b"] = 2
+        kd2.commit()
+
+        kd3 = flux.kvs.KVSDir(self.f, "initialpath")
+        kd3["c"] = 3
+        kd3["d.e.f"] = 4
+        kd3.commit()
+
+        kd4 = flux.kvs.KVSDir(self.f)
+        self.assertEqual(kd4["initialpath.a"], 1)
+        self.assertEqual(kd4["initialpath"]["a"], 1)
+        self.assertEqual(kd4["initialpath.b"], 2)
+        self.assertEqual(kd4["initialpath"]["b"], 2)
+        self.assertEqual(kd4["initialpath.c"], 3)
+        self.assertEqual(kd4["initialpath"]["c"], 3)
+        self.assertEqual(kd4["initialpath.d.e.f"], 4)
+        self.assertEqual(kd4["initialpath"]["d.e.f"], 4)
+        self.assertEqual(kd4["initialpath"]["d"]["e"]["f"], 4)
+
+        kd5 = flux.kvs.KVSDir(self.f, "initialpath")
+        self.assertEqual(kd5["a"], 1)
+        self.assertEqual(kd5["b"], 2)
+        self.assertEqual(kd5["c"], 3)
+        self.assertEqual(kd5["d.e.f"], 4)
+        self.assertEqual(kd5["d"]["e"]["f"], 4)
+
+    def test_fill_initial_path(self):
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("fillinitialpath")
+
+        with flux.kvs.get_dir(self.f, "fillinitialpath") as kd2:
+            kd2.fill({"g": 1, "h": "bar", "i.j.k": "baz"})
+            kd2.commit()
+
+        with flux.kvs.get_dir(self.f) as kd3:
+            self.assertEqual(kd3["fillinitialpath.g"], 1)
+            self.assertEqual(kd3["fillinitialpath.h"], "bar")
+            self.assertEqual(kd3["fillinitialpath.i.j.k"], "baz")
+            self.assertEqual(kd3["fillinitialpath.i"]["j"]["k"], "baz")
+
+        with flux.kvs.get_dir(self.f, "fillinitialpath") as kd4:
+            self.assertEqual(kd4["g"], 1)
+            self.assertEqual(kd4["h"], "bar")
+            self.assertEqual(kd4["i.j.k"], "baz")
+            self.assertEqual(kd4["i"]["j"]["k"], "baz")
+
+    def test_mkdir_initial_path(self):
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("mkdirinitialpath", {"l": 1, "m": "bar", "n.o.p": "baz"})
+            kd.commit()
+
+        with flux.kvs.get_dir(self.f) as kd2:
+            self.assertEqual(kd2["mkdirinitialpath.l"], 1)
+            self.assertEqual(kd2["mkdirinitialpath.m"], "bar")
+            self.assertEqual(kd2["mkdirinitialpath.n.o.p"], "baz")
+            self.assertEqual(kd2["mkdirinitialpath.n"]["o"]["p"], "baz")
+
+        with flux.kvs.get_dir(self.f, "mkdirinitialpath") as kd3:
+            self.assertEqual(kd3["l"], 1)
+            self.assertEqual(kd3["m"], "bar")
+            self.assertEqual(kd3["n.o.p"], "baz")
+            self.assertEqual(kd3["n"]["o"]["p"], "baz")
+
     def test_walk_with_no_handle(self):
         with self.assertRaises(ValueError):
             flux.kvs.walk("dir").next()
