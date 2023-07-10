@@ -35,7 +35,7 @@ MAIN_EVENTS = frozenset(
 )
 
 
-class EventLogEvent:
+class EventLogEvent(dict):
     """
     wrapper class for a single KVS EventLog entry
     """
@@ -46,26 +46,24 @@ class EventLogEvent:
         """
         if isinstance(event, str):
             event = json.loads(event)
-        self._name = event["name"]
-        self._timestamp = event["timestamp"]
-        self._context = {}
-        if "context" in event:
-            self._context = event["context"]
+        super().__init__(event)
+        if "context" not in self:
+            self["context"] = {}
 
     def __str__(self):
         return "{0.timestamp:<0.5f}: {0.name} {0.context}".format(self)
 
     @property
     def name(self):
-        return self._name
+        return self["name"]
 
     @property
     def timestamp(self):
-        return self._timestamp
+        return self["timestamp"]
 
     @property
     def context(self):
-        return self._context
+        return self["context"]
 
 
 class JobEventWatchFuture(Future):
