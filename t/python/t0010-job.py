@@ -288,6 +288,7 @@ class TestJob(unittest.TestCase):
             self.assertTrue(hasattr(event, "timestamp"))
             self.assertTrue(hasattr(event, "name"))
             self.assertTrue(hasattr(event, "context"))
+            self.assertTrue(type(dict(event)), dict)
             self.assertIs(type(event.timestamp), float)
             self.assertIs(type(event.name), str)
             self.assertIs(type(event.context), dict)
