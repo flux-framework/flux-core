@@ -41,7 +41,11 @@ struct bulk_exec_ops {
     exec_error_f on_error;    /* called on any fatal error              */
 };
 
-struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops, void *arg);
+struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops,
+		                     const char *service,
+				     flux_jobid_t id,
+				     const char *name,
+				     void *arg);
 
 void *bulk_exec_aux_get (struct bulk_exec *exec, const char *key);
 
@@ -89,5 +93,8 @@ int bulk_exec_close (struct bulk_exec *exec, const char *stream);
 
 /* Returns total number of processes expected to run */
 int bulk_exec_total (struct bulk_exec *exec);
+
+/* Get subprocess remote exec service name (never returns NULL) */
+const char *bulk_exec_service_name (struct bulk_exec *exec);
 
 #endif /* !HAVE_JOB_EXEC_BULK_EXEC_H */

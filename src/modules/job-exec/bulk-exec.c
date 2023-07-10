@@ -21,6 +21,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
 #include "src/common/libjob/idf58.h"
+#include "ccan/str/str.h"
 #include "bulk-exec.h"
 
 struct exec_cmd {
@@ -31,6 +32,10 @@ struct exec_cmd {
 
 struct bulk_exec {
     flux_t *h;
+
+    char *service;
+    flux_jobid_t id;
+    char *name;
 
     struct aux_item *aux;
 
@@ -232,9 +237,13 @@ static void exec_output_cb (flux_subprocess_t *p, const char *stream)
 static void exec_cmd_destroy (void *arg)
 {
     struct exec_cmd *cmd = arg;
-    idset_destroy (cmd->ranks);
-    flux_cmd_destroy (cmd->cmd);
-    free (cmd);
+    if (cmd) {
+        int saved_errno = errno;
+        idset_destroy (cmd->ranks);
+        flux_cmd_destroy (cmd->cmd);
+        free (cmd);
+        errno = saved_errno;
+    }
 }
 
 static struct exec_cmd *exec_cmd_create (const struct idset *ranks,
@@ -289,7 +298,7 @@ static int exec_start_cmd (struct bulk_exec *exec,
     rank = idset_first (cmd->ranks);
     while (rank != IDSET_INVALID_ID && (max < 0 || count < max)) {
         flux_subprocess_t *p = flux_rexec_ex (exec->h,
-                                              "rexec",
+                                              bulk_exec_service_name (exec),
                                               rank,
                                               cmd->flags,
                                               cmd->cmd,
@@ -371,6 +380,7 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
 void bulk_exec_destroy (struct bulk_exec *exec)
 {
     if (exec) {
+        int saved_errno = errno;
         zlist_destroy (&exec->processes);
         zlist_destroy (&exec->commands);
         idset_destroy (exec->exit_batch);
@@ -378,11 +388,18 @@ void bulk_exec_destroy (struct bulk_exec *exec)
         flux_watcher_destroy (exec->check);
         flux_watcher_destroy (exec->idle);
         aux_destroy (&exec->aux);
+        free (exec->name);
+        free (exec->service);
         free (exec);
+        errno = saved_errno;
     }
 }
 
-struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops, void *arg)
+struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops,
+                                     const char *service,
+                                     flux_jobid_t id,
+                                     const char *name,
+                                     void *arg)
 {
     flux_subprocess_ops_t sp_ops = {
         .on_completion =   exec_complete_cb,
@@ -392,8 +409,11 @@ struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops, void *arg)
         .on_stderr =       exec_output_cb,
     };
     struct bulk_exec *exec = calloc (1, sizeof (*exec));
-    if (!exec)
-        return NULL;
+    if (!exec
+        || !(exec->service = strdup (service))
+        || !(exec->name = strdup (name)))
+        goto error;
+    exec->id = id;
     exec->ops = sp_ops;
     exec->handlers = ops;
     exec->arg = arg;
@@ -403,6 +423,9 @@ struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops, void *arg)
     exec->max_start_per_loop = 1;
 
     return exec;
+error:
+    bulk_exec_destroy (exec);
+    return NULL;
 }
 
 int bulk_exec_set_max_per_loop (struct bulk_exec *exec, int max)
@@ -624,7 +647,11 @@ flux_future_t *bulk_exec_imp_kill (struct bulk_exec *exec,
     }
     flux_future_set_flux (f, exec->h);
 
-    if (!(killcmd = bulk_exec_create (&imp_kill_ops, f)))
+    if (!(killcmd = bulk_exec_create (&imp_kill_ops,
+                                      exec->service,
+                                      exec->id,
+                                      "imp-kill",
+                                      f)))
         return NULL;
 
     /*  Tie bulk exec object destruction to future */
@@ -688,5 +715,11 @@ void * bulk_exec_aux_get (struct bulk_exec *exec, const char *key)
 {
     return (aux_get (exec->aux, key));
 }
+
+const char *bulk_exec_service_name (struct bulk_exec *exec)
+{
+    return exec->service;
+}
+
 /* vi: ts=4 sw=4 expandtab
  */

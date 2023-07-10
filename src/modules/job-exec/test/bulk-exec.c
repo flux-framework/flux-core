@@ -236,7 +236,7 @@ int main (int ac, char **av)
     else if (!(idset = idset_decode (ranks)))
         log_err_exit ("idset_decode (%s)", ranks);
 
-    if (!(exec = bulk_exec_create (&ops, h)))
+    if (!(exec = bulk_exec_create (&ops, "rexec", 1234, "shell", h)))
         log_err_exit ("bulk_exec_create");
 
     if (bulk_exec_set_max_per_loop (exec, optparse_get_int (p, "mpl", -1)) < 0)

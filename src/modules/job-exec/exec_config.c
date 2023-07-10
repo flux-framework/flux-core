@@ -27,6 +27,7 @@
 static const char *default_cwd = "/tmp";
 static const char *default_job_shell = NULL;
 static const char *flux_imp_path = NULL;
+static const char *exec_service = "rexec";
 
 static const char *jobspec_get_job_shell (json_t *jobspec)
 {
@@ -73,6 +74,11 @@ const char *config_get_imp_path (void)
     return flux_imp_path;
 }
 
+const char *config_get_exec_service (void)
+{
+    return exec_service;
+}
+
 /*  Initialize common configurations for use by job-exec exec modules.
  */
 int config_init (flux_t *h, int argc, char **argv)
@@ -108,6 +114,18 @@ int config_init (flux_t *h, int argc, char **argv)
         return -1;
     }
 
+    /*  Check configuration for exec.service */
+    if (flux_conf_unpack (flux_get_conf (h),
+                          &err,
+                          "{s?{s?s}}",
+                          "exec",
+                            "service", &exec_service) < 0) {
+        flux_log (h, LOG_ERR,
+                  "error reading config value exec.service: %s",
+                  err.text);
+        return -1;
+    }
+
     if (argv && argc) {
         /* Finally, override values on cmdline */
         for (int i = 0; i < argc; i++) {
@@ -115,6 +133,8 @@ int config_init (flux_t *h, int argc, char **argv)
                 default_job_shell = argv[i]+10;
             else if (strstarts (argv[i], "imp="))
                 flux_imp_path = argv[i]+4;
+            else if (strstarts (argv[i], "service="))
+                exec_service = argv[i]+8;
         }
     }
 
