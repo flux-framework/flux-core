@@ -105,6 +105,13 @@ class JobEventWatchFuture(Future):
             # raise handle exception if there is one
             self.raise_if_handle_exception()
             # re-raise all other exceptions
+            #
+            # Note: overwrite generic OSError strerror string with the
+            # EventWatch future error string to give the caller appropriate
+            # detail (e.g. instead of "No such file or directory" use
+            # "job <jobid> does not exist"
+            #
+            exc.strerror = self.error_string()
             raise
         event = EventLogEvent(ffi.string(result[0]).decode("utf-8"))
         if autoreset is True:
