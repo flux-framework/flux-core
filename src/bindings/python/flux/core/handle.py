@@ -286,8 +286,7 @@ class Flux(Wrapper):
         #
         if threading.current_thread() != threading.main_thread():
             rc = self.flux_reactor_run(reactor, flags)
-            if rc < 0:
-                Flux.raise_if_exception()
+            Flux.raise_if_exception()
             return rc
 
         reactor_interrupted = False
@@ -312,8 +311,7 @@ class Flux(Wrapper):
                 self.reactor_active_incref(reactor)
             if reactor_interrupted:
                 raise KeyboardInterrupt
-            if rc < 0:
-                Flux.raise_if_exception()
+            Flux.raise_if_exception()
 
         # If rc > 0, we need to subtract our added SIGINT watcher, which
         # will now be destroyed since it has left scope
