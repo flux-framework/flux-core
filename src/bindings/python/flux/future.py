@@ -9,6 +9,7 @@
 ###############################################################
 
 import errno
+import json
 from typing import Dict
 
 from flux.core.inner import ffi, lib, raw
@@ -23,6 +24,9 @@ from flux.wrapper import Wrapper, WrapperPimpl
 # future, and whenever reset is called on a future, increment the counter. If
 # the counter hits 0, delete the reference to the future from the dictionary.
 _THEN_HANDLES: Dict["Future", int] = {}
+
+# Same as above, but for FutreExt init callbacks:
+_INIT_HANDLES: Dict["Future", int] = {}
 
 
 @ffi.def_extern()
@@ -50,6 +54,27 @@ def continuation_callback(c_future, opaque_handle):
             # registered callbacks have completed
             py_future.cb_handle = None
             del _THEN_HANDLES[py_future]
+
+
+@ffi.def_extern()
+def init_callback(c_future, opaque_handle):
+    try:
+        handle_ptr: "list" = ffi.from_handle(opaque_handle)
+        future: "Future" = ffi.from_handle(handle_ptr[0])
+        assert c_future == future.pimpl.handle
+        future.init_cb(future, *future.init_args, **future.init_kwargs)
+    # pylint: disable=broad-except
+    except Exception as exc:
+        flux_handle = future.get_flux()
+        type(flux_handle).set_exception(exc)
+        flux_handle.reactor_stop_error()
+    finally:
+        _INIT_HANDLES[future] -= 1
+        if _INIT_HANDLES[future] <= 0:
+            # allow future object to be garbage collected now that all
+            # registered callbacks have completed
+            future.init_handle = None
+            del _INIT_HANDLES[future]
 
 
 class Future(WrapperPimpl):
@@ -243,3 +268,113 @@ class WaitAllFuture(Future):
         #   child goes out of scope in caller context.
         child.pimpl.incref()
         self.children.append(child)
+
+
+class FutureExt(Future):
+    """
+    Extensible Future for use directly from Python.
+
+    This class allows creation of an "empty" Future which can then
+    be fulfilled with a value or other Future directly from Python.
+
+    The purpose is to allow multiple actions, RPCs, etc to be abstracted
+    behind a single interface, with one "Future" object used to signal
+    completion and/or availability of a result to the caller.
+    """
+
+    def __init__(self, init_cb, *args, flux_handle=None, **kw_args):
+        """
+        Create an empty Future with initialization callback init_cb(),
+        with optional arguments args and kwargs.
+
+        The initialization callback will be called either when a then()
+        callback is registered on the returned Future or a blocking get()
+        is used on the Future.
+
+        The initialization callback should take care to use
+        ``future.get_flux()`` to get the correct Flux handle for the
+        context in which the initialization is running. This is because
+        the underlying reactor will be different depending on whether
+        the Future is being initialized in a blocking ``future.get()``
+        or by a call to ``future.then()``. See the documentation for
+        ``flux_future_create(3)`` for more information.
+
+        If ``flux_handle`` is not None, then the given Flux handle will
+        be associated with the Future during initialization. Otherwise,
+        Future.set_flux() must be called before .then() or .get() are
+        called, or an OSError with errno.EINVAL exception may be raised.
+
+        Args:
+            init_cb (Callable): Future initialization callback
+            flux_handle (flux.Flux): Flux handle to associate with this Future
+            args, kw_args: args and keyword args to pass along to init_cb
+        """
+        # The ffi handle for the Future object is not available until we
+        # create it, but the ffi handle needs to be passed to
+        # flux_future_create(3). Therefore, create a list object we can pass
+        # to create(), then add the Future ffi handle to the list.
+        #
+        ffi_handle_list = []
+        handle = ffi.new_handle(ffi_handle_list)
+
+        # Setup initialization callback:
+        self.init_handle = handle
+        self.init_cb = init_cb
+        self.init_args = args
+        self.init_kwargs = kw_args
+
+        # When this Future is fulfilled with a Python value, the memory for
+        # the C copy of this value (or the string representation of it) must
+        # have a reference held by this Future object, so it is not released
+        # until this Future is garbage-collected. Use a _results list for this
+        # purpose:
+        self._results = []
+
+        # Create a Future from flux_future_create(3)
+        future = raw.flux_future_create(lib.init_callback, handle)
+
+        # Place ffi handle for future into ffi_handle_list and set this
+        # future in _INIT_HANDLES to avoid garbage collection
+        ffi_handle_list.append(ffi.new_handle(self))
+        _INIT_HANDLES[self] = 1
+        super().__init__(future)
+
+        if flux_handle is not None:
+            self.set_flux(flux_handle)
+
+    def fulfill(self, result=None):
+        """
+        Fulfill a future with a result. The ``result`` can be any object
+        or value that is JSON serializable by json.dumps()
+        """
+        # Note: result=None handled since json.dumps(None) => 'null'
+        result = json.dumps(result).encode("utf-8", errors="surrogateescape")
+        payload = ffi.new("char[]", result)
+        self.pimpl.fulfill(payload, ffi.NULL)
+
+        # Python will free memory for the payload once it goes out of scope.
+        # Therefore append payload to the internal results list to keep
+        # a reference until the future is garbage collected.
+        self._results.append(payload)
+
+    @interruptible
+    def get(self):
+        """
+        Convenience method to return a value stored by ``fulfill()``
+
+        Note: will return garbage if future does not contain a string, i.e.
+        if this Future was fulfilled outside of Python with a C object.
+
+        Returns string payload or None if future payload is NULL.
+        """
+        payload = ffi.new("void **")
+        try:
+            self.pimpl.get(payload)
+        except OSError:
+            self.raise_if_handle_exception()
+            raise
+
+        if payload[0] == ffi.NULL:
+            return None
+        value = ffi.string(ffi.cast("char *", payload[0])).decode("utf-8")
+        return json.loads(value)
