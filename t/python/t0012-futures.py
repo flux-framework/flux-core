@@ -17,7 +17,7 @@ import unittest
 import flux
 import flux.constants
 from flux.core.inner import ffi
-from flux.future import Future
+from flux.future import Future, FutureExt
 from subflux import rerun_under_flux
 
 
@@ -239,6 +239,81 @@ class TestHandle(unittest.TestCase):
         del orig_fut
         with self.assertRaises(EnvironmentError):
             new_fut.get()
+
+    def test_20_FutureExt(self):
+        cb_ran = [False]
+
+        def init_cb(future):
+            cb_ran[0] = True
+            self.assertIsInstance(future, Future)
+            future.fulfill("foo")
+
+        future = FutureExt(init_cb)
+        self.assertIsInstance(future, FutureExt)
+        self.assertFalse(cb_ran[0])
+        self.assertEqual(future.get(), "foo")
+        self.assertTrue(cb_ran[0])
+
+        future.reset()
+        future.fulfill("bar")
+        self.assertEqual(future.get(), "bar")
+
+        future.reset()
+        future.fulfill({"key": "value"})
+        self.assertDictEqual(future.get(), {"key": "value"})
+
+        # fulfill with None
+        future.reset()
+        future.fulfill()
+        self.assertEqual(future.get(), None)
+
+        future.reset()
+        future.fulfill_error(errno.EINVAL, "test error")
+        with self.assertRaises(OSError):
+            future.get()
+
+    def test_21_FutureExt_complex(self):
+        class Ping5(FutureExt):
+            """Test future that returns after 5 pings"""
+
+            def __init__(self, flux_handle):
+                super().__init__(init_cb=self.init_cb, flux_handle=flux_handle)
+
+            def ping_cb(self, future, original_future):
+                seq = future.get()["seq"]
+                if seq == 5:
+                    try:
+                        original_future.fulfill(future.get())
+                    except Exception as exc:
+                        print(exc)
+                    return
+                h = future.get_flux()
+                h.rpc("broker.ping", {"seq": seq + 1}).then(
+                    self.ping_cb, original_future
+                )
+
+            def init_cb(self, future):
+                h = future.get_flux()
+                h.rpc("broker.ping", {"seq": 1}).then(self.ping_cb, future)
+
+        result = Ping5(self.f).get()
+        self.assertEqual(result["seq"], 5)
+
+        #  Now, try the same in async context:
+        cb_ran = [False]
+
+        def ping5_cb(future, a, b=None):
+            self.assertEqual(future.get()["seq"], 5)
+            self.assertEqual(a, "foo")
+            self.assertEqual(b, "bar")
+            cb_ran[0] = True
+            # XXX: reactor doesn't exit without this for unknown reason
+            # works standalone though...
+            future.get_flux().reactor_stop()
+
+        Ping5(self.f).then(ping5_cb, "foo", b="bar")
+        self.f.reactor_run()
+        self.assertTrue(cb_ran[0])
 
 
 if __name__ == "__main__":
