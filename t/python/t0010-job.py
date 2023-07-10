@@ -565,7 +565,7 @@ class TestJob(unittest.TestCase):
             self.assertEqual(x.exception.type, y.exception.type)
             self.assertEqual(x.exception.severity, y.exception.severity)
             if y.exception.note:
-                self.assertRegexpMatches(x.exception.note, y.exception.note)
+                self.assertRegex(x.exception.note, y.exception.note)
             else:
                 self.assertEqual(x.exception.note, y.exception.note)
 
