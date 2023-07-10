@@ -23,7 +23,7 @@
  *    "mock_exception":s       - Generate a mock exception in phase:
  *                               "init", or "starting"
  *    "service":s              - Specify service to use for launching remote
- *                               subprocesses: "rexec".
+ *                               subprocesses: "rexec" or "sdexec".
  * }
  *
  */
@@ -312,7 +312,7 @@ static int parse_service_option (json_t *jobspec,
             return -1;
         }
     }
-    if (!streq (s, "rexec")) {
+    if (!streq (s, "rexec") && !streq (s, "sdexec")) {
         errprintf (error, "unknown bulkexec.service value: %s", s);
         errno = EINVAL;
         return -1;
