@@ -174,9 +174,31 @@ class Future(WrapperPimpl):
     def is_ready(self):
         return self.pimpl.is_ready()
 
+    def raise_if_handle_exception(self):
+        #  Helper function to raise any pending exception on this Future's
+        #  handle instead of raising an OSError returned from calling
+        #  flux_future_get(3) or flux_future_wait_for(3). The reason for
+        #  doing this is that these functions can fail if a Python callback
+        #  raises an exception, since the callback could then return without
+        #  fulfilling the target future, thus the low-level future calls
+        #  can return EDEADLOCK. In other situations we also want to raise any
+        #  pending exceptions since they will be more valuable than just
+        #  the equivalent of an errno. (If the future was really fulfilled
+        #  with an error, then no pending exception is expected, and the
+        #  caller should go on to raise the original OSError exception.)
+        #
+        flux_handle = self.get_flux()
+        if flux_handle is not None:
+            type(flux_handle).raise_if_exception()
+
     @interruptible
     def wait_for(self, timeout=-1.0):
-        self.pimpl.wait_for(timeout)
+        try:
+            self.pimpl.wait_for(timeout)
+        except OSError:
+            self.raise_if_handle_exception()
+            raise
+
         return self
 
     @interruptible
@@ -185,7 +207,11 @@ class Future(WrapperPimpl):
         Base Future.get() method. Does not return a result, just blocks
         until future is fulfilled and throws OSError on failure.
         """
-        self.pimpl.flux_future_get(ffi.NULL)
+        try:
+            self.pimpl.flux_future_get(ffi.NULL)
+        except OSError:
+            self.raise_if_handle_exception()
+            raise
 
     def incref(self):
         self.pimpl.flux_future_incref()
