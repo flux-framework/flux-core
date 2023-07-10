@@ -3331,15 +3331,20 @@ void info_usage (void)
 struct info_ctx {
     const char *id_arg;
     flux_jobid_t id;
-    json_t *keys;
+    json_t *keys_input;         /* keys input by user */
+    json_t *keys_lookup;        /* keys to lookup */
     bool original;
 };
 
-void info_output (flux_future_t *f, const char *suffix, struct info_ctx *ctx)
+void info_output (flux_future_t *f, const char *key, struct info_ctx *ctx)
 {
+    const char *lookup_key = key;
     const char *s;
 
-    if (flux_rpc_get_unpack (f, "{s:s}", suffix, &s) < 0) {
+    if (ctx->original && streq (key, "jobspec"))
+        lookup_key = "J";
+
+    if (flux_rpc_get_unpack (f, "{s:s}", lookup_key, &s) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
             log_msg_exit ("job %s id or key not found", ctx->id_arg);
@@ -3348,7 +3353,7 @@ void info_output (flux_future_t *f, const char *suffix, struct info_ctx *ctx)
             log_err_exit ("flux_rpc_get_unpack");
     }
 
-    if (ctx->original && streq (suffix, "J")) {
+    if (ctx->original && streq (key, "jobspec")) {
         flux_error_t error;
         char *jobspec = flux_unwrap_string (s, false, NULL, &error);
         if (!jobspec)
@@ -3368,7 +3373,7 @@ void info_continuation (flux_future_t *f, void *arg)
     size_t index;
     json_t *key;
 
-    json_array_foreach (ctx->keys, index, key) {
+    json_array_foreach (ctx->keys_input, index, key) {
         const char *s = json_string_value (key);
         info_output (f, s, ctx);
     }
@@ -3389,12 +3394,19 @@ void info_lookup (flux_t *h,
 
     ctx.id_arg = argv[optindex-1];
     ctx.id = id;
-    if (!(ctx.keys = json_array ()))
+    if (!(ctx.keys_input = json_array ()))
+        log_msg_exit ("json_array");
+    if (!(ctx.keys_lookup = json_array ()))
         log_msg_exit ("json_array");
 
     while (optindex < argc) {
         json_t *s;
         const char *key = argv[optindex];
+
+        if (!(s = json_string (key)))
+            log_msg_exit ("json_string");
+        if (json_array_append_new (ctx.keys_input, s) < 0)
+            log_msg_exit ("json_array_append");
 
         /*  Special case: if --original was used and the key is "jobspec",
          *   then fetch J and decode it on behalf of the caller.
@@ -3404,9 +3416,13 @@ void info_lookup (flux_t *h,
             key = "J";
         }
 
+        /* N.B. job-info.lookup will ignore duplicate keys, in the
+         * event user specified both "jobspec" and "J" on the command
+         * line with --original.
+         */
         if (!(s = json_string (key)))
             log_msg_exit ("json_string");
-        if (json_array_append_new (ctx.keys, s) < 0)
+        if (json_array_append_new (ctx.keys_lookup, s) < 0)
             log_msg_exit ("json_array_append");
         optindex++;
     }
@@ -3414,7 +3430,7 @@ void info_lookup (flux_t *h,
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
                              "{s:I s:O s:i}",
                              "id", ctx.id,
-                             "keys", ctx.keys,
+                             "keys", ctx.keys_lookup,
                              "flags", 0)))
         log_err_exit ("flux_rpc_pack");
     if (flux_future_then (f, -1., info_continuation, &ctx) < 0)
@@ -3422,7 +3438,8 @@ void info_lookup (flux_t *h,
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
 
-    json_decref (ctx.keys);
+    json_decref (ctx.keys_input);
+    json_decref (ctx.keys_lookup);
 }
 
 int cmd_info (optparse_t *p, int argc, char **argv)
