@@ -477,6 +477,7 @@ int bulk_exec_push_cmd (struct bulk_exec *exec,
 
     if (zlist_append (exec->commands, c) < 0) {
         exec_cmd_destroy (c);
+        errno = ENOMEM;
         return -1;
     }
     zlist_freefn (exec->commands, c, exec_cmd_destroy, true);
