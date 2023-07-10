@@ -131,6 +131,9 @@ class Future(WrapperPimpl):
         handle.incref()
         return handle
 
+    def set_flux(self, flux_handle):
+        self.pimpl.set_flux(flux_handle)
+
     def get_reactor(self):
         return self.pimpl.get_reactor()
 
@@ -156,6 +159,9 @@ class Future(WrapperPimpl):
         # return self to enable further chaining of the future.
         # For example `f.rpc('topic').then(cb).wait_for(-1)
         return self
+
+    def fulfill_error(self, errnum=2, errstr=ffi.NULL):
+        self.pimpl.fulfill_error(errnum, errstr)
 
     def reset(self):
         self.pimpl.reset()
