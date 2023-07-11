@@ -124,7 +124,12 @@ class Flux(Wrapper):
         The exception is raised ``from None`` to preserve the original
         stack trace.
         """
-        if cls.tls.exception is not None:
+        #  Note: for unknown reason, an AttributeError is occasionally raised
+        #  here: '_thread._local' object has no attribute 'exception'
+        #  This should not be possible since the attribute is initialized
+        #  in the class, but workaround it anyway through use of getattr():
+        #
+        if getattr(cls.tls, "exception", None) is not None:
             raise cls.set_exception(None) from None
 
     # pylint: disable=no-self-use
