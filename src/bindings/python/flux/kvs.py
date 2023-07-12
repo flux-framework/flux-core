@@ -46,6 +46,15 @@ def get_key_direct(flux_handle, key):
 
 
 def exists(flux_handle, key):
+    """Determine if key exists
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        key: key to check for existence
+
+    Returns:
+        bool: True if key exists, False if not
+    """
     try:
         get_key_direct(flux_handle, key)
         return True
@@ -58,6 +67,15 @@ def exists(flux_handle, key):
 
 
 def isdir(flux_handle, key):
+    """Determine if key is a directory
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        key: key to check if it is a directory
+
+    Returns:
+        bool: True if key is a directory, False if not
+    """
     try:
         get_key_direct(flux_handle, key)
     except EnvironmentError as err:
@@ -68,10 +86,31 @@ def isdir(flux_handle, key):
 
 
 def get_dir(flux_handle, key="."):
+    """Get KVS directory
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        key: directory name (default ".")
+
+    Returns:
+        KVSDir: object representing directory
+    """
     return KVSDir(path=key, flux_handle=flux_handle)
 
 
 def get(flux_handle, key):
+    """Get KVS directory
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        key: key to get
+
+    Returns:
+        If value is decodeable by json.loads(), the decoded
+        result is returned.  If the value is a legal utf-8 decodable
+        string, it is returned as a string.  Otherwise, the value is
+        returned as a bytes array.
+    """
     try:
         return get_key_direct(flux_handle, key)
     except EnvironmentError as err:
@@ -83,6 +122,15 @@ def get(flux_handle, key):
 
 
 def put(flux_handle, key, value):
+    """Put data into the KVS
+
+    Internally will stage changes until commit() is called.
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        key: key to write to
+        value: value of the key
+    """
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
     try:
@@ -97,24 +145,61 @@ def put(flux_handle, key, value):
 
 
 def put_mkdir(flux_handle, key):
+    """Create directory in the KVS
+
+    Internally will stage changes until commit() is called.
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        key: directory to create
+    """
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
     RAW.flux_kvs_txn_mkdir(flux_handle.aux_txn, 0, key)
 
 
 def put_unlink(flux_handle, key):
+    """Unlink key in the KVS
+
+    Internally will stage changes until commit() is called.
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        key: key to delete
+    """
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
     RAW.flux_kvs_txn_unlink(flux_handle.aux_txn, 0, key)
 
 
 def put_symlink(flux_handle, key, target):
+    """Create symlink in the KVS
+
+    Internally will stage changes until commit() is called.
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        key: symlink name
+        target: target symlink points to
+    """
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
     RAW.flux_kvs_txn_symlink(flux_handle.aux_txn, 0, key, None, target)
 
 
 def commit(flux_handle, flags: int = 0):
+    """Commit changes to the KVS
+
+    Must be called after put(), put_mkdir(), put_unlink(), or
+    put_symlink() to write staged changes to the KVS.
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        flags: defaults to 0, possible flag options:
+          flux.constants.FLUX_KVS_NO_MERGE - disallow merging of different commits
+          flux.constants.FLUX_KVS_TXN_COMPACT - if possible compact changes
+          flux.constants.FLUX_KVS_SYNC - flush & checkpoint commit (only against primary KVS)
+    """
     if flux_handle.aux_txn is None:
         return
     future = RAW.flux_kvs_commit(flux_handle, None, flags, flux_handle.aux_txn)
@@ -124,10 +209,32 @@ def commit(flux_handle, flags: int = 0):
 
 
 def dropcache(flux_handle):
+    """Drop KVS cache entries
+
+    Inform KVS module to drop cache entries without a reference.
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+    """
     RAW.flux_kvs_dropcache(flux_handle)
 
 
 class KVSDir(WrapperPimpl, abc.MutableMapping):
+    """User friendly class for KVS operations
+
+    KVS values can be read or written through this class's item accessor.  e.g.
+
+    mydir = KVSDir(flux_handle)
+    print(mydir["mykey"])
+
+    mydir["newkey"] = "foo"
+    mydir.commit()
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        path: Optional base path for all read/write to be relative to (default ".")
+    """
+
     # pylint: disable=too-many-ancestors, too-many-public-methods
 
     class InnerWrapper(Wrapper):
@@ -177,13 +284,29 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
         self.pimpl = self.InnerWrapper(flux_handle, path, handle)
 
     def commit(self, flags=0):
+        """Commit changes to the KVS
+
+        When keys are added, removed, or updated in the KVSDir object, the
+        changes are only cached in memory until the commit method asks the
+        KVS service to make them permanent. The commit method only includes
+        keys that have been explicitly updated in the KVSDir object, and the
+        contents of the KVS directory may diverge from the contents of the
+        KVSDir object if other changes are being made to the directory
+        concurrently.
+
+        After the commit method returns, updated keys can be accessed by other
+        clients on the same broker rank. Other broker ranks are eventually
+        consistent.
+        """
         commit(self.fhdl, flags)
 
     def key_at(self, key):
+        """Get full path to KVS key"""
         p_str = self.pimpl.key_at(key)
         return p_str.decode("utf-8")
 
     def exists(self, name):
+        """Evaluate if key exists in the basedir"""
         return exists(self.fhdl, self._path + name)
 
     def __getitem__(self, key):
@@ -265,16 +388,19 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
             new_kvsdir.fill(contents)
 
     def files(self):
+        """Get list of files in basedir"""
         for k in self:
             if not self.pimpl.isdir(k):
                 yield k
 
     def directories(self):
+        """Get list of directories in basedir"""
         for k in self:
             if self.pimpl.isdir(k):
                 yield k
 
     def list_all(self):
+        """Get tuple with list of files and directories in basedir"""
         files = []
         dirs = []
         for k in self:
@@ -297,6 +423,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
 
 
 def join(*args):
+    """Convenience function for use with walk(), similar to os.path.join()"""
     return ".".join([a for a in args if len(a) > 0])
 
 
@@ -315,7 +442,14 @@ def _inner_walk(kvsdir, curr_dir, topdown=False):
 
 
 def walk(directory, topdown=False, flux_handle=None):
-    """Walk a directory in the style of os.walk()"""
+    """Walk a directory in the style of os.walk()
+
+    Args:
+        directory: A path or KVSDir object
+        topdown: Specify True for current directory to be
+          listed before subdirectories.
+        flux_handle: Required if "directory" is a path.
+    """
     if not isinstance(directory, KVSDir):
         if flux_handle is None:
             raise ValueError("If directory is a key, flux_handle must be specified")
