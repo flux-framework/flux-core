@@ -21,7 +21,7 @@ def job_kvs(flux_handle, jobid):
     path_len = 1024
     buf = ffi.new("char[]", path_len)
     RAW.kvs_key(buf, path_len, jobid, "")
-    kvs_key = ffi.string(buf, path_len)
+    kvs_key = ffi.string(buf, path_len).decode("utf-8")
     return flux.kvs.get_dir(flux_handle, kvs_key)
 
 
@@ -34,5 +34,5 @@ def job_kvs_guest(flux_handle, jobid):
     path_len = 1024
     buf = ffi.new("char[]", path_len)
     RAW.kvs_guest_key(buf, path_len, jobid, "")
-    kvs_key = ffi.string(buf, path_len)
+    kvs_key = ffi.string(buf, path_len).decode("utf-8")
     return flux.kvs.get_dir(flux_handle, kvs_key)

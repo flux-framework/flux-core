@@ -350,6 +350,7 @@ dist_check_SCRIPTS = \
 	issues/t4771-flux-start-bash.sh \
 	issues/t4852-t_submit-legacy.sh \
 	issues/t5105-signal-propagation.sh \
+	issues/t5308-kvsdir-initial-path.py \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \

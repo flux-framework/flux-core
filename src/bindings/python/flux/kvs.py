@@ -165,6 +165,8 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
         super(KVSDir, self).__init__()
         self.fhdl = flux_handle
         self.path = path
+        # Helper var for easier concatenations
+        self._path = "" if path == "." else path if path[-1] == "." else path + "."
         if flux_handle is None and handle is None:
             raise ValueError(
                 "flux_handle must be a valid Flux object or"
@@ -191,7 +193,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
             )
 
     def __setitem__(self, key, value):
-        if put(self.fhdl, key, value) < 0:
+        if put(self.fhdl, self._path + key, value) < 0:
             print("Error setting item in KVS")
 
     def __delitem__(self, key):
@@ -255,7 +257,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
               syntax, sub-dicts will be stored as json values in a single key
         """
 
-        put_mkdir(self.fhdl, key)
+        put_mkdir(self.fhdl, self._path + key)
         self.commit()
         new_kvsdir = KVSDir(self.fhdl, key)
         if contents is not None:
