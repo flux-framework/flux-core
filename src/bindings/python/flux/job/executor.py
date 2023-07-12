@@ -414,7 +414,7 @@ class FluxExecutorFuture(concurrent.futures.Future):
                 self._invoke_flux_callback(callback, log_entry)
 
 
-class FluxExecutor:
+class FluxExecutor(concurrent.futures.Executor):
     """Provides a method to submit and monitor Flux jobs asynchronously.
 
     Forks threads to complete futures and fetch event updates in the background.
@@ -605,13 +605,6 @@ class FluxExecutor:
             )
             self._next_thread = (self._next_thread + 1) % len(self._submission_queues)
             return fut
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.shutdown(wait=True)
-        return False
 
     @staticmethod
     def _shutdown_threads(event, threads):
