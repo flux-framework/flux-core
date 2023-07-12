@@ -300,14 +300,14 @@ def join(*args):
     return ".".join([a for a in args if len(a) > 0])
 
 
-def inner_walk(kvsdir, curr_dir, topdown=False):
+def _inner_walk(kvsdir, curr_dir, topdown=False):
     if topdown:
         yield (curr_dir, kvsdir.directories(), kvsdir.files())
 
     for directory in kvsdir.directories():
         path = join(curr_dir, directory)
         key = kvsdir.key_at(directory)
-        for entry in inner_walk(get_dir(kvsdir.fhdl, key), path, topdown):
+        for entry in _inner_walk(get_dir(kvsdir.fhdl, key), path, topdown):
             yield entry
 
     if not topdown:
@@ -320,4 +320,4 @@ def walk(directory, topdown=False, flux_handle=None):
         if flux_handle is None:
             raise ValueError("If directory is a key, flux_handle must be specified")
         directory = KVSDir(flux_handle, directory)
-    return inner_walk(directory, "", topdown)
+    return _inner_walk(directory, "", topdown)
