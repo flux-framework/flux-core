@@ -248,8 +248,8 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
             self.commit()
 
     def mkdir(self, key: str, contents: Mapping[str, Any] = None):
-        """Create a new sub-directory, optionally pre-populated with the
-        contents of ``files`` as would be done with ``fill(contents)``
+        """Create a new sub-directory, optionally pre-populated by
+        contents, as would be done with ``fill(contents)``
 
         Args:
             key: Key of the directory to be created
