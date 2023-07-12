@@ -23,6 +23,8 @@ cat >config/config.toml <<EOT
 [systemd]
 sdbus-debug = true
 sdexec-debug = true
+[exec]
+service-override = true
 EOT
 
 test_under_flux 2 full -o,--config-path=$(pwd)/config
