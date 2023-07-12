@@ -28,6 +28,7 @@ static const char *default_cwd = "/tmp";
 static const char *default_job_shell = NULL;
 static const char *flux_imp_path = NULL;
 static const char *exec_service = "rexec";
+static int exec_service_override = 0;
 
 static const char *jobspec_get_job_shell (json_t *jobspec)
 {
@@ -79,6 +80,11 @@ const char *config_get_exec_service (void)
     return exec_service;
 }
 
+bool config_get_exec_service_override (void)
+{
+    return exec_service_override;
+}
+
 /*  Initialize common configurations for use by job-exec exec modules.
  */
 int config_init (flux_t *h, int argc, char **argv)
@@ -114,12 +120,13 @@ int config_init (flux_t *h, int argc, char **argv)
         return -1;
     }
 
-    /*  Check configuration for exec.service */
+    /*  Check configuration for exec.service and exec.service-override */
     if (flux_conf_unpack (flux_get_conf (h),
                           &err,
-                          "{s?{s?s}}",
+                          "{s?{s?s s?b}}",
                           "exec",
-                            "service", &exec_service) < 0) {
+                            "service", &exec_service,
+                            "service-override", &exec_service_override) < 0) {
         flux_log (h, LOG_ERR,
                   "error reading config value exec.service: %s",
                   err.text);

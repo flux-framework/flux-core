@@ -295,9 +295,11 @@ static int parse_service_option (json_t *jobspec,
                                  flux_error_t *error)
 {
     const char *s = config_get_exec_service (); // default
+    bool override = config_get_exec_service_override ();
     json_error_t e;
 
     if (jobspec) {
+        const char *s2 = NULL;
         if (json_unpack_ex (jobspec,
                             &e,
                             0,
@@ -306,10 +308,18 @@ static int parse_service_option (json_t *jobspec,
                               "system",     // key is optional per RFC 14
                                 "exec",
                                   "bulkexec",
-                                    "service", &s) < 0) {
+                                    "service", &s2) < 0) {
             errprintf (error, "error parsing bulkexec.service: %s", e.text);
             errno = EINVAL;
             return -1;
+        }
+        if (s2) {
+            if (!override && !streq (s, s2)) {
+                errprintf (error, "exec service override is not permitted");
+                errno = EINVAL;
+                return -1;
+            }
+            s = s2;
         }
     }
     if (!streq (s, "rexec") && !streq (s, "sdexec")) {
