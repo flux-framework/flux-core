@@ -22,6 +22,15 @@ imp
    the credentials of the guest user that submitted them.  If unset, only
    jobs submitted by the instance owner may be executed.
 
+service
+   (optional) Set the remote subprocess service name. (Default: ``rexec``).
+   Note that ``systemd.enable`` must be set to ``true`` if ``sdexec`` is
+   configured.  See :man5:`flux-config-systemd`.
+
+service-override
+   (optional) Allow ``service`` to be overridden on a per-job basis with
+   ``--setattr system.exec.bulkexec.service=NAME``.  (Default: ``false``).
+
 method
    (optional) Run job shell under a specific mechanism other than the default
    forked subprocesses.  Potential configurations:
