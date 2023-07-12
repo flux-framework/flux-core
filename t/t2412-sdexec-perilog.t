@@ -68,4 +68,14 @@ test_expect_success 'prolog was run under systemd' '
 test_expect_success 'epilog was run under systemd' '
 	grep "System epilog script" dmesg.out
 '
+test_expect_success 'configured exec service cannot be overridden' '
+	test_must_fail flux run \
+	    --setattr system.exec.bulkexec.service=rexec \
+	    /bin/true
+'
+test_expect_success 'but the default can be over-specified' '
+	flux run \
+	    --setattr system.exec.bulkexec.service=sdexec \
+	    /bin/true
+'
 test_done
