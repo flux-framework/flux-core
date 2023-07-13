@@ -11,6 +11,7 @@
 ###############################################################
 
 import ast
+import errno
 import unittest
 
 import flux
@@ -333,6 +334,42 @@ class TestKVS(unittest.TestCase):
         flux.kvs.put_symlink(self.f, "txn_symlink", "txn_target")
         flux.kvs.commit(self.f)
         self.assertFalse(flux.kvs.exists(self.f, "txn_symlink"))
+
+    def bad_input(self, func, *args):
+        with self.assertRaises(OSError) as ctx:
+            func(*args)
+        self.assertEqual(ctx.exception.errno, errno.EINVAL)
+
+    def test_37_exists_bad_input(self):
+        self.bad_input(flux.kvs.exists, self.f, "")
+
+    def test_38_isdir_bad_input(self):
+        self.bad_input(flux.kvs.isdir, self.f, "")
+
+    def test_39_get_bad_input(self):
+        self.bad_input(flux.kvs.get, self.f, "")
+
+    def test_40_get_dir_bad_input(self):
+        self.bad_input(flux.kvs.get_dir, self.f, "")
+
+    def test_41_put_exception_bad_input(self):
+        self.bad_input(flux.kvs.put, self.f, "", "")
+
+    def test_42_put_mkdir_exception_bad_input(self):
+        self.bad_input(flux.kvs.put_mkdir, self.f, "")
+
+    def test_43_put_unlink_bad_input(self):
+        self.bad_input(flux.kvs.put_unlink, self.f, "")
+
+    def test_44_put_symlink_bad_input(self):
+        self.bad_input(flux.kvs.put_symlink, self.f, "", "")
+
+    # try to overwrite root dir, will fail on commit
+    def test_45_commit_fail(self):
+        with self.assertRaises(OSError) as ctx:
+            flux.kvs.put(self.f, ".", "foof")
+            flux.kvs.commit(self.f)
+        self.assertEqual(ctx.exception.errno, errno.EINVAL)
 
 
 if __name__ == "__main__":
