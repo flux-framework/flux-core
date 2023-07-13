@@ -149,6 +149,20 @@ class TestKVS(unittest.TestCase):
         with flux.kvs.get_dir(self.f, "testkeyat") as kd:
             self.assertEqual(kd.key_at("meh"), "testkeyat.meh")
 
+    def test_exists_initial_path(self):
+        with flux.kvs.get_dir(self.f) as kd:
+            kd["exists1"] = 1
+            kd.mkdir("existssubdir")
+            kd["existssubdir.exists2"] = 2
+
+        with flux.kvs.get_dir(self.f) as kd2:
+            self.assertTrue(kd2.exists("exists1"))
+            self.assertTrue(kd2.exists("existssubdir.exists2"))
+
+        with flux.kvs.get_dir(self.f, "existssubdir") as kd3:
+            self.assertFalse(kd3.exists("exists1"))
+            self.assertTrue(kd3.exists("exists2"))
+
     def test_key_initial_path(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.mkdir("initialpath")
