@@ -87,7 +87,7 @@ def put(flux_handle, key, value):
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
     try:
         json_str = json.dumps(value)
-        return RAW.flux_kvs_txn_put(flux_handle.aux_txn, 0, key, json_str)
+        RAW.flux_kvs_txn_put(flux_handle.aux_txn, 0, key, json_str)
     except TypeError:
         if isinstance(value, bytes):
             return RAW.flux_kvs_txn_put_raw(
@@ -99,33 +99,32 @@ def put(flux_handle, key, value):
 def put_mkdir(flux_handle, key):
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
-    return RAW.flux_kvs_txn_mkdir(flux_handle.aux_txn, 0, key)
+    RAW.flux_kvs_txn_mkdir(flux_handle.aux_txn, 0, key)
 
 
 def put_unlink(flux_handle, key):
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
-    return RAW.flux_kvs_txn_unlink(flux_handle.aux_txn, 0, key)
+    RAW.flux_kvs_txn_unlink(flux_handle.aux_txn, 0, key)
 
 
 def put_symlink(flux_handle, key, target):
     if flux_handle.aux_txn is None:
         flux_handle.aux_txn = RAW.flux_kvs_txn_create()
-    return RAW.flux_kvs_txn_symlink(flux_handle.aux_txn, 0, key, None, target)
+    RAW.flux_kvs_txn_symlink(flux_handle.aux_txn, 0, key, None, target)
 
 
-def commit(flux_handle, flags: int = 0) -> int:
+def commit(flux_handle, flags: int = 0):
     if flux_handle.aux_txn is None:
-        return -1
+        return
     future = RAW.flux_kvs_commit(flux_handle, None, flags, flux_handle.aux_txn)
     RAW.flux_future_get(future, None)
     RAW.flux_kvs_txn_destroy(flux_handle.aux_txn)
     flux_handle.aux_txn = None
-    return 0
 
 
 def dropcache(flux_handle):
-    return RAW.flux_kvs_dropcache(flux_handle)
+    RAW.flux_kvs_dropcache(flux_handle)
 
 
 class KVSDir(WrapperPimpl, abc.MutableMapping):
@@ -177,8 +176,8 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
             )
         self.pimpl = self.InnerWrapper(flux_handle, path, handle)
 
-    def commit(self, flags=0) -> int:
-        return commit(self.fhdl, flags)
+    def commit(self, flags=0):
+        commit(self.fhdl, flags)
 
     def key_at(self, key):
         p_str = self.pimpl.key_at(key)
@@ -196,8 +195,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
             )
 
     def __setitem__(self, key, value):
-        if put(self.fhdl, self._path + key, value) < 0:
-            print("Error setting item in KVS")
+        put(self.fhdl, self._path + key, value)
 
     def __delitem__(self, key):
         put_unlink(self.fhdl, key)
