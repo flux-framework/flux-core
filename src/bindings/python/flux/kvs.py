@@ -166,7 +166,10 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
         self.fhdl = flux_handle
         self.path = path
         # Helper var for easier concatenations
-        self._path = "" if path == "." else path if path[-1] == "." else path + "."
+        if not path or path == ".":
+            self._path = ""
+        else:
+            self._path = path if path[-1] == "." else path + "."
         if flux_handle is None and handle is None:
             raise ValueError(
                 "flux_handle must be a valid Flux object or"
