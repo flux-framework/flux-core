@@ -182,7 +182,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
         return p_str.decode("utf-8")
 
     def exists(self, name):
-        return exists(self.fhdl, name)
+        return exists(self.fhdl, self._path + name)
 
     def __getitem__(self, key):
         try:
