@@ -232,10 +232,6 @@ class TestKVS(unittest.TestCase):
             self.assertEqual(kd3["n.o.p"], "baz")
             self.assertEqual(kd3["n"]["o"]["p"], "baz")
 
-    def test_walk_with_no_handle(self):
-        with self.assertRaises(ValueError):
-            flux.kvs.walk("dir").next()
-
     def test_read_non_existent(self):
         with self.assertRaises(KeyError):
             print(
@@ -279,6 +275,10 @@ class TestKVS(unittest.TestCase):
 
         for r, ds, fs in walk_gen:
             pass
+
+    def test_walk_with_no_handle(self):
+        with self.assertRaises(ValueError):
+            flux.kvs.walk("dir").next()
 
     def test_put_mkdir(self):
         flux.kvs.put_mkdir(self.f, "txn_mkdir")
