@@ -232,6 +232,43 @@ class TestKVS(unittest.TestCase):
             self.assertEqual(kd3["n.o.p"], "baz")
             self.assertEqual(kd3["n"]["o"]["p"], "baz")
 
+    def test_files(self):
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("filestest", {"somefile": 1, "somefile2": 2})
+            kd.mkdir("filestest.subdir")
+            kd.commit()
+
+        with flux.kvs.get_dir(self.f, "filestest") as kd2:
+            files = [x for x in kd2.files()]
+            self.assertEqual(len(files), 2)
+            self.assertIn("somefile", files)
+            self.assertIn("somefile2", files)
+
+    def test_directories(self):
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("directoriestest", {"somefile": 1, "somefile2": 2})
+            kd.mkdir("directoriestest.subdir")
+            kd.commit()
+
+        with flux.kvs.get_dir(self.f, "directoriestest") as kd2:
+            directories = [x for x in kd2.directories()]
+            self.assertEqual(len(directories), 1)
+            self.assertIn("subdir", directories)
+
+    def test_list_all(self):
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("listalltest", {"somefile": 1, "somefile2": 2})
+            kd.mkdir("listalltest.subdir")
+            kd.commit()
+
+        with flux.kvs.get_dir(self.f, "listalltest") as kd2:
+            (files, directories) = kd2.list_all()
+            self.assertEqual(len(files), 2)
+            self.assertEqual(len(directories), 1)
+            self.assertIn("somefile", files)
+            self.assertIn("somefile2", files)
+            self.assertIn("subdir", directories)
+
     def test_read_non_existent(self):
         with self.assertRaises(KeyError):
             print(
