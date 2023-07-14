@@ -102,21 +102,13 @@ class TestJob(unittest.TestCase):
 
     def test_02_job_info_lookup_badid(self):
         rpc = flux.job.job_info_lookup(self.fh, 123456789)
-        notfound = False
-        try:
+        with self.assertRaises(FileNotFoundError):
             rpc.get()
-        except FileNotFoundError:
-            notfound = True
-        self.assertEqual(notfound, True)
 
     def test_03_job_info_lookup_badkey(self):
         rpc = flux.job.job_info_lookup(self.fh, self.jobid1, keys=["foo"])
-        notfound = False
-        try:
+        with self.assertRaises(FileNotFoundError):
             rpc.get()
-        except FileNotFoundError:
-            notfound = True
-        self.assertEqual(notfound, True)
 
     def test_04_job_kvs_lookup(self):
         data = flux.job.job_kvs_lookup(self.fh, self.jobid1)

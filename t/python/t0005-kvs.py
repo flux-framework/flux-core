@@ -11,6 +11,7 @@
 ###############################################################
 
 import ast
+import errno
 import unittest
 
 import flux
@@ -27,7 +28,7 @@ class TestKVS(unittest.TestCase):
     def setUpClass(self):
         self.f = flux.Flux()
 
-    def test_kvs_dir_open(self):
+    def test_01_kvs_dir_open(self):
         with flux.kvs.get_dir(self.f) as d:
             self.assertIsNotNone(d)
 
@@ -51,57 +52,57 @@ class TestKVS(unittest.TestCase):
 
         return kd2
 
-    def test_set_int(self):
+    def test_02_set_int(self):
         self.set_and_check_context("int", 10, int)
 
-    def test_set_float(self):
+    def test_03_set_float(self):
         self.set_and_check_context("float", 10.5, float)
 
-    def test_set_string(self):
+    def test_04_set_string(self):
         self.set_and_check_context("string", "stuff", str)
 
-    def test_set_none(self):
+    def test_05_set_none(self):
         self.set_and_check_context("none", None, None)
 
-    def test_set_unicode(self):
+    def test_06_set_unicode(self):
         self.set_and_check_context("unicode", "\u32db \u263a \u32e1", str)
 
-    def test_set_bytes(self):
+    def test_07_set_bytes(self):
         self.set_and_check_context("bytes", bytes.fromhex("deadbeef"), bytes)
 
-    def test_set_list(self):
+    def test_08_set_list(self):
         self.set_and_check_context("list", [1, 2, 3, 4], list)
 
-    def test_set_dict(self):
+    def test_09_set_dict(self):
         self.set_and_check_context(
             "dict", {"thing": "stuff", "other thing": "more stuff"}, dict
         )
 
-    def test_set_legal_json(self):
+    def test_10_set_legal_json(self):
         self.set_and_check_context("badjson", b"{}", dict)
 
-    def test_set_not_legal_json(self):
+    def test_11_set_not_legal_json(self):
         self.set_and_check_context("badjson", b"{", str)
 
-    def test_exists_dir(self):
+    def test_12_exists_dir(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.mkdir("pytestdir")
         self.assertTrue(flux.kvs.exists(self.f, "pytestdir"))
 
-    def test_exists_true(self):
+    def test_13_exists_true(self):
         flux.kvs.put(self.f, "thing", 15)
         flux.kvs.commit(self.f)
         self.assertTrue(flux.kvs.exists(self.f, "thing"))
 
-    def test_exists_false(self):
+    def test_14_exists_false(self):
         self.assertFalse(flux.kvs.exists(self.f, "argbah"))
 
-    def test_commit_flags(self):
+    def test_15_commit_flags(self):
         flux.kvs.put(self.f, "flagcheck", 42)
         flux.kvs.commit(self.f, 1)
         self.assertTrue(flux.kvs.exists(self.f, "flagcheck"))
 
-    def test_remove(self):
+    def test_16_remove(self):
         kd = self.set_and_check_context("todel", "things to delete", str)
         del kd["todel"]
         kd.commit()
@@ -109,7 +110,7 @@ class TestKVS(unittest.TestCase):
             stuff = kd["todel"]
             print(stuff)
 
-    def test_fill(self):
+    def test_17_fill(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.fill({"things": 1, "stuff": "strstuff", "dir.other_thing": "dirstuff"})
             kd.commit()
@@ -119,7 +120,7 @@ class TestKVS(unittest.TestCase):
             self.assertEqual(kd2["stuff"], "strstuff")
             self.assertEqual(kd2["dir"]["other_thing"], "dirstuff")
 
-    def test_mkdir_fill(self):
+    def test_18_mkdir_fill(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.mkdir(
                 "mkdirfill",
@@ -136,20 +137,20 @@ class TestKVS(unittest.TestCase):
             self.assertEqual(kd2["mkdirfill.stuffs"], "strstuffs")
             self.assertEqual(kd2["mkdirfill"]["dir"]["other_thingies"], "dirstuffs")
 
-    def test_set_deep(self):
+    def test_19_set_deep(self):
         self.set_and_check_context("a.b.c.e.f.j.k", 5, int)
 
-    def test_bad_init(self):
+    def test_20_bad_init(self):
         with self.assertRaises(ValueError):
             flux.kvs.KVSDir()
 
-    def test_key_at(self):
+    def test_21_key_at(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.mkdir("testkeyat")
         with flux.kvs.get_dir(self.f, "testkeyat") as kd:
             self.assertEqual(kd.key_at("meh"), "testkeyat.meh")
 
-    def test_exists_initial_path(self):
+    def test_22_exists_initial_path(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd["exists1"] = 1
             kd.mkdir("existssubdir")
@@ -163,7 +164,7 @@ class TestKVS(unittest.TestCase):
             self.assertFalse(kd3.exists("exists1"))
             self.assertTrue(kd3.exists("exists2"))
 
-    def test_key_initial_path(self):
+    def test_23_key_initial_path(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.mkdir("initialpath")
 
@@ -195,7 +196,7 @@ class TestKVS(unittest.TestCase):
         self.assertEqual(kd5["d.e.f"], 4)
         self.assertEqual(kd5["d"]["e"]["f"], 4)
 
-    def test_fill_initial_path(self):
+    def test_24_fill_initial_path(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.mkdir("fillinitialpath")
 
@@ -215,7 +216,7 @@ class TestKVS(unittest.TestCase):
             self.assertEqual(kd4["i.j.k"], "baz")
             self.assertEqual(kd4["i"]["j"]["k"], "baz")
 
-    def test_mkdir_initial_path(self):
+    def test_25_mkdir_initial_path(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.mkdir("mkdirinitialpath", {"l": 1, "m": "bar", "n.o.p": "baz"})
             kd.commit()
@@ -232,11 +233,44 @@ class TestKVS(unittest.TestCase):
             self.assertEqual(kd3["n.o.p"], "baz")
             self.assertEqual(kd3["n"]["o"]["p"], "baz")
 
-    def test_walk_with_no_handle(self):
-        with self.assertRaises(ValueError):
-            flux.kvs.walk("dir").next()
+    def test_26_files(self):
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("filestest", {"somefile": 1, "somefile2": 2})
+            kd.mkdir("filestest.subdir")
+            kd.commit()
 
-    def test_read_non_existent(self):
+        with flux.kvs.get_dir(self.f, "filestest") as kd2:
+            files = [x for x in kd2.files()]
+            self.assertEqual(len(files), 2)
+            self.assertIn("somefile", files)
+            self.assertIn("somefile2", files)
+
+    def test_27_directories(self):
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("directoriestest", {"somefile": 1, "somefile2": 2})
+            kd.mkdir("directoriestest.subdir")
+            kd.commit()
+
+        with flux.kvs.get_dir(self.f, "directoriestest") as kd2:
+            directories = [x for x in kd2.directories()]
+            self.assertEqual(len(directories), 1)
+            self.assertIn("subdir", directories)
+
+    def test_28_list_all(self):
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("listalltest", {"somefile": 1, "somefile2": 2})
+            kd.mkdir("listalltest.subdir")
+            kd.commit()
+
+        with flux.kvs.get_dir(self.f, "listalltest") as kd2:
+            (files, directories) = kd2.list_all()
+            self.assertEqual(len(files), 2)
+            self.assertEqual(len(directories), 1)
+            self.assertIn("somefile", files)
+            self.assertIn("somefile2", files)
+            self.assertIn("subdir", directories)
+
+    def test_29_read_non_existent(self):
         with self.assertRaises(KeyError):
             print(
                 flux.kvs.KVSDir(self.f)[
@@ -244,7 +278,7 @@ class TestKVS(unittest.TestCase):
                 ]
             )
 
-    def test_read_non_existent_basedir(self):
+    def test_30_read_non_existent_basedir(self):
         with self.assertRaisesRegex(EnvironmentError, "No such file"):
             print(
                 flux.kvs.KVSDir(
@@ -252,7 +286,7 @@ class TestKVS(unittest.TestCase):
                 )
             )
 
-    def test_iterator(self):
+    def test_31_iterator(self):
         keys = ["testdir1a." + str(x) for x in range(1, 15)]
         with flux.kvs.get_dir(self.f) as kd:
             for k in keys:
@@ -264,7 +298,7 @@ class TestKVS(unittest.TestCase):
                 self.assertEqual(v, "bar")
                 print("passed {}".format(k))
 
-    def test_walk(self):
+    def test_32_walk(self):
         keys = ["testwalk." + str(x) for x in range(1, 15)]
         with flux.kvs.get_dir(self.f) as kd:
             for k in keys:
@@ -280,22 +314,62 @@ class TestKVS(unittest.TestCase):
         for r, ds, fs in walk_gen:
             pass
 
-    def test_put_mkdir(self):
+    def test_33_walk_with_no_handle(self):
+        with self.assertRaises(ValueError):
+            flux.kvs.walk("dir").next()
+
+    def test_34_put_mkdir(self):
         flux.kvs.put_mkdir(self.f, "txn_mkdir")
         flux.kvs.commit(self.f)
         self.assertTrue(flux.kvs.exists(self.f, "txn_mkdir"))
 
-    def test_put_unlink(self):
+    def test_35_put_unlink(self):
         flux.kvs.put(self.f, "txn_unlink", 1)
         flux.kvs.commit(self.f)
         flux.kvs.put_unlink(self.f, "txn_unlink")
         flux.kvs.commit(self.f)
         self.assertFalse(flux.kvs.exists(self.f, "txn_unlink"))
 
-    def test_put_symlink(self):
+    def test_36_put_symlink(self):
         flux.kvs.put_symlink(self.f, "txn_symlink", "txn_target")
         flux.kvs.commit(self.f)
         self.assertFalse(flux.kvs.exists(self.f, "txn_symlink"))
+
+    def bad_input(self, func, *args):
+        with self.assertRaises(OSError) as ctx:
+            func(*args)
+        self.assertEqual(ctx.exception.errno, errno.EINVAL)
+
+    def test_37_exists_bad_input(self):
+        self.bad_input(flux.kvs.exists, self.f, "")
+
+    def test_38_isdir_bad_input(self):
+        self.bad_input(flux.kvs.isdir, self.f, "")
+
+    def test_39_get_bad_input(self):
+        self.bad_input(flux.kvs.get, self.f, "")
+
+    def test_40_get_dir_bad_input(self):
+        self.bad_input(flux.kvs.get_dir, self.f, "")
+
+    def test_41_put_exception_bad_input(self):
+        self.bad_input(flux.kvs.put, self.f, "", "")
+
+    def test_42_put_mkdir_exception_bad_input(self):
+        self.bad_input(flux.kvs.put_mkdir, self.f, "")
+
+    def test_43_put_unlink_bad_input(self):
+        self.bad_input(flux.kvs.put_unlink, self.f, "")
+
+    def test_44_put_symlink_bad_input(self):
+        self.bad_input(flux.kvs.put_symlink, self.f, "", "")
+
+    # try to overwrite root dir, will fail on commit
+    def test_45_commit_fail(self):
+        with self.assertRaises(OSError) as ctx:
+            flux.kvs.put(self.f, ".", "foof")
+            flux.kvs.commit(self.f)
+        self.assertEqual(ctx.exception.errno, errno.EINVAL)
 
 
 if __name__ == "__main__":

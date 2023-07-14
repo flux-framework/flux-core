@@ -317,14 +317,8 @@ class TestJob(unittest.TestCase):
     # flux job list-id fails on bad id
     def test_18_list_id_fail(self):
         rpc_handle = flux.job.job_list_id(self.fh, 123456789)
-        notfound = False
-
-        try:
+        with self.assertRaises(FileNotFoundError):
             rpc_handle.get_jobinfo()
-        except FileNotFoundError:
-            notfound = True
-
-        self.assertEqual(notfound, True)
 
 
 if __name__ == "__main__":
