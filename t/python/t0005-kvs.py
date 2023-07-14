@@ -15,6 +15,7 @@ import errno
 import unittest
 
 import flux
+import flux.constants
 import flux.kvs
 from subflux import rerun_under_flux
 
@@ -372,6 +373,16 @@ class TestKVS(unittest.TestCase):
         self.assertEqual(ctx.exception.errno, errno.EINVAL)
         # so we don't mess up later tests, issue #5333
         self.f.aux_txn = None
+
+    # just testing that passing flags work, these are pitiful KVS
+    # changes and the flags don't mean much
+    def test_46_commit_flags(self):
+        flux.kvs.put(self.f, "commitflags", "foo")
+        flux.kvs.commit(self.f, flux.constants.FLUX_KVS_NO_MERGE)
+        flux.kvs.put(self.f, "commitflags", "baz")
+        flux.kvs.commit(self.f, flux.constants.FLUX_KVS_TXN_COMPACT)
+        flux.kvs.put(self.f, "commitflags", "bar")
+        flux.kvs.commit(self.f, flux.constants.FLUX_KVS_SYNC)
 
 
 if __name__ == "__main__":
