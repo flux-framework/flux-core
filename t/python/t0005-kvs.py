@@ -371,8 +371,10 @@ class TestKVS(unittest.TestCase):
             flux.kvs.put(self.f, ".", "foof")
             flux.kvs.commit(self.f)
         self.assertEqual(ctx.exception.errno, errno.EINVAL)
-        # so we don't mess up later tests, issue #5333
-        self.f.aux_txn = None
+
+        # Issue #5333, make sure internal bad transaction cleared and
+        # subsequent commit works
+        flux.kvs.commit(self.f)
 
     # just testing that passing flags work, these are pitiful KVS
     # changes and the flags don't mean much
