@@ -175,8 +175,10 @@ static void result_eventlog_cb (flux_future_t *f, void *arg)
             || json_object_set (res, "waitstatus", wstatus) < 0)
             goto error;
     }
-    else if (streq (name, "exception"))
-        job_result_handle_exception (res, context);
+    else if (streq (name, "exception")) {
+        if (job_result_handle_exception (res, context) < 0)
+            goto error;
+    }
 
     json_decref (o);
 
