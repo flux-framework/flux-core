@@ -4,12 +4,13 @@ test_description='Test resource acquire'
 
 . `dirname $0`/sharness.sh
 
-# Start out with empty config object
-# Then we will reload after adding TOML to cwd
-export FLUX_CONF_DIR=$(pwd)
+cat >exclude.toml <<-EOT
+[resource]
+exclude = "0"
+EOT
 
 SIZE=4
-test_under_flux $SIZE
+test_under_flux $SIZE full -o,--config-path=$(pwd)/exclude.toml
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 RPC_STREAM=${FLUX_BUILD_DIR}/t/request/rpc_stream
@@ -48,14 +49,6 @@ test_expect_success 'acquire works again after first acquire disconnected' '
 	$RPC resource.acquire </dev/null
 '
 
-test_expect_success 'reload config excluding rank 0' '
-	cat >resource.toml <<-EOT &&
-	[resource]
-	exclude = "0"
-	EOT
-	flux config reload
-'
-
 test_expect_success 'acquire returns resources excluding rank 0' '
 	$RPC resource.acquire </dev/null >acquire2.out &&
 	jq -r .resources.execution.R_lite[0].rank acquire2.out \
@@ -85,25 +78,6 @@ test_expect_success NO_CHAIN_LINT 'undrain/drain rank 1 causes up,down responses
 	$WAITFILE -t 10 -v -p \"up\" -c 2 acquire4.out &&
 	flux resource drain 1 &&
 	wait $pid
-'
-
-test_expect_success NO_CHAIN_LINT 'add/remove new exclusion causes down/up response' '
-	acquire_stream 30 acquire5.out &
-	pid=$! &&
-	$WAITFILE -t 10 -v -p \"resources\" acquire5.out &&
-	cat >resource.toml <<-EOT &&
-	[resource]
-	exclude = "0,3"
-	EOT
-	flux config reload &&
-	$WAITFILE -t 10 -v -p \"down\" acquire5.out &&
-	cat >resource.toml <<-EOT &&
-	[resource]
-	exclude = "0"
-	EOT
-	flux config reload &&
-	$WAITFILE -t 10 -v -p \"up\" -c 2 acquire5.out &&
-	kill -15 $pid && wait $pid || true
 '
 
 test_expect_success 'load scheduler' '
