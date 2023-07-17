@@ -109,5 +109,23 @@ test_expect_success 'flux resource status shows zero nodes excluded' '
 test_expect_success 'unexclude event was posted' '
 	test $(has_resource_event unexclude | wc -l) -eq 1
 '
+# See flux-framework/flux-core#5337
+test_expect_success 'test instance can exclude ranks' '
+	cat >exclude.toml <<-EOT &&
+	[resource]
+	exclude = "1"
+	EOT
+	test $(flux start -s2 -o,--config-path=exclude.toml \
+	    flux resource status -s exclude -no {nnodes}) -eq 1
+'
+test_expect_success 'test instance fails to exclude hostnames' '
+	cat >exclude2.toml <<-EOT &&
+	[resource]
+	exclude = "$(hostname -s)"
+	EOT
+	test_must_fail flux start -s2 -o,--config-path=exclude2.toml \
+	    /bin/true 2>exclude2.err &&
+	grep "R is unavailable" exclude2.err
+'
 
 test_done
