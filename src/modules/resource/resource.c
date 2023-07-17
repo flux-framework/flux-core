@@ -116,7 +116,8 @@ static int parse_config (struct resource_ctx *ctx,
             return -1;
         }
     }
-    *excludep = exclude;
+    if (excludep)
+        *excludep = exclude;
     if (noverifyp)
         *noverifyp = noverify ? true : false;
     if (norestrictp)
@@ -130,9 +131,7 @@ static int parse_config (struct resource_ctx *ctx,
 
 /* Broker is sending us a new config object because 'flux config reload'
  * was run.  Parse it and respond with human readable errors.
- * If events are posted, block until they complete so that:
- * - any KVS commit errors are captured by 'flux config reload'
- * - tests can look for eventlog entry after running 'flux config reload'
+ * At the moment this doesn't do much - just cache the new config.
  */
 static void config_reload_cb (flux_t *h,
                               flux_msg_handler_t *mh,
@@ -141,33 +140,14 @@ static void config_reload_cb (flux_t *h,
 {
     struct resource_ctx *ctx = arg;
     const flux_conf_t *conf;
-    const char *exclude;
     flux_error_t error;
     const char *errstr = NULL;
 
     if (flux_conf_reload_decode (msg, &conf) < 0)
         goto error;
-    if (parse_config (ctx,
-                      conf,
-                      &exclude,
-                      NULL,
-                      NULL,
-                      NULL,
-                      &error) < 0) {
+    if (parse_config (ctx, conf, NULL, NULL, NULL, NULL, &error) < 0) {
         errstr = error.text;
         goto error;
-    }
-    if (ctx->rank == 0) {
-        if (exclude_update (ctx->exclude,
-                            exclude,
-                            &error) < 0) {
-            errstr = error.text;
-            goto error;
-        }
-        if (reslog_sync (ctx->reslog) < 0) {
-            errstr = "error posting to eventlog for reconfig";
-            goto error;
-        }
     }
     if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
         errstr = "error updating cached configuration";

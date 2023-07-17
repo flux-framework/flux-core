@@ -8,9 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* exclude.c - maintain a list of exec targets excluded from scheduling
- *
- * Post exclude/unexclude event when configured exclusion set changes.
+/* exclude.c - get static list of exec targets excluded from scheduling
  *
  * Caveats:
  * - There is no way to exclude at a finer granularity than execution target
@@ -41,74 +39,6 @@ struct exclude {
 const struct idset *exclude_get (struct exclude *exclude)
 {
     return exclude->idset;
-}
-
-/* Update exclusion set and post event.
- */
-int exclude_update (struct exclude *exclude,
-                    const char *s,
-                    flux_error_t *errp)
-{
-    flux_t *h = exclude->ctx->h;
-    struct idset *idset = NULL;
-    struct idset *add;
-    struct idset *del;
-
-    if (s) {
-        if (!(idset = inventory_targets_to_ranks (exclude->ctx->inventory,
-                                                  s,
-                                                  errp)))
-            return -1;
-        if (idset_count (idset) > 0
-            && idset_last (idset) >= exclude->ctx->size) {
-            errprintf (errp, "exclusion idset is out of range");
-            idset_destroy (idset);
-            errno = EINVAL;
-            return -1;
-        }
-    }
-    if (rutil_idset_diff (exclude->idset, idset, &add, &del) < 0) {
-        errprintf (errp, "error analyzing exclusion set update");
-        idset_destroy (idset);
-        return -1;
-    }
-    if (add) {
-        char *add_s = idset_encode (add, IDSET_FLAG_RANGE);
-        if (!add_s || reslog_post_pack (exclude->ctx->reslog,
-                                        NULL,
-                                        0.,
-                                        "exclude",
-                                        "{s:s}",
-                                        "idset",
-                                        add_s) < 0) {
-            flux_log_error (h, "error posting exclude event");
-        }
-        /*  Added exclude ranks can no longer be drained:
-         */
-        if (undrain_ranks (exclude->ctx->drain, add) < 0)
-            flux_log_error (h,
-                            "exclude: failed to undrain ranks in %s",
-                            add_s);
-        free (add_s);
-        idset_destroy (add);
-    }
-    if (del) {
-        char *del_s = idset_encode (del, IDSET_FLAG_RANGE);
-        if (!del_s || reslog_post_pack (exclude->ctx->reslog,
-                                        NULL,
-                                        0.,
-                                        "unexclude",
-                                        "{s:s}",
-                                        "idset",
-                                        del_s) < 0) {
-            flux_log_error (h, "error posting unexclude event");
-        }
-        free (del_s);
-        idset_destroy (del);
-    }
-    idset_destroy (exclude->idset);
-    exclude->idset = idset;
-    return 0;
 }
 
 void exclude_destroy (struct exclude *exclude)

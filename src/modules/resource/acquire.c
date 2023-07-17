@@ -350,7 +350,6 @@ static void reslog_cb (struct reslog *reslog, const char *name, void *arg)
             }
         }
         else if (streq (name, "online") || streq (name, "offline")
-                || streq (name, "exclude") || streq (name, "unexclude")
                 || streq (name, "drain") || streq (name, "undrain")) {
             if (ar->response_count > 0) {
                 struct idset *up, *dn;
