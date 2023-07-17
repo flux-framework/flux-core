@@ -307,8 +307,7 @@ EXTRA_DIST= \
 	marshall \
 	batch \
 	job-manager/dumps \
-	flux-resource \
-	resource/get-xml-test.py
+	flux-resource
 
 dist_check_SCRIPTS = \
 	$(TESTSCRIPTS) \
