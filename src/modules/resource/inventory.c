@@ -206,24 +206,25 @@ struct idset *inventory_targets_to_ranks (struct inventory *inv,
                                           const char *targets,
                                           flux_error_t *errp)
 {
-    struct idset *ids;
+    struct idset *ids = NULL;
 
-    if (!inv->R) {
-        errno = ENOENT;
-        return NULL;
-    }
     if (!(ids = idset_decode (targets))) {
         /*  Not a valid idset, maybe an RFC29 Hostlist
          */
         flux_error_t err;
-        struct rlist *rl = rlist_from_json (inv->R, NULL);
-        ids = rlist_hosts_to_ranks (rl, targets, &err);
-        rlist_destroy (rl);
-        if (!ids) {
-            errprintf (errp, "invalid targets: %s", err.text);
+        struct rlist *rl;
+        if (!inv->R || !(rl = rlist_from_json (inv->R, NULL))) {
+            errprintf (errp, "R is unavailable for mapping hostnames to ranks");
             errno = EINVAL;
             return NULL;
         }
+        if (!(ids = rlist_hosts_to_ranks (rl, targets, &err))) {
+            errprintf (errp, "invalid targets: %s", err.text);
+            rlist_destroy (rl);
+            errno = EINVAL;
+            return NULL;
+        }
+        rlist_destroy (rl);
     }
     return ids;
 }
