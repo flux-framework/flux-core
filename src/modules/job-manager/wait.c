@@ -89,17 +89,17 @@ static int decode_job_result (struct job *job,
      */
     if (streq (name, "exception")) {
         const char *type;
-        const char *note = NULL;
+        const char *note;
 
         if (json_unpack (context,
-                         "{s:s s?s}",
+                         "{s:s s:s}",
                          "type", &type,
                          "note", &note) < 0)
             return -1;
         errprintf (errp,
                    "Fatal exception type=%s %s",
                    type,
-                   note ? note : "");
+                   note);
         *success = false;
     }
     /* Shells exited - set errbuf=decoded status byte,
