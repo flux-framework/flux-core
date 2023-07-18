@@ -71,6 +71,9 @@ norestrict
    when the Flux system instance is constrained to a subset of cores,
    but jobs run within this instance should have access to all cores.
 
+noverify
+   (optional) If true, disable the draining of nodes when there is a
+   discrepancy between configured resources and HWLOC-probed resources.
 
 EXAMPLE
 =======
