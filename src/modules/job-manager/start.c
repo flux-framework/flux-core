@@ -43,7 +43,7 @@
  *             data: {"ranks":s "final":b}
  *
  * "exception" - raise an exception (0 is fatal)
- *               data: {"severity":i "type":s "note"?:s}
+ *               data: {"severity":i "type":s "note":s}
  *
  * "finish" - data: {"status":i}
  *
@@ -272,7 +272,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "type", xtype,
                                  "severity", xseverity,
                                  "userid", (json_int_t) FLUX_USERID_UNKNOWN,
-                                 "note", xnote ? xnote : "")  < 0)
+                                 "note", xnote)  < 0)
             goto error_post;
     }
     else if (streq (type, "finish")) {
