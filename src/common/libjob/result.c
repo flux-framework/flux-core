@@ -112,10 +112,10 @@ static int job_result_handle_exception (json_t *res,
 {
     json_t *type;
     json_t *severity;
-    json_t *note = NULL;
+    json_t *note;
 
     if (json_unpack (context,
-                     "{s:o s:o s?o}",
+                     "{s:o s:o s:o}",
                      "type", &type,
                      "severity", &severity,
                      "note", &note) < 0) {
