@@ -174,9 +174,13 @@ test_expect_success 'no nodes remain drained after restart' '
 test_expect_success 'drain one node' '
 	flux resource drain 0 testing
 '
-
-test_expect_success 'exclude one node via configuration' '
-	echo "resource.exclude = \"0\"" | flux config load
+test_expect_success 'reload resource module with one node excluded' '
+	flux module remove sched-simple &&
+	flux module remove resource &&
+	echo "resource.exclude = \"0\"" | flux config load &&
+	flux module load resource &&
+	waitdown 0 &&
+	flux module load sched-simple
 '
 
 test_expect_success 'excluded node is no longer drained' '
@@ -194,9 +198,16 @@ test_expect_success 'drain of idset with excluded and drained nodes fails' '
 	grep "drained or excluded" multi.err
 '
 
-test_expect_success 'undrain/unexclude ranks' '
-	flux resource undrain 1 &&
-	echo "resource.exclude = \"\"" | flux config load
+test_expect_success 'undrain ranks' '
+	flux resource undrain 1
+'
+test_expect_success 'reload resource module with no nodes excluded' '
+	flux module remove sched-simple &&
+	flux module remove resource &&
+	echo "resource.exclude = \"\"" | flux config load &&
+	flux module load resource &&
+	waitdown 0 &&
+	flux module load sched-simple
 '
 
 test_expect_success 'no nodes remain drained or excluded' '
@@ -217,17 +228,18 @@ test_expect_success 'drained rank subsequently excluded is ignored' '
 	flux resource list
 '
 
-test_expect_success 'unexclude ranks' '
-	echo "resource.exclude = \"\"" | flux config load
+test_expect_success 'reload resource module with no nodes excluded' '
+	flux module remove sched-simple &&
+	flux module remove resource &&
+	echo "resource.exclude = \"\"" | flux config load &&
+	flux module load resource &&
+	waitdown 0 &&
+	flux module load sched-simple
 '
 
 test_expect_success 'no nodes remain drained or excluded' '
 	test $(flux resource status -s drain -no {nnodes}) -eq 0 &&
 	test $(flux resource status -s exclude -no {nnodes}) -eq 0
-'
-
-test_expect_success 'reload scheduler so it seems all ranks' '
-	flux module reload sched-simple
 '
 
 test_expect_success 'undrain fails if rank not drained' '

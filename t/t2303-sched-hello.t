@@ -16,7 +16,8 @@ test_expect_success 'start a long-running job' '
 	jobid=$(flux submit -n1 -t1h sleep 3600)
 '
 test_expect_success 'unload scheduler' '
-	flux module remove sched-simple
+	flux module remove sched-simple &&
+	flux module remove resource
 '
 test_expect_success 'exclude the job node from configuration' '
 	flux config load <<-EOT
@@ -28,6 +29,7 @@ test_expect_success 'increase broker stderr log level' '
 	flux setattr log-stderr-level 6
 '
 test_expect_success 'load scheduler' '
+	flux module load resource &&
 	flux module load sched-simple
 '
 test_expect_success 'job receives exception' '

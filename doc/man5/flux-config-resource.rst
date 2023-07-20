@@ -57,10 +57,6 @@ config
 exclude
    (optional) A string value that defines one or more nodes to withhold
    from scheduling, either in RFC 22 idset form, or in RFC 29 hostlist form.
-   This value may be changed on a live system by reloading the configuration
-   on the rank 0 broker.  A newly excluded node will appear as "down" to
-   the scheduler, but will still be used to determine satisfiability of job
-   requests until the instance is restarted.
 
    If a drained node is subsequently excluded, the drain state of the node
    is cleared since nodes cannot be both excluded and drained.
@@ -71,6 +67,12 @@ norestrict
    when the Flux system instance is constrained to a subset of cores,
    but jobs run within this instance should have access to all cores.
 
+noverify
+   (optional) If true, disable the draining of nodes when there is a
+   discrepancy between configured resources and HWLOC-probed resources.
+
+Note that updates to the resource table are ignored until the next Flux
+restart.
 
 EXAMPLE
 =======
