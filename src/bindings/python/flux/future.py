@@ -46,6 +46,14 @@ def continuation_callback(c_future, opaque_handle):
         flux_handle = py_future.get_flux()
         type(flux_handle).set_exception(exc)
         flux_handle.reactor_stop_error()
+        #
+        # Reset this future so it doesn't immediately call the callback
+        # again (and fail) if the reactor is restarted. (and bypass
+        # future.reset() to avoid unnecessarily incrementing _THEN_HANDLES
+        # count).
+        #
+        py_future.pimpl.reset()
+        py_future.stop()
 
     finally:
         if py_future in _THEN_HANDLES:
