@@ -124,7 +124,12 @@ class Flux(Wrapper):
         The exception is raised ``from None`` to preserve the original
         stack trace.
         """
-        if cls.tls.exception is not None:
+        #  Note: for unknown reason, an AttributeError is occasionally raised
+        #  here: '_thread._local' object has no attribute 'exception'
+        #  This should not be possible since the attribute is initialized
+        #  in the class, but workaround it anyway through use of getattr():
+        #
+        if getattr(cls.tls, "exception", None) is not None:
             raise cls.set_exception(None) from None
 
     # pylint: disable=no-self-use
@@ -286,8 +291,7 @@ class Flux(Wrapper):
         #
         if threading.current_thread() != threading.main_thread():
             rc = self.flux_reactor_run(reactor, flags)
-            if rc < 0:
-                Flux.raise_if_exception()
+            Flux.raise_if_exception()
             return rc
 
         reactor_interrupted = False
@@ -312,8 +316,7 @@ class Flux(Wrapper):
                 self.reactor_active_incref(reactor)
             if reactor_interrupted:
                 raise KeyboardInterrupt
-            if rc < 0:
-                Flux.raise_if_exception()
+            Flux.raise_if_exception()
 
         # If rc > 0, we need to subtract our added SIGINT watcher, which
         # will now be destroyed since it has left scope

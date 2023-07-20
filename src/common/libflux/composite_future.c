@@ -356,6 +356,12 @@ static void chained_continuation (flux_future_t *prev, void *arg)
         ran_callback = true;
     }
 
+    /*  Check if prev future was reset. If so return and allow this
+     *   continuation to run again.
+     */
+    if (!flux_future_is_ready (prev))
+        return;
+
     /*  If future prev was not continued with flux_future_continue()
      *   or flux_future_continue_error(), then fallback to continue
      *   cf->next using prev directly.

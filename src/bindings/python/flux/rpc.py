@@ -68,7 +68,11 @@ class RPC(Future):
     @interruptible
     def get_str(self):
         payload_str = ffi.new("char *[1]")
-        self.pimpl.flux_rpc_get(payload_str)
+        try:
+            self.pimpl.flux_rpc_get(payload_str)
+        except OSError:
+            self.raise_if_handle_exception()
+            raise
         if payload_str[0] == ffi.NULL:
             return None
         return ffi.string(payload_str[0]).decode("utf-8")

@@ -8,3 +8,6 @@ extern "Python" void signal_handler_wrapper(flux_reactor_t *, flux_watcher_t *, 
 
 //flux_continuation_f
 extern "Python" void continuation_callback(flux_future_t *, void *);
+
+//flux_future_init_f
+extern "Python" void init_callback(flux_future_t *, void *);

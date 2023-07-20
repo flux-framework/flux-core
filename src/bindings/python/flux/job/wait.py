@@ -112,8 +112,12 @@ class JobResultFuture(Future):
         Return the underlying "result" payload from ``flux_job_result(3)``
         as a dictionary.
         """
-        result_str = ffi.new("char *[1]")
-        RAW.result_get(self.handle, result_str)
+        try:
+            result_str = ffi.new("char *[1]")
+            RAW.result_get(self.handle, result_str)
+        except OSError:
+            self.raise_if_handle_exception()
+            raise
         if result_str[0] == ffi.NULL:
             return None
         return json.loads(ffi.string(result_str[0]).decode("utf-8"))
