@@ -46,14 +46,32 @@ def continuation_callback(c_future, opaque_handle):
         flux_handle = py_future.get_flux()
         type(flux_handle).set_exception(exc)
         flux_handle.reactor_stop_error()
+        #
+        # Reset this future so it doesn't immediately call the callback
+        # again (and fail) if the reactor is restarted. (and bypass
+        # future.reset() to avoid unnecessarily incrementing _THEN_HANDLES
+        # count).
+        #
+        py_future.pimpl.reset()
+        py_future.stop()
 
     finally:
-        _THEN_HANDLES[py_future] -= 1
-        if _THEN_HANDLES[py_future] <= 0:
-            # allow future object to be garbage collected now that all
-            # registered callbacks have completed
-            py_future.cb_handle = None
-            del _THEN_HANDLES[py_future]
+        if py_future in _THEN_HANDLES:
+            _THEN_HANDLES[py_future] -= 1
+            if _THEN_HANDLES[py_future] <= 0:
+                #
+                #  Note, a multiply fulfilled future which is not reset
+                #  before leaving the then_cb() will end up here, since a
+                #  call to reset() is the only thing that increments the
+                #  _THEN_HANDLES counter. If py_future.cb_handle is set
+                #  to None at this point, then the handle could be garbage
+                #  collected immediately. If the Future is not also collected,
+                #  then continuation_callback() might be called again with
+                #  the same cb_handle, which is now invalid, and Python will
+                #  abort. Therefore, leave cb_handle defined for the
+                #  lifetime of the Future.
+                #
+                del _THEN_HANDLES[py_future]
 
 
 @ffi.def_extern()
@@ -191,7 +209,7 @@ class Future(WrapperPimpl):
     def reset(self):
         self.pimpl.reset()
 
-        if self.cb_handle is not None:
+        if self in _THEN_HANDLES:
             # ensure that this future object is not garbage collected with a
             # callback outstanding. Particularly important for streaming RPCs.
             _THEN_HANDLES[self] += 1
