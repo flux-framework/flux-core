@@ -58,8 +58,8 @@ test_expect_success 'flux alloc --bg option works' '
 	flux job wait-event $jobid clean
 '
 test_expect_success 'flux alloc --bg option works with a command' '
-	jobid=$(flux alloc -n1 -v --bg /bin/true) &&
-	flux job wait-event -t 180 -v $jobid finish &&
+	jobid=$(flux alloc -n1 -v --bg true) &&
+	flux job wait-event -t15 -v $jobid finish &&
 	flux job attach $jobid
 '
 test_expect_success 'flux alloc --bg fails if broker fails' '

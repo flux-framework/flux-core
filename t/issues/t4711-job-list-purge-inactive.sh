@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 prejob=$(flux job stats | jq .job_states.run)
 

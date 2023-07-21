@@ -29,18 +29,21 @@ fi
 test_under_flux 1 full
 
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
+true=$(which true)
+false=$(which false)
+sleep=$(which sleep)
 
 test_expect_success 'run process under systemd and wait till exits (success)' '
         ${SHARNESS_TEST_DIRECTORY}/sdprocess/sim-broker \
             run-wait-exit --unitname=simtest-success \
-            /bin/true >run-wait-exitA.out 2>&1 &&
+            $true >run-wait-exitA.out 2>&1 &&
         grep simtest-success run-wait-exitA.out | grep exited | grep "status=0"
 '
 
 test_expect_success 'run process under systemd and wait till exits (failure)' '
         ${SHARNESS_TEST_DIRECTORY}/sdprocess/sim-broker \
             run-wait-exit --unitname=simtest-failure \
-            /bin/false >run-wait-exitB.out 2>&1 &&
+            $false >run-wait-exitB.out 2>&1 &&
         grep simtest-failure run-wait-exitB.out | grep exited | grep "status=1"
 '
 
@@ -48,7 +51,7 @@ test_expect_success 'run process under systemd and wait till exits (failure)' '
 test_expect_success NO_CHAIN_LINT 'run process under systemd and wait till exits (signal)' '
         ${SHARNESS_TEST_DIRECTORY}/sdprocess/sim-broker \
             run-wait-exit --unitname=simtest-signal \
-            /usr/bin/sleep 30 >run-wait-exitC.out 2>&1 &
+            $sleep 30 >run-wait-exitC.out 2>&1 &
         $waitfile --count=1 --timeout=10 --pattern=active run-wait-exitC.out &&
         systemctl kill --user simtest-signal.service &&
         $waitfile --count=1 --timeout=10 --pattern=exited run-wait-exitC.out &&
@@ -103,7 +106,7 @@ test_expect_success NO_CHAIN_LINT 'attach to running process and wait for exit (
 test_expect_success 'run process under systemd and let it keep running (failure)' '
         ${SHARNESS_TEST_DIRECTORY}/sdprocess/sim-broker \
             run --unitname=simtest-reattach-run-failure \
-            /usr/bin/sleep 60 >runH.out 2>&1 &&
+            $sleep 60 >runH.out 2>&1 &&
         grep simtest-reattach-run-failure runH.out | grep active &&
         systemctl list-units --user | grep simtest-reattach-run-failure | grep active
 '
@@ -122,7 +125,7 @@ test_expect_success NO_CHAIN_LINT 'attach to running process and wait for exit (
 test_expect_success 'attach to process that finished (success)' '
         ${SHARNESS_TEST_DIRECTORY}/sdprocess/sim-broker \
             run-wait-exit --unitname=simtest-reattach-exit-success --no-cleanup \
-            /bin/true >run-wait-exitJ.out 2>&1 &&
+            $true >run-wait-exitJ.out 2>&1 &&
         grep simtest-reattach-exit-success run-wait-exitJ.out \
             | grep exited | grep "status=0"
         ${SHARNESS_TEST_DIRECTORY}/sdprocess/sim-broker \
@@ -133,7 +136,7 @@ test_expect_success 'attach to process that finished (success)' '
 test_expect_success 'attach to process that finished (failure)' '
         ${SHARNESS_TEST_DIRECTORY}/sdprocess/sim-broker \
             run-wait-exit --unitname=simtest-reattach-exit-failure --no-cleanup \
-            /bin/false >run-wait-exitK.out 2>&1 &&
+            $false >run-wait-exitK.out 2>&1 &&
         grep simtest-reattach-exit-failure run-wait-exitK.out \
             | grep exited | grep "status=0"
         ${SHARNESS_TEST_DIRECTORY}/sdprocess/sim-broker \
@@ -145,7 +148,7 @@ test_expect_success 'attach to process that finished (failure)' '
 test_expect_success NO_CHAIN_LINT 'attach to process that finished (signal)' '
         ${SHARNESS_TEST_DIRECTORY}/sdprocess/sim-broker \
             run-wait-exit --unitname=simtest-reattach-exit-signal --no-cleanup \
-            /usr/bin/sleep 30 >run-wait-exitL.out 2>&1 &
+            $sleep 30 >run-wait-exitL.out 2>&1 &
         $waitfile --count=1 --timeout=10 --pattern=active run-wait-exitL.out &&
         systemctl kill --user simtest-reattach-exit-signal.service &&
         $waitfile --count=1 --timeout=10 --pattern=exited run-wait-exitL.out &&

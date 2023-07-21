@@ -158,7 +158,7 @@ static void test_protocol (void)
     f = flux_rpc_pack (h, "terminus.new",
                        0, 0,
                       "{s:s}",
-                      "cmd", "/bin/bash");
+                      "cmd", "bash");
     ok (f != NULL,
         "terminus.new: invalid proto");
     errno = 0;
@@ -198,11 +198,10 @@ static void test_protocol (void)
     f = flux_rpc_pack (h,
                        "terminus.new",
                         0, 0,
-                        "{s:s s:[ss] s:{s:s s:s}}",
+                        "{s:s s:[ss] s:{ s:s}}",
                         "name", "test-name",
                         "cmd", "sleep", "1000",
                         "environ",
-                           "PATH", "/bin:/usr/bin",
                            "HOME", "/home/user1");
     ok (f != NULL,
         "terminus.new: full args");

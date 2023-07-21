@@ -29,7 +29,7 @@ if len(sys.argv) == 3:
 # Open connection to broker
 h = flux.Flux()
 
-jobspec = JobspecV1.from_command(["/bin/true"])
+jobspec = JobspecV1.from_command(["true"])
 done = 0
 running = 0
 

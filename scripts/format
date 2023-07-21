@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if command -v black 2>&1 > /dev/null ; then
     # awk cmd copied from:

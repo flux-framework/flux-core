@@ -38,26 +38,26 @@ test_expect_success 'broker.quorum can be set on the command line' '
 
 test_expect_success 'broker fails with malformed broker.quorum' '
 	test_must_fail flux start ${ARGS} \
-		-o,-Sbroker.quorum=9-10 /bin/true 2>qmalformed.err &&
+		-o,-Sbroker.quorum="badids" true 2>qmalformed.err &&
 	grep "Error parsing broker.quorum attribute" qmalformed.err
 '
 
 test_expect_success 'broker fails with broker.quorum that exceeds size' '
 	test_must_fail flux start ${ARGS} \
-		-o,-Sbroker.quorum=99 /bin/true 2>qtoobig.err &&
+		-o,-Sbroker.quorum=99 true 2>qtoobig.err &&
 	grep "Error parsing broker.quorum attribute" qtoobig.err
 '
 test_expect_success 'broker.quorum can be 0 for compatibility' '
-	flux start ${ARGS} -o,-Sbroker.quorum=0 /bin/true 2>compat1.err &&
+	flux start ${ARGS} -o,-Sbroker.quorum=0 true 2>compat1.err &&
 	grep assuming compat1.err
 '
 test_expect_success 'broker.quorum can be 0-1 (size=2) for compatibility' '
-	flux start -s2 ${ARGS} -o,-Sbroker.quorum=0-1 /bin/true 2>compat2.err &&
+	flux start -s2 ${ARGS} -o,-Sbroker.quorum=0-1 true 2>compat2.err &&
 	grep assuming compat2.err
 '
 test_expect_success 'create rc1 that blocks on FIFO for rank != 0' '
 	cat <<-EOT >rc1_block &&
-	#!/bin/bash
+	#!/usr/bin/env bash
 	rank=\$(flux getattr rank)
 	test \$rank -eq 0 || cat fifo
 	EOT
@@ -66,7 +66,7 @@ test_expect_success 'create rc1 that blocks on FIFO for rank != 0' '
 
 test_expect_success 'create rc2 that unblocks FIFO' '
 	cat <<-EOT >rc2_unblock &&
-	#!/bin/bash
+	#!/usr/bin/env bash
 	${GROUPSCMD} get broker.online
 	echo UNBLOCKED! >>fifo
 	EOT
@@ -105,7 +105,7 @@ test_expect_success 'monitor streaming RPC works' '
 
 test_expect_success 'create rc script that prints current state' '
 	cat <<-EOT >rc_getstate &&
-	#!/bin/bash
+	#!/usr/bin/env bash
 	$RPC state-machine.monitor </dev/null | jq -cea .state >rc.out
 	EOT
 	chmod +x rc_getstate
@@ -116,7 +116,7 @@ test_expect_success 'monitor reports INIT(2) in rc1' '
 	flux start \
 		-o,-Sbroker.rc1_path=$(pwd)/rc_getstate \
 		-o,-Sbroker.rc3_path= \
-		/bin/true &&
+		true &&
 	test_cmp rc1.exp rc.out
 '
 
@@ -143,12 +143,12 @@ test_expect_success 'monitor reports FINALIZE(7) in rc3' '
 	flux start \
 		-o,-Sbroker.rc1_path= \
 		-o,-Sbroker.rc3_path=$(pwd)/rc_getstate \
-		/bin/true &&
+		true &&
 	test_cmp rc3.exp rc.out
 '
 
 test_expect_success 'capture state transitions from size=1 instance' '
-	flux start ${ARGS} -o,-Slog-filename=states.log /bin/true
+	flux start ${ARGS} -o,-Slog-filename=states.log true
 '
 
 test_expect_success 'all expected events and state transitions occurred' '
@@ -165,7 +165,7 @@ test_expect_success 'all expected events and state transitions occurred' '
 
 test_expect_success 'capture state transitions from size=2 instance' '
 	flux start ${ARGS} --test-size=2 -o,-Slog-stderr-level=6 \
-		/bin/true 2>states2.log
+		true 2>states2.log
 '
 
 test_expect_success 'all expected events and state transitions occurred on rank 0' '
@@ -195,9 +195,9 @@ test_expect_success 'all expected events and state transitions occurred on rank 
 test_expect_success 'capture state transitions from instance with rc1 failure' '
 	test_expect_code 1 flux start \
 	    -o,-Slog-filename=states_rc1.log \
-	    -o,-Sbroker.rc1_path=/bin/false \
+	    -o,-Sbroker.rc1_path=false \
 	    -o,-Sbroker.rc3_path= \
-	    /bin/true
+	    true
 '
 
 test_expect_success 'all expected events and state transitions occurred' '
@@ -213,7 +213,7 @@ test_expect_success 'capture state transitions from instance with rc2 failure' '
 	test_expect_code 1 flux start \
 	    -o,-Slog-filename=states_rc2.log \
 	    ${ARGS} \
-	    /bin/false
+	    false
 '
 
 test_expect_success 'all expected events and state transitions occurred' '
@@ -232,8 +232,8 @@ test_expect_success 'capture state transitions from instance with rc3 failure' '
 	test_expect_code 1 flux start \
 	    -o,-Slog-filename=states_rc3.log \
 	    -o,-Sbroker.rc1_path= \
-	    -o,-Sbroker.rc3_path=/bin/false \
-	    /bin/true
+	    -o,-Sbroker.rc3_path=false \
+	    true
 '
 
 test_expect_success 'all expected events and state transitions occurred' '
@@ -251,24 +251,24 @@ test_expect_success 'all expected events and state transitions occurred' '
 test_expect_success 'instance rc1 failure exits with norestart code' '
 	test_expect_code 99 flux start \
 	    -o,-Sbroker.exit-norestart=99 \
-	    -o,-Sbroker.rc1_path=/bin/false \
+	    -o,-Sbroker.rc1_path=false \
 	    -o,-Sbroker.rc3_path= \
-	    /bin/true
+	    true
 '
 
 test_expect_success 'broker.quorum-timeout=none is accepted' '
-	flux start ${ARGS} -o,-Sbroker.quorum-timeout=none /bin/true
+	flux start ${ARGS} -o,-Sbroker.quorum-timeout=none true
 '
 
 test_expect_success 'broker.quorum-timeout=3h is accepted' '
-	flux start ${ARGS} -o,-Sbroker.quorum-timeout=3h /bin/true
+	flux start ${ARGS} -o,-Sbroker.quorum-timeout=3h true
 '
 test_expect_success 'broker.quorum-timeout=x fails' '
-	test_must_fail flux start ${ARGS} -o,-Sbroker.quorum-timeout=x /bin/true
+	test_must_fail flux start ${ARGS} -o,-Sbroker.quorum-timeout=x true
 '
 test_expect_success 'create rc1 that sleeps for 2s on rank != 0' '
 	cat <<-EOT >rc1_sleep &&
-	#!/bin/bash
+	#!/usr/bin/env bash
 	rank=\$(flux getattr rank)
 	test \$rank -eq 0 || sleep 2
 	EOT
@@ -278,7 +278,7 @@ test_expect_success 'broker.quorum-timeout works' '
 	flux start -s2 ${ARGS} \
 		-o,-Slog-filename=timeout.log \
 		-o,-Sbroker.rc1_path="$(pwd)/rc1_sleep" \
-		-o,-Sbroker.quorum-timeout=1s /bin/true
+		-o,-Sbroker.quorum-timeout=1s true
 '
 test_expect_success 'logs contain quorum delayed/reached messages' '
 	grep "quorum delayed" timeout.log &&

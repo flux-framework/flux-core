@@ -30,7 +30,7 @@ flux setattr log-stderr-level 1
 
 # Other tests may refer to $(cat inactivejob) for inactive job id
 test_expect_success 'create one inactive job' '
-	flux submit /bin/true >inactivejob &&
+	flux submit true >inactivejob &&
 	flux queue drain
 '
 

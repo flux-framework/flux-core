@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Run all Flux tests as Flux jobs using bulksubmit.
 #  This must be run from the sharness test directory ./t.

@@ -2,7 +2,7 @@
 # flux start of interactive process non-interactively causes error
 
 # create link to shell to thwart broker detection of interactive shell:
-ln -s /bin/bash bash
+ln -s /bin/sh bash
 
 ${SHARNESS_TEST_SRCDIR}/scripts/runpty.py flux start ./bash
 

@@ -28,11 +28,11 @@ else:
 h = flux.Flux()
 
 # Submit njobs test jobs
-jobspec = JobspecV1.from_command(["/bin/true"])
+jobspec = JobspecV1.from_command(["true"])
 jobs = []
 for i in range(njobs):
     jobid = job.submit(h, jobspec, waitable=True)
-    print("submit: {} /bin/true".format(jobid))
+    print("submit: {} true".format(jobid))
     jobs.append(jobid)
 
 # Async wait which we immediately abandon

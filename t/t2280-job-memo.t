@@ -26,7 +26,7 @@ test_expect_success 'memo: error on invalid jobid' '
 	test_expect_code 1 flux job memo f1 foo=bar
 '
 test_expect_success 'memo: create one inactive job' '
-	flux submit /bin/true >inactivejob &&
+	flux submit true >inactivejob &&
 	flux queue drain
 '
 test_expect_success 'memo: submit a running and pending job' '

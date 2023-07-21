@@ -7,8 +7,8 @@ test_description='Test flux job status'
 test_under_flux 2 job
 
 test_expect_success 'status: submit a series of jobs' '
-	zero=$(flux submit /bin/true) &&
-	one=$(flux submit /bin/false) &&
+	zero=$(flux submit true) &&
+	one=$(flux submit false) &&
 	sigint=$(flux submit sh -c "kill -INT \$$") &&
 	shell_sigquit=$(flux submit sh -c "kill -QUIT \$PPID") &&
 	unsatisfiable=$(flux submit -n 1024 hostname) &&

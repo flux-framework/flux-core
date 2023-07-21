@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 flux module remove kvs-watch
 flux module remove kvs

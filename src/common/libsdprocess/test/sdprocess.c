@@ -19,6 +19,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <time.h>
+#include <linux/limits.h>
+
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libsdprocess/sdprocess.h"
@@ -31,10 +33,41 @@
 static struct fluid_generator gen;
 static bool fluid_generator_init = false;
 
+char true_cmd[PATH_MAX];
+char false_cmd[PATH_MAX];
+char sleep_cmd[PATH_MAX];
+char *true_cmdv[] = {true_cmd, NULL};
+char *false_cmdv[] = {false_cmd, NULL};
+char *sleep30_cmdv[] = {sleep_cmd, "30", NULL};
+
 struct state_counts {
     int active_count;
     int exited_count;
 };
+
+// NOTE: sourced from ssh connector
+static char *which (const char *prog, char *buf, size_t size)
+{
+    char *path = getenv ("PATH");
+    char *cpy = path ? strdup (path) : NULL;
+    char *dir, *saveptr = NULL, *a1 = cpy;
+    struct stat sb;
+    char *result = NULL;
+
+    if (cpy) {
+        while ((dir = strtok_r (a1, ":", &saveptr))) {
+            snprintf (buf, size, "%s/%s", dir, prog);
+            if (stat (buf, &sb) == 0 && S_ISREG (sb.st_mode)
+                                     && access (buf, X_OK) == 0) {
+                result = buf;
+                break;
+            }
+            a1 = NULL;
+        }
+    }
+    free (cpy);
+    return result;
+}
 
 static char *get_unitname (const char *prefix)
 {
@@ -147,11 +180,10 @@ static void test_corner_case (void)
 }
 
 static void test_basic (flux_t *h,
-                        char *cmd,
+                        char **cmdv,
                         int expected_exit_status)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { cmd, NULL };
     sdprocess_t *sdp = NULL;
     int ret;
 
@@ -170,6 +202,11 @@ static void test_basic (flux_t *h,
         "sdprocess_wait success");
 
     ret = sdprocess_exit_status (sdp);
+    printf("got: %d\n", ret);
+    char **cmdv2 = cmdv;
+    while(*cmdv2) {
+        printf("cmd: %s\n", *cmdv2++);
+    }
     ok (ret == expected_exit_status,
         "sdprocess_exit_status returns correct exit status");
 
@@ -185,25 +222,24 @@ static void test_basic (flux_t *h,
 
 static void test_success (flux_t *h)
 {
-    test_basic (h, "/bin/true", 0);
+    test_basic (h, true_cmdv, 0);
 }
 
 static void test_failure (flux_t *h)
 {
-    test_basic (h, "/bin/false", 1);
+    test_basic (h, false_cmdv, 1);
 }
 
 static void test_unitname (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/true", NULL };
     sdprocess_t *sdp = NULL;
     const char *unitnameptr;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          true_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -228,7 +264,6 @@ static void test_unitname (flux_t *h)
 static void test_pid (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/sleep", "30", NULL };
     sdprocess_t *sdp = NULL;
     bool active;
     int pid;
@@ -236,7 +271,7 @@ static void test_pid (flux_t *h)
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          sleep30_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -276,7 +311,6 @@ static void test_pid (flux_t *h)
 static void test_duplicate (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/sleep", "30", NULL };
     sdprocess_t *sdp = NULL;
     sdprocess_t *sdp_dup = NULL;
     bool active;
@@ -284,7 +318,7 @@ static void test_duplicate (flux_t *h)
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          sleep30_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -302,7 +336,7 @@ static void test_duplicate (flux_t *h)
 
     sdp_dup = sdprocess_exec (h,
                               unitname,
-                              cmdv,
+                              sleep30_cmdv,
                               NULL,
                               STDIN_FILENO,
                               STDOUT_FILENO,
@@ -325,14 +359,13 @@ static void test_duplicate (flux_t *h)
 static void test_active (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/sleep", "30", NULL };
     sdprocess_t *sdp = NULL;
     bool active;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          sleep30_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -363,14 +396,13 @@ static void test_active (flux_t *h)
 static void test_exited (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/sleep", "30", NULL };
     sdprocess_t *sdp = NULL;
     bool exited;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          sleep30_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -401,13 +433,12 @@ static void test_exited (flux_t *h)
 static void test_exit_status (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/sleep", "30", NULL };
     sdprocess_t *sdp = NULL;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          sleep30_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -438,13 +469,12 @@ static void test_exit_status (flux_t *h)
 static void test_wait_status (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/sleep", "30", NULL };
     sdprocess_t *sdp = NULL;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          sleep30_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -475,13 +505,12 @@ static void test_wait_status (flux_t *h)
 static void test_wait (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/true", NULL };
     sdprocess_t *sdp = NULL;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          true_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -502,13 +531,12 @@ static void test_wait (flux_t *h)
 static void test_wait_after_exited (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/true", NULL };
     sdprocess_t *sdp = NULL;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          true_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -546,14 +574,13 @@ static void count_and_kill_cb (sdprocess_t *sdp,
 static void test_state (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/sleep", "30", NULL };
     sdprocess_t *sdp = NULL;
     struct state_counts counts = {0};
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          sleep30_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -595,14 +622,13 @@ static void count_cb (sdprocess_t *sdp,
 static void test_state_after_exited (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/true", NULL };
     sdprocess_t *sdp = NULL;
     struct state_counts counts = {0};
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          true_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -637,14 +663,13 @@ static void test_state_after_exited (flux_t *h)
 static void test_kill (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/sleep", "30", NULL };
     sdprocess_t *sdp = NULL;
     bool active;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          sleep30_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -683,13 +708,12 @@ static void test_kill (flux_t *h)
 static void test_kill_after_exited_success (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/true", NULL };
     sdprocess_t *sdp = NULL;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          true_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -714,13 +738,12 @@ static void test_kill_after_exited_success (flux_t *h)
 static void test_kill_after_exited_failure (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/false", NULL };
     sdprocess_t *sdp = NULL;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          false_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -745,7 +768,6 @@ static void test_kill_after_exited_failure (flux_t *h)
 static void test_find_unit (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/sleep", "30", NULL };
     sdprocess_t *sdp = NULL;
     sdprocess_t *sdpfind = NULL;
     bool active;
@@ -753,7 +775,7 @@ static void test_find_unit (flux_t *h)
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          sleep30_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -799,7 +821,6 @@ static void test_find_unit_not_exist (flux_t *h)
 static void test_find_unit_state (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/sleep", "30", NULL };
     sdprocess_t *sdp = NULL;
     sdprocess_t *sdpfind = NULL;
     struct state_counts counts = {0};
@@ -808,7 +829,7 @@ static void test_find_unit_state (flux_t *h)
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          sleep30_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -851,11 +872,10 @@ static void test_find_unit_state (flux_t *h)
 }
 
 static void test_find_unit_after_exited (flux_t *h,
-                                         char *cmd,
+                                         char *cmdv[],
                                          int expected_exit_status)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { cmd,  NULL };
     sdprocess_t *sdp = NULL;
     sdprocess_t *sdpfind = NULL;
     int ret;
@@ -900,18 +920,17 @@ static void test_find_unit_after_exited (flux_t *h,
 
 static void test_find_unit_after_exited_success (flux_t *h)
 {
-    test_find_unit_after_exited (h, "/bin/true", 0);
+    test_find_unit_after_exited (h, true_cmdv, 0);
 }
 
 static void test_find_unit_after_exited_failure (flux_t *h)
 {
-    test_find_unit_after_exited (h, "/bin/false", 1);
+    test_find_unit_after_exited (h, false_cmdv, 1);
 }
 
 static void test_find_unit_after_signaled (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/sleep", "30",  NULL };
     sdprocess_t *sdp = NULL;
     sdprocess_t *sdpfind = NULL;
     bool active;
@@ -919,7 +938,7 @@ static void test_find_unit_after_signaled (flux_t *h)
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          sleep30_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -1204,14 +1223,13 @@ static void test_list (flux_t *h)
 {
     char *unitname1 = get_unitname ("libsdprocess-test-listA");
     char *unitname2 = get_unitname ("libsdprocess-test-listB");
-    char *cmdv[] = { "/bin/true", NULL };
     sdprocess_t *sdp1 = NULL;
     sdprocess_t *sdp2 = NULL;
     int ret, count;
 
     sdp1 = sdprocess_exec (h,
                            unitname1,
-                           cmdv,
+                           true_cmdv,
                            NULL,
                            STDIN_FILENO,
                            STDOUT_FILENO,
@@ -1221,7 +1239,7 @@ static void test_list (flux_t *h)
 
     sdp2 = sdprocess_exec (h,
                            unitname2,
-                           cmdv,
+                           true_cmdv,
                            NULL,
                            STDIN_FILENO,
                            STDOUT_FILENO,
@@ -1288,13 +1306,12 @@ static int list_error_cb (flux_t *h,
 static void test_list_error (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/true", NULL };
     sdprocess_t *sdp = NULL;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          true_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -1332,14 +1349,13 @@ static void test_list_early_exit (flux_t *h)
 {
     char *unitname1 = get_unitname ("libsdprocess-test-listA");
     char *unitname2 = get_unitname ("libsdprocess-test-listB");
-    char *cmdv[] = { "/bin/true", NULL };
     sdprocess_t *sdp1 = NULL;
     sdprocess_t *sdp2 = NULL;
     int ret, count;
 
     sdp1 = sdprocess_exec (h,
                            unitname1,
-                           cmdv,
+                           true_cmdv,
                            NULL,
                            STDIN_FILENO,
                            STDOUT_FILENO,
@@ -1349,7 +1365,7 @@ static void test_list_early_exit (flux_t *h)
 
     sdp2 = sdprocess_exec (h,
                            unitname2,
-                           cmdv,
+                           true_cmdv,
                            NULL,
                            STDIN_FILENO,
                            STDOUT_FILENO,
@@ -1435,14 +1451,13 @@ static bool unit_listed (char *unitname)
 static void test_cleanup_success (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/true", NULL };
     sdprocess_t *sdp = NULL;
     bool listed;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          true_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -1478,14 +1493,13 @@ static void test_cleanup_success (flux_t *h)
 static void test_cleanup_failure (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/false", NULL };
     sdprocess_t *sdp = NULL;
     bool listed;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          false_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -1521,14 +1535,13 @@ static void test_cleanup_failure (flux_t *h)
 static void test_cleanup_before_exited (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/sleep", "30", NULL };
     sdprocess_t *sdp = NULL;
     bool active;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          sleep30_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -1563,13 +1576,12 @@ static void test_cleanup_before_exited (flux_t *h)
 static void test_cleanup_success_after_cleanup (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/true", NULL };
     sdprocess_t *sdp = NULL;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          true_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -1601,13 +1613,12 @@ static void test_cleanup_success_after_cleanup (flux_t *h)
 static void test_cleanup_failure_after_cleanup (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
-    char *cmdv[] = { "/bin/false", NULL };
     sdprocess_t *sdp = NULL;
     int ret;
 
     sdp = sdprocess_exec (h,
                           unitname,
-                          cmdv,
+                          false_cmdv,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -1664,6 +1675,15 @@ int main (int argc, char *argv[])
      */
     if (access (xdgenv, R_OK | W_OK) < 0) {
         diag ("cannot access XDG_RUNTIME_DIR");
+        done_testing ();
+    }
+
+    /* initialize paths to true, false and sleep in case they are not in /bin
+     */
+    if (which("true", true_cmd, PATH_MAX) == NULL
+     || which("false", false_cmd, PATH_MAX) == NULL
+     || which("sleep", sleep_cmd, PATH_MAX) == NULL) {
+        diag ("necessary test binary missing, one of true, false or sleep");
         done_testing ();
     }
 

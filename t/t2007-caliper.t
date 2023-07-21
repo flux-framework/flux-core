@@ -17,7 +17,7 @@ if ! flux start --noexec --caliper-profile=thread-trace ; then
 fi
 
 test_expect_success '--caliper-profile works' '
-	flux start --caliper-profile=thread-trace /bin/true
+	flux start --caliper-profile=thread-trace true
 '
 
 CALIPER_OUTPUT=$(echo *.cali)

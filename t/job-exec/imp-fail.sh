@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Mock flux-imp that fails on broker rank 1
 #

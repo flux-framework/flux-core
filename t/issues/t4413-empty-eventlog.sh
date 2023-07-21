@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 # create a fake job eventlog in the KVS, no normal mechanism will
 # create an empty eventlog

@@ -189,7 +189,7 @@ test_expect_success 'restore --no-cache with no backing store fails' '
 '
 test_expect_success 'run a flux instance, preserving content.sqlite' '
 	mkdir test &&
-	flux start -o,-Sstatedir=$(pwd)/test /bin/true
+	flux start -o,-Sstatedir=$(pwd)/test true
 '
 
 reader() {
@@ -224,7 +224,7 @@ test_expect_success 'perform offline garbage collection with dump/restore' '
 
 test_expect_success 'restart flux instance and try to run a job' '
 	flux start -o,-Sstatedir=test \
-		flux run /bin/true
+		flux run true
 '
 
 # Cover --size-limit
@@ -253,7 +253,7 @@ test_expect_success 'rc1 skips blob that exceeds 100M limit' '
 	dd if=/dev/zero of=big/hugeblob bs=1048576 count=120 &&
 	tar cvf bigdump2.tar big &&
 	flux start -o,-Scontent.restore=bigdump2.tar \
-		/bin/true 2>bigdump3.err &&
+		true 2>bigdump3.err &&
 	grep "exceeds" bigdump3.err
 '
 

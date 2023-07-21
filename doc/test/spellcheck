@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if test $man_base_dir; then
     set ${man_base_dir}/man*/*.rst ${man_base_dir}/man*/common/*.rst

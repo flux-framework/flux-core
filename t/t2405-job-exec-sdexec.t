@@ -91,11 +91,11 @@ test_expect_success 'job-exec: simple job takes stdin under systemd' '
         test_cmp stdout.expected stdout.out
 '
 test_expect_success 'job-exec: simple job exits 0 on success' '
-        jobid=$(flux submit /bin/true) &&
+        jobid=$(flux submit true) &&
         test_expect_code 0 flux job status $jobid
 '
 test_expect_success 'job-exec: simple job exits 1 on failure' '
-        jobid=$(flux submit /bin/false) &&
+        jobid=$(flux submit false) &&
         test_expect_code 1 flux job status -vv $jobid
 '
 test_expect_success 'job-exec: simple job exits 127 on bad command' '
@@ -146,7 +146,7 @@ test_expect_success 'job-exec: no cleanup does not cleanup systemd' '
 '
 test_expect_success 'job-exec: shell stdout/err goto eventlog logged by default' '
         cat >testdefaultlog.sh <<-EOF &&
-#!/bin/bash
+#!/bin/sh
 echo "default stdout"
 echo "default stderr" 1>&2
 EOF
@@ -160,7 +160,7 @@ EOF
 '
 test_expect_success 'job-exec: shell stdout/err goto eventlog when configured' '
         cat >testeventloglog.sh <<-EOF &&
-#!/bin/bash
+#!/bin/sh
 echo "eventlog stdout"
 echo "eventlog stderr" 1>&2
 EOF
@@ -179,7 +179,7 @@ EOF
 # go to the guest.exec.eventlog
 test_expect_success 'job-exec: shell stdout/err dont goto eventlog when configured' '
         cat >testsystemdlog.sh <<-EOF &&
-#!/bin/bash
+#!/bin/sh
 echo "systemd stdout"
 echo "systemd stderr" 1>&2
 EOF
@@ -195,7 +195,7 @@ EOF
 '
 test_expect_success 'job-exec: shell stdout/err goto eventlog with bad config' '
         cat >testbadlog.sh <<-EOF &&
-#!/bin/bash
+#!/bin/sh
 echo "bad stdout"
 echo "bad stderr" 1>&2
 EOF

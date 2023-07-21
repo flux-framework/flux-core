@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Build fluxorama image with builddir mounted as /usr/src for testing.
 #

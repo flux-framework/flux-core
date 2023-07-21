@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 #  Post-process testsuite logs and outputs after a failure
 #

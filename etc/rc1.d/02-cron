@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Load crontabs from directory if cron.directory attribute is set
 

@@ -36,7 +36,7 @@ submit_fake_user_instance()
 #   the sleep job to finish.
 #
 test_expect_success 'start a recursive job' '
-	id=$(flux submit flux start /bin/true) &&
+	id=$(flux submit flux start true) &&
 	rid=$(flux submit -n2 \
 		flux start \
 		flux submit --wait --cc=1-2 flux start \

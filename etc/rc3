@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 RANK=$(flux getattr rank)
 exit_rc=0

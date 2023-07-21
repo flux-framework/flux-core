@@ -50,7 +50,6 @@ test_expect_success 'flux-shell: historical batch jobspec still work' '
 	for spec in $SHARNESS_TEST_SRCDIR/batch/jobspec/*.json; do
 		input=$(basename $spec) &&
 		cat $spec |
-		    jq -S ".attributes.system.environment.PATH=\"$PATH\"" |
 		    jq -S ".attributes.system.environment.PYTHONPATH=\"$PYTHONPATH\"" |
 		    jq -S ".attributes.system.environment.HOME=\"$HOME\"" |
 		    jq -S ".attributes.system.cwd=\"$(pwd)\"" \

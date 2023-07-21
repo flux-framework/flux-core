@@ -25,10 +25,10 @@ test_expect_success 'flux-shell: works when no specific rlimit propagated' '
 	test "$(cat ulimit-n.out)" = "123"
 '
 test_expect_success 'flux-shell: nonfatal rlimit errors are logged' '
-	flux run --output=nofile.out --rlimit nofile=inf /bin/true &&
+	flux run --output=nofile.out --rlimit nofile=inf true &&
 	grep "nofile exceeds current max"  nofile.out
 '
 test_expect_success 'flux-shell: invalid rlimit option is fatal error' '
-	test_must_fail flux run -o rlimit.foo=1234 /bin/true
+	test_must_fail flux run -o rlimit.foo=1234 true
 '
 test_done

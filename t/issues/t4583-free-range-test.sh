@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 #
 #  Test that batch/alloc jobs are resilient to leaf not failures
 #
