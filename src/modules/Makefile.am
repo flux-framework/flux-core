@@ -143,10 +143,6 @@ job_exec_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(JANSSON_LIBS)
-if HAVE_LIBSYSTEMD
-job_exec_la_LIBADD += \
-	$(top_builddir)/src/common/libsdprocess/libsdprocess.la
-endif
 job_exec_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 job_info_la_SOURCES = \

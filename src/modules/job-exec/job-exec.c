@@ -107,16 +107,10 @@
 static double kill_timeout=5.0;
 
 extern struct exec_implementation testexec;
-#ifdef HAVE_LIBSYSTEMD
-extern struct exec_implementation sdexec;
-#endif
 extern struct exec_implementation bulkexec;
 
 static struct exec_implementation * implementations[] = {
     &testexec,
-#ifdef HAVE_LIBSYSTEMD
-    &sdexec,
-#endif
     &bulkexec,
     NULL
 };
