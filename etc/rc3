@@ -39,6 +39,7 @@ modrm 0 job-manager
 modrm all job-ingest
 
 modrm 0 cron
+modrm all sdexec
 modrm all sdbus
 modrm all barrier
 

@@ -22,6 +22,8 @@
  * {
  *    "mock_exception":s       - Generate a mock exception in phase:
  *                               "init", or "starting"
+ *    "service":s              - Specify service to use for launching remote
+ *                               subprocesses: "rexec" or "sdexec".
  * }
  *
  */
@@ -34,6 +36,7 @@
 
 #include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "job-exec.h"
 #include "exec_config.h"
@@ -213,6 +216,14 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
                                 hostname,
                                 rank);
         }
+        else if (errnum == ENOSYS) {
+            jobinfo_fatal_error (job,
+                                 0,
+                                 "%s service is not loaded on %s (rank %d)",
+                                 bulk_exec_service_name (exec),
+                                 hostname,
+                                 rank);
+        }
         else {
             jobinfo_fatal_error (job,
                                  errnum,
@@ -279,6 +290,47 @@ static void exit_cb (struct bulk_exec *exec,
     }
 }
 
+static int parse_service_option (json_t *jobspec,
+                                 const char **service,
+                                 flux_error_t *error)
+{
+    const char *s = config_get_exec_service (); // default
+    bool override = config_get_exec_service_override ();
+    json_error_t e;
+
+    if (jobspec) {
+        const char *s2 = NULL;
+        if (json_unpack_ex (jobspec,
+                            &e,
+                            0,
+                            "{s:{s?{s?{s?{s?s}}}}}",
+                            "attributes",   // key is required per RFC 14
+                              "system",     // key is optional per RFC 14
+                                "exec",
+                                  "bulkexec",
+                                    "service", &s2) < 0) {
+            errprintf (error, "error parsing bulkexec.service: %s", e.text);
+            errno = EINVAL;
+            return -1;
+        }
+        if (s2) {
+            if (!override && !streq (s, s2)) {
+                errprintf (error, "exec service override is not permitted");
+                errno = EINVAL;
+                return -1;
+            }
+            s = s2;
+        }
+    }
+    if (!streq (s, "rexec") && !streq (s, "sdexec")) {
+        errprintf (error, "unknown bulkexec.service value: %s", s);
+        errno = EINVAL;
+        return -1;
+    }
+    *service = s;
+    return 0;
+}
+
 static struct bulk_exec_ops exec_ops = {
     .on_start =     start_cb,
     .on_exit =      exit_cb,
@@ -293,6 +345,8 @@ static int exec_init (struct jobinfo *job)
     struct exec_ctx *ctx = NULL;
     struct bulk_exec *exec = NULL;
     const struct idset *ranks = NULL;
+    const char *service;
+    flux_error_t error;
 
     if (job->multiuser && !config_get_imp_path ()) {
         flux_log (job->h,
@@ -305,7 +359,15 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: resource_set_ranks");
         goto err;
     }
-    if (!(exec = bulk_exec_create (&exec_ops, job))) {
+    if (parse_service_option (job->jobspec, &service, &error) < 0) {
+        flux_log (job->h, LOG_ERR, "exec_init: %s" , error.text);
+        goto err;
+    }
+    if (!(exec = bulk_exec_create (&exec_ops,
+                                   service,
+                                   job->id,
+                                   job->multiuser ? "imp-shell" : "shell",
+                                   job))) {
         flux_log_error (job->h, "exec_init: bulk_exec_create");
         goto err;
     }

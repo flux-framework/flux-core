@@ -11,6 +11,7 @@
 #ifndef HAVE_JOB_EXEC_CONFIG_H
 #define HAVE_JOB_EXEC_CONFIG_H 1
 
+#include <stdbool.h>
 #include <flux/core.h>
 
 #include "job-exec.h"
@@ -20,6 +21,10 @@ const char *config_get_job_shell (struct jobinfo *job);
 const char *config_get_cwd (struct jobinfo *job);
 
 const char *config_get_imp_path (void);
+
+const char *config_get_exec_service (void);
+
+bool config_get_exec_service_override (void);
 
 int config_init (flux_t *h, int argc, char **argv);
 

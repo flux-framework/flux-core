@@ -21,7 +21,7 @@ def kill(args):
     h = flux.Flux()
     try:
         h.rpc(
-            "rexec.kill",
+            args.service + ".kill",
             nodeid=args.rank,
             payload={"pid": int(args.pid), "signum": int(args.signum)},
         ).get()
@@ -34,7 +34,7 @@ def ps(args):
     h = flux.Flux()
     try:
         resp = h.rpc(
-            "rexec.list",
+            args.service + ".list",
             nodeid=int(args.rank),
         ).get()
     except OSError as exc:
@@ -67,6 +67,13 @@ def main():
         help="Send RPC to specified broker rank",
         default=flux.constants.FLUX_NODEID_ANY,
     )
+    kill_parser.add_argument(
+        "-s",
+        "--service",
+        type=str,
+        help="Send RPC to specified service (default rexec)",
+        default="rexec",
+    )
     kill_parser.add_argument("signum")
     kill_parser.add_argument("pid")
     kill_parser.set_defaults(func=kill)
@@ -82,6 +89,13 @@ def main():
         type=int,
         help="Send RPC to specified broker rank",
         default=flux.constants.FLUX_NODEID_ANY,
+    )
+    ps_parser.add_argument(
+        "-s",
+        "--service",
+        type=str,
+        help="Send RPC to specified service (default rexec)",
+        default="rexec",
     )
     ps_parser.set_defaults(func=ps)
 

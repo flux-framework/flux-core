@@ -44,6 +44,12 @@ static struct optparse_option cmdopts[] = {
       .usage = "Run with more verbosity." },
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Suppress extraneous output." },
+    { .name = "service", .has_arg = 1, .arginfo = "NAME",
+      .flags = OPTPARSE_OPT_HIDDEN,
+      .usage = "Override service name (default: rexec)." },
+    { .name = "setopt", .has_arg = 1, .arginfo = "NAME=VALUE",
+      .flags = OPTPARSE_OPT_HIDDEN,
+      .usage = "Set subprocess option NAME to VALUE (multiple use ok)" },
     OPTPARSE_TABLE_END
 };
 
@@ -300,6 +306,22 @@ void restore_stdin_flags (void)
     (void)fcntl (STDIN_FILENO, F_SETFL, stdin_flags);
 }
 
+char *split_opt (const char *s, char sep, const char **val)
+{
+    char *cpy = strdup (s);
+    if (!cpy)
+        return NULL;
+    char *cp = strchr (cpy, sep);
+    if (!cp) {
+        free (cpy);
+        errno = EINVAL;
+        return NULL;
+    }
+    *cp++ = '\0';
+    *val = cp;
+    return cpy;
+}
+
 int main (int argc, char *argv[])
 {
     const char *optargp;
@@ -318,6 +340,7 @@ int main (int argc, char *argv[])
         .on_stderr = output_cb,
     };
     struct timespec t0;
+    const char *service_name;
 
     log_init ("flux-exec");
 
@@ -349,6 +372,17 @@ int main (int argc, char *argv[])
     if (!streq (cwd, "none")) {
         if (flux_cmd_setcwd (cmd, cwd) < 0)
             log_err_exit ("flux_cmd_setcwd");
+    }
+    if (optparse_hasopt (opts, "setopt")) {
+        const char *arg;
+        optparse_getopt_iterator_reset (opts, "setopt");
+        while ((arg = optparse_getopt_next (opts, "setopt"))) {
+            const char *value;
+            char *name = split_opt (arg, '=', &value);
+            if (!name || flux_cmd_setopt (cmd, name, value) < 0)
+                log_err_exit ("error handling '%s' option", arg);
+            free (name);
+        }
     }
 
     if (!(h = flux_open (NULL, 0)))
@@ -406,10 +440,18 @@ int main (int argc, char *argv[])
     if (!(exitsets = zhashx_new ()))
         log_err_exit ("zhashx_new()");
 
+    service_name = optparse_get_str (opts, "service", "rexec");
     rank = idset_first (ns);
     while (rank != IDSET_INVALID_ID) {
         flux_subprocess_t *p;
-        if (!(p = flux_rexec (h, rank, 0, cmd, &ops)))
+        if (!(p = flux_rexec_ex (h,
+                                 service_name,
+                                 rank,
+                                 0,
+                                 cmd,
+                                 &ops,
+                                 NULL,
+                                 NULL)))
             log_err_exit ("flux_rexec");
         if (zlist_append (subprocesses, p) < 0)
             log_err_exit ("zlist_append");

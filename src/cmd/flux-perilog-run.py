@@ -80,7 +80,12 @@ def run_per_rank(name, jobid, args):
         )
 
     for rank in ranks:
-        cmd = ["flux", "exec", "-qn", f"-r{rank}"] + per_rank_cmd
+        cmdv = ["flux", "exec", "-qn", f"-r{rank}"]
+        if args.sdexec:
+            cmdv.append("--service=sdexec")
+            cmdv.append(f"--setopt=SDEXEC_NAME={name}-{rank}-{jobid.f58plain}.service")
+            cmdv.append(f"--setopt=SDEXEC_PROP_Description=System {name} script")
+        cmd = cmdv + per_rank_cmd
         processes[rank] = process_create(cmd, stderr=subprocess.PIPE)
 
     for rank in ranks:
@@ -180,6 +185,9 @@ def main():
         "-v", "--verbose", help="Log script events", action="store_true"
     )
     prolog_parser.add_argument(
+        "-s", "--sdexec", help="Use sdexec to run prolog", action="store_true"
+    )
+    prolog_parser.add_argument(
         "-e",
         "--exec-per-rank",
         metavar="CMD[,ARGS...]",
@@ -199,6 +207,9 @@ def main():
     )
     epilog_parser.add_argument(
         "-v", "--verbose", help="Log script events", action="store_true"
+    )
+    epilog_parser.add_argument(
+        "-s", "--sdexec", help="Use sdexec to run epilog", action="store_true"
     )
     epilog_parser.add_argument(
         "-e",

@@ -27,7 +27,8 @@ SUBDIRS = \
 	libccan \
 	libzmqutil \
 	libtaskmap \
-	libfilemap
+	libfilemap \
+	libsdexec
 
 if HAVE_LIBSYSTEMD
 SUBDIRS += libsdprocess

@@ -25,6 +25,7 @@ fi
 modload all barrier
 if test "$(flux config get --default=false systemd.enable)" = "true"; then
     modload all sdbus
+    modload all sdexec
 fi
 
 if test $RANK -eq 0; then
