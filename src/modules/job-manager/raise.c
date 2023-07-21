@@ -76,26 +76,20 @@ int raise_job_exception (struct job_manager *ctx,
     flux_future_t *f;
     json_t *evctx;
 
-    // create exception event context with the required keys per RFC 21
-    if (!(evctx = json_pack ("{s:s s:i}", "type", type, "severity", severity)))
-        goto nomem;
-    // work around flux-framework/flux-core#5314
+    // if no note specified, set to empty string per RFC21
     if (!note)
         note = "";
+    // create exception event context with the required keys per RFC 21
+    if (!(evctx = json_pack ("{s:s s:i s:s}",
+                             "type", type,
+                             "severity", severity,
+                             "note", note)))
+        goto nomem;
     // add optional userid key
     if (userid != FLUX_USERID_UNKNOWN) {
         json_t *val;
         if (!(val = json_integer (userid))
             || json_object_set_new (evctx, "userid", val) < 0) {
-            json_decref (val);
-            goto nomem;
-        }
-    }
-    // add optional note key
-    if (note) {
-        json_t *val;
-        if (!(val = json_string (note))
-            || json_object_set_new (evctx, "note", val) < 0) {
             json_decref (val);
             goto nomem;
         }

@@ -191,7 +191,7 @@ class JobException(Exception):
     def __init__(self, event):
         self.timestamp = event.timestamp
         self.type = event.context["type"]
-        self.note = event.context.get("note", "no explanation given")
+        self.note = event.context["note"]
         self.severity = event.context["severity"]
         super().__init__(self)
 

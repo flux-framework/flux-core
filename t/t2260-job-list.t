@@ -1919,28 +1919,6 @@ EOF
 	flux job list-ids ${jobid} > empty_alloc.out &&
 	cat empty_alloc.out | jq -e ".annotations == null"
 '
-test_expect_success 'job-list can handle events missing optional data (exception)' '
-	userid=`id -u` &&
-	cat <<EOF >eventlog_no_exception_note.out &&
-{"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":16,"flags":0,"version":1}}
-{"timestamp":1001.0,"name":"validate"}
-{"timestamp":1002.0,"name":"depend"}
-{"timestamp":1003.0,"name":"priority","context":{"priority":8}}
-{"timestamp":1004.0,"name":"alloc","context":{"annotations":{"sched":{"resource_summary":"rank0/core0"}}}}
-{"timestamp":1005.0,"name":"start"}
-{"timestamp":1006.0,"name":"exception","context":{"type":"exec","severity":0}}
-{"timestamp":1007.0,"name":"finish","context":{"status":0}}
-{"timestamp":1008.0,"name":"release","context":{"ranks":"all","final":true}}
-{"timestamp":1009.0,"name":"free"}
-{"timestamp":1010.0,"name":"clean"}
-EOF
-	jobid=`flux submit notacommand` &&
-	kvspath=`flux job id --to=kvs ${jobid}` &&
-	flux kvs put -r ${kvspath}.eventlog=- < eventlog_no_exception_note.out &&
-	flux module reload job-list &&
-	flux job list-ids ${jobid} > no_exception_note.out &&
-	cat no_exception_note.out | jq -e ".exception_note == null"
-'
 # N.B. Note the original job was submitted with urgency 16, but we
 # hard code 8 in the fake eventlog.	 This is just to make sure the fake
 # eventlog was loaded correctly at the end of the test.

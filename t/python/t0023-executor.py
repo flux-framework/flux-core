@@ -304,7 +304,7 @@ class TestFluxExecutorThread(unittest.TestCase):
                     {
                         "name": "exception",
                         "timestamp": 0,
-                        "context": {"severity": 1, "type": "foobar"},
+                        "context": {"severity": 1, "type": "foobar", "note": ""},
                     }
                 )
             ),
@@ -317,7 +317,7 @@ class TestFluxExecutorThread(unittest.TestCase):
                     {
                         "name": "exception",
                         "timestamp": 0,
-                        "context": {"severity": 0, "type": "foobar"},
+                        "context": {"severity": 0, "type": "foobar", "note": ""},
                     }
                 )
             ),

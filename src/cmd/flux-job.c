@@ -2550,9 +2550,9 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     if (streq (name, "exception")) {
         const char *type;
         int severity;
-        const char *note = NULL;
+        const char *note;
 
-        if (json_unpack (context, "{s:s s:i s?s}",
+        if (json_unpack (context, "{s:s s:i s:s}",
                          "type", &type,
                          "severity", &severity,
                          "note", &note) < 0)
@@ -2561,7 +2561,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                          timestamp - ctx->timestamp_zero,
                          type,
                          severity,
-                         note ? note : "");
+                         note);
 
         /*  If this job has an interactive pty and the pty is not yet attached,
          *   destroy the pty to avoid a potential hang attempting to connect

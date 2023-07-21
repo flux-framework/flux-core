@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <assert.h>
 #include <flux/core.h>
 
 #include "ccan/array_size/array_size.h"
@@ -88,7 +89,7 @@ static void result_eventlog_error_cb (flux_future_t *f, void *arg)
     if (!(o = json_integer (result))
         || json_object_set_new (res, "result", o) < 0
         || !(s = json_dumps (res, JSON_COMPACT))) {
-        flux_future_continue_error (f, errno, NULL);
+        flux_future_continue_error (f, ENOMEM, NULL);
         goto out;
     }
     flux_future_fulfill_next (f, s, free);
@@ -111,20 +112,18 @@ static int job_result_handle_exception (json_t *res,
 {
     json_t *type;
     json_t *severity;
-    json_t *note = NULL;
-    json_t *exception_occurred = json_object_get (res, "exception_occurred");
-
-    if (!exception_occurred)
-        return -1;
+    json_t *note;
 
     if (json_unpack (context,
-                     "{s:o s:o s?o}",
+                     "{s:o s:o s:o}",
                      "type", &type,
                      "severity", &severity,
-                     "note", &note) < 0)
+                     "note", &note) < 0) {
+        errno = EPROTO;
         return -1;
+    }
 
-    if (json_is_true (exception_occurred)) {
+    if (json_is_true (json_object_get (res, "exception_occurred"))) {
         /* Only overwrite previous exception if the latest
          *  is of greater severity.
          */
@@ -136,8 +135,10 @@ static int job_result_handle_exception (json_t *res,
     if (json_object_set (res, "exception_occurred", json_true ()) < 0
         || json_object_set (res, "exception_type", type) < 0
         || json_object_set (res, "exception_note", note) < 0
-        || json_object_set (res, "exception_severity", severity) < 0)
-            return -1;
+        || json_object_set (res, "exception_severity", severity) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
     return 0;
 }
 
@@ -155,28 +156,38 @@ static void result_eventlog_cb (flux_future_t *f, void *arg)
          */
         goto error;
     }
-    if (!(o = eventlog_entry_decode (entry))
-        || !(timestamp = json_object_get (o, "timestamp"))
-        || eventlog_entry_parse (o, NULL, &name, &context) < 0)
+    if (!(o = eventlog_entry_decode (entry)))
+        goto error;
+    if (!(timestamp = json_object_get (o, "timestamp"))) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
         goto error;
 
     if (streq (name, "submit")) {
         if (json_object_set (res, "t_submit", timestamp) < 0)
-            goto error;
+            goto enomem;
     }
     else if (streq (name, "alloc")) {
         if (json_object_set (res, "t_run", timestamp) < 0)
-            goto error;
+            goto enomem;
     }
     else if (streq (name, "finish")) {
         json_t *wstatus = NULL;
-        if (json_object_set (res, "t_cleanup", timestamp) < 0
-            || !(wstatus = json_object_get (context, "status"))
-            || json_object_set (res, "waitstatus", wstatus) < 0)
+        if (json_object_set (res, "t_cleanup", timestamp) < 0)
+            goto enomem;
+        if (!(wstatus = json_object_get (context, "status"))) {
+            errno = EPROTO;
+            goto error;
+        }
+        if (json_object_set (res, "waitstatus", wstatus) < 0)
+            goto enomem;
+    }
+    else if (streq (name, "exception")) {
+        if (job_result_handle_exception (res, context) < 0)
             goto error;
     }
-    else if (streq (name, "exception"))
-        job_result_handle_exception (res, context);
 
     json_decref (o);
 
@@ -187,6 +198,8 @@ static void result_eventlog_cb (flux_future_t *f, void *arg)
     flux_future_continue (f, NULL);
     flux_future_reset (f);
     return;
+enomem:
+    errno = ENOMEM;
 error:
     flux_future_continue_error (f, errno, NULL);
     flux_future_destroy (f);

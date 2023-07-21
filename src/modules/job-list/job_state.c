@@ -1070,11 +1070,11 @@ static int exception_context_parse (flux_t *h,
 {
     const char *type;
     int severity;
-    const char *note = NULL;
+    const char *note;
 
     if (!context
         || json_unpack (context,
-                        "{s:s s:i s?s}",
+                        "{s:s s:i s:s}",
                         "type", &type,
                         "severity", &severity,
                         "note", &note) < 0) {
