@@ -390,6 +390,7 @@ static void sdproc_destroy (struct sdproc *proc)
 {
     if (proc) {
         int saved_errno = errno;
+        sdexec_channel_destroy (proc->in);
         sdexec_channel_destroy (proc->out);
         sdexec_channel_destroy (proc->err);
         if (proc->f_watch) {
