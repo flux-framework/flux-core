@@ -31,16 +31,6 @@ service-override
    (optional) Allow ``service`` to be overridden on a per-job basis with
    ``--setattr system.exec.bulkexec.service=NAME``.  (Default: ``false``).
 
-method
-   (optional) Run job shell under a specific mechanism other than the default
-   forked subprocesses.  Potential configurations:
-
-   systemd
-
-   Run job shells are run under systemd, the job shell may be able to
-   survive an unexpected broker shutdown and be recovered when the
-   broker is restarted.
-
 job-shell
    (optional) Override the compiled-in default job shell path.
 

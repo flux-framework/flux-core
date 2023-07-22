@@ -336,9 +336,6 @@ AM_CONDITIONAL([HAVE_LIBSYSTEMD],
         [test "$have_libsystemd" = yes -a "$have_sd_bus_h" = yes])
 if test "$have_libsystemd" = yes -a "$have_sd_bus_h" = yes; then
     AC_DEFINE([HAVE_LIBSYSTEMD], [1], [Define if you have libsystemd])
-    AC_CHECK_LIB(systemd, sd_bus_set_method_call_timeout,
-                 AC_DEFINE([HAVE_SD_BUS_SET_METHOD_CALL_TIMEOUT], [1],
-                           [Define if you have sd_bus_set_method_call_timeout]))
     AC_CHECK_LIB(systemd, sd_bus_message_dump,
                  AC_DEFINE([HAVE_SD_BUS_MESSAGE_DUMP], [1],
                            [Define if you have sd_bus_message_dump]))
@@ -535,7 +532,6 @@ AC_CONFIG_FILES( \
   src/common/libcontent/Makefile \
   src/common/libjob/Makefile \
   src/common/libsubprocess/Makefile \
-  src/common/libsdprocess/Makefile \
   src/common/liboptparse/Makefile \
   src/common/libidset/Makefile \
   src/common/libtomlc99/Makefile \

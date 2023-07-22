@@ -30,9 +30,6 @@ libjob_exec_la_SOURCES = \
 	rset.h \
 	testexec.c \
 	exec.c
-if HAVE_LIBSYSTEMD
-libjob_exec_la_SOURCES += sdexec.c
-endif
 
 libbulk_exec_la_SOURCES = \
 	bulk-exec.h \
