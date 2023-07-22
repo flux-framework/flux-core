@@ -802,7 +802,7 @@ static void list_cb (flux_t *h,
     }
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:o}",
+                           "{s:i s:O}",
                            "rank", ctx->rank,
                            "procs", procs) < 0)
         flux_log_error (h, "error responding to list request");
