@@ -71,10 +71,10 @@ int sdexec_parse_bitmap (const char *s, uint8_t **bp, size_t *sp)
             BITMAP_BYTE (bitmap, id) |= BITMAP_BIT (id);
             id = idset_next (ids, id);
         }
-        idset_destroy (ids);
     }
     *bp = bitmap;
     *sp = BITMAP_NBYTES (nbits);
+    idset_destroy (ids);
     return 0;
 }
 
