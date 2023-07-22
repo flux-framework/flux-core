@@ -390,6 +390,7 @@ static void sdproc_destroy (struct sdproc *proc)
 {
     if (proc) {
         int saved_errno = errno;
+        sdexec_channel_destroy (proc->in);
         sdexec_channel_destroy (proc->out);
         sdexec_channel_destroy (proc->err);
         if (proc->f_watch) {
@@ -801,7 +802,7 @@ static void list_cb (flux_t *h,
     }
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:o}",
+                           "{s:i s:O}",
                            "rank", ctx->rank,
                            "procs", procs) < 0)
         flux_log_error (h, "error responding to list request");

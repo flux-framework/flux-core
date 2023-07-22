@@ -40,11 +40,18 @@ VALGRIND_WORKLOAD=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind-workload.sh
 
 VALGRIND_NBROKERS=${VALGRIND_NBROKERS:-2}
 
+# Allow jobs to run under sdexec in test, if available
+cat >valgrind.toml <<-EOT
+[exec]
+service-override = true
+EOT
+
 test_expect_success \
   "valgrind reports no new errors on $VALGRIND_NBROKERS broker run" '
 	run_timeout 300 \
 	flux start -s ${VALGRIND_NBROKERS} \
 		--test-exit-timeout=120 \
+		-o,--config-path=valgrind.toml \
 		--wrap=libtool,e,${VALGRIND} \
 		--wrap=--tool=memcheck \
 		--wrap=--leak-check=full \
