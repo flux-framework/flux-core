@@ -204,7 +204,10 @@ static int store_attr (struct job *job,
     else if (streq (attr, "dependencies")) {
         if (!job->dependencies)
             return 0;
-        val = json_incref (grudgeset_tojson (job->dependencies));
+        if (job->dependencies_db)
+            val = json_incref (job->dependencies_db);
+        else
+            val = json_incref (grudgeset_tojson (job->dependencies));
     }
     else {
         seterror (errp, "%s is not a valid attribute", attr);
@@ -288,6 +291,38 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_list_error_t *errp)
     ERRNO_SAFE_WRAP (json_decref, o);
     return NULL;
 }
+
+json_t *job_to_json_dbdata (struct job *job, job_list_error_t *errp)
+{
+    json_t *val = NULL;
+    json_t *o;
+
+    memset (errp, 0, sizeof (*errp));
+
+    if (!(o = json_object ()))
+        goto error_nomem;
+    if (!(val = json_integer (job->id)))
+        goto error_nomem;
+    if (json_object_set_new (o, "id", val) < 0) {
+        json_decref (val);
+        goto error_nomem;
+    }
+    if (store_all_attr (job, o, errp) < 0)
+        goto error;
+    if (!(val = json_integer (job->states_mask)))
+        goto error_nomem;
+    if (json_object_set_new (o, "states_mask", val) < 0) {
+        json_decref (val);
+        goto error_nomem;
+    }
+    return o;
+error_nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return NULL;
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

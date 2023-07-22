@@ -31,6 +31,7 @@
 #include "job-list.h"
 #include "job_state.h"
 #include "job_data.h"
+#include "job_db.h"
 #include "idsync.h"
 #include "job_util.h"
 
@@ -497,12 +498,26 @@ static void process_next_state (struct job_state_ctx *jsctx, struct job *job)
             /* FLUX_JOB_STATE_SCHED */
             /* FLUX_JOB_STATE_CLEANUP */
             /* FLUX_JOB_STATE_INACTIVE */
+            bool inactive = false;
 
-            if (st->state == FLUX_JOB_STATE_INACTIVE)
+            if (st->state == FLUX_JOB_STATE_INACTIVE) {
                 eventlog_inactive_complete (job);
+                inactive = true;
+            }
 
             update_job_state_and_list (jsctx, job, st->state, st->timestamp);
             zlist_remove (job->next_states, st);
+
+            if (inactive) {
+                assert (job->state == FLUX_JOB_STATE_INACTIVE);
+
+                /* if no eventlog, assume from restart */
+                if (job->eventlog && jsctx->dbctx) {
+                    if (job_db_store (jsctx->dbctx, job) < 0)
+                        flux_log_error (jsctx->h, "%s: job_db_store",
+                                        __FUNCTION__);
+                }
+            }
         }
     }
 }
@@ -542,6 +557,42 @@ error:
         flux_log_error (h, "error responding to unpause request");
 }
 
+static int store_eventlog_entry (struct job_state_ctx *jsctx,
+                                 struct job *job,
+                                 json_t *entry)
+{
+    char *s = json_dumps (entry, 0);
+    int rv = -1;
+
+    /* entry should have been verified via eventlog_entry_parse()
+     * earlier */
+    assert (s);
+
+    if (!job->eventlog) {
+        job->eventlog_len = strlen (s) + 2; /* +2 for \n and \0 */
+        if (!(job->eventlog = calloc (1, job->eventlog_len))) {
+            flux_log_error (jsctx->h, "calloc");
+            goto error;
+
+        }
+        strcpy (job->eventlog, s);
+        strcat (job->eventlog, "\n");
+    }
+    else {
+        job->eventlog_len += strlen (s) + 1; /* +1 for \n */
+        if (!(job->eventlog = realloc (job->eventlog, job->eventlog_len))) {
+            flux_log_error (jsctx->h, "realloc");
+            goto error;
+        }
+        strcat (job->eventlog, s);
+        strcat (job->eventlog, "\n");
+    }
+    rv = 0;
+error:
+    free (s);
+    return rv;
+}
+
 static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
                                            const char *eventlog,
                                            flux_jobid_t id)
@@ -571,6 +622,9 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
                             __FUNCTION__, idf58 (job->id));
             goto error;
         }
+
+        if (store_eventlog_entry (jsctx, job, value) < 0)
+            goto error;
 
         job->eventlog_seq++;
         if (streq (name, "submit")) {
@@ -930,11 +984,16 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
                                  flux_jobid_t id,
                                  int eventlog_seq,
                                  double timestamp,
+                                 json_t *entry,
                                  json_t *context)
 {
     if (!job) {
         if (!(job = job_create (jsctx->h, id)))
             return -1;
+        if (store_eventlog_entry (jsctx, job, entry) < 0) {
+            job_destroy (job);
+            return -1;
+        }
         if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
             job_destroy (job);
             errno = EEXIST;
@@ -1306,12 +1365,18 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
         return 0;
     }
 
+    if (job && job->eventlog) {
+        if (store_eventlog_entry (jsctx, job, entry) < 0)
+            return -1;
+    }
+
     if (streq (name, "submit")) {
         if (journal_submit_event (jsctx,
                                   job,
                                   id,
                                   eventlog_seq,
                                   timestamp,
+                                  entry,
                                   context) < 0)
             return -1;
     }
@@ -1484,15 +1549,20 @@ error:
     return NULL;
 }
 
-struct job_state_ctx *job_state_create (struct idsync_ctx *isctx)
+struct job_state_ctx *job_state_create (struct job_db_ctx *dbctx,
+                                        struct idsync_ctx *isctx)
 {
     struct job_state_ctx *jsctx = NULL;
+
+    /* dbctx can be NULL */
+    assert (isctx);
 
     if (!(jsctx = calloc (1, sizeof (*jsctx)))) {
         flux_log_error (isctx->h, "calloc");
         return NULL;
     }
     jsctx->h = isctx->h;
+    jsctx->dbctx = dbctx;
     jsctx->isctx = isctx;
 
     /* Index is the primary data structure holding the job data

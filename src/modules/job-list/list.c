@@ -15,6 +15,8 @@
 #endif
 #include <jansson.h>
 #include <flux/core.h>
+#include <float.h>
+#include <sqlite3.h>
 #include <assert.h>
 
 #include "src/common/libutil/errno_safe.h"
@@ -26,6 +28,8 @@
 #include "list.h"
 #include "job_util.h"
 #include "job_data.h"
+#include "job_db.h"
+#include "util.h"
 
 json_t *get_job_by_id (struct job_state_ctx *jsctx,
                        job_list_error_t *errp,
@@ -73,7 +77,8 @@ int get_jobs_from_list (json_t *jobs,
                         int results,
                         double since,
                         const char *name,
-                        const char *queue)
+                        const char *queue,
+                        double *t_inactive_last)
 {
     struct job *job;
 
@@ -100,6 +105,8 @@ int get_jobs_from_list (json_t *jobs,
                 errno = ENOMEM;
                 return -1;
             }
+            if (t_inactive_last)
+                (*t_inactive_last) = job->t_inactive;
             if (json_array_size (jobs) == max_entries)
                 return 1;
         }
@@ -107,6 +114,190 @@ int get_jobs_from_list (json_t *jobs,
     }
 
     return 0;
+}
+
+struct job *sqliterow_2_job (struct job_state_ctx *jsctx, sqlite3_stmt *res)
+{
+    struct job *job = NULL;
+    const char *s;
+    int success;
+    int exception_occurred;
+    const char *ranks = NULL;
+    const char *nodelist = NULL;
+
+    /* initially set job id to 0 */
+    if (!(job = job_create (jsctx->h, 0)))
+        return NULL;
+
+    /* index 0 - id - will be taken care of below */
+    /* index 1 - t_inactive - will be taken care of below */
+
+    s = (const char *)sqlite3_column_text (res, 2);
+    assert (s);
+    job->job_dbdata = json_loads (s, 0, NULL);
+    assert (job->job_dbdata);
+
+    s = (const char *)sqlite3_column_text (res, 3);
+    assert (s);
+    job->eventlog = strdup (s);
+    assert (job->eventlog);
+
+    s = (const char *)sqlite3_column_text (res, 4);
+    assert (s);
+    job->jobspec = json_loads (s, 0, NULL);
+    assert (job->jobspec);
+
+    s = (const char *)sqlite3_column_text (res, 5);
+    assert (s);
+    if (strlen (s) > 0) {
+        job->R = json_loads (s, 0, NULL);
+        assert (job->R);
+    }
+
+    if (json_unpack (job->job_dbdata,
+                     "{s:I s:i s:i s:I s:f s?:f s?:f s:f s:i s:i}",
+                     "id", &job->id,
+                     "userid", &job->userid,
+                     "urgency", &job->urgency,
+                     "priority", &job->priority,
+                     "t_submit", &job->t_submit,
+                     "t_run", &job->t_run,
+                     "t_cleanup", &job->t_cleanup,
+                     "t_inactive", &job->t_inactive,
+                     "state", &job->state,
+                     "states_mask", &job->states_mask) < 0) {
+        flux_log (jsctx->h, LOG_ERR, "json_unpack");
+        return NULL;
+    }
+
+    if (json_unpack (job->job_dbdata,
+                     "{s?:s s?:i s?:i s?:s s?:s s?:f s?:i s:b}",
+                     "name", &job->name,
+                     "ntasks", &job->ntasks,
+                     "nnodes", &job->nnodes,
+                     "ranks", &ranks,
+                     "nodelist", &nodelist,
+                     "expiration", &job->expiration,
+                     "waitstatus", &job->wait_status,
+                     "success", &success) < 0) {
+        flux_log (jsctx->h, LOG_ERR, "json_unpack");
+        return NULL;
+    }
+
+    if (json_unpack (job->job_dbdata,
+                     "{s:b s?:s s?:i s?:s s:i s?:O s?:O}",
+                     "exception_occurred", &exception_occurred,
+                     "exception_type", &job->exception_type,
+                     "exception_severity", &job->exception_severity,
+                     "exception_note", &job->exception_note,
+                     "result", &job->result,
+                     "annotations", &job->annotations,
+                     "dependencies", &job->dependencies_db) < 0) {
+        flux_log (jsctx->h, LOG_ERR, "json_unpack");
+        return NULL;
+    }
+
+    job->success = success;
+    job->exception_occurred = exception_occurred;
+
+    if (ranks) {
+        job->ranks = strdup (ranks);
+        assert (job->ranks);
+    }
+    if (nodelist) {
+        job->nodelist = strdup (nodelist);
+        assert (job->nodelist);
+    }
+
+    return job;
+}
+
+int get_jobs_from_sqlite (struct job_state_ctx *jsctx,
+                          json_t *jobs,
+                          job_list_error_t *errp,
+                          int max_entries,
+                          json_t *attrs,
+                          uint32_t userid,
+                          int states,
+                          int results,
+                          double since,
+                          const char *name,
+                          const char *queue,
+                          double t_inactive_last)
+{
+    char *sql = \
+        "SELECT * "
+        "FROM jobs "
+        "WHERE t_inactive < ?1 "
+        "ORDER BY t_inactive DESC;";
+    char *sqllimit = \
+        "SELECT * "
+        "FROM jobs "
+        "WHERE t_inactive < ?1 "
+        "ORDER BY t_inactive DESC LIMIT ?2";
+    sqlite3_stmt *res = NULL;
+    int rv = -1;
+
+    if (!jsctx->dbctx)
+        return 0;
+
+    if (sqlite3_prepare_v2 (jsctx->dbctx->db,
+                            max_entries ? sqllimit : sql,
+                            -1,
+                            &res,
+                            0) != SQLITE_OK) {
+        log_sqlite_error (jsctx->dbctx, "sqlite3_prepare_v2");
+        goto out;
+    }
+    if (sqlite3_bind_double (res, 1, t_inactive_last) != SQLITE_OK) {
+        log_sqlite_error (jsctx->dbctx, "sqlite3_bind_int");
+        goto out;
+    }
+    if (max_entries) {
+        int count = max_entries - json_array_size (jobs);
+        if (sqlite3_bind_int (res, 2, count) != SQLITE_OK) {
+            log_sqlite_error (jsctx->dbctx, "sqlite3_bind_int");
+            goto out;
+        }
+    }
+
+    while (sqlite3_step (res) == SQLITE_ROW) {
+        struct job *job;
+        if (!(job = sqliterow_2_job (jsctx, res))) {
+            log_sqlite_error (jsctx->dbctx, "sqliterow_2_job");
+            goto out;
+        }
+        /*  If job->t_inactive > since, then we're done since inactive
+         *   jobs are sorted by inactive time.
+         */
+        if (job->t_inactive <= since)
+            break;
+        if (job_filter (job, userid, states, results, name, queue)) {
+            json_t *o;
+            if (!(o = job_to_json (job, attrs, errp))) {
+                job_destroy (job);
+                goto out;
+            }
+            if (json_array_append_new (jobs, o) < 0) {
+                json_decref (o);
+                job_destroy (job);
+                errno = ENOMEM;
+                goto out;
+            }
+            if (json_array_size (jobs) == max_entries) {
+                job_destroy (job);
+                rv = 1;
+                goto out;
+            }
+        }
+
+        job_destroy (job);
+    }
+
+    rv = 0;
+ out:
+    sqlite3_finalize (res);
+    return rv;
 }
 
 /* Create a JSON array of 'job' objects.  'max_entries' determines the
@@ -149,7 +340,8 @@ json_t *get_jobs (struct job_state_ctx *jsctx,
                                        results,
                                        0.,
                                        name,
-                                       queue)) < 0)
+                                       queue,
+                                       NULL)) < 0)
             goto error;
     }
 
@@ -165,13 +357,16 @@ json_t *get_jobs (struct job_state_ctx *jsctx,
                                            results,
                                            0.,
                                            name,
-                                           queue)) < 0)
+                                           queue,
+                                           NULL)) < 0)
                 goto error;
         }
     }
 
     if (states & FLUX_JOB_STATE_INACTIVE) {
         if (!ret) {
+            double t_inactive_last = DBL_MAX;
+
             if ((ret = get_jobs_from_list (jobs,
                                            errp,
                                            jsctx->inactive,
@@ -182,8 +377,25 @@ json_t *get_jobs (struct job_state_ctx *jsctx,
                                            results,
                                            since,
                                            name,
-                                           queue)) < 0)
+                                           queue,
+                                           &t_inactive_last)) < 0)
                 goto error;
+
+            if (!ret) {
+                if ((ret = get_jobs_from_sqlite (jsctx,
+                                                 jobs,
+                                                 errp,
+                                                 max_entries,
+                                                 attrs,
+                                                 userid,
+                                                 states,
+                                                 results,
+                                                 since,
+                                                 name,
+                                                 queue,
+                                                 t_inactive_last)) < 0)
+                    goto error;
+            }
         }
     }
 
@@ -340,6 +552,49 @@ int check_id_valid (struct job_state_ctx *jsctx,
     return 0;
 }
 
+struct job *get_job_by_id_sqlite (struct job_state_ctx *jsctx,
+                                  job_list_error_t *errp,
+                                  const flux_msg_t *msg,
+                                  flux_jobid_t id,
+                                  json_t *attrs,
+                                  bool *stall)
+{
+    char *sql = "SELECT * FROM jobs WHERE id = ?;";
+    sqlite3_stmt *res = NULL;
+    struct job *job = NULL;
+    struct job *rv = NULL;
+
+    if (!jsctx->dbctx)
+        return NULL;
+
+    if (sqlite3_prepare_v2 (jsctx->dbctx->db,
+                            sql,
+                            -1,
+                            &res,
+                            0) != SQLITE_OK) {
+        log_sqlite_error (jsctx->dbctx, "sqlite3_prepare_v2");
+        goto error;
+    }
+
+    if (sqlite3_bind_int64 (res, 1, id) != SQLITE_OK) {
+        log_sqlite_error (jsctx->dbctx, "sqlite3_bind_int64");
+        goto error;
+    }
+
+    if (sqlite3_step (res) == SQLITE_ROW) {
+        if (!(job = sqliterow_2_job (jsctx, res))) {
+            log_sqlite_error (jsctx->dbctx, "sqliterow_2_job");
+            goto error;
+        }
+    }
+
+    rv = job;
+error:
+    sqlite3_finalize (res);
+    return rv;
+}
+
+
 /* Returns JSON object which the caller must free.  On error, return
  * NULL with errno set:
  *
@@ -358,14 +613,16 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
     struct job *job;
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
-        if (stall) {
-            if (check_id_valid (jsctx, msg, id, attrs, state) < 0) {
-                flux_log_error (jsctx->h, "%s: check_id_valid", __FUNCTION__);
-                return NULL;
+        if (!(job = get_job_by_id_sqlite (jsctx, errp, msg, id, attrs, stall))) {
+            if (stall) {
+                if (check_id_valid (jsctx, msg, id, attrs, state) < 0) {
+                    flux_log_error (jsctx->h, "%s: check_id_valid", __FUNCTION__);
+                    return NULL;
+                }
+                (*stall) = true;
             }
-            (*stall) = true;
+            return NULL;
         }
-        return NULL;
     }
 
     if (job->state == FLUX_JOB_STATE_NEW) {
