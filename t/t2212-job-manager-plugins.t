@@ -482,6 +482,16 @@ test_expect_success 'job-manager: epilog works after exception during prolog' '
 	n_free=$(lineno job.free perilog-exception-test.out) &&
 	test $n_epilog -lt $n_free
 '
+test_expect_success 'job-manager: epilog prevents clean event' '
+	flux jobtap load --remove=all ${PLUGINPATH}/perilog-test.so &&
+	jobid=$(flux submit --urgency=hold hostname) &&
+	flux cancel $jobid &&
+	flux job attach --wait-event clean -vE $jobid 2>&1 \
+	    | tee perilog-epilog-clean-test.out &&
+	n_epilog=$(lineno job.epilog-finish perilog-epilog-clean-test.out) &&
+	n_clean=$(lineno job.clean perilog-epilog-clean-test.out) &&
+	test $n_epilog -lt $n_clean
+'
 test_expect_success 'job-manager: job.create posts events before validation' '
 	flux jobtap load --remove=all ${PLUGINPATH}/create-event.so &&
 	jobid=$(flux submit hostname) &&
