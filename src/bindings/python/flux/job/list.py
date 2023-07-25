@@ -55,8 +55,6 @@ def job_list(
     if queue:
         constraint["and"].append({"queue": [queue]})
     if states and results:
-        if states & flux.constants.FLUX_JOB_STATE_INACTIVE:
-            states &= ~flux.constants.FLUX_JOB_STATE_INACTIVE
         tmp = {"or": []}
         tmp["or"].append({"states": [states]})
         tmp["or"].append({"results": [results]})
