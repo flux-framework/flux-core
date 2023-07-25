@@ -119,6 +119,9 @@ static int watch_key (struct watch_ctx *w)
     char *pathptr = NULL;
     int flags = (FLUX_KVS_WATCH | FLUX_KVS_WATCH_APPEND);
 
+    if (w->flags & FLUX_JOB_EVENT_WATCH_WAITCREATE)
+        flags |= FLUX_KVS_WAITCREATE;
+
     if (w->guest) {
         if (flux_job_kvs_namespace (ns, sizeof (ns), w->id) < 0) {
             flux_log_error (w->ctx->h, "%s: flux_job_kvs_namespace",
@@ -402,6 +405,7 @@ void watch_cb (flux_t *h, flux_msg_handler_t *mh,
     int guest = 0;
     const char *path = NULL;
     int flags;
+    int valid_flags = FLUX_JOB_EVENT_WATCH_WAITCREATE;
     const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:I s:s s:i}",
@@ -409,6 +413,11 @@ void watch_cb (flux_t *h, flux_msg_handler_t *mh,
                              "path", &path,
                              "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+        goto error;
+    }
+    if ((flags & ~valid_flags)) {
+        errno = EPROTO;
+        errmsg = "eventlog-watch request rejected with invalid flag";
         goto error;
     }
     if (!flux_msg_is_streaming (msg)) {
