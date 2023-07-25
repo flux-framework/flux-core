@@ -423,7 +423,9 @@ int event_job_action (struct event *event, struct job *job)
                 && !job->alloc_pending
                 && !job->free_pending
                 && !job->start_pending
-                && !job->has_resources) {
+                && !job->has_resources
+                && !job_event_is_queued (job, "epilog-start")
+                && !job->perilog_active) {
 
                 if (event_job_post_pack (event, job, "clean", 0, NULL) < 0)
                     return -1;
