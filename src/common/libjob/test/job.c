@@ -241,6 +241,9 @@ struct ss sstab[] = {
     { FLUX_JOB_STATE_RUN,      "R", "RUN", "r", "run" },
     { FLUX_JOB_STATE_CLEANUP,  "C", "CLEANUP", "c", "cleanup" },
     { FLUX_JOB_STATE_INACTIVE, "I", "INACTIVE", "i", "inactive" },
+    { FLUX_JOB_STATE_PENDING,  "PD", "PENDING", "pd", "pending" },
+    { FLUX_JOB_STATE_RUNNING,  "RU", "RUNNING", "ru", "running" },
+    { FLUX_JOB_STATE_ACTIVE,   "A",  "ACTIVE",  "a",  "active" },
     { -1, NULL, NULL, NULL, NULL },
 };
 

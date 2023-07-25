@@ -46,18 +46,31 @@ def job_list(
     name=None,
     queue=None,
 ):
+    # N.B. an "and" operation with no values returns everything
+    constraint = {"and": []}
+    if userid != flux.constants.FLUX_USERID_UNKNOWN:
+        constraint["and"].append({"userid": [userid]})
+    if name:
+        constraint["and"].append({"name": [name]})
+    if queue:
+        constraint["and"].append({"queue": [queue]})
+    if states and results:
+        if states & flux.constants.FLUX_JOB_STATE_INACTIVE:
+            states &= ~flux.constants.FLUX_JOB_STATE_INACTIVE
+        tmp = {"or": []}
+        tmp["or"].append({"states": [states]})
+        tmp["or"].append({"results": [results]})
+        constraint["and"].append(tmp)
+    elif states:
+        constraint["and"].append({"states": [states]})
+    elif results:
+        constraint["and"].append({"results": [results]})
     payload = {
         "max_entries": int(max_entries),
         "attrs": attrs,
-        "userid": int(userid),
-        "states": states,
-        "results": results,
         "since": since,
+        "constraint": constraint,
     }
-    if name:
-        payload["name"] = name
-    if queue:
-        payload["queue"] = queue
     return JobListRPC(flux_handle, "job-list.list", payload)
 
 
@@ -240,8 +253,6 @@ class JobList:
         if fname in self.STATES:
             self.states |= self.STATES[fname]
         elif fname in self.RESULTS:
-            # Must specify "inactive" to get results:
-            self.states |= self.STATES["inactive"]
             self.results |= self.RESULTS[fname]
         else:
             raise ValueError(f"Invalid filter specified: {fname}")

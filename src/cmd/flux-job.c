@@ -1262,6 +1262,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     json_t *value;
     uint32_t userid;
     int states = 0;
+    json_t *c;
 
     if (isatty (STDOUT_FILENO)) {
         fprintf (stderr,
@@ -1290,16 +1291,20 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     else
         userid = getuid ();
 
+    if (!(c = json_pack ("{ s:[ {s:[i]}, {s:[i]} ] }",
+                         "and",
+                         "userid", userid,
+                         "states", states)))
+        log_msg_exit ("failed to construct constraint object");
+
     if (!(f = flux_rpc_pack (h,
                              "job-list.list",
                              FLUX_NODEID_ANY,
                              0,
-                             "{s:i s:[s] s:i s:i s:i}",
+                             "{s:i s:[s] s:o}",
                              "max_entries", max_entries,
                              "attrs", "all",
-                             "userid", userid,
-                             "states", states,
-                             "results", 0)))
+                             "constraint", c)))
         log_err_exit ("flux_rpc_pack");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
         log_err_exit ("flux job-list.list");
@@ -1327,6 +1332,7 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
     json_t *jobs;
     size_t index;
     json_t *value;
+    json_t *c;
 
     if (isatty (STDOUT_FILENO)) {
         fprintf (stderr,
@@ -1341,17 +1347,18 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
+    if (!(c = json_pack ("{s:[i]}", "states", FLUX_JOB_STATE_INACTIVE)))
+        log_msg_exit ("failed to construct constraint object");
+
     if (!(f = flux_rpc_pack (h,
                              "job-list.list",
                              FLUX_NODEID_ANY,
                              0,
-                             "{s:i s:f s:i s:i s:i s:[s]}",
+                             "{s:i s:f s:[s] s:o}",
                              "max_entries", max_entries,
                              "since", since,
-                             "userid", FLUX_USERID_UNKNOWN,
-                             "states", FLUX_JOB_STATE_INACTIVE,
-                             "results", 0,
-                             "attrs", "all")))
+                             "attrs", "all",
+                             "constraint", c)))
         log_err_exit ("flux_rpc_pack");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
         log_err_exit ("flux job-list.list");
