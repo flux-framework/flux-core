@@ -40,6 +40,17 @@ test_expect_success 'attach: --show-status shows job status line' '
 	grep "starting" jobid1.status &&
 	grep "started" jobid1.status
 '
+test_expect_success 'attach: no status is shown with FLUX_ATTACH_NONINTERACTIVE' '
+	(export FLUX_ATTACH_NONINTERACTIVE=t &&
+	 run_timeout 5 flux job attach \
+		--show-status $(cat jobid1) 2>jobid1.status2
+	) &&
+	test_must_fail grep "resolving dependencies" jobid1.status2 &&
+	test_must_fail grep "waiting for resources" jobid1.status2 &&
+	test_must_fail grep "starting" jobid1.status2 &&
+	test_must_fail grep "started" jobid1.status2
+
+'
 test_expect_success 'attach: --show-status properly accounts prolog-start events' '
 	flux jobtap load ${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs/perilog-test.so prolog-count=4 &&
 	jobid2=$(flux submit hostname) &&
