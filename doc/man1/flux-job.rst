@@ -68,6 +68,30 @@ in the environment.
    for tasks not in **RANKS** will be closed. The default is to broadcast
    stdin to all ranks.
 
+**--read-only**
+   Operate in read-only mode. Disable reading of stdin and capturing of
+   signals.
+
+**-v, --verbose**
+   Increase verbosity.
+
+**-w, --wait-event=EVENT**
+   Wait for event *EVENT* before detaching from eventlog. The default is
+   ``finish``.
+
+**-E, --show-events**
+   Show job events on stderr. This option also suppresses the status line
+   if enabled.
+
+**-X, --show-exec**
+   Show exec eventlog events on stderr.
+
+**--show-status**
+   Force immediate display of the status line.
+
+**--debug***
+   Enable parallel debugger attach.
+
 CANCEL
 ======
 
