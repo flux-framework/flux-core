@@ -45,6 +45,17 @@ A job can be interactively attached to via ``flux job attach``.  This is
 typically used to watch stdout/stderr while a job is running or after it has
 completed.  It can also be used to feed stdin to a job.
 
+When ``flux job attach`` is run interactively -- that is all of ``stdout``,
+``stderr`` and ``stdin`` are attached to a tty -- the command may display
+a status line while the job is pending, e.g
+
+::
+
+    flux-job: ƒJqUHUCzX9 waiting for resources                 00:00:08
+
+This status line may be suppressed by setting ``FLUX_ATTACH_NONINTERACTIVE``
+in the environment.
+
 **-l, --label-io**
    Label output by rank
 

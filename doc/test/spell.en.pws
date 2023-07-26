@@ -710,3 +710,4 @@ iteratively
 noverify
 sdbus
 sdexec
+NONINTERACTIVE
