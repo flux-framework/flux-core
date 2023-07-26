@@ -369,7 +369,7 @@ int watch (struct info_ctx *ctx,
     }
 
     if (path
-        && strcasecmp (path, "eventlog")
+        && !streq (path, "eventlog")
         && !w->allow) {
         if (check_eventlog (w) < 0)
             goto error;
