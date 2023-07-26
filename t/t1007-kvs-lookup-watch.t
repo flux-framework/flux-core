@@ -665,4 +665,9 @@ test_expect_success 'flux kvs get --watch allows owner access to guest ns' '
 test_expect_success 'kvs-watch.lookup request with empty payload fails with EPROTO(71)' '
 	${RPC} kvs-watch.lookup 71 </dev/null
 '
+# N.B. FLUX_KVS_WATCH = 4
+test_expect_success 'kvs-watch.lookup request non-streaming fails with EPROTO(71)' '
+	echo "{\"namespace\":"foo", \"key\":\"bar\", \"flags\":4}" \
+		${RPC} kvs-watch.lookup 71
+'
 test_done
