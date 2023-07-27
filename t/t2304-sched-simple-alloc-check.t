@@ -22,7 +22,8 @@ test_expect_success 'run an alloc-bypass sleep job' '
 	    sleep inf
 '
 test_expect_success 'a regular job fails with an alloc-check exception' '
-	run_timeout 30 flux submit --flags=waitable -vvv \
+	test_expect_code 1 \
+	    run_timeout 30 flux submit --flags=waitable -vvv \
 	    --wait-event=exception \
 	    -N1 /bin/true >bypass.jobid
 '
