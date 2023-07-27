@@ -1010,11 +1010,12 @@ static int finish_context_parse (flux_t *h,
         return -1;
     }
 
-    /* There is no need to check for "exception" events for the
-     * "success" attribute.  "success" is always false unless the
-     * job completes ("finish") without error.
+    /*
+     *  A job is successful only if it finished with status == 0
+     *  *and* there were no fatal job exceptions:
      */
-    if (!job->wait_status)
+    if (job->wait_status == 0
+        && !(job->exception_occurred && job->exception_severity == 0))
         job->success = true;
 
     return 0;
