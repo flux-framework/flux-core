@@ -78,14 +78,11 @@ test_expect_success MULTICORE 'flux-shell: map affinity can use hex bitmasks' '
     test "$(hwloc-calc --taskset $task0set)" = "0x1" &&
     test "$(hwloc-calc --taskset $task1set)" = "0x2"
 '
-# Expected to fail since 0xf,0xf won't be in the job cpuset, we're just
-# testing the parsing of args now
 test_expect_success 'flux-shell: map affinity can use a mix of inputs' '
     id=$(flux submit --label-io -o cpu-affinity="map:0xf,0xf;0-3" -n 2 \
 	hwloc-bind --get) &&
-    test_must_fail flux job attach $id >map4.out 2>&1 &&
-    test_debug "cat map4.out" &&
-    grep "cpuset 0xf,0xf is not included in job cpuset" map4.out
+    flux job attach $id >map4.out 2>&1 &&
+    test_debug "cat map4.out"
 '
 test_expect_success 'flux-shell: invalid cpuset is detected' '
     test_must_fail flux run -o cpu-affinity="map:0x0;1" -n 2 \

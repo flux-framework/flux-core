@@ -18,12 +18,8 @@
  *  `ntasks` filled with the resulting bitmasks. If `ntasks` is greater
  *  than the number of provided cpusets, then cpusets are reused as
  *  necessary.
- *
- *  It is an error if any cpuset is not contained within the `all` cpuset.
  */
-hwloc_cpuset_t *parse_cpuset_list (const char *setlist,
-                                   hwloc_cpuset_t *all,
-                                   int ntasks);
+hwloc_cpuset_t *parse_cpuset_list (const char *setlist, int ntasks);
 
 /*  Create an empty hwloc_cpuset_t array of size elements
  */

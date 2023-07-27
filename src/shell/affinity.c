@@ -71,11 +71,8 @@ static int topology_restrict (hwloc_topology_t topo, hwloc_cpuset_t set)
  *  form and return an allocated hwloc_cpuset_t array of size ntasks,
  *  filled with the resulting bitmasks. If ntasks is greater than the number
  *  of provided cpusets, then cpusets are reused as necessary.
- *
- *  It is an error if any cpuset does not fall within job_cpuset.
  */
 hwloc_cpuset_t *parse_cpuset_list (const char *setlist,
-                                   hwloc_cpuset_t job_cpuset,
                                    int ntasks)
 {
     char *copy = NULL;
@@ -112,16 +109,6 @@ hwloc_cpuset_t *parse_cpuset_list (const char *setlist,
         if (rc < 0 || hwloc_bitmap_weight (cpusets[i]) <= 0) {
             shell_log_error ("cpuset %s contains no cores or is invalid",
                              arg);
-            goto err;
-        }
-        if (!hwloc_bitmap_isincluded (cpusets[i], job_cpuset)) {
-            char buf[1024] = "";
-            (void) hwloc_bitmap_list_snprintf (buf,
-                                               sizeof (buf),
-                                               job_cpuset);
-            shell_log_error ("cpuset %s is not included in job cpuset %s",
-                             arg,
-                             buf);
             goto err;
         }
         s = NULL;
@@ -425,9 +412,7 @@ static int affinity_init (flux_plugin_t *p,
             shell_log_errno ("distribute_tasks failed");
     }
     else if (strstarts (option, "map:")) {
-        if (!(sa->pertask = parse_cpuset_list (option+4,
-                                               sa->cpuset,
-                                               sa->ntasks)))
+        if (!(sa->pertask = parse_cpuset_list (option+4, sa->ntasks)))
             return -1;
     }
     if (sa->pertask
