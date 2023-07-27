@@ -225,6 +225,10 @@ static int gpubind_init (flux_plugin_t *p,
             return shell_log_errno ("failed to distribute %d gpus",
                                     ctx->ngpus);
     }
+    else if (strstarts (opt, "map:")) {
+        if (!(ctx->gpusets = parse_cpuset_list (opt+4, ctx->ntasks)))
+            return shell_log_errno ("failed to parse gpu map %s", opt+4);
+    }
     else if (ctx->ngpus > 0) {
         char *ids = idset_encode (ctx->gpus, 0);
         flux_shell_setenvf (shell, 1, "CUDA_VISIBLE_DEVICES", "%s", ids);
