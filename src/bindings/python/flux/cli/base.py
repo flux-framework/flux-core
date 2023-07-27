@@ -1471,6 +1471,14 @@ class SubmitBulkCmd(SubmitBaseCmd):
                 jobinfo["state"] = "failed"
                 if self.exitcode == 0:
                     self.exitcode = 1
+            elif event.context["severity"] == 0:
+                #
+                #  A fatal job exception should cause the command to
+                #  to fail under any circumstances, even if the job
+                #  ends up finishing with status=0.
+                #
+                if self.exitcode == 0:
+                    self.exitcode = 1
 
             #  Print a human readable error:
             exception_type = event.context["type"]
