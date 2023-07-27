@@ -2651,6 +2651,45 @@ static char *get_stdin_ranks (optparse_t *p)
     return strdup (value);
 }
 
+static void initialize_attach_statusline (struct attach_ctx *ctx,
+                                          flux_reactor_t *r)
+{
+    /*  Never show status line if `FLUX_ATTACH_INTERACTIVE` is set
+     */
+    if (getenv ("FLUX_ATTACH_NONINTERACTIVE"))
+        return;
+
+    /*  Only enable the statusline if it is was explicitly requested via
+     *  --show status, or it is reasonably probable that flux-job attach
+     *  is being used interactively -- i.e. all of stdin, stdout, and stderr
+     *  are connected to a tty.
+     */
+    if ((ctx->statusline = optparse_hasopt (ctx->p, "show-status"))
+        || (!optparse_hasopt (ctx->p, "show-events")
+            && isatty (STDIN_FILENO)
+            && isatty (STDOUT_FILENO)
+            && isatty (STDERR_FILENO))) {
+        /*
+         * If flux-job is running interactively, and the job has not
+         * started within 2s, then display a status line notifying the
+         * user of the job's status. The timer repeats every second after
+         * the initial callback to update a clock displayed on the rhs of
+         * the status line.
+         *
+         * The timer is automatically stopped after the 'start' or 'clean'
+         * event.
+         */
+        ctx->notify_timer = flux_timer_watcher_create (r,
+                                                       ctx->statusline ? 0.:2.,
+                                                       1.,
+                                                       attach_notify_cb,
+                                                       ctx);
+        if (!ctx->notify_timer)
+            log_err ("Failed to start notification timer");
+        flux_watcher_start (ctx->notify_timer);
+    }
+}
+
 int cmd_attach (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
@@ -2744,28 +2783,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
         flux_watcher_start (ctx.sigint_w);
     }
 
-    ctx.statusline = optparse_hasopt (ctx.p, "show-status");
-    if ((isatty (STDIN_FILENO) || ctx.statusline)
-        && !optparse_hasopt (ctx.p, "show-events")) {
-        /*
-         * If flux-job is running interactively, and the job has not
-         * started within 2s, then display a status line notifying the
-         * user of the job's status. The timer repeats every second after
-         * the initial callback to update a clock displayed on the rhs of
-         * the status line.
-         *
-         * The timer is automatically stopped after the 'start' or 'clean'
-         * event.
-         */
-        ctx.notify_timer = flux_timer_watcher_create (r,
-                                                      ctx.statusline ? 0.:2.,
-                                                      1.,
-                                                      attach_notify_cb,
-                                                      &ctx);
-        if (!ctx.notify_timer)
-            log_err ("Failed to start notification timer");
-        flux_watcher_start (ctx.notify_timer);
-    }
+    initialize_attach_statusline (&ctx, r);
 
     if (flux_reactor_run (r, 0) < 0)
         log_err_exit ("flux_reactor_run");
