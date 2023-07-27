@@ -211,8 +211,6 @@ static int gpubind_init (flux_plugin_t *p,
         gpu_affinity_destroy (ctx);
         return -1;
     }
-    if (ctx->ngpus <= 0)
-        return 0;
 
     if (flux_plugin_add_handler (p,
                                  "task.init",
@@ -227,7 +225,7 @@ static int gpubind_init (flux_plugin_t *p,
             return shell_log_errno ("failed to distribute %d gpus",
                                     ctx->ngpus);
     }
-    else {
+    else if (ctx->ngpus > 0) {
         char *ids = idset_encode (ctx->gpus, 0);
         flux_shell_setenvf (shell, 1, "CUDA_VISIBLE_DEVICES", "%s", ids);
         free (ids);
