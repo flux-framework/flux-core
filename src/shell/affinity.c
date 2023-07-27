@@ -32,7 +32,7 @@ struct shell_affinity {
     hwloc_cpuset_t *pertask;
 };
 
-static void cpuset_array_destroy (hwloc_cpuset_t *set, int size)
+void cpuset_array_destroy (hwloc_cpuset_t *set, int size)
 {
     if (set) {
         for (int i = 0; i < size; i++) {
@@ -43,7 +43,7 @@ static void cpuset_array_destroy (hwloc_cpuset_t *set, int size)
     }
 }
 
-static hwloc_cpuset_t *cpuset_array_create (int size)
+hwloc_cpuset_t *cpuset_array_create (int size)
 {
     hwloc_cpuset_t *set = calloc (size, sizeof (hwloc_cpuset_t));
     if (!set)
@@ -74,9 +74,9 @@ static int topology_restrict (hwloc_topology_t topo, hwloc_cpuset_t set)
  *
  *  It is an error if any cpuset does not fall within job_cpuset.
  */
-static hwloc_cpuset_t *parse_cpuset_list (const char *setlist,
-                                          hwloc_cpuset_t job_cpuset,
-                                          int ntasks)
+hwloc_cpuset_t *parse_cpuset_list (const char *setlist,
+                                   hwloc_cpuset_t job_cpuset,
+                                   int ntasks)
 {
     char *copy = NULL;
     char *s, *arg, *sptr = NULL;

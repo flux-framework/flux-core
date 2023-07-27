@@ -76,6 +76,7 @@ flux_shell_SOURCES = \
 	kill.c \
 	signals.c \
 	affinity.c \
+	affinity.h \
 	gpubind.c \
 	evlog.c \
 	pty.c \
