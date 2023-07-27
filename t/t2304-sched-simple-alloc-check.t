@@ -30,6 +30,18 @@ test_expect_success 'a regular job fails with an alloc-check exception' '
 test_expect_success 'flux job wait says the job failed' '
 	test_must_fail flux job wait -v $(cat bypass.jobid)
 '
+test_expect_success 'flux job attach says the job failed' '
+	test_must_fail flux job attach -vE $(cat bypass.jobid)
+'
+test_expect_success 'flux job status says the job failed' '
+	test_must_fail flux job status -v $(cat bypass.jobid)
+'
+test_expect_success 'flux jobs says the job failed' '
+	flux job list-ids --wait-state=inactive $(cat bypass.jobid) >/dev/null &&
+	flux jobs -no {result} $(cat bypass.jobid) > bypass.result &&
+	test_debug "cat bypass.result" &&
+	test "$(cat bypass.result)" = "FAILED"
+'
 test_expect_success 'clean up jobs' '
 	flux cancel --all &&
 	flux queue drain
