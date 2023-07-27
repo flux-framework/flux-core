@@ -1595,6 +1595,7 @@ struct attach_ctx {
     int eventlog_watch_count;
     bool statusline;
     char *last_event;
+    bool fatal_exception;
 };
 
 void attach_completed_check (struct attach_ctx *ctx)
@@ -2570,6 +2571,8 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                          severity,
                          note);
 
+        ctx->fatal_exception = (severity == 0);
+
         /*  If this job has an interactive pty and the pty is not yet attached,
          *   destroy the pty to avoid a potential hang attempting to connect
          *   to job pty that will never exist.
@@ -2799,6 +2802,10 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     free (totalview_jobid);
     free (ctx.last_event);
     free (ctx.stdin_ranks);
+
+    if (ctx.fatal_exception && ctx.exit_code == 0)
+        ctx.exit_code = 1;
+
     return ctx.exit_code;
 }
 
