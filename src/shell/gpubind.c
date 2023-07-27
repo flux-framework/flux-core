@@ -122,9 +122,13 @@ static int gpubind_task_init (flux_plugin_t *p,
 {
     char *s;
     struct idset *ids;
+    int taskid;
     struct gpu_affinity *ctx = data;
-    int taskid = plugin_task_id (p);
-    if (taskid < 0)
+
+    if (!ctx->gpusets)
+        return 0;
+
+    if ((taskid = plugin_task_id (p)) < 0)
         return -1;
 
     /* Need to convert hwloc_cpuset_t to idset since there's no function
@@ -210,17 +214,18 @@ static int gpubind_init (flux_plugin_t *p,
     if (ctx->ngpus <= 0)
         return 0;
 
+    if (flux_plugin_add_handler (p,
+                                 "task.init",
+                                 gpubind_task_init,
+                                 ctx) < 0)
+        return shell_log_errno ("gpubind: flux_plugin_add_handler");
+
     flux_shell_setenvf (shell, 0, "CUDA_DEVICE_ORDER", "PCI_BUS_ID");
 
     if (streq (opt, "per-task")) {
         if (!(ctx->gpusets = distribute_gpus (ctx)))
             return shell_log_errno ("failed to distribute %d gpus",
                                     ctx->ngpus);
-        if (flux_plugin_add_handler (p,
-                                     "task.init",
-                                     gpubind_task_init,
-                                     ctx) < 0)
-            return shell_log_errno ("gpubind: flux_plugin_add_handler");
     }
     else {
         char *ids = idset_encode (ctx->gpus, 0);
