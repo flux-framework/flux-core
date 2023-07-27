@@ -225,6 +225,11 @@ test_expect_success 'flux job wait-event -p fails on invalid path' '
 	test_must_fail fj_wait_event -p "foobar" $jobid submit
 '
 
+test_expect_success 'flux job wait-event -p fails on invalid guest path' '
+	jobid=$(submit_job) &&
+	test_must_fail fj_wait_event -p "guest.foobar" $jobid submit
+'
+
 test_expect_success 'flux job wait-event -p fails on path "guest."' '
 	jobid=$(submit_job) &&
 	test_must_fail fj_wait_event -p "guest." $jobid submit
