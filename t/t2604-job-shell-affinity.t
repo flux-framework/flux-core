@@ -156,6 +156,19 @@ test_expect_success 'flux-shell: gpu-affinity=per-task' '
 		> ${name}.out 2>${name}.err &&
 	test_cmp ${name}.expected ${name}.out
 '
+test_expect_success 'flux-shell: gpu-affinity=map: works' '
+	name=gpu-map &&
+	flux run -N1 -n2 --dry-run -o gpu-affinity="map:7;4-6" \
+		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
+	cat >${name}.expected <<-EOF  &&
+	0: 7
+	1: 4,5,6
+	EOF
+	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
+		> ${name}.out 2>${name}.err &&
+	test_cmp ${name}.expected ${name}.out
+
+'
 test_expect_success 'flux-shell: gpu-affinity=off' '
 	name=gpu-off && (
 	  unset CUDA_VISIBLE_DEVICES &&
