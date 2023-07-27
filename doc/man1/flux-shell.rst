@@ -276,7 +276,10 @@ options are supported by the builtin plugins of ``flux-shell``:
   sets ``CUDA_VISIBLE_DEVICES`` to the GPU IDs allocated to the job.
   *OPT* may be set to ``off`` to disable the plugin, or ``per-task``
   to divide allocated GPUs among tasks launched by the shell (sets a
-  different GPU ID or IDs for each launched task)
+  different GPU ID or IDs for each launched task). If *OPT* starts with
+  ``map:``, then the rest of the option is a semicolon-delimited list
+  of GPUs to assign to each task. See **cpu-affinity** documentation
+  for a description of the ``map:`` list format.
 
 **stop-tasks-in-exec**
   Stops tasks in ``exec()`` using ``PTRACE_TRACEME``. Used for debugging
