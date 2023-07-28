@@ -178,6 +178,7 @@ TESTSCRIPTS = \
 	t2407-sdbus.t \
 	t2408-sdbus-recovery.t \
 	t2409-sdexec.t \
+	t2410-sdexec-memlimit.t \
 	t2411-sdexec-job.t \
 	t2412-sdexec-perilog.t \
 	t2500-job-attach.t \
