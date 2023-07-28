@@ -267,16 +267,21 @@ options are supported by the builtin plugins of ``flux-shell``:
   If *OPT* starts with ``map:``, then the rest of the option is taken
   as a semicolon-delimited list of cpus to allocate to each task. Each
   entry in the list can be in one of the :linux:man7:`hwloc` list,
-  bitmask, or taskset formats (See :linux:man3:`hwloc_cpuset_t`).
-  The default is ``on``, which binds all tasks to the assigned set
-  of cores in the job.
+  bitmask, or taskset formats (See
+  `hwlocality_bitmap(3) <https://www.open-mpi.org/projects/hwloc/doc/v2.9.0/a00181.php>`_,
+  especially the ``hwloc_bitmap_list_snprintf()``, ``hwloc_bitmap_snprintf()``
+  and ``hwloc_bitmap_taskset_snprintf()`` functions).  The default is ``on``,
+  which binds all tasks to the assigned set of cores in the job.
 
 **gpu-affinity**\ =\ *OPT*
   Adjust operation of the builtin shell ``gpubind`` plugin, which simply
   sets ``CUDA_VISIBLE_DEVICES`` to the GPU IDs allocated to the job.
   *OPT* may be set to ``off`` to disable the plugin, or ``per-task``
   to divide allocated GPUs among tasks launched by the shell (sets a
-  different GPU ID or IDs for each launched task)
+  different GPU ID or IDs for each launched task). If *OPT* starts with
+  ``map:``, then the rest of the option is a semicolon-delimited list
+  of GPUs to assign to each task. See **cpu-affinity** documentation
+  for a description of the ``map:`` list format.
 
 **stop-tasks-in-exec**
   Stops tasks in ``exec()`` using ``PTRACE_TRACEME``. Used for debugging

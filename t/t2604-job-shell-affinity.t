@@ -78,14 +78,11 @@ test_expect_success MULTICORE 'flux-shell: map affinity can use hex bitmasks' '
     test "$(hwloc-calc --taskset $task0set)" = "0x1" &&
     test "$(hwloc-calc --taskset $task1set)" = "0x2"
 '
-# Expected to fail since 0xf,0xf won't be in the job cpuset, we're just
-# testing the parsing of args now
 test_expect_success 'flux-shell: map affinity can use a mix of inputs' '
     id=$(flux submit --label-io -o cpu-affinity="map:0xf,0xf;0-3" -n 2 \
 	hwloc-bind --get) &&
-    test_must_fail flux job attach $id >map4.out 2>&1 &&
-    test_debug "cat map4.out" &&
-    grep "cpuset 0xf,0xf is not included in job cpuset" map4.out
+    flux job attach $id >map4.out 2>&1 &&
+    test_debug "cat map4.out"
 '
 test_expect_success 'flux-shell: invalid cpuset is detected' '
     test_must_fail flux run -o cpu-affinity="map:0x0;1" -n 2 \
@@ -158,6 +155,19 @@ test_expect_success 'flux-shell: gpu-affinity=per-task' '
 	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
 		> ${name}.out 2>${name}.err &&
 	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-affinity=map: works' '
+	name=gpu-map &&
+	flux run -N1 -n2 --dry-run -o gpu-affinity="map:7;4-6" \
+		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
+	cat >${name}.expected <<-EOF  &&
+	0: 7
+	1: 4,5,6
+	EOF
+	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
+		> ${name}.out 2>${name}.err &&
+	test_cmp ${name}.expected ${name}.out
+
 '
 test_expect_success 'flux-shell: gpu-affinity=off' '
 	name=gpu-off && (

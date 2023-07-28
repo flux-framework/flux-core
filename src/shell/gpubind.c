@@ -27,34 +27,49 @@
 #include "ccan/str/str.h"
 
 #include "builtins.h"
+#include "affinity.h"
 
-int ngpus_per_task = -1;
+struct gpu_affinity {
+    int ntasks;
+    int ngpus;
+    struct idset *gpus;
+    hwloc_cpuset_t *gpusets;
+};
 
-int get_shell_gpus (flux_shell_t *shell,
-                    int *ntasks,
-                    struct idset **ids)
+
+static void gpu_affinity_destroy (struct gpu_affinity *ctx)
 {
-    int rc = -1;
-    const char *gpu_list = NULL;
-    struct idset *gpus = NULL;
+    if (ctx) {
+        idset_destroy (ctx->gpus);
+        cpuset_array_destroy (ctx->gpusets, ctx->ntasks);
+        free (ctx);
+    }
+}
 
+static struct gpu_affinity *gpu_affinity_create (flux_shell_t *shell)
+{
+    const char *gpu_list = NULL;
+    struct gpu_affinity *ctx = calloc (1, sizeof (*ctx));
+    if (!ctx)
+        return NULL;
     if (flux_shell_rank_info_unpack (shell,
                                      -1,
                                      "{s:i s:{s?s}}",
-                                     "ntasks", ntasks,
+                                     "ntasks", &ctx->ntasks,
                                      "resources",
                                        "gpus", &gpu_list) < 0) {
         shell_log_errno ("flux_shell_rank_info_unpack");
-        goto out;
+        goto error;
     }
-    if (!(gpus = idset_decode (gpu_list ? gpu_list : ""))) {
+    if (!(ctx->gpus = idset_decode (gpu_list ? gpu_list : ""))) {
         shell_log_errno ("idset_encode (%s)", gpu_list);
-        goto out;
+        goto error;
     }
-    rc = 0;
-out:
-    *ids = gpus;
-    return rc;
+    ctx->ngpus = idset_count (ctx->gpus);
+    return ctx;
+error:
+    gpu_affinity_destroy (ctx);
+    return NULL;
 }
 
 static int plugin_task_setenv (flux_plugin_t *p,
@@ -69,25 +84,88 @@ static int plugin_task_setenv (flux_plugin_t *p,
     return 0;
 }
 
+static int plugin_task_id (flux_plugin_t *p)
+{
+    int taskid = -1;
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+    flux_shell_task_t *task = flux_shell_current_task (shell);
+    if (flux_shell_task_info_unpack (task,
+                                     "{s:i}",
+                                     "localid", &taskid) < 0)
+        return shell_log_errno ("failed to unpack task local id");
+    return taskid;
+}
+
+static struct idset *cpuset_to_idset (hwloc_cpuset_t set)
+{
+    int i;
+    struct idset *idset;
+    if (!(idset = idset_create (0, IDSET_FLAG_AUTOGROW))) {
+        shell_log_errno ("failed to create idset");
+        return NULL;
+    }
+    i = -1;
+    while ((i = hwloc_bitmap_next (set, i)) != -1) {
+        if (idset_set (idset, i) < 0) {
+            shell_log_errno ("failed to set %d in idset", i);
+            idset_destroy (idset);
+            return NULL;
+        }
+    }
+    return idset;
+}
+
 static int gpubind_task_init (flux_plugin_t *p,
                               const char *topic,
                               flux_plugin_arg_t *args,
                               void *data)
 {
     char *s;
-    struct idset *gpus = data;
-    struct idset *ids = idset_create (0, IDSET_FLAG_AUTOGROW);
+    struct idset *ids;
+    int taskid;
+    struct gpu_affinity *ctx = data;
 
-    for (int i = 0; i < ngpus_per_task; i++) {
-        unsigned id = idset_first (gpus);
-        idset_set (ids, id);
-        idset_clear (gpus, id);
+    if (!ctx->gpusets)
+        return 0;
+
+    if ((taskid = plugin_task_id (p)) < 0)
+        return -1;
+
+    /* Need to convert hwloc_cpuset_t to idset since there's no function
+     * to convert a hwloc_cpuset_t to a strict comma-separated list of ids:
+     */
+    if (!(ids = cpuset_to_idset (ctx->gpusets[taskid]))
+        || !(s = idset_encode (ids, 0))) {
+        shell_log_error ("failed to get idset from gpu set for task %d",
+                         taskid);
+        idset_destroy (ids);
+        return -1;
     }
-    s = idset_encode (ids, 0);
     plugin_task_setenv (p, "CUDA_VISIBLE_DEVICES", s);
     free (s);
     idset_destroy (ids);
     return 0;
+}
+
+static hwloc_cpuset_t *distribute_gpus (struct gpu_affinity *ctx)
+{
+    int ngpus_per_task = ctx->ngpus / ctx->ntasks;
+    hwloc_cpuset_t *gpusets = cpuset_array_create (ctx->ntasks);
+    for (int i = 0; i < ctx->ntasks; i++) {
+        for (int j = 0; j < ngpus_per_task; j++) {
+            unsigned id = idset_first (ctx->gpus);
+            if (id == IDSET_INVALID_ID
+                || idset_clear (ctx->gpus, id) < 0) {
+                shell_log_errno ("Failed to get GPU id for task %d", id);
+                goto error;
+            }
+            hwloc_bitmap_set (gpusets[i], id);
+        }
+    }
+    return gpusets;
+error:
+    cpuset_array_destroy (gpusets, ctx->ntasks);
+    return NULL;
 }
 
 static int gpubind_init (flux_plugin_t *p,
@@ -95,9 +173,9 @@ static int gpubind_init (flux_plugin_t *p,
                          flux_plugin_arg_t *args,
                          void *data)
 {
-    int rc, ngpus, ntasks;
-    struct idset *gpus;
+    int rc;
     char *opt;
+    struct gpu_affinity *ctx;
     flux_shell_t *shell = flux_plugin_get_shell (p);
 
     if (!shell)
@@ -123,30 +201,36 @@ static int gpubind_init (flux_plugin_t *p,
      */
     flux_shell_setenvf (shell, 1, "CUDA_VISIBLE_DEVICES", "%d", -1);
 
-    if (get_shell_gpus (shell, &ntasks, &gpus) < 0)
+    if (!(ctx = gpu_affinity_create (shell)))
         return -1;
-    if (flux_plugin_aux_set (p, NULL, gpus, (flux_free_f)idset_destroy) < 0) {
+    if (flux_plugin_aux_set (p,
+                             NULL,
+                             ctx,
+                             (flux_free_f) gpu_affinity_destroy) < 0) {
         shell_log_errno ("flux_plugin_aux_set");
-        idset_destroy (gpus);
+        gpu_affinity_destroy (ctx);
         return -1;
     }
-    if ((ngpus = idset_count (gpus)) <= 0)
-        return 0;
+
+    if (flux_plugin_add_handler (p,
+                                 "task.init",
+                                 gpubind_task_init,
+                                 ctx) < 0)
+        return shell_log_errno ("gpubind: flux_plugin_add_handler");
 
     flux_shell_setenvf (shell, 0, "CUDA_DEVICE_ORDER", "PCI_BUS_ID");
 
     if (streq (opt, "per-task")) {
-        /*  Set global ngpus_per_task to use in task.init callback:
-         */
-        ngpus_per_task = ngpus / ntasks;
-        if (flux_plugin_add_handler (p,
-                                     "task.init",
-                                     gpubind_task_init,
-                                     gpus) < 0)
-            return shell_log_errno ("gpubind: flux_plugin_add_handler");
+        if (!(ctx->gpusets = distribute_gpus (ctx)))
+            return shell_log_errno ("failed to distribute %d gpus",
+                                    ctx->ngpus);
     }
-    else {
-        char *ids = idset_encode (gpus, 0);
+    else if (strstarts (opt, "map:")) {
+        if (!(ctx->gpusets = parse_cpuset_list (opt+4, ctx->ntasks)))
+            return shell_log_errno ("failed to parse gpu map %s", opt+4);
+    }
+    else if (ctx->ngpus > 0) {
+        char *ids = idset_encode (ctx->gpus, 0);
         flux_shell_setenvf (shell, 1, "CUDA_VISIBLE_DEVICES", "%s", ids);
         free (ids);
     }
