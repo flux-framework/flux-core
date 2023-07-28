@@ -711,3 +711,5 @@ noverify
 sdbus
 sdexec
 NONINTERACTIVE
+hwlocality
+snprintf
