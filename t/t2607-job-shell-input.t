@@ -89,8 +89,7 @@ test_expect_success NO_CHAIN_LINT 'flux-shell: no stdin desired in job' '
         id=$(flux submit -n1 sleep 60)
         flux job attach $id < input_stdin_file 2> pipe6A.err &
         pid=$! &&
-        flux job wait-event -p guest.exec.eventlog $id shell.init 2> pipe6B.err &&
-        flux job wait-event -p guest.input -m eof=true $id data 2> pipe6C.err &&
+        flux job wait-event -W -p guest.input -m eof=true $id data 2> pipe6C.err &&
         flux cancel $id 2> pipe6D.err &&
         test_expect_code 143 wait $pid
 '
@@ -119,8 +118,7 @@ test_expect_success NO_CHAIN_LINT 'flux-shell: pipe to stdin twice, second fails
         id=$(flux submit -n1 sleep 60)
         flux job attach $id < input_stdin_file 2> pipe9A.err &
         pid=$!
-        flux job wait-event -p guest.exec.eventlog $id shell.init 2> pipe9B.err &&
-        flux job wait-event -p guest.input -m eof=true $id data 2> pipe9C.err &&
+        flux job wait-event -W -p guest.input -m eof=true $id data 2> pipe9C.err &&
         test_must_fail flux job attach $id < input_stdin_file 2> pipe9D.err &&
         flux cancel $id 2> pipe9E.err &&
         test_expect_code 143 wait $pid
