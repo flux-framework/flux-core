@@ -1,3 +1,4 @@
+
 /************************************************************\
  * Copyright 2014 Lawrence Livermore National Security, LLC
  * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
@@ -66,7 +67,7 @@ const double max_namespace_age = 3600.;
 struct kvs_ctx {
     struct cache *cache; /* blobref => cache_entry */
     kvsroot_mgr_t *krm;
-    int faults; /* for kvs.stats.get, etc. */
+    int faults;          /* for kvs.stats.get, etc. */
     flux_t *h;
     uint32_t rank;
     flux_watcher_t *prep_w;
@@ -321,8 +322,7 @@ static void getroot_completion (flux_future_t *f, void *arg)
                              "owner", &owner,
                              "rootseq", &rootseq,
                              "rootref", &ref,
-                             "flags", &flags)
-                             < 0) {
+                             "flags", &flags) < 0) {
         if (errno != ENOTSUP)
             flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto error;
@@ -1504,16 +1504,14 @@ static void lookup_plus_request_cb (flux_t *h,
         if (flux_respond_pack (h, msg, "{ s:i s:i s:s }",
                                "errno", ENOENT,
                                "rootseq", root_seq,
-                               "rootref", root_ref)
-                               < 0)
+                               "rootref", root_ref) < 0)
             flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     }
     else {
         if (flux_respond_pack (h, msg, "{ s:O s:i s:s }",
                                "val", val,
                                "rootseq", root_seq,
-                               "rootref", root_ref)
-                               < 0)
+                               "rootref", root_ref) < 0)
             flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     }
     lookup_destroy (lh);
@@ -1535,8 +1533,7 @@ static int finalize_transaction_req (treq_t *tr, const flux_msg_t *req, void *da
     else {
         if (flux_respond_pack (cbd->ctx->h, req, "{ s:s s:i }",
                                "rootref", cbd->root->ref,
-                               "rootseq", cbd->root->seq)
-                               < 0)
+                               "rootseq", cbd->root->seq) < 0)
             flux_log_error (cbd->ctx->h, "%s: flux_respond_pack", __FUNCTION__);
     }
 
@@ -1592,8 +1589,7 @@ static void relaycommit_request_cb (flux_t *h,
                              "ops", &ops,
                              "name", &name,
                              "namespace", &ns,
-                             "flags", &flags)
-                             < 0) {
+                             "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         return;
     }
@@ -1640,8 +1636,7 @@ static void commit_request_cb (flux_t *h,
     if (flux_request_unpack (msg, NULL, "{ s:o s:s s:i }",
                              "ops", &ops,
                              "namespace", &ns,
-                             "flags", &flags)
-                             < 0) {
+                             "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
@@ -1678,8 +1673,7 @@ static void commit_request_cb (flux_t *h,
          */
         treq_set_processed (tr, true);
 
-        if (kvstxn_mgr_add_transaction (root->ktm, treq_get_name (tr), ops, flags, 0)
-            < 0) {
+        if (kvstxn_mgr_add_transaction (root->ktm, treq_get_name (tr), ops, flags, 0) < 0) {
             flux_log_error (h, "%s: kvstxn_mgr_add_transaction", __FUNCTION__);
             goto error;
         }
@@ -1728,8 +1722,7 @@ static void relayfence_request_cb (flux_t *h,
                              "name", &name,
                              "namespace", &ns,
                              "flags", &flags,
-                             "nprocs", &nprocs)
-                             < 0) {
+                             "nprocs", &nprocs) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         return;
     }
@@ -1777,8 +1770,7 @@ static void relayfence_request_cb (flux_t *h,
                                         treq_get_name (tr),
                                         treq_get_ops (tr),
                                         treq_get_flags (tr),
-                                        0)
-            < 0) {
+                                        0) < 0) {
             flux_log_error (h, "%s: kvstxn_mgr_add_transaction", __FUNCTION__);
             goto error;
         }
@@ -1819,8 +1811,7 @@ static void fence_request_cb (flux_t *h,
                              "name", &name,
                              "namespace", &ns,
                              "flags", &flags,
-                             "nprocs", &nprocs)
-                             < 0) {
+                             "nprocs", &nprocs) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
@@ -1879,8 +1870,7 @@ static void fence_request_cb (flux_t *h,
                                             treq_get_name (tr),
                                             treq_get_ops (tr),
                                             treq_get_flags (tr),
-                                            0)
-                < 0) {
+                                            0) < 0) {
                 flux_log_error (h, "%s: kvstxn_mgr_add_transaction", __FUNCTION__);
                 goto error;
             }
@@ -1944,8 +1934,7 @@ static void wait_version_request_cb (flux_t *h,
                                   mh,
                                   msg,
                                   ctx,
-                                  rootseq)
-            < 0) {
+                                  rootseq) < 0) {
             flux_log_error (h, "%s: kvs_wait_version_add", __FUNCTION__);
             goto error;
         }
@@ -2006,8 +1995,7 @@ static void getroot_request_cb (flux_t *h,
                            "owner", root->owner,
                            "rootseq", root->seq,
                            "rootref", root->ref,
-                           "flags", root->flags)
-                           < 0)
+                           "flags", root->flags) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     return;
 error:
@@ -2029,8 +2017,7 @@ static void error_event_cb (flux_t *h,
     if (flux_event_unpack (msg, NULL, "{ s:s s:o s:i }",
                            "namespace", &ns,
                            "names", &names,
-                           "errnum", &errnum)
-                           < 0) {
+                           "errnum", &errnum) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
@@ -2091,8 +2078,7 @@ static void setroot_event_cb (flux_t *h,
                            "namespace", &ns,
                            "rootseq", &rootseq,
                            "rootref", &rootref,
-                           "names", &names)
-                           < 0) {
+                           "names", &names) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
@@ -2404,8 +2390,7 @@ static void namespace_create_request_cb (flux_t *h,
                              "namespace", &ns,
                              "rootref", &rootref,
                              "owner", &owner,
-                             "flags", &flags)
-                             < 0) {
+                             "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         goto error;
     }
@@ -2478,8 +2463,7 @@ static void start_root_remove (struct kvs_ctx *ctx, const char *ns)
 
         if (treq_mgr_iter_transactions (root->trm,
                                         root_remove_process_transactions,
-                                        &cbd)
-            < 0)
+                                        &cbd) < 0)
             flux_log_error (ctx->h, "%s: treq_mgr_iter_transactions", __FUNCTION__);
     }
 }
@@ -2689,8 +2673,7 @@ static void setroot_unpause_process_msg (struct kvs_ctx *ctx,
                            "namespace", &ns,
                            "rootseq", &rootseq,
                            "rootref", &rootref,
-                           "names", &names)
-                           < 0) {
+                           "names", &names) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
@@ -2981,8 +2964,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         int seq = 0;
         uint32_t owner = getuid ();
 
-        if (store_initial_rootdir (ctx, empty_dir_rootref, sizeof (empty_dir_rootref))
-            < 0) {
+        if (store_initial_rootdir (ctx, empty_dir_rootref, sizeof (empty_dir_rootref)) < 0) {
             flux_log_error (h, "store_initial_rootdir");
             goto done;
         }
@@ -3026,8 +3008,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         || flux_future_then (f_heartbeat_sync,
                              heartbeat_sync_max,
                              heartbeat_sync_cb,
-                             ctx)
-               < 0) {
+                             ctx) < 0) {
         flux_log_error (h, "error starting heartbeat synchronization");
         goto done;
     }
@@ -3065,4 +3046,3 @@ MOD_NAME ("kvs");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
- */

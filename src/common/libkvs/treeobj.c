@@ -1,3 +1,4 @@
+
 /************************************************************\
  * Copyright 2016 Lawrence Livermore National Security, LLC
  * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
@@ -32,8 +33,7 @@ static int treeobj_unpack (json_t *obj, const char **typep, json_t **datap)
     int version;
     const char *type;
     if (!obj || version != treeobj_version
-        || json_unpack (obj, "{s:i s:s s:o !}", "ver", &version, "type", &type, "data", &data)
-                        < 0) {
+        || json_unpack (obj, "{s:i s:s s:o !}", "ver", &version, "type", &type, "data", &data) < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -611,4 +611,3 @@ char *treeobj_encode (const json_t *obj)
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
- */

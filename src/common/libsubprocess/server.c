@@ -1,3 +1,4 @@
+
 /************************************************************\
  * Copyright 2018 Lawrence Livermore National Security, LLC
  * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
@@ -154,8 +155,7 @@ static void rexec_completion_cb (flux_subprocess_t *p)
         /* no fallback if this fails */
         if (flux_respond_pack (rex->s->h, rex->msg, "{s:s s:i}",
                                "type", "complete",
-                               "rank", rex->s->rank)
-                               < 0)
+                               "rank", rex->s->rank) < 0)
             flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
     }
 
@@ -204,8 +204,7 @@ static void rexec_state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t
                                "type", "state",
                                "rank", rex->s->rank,
                                "state", state,
-                               "status", flux_subprocess_status (p))
-                               < 0) {
+                               "status", flux_subprocess_status (p)) < 0) {
             flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
         }
     }
@@ -214,8 +213,7 @@ static void rexec_state_change_cb (flux_subprocess_t *p, flux_subprocess_state_t
                                "type", "state",
                                "rank", rex->s->rank,
                                "state", FLUX_SUBPROCESS_FAILED,
-                               "errno", p->failed_errno)
-                               < 0) {
+                               "errno", p->failed_errno) < 0) {
             flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
         }
         subprocess_cleanup (p);
@@ -365,8 +363,7 @@ static void server_exec_cb (flux_t *h,
                                "type", "state",
                                "rank", s->rank,
                                "state", FLUX_SUBPROCESS_EXEC_FAILED,
-                               "errno", errno)
-                               < 0) {
+                               "errno", errno) < 0) {
             flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
             goto error;
         }
@@ -771,4 +768,3 @@ int server_terminate_wait (flux_subprocess_server_t *s)
 
 /*
  * vi: ts=4 sw=4 expandtab
- */

@@ -1,3 +1,4 @@
+
 /************************************************************\
  * Copyright 2014 Lawrence Livermore National Security, LLC
  * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
@@ -1185,4 +1186,3 @@ int main (int argc, char *argv[])
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
- */

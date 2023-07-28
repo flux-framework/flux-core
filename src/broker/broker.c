@@ -1,3 +1,4 @@
+
 /************************************************************\
  * Copyright 2014 Lawrence Livermore National Security, LLC
  * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
@@ -165,8 +166,7 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
         int e;
         if ((e = argz_create (argv + optindex,
                               &ctx->init_shell_cmd,
-                              &ctx->init_shell_cmd_len))
-            != 0)
+                              &ctx->init_shell_cmd_len)) != 0)
             log_errn_exit (e, "argz_create");
     }
 }
@@ -612,15 +612,13 @@ static void init_attrs_rc_paths (attr_t *attrs)
     if (attr_add (attrs,
                   "broker.rc1_path",
                   flux_conf_builtin_get ("rc1_path", FLUX_CONF_AUTO),
-                  0)
-        < 0)
+                  0) < 0)
         log_err_exit ("attr_add rc1_path");
 
     if (attr_add (attrs,
                   "broker.rc3_path",
                   flux_conf_builtin_get ("rc3_path", FLUX_CONF_AUTO),
-                  0)
-        < 0)
+                  0) < 0)
         log_err_exit ("attr_add rc3_path");
 }
 
@@ -629,14 +627,12 @@ static void init_attrs_shell_paths (attr_t *attrs)
     if (attr_add (attrs,
                   "conf.shell_pluginpath",
                   flux_conf_builtin_get ("shell_pluginpath", FLUX_CONF_AUTO),
-                  0)
-        < 0)
+                  0) < 0)
         log_err_exit ("attr_add conf.shell_pluginpath");
     if (attr_add (attrs,
                   "conf.shell_initrc",
                   flux_conf_builtin_get ("shell_initrc", FLUX_CONF_AUTO),
-                  0)
-        < 0)
+                  0) < 0)
         log_err_exit ("attr_add conf.shell_initrc");
 }
 
@@ -729,8 +725,7 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc1 - initialization
      */
     if (rc1 && strlen (rc1) > 0) {
-        if (runat_push_shell_command (ctx->runat, "rc1", rc1, RUNAT_FLAG_LOG_STDIO)
-            < 0) {
+        if (runat_push_shell_command (ctx->runat, "rc1", rc1, RUNAT_FLAG_LOG_STDIO) < 0) {
             log_err ("runat_push_shell_command rc1");
             return -1;
         }
@@ -739,8 +734,7 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc2 - initial program
      */
     if (ctx->rank == 0 && !rc2_none) {
-        if (create_runat_rc2 (ctx->runat, ctx->init_shell_cmd, ctx->init_shell_cmd_len)
-            < 0) {
+        if (create_runat_rc2 (ctx->runat, ctx->init_shell_cmd, ctx->init_shell_cmd_len) < 0) {
             log_err ("create_runat_rc2");
             return -1;
         }
@@ -749,8 +743,7 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc3 - finalization
      */
     if (rc3 && strlen (rc3) > 0) {
-        if (runat_push_shell_command (ctx->runat, "rc3", rc3, RUNAT_FLAG_LOG_STDIO)
-            < 0) {
+        if (runat_push_shell_command (ctx->runat, "rc3", rc3, RUNAT_FLAG_LOG_STDIO) < 0) {
             log_err ("runat_push_shell_command rc3");
             return -1;
         }
@@ -950,8 +943,7 @@ static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs)
             log_err ("unable to calculate critical-ranks attribute");
             goto out;
         }
-        if (attr_add (attrs, "broker.critical-ranks", ranks, FLUX_ATTRFLAG_IMMUTABLE)
-            < 0) {
+        if (attr_add (attrs, "broker.critical-ranks", ranks, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
             log_err ("attr_add critical_ranks");
             goto out;
         }
@@ -964,8 +956,7 @@ static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs)
         }
         /*  Need to set immutable flag when attr set on command line
          */
-        if (attr_set_flags (attrs, "broker.critical-ranks", FLUX_ATTRFLAG_IMMUTABLE)
-            < 0) {
+        if (attr_set_flags (attrs, "broker.critical-ranks", FLUX_ATTRFLAG_IMMUTABLE) < 0) {
             log_err ("failed to make broker.criitcal-ranks attr immutable");
             goto out;
         }
@@ -1169,8 +1160,7 @@ static int load_module_bypath (broker_ctx_t *ctx,
                      module_get_name (p),
                      module_get_uuid (p),
                      mod_svc_cb,
-                     p)
-        < 0)
+                     p) < 0)
         goto module_remove;
     arg = argz_next (argz, argz_len, NULL);
     while (arg) {
@@ -2066,4 +2056,3 @@ void I_WRAP_SONAME_FNNAME_ZZ (Za, dlclose) (void *dso)
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
- */
