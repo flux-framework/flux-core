@@ -29,6 +29,7 @@ static const char *default_job_shell = NULL;
 static const char *flux_imp_path = NULL;
 static const char *exec_service = "rexec";
 static int exec_service_override = 0;
+static json_t *sdexec_properties = NULL;
 
 static const char *jobspec_get_job_shell (json_t *jobspec)
 {
@@ -85,6 +86,11 @@ bool config_get_exec_service_override (void)
     return exec_service_override;
 }
 
+json_t *config_get_sdexec_properties (void)
+{
+    return sdexec_properties;
+}
+
 /*  Initialize common configurations for use by job-exec exec modules.
  */
 int config_init (flux_t *h, int argc, char **argv)
@@ -131,6 +137,37 @@ int config_init (flux_t *h, int argc, char **argv)
                   "error reading config value exec.service: %s",
                   err.text);
         return -1;
+    }
+
+    /*  Check configuration for exec.sdexec-properties */
+    if (flux_conf_unpack (flux_get_conf (h),
+                          &err,
+                          "{s?{s?o}}",
+                          "exec",
+                            "sdexec-properties", &sdexec_properties) < 0) {
+        flux_log (h, LOG_ERR,
+                  "error reading config table exec.sdexec-properties: %s",
+                  err.text);
+        return -1;
+    }
+    if (sdexec_properties) {
+        const char *k;
+        json_t *v;
+
+        if (!json_is_object (sdexec_properties)) {
+            flux_log (h, LOG_ERR, "exec.sdexec-properties is not a table");
+            errno = EINVAL;
+            return -1;
+        }
+        json_object_foreach (sdexec_properties, k, v) {
+            if (!json_is_string (v)) {
+                flux_log (h, LOG_ERR,
+                          "exec.sdexec-properties.%s is not a string",
+                          k);
+                errno = EINVAL;
+                return -1;
+            }
+        }
     }
 
     if (argv && argc) {

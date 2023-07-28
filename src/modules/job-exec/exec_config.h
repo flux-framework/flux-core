@@ -11,6 +11,7 @@
 #ifndef HAVE_JOB_EXEC_CONFIG_H
 #define HAVE_JOB_EXEC_CONFIG_H 1
 
+#include <jansson.h>
 #include <stdbool.h>
 #include <flux/core.h>
 
@@ -23,6 +24,8 @@ const char *config_get_cwd (struct jobinfo *job);
 const char *config_get_imp_path (void);
 
 const char *config_get_exec_service (void);
+
+json_t *config_get_sdexec_properties (void);
 
 bool config_get_exec_service_override (void);
 
