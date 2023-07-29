@@ -95,8 +95,7 @@ test_expect_success 'submit jobs for job list testing' '
 	# rare job startup race.  See #5210
 	#
 	jobid=`flux submit ./sleepinf.sh` &&
-	flux job wait-event -p guest.exec.eventlog $jobid shell.init &&
-	flux job wait-event -p guest.output $jobid data &&
+	flux job wait-event -W -p guest.output $jobid data &&
 	flux job kill $jobid &&
 	fj_wait_event $jobid clean &&
 	echo $jobid >> inactiveids &&
@@ -110,8 +109,7 @@ test_expect_success 'submit jobs for job list testing' '
 	# rare job startup race.  See #5210
 	#
 	jobid=`flux submit ./sleepinf.sh` &&
-	flux job wait-event -p guest.exec.eventlog $jobid shell.init &&
-	flux job wait-event -p guest.output $jobid data &&
+	flux job wait-event -W -p guest.output $jobid data &&
 	flux job raise --type=myexception --severity=0 -m "myexception" $jobid &&
 	fj_wait_event $jobid clean &&
 	echo $jobid >> inactiveids &&

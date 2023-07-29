@@ -579,7 +579,7 @@ static int guest_namespace_watch (struct guest_watch_ctx *gw)
                                 "id", gw->id,
                                 "guest", true,
                                 "path", gw->path,
-                                "flags", 0)))
+                                "flags", gw->flags)))
         goto error;
 
     if (!(gw->guest_namespace_watch_f = flux_rpc_message (gw->ctx->h,

@@ -360,6 +360,9 @@ static struct optparse_option wait_event_opts[] =  {
       .usage = "Specify alternate eventlog path suffix "
                "(e.g. \"guest.exec.eventlog\")",
     },
+    { .name = "waitcreate", .key = 'W', .has_arg = 0,
+      .usage = "If path does not exist, wait for its creation",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -538,7 +541,7 @@ static struct optparse_subcommand subcommands[] = {
     },
     { "wait-event",
       "[-f text|json] [-T raw|iso|offset] [-t seconds] [-m key=val] [-c <num>] "
-      "[-p path] [-q] [-v] id event",
+      "[-p path] [-W] [-q] [-v] id event",
       "Wait for an event ",
       cmd_wait_event,
       0,
@@ -3309,6 +3312,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     struct wait_event_ctx ctx = {0};
     const char *str;
     double timeout;
+    int flags = 0;
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -3323,6 +3327,8 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     ctx.wait_event = argv[optindex++];
     ctx.path = optparse_get_str (p, "path", "eventlog");
     timeout = optparse_get_duration (p, "timeout", -1.0);
+    if (optparse_hasopt (p, "waitcreate"))
+        flags |= FLUX_JOB_EVENT_WATCH_WAITCREATE;
     entry_format_parse_options (p, &ctx.e);
     if ((str = optparse_get_str (p, "match-context", NULL))) {
         ctx.context_key = xstrdup (str);
@@ -3335,7 +3341,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     if (ctx.count <= 0)
         log_msg_exit ("count must be > 0");
 
-    if (!(f = flux_job_event_watch (h, ctx.id, ctx.path, 0)))
+    if (!(f = flux_job_event_watch (h, ctx.id, ctx.path, flags)))
         log_err_exit ("flux_job_event_watch");
     if (flux_future_then (f, timeout, wait_event_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");

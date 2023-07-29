@@ -225,9 +225,26 @@ test_expect_success 'flux job wait-event -p fails on invalid path' '
 	test_must_fail fj_wait_event -p "foobar" $jobid submit
 '
 
+test_expect_success 'flux job wait-event -p fails on invalid guest path' '
+	jobid=$(submit_job) &&
+	test_must_fail fj_wait_event -p "guest.foobar" $jobid submit
+'
+
 test_expect_success 'flux job wait-event -p fails on path "guest."' '
 	jobid=$(submit_job) &&
 	test_must_fail fj_wait_event -p "guest." $jobid submit
+'
+
+test_expect_success 'flux job wait-event -p and --waitcreate works (guest.exec.eventlog)' '
+	jobid=$(submit_job) &&
+	fj_wait_event --waitcreate -p "guest.exec.eventlog" $jobid done > wait_event_path4.out &&
+	grep done wait_event_path4.out
+'
+
+test_expect_success 'flux job wait-event -p invalid and --waitcreate fails' '
+	jobid=$(submit_job) &&
+	test_must_fail fj_wait_event --waitcreate -p "guest.invalid" $jobid foobar 2> waitcreate1.err &&
+	grep "not found" waitcreate1.err
 '
 
 test_expect_success 'flux job wait-event -p hangs on non-guest eventlog' '
@@ -239,7 +256,7 @@ test_expect_success 'flux job wait-event -p hangs on non-guest eventlog' '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (live job)' '
 	jobid=$(submit_job_live sleeplong.json)
-	fj_wait_event -p "guest.exec.eventlog" $jobid done > wait_event_path4.out &
+	fj_wait_event -p "guest.exec.eventlog" $jobid done > wait_event_path5.out &
 	waitpid=$! &&
 	wait_watchers_nonzero "watchers" &&
 	wait_watchers_nonzero "guest_watchers" &&
@@ -247,7 +264,35 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 	wait_watcherscount_nonzero $guestns &&
 	flux cancel $jobid &&
 	wait $waitpid &&
-	grep done wait_event_path4.out
+	grep done wait_event_path5.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.foobar and --waitcreate works (live job)' '
+	jobid=$(submit_job_live sleeplong.json)
+	fj_wait_event --waitcreate -p "guest.foobar" $jobid foobar > wait_event_path6.out &
+	waitpid=$! &&
+	wait_watchers_nonzero "watchers" &&
+	wait_watchers_nonzero "guest_watchers" &&
+	guestns=$(flux job namespace $jobid) &&
+	wait_watcherscount_nonzero $guestns &&
+	flux kvs eventlog append --namespace=${guestns} foobar foobar &&
+	flux cancel $jobid &&
+	wait $waitpid &&
+	grep foobar wait_event_path6.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux job wait-event -p invalid and --waitcreate fails (live job)' '
+	jobid=$(submit_job_live sleeplong.json)
+	fj_wait_event --waitcreate -p "guest.invalid" $jobid foobar \
+		> wait_event_path6.out 2> wait_event_path6.err &
+	waitpid=$! &&
+	wait_watchers_nonzero "watchers" &&
+	wait_watchers_nonzero "guest_watchers" &&
+	guestns=$(flux job namespace $jobid) &&
+	wait_watcherscount_nonzero $guestns &&
+	flux cancel $jobid &&
+	! wait $waitpid &&
+	grep "not found" wait_event_path6.err
 '
 
 test_expect_success 'flux job wait-event -p times out on no event (live job)' '
@@ -308,7 +353,7 @@ test_expect_success 'job-info: generate jobspec to consume all resources' '
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (wait job)' '
 	jobidall=$(submit_job_live sleeplong-all-rsrc.json)
 	jobid=$(submit_job_wait)
-	fj_wait_event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path5.out &
+	fj_wait_event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path7.out &
 	waitpid=$! &&
 	wait_watchers_nonzero "watchers" &&
 	wait_watchers_nonzero "guest_watchers" &&
@@ -318,7 +363,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 	wait_watcherscount_nonzero $guestns &&
 	flux cancel ${jobid} &&
 	wait $waitpid &&
-	grep done wait_event_path5.out
+	grep done wait_event_path7.out
 '
 
 test_expect_success 'flux job wait-event -p times out on no event (wait job)' '
@@ -337,12 +382,60 @@ test_expect_success 'flux job wait-event -p times out on no event (wait job)' '
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (never start job)' '
 	jobidall=$(submit_job_live sleeplong-all-rsrc.json)
 	jobid=$(submit_job_wait)
-	fj_wait_event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path6.out &
+	fj_wait_event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path8.out &
 	waitpid=$! &&
 	wait_watchers_nonzero "watchers" &&
 	wait_watchers_nonzero "guest_watchers" &&
 	flux cancel ${jobid} &&
 	! wait $waitpid &&
+	flux cancel ${jobidall}
+'
+
+test_expect_success NO_CHAIN_LINT 'flux job wait-event -p and --waitcreate works (wait job)' '
+	jobidall=$(submit_job_live sleeplong-all-rsrc.json)
+	jobid=$(submit_job_wait)
+	fj_wait_event -v --waitcreate -p "guest.foobar" ${jobid} foobar > wait_event_path8.out &
+	waitpid=$! &&
+	wait_watchers_nonzero "watchers" &&
+	wait_watchers_nonzero "guest_watchers" &&
+	flux cancel ${jobidall} &&
+	fj_wait_event ${jobid} start &&
+	guestns=$(flux job namespace ${jobid}) &&
+	wait_watcherscount_nonzero $guestns &&
+	flux kvs eventlog append --namespace=${guestns} foobar foobar &&
+	flux cancel ${jobid} &&
+	wait $waitpid &&
+	grep foobar wait_event_path8.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux job wait-event -p invalid and --waitcreate fails (wait job)' '
+	jobidall=$(submit_job_live sleeplong-all-rsrc.json)
+	jobid=$(submit_job_wait)
+	fj_wait_event -v --waitcreate -p "guest.invalid" ${jobid} invalid \
+		> wait_event_path9.out 2> wait_event_path9.err &
+	waitpid=$! &&
+	wait_watchers_nonzero "watchers" &&
+	wait_watchers_nonzero "guest_watchers" &&
+	flux cancel ${jobidall} &&
+	fj_wait_event ${jobid} start &&
+	guestns=$(flux job namespace ${jobid}) &&
+	wait_watcherscount_nonzero $guestns &&
+	flux cancel ${jobid} &&
+	! wait $waitpid &&
+	grep "not found" wait_event_path9.err
+'
+
+test_expect_success NO_CHAIN_LINT 'flux job wait-event -p invalid and --waitcreate works (never start job)' '
+	jobidall=$(submit_job_live sleeplong-all-rsrc.json)
+	jobid=$(submit_job_wait)
+	fj_wait_event -v --waitcreate -p "guest.invalid" ${jobid} invalid \
+		> wait_event_path10.out 2> wait_event_path10.err &
+	waitpid=$! &&
+	wait_watchers_nonzero "watchers" &&
+	wait_watchers_nonzero "guest_watchers" &&
+	flux cancel ${jobid} &&
+	! wait $waitpid &&
+	grep "never received" wait_event_path10.err &&
 	flux cancel ${jobidall}
 '
 
@@ -357,6 +450,15 @@ test_expect_success 'job-info stats works' '
 
 test_expect_success 'eventlog-watch request with empty payload fails with EPROTO(71)' '
 	${RPC} job-info.eventlog-watch 71 </dev/null
+'
+
+test_expect_success 'eventlog-watch request invalid flags fails with EPROTO(71)' '
+	echo "{\"id\":42, \"path\":\"foobar\", \"flags\":499}" \
+		${RPC} job-info.eventlog-watch 71
+'
+test_expect_success 'eventlog-watch request non-streaming fails with EPROTO(71)' '
+	echo "{\"id\":42, \"path\":\"foobar\", \"flags\":0}" \
+		${RPC} job-info.eventlog-watch 71
 '
 
 test_done

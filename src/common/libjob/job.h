@@ -26,6 +26,10 @@ enum job_submit_flags {
     FLUX_JOB_NOVALIDATE = 8,    // don't validate jobspec (instance owner only)
 };
 
+enum job_event_watch_flags {
+    FLUX_JOB_EVENT_WATCH_WAITCREATE = 1, // wait for path to exist
+};
+
 enum job_urgency {
     FLUX_JOB_URGENCY_MIN = 0,
     FLUX_JOB_URGENCY_HOLD = FLUX_JOB_URGENCY_MIN,
