@@ -463,6 +463,7 @@ _flux_job()
         -q --quiet \
         -v --verbose \
         -p --path= \
+        -W --waitcreate \
     "
     local info_OPTS="\
         -o --original \
