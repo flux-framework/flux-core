@@ -171,7 +171,7 @@ class TestHandle(unittest.TestCase):
         self.assertEqual(cm.exception.errno, errno.EINVAL)
         # Ensure that the result of flux_future_error_string propagated up
         self.assertEqual(cm.exception.strerror, future.error_string())
-        self.assertRegexpMatches(cm.exception.strerror, "urgency range is .*")
+        self.assertRegex(cm.exception.strerror, "urgency range is .*")
 
     def test_06_blocking_methods(self):
         future = Future(self.f.future_create(ffi.NULL, ffi.NULL))

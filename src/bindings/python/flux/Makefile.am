@@ -37,6 +37,7 @@ nobase_fluxpy_PYTHON = \
 	job/submit.py \
 	job/timeleft.py \
 	job/stats.py \
+	job/output.py \
 	job/_wrapper.py \
 	job/executor.py \
 	job/directives.py \

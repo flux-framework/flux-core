@@ -32,3 +32,12 @@ from flux.job.executor import (
 )
 from flux.job.timeleft import timeleft
 from flux.core.inner import ffi
+from flux.job.output import (
+    job_output,
+    output_event_watch,
+    output_event_watch_async,
+    output_watch,
+    output_watch_async,
+    output_watch_lines,
+    output_watch_lines_async,
+)
