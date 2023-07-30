@@ -458,6 +458,11 @@ class JobInfo:
         if not isinstance(status, int):
             if self.result_id == flux.constants.FLUX_JOB_RESULT_CANCELED:
                 code = -128
+            elif self.result_id == flux.constants.FLUX_JOB_RESULT_FAILED:
+                #  A job with empty waitstatus could fail if it received a
+                #  fatal exception before starting. Use generic returncode
+                #  of 1.
+                code = 1
         elif os.WIFSIGNALED(status):
             code = -os.WTERMSIG(status)
         elif os.WIFEXITED(status):
