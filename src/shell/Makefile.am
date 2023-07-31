@@ -92,7 +92,8 @@ flux_shell_SOURCES = \
 	rlimit.c \
 	cyclic.c \
 	signal.c \
-	files.c
+	files.c \
+	oom.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \

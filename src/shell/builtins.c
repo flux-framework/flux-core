@@ -50,6 +50,7 @@ extern struct shell_builtin builtin_exception;
 extern struct shell_builtin builtin_rlimit;
 extern struct shell_builtin builtin_cyclic;
 extern struct shell_builtin builtin_signal;
+extern struct shell_builtin builtin_oom;
 
 static struct shell_builtin * builtins [] = {
     &builtin_tmpdir,
@@ -72,6 +73,7 @@ static struct shell_builtin * builtins [] = {
     &builtin_rlimit,
     &builtin_cyclic,
     &builtin_signal,
+    &builtin_oom,
     &builtin_list_end,
 };
 
