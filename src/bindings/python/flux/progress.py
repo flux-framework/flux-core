@@ -175,7 +175,8 @@ class Bottombar:
     def start(self):
         """Start drawing a Bottombar"""
         self._running = True
-        self._t0 = time.time()
+        if self._t0 is None:
+            self._t0 = time.time()
         self.redraw()
         atexit.register(self._reset_terminal)
         return self
