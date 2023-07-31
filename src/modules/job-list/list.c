@@ -159,6 +159,93 @@ error:
     return NULL;
 }
 
+static int legacy_list_rpc (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            struct list_ctx *ctx,
+                            int *max_entries,
+                            json_t **attrs,
+                            double *since,
+                            json_t **legacy_constraint)
+{
+    uint32_t userid;
+    int states;
+    int results;
+    const char *name = NULL;
+    const char *queue = NULL;
+    json_t *a = NULL;
+    json_t *o;
+
+    if (flux_request_unpack (msg, NULL, "{s:i s:o s:i s:i s:i s?F s?s s?s}",
+                             "max_entries", max_entries,
+                             "attrs", attrs,
+                             "userid", &userid,
+                             "states", &states,
+                             "results", &results,
+                             "since", since,
+                             "name", &name,
+                             "queue", &queue) < 0)
+        return -1;
+
+    /* Create constraint object given legacy inputs */
+
+    if (!(a = json_array ()))
+        goto error;
+
+    if (userid != FLUX_USERID_UNKNOWN) {
+        o = json_pack ("{s:[i]}", "userid", userid);
+        if (!o || json_array_append_new (a, o) < 0) {
+            json_decref (o);
+            goto error;
+        }
+    }
+
+    if (name) {
+        o = json_pack ("{s:[s]}", "name", name);
+        if (!o || json_array_append_new (a, o) < 0) {
+            json_decref (o);
+            goto error;
+        }
+    }
+
+    if (queue) {
+        o = json_pack ("{s:[s]}", "queue", queue);
+        if (!o || json_array_append_new (a, o) < 0) {
+            json_decref (o);
+            goto error;
+        }
+    }
+
+    /* N.B. in older code, if states == 0, then set states=<all the states>.
+     * The equivalent in constraints is to not set a constraint. */
+    if (states) {
+        o = json_pack ("{s:[i]}", "states", states);
+        if (!o || json_array_append_new (a, o) < 0) {
+            json_decref (o);
+            goto error;
+        }
+    }
+
+    /* N.B. in older code, if results == 0, then set states=<all the results>.
+     * The equivalent in constraints is to not set a constraint. */
+    if (results) {
+        o = json_pack ("{s:[i]}", "results", results);
+        if (!o || json_array_append_new (a, o) < 0) {
+            json_decref (o);
+            goto error;
+        }
+    }
+
+    if (!((*legacy_constraint) = json_pack ("{s:o}", "and", a)))
+        goto error;
+
+    return 0;
+
+error:
+    json_decref (a);
+    return -1;
+}
+
 void list_cb (flux_t *h, flux_msg_handler_t *mh,
               const flux_msg_t *msg, void *arg)
 {
@@ -169,6 +256,7 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
     int max_entries;
     double since = 0.;
     json_t *constraint = NULL;
+    json_t *legacy_constraint = NULL;
     struct list_constraint *c = NULL;
     struct state_constraint *statec = NULL;
     flux_error_t error;
@@ -181,6 +269,26 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
         seterror (&err, "invalid payload: %s", flux_msg_last_error (msg));
         errno = EPROTO;
         goto error;
+    }
+    if (!constraint) {
+        /* Double check for legacy RPC fields since "constraint"
+         * object is optional in new protocol. */
+        int tmp_max_entries;
+        json_t *tmp_attrs;
+        double tmp_since = 0.;
+        if (!legacy_list_rpc (h,
+                              mh,
+                              msg,
+                              ctx,
+                              &tmp_max_entries,
+                              &tmp_attrs,
+                              &tmp_since,
+                              &legacy_constraint)) {
+            max_entries = tmp_max_entries;
+            attrs = tmp_attrs;
+            since = tmp_since;
+            constraint = legacy_constraint;
+        }
     }
     if (max_entries < 0) {
         seterror (&err, "invalid payload: max_entries < 0 not allowed");
@@ -222,6 +330,7 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
     json_decref (jobs);
     list_constraint_destroy (c);
     state_constraint_destroy (statec);
+    json_decref (legacy_constraint);
     return;
 
 error:
@@ -229,6 +338,7 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     list_constraint_destroy (c);
     state_constraint_destroy (statec);
+    json_decref (legacy_constraint);
 }
 
 void check_id_valid_continuation (flux_future_t *f, void *arg)
