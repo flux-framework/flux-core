@@ -1,3 +1,50 @@
+flux-core version 0.53.0 - 2023-08-01
+-------------------------------------
+
+## New Features
+ * add capability to run jobs in systemd (#5197)
+ * job-exec: allow job memory limits to be set (#5359)
+ * python: add API for job output (#5332)
+ * python: add JobWatcher class and use for `submit` and `bulksubmit`
+   `--watch` functionality (#5357)
+ * cmd: add flux-watch(1) (#5360)
+ * python: add FutureExt class for extensible futures from python (#5330)
+ * shell: support `-o gpu-affinity=map:LIST` (#5356)
+ * job-info: support WAITCREATE on eventlog watch  (#5358)
+ * job-list: support job list constraints (#5126)
+
+## Fixes
+ * job-list: support older RPC protocol (#5364)
+ * job-manager: prevent jobs with outstanding epilog-start events from
+   becoming inactive (#5353)
+ * ensure flux utilities agree that a job with a fatal exception has failed
+   (#5355)
+ * flux-job: suppress the `attach` status line in more situations (#5354)
+ * flux-jobs: correct several filtering corner cases (#5164)
+ * sdexec: fix memory leaks (#5349)
+ * python: fix potential gc of Future ffi handle before Future destruction
+   (#5346)
+ * resource: fix problem with exclusions when R is dynamically discovered
+   (#5339)
+ * python: clear KVS txns on commit error (#5335)
+ * python: do not return int status in kvs functions (#5329)
+ * python: fix exists in KVSDir with initial paths (#5331)
+ * python: fix writes in KVSDir with initial paths (#5322)
+ * flux-job: fix invalid --original info output (#5318)
+ * flux-job: fix `flux job status` handling of nonfatal exceptions (#5320)
+ * job-manager: fix prolog/epilog exception handling (#5321)
+ * job-info: ignore duplicate lookup keys (#5317)
+
+## Cleanup
+ * job-exec: remove systemd exec prototype (#5348)
+ * job-manager: make exception note a requirement (#5336)
+ * resource: ignore live resource.exclude changes (#5341)
+ * python: add extra documentation to kvs.py module (#5328)
+
+## Build/Testsuite/CI
+ * testsuite: remove get-xml-test.py (#5340)
+
+
 flux-core version 0.52.0 - 2023-07-06
 -------------------------------------
 
