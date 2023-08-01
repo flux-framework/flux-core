@@ -586,6 +586,85 @@ test_expect_success 'flux job list all via t_depend (3)' '
 	test $(cat list_constraint_all3.out | wc -l) -eq ${numlines}
 '
 
+#
+# legacy RPC tests
+#
+
+test_expect_success 'flux job list all hostname jobs (legacy RPC)' '
+	id=$(id -u) &&
+	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:0, results:0, name:\"hostname\", attrs:[]}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > legacy_hostname_jobs.out &&
+	numlines=$(cat pending.ids completed.ids | wc -l) &&
+	test $(cat legacy_hostname_jobs.out | wc -l) -eq ${numlines}
+'
+
+test_expect_success 'flux job list active hostname jobs (legacy RPC)' '
+	id=$(id -u) &&
+	state=`${JOB_CONV} strtostate ACTIVE` &&
+	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:0, name:\"hostname\", attrs:[]}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > legacy_pending_hostname.out &&
+	test_cmp legacy_pending_hostname.out pending.ids
+'
+
+test_expect_success 'flux job list inactive hostname jobs (legacy RPC)' '
+	id=$(id -u) &&
+	state=`${JOB_CONV} strtostate INACTIVE` &&
+	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:0, name:\"hostname\", attrs:[]}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > legacy_inactive_hostname.out &&
+	test_cmp legacy_inactive_hostname.out completed.ids
+'
+
+test_expect_success 'flux job list invalid queue (legacy RPC)' '
+	id=$(id -u) &&
+	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:0, results:0, queue:\"foof\", attrs:[]}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > legacy_invalid_queue.out &&
+	test $(cat legacy_invalid_queue.out | wc -l) -eq 0
+'
+
+test_expect_success 'flux job list active (legacy RPC)' '
+	state=`${JOB_CONV} strtostate ACTIVE` &&
+	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:0, attrs:[]}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > legacy_active.out &&
+	numlines=$(cat active.ids | wc -l) &&
+	test $(cat legacy_active.out | wc -l) -eq ${numlines}
+'
+
+test_expect_success 'flux job list only canceled jobs (legacy RPC)' '
+	id=$(id -u) &&
+	state=`${JOB_CONV} strtostate INACTIVE` &&
+	result=`${JOB_CONV} strtoresult CANCELED` &&
+	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > legacy_result_canceled.out &&
+	test_cmp canceled.ids legacy_result_canceled.out
+'
+
+test_expect_success 'flux job list only failed jobs (legacy RPC)' '
+	id=$(id -u) &&
+	state=`${JOB_CONV} strtostate INACTIVE` &&
+	result=`${JOB_CONV} strtoresult FAILED` &&
+	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > legacy_result_failed.out &&
+	test_cmp failed.ids legacy_result_failed.out
+'
+
+test_expect_success 'flux job list only timeout jobs (legacy RPC)' '
+	id=$(id -u) &&
+	state=`${JOB_CONV} strtostate INACTIVE` &&
+	result=`${JOB_CONV} strtoresult TIMEOUT` &&
+	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > legacy_result_timeout.out &&
+	test_cmp timeout.ids legacy_result_timeout.out
+'
+
+test_expect_success 'flux job list only completed jobs (legacy RPC)' '
+	id=$(id -u) &&
+	state=`${JOB_CONV} strtostate INACTIVE` &&
+	result=`${JOB_CONV} strtoresult COMPLETED` &&
+	$jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > legacy_result_completed.out &&
+	test_cmp completed.ids legacy_result_completed.out
+'
+
 # with single anonymous queue, queues arrays should be zero length
 test_expect_success 'job stats lists jobs in correct state (mix)' '
 	flux job stats | jq -e ".job_states.depend == 0" &&
