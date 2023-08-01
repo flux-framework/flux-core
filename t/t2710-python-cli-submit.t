@@ -11,6 +11,10 @@ export FLUX_PYCLI_LOGLEVEL=10
 
 flux setattr log-stderr-level 1
 
+test_expect_success 'flux submit --dry-run works without Flux instance' '
+	FLUX_URI=/no/such/path \
+	    flux submit -n1 --dry-run hostname >test.json
+'
 test_expect_success 'flux submit fails with error message' '
 	test_must_fail flux submit 2>usage.err &&
 	grep "job command and arguments are missing" usage.err

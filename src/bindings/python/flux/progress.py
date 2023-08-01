@@ -271,7 +271,7 @@ class ProgressBar(Bottombar):
 
     def _formatter(self, bbar, width):
         style = self.style
-        fraction = float(self.count / self.total)
+        fraction = float(self.count / self.total) if self.total else 0
         percent = 100 * fraction
 
         #  Format before/after strings:

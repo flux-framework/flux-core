@@ -586,6 +586,13 @@ class TestJob(unittest.TestCase):
         ids.append(job.submit(self.fh, JobspecV1.from_command(["true"]), urgency=0))
         job.cancel(self.fh, ids[4])
 
+        # Submit another held job so we can raise non-cancel exception
+        # before RUN:
+        ids.append(job.submit(self.fh, JobspecV1.from_command(["true"]), urgency=0))
+        self.fh.rpc(
+            "job-manager.raise", {"id": ids[5], "severity": 0, "type": "test"}
+        ).get()
+
         for jobid in ids:
             flux.job.result_async(self.fh, jobid).then(cb, jobid)
 
@@ -683,7 +690,24 @@ class TestJob(unittest.TestCase):
                 }
             ),
         )
-
+        self.assertEqual(
+            result[ids[5]].get_info(),
+            JobInfo(
+                {
+                    "id": ids[5],
+                    "result": flux.constants.FLUX_JOB_RESULT_FAILED,
+                    "t_submit": 0.0,
+                    "exception_occurred": True,
+                    "exception_type": "test",
+                    "exception_note": "",
+                    "exception_severity": 0,
+                }
+            ),
+        )
+        # Explicitly check returncode for job that failed before start
+        # without a cancel exception. This is done since returncode is
+        # a derived attribute and we want to ensure it is explicitly 1:
+        self.assertEqual(result[ids[5]].get_info().returncode, 1)
         # synchronous job.result() test
         self.assertEqual(job.result(self.fh, ids[3]), result[ids[3]].get_info())
 

@@ -38,7 +38,7 @@ import flux
 from flux import debugged, job, util
 from flux.constraint.parser import ConstraintParser, ConstraintSyntaxError
 from flux.idset import IDset
-from flux.job import JobspecV1
+from flux.job import JobspecV1, JobWatcher
 from flux.progress import ProgressBar
 from flux.util import dict_merge, set_treedict
 
@@ -731,6 +731,7 @@ class MiniCmd:
         self.flux_handle = None
         self.exitcode = 0
         self.progress = None
+        self.watcher = None
         self.parser = self.create_parser(prog, usage, description, exclude_io)
 
     @staticmethod
@@ -1312,6 +1313,8 @@ class SubmitBaseCmd(MiniCmd):
 
     def run_and_exit(self):
         self.flux_handle.reactor_run()
+        if self.watcher:
+            self.exitcode = max(self.watcher.exitcode, self.exitcode)
         sys.exit(self.exitcode)
 
 
@@ -1387,127 +1390,6 @@ class SubmitBulkCmd(SubmitBaseCmd):
             help="With --progress, show job throughput",
         )
 
-    @staticmethod
-    def output_watch_cb(future, args, jobid, label):
-        """Handle events in the guest.output eventlog"""
-        event = future.get_event()
-        if event and event.name == "data":
-            if "stream" in event.context and "data" in event.context:
-                stream = event.context["stream"]
-                data = event.context["data"]
-                rank = event.context["rank"]
-                if args.label_io:
-                    getattr(args, stream).write(f"{jobid}: {rank}: {data}")
-                else:
-                    getattr(args, stream).write(data)
-
-    def exec_watch_cb(self, future, watch_future, args, jobinfo, label=""):
-        """Handle events in the guest.exec.eventlog"""
-        jobid = jobinfo["id"]
-        event = future.get_event()
-        if event is None:
-            return
-        if args.verbose > 2:
-            ts = event.timestamp - self.t0
-            print(f"{jobid}: {ts:.3f}s exec.{event.name}", file=args.stderr)
-        if args.watch and event and event.name == "shell.init":
-            #  Once the shell.init event is posted, then it is safe to
-            #   begin watching the output eventlog:
-            #
-            job.event_watch_async(
-                self.flux_handle, jobid, eventlog="guest.output"
-            ).then(self.output_watch_cb, args, jobid, label)
-
-            if not args.wait or not args.wait.startswith("exec."):
-                #  Events from this eventlog are no longer needed
-                future.cancel()
-        if args.wait and args.wait == f"exec.{event.name}":
-            # Done with this job: update progress bar if necessary
-            #  and cancel this and the main eventlog futures:
-            #
-            self.progress_update(jobinfo, event=None)
-            future.cancel(stop=True)
-            watch_future.cancel(stop=True)
-
-    @staticmethod
-    def status_to_exitcode(status):
-        """Calculate exitcode from job status"""
-        if os.WIFEXITED(status):
-            status = os.WEXITSTATUS(status)
-        elif os.WIFSIGNALED(status):
-            status = 127 + os.WTERMSIG(status)
-        return status
-
-    def event_watch_cb(self, future, args, jobinfo, label=""):
-        """Handle events in the main job eventlog"""
-        jobid = jobinfo["id"]
-        event = future.get_event()
-        self.progress_update(jobinfo, event=event)
-        if event is None:
-            return
-
-        # Capture first timestamp if not already set
-        if not self.t0 or event.timestamp < self.t0:
-            self.t0 = event.timestamp
-        if args.verbose > 2:
-            ts = event.timestamp - self.t0
-            print(f"{jobid}: {ts:.3f}s {event.name}", file=args.stderr)
-
-        if args.wait and args.wait == event.name:
-            # Done with this job: update progress bar if necessary
-            #  and cancel future
-            #
-            self.progress_update(jobinfo, event=None)
-            future.cancel(stop=True)
-        if event.name == "exception":
-            #
-            #  Handle an exception: update global exitcode and print
-            #   an error:
-            if jobinfo["state"] == "submit":
-                #
-                #  If job was still pending then this job failed
-                #   to execute. Treat it as failure with exitcode = 1
-                #
-                jobinfo["state"] = "failed"
-                if self.exitcode == 0:
-                    self.exitcode = 1
-            elif event.context["severity"] == 0:
-                #
-                #  A fatal job exception should cause the command to
-                #  to fail under any circumstances, even if the job
-                #  ends up finishing with status=0.
-                #
-                if self.exitcode == 0:
-                    self.exitcode = 1
-
-            #  Print a human readable error:
-            exception_type = event.context["type"]
-            note = event.context["note"]
-            print(
-                f"{jobid}: exception: type={exception_type} note={note}",
-                file=args.stderr,
-            )
-        elif event.name == "alloc":
-            jobinfo["state"] = "running"
-        elif event.name == "start" and (args.watch or args.wait.startswith("exec.")):
-            #
-            #  Watch the exec eventlog if the --watch option was provided
-            #   or args.wait starts with 'exec.'
-            #
-            job.event_watch_async(
-                self.flux_handle, jobid, eventlog="guest.exec.eventlog"
-            ).then(self.exec_watch_cb, future, args, jobinfo, label)
-        elif event.name == "finish":
-            #
-            #  Collect exit status and adust self.exitcode if necessary:
-            #
-            jobinfo["state"] = "done"
-            status = self.status_to_exitcode(event.context["status"])
-            if args.verbose:
-                print(f"{jobid}: complete: status={status}", file=args.stderr)
-            if status > self.exitcode:
-                self.exitcode = status
-
     def submit_cb(self, future, args, label=""):
         try:
             jobid = future.get_id()
@@ -1519,41 +1401,56 @@ class SubmitBulkCmd(SubmitBaseCmd):
             self.progress_update(submit_failed=True)
             return
 
-        if args.wait or args.watch:
-            #
-            #  If the user requested to wait for or watch all jobs
-            #   then start watching the main eventlog.
-            #
-            #  Carry along a bit of state for each job so that exceptions
-            #   before the job is running can be handled properly
-            #
-            jobinfo = {"id": jobid, "state": "submit"}
-            fut = job.event_watch_async(self.flux_handle, jobid)
-            fut.then(self.event_watch_cb, args, jobinfo, label)
-            self.progress_update(jobinfo, submit=True)
+        if self.watcher:
+            self.watcher.add_jobid(jobid, args.stdout, args.stderr, args.wait)
         elif self.progress:
             #  Update progress of submission only
             self.progress.update(jps=self.jobs_per_sec())
+
+    def _progress_check(self, args):
+        if args.progress and not self.progress and not sys.stdout.isatty():
+            LOGGER.warning("stdout is not a tty. Ignoring --progress option")
+            args.progress = None
+
+    def watcher_start(self, args):
+
+        if not self.watcher:
+            #  Need to open self.flux_handle if it isn't already in order
+            #  to start the watcher
+            if not self.flux_handle:
+                self.flux_handle = flux.Flux()
+
+            self._progress_check(args)
+
+            self.watcher = JobWatcher(
+                self.flux_handle,
+                progress=args.progress,
+                jps=args.jps,
+                log_events=(args.verbose > 1),
+                log_status=(args.verbose > 0),
+                labelio=args.label_io,
+                wait=args.wait,
+                watch=args.watch,
+            ).start()
 
     def jobs_per_sec(self):
         return (self.progress.count + 1) / self.progress.elapsed
 
     def progress_start(self, args, total):
         """
-        Initialize progress bar if one was requested
+        Initialize job submission progress bar if user requested --progress
+        without --wait or --watch
         """
+        self._progress_check(args)
         if not args.progress or self.progress:
             # progress bar not requested or already started
             return
-        if not sys.stdout.isatty():
-            LOGGER.warning("stdout is not a tty. Ignoring --progress option")
 
-        before = (
-            "PD:{pending:<{width}} R:{running:<{width}} "
-            "CD:{complete:<{width}} F:{fail:<{width}} "
-        )
-        if not (args.wait or args.watch):
-            before = "Submitting {total} jobs: "
+        if args.wait or args.watch:
+            # progress handled in JobWatcher class
+            return
+
+        before = "Submitting {total} jobs: "
         after = "{percent:5.1f}% {elapsed.dt}"
         if args.jps:
             after = "{percent:5.1f}% {jps:4.1f} job/s"
@@ -1564,17 +1461,13 @@ class SubmitBulkCmd(SubmitBaseCmd):
             before=before,
             after=after,
             pending=0,
-            running=0,
-            complete=0,
             fail=0,
             jps=0,
         ).start()
 
-    def progress_update(
-        self, jobinfo=None, submit=False, submit_failed=False, event=None
-    ):
+    def progress_update(self, jobinfo=None, submit=False, submit_failed=False):
         """
-        Update progress bar if one was requested
+        Update submission progress bar if one was requested
         """
         if not self.progress:
             return
@@ -1605,39 +1498,6 @@ class SubmitBulkCmd(SubmitBaseCmd):
                 fail=self.progress.fail + 1,
                 jps=self.jobs_per_sec(),
             )
-        elif event is None:
-            self.progress.update(jps=self.jobs_per_sec())
-        elif event.name == "alloc":
-            self.progress.update(
-                advance=0,
-                pending=self.progress.pending - 1,
-                running=self.progress.running + 1,
-            )
-        elif event.name == "exception" and event.context["severity"] == 0:
-            #
-            #  Exceptions only need to be specially handled in the
-            #   pending state. If the job is running and gets an exception
-            #   then a finish event will be posted and handled below:
-            #
-            if jobinfo["state"] == "submit":
-                self.progress.update(
-                    advance=0,
-                    pending=self.progress.pending - 1,
-                    fail=self.progress.fail + 1,
-                )
-        elif event.name == "finish":
-            if event.context["status"] == 0:
-                self.progress.update(
-                    advance=0,
-                    running=self.progress.running - 1,
-                    complete=self.progress.complete + 1,
-                )
-            else:
-                self.progress.update(
-                    advance=0,
-                    running=self.progress.running - 1,
-                    fail=self.progress.fail + 1,
-                )
 
     @staticmethod
     def cc_list(args):
@@ -1678,7 +1538,10 @@ class SubmitBulkCmd(SubmitBaseCmd):
         args.stdout = sys.stdout
         args.stderr = sys.stderr
 
-        if args.progress:
+        if args.watch or args.wait:
+            self.watcher_start(args)
+
+        elif args.progress:
             self.progress_start(args, len(cclist))
 
         for i in cclist:

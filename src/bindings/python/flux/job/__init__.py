@@ -41,3 +41,4 @@ from flux.job.output import (
     output_watch_lines,
     output_watch_lines_async,
 )
+from flux.job.watcher import JobWatcher
