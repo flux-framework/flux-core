@@ -19,7 +19,13 @@ import sys
 import flux.constants
 from flux.job import JobID, JobInfo, JobInfoFormat, JobList, job_fields_to_attrs
 from flux.job.stats import JobStats
-from flux.util import UtilConfig
+from flux.util import (
+    FilterAction,
+    FilterActionSetUpdate,
+    FilterTrueAction,
+    UtilConfig,
+    help_formatter,
+)
 
 LOGGER = logging.getLogger("flux-jobs")
 
@@ -192,49 +198,8 @@ def fetch_jobs(args, fields):
     return lst
 
 
-class FilterAction(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, self.dest, values)
-        setattr(namespace, "filtered", True)
-
-
-class FilterActionSetUpdate(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, "filtered", True)
-        values = values.split(",")
-        getattr(namespace, self.dest).update(values)
-
-
-# pylint: disable=redefined-builtin
-class FilterTrueAction(argparse.Action):
-    def __init__(
-        self,
-        option_strings,
-        dest,
-        const=True,
-        default=False,
-        required=False,
-        help=None,
-        metavar=None,
-    ):
-        super(FilterTrueAction, self).__init__(
-            option_strings=option_strings,
-            dest=dest,
-            nargs=0,
-            const=const,
-            default=default,
-            help=help,
-        )
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, self.dest, self.const)
-        setattr(namespace, "filtered", True)
-
-
 def parse_args():
-    parser = argparse.ArgumentParser(
-        prog="flux-jobs", formatter_class=flux.util.help_formatter()
-    )
+    parser = argparse.ArgumentParser(prog="flux-jobs", formatter_class=help_formatter())
     # -a equivalent to -s "pending,running,inactive" and -u set to userid
     parser.add_argument("-a", action=FilterTrueAction, help="List jobs in all states")
     # -A equivalent to -s "pending,running,inactive" and -u set to "all"

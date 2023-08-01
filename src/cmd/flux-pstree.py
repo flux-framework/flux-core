@@ -16,7 +16,7 @@ import sys
 import flux
 import flux.uri
 from flux.job import JobID, JobInfo, JobInfoFormat, JobList
-from flux.util import Tree
+from flux.util import FilterAction, FilterTrueAction, Tree, YesNoAction
 
 DETAILS_FORMAT = {
     "default": (
@@ -204,58 +204,6 @@ def load_tree(
         tree.append_tree(future.result())
 
     return tree
-
-
-class FilterAction(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, self.dest, values)
-        setattr(namespace, "filtered", True)
-
-
-# pylint: disable=redefined-builtin
-class FilterTrueAction(argparse.Action):
-    def __init__(
-        self,
-        option_strings,
-        dest,
-        const=True,
-        default=False,
-        required=False,
-        help=None,
-        metavar=None,
-    ):
-        super(FilterTrueAction, self).__init__(
-            option_strings=option_strings,
-            dest=dest,
-            nargs=0,
-            const=const,
-            default=default,
-            help=help,
-        )
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, self.dest, self.const)
-        setattr(namespace, "filtered", True)
-
-
-class YesNoAction(argparse.Action):
-    """Simple argparse.Action for options with yes|no arguments"""
-
-    def __init__(
-        self,
-        option_strings,
-        dest,
-        help=None,
-        metavar="[yes|no]",
-    ):
-        super().__init__(
-            option_strings=option_strings, dest=dest, help=help, metavar=metavar
-        )
-
-    def __call__(self, parser, namespace, value, option_string=None):
-        if value not in ["yes", "no"]:
-            raise ValueError(f"{option_string} requires either 'yes' or 'no'")
-        setattr(namespace, self.dest, value == "yes")
 
 
 def parse_args():
