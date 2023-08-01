@@ -18,7 +18,7 @@ from pathlib import PurePath
 
 import flux
 from flux.job import JobID, JobInfoFormat, JobList
-from flux.util import UtilConfig
+from flux.util import FilterActionSetUpdate, UtilConfig
 
 PROGRAM = PurePath(sys.argv[0]).stem
 LOGGER = logging.getLogger(PROGRAM)
@@ -134,12 +134,6 @@ def fetch_jobs(args, flux_handle=None):
         pass
 
     return jobs
-
-
-class FilterActionSetUpdate(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        values = values.split(",")
-        getattr(namespace, self.dest).update(values)
 
 
 def parse_args():

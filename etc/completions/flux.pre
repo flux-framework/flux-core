@@ -1042,6 +1042,36 @@ _flux_pstree()
     return 0
 }
 
+# flux-watch(1) completions
+_flux_watch()
+{
+    local cmd=$1
+    local OPTS="\
+        -a --active \
+        -A --all \
+        -c --count= \
+        -f --filter= \
+        -l --label-io \
+        --since= \
+        --progress \
+        --jps \
+        --verbose
+    "
+    if [[ $cur != -* ]]; then
+        #  Attempt to substitute an active jobid
+        compopt +o filenames
+        active_jobs=$(flux jobs -no {id})
+        COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
+        return 0
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
 #  flux-dump(1) completions
 _flux_dump()
 {
@@ -1440,6 +1470,9 @@ _flux_core()
         ;;
     start)
         _flux_start $subcmd
+        ;;
+    watch)
+        _flux_watch $subcmd
         ;;
     -*)
         COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )

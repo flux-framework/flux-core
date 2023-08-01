@@ -203,6 +203,65 @@ class TreedictAction(argparse.Action):
             setattr(namespace, self.dest, result)
 
 
+class FilterAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+        setattr(namespace, "filtered", True)
+
+
+class FilterActionSetUpdate(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, "filtered", True)
+        values = values.split(",")
+        getattr(namespace, self.dest).update(values)
+
+
+# pylint: disable=redefined-builtin
+class FilterTrueAction(argparse.Action):
+    def __init__(
+        self,
+        option_strings,
+        dest,
+        const=True,
+        default=False,
+        required=False,
+        help=None,
+        metavar=None,
+    ):
+        super(FilterTrueAction, self).__init__(
+            option_strings=option_strings,
+            dest=dest,
+            nargs=0,
+            const=const,
+            default=default,
+            help=help,
+        )
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, self.const)
+        setattr(namespace, "filtered", True)
+
+
+class YesNoAction(argparse.Action):
+    """Simple argparse.Action for options with yes|no arguments"""
+
+    def __init__(
+        self,
+        option_strings,
+        dest,
+        help=None,
+        metavar="[yes|no]",
+    ):
+        super().__init__(
+            option_strings=option_strings, dest=dest, help=help, metavar=metavar
+        )
+
+    def __call__(self, parser, namespace, value, option_string=None):
+        if value not in ["yes", "no"]:
+            raise ValueError(f"{option_string} requires either 'yes' or 'no'")
+        setattr(namespace, self.dest, value == "yes")
+
+
 class CLIMain(object):
     def __init__(self, logger=None):
         if logger is None:
