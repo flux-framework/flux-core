@@ -713,3 +713,7 @@ sdexec
 NONINTERACTIVE
 hwlocality
 snprintf
+MemoryHigh
+MemoryMax
+MemoryLow
+MemoryMin

@@ -29,7 +29,7 @@ EOT
 
 test_under_flux 2 full -o,--config-path=$(pwd)/config
 
-flux setattr log-stderr-level 1
+flux setattr log-stderr-level 3
 
 sdexec="flux exec --service sdexec"
 lptest=${FLUX_BUILD_DIR}/t/shell/lptest
@@ -66,4 +66,25 @@ test_expect_success 'remove sdexec,sdbus modules' '
 	flux exec flux module remove sdexec &&
 	flux exec flux module remove sdbus
 '
+test_expect_success 'remove job-exec module' '
+	flux module remove job-exec
+'
+test_expect_success 'reconfigure with exec.sdexec-properties not a table' '
+	flux config load <<-EOT
+	exec.sdexec-properties = 42
+	EOT
+'
+test_expect_success 'cannot load job-exec module' '
+	test_must_fail flux module load job-exec
+'
+test_expect_success 'reconfigure with exec.sdexec-properties.key not a string' '
+	flux config load <<-EOT
+	[exec.sdexec-properties]
+	foo = 24
+	EOT
+'
+test_expect_success 'cannot load job-exec module' '
+	test_must_fail flux module load job-exec
+'
+
 test_done

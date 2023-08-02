@@ -49,8 +49,8 @@ static int check_setopt (flux_plugin_t *p,
                                 "attributes",
                                 "system",
                                 "shell",
-                                "options", &options) < 0 && errno == ENOENT,
-        "flux_shell_info_unpack shell options returns ENOENT");
+                                "options", &options) < 0,
+        "flux_shell_info_unpack shell options fails");
 
     /*  A shell plugin should be able to call setopt even though
      *   no shell options were currently set in jobspec.

@@ -385,6 +385,22 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: flux_cmd_create");
         goto err;
     }
+    /* Set any configured exec.sdexec-properties.
+     */
+    json_t *props;
+    if (streq (service, "sdexec")
+        && (props = config_get_sdexec_properties ())) {
+        const char *k;
+        json_t *v;
+        json_object_foreach (props, k, v) {
+            char name[128];
+            snprintf (name, sizeof (name), "SDEXEC_PROP_%s", k);
+            if (flux_cmd_setopt (cmd, name, json_string_value (v)) < 0) {
+                flux_log_error (job->h, "Unable to set sdexec options");
+                return -1;
+            }
+        }
+    }
     if (flux_cmd_setenvf (cmd, 1, "FLUX_KVS_NAMESPACE", "%s", job->ns) < 0) {
         flux_log_error (job->h, "exec_init: flux_cmd_setenvf");
         goto err;
