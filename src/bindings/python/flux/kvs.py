@@ -209,6 +209,8 @@ def commit(flux_handle, flags: int = 0):
         RAW.flux_kvs_txn_destroy(flux_handle.aux_txn)
         flux_handle.aux_txn = None
         raise
+    finally:
+        RAW.flux_future_destroy(future)
 
 
 def dropcache(flux_handle):
