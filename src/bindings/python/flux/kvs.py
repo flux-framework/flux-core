@@ -79,6 +79,8 @@ def isdir(flux_handle, key):
     try:
         get_key_direct(flux_handle, key)
     except EnvironmentError as err:
+        if err.errno == errno.ENOENT:
+            return False
         if err.errno == errno.EISDIR:
             return True
         raise err
