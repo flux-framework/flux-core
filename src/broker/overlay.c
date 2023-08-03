@@ -37,7 +37,6 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/librouter/rpc_track.h"
-#include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
 
 #include "overlay.h"
