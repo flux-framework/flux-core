@@ -390,8 +390,8 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
 
         put_mkdir(self.fhdl, self._path + key)
         self.commit()
-        new_kvsdir = KVSDir(self.fhdl, key)
         if contents is not None:
+            new_kvsdir = KVSDir(self.fhdl, key)
             new_kvsdir.fill(contents)
 
     def files(self):
