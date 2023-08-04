@@ -79,6 +79,8 @@ def isdir(flux_handle, key):
     try:
         get_key_direct(flux_handle, key)
     except EnvironmentError as err:
+        if err.errno == errno.ENOENT:
+            return False
         if err.errno == errno.EISDIR:
             return True
         raise err
@@ -388,8 +390,8 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
 
         put_mkdir(self.fhdl, self._path + key)
         self.commit()
-        new_kvsdir = KVSDir(self.fhdl, key)
         if contents is not None:
+            new_kvsdir = KVSDir(self.fhdl, key)
             new_kvsdir.fill(contents)
 
     def files(self):
