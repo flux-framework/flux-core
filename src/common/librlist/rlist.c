@@ -2565,7 +2565,7 @@ struct rlist *rlist_from_config (json_t *conf, flux_error_t *errp)
                             "cores", &cores,
                             "gpus",  &gpus,
                             "properties", &properties) < 0) {
-            errprintf (errp, "config[%ld]: %s", index, error.text);
+            errprintf (errp, "config[%zu]: %s", index, error.text);
             goto error;
         }
         if (rlist_config_add_entry (rl,
