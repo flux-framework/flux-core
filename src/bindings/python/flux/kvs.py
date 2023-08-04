@@ -206,9 +206,11 @@ def commit(flux_handle, flags: int = 0):
     try:
         RAW.flux_future_get(future, None)
     except OSError:
+        raise
+    finally:
         RAW.flux_kvs_txn_destroy(flux_handle.aux_txn)
         flux_handle.aux_txn = None
-        raise
+        RAW.flux_future_destroy(future)
 
 
 def dropcache(flux_handle):
