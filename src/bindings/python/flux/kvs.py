@@ -97,7 +97,7 @@ def isdir(flux_handle, key, namespace=None):
     return False
 
 
-def get_dir(flux_handle, key=".", namespace=None):
+def get_dir(flux_handle, key=".", namespace=None, _kvstxn=None):
     """Get KVS directory
 
     Args:
@@ -111,10 +111,12 @@ def get_dir(flux_handle, key=".", namespace=None):
     Returns:
         KVSDir: object representing directory
     """
-    return KVSDir(path=key, flux_handle=flux_handle, namespace=namespace)
+    return KVSDir(
+        path=key, flux_handle=flux_handle, namespace=namespace, _kvstxn=_kvstxn
+    )
 
 
-def get(flux_handle, key, namespace=None):
+def get(flux_handle, key, namespace=None, _kvstxn=None):
     """Get KVS directory
 
     Args:
@@ -138,10 +140,29 @@ def get(flux_handle, key, namespace=None):
             pass
         else:
             raise err
-    return get_dir(flux_handle, key, namespace=namespace)
+    return get_dir(flux_handle, key, namespace=namespace, _kvstxn=_kvstxn)
 
 
-def put(flux_handle, key, value):
+# convenience function to get RAW kvs txn object to use
+def _get_kvstxn(flux_handle, _kvstxn):
+    # If _kvstxn is None, use the default txn stored in the flux
+    # handle (create it if necessary)
+    if _kvstxn is None:
+        if flux_handle.aux_txn is None:
+            flux_handle.aux_txn = RAW.flux_kvs_txn_create()
+        _kvstxn = flux_handle.aux_txn
+    elif isinstance(_kvstxn, KVSTxn):
+        # if _kvstxn is type KVSTxn, get the RAW kvs txn
+        # stored within it
+        _kvstxn = _kvstxn.txn
+    # we don't perform this check, as it would require an
+    # import of _cffi_backend
+    # elif not isinstance(_kvstxn, _cffi_backend.FFI.CData):
+    #     raise TypeError
+    return _kvstxn
+
+
+def put(flux_handle, key, value, _kvstxn=None):
     """Put data into the KVS
 
     Internally will stage changes until commit() is called.
@@ -151,19 +172,18 @@ def put(flux_handle, key, value):
         key: key to write to
         value: value of the key
     """
-    if flux_handle.aux_txn is None:
-        flux_handle.aux_txn = RAW.flux_kvs_txn_create()
+    _kvstxn = _get_kvstxn(flux_handle, _kvstxn)
     try:
         json_str = json.dumps(value)
-        RAW.flux_kvs_txn_put(flux_handle.aux_txn, 0, key, json_str)
+        RAW.flux_kvs_txn_put(_kvstxn, 0, key, json_str)
     except TypeError:
         if isinstance(value, bytes):
-            RAW.flux_kvs_txn_put_raw(flux_handle.aux_txn, 0, key, value, len(value))
+            RAW.flux_kvs_txn_put_raw(_kvstxn, 0, key, value, len(value))
             return
         raise TypeError
 
 
-def put_mkdir(flux_handle, key):
+def put_mkdir(flux_handle, key, _kvstxn=None):
     """Create directory in the KVS
 
     Internally will stage changes until commit() is called.
@@ -172,12 +192,11 @@ def put_mkdir(flux_handle, key):
         flux_handle: A Flux handle obtained from flux.Flux()
         key: directory to create
     """
-    if flux_handle.aux_txn is None:
-        flux_handle.aux_txn = RAW.flux_kvs_txn_create()
-    RAW.flux_kvs_txn_mkdir(flux_handle.aux_txn, 0, key)
+    _kvstxn = _get_kvstxn(flux_handle, _kvstxn)
+    RAW.flux_kvs_txn_mkdir(_kvstxn, 0, key)
 
 
-def put_unlink(flux_handle, key):
+def put_unlink(flux_handle, key, _kvstxn=None):
     """Unlink key in the KVS
 
     Internally will stage changes until commit() is called.
@@ -186,12 +205,11 @@ def put_unlink(flux_handle, key):
         flux_handle: A Flux handle obtained from flux.Flux()
         key: key to delete
     """
-    if flux_handle.aux_txn is None:
-        flux_handle.aux_txn = RAW.flux_kvs_txn_create()
-    RAW.flux_kvs_txn_unlink(flux_handle.aux_txn, 0, key)
+    _kvstxn = _get_kvstxn(flux_handle, _kvstxn)
+    RAW.flux_kvs_txn_unlink(_kvstxn, 0, key)
 
 
-def put_symlink(flux_handle, key, target):
+def put_symlink(flux_handle, key, target, _kvstxn=None):
     """Create symlink in the KVS
 
     Internally will stage changes until commit() is called.
@@ -201,12 +219,11 @@ def put_symlink(flux_handle, key, target):
         key: symlink name
         target: target symlink points to
     """
-    if flux_handle.aux_txn is None:
-        flux_handle.aux_txn = RAW.flux_kvs_txn_create()
-    RAW.flux_kvs_txn_symlink(flux_handle.aux_txn, 0, key, None, target)
+    _kvstxn = _get_kvstxn(flux_handle, _kvstxn)
+    RAW.flux_kvs_txn_symlink(_kvstxn, 0, key, None, target)
 
 
-def commit(flux_handle, flags: int = 0, namespace=None):
+def commit(flux_handle, flags: int = 0, namespace=None, _kvstxn=None):
     """Commit changes to the KVS
 
     Must be called after put(), put_mkdir(), put_unlink(), or
@@ -223,17 +240,28 @@ def commit(flux_handle, flags: int = 0, namespace=None):
           environment variable will be used.  If FLUX_KVS_NAMESPACE is not
           set, the primary namespace will be used.
     """
-    if flux_handle.aux_txn is None:
-        return
-    future = RAW.flux_kvs_commit(flux_handle, namespace, flags, flux_handle.aux_txn)
-    try:
-        RAW.flux_future_get(future, None)
-    except OSError:
-        raise
-    finally:
-        RAW.flux_kvs_txn_destroy(flux_handle.aux_txn)
-        flux_handle.aux_txn = None
-        RAW.flux_future_destroy(future)
+    if _kvstxn is None:
+        if flux_handle.aux_txn is None:
+            return
+        future = RAW.flux_kvs_commit(flux_handle, namespace, flags, flux_handle.aux_txn)
+        try:
+            RAW.flux_future_get(future, None)
+        except OSError:
+            raise
+        finally:
+            RAW.flux_kvs_txn_destroy(flux_handle.aux_txn)
+            flux_handle.aux_txn = None
+            RAW.flux_future_destroy(future)
+    else:
+        if isinstance(_kvstxn, KVSTxn):
+            _kvstxn = _kvstxn.txn
+        future = RAW.flux_kvs_commit(flux_handle, namespace, flags, _kvstxn)
+        try:
+            RAW.flux_future_get(future, None)
+        except OSError:
+            raise
+        finally:
+            RAW.flux_future_destroy(future)
 
 
 def namespace_create(flux_handle, namespace, owner=os.getuid(), flags: int = 0):
@@ -301,6 +329,92 @@ def dropcache(flux_handle):
     RAW.flux_kvs_dropcache(flux_handle)
 
 
+class KVSTxn:
+    """KVS Transaction Object
+
+    Stage changes to the KVS.  When all changes have been placed
+    within the transaction, use commit() to finalize the transaction.
+    Can be used as a context manager and commits will be handled at
+    exit. e.g.
+
+    with KVSTxn(handle, "basedirectory") as kt:
+        kt.put("a", 1)
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        path: Optional base path for all writes to be relative to (default ".")
+        namespace: Optional namespace to write to, defaults to None.  If
+          namespace is None, the namespace specified in the FLUX_KVS_NAMESPACE
+          environment variable will be used.  If FLUX_KVS_NAMESPACE is not
+          set, the primary namespace will be used.
+    """
+
+    def __init__(self, flux_handle=None, path=".", namespace=None):
+        self.fhdl = flux_handle
+        self.path = path
+        # Helper var for easier concatenations
+        if not path or path == ".":
+            self._path = ""
+        else:
+            self._path = path if path[-1] == "." else path + "."
+        self.namespace = namespace
+        self.txn = RAW.flux_kvs_txn_create()
+
+    def commit(self, flags=0):
+        """Commit changes to the KVS
+
+        When keys are added, removed, or updated in the KVSTxn object, the
+        changes are only cached in memory until the commit method asks the
+        KVS service to make them permanent.
+
+        After the commit method returns, updated keys can be accessed by other
+        clients on the same broker rank. Other broker ranks are eventually
+        consistent.
+        """
+        # If no transactions stored, no need to waste an RPC on a commit call
+        if RAW.flux_kvs_txn_is_empty(self.txn):
+            return
+        try:
+            commit(self.fhdl, flags=flags, namespace=self.namespace, _kvstxn=self.txn)
+        except OSError:
+            raise
+        finally:
+            self.clear()
+
+    def put(self, key, value):
+        """Put key=value in the KVS"""
+        put(self.fhdl, self._path + key, value, _kvstxn=self.txn)
+
+    def mkdir(self, key):
+        """Create a directory in the KVS"""
+        put_mkdir(self.fhdl, self._path + key, _kvstxn=self.txn)
+
+    def unlink(self, key):
+        """Unlink key in the KVS"""
+        put_unlink(self.fhdl, self._path + key, _kvstxn=self.txn)
+
+    def symlink(self, key, target):
+        """Create a symlink in the KVS"""
+        put_symlink(self.fhdl, self._path + key, target, _kvstxn=self.txn)
+
+    def clear(self):
+        RAW.flux_kvs_txn_clear(self.txn)
+
+    def __del__(self):
+        RAW.flux_kvs_txn_destroy(self.txn)
+
+    def __enter__(self):
+        """Allow this to be used as a context manager"""
+        return self
+
+    def __exit__(self, type_arg, value, tb):
+        """
+        When used as a context manager, the KVSTxn commits itself on exit
+        """
+        self.commit()
+        return False
+
+
 class KVSDir(WrapperPimpl, abc.MutableMapping):
     """User friendly class for KVS operations
 
@@ -312,6 +426,15 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
     mydir["newkey"] = "foo"
     mydir.commit()
 
+    Any KVS directories accessed through the item accessor will share
+    the same internal KVS transaction, so that only a single call to
+    commit() is necessary.  e.g.
+
+    mydir = KVSDir(flux_handle)
+    subdir = mydir["subdir"]
+    subdir["anotherkey"] = "bar"
+    mydir.commit()
+
     Args:
         flux_handle: A Flux handle obtained from flux.Flux()
         path: Optional base path for all read/write to be relative to (default ".")
@@ -319,6 +442,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
           namespace is None, the namespace specified in the FLUX_KVS_NAMESPACE
           environment variable will be used.  If FLUX_KVS_NAMESPACE is not
           set, the primary namespace will be used.
+
     """
 
     # pylint: disable=too-many-ancestors, too-many-public-methods
@@ -353,7 +477,9 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
                 if self.handle is None or self.handle == ffi.NULL:
                     raise EnvironmentError("No such file or directory")
 
-    def __init__(self, flux_handle=None, path=".", handle=None, namespace=None):
+    def __init__(
+        self, flux_handle=None, path=".", handle=None, namespace=None, _kvstxn=None
+    ):
         super(KVSDir, self).__init__()
         self.fhdl = flux_handle
         self.path = path
@@ -369,6 +495,10 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
                 "handle must be a valid kvsdir cdata pointer"
             )
         self.pimpl = self.InnerWrapper(flux_handle, path, handle, namespace)
+        # See comment in __getitem__ as to why we don't set path to "." and not self.path
+        self.kvstxn = (
+            _kvstxn if _kvstxn else KVSTxn(self.fhdl, ".", namespace=self.namespace)
+        )
 
     def commit(self, flags=0):
         """Commit changes to the KVS
@@ -385,7 +515,12 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
         clients on the same broker rank. Other broker ranks are eventually
         consistent.
         """
-        commit(self.fhdl, flags=flags, namespace=self.namespace)
+        try:
+            self.kvstxn.commit(flags=flags)
+        except OSError:
+            raise
+        finally:
+            self.kvstxn.clear()
 
     def key_at(self, key):
         """Get full path to KVS key"""
@@ -397,18 +532,41 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
         return exists(self.fhdl, self._path + name, namespace=self.namespace)
 
     def __getitem__(self, key):
+        # it is common for users to do something like
+        #
+        # with flux.kvs.get_dir(self.f) as kd:
+        #    kd["dir"]["subdir"]["subsubdir"]["a"] = 1
+        #
+        # the ability to get KVSDir subdirectories via the item
+        # accessor requires us to share this KVS transaction with
+        # subdirs for the final commit.  So if the user gets a KVSDir
+        # via item accessor, give it the same KVS transaction object
+        # by passing self.txn to get()..
+        #
+        # This also requires all updates to the KVSTxn object to be based
+        # on an initial path of "." in the transaction object.  i.e. use
+        # the "absolute path".  Otherwise, subdirs may write to the wrong
+        # relative location.
         try:
-            return get(self.fhdl, self.key_at(key), namespace=self.namespace)
+            val = get(
+                self.fhdl,
+                self.key_at(key),
+                namespace=self.namespace,
+                _kvstxn=self.kvstxn,
+            )
         except EnvironmentError:
             raise KeyError(
                 "{} not found under directory {}".format(key, self.key_at(""))
             )
+        return val
 
     def __setitem__(self, key, value):
-        put(self.fhdl, self._path + key, value)
+        # See note in __getitem__, we always write to "absolute" path
+        self.kvstxn.put(self._path + key, value)
 
     def __delitem__(self, key):
-        put_unlink(self.fhdl, self._path + key)
+        # See note in __getitem__, we always write to "absolute" path
+        self.kvstxn.unlink(self._path + key)
 
     class KVSDirIterator(abc.Iterator):
         def __init__(self, kvsdir):
@@ -468,7 +626,8 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
               syntax, sub-dicts will be stored as json values in a single key
         """
 
-        put_mkdir(self.fhdl, self._path + key)
+        # See note in __getitem__, we always write to "absolute" path
+        self.kvstxn.mkdir(self._path + key)
         self.commit()
         if contents is not None:
             new_kvsdir = KVSDir(self.fhdl, key, namespace=self.namespace)
