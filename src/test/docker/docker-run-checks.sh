@@ -11,7 +11,7 @@ PROJECT=flux-core
 BASE_DOCKER_REPO=fluxrm/testenv
 
 WORKDIR=/usr/src
-IMAGE=bionic
+IMAGE=bookworm
 JOBS=2
 MOUNT_HOME_ARGS="--volume=$HOME:/home/$USER -e HOME"
 

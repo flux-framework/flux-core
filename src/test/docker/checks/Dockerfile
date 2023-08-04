@@ -41,7 +41,7 @@ RUN set -x && groupadd fluxuser \
 
 # Make sure user in appropriate group for sudo on different platforms
 RUN case $BASE_IMAGE in \
-     bionic*) adduser $USER sudo && adduser fluxuser sudo ;; \
+     jammy*) adduser $USER sudo && adduser fluxuser sudo ;; \
      focal*)  adduser $USER sudo && adduser fluxuser sudo ;; \
      el*|fedora*) usermod -G wheel $USER && usermod -G wheel fluxuser ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
@@ -49,12 +49,13 @@ RUN case $BASE_IMAGE in \
 
 # Install extra dependencies if necessary here.
 #
-# Do not forget to run `apt update` on Ubuntu/bionic.
+# Do not forget to run `apt update` on Ubuntu/jammy.
 # Do NOT run `yum upgrade` on RPM systems (this will unnecessarily upgrade
 #  existing packages)
 #
 RUN case $BASE_IMAGE in \
-     bionic*) ;; \
+     jammy*) ;; \
+     bookworm*) ;; \
      focal*) ;; \
      el*|fedora*) ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \

@@ -13,9 +13,9 @@ or a tagged version of flux-core.
 
 #### fluxrm/testenv Docker images
 
-The Dockerfiles `bionic/Dockerfile`, `focal/Dockerfile`,
+The Dockerfiles `jammy/Dockerfile`, `focal/Dockerfile`,
 `el7/Dockerfile`, and `el8/Dockerfile` describe the images built
-under the `fluxrm/testenv:bionic`, `fluxrm/testenv:focal`,
+under the `fluxrm/testenv:jammy`, `fluxrm/testenv:focal`,
 `fluxrm/testenv:el7`, and `fluxrm/testenv:el8` respectively, and
 include the base dependencies required to build flux-core. These images
 are updated manually by flux-core maintainers, but the Dockerfiles should
@@ -41,9 +41,9 @@ result in a temporary docker image being created during testing of the
 PR with the dependency installed.
 
 Later, a flux-core maintainer can move the dependency into the `testenv`
-Docker images `bionic/Dockerfile` and `el7/Dockerfile`.
+Docker images `jammy/Dockerfile` and `el7/Dockerfile`.
 These docker images should then be built by hand and manually
-pushed to DockerHub at `fluxrm/testenv:bionic` and
+pushed to DockerHub at `fluxrm/testenv:jammy` and
 `fluxrm/testenv:el7`. Be sure to test that the `docker-run-test.sh`
 script still runs against the new `testenv` images, e.g.:
 
@@ -56,16 +56,16 @@ $ for i in focal el7 el8 fedora33 fedora34 fedora35 fedora38; do
   done
 ```
 
-#### Bionic multiarch images
+#### Jammy multiarch images
 
-Building the bionic images for linux/amd64 and linux/386 requires the
+Building the jammy images for linux/amd64 and linux/386 requires the
 Docker buildx extensions, see
 
  https://www.docker.com/blog/multi-arch-build-and-images-the-simple-way/
 
 and run
 ```
-$  docker buildx build --push --platform=linux/386,linux/amd64 --tag fluxrm/testenv:bionic src/test/docker/bionic
+$  docker buildx build --push --platform=linux/386,linux/amd64 --tag fluxrm/testenv:jammy src/test/docker/jammy
 ```
 
 to build and push images to docker hub.
@@ -73,7 +73,7 @@ to build and push images to docker hub.
 #### Local Testing
 
 Developers can test the docker images themselves. If new dependencies are needed,
-they can update the `$image` Dockerfiles manually (where `$image` is one of bionic, el7, el8, or focal).
+they can update the `$image` Dockerfiles manually (where `$image` is one of jammy, el7, el8, or focal).
 To create a local Docker image, run the command:
 
 ```

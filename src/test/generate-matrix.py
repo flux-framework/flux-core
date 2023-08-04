@@ -37,12 +37,14 @@ class BuildMatrix:
             if match:
                 self.tag = match.group(1)
 
-    def create_docker_tag(self, image, env, command):
+    def create_docker_tag(self, image, env, command, platform):
         """Create docker tag string if this is master branch or a tag"""
         if self.branch == "master" or self.tag:
             tag = f"{DOCKER_REPO}:{image}"
             if self.tag:
                 tag += f"-{self.tag}"
+            if platform is not None:
+                tag += "-" + platform.split("/")[1]
             env["DOCKER_TAG"] = tag
             command += f" --tag={tag}"
             return True, command
@@ -65,7 +67,7 @@ class BuildMatrix:
     def add_build(
         self,
         name=None,
-        image="bionic",
+        image="bookworm",
         args=default_args,
         jobs=4,
         env=None,
@@ -96,7 +98,7 @@ class BuildMatrix:
 
         if docker_tag:
             #  Only export docker_tag if this is main branch or a tag:
-            docker_tag, command = self.create_docker_tag(image, env, command)
+            docker_tag, command = self.create_docker_tag(image, env, command, platform)
 
         if test_s3:
             args = self.env_add_s3(args, env)
@@ -136,34 +138,37 @@ class BuildMatrix:
 
 matrix = BuildMatrix()
 
-# Ubuntu: no args
-matrix.add_build(name="bionic")
+# Debian: no args
+matrix.add_build(name="bookworm")
 
-# Ubuntu: 32b
+# Debian: 32b
 matrix.add_build(
-    name="bionic - 32 bit",
+    name="bookworm - 32 bit",
+    image="bookworm",
     platform="linux/386",
+    docker_tag=True,
 )
 
-# Ubuntu: gcc-8, content-s3, distcheck
+# Debian: gcc-12, content-s3, distcheck
 matrix.add_build(
-    name="bionic - gcc-8,content-s3,distcheck",
+    name="bookworm - gcc-12,content-s3,distcheck",
     env=dict(
-        CC="gcc-8",
-        CXX="g++8",
+        CC="gcc-12",
+        CXX="g++12",
         DISTCHECK="t",
     ),
     args="--with-flux-security --enable-caliper",
     test_s3=True,
 )
 
-# Ubuntu: py3.7,clang-6.0
+# Ubuntu: py3.11,clang-15
 matrix.add_build(
-    name="bionic - py3.7,clang-6.0",
+    name="bookworm - py3.11,clang-15",
     env=dict(
-        CC="clang-6.0",
-        CXX="clang++-6.0",
-        PYTHON_VERSION="3.7",
+        CC="clang-15",
+        CXX="clang++-15",
+        CFLAGS="-O2 -gdwarf-4",
+        PYTHON_VERSION="3.11",
         chain_lint="t",
     ),
     args="--with-flux-security",
@@ -174,7 +179,6 @@ matrix.add_build(
 matrix.add_build(
     name="coverage",
     coverage_flags="ci-basic",
-    image="fedora35",
     coverage=True,
     jobs=2,
     args="--with-flux-security --enable-caliper",
@@ -182,7 +186,17 @@ matrix.add_build(
 
 # Ubuntu: TEST_INSTALL
 matrix.add_build(
-    name="bionic - test-install",
+    name="jammy - test-install",
+    image="jammy",
+    env=dict(
+        TEST_INSTALL="t",
+    ),
+    docker_tag=True,
+)
+
+# Debian: TEST_INSTALL
+matrix.add_build(
+    name="bookworm - test-install",
     env=dict(
         TEST_INSTALL="t",
     ),
@@ -194,13 +208,6 @@ matrix.add_build(
     name="focal - py3.8",
     image="focal",
     env=dict(PYTHON_VERSION="3.8"),
-    docker_tag=True,
-)
-
-# RHEL7 clone
-matrix.add_build(
-    name="el7",
-    image="el7",
     docker_tag=True,
 )
 
@@ -230,24 +237,10 @@ matrix.add_build(
     args="--with-flux-security --enable-caliper",
 )
 
-# Fedora 33
-matrix.add_build(
-    name="fedora33 - gcc-10,py3.9",
-    image="fedora33",
-    docker_tag=True,
-)
-
 # Fedora 34
 matrix.add_build(
     name="fedora34 - gcc-11.2,py3.9",
     image="fedora34",
-    docker_tag=True,
-)
-
-# Fedora 35
-matrix.add_build(
-    name="fedora35 - gcc-11.2,py3.10",
-    image="fedora35",
     docker_tag=True,
 )
 
@@ -269,7 +262,7 @@ matrix.add_build(
 # inception
 matrix.add_build(
     name="inception",
-    image="bionic",
+    image="bookworm",
     command_args="--inception",
 )
 

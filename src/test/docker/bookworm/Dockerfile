@@ -1,11 +1,12 @@
-FROM ubuntu:bionic
+FROM debian:bookworm
 
 LABEL maintainer="Tom Scogland <scogland1@llnl.gov>"
 
-# Update pkg caches, install latest pkg utils:
+# Update pkg caches, install latest pkg utils and basics:
 RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
         apt-utils \
+        wget \
  && rm -rf /var/lib/apt/lists/*
 
 # Utilities
@@ -41,10 +42,10 @@ RUN apt-get update \
         automake \
         make \
         cmake \
-        clang-6.0 \
-        clang-tidy \
-        gcc-8 \
-        g++-8 \
+        clang-15 \
+        clang-tools-15 \
+        gcc-12 \
+        g++-12 \
  && rm -rf /var/lib/apt/lists/*
 
 # Python
@@ -55,16 +56,15 @@ RUN apt-get update \
 RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
 	libffi-dev \
-        python3-dev \
-        python3.7-dev \
-        python3.8-dev \
+        python3.11-dev \
         python3-pip \
         python3-setuptools \
         python3-wheel \
  && rm -rf /var/lib/apt/lists/*
 
-RUN for PY in python3.6 python3.7 python3.8 ; do \
+RUN for PY in python3.11 ; do \
         sudo $PY -m pip install --upgrade --ignore-installed \
+        --break-system-packages \
 	    "markupsafe==2.0.0" \
             coverage cffi ply six pyyaml "jsonschema>=2.6,<4.0" \
             sphinx sphinx-rtd-theme sphinxcontrib-spelling; \
@@ -103,7 +103,7 @@ RUN apt-get update \
         libfaketime \
         pylint \
         cppcheck \
-        enchant \
+        enchant-2 \
         aspell \
         aspell-en \
  && rm -rf /var/lib/apt/lists/*
@@ -119,7 +119,7 @@ RUN mkdir caliper \
  && wget -O - https://github.com/LLNL/Caliper/archive/v1.7.0.tar.gz | tar xvz --strip-components 1 \
  && mkdir build \
  && cd build \
- && CC=gcc CXX=g++ cmake .. -DCMAKE_INSTALL_PREFIX=/usr \
+ && CC=gcc CXX=g++ cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DWITH_GOTCHA=Off \
  && make -j 4 \
  && make install \
  && cd ../.. \
