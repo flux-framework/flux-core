@@ -19,7 +19,7 @@ default_args = (
 )
 
 DOCKER_REPO = "fluxrm/flux-core"
-
+GITHUB_PACKAGE_REPO = 'ghcr.io/flux-framework/flux-core'
 
 class BuildMatrix:
     def __init__(self):
@@ -41,9 +41,14 @@ class BuildMatrix:
         """Create docker tag string if this is master branch or a tag"""
         if self.branch == "master" or self.tag:
             tag = f"{DOCKER_REPO}:{image}"
+            github_tag = f"{GITHUB_PACKAGE_REPO}:{image}"
             if self.tag:
                 tag += f"-{self.tag}"
+                github_tag += f"-{self.tag}"
             env["DOCKER_TAG"] = tag
+
+            # Create one for GitHub packages too - will tag at push time
+            env['GITHUB_PACKAGES_TAG'] = github_tag
             command += f" --tag={tag}"
             return True, command
 
