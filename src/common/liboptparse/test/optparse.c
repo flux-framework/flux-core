@@ -492,7 +492,7 @@ void test_convenience_accessors (void)
             "get_size default_argument=NULL results in default=0 ");
     ok (optparse_get_size (p, "mnf", "0") == 7,
             "get_size returns arg when present");
-    ok (optparse_get_size (p, "size", "0") == 4*1024UL*1024*1024,
+    ok (optparse_get_size (p, "size", "0") == 4*1024ULL*1024*1024,
             "get_size returns size arg when present");
 
     /* get_size_int
