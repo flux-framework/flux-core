@@ -83,8 +83,8 @@
    match-leak-kinds: definite
    fun:malloc
    ...
-   obj:*libhwloc.so.15.4.*
-   obj:*libhwloc.so.15.4.*
+   obj:*libhwloc.so.15.*.*
+   obj:*libhwloc.so.15.*.*
    fun:hwloc_topology_load
    ...
 }
