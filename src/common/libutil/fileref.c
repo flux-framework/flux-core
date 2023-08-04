@@ -39,6 +39,8 @@ static int blobvec_append (json_t *blobvec,
 {
     char blobref[BLOBREF_MAX_STRING_SIZE];
     json_t *o;
+    json_int_t offsetj = offset;
+    json_int_t blobsizej = blobsize;
 
     if (blobref_hash (hashtype,
                       mapbuf + offset,
@@ -46,7 +48,7 @@ static int blobvec_append (json_t *blobvec,
                       blobref,
                       sizeof (blobref)) < 0)
         return -1;
-    if (!(o = json_pack ("[I,I,s]", offset, blobsize, blobref))
+    if (!(o = json_pack ("[I,I,s]", offsetj, blobsizej, blobref))
         || json_array_append_new (blobvec, o) < 0) {
         json_decref (o);
         errno = ENOMEM;
