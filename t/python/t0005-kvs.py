@@ -586,6 +586,171 @@ class TestKVS(unittest.TestCase):
         self.assertEqual(len(list(ds)), 0)
         self.assertEqual(len(list(fs)), 2)
 
+    # N.B. some kvstxn tests depend on prior tests creating dirs/keys.
+    # Thus tests are numbered to ensure they are performed in order.
+
+    def test_kvstxn_01_basic(self):
+        txn = flux.kvs.KVSTxn(self.f)
+        txn.mkdir("kvstxntestdir")
+        txn.put("kvstxntestdir.a", 1)
+        txn.put("kvstxntestdir.b", 2)
+        txn.symlink("symlink", "kvstxntestdir.a")
+        txn.commit()
+
+        self.assertTrue(flux.kvs.isdir(self.f, "kvstxntestdir"))
+        self.assertEqual(flux.kvs.get(self.f, "kvstxntestdir.a"), 1)
+        self.assertEqual(flux.kvs.get(self.f, "kvstxntestdir.b"), 2)
+        self.assertEqual(flux.kvs.get(self.f, "symlink"), 1)
+
+        txn.unlink("kvstxntestdir.b")
+        txn.commit()
+
+        self.assertFalse(flux.kvs.exists(self.f, "kvstxntestdir.b"))
+
+    def test_kvstxn_02_initial_path(self):
+        txn = flux.kvs.KVSTxn(self.f, "kvstxntestdir")
+        txn.put("c", 3)
+        txn.commit()
+
+        self.assertEqual(flux.kvs.get(self.f, "kvstxntestdir.c"), 3)
+
+        txn.unlink("c")
+        txn.commit()
+
+        self.assertFalse(flux.kvs.exists(self.f, "kvstxntestdir.c"))
+
+    def test_kvstxn_03_namespace(self):
+        flux.kvs.namespace_create(self.f, "testns")
+
+        txn = flux.kvs.KVSTxn(self.f, namespace="testns")
+        txn.put("nskey", 1)
+        txn.commit()
+
+        self.assertTrue(flux.kvs.exists(self.f, "nskey", namespace="testns"))
+        self.assertFalse(flux.kvs.exists(self.f, "nskey"))
+
+    def test_kvstxn_04_context_manager(self):
+        with flux.kvs.KVSTxn(self.f) as txn:
+            txn.put("kvstxntestdir.d", 4)
+
+        self.assertEqual(flux.kvs.get(self.f, "kvstxntestdir.d"), 4)
+
+        with flux.kvs.KVSTxn(self.f) as txn2:
+            txn2.unlink("kvstxntestdir.d")
+
+        self.assertFalse(flux.kvs.exists(self.f, "kvstxntestdir.d"))
+
+    def test_kvstxn_05_pass_to_api(self):
+        # N.B. generally user should never do this, testing to ensure
+        # logic works.
+        txn = flux.kvs.KVSTxn(self.f)
+        flux.kvs.put_mkdir(self.f, "kvstxntestapi", _kvstxn=txn)
+        flux.kvs.put(self.f, "kvstxntestapi.a", 1, _kvstxn=txn)
+        flux.kvs.put(self.f, "kvstxntestapi.b", 2, _kvstxn=txn)
+        flux.kvs.put_symlink(self.f, "symlink", "kvstxntestapi.a", _kvstxn=txn)
+        flux.kvs.commit(self.f, _kvstxn=txn)
+
+        self.assertTrue(flux.kvs.isdir(self.f, "kvstxntestapi"))
+        self.assertEqual(flux.kvs.get(self.f, "kvstxntestapi.a"), 1)
+        self.assertEqual(flux.kvs.get(self.f, "kvstxntestapi.b"), 2)
+        self.assertEqual(flux.kvs.get(self.f, "symlink"), 1)
+
+        flux.kvs.put_unlink(self.f, "kvstxntestapi.b", _kvstxn=txn)
+        flux.kvs.commit(self.f, _kvstxn=txn)
+
+        self.assertFalse(flux.kvs.exists(self.f, "kvstxntestapi.b"))
+
+    def test_kvstxn_06_multiple(self):
+        with flux.kvs.KVSTxn(self.f) as txn:
+            txn.mkdir("kvstxntestmulti")
+
+        txn1 = flux.kvs.KVSTxn(self.f)
+        txn1.put("kvstxntestmulti.a", 1)
+        txn1.put("kvstxntestmulti.c", 3)
+
+        txn2 = flux.kvs.KVSTxn(self.f)
+        txn2.put("kvstxntestmulti.b", 2)
+        txn2.put("kvstxntestmulti.d", 4)
+
+        txn1.commit()
+
+        self.assertTrue(flux.kvs.exists(self.f, "kvstxntestmulti.a"))
+        self.assertFalse(flux.kvs.exists(self.f, "kvstxntestmulti.b"))
+        self.assertTrue(flux.kvs.exists(self.f, "kvstxntestmulti.c"))
+        self.assertFalse(flux.kvs.exists(self.f, "kvstxntestmulti.d"))
+
+        txn2.commit()
+
+        self.assertTrue(flux.kvs.exists(self.f, "kvstxntestmulti.a"))
+        self.assertTrue(flux.kvs.exists(self.f, "kvstxntestmulti.b"))
+        self.assertTrue(flux.kvs.exists(self.f, "kvstxntestmulti.c"))
+        self.assertTrue(flux.kvs.exists(self.f, "kvstxntestmulti.d"))
+
+    def test_kvstxn_06_multiple_kvsdir(self):
+        with flux.kvs.KVSTxn(self.f) as txn:
+            txn.mkdir("kvstxntestmultikvsdir")
+
+        kvsdir1 = flux.kvs.get_dir(self.f, "kvstxntestmultikvsdir")
+        kvsdir1["a"] = 1
+        kvsdir1["c"] = 3
+
+        kvsdir2 = flux.kvs.get_dir(self.f, "kvstxntestmultikvsdir")
+        kvsdir2["b"] = 2
+        kvsdir2["d"] = 4
+
+        kvsdir1.commit()
+
+        self.assertTrue(flux.kvs.exists(self.f, "kvstxntestmultikvsdir.a"))
+        self.assertFalse(flux.kvs.exists(self.f, "kvstxntestmultikvsdir.b"))
+        self.assertTrue(flux.kvs.exists(self.f, "kvstxntestmultikvsdir.c"))
+        self.assertFalse(flux.kvs.exists(self.f, "kvstxntestmultikvsdir.d"))
+
+        kvsdir2.commit()
+
+        self.assertTrue(flux.kvs.exists(self.f, "kvstxntestmultikvsdir.a"))
+        self.assertTrue(flux.kvs.exists(self.f, "kvstxntestmultikvsdir.b"))
+        self.assertTrue(flux.kvs.exists(self.f, "kvstxntestmultikvsdir.c"))
+        self.assertTrue(flux.kvs.exists(self.f, "kvstxntestmultikvsdir.d"))
+
+    # this test ensures subdirs get the same internal transaction of
+    # the parent KVSDir object, therefore only a single commit() call is
+    # necessary
+    def test_kvstxn_07_kvsdir_subdir(self):
+        with flux.kvs.KVSTxn(self.f) as txn:
+            txn.mkdir("kvstxntestsubdir")
+            txn.mkdir("kvstxntestsubdir.subdir")
+
+        kvsdir = flux.kvs.get_dir(
+            self.f,
+        )
+        subdir = kvsdir["kvstxntestsubdir"]["subdir"]
+        subdir["a"] = 1
+
+        kvsdir.commit()
+
+        self.assertEqual(flux.kvs.get(self.f, "kvstxntestsubdir.subdir.a"), 1)
+
+    # this test ensures commits are not done when an object reference
+    # count goes to 0
+    def test_kvstxn_08_kvsdir_keep_reference(self):
+        with flux.kvs.KVSTxn(self.f) as txn:
+            txn.mkdir("kvstxntestkeepref")
+            txn.mkdir("kvstxntestkeepref.dir1")
+            txn.mkdir("kvstxntestkeepref.dir1.dir2")
+
+        kvsdir = flux.kvs.get_dir(
+            self.f,
+        )
+        kvsdir["kvstxntestkeepref"]["dir1"]["dir2"]["a"] = 1
+        # N.B. flake8 check, F841 = "assigned to but never used"
+        keepref1 = kvsdir["kvstxntestkeepref"]  # noqa: F841
+        keepref2 = kvsdir["kvstxntestkeepref"]["dir1"]  # noqa: F841
+        keepref3 = kvsdir["kvstxntestkeepref"]["dir1"]["dir2"]  # noqa: F841
+
+        kvsdir.commit()
+
+        self.assertEqual(flux.kvs.get(self.f, "kvstxntestkeepref.dir1.dir2.a"), 1)
+
 
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
