@@ -413,6 +413,179 @@ class TestKVS(unittest.TestCase):
         with self.assertRaises(ValueError):
             flux.kvs.walk("dir").next()
 
+    # N.B. namespace tests may depend on prior tests creating
+    # namespaces and data within those namespaces.  So order matters
+    # in these tests and the numbering should be kept to enforce that
+    # order.
+
+    def test_namespace_01_namespace_list(self):
+        nslist = flux.kvs.namespace_list(self.f)
+        self.assertIn("primary", nslist)
+
+    def test_namespace_02_namespace_create(self):
+        flux.kvs.namespace_create(self.f, "testns1")
+        flux.kvs.namespace_create(self.f, "testns2")
+        flux.kvs.namespace_create(self.f, "testns3")
+        nslist = flux.kvs.namespace_list(self.f)
+        self.assertIn("testns1", nslist)
+        self.assertIn("testns2", nslist)
+        self.assertIn("testns3", nslist)
+
+    def test_namespace_03_namespace_remove(self):
+        flux.kvs.namespace_remove(self.f, "testns3")
+        # namespace removal is eventually consistent, may need to
+        # wait a bit to confirm.
+        removed = False
+        for i in range(30):
+            nslist = flux.kvs.namespace_list(self.f)
+            if "testns3" not in nslist:
+                removed = True
+                break
+        self.assertTrue(removed)
+
+    def test_namespace_04_commit(self):
+        flux.kvs.put_mkdir(self.f, "testdirns1")
+        flux.kvs.put(self.f, "testdirns1.a", 1)
+        flux.kvs.commit(self.f, namespace="testns1")
+        flux.kvs.put_mkdir(self.f, "testdirns2")
+        flux.kvs.put(self.f, "testdirns2.a", 2)
+        flux.kvs.commit(self.f, namespace="testns2")
+
+    def test_namespace_05_get(self):
+        self.assertEqual(flux.kvs.get(self.f, "testdirns1.a", namespace="testns1"), 1)
+        self.assertEqual(flux.kvs.get(self.f, "testdirns2.a", namespace="testns2"), 2)
+        with self.assertRaises(OSError) as cm:
+            flux.kvs.get(self.f, "testdirns1.a", namespace="testns2")
+        self.assertEqual(cm.exception.errno, errno.ENOENT)
+        with self.assertRaises(OSError) as cm:
+            flux.kvs.get(self.f, "testdirns2.a", namespace="testns1")
+        self.assertEqual(cm.exception.errno, errno.ENOENT)
+
+    def test_namespace_06_exists(self):
+        self.assertTrue(flux.kvs.exists(self.f, "testdirns1", namespace="testns1"))
+        self.assertTrue(flux.kvs.exists(self.f, "testdirns1.a", namespace="testns1"))
+        self.assertFalse(flux.kvs.exists(self.f, "testdirns1", namespace="testns2"))
+        self.assertFalse(flux.kvs.exists(self.f, "testdirns1.a", namespace="testns2"))
+
+        self.assertFalse(flux.kvs.exists(self.f, "testdirns2", namespace="testns1"))
+        self.assertFalse(flux.kvs.exists(self.f, "testdirns2.a", namespace="testns1"))
+        self.assertTrue(flux.kvs.exists(self.f, "testdirns2", namespace="testns2"))
+        self.assertTrue(flux.kvs.exists(self.f, "testdirns2.a", namespace="testns2"))
+
+    def test_namespace_06_isdir(self):
+        self.assertTrue(flux.kvs.isdir(self.f, "testdirns1", namespace="testns1"))
+        self.assertFalse(flux.kvs.isdir(self.f, "testdirns1.a", namespace="testns1"))
+        self.assertFalse(flux.kvs.isdir(self.f, "testdirns1", namespace="testns2"))
+        self.assertFalse(flux.kvs.isdir(self.f, "testdirns1.a", namespace="testns2"))
+
+        self.assertFalse(flux.kvs.isdir(self.f, "testdirns2", namespace="testns1"))
+        self.assertFalse(flux.kvs.isdir(self.f, "testdirns2.a", namespace="testns1"))
+        self.assertTrue(flux.kvs.isdir(self.f, "testdirns2", namespace="testns2"))
+        self.assertFalse(flux.kvs.isdir(self.f, "testdirns2.a", namespace="testns2"))
+
+    def test_namespace_07_unlink(self):
+        flux.kvs.namespace_create(self.f, "testnsunlink")
+        flux.kvs.put(self.f, "todelete", 1)
+        flux.kvs.commit(self.f, namespace="testnsunlink")
+        self.assertTrue(flux.kvs.exists(self.f, "todelete", namespace="testnsunlink"))
+
+        flux.kvs.put_unlink(self.f, "todelete")
+        flux.kvs.commit(self.f, namespace="testnsunlink")
+
+        with self.assertRaises(OSError) as cm:
+            flux.kvs.get(self.f, "todelete", namespace="testnsunlink")
+        self.assertEqual(cm.exception.errno, errno.ENOENT)
+
+    def test_namespace_08_KVSDir_fill(self):
+        flux.kvs.namespace_create(self.f, "testnsfill")
+        with flux.kvs.get_dir(self.f, namespace="testnsfill") as kd:
+            kd.fill({"testdirnsfill.a": 1})
+            kd.fill({"testdirnsfill.b": 2})
+            kd.commit()
+
+        self.assertTrue(flux.kvs.isdir(self.f, "testdirnsfill", namespace="testnsfill"))
+        self.assertTrue(
+            flux.kvs.exists(self.f, "testdirnsfill.a", namespace="testnsfill")
+        )
+        self.assertTrue(
+            flux.kvs.exists(self.f, "testdirnsfill.b", namespace="testnsfill")
+        )
+
+    def test_namespace_09_KVSDir_mkdir_fill(self):
+        flux.kvs.namespace_create(self.f, "testnsmkdirfill")
+        with flux.kvs.get_dir(self.f, namespace="testnsmkdirfill") as kd:
+            kd.mkdir("testdirnsmkdirfill", {"a": 1})
+            kd.commit()
+
+        self.assertTrue(
+            flux.kvs.isdir(self.f, "testdirnsmkdirfill", namespace="testnsmkdirfill")
+        )
+        self.assertTrue(
+            flux.kvs.exists(self.f, "testdirnsmkdirfill.a", namespace="testnsmkdirfill")
+        )
+
+    def test_namespace_10_KVSDir_initial_path(self):
+        with flux.kvs.get_dir(self.f, "testdirns1", namespace="testns1") as kd:
+            self.assertTrue(kd.exists("a"))
+            kd["b"] = 2
+
+        with flux.kvs.get_dir(self.f, namespace="testns1") as kd2:
+            self.assertTrue(kd2.exists("testdirns1.a"))
+            self.assertTrue(kd2.exists("testdirns1.b"))
+
+        self.assertFalse(flux.kvs.exists(self.f, "testdirns1.b", namespace="testns2"))
+
+    def test_namespace_11_KVSDir_files(self):
+        with flux.kvs.get_dir(self.f, "testdirns1", namespace="testns1") as kd:
+            files = [x for x in kd.files()]
+            self.assertEqual(len(files), 2)
+            self.assertIn("a", files)
+            self.assertIn("b", files)
+
+        with flux.kvs.get_dir(self.f, "testdirns2", namespace="testns2") as kd2:
+            files = [x for x in kd2.files()]
+            self.assertEqual(len(files), 1)
+            self.assertIn("a", files)
+
+    def test_namespace_12_KVSDir_directories(self):
+        with flux.kvs.get_dir(self.f, namespace="testns1") as kd:
+            directories = [x for x in kd.directories()]
+            self.assertEqual(len(directories), 1)
+            self.assertIn("testdirns1", directories)
+
+        with flux.kvs.get_dir(self.f, namespace="testns2") as kd2:
+            directories = [x for x in kd2.directories()]
+            self.assertEqual(len(directories), 1)
+            self.assertIn("testdirns2", directories)
+
+    def test_namespace_13_KVSDir_list_all(self):
+        with flux.kvs.get_dir(self.f, namespace="testns1") as kd:
+            (files, directories) = kd.list_all()
+            self.assertEqual(len(files), 0)
+            self.assertEqual(len(directories), 1)
+
+        with flux.kvs.get_dir(self.f, namespace="testns2") as kd2:
+            (files, directories) = kd2.list_all()
+            self.assertEqual(len(files), 0)
+            self.assertEqual(len(directories), 1)
+
+    def test_namespace_14_walk(self):
+        walk_gen = flux.kvs.walk(
+            ".", flux_handle=self.f, topdown=True, namespace="testns1"
+        )
+        (r, ds, fs) = next(walk_gen)
+        self.assertEqual(r, "")
+        self.assertEqual(len(list(ds)), 1)
+        self.assertEqual(len(list(fs)), 0)
+
+        walk_gen = flux.kvs.walk(
+            "testdirns1", flux_handle=self.f, topdown=True, namespace="testns1"
+        )
+        (r, ds, fs) = next(walk_gen)
+        self.assertEqual(r, "")
+        self.assertEqual(len(list(ds)), 0)
+        self.assertEqual(len(list(fs)), 2)
+
 
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
