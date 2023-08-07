@@ -179,7 +179,7 @@ void basic (void)
     errno = 0;
     rc = flux_kvs_txn_mkdir (txn, 0xFFFF, "b.b.b");
     ok (rc < 0 && errno == EINVAL,
-        "error: flux_kvs_txn_mkdir works");
+        "error: flux_kvs_txn_mkdir(bad flags) fails with EINVAL");
     errno = 0;
     rc = flux_kvs_txn_put (txn, 0xFFFF, "f", "42");
     ok (rc < 0 && errno == EINVAL,
