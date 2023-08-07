@@ -63,6 +63,7 @@
 {
    <issue_1897>
    Memcheck:Addr1
+   ...
    fun:ev_run
    fun:flux_reactor_run
    ...
