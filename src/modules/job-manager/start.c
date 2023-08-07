@@ -316,7 +316,7 @@ int start_send_request (struct start *start, struct job *job)
         if (!(msg = flux_request_encode (start->topic, NULL)))
             return -1;
         if (flux_msg_pack (msg,
-                           "{s:I s:i s:O s:b}",
+                           "{s:I s:I s:O s:b}",
                            "id", job->id,
                            "userid", (json_int_t) job->userid,
                            "jobspec", job->jobspec_redacted,
