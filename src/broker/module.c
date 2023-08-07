@@ -32,6 +32,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/librouter/subhash.h"
 #include "ccan/str/str.h"
 
 #include "module.h"
@@ -73,8 +74,7 @@ struct broker_module {
     flux_msg_t *insmod;
 
     flux_t *h;               /* module's handle */
-
-    zlist_t *subs;          /* subscription strings */
+    struct subhash *sub;
 };
 
 static int setup_module_profiling (module_t *p)
@@ -321,8 +321,7 @@ module_t *module_create (flux_t *h,
         }
     }
     if (!(p->path = strdup (path))
-        || !(p->rmmod = zlist_new ())
-        || !(p->subs = zlist_new ()))
+        || !(p->rmmod = zlist_new ()))
         goto nomem;
     if (name) {
         if (!(p->name = strdup (name)))
@@ -331,6 +330,10 @@ module_t *module_create (flux_t *h,
     else {
         if (!(p->name = module_name_from_path (path)))
             goto nomem;
+    }
+    if (!(p->sub = subhash_create ())) {
+        errprintf (error, "error creating subscription hash");
+        goto cleanup;
     }
     /* Handle legacy 'mod_name' symbol - not recommended for new modules
      * but double check that it's sane if present.
@@ -567,12 +570,7 @@ void module_destroy (module_t *p)
             flux_msg_destroy (msg);
     }
     flux_msg_destroy (p->insmod);
-    if (p->subs) {
-        char *s;
-        while ((s = zlist_pop (p->subs)))
-            free (s);
-        zlist_destroy (&p->subs);
-    }
+    subhash_destroy (p->sub);
     zlist_destroy (&p->rmmod);
     free (p);
     errno = saved_errno;
@@ -704,46 +702,12 @@ flux_msg_t *module_pop_insmod (module_t *p)
 
 int module_subscribe (module_t *p, const char *topic)
 {
-    char *cpy;
-    int rc = -1;
-
-    if (!(cpy = strdup (topic)))
-        goto done;
-    if (zlist_push (p->subs, cpy) < 0) {
-        free (cpy);
-        errno = ENOMEM;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
+    return subhash_subscribe (p->sub, topic);
 }
 
-void module_unsubscribe (module_t *p, const char *topic)
+int module_unsubscribe (module_t *p, const char *topic)
 {
-    char *s;
-
-    s = zlist_first (p->subs);
-    while (s) {
-        if (streq (topic, s)) {
-            zlist_remove (p->subs, s);
-            free (s);
-            break;
-        }
-        s = zlist_next (p->subs);
-    }
-}
-
-static bool match_sub (module_t *p, const char *topic)
-{
-    char *s = zlist_first (p->subs);
-
-    while (s) {
-        if (strstarts (topic, s))
-            return true;
-        s = zlist_next (p->subs);
-    }
-    return false;
+    return subhash_unsubscribe (p->sub, topic);
 }
 
 int module_event_cast (module_t *p, const flux_msg_t *msg)
@@ -752,7 +716,7 @@ int module_event_cast (module_t *p, const flux_msg_t *msg)
 
     if (flux_msg_get_topic (msg, &topic) < 0)
         return -1;
-    if (match_sub (p, topic)) {
+    if (subhash_topic_match (p->sub, topic)) {
         if (module_sendmsg (p, msg) < 0)
             return -1;
     }

@@ -44,6 +44,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/librouter/subhash.h"
 #include "src/common/libfluxutil/method.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
@@ -218,7 +219,7 @@ int main (int argc, char *argv[])
         || !(ctx.modhash = modhash_create ())
         || !(ctx.services = service_switch_create ())
         || !(ctx.attrs = attr_create ())
-        || !(ctx.subscriptions = zlist_new ()))
+        || !(ctx.sub = subhash_create ()))
         log_msg_exit ("Out of memory in early initialization");
 
     /* Record the instance owner: the effective uid of the broker. */
@@ -550,7 +551,7 @@ cleanup:
     runat_destroy (ctx.runat);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
-    zlist_destroy (&ctx.subscriptions);
+    subhash_destroy (ctx.sub);
     free (ctx.init_shell_cmd);
     optparse_destroy (ctx.opts);
 
@@ -1745,7 +1746,7 @@ static void overlay_recv_cb (const flux_msg_t *msg,
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
     uint32_t seq;
-    const char *topic, *s;
+    const char *topic;
 
     if (flux_msg_get_seq (msg, &seq) < 0
             || flux_msg_get_topic (msg, &topic) < 0) {
@@ -1772,14 +1773,9 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 
     /* Internal services may install message handlers for events.
      */
-    s = zlist_first (ctx->subscriptions);
-    while (s) {
-        if (strstarts (topic, s)) {
-            if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
-                flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
-            break;
-        }
-        s = zlist_next (ctx->subscriptions);
+    if (subhash_topic_match (ctx->sub, topic)) {
+        if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
+            flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
     }
     /* Finally, route to local module subscribers.
      */
