@@ -140,9 +140,8 @@ def put(flux_handle, key, value):
         RAW.flux_kvs_txn_put(flux_handle.aux_txn, 0, key, json_str)
     except TypeError:
         if isinstance(value, bytes):
-            return RAW.flux_kvs_txn_put_raw(
-                flux_handle.aux_txn, 0, key, value, len(value)
-            )
+            RAW.flux_kvs_txn_put_raw(flux_handle.aux_txn, 0, key, value, len(value))
+            return
         raise TypeError
 
 
