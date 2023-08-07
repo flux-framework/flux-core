@@ -281,6 +281,12 @@ void basic (void)
     ok (txn_get_op (txn, 9, &entry) < 0 && errno == EINVAL,
         "10: invalid (end of transaction)");
 
+    ok (flux_kvs_txn_clear (txn) == 0,
+        "flux_kvs_txn_clear success");
+
+    ok (txn_get_op_count (txn) == 0,
+        "txn contains 0 ops");
+
     flux_kvs_txn_destroy (txn);
 }
 
@@ -399,6 +405,11 @@ void test_corner_cases (void)
     rc = flux_kvs_txn_symlink (NULL, 0, NULL, NULL, NULL);
     ok (rc < 0 && errno == EINVAL,
         "flux_kvs_txn_symlink fails w/ EINVAL on bad inputs");
+
+    errno = 0;
+    rc = flux_kvs_txn_clear (NULL);
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_clear fails w/ EINVAL on bad input");
 
     errno = 0;
     rc = flux_kvs_txn_put (txn, 0xFFFF, "a", "42");

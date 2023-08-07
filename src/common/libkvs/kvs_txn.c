@@ -307,6 +307,20 @@ error:
     return -1;
 }
 
+int flux_kvs_txn_clear (flux_kvs_txn_t *txn)
+{
+    if (!txn) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (json_array_clear (txn->ops) < 0) {
+        /* right errno? no obvious best choice */
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
 /* kvs_txn_private.h */
 
 int txn_get_op_count (flux_kvs_txn_t *txn)
