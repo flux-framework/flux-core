@@ -50,7 +50,7 @@ struct broker_module {
     char *parent_uuid_str;
     int rank;
     json_t *attr_cache;     /* attrs to be cached in module flux_t */
-    const flux_conf_t *conf;
+    flux_conf_t *conf;
     pthread_t t;            /* module thread */
     mod_main_f *main;       /* dlopened mod_main() */
     char *name;
@@ -156,7 +156,6 @@ static void *module_thread (void *arg)
     int ac;
     int mod_main_errno = 0;
     flux_msg_t *msg;
-    flux_conf_t *conf;
     flux_future_t *f;
 
     setup_module_profiling (p);
@@ -173,15 +172,11 @@ static void *module_thread (void *arg)
         goto done;
     }
     flux_log_set_appname (p->h, p->name);
-    /* Copy the broker's config object so that modules
-     * can call flux_get_conf() and expect it to always succeed.
-     */
-    if (!(conf = flux_conf_copy (p->conf))
-            || flux_set_conf (p->h, conf) < 0) {
-        flux_conf_decref (conf);
-        log_err ("%s: error duplicating config object", p->name);
+    if (flux_set_conf (p->h, p->conf) < 0) {
+        log_err ("%s: error setting config object", p->name);
         goto done;
     }
+    p->conf = NULL; // flux_set_conf() transfers ownership to p->h
     if (modservice_register (p->h, p) < 0) {
         log_err ("%s: modservice_register", p->name);
         goto done;
@@ -310,7 +305,8 @@ module_t *module_create (flux_t *h,
     p->main = mod_main;
     p->dso = dso;
     p->rank = rank;
-    p->conf = flux_get_conf (h);
+    if (!(p->conf = flux_conf_copy (flux_get_conf (h))))
+        goto cleanup;
     if (!(p->parent_uuid_str = strdup (parent_uuid)))
         goto nomem;
     strncpy (p->uuid_str, parent_uuid, sizeof (p->uuid_str) - 1);
@@ -563,6 +559,7 @@ void module_destroy (module_t *p)
     free (p->name);
     free (p->path);
     free (p->parent_uuid_str);
+    flux_conf_decref (p->conf);
     json_decref (p->attr_cache);
     if (p->rmmod) {
         flux_msg_t *msg;
