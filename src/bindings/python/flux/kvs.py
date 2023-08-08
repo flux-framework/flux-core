@@ -327,7 +327,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
         put(self.fhdl, self._path + key, value)
 
     def __delitem__(self, key):
-        put_unlink(self.fhdl, key)
+        put_unlink(self.fhdl, self._path + key)
 
     class KVSDirIterator(abc.Iterator):
         def __init__(self, kvsdir):
