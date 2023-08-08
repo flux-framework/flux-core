@@ -55,7 +55,7 @@ jobs:
     - run: >
         cd .. && git clone https://github.com/flux-framework/flux-sched &&
         cd flux-sched &&
-        src/test/docker/docker-run-checks.sh -j 4 -i bookworm
+        src/test/docker/docker-run-checks.sh -j 4 -i bookworm -- CXXFLAGS=-Wno-error=maybe-uninitialized
 
   check-accounting:
     needs: [python-lint]
