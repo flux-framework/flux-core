@@ -21,7 +21,7 @@ log "docker push ${DOCKER_TAG}"
 docker push ${DOCKER_TAG}
 
 #  If this is the bookworm build, then also tag without image name:
-if echo "$DOCKER_TAG" | grep -q "bookworm"; then
+if echo "$DOCKER_TAG" | grep "bookworm" | grep -qv "386"; then
     t="${DOCKER_REPO}:${GITHUB_TAG:-latest}"
     log "docker push ${t}"
     docker tag "$DOCKER_TAG" ${t} && docker push ${t}
