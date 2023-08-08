@@ -56,16 +56,17 @@ $ for i in focal el7 el8 fedora33 fedora34 fedora35 fedora38; do
   done
 ```
 
-#### Jammy multiarch images
+#### Bookworm and Jammy multiarch images
 
-Building the jammy images for linux/amd64 and linux/386 requires the
+Building the images for linux/amd64, linux/arm64 and linux/386 requires the
 Docker buildx extensions, see
 
  https://www.docker.com/blog/multi-arch-build-and-images-the-simple-way/
 
 and run
 ```
-$  docker buildx build --push --platform=linux/386,linux/amd64 --tag fluxrm/testenv:jammy src/test/docker/jammy
+$  docker buildx build --push --platform=linux/arm64,linux/amd64 --tag fluxrm/testenv:jammy src/test/docker/jammy
+$  docker buildx build --push --platform=linux/386,linux/amd64,linux/arm64 --tag fluxrm/testenv:bookworm src/test/docker/bookworm
 ```
 
 to build and push images to docker hub.
