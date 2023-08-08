@@ -28,6 +28,8 @@ libbroker_la_SOURCES = \
 	brokercfg.h \
 	module.c \
 	module.h \
+	modhash.c \
+	modhash.h \
 	modservice.c \
 	modservice.h \
 	overlay.h \

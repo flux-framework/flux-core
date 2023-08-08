@@ -16,6 +16,9 @@
 #include <czmq.h>
 #undef streq // redefined by ccan/str/str.h below
 #include <uuid.h>
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN 37     // defined in later libuuid headers
+#endif
 #include <flux/core.h>
 #include <jansson.h>
 #if HAVE_CALIPER
@@ -27,7 +30,6 @@
 #include "src/common/libzmqutil/reactor.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/iterators.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "ccan/str/str.h"
@@ -35,14 +37,7 @@
 #include "module.h"
 #include "modservice.h"
 
-#ifndef UUID_STR_LEN
-#define UUID_STR_LEN 37     // defined in later libuuid headers
-#endif
-
-
 struct broker_module {
-    struct modhash *modhash;
-
     flux_watcher_t *broker_w;
 
     double lastseen;
@@ -52,6 +47,10 @@ struct broker_module {
 
     uuid_t uuid;            /* uuid for unique request sender identity */
     char uuid_str[UUID_STR_LEN];
+    char *parent_uuid_str;
+    int rank;
+    attr_t *attrs;
+    const flux_conf_t *conf;
     pthread_t t;            /* module thread */
     mod_main_f *main;       /* dlopened mod_main() */
     char *name;
@@ -78,20 +77,12 @@ struct broker_module {
     zlist_t *subs;          /* subscription strings */
 };
 
-struct modhash {
-    zhash_t *zh_byuuid;
-    uint32_t rank;
-    flux_t *broker_h;
-    attr_t *attrs;
-    char uuid_str[UUID_STR_LEN];
-};
-
 static int setup_module_profiling (module_t *p)
 {
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.type", "module");
     cali_begin_int_byname ("flux.tid", syscall (SYS_gettid));
-    cali_begin_int_byname ("flux.rank", p->modhash->rank);
+    cali_begin_int_byname ("flux.rank", p->rank);
     cali_begin_string_byname ("flux.name", p->name);
 #endif
     return (0);
@@ -144,7 +135,7 @@ static void *module_thread (void *arg)
         log_err ("flux_open %s", uri);
         goto done;
     }
-    if (attr_cache_immutables (p->modhash->attrs, p->h) < 0) {
+    if (attr_cache_immutables (p->attrs, p->h) < 0) {
         log_err ("%s: error priming broker attribute cache", p->name);
         goto done;
     }
@@ -152,7 +143,7 @@ static void *module_thread (void *arg)
     /* Copy the broker's config object so that modules
      * can call flux_get_conf() and expect it to always succeed.
      */
-    if (!(conf = flux_conf_copy (flux_get_conf (p->modhash->broker_h)))
+    if (!(conf = flux_conf_copy (p->conf))
             || flux_set_conf (p->h, conf) < 0) {
         flux_conf_decref (conf);
         log_err ("%s: error duplicating config object", p->name);
@@ -227,19 +218,166 @@ done:
     return NULL;
 }
 
+static void module_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
+{
+    module_t *p = arg;
+    p->lastseen = flux_reactor_now (r);
+    if (p->poller_cb)
+        p->poller_cb (p, p->poller_arg);
+}
+
+static char *module_name_from_path (const char *s)
+{
+    char *path, *name, *cpy;
+    char *cp;
+
+    if (!(path = strdup (s))
+        || !(name = basename (path)))
+        goto error;
+    if ((cp = strstr (name, ".so")))
+        *cp = '\0';
+    if (!(cpy = strdup (name)))
+        goto error;
+    free (path);
+    return cpy;
+error:
+    ERRNO_SAFE_WRAP (free, path);
+    return NULL;
+}
+
+module_t *module_create (flux_t *h,
+                         const char *parent_uuid,
+                         const char *name, // may be NULL
+                         const char *path,
+                         int rank,
+                         attr_t *attrs,
+                         json_t *args,
+                         flux_error_t *error)
+{
+    module_t *p;
+    void *dso;
+    const char **mod_namep;
+    mod_main_f *mod_main;
+
+    dlerror ();
+    if (!(dso = dlopen (path, RTLD_NOW | RTLD_GLOBAL | FLUX_DEEPBIND))) {
+        errprintf (error, "%s", dlerror ());
+        errno = ENOENT;
+        return NULL;
+    }
+    if (!(mod_main = dlsym (dso, "mod_main"))) {
+        errprintf (error, "module does not define mod_main()");
+        dlclose (dso);
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(p = calloc (1, sizeof (*p))))
+        goto nomem;
+    p->main = mod_main;
+    p->dso = dso;
+    p->rank = rank;
+    p->attrs = attrs;
+    p->conf = flux_get_conf (h);
+    if (!(p->parent_uuid_str = strdup (parent_uuid)))
+        goto nomem;
+    strncpy (p->uuid_str, parent_uuid, sizeof (p->uuid_str) - 1);
+    if (args) {
+        size_t index;
+        json_t *entry;
+
+        json_array_foreach (args, index, entry) {
+            const char *s = json_string_value (entry);
+            if (s && (argz_add (&p->argz, &p->argz_len, s) != 0))
+                goto nomem;
+        }
+    }
+    if (!(p->path = strdup (path))
+        || !(p->rmmod = zlist_new ())
+        || !(p->subs = zlist_new ()))
+        goto nomem;
+    if (name) {
+        if (!(p->name = strdup (name)))
+            goto nomem;
+    }
+    else {
+        if (!(p->name = module_name_from_path (path)))
+            goto nomem;
+    }
+    /* Handle legacy 'mod_name' symbol - not recommended for new modules
+     * but double check that it's sane if present.
+     */
+    if ((mod_namep = dlsym (p->dso, "mod_name")) && *mod_namep != NULL) {
+        if (!streq (*mod_namep, p->name)) {
+            errprintf (error, "mod_name %s != name %s", *mod_namep, name);
+            errno = EINVAL;
+            goto cleanup;
+        }
+    }
+    uuid_generate (p->uuid);
+    uuid_unparse (p->uuid, p->uuid_str);
+
+     /* Broker end of PAIR socket is opened here.
+     */
+    if (!(p->sock = zsock_new_pair (NULL))) {
+        errprintf (error, "could not create zsock for %s", p->name);
+        goto cleanup;
+    }
+    zsock_set_unbounded (p->sock);
+    zsock_set_linger (p->sock, 5);
+    if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0) {
+        errprintf (error, "zsock_bind inproc://%s", module_get_uuid (p));
+        goto cleanup;
+    }
+    if (!(p->broker_w = zmqutil_watcher_create (flux_get_reactor (h),
+                                                p->sock,
+                                                FLUX_POLLIN,
+                                                module_cb,
+                                                p))) {
+        errprintf (error, "could not create %s zsock watcher", p->name);
+        goto cleanup;
+    }
+    /* Set creds for connection.
+     * Since this is a point to point connection between broker threads,
+     * credentials are always those of the instance owner.
+     */
+    p->cred.userid = getuid ();
+    p->cred.rolemask = FLUX_ROLE_OWNER | FLUX_ROLE_LOCAL;
+
+    return p;
+nomem:
+    errprintf (error, "out of memory");
+    errno = ENOMEM;
+cleanup:
+    module_destroy (p);
+    return NULL;
+}
+
+const char *module_get_path (module_t *p)
+{
+    return p && p->path ? p->path : "unknown";
+}
+
 const char *module_get_name (module_t *p)
 {
-    return p->name;
+    return p && p->name ? p->name : "unknown";
 }
 
 const char *module_get_uuid (module_t *p)
 {
-    return p->uuid_str;
+    return p ? p->uuid_str : "unknown";
 }
 
-static int module_get_idle (module_t *p)
+double module_get_lastseen (module_t *p)
 {
-    return flux_reactor_now (flux_get_reactor (p->modhash->broker_h)) - p->lastseen;
+    return p ? p->lastseen : 0;
+}
+
+int module_get_status (module_t *p)
+{
+    return p ? p->status : 0;
 }
 
 flux_msg_t *module_recvmsg (module_t *p)
@@ -311,7 +449,7 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
         case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
             if (!(cpy = flux_msg_copy (msg, true)))
                 goto done;
-            if (flux_msg_route_push (cpy, p->modhash->uuid_str) < 0)
+            if (flux_msg_route_push (cpy, p->parent_uuid_str) < 0)
                 goto done;
             if (zmqutil_msg_send (p->sock, cpy) < 0)
                 goto done;
@@ -337,24 +475,6 @@ done:
     return rc;
 }
 
-int module_response_sendmsg (modhash_t *mh, const flux_msg_t *msg)
-{
-    const char *uuid;
-    module_t *p;
-
-    if (!msg)
-        return 0;
-    if (!(uuid = flux_msg_route_last (msg))) {
-        errno = EPROTO;
-        return -1;
-    }
-    if (!(p = zhash_lookup (mh->zh_byuuid, uuid))) {
-        errno = ENOSYS;
-        return -1;
-    }
-    return module_sendmsg (p, msg);
-}
-
 int module_disconnect_arm (module_t *p,
                            const flux_msg_t *msg,
                            disconnect_send_f cb,
@@ -369,7 +489,7 @@ int module_disconnect_arm (module_t *p,
     return 0;
 }
 
-static void module_destroy (module_t *p)
+void module_destroy (module_t *p)
 {
     int e;
     void *res;
@@ -406,6 +526,7 @@ static void module_destroy (module_t *p)
     free (p->argz);
     free (p->name);
     free (p->path);
+    free (p->parent_uuid_str);
     if (p->rmmod) {
         flux_msg_t *msg;
         while ((msg = zlist_pop (p->rmmod)))
@@ -425,7 +546,7 @@ static void module_destroy (module_t *p)
 
 /* Send shutdown request, broker to module.
  */
-int module_stop (module_t *p)
+int module_stop (module_t *p, flux_t *h)
 {
     char *topic = NULL;
     flux_future_t *f = NULL;
@@ -433,8 +554,11 @@ int module_stop (module_t *p)
 
     if (asprintf (&topic, "%s.shutdown", p->name) < 0)
         goto done;
-    if (!(f = flux_rpc (p->modhash->broker_h, topic, NULL,
-                        FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
+    if (!(f = flux_rpc (h,
+                        topic,
+                        NULL,
+                        FLUX_NODEID_ANY,
+                        FLUX_RPC_NORESPONSE)))
         goto done;
     rc = 0;
 done:
@@ -446,15 +570,6 @@ done:
 void module_mute (module_t *p)
 {
     p->muted = true;
-}
-
-static void module_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
-{
-    module_t *p = arg;
-    p->lastseen = flux_reactor_now (r);
-    if (p->poller_cb)
-        p->poller_cb (p, p->poller_arg);
 }
 
 int module_start (module_t *p)
@@ -470,6 +585,18 @@ int module_start (module_t *p)
     rc = 0;
 done:
     return rc;
+}
+
+int module_cancel (module_t *p, flux_error_t *error)
+{
+    if (p->t) {
+        int e;
+        if ((e = pthread_cancel (p->t)) != 0 && e != ESRCH) {
+            errprintf (error, "pthread_cancel: %s", strerror (e));
+            return -1;
+        }
+    }
+    return 0;
 }
 
 void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg)
@@ -492,11 +619,6 @@ void module_set_status (module_t *p, int new_status)
     p->status = new_status;
     if (p->status_cb)
         p->status_cb (p, prev_status, p->status_arg);
-}
-
-int module_get_status (module_t *p)
-{
-    return p->status;
 }
 
 void module_set_errnum (module_t *p, int errnum)
@@ -546,277 +668,11 @@ flux_msg_t *module_pop_insmod (module_t *p)
     return msg;
 }
 
-static char *module_name_from_path (const char *s)
+int module_subscribe (module_t *p, const char *topic)
 {
-    char *path, *name, *cpy;
-    char *cp;
-
-    if (!(path = strdup (s))
-        || !(name = basename (path)))
-        goto error;
-    if ((cp = strstr (name, ".so")))
-        *cp = '\0';
-    if (!(cpy = strdup (name)))
-        goto error;
-    free (path);
-    return cpy;
-error:
-    ERRNO_SAFE_WRAP (free, path);
-    return NULL;
-}
-
-module_t *module_add (modhash_t *mh,
-                      const char *name,
-                      const char *path,
-                      json_t *args,
-                      flux_error_t *error)
-{
-    module_t *p;
-    void *dso;
-    const char **mod_namep;
-    mod_main_f *mod_main;
-    int rc;
-
-    dlerror ();
-    if (!(dso = dlopen (path, RTLD_NOW | RTLD_GLOBAL | FLUX_DEEPBIND))) {
-        errprintf (error, "%s", dlerror ());
-        errno = ENOENT;
-        return NULL;
-    }
-    if (!(mod_main = dlsym (dso, "mod_main"))) {
-        errprintf (error, "module does not define mod_main()");
-        dlclose (dso);
-        errno = EINVAL;
-        return NULL;
-    }
-    if (!(p = calloc (1, sizeof (*p)))) {
-        dlclose (dso);
-        goto nomem;
-    }
-    p->main = mod_main;
-    p->dso = dso;
-    if (args) {
-        size_t index;
-        json_t *entry;
-
-        json_array_foreach (args, index, entry) {
-            const char *s = json_string_value (entry);
-            if (s && (argz_add (&p->argz, &p->argz_len, s) != 0))
-                goto nomem;
-        }
-    }
-    if (!(p->path = strdup (path))
-        || !(p->rmmod = zlist_new ())
-        || !(p->subs = zlist_new ()))
-        goto nomem;
-    if (name) {
-        if (!(p->name = strdup (name)))
-            goto nomem;
-    }
-    else {
-        if (!(p->name = module_name_from_path (path)))
-            goto nomem;
-    }
-    /* Handle legacy 'mod_name' symbol - not recommended for new modules
-     * but double check that it's sane if present.
-     */
-    if ((mod_namep = dlsym (p->dso, "mod_name")) && *mod_namep != NULL) {
-        if (!streq (*mod_namep, p->name)) {
-            errprintf (error, "mod_name %s != name %s", *mod_namep, name);
-            errno = EINVAL;
-            goto cleanup;
-        }
-    }
-    uuid_generate (p->uuid);
-    uuid_unparse (p->uuid, p->uuid_str);
-
-    p->modhash = mh;
-
-    /* Broker end of PAIR socket is opened here.
-     */
-    if (!(p->sock = zsock_new_pair (NULL))) {
-        errprintf (error, "could not create zsock for %s", p->name);
-        goto cleanup;
-    }
-    zsock_set_unbounded (p->sock);
-    zsock_set_linger (p->sock, 5);
-    if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0) {
-        errprintf (error, "zsock_bind inproc://%s", module_get_uuid (p));
-        goto cleanup;
-    }
-    if (!(p->broker_w = zmqutil_watcher_create (
-                                        flux_get_reactor (p->modhash->broker_h),
-                                        p->sock,
-                                        FLUX_POLLIN,
-                                        module_cb,
-                                        p))) {
-        errprintf (error, "could not create %s zsock watcher", p->name);
-        goto cleanup;
-    }
-    /* Set creds for connection.
-     * Since this is a point to point connection between broker threads,
-     * credentials are always those of the instance owner.
-     */
-    p->cred.userid = getuid ();
-    p->cred.rolemask = FLUX_ROLE_OWNER | FLUX_ROLE_LOCAL;
-
-    /* Update the modhash.
-     */
-    rc = zhash_insert (mh->zh_byuuid, module_get_uuid (p), p);
-    assert (rc == 0); /* uuids are by definition unique */
-    zhash_freefn (mh->zh_byuuid, module_get_uuid (p),
-                  (zhash_free_fn *)module_destroy);
-    return p;
-nomem:
-    errprintf (error, "out of memory");
-    errno = ENOMEM;
-cleanup:
-    module_destroy (p);
-    return NULL;
-}
-
-void module_remove (modhash_t *mh, module_t *p)
-{
-    zhash_delete (mh->zh_byuuid, module_get_uuid (p));
-}
-
-modhash_t *modhash_create (void)
-{
-    modhash_t *mh = calloc (1, sizeof (*mh));
-    if (!mh)
-        return NULL;
-    if (!(mh->zh_byuuid = zhash_new ())) {
-        errno = ENOMEM;
-        modhash_destroy (mh);
-        return NULL;
-    }
-    return mh;
-}
-
-void modhash_destroy (modhash_t *mh)
-{
-    int saved_errno = errno;
-    const char *uuid;
-    module_t *p;
-    int e;
-
-    if (mh) {
-        if (mh->zh_byuuid) {
-            FOREACH_ZHASH (mh->zh_byuuid, uuid, p) {
-                if (p->t) {
-                    if ((e = pthread_cancel (p->t)) != 0 && e != ESRCH)
-                        log_errn (e, "pthread_cancel");
-                }
-            }
-            zhash_destroy (&mh->zh_byuuid);
-        }
-        free (mh);
-    }
-    errno = saved_errno;
-}
-
-void modhash_initialize (modhash_t *mh,
-                         flux_t *h,
-                         const char *uuid,
-                         attr_t *attrs)
-{
-    mh->broker_h = h;
-    mh->attrs = attrs;
-    flux_get_rank (h, &mh->rank);
-    strncpy (mh->uuid_str, uuid, sizeof (mh->uuid_str) - 1);
-}
-
-json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw)
-{
-    json_t *mods = NULL;
-    zlist_t *uuids = NULL;
-    char *uuid;
-    module_t *p;
-
-    if (!(mods = json_array()))
-        goto nomem;
-    if (!(uuids = zhash_keys (mh->zh_byuuid)))
-        goto nomem;
-    uuid = zlist_first (uuids);
-    while (uuid) {
-        if ((p = zhash_lookup (mh->zh_byuuid, uuid))) {
-            json_t *svcs;
-            json_t *entry;
-
-            if (!(svcs  = service_list_byuuid (sw, uuid)))
-                goto nomem;
-            if (!(entry = json_pack ("{s:s s:s s:i s:i s:o}",
-                                     "name", module_get_name (p),
-                                     "path", p->path,
-                                     "idle", module_get_idle (p),
-                                     "status", p->status,
-                                     "services", svcs))) {
-                json_decref (svcs);
-                goto nomem;
-            }
-            if (json_array_append_new (mods, entry) < 0) {
-                json_decref (entry);
-                goto nomem;
-            }
-        }
-        uuid = zlist_next (uuids);
-    }
-    zlist_destroy (&uuids);
-    return mods;
-nomem:
-    zlist_destroy (&uuids);
-    json_decref (mods);
-    errno = ENOMEM;
-    return NULL;
-}
-
-module_t *module_lookup (modhash_t *mh, const char *uuid)
-{
-    module_t *m;
-
-    if (!(m = zhash_lookup (mh->zh_byuuid, uuid))) {
-        errno = ENOENT;
-        return NULL;
-    }
-    return m;
-}
-
-module_t *module_lookup_byname (modhash_t *mh, const char *name)
-{
-    zlist_t *uuids;
-    char *uuid;
-    module_t *result = NULL;
-
-    if (!(uuids = zhash_keys (mh->zh_byuuid))) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    uuid = zlist_first (uuids);
-    while (uuid) {
-        module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
-        if (p) {
-            if (streq (module_get_name (p), name)
-                || streq (p->path, name)) {
-                result = p;
-                break;
-            }
-        }
-        uuid = zlist_next (uuids);
-    }
-    zlist_destroy (&uuids);
-    return result;
-}
-
-int module_subscribe (modhash_t *mh, const char *uuid, const char *topic)
-{
-    module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
-    char *cpy = NULL;
+    char *cpy;
     int rc = -1;
 
-    if (!p) {
-        errno = ENOENT;
-        goto done;
-    }
     if (!(cpy = strdup (topic)))
         goto done;
     if (zlist_push (p->subs, cpy) < 0) {
@@ -829,16 +685,10 @@ done:
     return rc;
 }
 
-int module_unsubscribe (modhash_t *mh, const char *uuid, const char *topic)
+void module_unsubscribe (module_t *p, const char *topic)
 {
-    module_t *p = zhash_lookup (mh->zh_byuuid, uuid);
     char *s;
-    int rc = -1;
 
-    if (!p) {
-        errno = ENOENT;
-        goto done;
-    }
     s = zlist_first (p->subs);
     while (s) {
         if (streq (topic, s)) {
@@ -848,9 +698,6 @@ int module_unsubscribe (modhash_t *mh, const char *uuid, const char *topic)
         }
         s = zlist_next (p->subs);
     }
-    rc = 0;
-done:
-    return rc;
 }
 
 static bool match_sub (module_t *p, const char *topic)
@@ -865,35 +712,17 @@ static bool match_sub (module_t *p, const char *topic)
     return false;
 }
 
-int module_event_mcast (modhash_t *mh, const flux_msg_t *msg)
+int module_event_cast (module_t *p, const flux_msg_t *msg)
 {
     const char *topic;
-    module_t *p;
-    int rc = -1;
 
     if (flux_msg_get_topic (msg, &topic) < 0)
-        goto done;
-    p = zhash_first (mh->zh_byuuid);
-    while (p) {
-        if (match_sub (p, topic)) {
-            if (module_sendmsg (p, msg) < 0)
-                goto done;
-        }
-        p = zhash_next (mh->zh_byuuid);
+        return -1;
+    if (match_sub (p, topic)) {
+        if (module_sendmsg (p, msg) < 0)
+            return -1;
     }
-    rc = 0;
-done:
-    return rc;
-}
-
-module_t *module_first (modhash_t *mh)
-{
-    return zhash_first (mh->zh_byuuid);
-}
-
-module_t *module_next (modhash_t *mh)
-{
-    return zhash_next (mh->zh_byuuid);
+    return 0;
 }
 
 /*

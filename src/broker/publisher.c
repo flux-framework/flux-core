@@ -20,7 +20,7 @@
 #include "src/common/libccan/ccan/base64/base64.h"
 #include "ccan/str/str.h"
 
-#include "module.h"
+#include "modhash.h"
 #include "publisher.h"
 
 
@@ -190,7 +190,9 @@ static void subscribe_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
         goto error;
     if ((uuid = flux_msg_route_first (msg))) {
-        if (module_subscribe (pub->ctx->modhash, uuid, topic) < 0)
+        module_t *p;
+        if (!(p = modhash_lookup (pub->ctx->modhash, uuid))
+            || module_subscribe (p, topic) < 0)
             goto error;
     }
     else {
@@ -217,8 +219,10 @@ static void unsubscribe_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
         goto error;
     if ((uuid = flux_msg_route_first (msg))) {
-        if (module_unsubscribe (pub->ctx->modhash, uuid, topic) < 0)
+        module_t *p;
+        if (!(p = modhash_lookup (pub->ctx->modhash, uuid)))
             goto error;
+        module_unsubscribe (p, topic);
     }
     else
         broker_unsubscribe (pub->ctx, topic);

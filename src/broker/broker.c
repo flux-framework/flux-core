@@ -50,6 +50,7 @@
 #include "ccan/ptrint/ptrint.h"
 
 #include "module.h"
+#include "modhash.h"
 #include "brokercfg.h"
 #include "groups.h"
 #include "overlay.h"
@@ -478,16 +479,6 @@ int main (int argc, char *argv[])
         log_err ("error initializing content cache");
         goto cleanup;
     }
-
-
-    /* Initialize module infrastructure.
-     */
-    if (ctx.verbose > 1)
-        log_msg ("initializing modules");
-    modhash_initialize (ctx.modhash,
-                        ctx.h,
-                        overlay_get_uuid (ctx.overlay),
-                        ctx.attrs);
 
     /* Configure broker state machine
      */
@@ -1228,8 +1219,16 @@ static int load_module (broker_ctx_t *ctx,
         }
         path = zlist_first (files);
     }
-    if (!(p = module_add (ctx->modhash, name, path, args, error)))
+    if (!(p = module_create (ctx->h,
+                             overlay_get_uuid (ctx->overlay),
+                             name,
+                             path,
+                             ctx->rank,
+                             ctx->attrs,
+                             args,
+                             error)))
         goto error;
+    modhash_add (ctx->modhash, p);
     if (service_add (ctx->services,
                      module_get_name (p),
                      module_get_uuid (p),
@@ -1255,7 +1254,7 @@ static int load_module (broker_ctx_t *ctx,
 service_remove:
     service_remove_byuuid (ctx->services, module_get_uuid (p));
 module_remove:
-    module_remove (ctx->modhash, p);
+    modhash_remove (ctx->modhash, p);
 error:
     ERRNO_SAFE_WRAP (zlist_destroy, &files);
     ERRNO_SAFE_WRAP (free, pattern);
@@ -1267,11 +1266,11 @@ static int unload_module (broker_ctx_t *ctx, const char *name,
 {
     module_t *p;
 
-    if (!(p = module_lookup_byname (ctx->modhash, name))) {
+    if (!(p = modhash_lookup_byname (ctx->modhash, name))) {
         errno = ENOENT;
         return -1;
     }
-    if (module_stop (p) < 0)
+    if (module_stop (p, ctx->h) < 0)
         return -1;
     if (module_push_rmmod (p, request) < 0)
         return -1;
@@ -1374,10 +1373,11 @@ static void broker_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     broker_ctx_t *ctx = arg;
     json_t *mods = NULL;
+    double now = flux_reactor_now (flux_get_reactor (h));
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (!(mods = module_get_modlist (ctx->modhash, ctx->services)))
+    if (!(mods = modhash_get_modlist (ctx->modhash, now, ctx->services)))
         goto error;
     if (flux_respond_pack (h, msg, "{s:O}", "mods", mods) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
@@ -1408,7 +1408,7 @@ static void broker_module_status_cb (flux_t *h,
                              "status", &status,
                              "errnum", &errnum) < 0
         || !(sender = flux_msg_route_first (msg))
-        || !(p = module_lookup (ctx->modhash, sender))) {
+        || !(p = modhash_lookup (ctx->modhash, sender))) {
         const char *errmsg = "error decoding/finding broker.module-status";
         if (flux_msg_is_noresponse (msg))
             flux_log_error (h, "%s", errmsg);
@@ -1518,7 +1518,7 @@ static void service_add_cb (flux_t *h, flux_msg_handler_t *w,
         errno = EPROTO;
         goto error;
     }
-    if (!(p = module_lookup (ctx->modhash, sender))) {
+    if (!(p = modhash_lookup (ctx->modhash, sender))) {
         errno = ENOENT;
         goto error;
     }
@@ -1785,7 +1785,7 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     }
     /* Finally, route to local module subscribers.
      */
-    return module_event_mcast (ctx->modhash, msg);
+    return modhash_event_mcast (ctx->modhash, msg);
 }
 
 /* Callback to send disconnect messages on behalf of unloading module.
@@ -1942,7 +1942,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
         if (module_rmmod_respond (ctx->h, p) < 0)
             flux_log_error (ctx->h, "flux_respond to rmmod %s", name);
 
-        module_remove (ctx->modhash, p);
+        modhash_remove (ctx->modhash, p);
     }
 }
 
@@ -2111,7 +2111,7 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
     else if (overlay_uuid_is_child (ctx->overlay, uuid))
         rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_DOWNSTREAM);
     else
-        rc = module_response_sendmsg (ctx->modhash, msg);
+        rc = modhash_response_sendmsg (ctx->modhash, msg);
     return rc;
 }
 
