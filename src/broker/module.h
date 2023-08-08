@@ -21,8 +21,6 @@
 
 #include "src/common/librouter/disconnect.h"
 
-#include "attr.h"
-
 typedef struct broker_module module_t;
 typedef void (*modpoller_cb_f)(module_t *p, void *arg);
 typedef void (*module_status_cb_f)(module_t *p, int prev_status, void *arg);
@@ -32,7 +30,6 @@ module_t *module_create (flux_t *h,
                          const char *name, // may be NULL
                          const char *path,
                          int rank,
-                         attr_t *attrs,
                          json_t *args,
                          flux_error_t *error);
 void module_destroy (module_t *p);

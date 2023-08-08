@@ -49,7 +49,7 @@ struct broker_module {
     char uuid_str[UUID_STR_LEN];
     char *parent_uuid_str;
     int rank;
-    attr_t *attrs;
+    json_t *attr_cache;     /* attrs to be cached in module flux_t */
     const flux_conf_t *conf;
     pthread_t t;            /* module thread */
     mod_main_f *main;       /* dlopened mod_main() */
@@ -86,6 +86,42 @@ static int setup_module_profiling (module_t *p)
     cali_begin_string_byname ("flux.name", p->name);
 #endif
     return (0);
+}
+
+static int attr_cache_to_json (flux_t *h, json_t **cachep)
+{
+    json_t *cache;
+    const char *name;
+
+    if (!(cache = json_object ()))
+        return -1;
+    name = flux_attr_cache_first (h);
+    while (name) {
+        json_t *val = json_string (flux_attr_get (h, name));
+        if (!val || json_object_set_new (cache, name, val) < 0) {
+            json_decref (val);
+            goto error;
+        }
+        name = flux_attr_cache_next (h);
+    }
+    *cachep = cache;
+    return 0;
+error:
+    json_decref (cache);
+    return -1;
+}
+
+static int attr_cache_from_json (flux_t *h, json_t *cache)
+{
+    const char *name;
+    json_t *o;
+
+    json_object_foreach (cache, name, o) {
+        const char *val = json_string_value (o);
+        if (flux_attr_set_cacheonly (h, name, val) < 0)
+            return -1;
+    }
+    return 0;
 }
 
 /*  Synchronize the FINALIZING state with the broker, so the broker
@@ -132,7 +168,7 @@ static void *module_thread (void *arg)
         log_err ("flux_open %s", uri);
         goto done;
     }
-    if (attr_cache_immutables (p->attrs, p->h) < 0) {
+    if (attr_cache_from_json (p->h, p->attr_cache) < 0) {
         log_err ("%s: error priming broker attribute cache", p->name);
         goto done;
     }
@@ -249,7 +285,6 @@ module_t *module_create (flux_t *h,
                          const char *name, // may be NULL
                          const char *path,
                          int rank,
-                         attr_t *attrs,
                          json_t *args,
                          flux_error_t *error)
 {
@@ -275,7 +310,6 @@ module_t *module_create (flux_t *h,
     p->main = mod_main;
     p->dso = dso;
     p->rank = rank;
-    p->attrs = attrs;
     p->conf = flux_get_conf (h);
     if (!(p->parent_uuid_str = strdup (parent_uuid)))
         goto nomem;
@@ -342,6 +376,12 @@ module_t *module_create (flux_t *h,
     p->cred.userid = getuid ();
     p->cred.rolemask = FLUX_ROLE_OWNER | FLUX_ROLE_LOCAL;
 
+    /* Optimization: create attribute cache to be primed in the module's
+     * flux_t handle.  Priming the cache avoids a synchronous RPC from
+     * flux_attr_get(3) for common attrs like rank, etc.
+     */
+    if (attr_cache_to_json (h, &p->attr_cache) < 0)
+        goto nomem;
     return p;
 nomem:
     errprintf (error, "out of memory");
@@ -523,6 +563,7 @@ void module_destroy (module_t *p)
     free (p->name);
     free (p->path);
     free (p->parent_uuid_str);
+    json_decref (p->attr_cache);
     if (p->rmmod) {
         flux_msg_t *msg;
         while ((msg = zlist_pop (p->rmmod)))

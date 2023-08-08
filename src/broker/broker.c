@@ -1223,7 +1223,6 @@ static int load_module (broker_ctx_t *ctx,
                              name,
                              path,
                              ctx->rank,
-                             ctx->attrs,
                              args,
                              error)))
         goto error;
