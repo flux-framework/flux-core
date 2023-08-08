@@ -272,7 +272,7 @@ static struct taskmap *taskmap_decode_array (json_t *o, flux_error_t *errp)
     json_array_foreach (o, index, entry) {
         struct taskmap_block *block;
         if (!json_is_array (entry)) {
-            errprintf (errp, "entry %lu in taskmap is not an array", index);
+            errprintf (errp, "entry %zu in taskmap is not an array", index);
             goto err;
         }
         if (!(block = taskmap_block_from_json (entry, errp))

@@ -113,7 +113,7 @@ static int parse_as_double (const char *s, uint64_t *up)
         return -1;
     }
     double result = floor (d * scale);
-    if (result > UINT64_MAX) {
+    if (result > (double)UINT64_MAX) {
         errno = EOVERFLOW;
         return -1;
     }

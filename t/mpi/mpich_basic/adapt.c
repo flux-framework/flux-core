@@ -1135,6 +1135,7 @@ int main(int argc, char *argv[])
     free(bwdata01);
     free(bwdata12);
     free(bwdata012);
+    (void)t1; // avoid "t1 set but not used"
     return 0;
 }
 

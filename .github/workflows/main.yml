@@ -1,5 +1,8 @@
 on: [pull_request, push]
 name: ci
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   check-pr:
     name: validate commits
@@ -48,11 +51,11 @@ jobs:
     - run: git fetch --tags || true
     - run: >
         src/test/docker/docker-run-checks.sh --install-only \
-          --tag=fluxrm/flux-core:bionic
+          --tag=fluxrm/flux-core:bookworm
     - run: >
         cd .. && git clone https://github.com/flux-framework/flux-sched &&
         cd flux-sched &&
-        src/test/docker/docker-run-checks.sh -j 4 -i bionic
+        src/test/docker/docker-run-checks.sh -j 4 -i bookworm -- CXXFLAGS=-Wno-error=maybe-uninitialized
 
   check-accounting:
     needs: [python-lint]

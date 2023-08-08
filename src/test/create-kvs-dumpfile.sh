@@ -79,7 +79,7 @@ DUMPFILE=flux-${TAG}.tar.bz2
 printf "Creating dumpfile in ${OUTPUTDIR}/${DUMPFILE}\n"
 docker run -i --rm -u $(id -u) \
      --mount type=bind,source=${OUTPUTDIR},target=/data \
-     fluxrm/flux-core:bionic-${TAG} \
+     fluxrm/flux-core:bookworm-${TAG} \
      flux start sh -c "/data/workload.sh; flux dump /data/${DUMPFILE}"
 
 rm ${OUTPUTDIR}/workload.sh

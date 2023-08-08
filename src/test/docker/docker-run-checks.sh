@@ -11,7 +11,7 @@ PROJECT=flux-core
 BASE_DOCKER_REPO=fluxrm/testenv
 
 WORKDIR=/usr/src
-IMAGE=bionic
+IMAGE=bookworm
 JOBS=2
 MOUNT_HOME_ARGS="--volume=$HOME:/home/$USER -e HOME"
 
@@ -60,10 +60,10 @@ Options:\n\
 # check if running in OSX
 if [[ "$(uname)" == "Darwin" ]]; then
     # BSD getopt
-    GETOPTS=`/usr/bin/getopt $short_opts -- $*`
+    GETOPTS=`getopt $short_opts -- $*`
 else
     # GNU getopt
-    GETOPTS=`/usr/bin/getopt -u -o $short_opts -l $long_opts -n $prog -- $@`
+    GETOPTS=`getopt -u -o $short_opts -l $long_opts -n $prog -- $@`
     if [[ $? != 0 ]]; then
         die "$usage"
     fi
