@@ -115,7 +115,7 @@ static void *module_thread (void *arg)
     module_t *p = arg;
     sigset_t signal_set;
     int errnum;
-    char *uri = NULL;
+    char uri[UUID_STR_LEN + 16];
     char **av = NULL;
     int ac;
     int mod_main_errno = 0;
@@ -127,10 +127,7 @@ static void *module_thread (void *arg)
 
     /* Connect to broker socket, enable logging, register built-in services
      */
-    if (asprintf (&uri, "shmem://%s", p->uuid_str) < 0) {
-        log_err ("asprintf");
-        goto done;
-    }
+    snprintf (uri, sizeof (uri), "shmem://%s", p->uuid_str);
     if (!(p->h = flux_open (uri, 0))) {
         log_err ("flux_open %s", uri);
         goto done;
@@ -211,7 +208,6 @@ static void *module_thread (void *arg)
     }
     flux_future_destroy (f);
 done:
-    free (uri);
     free (av);
     flux_close (p->h);
     p->h = NULL;
