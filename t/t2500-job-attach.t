@@ -68,6 +68,7 @@ test_expect_success 'attach: --show-status properly accounts prolog-start events
 		| tail -1 \
 		| cut -f1 -d:) &&
 	test $first_starting_line -ge $last_prolog_finish_line &&
+	flux job wait-event $jobid2 clean &&
 	flux jobtap remove perilog-test.so
 '
 test_expect_success 'attach: shows output from job' '
