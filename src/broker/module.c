@@ -70,8 +70,8 @@ struct broker_module {
 
     struct disconnect *disconnect;
 
-    zlist_t *rmmod;
-    flux_msg_t *insmod;
+    struct flux_msglist *rmmod_requests;
+    struct flux_msglist *insmod_requests;
 
     flux_t *h;               /* module's handle */
     struct subhash *sub;
@@ -321,7 +321,8 @@ module_t *module_create (flux_t *h,
         }
     }
     if (!(p->path = strdup (path))
-        || !(p->rmmod = zlist_new ()))
+        || !(p->rmmod_requests = flux_msglist_create ())
+        || !(p->insmod_requests = flux_msglist_create ()))
         goto nomem;
     if (name) {
         if (!(p->name = strdup (name)))
@@ -564,14 +565,9 @@ void module_destroy (module_t *p)
     free (p->parent_uuid_str);
     flux_conf_decref (p->conf);
     json_decref (p->attr_cache);
-    if (p->rmmod) {
-        flux_msg_t *msg;
-        while ((msg = zlist_pop (p->rmmod)))
-            flux_msg_destroy (msg);
-    }
-    flux_msg_destroy (p->insmod);
+    flux_msglist_destroy (p->rmmod_requests);
+    flux_msglist_destroy (p->insmod_requests);
     subhash_destroy (p->sub);
-    zlist_destroy (&p->rmmod);
     free (p);
     errno = saved_errno;
 }
@@ -665,39 +661,28 @@ int module_get_errnum (module_t *p)
 
 int module_push_rmmod (module_t *p, const flux_msg_t *msg)
 {
-    flux_msg_t *cpy = flux_msg_copy (msg, false);
-    if (!cpy)
-        return -1;
-    if (zlist_push (p->rmmod, cpy) < 0) {
-        errno = ENOMEM;
-        return -1;
-    }
-    return 0;
+    return flux_msglist_push (p->rmmod_requests, msg);
 }
 
-flux_msg_t *module_pop_rmmod (module_t *p)
+const flux_msg_t *module_pop_rmmod (module_t *p)
 {
-    return zlist_pop (p->rmmod);
+    return flux_msglist_pop (p->rmmod_requests);
 }
 
-/* There can be only one.
+/* There can be only one insmod request.
  */
 int module_push_insmod (module_t *p, const flux_msg_t *msg)
 {
-    flux_msg_t *cpy = flux_msg_copy (msg, false);
-    if (!cpy)
+    if (flux_msglist_count (p->insmod_requests) > 0) {
+        errno = EEXIST;
         return -1;
-    if (p->insmod)
-        flux_msg_destroy (p->insmod);
-    p->insmod = cpy;
-    return 0;
+    }
+    return flux_msglist_push (p->insmod_requests, msg);
 }
 
-flux_msg_t *module_pop_insmod (module_t *p)
+const flux_msg_t *module_pop_insmod (module_t *p)
 {
-    flux_msg_t *msg = p->insmod;
-    p->insmod = NULL;
-    return msg;
+    return flux_msglist_pop (p->insmod_requests);
 }
 
 int module_subscribe (module_t *p, const char *topic)

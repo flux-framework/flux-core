@@ -1875,7 +1875,7 @@ static int module_insmod_respond (flux_t *h, module_t *p)
     int rc;
     int errnum = 0;
     int status = module_get_status (p);
-    flux_msg_t *msg = module_pop_insmod (p);
+    const flux_msg_t *msg = module_pop_insmod (p);
 
     if (msg == NULL)
         return 0;
@@ -1889,18 +1889,18 @@ static int module_insmod_respond (flux_t *h, module_t *p)
     else
         rc = flux_respond_error (h, msg, errnum, NULL);
 
-    flux_msg_destroy (msg);
+    flux_msg_decref (msg);
     return rc;
 }
 
 static int module_rmmod_respond (flux_t *h, module_t *p)
 {
-    flux_msg_t *msg;
+    const flux_msg_t *msg;
     int rc = 0;
     while ((msg = module_pop_rmmod (p))) {
         if (flux_respond (h, msg, NULL) < 0)
             rc = -1;
-        flux_msg_destroy (msg);
+        flux_msg_decref (msg);
     }
     return rc;
 }
