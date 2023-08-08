@@ -145,6 +145,8 @@ void basic (void)
     txn = flux_kvs_txn_create ();
     ok (txn != NULL,
         "flux_kvs_txn_create works");
+    ok (flux_kvs_txn_is_empty (txn) == true,
+        "flux_kvs_txn_is_empty returns true immediately after create");
     rc = flux_kvs_txn_pack (txn, FLUX_KVS_APPEND, "foo.bar.baz",  "i", 42);
     ok (rc == 0,
         "1: flux_kvs_txn_pack(i) flags=FLUX_KVS_APPEND works");
@@ -175,6 +177,8 @@ void basic (void)
 
     /* Verify transaction contents
      */
+    ok (flux_kvs_txn_is_empty (txn) == false,
+        "flux_kvs_txn_is_empty returns false after transactions added");
     ok (txn_get_op_count (txn) == 9,
         "txn contains 9 ops");
     ok (txn_get_op (txn, 0, &entry) == 0
@@ -286,6 +290,9 @@ void basic (void)
 
     ok (txn_get_op_count (txn) == 0,
         "txn contains 0 ops");
+
+    ok (flux_kvs_txn_is_empty (txn) == true,
+        "flux_kvs_txn_is_empty returns true after clear");
 
     flux_kvs_txn_destroy (txn);
 }
@@ -410,6 +417,9 @@ void test_corner_cases (void)
     rc = flux_kvs_txn_clear (NULL);
     ok (rc < 0 && errno == EINVAL,
         "flux_kvs_txn_clear fails w/ EINVAL on bad input");
+
+    ok (flux_kvs_txn_is_empty (NULL) == true,
+        "flux_kvs_txn_is_empty returns true on NULL input");
 
     errno = 0;
     rc = flux_kvs_txn_put (txn, 0xFFFF, "a", "42");

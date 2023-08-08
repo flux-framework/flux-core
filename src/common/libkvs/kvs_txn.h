@@ -49,6 +49,8 @@ int flux_kvs_txn_symlink (flux_kvs_txn_t *txn, int flags,
 
 int flux_kvs_txn_clear (flux_kvs_txn_t *txn);
 
+bool flux_kvs_txn_is_empty (flux_kvs_txn_t *txn);
+
 #ifdef __cplusplus
 }
 #endif

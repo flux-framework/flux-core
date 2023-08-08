@@ -321,6 +321,13 @@ int flux_kvs_txn_clear (flux_kvs_txn_t *txn)
     return 0;
 }
 
+bool flux_kvs_txn_is_empty (flux_kvs_txn_t *txn)
+{
+    if (!txn)
+        return true;
+    return json_array_size (txn->ops) ? false : true;
+}
+
 /* kvs_txn_private.h */
 
 int txn_get_op_count (flux_kvs_txn_t *txn)
