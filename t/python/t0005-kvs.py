@@ -291,7 +291,23 @@ class TestKVS(unittest.TestCase):
         self.assertEqual(kd5["d.e.f"], 4)
         self.assertEqual(kd5["d"]["e"]["f"], 4)
 
-    def test_kvsdir_10_fill_initial_path(self):
+    def test_kvsdir_10_unlink_initial_path(self):
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("unlinkinitialpath")
+            kd["unlinkinitialpath"]["a"] = 1
+
+        kd2 = flux.kvs.KVSDir(self.f)
+        self.assertEqual(kd2["unlinkinitialpath.a"], 1)
+
+        kd3 = flux.kvs.KVSDir(self.f, "unlinkinitialpath")
+        del kd3["a"]
+        kd3.commit()
+
+        kd4 = flux.kvs.KVSDir(self.f)
+        with self.assertRaises(KeyError):
+            kd4["unlinkinitialpath.a"]
+
+    def test_kvsdir_11_fill_initial_path(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.mkdir("fillinitialpath")
 
@@ -311,7 +327,7 @@ class TestKVS(unittest.TestCase):
             self.assertEqual(kd4["i.j.k"], "baz")
             self.assertEqual(kd4["i"]["j"]["k"], "baz")
 
-    def test_kvsdir_11_mkdir_initial_path(self):
+    def test_kvsdir_12_mkdir_initial_path(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.mkdir("mkdirinitialpath", {"l": 1, "m": "bar", "n.o.p": "baz"})
             kd.commit()
@@ -328,7 +344,7 @@ class TestKVS(unittest.TestCase):
             self.assertEqual(kd3["n.o.p"], "baz")
             self.assertEqual(kd3["n"]["o"]["p"], "baz")
 
-    def test_kvsdir_12_iterator(self):
+    def test_kvsdir_13_iterator(self):
         keys = ["testdir1a." + str(x) for x in range(1, 15)]
         with flux.kvs.get_dir(self.f) as kd:
             for k in keys:
@@ -340,7 +356,7 @@ class TestKVS(unittest.TestCase):
                 self.assertEqual(v, "bar")
                 print("passed {}".format(k))
 
-    def test_kvsdir_13_files(self):
+    def test_kvsdir_14_files(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.mkdir("filestest", {"somefile": 1, "somefile2": 2})
             kd.mkdir("filestest.subdir")
@@ -352,7 +368,7 @@ class TestKVS(unittest.TestCase):
             self.assertIn("somefile", files)
             self.assertIn("somefile2", files)
 
-    def test_kvsdir_14_directories(self):
+    def test_kvsdir_15_directories(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.mkdir("directoriestest", {"somefile": 1, "somefile2": 2})
             kd.mkdir("directoriestest.subdir")
@@ -363,7 +379,7 @@ class TestKVS(unittest.TestCase):
             self.assertEqual(len(directories), 1)
             self.assertIn("subdir", directories)
 
-    def test_kvsdir_15_list_all(self):
+    def test_kvsdir_16_list_all(self):
         with flux.kvs.get_dir(self.f) as kd:
             kd.mkdir("listalltest", {"somefile": 1, "somefile2": 2})
             kd.mkdir("listalltest.subdir")
