@@ -7,7 +7,7 @@ queue_rules:
       - status-success="flux-sched check"
       - status-success="flux-accounting check"
       - status-success="python linting"
-      - status-success="jammy"
+      - status-success="jammy - test-install"
       - status-success="bookworm"
       - status-success="bookworm - 32 bit"
       - status-success="bookworm - gcc-12,content-s3,distcheck"
