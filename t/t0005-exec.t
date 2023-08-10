@@ -188,9 +188,11 @@ test_expect_success 'signal forwarding works' '
 	cat >test_signal.sh <<-EOF &&
 	#!/bin/bash
 	sig=\${1-INT}
+	mkfifo input.fifo
 	stdbuf --output=L \
-	    flux exec -n sh -c "echo hi; sleep 100" >sleepready.out 2>&1 &
-	$waitfile -t 20 -p ^hi -c ${SIZE} sleepready.out &&
+	    flux exec -v -n awk "BEGIN {print \"hi\"} {print}" input.fifo \
+	        >sleepready.out &
+	$waitfile -vt 20 -p ^hi -c ${SIZE} sleepready.out &&
 	kill -\$sig %1 &&
 	wait %1
 	exit \$?
