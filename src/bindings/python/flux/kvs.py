@@ -14,6 +14,7 @@ import json
 import os
 from typing import Any, Mapping
 
+import flux.constants
 from _flux._core import ffi, lib
 from flux.future import Future
 from flux.rpc import RPC
@@ -31,6 +32,16 @@ RAW = KVSWrapper(ffi, lib, prefixes=["flux_kvs", "flux_kvs_"])
 RAW.flux_kvsitr_next.set_error_check(lambda x: False)
 
 
+def _get_value(valp):
+    try:
+        ret = json.loads(ffi.string(valp[0]).decode("utf-8"))
+    except json.decoder.JSONDecodeError:
+        ret = ffi.string(valp[0]).decode("utf-8")
+    except UnicodeDecodeError:
+        ret = ffi.string(valp[0])
+    return ret
+
+
 def get_key_direct(flux_handle, key, namespace=None):
     valp = ffi.new("char *[1]")
     future = RAW.flux_kvs_lookup(flux_handle, namespace, 0, key)
@@ -38,12 +49,7 @@ def get_key_direct(flux_handle, key, namespace=None):
     if valp[0] == ffi.NULL:
         return None
 
-    try:
-        ret = json.loads(ffi.string(valp[0]).decode("utf-8"))
-    except json.decoder.JSONDecodeError:
-        ret = ffi.string(valp[0]).decode("utf-8")
-    except UnicodeDecodeError:
-        ret = ffi.string(valp[0])
+    ret = _get_value(valp)
     RAW.flux_future_destroy(future)
     return ret
 
@@ -773,3 +779,104 @@ def walk(directory, topdown=False, flux_handle=None, namespace=None):
             raise ValueError("If directory is a key, flux_handle must be specified")
         directory = KVSDir(flux_handle, directory, namespace=namespace)
     return _inner_walk(directory, "", topdown, namespace=namespace)
+
+
+class KVSWatchFuture(Future):
+    """
+    A future returned from kvs_watch_async().
+    """
+
+    def __del__(self):
+        if self.needs_cancel is not False:
+            self.cancel()
+        try:
+            super().__del__()
+        except AttributeError:
+            pass
+
+    def __init__(self, future_handle):
+        super().__init__(future_handle)
+        self.needs_cancel = True
+
+    def get(self, autoreset=True):
+        """
+        Return the new value of the KVS key or None if the stream has
+        terminated.
+
+        The future is auto-reset unless autoreset=False, so a subsequent
+        call to get() will try to fetch the next value and thus
+        may block.
+        """
+        valp = ffi.new("char *[1]")
+        try:
+            #  Block until Future is ready:
+            self.wait_for()
+            RAW.flux_kvs_lookup_get(self.pimpl, valp)
+        except OSError as exc:
+            if exc.errno == errno.ENODATA:
+                self.needs_cancel = False
+                return None
+            # raise handle exception if there is one
+            self.raise_if_handle_exception()
+            # re-raise all other exceptions
+            #
+            # Note: overwrite generic OSError strerror string with the
+            # EventWatch future error string to give the caller appropriate
+            # detail (e.g. instead of "No such file or directory" use
+            # "job <jobid> does not exist"
+            #
+            exc.strerror = self.error_string()
+            raise
+        val = _get_value(valp)
+        if autoreset is True:
+            self.reset()
+        return val
+
+    def cancel(self, stop=False):
+        """Cancel a streaming kvs_watch_async() future
+
+        If stop=True, then deactivate the multi-response future so no
+        further callbacks are called.
+        """
+        RAW.flux_kvs_lookup_cancel(self.pimpl)
+        self.needs_cancel = False
+        if stop:
+            self.stop()
+
+
+def kvs_watch_async(
+    flux_handle, key, namespace=None, waitcreate=False, uniq=False, full=False
+):
+    """Asynchronously get KVS updates for a key
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        key: the key on which to watch
+        namespace: namespace to read from, defaults to None.  If namespace
+          is None, the namespace specified in the FLUX_KVS_NAMESPACE
+          environment variable will be used.  If FLUX_KVS_NAMESPACE is not
+          set, the primary namespace will be used.
+        waitcreate: If True and a key does not yet exist, will wait
+          for it to exit.  Defaults to False.
+        uniq: If True, only different values will be returned by
+          watch.  Defaults to False.
+        full: If True, any change that can affect the key is
+          monitored.  Typically, this is to capture when a parent directory
+          is removed or altered in some way.  Typically kvs watch will not
+          detect this as the exact key has not been changed.  Defaults to
+          False.
+
+    Returns:
+        KVSWatchFuture: a KVSWatchFuture object.  Call .get() from the then
+         callback to get the currently returned value from the Future object.
+    """
+
+    flags = flux.constants.FLUX_KVS_WATCH
+    if waitcreate:
+        flags |= flux.constants.FLUX_KVS_WAITCREATE
+    if uniq:
+        flags |= flux.constants.FLUX_KVS_WATCH_UNIQ
+    if full:
+        flags |= flux.constants.FLUX_KVS_WATCH_FULL
+    future = RAW.flux_kvs_lookup(flux_handle, namespace, flags, key)
+    return KVSWatchFuture(future)
