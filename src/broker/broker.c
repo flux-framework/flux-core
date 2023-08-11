@@ -579,13 +579,12 @@ static void init_attrs_from_environment (attr_t *attrs)
 {
     struct attrmap *m;
     const char *val;
-    int flags = 0;  // XXX possibly these should be immutable?
 
     for (m = &attrmap[0]; m->env != NULL; m++) {
         val = getenv (m->env);
         if (!val && m->required)
             log_msg_exit ("required environment variable %s is not set", m->env);
-        if (attr_add (attrs, m->attr, val, flags) < 0)
+        if (attr_add (attrs, m->attr, val, ATTR_IMMUTABLE) < 0)
             log_err_exit ("attr_add %s", m->attr);
         if (m->sanitize)
             unsetenv (m->env);
