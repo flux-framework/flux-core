@@ -32,6 +32,7 @@ struct attr_cache {
     zhashx_t *cache;        // immutable values
     zhashx_t *temp;         // values that stay valid until next lookup
 
+    zlistx_t *cache_iter;
     struct hostlist *hostlist;
 };
 
@@ -39,6 +40,7 @@ static void attr_cache_destroy (struct attr_cache *c)
 {
     if (c) {
         int saved_errno = errno;
+        zlistx_destroy (&c->cache_iter);
         zhashx_destroy (&c->cache);
         zhashx_destroy (&c->temp);
         hostlist_destroy (c->hostlist);
@@ -202,6 +204,29 @@ int flux_attr_set_cacheonly (flux_t *h, const char *name, const char *val)
     else
         zhashx_delete (c->cache, name);
     return 0;
+}
+
+const char *flux_attr_cache_first (flux_t *h)
+{
+    struct attr_cache *c;
+
+    if (!h || !(c = get_attr_cache (h)))
+        return NULL;
+    zlistx_destroy (&c->cache_iter);
+    if (!(c->cache_iter = zhashx_keys (c->cache)))
+        return NULL;
+    return zlistx_first (c->cache_iter);
+}
+
+const char *flux_attr_cache_next (flux_t *h)
+{
+    struct attr_cache *c;
+
+    if (!h || !(c = get_attr_cache (h)))
+        return NULL;
+    if (!c->cache_iter)
+        return NULL;
+    return zlistx_next (c->cache_iter);
 }
 
 int flux_get_size (flux_t *h, uint32_t *size)
