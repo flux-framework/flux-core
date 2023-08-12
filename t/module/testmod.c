@@ -33,9 +33,9 @@ int mod_main (flux_t *h, int argc, char **argv)
     flux_msg_handler_t **handlers = NULL;
     int rc;
 
-    /* Dynamically register a service name if requested.
-     */
     for (int i = 0; i < argc; i++) {
+        /* Dynamically register a service name if requested.
+         */
         if (strstarts (argv[i], "--service=")) {
             const char *service = argv[i] + 10;
             flux_future_t *f;
@@ -46,7 +46,7 @@ int mod_main (flux_t *h, int argc, char **argv)
             }
             flux_future_destroy (f);
         }
-        else if (streq (argv[0], "--init-failure")) {
+        else if (streq (argv[i], "--init-failure")) {
             flux_log (h, LOG_INFO, "aborting during init per test request");
             errno = EIO;
             return -1;
