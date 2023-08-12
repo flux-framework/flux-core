@@ -51,6 +51,21 @@ int mod_main (flux_t *h, int argc, char **argv)
             errno = EIO;
             return -1;
         }
+        else if (strstarts (argv[i], "--attr-is-cached=")) {
+            const char *attr = argv[i] + 17;
+            const char *name;
+            name = flux_attr_cache_first (h);
+            while (name) {
+                if (streq (attr, name))
+                    break;
+                name = flux_attr_cache_next (h);
+            }
+            if (name == NULL) {
+                flux_log (h, LOG_ERR, "attr %s is not present in cache", attr);
+                errno = ENOENT;
+                return -1;
+            }
+        }
     }
     if (flux_msg_handler_addvec_ex (h,
                                     flux_aux_get (h, "flux::name"),
