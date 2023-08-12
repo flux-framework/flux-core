@@ -44,12 +44,14 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/librouter/subhash.h"
 #include "src/common/libfluxutil/method.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 #include "ccan/ptrint/ptrint.h"
 
 #include "module.h"
+#include "modhash.h"
 #include "brokercfg.h"
 #include "groups.h"
 #include "overlay.h"
@@ -217,7 +219,7 @@ int main (int argc, char *argv[])
         || !(ctx.modhash = modhash_create ())
         || !(ctx.services = service_switch_create ())
         || !(ctx.attrs = attr_create ())
-        || !(ctx.subscriptions = zlist_new ()))
+        || !(ctx.sub = subhash_create ()))
         log_msg_exit ("Out of memory in early initialization");
 
     /* Record the instance owner: the effective uid of the broker. */
@@ -479,16 +481,6 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-
-    /* Initialize module infrastructure.
-     */
-    if (ctx.verbose > 1)
-        log_msg ("initializing modules");
-    modhash_initialize (ctx.modhash,
-                        ctx.h,
-                        overlay_get_uuid (ctx.overlay),
-                        ctx.attrs);
-
     /* Configure broker state machine
      */
     if (!(ctx.state_machine = state_machine_create (&ctx))) {
@@ -559,7 +551,7 @@ cleanup:
     runat_destroy (ctx.runat);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
-    zlist_destroy (&ctx.subscriptions);
+    subhash_destroy (ctx.sub);
     free (ctx.init_shell_cmd);
     optparse_destroy (ctx.opts);
 
@@ -588,13 +580,12 @@ static void init_attrs_from_environment (attr_t *attrs)
 {
     struct attrmap *m;
     const char *val;
-    int flags = 0;  // XXX possibly these should be immutable?
 
     for (m = &attrmap[0]; m->env != NULL; m++) {
         val = getenv (m->env);
         if (!val && m->required)
             log_msg_exit ("required environment variable %s is not set", m->env);
-        if (attr_add (attrs, m->attr, val, flags) < 0)
+        if (attr_add (attrs, m->attr, val, ATTR_IMMUTABLE) < 0)
             log_err_exit ("attr_add %s", m->attr);
         if (m->sanitize)
             unsetenv (m->env);
@@ -1228,8 +1219,15 @@ static int load_module (broker_ctx_t *ctx,
         }
         path = zlist_first (files);
     }
-    if (!(p = module_add (ctx->modhash, name, path, args, error)))
+    if (!(p = module_create (ctx->h,
+                             overlay_get_uuid (ctx->overlay),
+                             name,
+                             path,
+                             ctx->rank,
+                             args,
+                             error)))
         goto error;
+    modhash_add (ctx->modhash, p);
     if (service_add (ctx->services,
                      module_get_name (p),
                      module_get_uuid (p),
@@ -1255,7 +1253,7 @@ static int load_module (broker_ctx_t *ctx,
 service_remove:
     service_remove_byuuid (ctx->services, module_get_uuid (p));
 module_remove:
-    module_remove (ctx->modhash, p);
+    modhash_remove (ctx->modhash, p);
 error:
     ERRNO_SAFE_WRAP (zlist_destroy, &files);
     ERRNO_SAFE_WRAP (free, pattern);
@@ -1267,11 +1265,11 @@ static int unload_module (broker_ctx_t *ctx, const char *name,
 {
     module_t *p;
 
-    if (!(p = module_lookup_byname (ctx->modhash, name))) {
+    if (!(p = modhash_lookup_byname (ctx->modhash, name))) {
         errno = ENOENT;
         return -1;
     }
-    if (module_stop (p) < 0)
+    if (module_stop (p, ctx->h) < 0)
         return -1;
     if (module_push_rmmod (p, request) < 0)
         return -1;
@@ -1374,10 +1372,11 @@ static void broker_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     broker_ctx_t *ctx = arg;
     json_t *mods = NULL;
+    double now = flux_reactor_now (flux_get_reactor (h));
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (!(mods = module_get_modlist (ctx->modhash, ctx->services)))
+    if (!(mods = modhash_get_modlist (ctx->modhash, now, ctx->services)))
         goto error;
     if (flux_respond_pack (h, msg, "{s:O}", "mods", mods) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
@@ -1408,7 +1407,7 @@ static void broker_module_status_cb (flux_t *h,
                              "status", &status,
                              "errnum", &errnum) < 0
         || !(sender = flux_msg_route_first (msg))
-        || !(p = module_lookup (ctx->modhash, sender))) {
+        || !(p = modhash_lookup (ctx->modhash, sender))) {
         const char *errmsg = "error decoding/finding broker.module-status";
         if (flux_msg_is_noresponse (msg))
             flux_log_error (h, "%s", errmsg);
@@ -1518,7 +1517,7 @@ static void service_add_cb (flux_t *h, flux_msg_handler_t *w,
         errno = EPROTO;
         goto error;
     }
-    if (!(p = module_lookup (ctx->modhash, sender))) {
+    if (!(p = modhash_lookup (ctx->modhash, sender))) {
         errno = ENOENT;
         goto error;
     }
@@ -1747,7 +1746,7 @@ static void overlay_recv_cb (const flux_msg_t *msg,
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
     uint32_t seq;
-    const char *topic, *s;
+    const char *topic;
 
     if (flux_msg_get_seq (msg, &seq) < 0
             || flux_msg_get_topic (msg, &topic) < 0) {
@@ -1774,18 +1773,13 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 
     /* Internal services may install message handlers for events.
      */
-    s = zlist_first (ctx->subscriptions);
-    while (s) {
-        if (strstarts (topic, s)) {
-            if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
-                flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
-            break;
-        }
-        s = zlist_next (ctx->subscriptions);
+    if (subhash_topic_match (ctx->sub, topic)) {
+        if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
+            flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
     }
     /* Finally, route to local module subscribers.
      */
-    return module_event_mcast (ctx->modhash, msg);
+    return modhash_event_mcast (ctx->modhash, msg);
 }
 
 /* Callback to send disconnect messages on behalf of unloading module.
@@ -1881,7 +1875,7 @@ static int module_insmod_respond (flux_t *h, module_t *p)
     int rc;
     int errnum = 0;
     int status = module_get_status (p);
-    flux_msg_t *msg = module_pop_insmod (p);
+    const flux_msg_t *msg = module_pop_insmod (p);
 
     if (msg == NULL)
         return 0;
@@ -1895,18 +1889,18 @@ static int module_insmod_respond (flux_t *h, module_t *p)
     else
         rc = flux_respond_error (h, msg, errnum, NULL);
 
-    flux_msg_destroy (msg);
+    flux_msg_decref (msg);
     return rc;
 }
 
 static int module_rmmod_respond (flux_t *h, module_t *p)
 {
-    flux_msg_t *msg;
+    const flux_msg_t *msg;
     int rc = 0;
     while ((msg = module_pop_rmmod (p))) {
         if (flux_respond (h, msg, NULL) < 0)
             rc = -1;
-        flux_msg_destroy (msg);
+        flux_msg_decref (msg);
     }
     return rc;
 }
@@ -1942,7 +1936,7 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
         if (module_rmmod_respond (ctx->h, p) < 0)
             flux_log_error (ctx->h, "flux_respond to rmmod %s", name);
 
-        module_remove (ctx->modhash, p);
+        modhash_remove (ctx->modhash, p);
     }
 }
 
@@ -2111,7 +2105,7 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
     else if (overlay_uuid_is_child (ctx->overlay, uuid))
         rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_DOWNSTREAM);
     else
-        rc = module_response_sendmsg (ctx->modhash, msg);
+        rc = modhash_response_sendmsg (ctx->modhash, msg);
     return rc;
 }
 

@@ -39,7 +39,7 @@ struct broker {
     struct service_switch *services;
     struct brokercfg *config;
     double heartbeat_rate;
-    zlist_t *subscriptions;     /* subscripts for internal services */
+    struct subhash *sub;        /* subscriptions for internal services */
     struct content_cache *cache;
     struct publisher *publisher;
     struct groups *groups;

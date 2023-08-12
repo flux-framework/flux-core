@@ -169,6 +169,17 @@ int test_server (flux_t *h, void *arg)
     return 0;
 }
 
+int cache_size (flux_t *h)
+{
+    int count = 0;
+    const char *name = flux_attr_cache_first (h);
+    while (name) {
+        count++;
+        name = flux_attr_cache_next (h);
+    }
+    return count;
+}
+
 int main (int argc, char *argv[])
 {
     flux_t *h;
@@ -190,12 +201,22 @@ int main (int argc, char *argv[])
         && get_count == 1,
         "flux_attr_get name=notakey fails with ENOENT (with rpc)");
 
+    /* cache iterator */
+    ok (flux_attr_cache_first (NULL) == NULL,
+        "flux_attr_cache_first h=NULL returns NULL");
+    ok (flux_attr_cache_next (NULL) == NULL,
+        "flux_attr_cache_next h=NULL returns NULL");
+    ok (cache_size (h) == 0,
+        "cache is empty");
+
     /* set, get */
 
     ok (flux_attr_set (h, "foo", "bar") == 0,
         "flux_attr_set foo=bar works");
     ok (flux_attr_set (h, "baz", "meep") == 0,
         "flux_attr_set baz=meep works");
+    ok (cache_size (h) == 0,
+        "cache is empty");
 
     get_count = 0;
     value = flux_attr_get (h, "foo");
@@ -204,6 +225,8 @@ int main (int argc, char *argv[])
     value = flux_attr_get (h, "foo");
     ok (value && streq (value, "bar") && get_count == 2,
         "flux_attr_get foo=bar (with 2nd rpc)");
+    ok (cache_size (h) == 0,
+        "cache is empty");
 
     get_count = 0;
     value2 = flux_attr_get (h, "baz");
@@ -215,6 +238,8 @@ int main (int argc, char *argv[])
 
     ok (value && streq (value, "bar"),
         "const return value of flux_attr_get foo=bar still valid");
+    ok (cache_size (h) == 0,
+        "cache is empty");
 
     /* get (cached) */
 
@@ -222,23 +247,37 @@ int main (int argc, char *argv[])
     value = flux_attr_get (h, "cow");
     ok (value && streq (value, "moo") && get_count == 1,
         "flux_attr_get cow=moo (with rpc)");
+    ok (cache_size (h) == 1,
+        "cache contains 1 item");
+    const char *key = flux_attr_cache_first (h);
+    ok (key != NULL && streq (key, "cow"),
+        "flux_attr_cache_first returned key name");
+
     get_count = 0;
     value = flux_attr_get (h, "chick");
     ok (value && streq (value, "peep") && get_count == 1,
         "flux_attr_get chick=peep (with rpc)");
+    ok (cache_size (h) == 2,
+        "cache contains 2 items");
     get_count = 0;
     value = flux_attr_get (h, "cow");
     ok (value && streq (value, "moo") && get_count == 0,
         "flux_attr_get cow=moo (cached)");
+    ok (cache_size (h) == 2,
+        "cache contains 2 items");
     get_count = 0;
     value = flux_attr_get (h, "chick");
     ok (value && streq (value, "peep") && get_count == 0,
         "flux_attr_get chick=peep (cached)");
+    ok (cache_size (h) == 2,
+        "cache contains 2 items");
 
     /* cacheonly */
 
     ok (flux_attr_set_cacheonly (h, "fake", "42") == 0,
         "flux_attr_set_cacheonly fake=42");
+    ok (cache_size (h) == 3,
+        "cache contains 3 items");
     get_count = 0;
     value = flux_attr_get (h, "fake");
     ok (value && streq (value, "42") && get_count == 0,
@@ -246,6 +285,8 @@ int main (int argc, char *argv[])
 
     ok (flux_attr_set_cacheonly (h, "fake", NULL) == 0,
         "flux_attr_set_cacheonly fake=NULL");
+    ok (cache_size (h) == 2,
+        "local cache contains 2 items");
     get_count = 0;
     errno = 0;
     ok (flux_attr_get (h, "fake") == NULL && errno == ENOENT && get_count == 1,

@@ -23,7 +23,7 @@
 #include "src/common/libutil/fsd.h"
 
 #include "attr.h"
-#include "module.h"
+#include "modhash.h"
 #include "brokercfg.h"
 
 
@@ -475,7 +475,7 @@ static flux_future_t *reload_module_configs (flux_t *h, struct brokercfg *cfg)
     if (!(cf = flux_future_wait_all_create ()))
         return NULL;
     flux_future_set_flux (cf, h);
-    module = module_first (cfg->modhash);
+    module = modhash_first (cfg->modhash);
     while (module) {
         flux_future_t *f;
         char topic[1024];
@@ -493,7 +493,7 @@ static flux_future_t *reload_module_configs (flux_t *h, struct brokercfg *cfg)
             flux_future_destroy (f);
             goto error;
         }
-        module = module_next (cfg->modhash);
+        module = modhash_next (cfg->modhash);
     }
     return cf;
 error:

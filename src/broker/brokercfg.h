@@ -11,6 +11,10 @@
 #ifndef _BROKER_BROKERCFG_H
 #define _BROKER_BROKERCFG_H
 
+#include <flux/core.h>
+#include "attr.h"
+#include "modhash.h"
+
 struct brokercfg;
 
 struct brokercfg *brokercfg_create (flux_t *h,

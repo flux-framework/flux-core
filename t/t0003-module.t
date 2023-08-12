@@ -254,4 +254,25 @@ test_expect_success 'module with version ext can be loaded by name' '
 	grep testmod.so.0.0.0 modlist.out
 '
 
+test_expect_success 'module: rank attribute is cached' '
+        flux module load $testmod --attr-is-cached=rank
+'
+test_expect_success 'module: size attribute is cached' '
+        flux module reload $testmod --attr-is-cached=size
+'
+test_expect_success 'module: security.owner attribute is cached' '
+        flux module reload $testmod --attr-is-cached=security.owner
+'
+test_expect_success 'module: log-stderr-level attribute is NOT cached' '
+        test_must_fail flux module reload $testmod \
+            --attr-is-cached=log-stderr-level
+'
+test_expect_success 'module: configuration object is cached' '
+        flux module reload -f $testmod --config-is-cached
+'
+test_expect_success 'module: remove testmod if loaded' '
+        flux module remove -f testmod
+'
+
+
 test_done

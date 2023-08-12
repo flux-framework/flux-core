@@ -46,10 +46,14 @@ const char *flux_attr_get (flux_t *h, const char *name);
  */
 int flux_attr_set (flux_t *h, const char *name, const char *val);
 
-
 /* hotwire flux_attr_get()'s cache for testing */
 int flux_attr_set_cacheonly (flux_t *h, const char *name, const char *val);
 
+/* Iterate over the attribute names that are stored in the local
+ * attribute cache.
+ */
+const char *flux_attr_cache_first (flux_t *h);
+const char *flux_attr_cache_next (flux_t *h);
 
 /* Get "rank" attribute, and convert to an unsigned integer.
  * Returns 0 on success, or -1 on failure with errno set.

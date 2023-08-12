@@ -18,9 +18,10 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libccan/ccan/base64/base64.h"
+#include "src/common/librouter/subhash.h"
 #include "ccan/str/str.h"
 
-#include "module.h"
+#include "modhash.h"
 #include "publisher.h"
 
 
@@ -151,35 +152,6 @@ error_restore_seq:
     return -1;
 }
 
-static int broker_subscribe (struct broker *ctx, const char *topic)
-{
-    char *cpy;
-
-    if (!(cpy = strdup (topic)))
-        return -1;
-    if (zlist_append (ctx->subscriptions, cpy) < 0)
-        goto nomem;
-    zlist_freefn (ctx->subscriptions, cpy, free, true);
-    return 0;
-nomem:
-    free (cpy);
-    errno = ENOMEM;
-    return -1;
-}
-
-static void broker_unsubscribe (struct broker *ctx, const char *topic)
-{
-    char *s = zlist_first (ctx->subscriptions);
-    while (s) {
-        if (streq (s, topic)) {
-            zlist_remove (ctx->subscriptions, s);
-            break;
-        }
-        s = zlist_next (ctx->subscriptions);
-    }
-}
-
-
 static void subscribe_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
@@ -190,11 +162,13 @@ static void subscribe_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
         goto error;
     if ((uuid = flux_msg_route_first (msg))) {
-        if (module_subscribe (pub->ctx->modhash, uuid, topic) < 0)
+        module_t *p;
+        if (!(p = modhash_lookup (pub->ctx->modhash, uuid))
+            || module_subscribe (p, topic) < 0)
             goto error;
     }
     else {
-        if (broker_subscribe (pub->ctx, topic) < 0)
+        if (subhash_subscribe (pub->ctx->sub, topic) < 0)
             goto error;
     }
     if (!flux_msg_is_noresponse (msg)
@@ -217,11 +191,15 @@ static void unsubscribe_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
         goto error;
     if ((uuid = flux_msg_route_first (msg))) {
-        if (module_unsubscribe (pub->ctx->modhash, uuid, topic) < 0)
+        module_t *p;
+        if (!(p = modhash_lookup (pub->ctx->modhash, uuid))
+            || module_unsubscribe (p, topic) < 0)
             goto error;
     }
-    else
-        broker_unsubscribe (pub->ctx, topic);
+    else {
+        if (subhash_unsubscribe (pub->ctx->sub, topic) < 0)
+            goto error;
+    }
     if (!flux_msg_is_noresponse (msg)
         && flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to unsubscribe request");

@@ -33,9 +33,9 @@ int mod_main (flux_t *h, int argc, char **argv)
     flux_msg_handler_t **handlers = NULL;
     int rc;
 
-    /* Dynamically register a service name if requested.
-     */
     for (int i = 0; i < argc; i++) {
+        /* Dynamically register a service name if requested.
+         */
         if (strstarts (argv[i], "--service=")) {
             const char *service = argv[i] + 10;
             flux_future_t *f;
@@ -46,10 +46,32 @@ int mod_main (flux_t *h, int argc, char **argv)
             }
             flux_future_destroy (f);
         }
-        else if (streq (argv[0], "--init-failure")) {
+        else if (streq (argv[i], "--init-failure")) {
             flux_log (h, LOG_INFO, "aborting during init per test request");
             errno = EIO;
             return -1;
+        }
+        else if (strstarts (argv[i], "--attr-is-cached=")) {
+            const char *attr = argv[i] + 17;
+            const char *name;
+            name = flux_attr_cache_first (h);
+            while (name) {
+                if (streq (attr, name))
+                    break;
+                name = flux_attr_cache_next (h);
+            }
+            if (name == NULL) {
+                flux_log (h, LOG_ERR, "attr %s is not present in cache", attr);
+                errno = ENOENT;
+                return -1;
+            }
+        }
+        else if (streq (argv[i], "--config-is-cached")) {
+            if (!flux_get_conf (h)) {
+                flux_log (h, LOG_ERR, "config object is not cached");
+                errno = ENOENT;
+                return -1;
+            }
         }
     }
     if (flux_msg_handler_addvec_ex (h,
