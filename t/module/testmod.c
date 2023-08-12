@@ -66,6 +66,13 @@ int mod_main (flux_t *h, int argc, char **argv)
                 return -1;
             }
         }
+        else if (streq (argv[i], "--config-is-cached")) {
+            if (!flux_get_conf (h)) {
+                flux_log (h, LOG_ERR, "config object is not cached");
+                errno = ENOENT;
+                return -1;
+            }
+        }
     }
     if (flux_msg_handler_addvec_ex (h,
                                     flux_aux_get (h, "flux::name"),

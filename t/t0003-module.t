@@ -267,6 +267,9 @@ test_expect_success 'module: log-stderr-level attribute is NOT cached' '
         test_must_fail flux module reload $testmod \
             --attr-is-cached=log-stderr-level
 '
+test_expect_success 'module: configuration object is cached' '
+        flux module reload -f $testmod --config-is-cached
+'
 test_expect_success 'module: remove testmod if loaded' '
         flux module remove -f testmod
 '
