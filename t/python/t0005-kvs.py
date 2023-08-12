@@ -779,6 +779,207 @@ class TestKVS(unittest.TestCase):
         f.get()
         self.assertEqual(flux.kvs.get(self.f, "commitasync4"), "qux")
 
+    def test_kvswatch_01_key_ENOENT(self):
+        with self.assertRaises(OSError) as cm:
+            future = flux.kvs.kvs_watch_async(self.f, "grog")
+            future.get()
+        self.assertEqual(cm.exception.errno, errno.ENOENT)
+
+    def _change_value_kvs_nowait(self, key, val):
+        kvstxn = flux.kvs.KVSTxn(self.f)
+        kvstxn.put(key, val)
+        flux.kvs.commit_async(self.f, _kvstxn=kvstxn)
+
+    def test_kvswatch_02_kvs_watch_async_basic(self):
+        myarg = dict(a=1, b=2)
+        vals = []
+
+        def cb(future, arg):
+            self.assertEqual(arg, myarg)
+            val = future.get()
+            if val is None:
+                return
+            elif val == 1:
+                self._change_value_kvs_nowait("kvswatch1.val", 2)
+            elif val == 2:
+                future.cancel()
+            vals.append(val)
+
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("kvswatch1")
+            kd["kvswatch1.val"] = 1
+
+        future = flux.kvs.kvs_watch_async(self.f, "kvswatch1.val")
+        self.assertIsInstance(future, flux.kvs.KVSWatchFuture)
+        future.then(cb, myarg)
+        rc = self.f.reactor_run()
+        self.assertGreaterEqual(rc, 0)
+        self.assertEqual(len(vals), 2)
+        self.assertEqual(vals[0], 1)
+        self.assertEqual(vals[1], 2)
+
+    def test_kvswatch_03_kvs_watch_async_no_autoreset(self):
+        vals = []
+
+        def cb(future, arg):
+            val = future.get(autoreset=False)
+            if val is None:
+                return
+            elif val == 1:
+                valtmp = future.get()
+                # Value hasn't changed
+                self.assertEqual(valtmp, 1)
+                self._change_value_kvs_nowait("kvswatch2.val", 2)
+            elif val == 2:
+                valtmp = future.get()
+                # Value hasn't changed
+                self.assertEqual(valtmp, 2)
+                future.cancel()
+            vals.append(val)
+
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("kvswatch2")
+            kd["kvswatch2.val"] = 1
+
+        future = flux.kvs.kvs_watch_async(self.f, "kvswatch2.val")
+        self.assertIsInstance(future, flux.kvs.KVSWatchFuture)
+        future.then(cb, None)
+        rc = self.f.reactor_run()
+        self.assertGreaterEqual(rc, 0)
+        self.assertEqual(len(vals), 2)
+        self.assertEqual(vals[0], 1)
+        self.assertEqual(vals[1], 2)
+
+    def test_kvswatch_04_kvs_watch_async_waitcreate(self):
+        # To test waitcreate, we create two KVS watchers, one with
+        # waitcreate and one without.  The one without waitcreate will
+        # create the field we are waiting to be created.
+        results = []
+
+        def cb_ENOENT(future, arg):
+            try:
+                future.get()
+            except OSError as e:
+                self.assertEqual(e.errno, errno.ENOENT)
+                self._change_value_kvs_nowait("kvswatch3.val", 1)
+                results.append("ENOENT")
+
+        def cb_waitcreate(future, arg):
+            val = future.get()
+            if val is None:
+                return
+            elif val == 1:
+                future.cancel()
+            results.append(val)
+
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("kvswatch3")
+
+        future1 = flux.kvs.kvs_watch_async(self.f, "kvswatch3.val")
+        future2 = flux.kvs.kvs_watch_async(self.f, "kvswatch3.val", waitcreate=True)
+        future1.then(cb_ENOENT, None)
+        future2.then(cb_waitcreate, None)
+        rc = self.f.reactor_run()
+        self.assertGreaterEqual(rc, 0)
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0], "ENOENT")
+        self.assertEqual(results[1], 1)
+
+    def test_kvswatch_05_kvs_watch_async_uniq(self):
+        # To test uniq, we create two KVS watchers, one with uniq and
+        # one without.  The one with uniq should see fewer changes
+        # than the one without.
+        vals = []
+        uniq_vals = []
+
+        def cb(future, arg):
+            otherfuture = arg
+            val = future.get()
+            if val is None:
+                return
+            elif val == 1:
+                if len(vals) == 0:
+                    self._change_value_kvs_nowait("kvswatch4.val", 1)
+                elif len(vals) == 1:
+                    self._change_value_kvs_nowait("kvswatch4.val", 2)
+            vals.append(val)
+            if len(vals) == 3 and len(uniq_vals) == 2:
+                future.cancel()
+                otherfuture.cancel()
+
+        def cb_uniq(future, arg):
+            otherfuture = arg
+            val = future.get()
+            if val is None:
+                return
+            uniq_vals.append(val)
+            if len(vals) == 3 and len(uniq_vals) == 2:
+                future.cancel()
+                otherfuture.cancel()
+
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("kvswatch4")
+            kd["kvswatch4.val"] = 1
+
+        future1 = flux.kvs.kvs_watch_async(self.f, "kvswatch4.val")
+        future2 = flux.kvs.kvs_watch_async(self.f, "kvswatch4.val", uniq=True)
+        future1.then(cb, future2)
+        future2.then(cb_uniq, future1)
+        rc = self.f.reactor_run()
+        self.assertGreaterEqual(rc, 0)
+        self.assertEqual(len(vals), 3)
+        self.assertEqual(vals[0], 1)
+        self.assertEqual(vals[1], 1)
+        self.assertEqual(vals[2], 2)
+        self.assertEqual(len(uniq_vals), 2)
+        self.assertEqual(uniq_vals[0], 1)
+        self.assertEqual(uniq_vals[1], 2)
+
+    def test_kvswatch_06_kvs_watch_async_full(self):
+        # To test full, we create two KVS watchers, one with full and
+        # one without.  The one with full should see a change if we
+        # delete an upstream directory.  The other watcher should not.
+        vals = []
+        full_vals = []
+
+        def cb(future, arg):
+            val = future.get()
+            if val is None:
+                return
+            vals.append(val)
+
+        def cb_full(future, arg):
+            otherfuture = arg
+            try:
+                val = future.get()
+                if val is None:
+                    return
+                elif val == 1:
+                    # Set to None == unlink/delete/remove
+                    self._change_value_kvs_nowait("kvswatch5", None)
+            except OSError:
+                future.cancel()
+                otherfuture.cancel()
+                full_vals.append("ENOENT")
+                return
+            full_vals.append(val)
+
+        with flux.kvs.get_dir(self.f) as kd:
+            kd.mkdir("kvswatch5")
+            kd["kvswatch5.val"] = 1
+
+        future1 = flux.kvs.kvs_watch_async(self.f, "kvswatch5.val")
+        future2 = flux.kvs.kvs_watch_async(self.f, "kvswatch5.val", full=True)
+        future1.then(cb, None)
+        future2.then(cb_full, future1)
+        rc = self.f.reactor_run()
+        self.assertGreaterEqual(rc, 0)
+        self.assertEqual(len(vals), 1)
+        self.assertEqual(vals[0], 1)
+        self.assertEqual(len(full_vals), 2)
+        self.assertEqual(full_vals[0], 1)
+        self.assertEqual(full_vals[1], "ENOENT")
+
 
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
