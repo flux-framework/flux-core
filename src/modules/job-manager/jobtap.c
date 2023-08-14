@@ -74,7 +74,6 @@ struct jobtap {
     zhashx_t *plugins_byuuid;
     zlistx_t *jobstack;
     json_t *jobspec_update;
-    char last_error [128];
     bool configured;
 };
 
