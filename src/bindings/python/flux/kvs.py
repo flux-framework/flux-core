@@ -12,6 +12,7 @@ import collections.abc as abc
 import errno
 import json
 import os
+from abc import ABC, abstractmethod
 from typing import Any, Mapping
 
 import flux.constants
@@ -781,9 +782,11 @@ def walk(directory, topdown=False, flux_handle=None, namespace=None):
     return _inner_walk(directory, "", topdown, namespace=namespace)
 
 
-class KVSWatchFuture(Future):
+class WatchImplementation(Future, ABC):
     """
-    A future returned from kvs_watch_async().
+    Interface for KVS based watchers
+
+    Users to implement watch_get() and watch_cancel() functions.
     """
 
     def __del__(self):
@@ -798,20 +801,26 @@ class KVSWatchFuture(Future):
         super().__init__(future_handle)
         self.needs_cancel = True
 
+    @abstractmethod
+    def watch_get(self, future):
+        pass
+
+    @abstractmethod
+    def watch_cancel(self, future):
+        pass
+
     def get(self, autoreset=True):
         """
-        Return the new value of the KVS key or None if the stream has
-        terminated.
+        Return the new value or None if the stream has terminated.
 
         The future is auto-reset unless autoreset=False, so a subsequent
         call to get() will try to fetch the next value and thus
         may block.
         """
-        valp = ffi.new("char *[1]")
         try:
             #  Block until Future is ready:
             self.wait_for()
-            RAW.flux_kvs_lookup_get(self.pimpl, valp)
+            ret = self.watch_get(self.pimpl)
         except OSError as exc:
             if exc.errno == errno.ENODATA:
                 self.needs_cancel = False
@@ -827,21 +836,47 @@ class KVSWatchFuture(Future):
             #
             exc.strerror = self.error_string()
             raise
-        val = _get_value(valp)
         if autoreset is True:
             self.reset()
-        return val
+        return ret
 
     def cancel(self, stop=False):
-        """Cancel a streaming kvs_watch_async() future
+        """Cancel a streaming future
 
         If stop=True, then deactivate the multi-response future so no
         further callbacks are called.
         """
-        RAW.flux_kvs_lookup_cancel(self.pimpl)
+        self.watch_cancel(self.pimpl)
         self.needs_cancel = False
         if stop:
             self.stop()
+
+
+class KVSWatchFuture(WatchImplementation):
+    """
+    A future returned from kvs_watch_async().
+    """
+
+    def __init__(self, future_handle):
+        super().__init__(future_handle)
+
+    def watch_get(self, future):
+        """
+        Implementation of watch_get() for KVSWatchFuture.
+
+        Will be called from WatchABC.get()
+        """
+        valp = ffi.new("char *[1]")
+        RAW.flux_kvs_lookup_get(future, valp)
+        return _get_value(valp)
+
+    def watch_cancel(self, future):
+        """
+        Implementation of watch_cancel() for KVSWatchFuture.
+
+        Will be called from WatchABC.cancel()
+        """
+        RAW.flux_kvs_lookup_cancel(future)
 
 
 def kvs_watch_async(
