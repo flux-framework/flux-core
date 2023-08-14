@@ -47,7 +47,7 @@ flux setattr log-stderr-level 1
 test_expect_success 'create flist.sh script' '
 	cat >flist.sh<<-EOT &&
 	#!/bin/sh
-	systemctl --user list-units --type=service | grep "active running"
+	systemctl --user list-units --type=service | grep "active[[:space:]]*running"
 	EOT
 	chmod +x flist.sh
 '
