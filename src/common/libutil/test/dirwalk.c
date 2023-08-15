@@ -104,7 +104,7 @@ static char * create_test_dir ()
 
 static int find_dir (dirwalk_t *d, void *arg)
 {
-    return (dirwalk_isdir (d) ? 1 : 0); 
+    return (dirwalk_isdir (d) ? 1 : 0);
 }
 
 static int return_err (dirwalk_t *d, void *arg)
@@ -283,7 +283,7 @@ int main(int argc, char** argv)
     ok (l && zlist_size (l) == 3, "find with search path found all matches");
     zlist_destroy (&l);
     free (s);
- 
+
     /* depth-first find */
     l = dirwalk_find (tmp, DIRWALK_DEPTH, "foo", 0, NULL, 0);
     ok (l != NULL, "dirwalk with find callback");
