@@ -21,6 +21,8 @@ SYNOPSIS
 
 | **flux** **resource** **reload** [-f] [--xml] *path*
 
+| **flux** **resource** **watch** [-a] [-r]
+
 DESCRIPTION
 ===========
 
@@ -290,6 +292,23 @@ This command is primarily used in test.
 .. option:: -f, --force
 
   Do not fail if resource contain invalid ranks.
+
+watch
+-----
+
+.. program:: flux resource watch
+
+Output changes in resources from the *resource.eventlog* log as they
+occur.  May be useful when needing to see resource changes in real
+time.
+
+.. option:: -a, --all
+
+  Output all historical changes, not just new ones
+
+.. option:: -r, --ranks
+
+  Output ranks instead of hosts
 
 
 OUTPUT FORMAT
