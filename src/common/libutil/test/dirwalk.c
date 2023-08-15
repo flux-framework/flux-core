@@ -307,6 +307,16 @@ int main(int argc, char** argv)
         "depth-first visited directories in correct order");
     zlist_destroy (&l);
 
+    l = dirwalk_find (tmp,
+                      DIRWALK_FIND_DIR | DIRWALK_NORECURSE,
+                      "*",
+                      0,
+                      find_dir,
+                      NULL);
+    ok (l != NULL && zlist_size (l) == 2,
+        "dirwalk_find FIND_DIR|NORECURSE vists top level directories");
+    zlist_destroy (&l);
+
     flags = DIRWALK_FIND_DIR;
     l = dirwalk_find (tmp, flags, "*", 0, find_dir, NULL);
     ok (l && zlist_size (l) >  0, "dirwalk to find all dirs works");
