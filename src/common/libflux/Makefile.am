@@ -38,7 +38,7 @@ installed_conf_cppflags = \
 
 intree_conf_cppflags = \
 	-DINTREE_MODULE_PATH=\"$(abs_top_builddir)/src/modules/.libs\" \
-	-DINTREE_CONNECTOR_PATH=\"$(abs_top_builddir)/src/connectors\" \
+	-DINTREE_CONNECTOR_PATH=\"$(abs_top_builddir)/src/connectors/.libs\" \
 	-DINTREE_EXEC_PATH=\"$(abs_top_builddir)/src/cmd:$(abs_top_srcdir)/src/cmd:$(abs_top_builddir)/src/broker\" \
 	-DINTREE_LUA_PATH_ADD=\"$(abs_top_builddir)/t/?.lua\;$(abs_top_srcdir)/src/bindings/lua/?.lua\" \
 	-DINTREE_LUA_CPATH_ADD=\"$(abs_top_builddir)/src/bindings/lua/?.so\" \

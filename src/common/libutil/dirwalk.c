@@ -233,7 +233,8 @@ static int dirwalk_traverse (dirwalk_t *d, dirwalk_filter_f fn, void *arg)
                 dirwalk_stop (d, errno);
             continue;
         }
-        if (S_ISDIR (d->current->sb.st_mode)) {
+        if (S_ISDIR (d->current->sb.st_mode)
+            && !(d->flags & DIRWALK_NORECURSE)) {
             /*
              *  Save current direntry onto stack and call traverse()
              */
@@ -241,7 +242,7 @@ static int dirwalk_traverse (dirwalk_t *d, dirwalk_filter_f fn, void *arg)
             (void) dirwalk_traverse (d, fn, arg);
             d->current = zlist_pop (d->dirstack);
         }
-        else /* Not A directory, simply visit this file */
+        else /* Not a directory or NORECURSE, simply visit this object */
             dirwalk_visit (d, fn, arg);
         direntry_destroy (d->current);
         d->current = NULL;

@@ -104,7 +104,7 @@ static char * create_test_dir ()
 
 static int find_dir (dirwalk_t *d, void *arg)
 {
-    return (dirwalk_isdir (d) ? 1 : 0); 
+    return (dirwalk_isdir (d) ? 1 : 0);
 }
 
 static int return_err (dirwalk_t *d, void *arg)
@@ -232,6 +232,9 @@ int main(int argc, char** argv)
     n = dirwalk (tmp, 0, NULL, NULL);
     ok (n == 4, "dirwalk of deeper dirtree");
 
+    n = dirwalk (tmp, DIRWALK_NORECURSE, NULL, NULL);
+    ok (n == 2, "dirwalk of deeper dirtree with NORECURSE works");
+
     if (makepath ("%s/a/b/c/d", tmp) < 0)
         BAIL_OUT ("makepath failed");
 
@@ -280,7 +283,7 @@ int main(int argc, char** argv)
     ok (l && zlist_size (l) == 3, "find with search path found all matches");
     zlist_destroy (&l);
     free (s);
- 
+
     /* depth-first find */
     l = dirwalk_find (tmp, DIRWALK_DEPTH, "foo", 0, NULL, 0);
     ok (l != NULL, "dirwalk with find callback");
@@ -302,6 +305,16 @@ int main(int argc, char** argv)
     };
     ok (l && check_zlist_order (l, tmp, expect_depth),
         "depth-first visited directories in correct order");
+    zlist_destroy (&l);
+
+    l = dirwalk_find (tmp,
+                      DIRWALK_FIND_DIR | DIRWALK_NORECURSE,
+                      "*",
+                      0,
+                      find_dir,
+                      NULL);
+    ok (l != NULL && zlist_size (l) == 2,
+        "dirwalk_find FIND_DIR|NORECURSE vists top level directories");
     zlist_destroy (&l);
 
     flags = DIRWALK_FIND_DIR;

@@ -1207,7 +1207,7 @@ static int load_module (broker_ctx_t *ctx,
             return -1;
         }
         if (!(files = dirwalk_find (searchpath,
-                                    DIRWALK_REALPATH,
+                                    DIRWALK_REALPATH | DIRWALK_NORECURSE,
                                     pattern,
                                     1,
                                     NULL,
