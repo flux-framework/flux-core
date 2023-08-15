@@ -212,7 +212,12 @@ static char *find_file (const char *name, const char *searchpath)
 {
     char *path;
     zlist_t *l;
-    if (!(l = dirwalk_find (searchpath, DIRWALK_REALPATH, name, 1, NULL, NULL)))
+    if (!(l = dirwalk_find (searchpath,
+                            DIRWALK_REALPATH | DIRWALK_NORECURSE,
+                            name,
+                            1,
+                            NULL,
+                            NULL)))
         return NULL;
     path = zlist_pop (l);
     zlist_destroy (&l);
