@@ -762,7 +762,6 @@ def main():
     reload_parser = subparsers.add_parser(
         "reload", formatter_class=flux.util.help_formatter()
     )
-    reload_parser.set_defaults(func=reload)
     reload_parser.add_argument("path", help="path to R or hwloc <rank>.xml dir")
     reload_parser.add_argument(
         "-x",
@@ -778,9 +777,9 @@ def main():
         default=False,
         help="allow resources to contain invalid ranks",
     )
+    reload_parser.set_defaults(func=reload)
 
     R_parser = subparsers.add_parser("R", formatter_class=flux.util.help_formatter())
-    R_parser.set_defaults(func=emit_R)
     R_parser.add_argument(
         "-s",
         "--states",
@@ -796,6 +795,7 @@ def main():
         + "provided as an idset or hostlist.",
     )
     R_parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
+    R_parser.set_defaults(func=emit_R)
 
     args = parser.parse_args()
     args.func(args)
