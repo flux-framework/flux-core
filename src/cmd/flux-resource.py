@@ -14,10 +14,15 @@ import json
 import logging
 import os.path
 import sys
+import time
+from datetime import datetime
 
 import flux
+from flux.core.inner import ffi, raw
 from flux.hostlist import Hostlist
 from flux.idset import IDset
+from flux.job import EventLogEvent
+from flux.kvs import kvs_watch_async
 from flux.resource import (
     ResourceSet,
     ResourceStatus,
@@ -582,6 +587,51 @@ def emit_R(args):
     print(rset.encode())
 
 
+def ranks_to_hosts(flux_handle, ranks):
+    try:
+        hosts = raw.hostmap_lookup(flux_handle, ranks, ffi.NULL)
+        return hosts.decode("utf-8")
+    except Exception as e:
+        LOGGER.warning(f"Could not convert ranks {ranks} to hosts: {e}")
+        return ranks
+
+
+def watch_cb(future, arg):
+    cbargs = arg
+    vals = future.get().split("\n")
+    for e in vals:
+        try:
+            entry = EventLogEvent(json.loads(e))
+        except json.decoder.JSONDecodeError:
+            continue
+        if (
+            entry.name == "online"
+            or entry.name == "offline"
+            or entry.name == "drain"
+            or entry.name == "undrain"
+        ):
+            if cbargs["all"] or entry.timestamp > cbargs["starttime"]:
+                if not cbargs["ranks"]:
+                    hosts = ranks_to_hosts(cbargs["fh"], entry.context["idset"])
+                else:
+                    hosts = entry.context["idset"]
+                time = datetime.fromtimestamp(entry.timestamp).strftime("%FT%T")
+                print(f"{time} {entry.name:<7.7} {hosts}")
+                sys.stdout.flush()
+
+
+def watch(args):
+    """Watch resource.eventlog and emit changes"""
+    fh = flux.Flux()
+
+    future = kvs_watch_async(fh, "resource.eventlog")
+
+    cbargs = {"fh": fh, "all": args.all, "ranks": args.ranks, "starttime": time.time()}
+    future.then(watch_cb, cbargs)
+
+    fh.reactor_run()
+
+
 LOGGER = logging.getLogger("flux-resource")
 
 
@@ -796,6 +846,26 @@ def main():
     )
     R_parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
     R_parser.set_defaults(func=emit_R)
+
+    # flux-resource watch:
+    watch_parser = subparsers.add_parser(
+        "watch", formatter_class=flux.util.help_formatter()
+    )
+    watch_parser.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=False,
+        help="Output all historical changes, not just new ones",
+    )
+    watch_parser.add_argument(
+        "-r",
+        "--ranks",
+        action="store_true",
+        default=False,
+        help="Output ranks instead of hosts",
+    )
+    watch_parser.set_defaults(func=watch)
 
     args = parser.parse_args()
     args.func(args)
