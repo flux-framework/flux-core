@@ -19,6 +19,7 @@ enum {
     DIRWALK_DEPTH =    1<<0,  /* Traverse in depth-first order             */
     DIRWALK_REALPATH = 1<<1,  /* Resolve all paths with realpath(3)        */
     DIRWALK_FIND_DIR = 1<<2,  /* Do not skip directories in dirwalk_find() */
+    DIRWALK_NORECURSE = 1<<3, /* Do not descend into directories           */
 };
 
 /*

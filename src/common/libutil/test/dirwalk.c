@@ -232,6 +232,9 @@ int main(int argc, char** argv)
     n = dirwalk (tmp, 0, NULL, NULL);
     ok (n == 4, "dirwalk of deeper dirtree");
 
+    n = dirwalk (tmp, DIRWALK_NORECURSE, NULL, NULL);
+    ok (n == 2, "dirwalk of deeper dirtree with NORECURSE works");
+
     if (makepath ("%s/a/b/c/d", tmp) < 0)
         BAIL_OUT ("makepath failed");
 
