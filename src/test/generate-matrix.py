@@ -210,6 +210,7 @@ matrix.add_build(
     env=dict(
         TEST_INSTALL="t",
     ),
+    platform="linux/amd64",
     docker_tag=True,
 )
 
