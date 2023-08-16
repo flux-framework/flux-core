@@ -1,7 +1,6 @@
 nobase_fluxpy_PYTHON = \
 	__init__.py \
 	kvs.py \
-	wrapper.py \
 	rpc.py \
 	message.py \
 	constants.py \
@@ -90,7 +89,8 @@ nobase_fluxpy_PYTHON = \
 	utils/tomli/__init__.py \
 	utils/tomli/py.typed \
 	utils/tomli/LICENSE \
-	utils/tomli/_types.py
+	utils/tomli/_types.py \
+	wrapper/__init__.py
 
 if HAVE_FLUX_SECURITY
 nobase_fluxpy_PYTHON += security.py
