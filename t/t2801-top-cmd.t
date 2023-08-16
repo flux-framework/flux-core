@@ -61,6 +61,13 @@ test_expect_success 'flux-top summary shows no jobs initially' '
 	grep "0 running" nojobs.out &&
 	grep "0 failed" nojobs.out
 '
+# Note: jpXCZedGfVQ is the base58 representation of FLUX_JOBID_ANY. We
+# grep for this value without f or ƒ in case build environment influences
+# presence of one of the other.
+#
+test_expect_success 'flux-top does not display FLUX_JOBID_ANY jobid in title' '
+	test_must_fail grep jpXCZedGfVQ nojobs.out
+'
 test_expect_success 'run a test job to completion' '
 	flux submit --wait -n1 flux start /bin/true >jobid &&
 	job_list_wait_state $(cat jobid) INACTIVE

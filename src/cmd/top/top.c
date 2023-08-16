@@ -226,7 +226,7 @@ static flux_jobid_t get_jobid (flux_t *h)
 static char * build_title (struct top *top, const char *title)
 {
     if (!title)
-        title = idf58 (top->id);
+        title = top->id == FLUX_JOBID_ANY ? "" : idf58 (top->id);
     return strdup (title);
 }
 
