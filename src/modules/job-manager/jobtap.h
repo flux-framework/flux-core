@@ -176,6 +176,21 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
                                  const char *fmt,
                                  ...);
 
+/*  Post a request to update jobspec for the current job. Accumulated updates
+ *  will be applied once the current callback returns so that the jobspec is
+ *  not modified while the plugin may have references to it.
+ *
+ *  The update is defined by one or more period-delimited keys and values
+ *  specified by `fmt`, ..., e.g.
+ *
+ *      flux_jobtap_jobspec_update_pack (p,
+ *                                       "{s:i s:s}",
+ *                                       "attributes.system.duration", 3600,
+ *                                       "attributes.system.queue", "batch");
+ *
+ */
+int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...);
+
 /*  Return a flux_plugin_arg_t object for a job.
  *
  *  The result can then be unpacked with flux_plugin_arg_unpack(3) to get

@@ -507,6 +507,14 @@ test_expect_success 'job-manager: job.create can reject a job' '
 	grep nope submit.err
 '
 
+test_expect_success 'job-manager: plugins can update jobspec' '
+	flux jobtap load --remove=all ${PLUGINPATH}/jobspec-update.so &&
+	jobid=$(flux submit --job-name=test hostname) &&
+	flux job attach $jobid &&
+	flux job eventlog $jobid | grep jobspec-update &&
+	flux job eventlog $jobid | grep attributes.system.update-test
+'
+
 test_expect_success 'job-manager: plugin fails to load on config.update error' '
 	flux jobtap remove all &&
 	test_must_fail flux jobtap load ${PLUGINPATH}/config.so 2>config.err

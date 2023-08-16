@@ -73,7 +73,7 @@ struct jobtap {
     zlistx_t *plugins;
     zhashx_t *plugins_byuuid;
     zlistx_t *jobstack;
-    char last_error [128];
+    json_t *jobspec_update;
     bool configured;
 };
 
@@ -612,6 +612,26 @@ static int jobtap_topic_match_count (struct jobtap *jobtap,
     return count;
 }
 
+static int jobtap_post_jobspec_updates (struct jobtap *jobtap,
+                                        struct job *job)
+{
+    int rc;
+    int saved_errno;
+    if (!jobtap->jobspec_update)
+        return 0;
+    rc = event_job_post_pack (jobtap->ctx->event,
+                              job,
+                              "jobspec-update",
+                              0,
+                              "O",
+                              jobtap->jobspec_update);
+    saved_errno = errno;
+    json_decref (jobtap->jobspec_update);
+    jobtap->jobspec_update = NULL;
+    errno = saved_errno;
+    return rc;
+}
+
 static int jobtap_stack_call (struct jobtap *jobtap,
                               zlistx_t *plugins,
                               struct job *job,
@@ -638,6 +658,18 @@ static int jobtap_stack_call (struct jobtap *jobtap,
                       jobtap_plugin_name (p),
                       topic,
                       rc);
+            retcode = -1;
+            break;
+        }
+        /*  Post any pending jobspec updates now. This is done after
+         *  the callback returns to avoid rewriting jobspec during a
+         *  plugin callback that modifies it.
+         */
+        if (jobtap_post_jobspec_updates (jobtap, job) < 0) {
+            flux_log_error (jobtap->ctx->h,
+                            "jobtap: %s: %s: failed to apply jobspec updates",
+                            jobtap_plugin_name (p),
+                            topic);
             retcode = -1;
             break;
         }
@@ -2075,6 +2107,58 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
     va_start (ap, fmt);
     rc = event_job_post_vpack (jobtap->ctx->event, job, name, 0, fmt, ap);
     va_end (ap);
+    return rc;
+}
+
+/* RFC 21 jobspec-update event keys must start with "attributes."
+ * Reject update events with keys that violate the RFC.
+ */
+static bool validate_jobspec_updates (json_t *o)
+{
+    const char *key;
+    json_t *entry;
+    json_object_foreach (o, key, entry) {
+        if (!strstarts (key, "attributes."))
+            return false;
+    }
+    return true;
+}
+
+int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...)
+{
+    int rc = -1;
+    int saved_errno;
+    va_list ap;
+    struct jobtap *jobtap;
+    json_t *o = NULL;
+    json_error_t error;
+
+    if (!p || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return -1;
+    }
+    va_start (ap, fmt);
+    o = json_vpack_ex (&error, 0, fmt, ap);
+    va_end (ap);
+    if (!o) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!validate_jobspec_updates (o)) {
+        errno = EINVAL;
+        goto out;
+    }
+    if (!jobtap->jobspec_update)
+        jobtap->jobspec_update = json_incref (o);
+    else if (json_object_update (jobtap->jobspec_update, o) < 0) {
+        errno = EINVAL;
+        goto out;
+    }
+    rc = 0;
+out:
+    saved_errno = errno;
+    json_decref (o);
+    errno = saved_errno;
     return rc;
 }
 
