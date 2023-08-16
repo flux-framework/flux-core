@@ -20,11 +20,11 @@ from flux.future import Future
 from flux.message import Message, MessageWatcher
 from flux.rpc import RPC
 from flux.util import encode_payload, encode_topic
-from flux.wrapper import Wrapper
+from flux.wrapper import CoreWrapper
 
 
 # pylint: disable=too-many-public-methods
-class Flux(Wrapper):
+class Flux(CoreWrapper):
     """
     The general Flux handle class, create one of these to connect to the
     nearest enclosing flux instance

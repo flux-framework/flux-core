@@ -9,10 +9,10 @@
 ###############################################################
 
 from _flux._core import ffi, lib
-from flux.wrapper import Wrapper
+from flux.wrapper import CoreWrapper
 
 
-class Core(Wrapper):
+class Core(CoreWrapper):
     """
     Generic Core wrapper, you probably do not want or need one of these.
     """

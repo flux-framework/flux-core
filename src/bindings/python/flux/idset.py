@@ -12,7 +12,7 @@ import collections
 import numbers
 
 from _flux._idset import ffi, lib
-from flux.wrapper import Wrapper, WrapperPimpl
+from flux.wrapper import IdsetWrapper, WrapperPimpl
 
 IDSET_INVALID_ID = lib.IDSET_INVALID_ID
 IDSET_FLAG_RANGE = lib.IDSET_FLAG_RANGE
@@ -51,7 +51,7 @@ class IDset(WrapperPimpl):
 
     """
 
-    class InnerWrapper(Wrapper):
+    class InnerWrapper(IdsetWrapper):
         def __init__(
             self,
             arg="",

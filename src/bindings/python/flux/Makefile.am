@@ -96,7 +96,6 @@ if HAVE_FLUX_SECURITY
 nobase_fluxpy_PYTHON += security.py
 endif
 
-
 BUILT_SOURCES = \
 	constraint/parsetab.py
 

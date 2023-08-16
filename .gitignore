@@ -23,6 +23,26 @@ libtool
 .libs/
 libltdl/
 
+# Python
+/src/bindings/python/_flux/codegen
+/src/bindings/python/*.so-built
+/src/bindings/python/flux/wrapper/core.py
+/src/bindings/python/flux/wrapper/hostlist.py
+/src/bindings/python/flux/wrapper/idset.py
+/src/bindings/python/build/
+/src/bindings/python/dist/
+/src/bindings/python/_flux/_*_clean.h
+/src/bindings/python/_flux/_*_preproc.h
+*.egg-info/
+*.eggs
+
+# Commands generated
+/src/cmd/flux-R
+/src/cmd/flux-pkill.py
+/src/cmd/flux-top
+/src/modules/job-exec/bulk-exec
+/src/shell/flux-shell
+
 # generated library version header
 /src/common/libflux/version.h
 
