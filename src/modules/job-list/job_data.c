@@ -38,7 +38,7 @@ void job_destroy (void *data)
         json_decref (job->jobspec);
         json_decref (job->R);
         json_decref (job->exception_context);
-        zlist_destroy (&job->next_states);
+        zlist_destroy (&job->updates);
         free (job);
         errno = save_errno;
     }
@@ -66,7 +66,7 @@ struct job *job_create (flux_t *h, flux_jobid_t id)
     job->wait_status = -1;
     job->result = FLUX_JOB_RESULT_FAILED;
 
-    if (!(job->next_states = zlist_new ())) {
+    if (!(job->updates = zlist_new ())) {
         errno = ENOMEM;
         job_destroy (job);
         return NULL;

@@ -45,15 +45,24 @@
 #define STATE_TRANSITION_FLAG_REVERT 0x1
 #define STATE_TRANSITION_FLAG_CONDITIONAL 0x2
 
-struct state_transition {
+typedef enum {
+    JOB_UPDATE_TYPE_STATE_TRANSITION,
+} job_update_type_t;
+
+struct job_update {
+    job_update_type_t type;
+
+    /* state transitions */
     flux_job_state_t state;
+    double timestamp;
+    int flags;
+    flux_job_state_t expected_state;
+
+    /* all updates */
     bool processing;            /* indicates we are waiting for
                                  * current update to complete */
     bool finished;              /* indicates we are done, can remove
                                  * from list */
-    double timestamp;
-    int flags;
-    flux_job_state_t expected_state;
 };
 
 static int submit_context_parse (flux_t *h,
@@ -80,7 +89,7 @@ static int memo_update (flux_t *h,
                         struct job *job,
                         json_t *context);
 
-static void process_next_state (struct job_state_ctx *jsctx, struct job *job);
+static void process_updates (struct job_state_ctx *jsctx, struct job *job);
 
 static int journal_process_events (struct job_state_ctx *jsctx,
                                    const flux_msg_t *msg);
@@ -279,7 +288,7 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
     struct job_state_ctx *jsctx = flux_future_aux_get (f, "job_state_ctx");
-    struct state_transition *st;
+    struct job_update *updt;
     const char *s;
     void *handle;
 
@@ -294,11 +303,11 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
     if (job_parse_jobspec (job, s) < 0)
         goto out;
 
-    st = zlist_head (job->next_states);
-    assert (st);
-    update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-    st->finished = true;
-    process_next_state (jsctx, job);
+    updt = zlist_head (job->updates);
+    assert (updt);
+    update_job_state_and_list (jsctx, job, updt->state, updt->timestamp);
+    updt->finished = true;
+    process_updates (jsctx, job);
 
 out:
     handle = zlistx_find (jsctx->futures, f);
@@ -329,7 +338,7 @@ static void state_run_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
     struct job_state_ctx *jsctx = flux_future_aux_get (f, "job_state_ctx");
-    struct state_transition *st;
+    struct job_update *updt;
     const char *s;
     void *handle;
 
@@ -344,11 +353,11 @@ static void state_run_lookup_continuation (flux_future_t *f, void *arg)
     if (job_parse_R (job, s) < 0)
         goto out;
 
-    st = zlist_head (job->next_states);
-    assert (st);
-    update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-    st->finished = true;
-    process_next_state (jsctx, job);
+    updt = zlist_head (job->updates);
+    assert (updt);
+    update_job_state_and_list (jsctx, job, updt->state, updt->timestamp);
+    updt->finished = true;
+    process_updates (jsctx, job);
 
 out:
     handle = zlistx_find (jsctx->futures, f);
@@ -390,14 +399,26 @@ static void eventlog_inactive_complete (struct job *job)
     }
 }
 
-static void state_transition_destroy (void *data)
+static void job_update_destroy (void *data)
 {
-    struct state_transition *st = data;
-    if (st) {
+    struct job_update *updt = data;
+    if (updt) {
         int saved_errno = errno;
-        free (st);
+        free (updt);
         errno = saved_errno;
     }
+}
+
+static struct job_update *job_update_create (job_update_type_t type)
+{
+    struct job_update *updt = NULL;
+
+    if (!(updt = calloc (1, sizeof (*updt))))
+        return NULL;
+    updt->type = type;
+    updt->processing = false;
+    updt->finished = false;
+    return updt;
 }
 
 static int add_state_transition (struct job *job,
@@ -406,115 +427,122 @@ static int add_state_transition (struct job *job,
                                  int flags,
                                  flux_job_state_t expected_state)
 {
-    struct state_transition *st = NULL;
+    struct job_update *updt = NULL;
 
     if (!((flags & STATE_TRANSITION_FLAG_REVERT)
           || (flags & STATE_TRANSITION_FLAG_CONDITIONAL))
         && (newstate & job->states_events_mask))
         return 0;
 
-    if (!(st = calloc (1, sizeof (*st))))
+    if (!(updt = job_update_create (JOB_UPDATE_TYPE_STATE_TRANSITION)))
         return -1;
-    st->state = newstate;
-    st->processing = false;
-    st->finished = false;
-    st->timestamp = timestamp;
-    st->flags = flags;
-    st->expected_state = expected_state;
 
-    if (zlist_append (job->next_states, st) < 0) {
+    updt->state = newstate;
+    updt->timestamp = timestamp;
+    updt->flags = flags;
+    updt->expected_state = expected_state;
+
+    if (zlist_append (job->updates, updt) < 0) {
         errno = ENOMEM;
         goto cleanup;
     }
-    zlist_freefn (job->next_states, st, state_transition_destroy, true);
+    zlist_freefn (job->updates, updt, job_update_destroy, true);
 
     job->states_events_mask |= newstate;
     return 0;
 
  cleanup:
-    state_transition_destroy (st);
+    job_update_destroy (updt);
     return -1;
 }
 
-static void process_next_state (struct job_state_ctx *jsctx, struct job *job)
+static void process_state_transition_update (struct job_state_ctx *jsctx,
+                                             struct job *job,
+                                             struct job_update *updt)
 {
-    struct state_transition *st;
-
-    while ((st = zlist_head (job->next_states))
-           && (!st->processing || st->finished)) {
-
-        if (st->finished)
-            goto next;
-
-        if ((st->flags & STATE_TRANSITION_FLAG_REVERT)) {
-            /* only revert if the current state is what is expected */
-            if (job->state == st->expected_state) {
-                job->states_mask &= ~job->state;
-                job->states_mask &= ~st->state;
-                update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-            }
-            else {
-                st->finished = true;
-                goto next;
-            }
-        }
-        else if ((st->flags & STATE_TRANSITION_FLAG_CONDITIONAL)) {
-            /* if current state isn't what we expected, move on */
-            if (job->state != st->expected_state) {
-                st->finished = true;
-                goto next;
-            }
-        }
-
-        if (st->state == FLUX_JOB_STATE_DEPEND
-            || st->state == FLUX_JOB_STATE_RUN) {
-            flux_future_t *f = NULL;
-
-            if (st->state == FLUX_JOB_STATE_DEPEND) {
-                /* get initial jobspec */
-                if (!(f = state_depend_lookup (jsctx, job))) {
-                    flux_log_error (jsctx->h, "%s: state_depend_lookup",
-                                    __FUNCTION__);
-                    return;
-                }
-            }
-            else { /* st->state == FLUX_JOB_STATE_RUN */
-                /* get R to get node count, etc. */
-                if (!(f = state_run_lookup (jsctx, job))) {
-                    flux_log_error (jsctx->h, "%s: state_run_lookup",
-                                    __FUNCTION__);
-                    return;
-                }
-            }
-
-            if (!zlistx_add_end (jsctx->futures, f)) {
-                flux_log (jsctx->h,
-                          LOG_ERR,
-                          "%s: zlistx_add_end: out of memory",
-                          __FUNCTION__);
-                flux_future_destroy (f);
-                return;
-            }
-
-            st->processing = true;
-            break;
+    if ((updt->flags & STATE_TRANSITION_FLAG_REVERT)) {
+        /* only revert if the current state is what is expected */
+        if (job->state == updt->expected_state) {
+            job->states_mask &= ~job->state;
+            job->states_mask &= ~updt->state;
+            update_job_state_and_list (jsctx, job, updt->state, updt->timestamp);
         }
         else {
-            /* FLUX_JOB_STATE_PRIORITY */
-            /* FLUX_JOB_STATE_SCHED */
-            /* FLUX_JOB_STATE_CLEANUP */
-            /* FLUX_JOB_STATE_INACTIVE */
+            updt->finished = true;
+            return;
+        }
+    }
+    else if ((updt->flags & STATE_TRANSITION_FLAG_CONDITIONAL)) {
+        /* if current state isn't what we expected, move on */
+        if (job->state != updt->expected_state) {
+            updt->finished = true;
+            return;
+        }
+    }
 
-            if (st->state == FLUX_JOB_STATE_INACTIVE)
-                eventlog_inactive_complete (job);
+    if (updt->state == FLUX_JOB_STATE_DEPEND
+        || updt->state == FLUX_JOB_STATE_RUN) {
+        flux_future_t *f = NULL;
 
-            update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-            st->finished = true;
+        if (updt->state == FLUX_JOB_STATE_DEPEND) {
+            /* get initial jobspec */
+            if (!(f = state_depend_lookup (jsctx, job))) {
+                flux_log_error (jsctx->h, "%s: state_depend_lookup",
+                                __FUNCTION__);
+                return;
+            }
+        }
+        else { /* updt->state == FLUX_JOB_STATE_RUN */
+            /* get R to get node count, etc. */
+            if (!(f = state_run_lookup (jsctx, job))) {
+                flux_log_error (jsctx->h, "%s: state_run_lookup",
+                                __FUNCTION__);
+                return;
+            }
         }
 
+        if (!zlistx_add_end (jsctx->futures, f)) {
+            flux_log (jsctx->h,
+                      LOG_ERR,
+                      "%s: zlistx_add_end: out of memory",
+                      __FUNCTION__);
+            flux_future_destroy (f);
+            return;
+        }
+
+        updt->processing = true;
+        return;
+    }
+    else {
+        /* FLUX_JOB_STATE_PRIORITY */
+        /* FLUX_JOB_STATE_SCHED */
+        /* FLUX_JOB_STATE_CLEANUP */
+        /* FLUX_JOB_STATE_INACTIVE */
+
+        if (updt->state == FLUX_JOB_STATE_INACTIVE)
+            eventlog_inactive_complete (job);
+
+        update_job_state_and_list (jsctx, job, updt->state, updt->timestamp);
+        updt->finished = true;
+    }
+}
+
+static void process_updates (struct job_state_ctx *jsctx, struct job *job)
+{
+    struct job_update *updt;
+
+    while ((updt = zlist_head (job->updates))
+           && (!updt->processing || updt->finished)) {
+
+        if (updt->finished)
+            goto next;
+
+        if (updt->type == JOB_UPDATE_TYPE_STATE_TRANSITION)
+            process_state_transition_update (jsctx, job, updt);
+
     next:
-        if (st->finished)
-            zlist_remove (job->next_states, st);
+        if (updt->finished)
+            zlist_remove (job->updates, updt);
     }
 }
 
@@ -881,7 +909,7 @@ static int job_transition_state (struct job_state_ctx *jsctx,
                         __FUNCTION__);
         return -1;
     }
-    process_next_state (jsctx, job);
+    process_updates (jsctx, job);
     return 0;
 }
 
