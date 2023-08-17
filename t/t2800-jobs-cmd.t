@@ -140,6 +140,9 @@ test_expect_success 'submit jobs for job list testing' '
 	#
 	#  Submit a job and cancel it
 	#
+	# N.B. no need to handle issue #5210 here, the job will not
+	# run due to lack of resources.
+	#
 	jobid=`flux submit --job-name=canceledjob sleep 30` &&
 	fj_wait_event $jobid depend &&
 	flux cancel -m "mecanceled" $jobid &&

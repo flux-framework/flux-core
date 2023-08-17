@@ -24,6 +24,15 @@ wait_jobid_state() {
 	flux job list-ids --wait-state=$2 $1 > /dev/null
 }
 
+test_expect_success 'create helper job submission script' '
+	cat >sleepinf.sh <<-EOT &&
+	#!/bin/sh
+	echo "job started"
+	sleep inf
+	EOT
+	chmod +x sleepinf.sh
+'
+
 # submit a whole bunch of jobs for job list testing
 #
 # - the first loop of job submissions are intended to have some jobs run
@@ -70,7 +79,11 @@ test_expect_success 'submit jobs for job list testing' '
 	#  Run a job that we will end with a signal, copy its JOBID to both inactive and
 	#	failed and terminated lists.
 	#
-	jobid=`flux submit --wait-event=start sleep inf` &&
+	# N.B. sleepinf.sh and wait-event on job data to workaround
+	# rare job startup race.  See #5210
+	#
+	jobid=`flux submit ./sleepinf.sh` &&
+	flux job wait-event -W -p guest.output $jobid data &&
 	flux job kill $jobid &&
 	fj_wait_event $jobid clean &&
 	echo $jobid >> inactiveids &&
@@ -80,7 +93,11 @@ test_expect_success 'submit jobs for job list testing' '
 	#  Run a job that we will end with a user exception, copy its JOBID to both
 	#	inactive and failed and exception lists.
 	#
-	jobid=`flux submit --wait-event=start sleep inf` &&
+	# N.B. sleepinf.sh and wait-event on job data to workaround
+	# rare job startup race.  See #5210
+	#
+	jobid=`flux submit ./sleepinf.sh` &&
+	flux job wait-event -W -p guest.output $jobid data &&
 	flux job raise --type=myexception --severity=0 -m "myexception" $jobid &&
 	fj_wait_event $jobid clean &&
 	echo $jobid >> inactiveids &&
@@ -124,6 +141,9 @@ test_expect_success 'submit jobs for job list testing' '
 	cat running.ids >> active.ids &&
 	#
 	#  Submit a job and cancel it
+	#
+	# N.B. no need to handle issue #5210 here, the job will not
+	# run due to lack of resources.
 	#
 	jobid=`flux submit --job-name=canceledjob sleep 30` &&
 	flux job wait-event $jobid depend &&
@@ -1827,9 +1847,12 @@ test_expect_success 'flux job list outputs exceptions correctly (exception)' '
 	echo $obj | jq .exception_note | grep "No such file or directory"
 '
 
+# N.B. sleepinf.sh and wait-event on job data to workaround
+# rare job startup race.  See #5210
 test_expect_success 'flux job list outputs exceptions correctly (exception cancel no message)' '
-	jobid=`flux submit sleep inf | flux job id` &&
+	jobid=`flux submit ./sleepinf.sh | flux job id` &&
 	echo $jobid > exceptions3.id &&
+	flux job wait-event -W -p guest.output $jobid data &&
 	flux cancel $jobid &&
 	wait_jobid_state $jobid inactive &&
 	obj=$(flux job list -s inactive | grep $jobid) &&
@@ -1839,9 +1862,12 @@ test_expect_success 'flux job list outputs exceptions correctly (exception cance
 	echo $obj | jq -e ".exception_note == \"\""
 '
 
+# N.B. sleepinf.sh and wait-event on job data to workaround
+# rare job startup race.  See #5210
 test_expect_success 'flux job list outputs exceptions correctly (exception cancel w/ message)' '
-	jobid=`flux submit sleep inf | flux job id` &&
+	jobid=`flux submit ./sleepinf.sh | flux job id` &&
 	echo $jobid > exceptions4.id &&
+	flux job wait-event -W -p guest.output $jobid data &&
 	flux cancel -m "mecanceled" $jobid &&
 	wait_jobid_state $jobid inactive &&
 	obj=$(flux job list -s inactive | grep $jobid) &&
@@ -1851,9 +1877,12 @@ test_expect_success 'flux job list outputs exceptions correctly (exception cance
 	echo $obj | jq -e ".exception_note == \"mecanceled\""
 '
 
+# N.B. sleepinf.sh and wait-event on job data to workaround
+# rare job startup race.  See #5210
 test_expect_success 'flux job list outputs exceptions correctly (user exception)' '
-	jobid=`flux submit sleep inf | flux job id` &&
+	jobid=`flux submit ./sleepinf.sh | flux job id` &&
 	echo $jobid > exceptions5.id &&
+	flux job wait-event -W -p guest.output $jobid data &&
 	flux job raise --type=foo --severity=0 -m "foobar" $jobid &&
 	wait_jobid_state $jobid inactive &&
 	obj=$(flux job list -s inactive | grep $jobid) &&
