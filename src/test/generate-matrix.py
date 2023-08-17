@@ -149,6 +149,16 @@ matrix.add_build(
     docker_tag=True,
 )
 
+# Debian: arm64, expensive, only on master and tags, only install
+if matrix.branch == 'master' or matrix.tag:
+    matrix.add_build(
+        name="bookworm - arm64",
+        image="bookworm",
+        platform="linux/arm64",
+        docker_tag=True,
+        command_args="--install-only ",
+    )
+
 # Debian: gcc-12, content-s3, distcheck
 matrix.add_build(
     name="bookworm - gcc-12,content-s3,distcheck",
@@ -200,6 +210,7 @@ matrix.add_build(
     env=dict(
         TEST_INSTALL="t",
     ),
+    platform="linux/amd64",
     docker_tag=True,
 )
 
