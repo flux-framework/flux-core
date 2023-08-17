@@ -85,6 +85,8 @@ struct job {
     unsigned int states_mask;
     unsigned int states_events_mask;
     void *list_handle;
+    /* if updates in eventlog before jobspec read from KVS */
+    json_t *jobspec_updates;
 
     int eventlog_seq;           /* last event seq read */
     int submit_version;         /* version number in submit context */

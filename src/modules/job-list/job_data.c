@@ -41,6 +41,7 @@ void job_destroy (void *data)
         json_decref (job->jobspec_tasks);
         json_decref (job->R);
         json_decref (job->exception_context);
+        json_decref (job->jobspec_updates);
         zlist_destroy (&job->updates);
         free (job);
         errno = save_errno;
