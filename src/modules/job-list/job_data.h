@@ -95,8 +95,11 @@ struct job *job_create (flux_t *h, flux_jobid_t id);
 
 /* Parse and internally cache jobspec.  Set values for:
  * - job name
+ * - queue
  * - ntasks
  * - nnodes (if available)
+ * - ncores (if possible)
+ * - duration
  */
 int job_parse_jobspec (struct job *job, const char *s);
 
@@ -109,6 +112,8 @@ int job_parse_jobspec_fatal (struct job *job, const char *s);
  * - expiration
  * - nnodes
  * - nodelist
+ * - ncores
+ * - ntasks (if necessary)
  */
 int job_parse_R (struct job *job, const char *s);
 
