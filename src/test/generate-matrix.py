@@ -150,7 +150,7 @@ matrix.add_build(
 )
 
 # Debian: arm64, expensive, only on master and tags, only install
-if matrix.branch == 'master' or matrix.tag:
+if True or matrix.branch == 'master' or matrix.tag:
     matrix.add_build(
         name="bookworm - arm64",
         image="bookworm",
