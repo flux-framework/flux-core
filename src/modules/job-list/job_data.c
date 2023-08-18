@@ -266,13 +266,12 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
     json_error_t error;
     json_t *jobspec_job = NULL;
     json_t *tasks;
-    int rc = -1;
 
     if (!(job->jobspec = json_loads (s, 0, &error))) {
         flux_log (job->h, LOG_ERR,
                   "%s: job %s invalid jobspec: %s",
                   __FUNCTION__, idf58 (job->id), error.text);
-        goto error;
+        goto nonfatal_error;
     }
 
     if (json_unpack_ex (job->jobspec, &error, 0,
@@ -344,9 +343,7 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
     /* nonfatal error - jobspec illegal, but we'll continue on.  job
      * listing will return whatever data is available */
 nonfatal_error:
-    rc = allow_nonfatal ? 0 : -1;
-error:
-    return rc;
+    return allow_nonfatal ? 0 : -1;
 }
 
 int job_parse_jobspec (struct job *job, const char *s)
