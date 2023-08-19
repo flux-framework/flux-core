@@ -36,6 +36,7 @@ void job_destroy (void *data)
         json_decref (job->annotations);
         grudgeset_destroy (job->dependencies);
         json_decref (job->jobspec);
+        json_decref (job->jobspec_tasks);
         json_decref (job->R);
         json_decref (job->exception_context);
         zlist_destroy (&job->updates);
@@ -95,8 +96,7 @@ static const char *parse_job_name (const char *path)
 }
 
 static int parse_jobspec_job_name (struct job *job,
-                                   json_t *jobspec_job,
-                                   json_t *tasks)
+                                   json_t *jobspec_job)
 {
     json_error_t error;
 
@@ -117,7 +117,7 @@ static int parse_jobspec_job_name (struct job *job,
         json_t *command = NULL;
         json_t *arg0;
 
-        if (json_unpack_ex (tasks, &error, 0,
+        if (json_unpack_ex (job->jobspec_tasks, &error, 0,
                             "[{s:o}]",
                             "command", &command) < 0) {
             flux_log (job->h, LOG_ERR,
@@ -303,8 +303,9 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
                   __FUNCTION__, idf58 (job->id), error.text);
         goto nonfatal_error;
     }
+    job->jobspec_tasks = json_incref (tasks);
 
-    if (parse_jobspec_job_name (job, jobspec_job, tasks) < 0)
+    if (parse_jobspec_job_name (job, jobspec_job) < 0)
         goto nonfatal_error;
 
     if (json_unpack_ex (job->jobspec, &error, 0,
