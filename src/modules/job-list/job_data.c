@@ -147,6 +147,52 @@ static int parse_jobspec_job_name (struct job *job,
     return 0;
 }
 
+static int parse_attributes_dict (struct job *job)
+{
+    json_error_t error;
+    json_t *jobspec_job = NULL;
+
+    if (json_unpack_ex (job->jobspec, &error, 0,
+                        "{s:{s?{s?o}}}",
+                        "attributes",
+                        "system",
+                        "job",
+                        &jobspec_job) < 0) {
+        flux_log (job->h, LOG_ERR,
+                  "%s: job %s invalid jobspec: %s",
+                  __FUNCTION__, idf58 (job->id), error.text);
+        return -1;
+    }
+
+    if (jobspec_job) {
+        if (!json_is_object (jobspec_job)) {
+            flux_log (job->h, LOG_ERR,
+                      "%s: job %s invalid jobspec",
+                      __FUNCTION__, idf58 (job->id));
+            return -1;
+        }
+    }
+
+    if (parse_jobspec_job_name (job, jobspec_job) < 0)
+        return -1;
+
+    /* N.B. attributes.system.duration is required in jobspec version 1 */
+    if (json_unpack_ex (job->jobspec, &error, 0,
+                        "{s:{s?{s?s s?s s:F}}}",
+                        "attributes",
+                        "system",
+                        "cwd", &job->cwd,
+                        "queue", &job->queue,
+                        "duration", &job->duration) < 0) {
+        flux_log (job->h, LOG_ERR,
+                  "%s: job %s invalid jobspec: %s",
+                  __FUNCTION__, idf58 (job->id), error.text);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int parse_jobspec_nnodes (struct job *job, struct jj_counts *jj)
 {
     /* Set job->nnodes if it is available, otherwise it will be set
@@ -155,15 +201,6 @@ static int parse_jobspec_nnodes (struct job *job, struct jj_counts *jj)
     if (jj->nnodes > 0)
         job->nnodes = jj->nnodes;
 
-    return 0;
-}
-
-static int parse_jobspec_duration (struct job *job, struct jj_counts *jj)
-{
-    /* N.B. Jobspec V1 requires duration to be set, so duration will
-     * always be >= 0 from libjj.
-     */
-    job->duration = jj->duration;
     return 0;
 }
 
@@ -264,7 +301,6 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
 {
     struct jj_counts jj;
     json_error_t error;
-    json_t *jobspec_job = NULL;
     json_t *tasks;
 
     if (!(job->jobspec = json_loads (s, 0, &error))) {
@@ -272,27 +308,6 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
                   "%s: job %s invalid jobspec: %s",
                   __FUNCTION__, idf58 (job->id), error.text);
         goto nonfatal_error;
-    }
-
-    if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:{s?{s?o}}}",
-                        "attributes",
-                        "system",
-                        "job",
-                        &jobspec_job) < 0) {
-        flux_log (job->h, LOG_ERR,
-                  "%s: job %s invalid jobspec: %s",
-                  __FUNCTION__, idf58 (job->id), error.text);
-        goto nonfatal_error;
-    }
-
-    if (jobspec_job) {
-        if (!json_is_object (jobspec_job)) {
-            flux_log (job->h, LOG_ERR,
-                      "%s: job %s invalid jobspec",
-                      __FUNCTION__, idf58 (job->id));
-            goto nonfatal_error;
-        }
     }
 
     if (json_unpack_ex (job->jobspec, &error, 0,
@@ -305,20 +320,8 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
     }
     job->jobspec_tasks = json_incref (tasks);
 
-    if (parse_jobspec_job_name (job, jobspec_job) < 0)
+    if (parse_attributes_dict (job) < 0)
         goto nonfatal_error;
-
-    if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:{s?{s?s s?s}}}",
-                        "attributes",
-                        "system",
-                        "cwd", &job->cwd,
-                        "queue", &job->queue) < 0) {
-        flux_log (job->h, LOG_ERR,
-                  "%s: job %s invalid jobspec: %s",
-                  __FUNCTION__, idf58 (job->id), error.text);
-        goto nonfatal_error;
-    }
 
     if (jj_get_counts_json (job->jobspec, &jj) < 0) {
         flux_log (job->h, LOG_ERR,
@@ -334,9 +337,6 @@ static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
         goto nonfatal_error;
 
     if (parse_jobspec_ncores (job, &jj) < 0)
-        goto nonfatal_error;
-
-    if (parse_jobspec_duration (job, &jj) < 0)
         goto nonfatal_error;
 
     return 0;
