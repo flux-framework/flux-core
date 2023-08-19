@@ -23,6 +23,8 @@
 #include "src/common/libccan/ccan/str/str.h"
 #include "src/common/libjob/jj.h"
 #include "src/common/libjob/idf58.h"
+#include "src/common/libutil/jpath.h"
+#include "ccan/str/str.h"
 
 #include "job_data.h"
 
@@ -347,14 +349,18 @@ nonfatal_error:
     return allow_nonfatal ? 0 : -1;
 }
 
-int job_parse_jobspec (struct job *job, const char *s)
+int job_parse_jobspec (struct job *job, const char *s, json_t *updates)
 {
-    return parse_jobspec (job, s, true);
+    if (parse_jobspec (job, s, true) < 0)
+        return -1;
+    return job_jobspec_update (job, updates);
 }
 
-int job_parse_jobspec_fatal (struct job *job, const char *s)
+int job_parse_jobspec_fatal (struct job *job, const char *s, json_t *updates)
 {
-    return parse_jobspec (job, s, false);
+    if (parse_jobspec (job, s, false) < 0)
+        return -1;
+    return job_jobspec_update (job, updates);
 }
 
 static int parse_R (struct job *job, const char *s, bool allow_nonfatal)
@@ -434,6 +440,27 @@ int job_parse_R (struct job *job, const char *s)
 int job_parse_R_fatal (struct job *job, const char *s)
 {
     return parse_R (job, s, false);
+}
+
+int job_jobspec_update (struct job *job, json_t *updates)
+{
+    const char *key;
+    json_t *value;
+
+    if (!updates)
+        return 0;
+
+    json_object_foreach (updates, key, value) {
+        /* RFC 21 jobspec-update event keys must start with "attributes."
+         * Reject update events with keys that violate the RFC.
+         */
+        if (!strstarts (key, "attributes.")
+            || jpath_set (job->jobspec, key, value) < 0)
+            flux_log (job->h, LOG_INFO,
+                      "%s: job %s failed to update jobspec key %s",
+                      __FUNCTION__, idf58 (job->id), key);
+    }
+    return parse_attributes_dict (job);
 }
 
 /*

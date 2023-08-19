@@ -300,7 +300,7 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
         goto out;
     }
 
-    if (job_parse_jobspec (job, s) < 0)
+    if (job_parse_jobspec (job, s, NULL) < 0)
         goto out;
 
     updt = zlist_head (job->updates);
@@ -743,7 +743,7 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
     if (flux_kvs_lookup_get (f2, &jobspec) < 0)
         goto done;
 
-    if (job_parse_jobspec (job, jobspec) < 0)
+    if (job_parse_jobspec (job, jobspec, NULL) < 0)
         goto done;
 
     /* eventlog parsing above would not have tracked queue specific
