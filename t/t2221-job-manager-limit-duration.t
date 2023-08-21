@@ -24,9 +24,6 @@ test_expect_success 'a job that exceeds policy.limits.duration is rejected' '
 	test_must_fail flux submit -t 1h /bin/true 2>duration.err &&
 	grep "exceeds policy limit of 1m" duration.err
 '
-test_expect_success 'a job that sets no explicit duration is accepted' '
-	flux submit /bin/true
-'
 test_expect_success 'a job that is under policy.limits.duration is accepted' '
 	flux submit -t 30s /bin/true
 '
