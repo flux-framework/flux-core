@@ -42,6 +42,9 @@ test_expect_success 'configure policy.limits.duration and queue duration' '
 test_expect_success 'a job that exceeds policy.limits.duration is rejected' '
 	test_must_fail flux submit --queue=debug -t 2h /bin/true
 '
+test_expect_success 'a job with no limit is also rejected' '
+	test_must_fail flux submit --queue=debug -t 0 /bin/true
+'
 test_expect_success 'but is accepted by a queue with higher limit' '
 	flux submit \
 	    --queue=batch \
@@ -52,6 +55,12 @@ test_expect_success 'and is rejected when it exceeds the queue limit' '
 	test_must_fail flux submit \
 	    --queue=batch \
 	    -t 16h \
+	    /bin/true
+'
+test_expect_success 'no limit is also rejected as exceeding the queue limit' '
+	test_must_fail flux submit \
+	    --queue=batch \
+	    -t 0 \
 	    /bin/true
 '
 test_expect_success 'a job that is under policy.limits.duration is accepted' '
