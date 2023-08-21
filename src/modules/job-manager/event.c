@@ -675,6 +675,13 @@ int event_job_update (struct job *job, json_t *event)
     else if (streq (name, "jobspec-update")) {
         if (event_handle_jobspec_update (job, context) < 0)
             goto inval;
+        /*  Transition a job in SCHED state back to PRIORITY to trigger
+         *  possible recalculation of job priority, update scheduler with
+         *  new jobspec, etc. Job will transition back to SCHED after a
+         *  priority is assigned.
+         */
+        if (job->state == FLUX_JOB_STATE_SCHED)
+            job->state = FLUX_JOB_STATE_PRIORITY;
     }
     else if (strstarts (name, "dependency-")) {
         if (job->state == FLUX_JOB_STATE_DEPEND
