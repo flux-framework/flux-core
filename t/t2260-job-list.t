@@ -14,6 +14,8 @@ PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-list/jobspec-permissive.jsonschema
 JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py"
 
+PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
+
 fj_wait_event() {
 	flux job wait-event --timeout=20 "$@"
 }
@@ -2073,6 +2075,125 @@ test_expect_success 'job-list parses flux-restart events' '
 '
 
 #
+# jobspec-update event testing
+#
+
+test_expect_success 'configure update queues' '
+	flux config load <<-EOT &&
+	[queues.defaultqueue]
+	[queues.updatequeue]
+	EOT
+	flux queue start --all
+'
+
+wait_id_inactive() {
+	id=$1
+	local i=0
+	while ! flux job list --states=inactive | grep ${id} > /dev/null \
+		   && [ $i -lt 50 ]
+	do
+		sleep 0.1
+		i=$((i + 1))
+	done
+	if [ "$i" -eq "50" ]
+	then
+		return 1
+	fi
+	return 0
+}
+
+test_expect_success 'load jobspec-update test plugin' '
+        flux jobtap load --remove=all ${PLUGINPATH}/jobspec-update-job-list.so
+'
+
+test_expect_success 'run job in the default queue' '
+	flux submit -q defaultqueue --wait /bin/true | flux job id > update1.id &&
+	wait_id_inactive $(cat update1.id)
+'
+
+# jobspec-update-job-list changes duration to 1000.0, job name to
+# "updatename", and queue to "updatequeue".
+test_expect_success 'job-list returns expected jobspec changes' '
+	flux job list -s inactive | grep $(cat update1.id) | jq -e ".name == \"updatename\"" &&
+	flux job list -s inactive | grep $(cat update1.id) | jq -e ".queue == \"updatequeue\"" &&
+	flux job list -s inactive | grep $(cat update1.id) | jq -e ".duration == 1000.0"
+'
+
+test_expect_success 'job stats lists jobs in correct state in each queue' '
+	defaultq=`flux job stats | jq ".queues[] | select( .name == \"defaultqueue\" )"` &&
+	updateq=`flux job stats | jq ".queues[] | select( .name == \"updatequeue\" )"` &&
+	echo $defaultq | jq -e ".job_states.depend == 0" &&
+	echo $defaultq | jq -e ".job_states.priority == 0" &&
+	echo $defaultq | jq -e ".job_states.sched == 0" &&
+	echo $defaultq | jq -e ".job_states.run == 0" &&
+	echo $defaultq | jq -e ".job_states.cleanup == 0" &&
+	echo $defaultq | jq -e ".job_states.inactive == 0" &&
+	echo $defaultq | jq -e ".job_states.total == 0" &&
+	echo $defaultq | jq -e ".successful == 0" &&
+	echo $defaultq | jq -e ".failed == 0" &&
+	echo $defaultq | jq -e ".canceled == 0" &&
+	echo $defaultq | jq -e ".timeout == 0" &&
+	echo $defaultq | jq -e ".inactive_purged == 0" &&
+	echo $updateq | jq -e ".job_states.depend == 0" &&
+	echo $updateq | jq -e ".job_states.priority == 0" &&
+	echo $updateq | jq -e ".job_states.sched == 0" &&
+	echo $updateq | jq -e ".job_states.run == 0" &&
+	echo $updateq | jq -e ".job_states.cleanup == 0" &&
+	echo $updateq | jq -e ".job_states.inactive == 1" &&
+	echo $updateq | jq -e ".job_states.total == 1" &&
+	echo $updateq | jq -e ".successful == 1" &&
+	echo $updateq | jq -e ".failed == 0" &&
+	echo $updateq | jq -e ".canceled == 0" &&
+	echo $updateq | jq -e ".timeout == 0" &&
+	echo $updateq | jq -e ".inactive_purged == 0"
+'
+
+test_expect_success 'reload the job-list module' '
+	flux module reload job-list &&
+	wait_id_inactive $(cat update1.id)
+'
+
+test_expect_success 'job-list returns expected jobspec changes after reload' '
+	flux job list -s inactive | grep $(cat update1.id) | jq -e ".name == \"updatename\"" &&
+	flux job list -s inactive | grep $(cat update1.id) | jq -e ".queue == \"updatequeue\"" &&
+	flux job list -s inactive | grep $(cat update1.id) | jq -e ".duration == 1000.0"
+'
+
+test_expect_success 'job stats in each queue correct after reload' '
+	defaultq=`flux job stats | jq ".queues[] | select( .name == \"defaultqueue\" )"` &&
+	updateq=`flux job stats | jq ".queues[] | select( .name == \"updatequeue\" )"` &&
+	echo $defaultq | jq -e ".job_states.depend == 0" &&
+	echo $defaultq | jq -e ".job_states.priority == 0" &&
+	echo $defaultq | jq -e ".job_states.sched == 0" &&
+	echo $defaultq | jq -e ".job_states.run == 0" &&
+	echo $defaultq | jq -e ".job_states.cleanup == 0" &&
+	echo $defaultq | jq -e ".job_states.inactive == 0" &&
+	echo $defaultq | jq -e ".job_states.total == 0" &&
+	echo $defaultq | jq -e ".successful == 0" &&
+	echo $defaultq | jq -e ".failed == 0" &&
+	echo $defaultq | jq -e ".canceled == 0" &&
+	echo $defaultq | jq -e ".timeout == 0" &&
+	echo $defaultq | jq -e ".inactive_purged == 0" &&
+	echo $updateq | jq -e ".job_states.depend == 0" &&
+	echo $updateq | jq -e ".job_states.priority == 0" &&
+	echo $updateq | jq -e ".job_states.sched == 0" &&
+	echo $updateq | jq -e ".job_states.run == 0" &&
+	echo $updateq | jq -e ".job_states.cleanup == 0" &&
+	echo $updateq | jq -e ".job_states.inactive == 1" &&
+	echo $updateq | jq -e ".job_states.total == 1" &&
+	echo $updateq | jq -e ".successful == 1" &&
+	echo $updateq | jq -e ".failed == 0" &&
+	echo $updateq | jq -e ".canceled == 0" &&
+	echo $updateq | jq -e ".timeout == 0" &&
+	echo $updateq | jq -e ".inactive_purged == 0"
+'
+
+test_expect_success 'remove jobtap plugins and remove queue config' '
+	flux jobtap remove all &&
+	flux config load < /dev/null
+'
+
+#
 # job list special cases
 #
 
@@ -2309,22 +2430,6 @@ test_expect_success 'configure batch,debug queues' '
 	EOT
 	flux queue start --all
 '
-
-wait_id_inactive() {
-	id=$1
-	local i=0
-	while ! flux job list --states=inactive | grep ${id} > /dev/null \
-		   && [ $i -lt 50 ]
-	do
-		sleep 0.1
-		i=$((i + 1))
-	done
-	if [ "$i" -eq "50" ]
-	then
-		return 1
-	fi
-	return 0
-}
 
 test_expect_success 'run some jobs in the batch,debug queues' '
 	flux submit -q batch --wait /bin/true | flux job id > stats1.id &&
