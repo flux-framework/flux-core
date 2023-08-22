@@ -556,7 +556,9 @@ static int event_handle_jobspec_update (struct job *job, json_t *context)
     const char *path;
     json_t *val;
 
-    if (!job->jobspec_redacted)
+    if (!job->jobspec_redacted
+        || job->state == FLUX_JOB_STATE_RUN
+        || job->state == FLUX_JOB_STATE_CLEANUP)
         return -1;
     json_object_foreach (context, path, val) {
         if (jpath_set (job->jobspec_redacted, path, val) < 0)
