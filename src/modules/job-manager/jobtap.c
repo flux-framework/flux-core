@@ -2130,10 +2130,16 @@ int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...)
     int saved_errno;
     va_list ap;
     struct jobtap *jobtap;
+    struct job * job;
     json_t *o = NULL;
     json_error_t error;
 
-    if (!p || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+    if (!p
+        || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))
+        || !(job = current_job (jobtap))
+        || job->state == FLUX_JOB_STATE_RUN
+        || job->state == FLUX_JOB_STATE_CLEANUP
+        || job->eventlog_readonly) {
         errno = EINVAL;
         return -1;
     }
