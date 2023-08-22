@@ -512,7 +512,9 @@ test_expect_success 'job-manager: plugins can update jobspec' '
 	jobid=$(flux submit --job-name=test hostname) &&
 	flux job attach $jobid &&
 	flux job eventlog $jobid | grep jobspec-update &&
-	flux job eventlog $jobid | grep attributes.system.update-test
+	flux job eventlog $jobid | grep attributes.system.update-test &&
+	flux job eventlog $jobid | \
+		test_must_fail grep attributes.system.run-update
 '
 
 test_expect_success 'job-manager: plugin fails to load on config.update error' '
