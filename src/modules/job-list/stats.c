@@ -153,6 +153,40 @@ void job_stats_add_queue (struct job_stats_ctx *statsctx,
         stats_add (stats, job, job->state);
 }
 
+static void stats_remove (struct job_stats *stats,
+                          struct job *job)
+{
+    /*  Stats for NEW are not tracked */
+    if (job->state != FLUX_JOB_STATE_NEW)
+        stats->state_count[state_index (job->state)]--;
+
+    if (job->state == FLUX_JOB_STATE_INACTIVE) {
+        if (!job->success) {
+            if (job->exception_occurred) {
+                if (streq (job->exception_type, "cancel"))
+                    stats->canceled--;
+                else if (streq (job->exception_type, "timeout"))
+                    stats->timeout--;
+                else
+                    stats->failed--;
+            }
+            else
+                stats->failed--;
+        }
+        else
+            stats->successful--;
+    }
+}
+
+void job_stats_remove_queue (struct job_stats_ctx *statsctx,
+                             struct job *job)
+{
+    struct job_stats *stats;
+
+    if ((stats = queue_stats_lookup (statsctx, job)))
+        stats_remove (stats, job);
+}
+
 static void stats_purge (struct job_stats *stats, struct job *job)
 {
     stats->state_count[state_index (job->state)]--;
