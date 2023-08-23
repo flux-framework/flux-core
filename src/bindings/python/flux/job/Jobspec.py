@@ -534,11 +534,12 @@ class Jobspec(object):
         self.jobspec["attributes"]["system"]["files"] = files
 
     def setattr(self, key, val):
-
         """
         set job attribute
         """
-        set_treedict(self.jobspec, "attributes." + key, val)
+        if not key.startswith("attributes."):
+            key = "attributes." + key
+        set_treedict(self.jobspec, key, val)
 
     def setattr_shell_option(self, key, val):
         """
