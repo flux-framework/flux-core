@@ -43,7 +43,6 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/errno_safe.h"
-#include "src/common/libutil/jpath.h"
 #include "src/common/libjob/idf58.h"
 #include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
@@ -553,17 +552,11 @@ static int event_handle_dependency (struct job *job,
  */
 static int event_handle_jobspec_update (struct job *job, json_t *context)
 {
-    const char *path;
-    json_t *val;
-
     if (!job->jobspec_redacted
         || job->state == FLUX_JOB_STATE_RUN
-        || job->state == FLUX_JOB_STATE_CLEANUP)
+        || job->state == FLUX_JOB_STATE_CLEANUP
+        || job_apply_jobspec_updates (job, context) < 0)
         return -1;
-    json_object_foreach (context, path, val) {
-        if (jpath_set (job->jobspec_redacted, path, val) < 0)
-            return -1;
-    }
     return 0;
 }
 
