@@ -34,6 +34,7 @@
 #include "annotate.h"
 #include "journal.h"
 #include "getattr.h"
+#include "update.h"
 #include "jobtap-internal.h"
 
 #include "job-manager.h"
@@ -217,6 +218,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating journal interface");
         goto done;
     }
+    if (!(ctx.update = update_ctx_create (&ctx))) {
+        flux_log_error (h, "error creating job update interface");
+        goto done;
+    }
     if (!(ctx.jobtap = jobtap_create (&ctx))) {
         flux_log (h, LOG_ERR, "error creating jobtap interface");
         goto done;
@@ -250,6 +255,7 @@ done:
     alloc_ctx_destroy (ctx.alloc);
     submit_ctx_destroy (ctx.submit);
     event_ctx_destroy (ctx.event);
+    update_ctx_destroy (ctx.update);
     /* job aux containers may call destructors in jobtap plugins, so destroy
      * jobs before unloading plugins; but don't destroy job hashes until after.
      */
