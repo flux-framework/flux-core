@@ -139,9 +139,30 @@ static int depend_cb (flux_plugin_t *p,
     return 0;
 }
 
+static int run_cb (flux_plugin_t *p,
+                   const char *topic,
+                   flux_plugin_arg_t *args,
+                   void *data)
+{
+    /*  Jobspec update after RUN is expected to fail
+     */
+    if (flux_jobtap_jobspec_update_pack (p,
+                                         "{s:i}",
+                                         "attributes.system.run-update",
+                                         1) == 0) {
+        flux_jobtap_raise_exception (p,
+                                     FLUX_JOBTAP_CURRENT_JOB,
+                                     "jobspec-update", 0,
+                                     "expected update failure, got success");
+    }
+    return 0;
+}
+
+
 static const struct flux_plugin_handler tab[] = {
     { "job.validate", validate_cb, NULL },
     { "job.state.depend", depend_cb, NULL },
+    { "job.state.run", run_cb, NULL },
     { 0 },
 };
 

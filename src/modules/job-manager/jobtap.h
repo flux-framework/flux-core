@@ -188,6 +188,9 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
  *                                       "attributes.system.duration", 3600,
  *                                       "attributes.system.queue", "batch");
  *
+ *  Returns -1 with errno set to EINVAL for invalid arguments, if there is
+ *  no current job, or if the current job is in RUN, CLEANUP, or INACTIVE
+ *  states.
  */
 int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...);
 

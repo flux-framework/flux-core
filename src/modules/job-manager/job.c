@@ -492,6 +492,10 @@ int job_event_enqueue (struct job *job, int flags, json_t *entry)
 {
     json_t *wrap;
 
+    if (job->eventlog_readonly) {
+        errno = EROFS;
+        return -1;
+    }
     if (!(wrap = json_pack ("{s:i s:O}",
                             "flags", flags,
                             "entry", entry))
