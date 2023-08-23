@@ -2110,20 +2110,6 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
     return rc;
 }
 
-/* RFC 21 jobspec-update event keys must start with "attributes."
- * Reject update events with keys that violate the RFC.
- */
-static bool validate_jobspec_updates (json_t *o)
-{
-    const char *key;
-    json_t *entry;
-    json_object_foreach (o, key, entry) {
-        if (!strstarts (key, "attributes."))
-            return false;
-    }
-    return true;
-}
-
 int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...)
 {
     int rc = -1;

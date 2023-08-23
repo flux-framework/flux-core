@@ -127,6 +127,18 @@ int job_event_peek (struct job *job, int *flagsp, json_t **entryp);
 bool job_event_is_queued (struct job *job, const char *name);
 const char *job_event_queue_print (struct job *job, char *buf, int size);
 
+/*  Validate updates as valid RFC 21 jobspec-update event context:
+ */
+bool validate_jobspec_updates (json_t *updates);
+
+/*  Apply updates to jobspec
+ */
+int job_apply_jobspec_updates (struct job *job, json_t *updates);
+
+/*  Return a copy of the jobspec for 'job' with 'updates' applied.
+ */
+json_t *job_jobspec_with_updates (struct job *job, json_t *updates);
+
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 
 /*
