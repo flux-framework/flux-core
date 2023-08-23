@@ -47,7 +47,10 @@
 
 struct state_transition {
     flux_job_state_t state;
-    bool processed;
+    bool processing;            /* indicates we are waiting for
+                                 * current update to complete */
+    bool finished;              /* indicates we are done, can remove
+                                 * from list */
     double timestamp;
     int flags;
     flux_job_state_t expected_state;
@@ -294,7 +297,7 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
     st = zlist_head (job->next_states);
     assert (st);
     update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-    zlist_remove (job->next_states, st);
+    st->finished = true;
     process_next_state (jsctx, job);
 
 out:
@@ -344,7 +347,7 @@ static void state_run_lookup_continuation (flux_future_t *f, void *arg)
     st = zlist_head (job->next_states);
     assert (st);
     update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-    zlist_remove (job->next_states, st);
+    st->finished = true;
     process_next_state (jsctx, job);
 
 out:
@@ -413,7 +416,8 @@ static int add_state_transition (struct job *job,
     if (!(st = calloc (1, sizeof (*st))))
         return -1;
     st->state = newstate;
-    st->processed = false;
+    st->processing = false;
+    st->finished = false;
     st->timestamp = timestamp;
     st->flags = flags;
     st->expected_state = expected_state;
@@ -437,7 +441,10 @@ static void process_next_state (struct job_state_ctx *jsctx, struct job *job)
     struct state_transition *st;
 
     while ((st = zlist_head (job->next_states))
-           && !st->processed) {
+           && (!st->processing || st->finished)) {
+
+        if (st->finished)
+            goto next;
 
         if ((st->flags & STATE_TRANSITION_FLAG_REVERT)) {
             /* only revert if the current state is what is expected */
@@ -447,15 +454,15 @@ static void process_next_state (struct job_state_ctx *jsctx, struct job *job)
                 update_job_state_and_list (jsctx, job, st->state, st->timestamp);
             }
             else {
-                zlist_remove (job->next_states, st);
-                continue;
+                st->finished = true;
+                goto next;
             }
         }
         else if ((st->flags & STATE_TRANSITION_FLAG_CONDITIONAL)) {
             /* if current state isn't what we expected, move on */
             if (job->state != st->expected_state) {
-                zlist_remove (job->next_states, st);
-                continue;
+                st->finished = true;
+                goto next;
             }
         }
 
@@ -489,7 +496,7 @@ static void process_next_state (struct job_state_ctx *jsctx, struct job *job)
                 return;
             }
 
-            st->processed = true;
+            st->processing = true;
             break;
         }
         else {
@@ -502,8 +509,12 @@ static void process_next_state (struct job_state_ctx *jsctx, struct job *job)
                 eventlog_inactive_complete (job);
 
             update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-            zlist_remove (job->next_states, st);
+            st->finished = true;
         }
+
+    next:
+        if (st->finished)
+            zlist_remove (job->next_states, st);
     }
 }
 

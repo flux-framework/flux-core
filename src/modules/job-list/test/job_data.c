@@ -277,7 +277,7 @@ struct test_ncores {
     { NULL, NULL, 0, 0 },
 };
 
-static int read_file (const char *filename, void **datap)
+static void read_file (const char *filename, void **datap)
 {
     int fd;
     ssize_t size;
@@ -287,34 +287,32 @@ static int read_file (const char *filename, void **datap)
     /* N.B. read_all() NUL terminates buffer */
     if ((size = read_all (fd, datap)) < 0)
         BAIL_OUT ("failed to read data %s", filename);
-    return fd;
+    close (fd);
 }
 
 static int parse_jobspec (struct job *job, const char *filename)
 {
     char *data;
-    int fd, ret;
+    int ret;
 
-    fd = read_file (filename, (void **)&data);
+    read_file (filename, (void **)&data);
 
     ret = job_parse_jobspec_fatal (job, data);
 
     free (data);
-    close (fd);
     return ret;
 }
 
 static int parse_R (struct job *job, const char *filename)
 {
     char *data;
-    int fd, ret;
+    int ret;
 
-    fd = read_file (filename, (void **)&data);
+    read_file (filename, (void **)&data);
 
     ret = job_parse_R_fatal (job, data);
 
     free (data);
-    close (fd);
     return ret;
 }
 
