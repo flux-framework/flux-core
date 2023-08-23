@@ -2308,6 +2308,140 @@ int flux_jobtap_epilog_finish (flux_plugin_t *p,
                                       status);
 }
 
+int jobtap_job_update (struct jobtap *jobtap,
+                       struct flux_msg_cred cred,
+                       struct job *job,
+                       const char *key,
+                       json_t *value,
+                       int *needs_validation,
+                       char **errp)
+{
+    int rc = -1;
+    char topic[128];
+    int topiclen = sizeof (topic);
+    flux_plugin_arg_t *args = NULL;
+
+    if (snprintf (topic, topiclen, "job.update.%s", key) >= topiclen) {
+        error_asprintf (jobtap, job, errp,
+                        "topic string overflow");
+        return -1;
+    }
+
+    if (!(args = jobtap_args_create (jobtap, job))
+        || flux_plugin_arg_pack (args,
+                                 FLUX_PLUGIN_ARG_IN,
+                                 "{s:{s:I s:I} s:s s:O}",
+                                 "cred",
+                                   "userid", (json_int_t) cred.userid,
+                                   "rolemask", (json_int_t) cred.rolemask,
+                                 "key", key,
+                                 "value", value) < 0
+        || flux_plugin_arg_set (args, FLUX_PLUGIN_ARG_OUT, "{}") < 0) {
+        error_asprintf (jobtap, job, errp,
+                "jobtap_job_update: failed to create args");
+        flux_plugin_arg_destroy (args);
+        return -1;
+    }
+    rc = jobtap_stack_call (jobtap, jobtap->plugins, job, topic, args);
+    if (rc == 0) {
+        /* No plugin handles update of this jobspec key, reject the update.
+         */
+        error_asprintf (jobtap, job, errp, "update of %s not supported", key);
+        rc = -1;
+    }
+    else if (rc < 0) {
+        /* Callback failed, check for provided errmsg */
+        const char *errmsg;
+        if (flux_plugin_arg_unpack (args,
+                                    FLUX_PLUGIN_ARG_OUT,
+                                    "{s:s}",
+                                    "errmsg", &errmsg) < 0) {
+            errmsg = "update rejected by job-manager plugin";
+        }
+        error_asprintf (jobtap, job, errp, "%s", errmsg);
+        errno = EPERM;
+    }
+    else if (rc > 0 && needs_validation != NULL) {
+        /*  Default is to require further validation by calling job.validate
+         *  with the updated jobspec. However, a plugin may note that the
+         *  update is already validated or should bypass validation by
+         *  setting "validated" in the plugin OUT arguments to a nonzero
+         *  value.
+         */
+        int validated = 0;
+        if ((rc = flux_plugin_arg_unpack (args,
+                                          FLUX_PLUGIN_ARG_OUT,
+                                          "{s?i}",
+                                          "validated", &validated) < 0)) {
+            error_asprintf (jobtap,
+                            job,
+                            errp,
+                            "failed to unpack validated flag");
+            fprintf (stderr, "arg unpack failed: %s\n",
+                             flux_plugin_arg_strerror (args));
+            return -1;
+        }
+        *needs_validation = !validated;
+    }
+    flux_plugin_arg_destroy (args);
+    return rc;
+}
+
+int jobtap_validate_updates (struct jobtap *jobtap,
+                             struct job *job,
+                             json_t *updates,
+                             char **errp)
+{
+    int rc = -1;
+    json_t *jobspec_updated = NULL;
+    flux_plugin_arg_t *args = NULL;
+
+    if (!(jobspec_updated = job_jobspec_with_updates (job, updates))) {
+        error_asprintf (jobtap, job, errp, "update: %s", strerror (errno));
+        goto error;
+    }
+
+    /*  Create plugin args, then override jobspec with updated version
+     */
+    if (!(args = jobtap_args_create (jobtap, job))
+        || flux_plugin_arg_pack (args,
+                                 FLUX_PLUGIN_ARG_IN,
+                                 "{s:O}",
+                                 "jobspec", jobspec_updated) < 0) {
+        error_asprintf (jobtap, job, errp, "update: %s",
+                        flux_plugin_arg_strerror (args));
+        goto error;
+    }
+
+    /*  Call validation stack
+     */
+    rc = jobtap_stack_call (jobtap,
+                            jobtap->plugins,
+                            job,
+                            "job.validate",
+                            args);
+
+    if (rc < 0) {
+        const char *errmsg;
+        /*
+         *  Plugin callback failed, check for errmsg for this job
+         *   If plugin did not provide an error message, then construct
+         *   a generic error "rejected by plugin".
+         */
+        if (flux_plugin_arg_unpack (args,
+                                    FLUX_PLUGIN_ARG_OUT,
+                                    "{s:s}",
+                                    "errmsg", &errmsg) < 0)
+                errmsg = "rejected by job-manager plugin";
+        if ((*errp = strdup (errmsg)) == NULL)
+            flux_log (jobtap->ctx->h, LOG_ERR,
+                      "jobtap: validate failed to capture errmsg");
+    }
+error:
+    ERRNO_SAFE_WRAP (json_decref, jobspec_updated);
+    flux_plugin_arg_destroy (args);
+    return rc;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

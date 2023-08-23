@@ -63,6 +63,37 @@ int jobtap_check_dependencies (struct jobtap *jobtap,
                                bool raise_exception,
                                char **errp);
 
+/*  Call `job.update.<key>` callback to verify that a jobspec update of
+ *  'key' to 'value' is allowed. The flux_msg_cred parameter should be set
+ *  to the credentials of the original requestor.
+ *
+ *  Returns an error with 'errp' (Caller must free) set if no plugin is
+ *  registered to handle updates of 'key', or if the callback returned an
+ *  error.
+ *
+ *  If the update needs further validation via `job.validate`, then
+ *  needs_validation will be set nonzero. The caller should be sure to pass
+ *  the updated jobspec to `job.validate` before posting updates to the job
+ *  eventlog.
+ */
+int jobtap_job_update (struct jobtap *jobtap,
+                       struct flux_msg_cred cred,
+                       struct job *job,
+                       const char *key,
+                       json_t *value,
+                       int *needs_validation,
+                       char **errp);
+
+/*  Call the `job.validate` plugin stack, but using an updated jobspec by
+ *  applying 'updates' to 'job'.
+ *
+ *  If validation fails, then this function will return -1 with the error
+ *  set in 'errp' (Caller must free).
+ */
+int jobtap_validate_updates (struct jobtap *jobtap,
+                             struct job *job,
+                             json_t *updates,
+                             char **errp);
 
 /*  Load a new jobtap from `path`. Path may start with `builtin.` to
  *   attempt to load one of the builtin jobtap plugins.
