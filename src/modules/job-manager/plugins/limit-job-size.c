@@ -375,12 +375,6 @@ static int validate_cb (flux_plugin_t *p,
         goto error;
     }
 
-    /* Jobs that have already been accepted must bypass the limits check.
-     * This occurs when Flux is restarted with pending jobs in the KVS.
-     */
-    if (state != FLUX_JOB_STATE_NEW)
-        return 0;
-
     if (jj_get_counts_json (jobspec, &counts) < 0) {
         errprintf (&error, "%s", counts.error);
         goto error;
