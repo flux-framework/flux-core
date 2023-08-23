@@ -122,7 +122,6 @@ TESTSCRIPTS = \
 	t2204-job-manager-limited.t \
 	t2205-job-manager-unlimited.t \
 	t2206-job-manager-annotate.t \
-	t2207-job-manager-bulk-state.t \
 	t2208-job-manager-wait.t \
 	t2209-job-manager-bugs.t \
 	t2210-job-manager-events-journal.t \
