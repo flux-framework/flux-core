@@ -485,6 +485,7 @@ check_LTLIBRARIES = \
 	job-manager/plugins/jobspec-update.la \
 	job-manager/plugins/jobspec-update-job-list.la \
 	job-manager/plugins/update-test.la \
+	job-manager/plugins/project-bank-validate.la \
 	stats/stats-basic.la \
 	stats/stats-immediate.la
 
@@ -1006,6 +1007,7 @@ job_manager_plugins_jobspec_update_job_list_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
 
+
 job_manager_plugins_update_test_la_SOURCES = \
 	job-manager/plugins/update-test.c
 job_manager_plugins_update_test_la_CPPFLAGS = \
@@ -1013,6 +1015,16 @@ job_manager_plugins_update_test_la_CPPFLAGS = \
 job_manager_plugins_update_test_la_LDFLAGS = \
 	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_update_test_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_project_bank_validate_la_SOURCES = \
+	job-manager/plugins/project-bank-validate.c
+job_manager_plugins_project_bank_validate_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_project_bank_validate_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_project_bank_validate_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
 
