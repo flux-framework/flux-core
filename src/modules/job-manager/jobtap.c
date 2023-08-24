@@ -49,6 +49,7 @@ extern int limit_duration_plugin_init (flux_plugin_t *p);
 extern int after_plugin_init (flux_plugin_t *p);
 extern int begin_time_plugin_init (flux_plugin_t *p);
 extern int validate_duration_plugin_init (flux_plugin_t *p);
+extern int update_duration_plugin_init (flux_plugin_t *p);
 extern int history_plugin_init (flux_plugin_t *p);
 
 struct jobtap_builtin {
@@ -63,6 +64,7 @@ static struct jobtap_builtin jobtap_builtins [] = {
     { ".dependency-after", after_plugin_init },
     { ".begin-time", &begin_time_plugin_init },
     { ".validate-duration", &validate_duration_plugin_init },
+    { ".update-duration", &update_duration_plugin_init },
     { ".history", &history_plugin_init },
     { 0 },
 };
