@@ -76,6 +76,24 @@ struct test_jobspec_queue {
     { NULL, 0 },
 };
 
+struct test_jobspec_project_bank {
+    const char *filename;
+    const char *project;
+    const char *bank;
+} jobspec_project_bank_tests[] = {
+    {
+        TEST_SRCDIR "/jobspec/1slot.jobspec",
+        NULL,
+        NULL,
+    },
+    {
+        TEST_SRCDIR "/jobspec/1slot_project_bank.jobspec",
+        "myproject",
+        "mybank",
+    },
+    { NULL, NULL, NULL},
+};
+
 struct test_jobspec_duration {
     const char *filename;
     double duration;
@@ -425,6 +443,47 @@ static void test_jobspec_queue (void)
     }
 }
 
+static void test_jobspec_project_bank (void)
+{
+    struct test_jobspec_project_bank *test;
+
+    test = jobspec_project_bank_tests;
+    while (test->filename) {
+        struct job *job = job_create (NULL, FLUX_JOBID_ANY);
+        const char *filename = test->filename;
+        const char *project = test->project;
+        const char *bank = test->bank;
+        int ret;
+
+        if (!job)
+            BAIL_OUT ("job_create failed");
+
+        ret = parse_jobspec (job, filename);
+        ok (ret == 0, "job_parse_jobspec parsed %s", filename);
+        if (project) {
+            ok (streq (project, job->project),
+                "job_parse_jobspec correctly parsed job project %s=%s",
+                project, job->project);
+        }
+        else {
+            ok (job->project == NULL,
+                "job_parse_jobspec correctly parsed no job project");
+        }
+        if (bank) {
+            ok (streq (bank, job->bank),
+                "job_parse_jobspec correctly parsed job bank %s=%s",
+                bank, job->bank);
+        }
+        else {
+            ok (job->bank == NULL,
+                "job_parse_jobspec correctly parsed no job bank");
+        }
+
+        job_destroy (job);
+        test++;
+    }
+}
+
 static void test_jobspec_duration (void)
 {
     struct test_jobspec_duration *test;
@@ -755,6 +814,7 @@ int main (int argc, char *argv[])
     test_jobspec_job_name ();
     test_jobspec_cwd ();
     test_jobspec_queue ();
+    test_jobspec_project_bank ();
     test_jobspec_duration ();
     test_R_corner_case ();
     test_R_ranks ();

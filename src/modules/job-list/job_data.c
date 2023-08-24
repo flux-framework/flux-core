@@ -197,12 +197,14 @@ static int parse_attributes_dict (struct job *job)
     job->cwd = NULL;
     job->queue = NULL;
     if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:{s?{s?s s?s s:F}}}",
+                        "{s:{s?{s?s s?s s:F s?s s?s}}}",
                         "attributes",
                         "system",
                         "cwd", &job->cwd,
                         "queue", &job->queue,
-                        "duration", &job->duration) < 0) {
+                        "duration", &job->duration,
+                        "project", &job->project,
+                        "bank", &job->bank) < 0) {
         flux_log (job->h, LOG_ERR,
                   "%s: job %s invalid jobspec: %s",
                   __FUNCTION__, idf58 (job->id), error.text);

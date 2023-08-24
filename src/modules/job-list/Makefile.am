@@ -110,6 +110,7 @@ EXTRA_DIST = \
 	test/jobspec/1slot.jobspec \
 	test/jobspec/1slot_4core.jobspec \
 	test/jobspec/1slot_perresourcecore4.jobspec \
+	test/jobspec/1slot_project_bank.jobspec \
 	test/jobspec/4node.jobspec \
 	test/jobspec/4node_1slot_nonexclusive.jobspec \
 	test/jobspec/4node_4slot_nonexclusive.jobspec \
