@@ -45,15 +45,28 @@
 #define STATE_TRANSITION_FLAG_REVERT 0x1
 #define STATE_TRANSITION_FLAG_CONDITIONAL 0x2
 
-struct state_transition {
+typedef enum {
+    JOB_UPDATE_TYPE_STATE_TRANSITION,
+    JOB_UPDATE_TYPE_JOBSPEC_UPDATE,
+} job_update_type_t;
+
+struct job_update {
+    job_update_type_t type;
+
+    /* state transitions */
     flux_job_state_t state;
+    double timestamp;
+    int flags;
+    flux_job_state_t expected_state;
+
+    /* jobspec_update */
+    json_t *jobspec_update_context;
+
+    /* all updates */
     bool processing;            /* indicates we are waiting for
                                  * current update to complete */
     bool finished;              /* indicates we are done, can remove
                                  * from list */
-    double timestamp;
-    int flags;
-    flux_job_state_t expected_state;
 };
 
 static int submit_context_parse (flux_t *h,
@@ -80,10 +93,15 @@ static int memo_update (flux_t *h,
                         struct job *job,
                         json_t *context);
 
-static void process_next_state (struct job_state_ctx *jsctx, struct job *job);
+static void process_updates (struct job_state_ctx *jsctx, struct job *job);
 
 static int journal_process_events (struct job_state_ctx *jsctx,
                                    const flux_msg_t *msg);
+
+static void update_jobspec (struct job_state_ctx *jsctx,
+                            struct job *job,
+                            json_t *context,
+                            bool update_stats);
 
 /* Compare items for sorting in list, priority first (higher priority
  * before lower priority), job id second N.B. zlistx_comparator_fn signature
@@ -279,7 +297,7 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
     struct job_state_ctx *jsctx = flux_future_aux_get (f, "job_state_ctx");
-    struct state_transition *st;
+    struct job_update *updt;
     const char *s;
     void *handle;
 
@@ -291,14 +309,14 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
         goto out;
     }
 
-    if (job_parse_jobspec (job, s) < 0)
+    if (job_parse_jobspec (job, s, job->jobspec_updates) < 0)
         goto out;
 
-    st = zlist_head (job->next_states);
-    assert (st);
-    update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-    st->finished = true;
-    process_next_state (jsctx, job);
+    updt = zlist_head (job->updates);
+    assert (updt);
+    update_job_state_and_list (jsctx, job, updt->state, updt->timestamp);
+    updt->finished = true;
+    process_updates (jsctx, job);
 
 out:
     handle = zlistx_find (jsctx->futures, f);
@@ -329,7 +347,7 @@ static void state_run_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
     struct job_state_ctx *jsctx = flux_future_aux_get (f, "job_state_ctx");
-    struct state_transition *st;
+    struct job_update *updt;
     const char *s;
     void *handle;
 
@@ -344,11 +362,11 @@ static void state_run_lookup_continuation (flux_future_t *f, void *arg)
     if (job_parse_R (job, s) < 0)
         goto out;
 
-    st = zlist_head (job->next_states);
-    assert (st);
-    update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-    st->finished = true;
-    process_next_state (jsctx, job);
+    updt = zlist_head (job->updates);
+    assert (updt);
+    update_job_state_and_list (jsctx, job, updt->state, updt->timestamp);
+    updt->finished = true;
+    process_updates (jsctx, job);
 
 out:
     handle = zlistx_find (jsctx->futures, f);
@@ -390,14 +408,37 @@ static void eventlog_inactive_complete (struct job *job)
     }
 }
 
-static void state_transition_destroy (void *data)
+static void job_update_destroy (void *data)
 {
-    struct state_transition *st = data;
-    if (st) {
+    struct job_update *updt = data;
+    if (updt) {
         int saved_errno = errno;
-        free (st);
+        json_decref (updt->jobspec_update_context);
+        free (updt);
         errno = saved_errno;
     }
+}
+
+static struct job_update *job_update_create (job_update_type_t type)
+{
+    struct job_update *updt = NULL;
+
+    if (!(updt = calloc (1, sizeof (*updt))))
+        return NULL;
+    updt->type = type;
+    updt->processing = false;
+    updt->finished = false;
+    return updt;
+}
+
+static int append_update (struct job *job, struct job_update *updt)
+{
+    if (zlist_append (job->updates, updt) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    zlist_freefn (job->updates, updt, job_update_destroy, true);
+    return 0;
 }
 
 static int add_state_transition (struct job *job,
@@ -406,115 +447,189 @@ static int add_state_transition (struct job *job,
                                  int flags,
                                  flux_job_state_t expected_state)
 {
-    struct state_transition *st = NULL;
+    struct job_update *updt = NULL;
 
     if (!((flags & STATE_TRANSITION_FLAG_REVERT)
           || (flags & STATE_TRANSITION_FLAG_CONDITIONAL))
         && (newstate & job->states_events_mask))
         return 0;
 
-    if (!(st = calloc (1, sizeof (*st))))
+    if (!(updt = job_update_create (JOB_UPDATE_TYPE_STATE_TRANSITION)))
         return -1;
-    st->state = newstate;
-    st->processing = false;
-    st->finished = false;
-    st->timestamp = timestamp;
-    st->flags = flags;
-    st->expected_state = expected_state;
 
-    if (zlist_append (job->next_states, st) < 0) {
-        errno = ENOMEM;
+    updt->state = newstate;
+    updt->timestamp = timestamp;
+    updt->flags = flags;
+    updt->expected_state = expected_state;
+
+    if (append_update (job, updt) < 0)
         goto cleanup;
-    }
-    zlist_freefn (job->next_states, st, state_transition_destroy, true);
 
     job->states_events_mask |= newstate;
     return 0;
 
  cleanup:
-    state_transition_destroy (st);
+    job_update_destroy (updt);
     return -1;
 }
 
-static void process_next_state (struct job_state_ctx *jsctx, struct job *job)
+static int add_jobspec_update (struct job *job, json_t *context)
 {
-    struct state_transition *st;
+    struct job_update *updt = NULL;
 
-    while ((st = zlist_head (job->next_states))
-           && (!st->processing || st->finished)) {
+    if (!(updt = job_update_create (JOB_UPDATE_TYPE_JOBSPEC_UPDATE)))
+        return -1;
 
-        if (st->finished)
-            goto next;
+    updt->jobspec_update_context = json_incref (context);
 
-        if ((st->flags & STATE_TRANSITION_FLAG_REVERT)) {
-            /* only revert if the current state is what is expected */
-            if (job->state == st->expected_state) {
-                job->states_mask &= ~job->state;
-                job->states_mask &= ~st->state;
-                update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-            }
-            else {
-                st->finished = true;
-                goto next;
-            }
-        }
-        else if ((st->flags & STATE_TRANSITION_FLAG_CONDITIONAL)) {
-            /* if current state isn't what we expected, move on */
-            if (job->state != st->expected_state) {
-                st->finished = true;
-                goto next;
-            }
-        }
+    if (append_update (job, updt) < 0)
+        goto cleanup;
 
-        if (st->state == FLUX_JOB_STATE_DEPEND
-            || st->state == FLUX_JOB_STATE_RUN) {
-            flux_future_t *f = NULL;
+    return 0;
 
-            if (st->state == FLUX_JOB_STATE_DEPEND) {
-                /* get initial jobspec */
-                if (!(f = state_depend_lookup (jsctx, job))) {
-                    flux_log_error (jsctx->h, "%s: state_depend_lookup",
-                                    __FUNCTION__);
-                    return;
-                }
-            }
-            else { /* st->state == FLUX_JOB_STATE_RUN */
-                /* get R to get node count, etc. */
-                if (!(f = state_run_lookup (jsctx, job))) {
-                    flux_log_error (jsctx->h, "%s: state_run_lookup",
-                                    __FUNCTION__);
-                    return;
-                }
-            }
+ cleanup:
+    job_update_destroy (updt);
+    return -1;
+}
 
-            if (!zlistx_add_end (jsctx->futures, f)) {
-                flux_log (jsctx->h,
-                          LOG_ERR,
-                          "%s: zlistx_add_end: out of memory",
-                          __FUNCTION__);
-                flux_future_destroy (f);
-                return;
-            }
-
-            st->processing = true;
-            break;
+static void process_state_transition_update (struct job_state_ctx *jsctx,
+                                             struct job *job,
+                                             struct job_update *updt)
+{
+    if ((updt->flags & STATE_TRANSITION_FLAG_REVERT)) {
+        /* only revert if the current state is what is expected */
+        if (job->state == updt->expected_state) {
+            job->states_mask &= ~job->state;
+            job->states_mask &= ~updt->state;
+            update_job_state_and_list (jsctx, job, updt->state, updt->timestamp);
         }
         else {
-            /* FLUX_JOB_STATE_PRIORITY */
-            /* FLUX_JOB_STATE_SCHED */
-            /* FLUX_JOB_STATE_CLEANUP */
-            /* FLUX_JOB_STATE_INACTIVE */
+            updt->finished = true;
+            return;
+        }
+    }
+    else if ((updt->flags & STATE_TRANSITION_FLAG_CONDITIONAL)) {
+        /* if current state isn't what we expected, move on */
+        if (job->state != updt->expected_state) {
+            updt->finished = true;
+            return;
+        }
+    }
 
-            if (st->state == FLUX_JOB_STATE_INACTIVE)
-                eventlog_inactive_complete (job);
+    if (updt->state == FLUX_JOB_STATE_DEPEND
+        || updt->state == FLUX_JOB_STATE_RUN) {
+        flux_future_t *f = NULL;
 
-            update_job_state_and_list (jsctx, job, st->state, st->timestamp);
-            st->finished = true;
+        if (updt->state == FLUX_JOB_STATE_DEPEND) {
+            /* get initial jobspec */
+            if (!(f = state_depend_lookup (jsctx, job))) {
+                flux_log_error (jsctx->h, "%s: state_depend_lookup",
+                                __FUNCTION__);
+                return;
+            }
+        }
+        else { /* updt->state == FLUX_JOB_STATE_RUN */
+            /* get R to get node count, etc. */
+            if (!(f = state_run_lookup (jsctx, job))) {
+                flux_log_error (jsctx->h, "%s: state_run_lookup",
+                                __FUNCTION__);
+                return;
+            }
         }
 
+        if (!zlistx_add_end (jsctx->futures, f)) {
+            flux_log (jsctx->h,
+                      LOG_ERR,
+                      "%s: zlistx_add_end: out of memory",
+                      __FUNCTION__);
+            flux_future_destroy (f);
+            return;
+        }
+
+        updt->processing = true;
+        return;
+    }
+    else {
+        /* FLUX_JOB_STATE_PRIORITY */
+        /* FLUX_JOB_STATE_SCHED */
+        /* FLUX_JOB_STATE_CLEANUP */
+        /* FLUX_JOB_STATE_INACTIVE */
+
+        if (updt->state == FLUX_JOB_STATE_INACTIVE)
+            eventlog_inactive_complete (job);
+
+        update_job_state_and_list (jsctx, job, updt->state, updt->timestamp);
+        updt->finished = true;
+    }
+}
+
+static void update_jobspec (struct job_state_ctx *jsctx,
+                            struct job *job,
+                            json_t *context,
+                            bool update_stats)
+{
+    /* we have not loaded the jobspec yet, save off jobspec updates
+     * for an update after jobspec retrieved
+     */
+    if (!job->jobspec) {
+        if (!job->jobspec_updates)
+            job->jobspec_updates = json_incref (context);
+        else {
+            if (json_object_update (job->jobspec_updates, context) < 0)
+                flux_log (jsctx->h, LOG_INFO,
+                          "%s: job %s failed to update jobspec",
+                          __FUNCTION__, idf58 (job->id));
+        }
+        return;
+    }
+
+    /* jobspec-update has the potential to change the job queue,
+     * remove the queue specific stats and re-add after the update.
+     */
+    if (update_stats)
+        job_stats_remove_queue (jsctx->statsctx, job);
+
+    job_jobspec_update (job, context);
+
+    if (update_stats)
+        job_stats_add_queue (jsctx->statsctx, job);
+}
+
+static void process_jobspec_update (struct job_state_ctx *jsctx,
+                                    struct job *job,
+                                    struct job_update *updt)
+{
+    /* Generally speaking, after a job is running, jobspec-update
+     * events should have no effect.  Note that in some cases,
+     * such as job duration, jobspec-updates can alter a job's
+     * behavior, but it is via an update to R.  In this case, we
+     * elect to not update the job duration seen by the user in
+     * the jobspec.  The effect will be seen changes in R (in this
+     * example, via the job expiration time in R).
+     */
+    if (job->state < FLUX_JOB_STATE_RUN)
+        update_jobspec (jsctx, job, updt->jobspec_update_context, true);
+    updt->finished = true;
+}
+
+static void process_updates (struct job_state_ctx *jsctx, struct job *job)
+{
+    struct job_update *updt;
+
+    while ((updt = zlist_head (job->updates))
+           && (!updt->processing || updt->finished)) {
+
+        if (updt->finished)
+            goto next;
+
+        if (updt->type == JOB_UPDATE_TYPE_STATE_TRANSITION)
+            process_state_transition_update (jsctx, job, updt);
+        else /* updt->type == JOB_UPDATE_TYPE_JOBSPEC_UPDATE */
+            process_jobspec_update (jsctx, job, updt);
+
     next:
-        if (st->finished)
-            zlist_remove (job->next_states, st);
+        if (updt->finished)
+            zlist_remove (job->updates, updt);
     }
 }
 
@@ -634,6 +749,9 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
         else if (streq (name, "clean")) {
             update_job_state (jsctx, job, FLUX_JOB_STATE_INACTIVE, timestamp);
         }
+        else if (streq (name, "jobspec-update")) {
+            update_jobspec (jsctx, job, context, false);
+        }
         else if (streq (name, "flux-restart")) {
             revert_job_state (jsctx, job, timestamp);
         }
@@ -715,7 +833,7 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
     if (flux_kvs_lookup_get (f2, &jobspec) < 0)
         goto done;
 
-    if (job_parse_jobspec (job, jobspec) < 0)
+    if (job_parse_jobspec (job, jobspec, job->jobspec_updates) < 0)
         goto done;
 
     /* eventlog parsing above would not have tracked queue specific
@@ -881,7 +999,7 @@ static int job_transition_state (struct job_state_ctx *jsctx,
                         __FUNCTION__);
         return -1;
     }
-    process_next_state (jsctx, job);
+    process_updates (jsctx, job);
     return 0;
 }
 
@@ -1241,6 +1359,26 @@ static int journal_annotations_event (struct job_state_ctx *jsctx,
     return 0;
 }
 
+static int journal_jobspec_update_event (struct job_state_ctx *jsctx,
+                                         struct job *job,
+                                         json_t *context)
+{
+    if (!context) {
+        flux_log (jsctx->h, LOG_ERR,
+                  "%s: jobspec-update event context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
+        errno = EPROTO;
+        return -1;
+    }
+
+    if (add_jobspec_update (job, context) < 0) {
+        flux_log_error (jsctx->h, "%s: add_jobspec_update", __FUNCTION__);
+        return -1;
+    }
+    process_updates (jsctx, job);
+    return 0;
+}
+
 static int journal_dependency_event (struct job_state_ctx *jsctx,
                                      struct job *job,
                                      const char *cmd,
@@ -1388,6 +1526,10 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
         if (journal_annotations_event (jsctx,
                                        job,
                                        context) < 0)
+            return -1;
+    }
+    else if (streq (name, "jobspec-update")) {
+        if (journal_jobspec_update_event (jsctx, job, context) < 0)
             return -1;
     }
     else if (streq (name, "memo")) {

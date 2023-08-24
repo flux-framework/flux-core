@@ -65,25 +65,28 @@ struct job {
 
     /* cache of job information */
     json_t *jobspec;
+    json_t *jobspec_tasks;
     json_t *R;
     json_t *exception_context;
 
-    /* Track which states we have seen and have completed transition
-     * to.  We do not immediately update to the new state and place
-     * onto a new list until we have retrieved any necessary data
-     * associated to that state.  For example, when the 'depend' state
-     * has been seen, we don't immediately place it on the `pending`
-     * list.  We wait until we've retrieved data such as userid,
-     * urgency, etc.
+    /* All internal changes (most notably job state transitions) are
+     * placed on the updates list.  We do not immediately update to
+     * the new state and place onto a new list until we have retrieved
+     * any necessary data associated to that state.  For example, when
+     * the 'depend' state has been seen, we don't immediately place it
+     * on the `pending` list.  We wait until we've retrieved data such
+     * as userid, urgency, etc.
      *
-     * Track which states we've seen via the states_mask.
-     *
-     * Track states seen via events stream in states_events_mask.
+     * Track which states we have seen and have completed transition
+     * to.  States we've processed via the states_mask and states seen
+     * via events stream in states_events_mask.
      */
-    zlist_t *next_states;
+    zlist_t *updates;
     unsigned int states_mask;
     unsigned int states_events_mask;
     void *list_handle;
+    /* if updates in eventlog before jobspec read from KVS */
+    json_t *jobspec_updates;
 
     int eventlog_seq;           /* last event seq read */
     int submit_version;         /* version number in submit context */
@@ -100,13 +103,21 @@ struct job *job_create (flux_t *h, flux_jobid_t id);
  * - nnodes (if available)
  * - ncores (if possible)
  * - duration
+ *
+ * Optionally pass in "updates", an object with path:value updates to
+ * the jobspec.
  */
-int job_parse_jobspec (struct job *job, const char *s);
+int job_parse_jobspec (struct job *job, const char *s, json_t *updates);
 
 /* identical to above, but all nonfatal errors will return error.
  * Primarily used for testing.
  */
-int job_parse_jobspec_fatal (struct job *job, const char *s);
+int job_parse_jobspec_fatal (struct job *job, const char *s, json_t *updates);
+
+/* Update jobspec with period delimited paths
+ * (i.e. "attributes.system.duration") and value.
+ */
+int job_jobspec_update (struct job *job, json_t *updates);
 
 /* Parse and internally cache R.  Set values for:
  * - expiration

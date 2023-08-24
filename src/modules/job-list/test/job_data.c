@@ -297,7 +297,7 @@ static int parse_jobspec (struct job *job, const char *filename)
 
     read_file (filename, (void **)&data);
 
-    ret = job_parse_jobspec_fatal (job, data);
+    ret = job_parse_jobspec_fatal (job, data, NULL);
 
     free (data);
     return ret;
@@ -627,6 +627,101 @@ static void test_ncores (void)
     }
 }
 
+static void test_jobspec_update (void)
+{
+    struct job *job = job_create (NULL, FLUX_JOBID_ANY);
+    const char *filename = TEST_SRCDIR "/jobspec/1slot.jobspec";
+    char *data;
+    int ret;
+    const char *name = NULL;
+    const char *queue = NULL;
+    const char *tmp = NULL;
+    double duration;
+    json_t *o;
+
+    if (!job)
+        BAIL_OUT ("job_create failed");
+
+    read_file (filename, (void **)&data);
+
+    if (!(o = json_pack ("{s:s s:s s:f s:s}",
+                         "attributes.system.job.name", "foo",
+                         "attributes.system.queue", "bar",
+                         "attributes.system.duration", 42.0,
+                         "dummy", "dummy")))
+        BAIL_OUT ("json_pack failed");
+
+    if (job_parse_jobspec_fatal (job, data, o) < 0)
+        BAIL_OUT ("cannot load basic jobspec");
+
+    json_decref (o);
+
+    ret = json_unpack (job->jobspec,
+                       "{s:{s:{s?{s?s}}}}",
+                       "attributes",
+                       "system",
+                       "job",
+                       "name", &name);
+    ok (ret == 0, "parsed initial jobspec name");
+
+    ret = json_unpack (job->jobspec,
+                       "{s:{s?{s?s s:F}}}",
+                       "attributes",
+                       "system",
+                       "queue", &queue,
+                       "duration", &duration);
+    ok (ret == 0, "parsed initial jobspec queue, duration");
+
+    ok (name && streq (name, "foo"), "initial jobspec name == foo");
+    ok (queue && streq (queue, "bar"), "initial jobspec queue == bar");
+    ok (duration == 42.0, "initial jobspec duration == 42.0");
+
+    ok (job->name && streq (job->name, "foo"), "initial job->name == foo");
+    ok (job->queue && streq (job->queue, "bar"), "initial job->queue == foo");
+    ok (job->duration == 42.0, "initial job->duration == 42.0");
+
+    ret = json_unpack (job->jobspec, "{s:s}", "dummy", &tmp);
+    ok (ret == -1, "job_parse_jobspec does not update non-attributes field");
+
+    ret = job_jobspec_update (job, NULL);
+    ok (ret == 0, "jobspec update jobspec success with no update");
+
+    if (!(o = json_pack ("{s:s s:s s:f}",
+                         "attributes.system.job.name", "monkey",
+                         "attributes.system.queue", "gorilla",
+                         "attributes.system.duration", 100.0)))
+        BAIL_OUT ("json_pack failed");
+    ret = job_jobspec_update (job, o);
+    ok (ret == 0, "jobspec update jobspec");
+    json_decref (o);
+
+    ret = json_unpack (job->jobspec,
+                       "{s:{s?{s?{s?s}}}}",
+                       "attributes",
+                       "system",
+                       "job",
+                       "name", &name);
+    ok (ret == 0, "parsed updated jobspec name");
+
+    ret = json_unpack (job->jobspec,
+                       "{s:{s?{s?s s:F}}}",
+                       "attributes",
+                       "system",
+                       "queue", &queue,
+                       "duration", &duration);
+    ok (ret == 0, "parsed updated jobspec queue, duration");
+
+    ok (name != NULL && streq (name, "monkey"), "jobspec name == monkey");
+    ok (queue != NULL && streq (queue, "gorilla"), "jobspec queue == gorilla");
+    ok (duration == 100.0, "jobspec duration == 100.0");
+
+    ok (job->name && streq (job->name, "monkey"), "job->name == monkey");
+    ok (job->queue && streq (job->queue, "gorilla"), "job->queue == gorilla");
+    ok (job->duration == 100.0, "job->duration == 100.0");
+
+    free (data);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -642,6 +737,7 @@ int main (int argc, char *argv[])
     test_nnodes ();
     test_ntasks ();
     test_ncores ();
+    test_jobspec_update ();
 
     done_testing ();
 }
