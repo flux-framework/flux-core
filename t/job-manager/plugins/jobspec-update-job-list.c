@@ -61,6 +61,13 @@ static int sched_cb (flux_plugin_t *p,
                      flux_plugin_arg_t *args,
                      void *data)
 {
+    static bool updated = false;
+    /* Avoid emitting this jobspec-update event more than once per test.
+     * Note: this means the test plugin will only work for one job without
+     *  reloading the plugin
+     */
+    if (updated)
+        return 0;
     if (flux_jobtap_jobspec_update_pack (p,
                                          "{s:s}",
                                          "attributes.system.queue",
@@ -71,6 +78,7 @@ static int sched_cb (flux_plugin_t *p,
                                      "update failure");
         return -1;
     }
+    updated = true;
     return 0;
 }
 
