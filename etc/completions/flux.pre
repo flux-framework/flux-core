@@ -159,6 +159,29 @@ _flux_cancel()
     return 0
 }
 
+#  flux-update(1) completions
+_flux_update()
+{
+    local cmd=$1
+    OPTS="\
+        -v, --verbose \
+        -n, --dry-run \
+    "
+    if [[ $cur != -* ]]; then
+        #  Attempt to substitute a pending jobid
+        compopt +o filenames
+        pending_jobs=$(flux jobs -f pending -no {id})
+        COMPREPLY=( $(compgen -W "${pending_jobs}" -- "$cur") )
+        return 0
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
 #  flux-mini(1) completions
 _flux_mini()
 {
@@ -1473,6 +1496,9 @@ _flux_core()
         ;;
     watch)
         _flux_watch $subcmd
+        ;;
+    update)
+        _flux_update $subcmd
         ;;
     -*)
         COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )
