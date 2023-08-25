@@ -156,6 +156,7 @@ TESTSCRIPTS = \
 	t2275-job-duration-validator.t \
 	t2276-job-requires.t \
 	t2280-job-memo.t \
+	t2290-job-update.t \
 	t2300-sched-simple.t \
 	t2302-sched-simple-up-down.t \
 	t2303-sched-hello.t \
@@ -484,6 +485,7 @@ check_LTLIBRARIES = \
 	job-manager/plugins/config.la \
 	job-manager/plugins/jobspec-update.la \
 	job-manager/plugins/jobspec-update-job-list.la \
+	job-manager/plugins/update-test.la \
 	stats/stats-basic.la \
 	stats/stats-immediate.la
 
@@ -1002,6 +1004,16 @@ job_manager_plugins_jobspec_update_job_list_la_CPPFLAGS = \
 job_manager_plugins_jobspec_update_job_list_la_LDFLAGS = \
 	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_jobspec_update_job_list_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_update_test_la_SOURCES = \
+	job-manager/plugins/update-test.c
+job_manager_plugins_update_test_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_update_test_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_update_test_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
 
