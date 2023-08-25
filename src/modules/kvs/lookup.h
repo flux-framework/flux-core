@@ -96,7 +96,7 @@ const char *lookup_get_namespace (lookup_t *lh);
  * root_ref will be the root_ref passed in via lookup_create() or the
  * root_ref used from the namespace.  The root_seq is only if the
  * root_ref was from a namespace.  Note that the values are not valid
- * unless the lookup completes (LOOKUP_PROCESS_FINISED).
+ * unless the lookup completes (LOOKUP_PROCESS_FINISHED).
  */
 const char *lookup_get_root_ref (lookup_t *lh);
 int lookup_get_root_seq (lookup_t *lh);

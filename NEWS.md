@@ -587,7 +587,7 @@ Other highlights include:
  * configure.ac: fix error message when running autogen.sh (#4590)
  * job-manager: print better errors on inactive move (#4586)
  * broker: fix use-after-free segfault (#4570)
- * python: uri: use path to current flux executable in lsf resovler (#4559)
+ * python: uri: use path to current flux executable in lsf resolver (#4559)
  * spack: add flux-core container build (#4561)
  * improve signal/noise ratio in systemd journal logs (#4560)
  * flux-mini: improve an error message and documentation for per-resource
