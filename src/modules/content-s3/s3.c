@@ -224,7 +224,7 @@ int s3_put (struct s3_config *cfg,
         S3_put_object (&bucket_ctx,
                        key,
                        size,
-                       NULL, // putPorperties (NULL for none)
+                       NULL, // putProperties (NULL for none)
                        NULL, // requestContext (NULL for synchronous operation)
                        &put_obj_hndl,
                        &ctx);

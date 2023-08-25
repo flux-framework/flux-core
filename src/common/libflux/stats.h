@@ -64,7 +64,7 @@ void flux_stats_timing (flux_t *h, const char *name, double ms);
  */
 void flux_stats_set_period (flux_t *h, double period);
 
-/* Set the prefix to be preprended to all metrics sent from the handle.
+/* Set the prefix to be prepended to all metrics sent from the handle.
  * The prefix has a max limit of 127 characters. The default prefix is
  * flux.{{rank}}.
  */

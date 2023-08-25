@@ -2385,7 +2385,7 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
 
     /*  If job is complete, and we haven't started watching
      *   output eventlog, then start now in case shell.init event
-     *   was never emitted (failure in iniitialization)
+     *   was never emitted (failure in initialization)
      */
     if (streq (name, "complete") && !ctx->output_f)
         attach_output_start (ctx);

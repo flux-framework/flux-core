@@ -228,7 +228,7 @@ void basic_iter_tests (void)
 
     count = 0;
     ok (kvsroot_mgr_iter_roots (krm, count_roots_early_exit_cb, &count) == 0,
-        "kvsroot_mgr_iter_roots works if exitting midway");
+        "kvsroot_mgr_iter_roots works if exiting midway");
 
     ok (count == 1,
         "kvsroot_mgr_iter_roots called callback correct number of times");

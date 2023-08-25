@@ -58,7 +58,7 @@ void fripp_set_agg_period (struct fripp_ctx *ctx, double period);
  */
 bool fripp_enabled (struct fripp_ctx *ctx);
 
-/* Set the prefix to be preprended to all metrics sent from the handle.
+/* Set the prefix to be prepended to all metrics sent from the handle.
  * The prefix has a max limit of 127 characters. The default prefix is
  * flux.{{rank}}.
  */

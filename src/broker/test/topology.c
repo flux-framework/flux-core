@@ -436,7 +436,7 @@ void test_custom (void)
     if (!topo)
         diag ("%s", error.text);
     ok (topo == NULL,
-        "topology_create custom failed with mistmatched topo and host size");
+        "topology_create custom failed with mismatched topo and host size");
 
     topo = topology_create ("custom:", 256, &error);
     topology_hosts_set (NULL);

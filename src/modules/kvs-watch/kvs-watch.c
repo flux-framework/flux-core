@@ -649,11 +649,11 @@ static void watcher_respond (struct ns_monitor *nsm, struct watcher *w)
      * of w->lookups until an unfulfilled future is encountered, so that
      * responses are always returned to the watcher in commit order.
      *
-     * Security note: although the requestor has already been authenticated
+     * Security note: although the requester has already been authenticated
      * to access the namespace by check_authorization() above, we make the
-     * kvs.lookupat request with the requestor's creds, in case the key lookup
+     * kvs.lookupat request with the requester's creds, in case the key lookup
      * traverses to a new namespace.  Leave it up to the KVS module to ensure
-     * the requestor is permitted to access *that* namespace.
+     * the requester is permitted to access *that* namespace.
      *
      * Note on FLUX_KVS_WATCH_FULL: A lookup / comparison is done on every
      * change.

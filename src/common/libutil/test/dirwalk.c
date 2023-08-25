@@ -314,7 +314,7 @@ int main(int argc, char** argv)
                       find_dir,
                       NULL);
     ok (l != NULL && zlist_size (l) == 2,
-        "dirwalk_find FIND_DIR|NORECURSE vists top level directories");
+        "dirwalk_find FIND_DIR|NORECURSE visits top level directories");
     zlist_destroy (&l);
 
     flags = DIRWALK_FIND_DIR;
