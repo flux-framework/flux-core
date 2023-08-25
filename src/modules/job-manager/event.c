@@ -813,6 +813,33 @@ static int event_jobtap_call (struct event *event,
                       name,
                       idf58 (job->id));
 
+    /*
+     *  Notify plugins not subscribed to all events of a jobspec update
+     *  since this is a more common case.
+     *
+     *  This callback should occur before the state transition callback
+     *  below, since jobspec-update will transition a job in SCHED back to
+     *  PRIORITY, and plugins should be notified of the jobspec changes
+     *  *before* the `job.state.priority` callback to allow for adjustment
+     *  of internal state normally established before the first time the
+     *  job.state.priority topic is called.
+     */
+    if (streq (name, "jobspec-update")) {
+        json_t *updates;
+        if (json_unpack (entry, "{s:o}", "context", &updates) < 0) {
+            flux_log (event->ctx->h,
+                      LOG_ERR,
+                      "unable to unpack jobspec-update contexto for %s",
+                      idf58 (job->id));
+            return -1;
+        }
+        (void) jobtap_call (event->ctx->jobtap,
+                            job,
+                            "job.update",
+                            "{s:O}",
+                            "updates", updates);
+    }
+
     if (job->state != old_state) {
         /*
          *  Call plugin callback on state change
