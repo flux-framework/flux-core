@@ -10,6 +10,7 @@ test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer -f asciicast"
+PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
 
 # submit a whole bunch of jobs for job list testing
 #
@@ -1092,6 +1093,61 @@ test_expect_success 'FLUX_JOBS_FORMAT_DEFAULT works with named format' '
 '
 
 #
+# project/name require update to jobs, do these "last" amongst the
+# basic tests to avoid affecting tests as we modify fields.
+#
+
+test_expect_success 'flux-jobs --format={project},{bank} works (initially empty)' '
+	flux jobs --filter=pending -no "{project},{bank}" > jobprojectbankP.out &&
+	for i in `seq 1 $(job_list_state_count sched)`; do
+		echo "," >> jobprojectbankP.exp
+	done &&
+	test_cmp jobprojectbankP.out jobprojectbankP.exp
+'
+
+test_expect_success 'support jobspec updates of project and bank' '
+	flux jobtap load --remove=all ${PLUGINPATH}/project-bank-validate.so
+'
+
+test_expect_success 'update project and bank in pending jobs' '
+	cat sched.ids | while read jobid; do
+		flux update $jobid project=foo
+		flux update $jobid bank=bar
+	done
+'
+
+wait_project_bank_synced() {
+	local i=0
+	while [ "$(flux jobs -f pending -o {project} | grep foo | wc -l)" != "$(job_list_state_count sched)" ] \
+		   && [ $i -lt 50 ]
+	do
+		sleep 0.1
+		i=$((i + 1))
+	done
+	if [ "$i" -eq "50" ]
+	then
+		return 1
+	fi
+	return 0
+}
+
+# can be racy, need to wait until `job-list` module definitely has
+# read from updated journal
+test_expect_success 'flux-jobs --format={project},{bank} works (set)' '
+	wait_project_bank_synced &&
+	flux jobs --filter=pending -no "{project},{bank}" > jobprojectbankP2.out &&
+	for i in `seq 1 $(job_list_state_count sched)`; do
+		echo "foo,bar" >> jobprojectbankP2.exp
+	done &&
+	test_cmp jobprojectbankP2.out jobprojectbankP2.exp
+'
+
+test_expect_success 'remove jobtap plugins' '
+	flux jobtap remove all
+'
+
+
+#
 # format header tests.
 #
 # to add additional tests, simply add a line with custom format and
@@ -1114,6 +1170,8 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	name==NAME
 	cwd==CWD
 	queue==QUEUE
+	project==PROJECT
+	bank==BANK
 	ntasks==NTASKS
 	duration==DURATION
 	nnodes==NNODES
