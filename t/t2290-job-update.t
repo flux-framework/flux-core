@@ -16,6 +16,17 @@ runas_guest() {
         FLUX_HANDLE_USERID=$userid FLUX_HANDLE_ROLEMASK=0x2 "$@"
 }
 
+submit_held_job_as_guest()
+{
+	local duration=$1
+	local userid=$(($(id -u)+1))
+        flux run --dry-run -t $duration true | \
+          flux python ${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py $userid \
+            >job.signed
+        FLUX_HANDLE_USERID=$userid \
+          flux job submit --flags=signed --urgency=0 job.signed
+}
+
 test_expect_success 'flux update requires jobid and keyval args' '
 	test_expect_code 2 flux update 1234 &&
 	test_expect_code 2 flux update
@@ -104,6 +115,35 @@ test_expect_success 'instance owner can adjust duration past limits' '
 	flux job eventlog $jobid \
 		| grep jobspec-update \
 		| grep duration=3600
+'
+test_expect_success FLUX_SECURITY 'guest update of their own job works' '
+	guest_jobid=$(submit_held_job_as_guest 1m) &&
+	runas_guest flux update -v $guest_jobid duration=1m  &&
+	flux job eventlog $guest_jobid \
+		| grep jobspec-update \
+		| grep duration=60
+'
+test_expect_success FLUX_SECURITY 'guest cannot update job duration past limit' '
+	test_expect_code 1 runas_guest flux update -v $guest_jobid duration=1h
+'
+test_expect_success 'instance owner can adjust duration past limits' '
+	flux update $jobid duration=1h &&
+	flux job eventlog $jobid \
+		| grep jobspec-update \
+		| grep duration=3600
+'
+test_expect_success FLUX_SECURITY 'instance owner can adjust guest job duration past limits' '
+	flux update $guest_jobid duration=1h &&
+	flux job eventlog $guest_jobid \
+		| grep jobspec-update \
+		| grep duration=3600
+'
+test_expect_success FLUX_SECURITY 'guest job is now immutable' '
+	test_expect_code 1 runas_guest \
+		flux update -v $guest_jobid duration=1m \
+			2>immutable.err &&
+	test_debug "cat immutable.err" &&
+	grep immutable immutable.err
 '
 test_expect_success 'adjust duration so future tests pass validation' '
 	flux update $jobid duration=1m
