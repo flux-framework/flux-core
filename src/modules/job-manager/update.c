@@ -112,6 +112,41 @@ static int update_job (struct job_manager *ctx,
                                     updates,
                                     errp) < 0)
             return -1;
+
+    /*  If this update was requested by the instance owner, and the
+     *  job owner is not the instance owner, and job validation was
+     *  bypassed (validate != true), then disable future job updates
+     *  as not permitted by marking the job immutable.
+     *
+     *  The reasons for doing this are two-fold:
+     *
+     *  - A future update of an unrelated attribute could fail validation
+     *    due to this attribute update. This could result in a confusing
+     *    error message.
+     *
+     *  - Bypassing validation for individual, previously updated attributes
+     *    could be complex and might open the update process to unintended
+     *    vulnerabilities (e.g. a user update after an instance owner update
+     *    could allow a job access to resources, time limits, etc that are
+     *    not intended for normal users.)
+     */
+    if (!validate
+        && (cred.rolemask & FLUX_ROLE_OWNER)
+        && cred.userid != job->userid) {
+        if (event_job_post_pack (ctx->event,
+                                job,
+                                "set-flags",
+                                0,
+                                "{s:[s]}",
+                                "flags", "immutable") < 0) {
+            if (!(*errp = strdup ("failed to set job immutable flag")))
+                flux_log_error (ctx->h,
+                                "update: set-flags: strdup errmsg failed");
+            return -1;
+        }
+
+    }
+
     /*  All updates have been allowed by plugins and validated as a unit,
      *  so now emit jobspec-update event.
      */
@@ -174,6 +209,10 @@ static void update_handle_request (flux_t *h,
     if (flux_msg_get_cred (msg, &cred) < 0
         || flux_msg_cred_authorize (cred, job->userid) < 0) {
         errstr = "guests may only update their own jobs";
+        goto error;
+    }
+    if (job->immutable && !(cred.rolemask & FLUX_ROLE_OWNER)) {
+        errstr = "job is immutable due to previous instance owner update";
         goto error;
     }
     /*  Process the update request
