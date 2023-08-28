@@ -39,6 +39,17 @@ all updates are either applied or the request fails.
    a case by case basis. At this time, the set of keys that can actually
    be updated for a job may be very limited.
 
+The instance owner may be allowed to update specific attributes of jobs
+and bypass validation checks. For example, the duration of a guest job may
+be increased beyond currently configured limits if the update request is
+performed by the instance owner. When a job is modified in this way, future
+updates to the job by the guest user are denied with an error message::
+
+   job is immutable due to previous instance owner update
+
+This is necessary to prevent possible unintended bypass of limits or
+other checks on a job by a guest.
+
 The flux-update(1) command may also support special handling of values
 for specific keys. Those special cases are documented in the SPECIAL KEYS
 section below.
