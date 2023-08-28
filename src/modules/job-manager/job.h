@@ -46,6 +46,7 @@ struct job {
     uint8_t reattach:1;
     uint8_t eventlog_readonly:1;// job is inactive or invalid
     uint8_t hold_events:1;  // queue events instead of posting immediately
+    uint8_t immutable:1;    // user job updates are disabled
 
     uint8_t perilog_active; // if nonzero, prolog/epilog active
 

@@ -112,6 +112,10 @@ static int job_flag_set_internal (struct job *job,
         if (!dry_run)
             job->flags |= FLUX_JOB_DEBUG;
     }
+    else if (streq (flag, "immutable")) {
+        if (!dry_run)
+            job->immutable = 1;
+    }
     else {
         errno = EINVAL;
         return -1;
