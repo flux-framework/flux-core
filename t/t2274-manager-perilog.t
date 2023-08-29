@@ -105,6 +105,25 @@ test_expect_success 'perilog: failed ranks generate useful error messages' '
 	undrain_all
 
 '
+test_expect_success 'perilog: can be run with timeout' '
+	cat <<-EOF >fail-timeout.sh &&
+	#!/bin/sh
+	if test \$(flux getattr rank) -eq \$1; then
+		sleep 120
+	fi
+	EOF
+	chmod +x fail-timeout.sh &&
+	(export FLUX_JOB_ID=${jobid} &&
+	 test_expect_code 143 flux perilog-run prolog --timeout=1s \
+		-ve./fail-timeout.sh,1 \
+		>fail-timeout.out 2>&1
+	) &&
+	test_debug "cat fail-timeout.out" &&
+	flux resource drain &&
+	test "$(drained_ranks)" = "1" &&
+	grep "timeout" fail-timeout.out &&
+	undrain_all
+'
 test_expect_success 'perilog: load perilog.so plugin' '
 	flux jobtap load perilog.so
 '
