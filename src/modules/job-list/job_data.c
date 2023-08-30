@@ -112,6 +112,8 @@ static int parse_jobspec_job_name (struct job *job,
             return -1;
         }
     }
+    else
+        job->name = NULL;
 
     /* If user did not specify job.name, we treat arg 0 of the command
      * as the job name */
@@ -189,6 +191,11 @@ static int parse_attributes_dict (struct job *job)
         return -1;
 
     /* N.B. attributes.system.duration is required in jobspec version 1 */
+    /* N.B. cwd & queue are optional, reset to NULL before parse in case
+     * not listed
+     */
+    job->cwd = NULL;
+    job->queue = NULL;
     if (json_unpack_ex (job->jobspec, &error, 0,
                         "{s:{s?{s?s s?s s:F}}}",
                         "attributes",
@@ -212,6 +219,8 @@ static int parse_jobspec_nnodes (struct job *job, struct jj_counts *jj)
      */
     if (jj->nnodes > 0)
         job->nnodes = jj->nnodes;
+    else
+        job->nnodes = -1;
 
     return 0;
 }
@@ -283,6 +292,7 @@ static int parse_jobspec_ntasks (struct job *job, struct jj_counts *jj)
                  * R has been retrieved.
                  */
                 job->ntasks_per_core_on_node_count = count;
+                job->ntasks = -1;
             }
             return 0;
         }
@@ -301,8 +311,10 @@ static int parse_jobspec_ncores (struct job *job, struct jj_counts *jj)
 {
     /* number of cores can't be determined yet, calculate later when R
      * is parsed */
-    if (jj->nnodes > 0 && jj->exclusive)
+    if (jj->nnodes > 0 && jj->exclusive) {
+        job->ncores = -1;
         return 0;
+    }
 
     /* nslots already accounts for nnodes if available */
     job->ncores = jj->nslots * jj->slot_size;
