@@ -10,6 +10,7 @@
 
 import argparse
 import asyncio
+import itertools
 import logging
 import os
 import signal
@@ -52,6 +53,40 @@ def process_create(cmd, stderr=None):
     return subprocess.Popen(cmd, preexec_fn=unblock_signals, stderr=stderr)
 
 
+async def get_children(pid):
+    """
+    Return a best effort list of pid and all current descendants
+    """
+    result = [pid]
+    p = await asyncio.create_subprocess_exec(
+        "ps", "-o", "pid=", f"--ppid={pid}", stdout=subprocess.PIPE
+    )
+    output, errors = await p.communicate()
+    if output is None:
+        # No children found at this time, just return [pid]:
+        return result
+    # Parse ps(1) output into list of child pids:
+    pids = [int(x) for x in output.decode().splitlines()]
+
+    # Call this function recursively for all children and wait for results:
+    futures = [get_children(pid) for pid in pids]
+    children = await asyncio.gather(*futures)
+
+    # Extend results with all current descendants:
+    result.extend(itertools.chain(pids, *children))
+    return result
+
+
+async def kill_process_tree(parent_pid, sig):
+    """
+    Send sig to entire process tree rooted at parent_pid
+    """
+    # Iterate the list in reverse so that parent_pid comes last and
+    # (for the most part) children are signaled before their parent:
+    for pid in reversed(await get_children(parent_pid)):
+        os.kill(pid, sig)
+
+
 async def run_with_timeout(cmd, label, timeout=1800.0):
     """
     Run a command with a timeout using asyncio. Default timeout is 30m
@@ -66,12 +101,12 @@ async def run_with_timeout(cmd, label, timeout=1800.0):
     except asyncio.TimeoutError:
         #  On timeout, mark and cancel process and wait for 5 seconds before
         #  sending SIGKILL:
+        await kill_process_tree(p.pid, signal.SIGTERM)
         p.canceled = True
-        p.terminate()
         try:
             stdout, stderr = await asyncio.wait_for(p.communicate(), 5.0)
         except asyncio.TimeoutError:
-            p.kill()
+            await kill_process_tree(p.pid, signal.SIGKILL)
             stdout, stderr = await p.communicate()
     p.errors = stderr.decode("utf8", errors="surrogateescape").splitlines()
     await p.wait()
