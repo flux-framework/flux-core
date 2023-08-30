@@ -470,17 +470,26 @@ int job_jobspec_update (struct job *job, json_t *updates)
     if (!updates)
         return 0;
 
+    /* To be on safe side, we should probably copy job->jobspec and
+     * only apply updates if they succeed and are parsed.  However, we
+     * don't do that given low odds of invalid updates ever happening.
+     */
     json_object_foreach (updates, key, value) {
-        /* RFC 21 jobspec-update event keys must start with "attributes."
-         * Reject update events with keys that violate the RFC.
+        /* In jobspec V1 only valid keys in a jobspec are resources,
+         * tasks, and attributes
          */
-        if (!strstarts (key, "attributes.")
+        if ((!streq (key, "resources")
+             && !strstarts (key, "resources.")
+             && !streq (key, "tasks")
+             && !strstarts (key, "tasks.")
+             && !streq (key, "attributes")
+             && !strstarts (key, "attributes."))
             || jpath_set (job->jobspec, key, value) < 0)
             flux_log (job->h, LOG_INFO,
                       "%s: job %s failed to update jobspec key %s",
                       __FUNCTION__, idf58 (job->id), key);
     }
-    return parse_attributes_dict (job);
+    return parse_jobspec (job, false);
 }
 
 /*

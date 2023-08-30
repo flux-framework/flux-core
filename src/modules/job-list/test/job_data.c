@@ -633,6 +633,7 @@ static void test_jobspec_update (void)
     const char *filename = TEST_SRCDIR "/jobspec/1slot.jobspec";
     char *data;
     int ret;
+    const char *command = NULL;
     const char *name = NULL;
     const char *queue = NULL;
     const char *tmp = NULL;
@@ -644,7 +645,12 @@ static void test_jobspec_update (void)
 
     read_file (filename, (void **)&data);
 
-    if (!(o = json_pack ("{s:s s:s s:f s:s}",
+    if (!(o = json_pack ("{s:[{s:[s] s:s s:{s:i}}] s:s s:s s:f s:s}",
+                         "tasks",
+                           "command", "ls",
+                           "slot", "task",
+                           "count",
+                             "per_slot", 1,
                          "attributes.system.job.name", "foo",
                          "attributes.system.queue", "bar",
                          "attributes.system.duration", 42.0,
@@ -655,6 +661,12 @@ static void test_jobspec_update (void)
         BAIL_OUT ("cannot load basic jobspec");
 
     json_decref (o);
+
+    ret = json_unpack (job->jobspec,
+                       "{s:[{s:[s]}]}",
+                       "tasks",
+                         "command", &command);
+    ok (ret == 0, "parsed initial jobspec command");
 
     ret = json_unpack (job->jobspec,
                        "{s:{s:{s?{s?s}}}}",
@@ -672,6 +684,7 @@ static void test_jobspec_update (void)
                        "duration", &duration);
     ok (ret == 0, "parsed initial jobspec queue, duration");
 
+    ok (command && streq (command, "ls"), "initial jobspec command == ls");
     ok (name && streq (name, "foo"), "initial jobspec name == foo");
     ok (queue && streq (queue, "bar"), "initial jobspec queue == bar");
     ok (duration == 42.0, "initial jobspec duration == 42.0");
@@ -681,12 +694,17 @@ static void test_jobspec_update (void)
     ok (job->duration == 42.0, "initial job->duration == 42.0");
 
     ret = json_unpack (job->jobspec, "{s:s}", "dummy", &tmp);
-    ok (ret == -1, "job_parse_jobspec does not update non-attributes field");
+    ok (ret == -1, "job_parse_jobspec does not set non jobspec field");
 
     ret = job_jobspec_update (job, NULL);
     ok (ret == 0, "jobspec update jobspec success with no update");
 
-    if (!(o = json_pack ("{s:s s:s s:f}",
+    if (!(o = json_pack ("{s:[{s:[s] s:s s:{s:i}}] s:s s:s s:f}",
+                         "tasks",
+                           "command", "uptime",
+                           "slot", "task",
+                           "count",
+                             "per_slot", 1,
                          "attributes.system.job.name", "monkey",
                          "attributes.system.queue", "gorilla",
                          "attributes.system.duration", 100.0)))
@@ -694,6 +712,12 @@ static void test_jobspec_update (void)
     ret = job_jobspec_update (job, o);
     ok (ret == 0, "jobspec update jobspec");
     json_decref (o);
+
+    ret = json_unpack (job->jobspec,
+                       "{s:[{s:[s]}]}",
+                       "tasks",
+                         "command", &command);
+    ok (ret == 0, "parsed updated jobspec command");
 
     ret = json_unpack (job->jobspec,
                        "{s:{s?{s?{s?s}}}}",
@@ -711,6 +735,7 @@ static void test_jobspec_update (void)
                        "duration", &duration);
     ok (ret == 0, "parsed updated jobspec queue, duration");
 
+    ok (command != NULL && streq (command, "uptime"), "jobspec command == uptime");
     ok (name != NULL && streq (name, "monkey"), "jobspec name == monkey");
     ok (queue != NULL && streq (queue, "gorilla"), "jobspec queue == gorilla");
     ok (duration == 100.0, "jobspec duration == 100.0");
