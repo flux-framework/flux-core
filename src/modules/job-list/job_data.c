@@ -504,6 +504,29 @@ int job_jobspec_update (struct job *job, json_t *updates)
     return parse_jobspec (job, false);
 }
 
+int job_R_update (struct job *job, json_t *updates)
+{
+    const char *key;
+    json_t *value;
+
+    if (!updates)
+        return 0;
+
+    json_object_foreach (updates, key, value) {
+        /* RFC 21 resource-update event only allows update
+         * to:
+         * - expiration
+         */
+        if (streq (key, "expiration"))
+            if (jpath_set (job->R, "execution.expiration", value) < 0)
+                flux_log (job->h, LOG_INFO,
+                          "%s: job %s failed to update R key %s",
+                          __FUNCTION__, idf58 (job->id), key);
+    }
+
+    return parse_R (job, false);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

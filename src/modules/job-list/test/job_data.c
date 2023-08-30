@@ -806,6 +806,61 @@ static void test_jobspec_update (void)
     free (data);
 }
 
+static void test_R_update (void)
+{
+    struct job *job = job_create (NULL, FLUX_JOBID_ANY);
+    const char *filename = TEST_SRCDIR "/R/1node_1core.R";
+    char *data;
+    int ret;
+    double expiration;
+    const char *tmp = NULL;
+    json_t *o;
+
+    if (!job)
+        BAIL_OUT ("job_create failed");
+
+    read_file (filename, (void **)&data);
+
+    if (job_parse_R (job, data) < 0)
+        BAIL_OUT ("cannot load basic R");
+
+    ret = json_unpack (job->R,
+                       "{s:{s:F}}",
+                       "execution",
+                       "expiration", &expiration);
+    ok (ret == 0, "parsed initial R expiration");
+
+    ok (expiration == 0.0, "initial R expiration == 0.0");
+    ok (job->expiration == 0.0, "initial job->expiration == 0.0");
+
+    ret = job_R_update (job, NULL);
+    ok (ret == 0, "job_R_update success with no update");
+
+    if (!(o = json_pack ("{s:f s:s}",
+                         "expiration", 100.0,
+                         "dummy", "dummy")))
+        BAIL_OUT ("json_pack failed");
+    ret = job_R_update (job, o);
+    ok (ret == 0, "job_R_update");
+    json_decref (o);
+
+    ret = json_unpack (job->R,
+                       "{s:{s:F}}",
+                       "execution",
+                       "expiration", &expiration);
+    ok (ret == 0, "parsed updated R expiration");
+
+    ok (expiration == 100.0, "R expiration == 100.0");
+    ok (job->expiration == 100.0, "job->expiration == 100.0");
+
+    ret = json_unpack (job->R, "{s?s}", "dummy", &tmp);
+    ok (ret == 0, "parsed updated R dummy");
+
+    ok (tmp == NULL, "R not updated with illegal update key");
+
+    free (data);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -823,6 +878,7 @@ int main (int argc, char *argv[])
     test_ntasks ();
     test_ncores ();
     test_jobspec_update ();
+    test_R_update ();
 
     done_testing ();
 }

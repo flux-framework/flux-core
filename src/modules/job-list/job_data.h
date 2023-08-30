@@ -134,6 +134,11 @@ int job_parse_R (struct job *job, const char *s);
  */
 int job_parse_R_fatal (struct job *job, const char *s);
 
+/* Update R with RFC21 defined keys
+ * (i.e. "expiration") and value.
+ */
+int job_R_update (struct job *job, json_t *updates);
+
 #endif /* ! _FLUX_JOB_LIST_JOB_DATA_H */
 
 /*
