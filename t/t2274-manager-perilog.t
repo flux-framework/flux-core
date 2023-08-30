@@ -64,6 +64,15 @@ test_expect_success 'perilog: perilog-run fails if any local script fails' '
 	) &&
 	rm -f prolog.d/fail.sh
 '
+test_expect_success 'perilog: perilog-run timeout works with local scripts' '
+	printf "#!/bin/sh\nsleep 60" >prolog.d/timeout.sh &&
+	chmod +x prolog.d/timeout.sh &&
+	( export FLUX_JOB_ID=f1 &&
+	  test_expect_code 143 \
+	    flux perilog-run prolog --timeout=0.5s -vv -d prolog.d
+	) &&
+	rm -f prolog.d/timeout.sh
+'
 test_expect_success 'perilog: perilog-run --exec-per-rank works' '
 	jobid=$(flux submit -n4 -N4 true) &&
 	flux job wait-event $jobid alloc &&
