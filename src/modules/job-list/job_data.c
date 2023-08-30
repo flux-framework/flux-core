@@ -309,17 +309,22 @@ static int parse_jobspec_ncores (struct job *job, struct jj_counts *jj)
     return 0;
 }
 
-static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
+static int load_jobspec (struct job *job, const char *s, bool allow_nonfatal)
 {
-    struct jj_counts jj;
     json_error_t error;
 
     if (!(job->jobspec = json_loads (s, 0, &error))) {
         flux_log (job->h, LOG_ERR,
                   "%s: job %s invalid jobspec: %s",
                   __FUNCTION__, idf58 (job->id), error.text);
-        goto nonfatal_error;
+        return allow_nonfatal ? 0 : -1;
     }
+    return 0;
+}
+
+static int parse_jobspec (struct job *job, bool allow_nonfatal)
+{
+    struct jj_counts jj;
 
     if (parse_attributes_dict (job) < 0)
         goto nonfatal_error;
@@ -350,14 +355,18 @@ nonfatal_error:
 
 int job_parse_jobspec (struct job *job, const char *s, json_t *updates)
 {
-    if (parse_jobspec (job, s, true) < 0)
+    if (load_jobspec (job, s, true) < 0)
+        return -1;
+    if (parse_jobspec (job, true) < 0)
         return -1;
     return job_jobspec_update (job, updates);
 }
 
 int job_parse_jobspec_fatal (struct job *job, const char *s, json_t *updates)
 {
-    if (parse_jobspec (job, s, false) < 0)
+    if (load_jobspec (job, s, false) < 0)
+        return -1;
+    if (parse_jobspec (job, false) < 0)
         return -1;
     return job_jobspec_update (job, updates);
 }
