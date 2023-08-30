@@ -48,11 +48,6 @@ def unblock_signals():
     signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM, signal.SIGINT})
 
 
-def process_create(cmd, stderr=None):
-    # pylint: disable=subprocess-popen-preexec-fn
-    return subprocess.Popen(cmd, preexec_fn=unblock_signals, stderr=stderr)
-
-
 async def get_children(pid):
     """
     Return a best effort list of pid and all current descendants
