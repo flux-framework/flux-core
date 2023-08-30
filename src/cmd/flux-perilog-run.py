@@ -228,25 +228,23 @@ async def run_scripts(name, jobid, args):
     return returncode
 
 
-def run(name, jobid, args):
-    loop = asyncio.get_event_loop()
-    returncode = loop.run_until_complete(run_scripts(name, jobid, args))
-    if returncode != 0:
-        sys.exit(returncode)
-
+async def run(name, jobid, args):
+    tasks = [run_scripts(name, jobid, args)]
     if args.exec_per_rank:
-        loop = asyncio.get_event_loop()
-        returncode = loop.run_until_complete(run_per_rank(name, jobid, args))
-        if returncode != 0:
-            sys.exit(returncode)
+        tasks.append(run_per_rank(name, jobid, args))
+    sys.exit(max(await asyncio.gather(*tasks)))
+
+
+def run_perilog(name, jobid, args):
+    asyncio.get_event_loop().run_until_complete(run(name, jobid, args))
 
 
 def run_prolog(jobid, args):
-    run("prolog", jobid, args)
+    run_perilog("prolog", jobid, args)
 
 
 def run_epilog(jobid, args):
-    run("epilog", jobid, args)
+    run_perilog("epilog", jobid, args)
 
 
 LOGGER = logging.getLogger("flux-perilog-run")
