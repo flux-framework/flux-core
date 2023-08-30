@@ -756,7 +756,7 @@ static void test_jobspec_update (void)
     ok (ret == -1, "job_parse_jobspec does not set non jobspec field");
 
     ret = job_jobspec_update (job, NULL);
-    ok (ret == 0, "jobspec update jobspec success with no update");
+    ok (ret == 0, "job_jobspec_update success with no update");
 
     if (!(o = json_pack ("{s:[{s:[s] s:s s:{s:i}}] s:s s:s s:f}",
                          "tasks",
@@ -769,7 +769,7 @@ static void test_jobspec_update (void)
                          "attributes.system.duration", 100.0)))
         BAIL_OUT ("json_pack failed");
     ret = job_jobspec_update (job, o);
-    ok (ret == 0, "jobspec update jobspec");
+    ok (ret == 0, "job_jobspec_update");
     json_decref (o);
 
     ret = json_unpack (job->jobspec,
