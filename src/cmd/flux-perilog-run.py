@@ -150,7 +150,7 @@ async def run_per_rank(name, jobid, args):
     return returncode
 
 
-def run_scripts(name, jobid, args):
+async def run_scripts(name, jobid, args):
     """Run a directory of scripts in parallel"""
 
     returncode = 0
@@ -172,22 +172,30 @@ def run_scripts(name, jobid, args):
             len(scripts),
             args.exec_directory,
         )
-    processes = {cmd: process_create([cmd]) for cmd in scripts}
+    processes = [
+        run_with_timeout([str(cmd)], cmd.name, args.timeout) for cmd in scripts
+    ]
+    results = await asyncio.gather(*processes)
 
-    for cmd in scripts:
-        rc = processes[cmd].wait()
-        if rc != 0:
-            if rc > returncode:
-                returncode = rc
+    for proc in results:
+        rc = proc.returncode
+        cmd = proc.label
+        if proc.canceled:
+            LOGGER.error("%s: %s timeout", jobid, cmd)
+            rc = 128 + signal.SIGTERM
+        elif rc != 0:
             LOGGER.error("%s: %s failed with rc=%d", jobid, cmd, rc)
         elif args.verbose:
             LOGGER.info("%s: %s completed successfully", jobid, cmd)
+        if rc > returncode:
+            returncode = rc
 
     return returncode
 
 
 def run(name, jobid, args):
-    returncode = run_scripts(name, jobid, args)
+    loop = asyncio.get_event_loop()
+    returncode = loop.run_until_complete(run_scripts(name, jobid, args))
     if returncode != 0:
         sys.exit(returncode)
 
