@@ -589,6 +589,104 @@ static void test_event_queue (void)
     job_decref (job);
 }
 
+static void test_jobspec_update (void)
+{
+    struct job *job;
+    flux_error_t error;
+    const char *command;
+    const char *queue;
+    json_t *o;
+    json_t *cpy;
+    int ret;
+
+    /* corner cases */
+
+    if (!(o = json_pack ("{s:s}", "dummy", "dummy")))
+        BAIL_OUT ("failed to create update");
+
+    ok (validate_jobspec_updates (o) == false,
+        "validate_jobspec_updates fails on bad update keys");
+
+    json_decref (o);
+
+    if (!(job = job_create()))
+        BAIL_OUT ("failed to create empty job");
+
+    ret = job_apply_jobspec_updates (job, NULL);
+    ok (ret == -1 && errno == EINVAL,
+        "job_apply_jobspec_updates fail on job with no jobspec");
+
+    cpy = job_jobspec_with_updates (job, NULL);
+    ok (cpy == NULL && errno == EAGAIN,
+        "job_jobspec_with_updates fail on job with no jobspec");
+
+    job_decref (job);
+
+    /* functional tests */
+
+    if (!(job = job_create_from_eventlog (1234, test_input[0], "{}", &error)))
+        BAIL_OUT ("failed to create job w/ empty jobspec");
+
+    if (!(o = json_pack ("{s:[{s:[s]}] s:s}",
+                         "tasks",
+                           "command", "hostname",
+                         "attributes.system.queue", "foo")))
+        BAIL_OUT ("failed to create update");
+
+    ok (validate_jobspec_updates (o) == true,
+        "validate_jobspec_updates success update keys");
+
+    ok (job->queue == NULL, "job->queue NULL before update");
+
+    ret = job_apply_jobspec_updates (job, o);
+    ok (ret == 0, "job_apply_jobspec_updates success");
+    json_decref (o);
+
+    ret = json_unpack (job->jobspec_redacted,
+                       "{s:[{s:[s]}]}",
+                       "tasks",
+                         "command", &command);
+    ok (ret == 0, "parsed jobspec command");
+    ok (command && streq (command, "hostname"),
+        "jobspec command updated correctly");
+
+    ret = json_unpack (job->jobspec_redacted,
+                       "{s:{s:{s:s}}}",
+                       "attributes",
+                         "system",
+                           "queue", &queue);
+    ok (ret == 0, "parsed jobspec queue");
+    ok (queue && streq (queue, "foo"),
+        "jobspec queue updated correctly");
+
+    ok (job->queue && streq (job->queue, "foo"), "job->queue=foo after update");
+
+    if (!(o = json_pack ("{s:s}", "attributes.system.queue", "bar")))
+        BAIL_OUT ("failed to create update");
+
+    cpy = job_jobspec_with_updates (job, o);
+    ok (cpy != NULL, "job_jobspec_with_updates success");
+
+    ret = json_unpack (cpy,
+                       "{s:{s:{s:s}}}",
+                       "attributes",
+                         "system",
+                           "queue", &queue);
+    ok (ret == 0, "parsed jobspec queue in cpy");
+    ok (queue && streq (queue, "bar"), "jobspec cpy has updated queue");
+    json_decref (cpy);
+
+    ret = json_unpack (job->jobspec_redacted,
+                       "{s:{s:{s:s}}}",
+                       "attributes",
+                         "system",
+                           "queue", &queue);
+    ok (ret == 0, "parsed jobspec queue in original");
+    ok (queue && streq (queue, "foo"), "job jobspec not modified");
+
+    job_decref (job);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -599,6 +697,7 @@ int main (int argc, char *argv[])
     test_subscribe ();
     test_event_id_cache ();
     test_event_queue ();
+    test_jobspec_update ();
 
     done_testing ();
 }
