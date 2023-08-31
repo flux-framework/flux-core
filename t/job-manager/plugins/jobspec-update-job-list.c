@@ -43,17 +43,52 @@ static int depend_cb (flux_plugin_t *p,
                       flux_plugin_arg_t *args,
                       void *data)
 {
+    json_t *o = NULL;
+    json_t *jobspec_tasks = NULL;
+    json_t *task;
+    json_t *command;
+    json_t *new_command = NULL;
+    int rc = -1;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:{s:o}}",
+                                "jobspec",
+                                  "tasks", &o) < 0) {
+        flux_jobtap_raise_exception (p,
+                                     FLUX_JOBTAP_CURRENT_JOB,
+                                     "jobspec-update", 0,
+                                     "cannot read jobspec");
+        goto cleanup;
+    }
+
+    if (!(jobspec_tasks = json_deep_copy (o))
+        || !(task = json_array_get (jobspec_tasks, 0))
+        || !(command = json_object_get (task, "command"))
+        || !(new_command = json_string ("hostname"))
+        || json_array_set (command, 0, new_command) < 0) {
+        flux_jobtap_raise_exception (p,
+                                     FLUX_JOBTAP_CURRENT_JOB,
+                                     "jobspec-update", 0,
+                                     "cannot update jobspec tasks");
+        goto cleanup;
+    }
+
     if (flux_jobtap_jobspec_update_pack (p,
-                                         "{s:s}",
-                                         "attributes.system.job.name",
-                                         "updatename") < 0) {
+                                         "{s:O}",
+                                         "tasks", jobspec_tasks) < 0) {
         flux_jobtap_raise_exception (p,
                                      FLUX_JOBTAP_CURRENT_JOB,
                                      "jobspec-update", 0,
                                      "update failure");
-        return -1;
+        goto cleanup;
     }
-    return 0;
+
+    rc = 0;
+cleanup:
+    json_decref (jobspec_tasks);
+    json_decref (new_command);
+    return rc;
 }
 
 static int sched_cb (flux_plugin_t *p,
