@@ -43,7 +43,6 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/errno_safe.h"
-#include "src/common/libutil/jpath.h"
 #include "src/common/libjob/idf58.h"
 #include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
@@ -553,17 +552,11 @@ static int event_handle_dependency (struct job *job,
  */
 static int event_handle_jobspec_update (struct job *job, json_t *context)
 {
-    const char *path;
-    json_t *val;
-
     if (!job->jobspec_redacted
         || job->state == FLUX_JOB_STATE_RUN
-        || job->state == FLUX_JOB_STATE_CLEANUP)
+        || job->state == FLUX_JOB_STATE_CLEANUP
+        || job_apply_jobspec_updates (job, context) < 0)
         return -1;
-    json_object_foreach (context, path, val) {
-        if (jpath_set (job->jobspec_redacted, path, val) < 0)
-            return -1;
-    }
     return 0;
 }
 
@@ -675,6 +668,13 @@ int event_job_update (struct job *job, json_t *event)
     else if (streq (name, "jobspec-update")) {
         if (event_handle_jobspec_update (job, context) < 0)
             goto inval;
+        /*  Transition a job in SCHED state back to PRIORITY to trigger
+         *  possible recalculation of job priority, update scheduler with
+         *  new jobspec, etc. Job will transition back to SCHED after a
+         *  priority is assigned.
+         */
+        if (job->state == FLUX_JOB_STATE_SCHED)
+            job->state = FLUX_JOB_STATE_PRIORITY;
     }
     else if (strstarts (name, "dependency-")) {
         if (job->state == FLUX_JOB_STATE_DEPEND
@@ -812,6 +812,33 @@ static int event_jobtap_call (struct event *event,
                       "jobtap: event.%s callback failed for job %s",
                       name,
                       idf58 (job->id));
+
+    /*
+     *  Notify plugins not subscribed to all events of a jobspec update
+     *  since this is a more common case.
+     *
+     *  This callback should occur before the state transition callback
+     *  below, since jobspec-update will transition a job in SCHED back to
+     *  PRIORITY, and plugins should be notified of the jobspec changes
+     *  *before* the `job.state.priority` callback to allow for adjustment
+     *  of internal state normally established before the first time the
+     *  job.state.priority topic is called.
+     */
+    if (streq (name, "jobspec-update")) {
+        json_t *updates;
+        if (json_unpack (entry, "{s:o}", "context", &updates) < 0) {
+            flux_log (event->ctx->h,
+                      LOG_ERR,
+                      "unable to unpack jobspec-update contexto for %s",
+                      idf58 (job->id));
+            return -1;
+        }
+        (void) jobtap_call (event->ctx->jobtap,
+                            job,
+                            "job.update",
+                            "{s:O}",
+                            "updates", updates);
+    }
 
     if (job->state != old_state) {
         /*

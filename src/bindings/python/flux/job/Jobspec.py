@@ -533,12 +533,29 @@ class Jobspec(object):
         files[path] = Fileref(data, perms=perms, encoding=encoding)
         self.jobspec["attributes"]["system"]["files"] = files
 
-    def setattr(self, key, val):
+    def getattr(self, key):
+        """
+        get attribute from jobspec using dotted key notation, e.g.
+        system.duration or optionally attributes.system.duration.
 
+        Raises KeyError if a component of key does not exist.
+        """
+        if not key.startswith("attributes."):
+            key = "attributes." + key
+        value = self.jobspec
+        for attr in key.split("."):
+            value = value.get(attr)
+            if value is None:
+                raise KeyError
+        return value
+
+    def setattr(self, key, val):
         """
         set job attribute
         """
-        set_treedict(self.jobspec, "attributes." + key, val)
+        if not key.startswith("attributes."):
+            key = "attributes." + key
+        set_treedict(self.jobspec, key, val)
 
     def setattr_shell_option(self, key, val):
         """

@@ -247,9 +247,6 @@ static int validate_cb (flux_plugin_t *p,
         goto error;
     }
 
-    if (state != FLUX_JOB_STATE_NEW) // flux restart or plugin reload
-        return 0;
-
     if (check_limit (ctx, duration, queue, &error) < 0)
         goto error;
 

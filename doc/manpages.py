@@ -68,6 +68,7 @@ man_pages = [
     ('man1/flux', 'flux', 'the Flux resource management framework', [author], 1),
     ('man1/flux-shell', 'flux-shell', 'the Flux job shell', [author], 1),
     ('man1/flux-watch', 'flux-watch', 'monitor one or more Flux jobs', [author], 1),
+    ('man1/flux-update', 'flux-update', 'update active Flux jobs', [author], 1),
     ('man3/flux_attr_get', 'flux_attr_set', 'get/set Flux broker attributes', [author], 3),
     ('man3/flux_attr_get', 'flux_attr_get', 'get/set Flux broker attributes', [author], 3),
     ('man3/flux_aux_set', 'flux_aux_get', 'get/set auxiliary handle data', [author], 3),

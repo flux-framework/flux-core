@@ -112,6 +112,10 @@ static int job_flag_set_internal (struct job *job,
         if (!dry_run)
             job->flags |= FLUX_JOB_DEBUG;
     }
+    else if (streq (flag, "immutable")) {
+        if (!dry_run)
+            job->immutable = 1;
+    }
     else {
         errno = EINVAL;
         return -1;
@@ -586,6 +590,62 @@ const char *job_event_queue_print (struct job *job, char *buf, int size)
         used += n;
     }
     return buf;
+}
+
+bool validate_jobspec_updates (json_t *updates)
+{
+    const char *key;
+    json_t *entry;
+    json_object_foreach (updates, key, entry) {
+        if (!strstarts (key, "attributes."))
+            return false;
+    }
+    return true;
+}
+
+static int jobspec_apply_updates (json_t *jobspec, json_t *updates)
+{
+    const char *path;
+    json_t *val;
+
+    if (!jobspec) {
+        errno = EINVAL;
+        return -1;
+    }
+    json_object_foreach (updates, path, val) {
+        if (jpath_set (jobspec, path, val) < 0)
+            return -1;
+    }
+    return 0;
+}
+
+int job_apply_jobspec_updates (struct job *job, json_t *updates)
+{
+    if (jobspec_apply_updates (job->jobspec_redacted, updates) < 0
+        || jobspec_redacted_parse_queue (job) < 0)
+        return -1;
+    return 0;
+}
+
+json_t *job_jobspec_with_updates (struct job *job, json_t *updates)
+{
+    json_t *jobspec;
+
+    if (!job->jobspec_redacted) {
+        errno = EAGAIN;
+        return NULL;
+    }
+    if (!(jobspec = json_deep_copy (job->jobspec_redacted))) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (jobspec_apply_updates (jobspec, updates) < 0) {
+        int saved_errno = errno;
+        json_decref (jobspec);
+        errno = saved_errno;
+        return NULL;
+    }
+    return jobspec;
 }
 
 /*
