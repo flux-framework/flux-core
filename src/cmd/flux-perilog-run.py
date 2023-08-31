@@ -24,6 +24,10 @@ from flux.job import JobID
 from flux.resource import ResourceSet
 
 
+def offline_ranks(handle):
+    return IDset(handle.rpc("resource.status", nodeid=0).get()["offline"])
+
+
 def fetch_job_ranks(handle, jobid):
     """Fetch job ranks from KVS for jobid"""
     try:
@@ -129,6 +133,16 @@ async def run_per_rank(name, jobid, args):
     ranks = fetch_job_ranks(handle, jobid)
     if ranks is None:
         return 1
+
+    #  Check for any offline ranks and subtract them from targets.
+    #  Optionally drain offline ranks with a unique message that prolog/epilog
+    #  failed due to offline state:
+    #
+    offline = offline_ranks(handle) & ranks
+    if offline:
+        returncode = 1
+        LOGGER.info("%s: %s: ranks %s offline. Skipping.", jobid, name, offline)
+        ranks.subtract(offline)
 
     if args.verbose:
         LOGGER.info(
