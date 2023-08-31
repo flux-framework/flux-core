@@ -597,7 +597,12 @@ bool validate_jobspec_updates (json_t *updates)
     const char *key;
     json_t *entry;
     json_object_foreach (updates, key, entry) {
-        if (!strstarts (key, "attributes."))
+        if (!streq (key, "attributes")
+            && !strstarts (key, "attributes.")
+            && !streq (key, "resources")
+            && !strstarts (key, "resources.")
+            && !streq (key, "tasks")
+            && !strstarts (key, "tasks."))
             return false;
     }
     return true;
