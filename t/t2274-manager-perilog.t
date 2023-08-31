@@ -16,7 +16,9 @@ command = [
 ]
 EOF
 
-test_under_flux 4 full -o,--config-path=$(pwd)/config
+test_under_flux 4 full -o,--config-path=$(pwd)/config --test-exit-mode=leader
+
+startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
 flux setattr log-stderr-level 1
 
@@ -280,5 +282,41 @@ test_expect_success 'perilog: epilog can be specified without a prolog' '
 	flux job wait-event -t 15 $jobid epilog-start &&
 	flux job wait-event -t 15 $jobid epilog-finish
 '
+#  Note: run this job before taking rank 3 offline below
+test_expect_success 'perilog: run job across all 4 ranks' '
+	jobid=$(flux submit --wait-event=clean -N4 -n4 true)
+'
+#  Note: rank 3 is taken offline after this point for testing handling
+#  of offline ranks.
+test_expect_success 'perilog: disconnect rank 3 for offline tests' '
+	flux resource status &&
+	flux overlay disconnect 3 &&
+	test_must_fail $startctl wait 3 &&
+	test "$(flux resource status -s offline -no {ranks})" = "3"
+'
+test_expect_success 'perilog: offline ranks are skipped with --exec-per-rank' '
+	(export FLUX_JOB_ID=${jobid}  &&
+	 test_expect_code 1 \
+		flux perilog-run prolog -ve flux,getattr,rank \
+		| sort >offline.out
+	) &&
+	test "$(drained_ranks)" = "" &&
+	cat <<-EOF >offline.expected &&
+	0
+	1
+	2
+	EOF
+	test_cmp offline.expected offline.out
+'
+test_expect_success 'perilog: offline ranks are drained with --drain-offline' '
+	(export FLUX_JOB_ID=${jobid}  &&
+	 test_expect_code 1 \
+		flux perilog-run prolog --drain-offline -ve flux,getattr,rank \
+		| sort >offline-drain.out
+	) &&
+	flux resource drain &&
+	test "$(drained_ranks)" = "3" &&
+	test_cmp offline.expected offline-drain.out
 
+'
 test_done
