@@ -143,6 +143,8 @@ async def run_per_rank(name, jobid, args):
         returncode = 1
         LOGGER.info("%s: %s: ranks %s offline. Skipping.", jobid, name, offline)
         ranks.subtract(offline)
+        if args.drain_offline:
+            drain(handle, offline, f"offline for {jobid} {name}")
 
     if args.verbose:
         LOGGER.info(
@@ -294,6 +296,14 @@ def main():
         help="With --exec-per-rank, run CMD under 'flux-imp run'",
     )
     prolog_parser.add_argument(
+        "-D",
+        "--drain-offline",
+        help="With --exec-per-rank, drain any offline ranks with a specific "
+        + "drain message. The default is to skip offline ranks and not update "
+        + "drain reason.",
+        action="store_true",
+    )
+    prolog_parser.add_argument(
         "-d",
         "--exec-directory",
         metavar="DIRECTORY",
@@ -324,6 +334,14 @@ def main():
         "--with-imp",
         action="store_true",
         help="With --exec-per-rank, run CMD under 'flux-imp run'",
+    )
+    epilog_parser.add_argument(
+        "-D",
+        "--drain-offline",
+        help="With --exec-per-rank, drain any offline ranks with a specific "
+        + "drain message. The default is to skip offline ranks and not update "
+        + "drain reason.",
+        action="store_true",
     )
     epilog_parser.add_argument(
         "-d",
