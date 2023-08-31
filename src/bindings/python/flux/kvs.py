@@ -11,9 +11,11 @@
 import collections.abc as abc
 import errno
 import json
+import os
 from typing import Any, Mapping
 
 from _flux._core import ffi, lib
+from flux.rpc import RPC
 from flux.wrapper import Wrapper, WrapperPimpl
 
 
@@ -28,9 +30,9 @@ RAW = KVSWrapper(ffi, lib, prefixes=["flux_kvs", "flux_kvs_"])
 RAW.flux_kvsitr_next.set_error_check(lambda x: False)
 
 
-def get_key_direct(flux_handle, key):
+def get_key_direct(flux_handle, key, namespace=None):
     valp = ffi.new("char *[1]")
-    future = RAW.flux_kvs_lookup(flux_handle, None, 0, key)
+    future = RAW.flux_kvs_lookup(flux_handle, namespace, 0, key)
     RAW.flux_kvs_lookup_get(future, valp)
     if valp[0] == ffi.NULL:
         return None
@@ -45,7 +47,7 @@ def get_key_direct(flux_handle, key):
     return ret
 
 
-def exists(flux_handle, key):
+def exists(flux_handle, key, namespace=None):
     """Determine if key exists
 
     Args:
@@ -54,9 +56,13 @@ def exists(flux_handle, key):
 
     Returns:
         bool: True if key exists, False if not
+        namespace: namespace to read from, defaults to None.  If namespace
+          is None, the namespace specified in the FLUX_KVS_NAMESPACE
+          environment variable will be used.  If FLUX_KVS_NAMESPACE is not
+          set, the primary namespace will be used.
     """
     try:
-        get_key_direct(flux_handle, key)
+        get_key_direct(flux_handle, key, namespace=namespace)
         return True
     except EnvironmentError as err:
         if err.errno == errno.ENOENT:
@@ -66,7 +72,7 @@ def exists(flux_handle, key):
         raise err
 
 
-def isdir(flux_handle, key):
+def isdir(flux_handle, key, namespace=None):
     """Determine if key is a directory
 
     Args:
@@ -75,9 +81,13 @@ def isdir(flux_handle, key):
 
     Returns:
         bool: True if key is a directory, False if not
+        namespace: namespace to read from, defaults to None.  If namespace
+          is None, the namespace specified in the FLUX_KVS_NAMESPACE
+          environment variable will be used.  If FLUX_KVS_NAMESPACE is not
+          set, the primary namespace will be used.
     """
     try:
-        get_key_direct(flux_handle, key)
+        get_key_direct(flux_handle, key, namespace=namespace)
     except EnvironmentError as err:
         if err.errno == errno.ENOENT:
             return False
@@ -87,25 +97,33 @@ def isdir(flux_handle, key):
     return False
 
 
-def get_dir(flux_handle, key="."):
+def get_dir(flux_handle, key=".", namespace=None):
     """Get KVS directory
 
     Args:
         flux_handle: A Flux handle obtained from flux.Flux()
         key: directory name (default ".")
+        namespace: namespace to read from, defaults to None.  If namespace
+          is None, the namespace specified in the FLUX_KVS_NAMESPACE
+          environment variable will be used.  If FLUX_KVS_NAMESPACE is not
+          set, the primary namespace will be used.
 
     Returns:
         KVSDir: object representing directory
     """
-    return KVSDir(path=key, flux_handle=flux_handle)
+    return KVSDir(path=key, flux_handle=flux_handle, namespace=namespace)
 
 
-def get(flux_handle, key):
+def get(flux_handle, key, namespace=None):
     """Get KVS directory
 
     Args:
         flux_handle: A Flux handle obtained from flux.Flux()
         key: key to get
+        namespace: namespace to read from, defaults to None.  If namespace
+          is None, the namespace specified in the FLUX_KVS_NAMESPACE
+          environment variable will be used.  If FLUX_KVS_NAMESPACE is not
+          set, the primary namespace will be used.
 
     Returns:
         If value is decodeable by json.loads(), the decoded
@@ -114,13 +132,13 @@ def get(flux_handle, key):
         returned as a bytes array.
     """
     try:
-        return get_key_direct(flux_handle, key)
+        return get_key_direct(flux_handle, key, namespace=namespace)
     except EnvironmentError as err:
         if err.errno == errno.EISDIR:
             pass
         else:
             raise err
-    return get_dir(flux_handle, key)
+    return get_dir(flux_handle, key, namespace=namespace)
 
 
 def put(flux_handle, key, value):
@@ -188,7 +206,7 @@ def put_symlink(flux_handle, key, target):
     RAW.flux_kvs_txn_symlink(flux_handle.aux_txn, 0, key, None, target)
 
 
-def commit(flux_handle, flags: int = 0):
+def commit(flux_handle, flags: int = 0, namespace=None):
     """Commit changes to the KVS
 
     Must be called after put(), put_mkdir(), put_unlink(), or
@@ -200,10 +218,14 @@ def commit(flux_handle, flags: int = 0):
           flux.constants.FLUX_KVS_NO_MERGE - disallow merging of different commits
           flux.constants.FLUX_KVS_TXN_COMPACT - if possible compact changes
           flux.constants.FLUX_KVS_SYNC - flush & checkpoint commit (only against primary KVS)
+        namespace: namespace to write to, defaults to None.  If namespace
+          is None, the namespace specified in the FLUX_KVS_NAMESPACE
+          environment variable will be used.  If FLUX_KVS_NAMESPACE is not
+          set, the primary namespace will be used.
     """
     if flux_handle.aux_txn is None:
         return
-    future = RAW.flux_kvs_commit(flux_handle, None, flags, flux_handle.aux_txn)
+    future = RAW.flux_kvs_commit(flux_handle, namespace, flags, flux_handle.aux_txn)
     try:
         RAW.flux_future_get(future, None)
     except OSError:
@@ -212,6 +234,60 @@ def commit(flux_handle, flags: int = 0):
         RAW.flux_kvs_txn_destroy(flux_handle.aux_txn)
         flux_handle.aux_txn = None
         RAW.flux_future_destroy(future)
+
+
+def namespace_create(flux_handle, namespace, owner=os.getuid(), flags: int = 0):
+    """Create KVS Namespace
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        flags: defaults to 0, possible flag options:
+          flux.constants.FLUX_KVS_NO_MERGE - disallow merging of different commits
+          flux.constants.FLUX_KVS_TXN_COMPACT - if possible compact changes
+          flux.constants.FLUX_KVS_SYNC - flush & checkpoint commit (only against primary KVS)
+        namespace: namespace to create
+        owner: uid of namespace owner, defaults to caller uid
+        flags: currently unused, defaults to 0
+    """
+    future = RAW.flux_kvs_namespace_create(flux_handle, namespace, owner, flags)
+    try:
+        RAW.flux_future_get(future, None)
+    finally:
+        RAW.flux_future_destroy(future)
+
+
+def namespace_remove(flux_handle, namespace):
+    """Remove KVS Namespace
+
+    Namespace is removed in background.  Caller cannot be certain of its removal
+    after this function returns.
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        namespace: namespace to remove
+    """
+    future = RAW.flux_kvs_namespace_remove(flux_handle, namespace)
+    try:
+        RAW.flux_future_get(future, None)
+    finally:
+        RAW.flux_future_destroy(future)
+
+
+def namespace_list(flux_handle):
+    """Get list of KVS Namespace
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+
+    Returns:
+        list: list of strings with names of namespaces
+    """
+    nslist = []
+    rpc = RPC(flux_handle, "kvs.namespace-list")
+    rsp = rpc.get()
+    for ns in rsp["namespaces"]:
+        nslist.append(ns["namespace"])
+    return nslist
 
 
 def dropcache(flux_handle):
@@ -239,6 +315,10 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
     Args:
         flux_handle: A Flux handle obtained from flux.Flux()
         path: Optional base path for all read/write to be relative to (default ".")
+        namespace: Optional namespace to read/write from/to, defaults to None.  If
+          namespace is None, the namespace specified in the FLUX_KVS_NAMESPACE
+          environment variable will be used.  If FLUX_KVS_NAMESPACE is not
+          set, the primary namespace will be used.
     """
 
     # pylint: disable=too-many-ancestors, too-many-public-methods
@@ -246,7 +326,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
     class InnerWrapper(Wrapper):
 
         # pylint: disable=no-value-for-parameter
-        def __init__(self, flux_handle=None, path=".", handle=None):
+        def __init__(self, flux_handle=None, path=".", handle=None, namespace=None):
             dest = RAW.flux_kvsdir_destroy
             super(KVSDir.InnerWrapper, self).__init__(
                 ffi,
@@ -265,7 +345,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
             if handle is None:
                 directory = ffi.new("flux_kvsdir_t *[1]")
                 future = RAW.flux_kvs_lookup(
-                    flux_handle, None, RAW.FLUX_KVS_READDIR, path
+                    flux_handle, namespace, RAW.FLUX_KVS_READDIR, path
                 )
                 RAW.flux_kvs_lookup_get_dir(future, directory)
                 self.handle = RAW.flux_kvsdir_copy(directory[0])
@@ -273,7 +353,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
                 if self.handle is None or self.handle == ffi.NULL:
                     raise EnvironmentError("No such file or directory")
 
-    def __init__(self, flux_handle=None, path=".", handle=None):
+    def __init__(self, flux_handle=None, path=".", handle=None, namespace=None):
         super(KVSDir, self).__init__()
         self.fhdl = flux_handle
         self.path = path
@@ -282,12 +362,13 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
             self._path = ""
         else:
             self._path = path if path[-1] == "." else path + "."
+        self.namespace = namespace
         if flux_handle is None and handle is None:
             raise ValueError(
                 "flux_handle must be a valid Flux object or"
                 "handle must be a valid kvsdir cdata pointer"
             )
-        self.pimpl = self.InnerWrapper(flux_handle, path, handle)
+        self.pimpl = self.InnerWrapper(flux_handle, path, handle, namespace)
 
     def commit(self, flags=0):
         """Commit changes to the KVS
@@ -304,7 +385,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
         clients on the same broker rank. Other broker ranks are eventually
         consistent.
         """
-        commit(self.fhdl, flags)
+        commit(self.fhdl, flags=flags, namespace=self.namespace)
 
     def key_at(self, key):
         """Get full path to KVS key"""
@@ -313,11 +394,11 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
 
     def exists(self, name):
         """Evaluate if key exists in the basedir"""
-        return exists(self.fhdl, self._path + name)
+        return exists(self.fhdl, self._path + name, namespace=self.namespace)
 
     def __getitem__(self, key):
         try:
-            return get(self.fhdl, self.key_at(key))
+            return get(self.fhdl, self.key_at(key), namespace=self.namespace)
         except EnvironmentError:
             raise KeyError(
                 "{} not found under directory {}".format(key, self.key_at(""))
@@ -390,7 +471,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
         put_mkdir(self.fhdl, self._path + key)
         self.commit()
         if contents is not None:
-            new_kvsdir = KVSDir(self.fhdl, key)
+            new_kvsdir = KVSDir(self.fhdl, key, namespace=self.namespace)
             new_kvsdir.fill(contents)
 
     def files(self):
@@ -433,21 +514,26 @@ def join(*args):
     return ".".join([a for a in args if len(a) > 0])
 
 
-def _inner_walk(kvsdir, curr_dir, topdown=False):
+def _inner_walk(kvsdir, curr_dir, topdown=False, namespace=None):
     if topdown:
         yield (curr_dir, kvsdir.directories(), kvsdir.files())
 
     for directory in kvsdir.directories():
         path = join(curr_dir, directory)
         key = kvsdir.key_at(directory)
-        for entry in _inner_walk(get_dir(kvsdir.fhdl, key), path, topdown):
+        for entry in _inner_walk(
+            get_dir(kvsdir.fhdl, key, namespace=namespace),
+            path,
+            topdown,
+            namespace=namespace,
+        ):
             yield entry
 
     if not topdown:
         yield (curr_dir, kvsdir.directories(), kvsdir.files())
 
 
-def walk(directory, topdown=False, flux_handle=None):
+def walk(directory, topdown=False, flux_handle=None, namespace=None):
     """Walk a directory in the style of os.walk()
 
     Args:
@@ -455,9 +541,13 @@ def walk(directory, topdown=False, flux_handle=None):
         topdown: Specify True for current directory to be
           listed before subdirectories.
         flux_handle: Required if "directory" is a path.
+        namespace: namespace to read from, defaults to None.  If namespace
+          is None, the namespace specified in the FLUX_KVS_NAMESPACE
+          environment variable will be used.  If FLUX_KVS_NAMESPACE is not
+          set, the primary namespace will be used.
     """
     if not isinstance(directory, KVSDir):
         if flux_handle is None:
             raise ValueError("If directory is a key, flux_handle must be specified")
-        directory = KVSDir(flux_handle, directory)
-    return _inner_walk(directory, "", topdown)
+        directory = KVSDir(flux_handle, directory, namespace=namespace)
+    return _inner_walk(directory, "", topdown, namespace=namespace)
