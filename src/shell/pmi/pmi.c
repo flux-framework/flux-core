@@ -81,6 +81,12 @@ struct shell_pmi {
     struct pmi_exchange *exchange;
 };
 
+/* pmi_simple_ops->warn() signature */
+static void shell_pmi_warn (void *client, const char *msg)
+{
+    shell_warn ("%s", msg);
+}
+
 /* pmi_simple_ops->abort() signature */
 static void shell_pmi_abort (void *arg,
                              void *client,
@@ -473,6 +479,7 @@ static struct pmi_simple_ops shell_pmi_ops = {
     .response_send  = shell_pmi_response_send,
     .debug_trace    = shell_pmi_debug_trace,
     .abort          = shell_pmi_abort,
+    .warn           = shell_pmi_warn,
 };
 
 static int parse_args (json_t *config,
