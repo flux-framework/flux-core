@@ -129,6 +129,21 @@ static void trace (struct pmi_simple_server *pmi,
     }
 }
 
+static void warn (struct pmi_simple_server *pmi,
+                  void *client,
+                  const char *fmt,
+                  ...)
+{
+    char buf[1024];
+    va_list ap;
+
+    va_start (ap, fmt);
+    (void)vsnprintf (buf, sizeof (buf), fmt, ap);
+    va_end (ap);
+    if (pmi->ops.warn)
+        pmi->ops.warn (client, buf);
+}
+
 struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops ops,
                                                     int appnum,
                                                     int universe_size,
@@ -232,8 +247,16 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
             goto proto;
         if (keyval_parse_uint (buf, "pmi_subversion", &pmi_subversion) < 0)
             goto proto;
-        if (pmi_version != 1 || (pmi_version == 1 && pmi_subversion < 1))
+        if (pmi_version < 1 || (pmi_version == 1 && pmi_subversion < 1))
             snprintf (resp, sizeof (resp), "cmd=response_to_init rc=-1\n");
+        else if (pmi_version == 2) {
+            if (cli->rank == 0) {
+                warn (pmi,
+                      cli,
+                      "is application unintentionally using slurm libpmi2.so?");
+            }
+            snprintf (resp, sizeof (resp), "cmd=response_to_init rc=-1\n");
+        }
         else
             snprintf (resp, sizeof (resp), "cmd=response_to_init rc=0 "
                       "pmi_version=1 pmi_subversion=1\n");
