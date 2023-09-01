@@ -50,6 +50,8 @@ static struct optparse_option cmdopts[] = {
     { .name = "setopt", .has_arg = 1, .arginfo = "NAME=VALUE",
       .flags = OPTPARSE_OPT_HIDDEN,
       .usage = "Set subprocess option NAME to VALUE (multiple use ok)" },
+    { .name = "with-imp", .has_arg = 0,
+      .usage = "Run args under 'flux-imp run'" },
     OPTPARSE_TABLE_END
 };
 
@@ -75,6 +77,9 @@ flux_watcher_t *stdin_w;
 
 struct timespec last;
 int sigint_count = 0;
+
+bool use_imp = false;
+const char *imp_path = NULL;
 
 void output_exitsets (const char *key, void *item)
 {
@@ -322,6 +327,35 @@ char *split_opt (const char *s, char sep, const char **val)
     return cpy;
 }
 
+static bool check_for_imp_run (int argc, char *argv[], const char **ppath)
+{
+    /* If argv0 basename is flux-imp, then we'll likely have to use
+     *  flux-imp kill to signal the resulting subprocesses
+     */
+    if (streq (basename (argv[0]), "flux-imp")) {
+        *ppath = argv[0];
+        return true;
+    }
+    return false;
+}
+
+static const char *get_flux_imp_path (flux_t *h)
+{
+    const char *imp = NULL;
+    flux_future_t *f;
+
+    if (!(f = flux_rpc (h, "config.get", NULL, FLUX_NODEID_ANY, 0))
+        || flux_rpc_get_unpack (f,
+                                "{s?{s?s}}",
+                                "exec",
+                                "imp", &imp) < 0)
+        fprintf (stderr, "error fetching config object: %s",
+                 future_strerror (f, errno));
+    flux_aux_set (h, NULL, f, (flux_free_f) flux_future_destroy);
+    return imp;
+}
+
+
 int main (int argc, char *argv[])
 {
     const char *optargp;
@@ -393,6 +427,20 @@ int main (int argc, char *argv[])
 
     if (flux_get_size (h, &rank_range) < 0)
         log_err_exit ("flux_get_size");
+
+    if (optparse_hasopt (opts, "with-imp")) {
+        if (!(imp_path = get_flux_imp_path (h)))
+            log_err_exit ("--with-imp: exec.imp path not found in config");
+        use_imp = true;
+        if (flux_cmd_argv_insert (cmd, 0, "run") < 0
+            || flux_cmd_argv_insert (cmd, 0, imp_path) < 0)
+            log_err_exit ("failed to prepend 'flux-imp run' to command");
+    }
+    else {
+        use_imp = check_for_imp_run (argc - optindex,
+                                     &argv[optindex],
+                                     &imp_path);
+    }
 
     if (optparse_getopt (opts, "rank", &optargp) > 0
         && !streq (optargp, "all")) {
