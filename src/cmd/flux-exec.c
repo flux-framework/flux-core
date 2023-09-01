@@ -57,6 +57,7 @@ static struct optparse_option cmdopts[] = {
 
 extern char **environ;
 
+flux_t *flux_handle = NULL;
 uint32_t rank_range;
 uint32_t rank_count;
 uint32_t started = 0;
@@ -244,10 +245,69 @@ static void stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
+static void kill_completion_cb (flux_subprocess_t *p)
+{
+    flux_subprocess_destroy (p);
+}
+
+static flux_subprocess_t *imp_kill (flux_subprocess_t *p, int signum)
+{
+    flux_cmd_t *cmd;
+    flux_subprocess_ops_t ops = {
+        .on_completion = kill_completion_cb,
+        .on_state_change = NULL,
+        .on_channel_out = NULL,
+        .on_stdout = output_cb,
+        .on_stderr = output_cb,
+    };
+
+    pid_t pid = flux_subprocess_pid (p);
+    int rank = flux_subprocess_rank (p);
+
+    if (!(cmd = flux_cmd_create (0, NULL, environ))
+        || flux_cmd_argv_append (cmd, imp_path) < 0
+        || flux_cmd_argv_append (cmd, "kill") < 0
+        || flux_cmd_argv_appendf (cmd, "%d", signum) < 0
+        || flux_cmd_argv_appendf (cmd, "-%ld", (long) pid) < 0) {
+        fprintf (stderr,
+                 "Failed to create flux-imp kill command for rank %d pid %d\n",
+                 rank, pid);
+        return NULL;
+    }
+    /* Note: subprocess object destroyed in completion callback
+     */
+    return flux_rexec (flux_handle, rank, 0, cmd, &ops);
+}
+
+static void killall (zlist_t *l, int signum)
+{
+    flux_subprocess_t *p = zlist_first (l);
+    while (p) {
+        if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
+            if (use_imp) {
+                if (!imp_kill (p, signum))
+                    fprintf (stderr,
+                             "failed to signal rank %d: %s\n",
+                             flux_subprocess_rank (p),
+                             strerror (errno));
+            }
+            else {
+                flux_future_t *f = flux_subprocess_kill (p, signum);
+                if (!f) {
+                    if (optparse_getopt (opts, "verbose", NULL) > 0)
+                        fprintf (stderr, "failed to signal rank %d: %s\n",
+                                flux_subprocess_rank (p), strerror (errno));
+                }
+                /* don't care about response */
+                flux_future_destroy (f);
+            }
+        }
+        p = zlist_next (l);
+    }
+}
+
 static void signal_cb (int signum)
 {
-    flux_subprocess_t *p = zlist_first (subprocesses);
-
     if (signum == SIGINT) {
         if (sigint_count >= 2) {
             double since_last = monotime_since (last);
@@ -270,19 +330,7 @@ static void signal_cb (int signum)
         fprintf (stderr, "sending signal %d to %d running processes\n",
                  signum, started - exited);
 
-    while (p) {
-        if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
-            flux_future_t *f = flux_subprocess_kill (p, signum);
-            if (!f) {
-                if (optparse_getopt (opts, "verbose", NULL) > 0)
-                    fprintf (stderr, "failed to signal rank %d: %s\n",
-                             flux_subprocess_rank (p), strerror (errno));
-            }
-            /* don't care about response */
-            flux_future_destroy (f);
-        }
-        p = zlist_next (subprocesses);
-    }
+    killall (subprocesses, signum);
 
     if (signum == SIGINT) {
         if (sigint_count)
@@ -360,7 +408,6 @@ int main (int argc, char *argv[])
 {
     const char *optargp;
     int optindex;
-    flux_t *h;
     flux_reactor_t *r;
     struct idset *ns;
     uint32_t rank;
@@ -419,8 +466,12 @@ int main (int argc, char *argv[])
         }
     }
 
-    if (!(h = flux_open (NULL, 0)))
+    if (!(flux_handle = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
+
+    /* Assign h to flux_handle for local usage in main()
+     */
+    flux_t *h = flux_handle;
 
     if (!(r = flux_get_reactor (h)))
         log_err_exit ("flux_get_reactor");
