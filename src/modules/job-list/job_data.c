@@ -38,7 +38,6 @@ void job_destroy (void *data)
         json_decref (job->annotations);
         grudgeset_destroy (job->dependencies);
         json_decref (job->jobspec);
-        json_decref (job->jobspec_tasks);
         json_decref (job->R);
         json_decref (job->exception_context);
         json_decref (job->jobspec_updates);
@@ -113,14 +112,26 @@ static int parse_jobspec_job_name (struct job *job,
             return -1;
         }
     }
+    else
+        job->name = NULL;
 
     /* If user did not specify job.name, we treat arg 0 of the command
      * as the job name */
     if (!job->name) {
         json_t *command = NULL;
         json_t *arg0;
+        json_t *tasks;
 
-        if (json_unpack_ex (job->jobspec_tasks, &error, 0,
+        if (json_unpack_ex (job->jobspec, &error, 0,
+                            "{s:o}",
+                            "tasks", &tasks) < 0) {
+            flux_log (job->h, LOG_ERR,
+                      "%s: job %s invalid jobspec: %s",
+                      __FUNCTION__, idf58 (job->id), error.text);
+            return -1;
+        }
+
+        if (json_unpack_ex (tasks, &error, 0,
                             "[{s:o}]",
                             "command", &command) < 0) {
             flux_log (job->h, LOG_ERR,
@@ -180,6 +191,11 @@ static int parse_attributes_dict (struct job *job)
         return -1;
 
     /* N.B. attributes.system.duration is required in jobspec version 1 */
+    /* N.B. cwd & queue are optional, reset to NULL before parse in case
+     * not listed
+     */
+    job->cwd = NULL;
+    job->queue = NULL;
     if (json_unpack_ex (job->jobspec, &error, 0,
                         "{s:{s?{s?s s?s s:F}}}",
                         "attributes",
@@ -203,6 +219,8 @@ static int parse_jobspec_nnodes (struct job *job, struct jj_counts *jj)
      */
     if (jj->nnodes > 0)
         job->nnodes = jj->nnodes;
+    else
+        job->nnodes = -1;
 
     return 0;
 }
@@ -274,6 +292,7 @@ static int parse_jobspec_ntasks (struct job *job, struct jj_counts *jj)
                  * R has been retrieved.
                  */
                 job->ntasks_per_core_on_node_count = count;
+                job->ntasks = -1;
             }
             return 0;
         }
@@ -292,36 +311,32 @@ static int parse_jobspec_ncores (struct job *job, struct jj_counts *jj)
 {
     /* number of cores can't be determined yet, calculate later when R
      * is parsed */
-    if (jj->nnodes > 0 && jj->exclusive)
+    if (jj->nnodes > 0 && jj->exclusive) {
+        job->ncores = -1;
         return 0;
+    }
 
     /* nslots already accounts for nnodes if available */
     job->ncores = jj->nslots * jj->slot_size;
     return 0;
 }
 
-static int parse_jobspec (struct job *job, const char *s, bool allow_nonfatal)
+static int load_jobspec (struct job *job, const char *s, bool allow_nonfatal)
 {
-    struct jj_counts jj;
     json_error_t error;
-    json_t *tasks;
 
     if (!(job->jobspec = json_loads (s, 0, &error))) {
         flux_log (job->h, LOG_ERR,
                   "%s: job %s invalid jobspec: %s",
                   __FUNCTION__, idf58 (job->id), error.text);
-        goto nonfatal_error;
+        return allow_nonfatal ? 0 : -1;
     }
+    return 0;
+}
 
-    if (json_unpack_ex (job->jobspec, &error, 0,
-                        "{s:o}",
-                        "tasks", &tasks) < 0) {
-        flux_log (job->h, LOG_ERR,
-                  "%s: job %s invalid jobspec: %s",
-                  __FUNCTION__, idf58 (job->id), error.text);
-        goto nonfatal_error;
-    }
-    job->jobspec_tasks = json_incref (tasks);
+static int parse_jobspec (struct job *job, bool allow_nonfatal)
+{
+    struct jj_counts jj;
 
     if (parse_attributes_dict (job) < 0)
         goto nonfatal_error;
@@ -352,14 +367,18 @@ nonfatal_error:
 
 int job_parse_jobspec (struct job *job, const char *s, json_t *updates)
 {
-    if (parse_jobspec (job, s, true) < 0)
+    if (load_jobspec (job, s, true) < 0)
+        return -1;
+    if (parse_jobspec (job, true) < 0)
         return -1;
     return job_jobspec_update (job, updates);
 }
 
 int job_parse_jobspec_fatal (struct job *job, const char *s, json_t *updates)
 {
-    if (parse_jobspec (job, s, false) < 0)
+    if (load_jobspec (job, s, false) < 0)
+        return -1;
+    if (parse_jobspec (job, false) < 0)
         return -1;
     return job_jobspec_update (job, updates);
 }
@@ -451,17 +470,26 @@ int job_jobspec_update (struct job *job, json_t *updates)
     if (!updates)
         return 0;
 
+    /* To be on safe side, we should probably copy job->jobspec and
+     * only apply updates if they succeed and are parsed.  However, we
+     * don't do that given low odds of invalid updates ever happening.
+     */
     json_object_foreach (updates, key, value) {
-        /* RFC 21 jobspec-update event keys must start with "attributes."
-         * Reject update events with keys that violate the RFC.
+        /* In jobspec V1 only valid keys in a jobspec are resources,
+         * tasks, and attributes
          */
-        if (!strstarts (key, "attributes.")
+        if ((!streq (key, "resources")
+             && !strstarts (key, "resources.")
+             && !streq (key, "tasks")
+             && !strstarts (key, "tasks.")
+             && !streq (key, "attributes")
+             && !strstarts (key, "attributes."))
             || jpath_set (job->jobspec, key, value) < 0)
             flux_log (job->h, LOG_INFO,
                       "%s: job %s failed to update jobspec key %s",
                       __FUNCTION__, idf58 (job->id), key);
     }
-    return parse_attributes_dict (job);
+    return parse_jobspec (job, false);
 }
 
 /*

@@ -2111,10 +2111,10 @@ test_expect_success 'run job in the default queue' '
 	wait_id_inactive $(cat update1.id)
 '
 
-# jobspec-update-job-list changes duration to 1000.0, job name to
-# "updatename", and queue to "updatequeue".
+# jobspec-update-job-list changes command to "hostname" (thus job name
+# changes), duration to 1000.0, queue to "updatequeue".
 test_expect_success 'job-list returns expected jobspec changes' '
-	flux job list -s inactive | grep $(cat update1.id) | jq -e ".name == \"updatename\"" &&
+	flux job list -s inactive | grep $(cat update1.id) | jq -e ".name == \"hostname\"" &&
 	flux job list -s inactive | grep $(cat update1.id) | jq -e ".queue == \"updatequeue\"" &&
 	flux job list -s inactive | grep $(cat update1.id) | jq -e ".duration == 1000.0"
 '
@@ -2154,7 +2154,7 @@ test_expect_success 'reload the job-list module' '
 '
 
 test_expect_success 'job-list returns expected jobspec changes after reload' '
-	flux job list -s inactive | grep $(cat update1.id) | jq -e ".name == \"updatename\"" &&
+	flux job list -s inactive | grep $(cat update1.id) | jq -e ".name == \"hostname\"" &&
 	flux job list -s inactive | grep $(cat update1.id) | jq -e ".queue == \"updatequeue\"" &&
 	flux job list -s inactive | grep $(cat update1.id) | jq -e ".duration == 1000.0"
 '
