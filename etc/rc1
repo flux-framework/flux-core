@@ -111,9 +111,7 @@ if test $RANK -eq 0 -a "${FLUX_SCHED_MODULE}" != "none" \
 fi
 
 if test $RANK -eq 0; then
-    method=$(flux config get --default=notset exec.method)
-    if test "${method}" != "systemd" \
-            -a -z "${FLUX_DISABLE_JOB_CLEANUP}"; then
+    if test -z "${FLUX_DISABLE_JOB_CLEANUP}"; then
 	flux admin cleanup-push <<-EOT
 	flux queue stop --quiet --all --nocheckpoint
 	flux cancel --user=all --quiet --states RUN
