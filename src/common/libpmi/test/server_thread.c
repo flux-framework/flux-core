@@ -162,6 +162,11 @@ void s_trace (void *arg, const char *buf)
     diag ("%s", buf);
 }
 
+void s_warn (void *arg, const char *buf)
+{
+    diag ("WARN: %s", buf);
+}
+
 struct pmi_server_context *pmi_server_create (int *cfd, int size)
 {
     char pmi_fd[16];
@@ -171,6 +176,7 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
         .barrier_enter = s_barrier_enter,
         .response_send = s_send_response,
         .debug_trace = s_trace,
+        .warn = s_warn,
     };
     struct pmi_server_context *ctx;
     int i;

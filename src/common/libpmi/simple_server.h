@@ -46,6 +46,7 @@ struct pmi_simple_ops {
     void (*debug_trace)(void *client, const char *buf);
     void (*abort) (void *arg, void *cli,
                    int exit_code, const char error_message[]);
+    void (*warn)(void *client, const char *buf);
 };
 
 enum {
