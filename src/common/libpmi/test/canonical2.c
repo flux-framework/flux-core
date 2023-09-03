@@ -14,7 +14,6 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libpmi/simple_client.h"
-#include "src/common/libpmi/dgetline.h"
 #include "src/common/libpmi/pmi2.h"
 #include "src/common/libflux/reactor.h"
 #include "ccan/str/str.h"
