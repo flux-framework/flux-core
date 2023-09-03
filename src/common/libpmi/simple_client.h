@@ -11,6 +11,7 @@
 #ifndef _FLUX_CORE_PMI_SIMPLE_CLIENT_H
 #define _FLUX_CORE_PMI_SIMPLE_CLIENT_H
 
+#include <stdio.h>
 #include "src/common/libutil/aux.h"
 #include "src/common/libflux/types.h"
 
@@ -29,7 +30,7 @@ struct pmi_simple_client {
     // for internal pmi_simple_client use only
     char *buf;
     int buflen;
-    int fd;
+    FILE *f;
     struct aux_item *aux;
 };
 
