@@ -48,7 +48,7 @@ int pmi_simple_client_init (struct pmi_simple_client *pmi)
         goto done;
     }
     if (keyval_parse_uint (buf, "pmi_version", &vers) < 0
-            || keyval_parse_uint (buf, "pmi_subversion", &subvers) < 0)
+        || keyval_parse_uint (buf, "pmi_subversion", &subvers) < 0)
         goto done;
     if (vers != 1 || subvers != 1)
         goto done;
@@ -64,8 +64,8 @@ int pmi_simple_client_init (struct pmi_simple_client *pmi)
         goto done;
     }
     if (keyval_parse_uint (buf, "kvsname_max", &pmi->kvsname_max) < 0
-            || keyval_parse_uint (buf, "keylen_max", &pmi->keylen_max) < 0
-            || keyval_parse_uint (buf, "vallen_max", &pmi->vallen_max) < 0)
+        || keyval_parse_uint (buf, "keylen_max", &pmi->keylen_max) < 0
+        || keyval_parse_uint (buf, "vallen_max", &pmi->vallen_max) < 0)
         goto done;
     pmi->buflen = pmi->keylen_max + pmi->vallen_max + pmi->kvsname_max
                                   + SIMPLE_MAX_PROTO_OVERHEAD;

@@ -104,7 +104,8 @@ struct pmi_simple_server {
 
 
 static int pmi_simple_server_kvs_get_error (struct pmi_simple_server *pmi,
-                                            void *client, int result);
+                                            void *client,
+                                            int result);
 
 static struct client *client_create (int rank, void *arg);
 static void client_destroy (void **item);
@@ -115,7 +116,9 @@ static void client_hash_destroy (zhashx_t *zhx);
 
 
 static void trace (struct pmi_simple_server *pmi,
-                   void *client, const char *fmt, ...)
+                   void *client,
+                   const char *fmt,
+                   ...)
 {
     va_list ap;
 
@@ -203,7 +206,8 @@ static int barrier_exit (struct pmi_simple_server *pmi, int rc)
     return ret;
 }
 
-static int client_respond (struct pmi_simple_server *pmi, void *client,
+static int client_respond (struct pmi_simple_server *pmi,
+                           void *client,
                            const char *resp)
 {
     if (resp[0] != '\0') {
@@ -215,7 +219,9 @@ static int client_respond (struct pmi_simple_server *pmi, void *client,
 }
 
 int pmi_simple_server_request (struct pmi_simple_server *pmi,
-                               const char *buf, void *client, int rank)
+                               const char *buf,
+                               void *client,
+                               int rank)
 {
     char resp[SIMPLE_MAX_PROTO_LINE+1];
     int rc = 0;
@@ -257,15 +263,21 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
             }
             snprintf (resp, sizeof (resp), "cmd=response_to_init rc=-1\n");
         }
-        else
-            snprintf (resp, sizeof (resp), "cmd=response_to_init rc=0 "
+        else {
+            snprintf (resp,
+                      sizeof (resp),
+                      "cmd=response_to_init rc=0 "
                       "pmi_version=1 pmi_subversion=1\n");
+        }
     }
     /* maxes */
     else if (keyval_parse_isword (buf, "cmd", "get_maxes") == 0) {
-        snprintf (resp, sizeof (resp), "cmd=maxes rc=0 "
-                  "kvsname_max=%d keylen_max=%d vallen_max=%d\n",
-                  SIMPLE_KVS_NAME_MAX, SIMPLE_KVS_KEY_MAX, SIMPLE_KVS_VAL_MAX);
+        snprintf (resp,
+                  sizeof (resp),
+                  "cmd=maxes rc=0 kvsname_max=%d keylen_max=%d vallen_max=%d\n",
+                  SIMPLE_KVS_NAME_MAX,
+                  SIMPLE_KVS_KEY_MAX,
+                  SIMPLE_KVS_VAL_MAX);
     }
     /* abort */
     else if (keyval_parse_isword (buf, "cmd", "abort") == 0) {
@@ -293,17 +305,22 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
     }
     /* universe */
     else if (keyval_parse_isword (buf, "cmd", "get_universe_size") == 0) {
-        snprintf (resp, sizeof (resp), "cmd=universe_size rc=0 size=%d\n",
+        snprintf (resp,
+                  sizeof (resp),
+                  "cmd=universe_size rc=0 size=%d\n",
                   pmi->universe_size);
     }
     /* appnum */
     else if (keyval_parse_isword (buf, "cmd", "get_appnum") == 0) {
-        snprintf (resp, sizeof (resp), "cmd=appnum rc=0 appnum=%d\n",
+        snprintf (resp,
+                  sizeof (resp), "cmd=appnum rc=0 appnum=%d\n",
                   pmi->appnum);
     }
     /* kvsname */
     else if (keyval_parse_isword (buf, "cmd", "get_my_kvsname") == 0) {
-        snprintf (resp, sizeof (resp), "cmd=my_kvsname rc=0 kvsname=%s\n",
+        snprintf (resp,
+                  sizeof (resp),
+                  "cmd=my_kvsname rc=0 kvsname=%s\n",
                   pmi->kvsname);
     }
     /* put */
@@ -425,7 +442,8 @@ int pmi_simple_server_barrier_complete (struct pmi_simple_server *pmi, int rc)
 }
 
 static int pmi_simple_server_kvs_get_error (struct pmi_simple_server *pmi,
-                                            void *client, int result)
+                                            void *client,
+                                            int result)
 {
     char resp[SIMPLE_MAX_PROTO_LINE+1];
     snprintf (resp, sizeof (resp), "cmd=get_result rc=%d\n", result);
@@ -433,12 +451,15 @@ static int pmi_simple_server_kvs_get_error (struct pmi_simple_server *pmi,
 }
 
 int pmi_simple_server_kvs_get_complete (struct pmi_simple_server *pmi,
-                                        void *client, const char *val)
+                                        void *client,
+                                        const char *val)
 {
     char resp[SIMPLE_MAX_PROTO_LINE+1];
-    if (val == NULL)
-        return (pmi_simple_server_kvs_get_error (pmi, client,
+    if (val == NULL) {
+        return (pmi_simple_server_kvs_get_error (pmi,
+                                                 client,
                                                  PMI_ERR_INVALID_KEY));
+    }
     snprintf (resp, sizeof (resp), "cmd=get_result rc=0 value=%s\n", val);
     return (client_respond (pmi, client, resp));
 }
