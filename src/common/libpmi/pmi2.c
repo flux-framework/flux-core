@@ -50,6 +50,7 @@
 #include <string.h>
 
 #include "ccan/str/str.h"
+#include "src/common/libutil/strlcpy.h"
 
 #include "pmi.h"
 #include "pmi2.h"
@@ -191,9 +192,8 @@ int PMI2_Job_GetId (char *jobid, int jobid_size)
     result = get_cached_kvsname (pmi_global_ctx, &kvsname);
     if (result != PMI2_SUCCESS)
         return result;
-    if (!jobid || jobid_size < (int)strlen (kvsname) + 1)
+    if (!jobid || strlcpy (jobid, kvsname, jobid_size) < strlen (kvsname))
         return PMI2_ERR_INVALID_ARGS;
-    strcpy (jobid, kvsname);
     return PMI2_SUCCESS;
 }
 
