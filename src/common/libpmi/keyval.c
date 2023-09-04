@@ -12,6 +12,7 @@
 # include "config.h"
 #endif
 #include <stdlib.h>
+#include <limits.h>
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
@@ -36,12 +37,14 @@ int keyval_parse_uint (const char *s, const char *key, unsigned int *val)
 {
     const char *cp = parse_val (s, key);
     char *endptr;
-    unsigned int i;
+    unsigned long i;
     if (!cp)
         return EKV_NOKEY;
     errno = 0;
     i = strtoul (cp, &endptr, 10);
-    if (errno != 0 || (*endptr && !isspace (*endptr)))
+    if (errno != 0
+        || (*endptr && !isspace (*endptr))
+        || i > UINT_MAX)
         return EKV_VAL_PARSE;
     *val = i;
     return EKV_SUCCESS;
@@ -51,12 +54,15 @@ int keyval_parse_int (const char *s, const char *key, int *val)
 {
     const char *cp = parse_val (s, key);
     char *endptr;
-    int i;
+    long i;
     if (!cp)
         return EKV_NOKEY;
     errno = 0;
     i = strtol (cp, &endptr, 10);
-    if (errno != 0 || (*endptr && !isspace (*endptr)))
+    if (errno != 0
+        || (*endptr && !isspace (*endptr))
+        || i > INT_MAX
+        || i < INT_MIN)
         return EKV_VAL_PARSE;
     *val = i;
     return EKV_SUCCESS;
