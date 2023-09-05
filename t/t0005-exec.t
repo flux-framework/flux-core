@@ -140,6 +140,12 @@ test_expect_success NO_ASAN 'flux exec passes non-zero exit status' '
 	test_expect_code 139 flux exec -n sh -c "kill -11 \$\$"
 '
 
+test_expect_success 'flux exec fails with --with-imp if no IMP configured' '
+	test_expect_code 1 flux exec --with-imp hostname 2>exec-no-imp.out &&
+	test_debug "cat exec-no-imp.out" &&
+	grep "exec\.imp path not found in config" exec-no-imp.out
+'
+
 test_expect_success NO_ASAN 'flux exec outputs tasks with errors' '
 	! flux exec -n sh -c "exit 2" > 2.out 2>&1 &&
         grep "\[0-3\]: Exit 2" 2.out &&
