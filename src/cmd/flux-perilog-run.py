@@ -9,6 +9,8 @@
 ##############################################################
 
 import argparse
+import asyncio
+import itertools
 import logging
 import os
 import signal
@@ -46,17 +48,71 @@ def unblock_signals():
     signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM, signal.SIGINT})
 
 
-def process_create(cmd, stderr=None):
-    # pylint: disable=subprocess-popen-preexec-fn
-    return subprocess.Popen(cmd, preexec_fn=unblock_signals, stderr=stderr)
+async def get_children(pid):
+    """
+    Return a best effort list of pid and all current descendants
+    """
+    result = [pid]
+    p = await asyncio.create_subprocess_exec(
+        "ps", "-o", "pid=", f"--ppid={pid}", stdout=subprocess.PIPE
+    )
+    output, errors = await p.communicate()
+    if output is None:
+        # No children found at this time, just return [pid]:
+        return result
+    # Parse ps(1) output into list of child pids:
+    pids = [int(x) for x in output.decode().splitlines()]
+
+    # Call this function recursively for all children and wait for results:
+    futures = [get_children(pid) for pid in pids]
+    children = await asyncio.gather(*futures)
+
+    # Extend results with all current descendants:
+    result.extend(itertools.chain(pids, *children))
+    return result
 
 
-def run_per_rank(name, jobid, args):
+async def kill_process_tree(parent_pid, sig):
+    """
+    Send sig to entire process tree rooted at parent_pid
+    """
+    # Iterate the list in reverse so that parent_pid comes last and
+    # (for the most part) children are signaled before their parent:
+    for pid in reversed(await get_children(parent_pid)):
+        os.kill(pid, sig)
+
+
+async def run_with_timeout(cmd, label, timeout=1800.0):
+    """
+    Run a command with a timeout using asyncio. Default timeout is 30m
+    """
+    p = await asyncio.create_subprocess_exec(
+        *cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=unblock_signals
+    )
+    p.label = label
+    p.canceled = False
+    try:
+        stdout, stderr = await asyncio.wait_for(p.communicate(), timeout)
+    except asyncio.TimeoutError:
+        #  On timeout, mark and cancel process and wait for 5 seconds before
+        #  sending SIGKILL:
+        await kill_process_tree(p.pid, signal.SIGTERM)
+        p.canceled = True
+        try:
+            stdout, stderr = await asyncio.wait_for(p.communicate(), 5.0)
+        except asyncio.TimeoutError:
+            await kill_process_tree(p.pid, signal.SIGKILL)
+            stdout, stderr = await p.communicate()
+    p.errors = stderr.decode("utf8", errors="surrogateescape").splitlines()
+    await p.wait()
+    return p
+
+
+async def run_per_rank(name, jobid, args):
     """Run args.exec_per_rank on every rank of jobid
 
     If command fails on any rank then drain that rank
     """
-
     returncode = 0
 
     if args.exec_per_rank is None:
@@ -64,8 +120,8 @@ def run_per_rank(name, jobid, args):
 
     per_rank_cmd = args.exec_per_rank.split(",")
 
-    processes = {}
     fail_ids = IDset()
+    timeout_ids = IDset()
 
     handle = flux.Flux()
     hostlist = flux.hostlist.Hostlist(handle.attr_get("hostlist"))
@@ -79,6 +135,7 @@ def run_per_rank(name, jobid, args):
             "%s: %s: executing %s on ranks %s", jobid, name, per_rank_cmd, ranks
         )
 
+    cmds = {}
     for rank in ranks:
         cmdv = ["flux", "exec", "-qn", f"-r{rank}"]
         if args.with_imp:
@@ -87,32 +144,43 @@ def run_per_rank(name, jobid, args):
             cmdv.append("--service=sdexec")
             cmdv.append(f"--setopt=SDEXEC_NAME={name}-{rank}-{jobid.f58plain}.service")
             cmdv.append(f"--setopt=SDEXEC_PROP_Description=System {name} script")
-        cmd = cmdv + per_rank_cmd
-        processes[rank] = process_create(cmd, stderr=subprocess.PIPE)
+        cmds[rank] = cmdv + per_rank_cmd
 
-    for rank in ranks:
-        rc = processes[rank].wait()
-        for line in processes[rank].stderr:
-            errline = line.decode("utf-8").rstrip()
-            LOGGER.error("%s (rank %d): %s", hostlist[rank], rank, errline)
-        if rc != 0:
+    processes = [
+        run_with_timeout(cmd, rank, args.timeout) for rank, cmd in cmds.items()
+    ]
+    results = await asyncio.gather(*processes)
+
+    for proc in results:
+        rank = proc.label
+        rc = proc.returncode
+        for line in proc.errors:
+            LOGGER.error("%s (rank %d): %s", hostlist[rank], rank, line)
+        if proc.canceled:
+            timeout_ids.set(rank)
+            rc = 128 + signal.SIGTERM
+        elif rc != 0:
             fail_ids.set(rank)
-            if rc > returncode:
-                returncode = rc
+        if rc > returncode:
+            returncode = rc
 
     if len(fail_ids) > 0:
         LOGGER.error("%s: rank %s failed %s, draining", jobid, fail_ids, name)
         drain(handle, fail_ids, f"{name} failed for jobid {jobid}")
+    if len(timeout_ids) > 0:
+        LOGGER.error("%s: rank %s %s timeout, draining", jobid, timeout_ids, name)
+        drain(handle, timeout_ids, f"{name} timed out for jobid {jobid}")
 
     if args.verbose:
         ranks.subtract(fail_ids)
+        ranks.subtract(timeout_ids)
         if len(ranks) > 0:
             LOGGER.info("%s: %s: completed successfully on %s", jobid, name, ranks)
 
     return returncode
 
 
-def run_scripts(name, jobid, args):
+async def run_scripts(name, jobid, args):
     """Run a directory of scripts in parallel"""
 
     returncode = 0
@@ -134,37 +202,44 @@ def run_scripts(name, jobid, args):
             len(scripts),
             args.exec_directory,
         )
-    processes = {cmd: process_create([cmd]) for cmd in scripts}
+    processes = [
+        run_with_timeout([str(cmd)], cmd.name, args.timeout) for cmd in scripts
+    ]
+    results = await asyncio.gather(*processes)
 
-    for cmd in scripts:
-        rc = processes[cmd].wait()
-        if rc != 0:
-            if rc > returncode:
-                returncode = rc
+    for proc in results:
+        rc = proc.returncode
+        cmd = proc.label
+        if proc.canceled:
+            LOGGER.error("%s: %s timeout", jobid, cmd)
+            rc = 128 + signal.SIGTERM
+        elif rc != 0:
             LOGGER.error("%s: %s failed with rc=%d", jobid, cmd, rc)
         elif args.verbose:
             LOGGER.info("%s: %s completed successfully", jobid, cmd)
+        if rc > returncode:
+            returncode = rc
 
     return returncode
 
 
-def run(name, jobid, args):
-    returncode = run_scripts(name, jobid, args)
-    if returncode != 0:
-        sys.exit(returncode)
-
+async def run(name, jobid, args):
+    tasks = [run_scripts(name, jobid, args)]
     if args.exec_per_rank:
-        returncode = run_per_rank(name, jobid, args)
-        if returncode != 0:
-            sys.exit(returncode)
+        tasks.append(run_per_rank(name, jobid, args))
+    sys.exit(max(await asyncio.gather(*tasks)))
+
+
+def run_perilog(name, jobid, args):
+    asyncio.get_event_loop().run_until_complete(run(name, jobid, args))
 
 
 def run_prolog(jobid, args):
-    run("prolog", jobid, args)
+    run_perilog("prolog", jobid, args)
 
 
 def run_epilog(jobid, args):
-    run("epilog", jobid, args)
+    run_perilog("epilog", jobid, args)
 
 
 LOGGER = logging.getLogger("flux-perilog-run")
@@ -185,6 +260,9 @@ def main():
     )
     prolog_parser.add_argument(
         "-v", "--verbose", help="Log script events", action="store_true"
+    )
+    prolog_parser.add_argument(
+        "-t", "--timeout", help="Set a command timeout", metavar="FSD"
     )
     prolog_parser.add_argument(
         "-s", "--sdexec", help="Use sdexec to run prolog", action="store_true"
@@ -216,6 +294,9 @@ def main():
         "-v", "--verbose", help="Log script events", action="store_true"
     )
     epilog_parser.add_argument(
+        "-t", "--timeout", help="Set a command timeout", metavar="FSD"
+    )
+    epilog_parser.add_argument(
         "-s", "--sdexec", help="Use sdexec to run epilog", action="store_true"
     )
     epilog_parser.add_argument(
@@ -245,8 +326,13 @@ def main():
         LOGGER.error("FLUX_JOB_ID not found in environment")
         sys.exit(1)
 
+    if args.timeout is not None:
+        args.timeout = flux.util.parse_fsd(args.timeout)
+
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
+        # But, avoid DEBUG messages from asyncio
+        logging.getLogger("asyncio").setLevel(logging.WARNING)
 
     args.func(jobid, args)
 

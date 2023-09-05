@@ -2481,6 +2481,7 @@ static void attach_notify (struct attach_ctx *ctx,
     if (!event_name)
         return;
     if (ctx->statusline
+        && !ctx->fatal_exception
         && (msg = job_event_notify_string (event_name))) {
         int dt = ts - ctx->timestamp_zero;
         int width = 80;

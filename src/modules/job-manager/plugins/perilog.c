@@ -138,24 +138,49 @@ static void perilog_proc_delete (struct perilog_proc *proc)
     }
 }
 
-static void emit_finish_event (struct perilog_proc *proc, int status)
+static void emit_finish_event (struct perilog_proc *proc,
+                               flux_subprocess_t *sp)
 {
+    int status = flux_subprocess_status (sp);
     if (proc->prolog) {
         /*
          *  If prolog failed, raise job exception before prolog-finish
          *   event is emitted to ensure job isn't halfway started before
          *   the exception is raised:
          */
-        if (status != 0
-            && flux_jobtap_raise_exception (proc->p,
-                                            proc->id,
-                                            "prolog",
-                                            0,
-                                            "prolog failed with status=%d",
-                                            status) < 0)
-                flux_log_error (flux_jobtap_get_flux (proc->p),
-                                "prolog-finish: flux_jobtap_raise_exception");
+        if (status != 0) {
+            int code = flux_subprocess_exit_code (sp);
+            int rc;
+            int sig;
+            char *errmsg;
 
+            if ((sig = flux_subprocess_signaled (sp)) > 0
+                || (sig = (code - 128)) > 0) {
+                rc = asprintf (&errmsg,
+                               "prolog killed by signal %d%s",
+                               sig,
+                               sig == SIGTERM ?
+                               " (timeout or job canceled)" :
+                               "");
+            }
+            else
+                rc = asprintf (&errmsg,
+                               "prolog exited with exit code=%d",
+                               flux_subprocess_exit_code (sp));
+            if (rc < 0)
+                errmsg = NULL;
+            if (flux_jobtap_raise_exception (proc->p,
+                                             proc->id,
+                                             "prolog",
+                                             0,
+                                             "%s",
+                                             errmsg ?
+                                             errmsg :
+                                             "job prolog failed") < 0)
+                    flux_log_error (flux_jobtap_get_flux (proc->p),
+                                    "prolog-finish: jobtap_raise_exception");
+            free (errmsg);
+        }
         if (flux_jobtap_prolog_finish (proc->p,
                                        proc->id,
                                        "job-manager.prolog",
@@ -188,7 +213,7 @@ static void completion_cb (flux_subprocess_t *sp)
 {
     struct perilog_proc *proc = flux_subprocess_aux_get (sp, "perilog_proc");
     if (proc) {
-        emit_finish_event (proc, flux_subprocess_status (sp));
+        emit_finish_event (proc, sp);
         perilog_proc_delete (proc);
     }
 }
@@ -220,7 +245,7 @@ static void state_cb (flux_subprocess_t *sp, flux_subprocess_state_t state)
                   flux_subprocess_state_string (flux_subprocess_state (sp)),
                   code);
 
-        emit_finish_event (proc, code);
+        emit_finish_event (proc, sp);
         perilog_proc_delete (proc);
     }
 }

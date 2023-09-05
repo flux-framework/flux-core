@@ -64,6 +64,15 @@ test_expect_success 'perilog: perilog-run fails if any local script fails' '
 	) &&
 	rm -f prolog.d/fail.sh
 '
+test_expect_success 'perilog: perilog-run timeout works with local scripts' '
+	printf "#!/bin/sh\nsleep 60" >prolog.d/timeout.sh &&
+	chmod +x prolog.d/timeout.sh &&
+	( export FLUX_JOB_ID=f1 &&
+	  test_expect_code 143 \
+	    flux perilog-run prolog --timeout=0.5s -vv -d prolog.d
+	) &&
+	rm -f prolog.d/timeout.sh
+'
 test_expect_success 'perilog: perilog-run --exec-per-rank works' '
 	jobid=$(flux submit -n4 -N4 true) &&
 	flux job wait-event $jobid alloc &&
@@ -104,6 +113,25 @@ test_expect_success 'perilog: failed ranks generate useful error messages' '
 	grep "$(hostname) (rank 1): failing on 1" fail-err.out &&
 	undrain_all
 
+'
+test_expect_success 'perilog: can be run with timeout' '
+	cat <<-EOF >fail-timeout.sh &&
+	#!/bin/sh
+	if test \$(flux getattr rank) -eq \$1; then
+		sleep 120
+	fi
+	EOF
+	chmod +x fail-timeout.sh &&
+	(export FLUX_JOB_ID=${jobid} &&
+	 test_expect_code 143 flux perilog-run prolog --timeout=1s \
+		-ve./fail-timeout.sh,1 \
+		>fail-timeout.out 2>&1
+	) &&
+	test_debug "cat fail-timeout.out" &&
+	flux resource drain &&
+	test "$(drained_ranks)" = "1" &&
+	grep "timeout" fail-timeout.out &&
+	undrain_all
 '
 test_expect_success 'perilog: load perilog.so plugin' '
 	flux jobtap load perilog.so
