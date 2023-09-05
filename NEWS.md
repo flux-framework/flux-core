@@ -1,3 +1,49 @@
+flux-core version 0.54.0 - 2023-09-05
+-------------------------------------
+
+## New Features
+ * flux-perilog-run: support prolog and epilog timeouts (default 30m) (#5416)
+ * cmd: add --with-imp options to flux-exec(1) and flux-perilog-run(1)
+   (#5422)
+ * shell/pmi: warn if application might be using slurm's libpmi2.so (#5420)
+ * job-list: allow updates to all of jobspec (#5418)
+ * job-manager: support jobspec update to all fields (#5419)
+ * python: add namespace support to KVS module (#5373)
+ * add job update service and new job-update(1) command (#5409)
+ * job-list: support jobspec-update event (#5408)
+ * job-manager: prevent jobspec-update events after a job has resources
+   (#5406)
+ * job-manager: add flux_jobtap_jobspec_update_pack(3) (#5386)
+
+## Fixes
+ * cmd: flux-perilog-run: avoid running prolog/epilog on offline ranks (#5417)
+ * job-manager: fix duration limit check for jobs with unset/unlimited
+   duration (#5405)
+ * flux-top: fix title when connected to instances that are not jobs (#5394)
+ * do not search for module and connector DSOs recursively (#5390)
+ * python: fix __delitem__ in KVSDir with initial paths (#5376)
+ * python: have kvs.isdir() return False if key missing (#5371)
+ * python: clear kvs txn after all commits (#5369)
+
+## Cleanup
+ * libpmi: cleanup old code and optimize client reads (#5423)
+ * job-list: misc cleanup (#5407)
+ * broker: refactor broker module loading code and fix minor bugs (#5385)
+
+## Build/Testsuite/CI
+ * ci: fix failure detection builds with coverage and remove obsolete system
+   tests (#5421)
+ * actions: update typo checker version (#5410)
+ * extend ci-checks timeout for arm64 build (#5402)
+ * testsuite: handle job signal race in more tests (#5401)
+ * matrix: add arm64 install-only builder (#5396)
+ * testsuite: relax systemctl output parsing (#5388)
+ * testsuite: fix race in t0005-exec.t signal test (#5383)
+ * actions: add merge_group trigger (#5379)
+ * mergify: remove status check conditions from config (#5381)
+ * docker-deploy: only push latest when arch is 64-bit (#5377)
+ * docker: drop bionic, el7 and fedora35 for bookworm and fedora38 (#5370)
+
 flux-core version 0.53.0 - 2023-08-01
 -------------------------------------
 
