@@ -46,7 +46,7 @@ extern "C" {
 int PMI2_Init (int *spawned, int *size, int *rank, int *appnum);
 int PMI2_Finalize (void);
 int PMI2_Initialized (void);
-int PMI2_Abort (int flag, const char msg[]);
+int PMI2_Abort (int flag, const char *msg);
 
 
 typedef struct PMI2_Connect_comm {
@@ -65,45 +65,65 @@ typedef struct MPID_Info {
     char                *value;
 } MPID_Info;
 
-int PMI2_Job_Spawn (int count, const char * cmds[],
-                    int argcs[], const char ** argvs[],
+int PMI2_Job_Spawn (int count,
+                    const char **cmds,
+                    int *argcs,
+                    const char **argvs[],
                     const int maxprocs[],
-                    const int info_keyval_sizes[],
-                    const struct MPID_Info *info_keyval_vectors[],
+                    const int *info_keyval_sizes,
+                    const struct MPID_Info **info_keyval_vectors,
                     int preput_keyval_size,
-                    const struct MPID_Info *preput_keyval_vector[],
-                    char jobId[], int jobIdSize,
-                    int errors[]);
-int PMI2_Job_GetId (char jobid[], int jobid_size);
+                    const struct MPID_Info **preput_keyval_vector,
+                    char *jobId,
+                    int jobIdSize,
+                    int *errors);
+int PMI2_Job_GetId (char *jobid, int jobid_size);
 int PMI2_Job_GetRank (int* rank);
-int PMI2_Job_Connect (const char jobid[], PMI2_Connect_comm_t *conn);
-int PMI2_Job_Disconnect (const char jobid[]);
+int PMI2_Job_Connect (const char *jobid, PMI2_Connect_comm_t *conn);
+int PMI2_Job_Disconnect (const char *jobid);
 
 
-int PMI2_KVS_Put (const char key[], const char value[]);
-int PMI2_KVS_Get (const char *jobid, int src_pmi_id,
-                  const char key[], char value [], int maxvalue, int *vallen);
+int PMI2_KVS_Put (const char *key, const char *value);
+int PMI2_KVS_Get (const char *jobid,
+                  int src_pmi_id,
+                  const char *key,
+                  char *value,
+                  int maxvalue,
+                  int *vallen);
 int PMI2_KVS_Fence (void);
 
 
-int PMI2_Info_GetSize (int* size);
-int PMI2_Info_GetNodeAttr (const char name[],
-                           char value[], int valuelen, int *found, int waitfor);
-int PMI2_Info_GetNodeAttrIntArray (const char name[], int array[],
-                                   int arraylen, int *outlen, int *found);
-int PMI2_Info_PutNodeAttr (const char name[], const char value[]);
-int PMI2_Info_GetJobAttr (const char name[],
-                          char value[], int valuelen, int *found);
-int PMI2_Info_GetJobAttrIntArray (const char name[], int array[],
-                                  int arraylen, int *outlen, int *found);
+int PMI2_Info_GetSize (int *size);
+int PMI2_Info_GetNodeAttr (const char *name,
+                           char *value,
+                           int valuelen,
+                           int *found,
+                           int waitfor);
+int PMI2_Info_GetNodeAttrIntArray (const char *name,
+                                   int *array,
+                                   int arraylen,
+                                   int *outlen,
+                                   int *found);
+int PMI2_Info_PutNodeAttr (const char *name, const char *value);
+int PMI2_Info_GetJobAttr (const char *name,
+                          char *value,
+                          int valuelen,
+                          int *found);
+int PMI2_Info_GetJobAttrIntArray (const char *name,
+                                  int *array,
+                                  int arraylen,
+                                  int *outlen,
+                                  int *found);
 
 
-int PMI2_Nameserv_publish (const char service_name[],
-                           const struct MPID_Info *info_ptr, const char port[]);
-int PMI2_Nameserv_lookup (const char service_name[],
+int PMI2_Nameserv_publish (const char *service_name,
+                           const struct MPID_Info *info_ptr,
+                           const char *port);
+int PMI2_Nameserv_lookup (const char *service_name,
                           const struct MPID_Info *info_ptr,
-                          char port[], int portLen);
-int PMI2_Nameserv_unpublish (const char service_name[],
+                          char *port,
+                          int portLen);
+int PMI2_Nameserv_unpublish (const char *service_name,
                              const struct MPID_Info *info_ptr);
 
 #ifdef __cplusplus

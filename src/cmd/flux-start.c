@@ -37,7 +37,6 @@
 #include "src/common/libutil/setenvf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libpmi/simple_server.h"
-#include "src/common/libpmi/dgetline.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/librouter/usock_service.h"
 #include "ccan/array_size/array_size.h"

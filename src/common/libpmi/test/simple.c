@@ -15,7 +15,6 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libpmi/simple_client.h"
 #include "src/common/libpmi/simple_server.h"
-#include "src/common/libpmi/dgetline.h"
 #include "src/common/libpmi/keyval.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libflux/reactor.h"
@@ -25,15 +24,16 @@
 
 #include "server_thread.h"
 
-int fake_publish (int fd, const char *service, const char *port)
+int fake_publish (FILE *fp, const char *service, const char *port)
 {
     char buf[SIMPLE_MAX_PROTO_LINE];
     int rc;
 
-    if (dprintf (fd, "cmd=publish_name service=%s port=%s\n",
+    if (fprintf (fp,
+                 "cmd=publish_name service=%s port=%s\n",
                  service, port) < 0)
         return PMI_FAIL;
-    if (dgetline (fd, buf, sizeof (buf)) < 0)
+    if (!fgets (buf, sizeof (buf), fp))
         return PMI_FAIL;
     if (keyval_parse_isword (buf, "cmd", "publish_result") < 0)
         return PMI_FAIL;
@@ -42,14 +42,14 @@ int fake_publish (int fd, const char *service, const char *port)
     return 0;
 }
 
-int fake_unpublish (int fd, const char *service)
+int fake_unpublish (FILE *fp, const char *service)
 {
     char buf[SIMPLE_MAX_PROTO_LINE];
     int rc;
 
-    if (dprintf (fd, "cmd=unpublish_name service=%s\n", service) < 0)
+    if (fprintf (fp, "cmd=unpublish_name service=%s\n", service) < 0)
         return PMI_FAIL;
-    if (dgetline (fd, buf, sizeof (buf)) < 0)
+    if (!fgets(buf, sizeof (buf), fp))
         return PMI_FAIL;
     if (keyval_parse_isword (buf, "cmd", "unpublish_result") < 0)
         return PMI_FAIL;
@@ -58,14 +58,14 @@ int fake_unpublish (int fd, const char *service)
     return 0;
 }
 
-int fake_lookup (int fd, const char *service)
+int fake_lookup (FILE *fp, const char *service)
 {
     char buf[SIMPLE_MAX_PROTO_LINE];
     int rc;
 
-    if (dprintf (fd, "cmd=lookup_name service=%s\n", service) < 0)
+    if (fprintf (fp, "cmd=lookup_name service=%s\n", service) < 0)
         return PMI_FAIL;
-    if (dgetline (fd, buf, sizeof (buf)) < 0)
+    if (!fgets (buf, sizeof (buf), fp))
         return PMI_FAIL;
     if (keyval_parse_isword (buf, "cmd", "lookup_result") < 0)
         return PMI_FAIL;
@@ -74,30 +74,23 @@ int fake_lookup (int fd, const char *service)
     return 0;
 }
 
-int fake_spawn (int fd)
+int fake_spawn (FILE *fp)
 {
     char buf[SIMPLE_MAX_PROTO_LINE];
     int rc;
 
-    if (dprintf (fd, "mcmd=spawn\n") < 0)
+    if (fprintf (fp,
+                 "mcmd=spawn\n"
+                 "nprocs=1\n"
+                 "execname=foo\n"
+                 "totspawns=1\n"
+                 "spawnssofar=1\n"
+                 "argcnt=0\n"
+                 "preput_num=0\n"
+                 "info_num=0\n"
+                 "endcmd\n") < 0)
         return PMI_FAIL;
-    if (dprintf (fd, "nprocs=1\n") < 0)
-        return PMI_FAIL;
-    if (dprintf (fd, "execname=foo\n") < 0)
-        return PMI_FAIL;
-    if (dprintf (fd, "totspawns=1\n") < 0)
-        return PMI_FAIL;
-    if (dprintf (fd, "spawnssofar=1\n") < 0)
-        return PMI_FAIL;
-    if (dprintf (fd, "argcnt=0\n") < 0)
-        return PMI_FAIL;
-    if (dprintf (fd, "preput_num=0\n") < 0)
-        return PMI_FAIL;
-    if (dprintf (fd, "info_num=0\n") < 0)
-        return PMI_FAIL;
-    if (dprintf (fd, "endcmd\n") < 0)
-        return PMI_FAIL;
-    if (dgetline (fd, buf, sizeof (buf)) < 0)
+    if (!fgets (buf, sizeof (buf), fp))
         return PMI_FAIL;
     if (keyval_parse_isword (buf, "cmd", "spawn_result") < 0)
         return PMI_FAIL;
@@ -106,17 +99,17 @@ int fake_spawn (int fd)
     return 0;
 }
 
-int fake_init (int fd, int version, int subversion)
+int fake_init (FILE *fp, int version, int subversion)
 {
     char buf[SIMPLE_MAX_PROTO_LINE];
     int rc;
 
-    if (dprintf (fd,
+    if (fprintf (fp,
                  "cmd=init pmi_version=%d pmi_subversion=%d\n",
                  version,
                  subversion) < 0)
         return -1;
-    if (dgetline (fd, buf, sizeof (buf)) < 0)
+    if (!fgets (buf, sizeof (buf), fp))
         return -1;
     if (keyval_parse_isword (buf, "cmd", "response_to_init") < 0)
         return -1;
@@ -137,20 +130,23 @@ int main (int argc, char *argv[])
     char pmi_fd[16];
     char pmi_rank[16];
     char pmi_size[16];
+    FILE *cfp;
 
     plan (NO_PLAN);
 
     srv = pmi_server_create (cfd, 1);
+    if (!(cfp = fdopen (dup (cfd[0]), "r+")))
+        BAIL_OUT ("fdopen/dup failed");
 
     /* N.B. server allows multiple inits, so we take advantage
      * of this to beat on its version negotiation without any
      * setup/teardown of the server.
      */
-    ok (fake_init (cfd[0], 1, 0) == -1,
+    ok (fake_init (cfp, 1, 0) == -1,
         "fake init for protocol 1.0 fails");
-    ok (fake_init (cfd[0], 2, 0) == -1,
+    ok (fake_init (cfp, 2, 0) == -1,
         "fake init for protocol 2.0 fails");
-    ok (fake_init (cfd[0], 1, 1) == 0,
+    ok (fake_init (cfp, 1, 1) == 0,
         "fake init for protocol 1.1 succeeds");
 
     /* create/init
@@ -259,20 +255,22 @@ int main (int argc, char *argv[])
         "pmi_simple_client_barrier OK (rigged errors cleared)");
 
     /* publish */
-    ok (fake_publish (cfd[0], "foo", "bar") == PMI_FAIL,
+    ok (fake_publish (cfp, "foo", "bar") == PMI_FAIL,
         "publish fails (unimplemented)");
 
     /* unpublish */
-    ok (fake_unpublish (cfd[0], "foo") == PMI_FAIL,
+    ok (fake_unpublish (cfp, "foo") == PMI_FAIL,
         "unpublish fails (unimplemented)");
 
     /* lookup */
-    ok (fake_lookup (cfd[0], "foo") == PMI_FAIL,
+    ok (fake_lookup (cfp, "foo") == PMI_FAIL,
         "lookup fails (unimplemented)");
 
     /* spawn */
-    ok (fake_spawn (cfd[0]) == PMI_FAIL,
+    ok (fake_spawn (cfp) == PMI_FAIL,
         "spawn fails (unimplemented)");
+
+    fclose (cfp);
 
     /* finalize
      */

@@ -50,6 +50,7 @@
 #include <string.h>
 
 #include "ccan/str/str.h"
+#include "src/common/libutil/strlcpy.h"
 
 #include "pmi.h"
 #include "pmi2.h"
@@ -117,14 +118,15 @@ int PMI2_Initialized (void)
     return 0;
 }
 
-int PMI2_Abort (int flag, const char msg[])
+int PMI2_Abort (int flag, const char *msg)
 {
     /* pmi_simple_client_abort() only returns on error, in which case
      * we fall back to printing the msg on stderr and call exit().
      * (return code not checked because we don't do anything with it)
      */
     (void) pmi_simple_client_abort (pmi_global_ctx, 1, msg);
-    fprintf (stderr, "PMI2_Abort: (%d) %s\n",
+    fprintf (stderr,
+             "PMI2_Abort: (%d) %s\n",
              pmi_global_ctx ? pmi_global_ctx->rank : -1,
              msg ? msg : "NULL");
     exit (1);
@@ -132,22 +134,26 @@ int PMI2_Abort (int flag, const char msg[])
     return PMI_SUCCESS;
 }
 
-int PMI2_Job_Spawn (int count, const char * cmds[],
-                    int argcs[], const char ** argvs[],
-                    const int maxprocs[],
-                    const int info_keyval_sizes[],
-                    const struct MPID_Info *info_keyval_vectors[],
+int PMI2_Job_Spawn (int count,
+                    const char **cmds,
+                    int *argcs,
+                    const char **argvs[],
+                    const int *maxprocs,
+                    const int *info_keyval_sizes,
+                    const struct MPID_Info **info_keyval_vectors,
                     int preput_keyval_size,
-                    const struct MPID_Info *preput_keyval_vector[],
-                    char jobId[], int jobIdSize,
-                    int errors[])
+                    const struct MPID_Info **preput_keyval_vector,
+                    char *jobId,
+                    int jobIdSize,
+                    int *errors)
 {
     return PMI_FAIL;
 }
 
 /* Look up kvsname on first request, then cache for subsequent requests.
  */
-static int get_cached_kvsname (struct pmi_simple_client *pmi, const char **name)
+static int get_cached_kvsname (struct pmi_simple_client *pmi,
+                               const char **name)
 {
     const char *auxkey = "flux::kvsname";
     char *kvsname;
@@ -178,7 +184,7 @@ static int get_cached_kvsname (struct pmi_simple_client *pmi, const char **name)
 
 /* MPICH: treats PMI2_Job_GetId() equivalent to PMI_KVS_Get_my_name().
  */
-int PMI2_Job_GetId (char jobid[], int jobid_size)
+int PMI2_Job_GetId (char *jobid, int jobid_size)
 {
     const char *kvsname;
     int result;
@@ -186,9 +192,8 @@ int PMI2_Job_GetId (char jobid[], int jobid_size)
     result = get_cached_kvsname (pmi_global_ctx, &kvsname);
     if (result != PMI2_SUCCESS)
         return result;
-    if (!jobid || jobid_size < (int)strlen (kvsname) + 1)
+    if (!jobid || strlcpy (jobid, kvsname, jobid_size) < strlen (kvsname))
         return PMI2_ERR_INVALID_ARGS;
-    strcpy (jobid, kvsname);
     return PMI2_SUCCESS;
 }
 
@@ -197,17 +202,17 @@ int PMI2_Job_GetRank (int *rank)
     return PMI2_FAIL;
 }
 
-int PMI2_Job_Connect (const char jobid[], PMI2_Connect_comm_t *conn)
+int PMI2_Job_Connect (const char *jobid, PMI2_Connect_comm_t *conn)
 {
     return PMI2_FAIL;
 }
 
-int PMI2_Job_Disconnect (const char jobid[])
+int PMI2_Job_Disconnect (const char *jobid)
 {
     return PMI2_FAIL;
 }
 
-int PMI2_KVS_Put (const char key[], const char value[])
+int PMI2_KVS_Put (const char *key, const char *value)
 {
     const char *kvsname;
     int result;
@@ -224,8 +229,8 @@ int PMI2_KVS_Put (const char key[], const char value[])
  */
 int PMI2_KVS_Get (const char *jobid,
                   int src_pmi_id,
-                  const char key[],
-                  char value [],
+                  const char *key,
+                  char *value,
                   int maxvalue,
                   int *vallen)
 {
@@ -259,8 +264,11 @@ int PMI2_Info_GetSize (int *size)
 /* Cray MPI: look up a node-scope key stored with PMI2_Info_PutNodeAttr().
  * If waitfor is nonzero, try once per second until the key is available.
  */
-int PMI2_Info_GetNodeAttr (const char name[],
-                           char value[], int valuelen, int *found, int waitfor)
+int PMI2_Info_GetNodeAttr (const char *name,
+                           char *value,
+                           int valuelen,
+                           int *found,
+                           int waitfor)
 {
     const char *kvsname;
     int result;
@@ -298,8 +306,11 @@ int PMI2_Info_GetNodeAttr (const char name[],
     return result;
 }
 
-int PMI2_Info_GetNodeAttrIntArray (const char name[], int array[],
-                                   int arraylen, int *outlen, int *found)
+int PMI2_Info_GetNodeAttrIntArray (const char *name,
+                                   int *array,
+                                   int arraylen,
+                                   int *outlen,
+                                   int *found)
 {
     return PMI2_FAIL;
 }
@@ -308,7 +319,7 @@ int PMI2_Info_GetNodeAttrIntArray (const char name[], int array[],
  * not to exchange them.  They are immediately available for kvs_get by procs
  * on the same shell.
  */
-int PMI2_Info_PutNodeAttr (const char name[], const char value[])
+int PMI2_Info_PutNodeAttr (const char *name, const char *value)
 {
     const char *kvsname;
     int result;
@@ -334,8 +345,10 @@ int PMI2_Info_PutNodeAttr (const char name[], const char value[])
 /* MPICH: only fetches PMI_process_mapping and universeSize
  * with PMI2_Info_GetJobAttr().
  */
-int PMI2_Info_GetJobAttr (const char name[],
-                          char value[], int valuelen, int *found)
+int PMI2_Info_GetJobAttr (const char *name,
+                          char *value,
+                          int valuelen,
+                          int *found)
 {
     int result;
 
@@ -385,26 +398,31 @@ error:
     return result;
 }
 
-int PMI2_Info_GetJobAttrIntArray (const char name[], int array[],
-                                  int arraylen, int *outlen, int *found)
+int PMI2_Info_GetJobAttrIntArray (const char *name,
+                                  int *array,
+                                  int arraylen,
+                                  int *outlen,
+                                  int *found)
 {
     return PMI2_FAIL;
 }
 
-int PMI2_Nameserv_publish (const char service_name[],
-                           const struct MPID_Info *info_ptr, const char port[])
+int PMI2_Nameserv_publish (const char *service_name,
+                           const struct MPID_Info *info_ptr,
+                           const char *port)
 {
     return PMI2_FAIL;
 }
 
-int PMI2_Nameserv_lookup (const char service_name[],
+int PMI2_Nameserv_lookup (const char *service_name,
                           const struct MPID_Info *info_ptr,
-                          char port[], int portLen)
+                          char *port,
+                          int portLen)
 {
     return PMI2_FAIL;
 }
 
-int PMI2_Nameserv_unpublish (const char service_name[],
+int PMI2_Nameserv_unpublish (const char *service_name,
                              const struct MPID_Info *info_ptr)
 {
     return PMI2_FAIL;

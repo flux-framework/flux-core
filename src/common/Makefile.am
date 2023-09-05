@@ -170,7 +170,9 @@ flux_libpmi_la_LIBADD = \
 	libflux-idset.la \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libpmi/libpmi_common.la \
-	$(builddir)/libutil/aux.lo
+	$(builddir)/libutil/aux.lo \
+	$(builddir)/libutil/strlcpy.lo
+
 flux_libpmi_la_LDFLAGS = \
 	-Wl,--version-script=$(srcdir)/libpmi.map \
 	-version-info 0:0:0 \
@@ -184,7 +186,8 @@ flux_libpmi2_la_LIBADD = \
 	libflux-idset.la \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libpmi/libpmi_common.la \
-	$(builddir)/libutil/aux.lo
+	$(builddir)/libutil/aux.lo \
+	$(builddir)/libutil/strlcpy.lo
 flux_libpmi2_la_LDFLAGS = \
 	-Wl,--version-script=$(srcdir)/libpmi2.map \
 	-version-info 0:0:0 \

@@ -19,8 +19,8 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libpmi/simple_server.h"
-#include "src/common/libpmi/dgetline.h"
 #include "src/common/libpmi/pmi.h"
+#include "src/common/libutil/fdutils.h"
 
 #include "src/common/libtap/tap.h"
 
@@ -86,31 +86,32 @@ static int s_send_response (void *client, const char *buf)
 {
     int *rfd = client;
 
-    return dputline (*rfd, buf);
+    return dprintf (*rfd, "%s", buf);
 }
 
-static void s_io_cb (flux_reactor_t *r, flux_watcher_t *w,
-                     int revents, void *arg)
+static void s_buf_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     struct client *cli = arg;
     struct pmi_server_context *ctx = cli->ctx;
-    int fd = flux_fd_watcher_get_fd (w);
+    const char *buf;
+    int len;
     int rc;
 
     assert (ctx->magic == MAGIC_VALUE);
-    if (dgetline (fd, ctx->buf, sizeof (ctx->buf)) < 0) {
+    if (!(buf = flux_buffer_read_watcher_get_data (w, &len))) {
         flux_reactor_stop_error (r);
         return;
     }
-    rc = pmi_simple_server_request (ctx->pmi, ctx->buf, cli, cli->rank);
+    rc = pmi_simple_server_request (ctx->pmi, buf, cli, cli->rank);
     if (rc < 0) {
         flux_reactor_stop_error (r);
         return;
     }
-    if (rc == 1) {
-        close (fd);
+    if (rc == 1)
         flux_watcher_stop (w);
-    }
 }
 
 static int s_barrier_enter (void *arg)
@@ -127,6 +128,22 @@ static int s_barrier_enter (void *arg)
     return 0;
 }
 
+static flux_watcher_t *s_buf_create (flux_reactor_t *r, int fd, void *arg)
+{
+    flux_watcher_t *w;
+    w = flux_buffer_read_watcher_create (r,
+                                         fd,
+                                         SIMPLE_MAX_PROTO_LINE,
+                                         s_buf_cb,
+                                         FLUX_POLLIN | FLUX_WATCHER_LINE_BUFFER,
+                                         arg);
+    if (!w)
+        BAIL_OUT ("flux_buffer_read_watcher_create failed: %s",
+                  strerror (errno));
+    flux_watcher_start (w);
+    return w;
+}
+
 static void *server_thread (void *arg)
 {
     struct pmi_server_context *ctx = arg;
@@ -140,13 +157,8 @@ static void *server_thread (void *arg)
     if (!(w = calloc (ctx->size, sizeof (w[0]))))
         BAIL_OUT ("calloc failed");
     for (i = 0; i < ctx->size; i++) {
-        if (!(w[i] = flux_fd_watcher_create (reactor,
-                                             ctx->cli[i].sfd,
-                                             FLUX_POLLIN,
-                                             s_io_cb,
-                                             &ctx->cli[i])))
-            BAIL_OUT ("flux_fd_watcher_create failed");
-        flux_watcher_start (w[i]);
+        fd_set_nonblocking (ctx->cli[i].sfd);
+        w[i] = s_buf_create (reactor, ctx->cli[i].sfd, &ctx->cli[i]);
     }
     if (flux_reactor_run (reactor, 0) < 0)
         BAIL_OUT ("flux_reactor_run failed");

@@ -18,6 +18,7 @@
 #include "ccan/array_size/array_size.h"
 
 #include "pmi.h"
+#include "pmi2.h"
 #include "pmi_strerror.h"
 
 
@@ -42,6 +43,7 @@ static etab_t pmi_errors[] = {
     { PMI_ERR_INVALID_NUM_PARSED, "invalid num_parsed length argument" },
     { PMI_ERR_INVALID_KEYVALP,  "invalid keyvalp argument" },
     { PMI_ERR_INVALID_SIZE,     "invalid size argument" },
+    { PMI2_ERR_OTHER,           "other PMI2 error" },
 };
 
 const char *pmi_strerror (int rc)

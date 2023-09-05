@@ -88,14 +88,15 @@ int PMI_Finalize (void)
     return result;
 }
 
-int PMI_Abort (int exit_code, const char error_msg[])
+int PMI_Abort (int exit_code, const char *error_msg)
 {
     /* pmi_simple_client_abort() only returns on error, in which case
      * we fall back to printing the message on stderr and call exit()
      * (return code not checked because we don't do anything with it)
      */
     (void) pmi_simple_client_abort (pmi_global_ctx, exit_code, error_msg);
-    fprintf (stderr, "PMI_Abort: (%d) %s\n",
+    fprintf (stderr,
+             "PMI_Abort: (%d) %s\n",
              pmi_global_ctx ? pmi_global_ctx->rank : -1,
              error_msg);
     exit (exit_code);
@@ -133,7 +134,7 @@ int PMI_Get_appnum (int *appnum)
     return pmi_simple_client_get_appnum (pmi_global_ctx, appnum);
 }
 
-int PMI_KVS_Get_my_name (char kvsname[], int length)
+int PMI_KVS_Get_my_name (char *kvsname, int length)
 {
     return pmi_simple_client_kvs_get_my_name (pmi_global_ctx,
                                               kvsname,
@@ -170,13 +171,15 @@ int PMI_KVS_Get_value_length_max (int *length)
     return PMI_SUCCESS;
 }
 
-int PMI_KVS_Put (const char kvsname[], const char key[], const char value[])
+int PMI_KVS_Put (const char *kvsname, const char *key, const char *value)
 {
     return pmi_simple_client_kvs_put (pmi_global_ctx, kvsname, key, value);
 }
 
-int PMI_KVS_Get (const char kvsname[], const char key[],
-                 char value[], int length)
+int PMI_KVS_Get (const char *kvsname,
+                 const char *key,
+                 char *value,
+                 int length)
 {
     return pmi_simple_client_kvs_get (pmi_global_ctx,
                                       kvsname,
@@ -185,7 +188,7 @@ int PMI_KVS_Get (const char kvsname[], const char key[],
                                       length);
 }
 
-int PMI_KVS_Commit (const char kvsname[])
+int PMI_KVS_Commit (const char *kvsname)
 {
     if (!pmi_global_ctx || !pmi_global_ctx->initialized)
         return PMI_ERR_INIT;
@@ -199,30 +202,30 @@ int PMI_Barrier (void)
     return pmi_simple_client_barrier (pmi_global_ctx);
 }
 
-int PMI_Publish_name (const char service_name[], const char port[])
+int PMI_Publish_name (const char *service_name, const char *port)
 {
     return PMI_FAIL;
 }
 
-int PMI_Unpublish_name (const char service_name[])
+int PMI_Unpublish_name (const char *service_name)
 {
     return PMI_FAIL;
 }
 
-int PMI_Lookup_name (const char service_name[], char port[])
+int PMI_Lookup_name (const char *service_name, char *port)
 {
     return PMI_FAIL;
 }
 
 int PMI_Spawn_multiple(int count,
-                       const char * cmds[],
-                       const char ** argvs[],
-                       const int maxprocs[],
-                       const int info_keyval_sizesp[],
-                       const PMI_keyval_t * info_keyval_vectors[],
+                       const char **cmds,
+                       const char **argvs[],
+                       const int *maxprocs,
+                       const int *info_keyval_sizesp,
+                       const PMI_keyval_t **info_keyval_vectors,
                        int preput_keyval_size,
-                       const PMI_keyval_t preput_keyval_vector[],
-                       int errors[])
+                       const PMI_keyval_t *preput_keyval_vector,
+                       int *errors)
 {
     return PMI_FAIL;
 }
@@ -230,7 +233,7 @@ int PMI_Spawn_multiple(int count,
 /* Old API funcs - signatures needed for ABI compliance.
  */
 
-int PMI_Get_clique_ranks (int ranks[], int length)
+int PMI_Get_clique_ranks (int *ranks, int length)
 {
     return pmi_simple_client_get_clique_ranks (pmi_global_ctx, ranks, length);
 }
@@ -245,51 +248,62 @@ int PMI_Get_id_length_max (int *length)
     return PMI_KVS_Get_name_length_max (length);
 }
 
-int PMI_Get_id (char kvsname[], int length)
+int PMI_Get_id (char *kvsname, int length)
 {
     return PMI_KVS_Get_my_name (kvsname, length);
 }
 
-int PMI_Get_kvs_domain_id (char kvsname[], int length)
+int PMI_Get_kvs_domain_id (char *kvsname, int length)
 {
     return PMI_KVS_Get_my_name (kvsname, length);
 }
 
-int PMI_KVS_Create (char kvsname[], int length)
+int PMI_KVS_Create (char *kvsname, int length)
 {
     return PMI_FAIL;
 }
 
-int PMI_KVS_Destroy (const char kvsname[])
+int PMI_KVS_Destroy (const char *kvsname)
 {
     return PMI_FAIL;
 }
 
-int PMI_KVS_Iter_first (const char kvsname[], char key[], int key_len,
-                        char val[], int val_len)
+int PMI_KVS_Iter_first (const char *kvsname,
+                        char *key,
+                        int key_len,
+                        char *val,
+                        int val_len)
 {
     return PMI_FAIL;
 }
 
-int PMI_KVS_Iter_next (const char kvsname[], char key[], int key_len,
-                       char val[], int val_len)
+int PMI_KVS_Iter_next (const char *kvsname,
+                       char *key,
+                       int key_len,
+                       char *val,
+                       int val_len)
 {
     return PMI_FAIL;
 }
 
-int PMI_Parse_option (int num_args, char *args[], int *num_parsed,
-                      PMI_keyval_t **keyvalp, int *size)
+int PMI_Parse_option (int num_args,
+                      char **args,
+                      int *num_parsed,
+                      PMI_keyval_t **keyvalp,
+                      int *size)
 {
     return PMI_FAIL;
 }
 
-int PMI_Args_to_keyval (int *argcp, char *((*argvp)[]),
-                        PMI_keyval_t **keyvalp, int *size)
+int PMI_Args_to_keyval (int *argcp,
+                        char *((*argvp)[]),
+                        PMI_keyval_t **keyvalp,
+                        int *size)
 {
     return PMI_FAIL;
 }
 
-int PMI_Free_keyvals (PMI_keyval_t keyvalp[], int size)
+int PMI_Free_keyvals (PMI_keyval_t *keyvalp, int size)
 {
     return PMI_FAIL;
 }

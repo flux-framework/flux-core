@@ -83,6 +83,25 @@ static char *spawn[] = {
     NULL,
 };
 
+void check_overflow (void)
+{
+    int rc;
+    int i;
+    unsigned int u;
+
+    rc = keyval_parse_int ("x=4294967296", "x", &i);
+    ok (rc == EKV_VAL_PARSE,
+        "keyval_parse_int x=2^32 (overflow) fails with EKV_VAL_PARSE");
+
+    rc = keyval_parse_int ("x=-4294967296", "x", &i);
+    ok (rc == EKV_VAL_PARSE,
+        "keyval_parse_int x=-2^32 (overflow) fails with EKV_VAL_PARSE");
+
+    rc = keyval_parse_uint ("x=8589934592", "x", &u);
+    ok (rc == EKV_VAL_PARSE,
+        "keyval_parse_uint x=2^33 (overflow) fails with EKV_VAL_PARSE");
+}
+
 int main(int argc, char** argv)
 {
     char val[42];
@@ -305,6 +324,8 @@ int main(int argc, char** argv)
         && keyval_parse_word (spawn[17], "errcodes", val, sizeof (val)) == EKV_SUCCESS
         && streq (val, "0,0"),
         "parsed pmi-1 spawn response");
+
+    check_overflow();
 
     done_testing();
 }
