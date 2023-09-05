@@ -109,6 +109,16 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
                              json_t *conf,
                              flux_error_t *errp);
 
+typedef int (*jobtap_builtin_f) (flux_plugin_t *p, void *arg);
+
+/*  Add a new jobtap builtin plugin.
+ *  Allows builtins to be created externally to the jobtap module.
+ */
+int jobtap_register_builtin (struct jobtap *jobtap,
+                             const char *name,
+                             jobtap_builtin_f init_cb,
+                             void *arg);
+
 /*  Job manager RPC handler for loading new jobtap plugins.
  */
 void jobtap_handler (flux_t *h,
