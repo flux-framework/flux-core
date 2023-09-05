@@ -24,6 +24,10 @@ from flux.job import JobID
 from flux.resource import ResourceSet
 
 
+def offline_ranks(handle):
+    return IDset(handle.rpc("resource.status", nodeid=0).get()["offline"])
+
+
 def fetch_job_ranks(handle, jobid):
     """Fetch job ranks from KVS for jobid"""
     try:
@@ -129,6 +133,18 @@ async def run_per_rank(name, jobid, args):
     ranks = fetch_job_ranks(handle, jobid)
     if ranks is None:
         return 1
+
+    #  Check for any offline ranks and subtract them from targets.
+    #  Optionally drain offline ranks with a unique message that prolog/epilog
+    #  failed due to offline state:
+    #
+    offline = offline_ranks(handle) & ranks
+    if offline:
+        returncode = 1
+        LOGGER.info("%s: %s: ranks %s offline. Skipping.", jobid, name, offline)
+        ranks.subtract(offline)
+        if args.drain_offline:
+            drain(handle, offline, f"offline for {jobid} {name}")
 
     if args.verbose:
         LOGGER.info(
@@ -280,6 +296,14 @@ def main():
         help="With --exec-per-rank, run CMD under 'flux-imp run'",
     )
     prolog_parser.add_argument(
+        "-D",
+        "--drain-offline",
+        help="With --exec-per-rank, drain any offline ranks with a specific "
+        + "drain message. The default is to skip offline ranks and not update "
+        + "drain reason.",
+        action="store_true",
+    )
+    prolog_parser.add_argument(
         "-d",
         "--exec-directory",
         metavar="DIRECTORY",
@@ -310,6 +334,14 @@ def main():
         "--with-imp",
         action="store_true",
         help="With --exec-per-rank, run CMD under 'flux-imp run'",
+    )
+    epilog_parser.add_argument(
+        "-D",
+        "--drain-offline",
+        help="With --exec-per-rank, drain any offline ranks with a specific "
+        + "drain message. The default is to skip offline ranks and not update "
+        + "drain reason.",
+        action="store_true",
     )
     epilog_parser.add_argument(
         "-d",
