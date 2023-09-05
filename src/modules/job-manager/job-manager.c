@@ -170,6 +170,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating conf context");
         goto done;
     }
+    if (!(ctx.jobtap = jobtap_create (&ctx))) {
+        flux_log (h, LOG_ERR, "error creating jobtap interface");
+        goto done;
+    }
     if (!(ctx.purge = purge_create (&ctx))) {
         flux_log_error (h, "error creating purge context");
         goto done;
@@ -220,10 +224,6 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (!(ctx.update = update_ctx_create (&ctx))) {
         flux_log_error (h, "error creating job update interface");
-        goto done;
-    }
-    if (!(ctx.jobtap = jobtap_create (&ctx))) {
-        flux_log (h, LOG_ERR, "error creating jobtap interface");
         goto done;
     }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
