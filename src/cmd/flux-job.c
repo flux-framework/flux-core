@@ -370,6 +370,10 @@ static struct optparse_option info_opts[] =  {
     { .name = "original", .key = 'o', .has_arg = 0,
       .usage = "For key \"jobspec\", return the original submitted jobspec",
     },
+    { .name = "base", .key = 'b', .has_arg = 0,
+      .usage = "For key \"jobspec\", get base value, "
+               "do not apply updates from eventlog",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -3373,17 +3377,15 @@ struct info_ctx {
     json_t *keys_input;         /* keys input by user */
     json_t *keys_lookup;        /* keys to lookup */
     bool original;
+    bool base;
 };
 
-void info_output (flux_future_t *f, const char *key, struct info_ctx *ctx)
+void info_output_get (flux_future_t *f,
+                      struct info_ctx *ctx,
+                      const char *key,
+                      const char **s)
 {
-    const char *lookup_key = key;
-    const char *s;
-
-    if (ctx->original && streq (key, "jobspec"))
-        lookup_key = "J";
-
-    if (flux_rpc_get_unpack (f, "{s:s}", lookup_key, &s) < 0) {
+    if (flux_rpc_get_unpack (f, "{s:s}", key, s) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
             log_msg_exit ("job %s id or key not found", ctx->id_arg);
@@ -3391,18 +3393,86 @@ void info_output (flux_future_t *f, const char *key, struct info_ctx *ctx)
         else
             log_err_exit ("flux_rpc_get_unpack");
     }
+}
 
-    if (ctx->original && streq (key, "jobspec")) {
+void info_output_jobspec (flux_future_t *f, struct info_ctx *ctx)
+{
+
+    if (ctx->original) {
+        const char *J_str;
+        char *jobspec_str;
         flux_error_t error;
-        char *jobspec = flux_unwrap_string (s, false, NULL, &error);
-        if (!jobspec)
+
+        info_output_get (f, ctx, "J", &J_str);
+        jobspec_str = flux_unwrap_string (J_str, false, NULL, &error);
+        if (!jobspec_str)
             log_msg_exit ("Failed to unwrap jobspec: %s", error.text);
-        printf ("%s\n", jobspec);
-        free (jobspec);
+        printf ("%s\n", jobspec_str);
+        free (jobspec_str);
+    }
+    else if (ctx->base) {
+        const char *jobspec_str;
+        info_output_get (f, ctx, "jobspec", &jobspec_str);
+        printf ("%s\n", jobspec_str);
+    }
+    else {
+        const char *jobspec_str;
+        const char *eventlog_str;
+        json_t *jobspec;
+        json_t *eventlog;
+        json_error_t error;
+        size_t index;
+        json_t *entry;
+        char *jobspec_updated;
+
+        info_output_get (f, ctx, "jobspec", &jobspec_str);
+        info_output_get (f, ctx, "eventlog", &eventlog_str);
+
+        if (!(jobspec = json_loads (jobspec_str, JSON_DECODE_ANY, &error)))
+            log_msg_exit ("Failed to decode jobspec: %s", error.text);
+
+        if (!(eventlog = eventlog_decode (eventlog_str)))
+            log_err_exit ("Failed to decode eventlog");
+
+        json_array_foreach (eventlog, index, entry) {
+            const char *name;
+            json_t *context;
+            const char *path;
+            json_t *value;
+
+            if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
+                log_err_exit ("Failed to parse eventlog entry");
+
+            if (!streq (name, "jobspec-update"))
+                continue;
+
+            json_object_foreach (context, path, value) {
+                if (jpath_set (jobspec, path, value) < 0)
+                    log_err_exit ("Failed to update jobspec");
+            }
+        }
+
+        if (!(jobspec_updated = json_dumps (jobspec, JSON_COMPACT)))
+            log_err_exit ("Failed to decode jobspec object");
+
+        printf ("%s\n", jobspec_updated);
+
+        json_decref (jobspec);
+        json_decref (eventlog);
+        free (jobspec_updated);
+    }
+}
+
+void info_output (flux_future_t *f, const char *key, struct info_ctx *ctx)
+{
+    const char *s;
+
+    if (streq (key, "jobspec")) {
+        info_output_jobspec (f, ctx);
         return;
     }
 
-    /* XXX - prettier output later */
+    info_output_get (f, ctx, key, &s);
     printf ("%s\n", s);
 }
 
@@ -3441,28 +3511,45 @@ void info_lookup (flux_t *h,
     while (optindex < argc) {
         json_t *s;
         const char *key = argv[optindex];
+        const char *extra_key = NULL;
 
         if (!(s = json_string (key)))
             log_msg_exit ("json_string");
         if (json_array_append_new (ctx.keys_input, s) < 0)
             log_msg_exit ("json_array_append");
 
-        /*  Special case: if --original was used and the key is "jobspec",
-         *   then fetch J and decode it on behalf of the caller.
-         */
-        if (optparse_hasopt (p, "original") && streq (key, "jobspec")) {
-            ctx.original = true;
-            key = "J";
+        /*  Special cases for key "jobspec" */
+        if (streq (key, "jobspec")) {
+            /* if --original was used fetch J and decode it on behalf of the caller. */
+            if (optparse_hasopt (p, "original")) {
+                ctx.original = true;
+                key = "J";
+            }
+            else if (optparse_hasopt (p, "base"))
+                ctx.base = true;
+            else
+                /* also get eventlog to build viewed jobspec */
+                extra_key = "eventlog";
         }
 
         /* N.B. job-info.lookup will ignore duplicate keys, in the
-         * event user specified both "jobspec" and "J" on the command
-         * line with --original.
+         * event user specified duplicate keys or options that lead to
+         * duplicate keys: e.g.
+         * - "jobspec" and "eventlog" (and not --base)
+         * - --original and both "jobspec" and "J"
          */
+
         if (!(s = json_string (key)))
             log_msg_exit ("json_string");
         if (json_array_append_new (ctx.keys_lookup, s) < 0)
             log_msg_exit ("json_array_append");
+
+        if (extra_key) {
+            if (!(s = json_string (extra_key)))
+                log_msg_exit ("json_string");
+            if (json_array_append_new (ctx.keys_lookup, s) < 0)
+                log_msg_exit ("json_array_append");
+        }
         optindex++;
     }
 
