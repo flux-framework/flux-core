@@ -81,6 +81,8 @@ def run_per_rank(name, jobid, args):
 
     for rank in ranks:
         cmdv = ["flux", "exec", "-qn", f"-r{rank}"]
+        if args.with_imp:
+            cmdv.append("--with-imp")
         if args.sdexec:
             cmdv.append("--service=sdexec")
             cmdv.append(f"--setopt=SDEXEC_NAME={name}-{rank}-{jobid.f58plain}.service")
@@ -195,6 +197,11 @@ def main():
         + "rank of jobid set in FLUX_JOB_ID environment variable",
     )
     prolog_parser.add_argument(
+        "--with-imp",
+        action="store_true",
+        help="With --exec-per-rank, run CMD under 'flux-imp run'",
+    )
+    prolog_parser.add_argument(
         "-d",
         "--exec-directory",
         metavar="DIRECTORY",
@@ -217,6 +224,11 @@ def main():
         metavar="CMD[,ARGS...]",
         help="Use flux-exec(1) to run CMD and optional ARGS on each target "
         + "rank of jobid set in FLUX_JOB_ID environment variable",
+    )
+    epilog_parser.add_argument(
+        "--with-imp",
+        action="store_true",
+        help="With --exec-per-rank, run CMD under 'flux-imp run'",
     )
     epilog_parser.add_argument(
         "-d",

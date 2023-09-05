@@ -50,11 +50,14 @@ static struct optparse_option cmdopts[] = {
     { .name = "setopt", .has_arg = 1, .arginfo = "NAME=VALUE",
       .flags = OPTPARSE_OPT_HIDDEN,
       .usage = "Set subprocess option NAME to VALUE (multiple use ok)" },
+    { .name = "with-imp", .has_arg = 0,
+      .usage = "Run args under 'flux-imp run'" },
     OPTPARSE_TABLE_END
 };
 
 extern char **environ;
 
+flux_t *flux_handle = NULL;
 uint32_t rank_range;
 uint32_t rank_count;
 uint32_t started = 0;
@@ -75,6 +78,9 @@ flux_watcher_t *stdin_w;
 
 struct timespec last;
 int sigint_count = 0;
+
+bool use_imp = false;
+const char *imp_path = NULL;
 
 void output_exitsets (const char *key, void *item)
 {
@@ -239,10 +245,69 @@ static void stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
+static void kill_completion_cb (flux_subprocess_t *p)
+{
+    flux_subprocess_destroy (p);
+}
+
+static flux_subprocess_t *imp_kill (flux_subprocess_t *p, int signum)
+{
+    flux_cmd_t *cmd;
+    flux_subprocess_ops_t ops = {
+        .on_completion = kill_completion_cb,
+        .on_state_change = NULL,
+        .on_channel_out = NULL,
+        .on_stdout = output_cb,
+        .on_stderr = output_cb,
+    };
+
+    pid_t pid = flux_subprocess_pid (p);
+    int rank = flux_subprocess_rank (p);
+
+    if (!(cmd = flux_cmd_create (0, NULL, environ))
+        || flux_cmd_argv_append (cmd, imp_path) < 0
+        || flux_cmd_argv_append (cmd, "kill") < 0
+        || flux_cmd_argv_appendf (cmd, "%d", signum) < 0
+        || flux_cmd_argv_appendf (cmd, "-%ld", (long) pid) < 0) {
+        fprintf (stderr,
+                 "Failed to create flux-imp kill command for rank %d pid %d\n",
+                 rank, pid);
+        return NULL;
+    }
+    /* Note: subprocess object destroyed in completion callback
+     */
+    return flux_rexec (flux_handle, rank, 0, cmd, &ops);
+}
+
+static void killall (zlist_t *l, int signum)
+{
+    flux_subprocess_t *p = zlist_first (l);
+    while (p) {
+        if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
+            if (use_imp) {
+                if (!imp_kill (p, signum))
+                    fprintf (stderr,
+                             "failed to signal rank %d: %s\n",
+                             flux_subprocess_rank (p),
+                             strerror (errno));
+            }
+            else {
+                flux_future_t *f = flux_subprocess_kill (p, signum);
+                if (!f) {
+                    if (optparse_getopt (opts, "verbose", NULL) > 0)
+                        fprintf (stderr, "failed to signal rank %d: %s\n",
+                                flux_subprocess_rank (p), strerror (errno));
+                }
+                /* don't care about response */
+                flux_future_destroy (f);
+            }
+        }
+        p = zlist_next (l);
+    }
+}
+
 static void signal_cb (int signum)
 {
-    flux_subprocess_t *p = zlist_first (subprocesses);
-
     if (signum == SIGINT) {
         if (sigint_count >= 2) {
             double since_last = monotime_since (last);
@@ -265,19 +330,7 @@ static void signal_cb (int signum)
         fprintf (stderr, "sending signal %d to %d running processes\n",
                  signum, started - exited);
 
-    while (p) {
-        if (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING) {
-            flux_future_t *f = flux_subprocess_kill (p, signum);
-            if (!f) {
-                if (optparse_getopt (opts, "verbose", NULL) > 0)
-                    fprintf (stderr, "failed to signal rank %d: %s\n",
-                             flux_subprocess_rank (p), strerror (errno));
-            }
-            /* don't care about response */
-            flux_future_destroy (f);
-        }
-        p = zlist_next (subprocesses);
-    }
+    killall (subprocesses, signum);
 
     if (signum == SIGINT) {
         if (sigint_count)
@@ -322,11 +375,39 @@ char *split_opt (const char *s, char sep, const char **val)
     return cpy;
 }
 
+static bool check_for_imp_run (int argc, char *argv[], const char **ppath)
+{
+    /* If argv0 basename is flux-imp, then we'll likely have to use
+     *  flux-imp kill to signal the resulting subprocesses
+     */
+    if (streq (basename (argv[0]), "flux-imp")) {
+        *ppath = argv[0];
+        return true;
+    }
+    return false;
+}
+
+static const char *get_flux_imp_path (flux_t *h)
+{
+    const char *imp = NULL;
+    flux_future_t *f;
+
+    if (!(f = flux_rpc (h, "config.get", NULL, FLUX_NODEID_ANY, 0))
+        || flux_rpc_get_unpack (f,
+                                "{s?{s?s}}",
+                                "exec",
+                                "imp", &imp) < 0)
+        fprintf (stderr, "error fetching config object: %s",
+                 future_strerror (f, errno));
+    flux_aux_set (h, NULL, f, (flux_free_f) flux_future_destroy);
+    return imp;
+}
+
+
 int main (int argc, char *argv[])
 {
     const char *optargp;
     int optindex;
-    flux_t *h;
     flux_reactor_t *r;
     struct idset *ns;
     uint32_t rank;
@@ -385,14 +466,32 @@ int main (int argc, char *argv[])
         }
     }
 
-    if (!(h = flux_open (NULL, 0)))
+    if (!(flux_handle = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
+
+    /* Assign h to flux_handle for local usage in main()
+     */
+    flux_t *h = flux_handle;
 
     if (!(r = flux_get_reactor (h)))
         log_err_exit ("flux_get_reactor");
 
     if (flux_get_size (h, &rank_range) < 0)
         log_err_exit ("flux_get_size");
+
+    if (optparse_hasopt (opts, "with-imp")) {
+        if (!(imp_path = get_flux_imp_path (h)))
+            log_err_exit ("--with-imp: exec.imp path not found in config");
+        use_imp = true;
+        if (flux_cmd_argv_insert (cmd, 0, "run") < 0
+            || flux_cmd_argv_insert (cmd, 0, imp_path) < 0)
+            log_err_exit ("failed to prepend 'flux-imp run' to command");
+    }
+    else {
+        use_imp = check_for_imp_run (argc - optindex,
+                                     &argv[optindex],
+                                     &imp_path);
+    }
 
     if (optparse_getopt (opts, "rank", &optargp) > 0
         && !streq (optargp, "all")) {

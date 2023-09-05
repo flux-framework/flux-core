@@ -63,6 +63,14 @@ OPTIONS
 **-q, --quiet**
    Suppress extraneous output (e.g. per-rank error exit status).
 
+**--with-imp**
+   Prepend ``/path/to/flux-imp run`` to *COMMANDS*. This option is mostly
+   meant for testing or as a convenience to execute a configured ``prolog``
+   or ``epilog`` command under the IMP. Note: When this option is used,
+   or if ``flux-imp`` is detected as the first argument of *COMMANDS*,
+   flux-exec(1) will use ``flux-imp kill`` to signal remote commands
+   instead of the normal builtin subprocess signaling mechanism.
+
 
 NODESET FORMAT
 ==============
