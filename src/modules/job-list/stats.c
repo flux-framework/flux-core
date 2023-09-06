@@ -43,8 +43,10 @@ struct job_stats_ctx *job_stats_ctx_create (flux_t *h)
         return NULL;
     statsctx->h = h;
 
-    if (!(statsctx->queue_stats = zhashx_new ()))
+    if (!(statsctx->queue_stats = zhashx_new ())) {
+        errno = ENOMEM;
         goto error;
+    }
     zhashx_set_destructor (statsctx->queue_stats, free_wrapper);
 
     return statsctx;
