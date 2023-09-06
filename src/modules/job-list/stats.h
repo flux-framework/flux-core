@@ -41,6 +41,12 @@ void job_stats_remove_queue (struct job_stats_ctx *statsctx,
 
 void job_stats_purge (struct job_stats_ctx *statsctx, struct job *job);
 
+/* A client has disconnected from job-list.
+ * Cancel streaming job-stats request, if any.
+ */
+void job_stats_disconnect (struct job_stats_ctx *statsctx,
+                           const flux_msg_t *msg);
+
 #endif /* ! _FLUX_JOB_LIST_JOB_STATS_H */
 
 // vi: ts=4 sw=4 expandtab

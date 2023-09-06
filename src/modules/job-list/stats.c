@@ -351,6 +351,12 @@ static int job_stats_respond (struct job_stats_ctx *statsctx,
     return rc;
 }
 
+void job_stats_disconnect (struct job_stats_ctx *statsctx,
+                           const flux_msg_t *msg)
+{
+    flux_msglist_disconnect (statsctx->watchers, msg);
+}
+
 static void timer_cb (flux_reactor_t *r,
                       flux_watcher_t *w,
                       int revents,

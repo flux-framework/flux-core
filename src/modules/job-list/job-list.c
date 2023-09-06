@@ -95,6 +95,15 @@ static void purge_cb (flux_t *h,
     flux_log (h, LOG_DEBUG, "purged %d inactive jobs", count);
 }
 
+static void disconnect_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct list_ctx *ctx = arg;
+    job_stats_disconnect (ctx->jsctx->statsctx, msg);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-list.list",
@@ -130,6 +139,11 @@ static const struct flux_msg_handler_spec htab[] = {
       .topic_glob   = "job-purge-inactive",
       .cb           = purge_cb,
       .rolemask     = 0
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-list.disconnect",
+      .cb           = disconnect_cb,
+      .rolemask     = FLUX_ROLE_USER,
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
