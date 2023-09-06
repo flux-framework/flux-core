@@ -1,0 +1,108 @@
+##############################################################
+# Copyright 2023 Lawrence Livermore National Security, LLC
+# (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+#
+# This file is part of the Flux resource manager framework.
+# For details, see https://github.com/flux-framework.
+#
+# SPDX-License-Identifier: LGPL-3.0
+##############################################################
+
+stages: 
+  - test
+
+##############################################################
+# Quartz (CTS-1)
+# OS as of 09/2023: TOSS 4
+# Scheduler as of 09/2023: Slurm
+# Year Commissioned: 2016
+##############################################################
+
+test_quartz:
+    tags:
+        - quartz
+        - batch
+    variables:
+        LLNL_SERVICE_USER: fluxci
+        PYTHON: "/usr/bin/python3"
+        HWLOC_COMPONENTS: x86
+        debug: t
+        FLUX_TESTS_LOGFILE: t
+        FF_ENABLE_JOB_CLEANUP: "false"
+        LLNL_SLURM_SCHEDULER_PARAMETERS: "-p pdebug -N 1"
+        CUSTOM_CI_BUILDS_DIR: "/usr/WS1/$$USER/gitlab-runner-builds-dir"
+        # Note: the above will not work with /usr/workspace, you must specify WS1 or WS2
+    stage: test
+    script:
+        - git fetch --unshallow --tags
+        - git describe --always --tags --dirty
+        - lstopo --of xml >quartz.xml
+        - export FLUX_HWLOC_XMLFILE=$(pwd)/quartz.xml
+        - ./autogen.sh
+        - ./configure
+        - make -j 32 check
+    when: always
+
+##############################################################
+# Tioga (CORAL-2 Early Access)
+# OS as of 09/2023: TOSS 4
+# Scheduler as of 09/2023: Flux
+# Year Commissioned: 2022
+##############################################################
+
+test_tioga:
+    tags:
+        - tioga
+        - batch
+    variables:
+        LLNL_SERVICE_USER: fluxci
+        PYTHON: "/usr/bin/python3"
+        HWLOC_COMPONENTS: x86
+        debug: t
+        FLUX_TESTS_LOGFILE: t
+        FF_ENABLE_JOB_CLEANUP: "false"
+        LLNL_FLUX_SCHEDULER_PARAMETERS: "--exclusive -N 1"
+        CUSTOM_CI_BUILDS_DIR: "/usr/WS1/$$USER/gitlab-runner-builds-dir"
+        # Note: the above will not work with /usr/workspace, you must specify WS1 or WS2
+    stage: test
+    script:
+        - git fetch --unshallow --tags
+        - git describe --always --tags --dirty
+        - lstopo --of xml >tioga.xml
+        - export FLUX_HWLOC_XMLFILE=$(pwd)/tioga.xml
+        - ./autogen.sh
+        - ./configure
+        - make -j 32 check
+    when: always
+
+##############################################################
+# Corona 
+# OS as of 09/2023: TOSS 4
+# Scheduler as of 09/2023: Flux
+# Year Commissioned: 2019
+##############################################################
+
+test_corona:
+    tags:
+        - corona
+        - batch
+    variables:
+        LLNL_SERVICE_USER: fluxci
+        PYTHON: "/usr/bin/python3"
+        HWLOC_COMPONENTS: x86
+        debug: t
+        FLUX_TESTS_LOGFILE: t
+        FF_ENABLE_JOB_CLEANUP: "false"
+        LLNL_FLUX_SCHEDULER_PARAMETERS: "--exclusive -N 1 --setattr=system.bank=lc"
+        CUSTOM_CI_BUILDS_DIR: "/usr/WS1/$$USER/gitlab-runner-builds-dir"
+        # Note: the above will not work with /usr/workspace, you must specify WS1 or WS2
+    stage: test
+    script:
+        - git fetch --unshallow --tags
+        - git describe --always --tags --dirty
+        - lstopo --of xml >corona.xml
+        - export FLUX_HWLOC_XMLFILE=$(pwd)/corona.xml
+        - ./autogen.sh
+        - ./configure
+        - make -j 32 check
+    when: always
