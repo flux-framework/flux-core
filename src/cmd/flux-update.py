@@ -49,27 +49,17 @@ class JobspecUpdates:
             self._flux_handle = flux.Flux()
         return self._flux_handle
 
-    def _apply_jobspec_updates(self, eventlog):
-        """
-        Apply jobspec updates from eventlog to internal jobspec:
-        """
-        for entry in eventlog.splitlines():
-            event = flux.job.EventLogEvent(entry)
-            if event.name == "jobspec-update":
-                for key, value in event.context.items():
-                    self.jobspec.setattr(key, value)
-
     def _fetch_jobspec(self, key):
         """
-        Fetch dotted key 'key' in jobspec for this job, fetching jobspec
-        and eventlog (to apply jobspec-updates) if necessary.
+        Fetch dotted key 'key' in jobspec for this job.  Note that
+        job_kvs_lookup() will apply `jobspec-update` events from the
+        eventlog in the returned jobspec.
         """
         if self.jobspec is None:
             lookup = flux.job.job_kvs_lookup(
-                self.flux_handle, jobid=self.jobid, keys=["jobspec", "eventlog"]
+                self.flux_handle, jobid=self.jobid, keys=["jobspec"]
             )
             self.jobspec = flux.job.JobspecV1(**lookup["jobspec"])
-            self._apply_jobspec_updates(lookup["eventlog"])
 
         return self.jobspec.getattr(key)
 
