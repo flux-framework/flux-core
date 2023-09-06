@@ -74,26 +74,17 @@ static void jobtimer_cb (flux_reactor_t *r,
     top->jobtimer_running = false;
 }
 
-/* After some job state activity, and after a rate-limited delay,
+/* After some job stats activity, and after a rate-limited delay,
  * trigger queries for info in the two panes.
  */
-static void job_state_cb (flux_t *h,
-                          flux_msg_handler_t *mh,
-                          const flux_msg_t *msg,
-                          void *arg)
+static void stats_continuation (flux_future_t *f, void *arg)
 {
     struct top *top = arg;
-
     if (!top->jobtimer_running) {
         flux_timer_watcher_reset (top->jobtimer, job_activity_rate_limit, 0.);
         flux_watcher_start (top->jobtimer);
         top->jobtimer_running = true;
     }
-}
-
-static void stats_continuation (flux_future_t *f, void *arg)
-{
-    struct top *top = arg;
     summary_pane_jobstats (top->summary_pane, f);
     flux_future_reset (f);
 }
@@ -194,7 +185,6 @@ void test_exit_check (struct top *top)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT, "job-state", job_state_cb, 0 },
     { FLUX_MSGTYPE_EVENT, "heartbeat.pulse", heartbeat_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -290,8 +280,7 @@ struct top *top_create (const char *uri,
 
     if (flux_msg_handler_addvec (top->h, htab, top, &top->handlers) < 0)
         goto fail;
-    if (flux_event_subscribe (top->h, "job-state") < 0
-        || flux_event_subscribe (top->h, "heartbeat.pulse") < 0)
+    if (flux_event_subscribe (top->h, "heartbeat.pulse") < 0)
         fatal (errno, "error subscribing to events");
      if (!(top->f_stats = flux_rpc (top->h,
                                     "job-list.job-stats",
