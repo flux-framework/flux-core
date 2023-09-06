@@ -91,6 +91,13 @@ static void job_state_cb (flux_t *h,
     }
 }
 
+static void stats_continuation (flux_future_t *f, void *arg)
+{
+    struct top *top = arg;
+    summary_pane_jobstats (top->summary_pane, f);
+    flux_future_reset (f);
+}
+
 void refresh_cb (flux_reactor_t *r,
                  flux_watcher_t *w,
                  int revents,
@@ -197,6 +204,7 @@ void top_destroy (struct top *top)
     if (top) {
         flux_watcher_destroy (top->refresh);
         flux_watcher_destroy (top->jobtimer);
+        flux_future_destroy (top->f_stats);
         flux_msg_handler_delvec (top->handlers);
         joblist_pane_destroy (top->joblist_pane);
         summary_pane_destroy (top->summary_pane);
@@ -285,6 +293,16 @@ struct top *top_create (const char *uri,
     if (flux_event_subscribe (top->h, "job-state") < 0
         || flux_event_subscribe (top->h, "heartbeat.pulse") < 0)
         fatal (errno, "error subscribing to events");
+     if (!(top->f_stats = flux_rpc (top->h,
+                                    "job-list.job-stats",
+                                    "{}",
+                                    0,
+                                    FLUX_RPC_STREAMING))
+            || flux_future_then (top->f_stats,
+                                 -1,
+                                 stats_continuation,
+                                 top) < 0)
+         fatal (errno, "error making streaming job-stats request");
 
 #if ASSUME_BROKEN_LOCALE
     top->f_char = "f";
