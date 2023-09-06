@@ -53,16 +53,11 @@ def job_info_lookup(flux_handle, jobid, keys=["jobspec"]):
     return rpc
 
 
-def _original_setup(keys, original):
-    jobspec_original = False
-    J_appended = False
+def _setup_lookup_keys(keys, original):
     if original and "jobspec" in keys:
         keys.remove("jobspec")
-        jobspec_original = True
         if "J" not in keys:
             keys.append("J")
-            J_appended = True
-    return jobspec_original, J_appended
 
 
 def _get_original_jobspec(job_data):
@@ -73,12 +68,12 @@ def _get_original_jobspec(job_data):
     return result.decode("utf-8")
 
 
-def _original_update(job_data, decode, jobspec_original, J_appended):
-    if jobspec_original:
+def _update_keys(job_data, decode, keys, original):
+    if original and "jobspec" in keys:
         job_data["jobspec"] = _get_original_jobspec(job_data)
         if decode:
             _decode_field(job_data, "jobspec")
-        if J_appended:
+        if "J" not in keys:
             job_data.pop("J")
 
 
@@ -95,16 +90,16 @@ def job_kvs_lookup(flux_handle, jobid, keys=["jobspec"], decode=True, original=F
              (default True)
     :original: For 'jobspec', return the original submitted jobspec
     """
-    keyscpy = list(keys)
-    jobspec_original, J_appended = _original_setup(keyscpy, original)
-    payload = {"id": int(jobid), "keys": keyscpy, "flags": 0}
+    keyslookup = list(keys)
+    _setup_lookup_keys(keyslookup, original)
+    payload = {"id": int(jobid), "keys": keyslookup, "flags": 0}
     rpc = JobInfoLookupRPC(flux_handle, "job-info.lookup", payload)
     try:
         if decode:
             rsp = rpc.get_decode()
         else:
             rsp = rpc.get()
-        _original_update(rsp, decode, jobspec_original, J_appended)
+        _update_keys(rsp, decode, keys, original)
     # The job does not exist!
     except FileNotFoundError:
         return None
@@ -173,10 +168,12 @@ class JobKVSLookup:
     ):
         self.handle = flux_handle
         self.keys = list(keys)
+        self.keyslookup = list(keys)
         self.ids = list(map(JobID, ids)) if ids else []
         self.decode = decode
+        self.original = original
         self.errors = []
-        self.jobspec_original, self.J_appended = _original_setup(self.keys, original)
+        _setup_lookup_keys(self.keyslookup, self.original)
 
     def fetch_data(self):
         """Initiate the job info lookup to the Flux job-info module
@@ -191,7 +188,7 @@ class JobKVSLookup:
         """
         listids = JobKVSLookupFuture()
         for jobid in self.ids:
-            listids.push(job_info_lookup(self.handle, jobid, self.keys))
+            listids.push(job_info_lookup(self.handle, jobid, self.keyslookup))
         return listids
 
     def data(self):
@@ -210,7 +207,5 @@ class JobKVSLookup:
         if hasattr(rpc, "errors"):
             self.errors = rpc.errors
         for job_data in data:
-            _original_update(
-                job_data, self.decode, self.jobspec_original, self.J_appended
-            )
+            _update_keys(job_data, self.decode, self.keys, self.original)
         return data
