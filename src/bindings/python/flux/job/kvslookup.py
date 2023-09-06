@@ -12,7 +12,8 @@ import json
 
 from _flux._core import ffi, lib
 from flux.future import WaitAllFuture
-from flux.job import JobID
+from flux.job import JobID, JobspecV1
+from flux.job.event import EventLogEvent
 from flux.rpc import RPC
 
 
@@ -53,11 +54,15 @@ def job_info_lookup(flux_handle, jobid, keys=["jobspec"]):
     return rpc
 
 
-def _setup_lookup_keys(keys, original):
-    if original and "jobspec" in keys:
-        keys.remove("jobspec")
-        if "J" not in keys:
-            keys.append("J")
+def _setup_lookup_keys(keys, original, base):
+    if "jobspec" in keys:
+        if original:
+            keys.remove("jobspec")
+            if "J" not in keys:
+                keys.append("J")
+        elif not base:
+            if "eventlog" not in keys:
+                keys.append("eventlog")
 
 
 def _get_original_jobspec(job_data):
@@ -68,19 +73,46 @@ def _get_original_jobspec(job_data):
     return result.decode("utf-8")
 
 
-def _update_keys(job_data, decode, keys, original):
-    if original and "jobspec" in keys:
-        job_data["jobspec"] = _get_original_jobspec(job_data)
-        if decode:
-            _decode_field(job_data, "jobspec")
-        if "J" not in keys:
-            job_data.pop("J")
+def _get_updated_jobspec(job_data):
+    if isinstance(job_data["jobspec"], str):
+        data = json.loads(job_data["jobspec"])
+    else:
+        data = job_data["jobspec"]
+    jobspec = JobspecV1(**data)
+    for entry in job_data["eventlog"].splitlines():
+        event = EventLogEvent(entry)
+        if event.name == "jobspec-update":
+            for key, value in event.context.items():
+                jobspec.setattr(key, value)
+    return jobspec.dumps()
+
+
+def _update_keys(job_data, decode, keys, original, base):
+    if "jobspec" in keys:
+        if original:
+            job_data["jobspec"] = _get_original_jobspec(job_data)
+            if decode:
+                _decode_field(job_data, "jobspec")
+            if "J" not in keys:
+                job_data.pop("J")
+        elif not base:
+            job_data["jobspec"] = _get_updated_jobspec(job_data)
+            if decode:
+                _decode_field(job_data, "jobspec")
+            if "eventlog" not in keys:
+                job_data.pop("eventlog")
 
 
 # jobs_kvs_lookup simple variant for one jobid
-def job_kvs_lookup(flux_handle, jobid, keys=["jobspec"], decode=True, original=False):
+def job_kvs_lookup(
+    flux_handle, jobid, keys=["jobspec"], decode=True, original=False, base=False
+):
     """
     Lookup job kvs data based on a jobid
+
+    Some keys such as "jobspec" may be altered based on update events
+    in the eventlog.  Set 'base' to True to skip these updates and
+    read exactly what is in the KVS.
 
     :flux_handle: A Flux handle obtained from flux.Flux()
     :jobid: jobid to lookup info for
@@ -89,9 +121,10 @@ def job_kvs_lookup(flux_handle, jobid, keys=["jobspec"], decode=True, original=F
              currently decodes "jobspec" and "R" into dicts
              (default True)
     :original: For 'jobspec', return the original submitted jobspec
+    :base: For 'jobspec', get base value, do not apply updates from eventlog
     """
     keyslookup = list(keys)
-    _setup_lookup_keys(keyslookup, original)
+    _setup_lookup_keys(keyslookup, original, base)
     payload = {"id": int(jobid), "keys": keyslookup, "flags": 0}
     rpc = JobInfoLookupRPC(flux_handle, "job-info.lookup", payload)
     try:
@@ -99,7 +132,7 @@ def job_kvs_lookup(flux_handle, jobid, keys=["jobspec"], decode=True, original=F
             rsp = rpc.get_decode()
         else:
             rsp = rpc.get()
-        _update_keys(rsp, decode, keys, original)
+        _update_keys(rsp, decode, keys, original, base)
     # The job does not exist!
     except FileNotFoundError:
         return None
@@ -149,6 +182,10 @@ class JobKVSLookupFuture(WaitAllFuture):
 class JobKVSLookup:
     """User friendly class to lookup job KVS data
 
+    Some keys such as "jobspec" may be altered based on update events
+    in the eventlog.  Set 'base' to True to skip these updates and
+    read exactly what is in the KVS.
+
     :flux_handle: A Flux handle obtained from flux.Flux()
     :ids: List of jobids to get data for
     :keys: Optional list of keys to fetch. (default is "jobspec")
@@ -156,6 +193,7 @@ class JobKVSLookup:
              currently decodes "jobspec" and "R" into dicts
              (default True)
     :original: For 'jobspec', return the original submitted jobspec
+    :base: For 'jobspec', get base value, do not apply updates from eventlog
     """
 
     def __init__(
@@ -165,6 +203,7 @@ class JobKVSLookup:
         keys=["jobspec"],
         decode=True,
         original=False,
+        base=False,
     ):
         self.handle = flux_handle
         self.keys = list(keys)
@@ -172,8 +211,9 @@ class JobKVSLookup:
         self.ids = list(map(JobID, ids)) if ids else []
         self.decode = decode
         self.original = original
+        self.base = base
         self.errors = []
-        _setup_lookup_keys(self.keyslookup, self.original)
+        _setup_lookup_keys(self.keyslookup, self.original, self.base)
 
     def fetch_data(self):
         """Initiate the job info lookup to the Flux job-info module
@@ -207,5 +247,5 @@ class JobKVSLookup:
         if hasattr(rpc, "errors"):
             self.errors = rpc.errors
         for job_data in data:
-            _update_keys(job_data, self.decode, self.keys, self.original)
+            _update_keys(job_data, self.decode, self.keys, self.original, self.base)
         return data
