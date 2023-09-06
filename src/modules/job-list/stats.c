@@ -22,13 +22,19 @@
 #include "stats.h"
 #include "job_data.h"
 
+#define BATCH_DELAY 0.2
+
 struct job_stats_ctx {
     flux_t *h;
     struct job_stats all;
     zhashx_t *queue_stats;
     flux_msg_handler_t **handlers;
+    struct flux_msglist *watchers;
+    flux_watcher_t *timer;
+    bool timer_running;
 };
 
+static void arm_timer (struct job_stats_ctx *statsctx);
 
 static void free_wrapper (void **item)
 {
@@ -123,6 +129,8 @@ void job_stats_update (struct job_stats_ctx *statsctx,
 
     if ((stats = queue_stats_lookup (statsctx, job)))
         stats_update (stats, job, newstate);
+
+    arm_timer (statsctx);
 }
 
 void job_stats_add_queue (struct job_stats_ctx *statsctx,
@@ -132,6 +140,8 @@ void job_stats_add_queue (struct job_stats_ctx *statsctx,
 
     if ((stats = queue_stats_lookup (statsctx, job)))
         stats_add (stats, job, job->state);
+
+    arm_timer (statsctx);
 }
 
 static void stats_remove (struct job_stats *stats,
@@ -166,6 +176,8 @@ void job_stats_remove_queue (struct job_stats_ctx *statsctx,
 
     if ((stats = queue_stats_lookup (statsctx, job)))
         stats_remove (stats, job);
+
+    arm_timer (statsctx);
 }
 
 static void stats_purge (struct job_stats *stats, struct job *job)
@@ -201,6 +213,8 @@ void job_stats_purge (struct job_stats_ctx *statsctx, struct job *job)
 
     if ((stats = queue_stats_lookup (statsctx, job)))
         stats_purge (stats, job);
+
+    arm_timer (statsctx);
 }
 
 static int object_set_integer (json_t *o,
@@ -337,6 +351,33 @@ static int job_stats_respond (struct job_stats_ctx *statsctx,
     return rc;
 }
 
+static void timer_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
+{
+    struct job_stats_ctx *statsctx = arg;
+    const flux_msg_t *msg;
+
+    msg = flux_msglist_first (statsctx->watchers);
+    while (msg) {
+        if (job_stats_respond (statsctx, msg) < 0)
+            flux_log_error (statsctx->h, "error responding to job-stats");
+        msg = flux_msglist_next (statsctx->watchers);
+    }
+    flux_watcher_stop (w);
+    statsctx->timer_running = false;
+}
+
+static void arm_timer (struct job_stats_ctx *statsctx)
+{
+    if (!statsctx->timer_running) {
+        flux_timer_watcher_reset (statsctx->timer, BATCH_DELAY, 0);
+        flux_watcher_start (statsctx->timer);
+        statsctx->timer_running = true;
+    }
+}
+
 static void job_stats_cb (flux_t *h,
                           flux_msg_handler_t *mh,
                           const flux_msg_t *msg,
@@ -344,7 +385,15 @@ static void job_stats_cb (flux_t *h,
 {
     struct job_stats_ctx *statsctx = arg;
 
+    if (flux_msg_is_streaming (msg)) {
+        if (flux_msglist_append (statsctx->watchers, msg) < 0)
+            goto error;
+    }
     if (job_stats_respond (statsctx, msg) < 0)
+        flux_log_error (h, "error responding to job-stats request");
+    return;
+error:
+    if (flux_respond_error (statsctx->h, msg, errno, NULL) < 0)
         flux_log_error (h, "error responding to job-stats request");
 }
 
@@ -372,6 +421,14 @@ struct job_stats_ctx *job_stats_ctx_create (flux_t *h)
     zhashx_set_destructor (statsctx->queue_stats, free_wrapper);
     if (flux_msg_handler_addvec (h, htab, statsctx, &statsctx->handlers) < 0)
         goto error;
+    if (!(statsctx->watchers = flux_msglist_create ()))
+        goto error;
+    if (!(statsctx->timer = flux_timer_watcher_create (flux_get_reactor (h),
+                                                       BATCH_DELAY,
+                                                       0.,
+                                                       timer_cb,
+                                                       statsctx)))
+        goto error;
 
     return statsctx;
 
@@ -385,6 +442,8 @@ void job_stats_ctx_destroy (struct job_stats_ctx *statsctx)
     if (statsctx) {
         int save_errno = errno;
         flux_msg_handler_delvec (statsctx->handlers);
+        flux_msglist_destroy (statsctx->watchers);
+        flux_watcher_destroy (statsctx->timer);
         zhashx_destroy (&statsctx->queue_stats);
         free (statsctx);
         errno = save_errno;
