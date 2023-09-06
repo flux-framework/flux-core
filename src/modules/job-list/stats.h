@@ -14,8 +14,6 @@
 #include <flux/core.h> /* FLUX_JOB_NR_STATES */
 #include <jansson.h>
 
-#include "src/common/libczmqcontainers/czmq_containers.h"
-
 #include "job_data.h"
 
 struct job_stats {
@@ -25,12 +23,6 @@ struct job_stats {
     unsigned int timeout;
     unsigned int canceled;
     unsigned int inactive_purged;
-};
-
-struct job_stats_ctx {
-    flux_t *h;
-    struct job_stats all;
-    zhashx_t *queue_stats;
 };
 
 struct job_stats_ctx *job_stats_ctx_create (flux_t *h);

@@ -16,9 +16,16 @@
 #include <flux/core.h>
 
 #include "ccan/str/str.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "stats.h"
 #include "job_data.h"
+
+struct job_stats_ctx {
+    flux_t *h;
+    struct job_stats all;
+    zhashx_t *queue_stats;
+};
 
 static void free_wrapper (void **item)
 {
