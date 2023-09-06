@@ -17,6 +17,7 @@
 
 #include "ccan/str/str.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "stats.h"
 #include "job_data.h"
@@ -323,22 +324,27 @@ static json_t *job_stats_encode (struct job_stats_ctx *statsctx)
     return o;
 }
 
+static int job_stats_respond (struct job_stats_ctx *statsctx,
+                              const flux_msg_t *msg)
+{
+    json_t *o;
+    int rc;
+
+    if (!(o = job_stats_encode (statsctx)))
+        return -1;
+    rc = flux_respond_pack (statsctx->h, msg, "O", o);
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return rc;
+}
+
 static void job_stats_cb (flux_t *h,
                           flux_msg_handler_t *mh,
                           const flux_msg_t *msg,
                           void *arg)
 {
     struct job_stats_ctx *statsctx = arg;
-    json_t *o = job_stats_encode (statsctx);
-    if (o == NULL)
-        goto error;
-    if (flux_respond_pack (h, msg, "o", o) < 0) {
-        flux_log_error (h, "error responding to job-stats request");
-        goto error;
-    }
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+
+    if (job_stats_respond (statsctx, msg) < 0)
         flux_log_error (h, "error responding to job-stats request");
 }
 
