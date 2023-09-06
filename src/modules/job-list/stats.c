@@ -25,44 +25,15 @@ struct job_stats_ctx {
     flux_t *h;
     struct job_stats all;
     zhashx_t *queue_stats;
+    flux_msg_handler_t **handlers;
 };
+
 
 static void free_wrapper (void **item)
 {
     if (item) {
         free (*item);
         (*item) = NULL;
-    }
-}
-
-struct job_stats_ctx *job_stats_ctx_create (flux_t *h)
-{
-    struct job_stats_ctx *statsctx = NULL;
-
-    if (!(statsctx = calloc (1, sizeof (*statsctx))))
-        return NULL;
-    statsctx->h = h;
-
-    if (!(statsctx->queue_stats = zhashx_new ())) {
-        errno = ENOMEM;
-        goto error;
-    }
-    zhashx_set_destructor (statsctx->queue_stats, free_wrapper);
-
-    return statsctx;
-
-error:
-    job_stats_ctx_destroy (statsctx);
-    return NULL;
-}
-
-void job_stats_ctx_destroy (struct job_stats_ctx *statsctx)
-{
-    if (statsctx) {
-        int save_errno = errno;
-        zhashx_destroy (&statsctx->queue_stats);
-        free (statsctx);
-        errno = save_errno;
     }
 }
 
@@ -327,7 +298,7 @@ static json_t *queue_stats_encode (struct job_stats_ctx *statsctx)
     return queues;
 }
 
-json_t * job_stats_encode (struct job_stats_ctx *statsctx)
+static json_t *job_stats_encode (struct job_stats_ctx *statsctx)
 {
     json_t *o = NULL;
     json_t *queues;
@@ -350,6 +321,68 @@ json_t * job_stats_encode (struct job_stats_ctx *statsctx)
     }
 
     return o;
+}
+
+static void job_stats_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
+{
+    struct job_stats_ctx *statsctx = arg;
+    json_t *o = job_stats_encode (statsctx);
+    if (o == NULL)
+        goto error;
+    if (flux_respond_pack (h, msg, "o", o) < 0) {
+        flux_log_error (h, "error responding to job-stats request");
+        goto error;
+    }
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to job-stats request");
+}
+
+static const struct flux_msg_handler_spec htab[] = {
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-list.job-stats",
+      .cb           = job_stats_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+struct job_stats_ctx *job_stats_ctx_create (flux_t *h)
+{
+    struct job_stats_ctx *statsctx = NULL;
+
+    if (!(statsctx = calloc (1, sizeof (*statsctx))))
+        return NULL;
+    statsctx->h = h;
+
+    if (!(statsctx->queue_stats = zhashx_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    zhashx_set_destructor (statsctx->queue_stats, free_wrapper);
+    if (flux_msg_handler_addvec (h, htab, statsctx, &statsctx->handlers) < 0)
+        goto error;
+
+    return statsctx;
+
+error:
+    job_stats_ctx_destroy (statsctx);
+    return NULL;
+}
+
+void job_stats_ctx_destroy (struct job_stats_ctx *statsctx)
+{
+    if (statsctx) {
+        int save_errno = errno;
+        flux_msg_handler_delvec (statsctx->handlers);
+        zhashx_destroy (&statsctx->queue_stats);
+        free (statsctx);
+        errno = save_errno;
+    }
 }
 
 // vi: ts=4 sw=4 expandtab

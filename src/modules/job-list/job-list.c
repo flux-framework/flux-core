@@ -65,23 +65,6 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void job_stats_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
-{
-    struct list_ctx *ctx = arg;
-    json_t *o = job_stats_encode (ctx->jsctx->statsctx);
-    if (o == NULL)
-        goto error;
-    if (flux_respond_pack (h, msg, "o", o) < 0) {
-        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-}
-
 static void purge_cb (flux_t *h,
                       flux_msg_handler_t *mh,
                       const flux_msg_t *msg,
@@ -136,11 +119,6 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-list.job-state-unpause",
       .cb           = job_state_unpause_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-list.job-stats",
-      .cb           = job_stats_cb,
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
