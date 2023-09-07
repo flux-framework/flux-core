@@ -2318,6 +2318,7 @@ int jobtap_job_update (struct jobtap *jobtap,
                        const char *key,
                        json_t *value,
                        int *needs_validation,
+                       int *require_feasibility,
                        char **errp)
 {
     int rc = -1;
@@ -2366,25 +2367,33 @@ int jobtap_job_update (struct jobtap *jobtap,
         error_asprintf (jobtap, job, errp, "%s", errmsg);
         errno = EINVAL;
     }
-    else if (rc > 0 && needs_validation != NULL) {
+    else if (rc > 0) {
         /*  Default is to require further validation by calling job.validate
          *  with the updated jobspec. However, a plugin may note that the
          *  update is already validated or should bypass validation by
          *  setting "validated" in the plugin OUT arguments to a nonzero
          *  value.
+         *
+         *  Similarly, a plugin can request feasibility check, but the
+         *  default is no feasibility will be performed on valid updates.
          */
         int validated = 0;
+        int feasibility = 0;
         if ((rc = flux_plugin_arg_unpack (args,
                                           FLUX_PLUGIN_ARG_OUT,
-                                          "{s?i}",
-                                          "validated", &validated) < 0)) {
+                                          "{s?i s?i}",
+                                          "validated", &validated,
+                                          "feasibility", &feasibility) < 0)) {
             error_asprintf (jobtap,
                             job,
                             errp,
-                            "failed to unpack validated flag");
+                            "failed to unpack update flags");
             return -1;
         }
-        *needs_validation = !validated;
+        if (needs_validation != NULL)
+            *needs_validation = !validated;
+        if (require_feasibility != NULL)
+            *require_feasibility = feasibility;
     }
     flux_plugin_arg_destroy (args);
     return rc;

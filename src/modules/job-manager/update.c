@@ -40,17 +40,15 @@
  * `job.update.*` callback. The `job.validate` step will only be skipped
  * all keys in an update have the validated flag set.
  *
+ * Plugins may also request a job feasibility check (sched.feasibility RPC)
+ * by setting a 'feasibility' flag to 1 in the FLUX_PLUGIN_OUT_ARGS. If any
+ * plugin requests a feasibility check, then feasibility is run for the
+ * proposed jobspec as a whole.
+ *
  * If all steps above are successful, then a `jobspec-update`event is
  * posted for the job and a success response sent to the caller.
  *
  * FUTURE WORK
- *
- * - Some job updates may require feasibility checks on the resulting
- *   jobspec. There should be a flag for a plugin to require that the
- *   result be passed to the scheduler feasibility RPC.
- *
- * - The above change will require some asynchronous handling be added
- *   to this service
  *
  * - Plugins should also somehow be able to initiate asynchronous work
  *   before validating an update. There is no support for async plugin
@@ -70,50 +68,69 @@
 struct update {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
+    zlistx_t *pending_requests;
 };
 
-static void update_job (struct job_manager *ctx,
+struct update_request {
+    void *handle;                 /* zlistx_t handle                       */
+    flux_future_t *feasibility_f; /* feasibility request future            */
+    struct update *update;        /* pointer back to update struct         */
+    const flux_msg_t *msg;        /* original update request msg           */
+    struct flux_msg_cred cred;    /* update request credentials            */
+    struct job *job;              /* target job                            */
+    json_t *updates;              /* requested updates object              */
+    unsigned int validate:1;      /* 1: validate updates, 0: no validation */
+};
+
+static void update_request_destroy (struct update_request *req)
+{
+    if (req) {
+        int saved_errno = errno;
+        flux_future_destroy (req->feasibility_f);
+        flux_msg_decref (req->msg);
+        job_decref (req->job);
+        free (req);
+        errno = saved_errno;
+    }
+}
+
+/* zlistx_t destructor_fn */
+static void update_request_destructor (void **item)
+{
+    if (item) {
+        struct update_request *req = *item;
+        update_request_destroy (req);
+        *item = NULL;
+    }
+}
+
+static struct update_request *
+update_request_create (struct update *update,
                        const flux_msg_t *msg,
                        struct flux_msg_cred cred,
                        struct job *job,
                        json_t *updates)
 {
+    struct update_request *req;
+
+    if (!(req = calloc (1, sizeof (*req))))
+        return NULL;
+    req->update = update;
+    req->msg = flux_msg_incref (msg);
+    req->job = job_incref (job);
+    req->cred = cred;
+    req->updates = updates;
+    return req;
+}
+
+static void post_job_updates (struct job_manager *ctx,
+                              const flux_msg_t *msg,
+                              struct flux_msg_cred cred,
+                              struct job *job,
+                              json_t *updates,
+                              int validate)
+{
     const char *errstr = NULL;
-    char *error = NULL;
-    const char *key;
-    json_t *value;
-    int validate = 0; /* validation of result necessary */
-
-    /*  Loop through one or more proposed updates in `updates` object
-     *  and call `job.update.<key>` job plugin(s) to validate each
-     *  update.
-     */
-    json_object_foreach (updates, key, value) {
-        int needs_validation = 1;
-        if (jobtap_job_update (ctx->jobtap,
-                               cred,
-                               job,
-                               key,
-                               value,
-                               &needs_validation,
-                               &error) < 0)
-            goto error;
-        /*  If any jobspec key needs further validation, then all
-         *  keys will be validated at the same time. This means a key
-         *  that might not need further validation when updated alone
-         *  may need to be validated when paired with other keys in a
-         *  single update:
-         */
-        if (needs_validation)
-            validate = 1;
-    }
-    if (validate
-        && jobtap_validate_updates (ctx->jobtap,
-                                    job,
-                                    updates,
-                                    &error) < 0)
-        goto error;
-
 
     /*  If this update was requested by the instance owner, and the
      *  job owner is not the instance owner, and job validation was
@@ -163,7 +180,147 @@ static void update_job (struct job_manager *ctx,
         flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
     return;
 error:
-    if (flux_respond_error (ctx->h, msg, errno, error ? error : errstr) < 0)
+    if (flux_respond_error (ctx->h, msg, errno, errstr) < 0)
+        flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+static void feasibility_cb (flux_future_t *f, void *arg)
+{
+    struct update_request *req = arg;
+    if (flux_future_get (f, NULL) < 0) {
+        if (flux_respond_error (req->update->ctx->h,
+                                req->msg,
+                                errno,
+                                future_strerror (f, errno)) < 0)
+            flux_log_error (req->update->ctx->h,
+                            "%s: flux_respond_error",
+                            __FUNCTION__);
+    }
+    else {
+        post_job_updates (req->update->ctx,
+                          req->msg,
+                          req->cred,
+                          req->job,
+                          req->updates,
+                          req->validate);
+    }
+    zlistx_delete (req->update->pending_requests, req->handle);
+}
+
+static struct update_request *
+pending_request_create (struct update *update,
+                        const flux_msg_t *msg,
+                        struct flux_msg_cred cred,
+                        struct job *job,
+                        json_t *updates,
+                        int validate)
+{
+    struct update_request *req = NULL;
+    if (!(req = update_request_create (update, msg, cred, job, updates))
+        || !(req->handle = zlistx_add_end (update->pending_requests, req)))
+        goto error;
+    req->validate = validate;
+    return req;
+error:
+    update_request_destroy (req);
+    errno = ENOMEM;
+    return NULL;
+}
+
+static int update_feasibility_check (struct update *update,
+                                     const flux_msg_t *msg,
+                                     struct flux_msg_cred cred,
+                                     struct job *job,
+                                     json_t *updates,
+                                     int validate)
+{
+    json_t *jobspec = NULL;
+    struct update_request *req = NULL;
+    flux_future_t *f = NULL;
+
+    if (!(jobspec = job_jobspec_with_updates (job, updates))
+        || !(req = pending_request_create (update,
+                                           msg,
+                                           cred,
+                                           job,
+                                           updates,
+                                           validate))
+        || !(f = flux_rpc_pack (update->ctx->h,
+                                "sched.feasibility",
+                                0,
+                                0,
+                                "{s:O}",
+                                "jobspec", jobspec))
+        || flux_future_then (f, -1., feasibility_cb, req) < 0)
+        goto error;
+    req->feasibility_f = f;
+    json_decref (jobspec);
+    return 0;
+error:
+    json_decref (jobspec);
+    update_request_destroy (req);
+    flux_future_destroy (f);
+    return -1;
+
+}
+
+static void update_job (struct update *update,
+                        const flux_msg_t *msg,
+                        struct flux_msg_cred cred,
+                        struct job *job,
+                        json_t *updates)
+{
+    char *error = NULL;
+    const char *key;
+    json_t *value;
+    int validate = 0; /* validation of result necessary */
+    int feasibility = 0; /* feasibilty check necessary */
+    struct job_manager *ctx = update->ctx;
+
+    /*  Loop through one or more proposed updates in `updates` object
+     *  and call `job.update.<key>` job plugin(s) to validate each
+     *  update.
+     */
+    json_object_foreach (updates, key, value) {
+        int needs_validation = 1;
+        int require_feasibility = 0;
+        if (jobtap_job_update (ctx->jobtap,
+                               cred,
+                               job,
+                               key,
+                               value,
+                               &needs_validation,
+                               &require_feasibility,
+                               &error) < 0)
+            goto error;
+        /*  If any jobspec key needs further validation, then all
+         *  keys will be validated at the same time. This means a key
+         *  that might not need further validation when updated alone
+         *  may need to be validated when paired with other keys in a
+         *  single update:
+         */
+        if (needs_validation)
+            validate = 1;
+        /*  Similarly, if any key requires a feasibility check, then
+         *  request feasibilty on the update as a whole.
+         */
+        if (require_feasibility)
+            feasibility = 1;
+    }
+    if (validate
+        && jobtap_validate_updates (ctx->jobtap,
+                                    job,
+                                    updates,
+                                    &error) < 0)
+        goto error;
+
+    if (feasibility)
+        update_feasibility_check (update, msg, cred, job, updates, validate);
+    else
+        post_job_updates (ctx, msg, cred, job, updates, validate);
+    return;
+error:
+    if (flux_respond_error (ctx->h, msg, EINVAL, error) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
     free (error);
 }
@@ -224,18 +381,36 @@ static void update_handle_request (flux_t *h,
     }
     /*  Process the update request. Response will be handled in update_job().
      */
-    update_job (ctx, msg, cred, job, updates);
+    update_job (update, msg, cred, job, updates);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+static void send_error_responses (struct update *update)
+{
+    struct update_request *req = zlistx_first (update->pending_requests);
+    while (req) {
+        if (flux_respond_error (update->ctx->h,
+                                req->msg,
+                                EAGAIN,
+                                "job manager is shutting down") < 0)
+            flux_log_error (update->ctx->h,
+                            "%s: error responding to "
+                            "job-manager.update request",
+                            __FUNCTION__);
+        req = zlistx_next (update->pending_requests);
+    }
+}
+
 void update_ctx_destroy (struct update *update)
 {
     if (update) {
         int saved_errno = errno;
+        send_error_responses (update);
         flux_msg_handler_delvec (update->handlers);
+        zlistx_destroy (&update->pending_requests);
         free (update);
         errno = saved_errno;
     }
@@ -260,6 +435,12 @@ struct update *update_ctx_create (struct job_manager *ctx)
     update->ctx = ctx;
     if (flux_msg_handler_addvec (ctx->h, htab, update, &update->handlers) < 0)
         goto error;
+    if (!(update->pending_requests = zlistx_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    zlistx_set_destructor (update->pending_requests,
+                           update_request_destructor);
     return update;
 error:
     update_ctx_destroy (update);
