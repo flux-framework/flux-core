@@ -148,6 +148,7 @@ TESTSCRIPTS = \
 	t2250-job-archive.t \
 	t2260-job-list.t \
 	t2261-job-list-update.t \
+	t2262-job-list-stats.t \
 	t2270-job-dependencies.t \
 	t2271-job-dependency-after.t \
 	t2272-job-begin-time.t \

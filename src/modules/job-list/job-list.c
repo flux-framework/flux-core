@@ -47,35 +47,20 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
     int inactive = zlistx_size (ctx->jsctx->inactive);
     int idsync_lookups = zlistx_size (ctx->isctx->lookups);
     int idsync_waits = zhashx_size (ctx->isctx->waits);
-    if (flux_respond_pack (h, msg, "{s:{s:i s:i s:i} s:{s:i s:i}}",
+    int stats_watchers = job_stats_watchers (ctx->jsctx->statsctx);
+    if (flux_respond_pack (h, msg, "{s:{s:i s:i s:i} s:{s:i s:i} s:i}",
                            "jobs",
                            "pending", pending,
                            "running", running,
                            "inactive", inactive,
                            "idsync",
                            "lookups", idsync_lookups,
-                           "waits", idsync_waits) < 0) {
+                           "waits", idsync_waits,
+                           "stats_watchers", stats_watchers) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
 
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-}
-
-static void job_stats_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
-{
-    struct list_ctx *ctx = arg;
-    json_t *o = job_stats_encode (ctx->jsctx->statsctx);
-    if (o == NULL)
-        goto error;
-    if (flux_respond_pack (h, msg, "o", o) < 0) {
-        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
@@ -112,6 +97,15 @@ static void purge_cb (flux_t *h,
     flux_log (h, LOG_DEBUG, "purged %d inactive jobs", count);
 }
 
+static void disconnect_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct list_ctx *ctx = arg;
+    job_stats_disconnect (ctx->jsctx->statsctx, msg);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-list.list",
@@ -139,11 +133,6 @@ static const struct flux_msg_handler_spec htab[] = {
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-list.job-stats",
-      .cb           = job_stats_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-list.stats-get",
       .cb           = stats_cb,
       .rolemask     = FLUX_ROLE_USER,
@@ -152,6 +141,11 @@ static const struct flux_msg_handler_spec htab[] = {
       .topic_glob   = "job-purge-inactive",
       .cb           = purge_cb,
       .rolemask     = 0
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-list.disconnect",
+      .cb           = disconnect_cb,
+      .rolemask     = FLUX_ROLE_USER,
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
