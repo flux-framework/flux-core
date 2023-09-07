@@ -285,20 +285,21 @@ test_expect_success 'flux job wait-event guest.exec.eventlog fails via -p (live 
 
 # for these tests we need to create a fake job eventlog in the KVS
 
-# value of R irrelevant here, just need to lookup something
+# value of "dummy" irrelevant here, just need to lookup something
+
 test_expect_success 'create empty eventlog for job' '
 	jobpath=`flux job id --to=kvs 123456789` &&
 	flux kvs put "${jobpath}.eventlog"="" &&
-	flux kvs put "${jobpath}.R"="foobar"
+	flux kvs put "${jobpath}.dummy"="foobar"
 '
 
-test_expect_success 'flux job info R works (owner)' '
-	flux job info $jobpath R
+test_expect_success 'flux job info dummy works (owner)' '
+	flux job info $jobpath dummy
 '
 
-test_expect_success 'flux job info R fails (user)' '
+test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 R 2>&1 | grep "Protocol error" &&
+        flux job info 123456789 dummy 2>&1 | grep "Protocol error" &&
 	unset_userid
 '
 
@@ -307,9 +308,9 @@ test_expect_success 'create eventlog with invalid data / not JSON' '
 	flux kvs put "${jobpath}.eventlog"="foobar"
 '
 
-test_expect_success 'flux job info R fails (user)' '
+test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 R 2>&1 | grep "Protocol error" &&
+        flux job info 123456789 dummy 2>&1 | grep "Protocol error" &&
 	unset_userid
 '
 
@@ -319,9 +320,9 @@ test_expect_success 'create eventlog without submit context' '
 	echo $submitstr | flux kvs put --raw "${jobpath}.eventlog"=-
 '
 
-test_expect_success 'flux job info R fails (user)' '
+test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 R 2>&1 | grep "Protocol error" &&
+        flux job info 123456789 dummy 2>&1 | grep "Protocol error" &&
 	unset_userid
 '
 
@@ -331,9 +332,9 @@ test_expect_success 'create eventlog without submit userid' '
 	echo $submitstr | flux kvs put --raw "${jobpath}.eventlog"=-
 '
 
-test_expect_success 'flux job info R fails (user)' '
+test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 R 2>&1 | grep "Protocol error" &&
+        flux job info 123456789 dummy 2>&1 | grep "Protocol error" &&
 	unset_userid
 '
 
@@ -343,9 +344,9 @@ test_expect_success 'create eventlog that is binary garbage' '
 	flux kvs put --raw "${jobpath}.eventlog"=- < binary.out
 '
 
-test_expect_success 'flux job info R fails (user)' '
+test_expect_success 'flux job info dummy fails (user)' '
 	set_userid 9000 &&
-        flux job info 123456789 R 2>&1 | grep "Protocol error" &&
+        flux job info 123456789 dummy 2>&1 | grep "Protocol error" &&
 	unset_userid
 '
 
