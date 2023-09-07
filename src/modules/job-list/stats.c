@@ -357,6 +357,11 @@ void job_stats_disconnect (struct job_stats_ctx *statsctx,
     flux_msglist_disconnect (statsctx->watchers, msg);
 }
 
+int job_stats_watchers (struct job_stats_ctx *statsctx)
+{
+    return flux_msglist_count (statsctx->watchers);
+}
+
 static void timer_cb (flux_reactor_t *r,
                       flux_watcher_t *w,
                       int revents,

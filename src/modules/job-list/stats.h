@@ -47,6 +47,10 @@ void job_stats_purge (struct job_stats_ctx *statsctx, struct job *job);
 void job_stats_disconnect (struct job_stats_ctx *statsctx,
                            const flux_msg_t *msg);
 
+/* Return the number of job-stats streaming clients.
+ */
+int job_stats_watchers (struct job_stats_ctx *statsctx);
+
 #endif /* ! _FLUX_JOB_LIST_JOB_STATS_H */
 
 // vi: ts=4 sw=4 expandtab
