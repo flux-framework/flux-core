@@ -72,13 +72,14 @@ struct update {
     flux_msg_handler_t **handlers;
 };
 
-
-static int update_job (struct job_manager *ctx,
+static void update_job (struct job_manager *ctx,
+                       const flux_msg_t *msg,
                        struct flux_msg_cred cred,
                        struct job *job,
-                       json_t *updates,
-                       char **errp)
+                       json_t *updates)
 {
+    const char *errstr = NULL;
+    char *error = NULL;
     const char *key;
     json_t *value;
     int validate = 0; /* validation of result necessary */
@@ -95,8 +96,8 @@ static int update_job (struct job_manager *ctx,
                                key,
                                value,
                                &needs_validation,
-                               errp) < 0)
-            return -1;
+                               &error) < 0)
+            goto error;
         /*  If any jobspec key needs further validation, then all
          *  keys will be validated at the same time. This means a key
          *  that might not need further validation when updated alone
@@ -110,8 +111,9 @@ static int update_job (struct job_manager *ctx,
         && jobtap_validate_updates (ctx->jobtap,
                                     job,
                                     updates,
-                                    errp) < 0)
-            return -1;
+                                    &error) < 0)
+        goto error;
+
 
     /*  If this update was requested by the instance owner, and the
      *  job owner is not the instance owner, and job validation was
@@ -139,10 +141,8 @@ static int update_job (struct job_manager *ctx,
                                 0,
                                 "{s:[s]}",
                                 "flags", "immutable") < 0) {
-            if (!(*errp = strdup ("failed to set job immutable flag")))
-                flux_log_error (ctx->h,
-                                "update: set-flags: strdup errmsg failed");
-            return -1;
+            errstr = "failed to set job immutable flag";
+            goto error;
         }
 
     }
@@ -156,12 +156,16 @@ static int update_job (struct job_manager *ctx,
                              0,
                              "O",
                              updates) < 0) {
-        if (!(*errp = strdup ("failed to pack jobspec-update event")))
-            flux_log_error (ctx->h,
-                            "update: failed to create pack error string");
-        return -1;
+        errstr = "failed to pack jobspec-update event";
+        goto error;
     }
-    return 0;
+    if (flux_respond (ctx->h, msg, NULL) < 0)
+        flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (ctx->h, msg, errno, error ? error : errstr) < 0)
+        flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+    free (error);
 }
 
 static void update_handle_request (flux_t *h,
@@ -176,7 +180,6 @@ static void update_handle_request (flux_t *h,
     json_t *updates;
     struct flux_msg_cred cred;
     const char *errstr = NULL;
-    char *error = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -219,19 +222,13 @@ static void update_handle_request (flux_t *h,
         errno = EPERM;
         goto error;
     }
-    /*  Process the update request
+    /*  Process the update request. Response will be handled in update_job().
      */
-    if (update_job (ctx, cred, job, updates, &error) < 0) {
-        errstr = error;
-        goto error;
-    }
-    if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    update_job (ctx, msg, cred, job, updates);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-    free (error);
 }
 
 void update_ctx_destroy (struct update *update)
