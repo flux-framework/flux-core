@@ -227,6 +227,10 @@ job.inactive-add
 job.inactive-remove
   The job has been purged from the inactive hash.
 
+job.update
+  The job has been updated with an RFC 21 ``jobspec-update`` event.
+
+
 CONFIGURATION CALLBACK TOPIC
 ============================
 
@@ -244,6 +248,29 @@ The callback should return 0 on success, and -1 on failure.  On failure,
 it may optionally set a human readable error string in the ``errstr`` output
 argument.  The ``flux_jobtap_error()`` convenience function may be useful here.
 
+JOB UPDATE CALLBACKS
+====================
+
+The job manager allows updates of select job attributes through a
+plugin-based scheme. Plugins may register a callback topic matching
+``job.update.KEY``, where ``KEY`` is a period-delimited jobspec attribute,
+e.g. ``job.update.attributes.system.duration``. The requested updates are
+passed as an additional argument to the plugin in the ``updates`` key.
+
+The purpose of ``job.update.*`` callbacks to enable plugins to allow or
+deny the update of specific job attributes. Updates are denied by default
+unless a callback exists for the updated attribute and the plugin returns 0
+from the callback. Plugins deny an attribute update by returning -1 from
+the callback, and may optionally set an error message to return to the
+user with ``flux_jobtap_error(3)``.
+
+After all updates in a request are allowed by plugins, then the updated
+jobspec is passed through the ``job.validate`` plugin stack to ensure the
+result is valid. Plugins can note that an update is already validated by
+setting a ``validated`` flag in the ``FLUX_PLUGIN_OUT_ARGS``. If all updated
+attributes have this flag then this validation step is skipped. This can
+be useful to allow an instance owner to update a job attribute beyond limits
+for example.
 
 PLUGIN CALLBACK TOPICS
 ======================
