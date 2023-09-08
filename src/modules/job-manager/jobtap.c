@@ -763,12 +763,14 @@ static void error_asprintf (struct jobtap *jobtap,
                             const char *fmt, ...)
 {
     va_list ap;
+    int saved_errno = errno;
     va_start (ap, fmt);
     if (vasprintf (errp, fmt, ap) < 0)
         flux_log_error (jobtap->ctx->h,
                         "id=%s: failed to create error string: fmt=%s",
                         idf58 (job->id), fmt);
     va_end (ap);
+    errno = saved_errno;
 }
 
 /* Common function for job.create and job.validate.
