@@ -46,6 +46,7 @@ struct jobq {
     bool checkpoint_start;  // may be different that actual start due
                             // to nocheckpoint flag
     char *stop_reason; // reason if stopped (optionally set)
+    json_t *requires;  // required properties array
 };
 
 struct queue {
@@ -62,6 +63,7 @@ static void jobq_destroy (struct jobq *q)
 {
     if (q) {
         int saved_errno = errno;
+        json_decref (q->requires);
         free (q->name);
         free (q->disable_reason);
         free (q);
@@ -78,7 +80,7 @@ static void jobq_destructor (void **item)
     }
 }
 
-static struct jobq *jobq_create (const char *name)
+static struct jobq *jobq_create (const char *name, json_t *config)
 {
     struct jobq *q;
 
@@ -87,6 +89,10 @@ static struct jobq *jobq_create (const char *name)
     if (name && !(q->name = strdup (name)))
         goto error;
     q->enable = true;
+
+    if (config && json_unpack (config, "{s?O}", "requires", &q->requires) < 0)
+        goto error;
+
     if (name) {
         q->start = false;
         q->checkpoint_start = false;
@@ -459,7 +465,7 @@ static int queue_configure (const flux_conf_t *conf,
          */
         json_object_foreach (queues, name, value) {
             if (!zhashx_lookup (queue->named, name)) {
-                if (!(q = jobq_create (name)))
+                if (!(q = jobq_create (name, value)))
                     goto nomem;
                 (void)zhashx_insert (queue->named, name, q);
             }
@@ -469,7 +475,7 @@ static int queue_configure (const flux_conf_t *conf,
         if (queue->have_named_queues) {
             queue->have_named_queues = false;
             zhashx_destroy (&queue->named);
-            if (!(queue->anon = jobq_create (NULL)))
+            if (!(queue->anon = jobq_create (NULL, NULL)))
                 goto nomem;
         }
     }
@@ -776,7 +782,7 @@ struct queue *queue_create (struct job_manager *ctx)
     if (!(queue = calloc (1, sizeof (*queue))))
         return NULL;
     queue->ctx = ctx;
-    if (!(queue->anon = jobq_create (NULL)))
+    if (!(queue->anon = jobq_create (NULL, NULL)))
         goto error;
     if (flux_msg_handler_addvec (ctx->h,
                                  htab,
