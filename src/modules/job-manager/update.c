@@ -196,11 +196,14 @@ static void update_handle_request (flux_t *h,
     /*  Verify jobid exists and is not inactive
      */
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        if (!(job = zhashx_lookup (ctx->inactive_jobs, &id)))
+        if (!(job = zhashx_lookup (ctx->inactive_jobs, &id))) {
             errstr = "unknown job id";
-        else
+            errno = ENOENT;
+        }
+        else {
             errstr = "job is inactive";
-        errno = EINVAL;
+            errno = EINVAL;
+        }
         goto error;
     }
     /*  Fetch the credential from this message and ensure the user
