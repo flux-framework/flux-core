@@ -2379,8 +2379,6 @@ int jobtap_job_update (struct jobtap *jobtap,
                             job,
                             errp,
                             "failed to unpack validated flag");
-            fprintf (stderr, "arg unpack failed: %s\n",
-                             flux_plugin_arg_strerror (args));
             return -1;
         }
         *needs_validation = !validated;
