@@ -29,6 +29,7 @@ endif
 fluxmod_LTLIBRARIES = \
 	barrier.la \
 	connector-local.la \
+	content.la \
 	content-files.la \
 	content-sqlite.la \
 	cron.la \
@@ -67,6 +68,19 @@ connector_local_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
 connector_local_la_LDFLAGS = $(fluxmod_ldflags) -module
+
+content_la_SOURCES = \
+	content/main.c \
+	content/cache.c \
+	content/cache.h \
+	content/mmap.c \
+	content/mmap.h \
+	content/checkpoint.c \
+	content/checkpoint.h
+content_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la
+content_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 content_files_la_SOURCES =
 content_files_la_LIBADD = \

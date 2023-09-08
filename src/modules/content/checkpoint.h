@@ -8,10 +8,10 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef HAVE_BROKER_CONTENT_CHECKPOINT_H
-#define HAVE_BROKER_CONTENT_CHECKPOINT_H 1
+#ifndef _CONTENT_CHECKPOINT_H
+#define _CONTENT_CHECKPOINT_H 1
 
-#include "content-cache.h"
+#include "cache.h"
 
 struct content_checkpoint *content_checkpoint_create (
     flux_t *h,
@@ -21,7 +21,7 @@ void content_checkpoint_destroy (struct content_checkpoint *checkpoint);
 
 int checkpoints_flush (struct content_checkpoint *checkpoint);
 
-#endif /* !HAVE_BROKER_CONTENT_CHECKPOINT_H */
+#endif /* !_CONTENT_CHECKPOINT_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

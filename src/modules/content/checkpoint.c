@@ -20,8 +20,8 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
-#include "content-checkpoint.h"
-#include "content-cache.h"
+#include "checkpoint.h"
+#include "cache.h"
 
 struct content_checkpoint {
     flux_t *h;

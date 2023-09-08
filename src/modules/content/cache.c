@@ -26,10 +26,9 @@
 #include "src/common/libcontent/content.h"
 #include "ccan/str/str.h"
 
-#include "attr.h"
-#include "content-cache.h"
-#include "content-checkpoint.h"
-#include "content-mmap.h"
+#include "cache.h"
+#include "checkpoint.h"
+#include "mmap.h"
 
 /* A periodic callback purges the cache of least recently used entries.
  * The callback is synchronized with the instance heartbeat, with a
@@ -996,6 +995,7 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
+#if 0
 static int content_cache_getattr (const char *name, const char **val, void *arg)
 {
     struct content_cache *cache = arg;
@@ -1006,9 +1006,11 @@ static int content_cache_getattr (const char *name, const char **val, void *arg)
         return -1;
     return 0;
 }
+#endif
 
-static int register_attrs (struct content_cache *cache, attr_t *attr)
+static int register_attrs (struct content_cache *cache)
 {
+#if 0
     const char *s;
 
     /* Take initial value of content->backing_name from content.backing-module
@@ -1061,7 +1063,7 @@ static int register_attrs (struct content_cache *cache, attr_t *attr)
     if (attr_add_active (attr, "content.backing-module", 0,
                  content_cache_getattr, NULL, cache) < 0)
         return -1;
-
+#endif
     return 0;
 }
 
@@ -1081,7 +1083,7 @@ void content_cache_destroy (struct content_cache *cache)
     }
 }
 
-struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
+struct content_cache *content_cache_create (flux_t *h)
 {
     struct content_cache *cache;
 
@@ -1109,7 +1111,7 @@ struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
     list_head_init (&cache->lru);
     list_head_init (&cache->flush);
 
-    if (register_attrs (cache, attrs) < 0)
+    if (register_attrs (cache) < 0)
         goto error;
     assert (content_hash_size >= sizeof (size_t)); // hasher assumes this
 
