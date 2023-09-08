@@ -87,6 +87,7 @@ int jobtap_job_update (struct jobtap *jobtap,
                        json_t *value,
                        int *needs_validation,
                        int *needs_feasibility,
+                       json_t **updates,
                        char **errp);
 
 /*  Call the `job.validate` plugin stack, but using an updated jobspec by

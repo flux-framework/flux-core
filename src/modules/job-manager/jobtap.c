@@ -2319,6 +2319,7 @@ int jobtap_job_update (struct jobtap *jobtap,
                        json_t *value,
                        int *needs_validation,
                        int *require_feasibility,
+                       json_t **additional_updates,
                        char **errp)
 {
     int rc = -1;
@@ -2379,11 +2380,13 @@ int jobtap_job_update (struct jobtap *jobtap,
          */
         int validated = 0;
         int feasibility = 0;
+        json_t *updates = NULL;
         if ((rc = flux_plugin_arg_unpack (args,
                                           FLUX_PLUGIN_ARG_OUT,
-                                          "{s?i s?i}",
+                                          "{s?i s?i s?o}",
                                           "validated", &validated,
-                                          "feasibility", &feasibility) < 0)) {
+                                          "feasibility", &feasibility,
+                                          "updates", &updates) < 0)) {
             error_asprintf (jobtap,
                             job,
                             errp,
@@ -2394,6 +2397,17 @@ int jobtap_job_update (struct jobtap *jobtap,
             *needs_validation = !validated;
         if (require_feasibility != NULL)
             *require_feasibility = feasibility;
+        if (additional_updates && updates) {
+            if (*additional_updates == NULL)
+                *additional_updates = json_incref (updates);
+            else if (json_object_update (*additional_updates, updates) < 0) {
+                error_asprintf (jobtap,
+                                job,
+                                errp,
+                                "failed to apply required extra job updates");
+                return -1;
+            }
+        }
     }
     flux_plugin_arg_destroy (args);
     return rc;

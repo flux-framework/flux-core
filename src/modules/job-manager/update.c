@@ -45,6 +45,10 @@
  * plugin requests a feasibility check, then feasibility is run for the
  * proposed jobspec as a whole.
  *
+ * A plugin may request additional updates by setting an 'updates' key in
+ * in the plugin out arguments. The updates key follows the same format as
+ * the RFC 21 jobspec-update event and the update request defined here.
+ *
  * If all steps above are successful, then a `jobspec-update`event is
  * posted for the job and a success response sent to the caller.
  *
@@ -275,6 +279,7 @@ static void update_job (struct update *update,
     json_t *value;
     int validate = 0; /* validation of result necessary */
     int feasibility = 0; /* feasibilty check necessary */
+    json_t *additional_updates = NULL;
     struct job_manager *ctx = update->ctx;
 
     /*  Loop through one or more proposed updates in `updates` object
@@ -291,6 +296,7 @@ static void update_job (struct update *update,
                                value,
                                &needs_validation,
                                &require_feasibility,
+                               &additional_updates,
                                &error) < 0)
             goto error;
         /*  If any jobspec key needs further validation, then all
@@ -307,6 +313,11 @@ static void update_job (struct update *update,
         if (require_feasibility)
             feasibility = 1;
     }
+    if (additional_updates
+        && json_object_update (updates, additional_updates) < 0) {
+        error = strdup ("unable to apply additional required updates");
+        goto error;
+    }
     if (validate
         && jobtap_validate_updates (ctx->jobtap,
                                     job,
@@ -318,10 +329,13 @@ static void update_job (struct update *update,
         update_feasibility_check (update, msg, cred, job, updates, validate);
     else
         post_job_updates (ctx, msg, cred, job, updates, validate);
+
+    json_decref (additional_updates);
     return;
 error:
     if (flux_respond_error (ctx->h, msg, EINVAL, error) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+    json_decref (additional_updates);
     free (error);
 }
 
