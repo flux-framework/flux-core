@@ -105,6 +105,24 @@ test_expect_success 'flux job info jobspec fails on bad id' '
 	test_must_fail flux job info 12345 jobspec
 '
 
+# N.B. In future may wish to update expiration via `flux update` tool
+# when feature is available
+test_expect_success 'flux job info applies resource updates' '
+	jobid=$(flux submit --wait-event=start sleep 300) &&
+	echo $jobid > updated_R.id &&
+	flux job info $jobid R | jq -e ".execution.expiration == 0.0" &&
+	kvspath=`flux job id --to=kvs ${jobid}` &&
+	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 1000.0}" &&
+	flux job info $jobid R | jq -e ".execution.expiration == 1000.0" &&
+	flux job info $jobid eventlog &&
+	flux cancel $jobid
+'
+
+test_expect_success 'flux job info --base R works' '
+	flux job info --base $(cat updated_R.id) R \
+	     | jq -e ".execution.expiration == 0.0"
+'
+
 #
 # job info lookup tests (multiple info requests)
 #
