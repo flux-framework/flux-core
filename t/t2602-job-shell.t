@@ -185,28 +185,28 @@ test_expect_success LONGTEST 'job-shell: verify 10K line lptest output works' '
 	test_cmp lptestXXL.exp lptestXXL.out
 '
 test_expect_success 'job-shell: test shell kill event handling' '
-	id=$(flux submit -n4 -N4 sleep 60) &&
+	id=$(flux submit -n4 -N4 sleep 300) &&
 	flux job wait-event $id start &&
 	flux job kill $id &&
 	flux job wait-event $id finish >kill1.finish.out &&
 	grep status=$((15+128<<8)) kill1.finish.out
 '
 test_expect_success 'job-shell: test shell kill event handling: SIGKILL' '
-	id=$(flux submit -n4 -N4 sleep 60) &&
+	id=$(flux submit -n4 -N4 sleep 300) &&
 	flux job wait-event $id start &&
 	flux job kill -s SIGKILL $id &&
 	flux job wait-event $id finish >kill2.finish.out &&
 	grep status=$((9+128<<8)) kill2.finish.out
 '
 test_expect_success 'job-shell: test shell kill event handling: numeric signal' '
-	id=$(flux submit -n4 -N4 sleep 60) &&
+	id=$(flux submit -n4 -N4 sleep 300) &&
 	flux job wait-event $id start &&
 	flux job kill -s 2 $id &&
 	flux job wait-event $id finish >kill3.finish.out &&
 	grep status=$((2+128<<8)) kill3.finish.out
 '
 test_expect_success 'job-shell: mangled shell kill event logged' '
-	id=$(flux submit -n4 -N4 sleep 60 | flux job id) &&
+	id=$(flux submit -n4 -N4 sleep 300 | flux job id) &&
 	flux job wait-event $id start &&
 	flux event pub shell-${id}.kill "{}" &&
 	flux job kill ${id} &&
@@ -216,7 +216,7 @@ test_expect_success 'job-shell: mangled shell kill event logged' '
 	grep "ignoring malformed event" kill4.log
 '
 test_expect_success 'job-shell: shell kill event: kill(2) failure logged' '
-	id=$(flux submit -n4 -N4 sleep 60 | flux job id) &&
+	id=$(flux submit -n4 -N4 sleep 300 | flux job id) &&
 	flux job wait-event $id start &&
 	flux event pub shell-${id}.kill "{\"signum\":199}" &&
 	flux job kill ${id} &&
