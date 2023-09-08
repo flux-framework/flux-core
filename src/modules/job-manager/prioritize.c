@@ -237,9 +237,11 @@ int reprioritize_all (struct job_manager *ctx)
 
     /*  Reorder alloc queue and pending jobs. Canceled alloc requests
      *   will be reinserted into the queue as the scheduler responds
-     *   to them.
+     *   to them. Note: ctx->alloc may not be initialized if this function
+     *   is called during jobtap initialization.
      */
-    alloc_queue_reprioritize (ctx->alloc);
+    if (ctx->alloc)
+        alloc_queue_reprioritize (ctx->alloc);
 
     /*  Update scheduler with any changed priorities */
     if (sched_prioritize (ctx->h, priorities) < 0) {
