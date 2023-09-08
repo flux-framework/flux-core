@@ -272,6 +272,31 @@ attributes have this flag then this validation step is skipped. This can
 be useful to allow an instance owner to update a job attribute beyond limits
 for example.
 
+Some updates may benefit from a job feasibility check before the updates
+are applied. This prevents a user from inadvertently causing a job that
+was feasible at the time of submission to become infeasible through an
+update.  Because the update plugin is in the best position to determine
+if a feasibility check should be completed for an update, feasibility
+checks are only done if a ``feasibility`` flag in ``FLUX_PLUGIN_OUT_ARGS``
+is set. If any plugin for a set of updates requires a feasibility check,
+then feasibility of the updated jobspec as a whole will be checked. If
+the updated job is determined to be infeasible, then the update is aborted
+and an error returned to the user.
+
+The update of one attribute may require modification of other attributes.
+For example, an update of ``attributes.system.queue`` may require
+modification of ``attributes.system.constraints`` to apply the constraints
+of the new queue. To support this use case, plugins may additionally push
+an ``updates`` object onto ``FLUX_PLUGIN_OUT_ARGS``. This object has the
+same form as the ``jobspec-update`` context defined in RFC 21. For example,
+if a plugin wishes to update ``attributes.system.foo`` to 1, it can set ::
+
+   {"updates": {"attributes.system.foo": 1}}
+
+in the ``FLUX_PLUGIN_OUT_ARGS`` before returning. Updates are applied by
+updating the requested updates, so this method could overwrite other user-
+requested updates and caution is advised.
+
 PLUGIN CALLBACK TOPICS
 ======================
 
