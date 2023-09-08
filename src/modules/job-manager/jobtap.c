@@ -2352,6 +2352,7 @@ int jobtap_job_update (struct jobtap *jobtap,
          */
         error_asprintf (jobtap, job, errp, "update of %s not supported", key);
         rc = -1;
+        errno = EINVAL;
     }
     else if (rc < 0) {
         /* Callback failed, check for provided errmsg */
@@ -2363,7 +2364,7 @@ int jobtap_job_update (struct jobtap *jobtap,
             errmsg = "update rejected by job-manager plugin";
         }
         error_asprintf (jobtap, job, errp, "%s", errmsg);
-        errno = EPERM;
+        errno = EINVAL;
     }
     else if (rc > 0 && needs_validation != NULL) {
         /*  Default is to require further validation by calling job.validate
@@ -2438,6 +2439,7 @@ int jobtap_validate_updates (struct jobtap *jobtap,
         if ((*errp = strdup (errmsg)) == NULL)
             flux_log (jobtap->ctx->h, LOG_ERR,
                       "jobtap: validate failed to capture errmsg");
+        errno = EINVAL;
     }
 error:
     ERRNO_SAFE_WRAP (json_decref, jobspec_updated);

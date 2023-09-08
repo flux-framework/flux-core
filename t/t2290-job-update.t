@@ -63,7 +63,7 @@ test_expect_success 'update request for negative duration fails' '
 	echo "{\"id\": $(flux job id $jobid),\
 	       \"updates\": {\"attributes.system.duration\": -1.0}\
               }" \
-	    | ${FLUX_BUILD_DIR}/t/request/rpc job-manager.update 1 # EPERM
+	    | ${FLUX_BUILD_DIR}/t/request/rpc job-manager.update 22 # EINVAL
 '
 test_expect_success 'update request with invalid duration type fails' '
 	echo "{\"id\": $(flux job id $jobid),\
