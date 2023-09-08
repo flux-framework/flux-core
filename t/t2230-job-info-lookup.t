@@ -87,6 +87,20 @@ test_expect_success 'flux job info --original jobspec works' '
 	grep ORIGINALTHING jobspec_original.out
 '
 
+test_expect_success 'flux job info applies jobspec updates' '
+	jobid=$(flux submit --urgency=hold true) &&
+	echo $jobid > updated_jobspec.id &&
+	flux job info $jobid jobspec | jq -e ".attributes.system.duration == 0" &&
+	flux update $jobid duration=100s &&
+	flux job info $jobid jobspec | jq -e ".attributes.system.duration == 100.0" &&
+	flux cancel $jobid
+'
+
+test_expect_success 'flux job info --base jobspec works' '
+	flux job info --base $(cat updated_jobspec.id) jobspec \
+	     | jq -e ".attributes.system.duration == 0"
+'
+
 test_expect_success 'flux job info jobspec fails on bad id' '
 	test_must_fail flux job info 12345 jobspec
 '
