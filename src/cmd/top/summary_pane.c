@@ -72,7 +72,6 @@ struct summary_pane {
     bool heart_visible;
     flux_jobid_t current;
     json_t *jobs;
-    flux_future_t *f_stats;
     flux_future_t *f_resource;
 };
 
@@ -468,9 +467,8 @@ static int get_queue_stats (json_t *o, const char *queue_name, json_t **qstats)
     return 0;
 }
 
-static void stats_continuation (flux_future_t *f, void *arg)
+void summary_pane_jobstats (struct summary_pane *sum, flux_future_t *f)
 {
-    struct summary_pane *sum = arg;
     json_t *o = NULL;
     const char *filter_queue;
 
@@ -508,8 +506,6 @@ static void stats_continuation (flux_future_t *f, void *arg)
         fatal (0, "error decoding job-list.job-stats object");
 
 out:
-    flux_future_destroy (f);
-    sum->f_stats = NULL;
     draw_stats (sum);
     if (sum->top->test_exit) {
         /* Ensure stats is refreshed before exiting */
@@ -553,20 +549,6 @@ void summary_pane_query (struct summary_pane *sum)
                                  sum) < 0) {
             flux_future_destroy (sum->f_resource);
             sum->f_resource = NULL;
-        }
-    }
-    if (!sum->f_stats) {
-        if (!(sum->f_stats = flux_rpc (sum->top->h,
-                                       "job-list.job-stats",
-                                       "{}",
-                                       0,
-                                       0))
-            || flux_future_then (sum->f_stats,
-                                 -1,
-                                 stats_continuation,
-                                 sum) < 0) {
-            flux_future_destroy (sum->f_stats);
-            sum->f_stats = NULL;
         }
     }
 }
@@ -635,7 +617,6 @@ void summary_pane_destroy (struct summary_pane *sum)
 {
     if (sum) {
         int saved_errno = errno;
-        flux_future_destroy (sum->f_stats);
         flux_future_destroy (sum->f_resource);
         flux_watcher_destroy (sum->heartblink);
         delwin (sum->win);

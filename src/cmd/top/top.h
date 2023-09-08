@@ -47,6 +47,7 @@ struct top {
     flux_watcher_t *jobtimer;
     bool jobtimer_running;
     flux_msg_handler_t **handlers;
+    flux_future_t *f_stats;
 };
 
 struct dimension {
@@ -70,6 +71,7 @@ void summary_pane_draw (struct summary_pane *sum);
 void summary_pane_refresh (struct summary_pane *sum);
 void summary_pane_query (struct summary_pane *sum);
 void summary_pane_heartbeat (struct summary_pane *sum);
+void summary_pane_jobstats (struct summary_pane *sum, flux_future_t *f);
 void summary_pane_toggle_details (struct summary_pane *sum);
 
 struct joblist_pane *joblist_pane_create (struct top *top);
