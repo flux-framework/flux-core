@@ -66,7 +66,6 @@ struct event {
     struct event_batch *batch;
     flux_watcher_t *timer;
     zlist_t *pending;
-    zlist_t *pub_futures;
     zhashx_t *evindex;
 };
 
@@ -101,23 +100,6 @@ static void commit_continuation (flux_future_t *f, void *arg)
     event_batch_destroy (batch);
 }
 
-/* job-state event publish has completed.
- * If there was a publish error, log it and stop the reactor.
- * Destroy 'f'.
- */
-static void publish_continuation (flux_future_t *f, void *arg)
-{
-    struct event *event = arg;
-    struct job_manager *ctx = event->ctx;
-
-    if (flux_future_get (f, NULL) < 0) {
-        flux_log_error (ctx->h, "%s: event publish failed", __FUNCTION__);
-        flux_reactor_stop_error (flux_get_reactor (ctx->h));
-    }
-    zlist_remove (event->pub_futures, f);
-    flux_future_destroy (f);
-}
-
 /* Close the current batch, if any, and commit it.
  */
 static void event_batch_commit (struct event *event)
@@ -127,11 +109,6 @@ static void event_batch_commit (struct event *event)
 
     if (batch) {
         event->batch = NULL;
-        /* note that job-state events will be sent after the KVS
-         * commit, as we want to ensure anyone who receives a
-         * job-state transition event will be able to read the
-         * corresponding event in the KVS.
-         */
         if (batch->txn) {
             if (!(batch->f = flux_kvs_commit (ctx->h, NULL, 0, batch->txn)))
                 goto error;
@@ -140,7 +117,7 @@ static void event_batch_commit (struct event *event)
             if (zlist_append (event->pending, batch) < 0)
                 goto nomem;
         }
-        else { // just publish events & send responses and be done
+        else { // just send responses and be done
             event_batch_destroy (batch);
         }
     }
@@ -159,33 +136,7 @@ static void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *a
     event_batch_commit (ctx->event);
 }
 
-void event_publish (struct event *event, const char *topic,
-                    const char *key, json_t *o)
-{
-    struct job_manager *ctx = event->ctx;
-    flux_future_t *f;
-
-    if (!(f = flux_event_publish_pack (ctx->h, topic, 0, "{s:O?}", key, o))) {
-        flux_log_error (ctx->h, "%s: flux_event_publish_pack", __FUNCTION__);
-        goto error;
-    }
-    if (flux_future_then (f, -1., publish_continuation, event) < 0) {
-        flux_future_destroy (f);
-        flux_log_error (ctx->h, "%s: flux_future_then", __FUNCTION__);
-        goto error;
-    }
-    if (zlist_append (event->pub_futures, f) < 0) {
-        flux_future_destroy (f);
-        flux_log_error (ctx->h, "%s: zlist_append", __FUNCTION__);
-        goto error;
-    }
-    return;
-error:
-    flux_reactor_stop_error (flux_get_reactor (ctx->h));
-}
-
 /* Besides cleaning up, this function has the following side effects:
- * - publish state transition event (if any)
  * - send listener responses (only under error scenarios, should be
  *   sent in event_batch_commit()).
  * - respond to deferred responses (if any)
@@ -198,14 +149,6 @@ static void event_batch_destroy (struct event_batch *batch)
         flux_kvs_txn_destroy (batch->txn);
         if (batch->f)
             (void)flux_future_wait_for (batch->f, -1);
-        if (batch->state_trans) {
-            if (json_array_size (batch->state_trans) > 0)
-                event_publish (batch->event,
-                               "job-state",
-                               "transitions",
-                               batch->state_trans);
-            json_decref (batch->state_trans);
-        }
         if (batch->jobs) {
             struct job *job;
             while ((job = zlist_pop (batch->jobs))) {
@@ -281,33 +224,6 @@ static int event_batch_commit_event (struct event *event,
     }
     free (entrystr);
     return 0;
-}
-
-int event_batch_pub_state (struct event *event, struct job *job,
-                           double timestamp)
-{
-    json_t *o;
-
-    if (event_batch_start (event) < 0)
-        goto error;
-    if (!event->batch->state_trans) {
-        if (!(event->batch->state_trans = json_array ()))
-            goto nomem;
-    }
-    if (!(o = json_pack ("[I,s,f]",
-                         job->id,
-                         flux_job_statetostr (job->state, "L"),
-                         timestamp)))
-        goto nomem;
-    if (json_array_append_new (event->batch->state_trans, o)) {
-        json_decref (o);
-        goto nomem;
-    }
-    return 0;
-nomem:
-    errno = ENOMEM;
-error:
-    return -1;
 }
 
 int event_batch_add_job (struct event *event, struct job *job)
@@ -918,15 +834,6 @@ int event_job_process_entry (struct event *event,
     if (!(flags & EVENT_NO_COMMIT)
         && event_batch_commit_event (event, job, entry) < 0)
         return -1;
-    if (job->state != old_state) {
-        double timestamp;
-        if (json_unpack (entry, "{s:f}", "timestamp", &timestamp) < 0) {
-            errno = EINVAL;
-            return -1;
-        }
-        if (event_batch_pub_state (event, job, timestamp) < 0)
-            return -1;
-    }
 
     /* Keep track of running job count.
      * If queue reaches idle state, event_job_action() triggers any waiters.
@@ -1034,19 +941,9 @@ void event_ctx_destroy (struct event *event)
         if (event->pending) {
             struct event_batch *batch;
             while ((batch = zlist_pop (event->pending)))
-                event_batch_destroy (batch); // N.B. can append to pub_futures
+                event_batch_destroy (batch);
         }
         zlist_destroy (&event->pending);
-        if (event->pub_futures) {
-            flux_future_t *f;
-            while ((f = zlist_pop (event->pub_futures))) {
-                if (flux_future_get (f, NULL) < 0)
-                    flux_log_error (event->ctx->h,
-                                    "error publishing job-state event");
-                flux_future_destroy (f);
-            }
-        }
-        zlist_destroy (&event->pub_futures);
         zhashx_destroy (&event->evindex);
         free (event);
         errno = saved_errno;
@@ -1097,8 +994,6 @@ struct event *event_ctx_create (struct job_manager *ctx)
                                                     ctx)))
         goto error;
     if (!(event->pending = zlist_new ()))
-        goto nomem;
-    if (!(event->pub_futures = zlist_new ()))
         goto nomem;
     if (!(event->evindex = zhashx_new ()))
         goto nomem;
