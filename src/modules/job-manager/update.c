@@ -216,6 +216,7 @@ static void update_handle_request (flux_t *h,
     }
     if (job->immutable && !(cred.rolemask & FLUX_ROLE_OWNER)) {
         errstr = "job is immutable due to previous instance owner update";
+        errno = EPERM;
         goto error;
     }
     /*  Process the update request
