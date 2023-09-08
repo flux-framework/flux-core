@@ -267,24 +267,8 @@ content.backing-module (Updates: C)
    on rank 0 where the content backing store is active.  Default:
    ``content-sqlite``.
 
-content.blob-size-limit (Updates: C, R)
-   The maximum size of a blob, the basic unit of content storage.
-   Default: ``1073741824``.
-
-content.flush-batch-limit (Updates: C, R)
-   The maximum number of outstanding store requests that will be initiated
-   when handling a flush or backing store load operation.  Default: ``256``.
-
 content.hash (Updates: C)
    The selected hash algorithm.  Default ``sha1``.  Other options: ``sha256``.
-
-content.purge-old-entry (Updates: C, R)
-   When the cache size footprint needs to be reduced, only consider purging
-   entries that are older than this number of seconds.  Default:  ``10``.
-
-content.purge-target-size (Updates: C, R)
-   If possible, the cache size purged periodically so that the total size of
-   the cache stays at or below this value, in bytes.  Default: ``16777216``.
 
 
 RESOURCES

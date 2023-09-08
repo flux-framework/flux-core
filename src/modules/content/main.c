@@ -23,7 +23,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     struct content_cache *cache;
     int rc = -1;
 
-    if (!(cache = content_cache_create (h))) {
+    if (!(cache = content_cache_create (h, argc, argv))) {
         flux_log_error (h, "error initializing content cache");
         goto done;
     }

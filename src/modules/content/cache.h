@@ -13,7 +13,7 @@
 
 struct content_cache;
 
-struct content_cache *content_cache_create (flux_t *h);
+struct content_cache *content_cache_create (flux_t *h, int argc, char **argv);
 void content_cache_destroy (struct content_cache *cache);
 bool content_cache_backing_loaded (struct content_cache *cache);
 
