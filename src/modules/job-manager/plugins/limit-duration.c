@@ -200,7 +200,7 @@ static int check_limit (struct limit_duration *ctx,
         && limit != DURATION_UNLIMITED
         && (duration > limit || duration == DURATION_UNLIMITED)) {
         char fsd[64];
-        fsd_format_duration_ex (fsd, sizeof (fsd), limit, 1);
+        fsd_format_duration_ex (fsd, sizeof (fsd), limit, 2);
         return errprintf (error,
                           "requested duration exceeds policy limit of %s",
                           fsd);
