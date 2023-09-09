@@ -13,6 +13,10 @@ countblobs() {
 		"select count(*) from objects;" | sed -e 's/.*= //'
 }
 
+test_expect_success 'load content module' '
+	flux module load content
+'
+
 test_expect_success 'flux-dump with no args prints Usage message' '
 	test_must_fail flux dump 2>dump-noargs.out &&
 	grep "Usage" dump-noargs.out
@@ -198,9 +202,11 @@ reader() {
                 -o,-Sbroker.rc3_path=\
                 -o,-Sstatedir=$dbdir\
                 bash -c "\
+                        flux module load content && \
                         flux module load content-sqlite && \
                         flux dump --no-cache -q --checkpoint - &&\
-                        flux module remove content-sqlite
+                        flux module remove content-sqlite && \
+                        flux module remove content
                 "
 }
 
@@ -210,9 +216,11 @@ writer() {
                 -o,-Sbroker.rc3_path= \
                 -o,-Sstatedir=$dbdir \
                 bash -c "\
+                        flux module load content && \
                         flux module load content-sqlite && \
                         flux restore --checkpoint - && \
-                        flux module remove content-sqlite
+                        flux module remove content-sqlite && \
+                        flux module remove content
                 "
 }
 
@@ -255,6 +263,10 @@ test_expect_success 'rc1 skips blob that exceeds 100M limit' '
 	flux start -o,-Scontent.restore=bigdump2.tar \
 		/bin/true 2>bigdump3.err &&
 	grep "exceeds" bigdump3.err
+'
+
+test_expect_success 'remove content module' '
+	flux module remove content
 '
 
 test_done

@@ -63,6 +63,10 @@ recheck_cache_blob() {
 	test_cmp blob.$1 blob.$1.cachecheck
 }
 
+test_expect_success 'load content module' '
+	flux module load content
+'
+
 ##
 # Tests of the module by itself (no content cache)
 ##
@@ -328,6 +332,7 @@ test_expect_success 'remove content-s3 module' '
 test_expect_success 'generate rc1/rc3 for content-s3 backing' '
 	cat >rc1-content-s3 <<EOF &&
 #!/bin/bash -e
+flux module load content
 flux module load content-s3
 flux module load kvs
 EOF
@@ -335,6 +340,7 @@ EOF
 #!/bin/bash -e
 flux module remove kvs
 flux module remove content-s3
+flux module remove content
 EOF
         chmod +x rc1-content-s3 &&
         chmod +x rc3-content-s3
@@ -367,6 +373,10 @@ test_expect_success 're-run instance, verify checkpoint date saved (s3)' '
 test_expect_success 'verify date in flux logs (s3)' '
 	today=`date --iso-8601` &&
 	grep checkpoint dmesgs3.out | grep ${today}
+'
+
+test_expect_success 'remove content module' '
+	flux module remove content
 '
 
 test_done

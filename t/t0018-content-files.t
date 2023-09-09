@@ -58,6 +58,10 @@ recheck_cache_blob() {
 	test_cmp blob.$1 blob.$1.cachecheck
 }
 
+test_expect_success 'load content module' '
+	flux module load content
+'
+
 ##
 # Tests of the module by itself (no content cache)
 ##
@@ -295,6 +299,10 @@ test_expect_success 'flux module stats content-files is open to guests' '
 test_expect_success 'remove content-files module on rank 0' '
        flux content flush &&
        flux module remove content-files
+'
+
+test_expect_success 'remove content module' '
+	flux module remove content
 '
 
 test_done

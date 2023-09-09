@@ -12,8 +12,11 @@ echo "# $0: flux session size will be ${SIZE}"
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SPAMUTIL=${FLUX_BUILD_DIR}/t/kvs/content-spam
+MAXBLOB=1048576
 
-MAXBLOB=`flux getattr content.blob-size-limit`
+test_expect_success 'load content module' '
+	flux exec flux module load content blob-size-limit=$MAXBLOB
+'
 HASHFUN=`flux getattr content.hash`
 
 register_backing() {
@@ -63,7 +66,7 @@ test_expect_success 'store test blobs on rank 0' '
 	flux content store <1m.0.store >1m.0.hash
 '
 
-test_expect_success LONGTEST "cannot store blob that exceeds max size of $MAXBLOB" '
+test_expect_success "cannot store blob that exceeds max size of $MAXBLOB" '
 	dd if=/dev/zero count=$(($MAXBLOB/4096+1)) bs=4096 \
 			skip=$(($MAXBLOB/4096)) >toobig 2>/dev/null &&
 	test_must_fail flux content store <toobig
@@ -212,6 +215,10 @@ test_expect_success 'content store --chunksize=-1 fails' '
 '
 test_expect_success 'content load with no blobrefs fails' '
 	test_must_fail flux content load </dev/null
+'
+
+test_expect_success 'remove content module' '
+	flux exec flux module remove content
 '
 
 test_done

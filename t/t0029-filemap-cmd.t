@@ -40,6 +40,10 @@ test_under_flux 2 minimal
 # these tests.
 umask 022
 
+test_expect_success 'load content module' '
+	flux exec flux module load content
+'
+
 test_expect_success 'create copy directory' '
 	mkdir -p copydir
 '
@@ -299,6 +303,10 @@ test_expect_success 'size reduction should cause an error' '
 	rm -f copydir/testfile &&
 	test_must_fail flux filemap get -C copydir 2>reduced.err &&
 	grep changed reduced.err
+'
+
+test_expect_success 'remove content module' '
+	flux exec flux module remove content
 '
 
 test_done

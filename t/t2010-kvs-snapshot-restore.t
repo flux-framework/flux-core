@@ -99,6 +99,7 @@ test_expect_success 'verify checkpoint loaded with no date (sqlite)' '
 test_expect_success 'generate rc1/rc3 for content-files backing' '
 	cat >rc1-content-files <<EOF &&
 #!/bin/bash -e
+flux module load content
 flux module load content-files
 flux module load kvs
 EOF
@@ -106,6 +107,7 @@ EOF
 #!/bin/bash -e
 flux module remove kvs
 flux module remove content-files
+flux module remove content
 EOF
 	chmod +x rc1-content-files &&
 	chmod +x rc3-content-files

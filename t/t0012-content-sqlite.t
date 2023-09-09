@@ -11,21 +11,27 @@ SIZE=$(test_size_large)
 test_under_flux ${SIZE} minimal
 echo "# $0: flux session size will be ${SIZE}"
 
+PURGE_TARGET_SIZE=100
+PURGE_OLD_ENTRY=1
+FLUSH_BATCH_LIMIT=5
+
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SPAMUTIL="${FLUX_BUILD_DIR}/t/kvs/content-spam"
 rc1_kvs=$SHARNESS_TEST_SRCDIR/rc/rc1-kvs
 rc3_kvs=$SHARNESS_TEST_SRCDIR/rc/rc3-kvs
 
+test_expect_success 'load content module with lower purge/age thresholds' '
+	flux exec flux module load content \
+	    purge-target-size=$PURGE_TARGET_SIZE \
+	    purge-old-entry=$PURGE_OLD_ENTRY \
+	    flush-batch-limit=$FLUSH_BATCH_LIMIT
+'
+
 HASHFUN=`flux getattr content.hash`
 
 test_expect_success 'load heartbeat module with fast rate to drive purge' '
 	flux module load heartbeat period=0.1s
-'
-
-test_expect_success 'lower purge size and age thresholds' '
-	flux setattr content.purge-target-size 100 &&
-	flux setattr content.purge-old-entry 1
 '
 
 test_expect_success 'load content-sqlite module on rank 0' '
@@ -108,7 +114,6 @@ test_expect_success 'load and verify 1m blob on all ranks' '
 '
 
 test_expect_success 'exercise batching of synchronous flush to backing store' '
-	flux setattr content.flush-batch-limit 5 &&
 	${SPAMUTIL} 200 200 >/dev/null &&
 	flux content flush &&
 	NDIRTY=`flux module stats --type int --parse dirty content` &&
@@ -207,9 +212,7 @@ getsize() {
 }
 
 test_expect_success 'wait for purge to clear cache entries' '
-	purge_size=$(flux getattr content.purge-target-size) &&
-	purge_age=$(flux getattr content.purge-old-entry) &&
-	echo "Purge size $purge_size bytes, age $purge_age secs" &&
+	echo "Purge size $PURGE_TARGET_SIZE bytes, age $PURGE_OLD_ENTRY secs" &&
 	size=$(getsize) && \
 	count=0 &&
 	while test $size -gt 100 -a $count -lt 300; do \
@@ -345,13 +348,17 @@ recreate_database()
 {
 	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
 	    -o,-Sstatedir=$(pwd) bash -c \
-	    "flux module load content-sqlite truncate; \
-	    flux module remove content-sqlite"
+	    "flux module load content &&
+	    flux module load content-sqlite truncate && \
+	    flux module remove content-sqlite && \
+	    flux module remove content"
 }
 load_module_xfail()
 {
 	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
-	    -o,-Sstatedir=$(pwd) flux module load content-sqlite
+	    -o,-Sstatedir=$(pwd) bash -c \
+	    "flux module load content && \
+	    flux module load content-sqlite"
 }
 
 # FWIW https://www.sqlite.org/fileformat.html
@@ -381,4 +388,9 @@ test_expect_success 'flux module stats content-sqlite is open to guests' '
 test_expect_success 'remove content-sqlite module on rank 0' '
 	flux module remove content-sqlite
 '
+
+test_expect_success 'remove content module' '
+	flux exec flux module remove content
+'
+
 test_done
