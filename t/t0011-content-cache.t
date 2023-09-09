@@ -220,5 +220,8 @@ test_expect_success 'content load with no blobrefs fails' '
 test_expect_success 'remove content module' '
 	flux exec flux module remove content
 '
+test_expect_success 'module fails to load with unknown option' '
+	test_must_fail flux module load content badopt
+'
 
 test_done
