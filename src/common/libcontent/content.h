@@ -43,7 +43,9 @@ flux_future_t *content_store (flux_t *h, const void *buf, int len, int flags);
  * Returns 0 on success, -1 on failure with errno set.
  */
 int content_store_get_hash (flux_future_t *f, const void **hash, int *hash_len);
-int content_store_get_blobref (flux_future_t *f, const char **blobref);
+int content_store_get_blobref (flux_future_t *f,
+                               const char *hash_name,
+                               const char **blobref);
 
 #endif /* !_FLUX_CONTENT_H */
 

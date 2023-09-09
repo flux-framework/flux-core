@@ -69,7 +69,7 @@ struct content_files {
     flux_msg_handler_t **handlers;
     char *dbpath;
     flux_t *h;
-    const char *hashfun;
+    char *hashfun;
     int hash_size;
 };
 
@@ -287,6 +287,7 @@ static void content_files_destroy (struct content_files *ctx)
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
         free (ctx->dbpath);
+        free (ctx->hashfun);
         free (ctx);
         errno = saved_errno;
     }
@@ -311,6 +312,7 @@ static struct content_files *content_files_create (flux_t *h, bool truncate)
 {
     struct content_files *ctx;
     const char *dbdir;
+    const char *s;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
@@ -320,8 +322,9 @@ static struct content_files *content_files_create (flux_t *h, bool truncate)
      * - the hash function, e.g. sha1, sha256
      * - path to sqlite file
      */
-    if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))
-        || (ctx->hash_size = blobref_validate_hashtype (ctx->hashfun)) < 0) {
+    if (!(s = flux_attr_get (h, "content.hash"))
+        || !(ctx->hashfun = strdup (s))
+        || (ctx->hash_size = blobref_validate_hashtype (s)) < 0) {
         flux_log_error (h, "content.hash");
         goto error;
     }

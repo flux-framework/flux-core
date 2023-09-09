@@ -29,8 +29,9 @@ static void store_completion (flux_future_t *f, void *arg)
 {
     flux_t *h = arg;
     const char *blobref;
+    const char *hash_type = flux_aux_get (h, "hash_type");
 
-    if (content_store_get_blobref (f, &blobref) < 0)
+    if (content_store_get_blobref (f, hash_type, &blobref) < 0)
         log_err_exit ("store");
     printf ("%s\n", blobref);
     flux_future_destroy (f);
@@ -45,6 +46,8 @@ int main (int ac, char *av[])
     flux_t *h;
     char data[256];
     int size = 256;
+    const char *s;
+    char *hash_type;
 
     if (ac != 2 && ac != 3) {
         fprintf (stderr, "Usage: content-spam N [M]\n");
@@ -58,6 +61,10 @@ int main (int ac, char *av[])
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
+    if (!(s = flux_attr_get (h, "content.hash"))
+        || !(hash_type = strdup (s))
+        || flux_aux_set (h, "hash_type", hash_type, (flux_free_f)free) < 0)
+        log_err_exit ("getattr content.hash");
 
     spam_cur_inflight = 0;
     i = 0;
