@@ -1445,27 +1445,6 @@ void __gcov_dump (void);
 void __gcov_reset (void);
 #endif
 
-static void broker_panic_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
-{
-    const char *reason;
-    int flags; // reserved
-
-    if (flux_request_unpack (msg, NULL, "{s:s s:i}",
-                             "reason", &reason,
-                             "flags", &flags) < 0) {
-        flux_log_error (h, "malformed broker.panic request");
-        return;
-    }
-    fprintf (stderr, "PANIC: %s\n", reason);
-#if CODE_COVERAGE_ENABLED
-    __gcov_dump ();
-    __gcov_reset ();
-#endif
-    _exit (1);
-    /*NOTREACHED*/
-}
-
 static void broker_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
@@ -1602,12 +1581,6 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "broker.module-status",
         broker_module_status_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "broker.panic",
-        broker_panic_cb,
         0
     },
     {

@@ -22,7 +22,6 @@
 #include "response.h"
 #include "control.h"
 #include "rpc.h"
-#include "panic.h"
 #include "event.h"
 #include "module.h"
 #include "attr.h"

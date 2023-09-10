@@ -70,7 +70,6 @@ fluxcoreinclude_HEADERS = \
 	control.h \
 	response.h \
 	rpc.h \
-	panic.h \
 	event.h \
 	module.h \
 	attr.h \
@@ -104,7 +103,6 @@ libflux_la_SOURCES = \
 	request.c \
 	response.c \
 	rpc.c \
-	panic.c \
 	event.c \
 	module.c \
 	conf_private.h \
@@ -172,7 +170,6 @@ TESTS = test_message.t \
 	test_log.t \
 	test_reactor_loop.t \
 	test_rpc_security.t \
-	test_panic.t \
 	test_attr.t \
 	test_module.t \
 	test_plugin.t \
@@ -286,10 +283,6 @@ test_reactor_loop_t_LDADD = $(test_ldadd)
 test_rpc_security_t_SOURCES = test/rpc_security.c
 test_rpc_security_t_CPPFLAGS = $(test_cppflags)
 test_rpc_security_t_LDADD = $(test_ldadd)
-
-test_panic_t_SOURCES = test/panic.c
-test_panic_t_CPPFLAGS = $(test_cppflags)
-test_panic_t_LDADD = $(test_ldadd)
 
 test_attr_t_SOURCES = test/attr.c
 test_attr_t_CPPFLAGS = $(test_cppflags)
