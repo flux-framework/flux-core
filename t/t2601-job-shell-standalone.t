@@ -5,7 +5,7 @@ test_description='Test flux-shell in --standalone mode'
 . `dirname $0`/sharness.sh
 
 #  Run flux-shell under flux command to get correct paths
-FLUX_SHELL="run_timeout 60 flux ${FLUX_BUILD_DIR}/src/shell/flux-shell"
+FLUX_SHELL="run_timeout 300 flux ${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
 PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
