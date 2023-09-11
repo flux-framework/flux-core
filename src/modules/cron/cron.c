@@ -866,7 +866,7 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-static void process_args (cron_ctx_t *ctx, int ac, char **av)
+static int process_args (cron_ctx_t *ctx, int ac, char **av)
 {
     int i;
     for (i = 0; i < ac; i++) {
@@ -877,9 +877,13 @@ static void process_args (cron_ctx_t *ctx, int ac, char **av)
             if (fsd_parse_duration (s, &ctx->sync_epsilon) < 0)
                 flux_log_error (ctx->h, "option %s ignored", av[i]);
         }
-        else
+        else {
             flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
+            errno = EINVAL;
+            return -1;
+        }
     }
+    return 0;
 }
 
 
@@ -891,7 +895,8 @@ int mod_main (flux_t *h, int ac, char **av)
     if (ctx == NULL)
         return -1;
 
-    process_args (ctx, ac, av);
+    if (process_args (ctx, ac, av) < 0)
+        goto done;
 
     if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
