@@ -43,6 +43,9 @@ contains() {
     fi
 }
 
+test_expect_success 'module fails to load with unknown option' '
+	test_must_fail flux module load cron badopt
+'
 test_expect_success 'load cron module' '
     flux module load cron
 '

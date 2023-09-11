@@ -493,6 +493,7 @@ static int parse_args (flux_t *h, int argc, char **argv)
         }
         else {
             flux_log (h, LOG_ERR, "Unknown module option: %s", argv[i]);
+            errno = EINVAL;
             return -1;
         }
     }

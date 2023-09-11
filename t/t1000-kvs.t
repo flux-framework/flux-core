@@ -1272,4 +1272,14 @@ test_expect_success 'setroot-pause request with empty payload fails with EPROTO(
 test_expect_success 'setroot-unpause request with empty payload fails with EPROTO(71)' '
 	${RPC} kvs.setroot-unpause 71 </dev/null
 '
+
+#
+# module corner cases
+#
+
+test_expect_success 'module fails to load with unknown option' '
+	flux module remove kvs &&
+	test_must_fail flux module load kvs badopt
+'
+
 test_done

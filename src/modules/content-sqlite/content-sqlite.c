@@ -821,6 +821,7 @@ static int process_args (struct content_sqlite *ctx,
         }
         else {
             flux_log (ctx->h, LOG_ERR, "Unknown module option: '%s'", argv[i]);
+            errno = EINVAL;
             return -1;
         }
     }

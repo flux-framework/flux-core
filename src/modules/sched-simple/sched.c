@@ -856,6 +856,7 @@ static int process_args (flux_t *h, struct simple_sched *ss,
         }
         else {
             flux_log_error (h, "Unknown module option: '%s'", argv[i]);
+            errno = EINVAL;
             return -1;
         }
     }

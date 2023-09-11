@@ -2804,16 +2804,20 @@ static int process_config (struct kvs_ctx *ctx)
     return 0;
 }
 
-static void process_args (struct kvs_ctx *ctx, int ac, char **av)
+static int process_args (struct kvs_ctx *ctx, int ac, char **av)
 {
     int i;
 
     for (i = 0; i < ac; i++) {
         if (strstarts (av[i], "transaction-merge="))
             ctx->transaction_merge = strtoul (av[i]+13, NULL, 10);
-        else
+        else {
             flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
+            errno = EINVAL;
+            return -1;
+        }
     }
+    return 0;
 }
 
 /* Synchronously get checkpoint data by key from checkpoint service.
@@ -2961,7 +2965,8 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (process_config (ctx) < 0)
         goto done;
-    process_args (ctx, argc, argv);
+    if (process_args (ctx, argc, argv) < 0)
+        goto done;
     if (ctx->rank == 0) {
         struct kvsroot *root;
         char empty_dir_rootref[BLOBREF_MAX_STRING_SIZE];
