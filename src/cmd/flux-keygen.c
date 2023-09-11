@@ -15,7 +15,6 @@
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <czmq.h>
-#include <sodium.h>
 
 #include "src/common/libutil/log.h"
 
@@ -120,10 +119,6 @@ int main (int argc, char *argv[])
                     CZMQ_VERSION_MAJOR,
                     CZMQ_VERSION_MINOR,
                     CZMQ_VERSION_PATCH);
-    zcert_set_meta (cert,
-                    "keygen.sodium-version",
-                    "%s",
-                    SODIUM_VERSION_STRING);
 
     if (path && zcert_save_secret (cert, path) < 0)
         log_msg_exit ("zcert_save_secret %s: %s", path, strerror (errno));
