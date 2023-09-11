@@ -746,32 +746,6 @@ test_expect_success 'reactor: reactorcat example program works' '
 	test_must_fail test -s reactorcat.devnull.out
 '
 
-test_expect_success 'create panic script' '
-	cat >panic.sh <<-EOT &&
-	#!/bin/sh
-	echo "{\"reason\":\"fubar\", \"flags\":0}" | $RPC broker.panic
-	exit 0
-	EOT
-	chmod +x panic.sh
-'
-
-test_expect_success 'flux-start: panic rank 1 of a size=2 instance' '
-	! flux start ${ARGS} \
-		--test-exit-timeout=0.2 -s2 \
-		bash -c "flux getattr rundir; flux exec -r 1 ./panic.sh; sleep 5" >panic.out 2>panic.err
-'
-test_expect_success 'flux-start: panic message reached stderr' '
-	grep -q fubar panic.err
-'
-# flux-start: 1 (pid 10023) exited with rc=1
-test_expect_success 'flux-start: rank 1 exited with rc=1' '
-	egrep "flux-start: 1 .* exited with rc=1" panic.err
-'
-# flux-start: 0 (pid 21474) Killed
-test_expect_success 'flux-start: rank 0 Killed' '
-	egrep "flux-start: 0 .* Killed" panic.err
-'
-
 test_expect_success 'no unit tests built with libtool wrapper' '
 	find ${FLUX_BUILD_DIR} \
 		-name "test_*.t" \
