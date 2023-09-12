@@ -1,7 +1,15 @@
-#!/bin/bash -e
+#!/bin/sh -e
 
 # Allow connector-local more time to start listening on socket
 RANK=$(FLUX_LOCAL_CONNECTOR_RETRY_COUNT=30 flux getattr rank)
+
+listfiles() {
+    local glob="$1"
+    for file in $glob; do
+        [ $file = "$glob" ] && continue
+        echo $file
+    done
+}
 
 # Usage: modload {all|<rank>} modname [args ...]
 modload() {
@@ -92,14 +100,12 @@ modload 0 heartbeat
 core_dir=$(cd ${0%/*} && pwd -P)
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
 IFS=:
-shopt -s nullglob
 for rcdir in $all_dirs; do
-    for rcfile in $rcdir/rc1.d/*; do
+    for rcfile in $(listfiles "$rcdir/rc1.d/*"); do
 	echo running $rcfile
         $rcfile
     done
 done
-shopt -u nullglob
 
 # Print module that has registered 'sched' service, if any
 lookup_sched_module() {

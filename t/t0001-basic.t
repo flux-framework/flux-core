@@ -311,6 +311,19 @@ test_expect_success 'flux-start in subprocess/pmi mode works as initial program'
 	flux start ${ARGS} -s2 flux start ${ARGS} -s1 flux getattr size | grep -x 1
 "
 
+# See issue #5447: rc1 can fail if the shell sources a script that reactivates
+# errexit mode and has an unchecked error.  'command' apparently reactivates
+# errexit mode in older versions of bash.
+#
+test_expect_success 'flux-start works with non-errexit clean BASH_ENV' '
+	cat >testbashrc <<-EOT &&
+	command -v ls >/dev/null || :
+	/bin/false
+	/bin/true
+	EOT
+	BASH_ENV=testbashrc flux start /bin/true
+'
+
 test_expect_success 'flux-start --wrap option works' '
 	broker_path=$(flux start ${ARGS} -vX 2>&1 | sed "s/^flux-start: *//g") &&
 	echo broker_path=${broker_path} &&
