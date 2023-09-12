@@ -33,19 +33,27 @@ static void load_to_fd (flux_t *h, int fd, const char *blobref, int flags)
     flux_future_destroy (f);
 }
 
-static void store_blob (flux_t *h, const void *data, size_t size, int flags)
+static void store_blob (flux_t *h,
+                        const char *hash_type,
+                        const void *data,
+                        size_t size,
+                        int flags)
 {
     flux_future_t *f;
     const char *blobref;
 
     if (!(f = content_store (h, data, size, flags))
-        || content_store_get_blobref (f, &blobref) < 0)
+        || content_store_get_blobref (f, hash_type, &blobref) < 0)
         log_msg_exit ("error storing blob: %s", future_strerror (f, errno));
     printf ("%s\n", blobref);
     flux_future_destroy (f);
 }
 
-static void store_from_fd (flux_t *h, int fd, size_t chunksize, int flags)
+static void store_from_fd (flux_t *h,
+                           const char *hash_type,
+                           int fd,
+                           size_t chunksize,
+                           int flags)
 {
     void *data;
     ssize_t total_size;
@@ -55,12 +63,12 @@ static void store_from_fd (flux_t *h, int fd, size_t chunksize, int flags)
     if (chunksize == 0)
         chunksize = total_size;
     if (total_size == 0) // an empty blob is still valid
-        store_blob (h, data, total_size, flags);
+        store_blob (h, hash_type, data, total_size, flags);
     else {
         for (off_t offset = 0; offset < total_size; offset += chunksize) {
             if (chunksize > total_size - offset)
                 chunksize = total_size - offset;
-            store_blob (h, data + offset, chunksize, flags);
+            store_blob (h, hash_type, data + offset, chunksize, flags);
         }
     }
     free (data);
@@ -103,6 +111,7 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
     flux_t *h;
     int flags = 0;
     int chunksize = optparse_get_int (p, "chunksize", 0);
+    const char *hash_type;
 
     if (optparse_option_index (p) != ac || chunksize < 0) {
         optparse_print_usage (p);
@@ -112,7 +121,9 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
         flags |= CONTENT_FLAG_CACHE_BYPASS;
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    store_from_fd (h, STDIN_FILENO, chunksize, flags);
+    if (!(hash_type = flux_attr_get (h, "content.hash")))
+        log_err_exit ("getattr content.hash");
+    store_from_fd (h, hash_type, STDIN_FILENO, chunksize, flags);
     flux_close (h);
     return (0);
 }

@@ -11,6 +11,10 @@ echo "# $0: flux session size will be ${SIZE}"
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
+test_expect_success 'loaded content module' '
+	flux exec flux module load content
+'
+
 test_expect_success 'checkpoint-get fails, no checkpoints yet' '
         checkpoint_put foo bar
 '
@@ -82,6 +86,10 @@ test_expect_success 'unload kvs' '
 
 test_expect_success 'content.backing-module input of none works' '
         flux start -o,-Scontent.backing-module=none /bin/true
+'
+
+test_expect_success 'removedcontent module' '
+	flux exec flux module remove content
 '
 
 test_done

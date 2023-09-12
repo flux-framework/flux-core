@@ -74,7 +74,7 @@ struct kvs_ctx {
     flux_watcher_t *check_w;
     int transaction_merge;
     bool events_init;            /* flag */
-    const char *hash_name;
+    char *hash_name;
     unsigned int seq;           /* for commit transactions */
     kvs_checkpoint_t *kcp;
     struct list_head work_queue;
@@ -110,6 +110,7 @@ static void kvs_ctx_destroy (struct kvs_ctx *ctx)
         flux_watcher_destroy (ctx->check_w);
         flux_watcher_destroy (ctx->idle_w);
         kvs_checkpoint_destroy (ctx->kcp);
+        free (ctx->hash_name);
         free (ctx);
         errno = saved_errno;
     }
@@ -126,11 +127,13 @@ static struct kvs_ctx *kvs_ctx_create (flux_t *h)
 {
     flux_reactor_t *r = flux_get_reactor (h);
     struct kvs_ctx *ctx;
+    const char *s;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
     ctx->h = h;
-    if (!(ctx->hash_name = flux_attr_get (h, "content.hash"))) {
+    if (!(s = flux_attr_get (h, "content.hash"))
+        || !(ctx->hash_name = strdup (s))) {
         flux_log_error (h, "getattr content.hash");
         goto error;
     }
@@ -616,7 +619,7 @@ static void content_store_completion (flux_future_t *f, void *arg)
     cache_blobref = flux_future_aux_get (f, "cache_blobref");
     assert (cache_blobref);
 
-    if (content_store_get_blobref (f, &blobref) < 0) {
+    if (content_store_get_blobref (f, ctx->hash_name, &blobref) < 0) {
         flux_log_error (ctx->h, "%s: content_store_get_blobref", __FUNCTION__);
         goto error;
     }
@@ -2921,7 +2924,7 @@ static int store_initial_rootdir (struct kvs_ctx *ctx, char *ref, int ref_len)
             goto error_uncache;
         }
         if (!(f = content_store (ctx->h, data, len, 0))
-                || content_store_get_blobref (f, &newref) < 0) {
+                || content_store_get_blobref (f, ctx->hash_name, &newref) < 0) {
             flux_log_error (ctx->h, "%s: content_store", __FUNCTION__);
             goto error_uncache;
         }

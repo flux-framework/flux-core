@@ -87,14 +87,14 @@ int content_store_get_hash (flux_future_t *f, const void **hash, int *hash_size)
     return 0;
 }
 
-int content_store_get_blobref (flux_future_t *f, const char **blobref)
+int content_store_get_blobref (flux_future_t *f,
+                               const char *hash_name,
+                               const char **blobref)
 {
-    flux_t *h = flux_future_get_flux (f);
     const char *auxkey = "flux::blobref";
     const char *result;
 
     if (!(result = flux_future_aux_get (f, auxkey))) {
-        const char *hash_name = flux_attr_get (h, "content.hash");
         const void *hash;
         int hash_len;
         char buf[BLOBREF_MAX_STRING_SIZE];

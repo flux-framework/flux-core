@@ -1,4 +1,4 @@
-ok 1 - flux module load kvs
+ok 1 - flux module load heartbeat
 # passed all 1 test(s)
 1..1
-error: manually loaded module(s) not unloaded: kvs
+error: manually loaded module(s) not unloaded: heartbeat

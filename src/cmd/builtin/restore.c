@@ -90,7 +90,7 @@ static void restore_destroy (struct archive *ar)
     archive_read_free (ar);
 }
 
-static json_t *restore_dir (flux_t *h, json_t *dir)
+static json_t *restore_dir (flux_t *h, const char *hash_type, json_t *dir)
 {
     json_t *data = treeobj_get_data (dir);
     const char *name;
@@ -102,7 +102,7 @@ static json_t *restore_dir (flux_t *h, json_t *dir)
     json_object_foreach (data, name, entry) {
         json_t *nentry = NULL;
         if (treeobj_is_dir (entry)) // recurse
-            nentry = restore_dir (h, entry);
+            nentry = restore_dir (h, hash_type, entry);
         if (treeobj_insert_entry_novalidate (ndir,
                                              name,
                                              nentry ? nentry : entry) < 0)
@@ -118,7 +118,7 @@ static json_t *restore_dir (flux_t *h, json_t *dir)
     if (!(s = treeobj_encode (ndir)))
         log_msg_exit ("out of memory");
     if (!(f = content_store (h, s, strlen (s), content_flags))
-        || content_store_get_blobref (f, &blobref) < 0)
+        || content_store_get_blobref (f, hash_type, &blobref) < 0)
         log_msg_exit ("error storing dirref blob: %s",
                       future_strerror (f, errno));
     progress (1, 0);
@@ -200,6 +200,7 @@ static void restore_symlink (flux_t *h,
 }
 
 static void restore_value (flux_t *h,
+                           const char *hash_type,
                            json_t *root,
                            const char *path,
                            const void *buf,
@@ -216,7 +217,7 @@ static void restore_value (flux_t *h,
         const char *blobref;
 
         if (!(f = content_store (h, buf, size, content_flags))
-            || content_store_get_blobref (f, &blobref) < 0)
+            || content_store_get_blobref (f, hash_type, &blobref) < 0)
             log_msg_exit ("error storing blob for %s: %s",
                           path,
                           future_strerror (f, errno));
@@ -232,7 +233,9 @@ static void restore_value (flux_t *h,
 
 /* Restore archive and return a 'dirref' object pointing to it.
  */
-static json_t *restore_snapshot (struct archive *ar, flux_t *h)
+static json_t *restore_snapshot (struct archive *ar,
+                                 flux_t *h,
+                                 const char *hash_type)
 {
     void *buf = NULL;
     int bufsize = 0;
@@ -296,13 +299,13 @@ static json_t *restore_snapshot (struct archive *ar, flux_t *h)
                 else
                     log_msg_exit ("short read from archive");
             }
-            restore_value (h, root, path, buf, size);
+            restore_value (h, hash_type, root, path, buf, size);
             if (verbose)
                 fprintf (stderr, "%s\n", path);
         }
     }
     free (buf);
-    rootref = restore_dir (h, root);
+    rootref = restore_dir (h, hash_type, root);
     json_decref (root);
 
     return rootref;
@@ -350,6 +353,7 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
     struct archive *ar;
     const char *infile;
     int kvs_checkpoint_flags = 0;
+    char *hash_type = "sha1";
 
     log_init ("flux-restore");
 
@@ -379,7 +383,7 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
         if (kvs_is_running (h))
             log_msg_exit ("please unload kvs module before using --checkpoint");
 
-        dirref = restore_snapshot (ar, h);
+        dirref = restore_snapshot (ar, h, hash_type);
         blobref = treeobj_get_blobref (dirref, 0);
         progress_end ();
 
@@ -411,7 +415,7 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
         flux_kvs_txn_t *txn;
         flux_future_t *f;
 
-        dirref = restore_snapshot (ar, h);
+        dirref = restore_snapshot (ar, h, hash_type);
         blobref = treeobj_get_blobref (dirref, 0);
         progress_end ();
 

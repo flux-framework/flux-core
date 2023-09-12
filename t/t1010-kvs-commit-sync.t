@@ -18,6 +18,10 @@ checkpoint_get() {
         jq -j -c -n  "{key:\"$1\"}" | $RPC content.checkpoint-get
 }
 
+test_expect_success 'load content module' '
+	flux module load content
+'
+
 test_expect_success 'load content-sqlite and kvs and add some data' '
         flux module load content-sqlite &&
         flux module load kvs &&
@@ -75,6 +79,10 @@ test_expect_success 'kvs: sync without backing store fails' '
 
 test_expect_success 'kvs: unload kvs' '
 	flux module remove kvs
+'
+
+test_expect_success 'remove content module' '
+	flux module remove content
 '
 
 test_done

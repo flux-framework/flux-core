@@ -53,6 +53,7 @@ test_expect_success 'configure checkpoint-period, place initial value' '
 	checkpoint-period = "200ms"
 	EOF
 	flux config reload &&
+	flux module load content &&
 	flux module load content-sqlite &&
 	flux module load kvs &&
 	flux kvs put --blobref --sync a=1 > blob1.out
@@ -157,7 +158,8 @@ test_expect_success 'kvs: checkpoint of kvs-primary should change in time (4)' '
 
 test_expect_success 'kvs: remove modules' '
 	flux module remove kvs &&
-	flux module remove content-sqlite
+	flux module remove content-sqlite &&
+	flux module remove content
 '
 
 test_done

@@ -281,6 +281,9 @@ test_expect_success 'guests may not add non-userid-prefixed services' '
 
 # kvs.namespace-<NS>-setroot is a "private" event
 
+test_expect_success 'loaded content module' '
+	flux module load content
+'
 test_expect_success 'loaded kvs module' '
 	flux module load kvs
 '
@@ -340,6 +343,10 @@ test_expect_success 'flux content store not allowed for guest user' '
 	test_must_fail bash -c "FLUX_HANDLE_ROLEMASK=0x2 \
 	    flux content store <content.blob 2>content-store.err" &&
 	    grep "Request requires owner credentials" content-store.err
+'
+
+test_expect_success 'unloaded content module' '
+	flux module remove content
 '
 
 test_expect_success 'flux module list is open to guests' '

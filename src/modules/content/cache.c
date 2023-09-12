@@ -26,10 +26,9 @@
 #include "src/common/libcontent/content.h"
 #include "ccan/str/str.h"
 
-#include "attr.h"
-#include "content-cache.h"
-#include "content-checkpoint.h"
-#include "content-mmap.h"
+#include "cache.h"
+#include "checkpoint.h"
+#include "mmap.h"
 
 /* A periodic callback purges the cache of least recently used entries.
  * The callback is synchronized with the instance heartbeat, with a
@@ -89,7 +88,7 @@ struct content_cache {
     zhashx_t *entries;
     uint8_t backing:1;              // 'content.backing' service available
     char *backing_name;
-    const char *hash_name;
+    char *hash_name;
     struct msgstack *flush_requests;
 
     struct list_head lru;           // LRU is for valid, clean entries only
@@ -746,7 +745,10 @@ static void content_register_backing_request (flux_t *h,
      * be changed.
      */
     if (!cache->backing_name) {
-        if (!(cache->backing_name = strdup (name)))
+        if (!(cache->backing_name = strdup (name))
+            || flux_attr_set (h,
+                              "content.backing-module",
+                              cache->backing_name) < 0)
             goto error;
     }
     if (!streq (cache->backing_name, name)) {
@@ -996,72 +998,75 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-static int content_cache_getattr (const char *name, const char **val, void *arg)
-{
-    struct content_cache *cache = arg;
-
-    if (streq (name, "content.backing-module"))
-        *val = cache->backing_name;
-    else
-        return -1;
-    return 0;
-}
-
-static int register_attrs (struct content_cache *cache, attr_t *attr)
+static int get_hash_name (struct content_cache *cache)
 {
     const char *s;
 
-    /* Take initial value of content->backing_name from content.backing-module
-     * attribute, if set.  The attribute is re-added below.
-     */
-    if (attr_get (attr, "content.backing-module", &s, NULL) == 0) {
-        if (!(cache->backing_name = strdup (s)))
-            return -1;
-        if (attr_delete (attr, "content.backing-module", 1) < 0)
-            return -1;
+    if (!(s = flux_attr_get (cache->h, "content.hash")))
+        s = default_hash;
+    if ((content_hash_size = blobref_validate_hashtype (s)) < 0
+        || !(cache->hash_name = strdup (s))) {
+        flux_log_error (cache->h, "%s: unknown hash type", s);
+        return -1;
     }
+    if (flux_attr_set (cache->h, "content.hash", cache->hash_name) < 0) {
+        flux_log_error (cache->h, "setattr content.hash");
+        return -1;
+    }
+    return 0;
+}
 
-    /* content.hash may be set on the command line.
-     */
-    if (attr_get (attr, "content.hash", &s, NULL) < 0) {
-        if (attr_add (attr,
-                      "content.hash",
-                      cache->hash_name,
-                      ATTR_IMMUTABLE) < 0)
-            return -1;
-    }
-    else {
-        int hash_size;
-        if ((hash_size = blobref_validate_hashtype (s)) < 0) {
-            log_msg ("%s: unknown hash type", s);
+static int parse_u32 (const char *s, uint32_t *val)
+{
+    unsigned long u;
+    char *endptr;
+
+    errno = 0;
+    u = strtoul (s, &endptr, 10);
+    if (errno != 0 || *endptr != '\0' || u > UINT32_MAX)
+        return -1;
+    *val = u;
+    return 0;
+}
+
+int parse_args (struct content_cache *cache, int argc, char **argv)
+{
+    uint32_t val;
+
+    for (int i = 0; i < argc; i++) {
+        if (strstarts (argv[i], "purge-target-size=")) {
+            if (parse_u32 (argv[i] + 18, &val) < 0) {
+                flux_log (cache->h, LOG_ERR, "error parsing %s", argv[i]);
+                return -1;
+            }
+            cache->purge_target_size = val;
+        }
+        else if (strstarts (argv[i], "purge-old-entry=")) {
+            if (parse_u32 (argv[i] + 16, &val) < 0) {
+                flux_log (cache->h, LOG_ERR, "error parsing %s", argv[i]);
+                return -1;
+            }
+            cache->purge_old_entry = val;
+        }
+        else if (strstarts (argv[i], "flush-batch-limit=")) {
+            if (parse_u32 (argv[i] + 18, &val) < 0) {
+                flux_log (cache->h, LOG_ERR, "error parsing %s", argv[i]);
+                return -1;
+            }
+            cache->purge_old_entry = val;
+        }
+        else if (strstarts (argv[i], "blob-size-limit=")) {
+            if (parse_u32 (argv[i] + 16, &val) < 0) {
+                flux_log (cache->h, LOG_ERR, "error parsing %s", argv[i]);
+                return -1;
+            }
+            cache->blob_size_limit = val;
+        }
+        else {
+            flux_log (cache->h, LOG_ERR, "unknown module option: %s", argv[i]);
             return -1;
         }
-        if (attr_set_flags (attr, "content.hash", ATTR_IMMUTABLE) < 0)
-            return -1;
-        cache->hash_name = s;
-        content_hash_size = hash_size;
     }
-
-    /* Purge tunables
-     */
-    if (attr_add_active_uint32 (attr, "content.purge-target-size",
-                &cache->purge_target_size, 0) < 0)
-        return -1;
-    if (attr_add_active_uint32 (attr, "content.purge-old-entry",
-                &cache->purge_old_entry, 0) < 0)
-        return -1;
-    /* Misc
-     */
-    if (attr_add_active_uint32 (attr, "content.flush-batch-limit",
-                &cache->flush_batch_limit, 0) < 0)
-        return -1;
-    if (attr_add_active_uint32 (attr, "content.blob-size-limit",
-                &cache->blob_size_limit, ATTR_IMMUTABLE) < 0)
-        return -1;
-    if (attr_add_active (attr, "content.backing-module", 0,
-                 content_cache_getattr, NULL, cache) < 0)
-        return -1;
-
     return 0;
 }
 
@@ -1076,12 +1081,13 @@ void content_cache_destroy (struct content_cache *cache)
         msgstack_destroy (&cache->flush_requests);
         content_checkpoint_destroy (cache->checkpoint);
         content_mmap_destroy (cache->mmap);
+        free (cache->hash_name);
         free (cache);
         errno = saved_errno;
     }
 }
 
-struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
+struct content_cache *content_cache_create (flux_t *h, int argc, char **argv)
 {
     struct content_cache *cache;
 
@@ -1089,6 +1095,8 @@ struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
         return NULL;
     if (!(cache->entries = zhashx_new ()))
         goto nomem;
+    cache->h = h;
+    cache->reactor = flux_get_reactor (h);
 
     zhashx_set_destructor (cache->entries, cache_entry_destructor);
     zhashx_set_key_hasher (cache->entries, cache_entry_hasher);
@@ -1101,17 +1109,17 @@ struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
     cache->flush_batch_limit = default_flush_batch_limit;
     cache->purge_target_size = default_cache_purge_target_size;
     cache->purge_old_entry = default_cache_purge_old_entry;
-    cache->hash_name = default_hash;
-    if ((content_hash_size = blobref_validate_hashtype (default_hash)) < 0)
+    /* Some tunables may be set on the module command line (mainly for test).
+     */
+    if (parse_args (cache, argc, argv) < 0) {
+        errno = EINVAL;
         goto error;
-    cache->h = h;
-    cache->reactor = flux_get_reactor (h);
+    }
+    if (get_hash_name (cache) < 0)
+        goto error;
+
     list_head_init (&cache->lru);
     list_head_init (&cache->flush);
-
-    if (register_attrs (cache, attrs) < 0)
-        goto error;
-    assert (content_hash_size >= sizeof (size_t)); // hasher assumes this
 
     if (flux_get_rank (h, &cache->rank) < 0)
         goto error;

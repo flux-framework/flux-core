@@ -70,7 +70,7 @@ struct content_sqlite {
     sqlite3_stmt *checkpt_get_stmt;
     sqlite3_stmt *checkpt_put_stmt;
     flux_t *h;
-    const char *hashfun;
+    char *hashfun;
     int hash_size;
     size_t lzo_bufsize;
     void *lzo_buf;
@@ -726,6 +726,7 @@ static void content_sqlite_destroy (struct content_sqlite *ctx)
         flux_msg_handler_delvec (ctx->handlers);
         free (ctx->dbfile);
         free (ctx->lzo_buf);
+        free (ctx->hashfun);
         free (ctx);
         errno = saved_errno;
     }
@@ -747,6 +748,7 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
 {
     struct content_sqlite *ctx;
     const char *dbdir;
+    const char *s;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
@@ -762,8 +764,9 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
      * - the maximum blob size
      * - path to sqlite file
      */
-    if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))
-        || (ctx->hash_size = blobref_validate_hashtype (ctx->hashfun)) < 0) {
+    if (!(s = flux_attr_get (h, "content.hash"))
+        || !(ctx->hashfun = strdup (s))
+        || (ctx->hash_size = blobref_validate_hashtype (s)) < 0) {
         flux_log_error (h, "content.hash");
         goto error;
     }

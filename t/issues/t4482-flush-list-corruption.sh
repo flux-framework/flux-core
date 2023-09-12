@@ -15,6 +15,8 @@
 cat <<-EOF >t4482.sh
 #!/bin/sh -e
 
+flux module load content
+
 echo "abcde" | flux content store
 echo "fghij" | flux content store
 echo "klmno" | flux content store
@@ -29,6 +31,7 @@ flux module load content-sqlite
 flux content flush
 
 flux module remove content-sqlite
+flux module remove content
 
 EOF
 

@@ -8,12 +8,12 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef BROKER_CONTENT_MMAP_H
-#define BROKER_CONTENT_MMAP_H 1
+#ifndef _CONTENT_MMAP_H
+#define _CONTENT_MMAP_H 1
 
 #include <stdbool.h>
 
-#include "content-cache.h"
+#include "cache.h"
 
 struct content_mmap *content_mmap_create (flux_t *h,
                                           const char *hash_name,
@@ -35,6 +35,6 @@ bool content_mmap_validate (struct content_region *reg,
 void content_mmap_region_decref (struct content_region *reg);
 struct content_region *content_mmap_region_incref (struct content_region *reg);
 
-#endif /* !BROKER_CONTENT_MMAP_H */
+#endif /* !_CONTENT_MMAP_H */
 
 // vi:ts=4 sw=4 expandtab

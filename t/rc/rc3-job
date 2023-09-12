@@ -29,3 +29,4 @@ modrm all kvs
 flux content flush
 
 modrm 0 content-sqlite
+modrm all content

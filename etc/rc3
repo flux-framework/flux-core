@@ -77,5 +77,6 @@ if test $RANK -eq 0; then
         flux module remove ${backingmod} || exit_rc=1
     fi
 fi
+modrm all content
 
 exit $exit_rc

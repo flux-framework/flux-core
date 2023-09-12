@@ -33,7 +33,7 @@ struct content_s3 {
     flux_msg_handler_t **handlers;
     struct s3_config *cfg;
     flux_t *h;
-    const char *hashfun;
+    char *hashfun;
     int hash_size;
 };
 
@@ -58,6 +58,7 @@ static void content_s3_destroy (struct content_s3 *ctx)
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
         s3_config_destroy (ctx->cfg);
+        free (ctx->hashfun);
         free (ctx);
         errno = saved_errno;
     }
@@ -444,13 +445,15 @@ static struct content_s3 *content_s3_create (flux_t *h)
     const char *errstr = NULL;
     flux_error_t error;
     struct content_s3 *ctx;
+    const char *s;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
     ctx->h = h;
 
-    if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))
-        || (ctx->hash_size = blobref_validate_hashtype (ctx->hashfun)) < 0) {
+    if (!(s = flux_attr_get (h, "content.hash"))
+        || !(ctx->hashfun = strdup (s))
+        || (ctx->hash_size = blobref_validate_hashtype (s)) < 0) {
         flux_log_error (h, "content.hash");
         goto error;
     }

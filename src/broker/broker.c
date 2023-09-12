@@ -58,7 +58,6 @@
 #include "service.h"
 #include "attr.h"
 #include "log.h"
-#include "content-cache.h"
 #include "runat.h"
 #include "heaptrace.h"
 #include "exec.h"
@@ -469,15 +468,11 @@ int main (int argc, char *argv[])
         log_err ("broker_add_services");
         goto cleanup;
     }
-    /* These two broker-resident services call flux_sync_create(), thus
-     * require event.subscribe to have a handler before running.
+    /* overlay_control_start() calls flux_sync_create(), thus
+     * requires event.subscribe to have a handler before running.
      */
     if (overlay_control_start (ctx.overlay) < 0) {
         log_err ("error initializing overlay control messages");
-        goto cleanup;
-    }
-    if (!(ctx.cache = content_cache_create (ctx.h, ctx.attrs))) {
-        log_err ("error initializing content cache");
         goto cleanup;
     }
 
@@ -536,7 +531,6 @@ cleanup:
     /* Unregister builtin services
      */
     attr_destroy (ctx.attrs);
-    content_cache_destroy (ctx.cache);
 
     modhash_destroy (ctx.modhash);
     zlist_destroy (&ctx.sigwatchers);
@@ -1612,7 +1606,6 @@ struct internal_service {
 static struct internal_service services[] = {
     { "broker",             NULL }, // kind of a catch-all, slowly deprecating
     { "log",                NULL },
-    { "content",            NULL },
     { "attr",               NULL },
     { "heaptrace",          NULL },
     { "event",              NULL },

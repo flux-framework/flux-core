@@ -28,6 +28,7 @@ modload() {
 }
 
 
+modload all content
 modload 0 content-sqlite
 modload all kvs
 modload all kvs-watch

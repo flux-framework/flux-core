@@ -90,7 +90,7 @@
 #include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
 
-#include "content-mmap.h"
+#include "mmap.h"
 
 struct cache_entry {
     struct content_region *reg;

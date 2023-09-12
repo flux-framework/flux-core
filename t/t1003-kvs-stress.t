@@ -97,16 +97,8 @@ test_expect_success 'kvs: 8 threads/rank each doing 100 put,fence in a loop, mix
 
 # large dirs
 
-test_expect_success 'kvs: store value exceeding RFC 10 max blob size of 1m' '
-	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $DIR.tortureval --count 1 --size=1048577
-'
-
 test_expect_success 'kvs: store 10,000 keys in one dir' '
 	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $DIR.bigdir --count 10000
-'
-
-test_expect_success LONGTEST 'kvs: store 100,000 keys in one dir' '
-	${FLUX_BUILD_DIR}/t/kvs/torture --prefix $DIR.bigdir2 --count 100000
 '
 
 # kvs merging tests
