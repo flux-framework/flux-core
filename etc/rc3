@@ -1,7 +1,15 @@
-#!/bin/bash
+#!/bin/sh
 
 RANK=$(flux getattr rank)
 exit_rc=0
+
+listfiles() {
+    local glob="$1"
+    for file in $glob; do
+        [ $file = "$glob" ] && continue
+        echo $file
+    done
+}
 
 # Usage: modrm {all|<rank>} modname
 modrm() {
@@ -19,14 +27,12 @@ backing_module() {
 core_dir=$(cd ${0%/*} && pwd -P)
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
 IFS=:
-shopt -s nullglob
 for rcdir in $all_dirs; do
-    for rcfile in $rcdir/rc3.d/*; do
+    for rcfile in $(listfiles "$rcdir/rc3.d/*"); do
         echo running $rcfile
         $rcfile || exit_rc=1
     done
 done
-shopt -u nullglob
 
 modrm 0 heartbeat
 modrm 0 sched-simple
