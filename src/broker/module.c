@@ -363,7 +363,7 @@ module_t *module_create (flux_t *h,
     uuid_generate (p->uuid);
     uuid_unparse (p->uuid, p->uuid_str);
 
-     /* Broker end of PAIR socket is opened here.
+    /* Broker end of PAIR socket is opened here.
      */
     if (!(p->sock = zsock_new_pair (NULL))) {
         errprintf (error, "could not create zsock for %s", p->name);
