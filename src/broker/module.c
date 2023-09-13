@@ -44,7 +44,8 @@ struct broker_module {
     double lastseen;
 
     void *zctx;             /* zeromq context shared with broker */
-    zsock_t *sock;          /* broker end of PAIR socket */
+    void *sock;             /* broker end of PAIR socket */
+    char endpoint[128];
     struct flux_msg_cred cred; /* cred of connection */
 
     uuid_t uuid;            /* uuid for unique request sender identity */
@@ -365,14 +366,18 @@ module_t *module_create (flux_t *h,
 
     /* Broker end of PAIR socket is opened here.
      */
-    if (!(p->sock = zsock_new_pair (NULL))) {
+    if (!(p->sock = zmq_socket (p->zctx, ZMQ_PAIR))) {
         errprintf (error, "could not create zsock for %s", p->name);
         goto cleanup;
     }
     zsock_set_unbounded (p->sock);
     zsock_set_linger (p->sock, 5);
-    if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0) {
-        errprintf (error, "zsock_bind inproc://%s", module_get_uuid (p));
+    snprintf (p->endpoint,
+              sizeof (p->endpoint),
+              "inproc://%s",
+              module_get_uuid (p));
+    if (zmq_bind (p->sock, p->endpoint) < 0) {
+        errprintf (error, "zmq_bind %s: %s", p->endpoint, strerror (errno));
         goto cleanup;
     }
     if (!(p->broker_w = zmqutil_watcher_create (flux_get_reactor (h),
@@ -568,7 +573,7 @@ void module_destroy (module_t *p)
 
     flux_watcher_stop (p->broker_w);
     flux_watcher_destroy (p->broker_w);
-    zsock_destroy (&p->sock);
+    zmq_close (p->sock);
 
 #ifndef __SANITIZE_ADDRESS__
     dlclose (p->dso);
