@@ -29,6 +29,7 @@
 #include "src/broker/topology.h"
 
 static zlist_t *logs;
+void *zctx;
 
 struct context {
     struct overlay *ov;
@@ -107,7 +108,7 @@ struct context *ctx_create (flux_t *h,
     ctx->size = size;
     ctx->rank = rank;
     snprintf (ctx->name, sizeof (ctx->name), "%s-%d", name, rank);
-    if (!(ctx->ov = overlay_create (h, ctx->attrs, cb, ctx)))
+    if (!(ctx->ov = overlay_create (h, ctx->attrs, zctx, cb, ctx)))
         BAIL_OUT ("overlay_create");
     if (!(ctx->uuid = overlay_get_uuid (ctx->ov)))
         BAIL_OUT ("overlay_get_uuid failed");
@@ -276,8 +277,8 @@ void trio (flux_t *h)
     const flux_msg_t *rmsg;
     flux_msg_t *msg;
     const char *topic;
-    zsock_t *zsock_none;
-    zsock_t *zsock_curve;
+    void *zsock_none;
+    void *zsock_curve;
     zcert_t *cert;
     const char *sender;
 
@@ -458,19 +459,21 @@ void trio (flux_t *h)
 
     /* 1) No security
      */
-    if (!(zsock_none = zsock_new_dealer (NULL)))
-        BAIL_OUT ("zsock_new_dealer failed");
+    if (!(zsock_none = zmq_socket (zctx, ZMQ_DEALER)))
+        BAIL_OUT ("zmq_socket failed");
+    zsock_set_linger (zsock_none, 5);
     zsock_set_identity (zsock_none, "2");
-    ok (zsock_connect (zsock_none, "%s", parent_uri) == 0,
-        "none-2: zsock_connect %s (no security) works", parent_uri);
+    ok (zmq_connect (zsock_none, parent_uri) == 0,
+        "none-2: zmq_connect %s (no security) works", parent_uri);
     ok (zmqutil_msg_send (zsock_none, msg) == 0,
         "none-2: zsock_msg_sendzsock works");
 
     /* 2) Curve, and correct server public key, but client public key
      * was not authorized
      */
-    if (!(zsock_curve = zsock_new_dealer (NULL)))
-        BAIL_OUT ("zsock_new_dealer failed");
+    if (!(zsock_curve = zmq_socket (zctx, ZMQ_DEALER)))
+        BAIL_OUT ("zmq_socket failed");
+    zsock_set_linger (zsock_curve, 5);
     if (!(cert = zcert_new ()))
         BAIL_OUT ("zcert_new failed");
     zsock_set_zap_domain (zsock_curve, "flux");
@@ -478,8 +481,8 @@ void trio (flux_t *h)
     zsock_set_curve_serverkey (zsock_curve, server_pubkey);
     zsock_set_identity (zsock_curve, "2");
     zcert_destroy (&cert);
-    ok (zsock_connect (zsock_curve, "%s", parent_uri) == 0,
-        "curve-2: zsock_connect %s works", parent_uri);
+    ok (zmq_connect (zsock_curve, parent_uri) == 0,
+        "curve-2: zmq_connect %s works", parent_uri);
     ok (zmqutil_msg_send (zsock_curve, msg) == 0,
         "curve-2: zmqutil_msg_send works");
 
@@ -490,8 +493,8 @@ void trio (flux_t *h)
         "%s: no messages received within 1.0s", ctx[0]->name);
 
     flux_msg_decref (msg);
-    zsock_destroy (&zsock_none);
-    zsock_destroy (&zsock_curve);
+    zmq_close (zsock_none);
+    zmq_close (zsock_curve);
 
     ctx_destroy (ctx[1]);
     ctx_destroy (ctx[0]);
@@ -648,16 +651,17 @@ void wrongness (flux_t *h)
     if (!(attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
     errno = 0;
-    ok (overlay_create (NULL, attrs, NULL, NULL) == NULL && errno == EINVAL,
+    ok (overlay_create (NULL, attrs, zctx, NULL, NULL) == NULL
+        && errno == EINVAL,
         "overlay_create h=NULL fails with EINVAL");
     errno = 0;
-    ok (overlay_create (h, NULL, NULL, NULL) == NULL && errno == EINVAL,
+    ok (overlay_create (h, NULL, zctx, NULL, NULL) == NULL && errno == EINVAL,
         "overlay_create attrs=NULL fails with EINVAL");
     attr_destroy (attrs);
 
     if (!(attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
-    if (!(ov = overlay_create (h, attrs, NULL, NULL)))
+    if (!(ov = overlay_create (h, attrs, zctx, NULL, NULL)))
         BAIL_OUT ("overlay_create failed");
 
     errno = 0;
@@ -697,9 +701,8 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    if (!zsys_init ())
-        BAIL_OUT ("zsys_init failed");
-    zsys_set_linger (5);
+    if (!(zctx = zmq_ctx_new ()))
+        BAIL_OUT ("zmq_ctx_new failed");
 
     if (!(logs = zlist_new ()))
         BAIL_OUT ("zlist_new failed");
@@ -725,6 +728,8 @@ int main (int argc, char *argv[])
 
     flux_close (h);
     zlist_destroy (&logs);
+
+    zmq_ctx_term (zctx);
 
     done_testing ();
 }

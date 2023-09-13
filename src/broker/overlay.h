@@ -35,6 +35,7 @@ typedef void (*overlay_recv_f)(const flux_msg_t *msg,
  */
 struct overlay *overlay_create (flux_t *h,
                                 attr_t *attrs,
+                                void *zctx,
                                 overlay_recv_f cb,
                                 void *arg);
 void overlay_destroy (struct overlay *ov);

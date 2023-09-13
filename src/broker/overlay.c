@@ -108,7 +108,7 @@ struct child {
 };
 
 struct parent {
-    zsock_t *zsock;         // NULL on rank 0
+    void *zsock;            // NULL on rank 0
     char *uri;
     flux_watcher_t *w;
     int lastsent;
@@ -138,6 +138,7 @@ struct overlay_monitor {
 };
 
 struct overlay {
+    void *zctx;
     zcert_t *cert;
     struct zmqutil_zap *zap;
     int enable_ipv6;
@@ -161,7 +162,7 @@ struct overlay {
 
     struct parent parent;
 
-    zsock_t *bind_zsock;        // NULL if no downstream peers
+    void *bind_zsock;           // NULL if no downstream peers
     char *bind_uri;
     flux_watcher_t *bind_w;
     struct child *children;
@@ -1035,7 +1036,7 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
                           "%s (rank %lu) sent disconnect control message",
                           flux_get_hostbyrank (ov->h, ov->parent.rank),
                           (unsigned long)ov->parent.rank);
-                (void)zsock_disconnect (ov->parent.zsock, "%s", ov->parent.uri);
+                (void)zmq_disconnect (ov->parent.zsock, ov->parent.uri);
                 ov->parent.offline = true;
                 rpc_track_purge (ov->parent.tracker, fail_parent_rpc, ov);
                 overlay_monitor_notify (ov, FLUX_NODEID_ANY);
@@ -1270,8 +1271,8 @@ int overlay_connect (struct overlay *ov)
             errno = EINVAL;
             return -1;
         }
-        if (!(ov->parent.zsock = zsock_new_dealer (NULL)))
-            goto nomem;
+        if (!(ov->parent.zsock = zmq_socket (ov->zctx, ZMQ_DEALER)))
+            return -1;
         /* The socket monitor is only used for logging.
          * Setup may fail if libzmq is too old.
          */
@@ -1297,8 +1298,8 @@ int overlay_connect (struct overlay *ov)
         zsock_set_curve_serverkey (ov->parent.zsock, ov->parent.pubkey);
         zsock_set_identity (ov->parent.zsock, ov->uuid);
 
-        if (zsock_connect (ov->parent.zsock, "%s", ov->parent.uri) < 0)
-            goto nomem;
+        if (zmq_connect (ov->parent.zsock, ov->parent.uri) < 0)
+            goto error;
         if (!(ov->parent.w = zmqutil_watcher_create (ov->reactor,
                                                      ov->parent.zsock,
                                                      FLUX_POLLIN,
@@ -1310,8 +1311,7 @@ int overlay_connect (struct overlay *ov)
             return -1;
     }
     return 0;
-nomem:
-    errno = ENOMEM;
+error:
     return -1;
 }
 
@@ -1337,7 +1337,7 @@ int overlay_bind (struct overlay *ov, const char *uri)
     }
     zmqutil_zap_set_logger (ov->zap, zaplogger, ov);
 
-    if (!(ov->bind_zsock = zsock_new_router (NULL))) {
+    if (!(ov->bind_zsock = zmq_socket (ov->zctx, ZMQ_ROUTER))) {
         log_err ("error creating zmq ROUTER socket");
         return -1;
     }
@@ -1363,11 +1363,11 @@ int overlay_bind (struct overlay *ov, const char *uri)
     zcert_apply (ov->cert, ov->bind_zsock);
     zsock_set_curve_server (ov->bind_zsock, 1);
 
-    if (zsock_bind (ov->bind_zsock, "%s", uri) < 0) {
+    if (zmq_bind (ov->bind_zsock, uri) < 0) {
         log_err ("error binding to %s", uri);
         return -1;
     }
-    /* Capture URI after zsock_bind() processing, so it reflects expanded
+    /* Capture URI after zmq_bind() processing, so it reflects expanded
      * wildcards and normalized addresses.
      */
     if (!(ov->bind_uri = zsock_last_endpoint (ov->bind_zsock))) {
@@ -1396,8 +1396,8 @@ int overlay_bind (struct overlay *ov, const char *uri)
 void overlay_shutdown (struct overlay *overlay)
 {
     if (overlay->bind_zsock && overlay->bind_uri)
-        if (zsock_unbind (overlay->bind_zsock, "%s", overlay->bind_uri) < 0)
-            flux_log (overlay->h, LOG_ERR, "zsock_unbind failed");
+        if (zmq_unbind (overlay->bind_zsock, overlay->bind_uri) < 0)
+            flux_log (overlay->h, LOG_ERR, "zmq_unbind failed");
 }
 
 /* Call after overlay bootstrap (bind/connect),
@@ -2036,14 +2036,14 @@ void overlay_destroy (struct overlay *ov)
         ov->status = SUBTREE_STATUS_OFFLINE;
         overlay_control_parent (ov, CONTROL_STATUS, ov->status);
 
-        zsock_destroy (&ov->parent.zsock);
+        zmq_close (ov->parent.zsock);
         free (ov->parent.uri);
         flux_watcher_destroy (ov->parent.w);
         free (ov->parent.pubkey);
         zmqutil_monitor_destroy (ov->parent.monitor);
 
-        zsock_destroy (&ov->bind_zsock);
         free (ov->bind_uri);
+        zmq_close (ov->bind_zsock);
         flux_watcher_destroy (ov->bind_w);
         zmqutil_monitor_destroy (ov->bind_monitor);
 
@@ -2104,6 +2104,7 @@ static const struct flux_msg_handler_spec htab[] = {
 
 struct overlay *overlay_create (flux_t *h,
                                 attr_t *attrs,
+                                void *zctx,
                                 overlay_recv_f cb,
                                 void *arg)
 {
@@ -2120,6 +2121,7 @@ struct overlay *overlay_create (flux_t *h,
     ov->recv_cb = cb;
     ov->recv_arg = arg;
     ov->version = FLUX_CORE_VERSION_HEX;
+    ov->zctx = zctx;
     uuid_generate (uuid);
     uuid_unparse (uuid, ov->uuid);
     if (!(ov->monitor_callbacks = zlist_new ()))

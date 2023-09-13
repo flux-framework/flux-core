@@ -318,6 +318,7 @@ int main (int argc, char *argv[])
 
     if (!(ctx.overlay = overlay_create (ctx.h,
                                         ctx.attrs,
+                                        ctx.zctx,
                                         overlay_recv_cb,
                                         &ctx))) {
         log_err ("overlay_create");
