@@ -11,9 +11,9 @@
 /* Note:
  * This connector creates a 0MQ inproc socket that communicates with another
  * inproc socket in the same process (normally the flux broker).  Pairs of
- * inproc sockets must share a common 0MQ context.  This connector uses the
- * libczmq zsock class, which hides creation/sharing of the 0MQ context;
- * therefore, the other inproc socket should be created with zsock also.
+ * inproc sockets must share a common 0MQ context. The context is passed
+ * in as a URI query option, e.g. "shmem://NAME&zctx=%p", where NAME is
+ * the unique socket name used to match two endpoints.
  */
 
 #if HAVE_CONFIG_H
@@ -21,6 +21,7 @@
 #endif
 #include <errno.h>
 #include <czmq.h>
+#undef streq // redefined by ccan/str/str.h below
 #include <argz.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
@@ -28,13 +29,16 @@
 #include <flux/core.h>
 
 #include "src/common/libzmqutil/msg_zsock.h"
+#include "ccan/str/str.h"
 
 typedef struct {
-    zsock_t *sock;
+    void *zctx;
+    void *sock;
     char *uuid;
     flux_t *h;
     char *argz;
     size_t argz_len;
+    char endpoint[128];
 } shmem_ctx_t;
 
 static const struct flux_handle_ops handle_ops;
@@ -75,7 +79,7 @@ static flux_msg_t *op_recv (void *impl, int flags)
     shmem_ctx_t *ctx = impl;
     zmq_pollitem_t zp = {
         .events = ZMQ_POLLIN,
-        .socket = zsock_resolve (ctx->sock),
+        .socket = ctx->sock,
         .revents = 0,
         .fd = -1,
     };
@@ -97,7 +101,8 @@ done:
 static void op_fini (void *impl)
 {
     shmem_ctx_t *ctx = impl;
-    zsock_destroy (&ctx->sock);
+
+    (void)zmq_close (ctx->sock);
     free (ctx->argz);
     free (ctx);
 }
@@ -140,21 +145,28 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
             bind_socket = 1;
         else if (streq (item, "connect"))
             bind_socket = 0;
+        else if (strstarts (item, "zctx=")) {
+            if (sscanf (item + 5, "%p", &ctx->zctx) != 1) {
+                errno = EINVAL;
+                goto error;
+            }
+        }
         else {
             errno = EINVAL;
             goto error;
         }
     }
-    if (!(ctx->sock = zsock_new_pair (NULL)))
+    if (!(ctx->sock = zmq_socket (ctx->zctx, ZMQ_PAIR)))
         goto error;
     zsock_set_unbounded (ctx->sock);
     zsock_set_linger (ctx->sock, 5);
+    snprintf (ctx->endpoint, sizeof (ctx->endpoint), "inproc://%s", ctx->uuid);
     if (bind_socket) {
-        if (zsock_bind (ctx->sock, "inproc://%s", ctx->uuid) < 0)
+        if (zmq_bind (ctx->sock, ctx->endpoint) < 0)
             goto error;
     }
     else {
-        if (zsock_connect (ctx->sock, "inproc://%s", ctx->uuid) < 0)
+        if (zmq_connect (ctx->sock, ctx->endpoint) < 0)
             goto error;
     }
     if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))

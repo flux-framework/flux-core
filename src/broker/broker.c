@@ -264,7 +264,7 @@ int main (int argc, char *argv[])
      * Disable czmq's internal signal handlers for SIGINT and SIGTERM, since
      * the broker will install its own.
      */
-    if (!zsys_init ()) {
+    if (!(ctx.zctx = zsys_init ())) {
         log_err ("zsys_init");
         goto cleanup;
     }
@@ -1214,6 +1214,7 @@ static int load_module (broker_ctx_t *ctx,
         path = zlist_first (files);
     }
     if (!(p = module_create (ctx->h,
+                             ctx->zctx,
                              overlay_get_uuid (ctx->overlay),
                              name,
                              path,

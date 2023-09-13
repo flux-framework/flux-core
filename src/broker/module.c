@@ -43,6 +43,7 @@ struct broker_module {
 
     double lastseen;
 
+    void *zctx;             /* zeromq context shared with broker */
     zsock_t *sock;          /* broker end of PAIR socket */
     struct flux_msg_cred cred; /* cred of connection */
 
@@ -151,7 +152,7 @@ static void *module_thread (void *arg)
     module_t *p = arg;
     sigset_t signal_set;
     int errnum;
-    char uri[UUID_STR_LEN + 16];
+    char uri[128];
     char **av = NULL;
     int ac;
     int mod_main_errno = 0;
@@ -162,7 +163,18 @@ static void *module_thread (void *arg)
 
     /* Connect to broker socket, enable logging, register built-in services
      */
-    snprintf (uri, sizeof (uri), "shmem://%s", p->uuid_str);
+
+    /* N.B. inproc endpoints (in same process) must share a 0MQ context
+     * pointer which is passed via query argument to the local connector.
+     * (There was no convenient way to share that directly).
+     *
+     * copying 8 + 37 + 6 + 18 + 1 = 70 bytes into 128 byte buffer cannot fail
+     */
+    (void)snprintf (uri,
+                    sizeof (uri),
+                    "shmem://%s&zctx=%p",
+                    p->uuid_str,
+                    p->zctx);
     if (!(p->h = flux_open (uri, 0))) {
         log_err ("flux_open %s", uri);
         goto done;
@@ -276,6 +288,7 @@ error:
 }
 
 module_t *module_create (flux_t *h,
+                         void *zctx,
                          const char *parent_uuid,
                          const char *name, // may be NULL
                          const char *path,
@@ -305,6 +318,7 @@ module_t *module_create (flux_t *h,
     p->main = mod_main;
     p->dso = dso;
     p->rank = rank;
+    p->zctx = zctx;
     if (!(p->conf = flux_conf_copy (flux_get_conf (h))))
         goto cleanup;
     if (!(p->parent_uuid_str = strdup (parent_uuid)))

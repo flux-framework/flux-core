@@ -13,21 +13,27 @@
 #endif
 #include <errno.h>
 #include <flux/core.h>
+#include <zmq.h>
 
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
 
 int main (int argc, char *argv[])
 {
     flux_t *h_cli, *h_srv;
+    void *zctx;
+    char uri[256];
     flux_msg_t *msg;
     int type;
 
     plan (NO_PLAN);
 
-    ok ((h_srv = flux_open ("shmem://test&bind", 0)) != NULL,
+    if (!(zctx = zmq_ctx_new ()))
+        BAIL_OUT ("could not create 0MQ context");
+    snprintf (uri, sizeof (uri), "shmem://test&bind&zctx=%p", zctx);
+    ok ((h_srv = flux_open (uri, 0)) != NULL,
         "created server handle");
-    ok ((h_cli = flux_open ("shmem://test&connect", 0)) != NULL,
+    snprintf (uri, sizeof (uri), "shmem://test&connect&zctx=%p", zctx);
+    ok ((h_cli = flux_open (uri, 0)) != NULL,
         "created client handle");
     if (!h_cli || !h_srv)
         BAIL_OUT ("can't continue without client or server handle");
@@ -58,6 +64,8 @@ int main (int argc, char *argv[])
 
     flux_close (h_cli);
     flux_close (h_srv);
+
+    zmq_ctx_term (zctx);
 
     done_testing();
     return (0);
