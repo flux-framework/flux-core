@@ -337,6 +337,13 @@ test_expect_success 'flux-start works with multiple files in rc1.d' '
 	grep rc-three rc-multi.out
 '
 
+test_expect_success 'flux-start works with zero files in rc1.d' '
+	rm rc1.d/* &&
+	FLUX_RC_EXTRA=$(pwd) flux start echo rc-done >rc-zero.out 2>&1 &&
+	test_debug "cat rc-zero.out" &&
+	grep rc-done rc-zero.out
+'
+
 test_expect_success 'flux-start --wrap option works' '
 	broker_path=$(flux start ${ARGS} -vX 2>&1 | sed "s/^flux-start: *//g") &&
 	echo broker_path=${broker_path} &&
