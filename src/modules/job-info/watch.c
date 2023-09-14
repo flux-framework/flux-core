@@ -333,12 +333,12 @@ error:
     zlist_remove (ctx->watchers, w);
 }
 
-int watch (struct info_ctx *ctx,
-           const flux_msg_t *msg,
-           flux_jobid_t id,
-           const char *path,
-           int flags,
-           bool guest)
+static int watch (struct info_ctx *ctx,
+                  const flux_msg_t *msg,
+                  flux_jobid_t id,
+                  const char *path,
+                  int flags,
+                  bool guest)
 {
     struct watch_ctx *w = NULL;
     uint32_t rolemask;
