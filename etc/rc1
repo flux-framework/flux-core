@@ -3,14 +3,6 @@
 # Allow connector-local more time to start listening on socket
 RANK=$(FLUX_LOCAL_CONNECTOR_RETRY_COUNT=30 flux getattr rank)
 
-listfiles() {
-    local glob="$1"
-    for file in $glob; do
-        [ $file = "$glob" ] && continue
-        echo $file
-    done
-}
-
 # Usage: modload {all|<rank>} modname [args ...]
 modload() {
     local where=$1; shift
@@ -101,7 +93,8 @@ core_dir=$(cd ${0%/*} && pwd -P)
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
 IFS=:
 for rcdir in $all_dirs; do
-    for rcfile in $(listfiles "$rcdir/rc1.d/*"); do
+    for rcfile in $rcdir/rc1.d/*; do
+	[ -e $rcfile ] || continue
 	echo running $rcfile
         $rcfile
     done
