@@ -14,6 +14,7 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libjob/job_hash.h"
 #include "src/common/libutil/lru_cache.h"
 
 #define OWNER_LRU_MAXSIZE 1000
@@ -25,6 +26,9 @@ struct info_ctx {
     zlist_t *lookups;
     zlist_t *watchers;
     zlist_t *guest_watchers;
+    zlist_t *update_lookups;
+    zlist_t *update_watchers;
+    zhashx_t *index_uw;        /* update_watchers lookup */
 };
 
 #endif /* _FLUX_JOB_INFO_H */
