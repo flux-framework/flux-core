@@ -1276,7 +1276,8 @@ int overlay_connect (struct overlay *ov)
          * Setup may fail if libzmq is too old.
          */
         if (ov->zmqdebug) {
-            ov->parent.monitor = zmqutil_monitor_create (ov->parent.zsock,
+            ov->parent.monitor = zmqutil_monitor_create (ov->zctx,
+                                                         ov->parent.zsock,
                                                          ov->reactor,
                                                          parent_monitor_cb,
                                                          ov);
@@ -1344,7 +1345,8 @@ int overlay_bind (struct overlay *ov, const char *uri)
      * Setup may fail if libzmq is too old.
      */
     if (ov->zmqdebug) {
-        ov->bind_monitor = zmqutil_monitor_create (ov->bind_zsock,
+        ov->bind_monitor = zmqutil_monitor_create (ov->zctx,
+                                                   ov->bind_zsock,
                                                    ov->reactor,
                                                    bind_monitor_cb,
                                                    ov);

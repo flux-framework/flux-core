@@ -29,7 +29,8 @@ typedef void (*zmqutil_monitor_f)(struct zmqutil_monitor *mon, void *arg);
  * after close/destroy.
  * N.B. this will fail if an old/buggy version of libzmq is used.
  */
-struct zmqutil_monitor *zmqutil_monitor_create (zsock_t *sock,
+struct zmqutil_monitor *zmqutil_monitor_create (void *zctx,
+                                                void *sock,
                                                 flux_reactor_t *r,
                                                 zmqutil_monitor_f fun,
                                                 void *arg);
