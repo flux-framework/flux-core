@@ -24,7 +24,7 @@
 
 struct zmqutil_zap {
     zcertstore_t *certstore;
-    zsock_t *sock;
+    void *sock;
     flux_watcher_t *w;
     zaplog_f logger;
     void *logger_arg;
@@ -192,8 +192,8 @@ void zmqutil_zap_destroy (struct zmqutil_zap *zap)
         int saved_errno = errno;
         flux_watcher_destroy (zap->w);
         if (zap->sock) {
-            zsock_unbind (zap->sock, ZAP_ENDPOINT);
-            zsock_destroy (&zap->sock);
+            zmq_unbind (zap->sock, ZAP_ENDPOINT);
+            zmq_close (zap->sock);
         }
         zcertstore_destroy (&zap->certstore);
         free (zap);
@@ -201,11 +201,11 @@ void zmqutil_zap_destroy (struct zmqutil_zap *zap)
     }
 }
 
-struct zmqutil_zap *zmqutil_zap_create (flux_reactor_t *r)
+struct zmqutil_zap *zmqutil_zap_create (void *zctx, flux_reactor_t *r)
 {
     struct zmqutil_zap *zap;
 
-    if (!r) {
+    if (!r || !zctx) {
         errno = EINVAL;
         return NULL;
     }
@@ -213,9 +213,9 @@ struct zmqutil_zap *zmqutil_zap_create (flux_reactor_t *r)
         return NULL;
     if (!(zap->certstore = zcertstore_new (NULL)))
         goto error;
-    if (!(zap->sock = zsock_new (ZMQ_REP)))
+    if (!(zap->sock = zmq_socket (zctx, ZMQ_REP)))
         goto error;
-    if (zsock_bind (zap->sock, ZAP_ENDPOINT) < 0)
+    if (zmq_bind (zap->sock, ZAP_ENDPOINT) < 0)
         goto error;
     if (!(zap->w = zmqutil_watcher_create (r,
                                            zap->sock,

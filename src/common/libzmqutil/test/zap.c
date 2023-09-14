@@ -20,8 +20,8 @@
 void test_badargs (void)
 {
     errno = 0;
-    ok (zmqutil_zap_create (NULL) == NULL && errno == EINVAL,
-        "zmqutil_zap_create reactor=NULL fails with EINVAL");
+    ok (zmqutil_zap_create (NULL, NULL) == NULL && errno == EINVAL,
+        "zmqutil_zap_create zctx=NULL reactor=NULL fails with EINVAL");
 
     lives_ok ({zmqutil_zap_destroy (NULL);},
         "zmqutil_zap_destroy zap=NULL doesn't crash");

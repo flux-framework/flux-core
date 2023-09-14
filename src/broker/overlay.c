@@ -1330,7 +1330,7 @@ int overlay_bind (struct overlay *ov, const char *uri)
     }
 
     assert (ov->zap == NULL);
-    if (!(ov->zap = zmqutil_zap_create (ov->reactor))) {
+    if (!(ov->zap = zmqutil_zap_create (ov->zctx, ov->reactor))) {
         log_err ("error creating ZAP server");
         return -1;
     }
