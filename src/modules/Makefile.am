@@ -169,7 +169,9 @@ job_info_la_SOURCES = \
 	job-info/watch.h \
 	job-info/watch.c \
 	job-info/guest_watch.h \
-	job-info/guest_watch.c
+	job-info/guest_watch.c \
+	job-info/util.h \
+	job-info/util.c
 job_info_la_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
 	$(FLUX_SECURITY_CFLAGS)

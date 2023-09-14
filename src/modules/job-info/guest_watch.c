@@ -25,6 +25,7 @@
 #include "ccan/str/str.h"
 
 #include "job-info.h"
+#include "util.h"
 #include "watch.h"
 
 /* This code (entrypoint guest_watch()) handles all
@@ -177,48 +178,6 @@ error:
     return NULL;
 }
 
-/* we want to copy credentials, etc. from the original
- * message when we redirect to other job-info targets.
- */
-static flux_msg_t *guest_msg_pack (struct guest_watch_ctx *gw,
-                                   const char *topic,
-                                   const char *fmt,
-                                   ...)
-{
-    flux_msg_t *newmsg = NULL;
-    json_t *payload = NULL;
-    char *payloadstr = NULL;
-    flux_msg_t *rv = NULL;
-    int save_errno;
-    va_list ap;
-
-    va_start (ap, fmt);
-
-    if (!(newmsg = flux_request_encode (topic, NULL)))
-        goto error;
-    if (flux_msg_set_cred (newmsg, gw->cred) < 0)
-        goto error;
-    if (!(payload = json_vpack_ex (NULL, 0, fmt, ap)))
-        goto error;
-    if (!(payloadstr = json_dumps (payload, JSON_COMPACT))) {
-        errno = ENOMEM;
-        goto error;
-    }
-    if (flux_msg_set_string (newmsg, payloadstr) < 0)
-        goto error;
-
-    rv = newmsg;
-error:
-    save_errno = errno;
-    if (!rv)
-        flux_msg_destroy (newmsg);
-    json_decref (payload);
-    free (payloadstr);
-    va_end (ap);
-    errno = save_errno;
-    return rv;
-}
-
 static int send_cancel (struct guest_watch_ctx *gw, flux_future_t *f)
 {
     if (!gw->cancel) {
@@ -274,12 +233,12 @@ static int get_main_eventlog (struct guest_watch_ctx *gw)
     flux_msg_t *msg = NULL;
     int save_errno, rv = -1;
 
-    if (!(msg = guest_msg_pack (gw,
-                                topic,
-                                "{s:I s:[s] s:i}",
-                                "id", gw->id,
-                                "keys", "eventlog",
-                                "flags", 0)))
+    if (!(msg = cred_msg_pack (topic,
+                               gw->cred,
+                               "{s:I s:[s] s:i}",
+                               "id", gw->id,
+                               "keys", "eventlog",
+                               "flags", 0)))
         goto error;
 
     if (!(gw->get_main_eventlog_f = flux_rpc_message (gw->ctx->h,
@@ -414,12 +373,12 @@ static int wait_guest_namespace (struct guest_watch_ctx *gw)
     flux_msg_t *msg = NULL;
     int save_errno, rv = -1;
 
-    if (!(msg = guest_msg_pack (gw,
-                                topic,
-                                "{s:I s:s s:i}",
-                                "id", gw->id,
-                                "path", "eventlog",
-                                "flags", 0)))
+    if (!(msg = cred_msg_pack (topic,
+                               gw->cred,
+                               "{s:I s:s s:i}",
+                               "id", gw->id,
+                               "path", "eventlog",
+                               "flags", 0)))
         goto error;
 
     if (!(gw->wait_guest_namespace_f = flux_rpc_message (gw->ctx->h,
@@ -572,13 +531,13 @@ static int guest_namespace_watch (struct guest_watch_ctx *gw)
     int save_errno;
     int rv = -1;
 
-    if (!(msg = guest_msg_pack (gw,
-                                topic,
-                                "{s:I s:b s:s s:i}",
-                                "id", gw->id,
-                                "guest", true,
-                                "path", gw->path,
-                                "flags", gw->flags)))
+    if (!(msg = cred_msg_pack (topic,
+                               gw->cred,
+                               "{s:I s:b s:s s:i}",
+                               "id", gw->id,
+                               "guest", true,
+                               "path", gw->path,
+                               "flags", gw->flags)))
         goto error;
 
     if (!(gw->guest_namespace_watch_f = flux_rpc_message (gw->ctx->h,
@@ -715,12 +674,12 @@ static int main_namespace_lookup (struct guest_watch_ctx *gw)
      * know that the eventlog is complete, so no need to do a "watch",
      * do a lookup instead */
 
-    if (!(msg = guest_msg_pack (gw,
-                                topic,
-                                "{s:I s:[s] s:i}",
-                                "id", gw->id,
-                                "keys", path,
-                                "flags", 0)))
+    if (!(msg = cred_msg_pack (topic,
+                               gw->cred,
+                               "{s:I s:[s] s:i}",
+                               "id", gw->id,
+                               "keys", path,
+                               "flags", 0)))
         goto error;
 
     if (!(gw->main_namespace_lookup_f = flux_rpc_message (gw->ctx->h,
