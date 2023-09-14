@@ -26,7 +26,9 @@ libzmqutil_la_SOURCES = \
 	zap.h \
 	zap.c \
 	monitor.h \
-	monitor.c
+	monitor.c \
+	sockopt.h \
+	sockopt.c
 
 TESTS = test_msg_zsock.t \
 	test_reactor.t \
