@@ -19,8 +19,7 @@
 #include <sys/resource.h>
 #include <argz.h>
 #include <flux/core.h>
-#include <czmq.h>
-#undef streq // redefined by ccan/str/str.h below
+#include <zmq.h>
 #include <jansson.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
@@ -250,27 +249,10 @@ int main (int argc, char *argv[])
         || sigaction (SIGTERM, NULL, &old_sigact_term) < 0)
         log_err_exit ("error setting signal mask");
 
-    /* Initialize libczmq zsys class.
-     *
-     * zsys_init() creates a global 0MQ context and starts the 0MQ I/O thread.
-     * The context is implicitly shared by users of the zsock class within
-     * the broker, including shmem connector, overlay.c, and module.c.
-     * libczmq tracks 0MQ sockets created with zsock, and any left open are
-     * closed by an atexit() handler to prevent zmq_ctx_term() from hanging.
-     *
-     * If something goes wrong, such as unclosed sockets in the atexit handler,
-     * czmq sends messages to its log class, which we redirect to stderr here.
-     *
-     * Disable czmq's internal signal handlers for SIGINT and SIGTERM, since
-     * the broker will install its own.
-     */
-    if (!(ctx.zctx = zsys_init ())) {
-        log_err ("zsys_init");
+    if (!(ctx.zctx = zmq_ctx_new ())) {
+        log_err ("zmq_ctx_new");
         goto cleanup;
     }
-    zsys_set_logstream (stderr);
-    zsys_set_logident ("flux-broker");
-    zsys_handler_set (NULL);
 
     /* Set up the flux reactor with support for child watchers.
      * Associate an internal flux_t handle with the reactor.
@@ -533,7 +515,7 @@ cleanup:
      */
     attr_destroy (ctx.attrs);
 
-    modhash_destroy (ctx.modhash);
+    int module_leaks = modhash_destroy (ctx.modhash);
     zlist_destroy (&ctx.sigwatchers);
     shutdown_destroy (ctx.shutdown);
     state_machine_destroy (ctx.state_machine);
@@ -549,6 +531,17 @@ cleanup:
     subhash_destroy (ctx.sub);
     free (ctx.init_shell_cmd);
     optparse_destroy (ctx.opts);
+
+    /* zmq_ctx_term() blocks if any 0mq sockets remain open, so skip it
+     * if any broker modules had to be canceled in modhash_destroy().
+     */
+    if (module_leaks > 0) {
+        log_msg ("skipping 0MQ shutdown due to presumed module socket leak");
+        if (ctx.exit_rc == 0)
+            ctx.exit_rc = 1;
+    }
+    else
+        zmq_ctx_term (ctx.zctx);
 
     return ctx.exit_rc;
 }
