@@ -26,8 +26,8 @@
 #define UUID_STR_LEN 37     // defined in later libuuid headers
 #endif
 
-
 struct test_server {
+    void *zctx;
     flux_t *c;
     flux_t *s;
     flux_msg_handler_t *shutdown_mh;
@@ -40,8 +40,10 @@ struct test_server {
     char uuid_str[UUID_STR_LEN];
 };
 
-static flux_t *test_connector_create (const char *shmem_name,
-                                      bool server, int flags);
+static flux_t *test_connector_create (void *zctx,
+                                      const char *shmem_name,
+                                      bool server,
+                                      int flags);
 
 
 void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -122,7 +124,7 @@ static void test_server_destroy (struct test_server *a)
     }
 }
 
-flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
+flux_t *test_server_create (void *zctx, int cflags, test_server_f cb, void *arg)
 {
     int e;
     struct test_server *a;
@@ -132,6 +134,7 @@ flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
         BAIL_OUT ("calloc");
     a->cb = cb;
     a->arg = arg;
+    a->zctx = zctx;
 
     uuid_generate (a->uuid);
     uuid_unparse (a->uuid, a->uuid_str);
@@ -141,9 +144,9 @@ flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
 
     /* Create back-to-back wired flux_t handles
      */
-    if (!(a->s = test_connector_create (a->uuid_str, true, sflags)))
+    if (!(a->s = test_connector_create (a->zctx, a->uuid_str, true, sflags)))
         BAIL_OUT ("test_connector_create server");
-    if (!(a->c = test_connector_create (a->uuid_str, false, cflags)))
+    if (!(a->c = test_connector_create (a->zctx, a->uuid_str, false, cflags)))
         BAIL_OUT ("test_connector_create client");
 
     /* If no callback, register watcher for all messages so we can log them.
@@ -176,20 +179,11 @@ flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
     return a->c;
 }
 
-void test_server_environment_init (const char *test_name)
-{
-    zsys_init ();
-    zsys_set_logstream (stderr);
-    zsys_set_logident (test_name);
-    zsys_handler_set (NULL);
-    zsys_set_linger (5); // msec
-}
-
 /* Test connector implementation
  */
 
 struct test_connector {
-    zsock_t *sock;
+    void *sock;
     flux_t *h;
     struct flux_msg_cred cred;
 };
@@ -274,7 +268,7 @@ static void test_connector_fini (void *impl)
 {
     struct test_connector *tcon = impl;
 
-    zsock_destroy (&tcon->sock);
+    zmq_close (tcon->sock);
     free (tcon);
 }
 
@@ -288,25 +282,30 @@ static const struct flux_handle_ops handle_ops = {
     .impl_destroy = test_connector_fini,
 };
 
-static flux_t *test_connector_create (const char *shmem_name,
-                                      bool server, int flags)
+static flux_t *test_connector_create (void *zctx,
+                                      const char *shmem_name,
+                                      bool server,
+                                      int flags)
 {
     struct test_connector *tcon;
+    char uri[256];
 
     if (!(tcon = calloc (1, sizeof (*tcon))))
         BAIL_OUT ("calloc");
     tcon->cred.userid = getuid ();
     tcon->cred.rolemask = FLUX_ROLE_OWNER;
-    if (!(tcon->sock = zsock_new_pair (NULL)))
-        BAIL_OUT ("zsock_new_pair");
+    if (!(tcon->sock = zmq_socket (zctx, ZMQ_PAIR)))
+        BAIL_OUT ("zmq_socket failed");
     zsock_set_unbounded (tcon->sock);
+    zsock_set_linger (tcon->sock, 5);
+    snprintf (uri, sizeof (uri), "inproc://%s", shmem_name);
     if (server) {
-        if (zsock_bind (tcon->sock, "inproc://%s", shmem_name) < 0)
-            BAIL_OUT ("zsock_bind %s", shmem_name);
+        if (zmq_bind (tcon->sock, uri) < 0)
+            BAIL_OUT ("zmq_bind %s", uri);
     }
     else {
-        if (zsock_connect (tcon->sock, "inproc://%s", shmem_name) < 0)
-            BAIL_OUT ("zsock_connect %s", shmem_name);
+        if (zmq_connect (tcon->sock, uri) < 0)
+            BAIL_OUT ("zmq_connect %s", uri);
     }
     if (!(tcon->h = flux_handle_create (tcon, &handle_ops, flags)))
         BAIL_OUT ("flux_handle_create");

@@ -13,6 +13,7 @@
 #endif
 #include <sys/param.h>
 #include <flux/core.h>
+#include <zmq.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/unlink_recursive.h"
@@ -291,17 +292,20 @@ static void test_async_stream (flux_t *h, int size, int count)
 int main (int argc, char *argv[])
 {
     flux_t *h;
+    void *zctx;
 
     plan (NO_PLAN);
+
+    if (!(zctx = zmq_ctx_new ()))
+        BAIL_OUT ("cannot create zeromq context");
 
     tmpdir_create ();
 
     signal (SIGPIPE, SIG_IGN);
 
     diag ("starting test server");
-    test_server_environment_init ("usock_server");
 
-    if (!(h = test_server_create (0, server_cb, NULL)))
+    if (!(h = test_server_create (zctx, 0, server_cb, NULL)))
         BAIL_OUT ("test_server_create failed");
 
     test_early_disconnect (h);
@@ -317,6 +321,7 @@ int main (int argc, char *argv[])
     flux_close (h);
 
     tmpdir_destroy ();
+    zmq_ctx_term (zctx);
     done_testing ();
 
     return 0;

@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
+#include <zmq.h>
 #include <jansson.h>
 
 #include "src/common/libtap/tap.h"
@@ -914,18 +915,18 @@ static int fake_server_reactor (flux_t *h, void *arg)
     return flux_reactor_run (flux_get_reactor (h), 0);
 }
 
-void test_fake_server (void)
+void test_fake_server (void *zctx)
 {
     flux_t *h;
 
-    ok ((h = test_server_create (0, fake_server, NULL)) != NULL,
+    ok ((h = test_server_create (zctx, 0, fake_server, NULL)) != NULL,
         "test_server_create (recv loop)");
     ok (test_server_stop (h) == 0,
         "test_server_stop worked");
     flux_close (h);
     diag ("completed test with server recv loop");
 
-    ok ((h = test_server_create (0, fake_server_reactor, NULL)) != NULL,
+    ok ((h = test_server_create (zctx, 0, fake_server_reactor, NULL)) != NULL,
         "test_server_create (reactor)");
     ok ((test_server_stop (h)) == 0,
         "test_server_stop worked");
@@ -960,14 +961,16 @@ static int comms_err (flux_t *h, void *arg)
 int main (int argc, char *argv[])
 {
     flux_t *h;
+    void *zctx;
 
     plan (NO_PLAN);
 
-    test_server_environment_init ("rpc-test");
+    if (!(zctx = zmq_ctx_new ()))
+        BAIL_OUT ("could not create zeromq context");
 
-    test_fake_server ();
+    test_fake_server (zctx);
 
-    h = test_server_create (0, test_server, NULL);
+    h = test_server_create (zctx, 0, test_server, NULL);
     ok (h != NULL,
         "created test server thread");
     if (!h)
@@ -997,6 +1000,8 @@ int main (int argc, char *argv[])
     ok (test_server_stop (h) == 0,
         "stopped test server thread");
     flux_close (h); // destroys test server
+
+    zmq_ctx_term (zctx);
 
     done_testing();
     return (0);

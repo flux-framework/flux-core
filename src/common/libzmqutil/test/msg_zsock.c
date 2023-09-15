@@ -20,28 +20,24 @@
 #include "src/common/libzmqutil/msg_zsock.h"
 #include "src/common/libtap/tap.h"
 
+static void *zctx;
+
 void check_sendzsock (void)
 {
-    zsock_t *zsock[2] = { NULL, NULL };
+    void *zsock[2] = { NULL, NULL };
     flux_msg_t *any, *msg, *msg2;
     const char *topic;
     int type;
     const char *uri = "inproc://test";
 
-    /* zsys boiler plate:
-     * appears to be needed to avoid atexit assertions when lives_ok()
-     * macro (which calls fork()) is used.
-     */
-    zsys_init ();
-    zsys_set_logstream (stderr);
-    zsys_set_logident ("test_message.t");
-    zsys_handler_set (NULL);
-    zsys_set_linger (5); // msec
-
-    ok ((zsock[0] = zsock_new_pair (NULL)) != NULL
-                    && zsock_bind (zsock[0], "%s", uri) == 0
-                    && (zsock[1] = zsock_new_pair (uri)) != NULL,
+    ok ((zsock[0] = zmq_socket (zctx, ZMQ_PAIR)) != NULL
+        && zmq_bind (zsock[0], uri) == 0
+        && (zsock[1] = zmq_socket (zctx, ZMQ_PAIR)) != NULL
+        && zmq_connect( zsock[1], uri) == 0,
         "got inproc socket pair");
+
+    zsock_set_linger (zsock[0], 5);
+    zsock_set_linger (zsock[1], 5);
 
     if (!(any = flux_msg_create (FLUX_MSGTYPE_ANY)))
         BAIL_OUT ("flux_msg_create failed");
@@ -87,19 +83,20 @@ void check_sendzsock (void)
     flux_msg_destroy (msg2);
     flux_msg_destroy (msg);
 
-    zsock_destroy (&zsock[0]);
-    zsock_destroy (&zsock[1]);
-
-    /* zsys boiler plate - see note above
-     */
-    zsys_shutdown();
+    zmq_close (zsock[0]);
+    zmq_close (zsock[1]);
 }
 
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
+    if (!(zctx = zmq_ctx_new ()))
+        BAIL_OUT ("could not create zeromq context");
+
     check_sendzsock ();
+
+    zmq_ctx_term (zctx);
 
     done_testing();
     return (0);

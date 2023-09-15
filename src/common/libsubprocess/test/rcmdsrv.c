@@ -74,7 +74,7 @@ done:
     return rc;
 }
 
-flux_t *rcmdsrv_create (const char *service_name)
+flux_t *rcmdsrv_create (void *zctx, const char *service_name)
 {
     flux_t *h;
 
@@ -83,7 +83,7 @@ flux_t *rcmdsrv_create (const char *service_name)
     signal (SIGPIPE, SIG_IGN);
 
     // N.B. test reactor is created with FLUX_REACTOR_SIGCHLD flag
-    if (!(h = test_server_create (0, test_server, (char *)service_name)))
+    if (!(h = test_server_create (zctx, 0, test_server, (char *)service_name)))
         BAIL_OUT ("test_server_create failed");
 
     return h;

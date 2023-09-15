@@ -17,6 +17,7 @@
 #include <errno.h>
 
 #include <flux/core.h>
+#include <zmq.h>
 #include "src/common/libterminus/pty.h"
 
 #include "src/common/libtap/tap.h"
@@ -174,9 +175,9 @@ out:
     return rc;
 }
 
-static void test_basic_protocol (void)
+static void test_basic_protocol (void *zctx)
 {
-    flux_t *h = test_server_create (0, pty_server, NULL);
+    flux_t *h = test_server_create (zctx, 0, pty_server, NULL);
     flux_future_t *f = NULL;
     flux_future_t *f_attach = NULL;
 
@@ -393,9 +394,9 @@ static void pty_exit_cb (struct flux_pty_client *c, void *arg)
     flux_reactor_stop (flux_get_reactor (h));
 }
 
-static void test_client()
+static void test_client (void *zctx)
 {
-    flux_t *h = test_server_create (0, pty_server, NULL);
+    flux_t *h = test_server_create (zctx, 0, pty_server, NULL);
     flux_future_t *f = NULL;
     int rc;
     int flags = FLUX_PTY_CLIENT_ATTACH_SYNC
@@ -481,14 +482,19 @@ void test_monitor ()
 
 int main (int argc, char *argv[])
 {
+    void *zctx;
+
     plan (NO_PLAN);
 
-    test_server_environment_init ("pty");
+    if (!(zctx = zmq_ctx_new ()))
+        BAIL_OUT ("could not create zeromq context");
+
     test_invalid_args ();
     test_empty_server ();
-    test_basic_protocol ();
-    test_client ();
+    test_basic_protocol (zctx);
+    test_client (zctx);
     test_monitor ();
+    zmq_ctx_term (zctx);
     done_testing ();
     return 0;
 }

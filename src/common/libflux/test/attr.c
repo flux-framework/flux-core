@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <string.h>
 #include <flux/core.h>
+#include <zmq.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -185,12 +186,13 @@ int main (int argc, char *argv[])
     flux_t *h;
     const char *value;
     const char *value2;
+    void *zctx;
 
     plan (NO_PLAN);
 
-    test_server_environment_init ("attr-test");
-
-    if (!(h = test_server_create (0, test_server, NULL)))
+    if (!(zctx = zmq_ctx_new ()))
+        BAIL_OUT ("could not create zeromq context");
+    if (!(h = test_server_create (zctx, 0, test_server, NULL)))
         BAIL_OUT ("test_server_create failed");
 
     /* get ENOENT */
@@ -404,6 +406,8 @@ int main (int argc, char *argv[])
 
     test_server_stop (h);
     flux_close (h);
+
+    zmq_ctx_term (zctx);
 
     done_testing();
     return (0);
