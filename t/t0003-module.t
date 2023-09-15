@@ -278,6 +278,16 @@ test_expect_success 'module: configuration object is cached' '
 test_expect_success 'module: remove testmod if loaded' '
         flux module remove -f testmod
 '
-
+test_expect_success 'module: load without unload causes broker failure' '
+	test_must_fail flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+	    flux module load content 2>nounload.err
+'
+test_expect_success 'module: socket leak is called out' '
+	grep "socket leak" nounload.err
+'
+test_expect_success 'module: leaked module name is called out' '
+	grep ".content. was not properly shut down" nounload.err
+'
 
 test_done
