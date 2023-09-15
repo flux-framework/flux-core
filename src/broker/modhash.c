@@ -73,24 +73,29 @@ modhash_t *modhash_create (void)
     return mh;
 }
 
-void modhash_destroy (modhash_t *mh)
+int modhash_destroy (modhash_t *mh)
 {
     int saved_errno = errno;
     const char *uuid;
     module_t *p;
+    int count = 0;
 
     if (mh) {
         if (mh->zh_byuuid) {
             FOREACH_ZHASH (mh->zh_byuuid, uuid, p) {
+                log_msg ("broker module '%s' was not properly shut down",
+                         module_get_name (p));
                 flux_error_t error;
                 if (module_cancel (p, &error) < 0)
                     log_msg ("%s: %s", module_get_name (p), error.text);
+                count++;
             }
             zhash_destroy (&mh->zh_byuuid);
         }
         free (mh);
     }
     errno = saved_errno;
+    return count;
 }
 
 static json_t *modhash_entry_tojson (module_t *p,
