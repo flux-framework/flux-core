@@ -708,19 +708,6 @@ error:
     return rv;
 }
 
-static bool eventlog_parse_next (const char **pp, const char **tok,
-                                 size_t *toklen)
-{
-    char *term;
-
-    if (!(term = strchr (*pp, '\n')))
-        return false;
-    *tok = *pp;
-    *toklen = term - *pp + 1;
-    *pp = term + 1;
-    return true;
-}
-
 static void main_namespace_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct guest_watch_ctx *gw = arg;
