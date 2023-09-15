@@ -249,7 +249,12 @@ test_expect_success 'module with version ext can be loaded by name' '
 	mkdir -p testmoddir &&
 	cp $testmod testmoddir/testmod.so.0.0.0 &&
 	FLUX_MODULE_PATH_PREPEND=$(pwd)/testmoddir flux start \
-	    bash -c "flux module load testmod && flux module list -l" \
+	    bash -c \
+	    "flux module load testmod; \
+	    rc=\$?; \
+	    flux module list -l; \
+	    flux module remove -f testmod; \
+	    exit \$rc" \
 	    >modlist.out &&
 	grep testmod.so.0.0.0 modlist.out
 '

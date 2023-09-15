@@ -357,8 +357,12 @@ load_module_xfail()
 {
 	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
 	    -o,-Sstatedir=$(pwd) bash -c \
-	    "flux module load content && \
-	    flux module load content-sqlite"
+	    "flux module load content; \
+	    flux module load content-sqlite; \
+	    rc=\$?; \
+	    flux module remove -f content-sqlite; \
+	    flux module remove -f content; \
+	    exit \$rc"
 }
 
 # FWIW https://www.sqlite.org/fileformat.html
