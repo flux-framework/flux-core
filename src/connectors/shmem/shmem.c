@@ -20,8 +20,7 @@
 #include "config.h"
 #endif
 #include <errno.h>
-#include <czmq.h>
-#undef streq // redefined by ccan/str/str.h below
+#include <zmq.h>
 #include <argz.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
@@ -29,6 +28,7 @@
 #include <flux/core.h>
 
 #include "src/common/libzmqutil/msg_zsock.h"
+#include "src/common/libzmqutil/sockopt.h"
 #include "ccan/str/str.h"
 
 typedef struct {
@@ -46,10 +46,11 @@ static const struct flux_handle_ops handle_ops;
 static int op_pollevents (void *impl)
 {
     shmem_ctx_t *ctx = impl;
-    uint32_t e;
+    int e;
     int revents = 0;
 
-    e = zsock_events (ctx->sock);
+    if (zgetsockopt_int (ctx->sock, ZMQ_EVENTS, &e) < 0)
+        return -1;
     if (e & ZMQ_POLLIN)
         revents |= FLUX_POLLIN;
     if (e & ZMQ_POLLOUT)
@@ -63,8 +64,11 @@ static int op_pollevents (void *impl)
 static int op_pollfd (void *impl)
 {
     shmem_ctx_t *ctx = impl;
+    int fd;
 
-    return zsock_fd (ctx->sock);
+    if (zgetsockopt_int (ctx->sock, ZMQ_FD, &fd) < 0)
+        return -1;
+    return fd;
 }
 
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
@@ -156,10 +160,11 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
             goto error;
         }
     }
-    if (!(ctx->sock = zmq_socket (ctx->zctx, ZMQ_PAIR)))
+    if (!(ctx->sock = zmq_socket (ctx->zctx, ZMQ_PAIR))
+        || zsetsockopt_int (ctx->sock, ZMQ_LINGER, 5) < 0
+        || zsetsockopt_int (ctx->sock, ZMQ_SNDHWM, 0) < 0
+        || zsetsockopt_int (ctx->sock, ZMQ_RCVHWM, 0) < 0)
         goto error;
-    zsock_set_unbounded (ctx->sock);
-    zsock_set_linger (ctx->sock, 5);
     snprintf (ctx->endpoint, sizeof (ctx->endpoint), "inproc://%s", ctx->uuid);
     if (bind_socket) {
         if (zmq_bind (ctx->sock, ctx->endpoint) < 0)
