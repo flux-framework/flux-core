@@ -16,7 +16,7 @@
 #include <string.h>
 #include <assert.h>
 #include <inttypes.h>
-#include <czmq.h>
+#include <zmq.h>
 
 #include "src/common/libflux/message.h"
 #include "src/common/libflux/message_iovec.h"
@@ -28,7 +28,6 @@
 
 int zmqutil_msg_send_ex (void *sock, const flux_msg_t *msg, bool nonblock)
 {
-    void *handle;
     int flags = ZMQ_SNDMORE;
     struct msg_iovec *iov = NULL;
     int iovcnt;
@@ -47,11 +46,10 @@ int zmqutil_msg_send_ex (void *sock, const flux_msg_t *msg, bool nonblock)
     if (nonblock)
         flags |= ZMQ_DONTWAIT;
 
-    handle = zsock_resolve (sock);
     while (count < iovcnt) {
         if ((count + 1) == iovcnt)
             flags &= ~ZMQ_SNDMORE;
-        if (zmq_send (handle,
+        if (zmq_send (sock,
                       iov[count].data,
                       iov[count].size,
                       flags) < 0)
@@ -71,7 +69,6 @@ int zmqutil_msg_send (void *sock, const flux_msg_t *msg)
 
 flux_msg_t *zmqutil_msg_recv (void *sock)
 {
-    void *handle;
     struct msg_iovec *iov = NULL;
     int iovlen = 0;
     int iovcnt = 0;
@@ -88,7 +85,6 @@ flux_msg_t *zmqutil_msg_recv (void *sock)
      * use the msg_iovec's "transport_data" field to store the entry
      * and then clear/free it later.
      */
-    handle = zsock_resolve (sock);
     while (true) {
         zmq_msg_t *msgdata;
         if (iovlen <= iovcnt) {
@@ -101,7 +97,7 @@ flux_msg_t *zmqutil_msg_recv (void *sock)
         if (!(msgdata = malloc (sizeof (zmq_msg_t))))
             goto error;
         zmq_msg_init (msgdata);
-        if (zmq_recvmsg (handle, msgdata, 0) < 0) {
+        if (zmq_recvmsg (sock, msgdata, 0) < 0) {
             int save_errno = errno;
             zmq_msg_close (msgdata);
             free (msgdata);
@@ -114,7 +110,7 @@ flux_msg_t *zmqutil_msg_recv (void *sock)
         iovcnt++;
 
         int rcvmore;
-        if (zgetsockopt_int (handle, ZMQ_RCVMORE, &rcvmore) < 0)
+        if (zgetsockopt_int (sock, ZMQ_RCVMORE, &rcvmore) < 0)
             goto error;
         if (!rcvmore)
             break;

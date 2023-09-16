@@ -274,7 +274,7 @@ struct zmqutil_monitor *zmqutil_monitor_create (void *zctx,
     /* Arrange for local callback to run on each monitor event.
      * It will call the user's callback.
      */
-    if (zmq_socket_monitor (zsock_resolve (sock),
+    if (zmq_socket_monitor (sock,
                             mon->endpoint,
                             ZMQ_EVENT_ALL) < 0
         || !(mon->sock = zmq_socket (zctx, ZMQ_PAIR))

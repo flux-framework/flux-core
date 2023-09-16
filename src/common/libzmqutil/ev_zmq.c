@@ -31,7 +31,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
 #include <zmq.h>
 #include <stdbool.h>
 
@@ -43,11 +42,13 @@ static void prepare_cb (struct ev_loop *loop, ev_prepare *w, int revents)
     ev_zmq *zw = (ev_zmq *)((char *)w - offsetof (ev_zmq, prepare_w));
     uint32_t zevents = 0;
     size_t zevents_size = sizeof (zevents);
-    void *handle = zsock_resolve (zw->zsock);
 
-    if (handle == NULL)
+    if (zw->zsock == NULL)
         ev_idle_start (loop, &zw->idle_w);
-    else if (zmq_getsockopt (handle, ZMQ_EVENTS, &zevents, &zevents_size) < 0)
+    else if (zmq_getsockopt (zw->zsock,
+                             ZMQ_EVENTS,
+                             &zevents,
+                             &zevents_size) < 0)
         ev_idle_start (loop, &zw->idle_w);
     else if ((revents = ztoe (zevents) & zw->events))
         ev_idle_start (loop, &zw->idle_w);
@@ -60,17 +61,19 @@ static void check_cb (struct ev_loop *loop, ev_check *w, int revents)
     ev_zmq *zw = (ev_zmq *)((char *)w - offsetof (ev_zmq, check_w));
     uint32_t zevents = 0;
     size_t zevents_size = sizeof (zevents);
-    void *handle = zsock_resolve (zw->zsock);
 
     ev_io_stop (loop, &zw->io_w);
     ev_idle_stop (loop, &zw->idle_w);
 
-    if (handle == NULL)
+    if (zw->zsock == NULL)
         zw->cb (loop, zw, EV_ERROR);
     else if (ev_is_pending (&zw->io_w)
             && ev_clear_pending (loop, &zw->io_w) & EV_ERROR)
         zw->cb (loop, zw, EV_ERROR);
-    else if (zmq_getsockopt (handle, ZMQ_EVENTS, &zevents, &zevents_size) < 0)
+    else if (zmq_getsockopt (zw->zsock,
+                             ZMQ_EVENTS,
+                             &zevents,
+                             &zevents_size) < 0)
         zw->cb (loop, zw, EV_ERROR);
     else if ((revents = ztoe (zevents) & zw->events))
         zw->cb (loop, zw, revents);
@@ -82,11 +85,10 @@ int ev_zmq_init (ev_zmq *w, ev_zmq_cb cb, void *zsock, int events)
     w->zsock = zsock;
     w->events = events;
     size_t fd_size = sizeof (w->fd);
-    void *handle = zsock_resolve (zsock);
 
-    if (handle == NULL)
+    if (zsock == NULL)
         return -1;
-    if (zmq_getsockopt (handle, ZMQ_FD, &w->fd, &fd_size) < 0)
+    if (zmq_getsockopt (zsock, ZMQ_FD, &w->fd, &fd_size) < 0)
         return -1;
 
     ev_prepare_init (&w->prepare_w, prepare_cb);

@@ -12,13 +12,14 @@
 #include "config.h"
 #endif
 #include <stdbool.h>
-#include <czmq.h>
+#include <zmq.h>
 #include <errno.h>
 #include <stdio.h>
 
 #include "src/common/libflux/message.h"
 #include "src/common/libzmqutil/msg_zsock.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
 
 #include "sockopt.h"
 
