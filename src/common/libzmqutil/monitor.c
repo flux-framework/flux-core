@@ -18,6 +18,7 @@
 #include "ccan/array_size/array_size.h"
 
 #include "reactor.h"
+#include "sockopt.h"
 #include "monitor.h"
 
 #ifndef UUID_STR_LEN
@@ -284,8 +285,10 @@ struct zmqutil_monitor *zmqutil_monitor_create (void *zctx,
                                               monitor_callback,
                                               mon)))
         goto error;
-    zsock_set_linger (mon->sock, 0);
-    zsock_set_unbounded (mon->sock);
+    if (zsetsockopt_int (mon->sock, ZMQ_LINGER, 0) < 0
+        || zsetsockopt_int (mon->sock, ZMQ_RCVHWM, 0) < 0
+        || zsetsockopt_int (mon->sock, ZMQ_SNDHWM, 0) < 0)
+        goto error;
     flux_watcher_start (mon->w);
     return mon;
 error:
