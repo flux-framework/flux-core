@@ -17,6 +17,10 @@
 #include <inttypes.h>
 #include <sys/prctl.h>
 #include <sys/resource.h>
+#include <unistd.h>
+#include <sys/un.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
 #include <argz.h>
 #include <flux/core.h>
 #include <zmq.h>

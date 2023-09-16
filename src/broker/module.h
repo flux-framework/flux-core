@@ -12,7 +12,6 @@
 #define _BROKER_MODULE_H
 
 #include <jansson.h>
-#include <czmq.h>
 #include <uuid.h>
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers
