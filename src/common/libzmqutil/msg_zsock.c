@@ -23,6 +23,7 @@
 #include "src/common/libflux/message_proto.h"
 #include "src/common/libutil/errno_safe.h"
 
+#include "sockopt.h"
 #include "msg_zsock.h"
 
 int zmqutil_msg_send_ex (void *sock, const flux_msg_t *msg, bool nonblock)
@@ -111,7 +112,11 @@ flux_msg_t *zmqutil_msg_recv (void *sock)
         iov[iovcnt].data = zmq_msg_data (msgdata);
         iov[iovcnt].size = zmq_msg_size (msgdata);
         iovcnt++;
-        if (!zsock_rcvmore (handle))
+
+        int rcvmore;
+        if (zgetsockopt_int (handle, ZMQ_RCVMORE, &rcvmore) < 0)
+            goto error;
+        if (!rcvmore)
             break;
     }
 
