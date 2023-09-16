@@ -20,6 +20,7 @@
 #include <uuid.h>
 
 #include "src/common/libzmqutil/msg_zsock.h"
+#include "src/common/libzmqutil/sockopt.h"
 #include "src/common/libzmqutil/reactor.h"
 #include "src/common/libzmqutil/zap.h"
 #include "src/common/libzmqutil/monitor.h"
@@ -1271,7 +1272,18 @@ int overlay_connect (struct overlay *ov)
             errno = EINVAL;
             return -1;
         }
-        if (!(ov->parent.zsock = zmq_socket (ov->zctx, ZMQ_DEALER)))
+        if (!(ov->parent.zsock = zmq_socket (ov->zctx, ZMQ_DEALER))
+            || zsetsockopt_int (ov->parent.zsock, ZMQ_SNDHWM, 0) < 0
+            || zsetsockopt_int (ov->parent.zsock, ZMQ_RCVHWM, 0) < 0
+            || zsetsockopt_int (ov->parent.zsock, ZMQ_LINGER, 5) < 0
+            || zsetsockopt_int (ov->parent.zsock, ZMQ_IPV6, ov->enable_ipv6) < 0
+            || zsetsockopt_str (ov->parent.zsock, ZMQ_IDENTITY, ov->uuid) < 0
+            || zsetsockopt_str (ov->parent.zsock,
+                                ZMQ_ZAP_DOMAIN,
+                                FLUX_ZAP_DOMAIN) < 0
+            || zsetsockopt_str (ov->parent.zsock,
+                                ZMQ_CURVE_SERVERKEY,
+                                ov->parent.pubkey) < 0)
             return -1;
         /* The socket monitor is only used for logging.
          * Setup may fail if libzmq is too old.
@@ -1285,21 +1297,16 @@ int overlay_connect (struct overlay *ov)
         }
 #ifdef ZMQ_CONNECT_TIMEOUT
         if (ov->connect_timeout > 0) {
-            zsock_set_connect_timeout (ov->parent.zsock,
-                                       ov->connect_timeout* 1000);
+            if (zsetsockopt_int (ov->parent.zsock,
+                                 ZMQ_CONNECT_TIMEOUT,
+                                 ov->connect_timeout * 1000) < 0)
+                return -1;
         }
 #endif
-        zsock_set_unbounded (ov->parent.zsock);
-        zsock_set_linger (ov->parent.zsock, 5);
-        zsock_set_ipv6 (ov->parent.zsock, ov->enable_ipv6);
-
-        zsock_set_zap_domain (ov->parent.zsock, FLUX_ZAP_DOMAIN);
         zcert_apply (ov->cert, ov->parent.zsock);
-        zsock_set_curve_serverkey (ov->parent.zsock, ov->parent.pubkey);
-        zsock_set_identity (ov->parent.zsock, ov->uuid);
 
         if (zmq_connect (ov->parent.zsock, ov->parent.uri) < 0)
-            goto error;
+            return -1;
         if (!(ov->parent.w = zmqutil_watcher_create (ov->reactor,
                                                      ov->parent.zsock,
                                                      FLUX_POLLIN,
@@ -1311,8 +1318,6 @@ int overlay_connect (struct overlay *ov)
             return -1;
     }
     return 0;
-error:
-    return -1;
 }
 
 static void zaplogger (int severity, const char *message, void *arg)
@@ -1337,7 +1342,14 @@ int overlay_bind (struct overlay *ov, const char *uri)
     }
     zmqutil_zap_set_logger (ov->zap, zaplogger, ov);
 
-    if (!(ov->bind_zsock = zmq_socket (ov->zctx, ZMQ_ROUTER))) {
+    if (!(ov->bind_zsock = zmq_socket (ov->zctx, ZMQ_ROUTER))
+        || zsetsockopt_int (ov->bind_zsock, ZMQ_SNDHWM, 0) < 0
+        || zsetsockopt_int (ov->bind_zsock, ZMQ_RCVHWM, 0) < 0
+        || zsetsockopt_int (ov->bind_zsock, ZMQ_LINGER, 5) < 0
+        || zsetsockopt_int (ov->bind_zsock, ZMQ_ROUTER_MANDATORY, 1) < 0
+        || zsetsockopt_int (ov->bind_zsock, ZMQ_IPV6, ov->enable_ipv6) < 0
+        || zsetsockopt_str (ov->bind_zsock, ZMQ_ZAP_DOMAIN, FLUX_ZAP_DOMAIN) < 0
+        || zsetsockopt_int (ov->bind_zsock, ZMQ_CURVE_SERVER, 1) < 0) {
         log_err ("error creating zmq ROUTER socket");
         return -1;
     }
@@ -1351,17 +1363,17 @@ int overlay_bind (struct overlay *ov, const char *uri)
                                                    bind_monitor_cb,
                                                    ov);
     }
-    zsock_set_unbounded (ov->bind_zsock);
-    zsock_set_linger (ov->bind_zsock, 5);
-    zsock_set_router_mandatory (ov->bind_zsock, 1);
-    zsock_set_ipv6 (ov->bind_zsock, ov->enable_ipv6);
 #ifdef ZMQ_TCP_MAXRT
-    if (ov->tcp_user_timeout > 0)
-        zsock_set_tcp_maxrt (ov->bind_zsock, ov->tcp_user_timeout * 1000);
+    if (ov->tcp_user_timeout > 0) {
+        if (zsetsockopt_int (ov->bind_zsock,
+                             ZMQ_TCP_MAXRT,
+                             ov->tcp_user_timeout * 1000) < 0) {
+            log_err ("error setting TCP_MAXRT option on bind socket");
+            return -1;
+        }
+    }
 #endif
-    zsock_set_zap_domain (ov->bind_zsock, FLUX_ZAP_DOMAIN);
     zcert_apply (ov->cert, ov->bind_zsock);
-    zsock_set_curve_server (ov->bind_zsock, 1);
 
     if (zmq_bind (ov->bind_zsock, uri) < 0) {
         log_err ("error binding to %s", uri);
@@ -1370,7 +1382,9 @@ int overlay_bind (struct overlay *ov, const char *uri)
     /* Capture URI after zmq_bind() processing, so it reflects expanded
      * wildcards and normalized addresses.
      */
-    if (!(ov->bind_uri = zsock_last_endpoint (ov->bind_zsock))) {
+    if (zgetsockopt_str (ov->bind_zsock,
+                         ZMQ_LAST_ENDPOINT,
+                         &ov->bind_uri) < 0) {
         log_err ("error obtaining concretized bind URI");
         return -1;
     }
