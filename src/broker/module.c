@@ -372,10 +372,11 @@ module_t *module_create (flux_t *h,
     }
     zsock_set_unbounded (p->sock);
     zsock_set_linger (p->sock, 5);
-    snprintf (p->endpoint,
-              sizeof (p->endpoint),
-              "inproc://%s",
-              module_get_uuid (p));
+    // copying 9 + 37 + 1 = 47 bytes into 128 byte buffer cannot fail
+    (void)snprintf (p->endpoint,
+                    sizeof (p->endpoint),
+                    "inproc://%s",
+                    module_get_uuid (p));
     if (zmq_bind (p->sock, p->endpoint) < 0) {
         errprintf (error, "zmq_bind %s: %s", p->endpoint, strerror (errno));
         goto cleanup;
