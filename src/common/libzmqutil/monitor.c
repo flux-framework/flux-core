@@ -28,7 +28,7 @@
 /* N.B. 4.1.4 has a bad bug
  */
 struct zmqutil_monitor {
-    zsock_t *sock;
+    void *sock;
     char endpoint[UUID_STR_LEN + 64];
     flux_watcher_t *w;
     zmqutil_monitor_f fun;
@@ -237,15 +237,16 @@ void zmqutil_monitor_destroy (struct zmqutil_monitor *mon)
         flux_watcher_destroy (mon->w);
         if (mon->sock) {
             monitor_purge (mon);
-            zsock_disconnect (mon->sock, "%s", mon->endpoint);
-            zsock_destroy (&mon->sock);
+            (void)zmq_disconnect (mon->sock, mon->endpoint);
+            (void)zmq_close (mon->sock);
         }
         free (mon);
         errno = saved_errno;
     }
 }
 
-struct zmqutil_monitor *zmqutil_monitor_create (zsock_t *sock,
+struct zmqutil_monitor *zmqutil_monitor_create (void *zctx,
+                                                void *sock,
                                                 flux_reactor_t *r,
                                                 zmqutil_monitor_f fun,
                                                 void *arg)
@@ -254,7 +255,7 @@ struct zmqutil_monitor *zmqutil_monitor_create (zsock_t *sock,
     uuid_t uuid;
     char uuid_str[UUID_STR_LEN];
 
-    if (!sock || !r) {
+    if (!zctx || !sock || !r) {
         errno = EINVAL;
         return NULL;
     }
@@ -275,8 +276,8 @@ struct zmqutil_monitor *zmqutil_monitor_create (zsock_t *sock,
     if (zmq_socket_monitor (zsock_resolve (sock),
                             mon->endpoint,
                             ZMQ_EVENT_ALL) < 0
-        || !(mon->sock = zsock_new (ZMQ_PAIR))
-        || zsock_connect (mon->sock, "%s", mon->endpoint) < 0
+        || !(mon->sock = zmq_socket (zctx, ZMQ_PAIR))
+        || zmq_connect (mon->sock, mon->endpoint) < 0
         || !(mon->w = zmqutil_watcher_create (r,
                                               mon->sock,
                                               FLUX_POLLIN,
@@ -294,7 +295,8 @@ error:
 #else
 /* Monitoring is disabled due to libzmq being too old.
  */
-struct zmqutil_monitor *zmqutil_monitor_create (zsock_t *sock,
+struct zmqutil_monitor *zmqutil_monitor_create (void *zctx,
+                                                void *sock,
                                                 flux_reactor_t *r,
                                                 zmqutil_monitor_f fun,
                                                 void *arg)

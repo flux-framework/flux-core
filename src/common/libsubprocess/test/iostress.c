@@ -14,6 +14,7 @@
 #include <unistd.h> // environ def
 #include <jansson.h>
 #include <flux/core.h>
+#include <zmq.h>
 
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
@@ -278,10 +279,14 @@ bool iostress_run_check (flux_t *h,
 int main (int argc, char *argv[])
 {
     flux_t *h;
+    void *zctx;
 
     plan (NO_PLAN);
 
-    h = rcmdsrv_create ("rexec");
+    if (!(zctx = zmq_ctx_new ()))
+        BAIL_OUT ("could not create zeromq context");
+
+    h = rcmdsrv_create (zctx, "rexec");
 
     ok (iostress_run_check (h, "balanced", false, 0, 0, 8, 8, 80),
         "balanced worked");
@@ -304,6 +309,7 @@ int main (int argc, char *argv[])
 
     test_server_stop (h);
     flux_close (h);
+    zmq_ctx_term (zctx);
     done_testing ();
     return 0;
 }

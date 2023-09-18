@@ -23,7 +23,7 @@ int zmqutil_zap_authorize (struct zmqutil_zap *zap,
 void zmqutil_zap_set_logger (struct zmqutil_zap *zap, zaplog_f fun, void *arg);
 
 void zmqutil_zap_destroy (struct zmqutil_zap *zap);
-struct zmqutil_zap *zmqutil_zap_create (flux_reactor_t *r);
+struct zmqutil_zap *zmqutil_zap_create (void *zctx, flux_reactor_t *r);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

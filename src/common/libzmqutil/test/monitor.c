@@ -22,7 +22,7 @@ void test_badargs (void)
     /* Note: these are stubbed for older libzmq (e.g. centos 7),
      * so checking for errno == EINVAL is not going to happen there.
      */
-    ok (zmqutil_monitor_create (NULL, NULL, NULL, NULL) == NULL,
+    ok (zmqutil_monitor_create (NULL, NULL, NULL, NULL, NULL) == NULL,
         "zmqutil_monitor_create sock=NULL fails");
 
     lives_ok({zmqutil_monitor_destroy (NULL);},

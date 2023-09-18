@@ -22,9 +22,10 @@
 typedef struct modhash modhash_t;
 
 /* Hash-o-modules, keyed by uuid
+ * Destructor returns the number of modules that had to be canceled.
  */
 modhash_t *modhash_create (void);
-void modhash_destroy (modhash_t *mh);
+int modhash_destroy (modhash_t *mh);
 
 void modhash_add (modhash_t *mh, module_t *p);
 void modhash_remove (modhash_t *mh, module_t *p);

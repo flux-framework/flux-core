@@ -26,6 +26,7 @@ typedef void (*modpoller_cb_f)(module_t *p, void *arg);
 typedef void (*module_status_cb_f)(module_t *p, int prev_status, void *arg);
 
 module_t *module_create (flux_t *h,
+                         void *zctx,
                          const char *parent_uuid,
                          const char *name, // may be NULL
                          const char *path,

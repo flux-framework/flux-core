@@ -249,7 +249,12 @@ test_expect_success 'module with version ext can be loaded by name' '
 	mkdir -p testmoddir &&
 	cp $testmod testmoddir/testmod.so.0.0.0 &&
 	FLUX_MODULE_PATH_PREPEND=$(pwd)/testmoddir flux start \
-	    bash -c "flux module load testmod && flux module list -l" \
+	    bash -c \
+	    "flux module load testmod; \
+	    rc=\$?; \
+	    flux module list -l; \
+	    flux module remove -f testmod; \
+	    exit \$rc" \
 	    >modlist.out &&
 	grep testmod.so.0.0.0 modlist.out
 '
@@ -273,6 +278,16 @@ test_expect_success 'module: configuration object is cached' '
 test_expect_success 'module: remove testmod if loaded' '
         flux module remove -f testmod
 '
-
+test_expect_success 'module: load without unload causes broker failure' '
+	test_must_fail flux start \
+	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+	    flux module load content 2>nounload.err
+'
+test_expect_success 'module: socket leak is called out' '
+	grep "socket leak" nounload.err
+'
+test_expect_success 'module: leaked module name is called out' '
+	grep ".content. was not properly shut down" nounload.err
+'
 
 test_done

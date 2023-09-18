@@ -519,9 +519,9 @@ test_cppflags = \
 	$(AM_CPPFLAGS)
 
 shmem_backtoback_t_SOURCES = shmem/backtoback.c
-shmem_backtoback_t_CPPFLAGS = $(test_cppflags)
+shmem_backtoback_t_CPPFLAGS = $(test_cppflags) $(ZMQ_CFLAGS)
 shmem_backtoback_t_LDADD = $(test_ldadd)
-shmem_backtoback_t_LDFLAGS = $(test_ldflags)
+shmem_backtoback_t_LDFLAGS = $(test_ldflags) $(ZMQ_LIBS)
 
 loop_logstderr_SOURCES = loop/logstderr.c
 loop_logstderr_CPPFLAGS = $(test_cppflags)

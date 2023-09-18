@@ -43,7 +43,9 @@ struct broker_module {
 
     double lastseen;
 
-    zsock_t *sock;          /* broker end of PAIR socket */
+    void *zctx;             /* zeromq context shared with broker */
+    void *sock;             /* broker end of PAIR socket */
+    char endpoint[128];
     struct flux_msg_cred cred; /* cred of connection */
 
     uuid_t uuid;            /* uuid for unique request sender identity */
@@ -151,7 +153,7 @@ static void *module_thread (void *arg)
     module_t *p = arg;
     sigset_t signal_set;
     int errnum;
-    char uri[UUID_STR_LEN + 16];
+    char uri[128];
     char **av = NULL;
     int ac;
     int mod_main_errno = 0;
@@ -162,7 +164,18 @@ static void *module_thread (void *arg)
 
     /* Connect to broker socket, enable logging, register built-in services
      */
-    snprintf (uri, sizeof (uri), "shmem://%s", p->uuid_str);
+
+    /* N.B. inproc endpoints (in same process) must share a 0MQ context
+     * pointer which is passed via query argument to the local connector.
+     * (There was no convenient way to share that directly).
+     *
+     * copying 8 + 37 + 6 + 18 + 1 = 70 bytes into 128 byte buffer cannot fail
+     */
+    (void)snprintf (uri,
+                    sizeof (uri),
+                    "shmem://%s&zctx=%p",
+                    p->uuid_str,
+                    p->zctx);
     if (!(p->h = flux_open (uri, 0))) {
         log_err ("flux_open %s", uri);
         goto done;
@@ -276,6 +289,7 @@ error:
 }
 
 module_t *module_create (flux_t *h,
+                         void *zctx,
                          const char *parent_uuid,
                          const char *name, // may be NULL
                          const char *path,
@@ -305,6 +319,7 @@ module_t *module_create (flux_t *h,
     p->main = mod_main;
     p->dso = dso;
     p->rank = rank;
+    p->zctx = zctx;
     if (!(p->conf = flux_conf_copy (flux_get_conf (h))))
         goto cleanup;
     if (!(p->parent_uuid_str = strdup (parent_uuid)))
@@ -349,16 +364,21 @@ module_t *module_create (flux_t *h,
     uuid_generate (p->uuid);
     uuid_unparse (p->uuid, p->uuid_str);
 
-     /* Broker end of PAIR socket is opened here.
+    /* Broker end of PAIR socket is opened here.
      */
-    if (!(p->sock = zsock_new_pair (NULL))) {
+    if (!(p->sock = zmq_socket (p->zctx, ZMQ_PAIR))) {
         errprintf (error, "could not create zsock for %s", p->name);
         goto cleanup;
     }
     zsock_set_unbounded (p->sock);
     zsock_set_linger (p->sock, 5);
-    if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0) {
-        errprintf (error, "zsock_bind inproc://%s", module_get_uuid (p));
+    // copying 9 + 37 + 1 = 47 bytes into 128 byte buffer cannot fail
+    (void)snprintf (p->endpoint,
+                    sizeof (p->endpoint),
+                    "inproc://%s",
+                    module_get_uuid (p));
+    if (zmq_bind (p->sock, p->endpoint) < 0) {
+        errprintf (error, "zmq_bind %s: %s", p->endpoint, strerror (errno));
         goto cleanup;
     }
     if (!(p->broker_w = zmqutil_watcher_create (flux_get_reactor (h),
@@ -554,7 +574,7 @@ void module_destroy (module_t *p)
 
     flux_watcher_stop (p->broker_w);
     flux_watcher_destroy (p->broker_w);
-    zsock_destroy (&p->sock);
+    zmq_close (p->sock);
 
 #ifndef __SANITIZE_ADDRESS__
     dlclose (p->dso);

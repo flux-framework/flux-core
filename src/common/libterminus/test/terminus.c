@@ -16,6 +16,7 @@
 #include <string.h>
 #include <errno.h>
 #include <jansson.h>
+#include <zmq.h>
 
 #include <flux/core.h>
 #include "src/common/libterminus/terminus.h"
@@ -86,11 +87,11 @@ static int terminus_server (flux_t *h, void *arg)
     return rc;
 }
 
-static void test_kill_server_empty (void)
+static void test_kill_server_empty (void *zctx)
 {
     int rc;
     flux_future_t *f = NULL;
-    flux_t *h = test_server_create (0, terminus_server, NULL);
+    flux_t *h = test_server_create (zctx, 0, terminus_server, NULL);
 
     /* kill-server
      */
@@ -116,12 +117,12 @@ static void test_kill_server_empty (void)
     flux_close (h);
 }
 
-static void test_protocol (void)
+static void test_protocol (void *zctx)
 {
     int rc;
     json_t *o = NULL;
     flux_future_t *f = NULL;
-    flux_t *h = test_server_create (0, terminus_server, NULL);
+    flux_t *h = test_server_create (zctx, 0, terminus_server, NULL);
 
     const char *service = NULL;
     const char *name = NULL;
@@ -470,16 +471,22 @@ void test_open_close_session (void)
 
 int main (int argc, char *argv[])
 {
+    void *zctx;
+
     plan (NO_PLAN);
     /* Make sure SHELL is set in environment.
      */
     if (getenv ("SHELL") == NULL)
         setenv ("SHELL", "/bin/sh", 1);
-    test_server_environment_init ("terminus");
+
+    if (!(zctx = zmq_ctx_new ()))
+        BAIL_OUT ("could not create zeromq context");
+
     test_invalid_args ();
-    test_kill_server_empty ();
-    test_protocol ();
+    test_kill_server_empty (zctx);
+    test_protocol (zctx);
     test_open_close_session ();
+    zmq_ctx_term (zctx);
     done_testing ();
     return 0;
 }

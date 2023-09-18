@@ -23,6 +23,7 @@
 #include "src/common/libzmqutil/reactor.h"
 
 static const size_t zmqwriter_msgcount = 1024;
+static void *zctx;
 
 static void zmqwriter (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg)
@@ -83,18 +84,15 @@ error:
 
 static void test_zmq (flux_reactor_t *reactor)
 {
-    zsock_t *zs[2];
+    void *zs[2];
     flux_watcher_t *r, *w;
     const char *uri = "inproc://test_zmq";
 
-    zsys_set_logstream (stderr);
-    zsys_handler_set (NULL);
-
-    zs[0] = zsock_new_pair (NULL);
-    zs[1] = zsock_new_pair (NULL);
+    zs[0] = zmq_socket (zctx, ZMQ_PAIR);
+    zs[1] = zmq_socket (zctx, ZMQ_PAIR);
     ok (zs[0] && zs[1]
-        && zsock_bind (zs[0], "%s", uri) == 0
-        && zsock_connect (zs[1], "%s", uri) == 0,
+        && zmq_bind (zs[0], uri) == 0
+        && zmq_connect (zs[1], uri) == 0,
         "zmq: connected ZMQ_PAIR sockets over inproc");
     r = zmqutil_watcher_create (reactor, zs[0], FLUX_POLLIN, zmqreader, NULL);
     w = zmqutil_watcher_create (reactor, zs[1], FLUX_POLLOUT, zmqwriter, NULL);
@@ -109,10 +107,8 @@ static void test_zmq (flux_reactor_t *reactor)
     flux_watcher_destroy (r);
     flux_watcher_destroy (w);
 
-    zsock_destroy (&zs[0]);
-    zsock_destroy (&zs[1]);
-
-    zsys_shutdown ();
+    zmq_close (zs[0]);
+    zmq_close (zs[1]);
 }
 
 int main (int argc, char *argv[])
@@ -120,6 +116,9 @@ int main (int argc, char *argv[])
     flux_reactor_t *reactor;
 
     plan (NO_PLAN);
+
+    if (!(zctx = zmq_ctx_new ()))
+        BAIL_OUT ("cannot create zmq context");
 
     ok ((reactor = flux_reactor_create (0)) != NULL,
         "created reactor");
@@ -129,6 +128,8 @@ int main (int argc, char *argv[])
     test_zmq (reactor);
 
     flux_reactor_destroy (reactor);
+
+    zmq_ctx_term (zctx);
 
     done_testing();
     return (0);
