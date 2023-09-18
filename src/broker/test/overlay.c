@@ -19,6 +19,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libzmqutil/msg_zsock.h"
+#include "src/common/libzmqutil/sockopt.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libtestutil/util.h"
 #include "src/common/libutil/stdlog.h"
@@ -459,10 +460,10 @@ void trio (flux_t *h)
 
     /* 1) No security
      */
-    if (!(zsock_none = zmq_socket (zctx, ZMQ_DEALER)))
+    if (!(zsock_none = zmq_socket (zctx, ZMQ_DEALER))
+        || zsetsockopt_int (zsock_none, ZMQ_LINGER, 5) < 0
+        || zsetsockopt_str (zsock_none, ZMQ_IDENTITY, "2") < 0)
         BAIL_OUT ("zmq_socket failed");
-    zsock_set_linger (zsock_none, 5);
-    zsock_set_identity (zsock_none, "2");
     ok (zmq_connect (zsock_none, parent_uri) == 0,
         "none-2: zmq_connect %s (no security) works", parent_uri);
     ok (zmqutil_msg_send (zsock_none, msg) == 0,
@@ -471,15 +472,15 @@ void trio (flux_t *h)
     /* 2) Curve, and correct server public key, but client public key
      * was not authorized
      */
-    if (!(zsock_curve = zmq_socket (zctx, ZMQ_DEALER)))
+    if (!(zsock_curve = zmq_socket (zctx, ZMQ_DEALER))
+        || zsetsockopt_int (zsock_curve, ZMQ_LINGER, 5) < 0
+        || zsetsockopt_str (zsock_curve, ZMQ_ZAP_DOMAIN, "flux") < 0
+        || zsetsockopt_str (zsock_curve, ZMQ_CURVE_SERVERKEY, server_pubkey) < 0
+        || zsetsockopt_str (zsock_curve, ZMQ_IDENTITY, "2") < 0)
         BAIL_OUT ("zmq_socket failed");
-    zsock_set_linger (zsock_curve, 5);
     if (!(cert = zcert_new ()))
         BAIL_OUT ("zcert_new failed");
-    zsock_set_zap_domain (zsock_curve, "flux");
     zcert_apply (cert, zsock_curve);
-    zsock_set_curve_serverkey (zsock_curve, server_pubkey);
-    zsock_set_identity (zsock_curve, "2");
     zcert_destroy (&cert);
     ok (zmq_connect (zsock_curve, parent_uri) == 0,
         "curve-2: zmq_connect %s works", parent_uri);
