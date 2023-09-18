@@ -8,9 +8,10 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#ifndef _ZMQUTIL_MONITOR_H
+#define _ZMQUTIL_MONITOR_H
+
 #include <flux/core.h>
-#include <czmq.h>
-#include <zmq.h>
 
 struct monitor_event {
     uint16_t event;
@@ -45,5 +46,7 @@ int zmqutil_monitor_get (struct zmqutil_monitor *mon,
 /* Returns true if the socket event likely should be logged at error severity.
  */
 bool zmqutil_monitor_iserror (struct monitor_event *mevent);
+
+#endif // !_ZMQUTIL_MONITOR
 
 // vi:ts=4 sw=4 expandtab

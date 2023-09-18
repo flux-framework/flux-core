@@ -11,8 +11,8 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
 #include <zmq.h>
+#include <stdint.h>
 #include <uuid.h>
 
 #include "ccan/array_size/array_size.h"
@@ -169,30 +169,43 @@ bool zmqutil_monitor_iserror (struct monitor_event *mevent)
     return false;
 }
 
+static int recv_frame1 (void *sock, uint16_t *event, uint32_t *value)
+{
+    uint8_t buf[6];
+    if (zmq_recv (sock, buf, sizeof (buf), 0) != 6)
+        return -1;
+    *event = *(uint16_t *)buf;
+    *value = *(uint32_t *)(buf + 2);
+    return 0;
+}
+
+static int recv_frame2 (void *sock, char *buf, int size)
+{
+    int more;
+    if (zgetsockopt_int (sock, ZMQ_RCVMORE, &more) < 0 || !more)
+        return -1;
+    memset (buf, 0, size);
+    if (zmq_recv (sock, buf, size, 0) < 0)
+        return -1;
+    return 0;
+}
+
 int zmqutil_monitor_get (struct zmqutil_monitor *mon,
                          struct monitor_event *mevent)
 {
-    zframe_t *zf;
-
     if (!mon || !mevent) {
         errno = EINVAL;
         return -1;
     }
     /* receive event+value frame */
-    if (!(zf = zframe_recv (mon->sock)) || zframe_size (zf) != 6)
+    if (recv_frame1 (mon->sock, &mevent->event, &mevent->value) < 0)
         return -1;
-    mevent->event = *(uint16_t *)zframe_data (zf);
-    mevent->value = *(uint32_t *)(zframe_data (zf) + 2);
-    zframe_destroy (&zf);
 
     /* receive endpoint frame */
-    if (!(zf = zframe_recv (mon->sock)))
+    if (recv_frame2 (mon->sock,
+                     mevent->endpoint,
+                     sizeof (mevent->endpoint)) < 0)
         return -1;
-    snprintf (mevent->endpoint,
-              sizeof (mevent->endpoint),
-              "%.*s",
-              (int)zframe_size (zf), zframe_data (zf));
-    zframe_destroy (&zf);
 
     /* note end of monitor stream for zmqutil_monitor_destroy() */
     if (mevent->event == ZMQ_EVENT_MONITOR_STOPPED)
