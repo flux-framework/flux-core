@@ -12,7 +12,7 @@
 #include "config.h"
 #endif
 #include <errno.h>
-#include <czmq.h>
+#include <zmq.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdlib.h>
@@ -35,16 +35,9 @@ static void zmqwriter (flux_reactor_t *r, flux_watcher_t *w,
         goto error;
     }
     if (revents & FLUX_POLLOUT) {
-        uint8_t blob[64];
-        zmsg_t *zmsg = zmsg_new ();
-        if (!zmsg || zmsg_addmem (zmsg, blob, sizeof (blob)) < 0) {
-            fprintf (stderr, "%s: failed to create message: %s\n",
-                     __FUNCTION__, strerror (errno));
-            goto error;
-        }
-        if (zmsg_send (&zmsg, sock) < 0) {
-            fprintf (stderr, "%s: zmsg_send: %s\n",
-                     __FUNCTION__, strerror (errno));
+        uint8_t blob[64] = { 0 };
+        if (zmq_send (sock, blob, sizeof (blob), 0) < 0) {
+            diag ("zmq_send: %s", strerror (errno));
             goto error;
         }
         count++;
@@ -66,13 +59,16 @@ static void zmqreader (flux_reactor_t *r, flux_watcher_t *w,
         goto error;
     }
     if (revents & FLUX_POLLIN) {
-        zmsg_t *zmsg = zmsg_recv (sock);
-        if (!zmsg) {
-            fprintf (stderr, "%s: zmsg_recv: %s\n",
-                     __FUNCTION__, strerror (errno));
+        char buf[64];
+        int rc;
+        if ((rc = zmq_recv (sock, buf, sizeof (buf), 0)) < 0) {
+            diag ("zmq_recv: %s", strerror (errno));
             goto error;
         }
-        zmsg_destroy (&zmsg);
+        if (rc != 64) {
+            diag ("zmq_reciv: got %d bytes, expected 64", rc);
+            goto error;
+        }
         count++;
         if (count == zmqwriter_msgcount)
             flux_watcher_stop (w);
