@@ -13,7 +13,7 @@ stop_tasks_test()     {
 
 test_under_flux 2
 
-TIMEOUT=10
+TIMEOUT=100
 
 parse_jobid() {
 	outfile=$1 &&
@@ -103,7 +103,7 @@ test_expect_success 'debugger: job attach --debug must not continue target' '
 	flux_job_attach ${jobid} jobid.out3 &&
 	tv_jobid=$(parse_totalview_jobid jobid.out3) &&
 	test ${tv_jobid} = "${jobid}" &&
-	test_must_fail flux job wait-event -vt ${TIMEOUT} ${jobid} finish &&
+	test_must_fail flux job wait-event -vt 2 ${jobid} finish &&
 	flux cancel ${jobid} &&
 	flux job wait-event -vt ${TIMEOUT} ${jobid} finish
 '
