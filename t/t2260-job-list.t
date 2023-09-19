@@ -1213,6 +1213,49 @@ test_expect_success 'verify job queue preserved across restart' '
 '
 
 #
+# job project and bank
+#
+
+test_expect_success 'support jobspec updates of project and bank' '
+	flux jobtap load --remove=all ${PLUGINPATH}/project-bank-validate.so
+'
+
+test_expect_success 'flux job list outputs no project and bank by default' '
+	jobid=`flux submit --wait /bin/true | flux job id` &&
+	echo $jobid > jobprojectbank1.id &&
+	wait_jobid_state $jobid inactive &&
+	flux job list -s inactive | grep $jobid | jq -e ".project == null" &&
+	flux job list -s inactive | grep $jobid | jq -e ".bank == null"
+'
+# initially put job on hold, jobspec-updates don't matter after the job is running
+test_expect_success 'flux job list outputs project and bank if one set' '
+	jobid=`flux submit --urgency=hold /bin/true | flux job id` &&
+	echo $jobid > jobprojectbank2.id &&
+	flux update $jobid project=foo &&
+	flux update $jobid bank=bar &&
+	flux job urgency $jobid default &&
+	wait_jobid_state $jobid inactive &&
+	flux job list -s inactive | grep $jobid | jq -e ".project == \"foo\"" &&
+	flux job list -s inactive | grep $jobid | jq -e ".bank == \"bar\""
+'
+test_expect_success 'reload the job-list module' '
+	flux module reload job-list
+'
+
+test_expect_success 'verify job project and bank preserved across restart' '
+	jobid1=`cat jobprojectbank1.id` &&
+	jobid2=`cat jobprojectbank2.id` &&
+	flux job list -s inactive | grep $jobid1 | jq -e ".project == null" &&
+	flux job list -s inactive | grep $jobid1 | jq -e ".bank == null" &&
+	flux job list -s inactive | grep $jobid | jq -e ".project == \"foo\"" &&
+	flux job list -s inactive | grep $jobid | jq -e ".bank == \"bar\""
+'
+
+test_expect_success 'remove jobtap plugins' '
+	flux jobtap remove all
+'
+
+#
 # job task count
 #
 
@@ -2220,6 +2263,8 @@ state \
 name \
 cwd \
 queue \
+project \
+bank \
 ntasks \
 ncores \
 duration \

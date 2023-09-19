@@ -110,6 +110,18 @@ static int store_attr (struct job *job,
             return 0;
         val = json_string (job->queue);
     }
+    else if (streq (attr, "project")) {
+        /* job->project potentially NULL, usually set via jobspec-update event */
+        if (!job->project)
+            return 0;
+        val = json_string (job->project);
+    }
+    else if (streq (attr, "bank")) {
+        /* job->bank potentially NULL, usually set via jobspec-update event */
+        if (!job->bank)
+            return 0;
+        val = json_string (job->bank);
+    }
     else if (streq (attr, "ntasks")) {
         /* job->ntasks potentially < 0 if jobspec invalid */
         if (job->ntasks < 0)

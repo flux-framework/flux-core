@@ -489,6 +489,8 @@ class TestJob(unittest.TestCase):
             "name",
             "cwd",
             "queue",
+            "project",
+            "bank",
             "ntasks",
             "ncores",
             "duration",

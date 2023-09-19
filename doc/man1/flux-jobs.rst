@@ -311,6 +311,12 @@ The field names that can be specified are:
 **queue**
    job queue
 
+**project**
+   job accounting project
+
+**bank**
+   job accounting bank
+
 **ntasks**
    job task count
 
