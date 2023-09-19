@@ -249,24 +249,24 @@ AM_CHECK_PYMOD(cffi,
                [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
                )
 AM_CHECK_PYMOD(yaml,
-               [StrictVersion(yaml.__version__) >= StrictVersion ('3.10.0')],
+               [Version(yaml.__version__) >= Version ('3.10.0')],
                ,
                [AC_MSG_ERROR([could not find python module yaml, version 3.10+ required])]
                )
 AM_CHECK_PYMOD(jsonschema,
-               [StrictVersion(jsonschema.__version__) >= StrictVersion ('2.3.0')],
+               [Version(jsonschema.__version__) >= Version ('2.3.0')],
                ,
                [AC_MSG_ERROR([could not find python module jsonschema, version 2.3.0+ required])]
                )
 
 AS_IF([test "x$enable_docs" != "xno"], [
             AM_CHECK_PYMOD(sphinx,
-                           [StrictVersion(sphinx.__version__) >= StrictVersion ('1.6.7')],
+                           [Version(sphinx.__version__) >= Version ('1.6.7')],
                            [sphinx=true],
                            [sphinx=false; AC_MSG_WARN([could not find sphinx to generate docs, version 1.6.7+ required])]
                            )
             AM_CHECK_PYMOD(docutils,
-                           [StrictVersion(docutils.__version__) >= StrictVersion ('0.11.0')],
+                           [Version(docutils.__version__) >= Version ('0.11.0')],
                            [docutils=true],
                            [docutils=false; AC_MSG_WARN([could not find docutils to generate docs, version 0.11.0+ required])]
                            )
@@ -316,7 +316,7 @@ AS_IF([test "x$enable_pylint" = "xyes"], [
   AC_CHECK_PROG(PYLINT,[pylint],[pylint])
   AS_IF([test "x$PYLINT" != "xpylint"], [AC_MSG_ERROR([No pylint found in PATH])])
   AM_CHECK_PYMOD(pylint,
-                   [StrictVersion(pylint.__version__) >= StrictVersion('1.8.4')],
+                   [Version(pylint.__version__) >= Version('1.8.4')],
                    ,
                    [AC_MSG_ERROR([could not find python module pylint, version 1.8.4+ required])]
                  )

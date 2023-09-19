@@ -15,7 +15,7 @@ except:
         sys.exit(0)
 sys.exit(0)"], [prog="
 import sys
-from distutils.version import LooseVersion, StrictVersion
+from packaging.version import Version
 import $1
 if not $2:
     sys.exit(1)
