@@ -15,15 +15,17 @@
 #include <errno.h>
 #include <string.h>
 #include <flux/core.h>
-#include <czmq.h>
+#include <zmq.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libzmqutil/msg_zsock.h"
 #include "src/common/libzmqutil/sockopt.h"
+#include "src/common/libzmqutil/cert.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libtestutil/util.h"
 #include "src/common/libutil/stdlog.h"
 #include "src/common/libutil/unlink_recursive.h"
+#include "ccan/str/str.h"
 
 #include "src/broker/overlay.h"
 #include "src/broker/attr.h"
@@ -280,7 +282,7 @@ void trio (flux_t *h)
     const char *topic;
     void *zsock_none;
     void *zsock_curve;
-    zcert_t *cert;
+    struct cert *cert;
     const char *sender;
 
     ctx[0] = ctx_create (h, "trio", size, 0, "kary:2", recv_cb);
@@ -478,10 +480,10 @@ void trio (flux_t *h)
         || zsetsockopt_str (zsock_curve, ZMQ_CURVE_SERVERKEY, server_pubkey) < 0
         || zsetsockopt_str (zsock_curve, ZMQ_IDENTITY, "2") < 0)
         BAIL_OUT ("zmq_socket failed");
-    if (!(cert = zcert_new ()))
+    if (!(cert = cert_create ()))
         BAIL_OUT ("zcert_new failed");
-    zcert_apply (cert, zsock_curve);
-    zcert_destroy (&cert);
+    cert_apply (cert, zsock_curve);
+    cert_destroy (cert);
     ok (zmq_connect (zsock_curve, parent_uri) == 0,
         "curve-2: zmq_connect %s works", parent_uri);
     ok (zmqutil_msg_send (zsock_curve, msg) == 0,
