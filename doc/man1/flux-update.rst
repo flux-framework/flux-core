@@ -73,6 +73,12 @@ SPECIAL KEYS
   is any string or number in RFC 23 Flux Standard Duration. Examples include
   ``60``, ``1m``, ``1.5h``, ``+10m``, ``-1h``.
 
+*attributes.system.queue*, *queue*
+  Updates of a pending job's ``queue`` to another enabled queue may
+  be allowed. The update could be rejected if the new job exceeds the
+  destination queue limits or if the job would not be feasible in the
+  new queue.
+
 *name*
   Alias for job name, i.e. ``attributes.system.job.name``
 

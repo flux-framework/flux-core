@@ -57,6 +57,12 @@ struct jobtap_builtin {
     flux_plugin_init_f init;
 };
 
+struct jobtap_builtin_ex {
+    char *name;
+    jobtap_builtin_f init_cb;
+    void *arg;
+};
+
 static struct jobtap_builtin jobtap_builtins [] = {
     { ".priority-default", priority_default_plugin_init },
     { ".limit-job-size", limit_job_size_plugin_init },
@@ -72,6 +78,7 @@ static struct jobtap_builtin jobtap_builtins [] = {
 struct jobtap {
     struct job_manager *ctx;
     char *searchpath;
+    zlistx_t *builtins_ex;
     zlistx_t *plugins;
     zhashx_t *plugins_byuuid;
     zlistx_t *jobstack;
@@ -115,6 +122,41 @@ static void plugin_destroy (void **item)
         flux_plugin_destroy (p);
         *item = NULL;
     }
+}
+
+static void jobtap_builtin_ex_destroy (struct jobtap_builtin_ex *ex)
+{
+    if (ex) {
+        int saved_errno = errno;
+        free (ex->name);
+        free (ex);
+        errno = saved_errno;
+    }
+}
+
+/*  zlistx_t jobtap_builtin_ex destructor */
+static void builtin_ex_destructor (void **item)
+{
+    if (item) {
+        struct jobtap_builtin_ex *ex = *item;
+        jobtap_builtin_ex_destroy (ex);
+        *item = NULL;
+    }
+}
+
+struct jobtap_builtin_ex * jobtap_builtin_ex_create (const char *name,
+                                                     jobtap_builtin_f init_cb,
+                                                     void *arg)
+{
+    struct jobtap_builtin_ex *ex = calloc (1, sizeof (*ex));
+    if (!ex || !(ex->name = strdup (name)))
+        goto error;
+    ex->init_cb = init_cb;
+    ex->arg = arg;
+    return ex;
+error:
+    jobtap_builtin_ex_destroy (ex);
+    return NULL;
 }
 
 static const char *jobtap_plugin_name (flux_plugin_t *p)
@@ -556,7 +598,8 @@ struct jobtap *jobtap_create (struct job_manager *ctx)
         goto error;
     if (!(jobtap->plugins = zlistx_new ())
         || !(jobtap->plugins_byuuid = zhashx_new ())
-        || !(jobtap->jobstack = zlistx_new ())) {
+        || !(jobtap->jobstack = zlistx_new ())
+        || !(jobtap->builtins_ex = zlistx_new ())) {
         errno = ENOMEM;
         goto error;
     }
@@ -566,6 +609,8 @@ struct jobtap *jobtap_create (struct job_manager *ctx)
     zhashx_set_key_destructor (jobtap->plugins_byuuid, NULL);
     zlistx_set_destructor (jobtap->jobstack, job_destructor);
     zlistx_set_duplicator (jobtap->jobstack, job_duplicator);
+    zlistx_set_destructor (jobtap->builtins_ex, builtin_ex_destructor);
+
 
     if (load_builtins (jobtap) < 0) {
         flux_log (ctx->h, LOG_ERR, "jobtap: failed to init builtins");
@@ -594,6 +639,7 @@ void jobtap_destroy (struct jobtap *jobtap)
         zlistx_destroy (&jobtap->plugins);
         zhashx_destroy (&jobtap->plugins_byuuid);
         zlistx_destroy (&jobtap->jobstack);
+        zlistx_destroy (&jobtap->builtins_ex);
         jobtap->ctx = NULL;
         free (jobtap->searchpath);
         free (jobtap);
@@ -1157,6 +1203,42 @@ static int jobtap_load_builtin (flux_plugin_t *p,
     return -1;
 }
 
+static int jobtap_load_builtin_ex (struct jobtap *jobtap,
+                                   flux_plugin_t *p,
+                                   const char *name)
+{
+    struct jobtap_builtin_ex *ex = zlistx_first (jobtap->builtins_ex);
+    while (ex) {
+        if (streq (name, ex->name)) {
+            if (flux_plugin_set_name (p, ex->name) < 0)
+                return -1;
+            return (*ex->init_cb) (p, ex->arg);
+        }
+    }
+    errno = ENOENT;
+    return -1;
+}
+
+int jobtap_register_builtin (struct jobtap *jobtap,
+                             const char *name,
+                             jobtap_builtin_f init_cb,
+                             void *arg)
+{
+    struct jobtap_builtin_ex *ex;
+
+    if (!jobtap || !name || !init_cb || !strstarts (name, ".")) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(ex = jobtap_builtin_ex_create (name, init_cb, arg)))
+        return -1;
+    if (!(zlistx_add_end (jobtap->builtins_ex, ex))) {
+        jobtap_builtin_ex_destroy (ex);
+        errno = ENOMEM;
+    }
+    return 0;
+}
+
 /*  Return 1 if either searchpath is NULL, or path starts with '/' or './'.
  */
 static int no_searchpath (const char *searchpath, const char *path)
@@ -1328,7 +1410,8 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
             goto error;
     }
     if (path[0] == '.') {
-        if (jobtap_load_builtin (p, path) < 0)
+        if (jobtap_load_builtin (p, path) < 0
+            && jobtap_load_builtin_ex (jobtap, p, path) < 0)
             goto error;
     }
     else {
@@ -2318,6 +2401,8 @@ int jobtap_job_update (struct jobtap *jobtap,
                        const char *key,
                        json_t *value,
                        int *needs_validation,
+                       int *require_feasibility,
+                       json_t **additional_updates,
                        char **errp)
 {
     int rc = -1;
@@ -2366,25 +2451,46 @@ int jobtap_job_update (struct jobtap *jobtap,
         error_asprintf (jobtap, job, errp, "%s", errmsg);
         errno = EINVAL;
     }
-    else if (rc > 0 && needs_validation != NULL) {
+    else if (rc > 0) {
         /*  Default is to require further validation by calling job.validate
          *  with the updated jobspec. However, a plugin may note that the
          *  update is already validated or should bypass validation by
          *  setting "validated" in the plugin OUT arguments to a nonzero
          *  value.
+         *
+         *  Similarly, a plugin can request feasibility check, but the
+         *  default is no feasibility will be performed on valid updates.
          */
         int validated = 0;
+        int feasibility = 0;
+        json_t *updates = NULL;
         if ((rc = flux_plugin_arg_unpack (args,
                                           FLUX_PLUGIN_ARG_OUT,
-                                          "{s?i}",
-                                          "validated", &validated) < 0)) {
+                                          "{s?i s?i s?o}",
+                                          "validated", &validated,
+                                          "feasibility", &feasibility,
+                                          "updates", &updates) < 0)) {
             error_asprintf (jobtap,
                             job,
                             errp,
-                            "failed to unpack validated flag");
+                            "failed to unpack update flags");
             return -1;
         }
-        *needs_validation = !validated;
+        if (needs_validation != NULL)
+            *needs_validation = !validated;
+        if (require_feasibility != NULL)
+            *require_feasibility = feasibility;
+        if (additional_updates && updates) {
+            if (*additional_updates == NULL)
+                *additional_updates = json_incref (updates);
+            else if (json_object_update (*additional_updates, updates) < 0) {
+                error_asprintf (jobtap,
+                                job,
+                                errp,
+                                "failed to apply required extra job updates");
+                return -1;
+            }
+        }
     }
     flux_plugin_arg_destroy (args);
     return rc;

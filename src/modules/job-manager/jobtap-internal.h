@@ -75,6 +75,10 @@ int jobtap_check_dependencies (struct jobtap *jobtap,
  *  needs_validation will be set nonzero. The caller should be sure to pass
  *  the updated jobspec to `job.validate` before posting updates to the job
  *  eventlog.
+ *
+ *  If the update requires a feasibility check with the scheduler, then
+ *  require_feasibility will be set nonzero. The caller should attempt to
+ *  request a feasibility check before applying updates.
  */
 int jobtap_job_update (struct jobtap *jobtap,
                        struct flux_msg_cred cred,
@@ -82,6 +86,8 @@ int jobtap_job_update (struct jobtap *jobtap,
                        const char *key,
                        json_t *value,
                        int *needs_validation,
+                       int *needs_feasibility,
+                       json_t **updates,
                        char **errp);
 
 /*  Call the `job.validate` plugin stack, but using an updated jobspec by
@@ -102,6 +108,16 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
                              const char *path,
                              json_t *conf,
                              flux_error_t *errp);
+
+typedef int (*jobtap_builtin_f) (flux_plugin_t *p, void *arg);
+
+/*  Add a new jobtap builtin plugin.
+ *  Allows builtins to be created externally to the jobtap module.
+ */
+int jobtap_register_builtin (struct jobtap *jobtap,
+                             const char *name,
+                             jobtap_builtin_f init_cb,
+                             void *arg);
 
 /*  Job manager RPC handler for loading new jobtap plugins.
  */

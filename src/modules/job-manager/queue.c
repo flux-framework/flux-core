@@ -26,6 +26,8 @@
 
 #include "alloc.h"
 #include "job-manager.h"
+#include "jobtap-internal.h"
+#include "jobtap.h"
 #include "conf.h"
 #include "restart.h"
 #include "queue.h"
@@ -46,6 +48,7 @@ struct jobq {
     bool checkpoint_start;  // may be different that actual start due
                             // to nocheckpoint flag
     char *stop_reason; // reason if stopped (optionally set)
+    json_t *requires;  // required properties array
 };
 
 struct queue {
@@ -62,6 +65,7 @@ static void jobq_destroy (struct jobq *q)
 {
     if (q) {
         int saved_errno = errno;
+        json_decref (q->requires);
         free (q->name);
         free (q->disable_reason);
         free (q);
@@ -78,7 +82,7 @@ static void jobq_destructor (void **item)
     }
 }
 
-static struct jobq *jobq_create (const char *name)
+static struct jobq *jobq_create (const char *name, json_t *config)
 {
     struct jobq *q;
 
@@ -87,6 +91,10 @@ static struct jobq *jobq_create (const char *name)
     if (name && !(q->name = strdup (name)))
         goto error;
     q->enable = true;
+
+    if (config && json_unpack (config, "{s?O}", "requires", &q->requires) < 0)
+        goto error;
+
     if (name) {
         q->start = false;
         q->checkpoint_start = false;
@@ -459,7 +467,7 @@ static int queue_configure (const flux_conf_t *conf,
          */
         json_object_foreach (queues, name, value) {
             if (!zhashx_lookup (queue->named, name)) {
-                if (!(q = jobq_create (name)))
+                if (!(q = jobq_create (name, value)))
                     goto nomem;
                 (void)zhashx_insert (queue->named, name, q);
             }
@@ -469,7 +477,7 @@ static int queue_configure (const flux_conf_t *conf,
         if (queue->have_named_queues) {
             queue->have_named_queues = false;
             zhashx_destroy (&queue->named);
-            if (!(queue->anon = jobq_create (NULL)))
+            if (!(queue->anon = jobq_create (NULL, NULL)))
                 goto nomem;
         }
     }
@@ -768,6 +776,171 @@ void queue_destroy (struct queue *queue)
     }
 }
 
+/*  Test equality of two constraint objects.
+ *  For now, two constraints are equivalent if:
+ *
+ *  - both are either NULL or empty objects (i.e. size == 0)
+ *    (Note: json_object_size (NULL) == 0)
+ *
+ *  - json_equal(a, b) returns true
+ */
+static bool constraints_equal (json_t *c1, json_t *c2)
+{
+    if ((json_object_size (c1) == 0 && json_object_size (c2) == 0)
+        || json_equal (c1, c2))
+        return true;
+    return false;
+}
+
+static int constraints_match_check (struct queue *queue,
+                                    const char *name,
+                                    json_t *constraints,
+                                    flux_error_t *errp)
+{
+    int rc = -1;
+    json_t *expected = NULL;
+    struct jobq *q;
+
+    /*  Return an error if the job's current queue doesn't exist since we
+     *  can't validate current constraints (This should not happen in normal
+     *  situations).
+     */
+    if (!(q = queue_lookup (queue, name, errp)))
+        return -1;
+
+    /*  If current queue has constraints, then create a constraint object
+     *  for equivalence test below:
+     */
+    if (q->requires
+        && !(expected = json_pack ("{s:O}", "properties", q->requires))) {
+        errprintf (errp, "failed to get constraints for current queue");
+        goto out;
+    }
+
+    /*  Constraints of current job and queue must match exactly or queue
+     *  update will be rejected. This is because the entire constraints
+     *  object will be overwritten on queue update, and we do not want to
+     *  replace any extra constraints provided on the submission commandline
+     *  (and these likely wouldn't make sense in the new queue anyway)
+     */
+    if (!constraints_equal (constraints, expected)) {
+        errprintf (errp,
+                   "job appears to have non-queue constraints, "
+                   "unable to update queue to %s",
+                   name);
+        goto out;
+    }
+    rc = 0;
+out:
+    json_decref (expected);
+    return rc;
+}
+
+static int queue_update_cb (flux_plugin_t *p,
+                            const char *topic,
+                            flux_plugin_arg_t *args,
+                            void *arg)
+{
+    int rc;
+    struct queue *queue = arg;
+    flux_job_state_t state;
+    const char *name;
+    const char *current_queue = NULL;
+    json_t *constraints = NULL;
+    flux_error_t error;
+    struct jobq *newq;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s s:i s:{s:{s:{s?s s?o}}}}",
+                                "value", &name,
+                                "state", &state,
+                                "jobspec",
+                                 "attributes",
+                                  "system",
+                                   "queue", &current_queue,
+                                   "constraints", &constraints) < 0) {
+        flux_jobtap_error (p, args, "plugin args unpack failed");
+        return -1;
+    }
+    if (state == FLUX_JOB_STATE_RUN
+        || state == FLUX_JOB_STATE_CLEANUP) {
+        flux_jobtap_error (p,
+                           args,
+                           "update of queue for running job not supported");
+        return -1;
+    }
+    if (current_queue && streq (current_queue, name)) {
+        flux_jobtap_error (p,
+                           args,
+                           "job queue is already set to %s",
+                           name);
+        return -1;
+    }
+    if (!(newq = queue_lookup (queue, name, &error))) {
+        flux_jobtap_error (p, args, "%s", error.text);
+        return -1;
+    }
+    if (!newq->enable) {
+        flux_jobtap_error (p,
+                           args,
+                           "queue %s is currently disabled",
+                           name);
+        return -1;
+    }
+    /*  Constraints must match current queue exactly since they will be
+     *  overwritten with new queue constraints after queue is updated:
+     */
+    if (constraints_match_check (queue, current_queue, constraints, &error)) {
+        flux_jobtap_error (p, args, "%s", error.text);
+        return -1;
+    }
+    /*  Request the update service do a feasibility check for this update
+     *  and append an additional update of the job constraints.
+     *
+     *  This is done via two different calls below dependent on whether the
+     *  new queue has any constraints.
+     */
+    if (newq->requires) {
+        /*  Replace current constraints with those of the new queue
+         */
+        rc = flux_plugin_arg_pack (args,
+                                   FLUX_PLUGIN_ARG_OUT,
+                                   "{s:i s:{s:{s:O}}}",
+                                   "feasibility", 1,
+                                   "updates",
+                                    "attributes.system.constraints",
+                                     "properties", newq->requires);
+    }
+    else {
+        /*  New queue has no requirements. Set constraints to empty object.
+         */
+        rc = flux_plugin_arg_pack (args,
+                                   FLUX_PLUGIN_ARG_OUT,
+                                   "{s:i s:{s:{}}}",
+                                   "feasibility", 1,
+                                   "updates",
+                                    "attributes.system.constraints");
+    }
+    /*  If either of the above packs failed then return an error:
+     */
+    if (rc < 0) {
+        flux_jobtap_error (p,
+                           args,
+                           "unable to create jobtap out arguments");
+        return -1;
+    }
+    return 0;
+}
+
+static int update_queue_plugin_init (flux_plugin_t *p, void *arg)
+{
+    return flux_plugin_add_handler (p,
+                                    "job.update.attributes.system.queue",
+                                    queue_update_cb,
+                                    arg);
+}
+
 struct queue *queue_create (struct job_manager *ctx)
 {
     struct queue *queue;
@@ -776,7 +949,7 @@ struct queue *queue_create (struct job_manager *ctx)
     if (!(queue = calloc (1, sizeof (*queue))))
         return NULL;
     queue->ctx = ctx;
-    if (!(queue->anon = jobq_create (NULL)))
+    if (!(queue->anon = jobq_create (NULL, NULL)))
         goto error;
     if (flux_msg_handler_addvec (ctx->h,
                                  htab,
@@ -791,6 +964,16 @@ struct queue *queue_create (struct job_manager *ctx)
                   LOG_ERR,
                   "error parsing queue config: %s",
                   error.text);
+        goto error;
+    }
+    if (jobtap_register_builtin (ctx->jobtap,
+                                 ".update-queue",
+                                 update_queue_plugin_init,
+                                 queue) < 0
+        || !jobtap_load (ctx->jobtap, ".update-queue", NULL, NULL)) {
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "Failed to register and load update-queue plugin");
         goto error;
     }
     return queue;
