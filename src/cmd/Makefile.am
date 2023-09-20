@@ -168,6 +168,7 @@ flux_keygen_CPPFLAGS = \
 	$(ZMQ_CFLAGS)
 
 flux_keygen_LDADD = \
+	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \
 	$(fluxcmd_ldadd) \
 	$(ZMQ_LIBS)
 

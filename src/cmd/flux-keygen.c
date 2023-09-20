@@ -11,11 +11,16 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <time.h>
 #include <unistd.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
-#include <czmq.h>
+#include <zmq.h>
 
+#include "src/common/libzmqutil/cert.h"
 #include "src/common/libutil/log.h"
 
 static struct optparse_option opts[] = {
@@ -41,13 +46,37 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
     return (buf);
 }
 
+/* Mimic zcert_set() behavior of doing nothing (silently) if metadata
+ * key already has a value.
+ */
+static void meta_set (struct cert *cert, const char *key, const char *val)
+{
+    if (!cert_meta_get (cert, key)
+        && cert_meta_set (cert, key, val) < 0)
+        log_err_exit ("error setting certificate metadata %s=%s", key, val);
+}
+
+static void meta_set_fmt (struct cert *cert,
+                          const char *key,
+                          const char *fmt,
+                          ...)
+{
+    char buf[1024];
+    va_list ap;
+
+    va_start (ap, fmt);
+    vsnprintf (buf, sizeof (buf), fmt, ap);
+    va_end (ap);
+    meta_set (cert, key, buf);
+}
+
 int main (int argc, char *argv[])
 {
     const char *usage_msg = "[OPTIONS] [PATH]";
     optparse_t *p;
     int optindex;
-    zcert_t *cert;
-    const char *name;
+    struct cert *cert;
+    const char *name = NULL;
     char now[64];
     char hostname[64];
     char *path = NULL;
@@ -68,20 +97,15 @@ int main (int argc, char *argv[])
     if (!path)
         log_msg ("WARNING: add PATH argument to save generated certificate");
 
-    if (!(cert = zcert_new ()))
-        log_msg_exit ("zcert_new: %s", zmq_strerror (errno));
+    if (!(cert = cert_create ()))
+        log_err_exit ("error creating CURVE certificate");
     if (gethostname (hostname, sizeof (hostname)) < 0)
         log_err_exit ("gethostname");
     if (ctime_iso8601_now (now, sizeof (now)) == NULL)
         log_err_exit ("localtime");
 
-    /* N.B. zcert_set_meta() silently ignores attempts to set the same
-     * value twice so the default settings come later and are ignored
-     * if values were provided on the command line.
-     */
-    if ((name = optparse_get_str (p, "name", NULL))) {
-        zcert_set_meta (cert, "name", "%s", name);
-    }
+    if ((name = optparse_get_str (p, "name", NULL)))
+        meta_set (cert, "name", name);
     if (optparse_hasopt (p, "meta")) {
         const char *arg;
 
@@ -93,37 +117,34 @@ int main (int argc, char *argv[])
                 log_msg_exit ("out of memory");
             if ((val = strchr (key, '=')))
                 *val++ = '\0';
-            zcert_set_meta (cert, key, "%s", val ? val : "");
+            meta_set (cert, key, val ? val : "");
             free (key);
         }
     }
+    meta_set (cert, "name", hostname); // used in overlay logging
+    meta_set (cert, "keygen.hostname", hostname);
+    meta_set (cert, "keygen.time", now);
+    meta_set_fmt (cert, "keygen.userid", "%d", getuid ());
+    meta_set (cert, "keygen.flux-core-version", FLUX_CORE_VERSION_STRING);
+    meta_set_fmt (cert,
+                  "keygen.zmq-version",
+                  "%d.%d.%d",
+                  ZMQ_VERSION_MAJOR,
+                  ZMQ_VERSION_MINOR,
+                  ZMQ_VERSION_PATCH);
 
-    // name is used in overlay logging
-    zcert_set_meta (cert, "name", "%s", hostname);
-    zcert_set_meta (cert, "keygen.hostname", "%s", hostname);
-    zcert_set_meta (cert, "keygen.time", "%s", now);
-    zcert_set_meta (cert, "keygen.userid", "%d", getuid ());
-    zcert_set_meta (cert,
-                    "keygen.flux-core-version",
-                    "%s",
-                    FLUX_CORE_VERSION_STRING);
-    zcert_set_meta (cert,
-                    "keygen.zmq-version",
-                    "%d.%d.%d",
-                    ZMQ_VERSION_MAJOR,
-                    ZMQ_VERSION_MINOR,
-                    ZMQ_VERSION_PATCH);
-    zcert_set_meta (cert,
-                    "keygen.czmq-version",
-                    "%d.%d.%d",
-                    CZMQ_VERSION_MAJOR,
-                    CZMQ_VERSION_MINOR,
-                    CZMQ_VERSION_PATCH);
-
-    if (path && zcert_save_secret (cert, path) < 0)
-        log_msg_exit ("zcert_save_secret %s: %s", path, strerror (errno));
-
-    zcert_destroy (&cert);
+    if (path) {
+        int fd;
+        FILE *f;
+        if ((fd = open (path, O_WRONLY | O_CREAT | O_TRUNC, 0600)) < 0
+            || !(f = fdopen (fd, "w")))
+            log_err_exit ("open %s", path);
+        if (cert_write (cert, f) < 0)
+            log_err_exit ("write %s", path);
+        if (fclose (f) < 0)
+            log_err_exit ("close %s", path);
+    }
+    cert_destroy (cert);
 
     optparse_destroy (p);
     log_fini ();
