@@ -85,6 +85,7 @@ void check_sendzsock (void)
             && flux_msg_has_payload (msg2) == false,
         "try2: decoded message looks like what was sent");
     flux_msg_destroy (msg2);
+    flux_msg_destroy (any);
     flux_msg_destroy (msg);
 
     zmq_close (zsock[0]);
