@@ -81,6 +81,7 @@ class TestJob(unittest.TestCase):
         self.assertEqual(data["R"]["execution"]["R_lite"][0]["rank"], "0")
 
     def check_jobspec_original_str(self, data, jobid):
+        self.assertEqual(data["id"], jobid)
         self.assertIn("jobspec", data)
         self.assertEqual(type(data["jobspec"]), str)
         jobspec = json.loads(data["jobspec"])
@@ -89,6 +90,7 @@ class TestJob(unittest.TestCase):
         self.assertEqual(jobspec["attributes"]["system"]["environment"]["FOO"], "BAR")
 
     def check_jobspec_original_decoded(self, data, jobid):
+        self.assertEqual(data["id"], jobid)
         self.assertIn("jobspec", data)
         self.assertEqual(data["jobspec"]["tasks"][0]["command"][0], "hostname")
         self.assertEqual(data["jobspec"]["attributes"]["system"]["duration"], 0)
@@ -97,6 +99,7 @@ class TestJob(unittest.TestCase):
         )
 
     def check_jobspec_base_str(self, data, jobid):
+        self.assertEqual(data["id"], jobid)
         self.assertIn("jobspec", data)
         self.assertEqual(type(data["jobspec"]), str)
         jobspec = json.loads(data["jobspec"])
@@ -104,6 +107,7 @@ class TestJob(unittest.TestCase):
         self.assertEqual(jobspec["attributes"]["system"]["duration"], 0)
 
     def check_jobspec_base_decoded(self, data, jobid):
+        self.assertEqual(data["id"], jobid)
         self.assertIn("jobspec", data)
         self.assertEqual(data["jobspec"]["tasks"][0]["command"][0], "hostname")
         self.assertEqual(data["jobspec"]["attributes"]["system"]["duration"], 0)
