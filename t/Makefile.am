@@ -483,6 +483,7 @@ check_LTLIBRARIES = \
 	job-manager/plugins/config.la \
 	job-manager/plugins/jobspec-update.la \
 	job-manager/plugins/jobspec-update-job-list.la \
+	job-manager/plugins/resource-update-expiration.la \
 	job-manager/plugins/update-test.la \
 	job-manager/plugins/project-bank-validate.la \
 	stats/stats-basic.la \
@@ -1003,6 +1004,15 @@ job_manager_plugins_jobspec_update_job_list_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
 
+job_manager_plugins_resource_update_expiration_la_SOURCES = \
+	job-manager/plugins/resource-update-expiration.c
+job_manager_plugins_resource_update_expiration_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_resource_update_expiration_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_resource_update_expiration_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la
 
 job_manager_plugins_update_test_la_SOURCES = \
 	job-manager/plugins/update-test.c
