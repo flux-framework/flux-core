@@ -62,23 +62,27 @@ class TestJob(unittest.TestCase):
         self.assertEqual(data["jobspec"]["attributes"]["system"]["duration"], duration)
         self.assertNotIn("R", data)
 
-    def check_R_J_str(self, data, jobid):
+    def check_R_str(self, data, jobid):
         self.assertEqual(data["id"], jobid)
-        self.assertNotIn("jobspec", data)
         self.assertIn("R", data)
-        self.assertIn("J", data)
         self.assertEqual(type(data["R"]), str)
-        self.assertEqual(type(data["J"]), str)
         R = json.loads(data["R"])
         self.assertEqual(R["execution"]["R_lite"][0]["rank"], "0")
 
-    def check_R_J_decoded(self, data, jobid):
+    def check_R_decoded(self, data, jobid):
         self.assertEqual(data["id"], jobid)
-        self.assertNotIn("jobspec", data)
         self.assertIn("R", data)
+        self.assertEqual(data["R"]["execution"]["R_lite"][0]["rank"], "0")
+
+    def check_J_str(self, data, jobid):
+        self.assertEqual(data["id"], jobid)
         self.assertIn("J", data)
         self.assertEqual(type(data["J"]), str)
-        self.assertEqual(data["R"]["execution"]["R_lite"][0]["rank"], "0")
+
+    def check_J_decoded(self, data, jobid):
+        self.assertEqual(data["id"], jobid)
+        self.assertIn("J", data)
+        self.assertEqual(type(data["J"]), str)
 
     def check_jobspec_original_str(self, data, jobid):
         self.assertEqual(data["id"], jobid)
@@ -122,9 +126,12 @@ class TestJob(unittest.TestCase):
     def test_info_01_job_info_lookup_keys(self):
         rpc = flux.job.job_info_lookup(self.fh, self.jobid1, keys=["R", "J"])
         data = rpc.get()
-        self.check_R_J_str(data, self.jobid1)
+        self.assertNotIn("jobspec", data)
+        self.check_R_str(data, self.jobid1)
+        self.check_J_str(data, self.jobid1)
         data = rpc.get_decode()
-        self.check_R_J_decoded(data, self.jobid1)
+        self.check_R_decoded(data, self.jobid1)
+        self.check_J_decoded(data, self.jobid1)
 
     def test_info_02_job_info_lookup_badid(self):
         rpc = flux.job.job_info_lookup(self.fh, 123456789)
@@ -146,13 +153,17 @@ class TestJob(unittest.TestCase):
 
     def test_lookup_03_job_kvs_lookup_keys(self):
         data = flux.job.job_kvs_lookup(self.fh, self.jobid1, keys=["R", "J"])
-        self.check_R_J_decoded(data, self.jobid1)
+        self.assertNotIn("jobspec", data)
+        self.check_R_decoded(data, self.jobid1)
+        self.check_J_decoded(data, self.jobid1)
 
     def test_lookup_04_job_kvs_lookup_keys_nodecode(self):
         data = flux.job.job_kvs_lookup(
             self.fh, self.jobid1, keys=["R", "J"], decode=False
         )
-        self.check_R_J_str(data, self.jobid1)
+        self.assertNotIn("jobspec", data)
+        self.check_R_str(data, self.jobid1)
+        self.check_J_str(data, self.jobid1)
 
     def test_lookup_05_job_kvs_lookup_badid(self):
         data = flux.job.job_kvs_lookup(self.fh, 123456789)
@@ -186,7 +197,8 @@ class TestJob(unittest.TestCase):
             self.fh, self.jobid1, keys=["R", "J"], original=True
         )
         self.assertNotIn("jobspec", data)
-        self.check_R_J_decoded(data, self.jobid1)
+        self.check_R_decoded(data, self.jobid1)
+        self.check_J_decoded(data, self.jobid1)
 
     def test_lookup_11_job_kvs_lookup_jobspec_base(self):
         data = flux.job.job_kvs_lookup(self.fh, self.jobid1, base=True)
@@ -208,7 +220,8 @@ class TestJob(unittest.TestCase):
     def test_lookup_14_job_kvs_lookup_base_no_jobspec(self):
         data = flux.job.job_kvs_lookup(self.fh, self.jobid1, keys=["R", "J"], base=True)
         self.assertNotIn("jobspec", data)
-        self.check_R_J_decoded(data, self.jobid1)
+        self.check_R_decoded(data, self.jobid1)
+        self.check_J_decoded(data, self.jobid1)
 
     def test_list_00_job_kvs_lookup_list(self):
         ids = [self.jobid1]
@@ -233,16 +246,22 @@ class TestJob(unittest.TestCase):
     def test_list_03_job_kvs_lookup_list_multiple_keys(self):
         ids = [self.jobid1, self.jobid2]
         data = flux.job.JobKVSLookup(self.fh, ids, keys=["R", "J"]).data()
+        self.assertNotIn("jobspec", data)
         self.assertEqual(len(data), 2)
-        self.check_R_J_decoded(data[0], self.jobid1)
-        self.check_R_J_decoded(data[1], self.jobid2)
+        self.check_R_decoded(data[0], self.jobid1)
+        self.check_J_decoded(data[0], self.jobid1)
+        self.check_R_decoded(data[1], self.jobid2)
+        self.check_J_decoded(data[1], self.jobid2)
 
     def test_list_04_job_kvs_lookup_list_multiple_keys_nodecode(self):
         ids = [self.jobid1, self.jobid2]
         data = flux.job.JobKVSLookup(self.fh, ids, keys=["R", "J"], decode=False).data()
+        self.assertNotIn("jobspec", data)
         self.assertEqual(len(data), 2)
-        self.check_R_J_str(data[0], self.jobid1)
-        self.check_R_J_str(data[1], self.jobid2)
+        self.check_R_str(data[0], self.jobid1)
+        self.check_J_str(data[0], self.jobid1)
+        self.check_R_str(data[1], self.jobid2)
+        self.check_J_str(data[1], self.jobid2)
 
     def test_list_05_job_kvs_lookup_list_none(self):
         data = flux.job.JobKVSLookup(self.fh).data()
@@ -292,7 +311,8 @@ class TestJob(unittest.TestCase):
         ).data()
         self.assertEqual(len(data), 1)
         self.assertNotIn("jobspec", data[0])
-        self.check_R_J_decoded(data[0], self.jobid1)
+        self.check_R_decoded(data[0], self.jobid1)
+        self.check_J_decoded(data[0], self.jobid1)
 
     def test_list_12_job_kvs_lookup_list_jobspec_base(self):
         ids = [self.jobid1]
@@ -322,7 +342,8 @@ class TestJob(unittest.TestCase):
         data = flux.job.JobKVSLookup(self.fh, ids, keys=["R", "J"], base=True).data()
         self.assertEqual(len(data), 1)
         self.assertNotIn("jobspec", data[0])
-        self.check_R_J_decoded(data[0], self.jobid1)
+        self.check_R_decoded(data[0], self.jobid1)
+        self.check_J_decoded(data[0], self.jobid1)
 
 
 if __name__ == "__main__":
