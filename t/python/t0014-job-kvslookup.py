@@ -64,7 +64,7 @@ class TestJob(unittest.TestCase):
 
     def check_R_J_str(self, data, jobid):
         self.assertEqual(data["id"], jobid)
-        self.assertNotIn("jobspec", data, jobid)
+        self.assertNotIn("jobspec", data)
         self.assertIn("R", data)
         self.assertIn("J", data)
         self.assertEqual(type(data["R"]), str)
