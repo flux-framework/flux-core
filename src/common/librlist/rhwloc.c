@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/utsname.h>
 
 #include <flux/idset.h>
 
@@ -85,7 +86,24 @@ hwloc_topology_t rhwloc_xml_topology_load_file (const char *path)
     ERRNO_SAFE_WRAP (close, fd);
     if (rc < 0)
         return NULL;
-    topo = rhwloc_xml_topology_load (buf);
+    /*  Load hwloc from XML file, add current system information from uname(2)
+     *  unless already set.
+     */
+    if ((topo = rhwloc_xml_topology_load (buf))
+        && !rhwloc_hostname (topo)) {
+        struct utsname utsname;
+        int depth = hwloc_get_type_depth (topo, HWLOC_OBJ_MACHINE);
+        hwloc_obj_t obj = hwloc_get_obj_by_depth (topo, depth, 0);
+
+        /* Best effort */
+        if (uname (&utsname) == 0) {
+            hwloc_obj_add_info(obj, "OSName", utsname.sysname);
+            hwloc_obj_add_info(obj, "OSRelease", utsname.release);
+            hwloc_obj_add_info(obj, "OSVersion", utsname.version);
+            hwloc_obj_add_info(obj, "HostName", utsname.nodename);
+            hwloc_obj_add_info(obj, "Architecture", utsname.machine);
+        }
+    }
     ERRNO_SAFE_WRAP (free, buf);
     return topo;
 }
