@@ -52,7 +52,13 @@ LONGTESTSCRIPTS = \
 	t3200-instance-restart.t \
 	t3202-instance-restart-testexec.t \
 	t3203-instance-recovery.t \
-	t4000-issues-test-driver.t
+	t4000-issues-test-driver.t \
+	t2801-top-cmd.t \
+	t2808-shutdown-cmd.t \
+	t2712-python-cli-alloc.t \
+	t2702-mini-alloc.t \
+	t2714-python-cli-batch.t \
+	t2701-mini-batch.t
 
 # This list is included in both TESTS and dist_check_SCRIPTS.
 TESTSCRIPTS = \
@@ -205,28 +211,22 @@ TESTSCRIPTS = \
 	t2617-job-shell-stage-in.t \
 	t2618-job-shell-signal.t \
 	t2700-mini-cmd.t \
-	t2701-mini-batch.t \
-	t2702-mini-alloc.t \
 	t2703-mini-bulksubmit.t \
 	t2710-python-cli-submit.t \
 	t2711-python-cli-run.t \
-	t2712-python-cli-alloc.t \
 	t2713-python-cli-bulksubmit.t \
-	t2714-python-cli-batch.t \
 	t2715-python-cli-cancel.t \
 	t2716-python-cli-batch-conf.t \
 	t2800-jobs-cmd.t \
 	t2800-jobs-recursive.t \
 	t2800-jobs-instance-info.t \
 	t2800-jobs-config.t \
-	t2801-top-cmd.t \
 	t2802-uri-cmd.t \
 	t2803-flux-pstree.t \
 	t2804-uptime-cmd.t \
 	t2805-startlog-cmd.t \
 	t2806-config-cmd.t \
 	t2807-dump-cmd.t \
-	t2808-shutdown-cmd.t \
 	t2809-job-purge.t \
 	t2810-kvs-garbage-collect.t \
 	t2811-flux-pgrep.t \
