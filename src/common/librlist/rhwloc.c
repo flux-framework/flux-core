@@ -12,9 +12,15 @@
 #include "config.h"
 #endif
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <flux/idset.h>
 
 #include "ccan/str/str.h"
+#include "src/common/libutil/read_all.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "rhwloc.h"
 
@@ -67,15 +73,41 @@ hwloc_topology_t rhwloc_xml_topology_load (const char *xml)
     return topo;
 }
 
+hwloc_topology_t rhwloc_xml_topology_load_file (const char *path)
+{
+    hwloc_topology_t topo;
+    int fd;
+    int rc;
+    char *buf;
+    if ((fd = open (path, O_RDONLY)) < 0)
+        return NULL;
+    rc = read_all (fd, (void **) &buf);
+    ERRNO_SAFE_WRAP (close, fd);
+    if (rc < 0)
+        return NULL;
+    topo = rhwloc_xml_topology_load (buf);
+    ERRNO_SAFE_WRAP (free, buf);
+    return topo;
+}
 
 hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
 {
+    const char *xml;
     hwloc_topology_t topo = NULL;
     hwloc_bitmap_t rset = NULL;
     uint32_t hwloc_version = hwloc_get_api_version ();
 
     if ((hwloc_version >> 16) != (HWLOC_API_VERSION >> 16))
         return NULL;
+
+    /*  Allow FLUX_HWLOC_XMLFILE to force loading topology from a file
+     *  instead of the system. This is meant for testing usage only.
+     *  If loading from the XML file fails for any reason, fall back
+     *  to normal topology load.
+     */
+    if ((xml = getenv ("FLUX_HWLOC_XMLFILE"))
+        && (topo = rhwloc_xml_topology_load_file (xml)))
+        return topo;
 
     if (topo_init_common (&topo) < 0)
         goto err;
