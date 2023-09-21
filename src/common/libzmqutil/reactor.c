@@ -15,7 +15,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <assert.h>
-#include <czmq.h>
+#include <zmq.h>
 
 #include "src/common/libev/ev.h"
 #include "src/common/libflux/reactor_private.h"

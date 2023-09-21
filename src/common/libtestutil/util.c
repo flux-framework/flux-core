@@ -12,7 +12,7 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
-#include <czmq.h>
+#include <zmq.h>
 #include <uuid.h>
 #include <pthread.h>
 #include <sys/poll.h>
@@ -20,6 +20,8 @@
 #include "util.h"
 
 #include "src/common/libzmqutil/msg_zsock.h"
+#include "src/common/libzmqutil/sockopt.h"
+#include "ccan/str/str.h"
 #include "src/common/libtap/tap.h"
 
 #ifndef UUID_STR_LEN
@@ -191,9 +193,11 @@ struct test_connector {
 static int test_connector_pollevents (void *impl)
 {
     struct test_connector *tcon = impl;
-    int e = zsock_events (tcon->sock);
+    int e;
     int revents = 0;
 
+    if (zgetsockopt_int (tcon->sock, ZMQ_EVENTS, &e) < 0)
+        return -1;
     if (e & ZMQ_POLLIN)
         revents |= FLUX_POLLIN;
     if (e & ZMQ_POLLOUT)
@@ -207,8 +211,11 @@ static int test_connector_pollevents (void *impl)
 static int test_connector_pollfd (void *impl)
 {
     struct test_connector *tcon = impl;
+    int fd;
 
-    return zsock_fd (tcon->sock);
+    if (zgetsockopt_int (tcon->sock, ZMQ_FD, &fd) < 0)
+        return -1;
+    return fd;
 }
 
 static int test_connector_send (void *impl, const flux_msg_t *msg, int flags)
@@ -250,7 +257,7 @@ static flux_msg_t *test_connector_recv (void *impl, int flags)
     if ((flags & FLUX_O_NONBLOCK)) {
         zmq_pollitem_t zp = {
             .events = ZMQ_POLLIN,
-            .socket = zsock_resolve (tcon->sock),
+            .socket = tcon->sock,
             .revents = 0,
             .fd = -1,
         };
@@ -294,10 +301,11 @@ static flux_t *test_connector_create (void *zctx,
         BAIL_OUT ("calloc");
     tcon->cred.userid = getuid ();
     tcon->cred.rolemask = FLUX_ROLE_OWNER;
-    if (!(tcon->sock = zmq_socket (zctx, ZMQ_PAIR)))
+    if (!(tcon->sock = zmq_socket (zctx, ZMQ_PAIR))
+        || zsetsockopt_int (tcon->sock, ZMQ_SNDHWM, 0) < 0
+        || zsetsockopt_int (tcon->sock, ZMQ_RCVHWM, 0) < 0
+        || zsetsockopt_int (tcon->sock, ZMQ_LINGER, 5) < 0)
         BAIL_OUT ("zmq_socket failed");
-    zsock_set_unbounded (tcon->sock);
-    zsock_set_linger (tcon->sock, 5);
     snprintf (uri, sizeof (uri), "inproc://%s", shmem_name);
     if (server) {
         if (zmq_bind (tcon->sock, uri) < 0)

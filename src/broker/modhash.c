@@ -13,6 +13,7 @@
 #endif
 #include <flux/core.h>
 #include <jansson.h>
+#include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"

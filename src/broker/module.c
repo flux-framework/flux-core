@@ -13,8 +13,13 @@
 #endif
 #include <dlfcn.h>
 #include <argz.h>
-#include <czmq.h>
-#undef streq // redefined by ccan/str/str.h below
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
+#include <zmq.h>
+#include <signal.h>
+#include <pthread.h>
+#include <assert.h>
 #include <uuid.h>
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers
@@ -27,6 +32,7 @@
 #endif
 
 #include "src/common/libzmqutil/msg_zsock.h"
+#include "src/common/libzmqutil/sockopt.h"
 #include "src/common/libzmqutil/reactor.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
@@ -366,12 +372,13 @@ module_t *module_create (flux_t *h,
 
     /* Broker end of PAIR socket is opened here.
      */
-    if (!(p->sock = zmq_socket (p->zctx, ZMQ_PAIR))) {
+    if (!(p->sock = zmq_socket (p->zctx, ZMQ_PAIR))
+        || zsetsockopt_int (p->sock, ZMQ_SNDHWM, 0) < 0
+        || zsetsockopt_int (p->sock, ZMQ_RCVHWM, 0) < 0
+        || zsetsockopt_int (p->sock, ZMQ_LINGER, 5) < 0) {
         errprintf (error, "could not create zsock for %s", p->name);
         goto cleanup;
     }
-    zsock_set_unbounded (p->sock);
-    zsock_set_linger (p->sock, 5);
     // copying 9 + 37 + 1 = 47 bytes into 128 byte buffer cannot fail
     (void)snprintf (p->endpoint,
                     sizeof (p->endpoint),

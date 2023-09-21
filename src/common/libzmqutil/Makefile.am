@@ -26,13 +26,18 @@ libzmqutil_la_SOURCES = \
 	zap.h \
 	zap.c \
 	monitor.h \
-	monitor.c
+	monitor.c \
+	sockopt.h \
+	sockopt.c \
+	mpart.h \
+	mpart.c
 
 TESTS = test_msg_zsock.t \
 	test_reactor.t \
 	test_ev.t \
 	test_zap.t \
-	test_monitor.t
+	test_monitor.t \
+	test_mpart.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -80,3 +85,8 @@ test_monitor_t_SOURCES = test/monitor.c
 test_monitor_t_CPPFLAGS = $(test_cppflags)
 test_monitor_t_LDADD = $(test_ldadd)
 test_monitor_t_LDFLAGS = $(test_ldflags)
+
+test_mpart_t_SOURCES = test/mpart.c
+test_mpart_t_CPPFLAGS = $(test_cppflags)
+test_mpart_t_LDADD = $(test_ldadd)
+test_mpart_t_LDFLAGS = $(test_ldflags)

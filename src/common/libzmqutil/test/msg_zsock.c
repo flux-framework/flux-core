@@ -12,13 +12,16 @@
 #include "config.h"
 #endif
 #include <stdbool.h>
-#include <czmq.h>
+#include <zmq.h>
 #include <errno.h>
 #include <stdio.h>
 
 #include "src/common/libflux/message.h"
 #include "src/common/libzmqutil/msg_zsock.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/str/str.h"
+
+#include "sockopt.h"
 
 static void *zctx;
 
@@ -36,8 +39,9 @@ void check_sendzsock (void)
         && zmq_connect( zsock[1], uri) == 0,
         "got inproc socket pair");
 
-    zsock_set_linger (zsock[0], 5);
-    zsock_set_linger (zsock[1], 5);
+    if (zsetsockopt_int (zsock[0], ZMQ_LINGER, 5) < 0
+        || zsetsockopt_int (zsock[1], ZMQ_LINGER, 5) < 0)
+        BAIL_OUT ("could not set ZMQ_LINGER socket option");
 
     if (!(any = flux_msg_create (FLUX_MSGTYPE_ANY)))
         BAIL_OUT ("flux_msg_create failed");
@@ -81,6 +85,7 @@ void check_sendzsock (void)
             && flux_msg_has_payload (msg2) == false,
         "try2: decoded message looks like what was sent");
     flux_msg_destroy (msg2);
+    flux_msg_destroy (any);
     flux_msg_destroy (msg);
 
     zmq_close (zsock[0]);

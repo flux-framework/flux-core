@@ -9,6 +9,8 @@
 \************************************************************/
 
 /* zap.c - zeromq auth proto (ZAP) server, embeddable in a flux reactor loop
+ *
+ * See 0MQ RFC 27:  https://rfc.zeromq.org/spec/27/
  */
 
 #if HAVE_CONFIG_H
@@ -17,7 +19,12 @@
 #include <czmq.h>
 #include <zmq.h>
 
+#include "src/common/libutil/errno_safe.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "reactor.h"
+#include "sockopt.h"
+#include "mpart.h"
 #include "zap.h"
 
 #define ZAP_ENDPOINT "inproc://zeromq.zap.01"
@@ -30,43 +37,27 @@ struct zmqutil_zap {
     void *logger_arg;
 };
 
-static zframe_t *get_zmsg_nth (zmsg_t *msg, int n)
+/* Get a public CURVE key (binary form) from message part at index 'n',
+ * and convert it to 40 byte text.  Return 0 on success, -1 on failure.
+ */
+static int get_mpart_pubkey (zlist_t *mpart, int n, char *pubkey_txt)
 {
-    zframe_t *zf;
-    int count = 0;
-
-    zf = zmsg_first (msg);
-    while (zf) {
-        if (count++ == n)
-            return zf;
-        zf = zmsg_next (msg);
-    }
-    return NULL;
+    zmq_msg_t *part = mpart_get (mpart, n);
+    if (!part || zmq_msg_size (part) != 32)
+        return -1;
+    zmq_z85_encode (pubkey_txt, zmq_msg_data (part), zmq_msg_size (part));
+    return 0;
 }
 
-static bool streq_zmsg_nth (zmsg_t *msg, int n, const char *s)
+/* Take a copy of message part at index 'n' of 'src' and append it to 'dst'.
+ * Return 0 on success, -1 on failure.
+ */
+static int add_mpart_copy (zlist_t *dst, zlist_t *src, int n)
 {
-    zframe_t *zf = get_zmsg_nth (msg, n);
-    if (zf && zframe_streq (zf, s))
-        return true;
-    return false;
-}
-
-static bool pubkey_zmsg_nth (zmsg_t *msg, int n, char *pubkey_txt)
-{
-    zframe_t *zf = get_zmsg_nth (msg, n);
-    if (!zf || zframe_size (zf) != 32)
-        return false;
-    zmq_z85_encode (pubkey_txt, zframe_data (zf), 32);
-    return true;
-}
-
-static bool add_zmsg_nth (zmsg_t *dst, zmsg_t *src, int n)
-{
-    zframe_t *zf = get_zmsg_nth (src, n);
-    if (!zf || zmsg_addmem (dst, zframe_data (zf), zframe_size (zf)) < 0)
-        return false;
-    return true;
+    zmq_msg_t *part = mpart_get (src, n);
+    if (!part)
+        return -1;
+    return mpart_addmem (dst, zmq_msg_data (part), zmq_msg_size (part));
 }
 
 static void logger (struct zmqutil_zap *zap,
@@ -101,8 +92,8 @@ static void zap_cb (flux_reactor_t *r,
                     void *arg)
 {
     struct zmqutil_zap *zap = arg;
-    zmsg_t *req = NULL;
-    zmsg_t *rep = NULL;
+    zlist_t *req = NULL;
+    zlist_t *rep = NULL;
     char pubkey[41];
     const char *status_code = "400";
     const char *status_text = "No access";
@@ -111,10 +102,10 @@ static void zap_cb (flux_reactor_t *r,
     const char *name = NULL;
     int log_level = LOG_ERR;
 
-    if ((req = zmsg_recv (zap->sock))) {
-        if (!streq_zmsg_nth (req, 0, "1.0")
-                || !streq_zmsg_nth (req, 5, "CURVE")
-                || !pubkey_zmsg_nth (req, 6, pubkey)) {
+    if ((req = mpart_recv (zap->sock))) {
+        if (!mpart_streq (req, 0, "1.0")
+            || !mpart_streq (req, 5, "CURVE")
+            || get_mpart_pubkey (req, 6, pubkey) < 0) {
             logger (zap, LOG_ERR, "ZAP request decode error");
             goto done;
         }
@@ -133,23 +124,23 @@ static void zap_cb (flux_reactor_t *r,
                 name,
                 status_text);
 
-        if (!(rep = zmsg_new ()))
+        if (!(rep = mpart_create ()))
             goto done;
-        if (!add_zmsg_nth (rep, req, 0)
-                || !add_zmsg_nth (rep, req, 1)
-                || zmsg_addstr (rep, status_code) < 0
-                || zmsg_addstr (rep, status_text) < 0
-                || zmsg_addstr (rep, user_id) < 0
-                || zmsg_addmem (rep, NULL, 0) < 0) {
+        if (add_mpart_copy (rep, req, 0) < 0
+            || add_mpart_copy (rep, req, 1) < 0
+            || mpart_addstr (rep, status_code) < 0
+            || mpart_addstr (rep, status_text) < 0
+            || mpart_addstr (rep, user_id) < 0
+            || mpart_addmem (rep, NULL, 0) < 0) {
             logger (zap, LOG_ERR, "ZAP response encode error");
             goto done;
         }
-        if (zmsg_send (&rep, zap->sock) < 0)
+        if (mpart_send (zap->sock, rep) < 0)
             logger (zap, LOG_ERR, "ZAP send error");
     }
 done:
-    zmsg_destroy (&req);
-    zmsg_destroy (&rep);
+    mpart_destroy (req);
+    mpart_destroy (rep);
 }
 
 /* Create a zcert_t and add it to in-memory zcertstore_t.
