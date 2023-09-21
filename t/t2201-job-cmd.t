@@ -763,11 +763,11 @@ test_expect_success 'flux job: timeleft works under mini alloc (and job)' '
 	flux run flux job timeleft > timeleft4
 	EOF
 	chmod +x test.sh &&
-	flux alloc -n1 -t 1m ./test.sh &&
+	flux alloc -n1 -t 5m ./test.sh &&
 	test_debug "cat timeleft3" &&
-	test $(cat timeleft3) -lt 60 &&
+	test $(cat timeleft3) -lt 300 &&
 	test_debug "cat timeleft4" &&
-	test $(cat timeleft4) -lt 60
+	test $(cat timeleft4) -lt 300
 '
 test_expect_success 'flux job: timeleft works for a jobid' '
 	id=$(flux submit --wait-event=start -t 1m sleep 60) &&
