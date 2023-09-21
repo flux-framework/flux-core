@@ -178,7 +178,7 @@ char *rhwloc_local_topology_xml (rhwloc_flags_t rflags)
 
 const char * rhwloc_hostname (hwloc_topology_t topo)
 {
-        int depth = hwloc_get_type_depth (topo, HWLOC_OBJ_MACHINE);
+    int depth = hwloc_get_type_depth (topo, HWLOC_OBJ_MACHINE);
     hwloc_obj_t obj = hwloc_get_obj_by_depth (topo, depth, 0);
     if (obj)
         return hwloc_obj_get_info_by_name(obj, "HostName");
