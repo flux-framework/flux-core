@@ -12,8 +12,12 @@
 #include "config.h"
 #endif
 #include <stdarg.h>
-#include <czmq.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <zmq.h>
+#include <unistd.h>
+#include <assert.h>
 #include <flux/core.h>
 #include <inttypes.h>
 #include <jansson.h>
@@ -23,6 +27,7 @@
 #include "src/common/libzmqutil/sockopt.h"
 #include "src/common/libzmqutil/reactor.h"
 #include "src/common/libzmqutil/zap.h"
+#include "src/common/libzmqutil/cert.h"
 #include "src/common/libzmqutil/monitor.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
@@ -32,7 +37,8 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/librouter/rpc_track.h"
-#include "src/common/libccan/ccan/ptrint/ptrint.h"
+#include "ccan/ptrint/ptrint.h"
+#include "ccan/str/str.h"
 
 #include "overlay.h"
 #include "attr.h"
@@ -140,7 +146,7 @@ struct overlay_monitor {
 
 struct overlay {
     void *zctx;
-    zcert_t *cert;
+    struct cert *cert;
     struct zmqutil_zap *zap;
     int enable_ipv6;
 
@@ -1303,8 +1309,8 @@ int overlay_connect (struct overlay *ov)
                 return -1;
         }
 #endif
-        zcert_apply (ov->cert, ov->parent.zsock);
-
+        if (cert_apply (ov->cert, ov->parent.zsock) < 0)
+            return -1;
         if (zmq_connect (ov->parent.zsock, ov->parent.uri) < 0)
             return -1;
         if (!(ov->parent.w = zmqutil_watcher_create (ov->reactor,
@@ -1373,8 +1379,10 @@ int overlay_bind (struct overlay *ov, const char *uri)
         }
     }
 #endif
-    zcert_apply (ov->cert, ov->bind_zsock);
-
+    if (cert_apply (ov->cert, ov->bind_zsock) < 0) {
+        log_err ("error setting curve socket options");
+        return -1;
+    }
     if (zmq_bind (ov->bind_zsock, uri) < 0) {
         log_err ("error binding to %s", uri);
         return -1;
@@ -1713,35 +1721,46 @@ error:
 int overlay_cert_load (struct overlay *ov, const char *path)
 {
     struct stat sb;
-    zcert_t *cert;
+    int fd;
+    FILE *f = NULL;
+    struct cert *cert;
 
-    if (stat (path, &sb) < 0) {
-        log_err ("%s", path);
-        return -1;
+    if ((fd = open (path, O_RDONLY)) < 0
+        || fstat (fd, &sb) < 0) {
+        goto error;
     }
     if ((sb.st_mode & S_IROTH) | (sb.st_mode & S_IRGRP)) {
         log_msg ("%s: readable by group/other", path);
         errno = EPERM;
-        return -1;
+        goto error_quiet;
     }
-    if (!(cert = zcert_load (path))) {
-        log_msg ("%s: invalid CURVE certificate", path);
-        errno = EINVAL;
-        return -1;
-    }
-    zcert_destroy (&ov->cert);
+    if (!(f = fdopen (fd, "r")))
+        goto error;
+    fd = -1; // now owned by 'f'
+    if (!(cert = cert_read (f)))
+        goto error;
+    cert_destroy (ov->cert); // replace ov->cert (if any) with this
     ov->cert = cert;
+    (void)fclose (f);
     return 0;
+error:
+    log_err ("%s", path);
+error_quiet:
+    if (fd >= 0)
+        (void)close (fd);
+    if (f)
+        (void)fclose (f);
+    return -1;
 }
 
 const char *overlay_cert_pubkey (struct overlay *ov)
 {
-    return zcert_public_txt (ov->cert);
+    return cert_public_txt (ov->cert);
 }
 
 const char *overlay_cert_name (struct overlay *ov)
 {
-    return zcert_meta (ov->cert, "name");
+    return cert_meta_get (ov->cert, "name");
 }
 
 int overlay_authorize (struct overlay *ov,
@@ -2042,7 +2061,7 @@ void overlay_destroy (struct overlay *ov)
 
         flux_msglist_destroy (ov->health_requests);
 
-        zcert_destroy (&ov->cert);
+        cert_destroy (ov->cert);
         zmqutil_zap_destroy (ov->zap);
 
         flux_future_destroy (ov->f_sync);
@@ -2164,7 +2183,7 @@ struct overlay *overlay_create (flux_t *h,
         goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;
-    if (!(ov->cert = zcert_new ()))
+    if (!(ov->cert = cert_create ()))
         goto nomem;
     if (!(ov->health_requests = flux_msglist_create ()))
         goto error;

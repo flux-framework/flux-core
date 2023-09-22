@@ -30,14 +30,17 @@ libzmqutil_la_SOURCES = \
 	sockopt.h \
 	sockopt.c \
 	mpart.h \
-	mpart.c
+	mpart.c \
+	cert.h \
+	cert.c
 
 TESTS = test_msg_zsock.t \
 	test_reactor.t \
 	test_ev.t \
 	test_zap.t \
 	test_monitor.t \
-	test_mpart.t
+	test_mpart.t \
+	test_cert.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -56,6 +59,7 @@ test_ldadd = \
 
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
+	-I$(srcdir) \
 	$(AM_CPPFLAGS)
 
 test_ldflags = \
@@ -90,3 +94,8 @@ test_mpart_t_SOURCES = test/mpart.c
 test_mpart_t_CPPFLAGS = $(test_cppflags)
 test_mpart_t_LDADD = $(test_ldadd)
 test_mpart_t_LDFLAGS = $(test_ldflags)
+
+test_cert_t_SOURCES = test/cert.c
+test_cert_t_CPPFLAGS = $(test_cppflags)
+test_cert_t_LDADD = $(test_ldadd)
+test_cert_t_LDFLAGS = $(test_ldflags)
