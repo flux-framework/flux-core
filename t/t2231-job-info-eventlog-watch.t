@@ -454,11 +454,11 @@ test_expect_success 'eventlog-watch request with empty payload fails with EPROTO
 
 test_expect_success 'eventlog-watch request invalid flags fails with EPROTO(71)' '
 	echo "{\"id\":42, \"path\":\"foobar\", \"flags\":499}" \
-		${RPC} job-info.eventlog-watch 71
+		| ${RPC} job-info.eventlog-watch 71
 '
 test_expect_success 'eventlog-watch request non-streaming fails with EPROTO(71)' '
 	echo "{\"id\":42, \"path\":\"foobar\", \"flags\":0}" \
-		${RPC} job-info.eventlog-watch 71
+		| ${RPC} job-info.eventlog-watch 71
 '
 
 test_done
