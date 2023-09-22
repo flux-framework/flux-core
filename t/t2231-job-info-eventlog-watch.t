@@ -9,6 +9,7 @@ test_description='Test flux job info service eventlog watch'
 test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+RPC_STREAM=${FLUX_BUILD_DIR}/t/request/rpc_stream
 
 fj_wait_event() {
 	flux job wait-event --timeout=20 "$@"
@@ -452,9 +453,10 @@ test_expect_success 'eventlog-watch request with empty payload fails with EPROTO
 	${RPC} job-info.eventlog-watch 71 </dev/null
 '
 
-test_expect_success 'eventlog-watch request invalid flags fails with EPROTO(71)' '
+test_expect_success 'eventlog-watch request invalid flags fails' '
 	echo "{\"id\":42, \"path\":\"foobar\", \"flags\":499}" \
-		| ${RPC} job-info.eventlog-watch 71
+		| test_must_fail ${RPC_STREAM} job-info.eventlog-watch 2> invalidflags.err &&
+	grep "invalid flag" invalidflags.err
 '
 test_expect_success 'eventlog-watch request non-streaming fails with EPROTO(71)' '
 	echo "{\"id\":42, \"path\":\"foobar\", \"flags\":0}" \
