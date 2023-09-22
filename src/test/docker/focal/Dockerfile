@@ -79,7 +79,6 @@ RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
         libsodium-dev \
         libzmq3-dev \
-        libczmq-dev \
         libjansson-dev \
         libmunge-dev \
         libncurses-dev \
