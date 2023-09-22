@@ -16,7 +16,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
 #include <zmq.h>
 
 #include "src/common/libutil/errno_safe.h"
@@ -25,12 +24,13 @@
 #include "reactor.h"
 #include "sockopt.h"
 #include "mpart.h"
+#include "cert.h"
 #include "zap.h"
 
 #define ZAP_ENDPOINT "inproc://zeromq.zap.01"
 
 struct zmqutil_zap {
-    zcertstore_t *certstore;
+    zhashx_t *certstore; // public_txt => authorized cert
     void *sock;
     flux_watcher_t *w;
     zaplog_f logger;
@@ -98,7 +98,7 @@ static void zap_cb (flux_reactor_t *r,
     const char *status_code = "400";
     const char *status_text = "No access";
     const char *user_id = "";
-    zcert_t *cert;
+    struct cert *cert;
     const char *name = NULL;
     int log_level = LOG_ERR;
 
@@ -109,11 +109,11 @@ static void zap_cb (flux_reactor_t *r,
             logger (zap, LOG_ERR, "ZAP request decode error");
             goto done;
         }
-        if ((cert = zcertstore_lookup (zap->certstore, pubkey)) != NULL) {
+        if ((cert = zhashx_lookup (zap->certstore, pubkey)) != NULL) {
             status_code = "200";
             status_text = "OK";
             user_id = pubkey;
-            name = zcert_meta (cert, "name");
+            name = cert_meta_get (cert, "name");
             log_level = LOG_DEBUG;
         }
         if (!name)
@@ -143,29 +143,28 @@ done:
     mpart_destroy (rep);
 }
 
-/* Create a zcert_t and add it to in-memory zcertstore_t.
+/* Create a cert and add it to in-memory store.
  */
 int zmqutil_zap_authorize (struct zmqutil_zap *zap,
                            const char *name,
                            const char *pubkey)
 {
-    uint8_t public_key[32];
-    zcert_t *cert;
+    struct cert *cert;
 
-    if (!zap
-        || !name
-        || !pubkey
-        || strlen (pubkey) != 40
-        || !zmq_z85_decode (public_key, pubkey)) {
+    if (!zap || !name) {
         errno = EINVAL;
         return -1;
     }
-    if (!(cert = zcert_new_from (public_key, public_key))) {
-        errno = ENOMEM;
+    if (!(cert = cert_create_from (pubkey, NULL))
+        || cert_meta_set (cert, "name", name) < 0)
+        return -1;
+
+    // hash takes ownership of cert
+    if ((zhashx_insert (zap->certstore, cert_public_txt (cert), cert)) < 0) {
+        cert_destroy (cert);
+        errno = EEXIST;
         return -1;
     }
-    zcert_set_meta (cert, "name", "%s", name);
-    zcertstore_insert (zap->certstore, &cert); // takes ownership of cert
     return 0;
 }
 
@@ -186,9 +185,19 @@ void zmqutil_zap_destroy (struct zmqutil_zap *zap)
             zmq_unbind (zap->sock, ZAP_ENDPOINT);
             zmq_close (zap->sock);
         }
-        zcertstore_destroy (&zap->certstore);
+        zhashx_destroy (&zap->certstore);
         free (zap);
         errno = saved_errno;
+    }
+}
+
+// zhashx_destructor_fn footprint
+void cert_destructor (void **item)
+{
+    if (item) {
+        struct cert *cert = *item;
+        cert_destroy (cert);
+        *item = NULL;
     }
 }
 
@@ -202,8 +211,13 @@ struct zmqutil_zap *zmqutil_zap_create (void *zctx, flux_reactor_t *r)
     }
     if (!(zap = calloc (1, sizeof (*zap))))
         return NULL;
-    if (!(zap->certstore = zcertstore_new (NULL)))
+    if (!(zap->certstore = zhashx_new ())) {
+        errno = EINVAL;
         goto error;
+    }
+    zhashx_set_key_duplicator (zap->certstore, NULL);
+    zhashx_set_key_destructor (zap->certstore, NULL);
+    zhashx_set_destructor (zap->certstore, cert_destructor);
     if (!(zap->sock = zmq_socket (zctx, ZMQ_REP)))
         goto error;
     if (zmq_bind (zap->sock, ZAP_ENDPOINT) < 0)
