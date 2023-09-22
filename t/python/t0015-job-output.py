@@ -254,7 +254,7 @@ class TestJobOutput(unittest.TestCase):
 
         future = output_event_watch_async(self.fh, jobid)
         self.assertIsInstance(future, flux.job.output.JobOutputEventWatch)
-        future.then(output_event_watch_cb, result, timeout=15)
+        future.then(output_event_watch_cb, result, timeout=60)
         self.fh.reactor_run()
 
         self.assertEqual(result["stdout"], self.test_stdout)

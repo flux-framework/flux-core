@@ -368,6 +368,14 @@ test_expect_success 'flux-start dies gracefully when run from removed dir' '
 	 test_must_fail flux start /bin/true )
 '
 
+command -v hwloc-ls >/dev/null && test_set_prereq HWLOC_LS
+test_expect_success HWLOC_LS 'FLUX_HWLOC_XMLFILE works' '
+	hwloc-ls --of xml -i "numa:2 core:3 pu:1" >test.xml &&
+	FLUX_HWLOC_XMLFILE=test.xml flux start -s 2 flux resource info \
+		>rinfo.out &&
+	test_debug "cat rinfo.out" &&
+	grep "12 Cores" rinfo.out
+'
 
 # too slow under ASAN
 test_expect_success NO_ASAN 'test_under_flux works' '

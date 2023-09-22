@@ -27,11 +27,25 @@ Running tests
 
 Tests may be run in as many as 3 different ways, the easiest
 of which is to issue `make check` from this directory or at
-the top-level flux-core build directory. The tests may also
-all be invoked via the `./runtests.sh` script, which runs
-all tests in turn and aggregates results of all tests at completion.
-Finally, since the tests output TAP, they may be run through a TAP
-harness such as the [prove] command, e.g.
+the top-level flux-core build directory.
+
+Some systems may have poor performance running `make -j N check`
+due to hwloc topology discovery occurring in parallel across many
+tests, each of which may start multiple brokers per test. To
+alleviate this issue, Flux may be directed to read topology from
+an XML file with the `FLUX_HWLOC_XMLFILE` environment variable,
+which avoids most dynamic topology discovery for the entire
+testsuite, e.g.
+
+```
+$ hwloc-ls --of xml >machine.xml
+$ FLUX_HWLOC_XMLFILE=$(pwd)/machine.xml make -j 32 check
+```
+
+The tests may also all be invoked via the `./runtests.sh` script,
+which runs all tests in turn and aggregates results of all tests
+at completion.  Finally, since the tests output TAP, they may be run
+through a TAP harness such as the [prove] command, e.g.
 
 ```
 $ prove --timer ./t*.t

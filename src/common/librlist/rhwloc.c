@@ -12,9 +12,16 @@
 #include "config.h"
 #endif
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/utsname.h>
+
 #include <flux/idset.h>
 
 #include "ccan/str/str.h"
+#include "src/common/libutil/read_all.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "rhwloc.h"
 
@@ -67,15 +74,58 @@ hwloc_topology_t rhwloc_xml_topology_load (const char *xml)
     return topo;
 }
 
+hwloc_topology_t rhwloc_xml_topology_load_file (const char *path)
+{
+    hwloc_topology_t topo;
+    int fd;
+    int rc;
+    char *buf;
+    if ((fd = open (path, O_RDONLY)) < 0)
+        return NULL;
+    rc = read_all (fd, (void **) &buf);
+    ERRNO_SAFE_WRAP (close, fd);
+    if (rc < 0)
+        return NULL;
+    /*  Load hwloc from XML file, add current system information from uname(2)
+     *  unless already set.
+     */
+    if ((topo = rhwloc_xml_topology_load (buf))
+        && !rhwloc_hostname (topo)) {
+        struct utsname utsname;
+        int depth = hwloc_get_type_depth (topo, HWLOC_OBJ_MACHINE);
+        hwloc_obj_t obj = hwloc_get_obj_by_depth (topo, depth, 0);
+
+        /* Best effort */
+        if (uname (&utsname) == 0) {
+            hwloc_obj_add_info(obj, "OSName", utsname.sysname);
+            hwloc_obj_add_info(obj, "OSRelease", utsname.release);
+            hwloc_obj_add_info(obj, "OSVersion", utsname.version);
+            hwloc_obj_add_info(obj, "HostName", utsname.nodename);
+            hwloc_obj_add_info(obj, "Architecture", utsname.machine);
+        }
+    }
+    ERRNO_SAFE_WRAP (free, buf);
+    return topo;
+}
 
 hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
 {
+    const char *xml;
     hwloc_topology_t topo = NULL;
     hwloc_bitmap_t rset = NULL;
     uint32_t hwloc_version = hwloc_get_api_version ();
 
     if ((hwloc_version >> 16) != (HWLOC_API_VERSION >> 16))
         return NULL;
+
+    /*  Allow FLUX_HWLOC_XMLFILE to force loading topology from a file
+     *  instead of the system. This is meant for testing usage only.
+     *  If loading from the XML file fails for any reason, fall back
+     *  to normal topology load.
+     */
+    if ((xml = getenv ("FLUX_HWLOC_XMLFILE"))
+        && (topo = rhwloc_xml_topology_load_file (xml)))
+        return topo;
 
     if (topo_init_common (&topo) < 0)
         goto err;
@@ -128,7 +178,7 @@ char *rhwloc_local_topology_xml (rhwloc_flags_t rflags)
 
 const char * rhwloc_hostname (hwloc_topology_t topo)
 {
-        int depth = hwloc_get_type_depth (topo, HWLOC_OBJ_MACHINE);
+    int depth = hwloc_get_type_depth (topo, HWLOC_OBJ_MACHINE);
     hwloc_obj_t obj = hwloc_get_obj_by_depth (topo, depth, 0);
     if (obj)
         return hwloc_obj_get_info_by_name(obj, "HostName");
