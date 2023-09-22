@@ -8,7 +8,6 @@ yum install \
   pkgconfig \
   glibc-devel \
   zeromq4-devel \
-  czmq-devel \
   libuuid-devel \
   jansson-devel \
   lz4-devel \
