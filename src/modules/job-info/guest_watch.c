@@ -131,6 +131,7 @@ static void guest_watch_ctx_destroy (void *data)
 {
     if (data) {
         struct guest_watch_ctx *gw = data;
+        int save_errno = errno;
         flux_msg_decref (gw->msg);
         free (gw->path);
         flux_future_destroy (gw->get_main_eventlog_f);
@@ -138,6 +139,7 @@ static void guest_watch_ctx_destroy (void *data)
         flux_future_destroy (gw->guest_namespace_watch_f);
         flux_future_destroy (gw->main_namespace_lookup_f);
         free (gw);
+        errno = save_errno;
     }
 }
 
@@ -148,7 +150,6 @@ static struct guest_watch_ctx *guest_watch_ctx_create (struct info_ctx *ctx,
                                                        int flags)
 {
     struct guest_watch_ctx *gw = calloc (1, sizeof (*gw));
-    int saved_errno;
 
     if (!gw)
         return NULL;
@@ -172,9 +173,7 @@ static struct guest_watch_ctx *guest_watch_ctx_create (struct info_ctx *ctx,
     return gw;
 
 error:
-    saved_errno = errno;
     guest_watch_ctx_destroy (gw);
-    errno = saved_errno;
     return NULL;
 }
 

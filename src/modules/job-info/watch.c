@@ -47,11 +47,13 @@ static void watch_ctx_destroy (void *data)
 {
     if (data) {
         struct watch_ctx *ctx = data;
+        int save_errno = errno;
         flux_msg_decref (ctx->msg);
         free (ctx->path);
         flux_future_destroy (ctx->check_f);
         flux_future_destroy (ctx->watch_f);
         free (ctx);
+        errno = save_errno;
     }
 }
 
@@ -63,7 +65,6 @@ static struct watch_ctx *watch_ctx_create (struct info_ctx *ctx,
                                            int flags)
 {
     struct watch_ctx *w = calloc (1, sizeof (*w));
-    int saved_errno;
 
     if (!w)
         return NULL;
@@ -82,9 +83,7 @@ static struct watch_ctx *watch_ctx_create (struct info_ctx *ctx,
     return w;
 
 error:
-    saved_errno = errno;
     watch_ctx_destroy (w);
-    errno = saved_errno;
     return NULL;
 }
 
