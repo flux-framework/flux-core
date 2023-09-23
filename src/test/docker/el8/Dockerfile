@@ -48,7 +48,6 @@ RUN yum -y update \
 #  Development dependencies
 	libsodium-devel \
 	zeromq-devel \
-	czmq-devel \
 	jansson-devel \
 	munge-devel \
 	ncurses-devel \

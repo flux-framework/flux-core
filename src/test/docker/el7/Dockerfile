@@ -28,7 +28,6 @@ RUN yum -y update \
       coreutils \
       ccache \
       cppcheck \
-      czmq-devel \
       hwloc \
       hwloc-devel \
       jansson-devel \

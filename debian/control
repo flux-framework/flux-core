@@ -9,7 +9,6 @@ Build-Depends:
   libarchive-dev,
   uuid-dev,
   libzmq3-dev,
-  libczmq-dev,
   libjansson-dev,
   liblz4-dev,
   libhwloc-dev,
