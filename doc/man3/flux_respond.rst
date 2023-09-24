@@ -70,6 +70,9 @@ requests were made with the FLUX_RPC_STREAMING flag by testing the
 FLUX_MSGFLAG_STREAMING flag, e.g. using ``flux_msg_is_streaming()``.
 If the flag is not set, the service must return an immediate EPROTO error.
 
+ENCODING JSON PAYLOADS
+======================
+
 .. include:: common/json_pack.rst
 
 

@@ -1,6 +1,3 @@
-ENCODING JSON PAYLOADS
-======================
-
 Flux API functions that are based on Jansson's json_pack()
 accept the following tokens in their format string.
 The type in parenthesis denotes the resulting JSON type, and
