@@ -1,8 +1,7 @@
-man7
-====
+Section 7 - Flux Miscellany
+===========================
 
 .. toctree::
-   :caption: Misc.
    :maxdepth: 1
 
    flux-broker-attributes

@@ -423,6 +423,8 @@ EXTRA_DIST = \
 	man3/index_shell.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst \
+	man5/index.rst \
+	man7/index.rst \
 	man7/flux-undocumented.rst
 
 CLEANFILES = \
