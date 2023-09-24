@@ -393,6 +393,7 @@ EXTRA_DIST = \
 	manpages.py \
 	domainrefs.py \
 	index.rst \
+	index_man.rst \
 	$(RST_FILES) \
 	man1/common/nodeset.rst \
 	man1/common/submit-job-parameters.rst \
