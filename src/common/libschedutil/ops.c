@@ -21,8 +21,10 @@
 #include "init.h"
 #include "ops.h"
 
-static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void alloc_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     schedutil_t *util = arg;
 
@@ -31,8 +33,10 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
     util->ops->alloc (h, msg, util->cb_arg);
 }
 
-static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+static void cancel_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
 {
     schedutil_t *util = arg;
 
@@ -64,8 +68,10 @@ error:
     flux_future_destroy (f);
 }
 
-static void free_cb (flux_t *h, flux_msg_handler_t *mh,
-                     const flux_msg_t *msg, void *arg)
+static void free_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
 {
     schedutil_t *util = arg;
     flux_jobid_t id;
@@ -108,8 +114,10 @@ error:
         flux_log_error (h, "sched.free respond_error");
 }
 
-static void prioritize_cb (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
+static void prioritize_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     schedutil_t *util = arg;
 

@@ -18,8 +18,10 @@
 #include "init.h"
 #include "alloc.h"
 
-static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
-                                    int type, const char *note,
+static int schedutil_alloc_respond (flux_t *h,
+                                    const flux_msg_t *msg,
+                                    int type,
+                                    const char *note,
                                     json_t *annotations)
 {
     flux_jobid_t id;
@@ -27,26 +29,36 @@ static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         return -1;
-    if (annotations)
-        rc = flux_respond_pack (h, msg, "{s:I s:i s:O}",
-                                        "id", id,
-                                        "type", type,
-                                        "annotations", annotations);
-    else if (note)
-        rc = flux_respond_pack (h, msg, "{s:I s:i s:s}",
-                                        "id", id,
-                                        "type", type,
-                                        "note", note);
-    else
-        rc = flux_respond_pack (h, msg, "{s:I s:i}",
-                                        "id", id,
-                                        "type", type);
+    if (annotations) {
+        rc = flux_respond_pack (h,
+                                msg,
+                                "{s:I s:i s:O}",
+                                "id", id,
+                                "type", type,
+                                "annotations", annotations);
+    }
+    else if (note) {
+        rc = flux_respond_pack (h,
+                                msg,
+                                "{s:I s:i s:s}",
+                                "id", id,
+                                "type", type,
+                                "note", note);
+    }
+    else {
+        rc = flux_respond_pack (h,
+                                msg,
+                                "{s:I s:i}",
+                                "id", id,
+                                "type", type);
+    }
     return rc;
 }
 
 int schedutil_alloc_respond_annotate_pack (schedutil_t *util,
                                            const flux_msg_t *msg,
-                                           const char *fmt, ...)
+                                           const char *fmt,
+                                           ...)
 {
     va_list ap;
     json_t *o = NULL;
@@ -57,25 +69,35 @@ int schedutil_alloc_respond_annotate_pack (schedutil_t *util,
         errno = EINVAL;
         goto error;
     }
-    rc = schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_ANNOTATE,
-                                  NULL, o);
+    rc = schedutil_alloc_respond (util->h,
+                                  msg,
+                                  FLUX_SCHED_ALLOC_ANNOTATE,
+                                  NULL,
+                                  o);
 error:
     va_end (ap);
     json_decref (o);
     return rc;
 }
 
-int schedutil_alloc_respond_deny (schedutil_t *util, const flux_msg_t *msg,
+int schedutil_alloc_respond_deny (schedutil_t *util,
+                                  const flux_msg_t *msg,
                                   const char *note)
 {
-    return schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_DENY,
-                                    note, NULL);
+    return schedutil_alloc_respond (util->h,
+                                    msg,
+                                    FLUX_SCHED_ALLOC_DENY,
+                                    note,
+                                    NULL);
 }
 
 int schedutil_alloc_respond_cancel (schedutil_t *util, const flux_msg_t *msg)
 {
-    return schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_CANCEL,
-                                    NULL, NULL);
+    return schedutil_alloc_respond (util->h,
+                                    msg,
+                                    FLUX_SCHED_ALLOC_CANCEL,
+                                    NULL,
+                                    NULL);
 }
 
 struct alloc {
@@ -96,8 +118,10 @@ static void alloc_destroy (struct alloc *ctx)
     }
 }
 
-static struct alloc *alloc_create (const flux_msg_t *msg, const char *R,
-                                   const char *fmt, va_list ap)
+static struct alloc *alloc_create (const flux_msg_t *msg,
+                                   const char *R,
+                                   const char *fmt,
+                                   va_list ap)
 {
     struct alloc *ctx;
     flux_jobid_t id;
@@ -137,8 +161,11 @@ static void alloc_continuation (flux_future_t *f, void *arg)
         goto error;
     }
     schedutil_remove_outstanding_future (util, f);
-    if (schedutil_alloc_respond (h, ctx->msg, FLUX_SCHED_ALLOC_SUCCESS,
-                                 NULL, ctx->annotations) < 0) {
+    if (schedutil_alloc_respond (h,
+                                 ctx->msg,
+                                 FLUX_SCHED_ALLOC_SUCCESS,
+                                 NULL,
+                                 ctx->annotations) < 0) {
         flux_log_error (h, "alloc response");
         goto error;
     }
@@ -153,7 +180,8 @@ error:
 int schedutil_alloc_respond_success_pack (schedutil_t *util,
                                           const flux_msg_t *msg,
                                           const char *R,
-                                          const char *fmt, ...)
+                                          const char *fmt,
+                                          ...)
 {
     struct alloc *ctx;
     flux_future_t *f;
@@ -167,8 +195,10 @@ int schedutil_alloc_respond_success_pack (schedutil_t *util,
         return -1;
     if (!(f = flux_kvs_commit (h, NULL, 0, ctx->txn)))
         goto error;
-    if (flux_future_aux_set (f, "flux::alloc_ctx",
-                             ctx, (flux_free_f)alloc_destroy) < 0) {
+    if (flux_future_aux_set (f,
+                             "flux::alloc_ctx",
+                             ctx,
+                             (flux_free_f)alloc_destroy) < 0) {
         goto error;
     }
     if (flux_future_then (f, -1, alloc_continuation, util) < 0)

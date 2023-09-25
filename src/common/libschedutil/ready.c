@@ -45,17 +45,22 @@ int schedutil_ready (schedutil_t *util, const char *mode, int *queue_depth)
         return -1;
     }
     if (limit) {
-        if (!(f = flux_rpc_pack (util->h, "job-manager.sched-ready",
-                                 FLUX_NODEID_ANY, 0,
+        if (!(f = flux_rpc_pack (util->h,
+                                 "job-manager.sched-ready",
+                                 FLUX_NODEID_ANY,
+                                 0,
                                  "{s:s s:i}",
                                  "mode", mode,
                                  "limit", limit)))
             return -1;
     }
     else {
-        if (!(f = flux_rpc_pack (util->h, "job-manager.sched-ready",
-                                 FLUX_NODEID_ANY, 0,
-                                 "{s:s}", "mode", mode)))
+        if (!(f = flux_rpc_pack (util->h,
+                                 "job-manager.sched-ready",
+                                 FLUX_NODEID_ANY,
+                                 0,
+                                 "{s:s}",
+                                 "mode", mode)))
             return -1;
     }
     if (flux_rpc_get_unpack (f, "{s:i}", "count", &count) < 0)
