@@ -15,6 +15,7 @@ import string
 import sys
 import time
 from collections import namedtuple
+from datetime import datetime
 from itertools import chain
 
 import flux.constants
@@ -271,6 +272,27 @@ class InfoList(list):
         return ",".join(self)
 
 
+class DependencyList(InfoList):
+    """Post processed list of dependencies."""
+
+    def __init__(self, items):
+        result = []
+        for dep in items:
+            #  Loop through dependencies and handle special cases:
+            if dep.startswith("begin-time="):
+                _, eq, timestamp = dep.partition("=")
+                dt = datetime.fromtimestamp(float(timestamp)).astimezone()
+                if dt.date() == datetime.today().date():
+                    dep = f"begin@{dt:%H:%M}"
+                else:
+                    dep = f"begin@{dt:%b%d-%H:%M}"
+                # Only add seconds if nonzero:
+                if dt.second > 0:
+                    dep += f":{dt:%S}"
+            result.append(dep)
+        super().__init__(result)
+
+
 class JobInfo:
     """
     JobInfo class: encapsulate job-list.list response in an object
@@ -348,7 +370,7 @@ class JobInfo:
         combined_dict["user"] = combined_dict["annotations"].user
 
         deps = combined_dict.get("dependencies", [])
-        combined_dict["dependencies"] = InfoList(deps)
+        combined_dict["dependencies"] = DependencyList(deps)
 
         #  Set all keys as self._{key} to be found by getattr and
         #   memoized_property decorator:
