@@ -110,6 +110,7 @@ struct alloc {
     json_t *annotations;
     const flux_msg_t *msg;
     flux_kvs_txn_t *txn;
+    json_t *R;
 };
 
 static void alloc_destroy (struct alloc *ctx)
@@ -119,6 +120,7 @@ static void alloc_destroy (struct alloc *ctx)
         flux_kvs_txn_destroy (ctx->txn);
         flux_msg_decref (ctx->msg);
         json_decref (ctx->annotations);
+        json_decref (ctx->R);
         free (ctx);
         errno = saved_errno;
     }
@@ -146,6 +148,10 @@ static struct alloc *alloc_create (const flux_msg_t *msg,
         if (!(ctx->annotations = json_vpack_ex (NULL, 0, fmt, ap)))
             goto error;
     }
+    if (!(ctx->R = json_loads (R, 0, NULL))) {
+        errno = ENOMEM;
+        goto error;
+    }
     if (!(ctx->txn = flux_kvs_txn_create ()))
         goto error;
     if (flux_kvs_txn_put (ctx->txn, 0, key, R) < 0)
@@ -171,7 +177,8 @@ static void alloc_continuation (flux_future_t *f, void *arg)
     if (!(payload = json_object ())
         || (ctx->annotations && json_object_set (payload,
                                                  "annotations",
-                                                 ctx->annotations) < 0)) {
+                                                 ctx->annotations) < 0)
+        || json_object_set (payload, "R", ctx->R) < 0) {
         errno = ENOMEM;
         flux_log_error (h, "error responding to alloc request");
         goto error;
