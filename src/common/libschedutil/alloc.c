@@ -14,45 +14,46 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "src/common/libutil/errno_safe.h"
 #include "schedutil_private.h"
 #include "init.h"
 #include "alloc.h"
 
-static int schedutil_alloc_respond (flux_t *h,
-                                    const flux_msg_t *msg,
-                                    int type,
-                                    const char *note,
-                                    json_t *annotations)
+static int schedutil_alloc_respond_pack (flux_t *h,
+                                         const flux_msg_t *msg,
+                                         int type,
+                                         const char *fmt,
+                                         ...)
 {
     flux_jobid_t id;
-    int rc;
+    va_list ap;
+    json_t *payload;
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         return -1;
-    if (annotations) {
-        rc = flux_respond_pack (h,
-                                msg,
-                                "{s:I s:i s:O}",
-                                "id", id,
-                                "type", type,
-                                "annotations", annotations);
+    if (!(payload = json_pack ("{s:I s:i}",
+                               "id", id,
+                               "type", type)))
+        goto nomem;
+    if (fmt) {
+        json_t *o;
+        va_start (ap, fmt);
+        if (!(o = json_vpack_ex (NULL, 0, fmt, ap))
+            || json_object_update (payload, o) < 0) {
+            json_decref (o);
+            goto nomem;
+        }
+        json_decref (o);
     }
-    else if (note) {
-        rc = flux_respond_pack (h,
-                                msg,
-                                "{s:I s:i s:s}",
-                                "id", id,
-                                "type", type,
-                                "note", note);
-    }
-    else {
-        rc = flux_respond_pack (h,
-                                msg,
-                                "{s:I s:i}",
-                                "id", id,
-                                "type", type);
-    }
-    return rc;
+    if (flux_respond_pack (h, msg, "O", payload) < 0)
+        goto error;
+    json_decref (payload);
+    return 0;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, payload);
+    return -1;
 }
 
 int schedutil_alloc_respond_annotate_pack (schedutil_t *util,
@@ -61,22 +62,22 @@ int schedutil_alloc_respond_annotate_pack (schedutil_t *util,
                                            ...)
 {
     va_list ap;
-    json_t *o = NULL;
-    int rc = -1;
+    json_t *annotations;
+    int rc;
 
     va_start (ap, fmt);
-    if (!(o = json_vpack_ex (NULL, 0, fmt, ap))) {
-        errno = EINVAL;
-        goto error;
-    }
-    rc = schedutil_alloc_respond (util->h,
-                                  msg,
-                                  FLUX_SCHED_ALLOC_ANNOTATE,
-                                  NULL,
-                                  o);
-error:
+    annotations = json_vpack_ex (NULL, 0, fmt, ap);
     va_end (ap);
-    json_decref (o);
+    if (!annotations) {
+        errno = EINVAL;
+        return -1;
+    }
+    rc = schedutil_alloc_respond_pack (util->h,
+                                       msg,
+                                       FLUX_SCHED_ALLOC_ANNOTATE,
+                                       "{s:O}",
+                                       "annotations", annotations);
+    ERRNO_SAFE_WRAP (json_decref, annotations);
     return rc;
 }
 
@@ -84,20 +85,25 @@ int schedutil_alloc_respond_deny (schedutil_t *util,
                                   const flux_msg_t *msg,
                                   const char *note)
 {
-    return schedutil_alloc_respond (util->h,
-                                    msg,
-                                    FLUX_SCHED_ALLOC_DENY,
-                                    note,
-                                    NULL);
+    if (note) {
+        return schedutil_alloc_respond_pack (util->h,
+                                             msg,
+                                             FLUX_SCHED_ALLOC_DENY,
+                                             "{s:s}",
+                                             "note", note);
+    }
+    return schedutil_alloc_respond_pack (util->h,
+                                         msg,
+                                         FLUX_SCHED_ALLOC_DENY,
+                                         NULL);
 }
 
 int schedutil_alloc_respond_cancel (schedutil_t *util, const flux_msg_t *msg)
 {
-    return schedutil_alloc_respond (util->h,
-                                    msg,
-                                    FLUX_SCHED_ALLOC_CANCEL,
-                                    NULL,
-                                    NULL);
+    return schedutil_alloc_respond_pack (util->h,
+                                         msg,
+                                         FLUX_SCHED_ALLOC_CANCEL,
+                                         NULL);
 }
 
 struct alloc {
@@ -155,25 +161,36 @@ static void alloc_continuation (flux_future_t *f, void *arg)
     schedutil_t *util = arg;
     flux_t *h = util->h;
     struct alloc *ctx = flux_future_aux_get (f, "flux::alloc_ctx");
+    json_t *payload = NULL;
 
     if (flux_future_get (f, NULL) < 0) {
         flux_log_error (h, "commit R");
         goto error;
     }
     schedutil_remove_outstanding_future (util, f);
-    if (schedutil_alloc_respond (h,
-                                 ctx->msg,
-                                 FLUX_SCHED_ALLOC_SUCCESS,
-                                 NULL,
-                                 ctx->annotations) < 0) {
-        flux_log_error (h, "alloc response");
+    if (!(payload = json_object ())
+        || (ctx->annotations && json_object_set (payload,
+                                                 "annotations",
+                                                 ctx->annotations) < 0)) {
+        errno = ENOMEM;
+        flux_log_error (h, "error responding to alloc request");
         goto error;
     }
+    if (schedutil_alloc_respond_pack (h,
+                                      ctx->msg,
+                                      FLUX_SCHED_ALLOC_SUCCESS,
+                                      "O",
+                                      payload) < 0) {
+        flux_log_error (h, "error responding to alloc request");
+        goto error;
+    }
+    json_decref (payload);
     flux_future_destroy (f);
     return;
 error:
     flux_reactor_stop_error (flux_get_reactor (h)); // XXX
     alloc_destroy (ctx);
+    ERRNO_SAFE_WRAP (json_decref, payload);
     flux_future_destroy (f);
 }
 
