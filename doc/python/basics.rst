@@ -24,14 +24,6 @@ instance, you will need to specify a Flux instance to communicate with,
 or most of the package's operations will fail.
 
 
-Additional Examples
--------------------
-
-In addition to the examples given in these pages, there is
-a set of detailed examples maintained on
-`the workflow examples page <https://flux-framework.readthedocs.io/projects/flux-workflow-examples/en/latest/>`_.
-
-
 The Flux class
 --------------
 

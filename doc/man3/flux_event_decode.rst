@@ -81,7 +81,13 @@ if the message doesn't have a JSON payload.
 Events propagated to all subscribers. Events will not be received
 without a matching subscription established using ``flux_event_subscribe()``.
 
+ENCODING JSON PAYLOADS
+======================
+
 .. include:: common/json_pack.rst
+
+DECODING JSON PAYLOADS
+======================
 
 .. include:: common/json_unpack.rst
 

@@ -80,6 +80,9 @@ FLUX_MSGFLAG_PRIVATE
    Indicates that the event should only be visible to the instance owner
    and the sender.
 
+ENCODING JSON PAYLOADS
+======================
+
 .. include:: common/json_pack.rst
 
 

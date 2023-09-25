@@ -1,5 +1,5 @@
-Python
-======
+Python API
+==========
 
 Flux provides a rich Python interface. With few exceptions,
 any Flux interactions that are possible in C or on the

@@ -393,7 +393,12 @@ EXTRA_DIST = \
 	manpages.py \
 	domainrefs.py \
 	index.rst \
+	index_man.rst \
 	$(RST_FILES) \
+	man1/index.rst \
+	man1/index_general.rst \
+	man1/index_job.rst \
+	man1/index_kvs.rst \
 	man1/common/nodeset.rst \
 	man1/common/submit-job-parameters.rst \
 	man1/common/submit-standard-io.rst \
@@ -407,8 +412,19 @@ EXTRA_DIST = \
 	man1/common/submit-bulksubmit.rst \
 	man1/common/submit-shell-options.rst \
 	man1/common/submit-submission-directives.rst \
+	man3/index.rst \
+	man3/index_general.rst \
+	man3/index_idset.rst \
+	man3/index_job.rst \
+	man3/index_jobtap.rst \
+	man3/index_kvs.rst \
+	man3/index_message.rst \
+	man3/index_reactor.rst \
+	man3/index_shell.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst \
+	man5/index.rst \
+	man7/index.rst \
 	man7/flux-undocumented.rst
 
 CLEANFILES = \
