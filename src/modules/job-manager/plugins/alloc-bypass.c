@@ -66,7 +66,7 @@ done:
 
 static flux_future_t *commit_R (flux_plugin_t *p,
                                 flux_jobid_t id,
-                                const char *R)
+                                json_t *R)
 {
     flux_future_t *f = NULL;
     flux_kvs_txn_t *txn = NULL;
@@ -78,7 +78,7 @@ static flux_future_t *commit_R (flux_plugin_t *p,
         || !(txn = flux_kvs_txn_create ()))
         return NULL;
 
-    if (flux_kvs_txn_put (txn, 0, key, R) < 0)
+    if (flux_kvs_txn_pack (txn, 0, key, "O", R) < 0)
         goto out;
 
     f = flux_kvs_commit (h, NULL, 0, txn);
@@ -89,7 +89,7 @@ out:
 
 static int alloc_start (flux_plugin_t *p,
                         flux_jobid_t id,
-                        const char *R)
+                        json_t *R)
 {
     int saved_errno;
     flux_future_t *f = NULL;
@@ -118,7 +118,7 @@ static int sched_cb (flux_plugin_t *p,
                      flux_plugin_arg_t *args,
                      void *arg)
 {
-    const char *R = NULL;
+    json_t *R;
     flux_jobid_t id;
 
     /*  If alloc-bypass::R set on this job then commit R to KVS
@@ -175,7 +175,6 @@ static int validate_cb (flux_plugin_t *p,
                         void *arg)
 {
     json_t *R = NULL;
-    char *s;
     struct rlist *rl;
     json_error_t error;
     uint32_t userid = (uint32_t) -1;
@@ -214,17 +213,16 @@ static int validate_cb (flux_plugin_t *p,
                                        error.text);
     rlist_destroy (rl);
 
-    /*  Store R string in job structure to avoid re-fetching from plugin args
+    /*  Store R in job structure to avoid re-fetching from plugin args
      *   in job.state.sched callback.
      */
-    if (!(s = json_dumps (R, 0))
-        || flux_jobtap_job_aux_set (p,
-                                    FLUX_JOBTAP_CURRENT_JOB,
-                                    "alloc-bypass::R",
-                                    s,
-                                    free) < 0) {
+    if (flux_jobtap_job_aux_set (p,
+                                 FLUX_JOBTAP_CURRENT_JOB,
+                                 "alloc-bypass::R",
+                                 json_incref (R),
+                                 (flux_free_f)json_decref) < 0) {
         int saved_errno = errno;
-        free (s);
+        json_decref (R);
         return flux_jobtap_reject_job (p,
                                        args,
                                        "failed to capture alloc-bypass R: %s",
