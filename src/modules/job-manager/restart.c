@@ -82,13 +82,16 @@ static struct job *lookup_job (flux_t *h,
 {
     flux_future_t *f1 = NULL;
     flux_future_t *f2 = NULL;
+    flux_future_t *f3 = NULL;
     const char *eventlog;
     const char *jobspec;
+    const char *R;
     struct job *job = NULL;
     flux_error_t e;
 
     if (!(f1 = lookup_job_data (h, id, "eventlog"))
-        || !(f2 = lookup_job_data (h, id, "jobspec"))) {
+        || !(f2 = lookup_job_data (h, id, "jobspec"))
+        || !(f3 = lookup_job_data (h, id, "R"))) {
         errprintf (error,
                    "cannot send lookup requests for job %s: %s",
                    idf58 (id),
@@ -104,10 +107,14 @@ static struct job *lookup_job (flux_t *h,
         *fatal = false;
         goto done;
     }
+    /* Ignore error if this returns NULL, since R is only available
+     * after resources have been allocated.
+     */
+    R = lookup_job_data_get (f3, NULL);
     if (!(job = job_create_from_eventlog (id,
                                           eventlog,
                                           jobspec,
-                                          NULL,
+                                          R,
                                           &e))) {
         errprintf (error,
                    "replay %s: %s",
@@ -118,6 +125,7 @@ static struct job *lookup_job (flux_t *h,
 done:
     flux_future_destroy (f1);
     flux_future_destroy (f2);
+    flux_future_destroy (f3);
     return job;
 }
 
