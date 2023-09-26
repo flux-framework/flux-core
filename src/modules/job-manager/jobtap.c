@@ -1156,12 +1156,12 @@ int jobtap_call (struct jobtap *jobtap,
          *   annotation event published to the journal before the first
          *   job state event may confuse consumers (i.e. job-info).
          */
-        int rc;
+        int ret;
         if (streq (topic, "job.new"))
-            rc = annotations_update (job, ".", note);
+            ret = annotations_update (job, ".", note);
         else
-            rc = annotations_update_and_publish (jobtap->ctx, job, note);
-        if (rc < 0)
+            ret = annotations_update_and_publish (jobtap->ctx, job, note);
+        if (ret < 0)
             flux_log_error (jobtap->ctx->h,
                             "jobtap: %s: %s: annotations_update",
                             topic,
