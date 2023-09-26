@@ -18,7 +18,12 @@ struct resource_set;
 
 struct resource_set *resource_set_create (const char *R, json_error_t *errp);
 
+struct resource_set *resource_set_create_fromjson (json_t *R,
+		                                   json_error_t *errp);
+
 void resource_set_destroy (struct resource_set *rset);
+
+json_t *resource_set_get_json (struct resource_set *rset);
 
 const struct idset * resource_set_ranks (struct resource_set *rset);
 

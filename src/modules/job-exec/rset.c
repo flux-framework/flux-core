@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <errno.h>
+#include "src/common/libutil/errno_safe.h"
 #include "rset.h"
 
 struct resource_set {
@@ -31,6 +32,11 @@ void resource_set_destroy (struct resource_set *r)
         idset_destroy (r->ranks);
         free (r);
     }
+}
+
+json_t *resource_set_get_json (struct resource_set *r)
+{
+    return r ? r->R : NULL;
 }
 
 static int util_idset_set_string (struct idset *idset, const char *ids)
@@ -93,7 +99,8 @@ static int rset_read_time_window (struct resource_set *r, json_error_t *errp)
     return 0;
 }
 
-struct resource_set * resource_set_create (const char *R, json_error_t *errp)
+struct resource_set *resource_set_create_fromjson (json_t *R,
+                                                   json_error_t *errp)
 {
     int version = 0;
     struct resource_set *r = calloc (1, sizeof (*r));
@@ -101,8 +108,7 @@ struct resource_set * resource_set_create (const char *R, json_error_t *errp)
         snprintf (errp->text, sizeof (errp->text), "out of memory");
         goto err;
     }
-    if (!(r->R = json_loads (R, 0, errp)))
-        goto err;
+    r->R = json_incref (R);
     if (json_unpack_ex (r->R, errp, 0, "{s:i s:{s:o}}",
                                        "version", &version,
                                        "execution",
@@ -126,6 +132,18 @@ struct resource_set * resource_set_create (const char *R, json_error_t *errp)
 err:
     resource_set_destroy (r);
     return NULL;
+}
+
+struct resource_set *resource_set_create (const char *R, json_error_t *errp)
+{
+    json_t *o;
+    struct resource_set *rset;
+
+    if (!(o = json_loads (R, 0, errp)))
+        return NULL;
+    rset = resource_set_create_fromjson (o, errp);
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return rset;
 }
 
 const struct idset * resource_set_ranks (struct resource_set *r)
