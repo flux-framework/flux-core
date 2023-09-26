@@ -38,7 +38,7 @@ void job_decref (struct job *job)
         json_decref (job->end_event);
         flux_msg_decref (job->waiter);
         json_decref (job->jobspec_redacted);
-        json_decref (job->R);
+        json_decref (job->R_redacted);
         json_decref (job->annotations);
         grudgeset_destroy (job->dependencies);
         subscribers_destroy (job);
@@ -180,6 +180,7 @@ static int jobspec_redacted_parse_queue (struct job *job)
 struct job *job_create_from_eventlog (flux_jobid_t id,
                                       const char *eventlog,
                                       const char *jobspec,
+                                      const char *R,
                                       flux_error_t *error)
 {
     struct job *job;
@@ -201,6 +202,14 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
     if (jobspec_redacted_parse_queue (job) < 0) {
         errprintf (error, "failed to decode jobspec queue");
         goto inval;
+    }
+
+    if (R) {
+        if (!(job->R_redacted = json_loads (R, 0, NULL))) {
+            errprintf (error, "failed to decode R");
+            goto inval;
+        }
+        (void)json_object_del (job->R_redacted, "scheduling");
     }
 
     if (!(a = eventlog_decode (eventlog))) {

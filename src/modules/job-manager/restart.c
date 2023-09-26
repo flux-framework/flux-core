@@ -80,7 +80,11 @@ static struct job *lookup_job (flux_t *h,
         *fatal = false;
         goto done;
     }
-    if (!(job = job_create_from_eventlog (id, eventlog, jobspec, &e))) {
+    if (!(job = job_create_from_eventlog (id,
+                                          eventlog,
+                                          jobspec,
+                                          NULL,
+                                          &e))) {
         errprintf (error, "replay %s: %s", k1, e.text);
         *fatal = true;
     }
