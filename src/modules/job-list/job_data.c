@@ -460,18 +460,22 @@ cleanup:
     return rc;
 }
 
-int job_parse_R (struct job *job, const char *s)
+int job_parse_R (struct job *job, const char *s, json_t *updates)
 {
     if (load_R (job, s, true) < 0)
         return -1;
-    return parse_R (job, true);
+    if (parse_R (job, true) < 0)
+        return -1;
+    return job_R_update (job, updates);
 }
 
-int job_parse_R_fatal (struct job *job, const char *s)
+int job_parse_R_fatal (struct job *job, const char *s, json_t *updates)
 {
     if (load_R (job, s, false) < 0)
         return -1;
-    return parse_R (job, false);
+    if (parse_R (job, false) < 0)
+        return -1;
+    return job_R_update (job, updates);
 }
 
 int job_jobspec_update (struct job *job, json_t *updates)

@@ -359,7 +359,7 @@ static void state_run_lookup_continuation (flux_future_t *f, void *arg)
         goto out;
     }
 
-    if (job_parse_R (job, s) < 0)
+    if (job_parse_R (job, s, NULL) < 0)
         goto out;
 
     updt = zlist_head (job->updates);
@@ -852,7 +852,7 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
         if (flux_kvs_lookup_get (f3, &R) < 0)
             goto done;
 
-        if (job_parse_R (job, R) < 0)
+        if (job_parse_R (job, R, NULL) < 0)
             goto done;
     }
 

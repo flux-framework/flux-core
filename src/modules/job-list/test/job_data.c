@@ -328,7 +328,7 @@ static int parse_R (struct job *job, const char *filename)
 
     read_file (filename, (void **)&data);
 
-    ret = job_parse_R_fatal (job, data);
+    ret = job_parse_R_fatal (job, data, NULL);
 
     free (data);
     return ret;
@@ -821,8 +821,13 @@ static void test_R_update (void)
 
     read_file (filename, (void **)&data);
 
-    if (job_parse_R (job, data) < 0)
+    if (!(o = json_pack ("{s:f}", "expiration", 100.0)))
+        BAIL_OUT ("json_pack failed");
+
+    if (job_parse_R (job, data, o) < 0)
         BAIL_OUT ("cannot load basic R");
+
+    json_decref (o);
 
     ret = json_unpack (job->R,
                        "{s:{s:F}}",
@@ -830,14 +835,14 @@ static void test_R_update (void)
                        "expiration", &expiration);
     ok (ret == 0, "parsed initial R expiration");
 
-    ok (expiration == 0.0, "initial R expiration == 0.0");
-    ok (job->expiration == 0.0, "initial job->expiration == 0.0");
+    ok (expiration == 100.0, "initial R expiration == 100.0");
+    ok (job->expiration == 100.0, "initial job->expiration == 100.0");
 
     ret = job_R_update (job, NULL);
     ok (ret == 0, "job_R_update success with no update");
 
     if (!(o = json_pack ("{s:f s:s}",
-                         "expiration", 100.0,
+                         "expiration", 200.0,
                          "dummy", "dummy")))
         BAIL_OUT ("json_pack failed");
     ret = job_R_update (job, o);
@@ -850,8 +855,8 @@ static void test_R_update (void)
                        "expiration", &expiration);
     ok (ret == 0, "parsed updated R expiration");
 
-    ok (expiration == 100.0, "R expiration == 100.0");
-    ok (job->expiration == 100.0, "job->expiration == 100.0");
+    ok (expiration == 200.0, "R expiration == 200.0");
+    ok (job->expiration == 200.0, "job->expiration == 200.0");
 
     ret = json_unpack (job->R, "{s?s}", "dummy", &tmp);
     ok (ret == 0, "parsed updated R dummy");

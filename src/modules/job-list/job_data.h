@@ -127,12 +127,12 @@ int job_jobspec_update (struct job *job, json_t *updates);
  * - ncores
  * - ntasks (if necessary)
  */
-int job_parse_R (struct job *job, const char *s);
+int job_parse_R (struct job *job, const char *s, json_t *updates);
 
 /* identical to above, but all nonfatal errors will return error.
  * Primarily used for testing.
  */
-int job_parse_R_fatal (struct job *job, const char *s);
+int job_parse_R_fatal (struct job *job, const char *s, json_t *updates);
 
 /* Update R with RFC21 defined keys
  * (i.e. "expiration") and value.
