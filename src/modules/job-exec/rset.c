@@ -97,6 +97,10 @@ struct resource_set * resource_set_create (const char *R, json_error_t *errp)
 {
     int version = 0;
     struct resource_set *r = calloc (1, sizeof (*r));
+    if (!r) {
+        snprintf (errp->text, sizeof (errp->text), "out of memory");
+        goto err;
+    }
     if (!(r->R = json_loads (R, 0, errp)))
         goto err;
     if (json_unpack_ex (r->R, errp, 0, "{s:i s:{s:o}}",
