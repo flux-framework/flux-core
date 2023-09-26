@@ -61,6 +61,15 @@ static json_t *make_dict (struct job *job,
             if (json_object_set (dict, key, job->jobspec_redacted) < 0)
                 goto nomem;
         }
+        else if (streq (key, "R")) {
+            if (!job->R_redacted) {
+                errprintf (errp, "R is NULL");
+                errno = ENOENT;
+                goto error;
+            }
+            if (json_object_set (dict, key, job->R_redacted) < 0)
+                goto nomem;
+        }
         else {
             errprintf (errp, "unknown attr %s", key);
             errno = ENOENT;
