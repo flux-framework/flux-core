@@ -47,6 +47,34 @@ int restart_count_char (const char *s, char c)
     return count;
 }
 
+static flux_future_t *lookup_job_data (flux_t *h,
+                                       flux_jobid_t id,
+                                       const char *key)
+{
+    char path[64];
+    flux_future_t *f;
+
+    if (flux_job_kvs_key (path, sizeof (path), id, key) < 0
+        || !(f = flux_kvs_lookup (h, NULL, 0, path)))
+        return NULL;
+    return f;
+}
+
+static const char *lookup_job_data_get (flux_future_t *f,
+                                        flux_error_t *error)
+{
+    const char *result;
+
+    if (flux_kvs_lookup_get (f, &result) < 0) {
+        errprintf (error,
+                   "lookup %s: %s",
+                   flux_kvs_lookup_get_key (f),
+                   strerror (errno));
+        return NULL;
+    }
+    return result;
+}
+
 static struct job *lookup_job (flux_t *h,
                                flux_jobid_t id,
                                flux_error_t *error,
@@ -54,15 +82,13 @@ static struct job *lookup_job (flux_t *h,
 {
     flux_future_t *f1 = NULL;
     flux_future_t *f2 = NULL;
-    char k1[64], k2[64];
-    const char *eventlog, *jobspec;
+    const char *eventlog;
+    const char *jobspec;
     struct job *job = NULL;
     flux_error_t e;
 
-    if (flux_job_kvs_key (k1, sizeof (k1), id, "eventlog") < 0
-        || flux_job_kvs_key (k2, sizeof (k2), id, "jobspec") < 0
-        || !(f1 = flux_kvs_lookup (h, NULL, 0, k1))
-        || !(f2 = flux_kvs_lookup (h, NULL, 0, k2))) {
+    if (!(f1 = lookup_job_data (h, id, "eventlog"))
+        || !(f2 = lookup_job_data (h, id, "jobspec"))) {
         errprintf (error,
                    "cannot send lookup requests for job %s: %s",
                    idf58 (id),
@@ -70,13 +96,11 @@ static struct job *lookup_job (flux_t *h,
         *fatal = true;
         goto done;
     }
-    if (flux_kvs_lookup_get (f1, &eventlog) < 0) {
-        errprintf (error, "lookup %s: %s", k1, strerror (errno));
+    if (!(eventlog = lookup_job_data_get (f1, error))) {
         *fatal = false;
         goto done;
     }
-    if (flux_kvs_lookup_get (f2, &jobspec) < 0) {
-        errprintf (error, "lookup %s: %s", k2, strerror (errno));
+    if (!(jobspec = lookup_job_data_get (f2, error))) {
         *fatal = false;
         goto done;
     }
@@ -85,7 +109,10 @@ static struct job *lookup_job (flux_t *h,
                                           jobspec,
                                           NULL,
                                           &e))) {
-        errprintf (error, "replay %s: %s", k1, e.text);
+        errprintf (error,
+                   "replay %s: %s",
+                   flux_kvs_lookup_get_key (f1),
+                   e.text);
         *fatal = true;
     }
 done:
