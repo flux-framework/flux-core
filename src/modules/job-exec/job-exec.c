@@ -799,31 +799,6 @@ static int jobinfo_start_execution (struct jobinfo *job)
     return 0;
 }
 
-/*  Lookup key 'key' under jobid 'id' kvs dir:
- */
-static flux_future_t *flux_jobid_kvs_lookup (flux_t *h, flux_jobid_t id,
-                                             int flags, const char *key)
-{
-    char path [256];
-    if (flux_job_kvs_key (path, sizeof (path), id, key) < 0)
-        return NULL;
-    return flux_kvs_lookup (h, NULL, flags, path);
-}
-
-/*
- *  Call lookup_get on a child named 'name' of the composite future 'f'
- */
-static const char * jobinfo_kvs_lookup_get (flux_future_t *f, const char *name)
-{
-    const char *result;
-    flux_future_t *child = flux_future_get_child (f, name);
-    if (child == NULL)
-        return NULL;
-    if (flux_kvs_lookup_get (child, &result) < 0)
-        return NULL;
-    return result;
-}
-
 static int jobinfo_load_implementation (struct jobinfo *job)
 {
     int i = 0;
@@ -852,9 +827,6 @@ static int jobinfo_load_implementation (struct jobinfo *job)
  */
 static void jobinfo_start_continue (flux_future_t *f, void *arg)
 {
-    json_error_t error;
-    const char *R = NULL;
-    size_t size;
     struct jobinfo *job = arg;
 
     if (flux_future_get (flux_future_get_child (f, "ns"), NULL) < 0) {
@@ -863,30 +835,11 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
     }
     job->has_namespace = 1;
 
-
     /*  If an exception was received during startup, no need to continue
      *   with startup
      */
     if (job->exception_in_progress)
         goto done;
-    if (!(R = jobinfo_kvs_lookup_get (f, "R"))) {
-        jobinfo_fatal_error (job, errno, "job does not have allocation");
-        goto done;
-    }
-    if (!(job->R = resource_set_create (R, &error))) {
-        jobinfo_fatal_error (job, errno, "reading R: %s", error.text);
-        goto done;
-    }
-    /*  Initialize critical ranks to the set of all _shell_ ranks
-     *  (i.e. zero origin to size-1). This means that loss of any rank
-     *  will result in a fatal job exception.
-     */
-    size = idset_count (resource_set_ranks (job->R));
-    if (!(job->critical_ranks = idset_create (0, IDSET_FLAG_AUTOGROW))
-        || idset_range_set (job->critical_ranks, 0, size - 1) < 0) {
-        jobinfo_fatal_error (job, errno, "initializing critical ranks");
-        goto done;
-    }
     if (jobinfo_load_implementation (job) < 0) {
         jobinfo_fatal_error (job, errno, "failed to initialize implementation");
         goto done;
@@ -1042,9 +995,6 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
     flux_future_t *f = flux_future_wait_all_create ();
     flux_future_set_flux (f, job->ctx->h);
 
-    if (!(f_kvs = flux_jobid_kvs_lookup (h, job->id, 0, "R"))
-        || flux_future_push (f, "R", f_kvs) < 0)
-        goto err;
     if (job->reattach)
         f_kvs = ns_get_rootref (h, job, 0);
     else
@@ -1091,6 +1041,7 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
     };
     flux_future_t *f = NULL;
     struct jobinfo *job;
+    json_t *R;
 
     if (!(job = jobinfo_new ()))
         return -1;
@@ -1107,12 +1058,26 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
 
     job->ctx = ctx;
 
-    if (flux_request_unpack (job->req, NULL, "{s:I s:i s:O s:b}",
+    if (flux_request_unpack (job->req, NULL, "{s:I s:i s:O s:b s:o}",
                                              "id", &job->id,
                                              "userid", &job->userid,
                                              "jobspec", &job->jobspec,
-                                             "reattach", &job->reattach) < 0) {
+                                             "reattach", &job->reattach,
+                                             "R", &R) < 0) {
         flux_log_error (ctx->h, "start: flux_request_unpack");
+        jobinfo_decref (job);
+        return -1;
+    }
+    json_error_t error;
+    if (!(job->R = resource_set_create_fromjson (R, &error))) {
+        flux_log (ctx->h, LOG_ERR, "reading R: %s", error.text);
+        jobinfo_decref (job);
+        return -1;
+    }
+    size_t size = idset_count (resource_set_ranks (job->R));
+    if (!(job->critical_ranks = idset_create (0, IDSET_FLAG_AUTOGROW))
+        || idset_range_set (job->critical_ranks, 0, size - 1) < 0) {
+        flux_log_error (ctx->h, "initializing critical ranks");
         jobinfo_decref (job);
         return -1;
     }
