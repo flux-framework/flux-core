@@ -1112,6 +1112,7 @@ int jobtap_call (struct jobtap *jobtap,
 {
     int rc = -1;
     json_t *note = NULL;
+    json_t *R = NULL;
     flux_plugin_arg_t *args;
     int64_t priority = FLUX_JOBTAP_PRIORITY_UNAVAIL;
     va_list ap;
@@ -1139,9 +1140,10 @@ int jobtap_call (struct jobtap *jobtap,
     }
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_OUT,
-                                "{s?I s?o}",
+                                "{s?I s?o s?o}",
                                 "priority", &priority,
-                                "annotations", &note) < 0) {
+                                "annotations", &note,
+                                "R", &R) < 0) {
         if (jobtap_job_raise (jobtap, job,
                               topic, 4,
                               "arg_unpack: %s%s",
@@ -1153,6 +1155,26 @@ int jobtap_call (struct jobtap *jobtap,
                        topic,
                        strerror (errno));
         rc = -1;
+    }
+    if (R != NULL) {
+        if (!streq (topic, "job.state.sched")) {
+            flux_log (jobtap->ctx->h,
+                      LOG_ERR,
+                      "jobtap: %s: %s: R may only be set in SCHED state",
+                      topic,
+                      idf58 (job->id));
+            rc = -1;
+        }
+        else if (job->R_redacted) {
+            flux_log (jobtap->ctx->h,
+                      LOG_ERR,
+                      "jobtap: %s: %s: R is already set",
+                      topic,
+                      idf58 (job->id));
+            rc = -1;
+        }
+        else
+            job->R_redacted = json_incref (R);
     }
     if (note != NULL) {
         /*
