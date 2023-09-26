@@ -2,7 +2,7 @@ name: Build and Deploy Containers
 
 on:
 
-  # Enable just for testing cobntainer builds
+  # Enable just for testing container builds
   pull_request:
     paths:
     - etc/docker/**
@@ -35,11 +35,8 @@ jobs:
       matrix:
 
         # Dockerfiles to build, a matrix supports future expanded builds
-        # spack: flux-core built by spack, otherwise from source on ubuntu
-        container: [[etc/docker/spack/Dockerfile.base, ghcr.io/flux-framework/flux-spack-base, 'true'],
-                    [etc/docker/spack/Dockerfile, ghcr.io/flux-framework/flux-spack-ubuntu, 'true'],
-                    [etc/docker/ubuntu/Dockerfile, ghcr.io/flux-framework/flux-ubuntu, 'true'],
-                    [etc/docker/ubuntu/Dockerfile.test, ghcr.io/flux-framework/flux-ubuntu-test, 'false']]
+        # spack: flux-core built by spack
+        container: [[etc/docker/spack/Dockerfile.base, ghcr.io/flux-framework/flux-spack-base, 'true']]
 
     runs-on: ubuntu-latest
     name: Build
@@ -52,7 +49,7 @@ jobs:
         sudo rm -rf /usr/share/dotnet
         sudo rm -rf /opt/ghc
 
-       # It's easier to reference named variables than indexes of the matrix
+    # It's easier to reference named variables than indexes of the matrix
     - name: Set Environment
       env:
         dockerfile: ${{ matrix.container[0] }}

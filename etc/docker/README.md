@@ -4,5 +4,3 @@ These sets of Dockerfiles are intended to build container bases with different
 install strategies for Flux. We currently include:
 
  - [spack](spack): Flux installed with spack
- - [ubuntu](ubuntu): Flux installed on ubuntu bases without spack
-
