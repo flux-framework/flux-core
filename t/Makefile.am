@@ -140,6 +140,7 @@ TESTSCRIPTS = \
 	t2217-job-manager-priority-order-limited.t \
 	t2218-job-manager-priority-order-unlimited.t \
 	t2219-job-manager-restart.t \
+	t2220-job-manager-R.t \
 	t2221-job-manager-limit-duration.t \
 	t2222-job-manager-limit-job-size.t \
 	t2223-job-manager-queue-priority-order-limited.t \
