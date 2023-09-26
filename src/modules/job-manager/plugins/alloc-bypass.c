@@ -145,6 +145,9 @@ static int sched_cb (flux_plugin_t *p,
     if (alloc_start (p, id, R) < 0)
         flux_jobtap_raise_exception (p, id, "alloc", 0,
                                      "failed to commit R to kvs");
+    if (flux_plugin_arg_pack (args, FLUX_PLUGIN_ARG_OUT, "{s:O}", "R", R) < 0)
+        return -1;
+
     return 0;
 }
 
