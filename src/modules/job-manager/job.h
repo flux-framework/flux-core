@@ -29,6 +29,7 @@ struct job {
     const char *queue;
     int flags;
     json_t *jobspec_redacted;
+    json_t *R;
     int eventlog_seq;           // eventlog count / sequence number
     flux_job_state_t state;
     json_t *event_queue;

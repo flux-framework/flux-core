@@ -38,6 +38,7 @@ void job_decref (struct job *job)
         json_decref (job->end_event);
         flux_msg_decref (job->waiter);
         json_decref (job->jobspec_redacted);
+        json_decref (job->R);
         json_decref (job->annotations);
         grudgeset_destroy (job->dependencies);
         subscribers_destroy (job);
