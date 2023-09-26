@@ -188,24 +188,24 @@ class TestJob(unittest.TestCase):
         self.assertNotIn("jobspec", data)
         self.check_R_J_decoded(data, self.jobid1)
 
-    def test_14_job_kvs_lookup_jobspec_base(self):
+    def test_lookup_11_job_kvs_lookup_jobspec_base(self):
         data = flux.job.job_kvs_lookup(self.fh, self.jobid1, base=True)
         self.assertNotIn("eventlog", data)
         self.check_jobspec_base_decoded(data, self.jobid1)
 
-    def test_15_job_kvs_lookup_jobspec_base_nodecode(self):
+    def test_lookup_12_job_kvs_lookup_jobspec_base_nodecode(self):
         data = flux.job.job_kvs_lookup(self.fh, self.jobid1, decode=False, base=True)
         self.assertNotIn("eventlog", data)
         self.check_jobspec_base_str(data, self.jobid1)
 
-    def test_16_job_kvs_lookup_jobspec_base_multiple_keys(self):
+    def test_lookup_13_job_kvs_lookup_jobspec_base_multiple_keys(self):
         data = flux.job.job_kvs_lookup(
             self.fh, self.jobid1, keys=["jobspec", "eventlog"], base=True
         )
         self.assertIn("eventlog", data)
         self.check_jobspec_base_decoded(data, self.jobid1)
 
-    def test_17_job_kvs_lookup_base_no_jobspec(self):
+    def test_lookup_14_job_kvs_lookup_base_no_jobspec(self):
         data = flux.job.job_kvs_lookup(self.fh, self.jobid1, keys=["R", "J"], base=True)
         self.assertNotIn("jobspec", data)
         self.check_R_J_decoded(data, self.jobid1)
