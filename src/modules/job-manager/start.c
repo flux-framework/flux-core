@@ -100,8 +100,10 @@ struct start {
     char *topic;
 };
 
-static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void hello_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct job_manager *ctx = arg;
     struct start *start = ctx->start;
@@ -154,8 +156,11 @@ static void interface_teardown (struct start *start, char *s, int errnum)
         struct job_manager *ctx = start->ctx;
         struct job *job;
 
-        flux_log (ctx->h, LOG_DEBUG, "start: stop due to %s: %s",
-                  s, flux_strerror (errnum));
+        flux_log (ctx->h,
+                  LOG_DEBUG,
+                  "start: stop due to %s: %s",
+                  s,
+                  flux_strerror (errnum));
 
         free (start->topic);
         start->topic = NULL;
@@ -177,8 +182,10 @@ static void interface_teardown (struct start *start, char *s, int errnum)
     }
 }
 
-static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void start_response_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     struct job_manager *ctx = arg;
     struct start *start = ctx->start;
@@ -203,7 +210,9 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        flux_log (h, LOG_ERR, "start response: id=%s not active",
+        flux_log (h,
+                  LOG_ERR,
+                  "start response: id=%s not active",
                   idf58 (id));
         errno = EINVAL;
         goto error;
