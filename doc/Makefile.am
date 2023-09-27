@@ -394,6 +394,7 @@ EXTRA_DIST = \
 	domainrefs.py \
 	index.rst \
 	index_man.rst \
+	build.rst \
 	$(RST_FILES) \
 	man1/index.rst \
 	man1/index_general.rst \
