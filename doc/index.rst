@@ -98,5 +98,6 @@ Table of Contents
    :maxdepth: 2
 
    build
+   support
    index_man
    python/index

@@ -395,6 +395,8 @@ EXTRA_DIST = \
 	index.rst \
 	index_man.rst \
 	build.rst \
+	support.rst \
+	images/lgplv3-147x51.png \
 	$(RST_FILES) \
 	man1/index.rst \
 	man1/index_general.rst \
