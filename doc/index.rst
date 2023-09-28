@@ -97,7 +97,7 @@ Table of Contents
 .. toctree::
    :maxdepth: 2
 
-   build
-   support
+   guide/build
+   guide/support
    index_man
    python/index
