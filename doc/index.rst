@@ -99,5 +99,6 @@ Table of Contents
 
    guide/build
    guide/support
+   guide/start
    index_man
    python/index
