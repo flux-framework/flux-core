@@ -153,6 +153,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     flux_reactor_t *r = flux_get_reactor (h);
     int rc = -1;
     struct job_manager ctx;
+    flux_error_t error;
 
     memset (&ctx, 0, sizeof (ctx));
     ctx.h = h;
@@ -166,8 +167,8 @@ int mod_main (flux_t *h, int argc, char **argv)
     zhashx_set_duplicator (ctx.active_jobs, job_duplicator);
     zhashx_set_destructor (ctx.inactive_jobs, job_destructor);
     zhashx_set_duplicator (ctx.inactive_jobs, job_duplicator);
-    if (!(ctx.conf = conf_create (&ctx))) {
-        flux_log_error (h, "error creating conf context");
+    if (!(ctx.conf = conf_create (&ctx, &error))) {
+        flux_log (h, LOG_ERR, "config: %s", error.text);
         goto done;
     }
     if (!(ctx.jobtap = jobtap_create (&ctx))) {

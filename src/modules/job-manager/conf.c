@@ -18,6 +18,7 @@
 
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libfluxutil/policy.h"
 
 #include "job-manager.h"
 #include "journal.h"
@@ -116,6 +117,10 @@ static void config_reload_cb (flux_t *h,
 
     if (flux_conf_reload_decode (msg, &instance_conf) < 0)
         goto error;
+    if (policy_validate (instance_conf, &error) < 0) {
+        errstr = error.text;
+        goto error;
+    }
     ccb = zlistx_first (conf->callbacks);
     while (ccb) {
         if (ccb->cb (instance_conf, &error, ccb->arg) < 0) {
@@ -154,13 +159,15 @@ void conf_destroy (struct conf *conf)
     }
 }
 
-struct conf *conf_create (struct job_manager *ctx)
+struct conf *conf_create (struct job_manager *ctx, flux_error_t *error)
 {
     struct conf *conf;
 
     if (!(conf = calloc (1, sizeof (*conf))))
-        return NULL;
+        goto error;
     conf->ctx = ctx;
+    if (policy_validate (flux_get_conf (ctx->h), error) < 0)
+        goto error_nofill;
     if (!(conf->callbacks = zlistx_new ())) {
         errno = ENOMEM;
         goto error;
@@ -170,6 +177,8 @@ struct conf *conf_create (struct job_manager *ctx)
         goto error;
     return conf;
 error:
+    errprintf (error, "%s", strerror (errno));
+error_nofill:
     conf_destroy (conf);
     return NULL;
 }

@@ -14,7 +14,9 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = libfluxutil.la
 libfluxutil_la_SOURCES = \
 	method.h \
-	method.c
+	method.c \
+	policy.h \
+	policy.c
 
 libfluxutil_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)

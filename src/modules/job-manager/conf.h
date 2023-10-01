@@ -25,7 +25,7 @@ typedef int (*conf_update_f)(const flux_conf_t *conf,
                              flux_error_t *error,
                              void *arg);
 
-struct conf *conf_create (struct job_manager *ctx);
+struct conf *conf_create (struct job_manager *ctx, flux_error_t *error);
 void conf_destroy (struct conf *conf);
 
 /* Immediately call 'cb' on current config object, and then on config updates
