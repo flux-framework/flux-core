@@ -100,6 +100,22 @@ error:
     return NULL;
 }
 
+static int copy_z85_key (char *dst, const char *src, int size)
+{
+    const char *xtra = ".-:+=^!/*?&<>()[]{}@%$#";
+    const char *cp = src;
+
+    if (!cp || strlen (cp) != size - 1)
+        return -1;
+    while (*cp) {
+        if (!isalnum (*cp) && !strchr (xtra, *cp))
+            return -1;
+        cp++;
+    }
+    (void)strlcpy (dst, src, size);
+    return 0;
+}
+
 // assumes both keys are valid
 static bool valid_keypair (struct cert *cert)
 {
@@ -119,18 +135,14 @@ struct cert *cert_create_from (const char *public_txt, const char *secret_txt)
     if (!(cert = cert_create_empty ()))
         return NULL;
     if (public_txt) {
-        if (strlen (public_txt) != TXTSIZE - 1)
-            goto inval;
-         strcpy (cert->public_txt, public_txt);
-         if (!zmq_z85_decode (cert->public_key, cert->public_txt))
+        if (copy_z85_key (cert->public_txt, public_txt, TXTSIZE) < 0
+            || !zmq_z85_decode (cert->public_key, cert->public_txt))
             goto inval;
         cert->public_valid = true;
     }
     if (secret_txt) {
-        if (strlen (secret_txt) != TXTSIZE - 1)
-            goto inval;
-        strcpy (cert->secret_txt, secret_txt);
-        if (!zmq_z85_decode (cert->secret_key, cert->secret_txt))
+        if (copy_z85_key (cert->secret_txt, secret_txt, TXTSIZE) < 0
+            || !zmq_z85_decode (cert->secret_key, cert->secret_txt))
             goto inval;
         cert->secret_valid = true;
     }
@@ -336,13 +348,13 @@ static int parse_curve (struct cert *cert, char *s)
     if (parse_keyval (s, &key, &val) < 0)
         return -1;
     if (streq (key, "public-key")) {
-        if (strlcpy (cert->public_txt, val, TXTSIZE) >= TXTSIZE
+        if (copy_z85_key (cert->public_txt, val, TXTSIZE) < 0
             || !zmq_z85_decode (cert->public_key, cert->public_txt))
             goto error;
         cert->public_valid = true;
     }
     else if (streq (key, "secret-key")) {
-        if (strlcpy (cert->secret_txt, val, TXTSIZE) >= TXTSIZE
+        if (copy_z85_key (cert->secret_txt, val, TXTSIZE) < 0
             || !zmq_z85_decode (cert->secret_key, cert->secret_txt))
             goto error;
         cert->secret_valid = true;
