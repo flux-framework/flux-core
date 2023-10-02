@@ -353,8 +353,7 @@ void test_inval (void)
 
     if (!(cert = cert_create ()))
         BAIL_OUT ("could not create cert");
-    if (!(cpub = cert_create_from (cert_public_txt (cert),
-                                           NULL)))
+    if (!(cpub = cert_create_from (cert_public_txt (cert), NULL)))
         BAIL_OUT ("could not create cert");
 
     errno = 0;
