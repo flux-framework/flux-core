@@ -13,6 +13,7 @@
 #endif
 #include <stdbool.h>
 #include <errno.h>
+#include <zmq.h>
 
 #include "tap.h"
 #include "ccan/str/str.h"
@@ -160,6 +161,7 @@ static struct test_vec badvec[] = {
     " public-key = \"" PAIR1_PUB PAIR1_PUB "\"\n"
     " secret-key = \"" PAIR1_SEC "\"\n"
     },
+#if (ZMQ_VERSION >= ZMQ_MAKE_VERSION(4,2,1))
     {
         .name = "cert with mismatched keypair",
         .input =
@@ -168,6 +170,7 @@ static struct test_vec badvec[] = {
     " public-key = \"" "YYFE.@650VuUqRGygAtG.RC$A<cid63q(WEnR+&y" "\"\n"
     " secret-key = \"" PAIR1_SEC "\"\n"
     },
+#endif
 };
 
 void test_basic (void)

@@ -103,11 +103,13 @@ error:
 // assumes both keys are valid
 static bool valid_keypair (struct cert *cert)
 {
+#if (ZMQ_VERSION >= ZMQ_MAKE_VERSION(4,2,1))
     char pub[TXTSIZE];
-    if (zmq_curve_public (pub, cert->secret_txt) == 0
-        && streq (pub, cert->public_txt))
-        return true;
-    return false;
+    if (zmq_curve_public (pub, cert->secret_txt) < 0
+        || !streq (pub, cert->public_txt))
+        return false;
+#endif
+    return true;
 }
 
 struct cert *cert_create_from (const char *public_txt, const char *secret_txt)
