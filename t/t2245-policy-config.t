@@ -10,7 +10,7 @@ specified in RFC 33 for [policy] and [queue.<name>.policy].
 
 mkdir -p config
 
-test_under_flux 1 minimal
+test_under_flux 1 job
 
 flux setattr log-stderr-level 1
 
@@ -175,4 +175,12 @@ test_expect_success 'valid config passes' '
 	[queues.batch]
 	EOT
 '
+
+test_expect_success 'a bad config is detected at initialization too' '
+	cat >badconf.toml <<-EOT &&
+	policy.foo = 1
+	EOT
+	test_must_fail flux start -o,--config-path=badconf.toml true
+'
+
 test_done

@@ -423,8 +423,9 @@ bool queue_started (struct queue *queue, struct job *job)
     return queue->anon->start;
 }
 
-/* N.B. the broker will have already validated the basic queue configuration so
- * we shouldn't need to produce detailed configuration errors for users here.
+/* N.B. the basic queue configuration should have already been validated by
+ * policy_validate() so we shouldn't need to produce detailed configuration
+ * errors for users here.
  */
 static int queue_configure (const flux_conf_t *conf,
                             flux_error_t *error,
