@@ -1,3 +1,57 @@
+flux-core version 0.55.0 - 2023-10-03
+-------------------------------------
+
+## New Features
+
+ * drop libzcmq dependency (#5468)
+ * allow hwloc topology to be loaded from a file with `FLUX_HWLOC_XMLFILE`
+   (#5462)
+ * improve begin-time representation in `flux-jobs(1)` output (#5473)
+ * support update of job queue (#5424)
+ * job-list: support getting job project and bank (#5413)
+ * flux-job: get updated version of jobspec (#5428)
+ * flux-top: use streaming job-stats RPC (#5432)
+ * job-list: support streaming job-stats RPC (#5430)
+
+## Fixes
+
+ * libzmqutil: fix portability to libzmq-4.1.5 (#5481)
+ * broker: move policy config check out to the modules that rely on it
+   (#5478)
+ * libzmqutil: add cert class and use it instead of CZMQ `zcert_t` (#5461)
+ * broker: stop managing 0MQ sockets with czmq (#5454)
+ * use zeromq interfaces directly where possible instead of via czmq (#5458)
+ * rc: fix `flux start` failure when multiple scripts are present in `rc1.d`
+   (#5453)
+ * rc: avoid startup problems when `BASH_ENV` is set (#5448)
+ * flux-keygen: drop libsodium requirement (#5446)
+ * content: make the content cache a broker module (#5435)
+ * job-manager: correct fsd output in error message (#5437)
+ * modules: consistently return error on invalid module arguments (#5442)
+
+## Documentation
+
+ * doc: add a page on starting Flux (#5477)
+ * doc: add build instructions and support info (#5476)
+ * doc: add content to landing page and group man pages (#5470)
+
+## Cleanup
+
+ * libflux: drop `flux_panic()` (#5439)
+ * job-manager: update: cleanup, small fixes, and documentation (#5434)
+ * job-manager: stop publishing job-state event messages (#5433)
+
+## Build/Testsuite/CI
+
+ * switch qemu-user-static setup to fix setuid (#5469)
+ * etc: remove ubuntu build-container action (#5474)
+ * configure: use distutils if available to avoid extra python module
+   dependency (#5459)
+ * configure: avoid use of deprecated python distutils module (#5456)
+ * testsuite: handle job signal race in more tests (#5438)
+ * testsuite: increase sleep time in tests (#5431)
+
+
 flux-core version 0.54.0 - 2023-09-05
 -------------------------------------
 
