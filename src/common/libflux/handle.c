@@ -332,14 +332,18 @@ flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
 #endif
     if ((s = getenv ("FLUX_HANDLE_USERID"))) {
         uint32_t userid = strtoul (s, NULL, 10);
-        if (flux_opt_set (h, FLUX_OPT_TESTING_USERID, &userid,
-                                                      sizeof (userid)) < 0)
+        if (flux_opt_set (h,
+                          FLUX_OPT_TESTING_USERID,
+                          &userid,
+                          sizeof (userid)) < 0)
             goto error_handle;
     }
     if ((s = getenv ("FLUX_HANDLE_ROLEMASK"))) {
         uint32_t rolemask = strtoul (s, NULL, 0);
-        if (flux_opt_set (h, FLUX_OPT_TESTING_ROLEMASK, &rolemask,
-                                                    sizeof (rolemask)) < 0)
+        if (flux_opt_set (h,
+                          FLUX_OPT_TESTING_ROLEMASK,
+                          &rolemask,
+                          sizeof (rolemask)) < 0)
             goto error_handle;
     }
     free (scheme);
@@ -369,7 +373,9 @@ void flux_close (flux_t *h)
     flux_handle_destroy (h);
 }
 
-flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
+flux_t *flux_handle_create (void *impl,
+                            const struct flux_handle_ops *ops,
+                            int flags)
 {
     flux_t *h;
 
