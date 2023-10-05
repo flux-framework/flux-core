@@ -17,7 +17,6 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 #include "list.h"
 
 void test_inval (void)
@@ -26,8 +25,8 @@ void test_inval (void)
     struct unit_info info;
     flux_future_t *f;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("could not create loopback flux_t handle for testing");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop flux_t handle for testing");
     if (!(f = flux_future_create (NULL, 0)))
         BAIL_OUT ("could not create future for testing");
 

@@ -18,7 +18,6 @@
 
 #include "src/common/libsubprocess/command.h"
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 #include "src/common/libutil/jpath.h"
 #include "start.h"
 
@@ -35,8 +34,8 @@ void test_inval (void)
     json_t *o;
     flux_error_t error;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("could not create loopback flux_t handle for testing");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop flux_t handle for testing");
     if (!(f = flux_future_create (NULL, 0)))
         BAIL_OUT ("could not create future for testing");
     if (!(cmd = flux_cmd_create (ac, av, environ))

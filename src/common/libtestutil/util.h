@@ -32,13 +32,3 @@ flux_t *test_server_create (void *zctx,
 			    void *arg);
 
 int test_server_stop (flux_t *c);
-
-/* Create a loopback connector for testing.
- * The net effect is much the same as flux_open("loop://") except
- * the implementation is self contained here.  Close with flux_close().
- *
- * Like loop://, this support test manipulation of credentials:
- *   flux_opt_set (h, FLUX_OPT_TESTING_USERID, &userid, sizeof (userid);
- *   flux_opt_set (h, FLUX_OPT_TESTING_ROLEMASK, &rolemask, sizeof (rolemask))
- */
-flux_t *loopback_create (int flags);

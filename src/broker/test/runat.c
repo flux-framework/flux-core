@@ -18,7 +18,6 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
-#include "src/common/libtestutil/util.h"
 #include "src/common/libutil/stdlog.h"
 
 #include "src/broker/runat.h"
@@ -361,8 +360,8 @@ int main (int argc, char *argv[])
         BAIL_OUT ("zlist_new failed");
     if (!(r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         BAIL_OUT ("flux_reactor_create failed");
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("loopback_create failed");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop handle");
     if (flux_set_reactor (h, r) < 0)
         BAIL_OUT ("flux_set_reactor failed");
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)

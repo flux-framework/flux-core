@@ -455,7 +455,7 @@ static void monitor_cb (struct flux_pty *pty, void *data, int len)
 void test_monitor ()
 {
     int total = 0;
-    flux_t *h = loopback_create (0);
+    flux_t *h = flux_open ("loop://", 0);
     struct flux_pty *pty = flux_pty_open ();
 
     if (!h || !pty)

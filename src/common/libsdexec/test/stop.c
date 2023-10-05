@@ -17,15 +17,14 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 #include "stop.h"
 
 void test_inval (void)
 {
     flux_t *h;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("could not create loopback flux_t handle for testing");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop flux_t handle for testing");
 
     errno = 0;
     ok (sdexec_stop_unit (NULL, 0, "foo", "bar") == NULL && errno == EINVAL,

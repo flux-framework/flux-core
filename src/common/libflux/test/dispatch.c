@@ -16,7 +16,6 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 
 int cb2_called;
 void cb2 (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
@@ -524,8 +523,8 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("can't continue without loopback handle");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("can't continue without loop handle");
     ok ((r = flux_get_reactor (h)) != NULL,
         "handle created reactor on demand");
 

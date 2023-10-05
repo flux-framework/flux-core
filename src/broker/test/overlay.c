@@ -22,7 +22,6 @@
 #include "src/common/libzmqutil/sockopt.h"
 #include "src/common/libzmqutil/cert.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
-#include "src/common/libtestutil/util.h"
 #include "src/common/libutil/stdlog.h"
 #include "src/common/libutil/unlink_recursive.h"
 #include "ccan/str/str.h"
@@ -709,8 +708,8 @@ int main (int argc, char *argv[])
 
     if (!(logs = zlist_new ()))
         BAIL_OUT ("zlist_new failed");
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("loopback_create failed");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop handle");
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
         BAIL_OUT ("flux_attr_set_cacheonly rank failed");
     if (flux_attr_set_cacheonly (h, "hostlist", "test") < 0)

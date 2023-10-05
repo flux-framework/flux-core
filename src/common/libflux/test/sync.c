@@ -16,7 +16,6 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 
 void send_fake_heartbeat (flux_t *h, int seq)
 {
@@ -42,8 +41,8 @@ void test_non_reactive_loop (void)
     int rc;
     int i;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("could not create loopback handle");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop handle");
 
     f = flux_sync_create (h, 0.);
     ok (f != NULL,
@@ -105,7 +104,7 @@ void continuation (flux_future_t *f, void *arg)
 
 void test_sync_reactive (double heartrate, double min, double max)
 {
-    flux_t *h = loopback_create (0);
+    flux_t *h = flux_open ("loop://", 0);
     struct heartbeat_ctx ctx = { .h = h, .seq = 0 };
     flux_reactor_t *r;
     flux_watcher_t *timer;
@@ -113,7 +112,7 @@ void test_sync_reactive (double heartrate, double min, double max)
     int count;
 
     if (!h)
-        BAIL_OUT ("could not create loopback handle");
+        BAIL_OUT ("could not create loop handle");
     if (!(r = flux_get_reactor (h)))
         BAIL_OUT ("flux_get_reactor failed on loopback handle");
 

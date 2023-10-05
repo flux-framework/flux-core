@@ -102,8 +102,8 @@ void test_subscribe_badparams (void)
 {
     flux_t *h;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("loopback_create failed");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop handle");
 
     errno = 0;
     ok (flux_event_subscribe_ex (NULL, "foo", 0) == NULL && errno == EINVAL,
@@ -288,8 +288,8 @@ void test_subscribe_nosub (void)
 {
     flux_t *h;
 
-    if (!(h = loopback_create (FLUX_O_TEST_NOSUB)))
-        BAIL_OUT ("loopback_create failed");
+    if (!(h = flux_open ("loop://", FLUX_O_TEST_NOSUB)))
+        BAIL_OUT ("could not create loop handle");
 
     ok (flux_event_subscribe (h, "foo") == 0,
         "flux_event_subscribe succeeds in loopback with TEST_NOSUB flag");

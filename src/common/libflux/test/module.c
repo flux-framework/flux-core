@@ -53,8 +53,8 @@ void test_set_running (void)
 {
     flux_t *h;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("loopback_create failed");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop handle");
 
     ok (flux_module_set_running (h) == 0,
         "flux_module_set_running returns success");

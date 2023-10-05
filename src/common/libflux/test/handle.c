@@ -16,7 +16,6 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 #include "ccan/str/str.h"
 
 /* Destructor for malloc'ed string.
@@ -98,8 +97,8 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("can't continue without loopback handle");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("can't continue without loop handle");
 
     test_handle_invalid_args (h);
 
