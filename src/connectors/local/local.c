@@ -91,8 +91,10 @@ static flux_msg_t *op_recv (void *impl, int flags)
     return usock_client_recv (ctx->uclient, flags);
 }
 
-static int op_setopt (void *impl, const char *option,
-                      const void *val, size_t size)
+static int op_setopt (void *impl,
+                      const char *option,
+                      const void *val,
+                      size_t size)
 {
     struct local_connector *ctx = impl;
     size_t val_size;
@@ -123,8 +125,10 @@ done:
     return rc;
 }
 
-static int op_getopt (void *impl, const char *option,
-                      void *val, size_t size)
+static int op_getopt (void *impl,
+                      const char *option,
+                      void *val,
+                      size_t size)
 {
     struct local_connector *ctx = impl;
     size_t val_size;
