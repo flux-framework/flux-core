@@ -92,7 +92,10 @@ struct builtin_connector {
     connector_init_f *init;
 };
 
+flux_t *connector_loop_init (const char *uri, int flags, flux_error_t *errp);
+
 static struct builtin_connector builtin_connectors[] = {
+    { "loop", &connector_loop_init },
 };
 
 static void handle_trace (flux_t *h, const char *fmt, ...)

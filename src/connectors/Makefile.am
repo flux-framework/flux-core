@@ -13,7 +13,6 @@ AM_CPPFLAGS = \
 
 fluxconnector_LTLIBRARIES = \
 	local.la \
-	loop.la \
 	shmem.la \
 	ssh.la
 
@@ -27,13 +26,6 @@ local_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
 local_la_LDFLAGS = $(connector_ldflags)
-
-loop_la_SOURCES = \
-	loop/loop.c
-loop_la_LIBADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la
-loop_la_LDFLAGS = $(connector_ldflags)
 
 shmem_la_SOURCES = \
 	shmem/shmem.c
