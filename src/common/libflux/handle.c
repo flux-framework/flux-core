@@ -60,7 +60,7 @@ struct profiling_context {
 };
 #endif
 
-struct flux_handle_struct {
+struct flux_handle {
     flux_t          *parent; // if FLUX_O_CLONE, my parent
     struct aux_item *aux;
     int             usecount;
