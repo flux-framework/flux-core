@@ -93,13 +93,13 @@ static int op_getopt (void *impl, const char *option, void *val, size_t size)
 {
     loop_ctx_t *c = impl;
 
-    if (option && streq (option, FLUX_OPT_TESTING_USERID)) {
-        if (size != sizeof (c->cred.userid))
+    if (streq (option, FLUX_OPT_TESTING_USERID)) {
+        if (size != sizeof (c->cred.userid) || !val)
             goto error;
         memcpy (val, &c->cred.userid, size);
     }
-    else if (option && streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
-        if (size != sizeof (c->cred.rolemask))
+    else if (streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
+        if (size != sizeof (c->cred.rolemask) || !val)
             goto error;
         memcpy (val, &c->cred.rolemask, size);
     }
@@ -119,15 +119,15 @@ static int op_setopt (void *impl,
     loop_ctx_t *c = impl;
     size_t val_size;
 
-    if (option && streq (option, FLUX_OPT_TESTING_USERID)) {
+    if (streq (option, FLUX_OPT_TESTING_USERID)) {
         val_size = sizeof (c->cred.userid);
-        if (size != val_size)
+        if (size != val_size || !val)
             goto error;
         memcpy (&c->cred.userid, val, val_size);
     }
-    else if (option && streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
+    else if (streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
         val_size = sizeof (c->cred.rolemask);
-        if (size != val_size)
+        if (size != val_size || !val)
             goto error;
         memcpy (&c->cred.rolemask, val, val_size);
     }

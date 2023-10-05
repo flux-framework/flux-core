@@ -578,6 +578,10 @@ int flux_flags_get (flux_t *h)
 
 int flux_opt_get (flux_t *h, const char *option, void *val, size_t len)
 {
+    if (!h || !option) {
+        errno = EINVAL;
+        return -1;
+    }
     h = lookup_clone_ancestor (h);
     if (!h->ops->getopt) {
         errno = EINVAL;
@@ -588,6 +592,10 @@ int flux_opt_get (flux_t *h, const char *option, void *val, size_t len)
 
 int flux_opt_set (flux_t *h, const char *option, const void *val, size_t len)
 {
+    if (!h || !option) {
+        errno = EINVAL;
+        return -1;
+    }
     h = lookup_clone_ancestor (h);
     if (!h->ops->setopt) {
         errno = EINVAL;
