@@ -95,6 +95,26 @@ jobs:
         --build-arg OMPI_BRANCH=v5.0.0rc12
         --build-arg OPENPMIX_BRANCH=v4.2.3
 
+  check-pam:
+    needs: [python-lint]
+    name: flux-pam check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+    - run: >
+        src/test/docker/docker-run-checks.sh
+        --image=el8
+        --install-only
+        --tag=fluxrm/flux-core:el8
+    - run: >
+        cd .. &&
+        git clone https://github.com/flux-framework/flux-pam &&
+        cd flux-pam &&
+        src/test/docker/docker-run-checks.sh -j 4 -i el8
+
   generate-matrix:
     # https://stackoverflow.com/questions/59977364
     name: Generate build matrix
