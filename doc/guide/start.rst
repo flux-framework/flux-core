@@ -22,7 +22,7 @@ parallel, as a *parallel program* if you will.
 phases:
 
 #. Initialize
-#. The rank 0 broker runs the **initial program** to completion
+#. The rank 0 broker runs the :term:`initial program` to completion
 #. Finalize
 
 By default, the initial program is an interactive shell.  If :man1:`flux-start`
@@ -280,8 +280,8 @@ can run Flux.  No surprise there.  What does that look like and how is it
 leveraged to provide expected workload manager abstractions?
 
 First let's try our workload commands in the "outer" Flux instance, in this
-case a standalone system instance, although this section applies to all Flux
-instances.
+case a standalone :term:`system instance`, although this section applies to all
+Flux instances.
 
 .. code-block:: console
 

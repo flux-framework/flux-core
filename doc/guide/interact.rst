@@ -166,13 +166,13 @@ socket and looks something like::
 
   local:///tmp/flux-lMDa6Z/local-0
 
-In the *initial program* (batch script, interactive alloc shell, or whatever),
-the FLUX_URI environment variable is set to the local URI of the rank 0
-broker.  Flux commands in the initial program, which also runs on rank 0,
+In the :term:`initial program` (batch script, interactive alloc shell, or
+whatever), the FLUX_URI environment variable is set to the local URI of the rank
+0 broker.  Flux commands in the initial program, which also runs on rank 0,
 read FLUX_URI and reference the instance that started them.
 
 When running outside of an instance, FLUX_URI will not be set.  In this case,
-commands fall back to the compiled-in URI of the Flux system instance.
+commands fall back to the compiled-in URI of the Flux :term:`system instance`.
 When there isn't a broker of the system instance running on the local node,
 commands fail with an error like::
 
