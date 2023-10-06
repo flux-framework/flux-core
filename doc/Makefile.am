@@ -398,6 +398,7 @@ EXTRA_DIST = \
 	guide/support.rst \
 	guide/images/lgplv3-147x51.png \
 	guide/start.rst \
+	guide/interact.rst \
 	$(RST_FILES) \
 	man1/index.rst \
 	man1/index_general.rst \

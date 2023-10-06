@@ -100,5 +100,6 @@ Table of Contents
    guide/build
    guide/support
    guide/start
+   guide/interact
    index_man
    python/index
