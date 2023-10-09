@@ -33,6 +33,8 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #include "handle.h"
 #include "reactor.h"
@@ -60,7 +62,7 @@ struct profiling_context {
 };
 #endif
 
-struct flux_handle_struct {
+struct flux_handle {
     flux_t          *parent; // if FLUX_O_CLONE, my parent
     struct aux_item *aux;
     int             usecount;
@@ -83,6 +85,17 @@ struct flux_handle_struct {
     struct profiling_context prof;
 #endif
     struct rpc_track *tracker;
+};
+
+struct builtin_connector {
+    const char *scheme;
+    connector_init_f *init;
+};
+
+flux_t *connector_loop_init (const char *uri, int flags, flux_error_t *errp);
+
+static struct builtin_connector builtin_connectors[] = {
+    { "loop", &connector_loop_init },
 };
 
 static void handle_trace (flux_t *h, const char *fmt, ...)
@@ -208,6 +221,14 @@ static void profiling_msg_snapshot (flux_t *h,
 
 #endif
 
+static connector_init_f *find_connector_builtin (const char *scheme)
+{
+    for (int i = 0; i < ARRAY_SIZE (builtin_connectors); i++)
+        if (streq (scheme, builtin_connectors[i].scheme))
+            return builtin_connectors[i].init;
+    return NULL;
+}
+
 static char *find_file (const char *name, const char *searchpath)
 {
     char *path;
@@ -224,9 +245,9 @@ static char *find_file (const char *name, const char *searchpath)
     return path;
 }
 
-static connector_init_f *find_connector (const char *scheme,
-                                         void **dsop,
-                                         flux_error_t *errp)
+static connector_init_f *find_connector_dso (const char *scheme,
+                                             void **dsop,
+                                             flux_error_t *errp)
 {
     char name[PATH_MAX];
     const char *searchpath = getenv ("FLUX_CONNECTOR_PATH");
@@ -316,14 +337,16 @@ flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
         *path = '\0';
         path = strtrim (path + 3, " \t");
     }
-    if (!(connector_init = find_connector (scheme, &dso, errp)))
+    if (!(connector_init = find_connector_builtin (scheme))
+        && !(connector_init = find_connector_dso (scheme, &dso, errp)))
         goto error;
     if (getenv ("FLUX_HANDLE_TRACE"))
         flags |= FLUX_O_TRACE;
     if (getenv ("FLUX_HANDLE_MATCHDEBUG"))
         flags |= FLUX_O_MATCHDEBUG;
     if (!(h = connector_init (path, flags, errp))) {
-        ERRNO_SAFE_WRAP (dlclose, dso);
+        if (dso)
+            ERRNO_SAFE_WRAP (dlclose, dso);
         goto error;
     }
     h->dso = dso;
@@ -332,14 +355,18 @@ flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
 #endif
     if ((s = getenv ("FLUX_HANDLE_USERID"))) {
         uint32_t userid = strtoul (s, NULL, 10);
-        if (flux_opt_set (h, FLUX_OPT_TESTING_USERID, &userid,
-                                                      sizeof (userid)) < 0)
+        if (flux_opt_set (h,
+                          FLUX_OPT_TESTING_USERID,
+                          &userid,
+                          sizeof (userid)) < 0)
             goto error_handle;
     }
     if ((s = getenv ("FLUX_HANDLE_ROLEMASK"))) {
         uint32_t rolemask = strtoul (s, NULL, 0);
-        if (flux_opt_set (h, FLUX_OPT_TESTING_ROLEMASK, &rolemask,
-                                                    sizeof (rolemask)) < 0)
+        if (flux_opt_set (h,
+                          FLUX_OPT_TESTING_ROLEMASK,
+                          &rolemask,
+                          sizeof (rolemask)) < 0)
             goto error_handle;
     }
     free (scheme);
@@ -369,7 +396,9 @@ void flux_close (flux_t *h)
     flux_handle_destroy (h);
 }
 
-flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
+flux_t *flux_handle_create (void *impl,
+                            const struct flux_handle_ops *ops,
+                            int flags)
 {
     flux_t *h;
 
@@ -549,6 +578,10 @@ int flux_flags_get (flux_t *h)
 
 int flux_opt_get (flux_t *h, const char *option, void *val, size_t len)
 {
+    if (!h || !option) {
+        errno = EINVAL;
+        return -1;
+    }
     h = lookup_clone_ancestor (h);
     if (!h->ops->getopt) {
         errno = EINVAL;
@@ -559,6 +592,10 @@ int flux_opt_get (flux_t *h, const char *option, void *val, size_t len)
 
 int flux_opt_set (flux_t *h, const char *option, const void *val, size_t len)
 {
+    if (!h || !option) {
+        errno = EINVAL;
+        return -1;
+    }
     h = lookup_clone_ancestor (h);
     if (!h->ops->setopt) {
         errno = EINVAL;

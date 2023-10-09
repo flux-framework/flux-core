@@ -18,6 +18,8 @@
 
 #include <flux/core.h>
 
+#include "ccan/str/str.h"
+
 typedef struct {
     flux_t *h;
 
@@ -87,6 +89,56 @@ static flux_msg_t *op_recv (void *impl, int flags)
     return msg;
 }
 
+static int op_getopt (void *impl, const char *option, void *val, size_t size)
+{
+    loop_ctx_t *c = impl;
+
+    if (streq (option, FLUX_OPT_TESTING_USERID)) {
+        if (size != sizeof (c->cred.userid) || !val)
+            goto error;
+        memcpy (val, &c->cred.userid, size);
+    }
+    else if (streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
+        if (size != sizeof (c->cred.rolemask) || !val)
+            goto error;
+        memcpy (val, &c->cred.rolemask, size);
+    }
+    else
+        goto error;
+    return 0;
+error:
+    errno = EINVAL;
+    return -1;
+}
+
+static int op_setopt (void *impl,
+                      const char *option,
+                      const void *val,
+                      size_t size)
+{
+    loop_ctx_t *c = impl;
+    size_t val_size;
+
+    if (streq (option, FLUX_OPT_TESTING_USERID)) {
+        val_size = sizeof (c->cred.userid);
+        if (size != val_size || !val)
+            goto error;
+        memcpy (&c->cred.userid, val, val_size);
+    }
+    else if (streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
+        val_size = sizeof (c->cred.rolemask);
+        if (size != val_size || !val)
+            goto error;
+        memcpy (&c->cred.rolemask, val, val_size);
+    }
+    else
+        goto error;
+    return 0;
+error:
+    errno = EINVAL;
+    return -1;
+}
+
 static void op_fini (void *impl)
 {
     loop_ctx_t *c = impl;
@@ -95,7 +147,7 @@ static void op_fini (void *impl)
     free (c);
 }
 
-flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
+flux_t *connector_loop_init (const char *path, int flags, flux_error_t *errp)
 {
     loop_ctx_t *c = malloc (sizeof (*c));
     if (!c) {
@@ -129,8 +181,8 @@ static const struct flux_handle_ops handle_ops = {
     .pollevents = op_pollevents,
     .send = op_send,
     .recv = op_recv,
-    .getopt = NULL,
-    .setopt = NULL,
+    .getopt = op_getopt,
+    .setopt = op_setopt,
     .impl_destroy = op_fini,
 };
 

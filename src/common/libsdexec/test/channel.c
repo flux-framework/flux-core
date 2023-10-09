@@ -18,7 +18,6 @@
 
 #include "ccan/array_size/array_size.h"
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 #include "src/common/libioencode/ioencode.h"
 #include "channel.h"
 
@@ -58,8 +57,8 @@ void test_input (void)
     json_t *io;
     json_t *io_eof;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("could not create loopback flux_t handle for testing");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop flux_t handle for testing");
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
         BAIL_OUT ("could not set rank for testing");
     ch = sdexec_channel_create_input (h, "in");
@@ -148,8 +147,8 @@ void test_output (void)
     struct channel *ch;
     int fd;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("could not create loopback flux_t handle for testing");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop flux_t handle for testing");
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
         BAIL_OUT ("could not set rank for testing");
     ch = sdexec_channel_create_output (h, "out", output_cb, error_cb, NULL);
@@ -200,8 +199,8 @@ void test_inval (void)
     flux_t *h;
     json_t *io;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("could not create loopback flux_t handle for testing");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop flux_t handle for testing");
     if (!(io = ioencode ("foo", "0", NULL, 0, true)))
         BAIL_OUT ("could not create json io object");
 

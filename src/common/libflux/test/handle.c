@@ -16,7 +16,6 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 #include "ccan/str/str.h"
 
 /* Destructor for malloc'ed string.
@@ -98,8 +97,8 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("can't continue without loopback handle");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("can't continue without loop handle");
 
     test_handle_invalid_args (h);
 
@@ -108,8 +107,43 @@ int main (int argc, char *argv[])
     /* Test flux_opt_set, flux_opt_get.
      */
     errno = 0;
+    uint32_t uid = 999;
+    ok (flux_opt_set (NULL, FLUX_OPT_TESTING_USERID, &uid, sizeof (uid)) < 0
+        && errno == EINVAL,
+        "flux_opt_set h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_opt_set (h, NULL, &uid, sizeof (uid)) < 0
+        && errno == EINVAL,
+        "flux_opt_set option=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_opt_set (h, FLUX_OPT_TESTING_USERID, NULL, sizeof (uid)) < 0
+        && errno == EINVAL,
+        "flux_opt_set option=testing_userid val=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_opt_set (h, FLUX_OPT_TESTING_USERID, &uid, sizeof (uid)+1) < 0
+        && errno == EINVAL,
+        "flux_opt_set option=testing_userid size=wrong fails with EINVAL");
+    errno = 0;
     ok (flux_opt_set (h, "nonexistent", NULL, 0) < 0 && errno == EINVAL,
         "flux_opt_set fails with EINVAL on unknown option");
+
+    errno = 0;
+    ok (flux_opt_get (NULL, FLUX_OPT_TESTING_USERID, &uid, sizeof (uid)) < 0
+        && errno == EINVAL,
+        "flux_opt_get h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_opt_get (h, NULL, &uid, sizeof (uid)) < 0
+        && errno == EINVAL,
+        "flux_opt_get option=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_opt_get (h, FLUX_OPT_TESTING_USERID, NULL, sizeof (uid)) < 0
+        && errno == EINVAL,
+        "flux_opt_get option=testing_userid val=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_opt_get (h, FLUX_OPT_TESTING_USERID, &uid, sizeof (uid)+1) < 0
+        && errno == EINVAL,
+        "flux_opt_get option=testing_userid size=wrong fails with EINVAL");
+
     errno = 0;
     ok (flux_opt_get (h, "nonexistent", NULL, 0) < 0 && errno == EINVAL,
         "flux_opt_get fails with EINVAL on unknown option");

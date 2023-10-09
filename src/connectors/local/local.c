@@ -91,24 +91,26 @@ static flux_msg_t *op_recv (void *impl, int flags)
     return usock_client_recv (ctx->uclient, flags);
 }
 
-static int op_setopt (void *impl, const char *option,
-                      const void *val, size_t size)
+static int op_setopt (void *impl,
+                      const char *option,
+                      const void *val,
+                      size_t size)
 {
     struct local_connector *ctx = impl;
     size_t val_size;
     int rc = -1;
 
-    if (option && streq (option, FLUX_OPT_TESTING_USERID)) {
+    if (streq (option, FLUX_OPT_TESTING_USERID)) {
         val_size = sizeof (ctx->testing_userid);
-        if (size != val_size) {
+        if (size != val_size || !val) {
             errno = EINVAL;
             goto done;
         }
         memcpy (&ctx->testing_userid, val, val_size);
     }
-    else if (option && streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
+    else if (streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
         val_size = sizeof (ctx->testing_rolemask);
-        if (size != val_size) {
+        if (size != val_size || !val) {
             errno = EINVAL;
             goto done;
         }
@@ -123,16 +125,18 @@ done:
     return rc;
 }
 
-static int op_getopt (void *impl, const char *option,
-                      void *val, size_t size)
+static int op_getopt (void *impl,
+                      const char *option,
+                      void *val,
+                      size_t size)
 {
     struct local_connector *ctx = impl;
     size_t val_size;
     int rc = -1;
 
-    if (option && streq (option, "flux::owner")) {
+    if (streq (option, "flux::owner")) {
         val_size = sizeof (ctx->owner);
-        if (size != val_size) {
+        if (size != val_size || !val) {
             errno = EINVAL;
             goto done;
         }

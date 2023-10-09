@@ -25,7 +25,6 @@
 #include "src/common/libflux/conf_private.h"
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 #include "ccan/str/str.h"
 
 const char *t1 = \
@@ -351,8 +350,8 @@ void test_in_handle (void)
 
     /* create test handle
      */
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("loopback_create failed");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("failed to create loop handle");
 
     /* create test config
      */

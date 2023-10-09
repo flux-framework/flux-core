@@ -16,7 +16,6 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 
 flux_msg_t *create_request (int sender,
                             uint32_t rolemask,
@@ -142,8 +141,8 @@ void check_cancel (void)
     int count;
     uint32_t matchtag;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("could not create loopback handle");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("failed to create loop handle");
 
     /* populate list of requests with unique senders
      */

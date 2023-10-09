@@ -18,7 +18,6 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/xzmalloc.h"
-#include "src/common/libtestutil/util.h"
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"
 
@@ -1366,8 +1365,8 @@ void test_rpc_like_thing_async (bool reverse_destroy_order)
     struct thing *t;
     flux_reactor_t *r;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("could not create loopback handle");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop handle");
     if (!(r = flux_get_reactor (h)))
         BAIL_OUT ("flux_get_reactor failed");
 
@@ -1412,8 +1411,8 @@ void test_rpc_like_thing (bool reverse_destroy_order)
     flux_msg_t *msg;
     struct thing *t;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("could not create loopback handle");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop handle");
 
     t = thing_create (h);
 
@@ -1445,7 +1444,7 @@ void test_rpc_like_thing_unfulfilled (bool reverse_destroy_order)
     flux_t *h;
     struct thing *t;
 
-    if (!(h = loopback_create (0)))
+    if (!(h = flux_open ("loop://", 0)))
         BAIL_OUT ("could not create loopback handle");
 
     t = thing_create (h);

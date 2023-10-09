@@ -17,7 +17,6 @@
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 
 static int cred_get (flux_t *h, struct flux_msg_cred *cr)
 {
@@ -328,8 +327,8 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("cannot continue without loopback handle");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("cannot continue without loop handle");
     flux_comms_error_set (h, comms_err, NULL);
 
     check_rpc_oneway (h);

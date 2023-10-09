@@ -401,7 +401,7 @@ void test_open_close_session (void)
     struct flux_pty *pty1 = NULL;
     struct flux_terminus_server *t = NULL;
     struct flux_terminus_server *t2 = NULL;
-    flux_t *h = loopback_create (0);
+    flux_t *h = flux_open ("loop://", 0);
     flux_reactor_t *r = flux_reactor_create (FLUX_REACTOR_SIGCHLD);
 
     if (!h || !r)

@@ -24,10 +24,14 @@ typedef flux_t *(connector_init_f)(const char *uri,
                                    flux_error_t *errp);
 
 struct flux_handle_ops {
-    int         (*setopt)(void *impl, const char *option,
-                          const void *val, size_t len);
-    int         (*getopt)(void *impl, const char *option,
-                          void *val, size_t len);
+    int         (*setopt)(void *impl,
+                          const char *option,
+                          const void *val,
+                          size_t len);
+    int         (*getopt)(void *impl,
+                          const char *option,
+                          void *val,
+                          size_t len);
     int         (*pollfd)(void *impl);
     int         (*pollevents)(void *impl);
     int         (*send)(void *impl, const flux_msg_t *msg, int flags);
@@ -37,7 +41,9 @@ struct flux_handle_ops {
     void        (*impl_destroy)(void *impl);
 };
 
-flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags);
+flux_t *flux_handle_create (void *impl,
+                            const struct flux_handle_ops *ops,
+                            int flags);
 void flux_handle_destroy (flux_t *hp);
 
 #ifdef __cplusplus

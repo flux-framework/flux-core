@@ -84,8 +84,9 @@ static char *which (const char *prog, char *buf, size_t size)
     if (cpy) {
         while ((dir = strtok_r (a1, ":", &saveptr))) {
             snprintf (buf, size, "%s/%s", dir, prog);
-            if (stat (buf, &sb) == 0 && S_ISREG (sb.st_mode)
-                                     && access (buf, X_OK) == 0) {
+            if (stat (buf, &sb) == 0
+                && S_ISREG (sb.st_mode)
+                && access (buf, X_OK) == 0) {
                 result = buf;
                 break;
             }
@@ -232,8 +233,12 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
     /* Construct argv for ssh command from uri "path" (non-scheme part)
      * and flux and ssh command paths.
      */
-    if (build_ssh_command (path, ssh_cmd, flux_cmd, ld_lib_path,
-                           &argv, &argbuf) < 0)
+    if (build_ssh_command (path,
+                           ssh_cmd,
+                           flux_cmd,
+                           ld_lib_path,
+                           &argv,
+                           &argbuf) < 0)
         goto error;
 
     /* Start the ssh command

@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-typedef struct flux_handle_struct flux_t;
+typedef struct flux_handle flux_t;
 
 typedef struct {
     int request_tx;

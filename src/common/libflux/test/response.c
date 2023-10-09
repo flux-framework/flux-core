@@ -16,7 +16,6 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 #include "ccan/str/str.h"
 
 int main (int argc, char *argv[])
@@ -157,9 +156,9 @@ int main (int argc, char *argv[])
     flux_msg_destroy (msg);
 
     /* respond with request=NULL */
-    h = loopback_create (0);
+    h = flux_open ("loop://", 0);
     if (!h)
-        BAIL_OUT ("loopback_create");
+        BAIL_OUT ("could not create loop handle");
     errno = 0;
     ok (flux_respond (h, NULL, NULL) < 0 && errno == EINVAL,
         "flux_respond msg=NULL fails with EINVAL");
@@ -175,9 +174,9 @@ int main (int argc, char *argv[])
     flux_close (h);
 
     /* errnum=0 */
-    h = loopback_create (0);
+    h = flux_open ("loop://", 0);
     if (!h)
-        BAIL_OUT ("loopback_create");
+        BAIL_OUT ("could not create loop handle");
     msg = flux_request_encode ("foo", NULL);
     if (!msg)
         BAIL_OUT ("flux_request_encode failed");

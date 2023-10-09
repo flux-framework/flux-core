@@ -127,7 +127,7 @@ static void leak_msg_handler (void)
     flux_t *h;
     flux_msg_handler_t *mh;
 
-    if (!(h = loopback_create (0)))
+    if (!(h = flux_open ("loop://", 0)))
         exit (1);
     if (!(mh = flux_msg_handler_create (h, FLUX_MATCH_ANY, dummy, NULL)))
         exit (1);
@@ -148,7 +148,7 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    if (!(h = loopback_create (0)))
+    if (!(h = flux_open ("loop://", 0)))
         BAIL_OUT ("can't continue without loop handle");
     flux_comms_error_set (h, comms_err, NULL);
     ok ((reactor = flux_get_reactor (h)) != NULL,

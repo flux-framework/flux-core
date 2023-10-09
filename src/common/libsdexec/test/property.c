@@ -17,7 +17,6 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libtestutil/util.h"
 #include "property.h"
 
 void test_dict (void)
@@ -45,8 +44,8 @@ void test_inval (void)
     flux_future_t *f;
     json_t *dict;
 
-    if (!(h = loopback_create (0)))
-        BAIL_OUT ("could not create loopback flux_t handle for testing");
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop flux_t handle for testing");
     if (!(f = flux_future_create (NULL, 0)))
         BAIL_OUT ("could not create future for testing");
     if (!(dict = json_pack ("{s:[si]}", "foo", "i", 42)))
