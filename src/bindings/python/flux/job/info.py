@@ -541,7 +541,10 @@ class JobInfo:
         """
         result = {}
         for attr in chain(self.defaults.keys(), self.properties):
-            val = getattr(self, attr)
+            try:
+                val = getattr(self, attr)
+            except AttributeError:
+                val = None
             if val is not None:
                 result[attr] = val
 
