@@ -27,3 +27,7 @@ comment:
  layout: "header, diff, changes, tree"
  behavior: new
  after_n_builds: 2
+
+codecov:
+ notify:
+  after_n_builds: 2
