@@ -153,6 +153,7 @@ libmessage_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
 
 TESTS = test_message.t \
 	test_msglist.t \
+	test_interthread.t \
 	test_request.t \
 	test_response.t \
 	test_event.t \
@@ -297,6 +298,10 @@ test_sync_t_LDADD = $(test_ldadd)
 test_disconnect_t_SOURCES = test/disconnect.c
 test_disconnect_t_CPPFLAGS = $(test_cppflags)
 test_disconnect_t_LDADD = $(test_ldadd)
+
+test_interthread_t_SOURCES = test/interthread.c
+test_interthread_t_CPPFLAGS = $(test_cppflags)
+test_interthread_t_LDADD = $(test_ldadd)
 
 test_module_t_SOURCES = test/module.c
 test_module_t_CPPFLAGS = $(test_cppflags)
