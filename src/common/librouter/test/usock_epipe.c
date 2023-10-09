@@ -14,7 +14,6 @@
 #include <sys/param.h>
 #include <pthread.h>
 #include <flux/core.h>
-#include <zmq.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/unlink_recursive.h"
@@ -218,12 +217,8 @@ int main (int argc, char *argv[])
 {
     struct test_params tp = {0};
     flux_t *h;
-    void *zctx;
 
     plan (NO_PLAN);
-
-    if (!(zctx = zmq_ctx_new ()))
-        BAIL_OUT ("cannot create zeromq context");
 
     tmpdir_create ();
 
@@ -231,7 +226,7 @@ int main (int argc, char *argv[])
 
     diag ("starting test server");
 
-    if (!(h = test_server_create (zctx, 0, server_cb, &tp)))
+    if (!(h = test_server_create (0, server_cb, &tp)))
         BAIL_OUT ("test_server_create failed");
 
     test_send_and_exit (h, 1);
@@ -256,7 +251,6 @@ int main (int argc, char *argv[])
     flux_close (h);
 
     tmpdir_destroy ();
-    zmq_ctx_term (zctx);
     done_testing ();
 
     return 0;

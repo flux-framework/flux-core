@@ -12,24 +12,20 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
-#include <zmq.h>
 #include <uuid.h>
 #include <pthread.h>
 #include <sys/poll.h>
 
-#include "util.h"
-
-#include "src/common/libzmqutil/msg_zsock.h"
-#include "src/common/libzmqutil/sockopt.h"
 #include "ccan/str/str.h"
 #include "src/common/libtap/tap.h"
+
+#include "util.h"
 
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers
 #endif
 
 struct test_server {
-    void *zctx;
     flux_t *c;
     flux_t *s;
     flux_msg_handler_t *shutdown_mh;
@@ -41,12 +37,6 @@ struct test_server {
     uuid_t uuid;
     char uuid_str[UUID_STR_LEN];
 };
-
-static flux_t *test_connector_create (void *zctx,
-                                      const char *shmem_name,
-                                      bool server,
-                                      int flags);
-
 
 void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
                   const flux_msg_t *msg, void *arg)
@@ -126,17 +116,18 @@ static void test_server_destroy (struct test_server *a)
     }
 }
 
-flux_t *test_server_create (void *zctx, int cflags, test_server_f cb, void *arg)
+flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
 {
     int e;
     struct test_server *a;
     int sflags = 0; // server connector flags
+    char uri[64];
+    flux_reactor_t *r;
 
     if (!(a = calloc (1, sizeof (*a))))
         BAIL_OUT ("calloc");
     a->cb = cb;
     a->arg = arg;
-    a->zctx = zctx;
 
     uuid_generate (a->uuid);
     uuid_unparse (a->uuid, a->uuid_str);
@@ -144,12 +135,19 @@ flux_t *test_server_create (void *zctx, int cflags, test_server_f cb, void *arg)
     if (getenv ("FLUX_HANDLE_TRACE"))
         cflags |= FLUX_O_TRACE;
 
-    /* Create back-to-back wired flux_t handles
+
+    /* Create back-to-back wired flux_t handles.
+     * Give the server side a SIGCHLD capable reactor for subprocess testing.
      */
-    if (!(a->s = test_connector_create (a->zctx, a->uuid_str, true, sflags)))
-        BAIL_OUT ("test_connector_create server");
-    if (!(a->c = test_connector_create (a->zctx, a->uuid_str, false, cflags)))
-        BAIL_OUT ("test_connector_create client");
+    snprintf (uri, sizeof (uri), "interthread://%s", a->uuid_str);
+    if (!(a->s = flux_open (uri, sflags))
+        || !(r = flux_reactor_create (FLUX_REACTOR_SIGCHLD))
+        || flux_set_reactor (a->s, r) < 0
+        || flux_aux_set (a->s, NULL, r, (flux_free_f)flux_reactor_destroy) < 0
+        || flux_opt_set (a->s, FLUX_OPT_ROUTER_NAME, "server", 7) < 0)
+        BAIL_OUT ("could not create server interthread handle");
+    if (!(a->c = flux_open (uri, cflags)))
+        BAIL_OUT ("could not create client interthread handle");
 
     /* If no callback, register watcher for all messages so we can log them.
      * N.B. this has to go in before shutdown else shutdown will be masked.
@@ -179,154 +177,6 @@ flux_t *test_server_create (void *zctx, int cflags, test_server_f cb, void *arg)
                       (flux_free_f)test_server_destroy) < 0)
         BAIL_OUT ("flux_aux_set");
     return a->c;
-}
-
-/* Test connector implementation
- */
-
-struct test_connector {
-    void *sock;
-    flux_t *h;
-    struct flux_msg_cred cred;
-};
-
-static int test_connector_pollevents (void *impl)
-{
-    struct test_connector *tcon = impl;
-    int e;
-    int revents = 0;
-
-    if (zgetsockopt_int (tcon->sock, ZMQ_EVENTS, &e) < 0)
-        return -1;
-    if (e & ZMQ_POLLIN)
-        revents |= FLUX_POLLIN;
-    if (e & ZMQ_POLLOUT)
-        revents |= FLUX_POLLOUT;
-    if (e & ZMQ_POLLERR)
-        revents |= FLUX_POLLERR;
-
-    return revents;
-}
-
-static int test_connector_pollfd (void *impl)
-{
-    struct test_connector *tcon = impl;
-    int fd;
-
-    if (zgetsockopt_int (tcon->sock, ZMQ_FD, &fd) < 0)
-        return -1;
-    return fd;
-}
-
-static int test_connector_send (void *impl, const flux_msg_t *msg, int flags)
-{
-    struct test_connector *tcon = impl;
-    flux_msg_t *cpy;
-    int type;
-
-    if (!(cpy = flux_msg_copy (msg, true)))
-        return -1;
-    if (flux_msg_set_cred (cpy, tcon->cred) < 0)
-        goto error;
-    if (flux_msg_get_type (cpy, &type) < 0)
-        goto error;
-    switch (type) {
-        case FLUX_MSGTYPE_REQUEST:
-            flux_msg_route_enable (cpy);
-            if (flux_msg_route_push (cpy, "test") < 0)
-                goto error;
-            break;
-        case FLUX_MSGTYPE_RESPONSE:
-            if (flux_msg_route_delete_last (cpy) < 0)
-                goto error;
-            break;
-    }
-    if (zmqutil_msg_send (tcon->sock, cpy) < 0)
-        goto error;
-    flux_msg_destroy (cpy);
-    return 0;
-error:
-    flux_msg_destroy (cpy);
-    return -1;
-}
-
-static flux_msg_t *test_connector_recv (void *impl, int flags)
-{
-    struct test_connector *tcon = impl;
-
-    if ((flags & FLUX_O_NONBLOCK)) {
-        zmq_pollitem_t zp = {
-            .events = ZMQ_POLLIN,
-            .socket = tcon->sock,
-            .revents = 0,
-            .fd = -1,
-        };
-        int n;
-        if ((n = zmq_poll (&zp, 1, 0L)) <= 0) {
-            if (n == 0)
-                errno = EWOULDBLOCK;
-            return NULL;
-        }
-    }
-    return zmqutil_msg_recv (tcon->sock);
-}
-
-static void test_connector_fini (void *impl)
-{
-    struct test_connector *tcon = impl;
-
-    zmq_close (tcon->sock);
-    free (tcon);
-}
-
-static const struct flux_handle_ops handle_ops = {
-    .pollfd = test_connector_pollfd,
-    .pollevents = test_connector_pollevents,
-    .send = test_connector_send,
-    .recv = test_connector_recv,
-    .getopt = NULL,
-    .setopt = NULL,
-    .impl_destroy = test_connector_fini,
-};
-
-static flux_t *test_connector_create (void *zctx,
-                                      const char *shmem_name,
-                                      bool server,
-                                      int flags)
-{
-    struct test_connector *tcon;
-    char uri[256];
-
-    if (!(tcon = calloc (1, sizeof (*tcon))))
-        BAIL_OUT ("calloc");
-    tcon->cred.userid = getuid ();
-    tcon->cred.rolemask = FLUX_ROLE_OWNER;
-    if (!(tcon->sock = zmq_socket (zctx, ZMQ_PAIR))
-        || zsetsockopt_int (tcon->sock, ZMQ_SNDHWM, 0) < 0
-        || zsetsockopt_int (tcon->sock, ZMQ_RCVHWM, 0) < 0
-        || zsetsockopt_int (tcon->sock, ZMQ_LINGER, 5) < 0)
-        BAIL_OUT ("zmq_socket failed");
-    snprintf (uri, sizeof (uri), "inproc://%s", shmem_name);
-    if (server) {
-        if (zmq_bind (tcon->sock, uri) < 0)
-            BAIL_OUT ("zmq_bind %s", uri);
-    }
-    else {
-        if (zmq_connect (tcon->sock, uri) < 0)
-            BAIL_OUT ("zmq_connect %s", uri);
-    }
-    if (!(tcon->h = flux_handle_create (tcon, &handle_ops, flags)))
-        BAIL_OUT ("flux_handle_create");
-    /* Allow server to have children
-     */
-    if (server) {
-        flux_reactor_t *r = flux_reactor_create (FLUX_REACTOR_SIGCHLD);
-        if (!r || flux_set_reactor (tcon->h, r) < 0)
-            BAIL_OUT ("failed to set reactor for flux handle");
-        /* Schedule custom reactor for destruction on flux_close() */
-        flux_aux_set (tcon->h, NULL, r, (flux_free_f) flux_reactor_destroy);
-    }
-    return tcon->h;
 }
 
 /*

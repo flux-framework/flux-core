@@ -62,8 +62,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(JANSSON_LIBS) \
 	$(LIBPTHREAD) \
-	$(FLUX_SECURITY_LIBS) \
-	$(ZMQ_LIBS)
+	$(FLUX_SECURITY_LIBS)
 
 test_cppflags = \
 	$(AM_CPPFLAGS) \

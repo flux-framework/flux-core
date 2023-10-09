@@ -12,7 +12,6 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
-#include <zmq.h>
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
 #include "ccan/str/str.h"
@@ -219,12 +218,8 @@ void test_subscribe_rpc (void)
 {
     flux_t *h;
     flux_future_t *f;
-    void *zctx;
 
-    if (!(zctx = zmq_ctx_new ()))
-        BAIL_OUT ("could not create zeromq context");
-
-    if (!(h = test_server_create (zctx, 0, test_server, NULL)))
+    if (!(h = test_server_create (0, test_server, NULL)))
         BAIL_OUT ("test_server_create: %s", strerror (errno));
 
     ok (flux_event_subscribe (h, "fubar") == 0,
@@ -280,8 +275,6 @@ void test_subscribe_rpc (void)
     if (test_server_stop (h) < 0)
         BAIL_OUT ("error stopping test server: %s", strerror (errno));
     flux_close (h);
-
-    zmq_ctx_term (zctx);
 }
 
 void test_subscribe_nosub (void)
