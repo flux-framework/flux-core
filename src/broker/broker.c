@@ -23,7 +23,6 @@
 #include <sys/syscall.h>
 #include <argz.h>
 #include <flux/core.h>
-#include <zmq.h>
 #include <jansson.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
@@ -253,11 +252,6 @@ int main (int argc, char *argv[])
         || sigaction (SIGTERM, NULL, &old_sigact_term) < 0)
         log_err_exit ("error setting signal mask");
 
-    if (!(ctx.zctx = zmq_ctx_new ())) {
-        log_err ("zmq_ctx_new");
-        goto cleanup;
-    }
-
     /* Set up the flux reactor with support for child watchers.
      * Associate an internal flux_t handle with the reactor.
      */
@@ -304,7 +298,7 @@ int main (int argc, char *argv[])
 
     if (!(ctx.overlay = overlay_create (ctx.h,
                                         ctx.attrs,
-                                        ctx.zctx,
+                                        NULL,
                                         overlay_recv_cb,
                                         &ctx))) {
         log_err ("overlay_create");
@@ -538,9 +532,6 @@ cleanup:
     subhash_destroy (ctx.sub);
     free (ctx.init_shell_cmd);
     optparse_destroy (ctx.opts);
-
-    if (ctx.zctx)
-        zmq_ctx_term (ctx.zctx);
 
     return ctx.exit_rc;
 }

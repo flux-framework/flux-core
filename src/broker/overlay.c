@@ -146,6 +146,7 @@ struct overlay_monitor {
 
 struct overlay {
     void *zctx;
+    bool zctx_external;
     struct cert *cert;
     struct zmqutil_zap *zap;
     int enable_ipv6;
@@ -1278,6 +1279,8 @@ int overlay_connect (struct overlay *ov)
             errno = EINVAL;
             return -1;
         }
+        if (!ov->zctx && !(ov->zctx = zmq_ctx_new ()))
+            return -1;
         if (!(ov->parent.zsock = zmq_socket (ov->zctx, ZMQ_DEALER))
             || zsetsockopt_int (ov->parent.zsock, ZMQ_SNDHWM, 0) < 0
             || zsetsockopt_int (ov->parent.zsock, ZMQ_RCVHWM, 0) < 0
@@ -1340,7 +1343,10 @@ int overlay_bind (struct overlay *ov, const char *uri)
         log_err ("overlay_bind: invalid arguments");
         return -1;
     }
-
+    if (!ov->zctx && !(ov->zctx = zmq_ctx_new ())) {
+        log_err ("error creating zeromq context");
+        return -1;
+    }
     assert (ov->zap == NULL);
     if (!(ov->zap = zmqutil_zap_create (ov->zctx, ov->reactor))) {
         log_err ("error creating ZAP server");
@@ -2096,6 +2102,8 @@ void overlay_destroy (struct overlay *ov)
             zlist_destroy (&ov->monitor_callbacks);
         }
         topology_decref (ov->topo);
+        if (!ov->zctx_external)
+            zmq_ctx_term (ov->zctx);
         free (ov);
         errno = saved_errno;
     }
@@ -2154,9 +2162,12 @@ struct overlay *overlay_create (flux_t *h,
     ov->recv_cb = cb;
     ov->recv_arg = arg;
     ov->version = FLUX_CORE_VERSION_HEX;
-    ov->zctx = zctx;
     uuid_generate (uuid);
     uuid_unparse (uuid, ov->uuid);
+    if (zctx) {
+        ov->zctx = zctx;
+        ov->zctx_external = true;
+    }
     if (!(ov->monitor_callbacks = zlist_new ()))
         goto nomem;
     if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
