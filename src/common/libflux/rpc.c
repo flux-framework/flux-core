@@ -243,10 +243,10 @@ error:
     flux_future_fulfill_error (f, errno, NULL);
 }
 
-static flux_future_t *flux_rpc_message_nocopy (flux_t *h,
-                                               flux_msg_t *msg,
-                                               uint32_t nodeid,
-                                               int flags)
+static flux_future_t *flux_rpc_message_send_new (flux_t *h,
+                                                 flux_msg_t **msg,
+                                                 uint32_t nodeid,
+                                                 int flags)
 {
     struct flux_rpc *rpc = NULL;
     flux_future_t *f;
@@ -261,9 +261,9 @@ static flux_future_t *flux_rpc_message_nocopy (flux_t *h,
         rpc_destroy (rpc);
         goto error;
     }
-    if (flux_msg_set_matchtag (msg, rpc->matchtag) < 0)
+    if (flux_msg_set_matchtag (*msg, rpc->matchtag) < 0)
         goto error;
-    if (flux_msg_get_flags (msg, &msgflags) < 0)
+    if (flux_msg_get_flags (*msg, &msgflags) < 0)
         goto error;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
         msgflags |= FLUX_MSGFLAG_UPSTREAM;
@@ -274,9 +274,9 @@ static flux_future_t *flux_rpc_message_nocopy (flux_t *h,
         msgflags |= FLUX_MSGFLAG_STREAMING;
     if ((flags & FLUX_RPC_NORESPONSE))
         msgflags |= FLUX_MSGFLAG_NORESPONSE;
-    if (flux_msg_set_flags (msg, msgflags) < 0)
+    if (flux_msg_set_flags (*msg, msgflags) < 0)
         goto error;
-    if (flux_msg_set_nodeid (msg, nodeid) < 0)
+    if (flux_msg_set_nodeid (*msg, nodeid) < 0)
         goto error;
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.message.rpc", "single");
@@ -284,7 +284,7 @@ static flux_future_t *flux_rpc_message_nocopy (flux_t *h,
     cali_begin_int_byname ("flux.message.response_expected",
                            !(flags & FLUX_RPC_NORESPONSE));
 #endif
-    int rc = flux_send (h, msg, 0);
+    int rc = flux_send_new (h, msg, 0);
 #if HAVE_CALIPER
     cali_end_byname ("flux.message.response_expected");
     cali_end_byname ("flux.message.rpc.nodeid");
@@ -327,15 +327,12 @@ flux_future_t *flux_rpc_message (flux_t *h,
         errno = EINVAL;
         return NULL;
     }
-    if (!(cpy = flux_msg_copy (msg, true)))
+    if (!(cpy = flux_msg_copy (msg, true))
+        || !(f = flux_rpc_message_send_new (h, &cpy, nodeid, flags))) {
+        flux_msg_destroy (cpy);
         return NULL;
-    if (!(f = flux_rpc_message_nocopy (h, cpy, nodeid, flags)))
-        goto error;
-    flux_msg_destroy (cpy);
+    }
     return f;
-error:
-    flux_msg_destroy (cpy);
-    return NULL;
 }
 
 flux_future_t *flux_rpc (flux_t *h,
@@ -344,20 +341,19 @@ flux_future_t *flux_rpc (flux_t *h,
                          uint32_t nodeid,
                          int flags)
 {
-    flux_msg_t *msg = NULL;
-    flux_future_t *f = NULL;
+    flux_msg_t *msg;
+    flux_future_t *f;
 
     if (validate_flags (flags, FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING) < 0
         || !h) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(msg = flux_request_encode (topic, s)))
-        goto done;
-    if (!(f = flux_rpc_message_nocopy (h, msg, nodeid, flags)))
-        goto done;
-done:
-    flux_msg_destroy (msg);
+    if (!(msg = flux_request_encode (topic, s))
+        || !(f = flux_rpc_message_send_new (h, &msg, nodeid, flags))) {
+        flux_msg_destroy (msg);
+        return NULL;
+    }
     return f;
 }
 
@@ -369,19 +365,18 @@ flux_future_t *flux_rpc_raw (flux_t *h,
                              int flags)
 {
     flux_msg_t *msg;
-    flux_future_t *f = NULL;
+    flux_future_t *f;
 
     if (validate_flags (flags, FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING) < 0
         || !h) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(msg = flux_request_encode_raw (topic, data, len)))
-        goto done;
-    if (!(f = flux_rpc_message_nocopy (h, msg, nodeid, flags)))
-        goto done;
-done:
-    flux_msg_destroy (msg);
+    if (!(msg = flux_request_encode_raw (topic, data, len))
+        || !(f = flux_rpc_message_send_new (h, &msg, nodeid, flags))) {
+        flux_msg_destroy (msg);
+        return NULL;
+    }
     return f;
 }
 
@@ -393,20 +388,19 @@ flux_future_t *flux_rpc_vpack (flux_t *h,
                                va_list ap)
 {
     flux_msg_t *msg;
-    flux_future_t *f = NULL;
+    flux_future_t *f;
 
     if (validate_flags (flags, FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING) < 0
         || !h) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(msg = flux_request_encode (topic, NULL)))
-        goto done;
-    if (flux_msg_vpack (msg, fmt, ap) < 0)
-        goto done;
-    f = flux_rpc_message_nocopy (h, msg, nodeid, flags);
-done:
-    flux_msg_destroy (msg);
+    if (!(msg = flux_request_encode (topic, NULL))
+        || flux_msg_vpack (msg, fmt, ap) < 0
+        || !(f = flux_rpc_message_send_new (h, &msg, nodeid, flags))) {
+        flux_msg_destroy (msg);
+        return NULL;
+    }
     return f;
 }
 

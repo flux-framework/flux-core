@@ -227,26 +227,21 @@ error:
 
 int flux_respond (flux_t *h, const flux_msg_t *request, const char *s)
 {
-    flux_msg_t *msg = NULL;
+    flux_msg_t *msg;
 
-    if (!h || !request)
-        goto inval;
+    if (!h || !request) {
+        errno = EINVAL;
+        return -1;
+    }
     if (flux_msg_is_noresponse (request))
         return 0;
-    msg = flux_response_derive (request, 0);
-    if (!msg)
-        goto error;
-    if (s && flux_msg_set_string (msg, s) < 0)
-        goto error;
-    if (flux_send (h, msg, 0) < 0)
-        goto error;
-    flux_msg_destroy (msg);
+    if (!(msg = flux_response_derive (request, 0))
+        || (s && flux_msg_set_string (msg, s) < 0)
+        || flux_send_new (h, &msg, 0) < 0) {
+        flux_msg_destroy (msg);
+        return -1;
+    }
     return 0;
-inval:
-    errno = EINVAL;
-error:
-    flux_msg_destroy (msg);
-    return -1;
 }
 
 static int flux_respond_vpack (flux_t *h,
@@ -254,26 +249,21 @@ static int flux_respond_vpack (flux_t *h,
                                const char *fmt,
                                va_list ap)
 {
-    flux_msg_t *msg = NULL;
+    flux_msg_t *msg;
 
-    if (!h || !request || !fmt)
-        goto inval;
+    if (!h || !request || !fmt) {
+        errno = EINVAL;
+        return -1;
+    }
     if (flux_msg_is_noresponse (request))
         return 0;
-    msg = flux_response_derive (request, 0);
-    if (!msg)
-        goto error;
-    if (flux_msg_vpack (msg, fmt, ap) < 0)
-        goto error;
-    if (flux_send (h, msg, 0) < 0)
-        goto error;
-    flux_msg_destroy (msg);
+    if (!(msg = flux_response_derive (request, 0))
+        || flux_msg_vpack (msg, fmt, ap) < 0
+        || flux_send_new (h, &msg, 0) < 0) {
+        flux_msg_destroy (msg);
+        return -1;
+    }
     return 0;
-inval:
-    errno = EINVAL;
-error:
-    flux_msg_destroy (msg);
-    return -1;
 }
 
 int flux_respond_pack (flux_t *h,
@@ -299,26 +289,21 @@ int flux_respond_raw (flux_t *h,
                       const void *data,
                       int len)
 {
-    flux_msg_t *msg = NULL;
+    flux_msg_t *msg;
 
-    if (!h || !request)
-        goto inval;
+    if (!h || !request) {
+        errno = EINVAL;
+        return -1;
+    }
     if (flux_msg_is_noresponse (request))
         return 0;
-    msg  = flux_response_derive (request, 0);
-    if (!msg)
-        goto error;
-    if (data && flux_msg_set_payload (msg, data, len) < 0)
-        goto error;
-    if (flux_send (h, msg, 0) < 0)
-        goto error;
-    flux_msg_destroy (msg);
+    if (!(msg  = flux_response_derive (request, 0))
+        || (data && flux_msg_set_payload (msg, data, len) < 0)
+        || flux_send_new (h, &msg, 0) < 0) {
+        flux_msg_destroy (msg);
+        return -1;
+    }
     return 0;
-inval:
-    errno = EINVAL;
-error:
-    flux_msg_destroy (msg);
-    return -1;
 }
 
 int flux_respond_error (flux_t *h,
@@ -326,30 +311,23 @@ int flux_respond_error (flux_t *h,
                         int errnum,
                         const char *errstr)
 {
-    flux_msg_t *msg = NULL;
+    flux_msg_t *msg;
 
-    if (!h || !request)
-        goto inval;
+    if (!h || !request) {
+        errno = EINVAL;
+        return -1;
+    }
     if (errnum == 0)
         errnum = EINVAL;
     if (flux_msg_is_noresponse (request))
         return 0;
-    msg = flux_response_derive (request, errnum);
-    if (!msg)
-        goto error;
-    if (errstr) {
-        if (flux_msg_set_string (msg, errstr) < 0)
-            goto error;
+    if (!(msg = flux_response_derive (request, errnum))
+        || (errstr && flux_msg_set_string (msg, errstr) < 0)
+        || flux_send_new (h, &msg, 0) < 0) {
+        flux_msg_destroy (msg);
+        return -1;
     }
-    if (flux_send (h, msg, 0) < 0)
-        goto error;
-    flux_msg_destroy (msg);
     return 0;
-inval:
-    errno = EINVAL;
-error:
-    flux_msg_destroy (msg);
-    return -1;
 }
 
 /*
