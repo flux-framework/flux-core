@@ -180,8 +180,10 @@ int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...)
  * instead of flux_rpc_get() to test result of RPC with no response payload.
  * Fulfill future.
 */
-static void response_cb (flux_t *h, flux_msg_handler_t *mh,
-                         const flux_msg_t *msg, void *arg)
+static void response_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
 {
     flux_future_t *f = arg;
     struct flux_rpc *rpc = flux_future_aux_get (f, "flux::rpc");
@@ -318,8 +320,10 @@ flux_future_t *flux_rpc_message (flux_t *h,
     flux_msg_t *cpy;
     flux_future_t *f;
 
-    if (!h || !msg || validate_flags (flags, FLUX_RPC_NORESPONSE
-                                           | FLUX_RPC_STREAMING)) {
+    if (!h
+        || !msg
+        || validate_flags (flags,
+                           FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING) < 0) {
         errno = EINVAL;
         return NULL;
     }
@@ -343,8 +347,8 @@ flux_future_t *flux_rpc (flux_t *h,
     flux_msg_t *msg = NULL;
     flux_future_t *f = NULL;
 
-    if (!h || validate_flags (flags, FLUX_RPC_NORESPONSE
-                                   | FLUX_RPC_STREAMING)) {
+    if (validate_flags (flags, FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING) < 0
+        || !h) {
         errno = EINVAL;
         return NULL;
     }
@@ -367,8 +371,8 @@ flux_future_t *flux_rpc_raw (flux_t *h,
     flux_msg_t *msg;
     flux_future_t *f = NULL;
 
-    if (!h || validate_flags (flags, FLUX_RPC_NORESPONSE
-                                   | FLUX_RPC_STREAMING)) {
+    if (validate_flags (flags, FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING) < 0
+        || !h) {
         errno = EINVAL;
         return NULL;
     }
@@ -385,13 +389,14 @@ flux_future_t *flux_rpc_vpack (flux_t *h,
                                const char *topic,
                                uint32_t nodeid,
                                int flags,
-                               const char *fmt, va_list ap)
+                               const char *fmt,
+                               va_list ap)
 {
     flux_msg_t *msg;
     flux_future_t *f = NULL;
 
-    if (!h || validate_flags (flags, FLUX_RPC_NORESPONSE
-                                   | FLUX_RPC_STREAMING)) {
+    if (validate_flags (flags, FLUX_RPC_NORESPONSE | FLUX_RPC_STREAMING) < 0
+        || !h) {
         errno = EINVAL;
         return NULL;
     }
@@ -405,8 +410,12 @@ done:
     return f;
 }
 
-flux_future_t *flux_rpc_pack (flux_t *h, const char *topic, uint32_t nodeid,
-                              int flags, const char *fmt, ...)
+flux_future_t *flux_rpc_pack (flux_t *h,
+                              const char *topic,
+                              uint32_t nodeid,
+                              int flags,
+                              const char *fmt,
+                              ...)
 {
     va_list ap;
     flux_future_t *f;
