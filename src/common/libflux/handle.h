@@ -143,6 +143,11 @@ uint32_t flux_matchtag_avail (flux_t *h);
  */
 int flux_send (flux_t *h, const flux_msg_t *msg, int flags);
 
+/* Send a message - same as above but '*msg' ownership is transferred to 'h'.
+ * N.B. this fails with EINVAL if '*msg' reference count is greater than 1.
+ */
+int flux_send_new (flux_t *h, flux_msg_t **msg, int flags);
+
 /* Receive a message
  * flags may be 0 or FLUX_O_TRACE or FLUX_O_NONBLOCK (FLUX_O_COPROC is ignored)
  * flux_recv reads messages from the handle until 'match' is matched,
