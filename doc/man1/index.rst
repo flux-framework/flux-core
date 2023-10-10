@@ -1,3 +1,5 @@
+.. _man-commands:
+
 Section 1 - Flux Commands
 =========================
 
