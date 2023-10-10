@@ -406,10 +406,14 @@ class JobInfo:
         return runtime
 
     def get_remaining_time(self):
-        status = str(self.status)
-        if status != "RUN":
+        try:
+            status = str(self.status)
+            if status != "RUN":
+                return 0.0
+            tleft = self.expiration - time.time()
+        except (KeyError, AttributeError):
+            # expiration and/or status attributes may not exist, return 0.0
             return 0.0
-        tleft = self.expiration - time.time()
         if tleft < 0.0:
             return 0.0
         return tleft
@@ -541,7 +545,10 @@ class JobInfo:
         """
         result = {}
         for attr in chain(self.defaults.keys(), self.properties):
-            val = getattr(self, attr)
+            try:
+                val = getattr(self, attr)
+            except AttributeError:
+                val = None
             if val is not None:
                 result[attr] = val
 

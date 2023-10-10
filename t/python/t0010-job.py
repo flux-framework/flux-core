@@ -629,6 +629,18 @@ class TestJob(unittest.TestCase):
                 }
             ),
         )
+
+        # t_remaining returns 0 from JobInfo returned from result():
+        self.assertEqual(result[ids[0]].get_info().t_remaining, 0.0)
+
+        # Ensure to_dict() works for a JobInfo returned from result():
+        job_dict = result[ids[0]].get_info().to_dict()
+        self.assertIsInstance(job_dict, dict)
+        self.assertEqual(job_dict["id"], ids[0])
+        self.assertEqual(job_dict["result"], "COMPLETED")
+        self.assertEqual(job_dict["returncode"], 0)
+        self.assertEqual(job_dict["duration"], 0.0)
+
         self.assertEqual(
             result[ids[1]].get_info(),
             JobInfo(
@@ -643,6 +655,14 @@ class TestJob(unittest.TestCase):
                 }
             ),
         )
+        # Ensure to_dict() works for a JobInfo returned from result():
+        job_dict = result[ids[1]].get_info().to_dict()
+        self.assertIsInstance(job_dict, dict)
+        self.assertEqual(job_dict["id"], ids[1])
+        self.assertEqual(job_dict["result"], "FAILED")
+        self.assertEqual(job_dict["returncode"], 1)
+        self.assertEqual(job_dict["duration"], 0.0)
+
         self.assertEqual(
             result[ids[2]].get_info(),
             JobInfo(
