@@ -313,7 +313,8 @@ flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
                           | FLUX_O_NONBLOCK
                           | FLUX_O_MATCHDEBUG
                           | FLUX_O_TEST_NOSUB
-                          | FLUX_O_RPCTRACK;
+                          | FLUX_O_RPCTRACK
+                          | FLUX_O_NOREQUEUE;
 
     err_init (errp);
 
@@ -415,8 +416,10 @@ flux_t *flux_handle_create (void *impl,
     if (!(h->tagpool = tagpool_create ()))
         goto error;
     tagpool_set_grow_cb (h->tagpool, tagpool_grow_notify, h);
-    if (!(h->queue = flux_msglist_create ()))
-        goto error;
+    if (!(flags & FLUX_O_NOREQUEUE)) {
+        if (!(h->queue = flux_msglist_create ()))
+            goto error;
+    }
     if ((flags & FLUX_O_RPCTRACK)) {
         /* N.B. rpc_track functions are safe to call with tracker == NULL,
          * so skipping creation here disables tracking without further ado.
@@ -844,8 +847,10 @@ static flux_msg_t *flux_recv_any (flux_t *h, int flags)
 {
     flux_msg_t *msg;
 
-    if (flux_msglist_count (h->queue) > 0)
-        return (flux_msg_t *)flux_msglist_pop (h->queue);
+    if (!(h->flags & FLUX_O_NOREQUEUE)) {
+        if (flux_msglist_count (h->queue) > 0)
+            return (flux_msg_t *)flux_msglist_pop (h->queue);
+    }
     if (!h->ops->recv) {
         errno = ENOSYS;
         return NULL;
@@ -928,7 +933,8 @@ int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
     h = lookup_clone_ancestor (h);
     int rc;
 
-    if (flags != FLUX_RQ_TAIL && flags != FLUX_RQ_HEAD) {
+    if ((h->flags & FLUX_O_NOREQUEUE)
+        || (flags != FLUX_RQ_TAIL && flags != FLUX_RQ_HEAD)) {
         errno = EINVAL;
         return -1;
     }
@@ -942,6 +948,15 @@ int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
 int flux_pollfd (flux_t *h)
 {
     h = lookup_clone_ancestor (h);
+
+    if ((h->flags & FLUX_O_NOREQUEUE)) {
+        if (!h->ops->pollfd) {
+            errno = ENOTSUP;
+            return -1;
+        }
+        return h->ops->pollfd (h->impl);
+    }
+
     if (h->pollfd < 0) {
         struct epoll_event ev = {
             .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
@@ -977,10 +992,12 @@ int flux_pollevents (flux_t *h)
     h = lookup_clone_ancestor (h);
     int e, events = 0;
 
-    /* wait for handle event */
-    if (h->pollfd >= 0) {
-        struct epoll_event ev;
-        (void)epoll_wait (h->pollfd, &ev, 1, 0);
+    if (!(h->flags & FLUX_O_NOREQUEUE)) {
+        /* wait for handle event */
+        if (h->pollfd >= 0) {
+            struct epoll_event ev;
+            (void)epoll_wait (h->pollfd, &ev, 1, 0);
+        }
     }
     /* get connector events (if applicable) */
     if (h->ops->pollevents) {
@@ -991,15 +1008,17 @@ int flux_pollevents (flux_t *h)
                 events &= ~FLUX_POLLERR;
         }
     }
-    /* get queue events */
-    if ((e = flux_msglist_pollevents (h->queue)) < 0)
-        return -1;
-    if ((e & POLLIN))
-        events |= FLUX_POLLIN;
-    if ((e & POLLOUT))
-        events |= FLUX_POLLOUT;
-    if ((e & POLLERR))
-        events |= FLUX_POLLERR;
+    if (!(h->flags & FLUX_O_NOREQUEUE)) {
+        /* get queue events */
+        if ((e = flux_msglist_pollevents (h->queue)) < 0)
+            return -1;
+        if ((e & POLLIN))
+            events |= FLUX_POLLIN;
+        if ((e & POLLOUT))
+            events |= FLUX_POLLOUT;
+        if ((e & POLLERR))
+            events |= FLUX_POLLERR;
+    }
     return events;
 }
 
