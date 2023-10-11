@@ -13,7 +13,6 @@
 #endif
 #include <errno.h>
 #include <flux/core.h>
-#include <zmq.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
@@ -21,14 +20,10 @@
 int main (int argc, char *argv[])
 {
     flux_t *h;
-    void *zctx;
 
     plan (NO_PLAN);
 
-    if (!(zctx = zmq_ctx_new ()))
-        BAIL_OUT ("could not create zeromq context");
-
-    if (!(h = test_server_create (zctx, 0, NULL, NULL)))
+    if (!(h = test_server_create (0, NULL, NULL)))
         BAIL_OUT ("could not create test server");
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
         BAIL_OUT ("flux_attr_set_cacheonly failed");
@@ -48,7 +43,6 @@ int main (int argc, char *argv[])
 
     test_server_stop (h);
     flux_close (h);
-    zmq_ctx_term (zctx);
     done_testing();
     return (0);
 }

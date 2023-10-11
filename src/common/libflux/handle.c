@@ -93,9 +93,13 @@ struct builtin_connector {
 };
 
 flux_t *connector_loop_init (const char *uri, int flags, flux_error_t *errp);
+flux_t *connector_interthread_init (const char *uri,
+                                    int flags,
+                                    flux_error_t *errp);
 
 static struct builtin_connector builtin_connectors[] = {
     { "loop", &connector_loop_init },
+    { "interthread", &connector_interthread_init },
 };
 
 static void handle_trace (flux_t *h, const char *fmt, ...)

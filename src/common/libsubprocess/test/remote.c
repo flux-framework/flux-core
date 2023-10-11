@@ -14,7 +14,6 @@
 #include <unistd.h> // environ def
 #include <jansson.h>
 #include <flux/core.h>
-#include <zmq.h>
 
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
@@ -343,22 +342,16 @@ void sigstop_test (flux_t *h)
 int main (int argc, char *argv[])
 {
     flux_t *h;
-    void *zctx;
 
     plan (NO_PLAN);
 
-    if (!(zctx = zmq_ctx_new ()))
-        BAIL_OUT ("could not create zeromq context");
-
-    h = rcmdsrv_create (zctx, SERVER_NAME);
+    h = rcmdsrv_create (SERVER_NAME);
 
     simple_test (h);
     sigstop_test (h);
 
     test_server_stop (h);
     flux_close (h);
-
-    zmq_ctx_term (zctx);
 
     done_testing ();
     return 0;

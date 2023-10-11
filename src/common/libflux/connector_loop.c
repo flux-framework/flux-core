@@ -31,8 +31,6 @@ typedef struct {
 
 static const struct flux_handle_ops handle_ops;
 
-const char *fake_uuid = "12345678123456781234567812345678";
-
 static int op_pollevents (void *impl)
 {
     loop_ctx_t *c = impl;

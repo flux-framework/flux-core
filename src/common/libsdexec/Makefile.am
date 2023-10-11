@@ -36,12 +36,10 @@ test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
 	$(top_builddir)/src/common/libtestutil/libtestutil.la \
-	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(LIBPTHREAD) \
-	$(JANSSON_LIBS) \
-	$(ZMQ_LIBS)
+	$(JANSSON_LIBS)
 
 test_cppflags = \
 	$(AM_CPPFLAGS)

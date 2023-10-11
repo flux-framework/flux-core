@@ -11,7 +11,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir) \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) \
 	$(JANSSON_CFLAGS) \
 	$(LIBUUID_CFLAGS)
 
@@ -96,6 +95,7 @@ libflux_la_SOURCES = \
 	attr.c \
 	handle.c \
 	connector_loop.c \
+	connector_interthread.c \
 	reactor.c \
 	reactor_private.h \
 	msg_handler.c \
@@ -152,6 +152,7 @@ libmessage_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
 
 TESTS = test_message.t \
 	test_msglist.t \
+	test_interthread.t \
 	test_request.t \
 	test_response.t \
 	test_event.t \
@@ -180,11 +181,9 @@ TESTS = test_message.t \
 test_ldadd = \
 	$(top_builddir)/src/common/libtestutil/libtestutil.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
-	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(JANSSON_LIBS) \
 	$(LIBPTHREAD) \
@@ -296,6 +295,10 @@ test_sync_t_LDADD = $(test_ldadd)
 test_disconnect_t_SOURCES = test/disconnect.c
 test_disconnect_t_CPPFLAGS = $(test_cppflags)
 test_disconnect_t_LDADD = $(test_ldadd)
+
+test_interthread_t_SOURCES = test/interthread.c
+test_interthread_t_CPPFLAGS = $(test_cppflags)
+test_interthread_t_LDADD = $(test_ldadd)
 
 test_module_t_SOURCES = test/module.c
 test_module_t_CPPFLAGS = $(test_cppflags)
