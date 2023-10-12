@@ -219,6 +219,7 @@ void check_cancel (void)
        && flux_msg_get_matchtag (msg, &matchtag) == 0
        && matchtag == 6,
        "flux_msglist_cancel responded to message");
+    flux_msg_destroy (msg);
 
     flux_msglist_destroy (l);
     flux_close (h);
