@@ -23,7 +23,6 @@
 #include <sys/syscall.h>
 #include <argz.h>
 #include <flux/core.h>
-#include <zmq.h>
 #include <jansson.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
@@ -253,11 +252,6 @@ int main (int argc, char *argv[])
         || sigaction (SIGTERM, NULL, &old_sigact_term) < 0)
         log_err_exit ("error setting signal mask");
 
-    if (!(ctx.zctx = zmq_ctx_new ())) {
-        log_err ("zmq_ctx_new");
-        goto cleanup;
-    }
-
     /* Set up the flux reactor with support for child watchers.
      * Associate an internal flux_t handle with the reactor.
      */
@@ -304,7 +298,7 @@ int main (int argc, char *argv[])
 
     if (!(ctx.overlay = overlay_create (ctx.h,
                                         ctx.attrs,
-                                        ctx.zctx,
+                                        NULL,
                                         overlay_recv_cb,
                                         &ctx))) {
         log_err ("overlay_create");
@@ -519,7 +513,10 @@ cleanup:
      */
     attr_destroy (ctx.attrs);
 
-    int module_leaks = modhash_destroy (ctx.modhash);
+    if (modhash_destroy (ctx.modhash) > 0) {
+        if (ctx.exit_rc == 0)
+            ctx.exit_rc = 1;
+    }
     zlist_destroy (&ctx.sigwatchers);
     shutdown_destroy (ctx.shutdown);
     state_machine_destroy (ctx.state_machine);
@@ -535,17 +532,6 @@ cleanup:
     subhash_destroy (ctx.sub);
     free (ctx.init_shell_cmd);
     optparse_destroy (ctx.opts);
-
-    /* zmq_ctx_term() blocks if any 0mq sockets remain open, so skip it
-     * if any broker modules had to be canceled in modhash_destroy().
-     */
-    if (module_leaks > 0) {
-        log_msg ("skipping 0MQ shutdown due to presumed module socket leak");
-        if (ctx.exit_rc == 0)
-            ctx.exit_rc = 1;
-    }
-    else
-        zmq_ctx_term (ctx.zctx);
 
     return ctx.exit_rc;
 }
@@ -1212,7 +1198,6 @@ static int load_module (broker_ctx_t *ctx,
         path = zlist_first (files);
     }
     if (!(p = module_create (ctx->h,
-                             ctx->zctx,
                              overlay_get_uuid (ctx->overlay),
                              name,
                              path,

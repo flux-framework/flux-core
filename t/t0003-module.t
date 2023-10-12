@@ -283,10 +283,7 @@ test_expect_success 'module: load without unload causes broker failure' '
 	    -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
 	    flux module load content 2>nounload.err
 '
-test_expect_success 'module: socket leak is called out' '
-	grep "socket leak" nounload.err
-'
-test_expect_success 'module: leaked module name is called out' '
+test_expect_success 'module: module name is called out' '
 	grep ".content. was not properly shut down" nounload.err
 '
 

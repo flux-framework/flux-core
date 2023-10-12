@@ -16,7 +16,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
-#include <zmq.h>
 #include <signal.h>
 #include <pthread.h>
 #include <assert.h>
@@ -31,10 +30,6 @@
 #include <sys/syscall.h>
 #endif
 
-#include "src/common/libzmqutil/msg_zsock.h"
-#include "src/common/libzmqutil/sockopt.h"
-#include "src/common/libzmqutil/reactor.h"
-#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
@@ -49,9 +44,8 @@ struct broker_module {
 
     double lastseen;
 
-    void *zctx;             /* zeromq context shared with broker */
-    void *sock;             /* broker end of PAIR socket */
-    char endpoint[128];
+    flux_t *h_broker;       /* broker end of interthread channel */
+    char uri[128];
     struct flux_msg_cred cred; /* cred of connection */
 
     uuid_t uuid;            /* uuid for unique request sender identity */
@@ -170,19 +164,7 @@ static void *module_thread (void *arg)
 
     /* Connect to broker socket, enable logging, register built-in services
      */
-
-    /* N.B. inproc endpoints (in same process) must share a 0MQ context
-     * pointer which is passed via query argument to the local connector.
-     * (There was no convenient way to share that directly).
-     *
-     * copying 8 + 37 + 6 + 18 + 1 = 70 bytes into 128 byte buffer cannot fail
-     */
-    (void)snprintf (uri,
-                    sizeof (uri),
-                    "shmem://%s&zctx=%p",
-                    p->uuid_str,
-                    p->zctx);
-    if (!(p->h = flux_open (uri, 0))) {
+    if (!(p->h = flux_open (p->uri, 0))) {
         log_err ("flux_open %s", uri);
         goto done;
     }
@@ -295,7 +277,6 @@ error:
 }
 
 module_t *module_create (flux_t *h,
-                         void *zctx,
                          const char *parent_uuid,
                          const char *name, // may be NULL
                          const char *path,
@@ -303,6 +284,7 @@ module_t *module_create (flux_t *h,
                          json_t *args,
                          flux_error_t *error)
 {
+    flux_reactor_t *r = flux_get_reactor (h);
     module_t *p;
     void *dso;
     const char **mod_namep;
@@ -325,7 +307,6 @@ module_t *module_create (flux_t *h,
     p->main = mod_main;
     p->dso = dso;
     p->rank = rank;
-    p->zctx = zctx;
     if (!(p->conf = flux_conf_copy (flux_get_conf (h))))
         goto cleanup;
     if (!(p->parent_uuid_str = strdup (parent_uuid)))
@@ -370,30 +351,25 @@ module_t *module_create (flux_t *h,
     uuid_generate (p->uuid);
     uuid_unparse (p->uuid, p->uuid_str);
 
-    /* Broker end of PAIR socket is opened here.
+    /* Broker end of interthread pair is opened here.
      */
-    if (!(p->sock = zmq_socket (p->zctx, ZMQ_PAIR))
-        || zsetsockopt_int (p->sock, ZMQ_SNDHWM, 0) < 0
-        || zsetsockopt_int (p->sock, ZMQ_RCVHWM, 0) < 0
-        || zsetsockopt_int (p->sock, ZMQ_LINGER, 5) < 0) {
-        errprintf (error, "could not create zsock for %s", p->name);
+    // copying 13 + 37 + 1 = 51 bytes into 128 byte buffer cannot fail
+    (void)snprintf (p->uri, sizeof (p->uri), "interthread://%s", p->uuid_str);
+    if (!(p->h_broker = flux_open (p->uri, FLUX_O_NOREQUEUE))
+        || flux_opt_set (p->h_broker,
+                         FLUX_OPT_ROUTER_NAME,
+                         parent_uuid,
+                         strlen (parent_uuid) + 1) < 0
+        || flux_set_reactor (p->h_broker, r) < 0) {
+        errprintf (error, "could not create %s interthread handle", p->name);
         goto cleanup;
     }
-    // copying 9 + 37 + 1 = 47 bytes into 128 byte buffer cannot fail
-    (void)snprintf (p->endpoint,
-                    sizeof (p->endpoint),
-                    "inproc://%s",
-                    module_get_uuid (p));
-    if (zmq_bind (p->sock, p->endpoint) < 0) {
-        errprintf (error, "zmq_bind %s: %s", p->endpoint, strerror (errno));
-        goto cleanup;
-    }
-    if (!(p->broker_w = zmqutil_watcher_create (flux_get_reactor (h),
-                                                p->sock,
-                                                FLUX_POLLIN,
-                                                module_cb,
-                                                p))) {
-        errprintf (error, "could not create %s zsock watcher", p->name);
+    if (!(p->broker_w = flux_handle_watcher_create (r,
+                                                    p->h_broker,
+                                                    FLUX_POLLIN,
+                                                    module_cb,
+                                                    p))) {
+        errprintf (error, "could not create %s flux handle watcher", p->name);
         goto cleanup;
     }
     /* Set creds for connection.
@@ -445,54 +421,13 @@ int module_get_status (module_t *p)
 
 flux_msg_t *module_recvmsg (module_t *p)
 {
-    flux_msg_t *msg = NULL;
-    int type;
-    struct flux_msg_cred cred;
-
-    if (!(msg = zmqutil_msg_recv (p->sock)))
-        goto error;
-    if (flux_msg_get_type (msg, &type) < 0)
-        goto error;
-    switch (type) {
-        case FLUX_MSGTYPE_RESPONSE:
-            if (flux_msg_route_delete_last (msg) < 0)
-                goto error;
-            break;
-        case FLUX_MSGTYPE_REQUEST:
-        case FLUX_MSGTYPE_EVENT:
-            if (flux_msg_route_push (msg, p->uuid_str) < 0)
-                goto error;
-            break;
-        default:
-            break;
-    }
-    /* All shmem:// connections to the broker have FLUX_ROLE_OWNER
-     * and are "authenticated" as the instance owner.
-     * Allow modules so endowed to change the userid/rolemask on messages when
-     * sending on behalf of other users.  This is necessary for connectors
-     * implemented as DSOs.
-     */
-    assert ((p->cred.rolemask & FLUX_ROLE_OWNER));
-    if (flux_msg_get_cred (msg, &cred) < 0)
-        goto error;
-    if (cred.userid == FLUX_USERID_UNKNOWN)
-        cred.userid = p->cred.userid;
-    if (cred.rolemask == FLUX_ROLE_NONE)
-        cred.rolemask = p->cred.rolemask;
-    if (flux_msg_set_cred (msg, cred) < 0)
-        goto error;
-    return msg;
-error:
-    flux_msg_destroy (msg);
-    return NULL;
+    return flux_recv (p->h_broker, FLUX_MATCH_ANY, FLUX_O_NONBLOCK);
 }
 
 int module_sendmsg (module_t *p, const flux_msg_t *msg)
 {
-    flux_msg_t *cpy = NULL;
     int type;
     const char *topic;
-    int rc = -1;
 
     if (!msg)
         return 0;
@@ -508,34 +443,7 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
             return -1;
         }
     }
-    switch (type) {
-        case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
-            if (!(cpy = flux_msg_copy (msg, true)))
-                goto done;
-            if (flux_msg_route_push (cpy, p->parent_uuid_str) < 0)
-                goto done;
-            if (zmqutil_msg_send (p->sock, cpy) < 0)
-                goto done;
-            break;
-        }
-        case FLUX_MSGTYPE_RESPONSE: { /* simulate ROUTER socket */
-            if (!(cpy = flux_msg_copy (msg, true)))
-                goto done;
-            if (flux_msg_route_delete_last (cpy) < 0)
-                goto done;
-            if (zmqutil_msg_send (p->sock, cpy) < 0)
-                goto done;
-            break;
-        }
-        default:
-            if (zmqutil_msg_send (p->sock, msg) < 0)
-                goto done;
-            break;
-    }
-    rc = 0;
-done:
-    flux_msg_destroy (cpy);
-    return rc;
+    return flux_send (p->h_broker, msg, 0);
 }
 
 int module_disconnect_arm (module_t *p,
@@ -581,7 +489,7 @@ void module_destroy (module_t *p)
 
     flux_watcher_stop (p->broker_w);
     flux_watcher_destroy (p->broker_w);
-    zmq_close (p->sock);
+    flux_close (p->h_broker);
 
 #ifndef __SANITIZE_ADDRESS__
     dlclose (p->dso);

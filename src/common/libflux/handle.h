@@ -46,6 +46,7 @@ enum {
     FLUX_O_MATCHDEBUG = 8,  /* enable matchtag debugging */
     FLUX_O_TEST_NOSUB = 16, /* for testing: make (un)subscribe a no-op */
     FLUX_O_RPCTRACK = 32,   /* track RPCs for recovery after reconnect */
+    FLUX_O_NOREQUEUE = 64,  /* disable flux_requeue() to save file descr. */
 };
 
 /* Flags for flux_requeue().

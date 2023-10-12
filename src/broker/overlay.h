@@ -32,6 +32,7 @@ typedef void (*overlay_recv_f)(const flux_msg_t *msg,
 
 /* Create overlay network, registering 'cb' to be called with each
  * received message.
+ * Note: If zctx is NULL, it is created/destroyed on demand internally.
  */
 struct overlay *overlay_create (flux_t *h,
                                 attr_t *attrs,

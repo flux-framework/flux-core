@@ -12,10 +12,6 @@
 #define _BROKER_MODULE_H
 
 #include <jansson.h>
-#include <uuid.h>
-#ifndef UUID_STR_LEN
-#define UUID_STR_LEN 37     // defined in later libuuid headers
-#endif
 #include <flux/core.h>
 
 #include "src/common/librouter/disconnect.h"
@@ -25,7 +21,6 @@ typedef void (*modpoller_cb_f)(module_t *p, void *arg);
 typedef void (*module_status_cb_f)(module_t *p, int prev_status, void *arg);
 
 module_t *module_create (flux_t *h,
-                         void *zctx,
                          const char *parent_uuid,
                          const char *name, // may be NULL
                          const char *path,

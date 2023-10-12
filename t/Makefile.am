@@ -285,9 +285,7 @@ TESTSCRIPTS += python/t0009-security.py
 endif
 
 # make check runs these TAP tests directly (both scripts and programs)
-TESTS = \
-	shmem/backtoback.t \
-	$(TESTSCRIPTS)
+TESTS = $(TESTSCRIPTS)
 
 EXTRA_DIST= \
 	aggregate-results.sh \
@@ -395,7 +393,6 @@ dist_check_SCRIPTS = \
 	ingest/bad-validate.py
 
 check_PROGRAMS = \
-	shmem/backtoback.t \
 	loop/logstderr \
 	loop/issue2337 \
 	loop/issue2711 \
@@ -519,11 +516,6 @@ test_ldflags = \
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
 	$(AM_CPPFLAGS)
-
-shmem_backtoback_t_SOURCES = shmem/backtoback.c
-shmem_backtoback_t_CPPFLAGS = $(test_cppflags) $(ZMQ_CFLAGS)
-shmem_backtoback_t_LDADD = $(test_ldadd)
-shmem_backtoback_t_LDFLAGS = $(test_ldflags) $(ZMQ_LIBS)
 
 loop_logstderr_SOURCES = loop/logstderr.c
 loop_logstderr_CPPFLAGS = $(test_cppflags)
