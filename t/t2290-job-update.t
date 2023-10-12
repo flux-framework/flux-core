@@ -98,7 +98,7 @@ test_expect_success 'update affects duration of running job' '
 	flux job urgency $jobid default &&
 	flux job wait-event -t 30 -m type=timeout $jobid exception &&
 	flux job info $jobid R \
-	    | jq  -e "(.execution|(.expiration - .starttime)*10 | round) == 1"
+	 | jq -e "(.execution|(.expiration - .starttime)*10 + 0.5 | floor) == 1"
 '
 test_expect_success 'update fails for running job' '
 	jobid=$(flux submit -t1m --wait-event=start sleep 60) &&
