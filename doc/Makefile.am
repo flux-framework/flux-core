@@ -166,6 +166,7 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_shell_task_info_unpack.3 \
 	man3/flux_shell_task_cmd.3 \
 	man3/flux_service_unregister.3 \
+	man3/flux_send_new.3 \
 	man3/flux_clone.3 \
 	man3/flux_close.3 \
 	man3/flux_reconnect.3 \
