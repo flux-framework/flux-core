@@ -1,6 +1,5 @@
-#include <inttypes.h>
 #include <flux/core.h>
-#include "src/common/libutil/log.h"
+#include "die.h"
 
 int main (int argc, char **argv)
 {
@@ -8,10 +7,10 @@ int main (int argc, char **argv)
     uint32_t rank;
 
     if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
+        die ("could not connect to broker");
     if (flux_get_rank (h, &rank) < 0)
-        log_err_exit ("flux_get_rank");
-    printf ("My rank is %"PRIu32"\n", rank);
+        die ("could not get rank");
+    printf ("My rank is %d\n", (int)rank);
     flux_close (h);
     return (0);
 }

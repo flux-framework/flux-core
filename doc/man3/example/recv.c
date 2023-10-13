@@ -1,5 +1,5 @@
 #include <flux/core.h>
-#include "src/common/libutil/log.h"
+#include "die.h"
 
 int main (int argc, char **argv)
 {
@@ -8,14 +8,14 @@ int main (int argc, char **argv)
     const char *topic;
 
     if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
+        die ("could not connect to broker");
     if (flux_event_subscribe (h, "") < 0)
-        log_err_exit ("flux_event_subscribe");
+        die ("could not subscribe to all events");
     for (;;) {
         if ((msg = flux_recv (h, FLUX_MATCH_EVENT, 0)))
-            log_err_exit ("flux_recv");
+            die ("receive error");
         if (flux_msg_get_topic (msg, &topic) < 0)
-            log_err_exit ("flux_msg_get_topic");
+            die ("message decode error");
         printf ("Event: %s\n", topic);
         flux_msg_destroy (msg);
     }

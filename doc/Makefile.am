@@ -471,3 +471,5 @@ check_PROGRAMS = \
 	man3/example/rpc \
 	man3/example/rpc_then \
 	man3/example/info
+
+check_HEADERS = man3/example/die.h

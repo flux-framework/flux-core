@@ -1,7 +1,5 @@
-#include <math.h>
 #include <flux/core.h>
-#include <inttypes.h>
-#include "src/common/libutil/log.h"
+#include "die.h"
 
 int main (int argc, char **argv)
 {
@@ -9,11 +7,11 @@ int main (int argc, char **argv)
     uint32_t rank, n;
 
     if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
+        die ("could not connect to broker");
     if (flux_get_rank (h, &rank) < 0)
-        log_err_exit ("flux_get_rank");
+        die ("error getting rank");
     if (flux_get_size (h, &n) < 0)
-        log_err_exit ("flux_get_size");
+        die ("error getting size");
     flux_close (h);
     return (0);
 }
