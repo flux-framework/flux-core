@@ -52,6 +52,19 @@ void test_handle_invalid_args (flux_t *h)
     if (!(msg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
         BAIL_OUT ("failed to create message");
     errno = 0;
+    ok (flux_send_new (NULL, &msg, 0) < 0 && errno == EINVAL,
+       "flux_send_new h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_send_new (h, NULL, 0) < 0 && errno == EINVAL,
+       "flux_send_new msg=NULL fails with EINVAL");
+    errno = 0;
+    flux_msg_t *nullmsg = NULL;
+    ok (flux_send_new (h, &nullmsg, 0) < 0 && errno == EINVAL,
+       "flux_send_new *msg=NULL fails with EINVAL");
+    ok (flux_send_new (h, &msg, 0x100000) < 0 && errno == EINVAL,
+       "flux_send flags=BOGUS fails with EINVAL");
+
+    errno = 0;
     ok (flux_send (NULL, msg, 0) < 0 && errno == EINVAL,
        "flux_send h=NULL fails with EINVAL");
     errno = 0;
@@ -85,6 +98,51 @@ static void test_flux_open_ex ()
 
     lives_ok ({flux_open_ex ("foo://foo", 0, NULL);},
         "flux_open_ex doesn't crash if error parameter is NULL");
+}
+
+static void test_send_new (void)
+{
+    flux_msg_t *msg;
+    flux_msg_t *msg2;
+    void *msgptr;
+    flux_t *h1;
+    flux_t *h2;
+    int type;
+
+    if (!(h1 = flux_open ("interthread://xyz", 0)))
+        BAIL_OUT ("can't continue without interthread pair");
+    if (!(h2 = flux_open ("interthread://xyz", 0)))
+        BAIL_OUT ("can't continue without interthread pair");
+
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
+        BAIL_OUT ("could not create message");
+    if (flux_msg_aux_set (msg, "foo", "bar", NULL) < 0)
+        BAIL_OUT ("could not set message aux item");
+    msgptr = msg;
+
+    flux_msg_incref (msg);
+    errno = 0;
+    ok (flux_send_new (h1, &msg, 0) < 0 && errno == EINVAL,
+        "flux_send_new fails if message refcount > 1");
+    flux_msg_decref (msg);
+
+    ok (flux_send_new (h1, &msg, 0) == 0,
+        "flux_send_new works");
+    ok (msg == NULL,
+        "msg was set to NULL after send");
+
+    ok ((msg2 = flux_recv (h2, FLUX_MATCH_ANY, 0)) != NULL,
+        "flux_recv got the message");
+    ok (msg2 == msgptr,
+        "received message was not copied");
+    ok (flux_msg_get_type (msg2, &type) == 0 && type == FLUX_MSGTYPE_EVENT,
+        "and message is the correct type");
+    ok (flux_msg_aux_get (msg2, "foo") == NULL,
+        "aux item in sent message is cleared in received message");
+    flux_msg_destroy (msg2);
+
+    flux_close (h1);
+    flux_close (h2);
 }
 
 int main (int argc, char *argv[])
@@ -285,6 +343,8 @@ int main (int argc, char *argv[])
 
     /* flux_open_ex() */
     test_flux_open_ex ();
+
+    test_send_new ();
 
     done_testing();
     return (0);
