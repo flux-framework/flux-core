@@ -110,6 +110,7 @@ This example opens the Flux broker using the default connector
 and path, requests the broker rank, and finally closes the broker handle.
 
 .. literalinclude:: example/open.c
+  :language: c
 
 
 RESOURCES

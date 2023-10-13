@@ -85,6 +85,7 @@ This example opens the Flux broker and displays event messages
 as they arrive.
 
 .. literalinclude:: example/recv.c
+  :language: c
 
 
 RESOURCES

@@ -66,6 +66,7 @@ This example opens the Flux broker, subscribes to heartbeat messages,
 displays one, then quits.
 
 .. literalinclude:: example/event.c
+  :language: c
 
 
 RESOURCES

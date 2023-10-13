@@ -45,6 +45,7 @@ EXAMPLES
 Example:
 
 .. literalinclude:: example/info.c
+  :language: c
 
 
 RESOURCES

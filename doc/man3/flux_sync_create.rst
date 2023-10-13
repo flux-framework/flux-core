@@ -61,6 +61,7 @@ Set up a continuation callback for each heartbeat that arrives at least
 
 
 .. literalinclude:: example/sync.c
+  :language: c
 
 
 RESOURCES

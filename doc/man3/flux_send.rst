@@ -67,6 +67,7 @@ EXAMPLES
 This example opens the Flux broker and publishes an event message.
 
 .. literalinclude:: example/send.c
+  :language: c
 
 
 RESOURCES
