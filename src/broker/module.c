@@ -46,7 +46,6 @@ struct broker_module {
 
     flux_t *h_broker;       /* broker end of interthread channel */
     char uri[128];
-    struct flux_msg_cred cred; /* cred of connection */
 
     uuid_t uuid;            /* uuid for unique request sender identity */
     char uuid_str[UUID_STR_LEN];
@@ -372,13 +371,6 @@ module_t *module_create (flux_t *h,
         errprintf (error, "could not create %s flux handle watcher", p->name);
         goto cleanup;
     }
-    /* Set creds for connection.
-     * Since this is a point to point connection between broker threads,
-     * credentials are always those of the instance owner.
-     */
-    p->cred.userid = getuid ();
-    p->cred.rolemask = FLUX_ROLE_OWNER | FLUX_ROLE_LOCAL;
-
     /* Optimization: create attribute cache to be primed in the module's
      * flux_t handle.  Priming the cache avoids a synchronous RPC from
      * flux_attr_get(3) for common attrs like rank, etc.

@@ -31,8 +31,10 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/aux.h"
 #include "ccan/list/list.h"
 #include "ccan/str/str.h"
+#include "message_private.h" // for access to msg->aux
 
 struct msglist_safe {
     struct flux_msglist *queue;
@@ -89,10 +91,18 @@ static struct msglist_safe *msglist_safe_create (void)
     return ml;
 }
 
-static int msglist_safe_append (struct msglist_safe *ml, const flux_msg_t *msg)
+static int msglist_safe_append_new (struct msglist_safe *ml,
+                                    flux_msg_t **msg)
 {
     pthread_mutex_lock (&ml->lock);
-    int rc = flux_msglist_append (ml->queue, msg);
+    int rc = flux_msglist_append (ml->queue, *msg);
+    /* flux_msglist_append() takes a reference on *msg on success, so we must
+     * decref under the lock before setting *msg to NULL.
+     */
+    if (rc == 0) {
+        flux_msg_decref (*msg);
+        *msg = NULL;
+    }
     pthread_mutex_unlock (&ml->lock);
     return rc;
 }
@@ -253,30 +263,39 @@ static int router_process (flux_msg_t *msg, const char *name)
     return 0;
 }
 
-static int op_send (void *impl, const flux_msg_t *msg, int flags)
+static int op_send_new (void *impl, flux_msg_t **msg, int flags)
 {
     struct interthread_ctx *ctx = impl;
-    flux_msg_t *cpy;
     struct flux_msg_cred cred;
-    int rc = -1;
 
-    if (!(cpy = flux_msg_copy (msg, true)))
+    if (flux_msg_get_cred (*msg, &cred) < 0)
         return -1;
-    if (flux_msg_get_cred (cpy, &cred) < 0)
-        goto done;
     if (cred.userid == FLUX_USERID_UNKNOWN
         && cred.rolemask == FLUX_ROLE_NONE) {
-        if (flux_msg_set_cred (cpy, ctx->cred) < 0)
-            goto done;
+        if (flux_msg_set_cred (*msg, ctx->cred) < 0)
+            return -1;
     }
     if (ctx->router) {
-        if (router_process (cpy, ctx->router) < 0)
-            goto done;
+        if (router_process (*msg, ctx->router) < 0)
+            return -1;
     }
-    rc = msglist_safe_append (ctx->send, cpy);
-done:
-    flux_msg_destroy (cpy);
-    return rc;
+    /* The aux container doesn't survive transit of a TCP channel
+     * so it shouldn't survive transit of this kind either.
+     */
+    aux_destroy (&(*msg)->aux);
+    return msglist_safe_append_new (ctx->send, msg);
+}
+
+static int op_send (void *impl, const flux_msg_t *msg, int flags)
+{
+    flux_msg_t *cpy;
+
+    if (!(cpy = flux_msg_copy (msg, true))
+        || op_send_new (impl, &cpy, flags)) {
+        flux_msg_destroy (cpy);
+        return -1;
+    }
+    return 0;
 }
 
 static flux_msg_t *op_recv (void *impl, int flags)
@@ -383,6 +402,7 @@ static const struct flux_handle_ops handle_ops = {
     .pollfd = op_pollfd,
     .pollevents = op_pollevents,
     .send = op_send,
+    .send_new = op_send_new,
     .recv = op_recv,
     .setopt = op_setopt,
     .impl_destroy = op_fini,

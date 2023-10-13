@@ -107,13 +107,13 @@ const char *flux_strerror (int errnum)
 static int log_rpc (flux_t *h, const char *buf, int len)
 {
     flux_msg_t *msg;
-    int rc;
 
-    if (!(msg = flux_request_encode_raw ("log.append", buf, len)))
+    if (!(msg = flux_request_encode_raw ("log.append", buf, len))
+        || flux_send_new (h, &msg, 0) < 0) {
+        flux_msg_destroy (msg);
         return -1;
-    rc = flux_send (h, msg, 0);
-    flux_msg_destroy (msg);
-    return rc;
+    }
+    return 0;
 }
 
 int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)

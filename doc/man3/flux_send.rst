@@ -6,9 +6,13 @@ flux_send(3)
 SYNOPSIS
 ========
 
-#include <flux/core.h>
+::
 
-int flux_send (flux_t \*h, const flux_msg_t \*msg, int flags);
+   #include <flux/core.h>
+
+   int flux_send (flux_t *h, const flux_msg_t *msg, int flags);
+
+   int flux_send_new (flux_t *h, flux_msg_t **msg, int flags);
 
 
 DESCRIPTION
@@ -30,6 +34,11 @@ to ``flux_open()`` when the handle was created.
 
 The message type, topic string, and nodeid affect how the message
 will be routed by the broker. These attributes are pre-set in the message.
+
+``flux_send_new()`` is the same, except message ownership is transferred
+to the handle *h*.  The double pointer *msg* points to a NULL value if
+the message is successfully transferred.  The send fails if the message
+reference count is greater than one.
 
 
 RETURN VALUE

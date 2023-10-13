@@ -44,6 +44,7 @@
 #include "msg_handler.h" // for flux_sleep_on ()
 #include "flog.h"
 #include "conf.h"
+#include "message_private.h" // to check msg refcount in flux_send_new ()
 
 #if HAVE_CALIPER
 struct profiling_context {
@@ -796,15 +797,50 @@ int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
     flags |= h->flags;
     update_tx_stats (h, msg);
     handle_trace_message (h, msg);
+#if HAVE_CALIPER
+    profiling_msg_snapshot(h, msg, flags, "send");
+#endif
     while (h->ops->send (h->impl, msg, flags) < 0) {
         if (comms_error (h, errno) < 0)
             return -1;
         /* retry if comms_error() returns success */
     }
-#if HAVE_CALIPER
-    profiling_msg_snapshot(h, msg, flags, "send");
-#endif
     rpc_track_update (h->tracker, msg);
+    return 0;
+}
+
+int flux_send_new (flux_t *h, flux_msg_t **msg, int flags)
+{
+    if (!h || !msg || !*msg || (*msg)->refcount > 1) {
+        errno = EINVAL;
+        return -1;
+    }
+    h = lookup_clone_ancestor (h);
+    /* Fall back to flux_send() if there are complications to using
+     * op->send_new(), e.g. when message is still needed after send.
+     */
+    if (!h->ops->send_new || h->tracker != NULL) {
+        if (flux_send (h, *msg, flags) < 0)
+            return -1;
+        flux_msg_destroy (*msg);
+        *msg = NULL;
+        return 0;
+    }
+    if (h->destroy_in_progress) {
+        errno = ENOSYS;
+        return -1;
+    }
+    flags |= h->flags;
+    update_tx_stats (h, *msg);
+    handle_trace_message (h, *msg);
+#if HAVE_CALIPER
+    profiling_msg_snapshot(h, *msg, flags, "send");
+#endif
+    while (h->ops->send_new (h->impl, msg, flags) < 0) {
+        if (comms_error (h, errno) < 0)
+            return -1;
+        /* retry if comms_error() returns success */
+    }
     return 0;
 }
 
