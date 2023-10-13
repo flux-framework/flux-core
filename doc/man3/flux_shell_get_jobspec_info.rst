@@ -6,17 +6,13 @@ flux_shell_get_jobspec_info(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
 
-::
-
    int flux_shell_get_jobspec_info (flux_shell_t *shell,
                                     char **json_str);
-
-::
 
    int flux_shell_jobspec_info_unpack (flux_shell_t *shell,
                                        const char *fmt,

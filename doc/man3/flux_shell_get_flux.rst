@@ -6,11 +6,9 @@ flux_shell_get_flux(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
-
-::
 
    flux_t *flux_shell_get_flux (flux_shell_t *shell);
 

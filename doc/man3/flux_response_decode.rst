@@ -6,23 +6,18 @@ flux_response_decode(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    int flux_response_decode (const flux_msg_t *msg,
                              const char **topic,
                              const char **s);
 
-::
-
    int flux_response_decode_raw (const flux_msg_t *msg,
                                  const char **topic,
-                                 const void **data, int *len);
-
-::
+                                 const void **data,
+                                 int *len);
 
    int flux_response_decode_error (const flux_msg_t *msg,
                                    const char *errstr);

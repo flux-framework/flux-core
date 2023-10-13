@@ -6,42 +6,33 @@ flux_event_decode(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    int flux_event_decode (const flux_msg_t *msg,
                           const char **topic,
                           const char **s);
 
-::
-
    int flux_event_decode_raw (const flux_msg_t *msg,
                               const char **topic,
-                              const void **data, int *len);
-
-::
+                              const void **data,
+                              int *len);
 
    int flux_event_unpack (const flux_msg_t *msg,
                           const char **topic,
-                          const char *fmt, ...);
+                          const char *fmt,
+                          ...);
 
-::
-
-   flux_msg_t *flux_event_encode (const char *topic,
-                                  const char *s);
-
-::
+   flux_msg_t *flux_event_encode (const char *topic, const char *s);
 
    flux_msg_t *flux_event_encode_raw (const char *topic,
-                                      const void *data, int len);
-
-::
+                                      const void *data,
+                                      int len);
 
    flux_msg_t *flux_event_pack (const char *topic,
-                                const char *fmt, ...);
+                                const char *fmt,
+                                ...);
 
 
 DESCRIPTION

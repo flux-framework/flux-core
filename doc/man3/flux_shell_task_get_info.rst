@@ -6,19 +6,16 @@ flux_shell_task_get_info(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
-
-::
 
    int flux_shell_task_get_info (flux_shell_task_t *task,
                                  char **json_str);
 
-::
-
    int flux_shell_task_info_unpack (flux_shell_task_t *task,
-                                    const char *fmt, ...);
+                                    const char *fmt,
+                                    ...);
 
 
 DESCRIPTION

@@ -6,12 +6,10 @@ flux_shell_get_hwloc_xml(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
-
-::
 
    int flux_shell_get_hwloc_xml (flux_shell_t *shell,
                                  const char **hwloc_xml);

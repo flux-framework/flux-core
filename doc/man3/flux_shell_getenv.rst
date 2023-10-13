@@ -6,30 +6,22 @@ flux_shell_getenv(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
 
-::
-
    const char * flux_shell_getenv (flux_shell_t *shell,
                                    const char *name);
 
-::
-
    int flux_shell_get_environ (flux_shell_t *shell,
                                char **json_str);
-
-::
 
    int flux_shell_setenvf (flux_shell_t *shell,
                            int overwrite,
                            const char *name,
                            const char *fmt,
-                           ...)
-
-::
+                           ...);
 
    int flux_shell_unsetenv (flux_shell_t *shell,
                             const char *name);

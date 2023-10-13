@@ -6,11 +6,9 @@ flux_shell_service_register(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
-
-::
 
    int flux_shell_service_register (flux_shell_t *shell,
                                     const char *method,

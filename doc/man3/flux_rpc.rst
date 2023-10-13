@@ -6,52 +6,44 @@ flux_rpc(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
-   flux_future_t *flux_rpc (flux_t *h, const char *topic,
+   flux_future_t *flux_rpc (flux_t *h,
+                            const char *topic,
                             const char *s,
-                            uint32_t nodeid, int flags);
+                            uint32_t nodeid,
+                            int flags);
 
-::
+   flux_future_t *flux_rpc_pack (flux_t *h,
+                                 const char *topic,
+                                 uint32_t nodeid,
+                                 int flags,
+                                 const char *fmt,
+                                 ...);
 
-   flux_future_t *flux_rpc_pack (flux_t *h, const char *topic,
-                                 uint32_t nodeid, int flags,
-                                 const char *fmt, ...);
-
-::
-
-   flux_future_t *flux_rpc_raw (flux_t *h, const char *topic,
-                                const void *data, int len,
-                                uint32_t nodeid, int flags);
-
-::
+   flux_future_t *flux_rpc_raw (flux_t *h,
+                                const char *topic,
+                                const void *data,
+                                int len,
+                                uint32_t nodeid,
+                                int flags);
 
    flux_future_t *flux_rpc_message (flux_t *h,
                                     const flux_msg_t *msg,
-                                    uint32_t nodeid, int flags);
-
-::
+                                    uint32_t nodeid,
+                                    int flags);
 
    int flux_rpc_get (flux_future_t *f, const char **s);
 
-::
-
    int flux_rpc_get_unpack (flux_future_t *f, const char *fmt, ...);
 
-::
-
    int flux_rpc_get_raw (flux_future_t *f,
-                         const void **data, int *len);
-
-::
+                         const void **data,
+                         int *len);
 
    uint32_t flux_rpc_get_matchtag (flux_future_t *f);
-
-::
 
    uint32_t flux_rpc_get_nodeid (flux_future_t *f);
 

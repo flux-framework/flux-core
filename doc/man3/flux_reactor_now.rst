@@ -6,11 +6,13 @@ flux_watcher_now(3)
 SYNOPSIS
 ========
 
-double flux_reactor_now (flux_reactor_t \*r);
+.. code-block:: c
 
-void flux_reactor_now_update (flux_reactor_t \*r);
+  double flux_reactor_now (flux_reactor_t *r);
 
-double flux_reactor_time (void);
+  void flux_reactor_now_update (flux_reactor_t *r);
+
+  double flux_reactor_time (void);
 
 
 DESCRIPTION

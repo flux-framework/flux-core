@@ -6,21 +6,23 @@ flux_reactor_create(3)
 SYNOPSIS
 ========
 
-#include <flux/core.h>
+.. code-block:: c
 
-flux_reactor_t \*flux_reactor_create (int flags);
+  #include <flux/core.h>
 
-void flux_reactor_destroy (flux_reactor_t \*r);
+  flux_reactor_t *flux_reactor_create (int flags);
 
-int flux_reactor_run (flux_reactor_t \*r, int flags);
+  void flux_reactor_destroy (flux_reactor_t *r);
 
-void flux_reactor_stop (flux_reactor_t \*r);
+  int flux_reactor_run (flux_reactor_t *r, int flags);
 
-void flux_reactor_stop_error (flux_reactor_t \*r);
+  void flux_reactor_stop (flux_reactor_t *r);
 
-void flux_reactor_active_incref (flux_reactor_t \*r);
+  void flux_reactor_stop_error (flux_reactor_t *r);
 
-void flux_reactor_active_decref (flux_reactor_t \*r);
+  void flux_reactor_active_incref (flux_reactor_t *r);
+
+  void flux_reactor_active_decref (flux_reactor_t *r);
 
 
 DESCRIPTION

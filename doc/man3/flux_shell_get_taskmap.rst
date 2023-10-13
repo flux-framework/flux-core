@@ -6,12 +6,10 @@ flux_shell_get_taskmap(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
-
-::
 
    const struct taskmap * flux_shell_get_taskmap (flux_shell_t *shell);
 

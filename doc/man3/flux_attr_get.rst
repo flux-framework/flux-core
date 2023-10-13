@@ -6,15 +6,11 @@ flux_attr_get(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    const char *flux_attr_get (flux_t *h, const char *name);
-
-::
 
    int flux_attr_set (flux_t *h, const char *name, const char *val);
 

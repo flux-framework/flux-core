@@ -6,17 +6,13 @@ flux_shell_task_subprocess(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
 
-::
+   flux_subprocess_t *flux_shell_task_subprocess (flux_shell_task_t *task);
 
-   flux_subprocess_t *flux_shell_task_subprocess (flux_shell_task_t *task)
-
-::
-
-   flux_cmd_t *flux_shell_task_cmd (flux_shell_task_t *task)
+   flux_cmd_t *flux_shell_task_cmd (flux_shell_task_t *task);
 
 
 DESCRIPTION

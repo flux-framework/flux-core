@@ -6,27 +6,22 @@ flux_child_watcher_create(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    typedef void (*flux_watcher_f)(flux_reactor_t *r,
                                   flux_watcher_t *w,
-                                  int revents, void *arg);
-
-::
+                                  int revents,
+                                  void *arg);
 
    flux_watcher_t *flux_child_watcher_create (flux_reactor_t *r,
-                                              int pid, bool trace,
-                                              flux_watcher_f cb, void *arg);
-
-::
+                                              int pid,
+                                              bool trace,
+                                              flux_watcher_f cb,
+                                              void *arg);
 
    int flux_child_watcher_get_rpid (flux_watcher_t *w);
-
-::
 
    int flux_child_watcher_get_rstatus (flux_watcher_t *w);
 

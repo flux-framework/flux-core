@@ -6,29 +6,28 @@ flux_respond(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
-   int flux_respond (flux_t *h, const flux_msg_t *request,
+   int flux_respond (flux_t *h,
+                     const flux_msg_t *request,
                      const char *s);
 
-::
+   int flux_respond_pack (flux_t *h,
+                          const flux_msg_t *request,
+                          const char *fmt,
+                          ...);
 
-   int flux_respond_pack (flux_t *h, const flux_msg_t *request,
-                          const char *fmt, ...);
+   int flux_respond_raw (flux_t *h,
+                         const flux_msg_t *request,
+                         const void *data,
+                         int length);
 
-::
-
-   int flux_respond_raw (flux_t *h, const flux_msg_t *request,
-                         const void *data, int length);
-
-::
-
-   int flux_respond_error (flux_t *h, const flux_msg_t *request,
-                           int errnum, const char *errmsg);
+   int flux_respond_error (flux_t *h,
+                           const flux_msg_t *request,
+                           int errnum,
+                           const char *errmsg);
 
 
 DESCRIPTION

@@ -6,20 +6,15 @@ flux_comms_error_set(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    typedef int (*flux_comms_error_f)(flux_t *h, void *arg);
-
-::
 
    void flux_comms_error_set (flux_t *h,
                               flux_comms_error_f fun,
                               void *arg);
-
 
 
 DESCRIPTION

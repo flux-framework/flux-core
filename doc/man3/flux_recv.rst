@@ -6,9 +6,13 @@ flux_recv(3)
 SYNOPSIS
 ========
 
-#include <flux/core.h>
+.. code-block:: c
 
-flux_msg_t \*flux_recv (flux_t \*h, struct flux_match match, int flags);
+  #include <flux/core.h>
+
+  flux_msg_t *flux_recv (flux_t *h,
+                         struct flux_match match,
+                         int flags);
 
 
 DESCRIPTION

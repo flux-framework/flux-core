@@ -6,40 +6,26 @@ flux_future_get(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    typedef void (*flux_continuation_f)(flux_future_t *f, void *arg);
-
-::
 
    int flux_future_get (flux_future_t *f, const void **result);
 
-::
-
-   int flux_future_then (flux_future_t *f, double timeout,
-                         flux_continuation_f cb, void *arg);
-
-::
+   int flux_future_then (flux_future_t *f,
+                         double timeout,
+                         flux_continuation_f cb,
+                         void *arg);
 
    int flux_future_wait_for (flux_future_t *f, double timeout);
 
-::
-
    void flux_future_reset (flux_future_t *f);
-
-::
 
    void flux_future_destroy (flux_future_t *f);
 
-::
-
    bool flux_future_has_error (flux_future_t *f);
-
-::
 
    const char *flux_future_error_string (flux_future_t *f);
 

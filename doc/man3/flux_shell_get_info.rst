@@ -6,29 +6,21 @@ flux_shell_get_info(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
 
-::
-
    int flux_shell_get_info (flux_shell_t *shell,
                            char **json_str);
-
-::
 
    int flux_shell_info_unpack (flux_shell_t *shell,
                               const char *fmt,
                               ...);
 
-::
-
    int flux_shell_get_rank_info (flux_shell_t *shell,
                                  int shell_rank,
                                  char **json_str);
-
-::
 
    int flux_shell_rank_info_unpack (flux_shell_t *shell,
                                     int shell_rank,

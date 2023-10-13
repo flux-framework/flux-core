@@ -6,15 +6,17 @@ flux_log(3)
 SYNOPSIS
 ========
 
-#include <flux/core.h>
+.. code-block:: c
 
-int flux_vlog (flux_t \*h, int level, const char \*fmt, va_list ap);
+  #include <flux/core.h>
 
-int flux_log (flux_t \*h, int level, const char \*fmt, …​);
+  int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap);
 
-void flux_log_set_appname (flux_t \*h, const char \*s);
+  int flux_log (flux_t *h, int level, const char *fmt, ...);
 
-void flux_log_set_procid (flux_t \*h, const char \*s);
+  void flux_log_set_appname (flux_t *h, const char *s);
+
+  void flux_log_set_procid (flux_t *h, const char *s);
 
 
 DESCRIPTION

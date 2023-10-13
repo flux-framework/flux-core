@@ -6,24 +6,24 @@ flux_future_wait_all_create(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    flux_future_t *flux_future_wait_all_create (void);
+
    flux_future_t *flux_future_wait_any_create (void);
 
-::
-
-   int flux_future_push (flux_future_t *cf, const char *name, flux_future_t *f);
-
-::
+   int flux_future_push (flux_future_t *cf,
+                         const char *name,
+                         flux_future_t *f);
 
    const char *flux_future_first_child (flux_future_t *cf);
+
    const char *flux_future_next_child (flux_future_t *cf);
-   flux_future_t *flux_future_get_child (flux_future_t *cf, const char *name);
+
+   flux_future_t *flux_future_get_child (flux_future_t *cf,
+                                         const char *name);
 
 
 DESCRIPTION

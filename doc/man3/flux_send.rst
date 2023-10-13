@@ -6,7 +6,7 @@ flux_send(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 

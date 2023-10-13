@@ -6,11 +6,9 @@ flux_sync_create(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    flux_future_t *flux_sync_create (flux_t *h, double minimum);
 

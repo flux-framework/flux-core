@@ -6,26 +6,20 @@ flux_kvs_namespace_create(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    flux_future_t *flux_kvs_namespace_create (flux_t *h,
                                              const char *namespace,
                                              uint32_t owner,
                                              int flags);
 
-::
-
    flux_future_t *flux_kvs_namespace_create_with (flux_t *h,
                                                   const char *namespace,
                                                   const char *rootref,
                                                   uint32_t owner,
                                                   int flags);
-
-::
 
    flux_future_t *flux_kvs_namespace_remove (flux_t *h,
                                              const char *namespace);

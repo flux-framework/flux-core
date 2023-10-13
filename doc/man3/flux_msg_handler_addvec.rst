@@ -6,11 +6,9 @@ flux_msg_handler_addvec(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    struct flux_msg_handler_spec {
        int typemask;
@@ -19,14 +17,10 @@ SYNOPSIS
        uint32_t rolemask;
    };
 
-::
-
    int flux_msg_handler_addvec (flux_t *h,
                                 const struct flux_msg_handler_spec tab[],
                                 void *arg,
                                 flux_msg_handler_t **handlers[]);
-
-::
 
    void flux_msg_handler_delvec (flux_msg_handler_t *handlers[]);
 

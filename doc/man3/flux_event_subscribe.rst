@@ -6,11 +6,13 @@ flux_event_subscribe(3)
 SYNOPSIS
 ========
 
-#include <flux/core.h>
+.. code-block:: c
 
-int flux_event_subscribe (flux_t \*h, const char \*topic);
+  #include <flux/core.h>
 
-int flux_event_unsubscribe (flux_t \*h, const char \*topic);
+  int flux_event_subscribe (flux_t *h, const char *topic);
+
+  int flux_event_unsubscribe (flux_t *h, const char *topic);
 
 
 DESCRIPTION

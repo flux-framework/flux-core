@@ -6,18 +6,14 @@ flux_shell_add_completion_ref(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
 
-::
-
    int flux_shell_add_completion_ref (flux_shell_t *shell,
                                       const char *fmt,
                                       ...)
-
-::
 
    int flux_shell_remove_completion_ref (flux_shell_t *shell,
                                          const char *fmt,

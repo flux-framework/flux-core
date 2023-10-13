@@ -6,30 +6,24 @@ flux_shell_log(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
-
-::
 
    void flux_shell_log (const char *component,
                         int level,
                         const char *file,
                         int line,
                         const char *fmt,
-                        ...)
-
-::
+                        ...);
 
    int flux_shell_err (const char *component,
                        const char *file,
                        int line,
                        int errnum,
                        const char *fmt,
-                       ...)
-
-::
+                       ...);
 
    void flux_shell_fatal (const char *component,
                           const char *file,
@@ -37,17 +31,14 @@ SYNOPSIS
                           int errnum,
                           int exit_code,
                           const char *fmt,
-                          ...)
-::
+                          ...);
 
    void flux_shell_raise (const char *type,
                           int severity,
                           const char *fmt,
-                          ...)
-::
+                          ...);
 
-   int flux_shell_log_setlevel (int level,
-                                const char *dest);
+   int flux_shell_log_setlevel (int level, const char *dest);
 
 
 DESCRIPTION

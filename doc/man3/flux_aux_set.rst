@@ -6,22 +6,18 @@ flux_aux_set(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    typedef void (*flux_free_f)(void *arg);
-
-::
 
    void *flux_aux_get (flux_t *h, const char *name);
 
-::
-
-   int flux_aux_set (flux_t *h, const char *name,
-                     void *aux, flux_free_f destroy);
+   int flux_aux_set (flux_t *h,
+                     const char *name,
+                     void *aux,
+                     flux_free_f destroy);
 
 
 DESCRIPTION

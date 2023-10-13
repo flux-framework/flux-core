@@ -6,19 +6,15 @@ flux_request_encode(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
-   flux_msg_t *flux_request_encode (const char *topic,
-                                    const char *s);
-
-::
+   flux_msg_t *flux_request_encode (const char *topic, const char *s);
 
    flux_msg_t *flux_request_encode_raw (const char *topic,
-                                        void *data, int len);
+                                        void *data,
+                                        int len);
 
 
 DESCRIPTION

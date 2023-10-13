@@ -6,11 +6,13 @@ flux_get_reactor(3)
 SYNOPSIS
 ========
 
-#include <flux/core.h>
+.. code-block:: c
 
-flux_reactor_t \*flux_get_reactor (flux_t \*h);
+  #include <flux/core.h>
 
-int flux_set_reactor (flux_t \*h, flux_reactor_t \*r);
+  flux_reactor_t *flux_get_reactor (flux_t *h);
+
+  int flux_set_reactor (flux_t *h, flux_reactor_t *r);
 
 
 DESCRIPTION
