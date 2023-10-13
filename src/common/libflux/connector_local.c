@@ -183,7 +183,7 @@ static int override_retry_count (struct usock_retry_params *retry)
     return 0;
 }
 
-flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
+flux_t *connector_local_init (const char *path, int flags, flux_error_t *errp)
 {
     struct local_connector *ctx;
 
