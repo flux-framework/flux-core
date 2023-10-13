@@ -6,11 +6,9 @@ flux_job_timeleft(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    int flux_job_timeleft (flux_t *h,
                           flux_error_t *error,

@@ -6,18 +6,14 @@ flux_kvs_commit(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    flux_future_t *flux_kvs_commit (flux_t *h,
                                    const char *ns,
                                    int flags,
                                    flux_kvs_txn_t *txn);
-
-::
 
    flux_future_t *flux_kvs_fence (flux_t *h,
                                   const char *ns,
@@ -26,15 +22,10 @@ SYNOPSIS
                                   int nprocs,
                                   flux_kvs_txn_t *txn);
 
-::
-
    int flux_kvs_commit_get_treeobj (flux_future_t *f,
                                     const char **treeobj);
 
-::
-
-   int flux_kvs_commit_get_sequence (flux_future_t *f,
-                                     int *seq);
+   int flux_kvs_commit_get_sequence (flux_future_t *f, int *seq);
 
 
 DESCRIPTION

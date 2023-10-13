@@ -6,14 +6,11 @@ flux_service_register(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    flux_future_t *flux_service_register (flux_t *h, const char *name);
-::
 
    flux_future_t *flux_service_unregister (flux_t *h, const char *name);
 

@@ -6,20 +6,14 @@ flux_shell_current_task(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
 
-::
-
    flux_shell_task_t *flux_shell_current_task (flux_shell_t *shell);
 
-::
-
    flux_shell_task_t *flux_shell_task_first (flux_shell_t *shell);
-
-::
 
    flux_shell_task_t *flux_shell_task_next (flux_shell_t *shell);
 

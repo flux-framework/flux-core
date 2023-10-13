@@ -6,11 +6,13 @@ flux_pollevents(3)
 SYNOPSIS
 ========
 
-#include <flux/core.h>
+.. code-block:: c
 
-int flux_pollevents (flux_t \*h);
+  #include <flux/core.h>
 
-int flux_pollfd (flux_t \*h);
+  int flux_pollevents (flux_t *h);
+
+  int flux_pollfd (flux_t *h);
 
 
 DESCRIPTION

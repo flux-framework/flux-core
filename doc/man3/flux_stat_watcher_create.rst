@@ -6,25 +6,20 @@ flux_stat_watcher_create(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    typedef void (*flux_watcher_f)(flux_reactor_t *r,
                                   flux_watcher_t *w,
-                                  int revents, void *arg);
-
-::
+                                  int revents,
+                                  void *arg);
 
    flux_watcher_t *flux_stat_watcher_create (flux_reactor_t *r,
                                              const char *path,
                                              double interval,
                                              flux_watcher_f callback,
                                              void *arg);
-
-::
 
    void flux_stat_watcher_get_rstat (flux_watcher_t *w,
                                      struct stat *stat,

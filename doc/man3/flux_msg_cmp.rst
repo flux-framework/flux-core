@@ -6,19 +6,15 @@ flux_msg_cmp(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    struct flux_match {
        int typemask;
        uint32_t matchtag;
        char *topic_glob;
    };
-
-::
 
    bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match);
 

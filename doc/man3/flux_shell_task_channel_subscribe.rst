@@ -6,11 +6,9 @@ flux_shell_task_channel_subscribe(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
-
-::
 
    int flux_shell_task_channel_subscribe (flux_shell_task_t *task,
                                           const char *channel,

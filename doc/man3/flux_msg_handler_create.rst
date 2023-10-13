@@ -6,34 +6,24 @@ flux_msg_handler_create(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    typedef void (*flux_msg_handler_f)(flux_t *h,
                                       flux_msg_handler_t *mh,
                                       const flux_msg_t *msg,
                                       void *arg);
 
-::
-
-   flux_msg_handler_t *
-   flux_msg_handler_create (flux_t *h,
-                            const struct flux_match match,
-                            flux_msg_handler_f callback,
-                            void *arg);
-
-::
+   flux_msg_handler_t *flux_msg_handler_create (
+                                      flux_t *h,
+                                      const struct flux_match match,
+                                      flux_msg_handler_f callback,
+                                      void *arg);
 
    void flux_msg_handler_destroy (flux_msg_handler_t *mh);
 
-::
-
    void flux_msg_handler_start (flux_msg_handler_t *mh);
-
-::
 
    void flux_msg_handler_stop (flux_msg_handler_t *mh);
 

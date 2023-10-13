@@ -6,15 +6,11 @@ flux_core_version(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    int flux_core_version (int *major, int *minor, int *patch);
-
-::
 
    const char *flux_core_version_string (void);
 

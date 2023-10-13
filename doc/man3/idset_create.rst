@@ -6,63 +6,41 @@ idset_create(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/idset.h>
 
-::
-
    struct idset *idset_create (size_t slots, int flags);
-
-::
 
    void idset_destroy (struct idset *idset);
 
-::
-
    struct idset *idset_copy (const struct idset *idset);
-
-::
 
    int idset_set (struct idset *idset, unsigned int id);
 
-::
-
    int idset_range_set (struct idset *idset,
-                        unsigned int lo, unsigned int hi);
-
-::
+                        unsigned int lo,
+                        unsigned int hi);
 
    int idset_clear (struct idset *idset, unsigned int id);
 
-::
-
    int idset_range_clear (struct idset *idset,
-                          unsigned int lo, unsigned int hi)
-
-::
+                          unsigned int lo,
+                          unsigned int hi);
 
    bool idset_test (const struct idset *idset, unsigned int id);
 
-::
-
    unsigned int idset_first (const struct idset *idset);
 
-::
+   unsigned int idset_next (const struct idset *idset,
+                            unsigned int prev);
 
-   unsigned int idset_next (const struct idset *idset, unsigned int prev);
-
-::
-
-   unsigned int idset_last (const struct idset *idset)
-
-::
+   unsigned int idset_last (const struct idset *idset);
 
    size_t idset_count (const struct idset *idset);
 
-::
-
-   bool idset_equal (const struct idset *set1, const struct idset *set2);
+   bool idset_equal (const struct idset *set1,
+                     const struct idset *set2);
 
 
 USAGE

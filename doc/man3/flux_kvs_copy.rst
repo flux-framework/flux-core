@@ -6,18 +6,14 @@ flux_kvs_copy(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    flux_future_t *flux_kvs_copy (flux_t *h,
                                  const char *srckey,
                                  const char *dstkey,
                                  int commit_flags);
-
-::
 
    flux_future_t *flux_kvs_move (flux_t *h,
                                  const char *srckey,

@@ -6,19 +6,13 @@ idset_encode(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/idset.h>
 
-::
-
    char *idset_encode (const struct idset *idset, int flags);
 
-::
-
    struct idset *idset_decode (const char *s);
-
-::
 
    struct idset *idset_ndecode (const char *s, size_t len);
 

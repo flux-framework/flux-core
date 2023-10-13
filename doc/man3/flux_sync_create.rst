@@ -6,11 +6,9 @@ flux_sync_create(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    flux_future_t *flux_sync_create (flux_t *h, double minimum);
 
@@ -62,7 +60,8 @@ Set up a continuation callback for each heartbeat that arrives at least
 *sync_min* seconds from the last, with a timeout of *sync_max* seconds:
 
 
-.. literalinclude:: tsync.c
+.. literalinclude:: example/sync.c
+  :language: c
 
 
 RESOURCES

@@ -6,32 +6,30 @@ flux_periodic_watcher_create(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    typedef void (*flux_watcher_f)(flux_reactor_t *r,
                                   flux_watcher_t *w,
-                                  int revents, void *arg);
+                                  int revents,
+                                  void *arg);
 
-::
+   typedef double (*flux_reschedule_f)(flux_watcher_t *w,
+                                       double now,
+                                       void *arg);
 
-   typedef double (*flux_reschedule_f) (flux_watcher_t *w, double now, void *arg);
-
-::
-
-   flux_watcher_t *flux_periodic_watcher_create (flux_reactor_t *r,
-                                                 double offset, double interval,
-                                                 flux_reschedule_f reschedule_cb,
-                                                 flux_watcher_f callback,
-                                                 void *arg);
-
-::
+   flux_watcher_t *flux_periodic_watcher_create (
+                                         flux_reactor_t *r,
+                                         double offset,
+                                         double interval,
+                                         flux_reschedule_f resched_cb,
+                                         flux_watcher_f callback,
+                                         void *arg);
 
    void flux_periodic_watcher_reset (flux_watcher_t *w,
-                                     double offset, double interval);
+                                     double offset,
+                                     double interval);
 
 
 DESCRIPTION

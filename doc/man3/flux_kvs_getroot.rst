@@ -6,35 +6,23 @@ flux_kvs_getroot(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    flux_future_t *flux_kvs_getroot (flux_t *h,
                                     const char *ns,
                                     int flags);
 
-::
-
    int flux_kvs_getroot_get_treeobj (flux_future_t *f,
                                      const char **treeobj);
-
-::
 
    int flux_kvs_getroot_get_blobref (flux_future_t *f,
                                      const char **blobref);
 
-::
+   int flux_kvs_getroot_get_sequence (flux_future_t *f, int *seq);
 
-   int flux_kvs_getroot_get_sequence (flux_future_t *f,
-                                      int *seq);
-
-::
-
-   int flux_kvs_getroot_get_owner (flux_future_t *f,
-                                   uint32_t *owner);
+   int flux_kvs_getroot_get_owner (flux_future_t *f, uint32_t *owner);
 
 
 DESCRIPTION

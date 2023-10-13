@@ -6,27 +6,23 @@ flux_request_decode(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
-
-::
 
    int flux_request_decode (const flux_msg_t *msg,
                             const char **topic,
                             const char **s);
 
-::
-
    int flux_request_unpack (const flux_msg_t *msg,
                             const char **topic,
-                            const char *fmt, ...);
-
-::
+                            const char *fmt,
+                            ...);
 
    int flux_request_decode_raw (const flux_msg_t *msg,
                                 const char **topic,
-                                const void **data, int *len);
+                                const void **data,
+                                int *len);
 
 
 DESCRIPTION

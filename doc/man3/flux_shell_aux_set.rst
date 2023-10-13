@@ -6,23 +6,17 @@ flux_shell_aux_set(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
 
-::
-
    typedef void (*flux_free_f)(void *arg);
-
-::
 
    int flux_shell_aux_set (flux_shell_t *shell,
                            const char *name,
                            void *aux,
                            flux_free_f free_fn);
-
-::
 
    void * flux_shell_aux_get (flux_shell_t *shell,
                               const char *key);

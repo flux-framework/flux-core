@@ -6,11 +6,9 @@ flux_shell_plugstack_call(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
-
-::
 
    int flux_shell_plugstack_call (flux_shell_t *shell,
                                   const char *topic,

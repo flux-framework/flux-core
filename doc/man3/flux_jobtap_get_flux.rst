@@ -6,42 +6,31 @@ flux_jobtap_get_flux(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
    #include <flux/jobtap.h>
 
-::
-
    flux_t *flux_jobtap_get_flux (flux_plugin_t *p);
-
-::
 
    int flux_jobtap_service_register (flux_plugin_t *p,
                                      const char *method,
                                      flux_msg_handler_f cb,
                                      void *arg);
 
-::
-
    int flux_jobtap_reprioritize_all (flux_plugin_t *p);
-
-::
 
    int flux_jobtap_reprioritize_job (flux_plugin_t *p,
                                      flux_jobid_t id,
                                      unsigned int priority);
 
-::
-
    int flux_jobtap_priority_unavail (flux_plugin_t *p,
                                      flux_plugin_arg_t *args);
 
-::
-
    int flux_jobtap_reject_job (flux_plugin_t *p,
                                flux_plugin_arg_t *args,
-                               const char *fmt, ...);
+                               const char *fmt,
+                               ...);
 
 
 DESCRIPTION

@@ -6,11 +6,13 @@ flux_event_subscribe(3)
 SYNOPSIS
 ========
 
-#include <flux/core.h>
+.. code-block:: c
 
-int flux_event_subscribe (flux_t \*h, const char \*topic);
+  #include <flux/core.h>
 
-int flux_event_unsubscribe (flux_t \*h, const char \*topic);
+  int flux_event_subscribe (flux_t *h, const char *topic);
+
+  int flux_event_unsubscribe (flux_t *h, const char *topic);
 
 
 DESCRIPTION
@@ -63,7 +65,8 @@ EXAMPLES
 This example opens the Flux broker, subscribes to heartbeat messages,
 displays one, then quits.
 
-.. literalinclude:: tevent.c
+.. literalinclude:: example/event.c
+  :language: c
 
 
 RESOURCES

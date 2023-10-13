@@ -6,9 +6,11 @@ flux_requeue(3)
 SYNOPSIS
 ========
 
-#include <flux/core.h>
+.. code-block:: c
 
-int flux_requeue (flux_t \*h, const flux_msg_t \*msg, int flags);
+  #include <flux/core.h>
+
+  int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags);
 
 
 DESCRIPTION

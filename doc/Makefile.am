@@ -463,11 +463,13 @@ LDADD = \
 	$(LIBPTHREAD)
 
 check_PROGRAMS = \
-	man3/topen \
-	man3/tsend \
-	man3/trecv \
-	man3/tevent \
-	man3/tsync \
-	man3/trpc \
-	man3/trpc_then \
-	man3/tinfo
+	man3/example/open \
+	man3/example/send \
+	man3/example/recv \
+	man3/example/event \
+	man3/example/sync \
+	man3/example/rpc \
+	man3/example/rpc_then \
+	man3/example/info
+
+check_HEADERS = man3/example/die.h

@@ -6,14 +6,11 @@ flux_shell_killall(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
 
-::
-
-   void flux_shell_killall (flux_shell_t *shell,
-                            int sig);
+   void flux_shell_killall (flux_shell_t *shell, int sig);
 
 
 DESCRIPTION

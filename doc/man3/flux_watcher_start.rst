@@ -6,13 +6,15 @@ flux_watcher_start(3)
 SYNOPSIS
 ========
 
-void flux_watcher_start (flux_watcher_t \*w);
+.. code-block:: c
 
-void flux_watcher_stop (flux_watcher_t \*w);
+  void flux_watcher_start (flux_watcher_t *w);
 
-void flux_watcher_destroy (flux_watcher_t \*w);
+  void flux_watcher_stop (flux_watcher_t *w);
 
-double flux_watcher_next_wakeup (flux_watcher_t \*w);
+  void flux_watcher_destroy (flux_watcher_t *w);
+
+  double flux_watcher_next_wakeup (flux_watcher_t *w);
 
 
 DESCRIPTION

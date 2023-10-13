@@ -6,43 +6,27 @@ idset_add(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/idset.h>
 
-::
-
    struct idset *idset_union (const struct idset *a,
-		              const struct idset *b);
-
-::
+                              const struct idset *b);
 
    struct idset *idset_difference (const struct idset *a,
-		                   const struct idset *b);
-
-::
+                                   const struct idset *b);
 
    struct idset *idset_intersect (const struct idset *a,
-		                  const struct idset *b);
+                                  const struct idset *b);
 
-::
+   int idset_add (struct idset *a, const struct idset *b);
 
-   int idset_add (struct idset *a,
-		  const struct idset *b);
-
-::
-
-   int idset_subtract (struct idset *a,
-		       const struct idset *b);
-
-::
+   int idset_subtract (struct idset *a, const struct idset *b);
 
    bool idset_has_intersection (const struct idset *a,
-		                const struct idset *b);
+                                const struct idset *b);
 
-::
-
-#define idset_clear_all (x) idset_subtract (x, x)
+   #define idset_clear_all (x) idset_subtract (x, x)
 
 
 USAGE

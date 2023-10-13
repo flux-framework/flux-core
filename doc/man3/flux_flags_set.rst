@@ -6,13 +6,15 @@ flux_flags_set(3)
 SYNOPSIS
 ========
 
-#include <flux/core.h>
+.. code-block:: c
 
-void flux_flags_set (flux_t \*h, int flags);
+  #include <flux/core.h>
 
-void flux_flags_unset (flux_t \*h, int flags);
+  void flux_flags_set (flux_t *h, int flags);
 
-int flux_flags_get (flux_t \*h);
+  void flux_flags_unset (flux_t *h, int flags);
+
+  int flux_flags_get (flux_t *h);
 
 
 DESCRIPTION

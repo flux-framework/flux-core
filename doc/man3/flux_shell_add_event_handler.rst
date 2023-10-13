@@ -6,12 +6,10 @@ flux_shell_add_event_handler(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
-
-::
 
    int flux_shell_add_event_handler (flux_shell_t *shell,
                                      const char *subtopic,

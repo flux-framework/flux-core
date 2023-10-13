@@ -6,24 +6,24 @@ flux_future_and_then(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    flux_future_t *flux_future_and_then (flux_future_t *f,
-                                        flux_continuation_f cb, void *arg);
+                                        flux_continuation_f cb,
+                                        void *arg);
+
    flux_future_t *flux_future_or_then (flux_future_t *f,
-                                       flux_continuation_f cb, void *arg);
+                                       flux_continuation_f cb,
+                                       void *arg);
 
-::
+   int flux_future_continue (flux_future_t *prev,
+                             flux_future_t *f);
 
-   int flux_future_continue (flux_future_t *prev, flux_future_t *f);
-   void flux_future_continue_error (flux_future_t *prev, int errnum,
+   void flux_future_continue_error (flux_future_t *prev,
+                                    int errnum,
                                     const char *errstr);
-
-::
 
    int flux_future_fulfill_next (flux_future_t *f,
                                  void *result,

@@ -6,24 +6,20 @@ flux_fd_watcher_create(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    typedef void (*flux_watcher_f)(flux_reactor_t *r,
                                   flux_watcher_t *w,
-                                  int revents, void *arg);
-
-::
+                                  int revents,
+                                  void *arg);
 
    flux_watcher_t *flux_fd_watcher_create (flux_reactor_t *r,
-                                           int fd, int events,
+                                           int fd,
+                                           int events,
                                            flux_watcher_f callback,
                                            void *arg);
-
-::
 
    int flux_fd_watcher_get_fd (flux_watcher_t *w);
 

@@ -6,12 +6,10 @@ flux_shell_add_event_context(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
-
-::
 
    int flux_shell_add_event_context (flux_shell_t *shell,
                                      const char *name,

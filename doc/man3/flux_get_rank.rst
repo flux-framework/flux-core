@@ -6,11 +6,13 @@ flux_get_rank(3)
 SYNOPSIS
 ========
 
-#include <flux/core.h>
+.. code-block:: c
 
-int flux_get_rank (flux_t \*h, uint32_t \*rank);
+  #include <flux/core.h>
 
-int flux_get_size (flux_t \*h, uint32_t \*size);
+  int flux_get_rank (flux_t *h, uint32_t *rank);
+
+  int flux_get_size (flux_t *h, uint32_t *size);
 
 
 DESCRIPTION
@@ -42,7 +44,8 @@ EXAMPLES
 
 Example:
 
-.. literalinclude:: tinfo.c
+.. literalinclude:: example/info.c
+  :language: c
 
 
 RESOURCES

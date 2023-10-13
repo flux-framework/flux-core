@@ -19,7 +19,6 @@ Reactor API
    flux_signal_watcher_create
    flux_stat_watcher_create
    flux_timer_watcher_create
-   flux_sync_create
 
 .. toctree::
    :maxdepth: 1
@@ -28,3 +27,4 @@ Reactor API
    flux_future_create
    flux_future_get
    flux_future_wait_all_create
+   flux_sync_create

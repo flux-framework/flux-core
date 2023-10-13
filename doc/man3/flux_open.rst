@@ -6,13 +6,15 @@ flux_open(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
    flux_t *flux_open (const char *uri, int flags);
 
-   flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *error);
+   flux_t *flux_open_ex (const char *uri,
+                         int flags,
+                         flux_error_t *error);
 
    void flux_close (flux_t *h);
 
@@ -107,7 +109,8 @@ EXAMPLES
 This example opens the Flux broker using the default connector
 and path, requests the broker rank, and finally closes the broker handle.
 
-.. literalinclude:: topen.c
+.. literalinclude:: example/open.c
+  :language: c
 
 
 RESOURCES

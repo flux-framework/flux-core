@@ -13,11 +13,11 @@ test_under_flux 2 minimal
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 test_expect_success 'flux_rpc(3) example runs' '
-	${FLUX_BUILD_DIR}/doc/man3/trpc
+	${FLUX_BUILD_DIR}/doc/man3/example/rpc
 '
 
 test_expect_success 'flux_rpc_then(3) example runs' '
-	${FLUX_BUILD_DIR}/doc/man3/trpc_then
+	${FLUX_BUILD_DIR}/doc/man3/example/rpc_then
 '
 
 test_expect_success 'request: load req module on rank 0' '

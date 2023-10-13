@@ -6,29 +6,26 @@ flux_event_publish(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/core.h>
 
-::
-
    flux_future_t *flux_event_publish (flux_t *h,
-                                      const char *topic, int flags,
+                                      const char *topic,
+                                      int flags,
                                       const char *s);
 
-::
-
    flux_future_t *flux_event_publish_pack (flux_t *h,
-                                           const char *topic, int flags,
-                                           const char *fmt, ...);
-
-::
+                                           const char *topic,
+                                           int flags,
+                                           const char *fmt,
+                                           ...);
 
    flux_future_t *flux_event_publish_raw (flux_t *h,
-                                          const char *topic, int flags,
-                                          const void *data, int len);
-
-::
+                                          const char *topic,
+                                          int flags,
+                                          const void *data,
+                                          int len);
 
    int flux_event_publish_get_seq (flux_future_t *f, int *seq);
 

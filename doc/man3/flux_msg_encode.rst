@@ -6,11 +6,15 @@ flux_msg_encode(3)
 SYNOPSIS
 ========
 
-#include <flux/core.h>
+.. code-block:: c
 
-int flux_msg_encode (const flux_msg_t \*msg, void \**buf, size_t \*size);
+  #include <flux/core.h>
 
-flux_msg_t \*flux_msg_decode (void \*buf, size_t size);
+  int flux_msg_encode (const flux_msg_t *msg,
+                       void **buf,
+                       size_t *size);
+
+  flux_msg_t *flux_msg_decode (void *buf, size_t size);
 
 
 DESCRIPTION

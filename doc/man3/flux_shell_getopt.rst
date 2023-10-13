@@ -6,31 +6,23 @@ flux_shell_getopt(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
 
-::
-
    int flux_shell_getopt (flux_shell_t *shell,
                           const char *name,
                           char **json_str);
-
-::
 
    int flux_shell_getopt_unpack (flux_shell_t *shell,
                                  const char *name,
                                  const char *fmt,
                                  ...);
 
-::
-
    int flux_shell_setopt (flux_shell_t *shell,
                           const char *name,
                           const char *json_str);
-
-::
 
    int flux_shell_setopt_pack (flux_shell_t *shell,
                                const char *name,

@@ -6,12 +6,10 @@ flux_shell_rpc_pack(3)
 SYNOPSIS
 ========
 
-::
+.. code-block:: c
 
    #include <flux/shell.h>
    #include <errno.h>
-
-::
 
    flux_future_t *flux_shell_rpc_pack (flux_shell_t *shell,
                                        const char *method,
