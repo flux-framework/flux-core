@@ -65,7 +65,7 @@ EXAMPLES
 This example opens the Flux broker, subscribes to heartbeat messages,
 displays one, then quits.
 
-.. literalinclude:: tevent.c
+.. literalinclude:: example/event.c
 
 
 RESOURCES

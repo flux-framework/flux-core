@@ -44,7 +44,7 @@ EXAMPLES
 
 Example:
 
-.. literalinclude:: tinfo.c
+.. literalinclude:: example/info.c
 
 
 RESOURCES

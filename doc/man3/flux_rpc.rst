@@ -218,11 +218,11 @@ EXAMPLES
 This example performs a synchronous RPC with the broker's "attr.get"
 service to obtain the broker's rank.
 
-.. literalinclude:: trpc.c
+.. literalinclude:: example/rpc.c
 
 This example registers a continuation to do the same thing asynchronously.
 
-.. literalinclude:: trpc_then.c
+.. literalinclude:: example/rpc_then.c
 
 
 RESOURCES

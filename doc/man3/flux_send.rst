@@ -66,7 +66,7 @@ EXAMPLES
 
 This example opens the Flux broker and publishes an event message.
 
-.. literalinclude:: tsend.c
+.. literalinclude:: example/send.c
 
 
 RESOURCES

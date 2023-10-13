@@ -60,7 +60,7 @@ Set up a continuation callback for each heartbeat that arrives at least
 *sync_min* seconds from the last, with a timeout of *sync_max* seconds:
 
 
-.. literalinclude:: tsync.c
+.. literalinclude:: example/sync.c
 
 
 RESOURCES
