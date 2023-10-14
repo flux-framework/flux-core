@@ -448,6 +448,9 @@ static int jobinfo_set_expiration (struct jobinfo *job)
         return -1;
     }
 
+    flux_watcher_destroy (job->expiration_timer);
+    job->expiration_timer = NULL;
+
     /* Timelimit disabled if expiration is set to 0.
      */
     if (expiration == 0.)
@@ -458,6 +461,8 @@ static int jobinfo_set_expiration (struct jobinfo *job)
      *  remaining, we should be as accurate as possible.
      */
     now = flux_reactor_time ();
+    if (job->t0 == 0.)
+       job->t0 = now;
 
     /* Adjust expiration time based on delay between when scheduler
      *  created R and when we received this job. O/w jobs may be
@@ -466,12 +471,14 @@ static int jobinfo_set_expiration (struct jobinfo *job)
      *  start events.
      */
     if (starttime > 0.)
-        expiration += now - starttime;
+        expiration += job->t0 - starttime;
 
     offset = expiration - now;
-    if (offset <= 0.) {
-        jobinfo_fatal_error (job, 0, "job started after expiration");
-        return -1;
+    if (offset < 0.) {
+        /*  Expiration has already passed. Just set offset to 0. so that
+         *  the expiration timer will fire immediately.
+         */
+        offset = 0.;
     }
     if (!(w = flux_timer_watcher_create (flux_get_reactor(job->h),
                                          offset,
