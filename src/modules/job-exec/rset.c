@@ -89,7 +89,7 @@ static int rset_read_time_window (struct resource_set *r, json_error_t *errp)
     /*  Default values: 0. indicates "unset"
      */
     r->expiration = 0.;
-    r-> starttime = 0.;
+    r->starttime = 0.;
     if (json_unpack_ex (r->R, errp, 0,
                         "{s:{s?F s?F}}",
                         "execution",
@@ -109,21 +109,27 @@ struct resource_set *resource_set_create_fromjson (json_t *R,
         goto err;
     }
     r->R = json_incref (R);
-    if (json_unpack_ex (r->R, errp, 0, "{s:i s:{s:o}}",
-                                       "version", &version,
-                                       "execution",
-                                       "R_lite", &r->R_lite) < 0)
+    if (json_unpack_ex (r->R,
+                        errp,
+                        0,
+                        "{s:i s:{s:o}}",
+                        "version", &version,
+                        "execution",
+                        "R_lite", &r->R_lite) < 0)
         goto err;
     if (version != 1) {
         if (errp)
-            snprintf (errp->text, sizeof (errp->text),
-                    "invalid version: %d", version);
+            snprintf (errp->text,
+                      sizeof (errp->text),
+                      "invalid version: %d",
+                      version);
         goto err;
     }
     if (!(r->ranks = rset_ranks (r))) {
         if (errp)
-            snprintf (errp->text, sizeof (errp->text),
-                    "R_lite: failed to read target rank list");
+            snprintf (errp->text,
+                      sizeof (errp->text),
+                      "R_lite: failed to read target rank list");
         goto err;
     }
     if (rset_read_time_window (r, errp) < 0)
@@ -146,7 +152,7 @@ struct resource_set *resource_set_create (const char *R, json_error_t *errp)
     return rset;
 }
 
-const struct idset * resource_set_ranks (struct resource_set *r)
+const struct idset *resource_set_ranks (struct resource_set *r)
 {
     return r->ranks;
 }

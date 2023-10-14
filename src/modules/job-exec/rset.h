@@ -25,7 +25,7 @@ void resource_set_destroy (struct resource_set *rset);
 
 json_t *resource_set_get_json (struct resource_set *rset);
 
-const struct idset * resource_set_ranks (struct resource_set *rset);
+const struct idset *resource_set_ranks (struct resource_set *rset);
 
 uint32_t resource_set_nth_rank (struct resource_set *r, int n);
 
