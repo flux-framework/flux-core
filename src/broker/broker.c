@@ -88,8 +88,10 @@ static void overlay_recv_cb (const flux_msg_t *msg,
                              void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
-static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg);
+static void signal_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg);
 static int broker_handle_signals (broker_ctx_t *ctx);
 
 static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx);
@@ -162,7 +164,8 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
 
     if (optindex < argc) {
         int e;
-        if ((e = argz_create (argv + optindex, &ctx->init_shell_cmd,
+        if ((e = argz_create (argv + optindex,
+                              &ctx->init_shell_cmd,
                               &ctx->init_shell_cmd_len)) != 0)
             log_errn_exit (e, "argz_create");
     }
@@ -1215,7 +1218,8 @@ error:
     return -1;
 }
 
-static int unload_module (broker_ctx_t *ctx, const char *name,
+static int unload_module (broker_ctx_t *ctx,
+                          const char *name,
                           const flux_msg_t *request)
 {
     module_t *p;
@@ -1274,8 +1278,10 @@ static int broker_handle_signals (broker_ctx_t *ctx)
  * N.B. unload_module() handles response, unless it fails early
  * and returns -1.
  */
-static void broker_rmmod_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void broker_rmmod_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *name;
@@ -1293,8 +1299,10 @@ error:
 /* Load a module, asynchronously.
  * N.B. load_module() handles response, unless it returns -1.
  */
-static void broker_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void broker_insmod_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *name = NULL;
@@ -1322,8 +1330,10 @@ error:
 
 /* List loaded modules
  */
-static void broker_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void broker_lsmod_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     broker_ctx_t *ctx = arg;
     json_t *mods = NULL;
@@ -1400,8 +1410,10 @@ void __gcov_dump (void);
 void __gcov_reset (void);
 #endif
 
-static void broker_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void broker_disconnect_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
 {
 }
 
@@ -1433,8 +1445,10 @@ static int service_allow (struct flux_msg_cred cred, const char *name)
  * These handlers need to appear in broker.c so that they have
  *  access to broker internals like modhash
  */
-static void service_add_cb (flux_t *h, flux_msg_handler_t *w,
-                            const flux_msg_t *msg, void *arg)
+static void service_add_cb (flux_t *h,
+                            flux_msg_handler_t *w,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *name = NULL;
@@ -1443,7 +1457,7 @@ static void service_add_cb (flux_t *h, flux_msg_handler_t *w,
     struct flux_msg_cred cred;
 
     if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0
-            || flux_msg_get_cred (msg, &cred) < 0)
+        || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (service_allow (cred, name) < 0)
         goto error;
@@ -1465,8 +1479,10 @@ error:
         flux_log_error (h, "service_add: flux_respond_error");
 }
 
-static void service_remove_cb (flux_t *h, flux_msg_handler_t *w,
-                               const flux_msg_t *msg, void *arg)
+static void service_remove_cb (flux_t *h,
+                               flux_msg_handler_t *w,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *name;
@@ -1475,7 +1491,7 @@ static void service_remove_cb (flux_t *h, flux_msg_handler_t *w,
     struct flux_msg_cred cred;
 
     if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0
-            || flux_msg_get_cred (msg, &cred) < 0)
+        || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (service_allow (cred, name) < 0)
         goto error;
@@ -1592,8 +1608,10 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
     for (svc = &services[0]; svc->name != NULL; svc++) {
         if (!nodeset_member (svc->nodeset, ctx->rank))
             continue;
-        if (service_add (ctx->services, svc->name, NULL,
-                         route_to_handle, ctx) < 0) {
+        if (service_add (ctx->services,
+                         svc->name, NULL,
+                         route_to_handle,
+                         ctx) < 0) {
             log_err ("error registering service for %s", svc->name);
             return NULL;
         }
@@ -1660,7 +1678,8 @@ static void overlay_recv_cb (const flux_msg_t *msg,
     if (dropped && (type != FLUX_MSGTYPE_RESPONSE || errno != ENOSYS)) {
         const char *topic = "unknown";
         (void)flux_msg_get_topic (msg, &topic);
-        flux_log_error (ctx->h, "DROP %s %s topic=%s",
+        flux_log_error (ctx->h,
+                        "DROP %s %s topic=%s",
                         where == OVERLAY_UPSTREAM ? "upstream" : "downstream",
                         flux_msg_typestr (type),
                         topic);
@@ -1782,14 +1801,19 @@ static void module_cb (module_t *p, void *arg)
             break;
         case FLUX_MSGTYPE_EVENT:
             if (broker_event_sendmsg (ctx, msg) < 0) {
-                flux_log_error (ctx->h, "%s(%s): broker_event_sendmsg %s",
-                                __FUNCTION__, module_get_name (p),
+                flux_log_error (ctx->h,
+                                "%s(%s): broker_event_sendmsg %s",
+                                __FUNCTION__,
+                                module_get_name (p),
                                 flux_msg_typestr (type));
             }
             break;
         default:
-            flux_log (ctx->h, LOG_ERR, "%s(%s): unexpected %s",
-                      __FUNCTION__, module_get_name (p),
+            flux_log (ctx->h,
+                      LOG_ERR,
+                      "%s(%s): unexpected %s",
+                      __FUNCTION__,
+                      module_get_name (p),
                       flux_msg_typestr (type));
             break;
     }
@@ -1908,16 +1932,18 @@ static int killall_jobs (broker_ctx_t *ctx, int signum)
                              "userid", FLUX_USERID_UNKNOWN,
                              "signum", signum))
         || flux_future_then (f, -1., killall_cb, ctx) < 0) {
-            flux_future_destroy (f);
-            return -1;
+        flux_future_destroy (f);
+        return -1;
     }
     if (flux_future_aux_set (f, "signum", int2ptr (signum), NULL) < 0)
         flux_log_error (ctx->h, "killall: future_aux_set");
     return 0;
 }
 
-static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
+static void signal_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     broker_ctx_t *ctx = arg;
     int signum = flux_signal_watcher_get_signum (w);

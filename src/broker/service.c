@@ -144,8 +144,11 @@ void service_remove_byuuid (struct service_switch *sw, const char *uuid)
     }
 }
 
-int service_add (struct service_switch *sh, const char *name,
-                 const char *uuid, service_send_f cb, void *arg)
+int service_add (struct service_switch *sh,
+                 const char *name,
+                 const char *uuid,
+                 service_send_f cb,
+                 void *arg)
 {
     struct service *svc = NULL;
 
@@ -172,7 +175,8 @@ error:
  * Avoid an extra malloc here if the substring is short.
  */
 static struct service *service_lookup_subtopic (struct service_switch *sw,
-                                                const char *topic, int length)
+                                                const char *topic,
+                                                int length)
 {
     char buf[16];
     char *cpy = NULL;

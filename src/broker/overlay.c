@@ -841,7 +841,8 @@ static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
 static void logdrop (struct overlay *ov,
                      overlay_where_t where,
                      const flux_msg_t *msg,
-                     const char *fmt, ...)
+                     const char *fmt,
+                     ...)
 {
     char reason[128];
     va_list ap;
@@ -883,8 +884,10 @@ static int clear_msg_role (flux_msg_t *msg, uint32_t role)
 
 /* Handle a message received from TBON child (downstream).
  */
-static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void child_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     struct overlay *ov = arg;
     flux_msg_t *msg;
@@ -991,8 +994,10 @@ static void fail_parent_rpc (const flux_msg_t *msg, void *arg)
         log_tracker_error (ov->h, msg, errno);
 }
 
-static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
+static void parent_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     struct overlay *ov = arg;
     flux_msg_t *msg;
@@ -1203,8 +1208,11 @@ static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg)
         errno = saved_errno;
         goto error;
     }
-    flux_log (ov->h, LOG_DEBUG, "hello parent %lu %s",
-              (unsigned long)ov->parent.rank, uuid);
+    flux_log (ov->h,
+              LOG_DEBUG,
+              "hello parent %lu %s",
+              (unsigned long)ov->parent.rank,
+              uuid);
     snprintf (ov->parent.uuid, sizeof (ov->parent.uuid), "%s", uuid);
     ov->parent.hello_responded = true;
     ov->parent.hello_error = false;
