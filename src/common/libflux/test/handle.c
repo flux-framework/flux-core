@@ -62,7 +62,7 @@ void test_handle_invalid_args (flux_t *h)
     ok (flux_send_new (h, &nullmsg, 0) < 0 && errno == EINVAL,
        "flux_send_new *msg=NULL fails with EINVAL");
     ok (flux_send_new (h, &msg, 0x100000) < 0 && errno == EINVAL,
-       "flux_send flags=BOGUS fails with EINVAL");
+       "flux_send_new flags=BOGUS fails with EINVAL");
 
     errno = 0;
     ok (flux_send (NULL, msg, 0) < 0 && errno == EINVAL,
