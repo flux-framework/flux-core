@@ -13,7 +13,7 @@
 
 #include <jansson.h>
 
-typedef int (*service_send_f)(const flux_msg_t *msg, void *arg);
+typedef int (*service_send_f)(flux_msg_t **msg, void *arg);
 
 struct service_switch *service_switch_create (void);
 void service_switch_destroy (struct service_switch *sw);
@@ -29,6 +29,7 @@ void service_remove (struct service_switch *sw, const char *name);
 void service_remove_byuuid (struct service_switch *sw, const char *uuid);
 
 int service_send (struct service_switch *sw, const flux_msg_t *msg);
+int service_send_new (struct service_switch *sw, flux_msg_t **msg);
 
 /* Return the UUID currently registered for service `name` */
 const char *service_get_uuid (struct service_switch *sw, const char *name);

@@ -206,13 +206,13 @@ done:
  * If found, call the service's callback and return its return value.
  * If not found, return -1 with errno set (usually ENOSYS).
  */
-int service_send (struct service_switch *sw, const flux_msg_t *msg)
+int service_send_new (struct service_switch *sw, flux_msg_t **msg)
 {
     const char *topic, *p;
     int length;
     struct service *svc;
 
-    if (flux_msg_get_topic (msg, &topic) < 0)
+    if (flux_msg_get_topic (*msg, &topic) < 0)
         return -1;
     if ((p = strchr (topic, '.')))
         length = p - topic;
@@ -222,6 +222,17 @@ int service_send (struct service_switch *sw, const flux_msg_t *msg)
         return -1;
 
     return svc->cb (msg, svc->cb_arg);
+}
+
+int service_send (struct service_switch *sw, const flux_msg_t *msg)
+{
+    flux_msg_t *cpy;
+    if (!(cpy = flux_msg_copy (msg, true))
+        || service_send_new (sw, &cpy) < 0) {
+        flux_msg_destroy (cpy);
+        return -1;
+    }
+    return 0;
 }
 
 /*

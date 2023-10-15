@@ -20,20 +20,25 @@
 
 #include "src/common/libtap/tap.h"
 
-const flux_msg_t *foo_cb_msg;
+flux_msg_t *foo_cb_msg;
 void *foo_cb_arg;
 int foo_cb_called;
 int foo_cb_rc;
 int foo_cb_errno;
 
-static int foo_cb (const flux_msg_t *msg, void *arg)
+static int foo_cb (flux_msg_t **msg, void *arg)
 {
-    foo_cb_msg = msg;
+    foo_cb_msg = *msg;
     foo_cb_arg = arg;
     foo_cb_called++;
 
     if (foo_cb_rc != 0)
         errno = foo_cb_errno;
+
+    if (foo_cb_rc == 0) {
+        flux_msg_decref (*msg);
+        *msg = NULL;
+    }
 
     return foo_cb_rc;
 }
@@ -43,6 +48,7 @@ int main (int argc, char **argv)
 {
     struct service_switch *sw;
     flux_msg_t *msg, *msg2, *msg3;
+    void *msg_ptr;
 
     plan (NO_PLAN);
 
@@ -50,12 +56,15 @@ int main (int argc, char **argv)
     ok (sw != NULL,
         "service_switch_create works");
 
-    msg = flux_request_encode ("foo", NULL);
+    msg_ptr = msg = flux_request_encode ("foo", NULL);
     if (!msg)
         BAIL_OUT ("flux_request_encode: %s", flux_strerror (errno));
     errno = 0;
-    ok (service_send (sw, msg) < 0 && errno == ENOSYS,
-        "service_send to 'foo' fails with ENOSYS");
+    ok (service_send_new (sw, &msg) < 0 && errno == ENOSYS,
+        "service_send_new to 'foo' fails with ENOSYS");
+    ok (msg != NULL,
+        "and message as not set to NULL");
+    msg = msg_ptr; // just in case that test failed
 
     ok (service_add (sw, "foo", NULL, foo_cb, NULL) == 0,
         "service_add foo works");
@@ -64,16 +73,25 @@ int main (int argc, char **argv)
     foo_cb_arg = (void *)(uintptr_t)1;
     foo_cb_called = 0;
     foo_cb_rc = 0;
-    ok (service_send (sw, msg) == 0,
-        "service_send to 'foo' works");
-    ok (foo_cb_called == 1 && foo_cb_arg == NULL && foo_cb_msg == msg,
+    ok (service_send_new (sw, &msg) == 0,
+        "service_send_new to 'foo' works");
+    ok (msg == NULL,
+        "and msg was set to NULL");
+    ok (foo_cb_called == 1 && foo_cb_arg == NULL && foo_cb_msg == msg_ptr,
         "and callback was called with expected arguments");
 
-    foo_cb_rc = 42;
+    // msg was destroyed above so recreate
+    msg_ptr = msg = flux_request_encode ("foo", NULL);
+    if (!msg)
+        BAIL_OUT ("flux_request_encode: %s", flux_strerror (errno));
+
+    foo_cb_rc = -1;
     foo_cb_errno = ENXIO;
     errno = 0;
-    ok (service_send (sw, msg) == 42 && errno == ENXIO,
-        "service_send returns callback's return code and preserves errno");
+    ok (service_send (sw, msg) == -1,
+        "service_send returns callback's return code");
+    ok (errno == ENXIO,
+        "and callback's errno was set");
 
     service_remove (sw, "foo");
     errno = 0;
