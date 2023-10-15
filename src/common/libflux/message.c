@@ -91,6 +91,7 @@ flux_msg_t *flux_msg_create (int type)
     if (!(msg = calloc (1, sizeof (*msg))))
         return NULL;
     list_head_init (&msg->routes);
+    list_node_init (&msg->list);
     msg->proto.type = type;
     if (msg_type_is_valid (msg))
         msg_setup_type (msg);
