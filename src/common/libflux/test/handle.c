@@ -150,6 +150,7 @@ int main (int argc, char *argv[])
     flux_t *h;
     char *s;
     flux_msg_t *msg;
+    flux_msg_t *msg2;
     const char *topic;
     uint32_t matchtag;
 
@@ -267,11 +268,32 @@ int main (int argc, char *argv[])
     ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
        "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
 
-    /* flux_requeue bad flags */
+    /* flux_requeue bad args */
+    errno = 0;
+    ok (flux_requeue (NULL, msg, FLUX_RQ_HEAD) < 0 && errno == EINVAL,
+        "flux_requeue h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_requeue (h, NULL, FLUX_RQ_HEAD) < 0 && errno == EINVAL,
+        "flux_requeue msg=NULL fails with EINVAL");
     errno = 0;
     ok (flux_requeue (h, msg, 0) < 0 && errno == EINVAL,
         "flux_requeue fails with EINVAL if HEAD|TAIL unspecified");
     flux_msg_destroy (msg);
+
+    /* requeue preserves aux container (kvs needs this) */
+    if (!(msg = flux_request_encode ("foo", NULL)))
+        BAIL_OUT ("couldn't encode request");
+    if (flux_msg_aux_set (msg, "fubar", "xyz", NULL) < 0)
+        BAIL_OUT ("couldn't attach something to message aux container");
+    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0,
+        "flux_requeue works");
+    msg2 = flux_recv (h, FLUX_MATCH_ANY, 0);
+    ok (msg2 == msg,
+        "flux_recv returned requeued message and it has the same address");
+    ok (flux_msg_aux_get (msg2, "fubar") != NULL,
+        "and aux was preserved");
+    flux_msg_decref (msg);
+    flux_msg_decref (msg2);
 
     /* flux_requeue: add foo, bar to HEAD; then receive bar, foo */
     if (!(msg = flux_request_encode ("foo", NULL)))
