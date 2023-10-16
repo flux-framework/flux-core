@@ -20,9 +20,14 @@ from flux.rpc import RPC
 
 class JobListRPC(RPC):
     def get_jobs(self):
+        """Returns all jobs in the RPC."""
         return self.get()["jobs"]
 
     def get_jobinfos(self):
+        """Yields a JobInfo object for each job in its current state.
+
+        :rtype: JobInfo
+        """
         for job in self.get_jobs():
             yield JobInfo(job)
 
@@ -75,6 +80,7 @@ def job_list(
 def job_list_inactive(
     flux_handle, since=0.0, max_entries=1000, attrs=["all"], name=None, queue=None
 ):
+    """Same as ``flux.job.list.job_list``, but lists only inactive jobs."""
     return job_list(
         flux_handle,
         max_entries=max_entries,
@@ -96,12 +102,24 @@ class JobListIdRPC(RPC):
         return self.get()["job"]
 
     def get_jobinfo(self):
+        """Returns a ``JobInfo`` object for the job.
+
+        :rtype: JobInfo
+        """
         return JobInfo(self.get_job())
 
 
 # list-id is not like list or list-inactive, it doesn't return an
 # array, so don't use JobListRPC
 def job_list_id(flux_handle, jobid, attrs=["all"]):
+    """Query job information for a single ``jobid``.
+
+    Sends an RPC to the job-list module to query information about the provided jobid.
+    Use the ``get_job()`` or ``get_jobinfo()`` method on the returned ``JobListIdRPC`` to
+    obtain the job data as a dict or a JobInfo object.
+
+    :rtype: JobListIdRPC
+    """
     payload = {"id": int(jobid), "attrs": attrs}
     rpc = JobListIdRPC(flux_handle, "job-list.list-id", payload)
     #  save original JobId argument for error reporting
