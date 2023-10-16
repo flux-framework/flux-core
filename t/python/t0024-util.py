@@ -34,6 +34,13 @@ class TestParseDatetime(unittest.TestCase):
     def parsedt(self, string):
         return parse_datetime(string).astimezone()
 
+    def test_now(self):
+        # "now" returns parse_datetime(now=) when set
+        self.assertEqual(self.parse("now"), self.ts)
+        # "now" has better than second precision
+        now = parse_datetime("now").timestamp()
+        self.assertNotEqual(now % 1, 0)
+
     def test_fsd(self):
         self.assertEqual(self.parse("+1"), self.ts + 1)
         self.assertEqual(self.parse("-1"), self.ts - 1)
