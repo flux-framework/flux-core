@@ -346,6 +346,9 @@ def parse_datetime(string, now=None):
     if now is None:
         now = datetime.now().astimezone()
 
+    if string == "now":
+        return now
+
     if string.startswith("+"):
         timestamp = now.timestamp() + parse_fsd(string[1:])
         return datetime.fromtimestamp(timestamp).astimezone()
