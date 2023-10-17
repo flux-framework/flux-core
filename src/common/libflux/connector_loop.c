@@ -19,24 +19,22 @@
 #include <flux/core.h>
 
 #include "ccan/str/str.h"
+#include "msg_deque.h"
 
-typedef struct {
+struct loop_ctx {
     flux_t *h;
-
     struct flux_msg_cred cred;
-
-    struct flux_msglist *queue;
-} loop_ctx_t;
-
+    struct msg_deque *queue;
+};
 
 static const struct flux_handle_ops handle_ops;
 
 static int op_pollevents (void *impl)
 {
-    loop_ctx_t *c = impl;
+    struct loop_ctx *ctx = impl;
     int e, revents = 0;
 
-    if ((e = flux_msglist_pollevents (c->queue)) < 0)
+    if ((e = msg_deque_pollevents (ctx->queue)) < 0)
         return e;
     if (e & POLLIN)
         revents |= FLUX_POLLIN;
@@ -49,39 +47,38 @@ static int op_pollevents (void *impl)
 
 static int op_pollfd (void *impl)
 {
-    loop_ctx_t *c = impl;
-    return flux_msglist_pollfd (c->queue);
+    struct loop_ctx *ctx = impl;
+    return msg_deque_pollfd (ctx->queue);
 }
 
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
-    loop_ctx_t *c = impl;
-    flux_msg_t *cpy = NULL;
+    struct loop_ctx *ctx = impl;
+    flux_msg_t *cpy;
     struct flux_msg_cred cred;
-    int rc = -1;
 
     if (!(cpy = flux_msg_copy (msg, true)))
-        goto done;
+        goto error;
     if (flux_msg_get_cred (cpy, &cred) < 0)
-        goto done;
+        goto error;
     if (cred.userid == FLUX_USERID_UNKNOWN)
-        cred.userid = c->cred.userid;
+        cred.userid = ctx->cred.userid;
     if (cred.rolemask == FLUX_ROLE_NONE)
-        cred.rolemask = c->cred.rolemask;
+        cred.rolemask = ctx->cred.rolemask;
     if (flux_msg_set_cred (cpy, cred) < 0)
-        goto done;
-    if (flux_msglist_append (c->queue, cpy) < 0)
-        goto done;
-    rc = 0;
-done:
+        goto error;
+    if (msg_deque_push_back (ctx->queue, cpy) < 0)
+        goto error;
+    return 0;
+error:
     flux_msg_destroy (cpy);
-    return rc;
+    return -1;
 }
 
 static flux_msg_t *op_recv (void *impl, int flags)
 {
-    loop_ctx_t *c = impl;
-    flux_msg_t *msg = (flux_msg_t *)flux_msglist_pop (c->queue);
+    struct loop_ctx *ctx = impl;
+    flux_msg_t *msg = msg_deque_pop_front (ctx->queue);
     if (!msg)
         errno = EWOULDBLOCK;
     return msg;
@@ -89,17 +86,17 @@ static flux_msg_t *op_recv (void *impl, int flags)
 
 static int op_getopt (void *impl, const char *option, void *val, size_t size)
 {
-    loop_ctx_t *c = impl;
+    struct loop_ctx *ctx = impl;
 
     if (streq (option, FLUX_OPT_TESTING_USERID)) {
-        if (size != sizeof (c->cred.userid) || !val)
+        if (size != sizeof (ctx->cred.userid) || !val)
             goto error;
-        memcpy (val, &c->cred.userid, size);
+        memcpy (val, &ctx->cred.userid, size);
     }
     else if (streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
-        if (size != sizeof (c->cred.rolemask) || !val)
+        if (size != sizeof (ctx->cred.rolemask) || !val)
             goto error;
-        memcpy (val, &c->cred.rolemask, size);
+        memcpy (val, &ctx->cred.rolemask, size);
     }
     else
         goto error;
@@ -114,20 +111,20 @@ static int op_setopt (void *impl,
                       const void *val,
                       size_t size)
 {
-    loop_ctx_t *c = impl;
+    struct loop_ctx *ctx = impl;
     size_t val_size;
 
     if (streq (option, FLUX_OPT_TESTING_USERID)) {
-        val_size = sizeof (c->cred.userid);
+        val_size = sizeof (ctx->cred.userid);
         if (size != val_size || !val)
             goto error;
-        memcpy (&c->cred.userid, val, val_size);
+        memcpy (&ctx->cred.userid, val, val_size);
     }
     else if (streq (option, FLUX_OPT_TESTING_ROLEMASK)) {
-        val_size = sizeof (c->cred.rolemask);
+        val_size = sizeof (ctx->cred.rolemask);
         if (size != val_size || !val)
             goto error;
-        memcpy (&c->cred.rolemask, val, val_size);
+        memcpy (&ctx->cred.rolemask, val, val_size);
     }
     else
         goto error;
@@ -139,38 +136,35 @@ error:
 
 static void op_fini (void *impl)
 {
-    loop_ctx_t *c = impl;
+    struct loop_ctx *ctx = impl;
 
-    flux_msglist_destroy (c->queue);
-    free (c);
+    if (ctx) {
+        int saved_errno = errno;
+        msg_deque_destroy (ctx->queue);
+        free (ctx);
+        errno = saved_errno;
+    }
 }
 
 flux_t *connector_loop_init (const char *path, int flags, flux_error_t *errp)
 {
-    loop_ctx_t *c = malloc (sizeof (*c));
-    if (!c) {
-        errno = ENOMEM;
+    struct loop_ctx *ctx;
+
+    if (!(ctx = calloc (1, sizeof (*ctx))))
+        return NULL;
+    if (!(ctx->queue = msg_deque_create (MSG_DEQUE_SINGLE_THREAD)))
         goto error;
-    }
-    memset (c, 0, sizeof (*c));
-    if (!(c->queue = flux_msglist_create ()))
-        goto error;
-    if (!(c->h = flux_handle_create (c, &handle_ops, flags)))
+    ctx->cred.userid = getuid ();
+    ctx->cred.rolemask = FLUX_ROLE_OWNER;
+    if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))
         goto error;
     /* Fake out size, rank attributes for testing.
      */
-    if (flux_attr_set_cacheonly(c->h, "rank", "0") < 0
-                || flux_attr_set_cacheonly (c->h, "size", "1") < 0)
-        goto error;
-    c->cred.userid = getuid ();
-    c->cred.rolemask = FLUX_ROLE_OWNER;
-    return c->h;
+    (void)flux_attr_set_cacheonly(ctx->h, "rank", "0");
+    (void)flux_attr_set_cacheonly (ctx->h, "size", "1");
+    return ctx->h;
 error:
-    if (c) {
-        int saved_errno = errno;
-        op_fini (c);
-        errno = saved_errno;
-    }
+    op_fini (ctx);
     return NULL;
 }
 

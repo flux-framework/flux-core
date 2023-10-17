@@ -37,6 +37,7 @@ struct flux_msg {
     char *lasterr;
     struct aux_item *aux;
     int refcount;
+    struct list_node list; // for use by msg_deque container only
 };
 
 #define msgtype_is_valid(tp) \

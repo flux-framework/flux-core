@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/poll.h>
 #include <pthread.h>
 #include <flux/core.h>
 
@@ -316,6 +317,83 @@ void test_threads (void)
     flux_reactor_destroy (r);
 }
 
+void test_poll (void)
+{
+    const char *uri = "interthread://polltest";
+    flux_t *h1;
+    flux_t *h2;
+    flux_msg_t *msg;
+    flux_msg_t *msg2;
+    struct pollfd pfd;
+
+    // with NOREQUEUE, pollfd/pollevents come directly from connector
+    if (!(h1 = flux_open (uri, FLUX_O_NOREQUEUE)))
+        BAIL_OUT ("%s: flux_open: %s", uri, strerror (errno));
+    if (!(h2 = flux_open (uri, FLUX_O_NOREQUEUE)))
+        BAIL_OUT ("%s: flux_open: %s", uri, strerror (errno));
+    diag ("poll: opened h1 and h2");
+
+    if (!(msg = flux_request_encode ("foo", NULL)))
+        BAIL_OUT ("flux_request_encode failed");
+
+    // enqueue 2 messages
+    ok (flux_pollevents (h2) == FLUX_POLLOUT,
+        "flux_pollevents h2 returns POLLOUT");
+    ok (flux_send (h1, msg, 0) == 0,
+        "flux_send h1 works");
+    ok (flux_send (h1, msg, 0) == 0,
+        "flux_send h1 works");
+    ok (flux_pollevents (h2) == (FLUX_POLLOUT | FLUX_POLLIN),
+        "flux_pollevents h2 returns POLLOUT|POLLIN");
+
+    // read 1 message
+    ok ((msg2 = flux_recv (h2, FLUX_MATCH_ANY, 0)) != NULL,
+        "flux_recv h2 works");
+    ok (flux_pollevents (h2) == (FLUX_POLLOUT | FLUX_POLLIN),
+        "flux_pollevents h2 returns POLLOUT|POLLIN");
+    flux_msg_decref (msg2);
+
+    // read 2nd message
+    ok ((msg2 = flux_recv (h2, FLUX_MATCH_ANY, 0)) != NULL,
+        "flux_recv h2 works");
+    ok (flux_pollevents (h2) == FLUX_POLLOUT,
+        "flux_pollevents h2 returns POLLOUT");
+    flux_msg_destroy (msg2);
+
+    // get pollfd set up with no messages pending
+    ok ((pfd.fd = flux_pollfd (h2)) >= 0,
+        "flux_pollfd works");
+    pfd.events = POLLIN; // poll fd becomes "readable" when pollevents should
+    pfd.revents = 0;     //   be checked
+    ok (poll (&pfd, 1, 0) == 1 && pfd.revents == POLLIN,
+        "flux_pollfd suggests we check pollevents");
+    ok (flux_pollevents (h2) == FLUX_POLLOUT,
+        "flux_pollevents returns POLLOUT only");
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    ok (poll (&pfd, 1, 0) == 0, // because edge triggered
+        "flux_pollfd says not ready, now that we've checked pollevents");
+
+    // enqueue 2 messages
+    ok (flux_send (h1, msg, 0) == 0,
+        "flux_send h1 works");
+    ok (flux_send (h1, msg, 0) == 0,
+        "flux_send h1 works");
+    pfd.events = POLLIN,
+    pfd.revents = 0,
+    ok (poll (&pfd, 1, 0) == 1 && pfd.revents == POLLIN,
+        "pollfd suggests we read pollevents");
+    ok (flux_pollevents (h2) == (FLUX_POLLOUT | FLUX_POLLIN),
+        "flux_pollevents returns POLLOUT|POLLIN");
+    ok (poll (&pfd, 1, 0) == 0,
+        "flux_pollfd says not ready, now that we've checked pollevents");
+
+    // N.B. we don't own the pollfd so no close here
+    flux_msg_destroy (msg);
+    flux_close (h1);
+    flux_close (h2);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -323,6 +401,7 @@ int main (int argc, char *argv[])
     test_basic ();
     test_router ();
     test_threads ();
+    test_poll ();
 
     done_testing ();
     return 0;

@@ -35,15 +35,11 @@
 #include "ccan/list/list.h"
 #include "ccan/str/str.h"
 #include "message_private.h" // for access to msg->aux
-
-struct msglist_safe {
-    struct flux_msglist *queue;
-    pthread_mutex_t lock;
-};
+#include "msg_deque.h"
 
 struct channel {
     char *name;
-    struct msglist_safe *pair[2];
+    struct msg_deque *pair[2];
     int refcount; // max of 2
     struct list_node list;
 };
@@ -53,8 +49,8 @@ struct interthread_ctx {
     struct flux_msg_cred cred;
     char *router;
     struct channel *chan;
-    struct msglist_safe *send; // refers to ctx->chan->pair[x]
-    struct msglist_safe *recv; // refers to ctx->chan->pair[y]
+    struct msg_deque *send; // refers to ctx->chan->pair[x]
+    struct msg_deque *recv; // refers to ctx->chan->pair[y]
 };
 
 /* Global state.
@@ -65,79 +61,12 @@ static pthread_mutex_t channels_lock = PTHREAD_MUTEX_INITIALIZER;
 
 static const struct flux_handle_ops handle_ops;
 
-
-static void msglist_safe_destroy (struct msglist_safe *ml)
-{
-    if (ml) {
-        int saved_errno = errno;
-        pthread_mutex_destroy (&ml->lock);
-        flux_msglist_destroy (ml->queue);
-        free (ml);
-        errno = saved_errno;
-    };
-}
-
-static struct msglist_safe *msglist_safe_create (void)
-{
-    struct msglist_safe *ml;
-
-    if (!(ml = calloc (1, sizeof (*ml))))
-        return NULL;
-    pthread_mutex_init (&ml->lock, NULL);
-    if (!(ml->queue = flux_msglist_create ())) {
-        msglist_safe_destroy (ml);
-        return NULL;
-    }
-    return ml;
-}
-
-static int msglist_safe_append_new (struct msglist_safe *ml,
-                                    flux_msg_t **msg)
-{
-    pthread_mutex_lock (&ml->lock);
-    int rc = flux_msglist_append (ml->queue, *msg);
-    /* flux_msglist_append() takes a reference on *msg on success, so we must
-     * decref under the lock before setting *msg to NULL.
-     */
-    if (rc == 0) {
-        flux_msg_decref (*msg);
-        *msg = NULL;
-    }
-    pthread_mutex_unlock (&ml->lock);
-    return rc;
-}
-
-static flux_msg_t *msglist_safe_pop (struct msglist_safe *ml)
-{
-
-    pthread_mutex_lock (&ml->lock);
-    flux_msg_t *msg = (flux_msg_t *)flux_msglist_pop (ml->queue);
-    pthread_mutex_unlock (&ml->lock);
-    return msg;
-}
-
-static int msglist_safe_pollfd (struct msglist_safe *ml)
-{
-    pthread_mutex_lock (&ml->lock);
-    int rc = flux_msglist_pollfd (ml->queue);
-    pthread_mutex_unlock (&ml->lock);
-    return rc;
-}
-
-static int msglist_safe_pollevents (struct msglist_safe *ml)
-{
-    pthread_mutex_lock (&ml->lock);
-    int rc = flux_msglist_pollevents (ml->queue);
-    pthread_mutex_unlock (&ml->lock);
-    return rc;
-}
-
 static void channel_destroy (struct channel *chan)
 {
     if (chan) {
         int saved_errno = errno;
-        msglist_safe_destroy (chan->pair[0]);
-        msglist_safe_destroy (chan->pair[1]);
+        msg_deque_destroy (chan->pair[0]);
+        msg_deque_destroy (chan->pair[1]);
         free (chan->name);
         free (chan);
         errno = saved_errno;
@@ -150,8 +79,8 @@ static struct channel *channel_create (const char *name)
 
     if (!(chan = calloc (1, sizeof (*chan)))
         || !(chan->name = strdup (name))
-        || !(chan->pair[0] = msglist_safe_create ())
-        || !(chan->pair[1] = msglist_safe_create ()))
+        || !(chan->pair[0] = msg_deque_create (0))
+        || !(chan->pair[1] = msg_deque_create (0)))
         goto error;
     list_node_init (&chan->list);
     return chan;
@@ -225,7 +154,7 @@ static int op_pollevents (void *impl)
     struct interthread_ctx *ctx = impl;
     int e, revents = 0;
 
-    e = msglist_safe_pollevents (ctx->recv);
+    e = msg_deque_pollevents (ctx->recv);
     if (e & POLLIN)
         revents |= FLUX_POLLIN;
     if (e & POLLOUT)
@@ -238,7 +167,7 @@ static int op_pollevents (void *impl)
 static int op_pollfd (void *impl)
 {
     struct interthread_ctx *ctx = impl;
-    return msglist_safe_pollfd (ctx->recv);
+    return msg_deque_pollfd (ctx->recv);
 }
 
 static int router_process (flux_msg_t *msg, const char *name)
@@ -283,7 +212,10 @@ static int op_send_new (void *impl, flux_msg_t **msg, int flags)
      * so it shouldn't survive transit of this kind either.
      */
     aux_destroy (&(*msg)->aux);
-    return msglist_safe_append_new (ctx->send, msg);
+    if (msg_deque_push_back (ctx->send, *msg) < 0)
+        return -1;
+    *msg = NULL;
+    return 0;
 }
 
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
@@ -304,14 +236,14 @@ static flux_msg_t *op_recv (void *impl, int flags)
     flux_msg_t *msg;
 
     do {
-        msg = msglist_safe_pop (ctx->recv);
+        msg = msg_deque_pop_front (ctx->recv);
         if (!msg) {
             if ((flags & FLUX_O_NONBLOCK)) {
                 errno = EWOULDBLOCK;
                 return NULL;
             }
             struct pollfd pfd = {
-                .fd = msglist_safe_pollfd (ctx->recv),
+                .fd = msg_deque_pollfd (ctx->recv),
                 .events = POLLIN,
                 .revents = 0,
             };

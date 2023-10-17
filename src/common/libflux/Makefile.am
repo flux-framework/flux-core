@@ -94,6 +94,8 @@ libflux_la_SOURCES = \
 	flog.c \
 	attr.c \
 	handle.c \
+	msg_deque.c \
+	msg_deque.h \
 	connector_loop.c \
 	connector_interthread.c \
 	connector_local.c \
@@ -177,7 +179,8 @@ TESTS = test_message.t \
 	test_module.t \
 	test_plugin.t \
 	test_sync.t \
-	test_disconnect.t
+	test_disconnect.t \
+	test_msg_deque.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libtestutil/libtestutil.la \
@@ -300,6 +303,10 @@ test_disconnect_t_LDADD = $(test_ldadd)
 test_interthread_t_SOURCES = test/interthread.c
 test_interthread_t_CPPFLAGS = $(test_cppflags)
 test_interthread_t_LDADD = $(test_ldadd)
+
+test_msg_deque_t_SOURCES = test/msg_deque.c
+test_msg_deque_t_CPPFLAGS = $(test_cppflags)
+test_msg_deque_t_LDADD = $(test_ldadd)
 
 test_module_t_SOURCES = test/module.c
 test_module_t_CPPFLAGS = $(test_cppflags)

@@ -44,6 +44,7 @@
 #include "msg_handler.h" // for flux_sleep_on ()
 #include "flog.h"
 #include "conf.h"
+#include "msg_deque.h"
 #include "message_private.h" // to check msg refcount in flux_send_new ()
 
 #if HAVE_CALIPER
@@ -73,7 +74,7 @@ struct flux_handle {
     const struct flux_handle_ops *ops;
     void            *impl;
     void            *dso;
-    struct flux_msglist *queue;
+    struct msg_deque *queue;
     int             pollfd;
 
     struct tagpool  *tagpool;
@@ -420,7 +421,7 @@ flux_t *flux_handle_create (void *impl,
         goto error;
     tagpool_set_grow_cb (h->tagpool, tagpool_grow_notify, h);
     if (!(flags & FLUX_O_NOREQUEUE)) {
-        if (!(h->queue = flux_msglist_create ()))
+        if (!(h->queue = msg_deque_create (MSG_DEQUE_SINGLE_THREAD)))
             goto error;
     }
     if ((flags & FLUX_O_RPCTRACK)) {
@@ -546,7 +547,7 @@ void flux_handle_destroy (flux_t *h)
             if (h->dso)
                 dlclose (h->dso);
 #endif
-            flux_msglist_destroy (h->queue);
+            msg_deque_destroy (h->queue);
         }
         free (h);
         errno = saved_errno;
@@ -886,8 +887,8 @@ static flux_msg_t *flux_recv_any (flux_t *h, int flags)
     flux_msg_t *msg;
 
     if (!(h->flags & FLUX_O_NOREQUEUE)) {
-        if (flux_msglist_count (h->queue) > 0)
-            return (flux_msg_t *)flux_msglist_pop (h->queue);
+        if (!msg_deque_empty (h->queue))
+            return msg_deque_pop_front (h->queue);
     }
     if (!h->ops->recv) {
         errno = ENOSYS;
@@ -968,6 +969,10 @@ error:
  */
 int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
 {
+    if (!h || !msg) {
+        errno = EINVAL;
+        return -1;
+    }
     h = lookup_clone_ancestor (h);
     int rc;
 
@@ -976,10 +981,13 @@ int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
         errno = EINVAL;
         return -1;
     }
+    flux_msg_incref (msg);
     if (flags == FLUX_RQ_TAIL)
-        rc = flux_msglist_append (h->queue, msg);
+        rc = msg_deque_push_back (h->queue, (flux_msg_t *)msg);
     else
-        rc = flux_msglist_push (h->queue, msg);
+        rc = msg_deque_push_front (h->queue, (flux_msg_t *)msg);
+    if (rc < 0)
+        flux_msg_decref (msg);
     return rc;
 }
 
@@ -1002,7 +1010,7 @@ int flux_pollfd (flux_t *h)
         if ((h->pollfd = epoll_create1 (EPOLL_CLOEXEC)) < 0)
             goto error;
         /* add queue pollfd */
-        ev.data.fd = flux_msglist_pollfd (h->queue);
+        ev.data.fd = msg_deque_pollfd (h->queue);
         if (ev.data.fd < 0)
             goto error;
         if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
@@ -1048,7 +1056,7 @@ int flux_pollevents (flux_t *h)
     }
     if (!(h->flags & FLUX_O_NOREQUEUE)) {
         /* get queue events */
-        if ((e = flux_msglist_pollevents (h->queue)) < 0)
+        if ((e = msg_deque_pollevents (h->queue)) < 0)
             return -1;
         if ((e & POLLIN))
             events |= FLUX_POLLIN;
