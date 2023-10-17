@@ -10,29 +10,31 @@ SYNOPSIS
 
   #include <flux/core.h>
 
-  int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags);
+  cc $(pkg-config --cflags --libs flux-core)
 
 
 DESCRIPTION
 ===========
 
-``flux_requeue()`` requeues a *msg* in handle *h*. The message
-can be received with ``flux_recv()`` as though it arrived from the broker.
+.. function:: int flux_requeue(flux_t *h, const flux_msg_t *msg)
 
-*flags* must be set to one of the following values:
+Enqueue :c:var:`msg` on the head of the handle :c:var:`h`'s receive queue,
+placing it in front of any messages already in the queue.  If successful, a
+reference is taken on :c:var:`msg` and the handle :c:var:`h` becomes
+ready for reading just as if the message were received from the broker.
+Available messages may be read by calling :man3:`flux_recv`.
 
-FLUX_RQ_TAIL
-   *msg* is placed at the tail of the message queue.
+.. function:: int flux_enqueue(flux_t *h, const flux_msg_t *msg)
 
-FLUX_RQ_TAIL
-   *msg* is placed at the head of the message queue.
+Like :func:`flux_requeue` except the message is enqueued on the tail of the
+receive queue, placing it behind any messages already in the queue.
 
 
 RETURN VALUE
 ============
 
-``flux_requeue()`` return zero on success.
-On error, -1 is returned, and errno is set appropriately.
+These functions return zero on success.  On error, -1 is returned with errno
+set.
 
 
 ERRORS
