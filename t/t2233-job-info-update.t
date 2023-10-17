@@ -16,10 +16,15 @@ fj_wait_event() {
 	flux job wait-event --timeout=20 "$@"
 }
 
+get_update_watchers() {
+	flux module stats --parse "update_watchers" job-info
+}
+
 wait_update_watchers() {
 	local count=$1
 	local i=0
-	while (! flux module stats --parse "update_watchers" job-info > /dev/null 2>&1 \
+	echo "waiting for $count watchers"
+	while (! flux module stats --parse "update_watchers" job-info \
 		|| [ "$(flux module stats --parse "update_watchers" job-info 2> /dev/null)" != "${count}" ]) \
 		&& [ $i -lt 50 ]
 	do
@@ -33,132 +38,147 @@ wait_update_watchers() {
 	return 0
 }
 
+# Usage: expiration_add JOBID N
+# Set expiration of job with JOBID to now + N seconds
+#
+expiration_add() {
+	local id=$1
+	local amount=$2
+	local kvsdir=$(flux job id --to=kvs $id)
+	local new=$(($(date +%s) + $amount))
+	flux kvs eventlog append \
+	    ${kvsdir}.eventlog resource-update "{\"expiration\": $new}"
+	echo $new
+}
+
 test_expect_success 'job-info: update lookup with no update events works (job active)' '
-	flux submit --wait-event=start sleep 300 > lookup1.id &&
-	${UPDATE_LOOKUP} $(cat lookup1.id) R > lookup1.out &&
-	flux cancel $(cat lookup1.id) &&
+	jobid=$(flux submit --wait-event=start sleep 300) &&
+	${UPDATE_LOOKUP} $jobid R > lookup1.out &&
+	flux cancel $jobid &&
+	test_debug "cat lookup1.out" &&
 	cat lookup1.out | jq -e ".execution.expiration == 0.0"
 '
 
 test_expect_success 'job-info: update lookup with no update events works (job inactive)' '
-	flux submit --wait-event=clean hostname > lookup2.id &&
-	${UPDATE_LOOKUP} $(cat lookup2.id) R > lookup2.out &&
+	jobid=$(flux submit --wait-event=clean hostname) &&
+	${UPDATE_LOOKUP} $jobid R > lookup2.out &&
+	test_debug "cat lookup2.out" &&
 	cat lookup2.out | jq -e ".execution.expiration == 0.0"
 '
 
 test_expect_success 'job-info: update lookup with update events works (job active)' '
-	flux submit --wait-event=start sleep 300 > lookup3.id &&
-	kvspath=`flux job id --to=kvs $(cat lookup3.id)` &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 100.0}" &&
-	${UPDATE_LOOKUP} $(cat lookup3.id) R > lookup3A.out &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 200.0}" &&
-	${UPDATE_LOOKUP} $(cat lookup3.id) R > lookup3B.out &&
-	flux cancel $(cat lookup3.id) &&
-	cat lookup3A.out | jq -e ".execution.expiration == 100.0" &&
-	cat lookup3B.out | jq -e ".execution.expiration == 200.0"
+	jobid=$(flux submit --wait-event=start sleep 300) &&
+	update1=$(expiration_add $jobid 100) &&
+	flux job eventlog $jobid &&
+	${UPDATE_LOOKUP} $jobid R > lookup3A.out &&
+	update2=$(expiration_add $jobid 200) &&
+	${UPDATE_LOOKUP} $jobid R > lookup3B.out &&
+	flux cancel $jobid &&
+	cat lookup3A.out | jq -e ".execution.expiration == ${update1}" &&
+	cat lookup3B.out | jq -e ".execution.expiration == ${update2}"
 '
 
 test_expect_success 'job-info: update lookup with update events works (job inactive)' '
-	flux submit --wait-event=start sleep 300 > lookup4.id &&
-	kvspath=`flux job id --to=kvs $(cat lookup4.id)` &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 100.0}" &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 200.0}" &&
-	flux cancel $(cat lookup4.id) &&
-	${UPDATE_LOOKUP} $(cat lookup4.id) R > lookup4.out &&
-	cat lookup4.out | jq -e ".execution.expiration == 200.0"
+	jobid=$(flux submit --wait-event=start sleep 300) &&
+	update1=$(expiration_add $jobid 100) &&
+	update2=$(expiration_add $jobid 100) &&
+	flux cancel $jobid &&
+	${UPDATE_LOOKUP} $jobid R > lookup4.out &&
+	cat lookup4.out | jq -e ".execution.expiration == ${update2}"
 '
 
 test_expect_success 'job-info: update watch with no update events works (job inactive)' '
-	flux submit --wait-event=clean hostname > watch1.id &&
-	${UPDATE_WATCH} $(cat watch1.id) R > watch1.out &&
+	jobid=$(flux submit --wait-event=clean hostname) &&
+	${UPDATE_WATCH} $jobid R > watch1.out &&
 	test $(cat watch1.out | wc -l) -eq 1 &&
 	cat watch1.out | jq -e ".execution.expiration == 0.0"
 '
 
 test_expect_success NO_CHAIN_LINT 'job-info: update watch with no update events works (job run/canceled)' '
-	flux submit --wait-event=start sleep inf > watch2.id
-	${UPDATE_WATCH} $(cat watch2.id) R > watch2.out &
+	jobid=$(flux submit --wait-event=start sleep inf)
+	watchers=$(get_update_watchers)
+	${UPDATE_WATCH} $jobid R > watch2.out &
 	watchpid=$! &&
-	wait_update_watchers 1 &&
-	${WAITFILE} --count=1 --timeout=30 --pattern="expiration" watch2.out &&
-	flux cancel $(cat watch2.id) &&
+	wait_update_watchers $((watchers+1)) &&
+	${WAITFILE} -v --count=1 --timeout=30 --pattern="expiration" watch2.out &&
+	flux cancel $jobid &&
 	wait $watchpid &&
+	test_debug "cat watch2.out" &&
 	test $(cat watch2.out | wc -l) -eq 1 &&
 	cat watch2.out | jq -e ".execution.expiration == 0.0"
 '
 
 test_expect_success 'job-info: update watch with update events works (job inactive)' '
-	flux submit --wait-event=start sleep inf > watch3.id &&
-	kvspath=`flux job id --to=kvs $(cat watch3.id)` &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 100.0}" &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 200.0}" &&
-	flux cancel $(cat watch3.id) &&
-	${UPDATE_WATCH} $(cat watch3.id) R > watch3.out &&
+	jobid=$(flux submit --wait-event=start sleep inf) &&
+	update1=$(expiration_add $jobid 100) &&
+	update2=$(expiration_add $jobid 200) &&
+	flux cancel $jobid &&
+	${UPDATE_WATCH} $jobid R > watch3.out &&
 	test $(cat watch3.out | wc -l) -eq 1 &&
-	cat watch3.out | jq -e ".execution.expiration == 200.0"
+	cat watch3.out | jq -e ".execution.expiration == ${update2}"
 '
 
 test_expect_success NO_CHAIN_LINT 'job-info: update watch with update events works (before watch)' '
-	flux submit --wait-event=start sleep inf > watch4.id &&
-	kvspath=`flux job id --to=kvs $(cat watch4.id)` &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 100.0}"
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 200.0}"
-	${UPDATE_WATCH} $(cat watch4.id) R > watch4.out &
+	jobid=$(flux submit --wait-event=start sleep inf) &&
+	update1=$(expiration_add $jobid 100) &&
+	update2=$(expiration_add $jobid 200) &&
+	watchers=$(get_update_watchers)
+	${UPDATE_WATCH} $jobid R > watch4.out &
 	watchpid=$! &&
-	wait_update_watchers 1 &&
+	wait_update_watchers $((watchers+1)) &&
 	${WAITFILE} --count=1 --timeout=30 --pattern="expiration" watch4.out &&
-	flux cancel $(cat watch4.id) &&
+	flux cancel $jobid &&
 	wait $watchpid &&
 	test $(cat watch4.out | wc -l) -eq 1 &&
-	cat watch4.out | jq -e ".execution.expiration == 200.0"
+	cat watch4.out | jq -e ".execution.expiration == ${update2}"
 '
 
 test_expect_success NO_CHAIN_LINT 'job-info: update watch with update events works (after watch)' '
-	flux submit --wait-event=start sleep inf > watch5.id
-	${UPDATE_WATCH} $(cat watch5.id) R > watch5.out &
+	jobid=$(flux submit --wait-event=start sleep inf) &&
+	watchers=$(get_update_watchers)
+	${UPDATE_WATCH} $jobid R > watch5.out &
 	watchpid=$! &&
-	wait_update_watchers 1 &&
+	wait_update_watchers $((watchers+1)) &&
 	${WAITFILE} --count=1 --timeout=30 --pattern="expiration" watch5.out &&
-	kvspath=`flux job id --to=kvs $(cat watch5.id)` &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 100.0}" &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 200.0}" &&
+	update1=$(expiration_add $jobid 100) &&
+	update2=$(expiration_add $jobid 200) &&
 	${WAITFILE} --count=3 --timeout=30 --pattern="expiration" watch5.out &&
-	flux cancel $(cat watch5.id) &&
+	flux cancel $jobid &&
 	wait $watchpid &&
 	test $(cat watch5.out | wc -l) -eq 3 &&
 	head -n1 watch5.out | jq -e ".execution.expiration == 0.0" &&
-	head -n2 watch5.out | tail -n1 | jq -e ".execution.expiration == 100.0" &&
-	tail -n1 watch5.out | jq -e ".execution.expiration == 200.0"
+	head -n2 watch5.out | tail -n1 | jq -e ".execution.expiration == ${update1}" &&
+	tail -n1 watch5.out | jq -e ".execution.expiration == ${update2}"
 '
 
 test_expect_success NO_CHAIN_LINT 'job-info: update watch with update events works (before/after watch)' '
-	flux submit --wait-event=start sleep inf > watch6.id &&
-	kvspath=`flux job id --to=kvs $(cat watch6.id)` &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 100.0}"
-	${UPDATE_WATCH} $(cat watch6.id) R > watch6.out &
+	jobid=$(flux submit --wait-event=start sleep inf) &&
+	update1=$(expiration_add $jobid 100) &&
+	watchers=$(get_update_watchers)
+	${UPDATE_WATCH} $jobid R > watch6.out &
 	watchpid=$! &&
-	wait_update_watchers 1 &&
+	wait_update_watchers $((watchers+1)) &&
 	${WAITFILE} --count=1 --timeout=30 --pattern="expiration" watch6.out &&
-	kvspath=`flux job id --to=kvs $(cat watch6.id)` &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 200.0}" &&
+	update2=$(expiration_add $jobid 200) &&
 	${WAITFILE} --count=2 --timeout=30 --pattern="expiration" watch6.out &&
-	flux cancel $(cat watch6.id) &&
+	flux cancel $jobid &&
 	wait $watchpid &&
 	test $(cat watch6.out | wc -l) -eq 2 &&
-	head -n1 watch6.out | jq -e ".execution.expiration == 100.0" &&
-	tail -n1 watch6.out | jq -e ".execution.expiration == 200.0"
+	head -n1 watch6.out | jq -e ".execution.expiration == ${update1}" &&
+	tail -n1 watch6.out | jq -e ".execution.expiration == ${update2}"
 '
 
 # signaling the update watch tool with SIGUSR1 will cancel the stream
 test_expect_success NO_CHAIN_LINT 'job-info: update watch can be canceled (single watcher)' '
-	flux submit --wait-event=start sleep inf > watch7.id
-	${UPDATE_WATCH} $(cat watch7.id) R > watch7.out &
+	jobid=$(flux submit --wait-event=start sleep inf) &&
+	watchers=$(get_update_watchers)
+	${UPDATE_WATCH} $jobid R > watch7.out &
 	watchpid=$! &&
-	wait_update_watchers 1 &&
+	wait_update_watchers $((watchers+1)) &&
 	${WAITFILE} --count=1 --timeout=30 --pattern="expiration" watch7.out &&
 	kill -s USR1 $watchpid &&
 	wait $watchpid &&
-	flux cancel $(cat watch7.id) &&
+	flux cancel $jobid &&
 	test $(cat watch7.out | wc -l) -eq 1 &&
 	cat watch7.out | jq -e ".execution.expiration == 0.0"
 '
@@ -170,25 +190,24 @@ test_expect_success NO_CHAIN_LINT 'job-info: update watch can be canceled (singl
 # At the end, the first watcher should see 3 R versions, the second
 # one 2, and the last one only 1.
 test_expect_success NO_CHAIN_LINT 'job-info: update watch with multiple watchers works' '
-	flux submit --wait-event=start sleep inf > watch8.id
-	${UPDATE_WATCH} $(cat watch8.id) R > watch8A.out &
+	jobid=$(flux submit --wait-event=start sleep inf)
+	watchers=$(get_update_watchers)
+	${UPDATE_WATCH} $jobid R > watch8A.out &
 	watchpidA=$! &&
-	wait_update_watchers 1 &&
-	kvspath=`flux job id --to=kvs $(cat watch8.id)` &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 100.0}" &&
+	wait_update_watchers $((watchers+1)) &&
+	update1=$(expiration_add $jobid 100) &&
 	${WAITFILE} --count=2 --timeout=30 --pattern="expiration" watch8A.out
-	${UPDATE_WATCH} $(cat watch8.id) R > watch8B.out &
+	${UPDATE_WATCH} $jobid R > watch8B.out &
 	watchpidB=$! &&
-	wait_update_watchers 2 &&
-	kvspath=`flux job id --to=kvs $(cat watch8.id)` &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 200.0}" &&
+	wait_update_watchers $((watchers+2)) &&
+	update2=$(expiration_add $jobid 200) &&
 	${WAITFILE} --count=3 --timeout=30 --pattern="expiration" watch8A.out &&
 	${WAITFILE} --count=2 --timeout=30 --pattern="expiration" watch8B.out
-	${UPDATE_WATCH} $(cat watch8.id) R > watch8C.out &
+	${UPDATE_WATCH} $jobid R > watch8C.out &
 	watchpidC=$! &&
-	wait_update_watchers 3 &&
+	wait_update_watchers $((watchers+3)) &&
 	${WAITFILE} --count=1 --timeout=30 --pattern="expiration" watch8C.out &&
-	flux cancel $(cat watch8.id) &&
+	flux cancel $jobid &&
 	wait $watchpidA &&
 	wait $watchpidB &&
 	wait $watchpidC &&
@@ -196,55 +215,55 @@ test_expect_success NO_CHAIN_LINT 'job-info: update watch with multiple watchers
 	test $(cat watch8B.out | wc -l) -eq 2 &&
 	test $(cat watch8C.out | wc -l) -eq 1 &&
 	head -n1 watch8A.out | jq -e ".execution.expiration == 0.0" &&
-	head -n2 watch8A.out | tail -n1 | jq -e ".execution.expiration == 100.0" &&
-	tail -n1 watch8A.out | jq -e ".execution.expiration == 200.0" &&
-	head -n1 watch8B.out | jq -e ".execution.expiration == 100.0" &&
-	tail -n1 watch8B.out | jq -e ".execution.expiration == 200.0" &&
-	tail -n1 watch8C.out | jq -e ".execution.expiration == 200.0"
+	head -n2 watch8A.out | tail -n1 | jq -e ".execution.expiration == ${update1}" &&
+	tail -n1 watch8A.out | jq -e ".execution.expiration == ${update2}" &&
+	head -n1 watch8B.out | jq -e ".execution.expiration == ${update1}" &&
+	tail -n1 watch8B.out | jq -e ".execution.expiration == ${update2}" &&
+	tail -n1 watch8C.out | jq -e ".execution.expiration == ${update2}"
 '
 
 # signaling the update watch tool with SIGUSR1 will cancel the stream
 test_expect_success NO_CHAIN_LINT 'job-info: update watch can be canceled (multiple watchers)' '
-	flux submit --wait-event=start sleep inf > watch10.id
-	${UPDATE_WATCH} $(cat watch10.id) R > watch10A.out &
+	jobid=$(flux submit --wait-event=start sleep inf)
+	watchers=$(get_update_watchers)
+	${UPDATE_WATCH} $jobid R > watch10A.out &
 	watchpidA=$! &&
-	wait_update_watchers 1 &&
-	kvspath=`flux job id --to=kvs $(cat watch10.id)` &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 100.0}"
-	${UPDATE_WATCH} $(cat watch10.id) R > watch10B.out &
+	wait_update_watchers $((watchers+1)) &&
+	update1=$(expiration_add $jobid 100)
+	${UPDATE_WATCH} $jobid R > watch10B.out &
 	watchpidB=$! &&
-	wait_update_watchers 2 &&
+	wait_update_watchers $((watchers+2)) &&
 	${WAITFILE} --count=2 --timeout=30 --pattern="expiration" watch10A.out &&
 	${WAITFILE} --count=1 --timeout=30 --pattern="expiration" watch10B.out &&
 	kill -s USR1 $watchpidA &&
 	wait $watchpidA &&
 	kill -s USR1 $watchpidB &&
 	wait $watchpidB &&
-	flux cancel $(cat watch10.id) &&
+	flux cancel $jobid &&
 	test $(cat watch10A.out | wc -l) -eq 2 &&
 	test $(cat watch10B.out | wc -l) -eq 1 &&
 	head -n1 watch10A.out | jq -e ".execution.expiration == 0.0" &&
-	tail -n1 watch10B.out | jq -e ".execution.expiration == 100.0" &&
-	cat watch10B.out | jq -e ".execution.expiration == 100.0"
+	tail -n1 watch10B.out | jq -e ".execution.expiration == ${update1}" &&
+	cat watch10B.out | jq -e ".execution.expiration == ${update1}"
 '
 
 # If someone is already doing an update-watch on a jobid/key, update-lookup can
 # return the cached info
 test_expect_success NO_CHAIN_LINT 'job-info: update lookup returns cached R from update watch' '
-	flux submit --wait-event=start sleep inf > watch9.id
-	${UPDATE_WATCH} $(cat watch9.id) R > watch9.out &
+	jobid=$(flux submit --wait-event=start sleep inf) &&
+	watchers=$(get_update_watchers)
+	${UPDATE_WATCH} $jobid R > watch9.out &
 	watchpid=$! &&
-	wait_update_watchers 1 &&
-	kvspath=`flux job id --to=kvs $(cat watch9.id)` &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 100.0}" &&
+	wait_update_watchers $((watchers+1)) &&
+	update1=$(expiration_add $jobid 100) &&
 	${WAITFILE} --count=2 --timeout=30 --pattern="expiration" watch9.out &&
-        ${UPDATE_LOOKUP} $(cat watch9.id) R > lookup9.out &&
-	flux cancel $(cat watch9.id) &&
+        ${UPDATE_LOOKUP} $jobid R > lookup9.out &&
+	flux cancel $jobid &&
 	wait $watchpid &&
 	test $(cat watch9.out | wc -l) -eq 2 &&
 	head -n1 watch9.out | jq -e ".execution.expiration == 0.0" &&
-	tail -n1 watch9.out | jq -e ".execution.expiration == 100.0" &&
-	cat lookup9.out | jq -e ".execution.expiration == 100.0"
+	tail -n1 watch9.out | jq -e ".execution.expiration == ${update1}" &&
+	cat lookup9.out | jq -e ".execution.expiration == ${update1}"
 '
 
 #
@@ -281,9 +300,10 @@ test_expect_success 'job-info: non job owner cannot watch key' '
 # access cached info
 test_expect_success NO_CHAIN_LINT 'job-info: non job owner cannot watch key (second watcher)' '
 	jobid=`flux submit --wait-event=start sleep inf`
+	watchers=$(get_update_watchers)
 	${UPDATE_WATCH} $jobid R > watchsecurity.out &
 	watchpid=$! &&
-	wait_update_watchers 1 &&
+	wait_update_watchers $((watchers+1)) &&
 	${WAITFILE} --count=1 --timeout=30 --pattern="expiration" watchsecurity.out &&
 	set_userid 9999 &&
 	test_must_fail ${UPDATE_WATCH} $jobid R &&
@@ -295,9 +315,10 @@ test_expect_success NO_CHAIN_LINT 'job-info: non job owner cannot watch key (sec
 # update-lookup cannot read cached watch data
 test_expect_success NO_CHAIN_LINT 'job-info: non job owner cannot lookup key (piggy backed)' '
 	jobid=`flux submit --wait-event=start sleep inf`
+	watchers=$(get_update_watchers)
 	${UPDATE_WATCH} $jobid R > lookupsecurity.out &
 	watchpid=$! &&
-	wait_update_watchers 1 &&
+	wait_update_watchers $((watchers+1)) &&
 	${WAITFILE} --count=1 --timeout=30 --pattern="expiration" lookupsecurity.out &&
 	set_userid 9999 &&
 	test_must_fail ${UPDATE_LOOKUP} $jobid R &&
