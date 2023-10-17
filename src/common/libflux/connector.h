@@ -35,11 +35,16 @@ struct flux_handle_ops {
     int         (*pollfd)(void *impl);
     int         (*pollevents)(void *impl);
     int         (*send)(void *impl, const flux_msg_t *msg, int flags);
-    int         (*send_new)(void *impl, flux_msg_t **msg, int flags);
     flux_msg_t* (*recv)(void *impl, int flags);
     int         (*reconnect)(void *impl);
 
     void        (*impl_destroy)(void *impl);
+
+    // added in v0.56.0
+    int         (*send_new)(void *impl, flux_msg_t **msg, int flags);
+
+    // added in v0.56.0
+    void        *_pad[4]; // reserved for future use
 };
 
 flux_t *flux_handle_create (void *impl,
