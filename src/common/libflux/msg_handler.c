@@ -196,7 +196,7 @@ static void dispatch_requeue (struct dispatch *d)
     if (d->unmatched) {
         flux_msg_t *msg;
         while ((msg = zlist_pop (d->unmatched))) {
-            if (flux_requeue (d->h, msg, FLUX_RQ_HEAD) < 0)
+            if (flux_requeue (d->h, msg) < 0)
                 flux_log_error (d->h, "%s: flux_requeue", __FUNCTION__);
             flux_msg_destroy (msg);
         }

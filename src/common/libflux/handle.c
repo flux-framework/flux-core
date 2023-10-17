@@ -464,7 +464,7 @@ static void fail_tracked_request (const flux_msg_t *msg, void *arg)
     if (!(rep = flux_response_derive (msg, ECONNRESET))
         || flux_msg_set_string (rep, "RPC aborted due to broker reconnect") < 0
         || flux_msg_set_cred (rep, lies) < 0
-        || flux_requeue (h, rep, FLUX_RQ_TAIL) < 0) {
+        || flux_enqueue (h, rep) < 0) {
         handle_trace (h,
                       "error responding to tracked rpc topic=%s: %s",
                       topic,
@@ -861,7 +861,7 @@ static int defer_requeue (zlist_t **l, flux_t *h)
     flux_msg_t *msg;
     if (*l) {
         while ((msg = zlist_pop (*l))) {
-            int rc = flux_requeue (h, msg, FLUX_RQ_TAIL);
+            int rc = flux_enqueue (h, msg);
             flux_msg_destroy (msg);
             if (rc < 0)
                 return -1;
@@ -967,28 +967,42 @@ error:
 /* FIXME: FLUX_O_TRACE will show these messages being received again
  * So will message counters.
  */
-int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
+int flux_requeue (flux_t *h, const flux_msg_t *msg)
 {
     if (!h || !msg) {
         errno = EINVAL;
         return -1;
     }
     h = lookup_clone_ancestor (h);
-    int rc;
-
-    if ((h->flags & FLUX_O_NOREQUEUE)
-        || (flags != FLUX_RQ_TAIL && flags != FLUX_RQ_HEAD)) {
+    if ((h->flags & FLUX_O_NOREQUEUE)) {
         errno = EINVAL;
         return -1;
     }
     flux_msg_incref (msg);
-    if (flags == FLUX_RQ_TAIL)
-        rc = msg_deque_push_back (h->queue, (flux_msg_t *)msg);
-    else
-        rc = msg_deque_push_front (h->queue, (flux_msg_t *)msg);
-    if (rc < 0)
+    if (msg_deque_push_front (h->queue, (flux_msg_t *)msg) < 0) {
         flux_msg_decref (msg);
-    return rc;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_enqueue (flux_t *h, const flux_msg_t *msg)
+{
+    if (!h || !msg) {
+        errno = EINVAL;
+        return -1;
+    }
+    h = lookup_clone_ancestor (h);
+    if ((h->flags & FLUX_O_NOREQUEUE)) {
+        errno = EINVAL;
+        return -1;
+    }
+    flux_msg_incref (msg);
+    if (msg_deque_push_back (h->queue, (flux_msg_t *)msg) < 0) {
+        flux_msg_decref (msg);
+        return -1;
+    }
+    return 0;
 }
 
 int flux_pollfd (flux_t *h)

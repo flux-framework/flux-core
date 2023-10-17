@@ -326,7 +326,7 @@ void test_service (flux_t *h)
     ok (flux_matchtag_avail (h) == count - 1,
         "flux_future_destroy did not free matchtag");
     // requeue "lost" response so matchtag can be reclaimed
-    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0,
+    ok (flux_requeue (h, msg) == 0,
         "flux_requeue response worked");
     flux_msg_destroy (msg);
 

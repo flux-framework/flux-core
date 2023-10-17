@@ -357,7 +357,7 @@ static void getroot_completion (flux_future_t *f, void *arg)
     if (!root->remove)
         setroot (ctx, root, ref, rootseq);
 
-    if (flux_requeue (ctx->h, msg, FLUX_RQ_HEAD) < 0) {
+    if (flux_requeue (ctx->h, msg) < 0) {
         flux_log_error (ctx->h, "%s: flux_requeue", __FUNCTION__);
         goto error;
     }

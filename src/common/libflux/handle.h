@@ -49,13 +49,6 @@ enum {
     FLUX_O_NOREQUEUE = 64,  /* disable flux_requeue() to save file descr. */
 };
 
-/* Flags for flux_requeue().
- */
-enum {
-    FLUX_RQ_HEAD = 1,   /* requeue message at head of queue */
-    FLUX_RQ_TAIL = 2,   /* requeue message at tail of queue */
-};
-
 /* Flags for flux_pollevents().
  */
 enum {
@@ -158,11 +151,11 @@ int flux_send_new (flux_t *h, flux_msg_t **msg, int flags);
 flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags);
 
 /* Requeue a message
- * flags must be either FLUX_RQ_HEAD or FLUX_RQ_TAIL.
  * A message that is requeued will be seen again by flux_recv() and will
  * cause FLUX_POLLIN to be raised in flux_pollevents().
  */
-int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags);
+int flux_requeue (flux_t *h, const flux_msg_t *msg); // add to head of queue
+int flux_enqueue (flux_t *h, const flux_msg_t *msg); // add to tail of queue
 
 /* Obtain a bitmask of FLUX_POLL* bits for the flux handle.
  * Returns bitmask on success, -1 on error with errno set.

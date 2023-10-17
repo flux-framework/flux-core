@@ -1431,8 +1431,8 @@ static void broker_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
 static int route_to_handle (const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
-        flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
+    if (flux_enqueue (ctx->h, msg) < 0)
+        flux_log_error (ctx->h, "%s: flux_enqueue\n", __FUNCTION__);
     return 0;
 }
 
@@ -1724,8 +1724,8 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     /* Internal services may install message handlers for events.
      */
     if (subhash_topic_match (ctx->sub, topic)) {
-        if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
-            flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
+        if (flux_enqueue (ctx->h, msg) < 0)
+            flux_log_error (ctx->h, "%s: flux_enqueue\n", __FUNCTION__);
     }
     /* Finally, route to local module subscribers.
      */
@@ -2049,7 +2049,7 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
     const char *uuid;
 
     if (!(uuid = flux_msg_route_last (msg)))
-        rc = flux_requeue (ctx->h, msg, FLUX_RQ_TAIL);
+        rc = flux_enqueue (ctx->h, msg);
     else if (overlay_uuid_is_parent (ctx->overlay, uuid))
         rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM);
     else if (overlay_uuid_is_child (ctx->overlay, uuid))
