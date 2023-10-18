@@ -22,7 +22,6 @@ libidset_la_SOURCES = idset.c \
 libidset_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
 libidset_la_LDFLAGS = \
-	-avoid-version -module -shared -export-dynamic \
 	$(AM_LDFLAGS)
 
 

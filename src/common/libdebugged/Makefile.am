@@ -14,7 +14,6 @@ libdebugged_la_SOURCES = debugged.c debugged.h
 libdebugged_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
 libdebugged_la_LDFLAGS = \
-	-avoid-version -module -shared -export-dynamic \
 	$(AM_LDFLAGS)
 
 TESTS = test_debugged.t

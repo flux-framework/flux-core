@@ -22,7 +22,6 @@ libtaskmap_la_SOURCES = \
 libtaskmap_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
 libtaskmap_la_LDFLAGS = \
-	-avoid-version -module -shared -export-dynamic \
 	$(AM_LDFLAGS)
 
 

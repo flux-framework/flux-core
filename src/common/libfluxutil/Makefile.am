@@ -21,5 +21,4 @@ libfluxutil_la_SOURCES = \
 libfluxutil_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
 libfluxutil_la_LDFLAGS = \
-	-avoid-version \
 	$(AM_LDFLAGS)

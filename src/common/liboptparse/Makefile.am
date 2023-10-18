@@ -18,7 +18,6 @@ liboptparse_la_SOURCES = optparse.c getopt.c getopt_int.h getopt.h
 liboptparse_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
 liboptparse_la_LDFLAGS = \
-	-avoid-version -module -shared -export-dynamic \
 	$(AM_LDFLAGS)
 
 

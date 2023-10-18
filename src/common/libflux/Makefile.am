@@ -138,7 +138,9 @@ libflux_la_CPPFLAGS = \
 	$(installed_conf_cppflags) \
 	$(intree_conf_cppflags) \
 	$(AM_CPPFLAGS)
-libflux_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
+
+libflux_la_LDFLAGS = \
+	$(AM_LDFLAGS)
 
 libmessage_la_SOURCES = \
 	message_private.h \
