@@ -103,6 +103,8 @@ connector_local_la_SOURCES = \
 	connector-local/local.c
 connector_local_la_LIBADD = \
 	$(top_builddir)/src/common/librouter/librouter.la \
+	$(top_builddir)/src/common/libflux/handle_requeue.lo \
+	$(top_builddir)/src/common/libflux/msg_deque.lo \
 	$(top_builddir)/src/common/libutil/log.lo \
 	$(top_builddir)/src/common/libutil/aux.lo \
 	$(top_builddir)/src/common/libutil/errprintf.lo \

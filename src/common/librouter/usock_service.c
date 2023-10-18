@@ -20,6 +20,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libflux/handle_requeue.h"
 #include "usock.h"
 
 #include "usock_service.h"
@@ -58,7 +59,7 @@ static void notify_disconnect (struct service *ss, const char *uuid)
         || (flux_msg_route_enable (msg), false)
         || flux_msg_set_cred (msg, ss->cred) < 0
         || flux_msg_route_push (msg, uuid) < 0
-        || flux_requeue (ss->h, msg, FLUX_RQ_TAIL) < 0) {
+        || handle_requeue_push_back (ss->h, msg) < 0) {
         if (ss->verbose)
             log_msg ("error notifying server of %.5s disconnect", uuid);
     }
@@ -100,7 +101,7 @@ static void service_recv (struct usock_conn *uconn, flux_msg_t *msg, void *arg)
         || (flux_msg_route_enable (msg), false)
         || flux_msg_set_cred (msg, ss->cred) < 0
         || flux_msg_route_push (msg, uuid) < 0
-        || flux_requeue (ss->h, msg, FLUX_RQ_TAIL) < 0)
+        || handle_requeue_push_back (ss->h, msg) < 0)
         goto drop;
     return;
 drop:
