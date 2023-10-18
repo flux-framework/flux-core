@@ -281,6 +281,8 @@ kvs_la_SOURCES =
 kvs_la_LIBADD = \
 	$(builddir)/kvs/libkvs.la \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
+	$(top_builddir)/src/common/libflux/handle_requeue.lo \
+	$(top_builddir)/src/common/libflux/msg_deque.lo \
 	$(content_libadd) \
 	$(top_builddir)/src/common/libutil/fsd.lo \
 	$(top_builddir)/src/common/libutil/timestamp.lo \

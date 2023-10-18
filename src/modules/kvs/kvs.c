@@ -30,6 +30,7 @@
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/timestamp.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libflux/handle_requeue.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libkvs/kvs_txn_private.h"
@@ -357,8 +358,8 @@ static void getroot_completion (flux_future_t *f, void *arg)
     if (!root->remove)
         setroot (ctx, root, ref, rootseq);
 
-    if (flux_requeue (ctx->h, msg, FLUX_RQ_HEAD) < 0) {
-        flux_log_error (ctx->h, "%s: flux_requeue", __FUNCTION__);
+    if (handle_requeue_push_front (ctx->h, msg) < 0) {
+        flux_log_error (ctx->h, "getroot message requeue failed");
         goto error;
     }
 
