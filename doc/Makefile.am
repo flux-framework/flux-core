@@ -91,7 +91,6 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_open.3 \
 	man3/flux_send.3 \
 	man3/flux_recv.3 \
-	man3/flux_requeue.3 \
 	man3/flux_aux_set.3 \
 	man3/flux_flags_set.3 \
 	man3/flux_comms_error_set.3 \

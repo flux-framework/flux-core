@@ -7,7 +7,6 @@ Message API
    flux_open
    flux_recv
    flux_send
-   flux_requeue
 
 .. toctree::
    :maxdepth: 1

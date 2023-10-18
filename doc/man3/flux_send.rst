@@ -79,4 +79,4 @@ Flux: http://flux-framework.org
 SEE ALSO
 ========
 
-:man3:`flux_open`, :man3:`flux_recv`, :man3:`flux_requeue`
+:man3:`flux_open`, :man3:`flux_recv`

@@ -54,8 +54,7 @@ FLUX_O_NONBLOCK
 Internally, flags are the logical "or" of *flags* and the flags provided
 to ``flux_open()`` when the handle was created.
 
-Messages that do not meet *match* criteria, are requeued with
-``flux_requeue()`` for later consumption.
+Messages that do not meet *match* criteria, are requeued for later consumption.
 
 
 RETURN VALUE
@@ -97,4 +96,4 @@ Flux: http://flux-framework.org
 SEE ALSO
 ========
 
-:man3:`flux_open`, :man3:`flux_send`, :man3:`flux_requeue`, :man3:`flux_msg_cmp`
+:man3:`flux_open`, :man3:`flux_send`, :man3:`flux_msg_cmp`

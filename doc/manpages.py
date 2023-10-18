@@ -197,7 +197,6 @@ man_pages = [
     ('man3/flux_request_decode', 'flux_request_decode', 'decode a Flux request message', [author], 3),
     ('man3/flux_request_encode', 'flux_request_encode_raw', 'encode a Flux request message', [author], 3),
     ('man3/flux_request_encode', 'flux_request_encode', 'encode a Flux request message', [author], 3),
-    ('man3/flux_requeue', 'flux_requeue', 'requeue a message', [author], 3),
     ('man3/flux_respond', 'flux_respond_pack', 'respond to a request', [author], 3),
     ('man3/flux_respond', 'flux_respond_raw', 'respond to a request', [author], 3),
     ('man3/flux_respond', 'flux_respond_error', 'respond to a request', [author], 3),
