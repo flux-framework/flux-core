@@ -46,6 +46,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libflux/handle_requeue.h"
 #include "src/common/librouter/subhash.h"
 #include "src/common/libfluxutil/method.h"
 #include "ccan/array_size/array_size.h"
@@ -1431,8 +1432,8 @@ static void broker_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
 static int route_to_handle (const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
-        flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
+    if (handle_requeue_push_back (ctx->h, msg) < 0)
+        flux_log_error (ctx->h, "broker handle requeue failed");
     return 0;
 }
 
@@ -1724,8 +1725,8 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     /* Internal services may install message handlers for events.
      */
     if (subhash_topic_match (ctx->sub, topic)) {
-        if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
-            flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
+        if (handle_requeue_push_back (ctx->h, msg) < 0)
+            flux_log_error (ctx->h, "broker handle requeue failed");
     }
     /* Finally, route to local module subscribers.
      */
@@ -2049,7 +2050,7 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
     const char *uuid;
 
     if (!(uuid = flux_msg_route_last (msg)))
-        rc = flux_requeue (ctx->h, msg, FLUX_RQ_TAIL);
+        rc = handle_requeue_push_back (ctx->h, msg);
     else if (overlay_uuid_is_parent (ctx->overlay, uuid))
         rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM);
     else if (overlay_uuid_is_child (ctx->overlay, uuid))
@@ -2077,7 +2078,7 @@ static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 /**
  ** Broker's internal flux_t implementation
  ** N.B. recv() method is missing because messages are "received"
- ** when routing logic calls flux_requeue().
+ ** when routing logic calls broker_handle_requeue_back().
  **/
 
 static int broker_send (void *impl, const flux_msg_t *msg, int flags)
