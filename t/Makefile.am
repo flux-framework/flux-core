@@ -192,11 +192,9 @@ TESTSCRIPTS = \
 	t2500-job-attach.t \
 	t2501-job-status.t \
 	t2600-job-shell-rcalc.t \
-	t2601-job-shell-standalone.t \
 	t2602-job-shell.t \
 	t2603-job-shell-initrc.t \
 	t2604-job-shell-affinity.t \
-	t2605-job-shell-output-redirection-standalone.t \
 	t2606-job-shell-output-redirection.t \
 	t2607-job-shell-input.t \
 	t2608-job-shell-log.t \
