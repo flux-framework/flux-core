@@ -52,6 +52,7 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_ldadd = \
 	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \
 	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(LIBUUID_LIBS) \
