@@ -14,6 +14,7 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "handle_requeue.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
 #include "src/common/libtestutil/util_rpc.h"
@@ -326,8 +327,8 @@ void test_service (flux_t *h)
     ok (flux_matchtag_avail (h) == count - 1,
         "flux_future_destroy did not free matchtag");
     // requeue "lost" response so matchtag can be reclaimed
-    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0,
-        "flux_requeue response worked");
+    ok (handle_requeue_push_front (h, msg) == 0,
+        "handle_requeue_push_front response worked");
     flux_msg_destroy (msg);
 
     ok (reclaim_matchtag (h, 1, 1.) == 0,

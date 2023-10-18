@@ -55,6 +55,9 @@ libflux_la_SOURCES = \
 	flog.c \
 	attr.c \
 	handle.c \
+	handle_private.h \
+	handle_requeue.c \
+	handle_requeue.h \
 	msg_deque.c \
 	msg_deque.h \
 	connector_loop.c \

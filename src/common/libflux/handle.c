@@ -37,6 +37,8 @@
 #include "ccan/str/str.h"
 
 #include "handle.h"
+#include "handle_private.h"
+#include "handle_requeue.h"
 #include "reactor.h"
 #include "connector.h"
 #include "message.h"
@@ -46,48 +48,6 @@
 #include "conf.h"
 #include "msg_deque.h"
 #include "message_private.h" // to check msg refcount in flux_send_new ()
-
-#if HAVE_CALIPER
-struct profiling_context {
-    int initialized;
-    cali_id_t msg_type;
-    cali_id_t msg_seq;
-    cali_id_t msg_topic;
-    cali_id_t msg_sender;
-    cali_id_t msg_rpc;
-    cali_id_t msg_rpc_nodeid;
-    cali_id_t msg_rpc_resp_expected;
-    cali_id_t msg_action;
-    cali_id_t msg_match_type;
-    cali_id_t msg_match_tag;
-    cali_id_t msg_match_glob;
-};
-#endif
-
-struct flux_handle {
-    flux_t          *parent; // if FLUX_O_CLONE, my parent
-    struct aux_item *aux;
-    int             usecount;
-    int             flags;
-
-    /* element below are unused in cloned handles */
-    const struct flux_handle_ops *ops;
-    void            *impl;
-    void            *dso;
-    struct msg_deque *queue;
-    int             pollfd;
-
-    struct tagpool  *tagpool;
-    flux_msgcounters_t msgcounters;
-    flux_comms_error_f comms_error_cb;
-    void            *comms_error_arg;
-    bool            comms_error_in_progress;
-    bool            destroy_in_progress;
-#if HAVE_CALIPER
-    struct profiling_context prof;
-#endif
-    struct rpc_track *tracker;
-};
 
 struct builtin_connector {
     const char *scheme;
@@ -117,13 +77,6 @@ static int validate_flags (int flags, int allowed)
         return -1;
     }
     return 0;
-}
-
-static flux_t *lookup_clone_ancestor (flux_t *h)
-{
-    while ((h->flags & FLUX_O_CLONE))
-        h = h->parent;
-    return h;
 }
 
 void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new);
@@ -464,7 +417,7 @@ static void fail_tracked_request (const flux_msg_t *msg, void *arg)
     if (!(rep = flux_response_derive (msg, ECONNRESET))
         || flux_msg_set_string (rep, "RPC aborted due to broker reconnect") < 0
         || flux_msg_set_cred (rep, lies) < 0
-        || flux_requeue (h, rep, FLUX_RQ_TAIL) < 0) {
+        || handle_requeue_push_back (h, rep) < 0) {
         handle_trace (h,
                       "error responding to tracked rpc topic=%s: %s",
                       topic,
@@ -861,7 +814,7 @@ static int defer_requeue (zlist_t **l, flux_t *h)
     flux_msg_t *msg;
     if (*l) {
         while ((msg = zlist_pop (*l))) {
-            int rc = flux_requeue (h, msg, FLUX_RQ_TAIL);
+            int rc = handle_requeue_push_back (h, msg);
             flux_msg_destroy (msg);
             if (rc < 0)
                 return -1;
@@ -964,31 +917,15 @@ error:
     return NULL;
 }
 
-/* FIXME: FLUX_O_TRACE will show these messages being received again
- * So will message counters.
- */
+// deprecated in header
 int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
 {
-    if (!h || !msg) {
-        errno = EINVAL;
-        return -1;
-    }
-    h = lookup_clone_ancestor (h);
-    int rc;
-
-    if ((h->flags & FLUX_O_NOREQUEUE)
-        || (flags != FLUX_RQ_TAIL && flags != FLUX_RQ_HEAD)) {
-        errno = EINVAL;
-        return -1;
-    }
-    flux_msg_incref (msg);
     if (flags == FLUX_RQ_TAIL)
-        rc = msg_deque_push_back (h->queue, (flux_msg_t *)msg);
-    else
-        rc = msg_deque_push_front (h->queue, (flux_msg_t *)msg);
-    if (rc < 0)
-        flux_msg_decref (msg);
-    return rc;
+        return handle_requeue_push_back (h, msg);
+    if (flags == FLUX_RQ_HEAD)
+        return handle_requeue_push_front (h, msg);
+    errno = EINVAL;
+    return -1;
 }
 
 int flux_pollfd (flux_t *h)

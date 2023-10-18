@@ -22,6 +22,8 @@
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/errno_safe.h"
 
+#include "handle.h"
+#include "handle_requeue.h"
 #include "message.h"
 #include "reactor.h"
 #include "msg_handler.h"
@@ -196,8 +198,8 @@ static void dispatch_requeue (struct dispatch *d)
     if (d->unmatched) {
         flux_msg_t *msg;
         while ((msg = zlist_pop (d->unmatched))) {
-            if (flux_requeue (d->h, msg, FLUX_RQ_HEAD) < 0)
-                flux_log_error (d->h, "%s: flux_requeue", __FUNCTION__);
+            if (handle_requeue_push_front  (d->h, msg) < 0)
+                flux_log_error (d->h, "dispatch: message requeue error");
             flux_msg_destroy (msg);
         }
     }

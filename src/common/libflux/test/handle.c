@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <flux/core.h>
 
+#include "handle_requeue.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"
@@ -249,7 +250,7 @@ int main (int argc, char *argv[])
     ok (flux_flags_get (h) == 0,
     "flux_flags_set flags=FLUX_O_RPCTRACK has no effect");
 
-    /* Test flux_send, flux_recv, flux_requeue
+    /* Test flux_send, flux_recv, handle_requeue_*
      * Check flux_pollevents along the way.
      */
     ok (flux_pollevents (h) == FLUX_POLLOUT,
@@ -268,25 +269,27 @@ int main (int argc, char *argv[])
     ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
        "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
 
-    /* flux_requeue bad args */
+    /* requeue bad args */
     errno = 0;
-    ok (flux_requeue (NULL, msg, FLUX_RQ_HEAD) < 0 && errno == EINVAL,
-        "flux_requeue h=NULL fails with EINVAL");
+    ok (handle_requeue_push_front (NULL, msg) < 0 && errno == EINVAL,
+        "handle_requeue_push_front h=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_requeue (h, NULL, FLUX_RQ_HEAD) < 0 && errno == EINVAL,
-        "flux_requeue msg=NULL fails with EINVAL");
+    ok (handle_requeue_push_front (h, NULL) < 0 && errno == EINVAL,
+        "handle_requeue_push_front msg=NULL fails with EINVAL");
     errno = 0;
-    ok (flux_requeue (h, msg, 0) < 0 && errno == EINVAL,
-        "flux_requeue fails with EINVAL if HEAD|TAIL unspecified");
-    flux_msg_destroy (msg);
+    ok (handle_requeue_push_back (NULL, msg) < 0 && errno == EINVAL,
+        "handle_requeue_push_back h=NULL fails with EINVAL");
+    errno = 0;
+    ok (handle_requeue_push_back (h, NULL) < 0 && errno == EINVAL,
+        "handle_requeue_push_back msg=NULL fails with EINVAL");
 
     /* requeue preserves aux container (kvs needs this) */
     if (!(msg = flux_request_encode ("foo", NULL)))
         BAIL_OUT ("couldn't encode request");
     if (flux_msg_aux_set (msg, "fubar", "xyz", NULL) < 0)
         BAIL_OUT ("couldn't attach something to message aux container");
-    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0,
-        "flux_requeue works");
+    ok (handle_requeue_push_front (h, msg) == 0,
+        "handle_requeue_push_front works");
     msg2 = flux_recv (h, FLUX_MATCH_ANY, 0);
     ok (msg2 == msg,
         "flux_recv returned requeued message and it has the same address");
@@ -295,16 +298,16 @@ int main (int argc, char *argv[])
     flux_msg_decref (msg);
     flux_msg_decref (msg2);
 
-    /* flux_requeue: add foo, bar to HEAD; then receive bar, foo */
+    /* requeue_push_front: add foo, bar; then receive bar, foo */
     if (!(msg = flux_request_encode ("foo", NULL)))
         BAIL_OUT ("couldn't encode request");
-    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0,
-        "flux_requeue foo HEAD works");
+    ok (handle_requeue_push_front (h, msg) == 0,
+        "handle_requeue_push_front foo works");
     flux_msg_destroy (msg);
     if (!(msg = flux_request_encode ("bar", NULL)))
         BAIL_OUT ("couldn't encode request");
-    ok (flux_requeue (h, msg, FLUX_RQ_HEAD) == 0,
-        "flux_requeue bar HEAD works");
+    ok (handle_requeue_push_front (h, msg) == 0,
+        "handle_requeue push_front bar works");
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
        "flux_pollevents shows FLUX_POLLIN set after requeue");
@@ -321,16 +324,16 @@ int main (int argc, char *argv[])
     ok ((flux_pollevents (h) & FLUX_POLLIN) == 0,
        "flux_pollevents shows FLUX_POLLIN clear after queue is emptied");
 
-    /* flux_requeue: add foo, bar to TAIL; then receive foo, bar */
+    /* requeue_push_back: add foo, bar; then receive foo, bar */
     if (!(msg = flux_request_encode ("foo", NULL)))
         BAIL_OUT ("couldn't encode request");
-    ok (flux_requeue (h, msg, FLUX_RQ_TAIL) == 0,
-        "flux_requeue foo TAIL works");
+    ok (handle_requeue_push_back (h, msg) == 0,
+        "handle_requeue_push_back foo works");
     flux_msg_destroy (msg);
     if (!(msg = flux_request_encode ("bar", NULL)))
         BAIL_OUT ("couldn't encode request");
-    ok (flux_requeue (h, msg, FLUX_RQ_TAIL) == 0,
-        "flux_requeue bar TAIL works");
+    ok (handle_requeue_push_back (h, msg) == 0,
+        "handle_requeue_push_back bar works");
     flux_msg_destroy (msg);
     ok ((flux_pollevents (h) & FLUX_POLLIN) != 0,
        "flux_pollevents shows FLUX_POLLIN set after requeue");
