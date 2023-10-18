@@ -23,6 +23,7 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "src/common/libflux/handle_requeue.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 
@@ -251,8 +252,9 @@ void test_putmsg (flux_t *h, uint32_t nodeid)
                 oom ();
             if (seq == defer_start + defer_count - 1) {
                 while ((z = zlist_pop (defer))) {
-                    if (flux_requeue (h, z, FLUX_RQ_TAIL) < 0)
-                        log_err_exit ("%s: flux_requeue", __FUNCTION__);
+                    if (handle_requeue_push_back (h, z) < 0)
+                        log_err_exit ("%s: handle_requeue_push_back",
+                                      __FUNCTION__);
                     flux_msg_destroy (z);
                 }
                 popped = true;
