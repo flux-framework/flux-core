@@ -47,18 +47,6 @@ static char *shell_name = "flux-shell";
 static const char *shell_usage = "[OPTIONS] JOBID";
 
 static struct optparse_option shell_opts[] =  {
-    { .name = "jobspec", .key = 'j', .has_arg = 1, .arginfo = "FILE",
-      .usage = "Get jobspec from FILE, not job-info service", },
-    { .name = "resources", .key = 'R', .has_arg = 1, .arginfo = "FILE",
-      .usage = "Get R from FILE, not job-info service", },
-    { .name = "broker-rank", .key = 'r', .has_arg = 1, .arginfo = "RANK",
-      .usage = "Set broker rank, rather than asking broker", },
-    { .name = "verbose", .key = 'v', .has_arg = 0,
-      .usage = "Log actions to stderr", },
-    { .name = "standalone", .key = 's', .has_arg = 0,
-      .usage = "Run local program without Flux instance", },
-    { .name = "initrc", .has_arg = 1, .arginfo = "FILE",
-      .usage = "Load shell initrc from FILE instead of the system default" },
     { .name = "reconnect", .has_arg = 0,
       .usage = "Attempt to reconnect if broker connection is lost" },
     OPTPARSE_TABLE_END
@@ -211,20 +199,6 @@ static void shell_parse_cmdline (flux_shell_t *shell, int argc, char *argv[])
     if (parse_jobid (argv[optindex++], &shell->jobid) < 0)
         exit (1);
 
-    /* In standalone mode, jobspec, resources and broker-rank must be
-     *  set on command line:
-     */
-    if ((shell->standalone = optparse_hasopt (p, "standalone"))) {
-        if (  !optparse_hasopt (p, "jobspec")
-           || !optparse_hasopt (p, "resources")
-           || !optparse_hasopt (p, "broker-rank"))
-            shell_die (1, "standalone mode requires --jobspec, "
-                       "--resources and --broker-rank");
-    }
-
-    if ((shell->verbose = optparse_getopt (p, "verbose", NULL)))
-        shell_set_verbose (shell->verbose);
-    shell->broker_rank = optparse_get_int (p, "broker-rank", -1);
     shell->p = p;
 }
 
@@ -281,13 +255,10 @@ static int reconnect (flux_t *h, void *arg)
 
 static void shell_connect_flux (flux_shell_t *shell)
 {
+    uint32_t rank;
     int flags = optparse_hasopt (shell->p, "reconnect") ? FLUX_O_RPCTRACK : 0;
 
-    if (shell->standalone)
-        shell->h = flux_open ("loop://", FLUX_O_TEST_NOSUB);
-    else
-        shell->h = flux_open (NULL, flags);
-    if (!shell->h)
+    if (!(shell->h = flux_open (NULL, flags)))
         shell_die_errno (1, "flux_open");
 
     if (optparse_hasopt (shell->p, "reconnect"))
@@ -297,14 +268,12 @@ static void shell_connect_flux (flux_shell_t *shell)
      */
     flux_set_reactor (shell->h, shell->r);
 
-    /*  Fetch local rank if not already set
+    /*  Fetch local rank
      */
-    if (shell->broker_rank < 0) {
-        uint32_t rank;
-        if (flux_get_rank (shell->h, &rank) < 0)
-            shell_log_errno ("error fetching broker rank");
-        shell->broker_rank = rank;
-    }
+    if (flux_get_rank (shell->h, &rank) < 0)
+        shell_log_errno ("error fetching broker rank");
+    shell->broker_rank = rank;
+
     if (plugstack_call (shell->plugstack, "shell.connect", NULL) < 0)
         shell_log_errno ("shell.connect");
 }
@@ -458,7 +427,7 @@ static json_t *flux_shell_get_info_object (flux_shell_t *shell)
         return o;
 
     if (!(o = json_pack_ex (&err, 0,
-                            "{ s:I s:i s:i s:i s:s s:O s:O s:{ s:i s:b }}",
+                            "{ s:I s:i s:i s:i s:s s:O s:O s:{ s:i }}",
                             "jobid", shell->info->jobid,
                             "rank",  shell->info->shell_rank,
                             "size",  shell->info->shell_size,
@@ -467,8 +436,7 @@ static json_t *flux_shell_get_info_object (flux_shell_t *shell)
                             "jobspec", shell->info->jobspec->jobspec,
                             "R", shell->info->R,
                             "options",
-                               "verbose", shell->verbose,
-                               "standalone", shell->standalone)))
+                               "verbose", shell->verbose)))
         return NULL;
     if (flux_shell_aux_set (shell,
                             "shell::info",
@@ -1239,7 +1207,7 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
 {
     char buf [8];
 
-    if (shell->standalone || shell->info->shell_size == 1)
+    if (shell->info->shell_size == 1)
         return 0; // NO-OP
 
     if (shell->protocol_fd[1] < 0)
@@ -1271,16 +1239,15 @@ static int load_initrc (flux_shell_t *shell, const char *default_rcfile)
     /* If initrc is set on command line or in jobspec, then
      *  it is required, O/w initrc is treated as empty file.
      */
-    if (optparse_getopt (shell->p, "initrc", &rcfile) > 0
-        || flux_shell_getopt_unpack (shell, "initrc", "s", &rcfile) > 0)
+    if (flux_shell_getopt_unpack (shell, "initrc", "s", &rcfile) > 0)
         required = true;
     else
         rcfile = default_rcfile;
 
-    /* Skip loading initrc file if it is not required and either the shell
-     *  is running in standalone mode, or the file isn't readable.
+    /* Skip loading initrc file if it is not required or the file isn't
+     * readable.
      */
-    if (!required && (shell->standalone || access (rcfile, R_OK) < 0))
+    if (!required && access (rcfile, R_OK) < 0)
         return 0;
 
     shell_debug ("Loading %s", rcfile);
@@ -1299,17 +1266,12 @@ static int load_initrc (flux_shell_t *shell, const char *default_rcfile)
 static int shell_initrc (flux_shell_t *shell)
 {
     const char *default_rcfile = shell_conf_get ("shell_initrc");
+    const char *result;
 
-    /*  Override pluginpath, default rcfile from broker attribute
-     *   if not in standalone mode.
-     */
-    if (!shell->standalone) {
-        const char *result;
-        if ((result = flux_attr_get (shell->h, "conf.shell_pluginpath")))
-            plugstack_set_searchpath (shell->plugstack, result);
-        if ((result = flux_attr_get (shell->h, "conf.shell_initrc")))
-            default_rcfile = result;
-    }
+    if ((result = flux_attr_get (shell->h, "conf.shell_pluginpath")))
+        plugstack_set_searchpath (shell->plugstack, result);
+    if ((result = flux_attr_get (shell->h, "conf.shell_initrc")))
+        default_rcfile = result;
 
     /* Change current working directory once before all tasks are
      * created, so that each task does not need to chdir().
@@ -1499,7 +1461,7 @@ static int shell_register_event_context (flux_shell_t *shell)
 {
     int rc = -1;
     json_t *o = NULL;
-    if (shell->standalone || shell->info->shell_rank != 0)
+    if (shell->info->shell_rank != 0)
         return 0;
     o = taskmap_encode_json (shell->info->taskmap, TASKMAP_ENCODE_WRAPPED);
     if (o == NULL
@@ -1580,7 +1542,7 @@ int main (int argc, char *argv[])
     if (!(shell.r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         shell_die_errno (1, "flux_reactor_create");
 
-    /* Connect to broker, or if standalone, open loopback connector.
+    /* Connect to broker:
      */
     shell_connect_flux (&shell);
 
@@ -1650,11 +1612,9 @@ int main (int argc, char *argv[])
     if (shell_barrier (&shell, "init") < 0)
         shell_die_errno (1, "shell_barrier");
 
-    /*  Emit an event after barrier completion from rank 0 if not in
-     *   standalone mode.
+    /*  Emit an event after barrier completion from rank 0
      */
     if (shell.info->shell_rank == 0
-        && !shell.standalone
         && shell_eventlogger_emit_event (shell.ev, "shell.init") < 0)
             shell_die_errno (1, "failed to emit event shell.init");
 
@@ -1727,11 +1687,9 @@ int main (int argc, char *argv[])
     if (shell_barrier (&shell, "start") < 0)
         shell_die_errno (1, "shell_barrier");
 
-    /*  Emit an event after barrier completion from rank 0 if not in
-     *   standalone mode.
+    /*  Emit an event after barrier completion from rank 0
      */
     if (shell.info->shell_rank == 0
-        && !shell.standalone
         && shell_eventlogger_emit_event (shell.ev, "shell.start") < 0)
             shell_die_errno (1, "failed to emit event shell.start");
 

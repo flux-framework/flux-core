@@ -291,7 +291,7 @@ void flux_shell_fatal (const char *component,
      */
     flux_shell_killall (shell, SIGKILL);
 
-    if (shell && !shell->standalone)
+    if (shell)
         flux_shell_raise ("exec", 0, "%s", buf);
 
     exit (exit_code);
@@ -336,12 +336,9 @@ int flux_shell_log_setlevel (int level, const char *dest)
     }
 
     /*  Always set internal dispatch level.
-     *  In standalone mode, also set stderr level by default
      */
     if (level > logger.level)
         logger.level = level;
-    if (logger.shell->standalone)
-        logger.fp_level = level;
 
     if (dest == NULL)
         return 0;

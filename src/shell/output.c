@@ -34,8 +34,6 @@
  *   there (checked for error, then destroyed).
  * - Any outstanding file writes at shell_output_destroy() are
  *   synchronously waited for to complete.
- * - In standalone mode, the loop:// connector enables RPCs to work
- * - In standalone mode, output is written to the shell's stdout/stderr not KVS
  * - The number of in-flight write requests on each shell is limited to
  *   shell_output_hwm, to avoid matchtag exhaustion, etc. for chatty tasks.
  */
@@ -784,9 +782,7 @@ static int shell_output_parse_type (struct shell_output *out,
                                     const char *typestr,
                                     int *typep)
 {
-    if (out->shell->standalone && streq (typestr, "term"))
-        (*typep) = FLUX_OUTPUT_TYPE_TERM;
-    else if (streq (typestr, "kvs"))
+    if (streq (typestr, "kvs"))
         (*typep) = FLUX_OUTPUT_TYPE_KVS;
     else if (streq (typestr, "file"))
         (*typep) = FLUX_OUTPUT_TYPE_FILE;
@@ -1039,13 +1035,10 @@ static int shell_output_header (struct shell_output *out)
             shell_log_errno ("shell_output_term_init");
     }
     /* emit initial output events.
-     * Call this as long as we're not standalone.
      */
-    if (!out->shell->standalone) {
-        if (shell_output_kvs_init (out, o) < 0) {
-            shell_log_errno ("shell_output_kvs_init");
-            goto error;
-        }
+    if (shell_output_kvs_init (out, o) < 0) {
+        shell_log_errno ("shell_output_kvs_init");
+        goto error;
     }
     rc = 0;
 error:
@@ -1149,14 +1142,8 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
     if (!(out = calloc (1, sizeof (*out))))
         return NULL;
     out->shell = shell;
-    if (out->shell->standalone) {
-        out->stdout_type = FLUX_OUTPUT_TYPE_TERM;
-        out->stderr_type = FLUX_OUTPUT_TYPE_TERM;
-    }
-    else {
-        out->stdout_type = FLUX_OUTPUT_TYPE_KVS;
-        out->stderr_type = FLUX_OUTPUT_TYPE_KVS;
-    }
+    out->stdout_type = FLUX_OUTPUT_TYPE_KVS;
+    out->stderr_type = FLUX_OUTPUT_TYPE_KVS;
     out->stdout_buffer_type = "line";
     out->stderr_buffer_type = "none";
 

@@ -109,7 +109,7 @@ const struct taskmap *flux_shell_get_taskmap (flux_shell_t *shell);
  *   "size":i,
  *   "ntasks";i,
  *   "service":s,
- *   "options": { "verbose":b, "standalone":b },
+ *   "options": { "verbose":b },
  *   "jobspec":o,
  *   "R":o
  *  }

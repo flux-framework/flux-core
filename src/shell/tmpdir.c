@@ -57,8 +57,7 @@ static int mkjobtmp_rundir (flux_shell_t *shell, char *buf, size_t size)
 {
     const char *rundir;
 
-    if (shell->standalone
-        || !(rundir = flux_attr_get (shell->h, "rundir"))
+    if (!(rundir = flux_attr_get (shell->h, "rundir"))
         || make_job_path (shell, rundir, buf, size) < 0
         || mkdir_exist_ok (buf, true) < 0)
         return -1;
