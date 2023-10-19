@@ -11,11 +11,6 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = libdebugged.la
 libdebugged_la_SOURCES = debugged.c debugged.h
 
-libdebugged_la_CPPFLAGS = \
-	$(AM_CPPFLAGS)
-libdebugged_la_LDFLAGS = \
-	$(AM_LDFLAGS)
-
 TESTS = test_debugged.t
 
 check_PROGRAMS = $(TESTS)

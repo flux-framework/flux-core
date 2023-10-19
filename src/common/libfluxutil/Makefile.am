@@ -17,8 +17,3 @@ libfluxutil_la_SOURCES = \
 	method.c \
 	policy.h \
 	policy.c
-
-libfluxutil_la_CPPFLAGS = \
-	$(AM_CPPFLAGS)
-libfluxutil_la_LDFLAGS = \
-	$(AM_LDFLAGS)

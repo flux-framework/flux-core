@@ -22,12 +22,6 @@ libhostlist_la_SOURCES = \
     hostlist.h \
     hostlist.c
 
-libhostlist_la_CPPFLAGS = \
-    $(AM_CPPFLAGS)
-libhostlist_la_LDFLAGS = \
-    $(AM_LDFLAGS)
-
-
 TESTS = \
     test_util.t \
     test_hostname.t \
