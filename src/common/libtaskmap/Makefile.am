@@ -19,13 +19,6 @@ libtaskmap_la_SOURCES = \
 	taskmap_private.h \
 	taskmap.c
 
-libtaskmap_la_CPPFLAGS = \
-	$(AM_CPPFLAGS)
-libtaskmap_la_LDFLAGS = \
-	-avoid-version -module -shared -export-dynamic \
-	$(AM_LDFLAGS)
-
-
 TESTS = test_taskmap.t
 
 check_PROGRAMS = \

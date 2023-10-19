@@ -45,27 +45,100 @@ struct flux_conf {
 static const char *conf_auxkey = "flux::conf_object";
 
 static struct builtin builtin_tab[] = {
-    { "lua_cpath_add",  INSTALLED_LUA_CPATH_ADD,    INTREE_LUA_CPATH_ADD },
-    { "lua_path_add",   INSTALLED_LUA_PATH_ADD,     INTREE_LUA_PATH_ADD },
-    { "python_path",    INSTALLED_PYTHON_PATH,      INTREE_PYTHON_PATH },
-    { "man_path",       INSTALLED_MAN_PATH,         INTREE_MAN_PATH },
-    { "exec_path",      INSTALLED_EXEC_PATH,        INTREE_EXEC_PATH },
-    { "connector_path", INSTALLED_CONNECTOR_PATH,   INTREE_CONNECTOR_PATH },
-    { "module_path",    INSTALLED_MODULE_PATH,      INTREE_MODULE_PATH },
-    { "rc1_path",       INSTALLED_RC1_PATH,         INTREE_RC1_PATH },
-    { "rc3_path",       INSTALLED_RC3_PATH,         INTREE_RC3_PATH },
-    { "cmdhelp_pattern",INSTALLED_CMDHELP_PATTERN,  INTREE_CMDHELP_PATTERN },
-    { "pmi_library_path",
-                        INSTALLED_PMI_LIBRARY_PATH, INTREE_PMI_LIBRARY_PATH },
-    { "shell_path",     INSTALLED_SHELL_PATH,       INTREE_SHELL_PATH },
-    { "shell_pluginpath",
-                        INSTALLED_SHELL_PLUGINPATH, INTREE_SHELL_PLUGINPATH },
-    { "shell_initrc",   INSTALLED_SHELL_INITRC,     INTREE_SHELL_INITRC },
-    { "jobtap_pluginpath",
-                        INSTALLED_JOBTAP_PLUGINPATH,INTREE_JOBTAP_PLUGINPATH },
-    { "upmi_pluginpath",INSTALLED_UPMI_PLUGINPATH,  INTREE_UPMI_PLUGINPATH },
-    { "no_docs_path",   INSTALLED_NO_DOCS_PATH,     INTREE_NO_DOCS_PATH },
-    { "rundir",         INSTALLED_RUNDIR,           NULL },
+    {
+        .key = "lua_cpath_add",
+        .val_installed = LUAEXECDIR "/?.so",
+        .val_intree = ABS_TOP_BUILDDIR "/src/bindings/lua/?.so",
+    },
+    {
+        .key = "lua_path_add",
+        .val_installed = LUADIR "/?.lua",
+        .val_intree = ABS_TOP_BUILDDIR "/t/?.lua;" \
+                      ABS_TOP_SRCDIR "/src/bindings/lua/?.lua",
+    },
+    {
+        .key = "python_path",
+        .val_installed = FLUXPYLINKDIR,
+        .val_intree = ABS_TOP_BUILDDIR "/src/bindings/python:" \
+                      ABS_TOP_SRCDIR "/src/bindings/python",
+    },
+    {
+        .key = "man_path",
+        .val_installed = X_MANDIR,
+        .val_intree =  ABS_TOP_BUILDDIR "/doc",
+    },
+    {
+        .key = "exec_path",
+        .val_installed = FLUXCMDDIR,
+        .val_intree = ABS_TOP_BUILDDIR "/src/cmd:" \
+                      ABS_TOP_SRCDIR "/src/cmd:" \
+                      ABS_TOP_BUILDDIR "/src/broker",
+    },
+    {
+        .key = "connector_path",
+        .val_installed = FLUXCONNECTORDIR,
+        .val_intree = ABS_TOP_BUILDDIR "/src/connectors/.libs",
+    },
+    {
+        .key = "module_path",
+        .val_installed = FLUXMODDIR,
+        .val_intree = ABS_TOP_BUILDDIR "/src/modules/.libs",
+    },
+    {
+        .key = "rc1_path",
+        .val_installed = FLUXCONFDIR "/rc1",
+        .val_intree = ABS_TOP_SRCDIR "/etc/rc1",
+    },
+    {
+        .key = "rc3_path",
+        .val_installed = FLUXCONFDIR "/rc3",
+        .val_intree = ABS_TOP_SRCDIR "/etc/rc3",
+    },
+    {
+        .key = "cmdhelp_pattern",
+        .val_installed = X_DATADIR "/flux/help.d/*.json",
+        .val_intree = ABS_TOP_BUILDDIR "/etc/flux/help.d/*.json",
+    },
+    {
+        .key = "pmi_library_path",
+        .val_installed = FLUXLIBDIR "/libpmi.so",
+        .val_intree = ABS_TOP_BUILDDIR "/src/common/flux/.libs/libpmi.so",
+    },
+    {
+        .key = "shell_path",
+        .val_installed = FLUXLIBEXECDIR "/flux-shell",
+        .val_intree = ABS_TOP_BUILDDIR "/src/shell/flux-shell",
+    },
+    {
+        .key = "shell_pluginpath",
+        .val_installed = FLUXLIBDIR "/shell/plugins",
+        .val_intree = ABS_TOP_BUILDDIR "/src/shell/plugins",
+    },
+    {
+        .key = "shell_initrc",
+        .val_installed = FLUXCONFDIR "/shell/initrc.lua",
+        .val_intree = ABS_TOP_SRCDIR "/src/shell/initrc.lua",
+    },
+    {
+        .key = "jobtap_pluginpath",
+        .val_installed = JOBTAP_PLUGINDIR,
+        .val_intree = ABS_TOP_BUILDDIR "/src/modules/job-manager/plugins/.libs",
+    },
+    {
+        .key = "upmi_pluginpath",
+        .val_installed = FLUXLIBDIR "/upmi/plugins",
+        .val_intree = ABS_TOP_BUILDDIR "/src/common/libpmi/plugins/.libs",
+    },
+    {
+        .key = "no_docs_path",
+        .val_installed = X_DATADIR "/flux/.nodocs",
+        .val_intree = ABS_TOP_BUILDDIR "/etc/flux/.nodocs",
+    },
+    {
+        .key = "rundir",
+        .val_installed = X_RUNSTATEDIR "/flux",
+        .val_intree = NULL
+    },
     { NULL, NULL, NULL },
 };
 

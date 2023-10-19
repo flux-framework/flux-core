@@ -3,10 +3,12 @@ systemdsystemunit_DATA = flux.service
 #endif
 
 tmpfilesdir = $(prefix)/lib/tmpfiles.d
+fluxrc1dir = $(fluxconfdir)/rc1.d
 
 tmpfiles_DATA = flux.conf
 
-dist_fluxrc_SCRIPTS = \
+
+dist_fluxconf_SCRIPTS = \
         rc1 \
         rc3
 

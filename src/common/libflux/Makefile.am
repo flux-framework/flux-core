@@ -11,50 +11,12 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir) \
 	-I$(top_builddir)/src/common/libflux \
+	-DABS_TOP_BUILDDIR=\"${abs_top_builddir}\" \
+	-DABS_TOP_SRCDIR=\"${abs_top_srcdir}\" \
+	-DLUADIR=\"$(luadir)\" \
+	-DLUAEXECDIR=\"$(luaexecdir)\" \
 	$(JANSSON_CFLAGS) \
 	$(LIBUUID_CFLAGS)
-
-installed_conf_cppflags = \
-	-DINSTALLED_MODULE_PATH=\"$(fluxmoddir)\" \
-	-DINSTALLED_CONNECTOR_PATH=\"$(fluxconnectordir)\" \
-	-DINSTALLED_EXEC_PATH=\"$(fluxcmddir)\" \
-	-DINSTALLED_LUA_PATH_ADD=\"$(luadir)/?.lua\" \
-	-DINSTALLED_LUA_CPATH_ADD=\"$(luaexecdir)/?.so\" \
-	-DINSTALLED_PYTHON_PATH=\"$(fluxpylinkdir)\" \
-	-DINSTALLED_MAN_PATH=\"$(mandir)\" \
-	-DINSTALLED_PROGRAM_LIBRARY_PATH=\"$(fluxlibdir)\" \
-	-DINSTALLED_PMI_LIBRARY_PATH=\"$(fluxlibdir)/libpmi.so\" \
-	-DINSTALLED_RC1_PATH=\"$(fluxrcdir)/rc1\" \
-	-DINSTALLED_RC3_PATH=\"$(fluxrcdir)/rc3\" \
-	-DINSTALLED_SHELL_PATH=\"$(fluxlibexecdir)/flux-shell\" \
-	-DINSTALLED_SHELL_PLUGINPATH=\"$(fluxlibdir)/shell/plugins\" \
-	-DINSTALLED_SHELL_INITRC=\"$(fluxrcdir)/shell/initrc.lua\" \
-	-DINSTALLED_JOBTAP_PLUGINPATH=\"$(fluxlibdir)/job-manager/plugins\" \
-	-DINSTALLED_UPMI_PLUGINPATH=\"$(fluxlibdir)/upmi/plugins\" \
-	-DINSTALLED_CMDHELP_PATTERN=\"${datadir}/flux/help.d/*.json\" \
-	-DINSTALLED_NO_DOCS_PATH=\"${datadir}/flux/.nodocs\" \
-	-DINSTALLED_RUNDIR=\"${runstatedir}/flux\"
-
-intree_conf_cppflags = \
-	-DINTREE_MODULE_PATH=\"$(abs_top_builddir)/src/modules/.libs\" \
-	-DINTREE_CONNECTOR_PATH=\"$(abs_top_builddir)/src/connectors/.libs\" \
-	-DINTREE_EXEC_PATH=\"$(abs_top_builddir)/src/cmd:$(abs_top_srcdir)/src/cmd:$(abs_top_builddir)/src/broker\" \
-	-DINTREE_LUA_PATH_ADD=\"$(abs_top_builddir)/t/?.lua\;$(abs_top_srcdir)/src/bindings/lua/?.lua\" \
-	-DINTREE_LUA_CPATH_ADD=\"$(abs_top_builddir)/src/bindings/lua/?.so\" \
-	-DINTREE_PYTHON_PATH=\"$(abs_top_builddir)/src/bindings/python:$(abs_top_srcdir)/src/bindings/python\" \
-	-DINTREE_MAN_PATH=\"$(abs_top_builddir)/doc\" \
-	-DINTREE_PROGRAM_LIBRARY_PATH=\"$(abs_top_builddir)/src/common/.libs\" \
-	-DINTREE_PMI_LIBRARY_PATH=\"$(abs_top_builddir)/src/common/flux/.libs/libpmi.so\" \
-	-DINTREE_RC1_PATH=\"$(abs_top_srcdir)/etc/rc1\" \
-	-DINTREE_RC3_PATH=\"$(abs_top_srcdir)/etc/rc3\" \
-	-DINTREE_SHELL_PATH=\"$(abs_top_builddir)/src/shell/flux-shell\" \
-	-DINTREE_SHELL_PLUGINPATH=\"$(abs_top_builddir)/src/shell/plugins\" \
-	-DINTREE_SHELL_INITRC=\"$(abs_top_srcdir)/src/shell/initrc.lua\" \
-	-DINTREE_JOBTAP_PLUGINPATH=\"$(abs_top_builddir)/src/modules/job-manager/plugins/.libs\" \
-	-DINTREE_UPMI_PLUGINPATH=\"$(abs_top_builddir)/src/common/libpmi/plugins/.libs\" \
-	-DINTREE_CMDHELP_PATTERN=\"${abs_top_builddir}/etc/flux/help.d/*.json\" \
-	-DINTREE_NO_DOCS_PATH=\"${abs_top_builddir}/etc/flux/.nodocs\"
-
 
 fluxcoreinclude_HEADERS = \
 	flux.h \
@@ -87,8 +49,7 @@ nodist_fluxcoreinclude_HEADERS = \
 	version.h
 
 noinst_LTLIBRARIES = \
-	libflux.la \
-	libmessage.la
+	libflux.la
 
 libflux_la_SOURCES = \
 	flog.c \
@@ -103,6 +64,13 @@ libflux_la_SOURCES = \
 	reactor_private.h \
 	msg_handler.c \
 	message.c \
+	message_private.h \
+	message_iovec.h \
+	message_iovec.c \
+	message_route.h \
+	message_route.c \
+	message_proto.h \
+	message_proto.c \
 	msglist.c \
 	request.c \
 	response.c \
@@ -134,24 +102,8 @@ libflux_la_SOURCES = \
 	fripp.h \
 	fripp.c
 
-libflux_la_CPPFLAGS = \
-	$(installed_conf_cppflags) \
-	$(intree_conf_cppflags) \
-	$(AM_CPPFLAGS)
-libflux_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
-
-libmessage_la_SOURCES = \
-	message_private.h \
-	message_iovec.h \
-	message_iovec.c \
-	message_route.h \
-	message_route.c \
-	message_proto.h \
-	message_proto.c
-
-
-libmessage_la_CPPFLAGS = $(AM_CPPFLAGS)
-libmessage_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
+libflux_la_LDFLAGS = \
+	$(AM_LDFLAGS)
 
 TESTS = test_message.t \
 	test_msglist.t \

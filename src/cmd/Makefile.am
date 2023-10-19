@@ -13,27 +13,20 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS) \
 	$(FLUX_SECURITY_CFLAGS) \
 	$(HWLOC_CFLAGS) \
-	$(PMIX_CFLAGS) \
 	$(JANSSON_CFLAGS) \
 	$(LIBARCHIVE_CFLAGS)
+
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
-	$(top_builddir)/src/common/libpmi/libupmi.la \
-	$(top_builddir)/src/common/libpmi/libpmi_client.la \
-	$(top_builddir)/src/common/libpmi/libpmi_common.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
-	$(top_builddir)/src/common/libccan/libccan.la \
-	$(top_builddir)/src/common/libfilemap/libfilemap.la \
 	$(FLUX_SECURITY_LIBS) \
 	$(LIBPTHREAD) \
 	$(HWLOC_LIBS) \
-	$(JANSSON_LIBS) \
-	$(LIBARCHIVE_LIBS) \
-	$(PMIX_LIBS)
+	$(JANSSON_LIBS)
 
 LDADD = $(fluxcmd_ldadd)
 
@@ -87,6 +80,14 @@ flux_SOURCES = \
 	builtin/shutdown.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
+
+flux_LDADD = \
+	$(top_builddir)/src/common/libpmi/libupmi.la \
+	$(top_builddir)/src/common/libpmi/libpmi_client.la \
+	$(top_builddir)/src/common/libpmi/libpmi_common.la \
+	$(top_builddir)/src/common/libfilemap/libfilemap.la \
+	$(LIBARCHIVE_LIBS) \
+	$(fluxcmd_ldadd)
 
 #
 # Flux subcommands

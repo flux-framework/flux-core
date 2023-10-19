@@ -442,41 +442,53 @@ AC_PKGCONFIG
 ##
 # Project directories
 ##
-AS_VAR_SET(fluxrcdir, $sysconfdir/flux)
-AC_SUBST(fluxrcdir)
+adl_RECURSIVE_EVAL(["$sysconfdir/flux"], [fluxconfdir])
+AC_DEFINE_UNQUOTED([FLUXCONFDIR], ["$fluxconfdir"],
+  [The expansion of "$sysconfdir/flux"])
+AC_SUBST(fluxconfdir)
 
-AS_VAR_SET(fluxrc1dir, $sysconfdir/flux/rc1.d)
-AC_SUBST(fluxrc1dir)
-
-AS_VAR_SET(fluxrc3dir, $sysconfdir/flux/rc3.d)
-AC_SUBST(fluxrc3dir)
-
-AS_VAR_SET(fluxlibexecdir, $libexecdir/flux)
+adl_RECURSIVE_EVAL(["$libexecdir/flux"], [fluxlibexecdir])
+AC_DEFINE_UNQUOTED([FLUXLIBEXECDIR], ["$fluxlibexecdir"],
+  [The expansion of "$libexecdir/flux"])
 AC_SUBST(fluxlibexecdir)
 
-AS_VAR_SET(fluxcmddir, $libexecdir/flux/cmd)
+adl_RECURSIVE_EVAL(["$libexecdir/flux/cmd"], [fluxcmddir])
+AC_DEFINE_UNQUOTED([FLUXCMDDIR], ["$fluxcmddir"],
+  [The expansion of "$libexecdir/flux/cmd"])
 AC_SUBST(fluxcmddir)
 
-AS_VAR_SET(fluxlibdir, $libdir/flux)
+adl_RECURSIVE_EVAL(["$libdir/flux"], [fluxlibdir])
+AC_DEFINE_UNQUOTED([FLUXLIBDIR], ["$fluxlibdir"],
+  [The expansion of "$libdir/flux"])
 AC_SUBST(fluxlibdir)
 
 # Target of PYTHONPATH set by flux(1) cmddriver, so flux(1)
 # doesn't inadvertently insert system python paths (or any
 # other python path for that matter) first in PYTHONPATH.
 #
-AS_VAR_SET(fluxpylinkdir, $fluxlibdir/python$PYTHON_VERSION)
+adl_RECURSIVE_EVAL(["$fluxlibdir/python$PYTHON_VERSION"], [fluxpylinkdir])
+AC_DEFINE_UNQUOTED([FLUXPYLINKDIR], ["$fluxpylinkdir"],
+  [The expansion of "$fluxlibdir/python$PYTHON_VERSION"])
 AC_SUBST(fluxpylinkdir)
 
-AS_VAR_SET(fluxmoddir, $libdir/flux/modules)
+adl_RECURSIVE_EVAL(["$libdir/flux/modules"], [fluxmoddir])
+AC_DEFINE_UNQUOTED([FLUXMODDIR], ["$fluxmoddir"],
+  [The expansion of "$libdir/flux/modules"])
 AC_SUBST(fluxmoddir)
 
-AS_VAR_SET(jobtap_plugindir, $libdir/flux/job-manager/plugins)
+adl_RECURSIVE_EVAL(["$libdir/flux/job-manager/plugins"], [jobtap_plugindir])
+AC_DEFINE_UNQUOTED([JOBTAP_PLUGINDIR], ["$jobtap_plugindir"],
+  [The expansion of "$libdir/flux/job-manager/plugins"])
 AC_SUBST(jobtap_plugindir)
 
-AS_VAR_SET(shell_plugindir, $libdir/flux/shell/plugins)
+adl_RECURSIVE_EVAL(["$libdir/flux/shell/plugins"], [shell_plugindir])
+AC_DEFINE_UNQUOTED([SHELL_PLUGINDIR], ["$shell_plugindir"],
+  [The expansion of "$libdir/flux/shell/plugins"])
 AC_SUBST(shell_plugindir)
 
-AS_VAR_SET(fluxconnectordir, $libdir/flux/connectors)
+adl_RECURSIVE_EVAL(["$libdir/flux/connectors"], [fluxconnectordir])
+AC_DEFINE_UNQUOTED([FLUXCONNECTORDIR], ["$fluxconnectordir"],
+  [The expansion of "$libdir/flux/connectors"])
 AC_SUBST(fluxconnectordir)
 
 AS_VAR_SET(fluxincludedir, $includedir/flux)

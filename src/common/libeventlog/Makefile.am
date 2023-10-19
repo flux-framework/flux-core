@@ -18,12 +18,6 @@ libeventlog_la_SOURCES = \
 	eventlogger.h \
 	eventlogger.c
 
-libeventlog_la_CPPFLAGS = \
-	$(AM_CPPFLAGS)
-libeventlog_la_LDFLAGS = \
-	-avoid-version \
-	$(AM_LDFLAGS)
-
 TESTS = test_eventlog.t
 
 check_PROGRAMS = $(TESTS)
