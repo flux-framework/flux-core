@@ -13,7 +13,6 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS) \
 	$(FLUX_SECURITY_CFLAGS) \
 	$(HWLOC_CFLAGS) \
-	$(PMIX_CFLAGS) \
 	$(JANSSON_CFLAGS) \
 	$(LIBARCHIVE_CFLAGS)
 
@@ -29,8 +28,7 @@ fluxcmd_ldadd = \
 	$(LIBPTHREAD) \
 	$(HWLOC_LIBS) \
 	$(JANSSON_LIBS) \
-	$(LIBARCHIVE_LIBS) \
-	$(PMIX_LIBS)
+	$(LIBARCHIVE_LIBS)
 
 LDADD = $(fluxcmd_ldadd)
 
