@@ -45,27 +45,96 @@ struct flux_conf {
 static const char *conf_auxkey = "flux::conf_object";
 
 static struct builtin builtin_tab[] = {
-    { "lua_cpath_add",  INSTALLED_LUA_CPATH_ADD,    INTREE_LUA_CPATH_ADD },
-    { "lua_path_add",   INSTALLED_LUA_PATH_ADD,     INTREE_LUA_PATH_ADD },
-    { "python_path",    INSTALLED_PYTHON_PATH,      INTREE_PYTHON_PATH },
-    { "man_path",       INSTALLED_MAN_PATH,         INTREE_MAN_PATH },
-    { "exec_path",      INSTALLED_EXEC_PATH,        INTREE_EXEC_PATH },
-    { "connector_path", INSTALLED_CONNECTOR_PATH,   INTREE_CONNECTOR_PATH },
-    { "module_path",    INSTALLED_MODULE_PATH,      INTREE_MODULE_PATH },
-    { "rc1_path",       INSTALLED_RC1_PATH,         INTREE_RC1_PATH },
-    { "rc3_path",       INSTALLED_RC3_PATH,         INTREE_RC3_PATH },
-    { "cmdhelp_pattern",INSTALLED_CMDHELP_PATTERN,  INTREE_CMDHELP_PATTERN },
-    { "pmi_library_path",
-                        INSTALLED_PMI_LIBRARY_PATH, INTREE_PMI_LIBRARY_PATH },
-    { "shell_path",     INSTALLED_SHELL_PATH,       INTREE_SHELL_PATH },
-    { "shell_pluginpath",
-                        INSTALLED_SHELL_PLUGINPATH, INTREE_SHELL_PLUGINPATH },
-    { "shell_initrc",   INSTALLED_SHELL_INITRC,     INTREE_SHELL_INITRC },
-    { "jobtap_pluginpath",
-                        INSTALLED_JOBTAP_PLUGINPATH,INTREE_JOBTAP_PLUGINPATH },
-    { "upmi_pluginpath",INSTALLED_UPMI_PLUGINPATH,  INTREE_UPMI_PLUGINPATH },
-    { "no_docs_path",   INSTALLED_NO_DOCS_PATH,     INTREE_NO_DOCS_PATH },
-    { "rundir",         INSTALLED_RUNDIR,           NULL },
+    {
+        .key = "lua_cpath_add",
+        .val_installed = INSTALLED_LUA_CPATH_ADD,
+        .val_intree = INTREE_LUA_CPATH_ADD
+    },
+    {
+        .key = "lua_path_add",
+        .val_installed = INSTALLED_LUA_PATH_ADD,
+        .val_intree = INTREE_LUA_PATH_ADD
+    },
+    {
+        .key = "python_path",
+        .val_installed = INSTALLED_PYTHON_PATH,
+        .val_intree = INTREE_PYTHON_PATH
+    },
+    {
+        .key = "man_path",
+        .val_installed = INSTALLED_MAN_PATH,
+        .val_intree = INTREE_MAN_PATH
+    },
+    {
+        .key = "exec_path",
+        .val_installed = INSTALLED_EXEC_PATH,
+        .val_intree = INTREE_EXEC_PATH
+    },
+    {
+        .key = "connector_path",
+        .val_installed = INSTALLED_CONNECTOR_PATH,
+        .val_intree = INTREE_CONNECTOR_PATH
+    },
+    {
+        .key = "module_path",
+        .val_installed = INSTALLED_MODULE_PATH,
+        .val_intree = INTREE_MODULE_PATH
+    },
+    {
+        .key = "rc1_path",
+        .val_installed = INSTALLED_RC1_PATH,
+        .val_intree = INTREE_RC1_PATH
+    },
+    {
+        .key = "rc3_path",
+        .val_installed = INSTALLED_RC3_PATH,
+        .val_intree = INTREE_RC3_PATH
+    },
+    {
+        .key = "cmdhelp_pattern",
+        .val_installed = INSTALLED_CMDHELP_PATTERN,
+        .val_intree = INTREE_CMDHELP_PATTERN
+    },
+    {
+        .key = "pmi_library_path",
+        .val_installed = INSTALLED_PMI_LIBRARY_PATH,
+        .val_intree = INTREE_PMI_LIBRARY_PATH
+    },
+    {
+        .key = "shell_path",
+        .val_installed = INSTALLED_SHELL_PATH,
+        .val_intree = INTREE_SHELL_PATH
+    },
+    {
+        .key = "shell_pluginpath",
+        .val_installed = INSTALLED_SHELL_PLUGINPATH,
+        .val_intree = INTREE_SHELL_PLUGINPATH
+    },
+    {
+        .key = "shell_initrc",
+        .val_installed = INSTALLED_SHELL_INITRC,
+        .val_intree = INTREE_SHELL_INITRC
+    },
+    {
+        .key = "jobtap_pluginpath",
+        .val_installed = INSTALLED_JOBTAP_PLUGINPATH,
+        .val_intree = INTREE_JOBTAP_PLUGINPATH
+    },
+    {
+        .key = "upmi_pluginpath",
+        .val_installed = INSTALLED_UPMI_PLUGINPATH,
+        .val_intree = INTREE_UPMI_PLUGINPATH
+    },
+    {
+        .key = "no_docs_path",
+        .val_installed = INSTALLED_NO_DOCS_PATH,
+        .val_intree = INTREE_NO_DOCS_PATH
+    },
+    {
+        .key = "rundir",
+        .val_installed = INSTALLED_RUNDIR,
+        .val_intree = NULL
+    },
     { NULL, NULL, NULL },
 };
 
