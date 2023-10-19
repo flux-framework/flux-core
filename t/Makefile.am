@@ -458,7 +458,6 @@ check_LTLIBRARIES = \
 	shell/plugins/conftest.la \
 	shell/plugins/invalid-args.la \
 	shell/plugins/getopt.la \
-	shell/plugins/setopt.la \
 	shell/plugins/log.la \
 	shell/plugins/test-event.la \
 	shell/plugins/jobspec-info.la \
@@ -801,14 +800,6 @@ shell_plugins_getopt_la_CPPFLAGS = $(test_cppflags)
 shell_plugins_getopt_la_LDFLAGS = \
 	$(fluxplugin_ldflags) -module -rpath /nowhere
 shell_plugins_getopt_la_LIBADD = \
-	$(top_builddir)/src/common/libtap/libtap.la \
-	$(top_builddir)/src/common/libflux-core.la
-
-shell_plugins_setopt_la_SOURCES = shell/plugins/setopt.c
-shell_plugins_setopt_la_CPPFLAGS = $(test_cppflags)
-shell_plugins_setopt_la_LDFLAGS = \
-	$(fluxplugin_ldflags) -module -rpath /nowhere
-shell_plugins_setopt_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-core.la
 
