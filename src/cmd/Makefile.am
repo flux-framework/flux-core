@@ -17,12 +17,10 @@ AM_CPPFLAGS = \
 	$(JANSSON_CFLAGS) \
 	$(LIBARCHIVE_CFLAGS)
 
+
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
-	$(top_builddir)/src/common/libpmi/libupmi.la \
-	$(top_builddir)/src/common/libpmi/libpmi_client.la \
-	$(top_builddir)/src/common/libpmi/libpmi_common.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
@@ -87,6 +85,12 @@ flux_SOURCES = \
 	builtin/shutdown.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
+
+flux_LDADD = \
+	$(top_builddir)/src/common/libpmi/libupmi.la \
+	$(top_builddir)/src/common/libpmi/libpmi_client.la \
+	$(top_builddir)/src/common/libpmi/libpmi_common.la \
+	$(fluxcmd_ldadd)
 
 #
 # Flux subcommands
