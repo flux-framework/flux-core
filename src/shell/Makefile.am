@@ -16,7 +16,7 @@ AM_CPPFLAGS = \
 	$(LIBARCHIVE_CFLAGS)
 
 shellrcdir = \
-	$(fluxrcdir)/shell
+	$(fluxconfdir)/shell
 
 nobase_dist_shellrc_SCRIPTS = \
 	initrc.lua \

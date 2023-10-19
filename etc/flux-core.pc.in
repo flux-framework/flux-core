@@ -4,14 +4,12 @@ libdir=@libdir@
 includedir=@includedir@
 datarootdir=@datarootdir@
 mandir=@mandir@
-fluxrcdir=@fluxrcdir@
-fluxrc1dir=@fluxrc1dir@
-fluxrc3dir=@fluxrc3dir@
+fluxconfdir=@fluxconfdir@
 fluxcmddir=@fluxcmddir@
 fluxlibdir=@fluxlibdir@
 fluxmoddir=@fluxmoddir@
 fluxcmdhelpdir=@datadir@/flux/help.d
-fluxshellrcdir=@fluxrcdir@/shell
+fluxshellrcdir=@fluxconfdir@/shell
 fluxshellpluginpath=@fluxlibdir@/shell/plugins
 
 Name: flux-core

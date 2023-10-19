@@ -442,14 +442,8 @@ AC_PKGCONFIG
 ##
 # Project directories
 ##
-AS_VAR_SET(fluxrcdir, $sysconfdir/flux)
-AC_SUBST(fluxrcdir)
-
-AS_VAR_SET(fluxrc1dir, $sysconfdir/flux/rc1.d)
-AC_SUBST(fluxrc1dir)
-
-AS_VAR_SET(fluxrc3dir, $sysconfdir/flux/rc3.d)
-AC_SUBST(fluxrc3dir)
+AS_VAR_SET(fluxconfdir, $sysconfdir/flux)
+AC_SUBST(fluxconfdir)
 
 AS_VAR_SET(fluxlibexecdir, $libexecdir/flux)
 AC_SUBST(fluxlibexecdir)
