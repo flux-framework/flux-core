@@ -109,9 +109,12 @@ test_expect_success 'flux-shell: CUDA_VISIBLE_DEVICES=-1 works with existing val
     test_debug "cat override-gpubind.out" &&
     grep "^-1" override-gpubind.out
 '
-#  GPU affinity tests use standalone shell since simple-sched doesnt
+#  GPU affinity tests use alloc-bypass shell since simple-sched doesnt
 #   schedule GPUs.
 #
+test_expect_success 'flux-shell: load alloc-bypass jobtap plugin' '
+	flux jobtap load alloc-bypass.so
+'
 test_expect_success 'flux-shell: create multi-gpu R' '
 	cat >R.gpu <<-EOF
 	        {"version": 1, "execution":{ "R_lite":[
@@ -121,73 +124,85 @@ test_expect_success 'flux-shell: create multi-gpu R' '
 '
 test_expect_success 'flux-shell: gpu-affinity works by default' '
 	name=gpu-basic &&
-	flux run -N1 -n2 --dry-run \
-		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
 	cat >${name}.expected <<-EOF  &&
 	0: 0,1,2,3
 	1: 0,1,2,3
 	EOF
-	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 &&
-	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
-		> ${name}.out 2>${name}.err &&
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
 	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success 'flux-shell: gpu-affinity=on' '
 	name=gpu-on &&
-	flux run -N1 -n2 --dry-run -o gpu-affinity=on \
-		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-affinity=on \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
 	cat >${name}.expected <<-EOF  &&
 	0: 0,1,2,3
 	1: 0,1,2,3
 	EOF
-	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
-		> ${name}.out 2>${name}.err &&
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
 	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success 'flux-shell: gpu-affinity=per-task' '
 	name=gpu-per-task &&
-	flux run -N1 -n2 --dry-run -o gpu-affinity=per-task \
-		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-affinity=per-task \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
 	cat >${name}.expected <<-EOF  &&
 	0: 0,1
 	1: 2,3
 	EOF
-	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
-		> ${name}.out 2>${name}.err &&
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
 	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success 'flux-shell: gpu-affinity=map: works' '
 	name=gpu-map &&
-	flux run -N1 -n2 --dry-run -o gpu-affinity="map:7;4-6" \
-		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-affinity="map:7;4-6" \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
 	cat >${name}.expected <<-EOF  &&
 	0: 7
 	1: 4,5,6
 	EOF
-	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
-		> ${name}.out 2>${name}.err &&
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
 	test_cmp ${name}.expected ${name}.out
 
 '
 test_expect_success 'flux-shell: gpu-affinity=off' '
-	name=gpu-off && (
-	  unset CUDA_VISIBLE_DEVICES &&
-	  flux run -N1 -n2 --dry-run -o gpu-affinity=off \
-		printenv CUDA_VISIBLE_DEVICES > j.${name}
-	) &&
+	name=gpu-off &&
+	test_expect_code 1 flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-affinity=off \
+		--env=-CUDA_VISIBLE_DEVICES \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
 	cat >${name}.expected <<-EOF  &&
 	EOF
-	test_expect_code 1  ${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 \
-	  | sort -k1,1n \
-	  > ${name}.out 2>${name}.err &&
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
 	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success 'flux-shell: gpu-affinity bad arg is ignored' '
 	name=gpu-bad-arg &&
-	flux run -N1 -n2 --dry-run -o gpu-affinity="[1]" \
-		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
-	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 \
-	  >${name}.out 2>${name}.err &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-affinity="[1]" \
+		printenv CUDA_VISIBLE_DEVICES >${name}.out 2>${name}.err &&
 	test_debug "cat ${name}.out" &&
 	test_debug "cat ${name}.err" >&2 &&
 	grep "Failed to get gpu-affinity shell option" ${name}.err
