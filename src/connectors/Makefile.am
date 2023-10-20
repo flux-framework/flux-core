@@ -21,6 +21,18 @@ connector_ldflags = -module $(san_ld_zdef_flag) \
 ssh_la_SOURCES = \
 	ssh/ssh.c
 ssh_la_LIBADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la
+       	$(top_builddir)/src/common/librouter/librouter.la \
+	$(top_builddir)/src/common/libutil/log.lo \
+	$(top_builddir)/src/common/libutil/aux.lo \
+	$(top_builddir)/src/common/libutil/errprintf.lo \
+	$(top_builddir)/src/common/libutil/fdutils.lo \
+	$(top_builddir)/src/common/libutil/popen2.lo \
+	$(top_builddir)/src/common/libutil/fdwalk.lo \
+	$(top_builddir)/src/common/libutil/strstrip.lo \
+	$(top_builddir)/src/common/libutil/read_all.lo \
+	$(top_builddir)/src/common/libyuarel/libyuarel.la \
+	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(LIBUUID_LIBS)
+
 ssh_la_LDFLAGS = $(connector_ldflags)
