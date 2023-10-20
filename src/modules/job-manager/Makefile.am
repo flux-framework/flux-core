@@ -76,6 +76,19 @@ libjob_manager_la_SOURCES = \
 	plugins/validate-duration.c \
 	plugins/history.c
 
+job_libadd = \
+	$(top_builddir)/src/common/libjob/libjob.la \
+	$(top_builddir)/src/common/libeventlog/libeventlog.la \
+	$(top_builddir)/src/common/libutil/errprintf.lo \
+	$(top_builddir)/src/common/libutil/jpath.lo \
+	$(top_builddir)/src/common/libutil/fluid.lo \
+	$(top_builddir)/src/common/libutil/mnemonic.lo \
+	$(top_builddir)/src/common/libutil/mn_wordlist.lo \
+	$(top_builddir)/src/common/libutil/basemoji.lo \
+	$(top_builddir)/src/common/libutil/fsd.lo \
+	$(top_builddir)/src/common/libccan/libccan.la \
+	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la
+
 fluxinclude_HEADERS = \
 	jobtap.h
 
@@ -88,8 +101,10 @@ plugins_submit_hold_la_LDFLAGS = \
 plugins_alloc_bypass_la_SOURCES = \
 	plugins/alloc-bypass.c
 plugins_alloc_bypass_la_LIBADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/librlist/librlist.la
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(top_builddir)/src/common/libutil/errprintf.lo \
+	$(top_builddir)/src/common/libutil/read_all.lo \
+	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la
 plugins_alloc_bypass_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
@@ -97,8 +112,10 @@ plugins_alloc_bypass_la_LDFLAGS = \
 plugins_alloc_check_la_SOURCES = \
 	plugins/alloc-check.c
 plugins_alloc_check_la_LIBADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/librlist/librlist.la
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(top_builddir)/src/common/libutil/errprintf.lo \
+	$(top_builddir)/src/common/libutil/read_all.lo \
+	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la
 plugins_alloc_check_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
@@ -106,9 +123,9 @@ plugins_alloc_check_la_LDFLAGS = \
 plugins_perilog_la_SOURCES = \
 	plugins/perilog.c
 plugins_perilog_la_LIBADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
-	$(top_builddir)/src/common/libjob/libjob.la
+	$(top_builddir)/src/common/libutil/read_all.lo \
+	$(job_libadd)
 plugins_perilog_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
@@ -128,6 +145,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
 	$(LIBPTHREAD) $(JANSSON_LIBS)
 
 test_cppflags = \
