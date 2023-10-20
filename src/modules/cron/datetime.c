@@ -17,6 +17,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/cronodate.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "entry.h"
 
@@ -38,7 +39,10 @@ struct datetime_entry * datetime_entry_create ()
 {
     struct datetime_entry *dt = calloc (1, sizeof (*dt));
     if (dt) {
-        dt->d = cronodate_create ();
+        if (!(dt->d = cronodate_create ())) {
+            ERRNO_SAFE_WRAP (free, dt);
+            return NULL;
+        }
         /*  Fill cronodate set initially. The cronodate object will
          *  be refined when json arguments from user are processed
          */
@@ -51,6 +55,9 @@ static struct datetime_entry * datetime_entry_from_json (json_t *o)
 {
     int i, rc = 0;
     struct datetime_entry *dt = datetime_entry_create ();
+
+    if (!dt)
+        return NULL;
 
     for (i = 0; i < TM_MAX_ITEM; i++) {
         json_t *val;
