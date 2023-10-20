@@ -176,7 +176,6 @@ cron_la_SOURCES = \
 	cron/datetime.c
 cron_la_LIBADD = \
 	$(top_builddir)/src/common/libutil/cronodate.lo \
-	$(top_builddir)/src/common/libutil/xzmalloc.lo \
 	$(top_builddir)/src/common/libutil/fsd.lo \
 	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
 	$(top_builddir)/src/common/libflux-core.la \

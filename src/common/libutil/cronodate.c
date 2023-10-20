@@ -20,7 +20,6 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libidset/idset.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "ccan/str/str.h"
 
 #include "cronodate.h"
@@ -178,9 +177,11 @@ void cronodate_destroy (cronodate_t *d)
 cronodate_t * cronodate_create ()
 {
     int i;
-    cronodate_t *d = xzmalloc (sizeof (*d));
+    cronodate_t *d;
 
-    memset (d, 0, sizeof (*d));
+    if (!(d = calloc (1, sizeof (*d))))
+        return NULL;
+
     for (i = 0; i < TM_MAX_ITEM; i++) {
         struct idset *n = idset_create (tm_unit_max (i) + 1,
                                         IDSET_FLAG_AUTOGROW);
