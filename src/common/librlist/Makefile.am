@@ -23,6 +23,8 @@ librlist_la_SOURCES = \
 	match.c \
 	rlist.c \
 	rlist.h \
+	rlist_private.h \
+	rlist_hwloc.c \
 	rhwloc.c \
 	rhwloc.h
 
