@@ -567,11 +567,9 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell, json_t *config)
     }
     if (!nomap && init_clique (pmi) < 0)
         goto error;
-    if (!shell->standalone) {
-        if (set_flux_instance_level (pmi) < 0
-            || (!nomap && set_flux_taskmap (pmi) < 0))
-            goto error;
-    }
+    if (set_flux_instance_level (pmi) < 0
+        || (!nomap && set_flux_taskmap (pmi) < 0))
+        goto error;
     return pmi;
 error:
     pmi_destroy (pmi);

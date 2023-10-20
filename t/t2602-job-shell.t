@@ -13,6 +13,11 @@ KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 
+test_expect_success 'job-shell: errors on unknown argument' '
+	id=$(flux submit hostname) &&
+	test_expect_code 1 ${FLUX_BUILD_DIR}/src/shell/flux-shell --foo ${id}
+'
+
 test_expect_success 'job-shell: reads J not jobspec' '
 	id=$(flux submit --wait-event=priority \
 		-n1 --urgency=hold /bin/true) &&

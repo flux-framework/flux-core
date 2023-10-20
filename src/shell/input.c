@@ -445,30 +445,27 @@ struct shell_input *shell_input_create (flux_shell_t *shell)
         goto error;
 
     if (shell->info->shell_rank == 0) {
-        /* can't use stdin in standalone, no kvs to write to */
-        if (!in->shell->standalone) {
-            if (in->stdin_type == FLUX_INPUT_TYPE_SERVICE) {
-                if (flux_shell_service_register (in->shell,
-                                                 "stdin",
-                                                 shell_input_stdin_cb,
-                                                 in) < 0)
-                    shell_die_errno (1, "flux_shell_service_register");
+        if (in->stdin_type == FLUX_INPUT_TYPE_SERVICE) {
+            if (flux_shell_service_register (in->shell,
+                                             "stdin",
+                                             shell_input_stdin_cb,
+                                             in) < 0)
+                shell_die_errno (1, "flux_shell_service_register");
 
-                /* Do not add a completion reference for the stdin service, we
-                 * don't care if the user ever sends stdin */
-            }
+            /* Do not add a completion reference for the stdin service, we
+             * don't care if the user ever sends stdin */
+        }
 
-            if (shell_input_header (in) < 0)
+        if (shell_input_header (in) < 0)
+            goto error;
+
+        if (in->stdin_type == FLUX_INPUT_TYPE_FILE) {
+            if (shell_input_type_file_setup (in) < 0)
                 goto error;
-
-            if (in->stdin_type == FLUX_INPUT_TYPE_FILE) {
-                if (shell_input_type_file_setup (in) < 0)
-                    goto error;
-                /* Ok to start fd watcher now since shell_input_header()
-                 *  synchronously write guest.input header.
-                 */
-                flux_watcher_start (in->stdin_file.w);
-            }
+            /* Ok to start fd watcher now since shell_input_header()
+             *  synchronously write guest.input header.
+             */
+            flux_watcher_start (in->stdin_file.w);
         }
     }
 
@@ -622,9 +619,7 @@ static int shell_input_task_init (flux_plugin_t *p,
     task_input->task = task;
 
     if (task_input->type == FLUX_TASK_INPUT_KVS) {
-        /* can't read stdin in standalone mode, no KVS to read from */
-        if (!task_input->in->shell->standalone
-            && shell_task_input_kvs_start (task_input) < 0)
+        if (shell_task_input_kvs_start (task_input) < 0)
             shell_die_errno (1, "shell_input_start_task_watch");
     }
     return 0;

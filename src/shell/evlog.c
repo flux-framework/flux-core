@@ -210,10 +210,6 @@ static int log_eventlog_start (flux_plugin_t *p,
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct evlog *evlog = NULL;
 
-    /*  Do not activate eventlogger in standalone mode */
-    if (shell->standalone)
-        return 0;
-
     if (!(evlog = evlog_create (shell)))
         return -1;
     if (flux_plugin_aux_set (p, "evlog", evlog,

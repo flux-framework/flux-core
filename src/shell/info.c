@@ -29,21 +29,7 @@
 #include "info.h"
 #include "jobspec.h"
 
-/* Append string 's' to JSON array 'array'.
- * Return 0 on success, -1 on failure.
- */
-static int array_append_string (json_t *array, const char *s)
-{
-    json_t *o;
-
-    if (!(o = json_string (s)) || json_array_append_new (array, o) < 0) {
-        json_decref (o);
-        return -1;
-    }
-    return 0;
-}
-
-/* If either *jobspec or *R is NULL, fetch it from future and assign.
+/* Get R and jobspec from job-info.lookup future and assign.
  * Return 0 on success, -1 on failure (and log error).
  * N.B. assigned values remain valid until future is destroyed.
  */
@@ -51,17 +37,15 @@ static int lookup_job_info_get (flux_future_t *f,
                                 char **jobspec,
                                 const char **R)
 {
-    if (*jobspec == NULL) {
-        flux_error_t error;
-        const char *J;
-        if (flux_rpc_get_unpack (f, "{s:s}", "J", &J) < 0)
-            goto error;
-        if (!(*jobspec = flux_unwrap_string (J, true, NULL, &error))) {
-            shell_log_error ("failed to unwrap J: %s", error.text);
-            return -1;
-        }
+    flux_error_t error;
+    const char *J;
+    if (flux_rpc_get_unpack (f, "{s:s}", "J", &J) < 0)
+        goto error;
+    if (!(*jobspec = flux_unwrap_string (J, true, NULL, &error))) {
+        shell_log_error ("failed to unwrap J: %s", error.text);
+        return -1;
     }
-    if (!*R && flux_rpc_get_unpack (f, "{s:s}", "R", R) < 0)
+    if (flux_rpc_get_unpack (f, "{s:s}", "R", R) < 0)
         goto error;
     return 0;
 error:
@@ -69,83 +53,29 @@ error:
     return -1;
 }
 
-/* If either jobspec or R is NULL, fetch it from the job-info service.
+/* Fetch R and J from the job-info service.
  * Return future on success or NULL on failure (and log error).
  */
-static flux_future_t *lookup_job_info (flux_t *h,
-                                       flux_jobid_t jobid,
-                                       const char *jobspec,
-                                       const char *R)
+static flux_future_t *lookup_job_info (flux_t *h, flux_jobid_t jobid)
 {
-    json_t *keys;
     flux_future_t *f;
-
-    if (!(keys = json_array ())
-            || (!R && array_append_string (keys, "R") < 0)
-            || (!jobspec && array_append_string (keys, "J") < 0)) {
-        shell_log_error ("error building json array");
-        return NULL;
-    }
     f = flux_rpc_pack (h,
                        "job-info.lookup",
                        FLUX_NODEID_ANY,
                        0,
-                       "{s:I s:O s:i}",
+                       "{s:I s:[ss] s:i}",
                        "id", jobid,
-                       "keys", keys,
+                       "keys", "R", "J",
                        "flags", 0);
     if (!f)
         shell_log_error ("error sending job-info request");
-    json_decref (keys);
     return f;
-}
-
-/* Read content of file 'optarg' and return it or NULL on failure (log error).
- * Caller must free returned result.
- */
-static char *parse_arg_file (const char *optarg)
-{
-    int fd;
-    ssize_t size;
-    void *buf = NULL;
-
-    if (streq (optarg, "-"))
-        fd = STDIN_FILENO;
-    else {
-        if ((fd = open (optarg, O_RDONLY)) < 0) {
-            shell_log_errno ("error opening %s", optarg);
-            return NULL;
-        }
-    }
-    if ((size = read_all (fd, &buf)) < 0)
-        shell_log_errno ("error reading %s", optarg);
-    if (fd != STDIN_FILENO)
-        (void)close (fd);
-    return buf;
-}
-
-/* If option 'name' exists, read it as a file and exit on failure.
- * O/w, return NULL.
- */
-static char *optparse_check_and_loadfile (optparse_t *p, const char *name)
-{
-    char *result = NULL;
-    const char *path = optparse_get_str (p, name, NULL);
-    if (path) {
-        if (!(result = parse_arg_file (path)))
-            exit (1);
-        return result;
-    }
-    return NULL;
 }
 
 /*  Fetch jobinfo (jobspec, R) from job-info service if not provided on
  *   command line, and parse.
  */
-static int shell_init_jobinfo (flux_shell_t *shell,
-                               struct shell_info *info,
-                               const char *jobspec_provided,
-                               const char *R_provided)
+static int shell_init_jobinfo (flux_shell_t *shell, struct shell_info *info)
 {
     int rc = -1;
     flux_future_t *f_info = NULL;
@@ -155,53 +85,31 @@ static int shell_init_jobinfo (flux_shell_t *shell,
     const char *R;
     json_error_t error;
 
-    R = R_provided;
-    if (jobspec_provided && !(jobspec = strdup (jobspec_provided)))
-        shell_die (1, "Out of memory copying provided jobspec");
-
-    /*  If shell is not running standalone, fetch hwloc topology
-     *   from resource module to avoid having to load from scratch
-     *   here. The topology XML is then cached for future shell plugin
-     *   use.
+    /*  fetch hwloc topology from resource module to avoid having to
+     *  load from scratch here. The topology XML is then cached for
+     *  future shell plugin use.
      */
-    if (!shell->standalone
-        && !(f_hwloc = flux_rpc (shell->h,
-                                 "resource.topo-get",
-                                 NULL,
-                                 FLUX_NODEID_ANY,
-                                 0)))
+    if (!(f_hwloc = flux_rpc (shell->h,
+                              "resource.topo-get",
+                              NULL,
+                              FLUX_NODEID_ANY,
+                              0)))
         goto out;
 
-    if (!R || !jobspec) {
-        /* Fetch missing jobinfo from broker job-info service */
-        if (shell->standalone) {
-            shell_log_error ("Invalid arguments: standalone and R/jobspec are unset");
-            goto out;
-        }
-        if (!(f_info = lookup_job_info (shell->h,
-                                        shell->jobid,
-                                        jobspec_provided,
-                                        R_provided)))
-            goto out;
-    }
+    /*  fetch jobspec (via J) and R for this job
+     */
+    if (!(f_info = lookup_job_info (shell->h, shell->jobid)))
+        goto out;
 
-    if (f_hwloc) {
-        if (flux_rpc_get (f_hwloc, &xml) < 0
-            || !(info->hwloc_xml = strdup (xml))) {
-            shell_log_error ("error fetching local hwloc xml");
-            goto out;
-        }
-    }
-    else {
-        /*  We couldn't fetch hwloc, load a copy manually */
+    if (flux_rpc_get (f_hwloc, &xml) < 0
+        || !(info->hwloc_xml = strdup (xml))) {
+        shell_log_error ("error fetching local hwloc xml");
         if (!(info->hwloc_xml = rhwloc_local_topology_xml (0))) {
             shell_log_error ("error loading local hwloc xml");
             goto out;
         }
     }
-
-    if (f_info &&
-        lookup_job_info_get (f_info, &jobspec, &R) < 0) {
+    if (lookup_job_info_get (f_info, &jobspec, &R) < 0) {
         shell_log_error ("error fetching jobspec,R");
         goto out;
     }
@@ -295,8 +203,6 @@ int shell_info_set_taskmap (struct shell_info *info,
 struct shell_info *shell_info_create (flux_shell_t *shell)
 {
     struct shell_info *info;
-    char *R = NULL;
-    char *jobspec = NULL;
     const char *per_resource = NULL;
     int per_resource_count = -1;
     int broker_rank = shell->broker_rank;
@@ -308,17 +214,8 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
     }
     info->jobid = shell->jobid;
 
-    /*  Check for jobspec and/or R on cmdline:
-     */
-    jobspec = optparse_check_and_loadfile (shell->p, "jobspec");
-    R = optparse_check_and_loadfile (shell->p, "resources");
-
-    if (shell_init_jobinfo (shell, info, jobspec, R) < 0)
+    if (shell_init_jobinfo (shell, info) < 0)
         goto error;
-
-    /* Done with potentially allocated jobspec, R strings */
-    free (jobspec);
-    free (R);
 
     if (get_per_resource_option (info->jobspec,
                                  &per_resource,

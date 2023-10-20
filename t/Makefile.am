@@ -192,11 +192,9 @@ TESTSCRIPTS = \
 	t2500-job-attach.t \
 	t2501-job-status.t \
 	t2600-job-shell-rcalc.t \
-	t2601-job-shell-standalone.t \
 	t2602-job-shell.t \
 	t2603-job-shell-initrc.t \
 	t2604-job-shell-affinity.t \
-	t2605-job-shell-output-redirection-standalone.t \
 	t2606-job-shell-output-redirection.t \
 	t2607-job-shell-input.t \
 	t2608-job-shell-log.t \
@@ -460,7 +458,6 @@ check_LTLIBRARIES = \
 	shell/plugins/conftest.la \
 	shell/plugins/invalid-args.la \
 	shell/plugins/getopt.la \
-	shell/plugins/setopt.la \
 	shell/plugins/log.la \
 	shell/plugins/test-event.la \
 	shell/plugins/jobspec-info.la \
@@ -803,14 +800,6 @@ shell_plugins_getopt_la_CPPFLAGS = $(test_cppflags)
 shell_plugins_getopt_la_LDFLAGS = \
 	$(fluxplugin_ldflags) -module -rpath /nowhere
 shell_plugins_getopt_la_LIBADD = \
-	$(top_builddir)/src/common/libtap/libtap.la \
-	$(top_builddir)/src/common/libflux-core.la
-
-shell_plugins_setopt_la_SOURCES = shell/plugins/setopt.c
-shell_plugins_setopt_la_CPPFLAGS = $(test_cppflags)
-shell_plugins_setopt_la_LDFLAGS = \
-	$(fluxplugin_ldflags) -module -rpath /nowhere
-shell_plugins_setopt_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-core.la
 

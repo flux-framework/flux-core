@@ -32,35 +32,14 @@ even extend the shell itself via simple shell plugins developed directly
 in Lua. See the SHELL INITRC section below for details of the ``initrc``
 format and features.
 
-Most Flux users will interact with flux-shell(1) indirectly through
-the execution of Flux jobs, however flux-shell(1) accepts the following
-OPTIONS in standalone mode (``-s, --standalone``), for testing purposes.
-
 OPTIONS
 =======
 
 **-h, --help**
    Summarize available options.
 
-**-v, --verbose**
-   Log actions to stderr.
-
-**--initrc**\ =\ *FILE*
-   Load shell initrc from FILE instead of the system default.
-
-**-R, --resources**\ =\ *FILE*
-   Load resource set **R** from a file instead of job-info service. This is
-   used for testing.
-
-**-j, --jobspec**\ =\ *FILE*
-   Load jobspec from FILE instead of job-info service. This is used for
-   testing.
-
-**-s, --standalone**
-   Run as as a local program without Flux instance. Used for testing.
-   In standalone mode an initrc file is not loaded unless specifically
-   requested via the ``--initrc`` option or specified in jobspec.
-
+**--reconnect**
+   Attempt to reconnect if broker connection is lost.
 
 OPERATION
 =========
@@ -485,9 +464,6 @@ supported. Job shell specific functions and tables are described below:
   Current flux-shell verbosity. This value may be changed at runtime,
   e.g. ``shell.options.verbose = 2`` to set maximum verbosity.
 
-**shell.options.standalone**
-  True if the shell is running in "standalone" mode for testing.
-
 **shell.info**
   Returns a Lua table of shell information obtained via
   :man3:`flux_shell_get_info`. This table includes
@@ -504,8 +480,6 @@ supported. Job shell specific functions and tables are described below:
     The service string advertised by the shell.
   **options.verbose**
     True if the shell is running in verbose mode.
-  **options.standalone**
-    True if the shell was run in standalone mode.
   **jobspec**
     The jobspec of the current job
   **R**

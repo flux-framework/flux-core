@@ -63,20 +63,17 @@ static int exception_init (flux_plugin_t *p,
     flux_t *h;
     flux_jobid_t id;
     int shell_rank;
-    int standalone;
     flux_shell_t *shell = flux_plugin_get_shell (p);
     if (!shell)
         return -1;
     if (!(h = flux_shell_get_flux (shell)))
         return -1;
     if (flux_shell_info_unpack (shell,
-                                "{s:I s:i s:{s:b}}",
+                                "{s:I s:i}",
                                 "jobid", &id,
-                                "rank", &shell_rank,
-                                "options",
-                                  "standalone", &standalone) < 0)
+                                "rank", &shell_rank) < 0)
         return -1;
-    if (standalone || shell_rank != 0)
+    if (shell_rank != 0)
         return 0;
 
     if (flux_shell_service_register (shell,

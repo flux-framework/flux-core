@@ -51,40 +51,21 @@ test_expect_success 'flux-shell: default initrc obeys FLUX_SHELL_RC_PATH' '
 	  flux run hostname >rcpath.log 2>&1 &&
 	grep "plugin loaded from test-dir.d" rcpath.log
 '
-test_expect_success 'flux-shell: initrc: generate 1-task jobspec and matching R' '
-	flux run --dry-run -N1 -n1 echo Hi >j1 &&
-	cat >R1 <<-EOT
-	{"version": 1, "execution":{ "R_lite":[
-		{ "children": { "core": "0,1" }, "rank": "0" }
-        ]}}
-	EOT
-'
-
-test_expect_success 'flux-shell: initrc: loading missing initrc fails' '
-	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=nosuchfile 0
-'
 test_expect_success 'flux-shell: initrc: specifying initrc of /dev/null works' '
-	${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=/dev/null 0 > devnull.log 2>&1 &&
+	flux run -o verbose -o initrc=/dev/null true > devnull.log 2>&1 &&
 	test_debug "cat devnull.log" &&
 	grep "Loading /dev/null" devnull.log
 '
 test_expect_success 'flux-shell: initrc: bad initrc in jobspec fails' '
-	flux run --dry-run -N1 -n1 echo Hi \
-	    | jq ".attributes.system.shell.options.initrc = \"nosuchfile\"" \
-	    > j2 &&
-	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j2 -R R1 0
+	test_must_fail_or_be_terminated \
+		flux run -o verbose -o initrc=nosuchfile true
 '
 test_expect_success 'flux-shell: initrc: in jobspec works' '
 	name=ok &&
 	cat >${name}.lua <<-EOT &&
-	    print ("jobspec initrc OK")
+	    io.stderr:write ("jobspec initrc OK\n")
 	EOT
-	flux run --dry-run -N1 -n1 echo Hi \
-	    | jq ".attributes.system.shell.options.initrc = \"${name}.lua\"" \
-	    > j3 &&
-	${FLUX_SHELL} -v -s -r 0 -j j3 -R R1 0 > ${name}.log 2>&1 &&
+	flux run -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "jobspec initrc OK" ${name}.log
 '
@@ -93,18 +74,18 @@ test_expect_success 'flux-shell: initrc: failed initrc causes termination' '
 	cat >${name}.lua <<-EOT &&
 	=
 	EOT
-	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_must_fail_or_be_terminated \
+	    flux run -o verbose -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "unexpected symbol" ${name}.log
 '
 test_expect_success 'flux-shell: initrc: access task in non-task context fails' '
 	name=invalid-access &&
-	cat >${name}.lua <<-EOT &&
-	    print (task.info)
+	cat >${name}.lua <<-"EOT" &&
+	    io.stderr:write (task.info .. "\n")
 	EOT
-	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_must_fail_or_be_terminated \
+	    flux run -o verbose -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "attempt to access task outside of task context" ${name}.log
 '
@@ -113,14 +94,14 @@ test_expect_success 'flux-shell: initrc: bad plugin.register usage fails' '
 	cat >${name}.lua <<-EOT &&
 	    plugin.register {}
 	EOT
-	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_must_fail_or_be_terminated \
+	    flux run -o verbose -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "required handlers table missing" ${name}.log
 '
 test_expect_success 'flux-shell: initrc: bad plugin.register usage fails' '
 	name=handlers-not-array &&
-	cat >${name}.lua <<-EOT &&
+	cat >${name}.lua <<-"EOT" &&
 	    plugin.register {
           handlers = {
              topic = "*",
@@ -128,8 +109,8 @@ test_expect_success 'flux-shell: initrc: bad plugin.register usage fails' '
           }
         }
 	EOT
-	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_must_fail_or_be_terminated \
+	    flux run -o verbose -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "no entries" ${name}.log
 '
@@ -138,12 +119,11 @@ test_expect_success 'flux-shell: initrc: assignment to shell method fails' '
 	cat >${name}.lua <<-EOT &&
 	    shell.getenv = "my data"
 	EOT
-	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_must_fail_or_be_terminated \
+	    flux run -o verbose -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep " attempt to set read-only field" ${name}.log
 '
-
 test_expect_success 'flux-shell: initrc: return false from plugin aborts shell' '
 	name=failed-return &&
 	cat >${name}.lua <<-EOT &&
@@ -154,30 +134,23 @@ test_expect_success 'flux-shell: initrc: return false from plugin aborts shell' 
               }
 	    }
 	EOT
-	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_must_fail_or_be_terminated \
+	    flux run -o verbose -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "plugin.*: shell.init failed" ${name}.log
 '
-test_expect_success 'flux-shell: initrc: add test options to jobspec' "
-	cat j1 | jq '.attributes.system.shell.options.test = \"test\"' \
-		> j.initrc
-"
-
-for initrc in ${INITRC_TESTDIR}/tests/*.lua; do
-    test_expect_success "flux-shell: initrc: runtest $(basename $initrc)" '
-	${FLUX_SHELL} -v -s -r 0 -j j.initrc -R R1 --initrc=${initrc} 0
-    '
-done
-
+# Submit all test initrcs to instance:
+test_expect_success 'flux-shell: initrc: run tests in shell/initrc/tests' '
+	flux bulksubmit --quiet --watch -n1 -o initc={} echo run test {./}  \
+	    ::: ${INITRC_TESTDIR}/tests/*.lua >&2
+'
 test_expect_success 'flux-shell: initrc: loads single .so successfully' '
 	name=conftest-success &&
 	cat >${name}.lua <<-EOT &&
         plugin.searchpath = "${INITRC_PLUGINPATH}"
 	plugin.load { file = "dummy.so", conf = { result = 0 } }
 	EOT
-	test_expect_code 0 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	flux run -o verbose -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "dummy: OK result=0" ${name}.log
 '
@@ -188,8 +161,8 @@ test_expect_success 'flux-shell: initrc: script fails on plugin.load failure' '
         plugin.searchpath = "${INITRC_PLUGINPATH}"
 	plugin.load { file = "dummy.so", conf = { result = -1 } }
 	EOT
-	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_must_fail_or_be_terminated \
+	    flux run -o verbose -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "dummy: OK result=-1" ${name}.log
 '
@@ -198,8 +171,8 @@ test_expect_success 'flux-shell: initrc: plugin pattern nomatch not fatal' '
 	cat >${name}.lua <<-EOT &&
 	plugin.load { file = "nofile*.so" }
 	EOT
-	test_expect_code 0 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	flux run --label-io -o verbose -o initrc=${name}.lua \
+	    echo Hi > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "0: Hi" ${name}.log
 '
@@ -208,8 +181,8 @@ test_expect_success 'flux-shell: initrc: plugin nonpattern nomatch fatal' '
 	cat >${name}.lua <<-EOT &&
 	plugin.load { file = "nofile.so" }
 	EOT
-	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_must_fail_or_be_terminated \
+	    flux run -o verbose -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "nofile.so: File not found" ${name}.log
 '
@@ -218,8 +191,8 @@ test_expect_success 'flux-shell: initrc: plugin.load accepts string arg' '
 	cat >${name}.lua <<-EOT &&
 	plugin.load "nomatch-again.so"
 	EOT
-	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_must_fail_or_be_terminated \
+	    flux run -o verbose -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "nomatch-again.so: File not found" ${name}.log
 '
@@ -228,12 +201,11 @@ test_expect_success 'flux-shell: initrc: plugin.load bad argument fatal' '
 	cat >${name}.lua <<-EOT &&
 	plugin.load (true)
 	EOT
-	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_must_fail_or_be_terminated \
+	    flux run -o verbose -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "plugin.load: invalid argument" ${name}.log
 '
-
 test_expect_success 'flux-shell: initrc: plugin.load passes conf to plugin' '
 	name=conftest &&
 	cat >${name}.lua <<-EOT &&
@@ -245,8 +217,7 @@ test_expect_success 'flux-shell: initrc: plugin.load passes conf to plugin' '
                                three = "bar" }
 	            }
 	EOT
-	${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	flux run -o verbose -o initrc=${name}.lua true > ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log" &&
 	grep "conftest: one=foo" ${name}.log &&
 	grep "conftest: two=two" ${name}.log &&
@@ -258,8 +229,7 @@ test_expect_success 'flux-shell: initrc: load invalid args plugins' '
         plugin.searchpath = "${INITRC_PLUGINPATH}"
 	plugin.load { file = "invalid-args.so" }
 	EOT
-	${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
-		--initrc=${name}.lua 0
+	flux run -o verbose -o initrc=${name}.lua true
 '
 test_expect_success 'flux-shell: initrc: load getopt plugin' '
 	name=getopt &&
@@ -267,36 +237,23 @@ test_expect_success 'flux-shell: initrc: load getopt plugin' '
 	plugin.searchpath = "${INITRC_PLUGINPATH}"
 	plugin.load { file = "getopt.so" }
 	EOF
-	cat j1 | jq ".attributes.system.shell.options.test = 1" >j.${name} &&
-	${FLUX_SHELL} -v -s -r 0 -j j.${name} -R R1 --initrc=${name}.lua 0 \
-		> ${name}.log 2>&1 &&
-	test_debug "cat ${name}.log"
+	flux run -o verbose -o initrc=${name}.lua -o test=1 true
 '
-test_expect_success 'flux-shell: plugins can use setopt with empty options' '
-	name=setopt &&
-	cat >${name}.lua <<-EOF &&
-	plugin.searchpath = "${INITRC_PLUGINPATH}"
-	plugin.load { file = "${name}.so" }
-	EOF
-	cat j1 | jq "del(.attributes.system.shell.options)" >j.${name} &&
-	${FLUX_SHELL} -v -s -r 0 -j j.${name} -R R1 --initrc=${name}.lua 0 \
-		> ${name}.log 2>&1 &&
-	test_debug "cat ${name}.log"
-'
-
 test_expect_success 'flux-shell: initrc: jobspec-info plugin works' '
 	name=jobspec-info &&
 	cat >${name}.lua <<-EOF &&
 	plugin.searchpath = "${INITRC_PLUGINPATH}"
 	plugin.load { file = "jobspec-info.so" }
 	EOF
-	cat j1 | \
-	  jq ".attributes.system.shell.options.jobspec_info = \
-		{ ntasks: 1, nnodes: 1, nslots: 1, \
-		  cores_per_slot: 1, \
-		  slots_per_node: 1 }" \
-		>j.${name} &&
-	${FLUX_SHELL} -v -s -r 0 -j j.${name} -R R1 --initrc=${name}.lua 0
+	cat >${name}.json <<-"EOF" &&
+	{ "ntasks":1, "nnodes":1, "nslots":1,
+	  "cores_per_slot":1,
+	  "slots_per_node":1
+	}
+	EOF
+	flux run -N1 -n1 -c1 -o verbose=2 \
+		-o initrc=${name}.lua \
+		-o ^jobspec_info=${name}.json true
 '
 test_expect_success 'flux-shell: initrc: shell log functions available' '
 	name=shell.log &&
@@ -306,11 +263,11 @@ test_expect_success 'flux-shell: initrc: shell log functions available' '
 
 	shell.log_error ("test: error")
 	EOF
-	${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 --initrc=${name}.lua 0 \
+	flux run -o verbose -o initrc=${name}.lua true \
 		> ${name}.log 2>&1 &&
-	grep "INFO: ${name}.lua:1: test: shell.log" ${name}.log &&
-	grep "DEBUG: ${name}.lua:2: test: debug" ${name}.log &&
-	grep "ERROR: ${name}.lua:4: test: error" ${name}.log
+	grep "test: shell.log" ${name}.log &&
+	grep "DEBUG: test: debug" ${name}.log &&
+	grep "ERROR: test: error" ${name}.log
 '
 test_expect_success 'flux-shell: initrc: shell.die function works' '
 	name=shell.die &&
@@ -318,10 +275,9 @@ test_expect_success 'flux-shell: initrc: shell.die function works' '
         -- shell.die test
 	shell.die ("test: shell.die")
 	EOF
-	test_expect_code 1 \
-	    ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 --initrc=${name}.lua 0 \
+	test_must_fail_or_be_terminated \
+		flux run -o verbose -o initrc=${name}.lua true \
 		> ${name}.log 2>&1 &&
-	grep "FATAL: ${name}.lua:2: test: shell.die" ${name}.log
+	grep "FATAL: test: shell.die" ${name}.log
 '
-
 test_done

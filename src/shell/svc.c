@@ -157,6 +157,7 @@ struct shell_svc *shell_svc_create (flux_shell_t *shell)
     struct shell_svc *svc;
     struct rcalc_rankinfo ri;
     int shell_size = shell->info->shell_size;
+    flux_future_t *f;
     int i;
 
     if (!(svc = calloc (1, sizeof (*svc))))
@@ -170,26 +171,23 @@ struct shell_svc *shell_svc_create (flux_shell_t *shell)
             goto error;
         svc->rank_table[i] = ri.rank;
     }
-    if (!shell->standalone) {
-        flux_future_t *f;
-        if (build_topic (svc, NULL, svc->name, sizeof (svc->name)) < 0)
-            goto error;
-        if (!(f = flux_service_register (shell->h, svc->name)))
-            goto error;
-        if (flux_future_get (f, NULL) < 0) {
-            flux_future_destroy (f);
-            goto error;
-        }
+    if (build_topic (svc, NULL, svc->name, sizeof (svc->name)) < 0)
+        goto error;
+    if (!(f = flux_service_register (shell->h, svc->name)))
+        goto error;
+    if (flux_future_get (f, NULL) < 0) {
         flux_future_destroy (f);
-        if (flux_shell_add_event_context (shell,
-                                          "shell.init",
-                                          0,
-                                          "{s:s}",
-                                          "service",
-                                          svc->name) < 0)
-            goto error;
-        svc->registered = 1;
+        goto error;
     }
+    flux_future_destroy (f);
+    if (flux_shell_add_event_context (shell,
+                                      "shell.init",
+                                      0,
+                                      "{s:s}",
+                                      "service",
+                                      svc->name) < 0)
+        goto error;
+    svc->registered = 1;
     return svc;
 error:
     shell_svc_destroy (svc);

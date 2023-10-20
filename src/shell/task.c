@@ -21,7 +21,7 @@
  *    . FLUX_JOB_SIZE
  *    . FLUX_JOB_NNODES
  *    . FLUX_JOB_ID
- *    . FLUX_URI (if not running standalone)
+ *    . FLUX_URI
  *    . correct HOSTNAME if set in job environment
  *
  * Current working directory

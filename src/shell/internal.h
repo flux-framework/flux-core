@@ -47,7 +47,6 @@ struct flux_shell {
     int rc;
 
     int verbose;
-    bool standalone;
     int nosetpgrp;
 
     struct aux_item *aux;

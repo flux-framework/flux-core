@@ -14,52 +14,13 @@ INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
 # test initrc files need to be able to find fluxometer.lua:
 export LUA_PATH="$LUA_PATH;${SHARNESS_TEST_DIRECTORY}/?.lua"
 
-test_expect_success 'flux-shell: log: generate 1-task jobspec and matching R' '
-	flux run --dry-run -N1 -n1 echo Hi >j1 &&
-	cat >R1 <<-EOT
-	{"version": 1, "execution":{ "R_lite":[
-		{ "children": { "core": "0,1" }, "rank": "0" }
-        ]}}
-	EOT
-'
-test_expect_success 'flux-shell: run log testing plugin' '
+test_expect_success 'flux-shell: create log testing initrc' '
 	name=log &&
-	cat >${name}.lua <<-EOF &&
+	cat >${name}.lua <<-EOF
 	plugin.searchpath = "${INITRC_PLUGINPATH}"
 	plugin.load { file = "log.so" }
 	EOF
-	${FLUX_SHELL} -v -v -s -r 0 -j j1 -R R1 --initrc=${name}.lua 0 \
-		> ${name}.log 2>&1 &&
-	test_debug "cat ${name}.log"
 '
-for topic in "shell.init" "shell.exit" \
-	     "task.init" "task.exit" \
-	     "task.fork" "task.fork"; do
-    test_expect_success "$topic: got TRACE level message" "
-        grep \"TRACE: log: .*: $topic: trace message\" log.log
-    "
-    test_expect_success "$topic: got truncated long TRACE level message" "
-        grep -q \"TRACE: log: .*: $topic: long message.*0000+$\" log.log
-    "
-    test_expect_success "$topic: got DEBUG level message" "
-        grep \"DEBUG: log: .*: $topic: debug message\" log.log
-    "
-    test_expect_success "$topic: got INFO level message" "
-        grep \" INFO: log: .*: $topic: log message\" log.log
-    "
-    test_expect_success "$topic: got WARN level message" "
-        grep \" WARN: log: .*: $topic: warn message\" log.log
-    "
-    test_expect_success "$topic: got ERROR level message" "
-        grep \"ERROR: log: .*: $topic: error message\" log.log
-    "
-    test_expect_success "$topic: got log_errn message" "
-	grep \"ERROR:.*: $topic: log_errn message: Operation not permitted\" log.log
-    "
-    test_expect_success "$topic: got log_errno message" "
-	grep \"ERROR: log: .*: $topic: log_errno message: Invalid argument\" log.log
-    "
-done
 
 test_expect_success 'flux-shell: run job with verbose logging to output' '
 	flux run -o verbose=2 -o initrc=log.lua -n2 -N2 hostname \
