@@ -44,7 +44,7 @@ luamod_ldflags = \
 
 luamod_libadd = \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux-internal.la \
+	$(JANSSON_LIBS) \
 	$(LUA_LIB)
 
 flux_la_LDFLAGS = \
