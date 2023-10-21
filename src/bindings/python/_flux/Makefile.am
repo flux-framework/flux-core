@@ -115,19 +115,32 @@ _rlist_preproc.h: _rlist_clean.h
 
 dist__core_la_SOURCES = callbacks.h
 nodist__core_la_SOURCES = _core.c
-_core_la_LIBADD = $(common_libs)
+_core_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libdebugged/libdebugged.la \
+	$(PYTHON_LIBS)
 
 nodist__hostlist_la_SOURCES = _hostlist.c
-_hostlist_la_LIBADD = $(common_libs)
+_hostlist_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-hostlist.la \
+	$(PYTHON_LIBS)
 
 nodist__idset_la_SOURCES = _idset.c
-_idset_la_LIBADD = $(common_libs)
+_idset_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-idset.la \
+	$(PYTHON_LIBS)
 
 nodist__rlist_la_SOURCES = _rlist.c
 _rlist_la_LIBADD = \
 	$(top_builddir)/src/common/librlist/librlist.la \
+	$(top_builddir)/src/common/libutil/read_all.lo \
+	$(top_builddir)/src/common/libutil/errprintf.lo \
+	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
+	$(top_builddir)/src/common/libflux-idset.la \
+	$(top_builddir)/src/common/libflux-hostlist.la \
+	$(JANSSON_LIBS) \
 	$(HWLOC_LIBS) \
-	$(common_libs)
+	$(PYTHON_LIBS)
 
 if HAVE_FLUX_SECURITY
 
@@ -155,8 +168,8 @@ _security_la_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
 	$(FLUX_SECURITY_CFLAGS)
 _security_la_LIBADD = \
-	$(common_libs) \
-	$(FLUX_SECURITY_LIBS)
+	$(FLUX_SECURITY_LIBS) \
+	$(PYTHON_LIBS)
 endif
 
 .PHONY: lib-copy
