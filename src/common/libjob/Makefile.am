@@ -59,8 +59,10 @@ test_ldadd = \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/librouter/librouter.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(JANSSON_LIBS) \
+	$(LIBUUID_LIBS) \
 	$(LIBPTHREAD) \
 	$(FLUX_SECURITY_LIBS)
 

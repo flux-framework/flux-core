@@ -54,6 +54,7 @@ TESTS = test_keyval.t \
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
+	$(top_builddir)/src/common/librouter/librouter.la \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
 	$(top_builddir)/src/common/libpmi/libpmi_client.la \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \

@@ -49,7 +49,6 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libtomlc99/libtomlc99.la \
 	$(builddir)/libeventlog/libeventlog.la \
 	$(builddir)/libioencode/libioencode.la \
-	$(builddir)/librouter/librouter.la \
 	$(builddir)/libhostlist/libhostlist.la \
 	$(builddir)/libczmqcontainers/libczmqcontainers.la \
 	$(builddir)/libcontent/libcontent.la \
@@ -90,6 +89,7 @@ $(install_fluxlibLTLIBRARIES): install-libLTLIBRARIES
 
 libflux_core_la_SOURCES =
 libflux_core_la_LIBADD = \
+	$(builddir)/librouter/librouter.la \
 	$(builddir)/libflux/libflux.la \
 	$(builddir)/libkvs/libkvs.la \
 	$(builddir)/libjob/libjob.la \

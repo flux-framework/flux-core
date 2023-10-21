@@ -86,6 +86,7 @@ flux_LDADD = \
 	$(top_builddir)/src/common/libpmi/libpmi_client.la \
 	$(top_builddir)/src/common/libpmi/libpmi_common.la \
 	$(top_builddir)/src/common/libfilemap/libfilemap.la \
+	$(top_builddir)/src/common/librouter/librouter.la \
 	$(LIBARCHIVE_LIBS) \
 	$(fluxcmd_ldadd)
 
@@ -134,10 +135,11 @@ fluxcmd_PROGRAMS = \
 	flux-top
 
 flux_start_LDADD = \
-	$(fluxcmd_ldadd) \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(top_builddir)/src/common/libpmi/libpmi_common.la \
-	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la
+	$(top_builddir)/src/common/libflux/libflux.la \
+	$(top_builddir)/src/common/librouter/librouter.la \
+	$(fluxcmd_ldadd)
 
 flux_job_LDADD = \
 	$(fluxcmd_ldadd) \
