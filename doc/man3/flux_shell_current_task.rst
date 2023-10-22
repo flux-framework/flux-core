@@ -22,14 +22,14 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux_shell_task_first and flux_shell_task_next are used to iterate
-over all current tasks known to the shell.
+:func:`flux_shell_task_first` and :func:`flux_shell_task_next` are used to
+iterate over all current tasks known to the shell.
 
-``flux_shell_current_task`` returns the current task for ``task_init``,
+:func:`flux_shell_current_task` returns the current task for ``task_init``,
 ``task_exec`` and ``task_exec`` callbacks and NULL in any other
 context.
 
-``flux_shell_task_first`` and ``flux_shell_task_next`` return the first
+:func:`flux_shell_task_first` and :func:`flux_shell_task_next` return the first
 and next tasks, respectively.
 
 

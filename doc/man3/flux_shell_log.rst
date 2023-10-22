@@ -45,9 +45,10 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_shell_log()`` logs a message at for shell component or plugin
+:func:`flux_shell_log` logs a message at for shell component or plugin
 ``component`` at ``level`` to all loggers registered to receive messages
-at that severity or greater. See ``flux_log`` for a list of supported levels.
+at that severity or greater. See :man3:`flux_log` for a list of supported
+levels.
 
 
 The following macros handle common levels. For external shell plugins,
@@ -75,7 +76,7 @@ for the ``component`` in all macros.
 
    #define shell_log_error(...) \
 
-``flux_shell_err()`` logs a message at FLUX_SHELL_ERROR level,
+:func:`flux_shell_err` logs a message at FLUX_SHELL_ERROR level,
 additionally appending the result of strerror(``errnum``) for
 convenience. Macros include:
 
@@ -90,10 +91,10 @@ convenience. Macros include:
 Note that ``errno`` is the standard global value defined in ``errno.h``
 and ``errn`` is a user-provided error code.
 
-``flux_shell_fatal()`` logs a message at FLUX_SHELL_FATAL level and
+func:`flux_shell_fatal` logs a message at FLUX_SHELL_FATAL level and
 schedules termination of the job shell. This may generate an
 exception if tasks are already running. Exits with ``exit_code``.
-While the macro names are similar to those using ``flux_shell_err()``,
+While the macro names are similar to those using :func:`flux_shell_err`,
 note that the choices of ``errnum`` are either 0 or ``errno``.
 
 ::
@@ -104,11 +105,11 @@ note that the choices of ``errnum`` are either 0 or ``errno``.
 
    #define shell_die_errno(code,...) \
 
-``flux_shell_raise()`` explicitly raises an exception for the current
+:func:`flux_shell_raise` explicitly raises an exception for the current
 job of the given ``type`` and ``severity``. Exceptions of severity 0
 will result in termination of the job by the execution system.
 
-``flux_shell_log_setlevel()`` sets default severity of logging
+:func:`flux_shell_log_setlevel` sets default severity of logging
 destination ``dest`` to ``level``. If ``dest`` is NULL then the internal
 log dispatch level is set (i.e. no messages above severity level will
 be logged to any log destination). Macros include:
@@ -135,11 +136,11 @@ logging to ``stderr``, use:
 RETURN VALUE
 ============
 
-``flux_shell_err()`` returns -1 with errno = errnum, so that the
+:func:`flux_shell_err` returns -1 with errno = errnum, so that the
 function can be used as:
 return flux_shell_err(…​);
 
-``flux_shell_log_setlevel()`` will return -1 and set ``errno`` to EINVAL
+:func:`flux_shell_log_setlevel` will return -1 and set ``errno`` to EINVAL
 if the requested ``level`` is not valid or if ``dest`` is not a valid
 pointer to a logger shell.
 

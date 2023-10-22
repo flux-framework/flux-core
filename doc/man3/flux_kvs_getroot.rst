@@ -29,23 +29,23 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_kvs_getroot()`` sends a request via handle *h* to the ``kvs``
+:func:`flux_kvs_getroot` sends a request via handle *h* to the ``kvs``
 service to look up the current root hash for namespace *ns*. A ``flux_future_t``
 object is returned, which acts as handle for synchronization and container
 for the response. *flags* is currently unused and should be set to 0.
 
 Upon future fulfillment, these functions can decode the result:
 
-``flux_kvs_getroot_get_treeobj()`` obtains the root hash in the form
+:func:`flux_kvs_getroot_get_treeobj` obtains the root hash in the form
 of an RFC 11 *dirref* treeobj, suitable to be passed to :man3:`flux_kvs_lookupat`.
 
-``flux_kvs_getroot_get_blobref()`` obtains the RFC 10 blobref, suitable to
+:func:`flux_kvs_getroot_get_blobref` obtains the RFC 10 blobref, suitable to
 be passed to :man3:`flux_content_load`.
 
-``flux_kvs_getroot_get_sequence()`` retrieves the monotonic sequence number
+:func:`flux_kvs_getroot_get_sequence` retrieves the monotonic sequence number
 for the root.
 
-``flux_kvs_getroot_get_owner()`` retrieves the namespace owner.
+:func:`flux_kvs_getroot_get_owner` retrieves the namespace owner.
 
 
 FLAGS
@@ -57,7 +57,7 @@ The *flags* mask is currently unused and should be set to 0.
 RETURN VALUE
 ============
 
-``flux_kvs_getroot()`` returns a ``flux_future_t`` on success, or NULL on
+:func:`flux_kvs_getroot` returns a ``flux_future_t`` on success, or NULL on
 failure with errno set appropriately.
 
 The other functions return zero on success, or -1 on failure with errno
@@ -87,7 +87,7 @@ EPERM
 
 ENODATA
    A stream of responses has been terminated by a call to
-   ``flux_kvs_getroot_cancel()``.
+   :func:`flux_kvs_getroot_cancel`.
 
 
 RESOURCES

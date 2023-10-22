@@ -40,34 +40,34 @@ DESCRIPTION
 These interfaces are used by Flux *jobtap* plugins which are used to
 extend the job manager broker module.
 
-``flux_jobtap_get_flux()`` returns the job manager's Flux handle given
+:func:`flux_jobtap_get_flux` returns the job manager's Flux handle given
 the plugin's ``flux_plugin_t *``. This can be used by a *jobtap* plugin
 to send RPCs, schedule timer watchers, or other asynchronous work.
 
-``flux_jobtap_service_register()`` registers a service name ``method``
+:func:`flux_jobtap_service_register` registers a service name ``method``
 under the job manager which will be handled by the provided message
 handler ``cb``.  The constructed service name will be
 ``job-manager.<name>.<method>`` where ``name`` is the name of the plugin
-as returned by ``flux_plugin_get_name(3)``. As such, this call may
+as returned by :func:`flux_plugin_get_name`. As such, this call may
 fail if the *jobtap* plugin has not yet set a name for itself using
-``flux_plugin_set_name(3)``.
+:func:`flux_plugin_set_name`.
 
-``flux_jobtap_reprioritize_all()`` requests that the job manager begin
+:func:`flux_jobtap_reprioritize_all` requests that the job manager begin
 reprioritization of all pending jobs, i.e. jobs in the PRIORITY and
 SCHED states. This will result on each job having a ``job.priority.get``
 callback invoked on it.
 
-``flux_jobtap_reprioritize_job()`` allows a *jobtap* plugin to asynchronously
+:func:`flux_jobtap_reprioritize_job` allows a *jobtap* plugin to asynchronously
 assign the priority of a job.
 
-``flux_jobtap_priority_unavail()`` is a convenience function which may
+:func:`flux_jobtap_priority_unavail` is a convenience function which may
 be used by a plugin in the ``job.state.priority`` priority callback to
 indicate that a priority for the job is not yet available. It can be
 called as::
 
    return flux_jobtap_priority_unavail (p, args);
 
-``flux_jobtap_reject_job()`` is a convenience function which may be used
+:func:`flux_jobtap_reject_job` is a convenience function which may be used
 by a plugin from the ``job.validate`` callback to reject a job before its
 submission is fully complete. The error and optional message supplied in
 ``fmt`` will be returned to the originating job submission request. This
@@ -80,11 +80,11 @@ function returns ``-1`` so that it may be conveniently called as::
 RETURN VALUE
 ============
 
-``flux_jobtap_get_flux()`` returns a ``flux_t *`` handle on success. ``NULL``
+:func:`flux_jobtap_get_flux` returns a ``flux_t *`` handle on success. ``NULL``
 is returned with errno set to ``EINVAL`` if the supplied ``flux_plugin_t *p``
 is not a jobtap plugin handle.
 
-``flux_jobtap_reject_job()`` always returns ``-1`` so that it may be used
+:func:`flux_jobtap_reject_job` always returns ``-1`` so that it may be used
 to exit the ``job.validate`` callback.
 
 The remaining functions return 0 on success, -1 on failure.

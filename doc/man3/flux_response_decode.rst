@@ -27,7 +27,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_response_decode()`` decodes a response message *msg*.
+:func:`flux_response_decode` decodes a response message *msg*.
 
 *topic*, if non-NULL, will be set to the message's topic string. The
 storage for this string belongs to *msg* and should not be freed.
@@ -36,11 +36,11 @@ storage for this string belongs to *msg* and should not be freed.
 If no payload exists, it is set to NULL. The storage for this
 string belongs to *msg* and should not be freed.
 
-``flux_response_decode_raw()`` decodes a response message with a raw payload,
+:func:`flux_response_decode_raw` decodes a response message with a raw payload,
 setting *data* and *len* to the payload data and length. The storage for
 the raw payload belongs to *msg* and should not be freed.
 
-``flux_response_decode_error()`` decodes an optional error string included
+:func:`flux_response_decode_error` decodes an optional error string included
 with an error response. This fails if the response is not an error,
 or does not include an error string payload.
 
@@ -63,7 +63,7 @@ EPROTO
    missing topic string, etc.
 
 ENOENT
-   ``flux_response_decode_error()`` was called on a message with no
+   :func:`flux_response_decode_error` was called on a message with no
    error response payload.
 
 

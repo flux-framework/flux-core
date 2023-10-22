@@ -41,36 +41,36 @@ DESCRIPTION
 
 Refer to :man3:`idset_create` for a general description of idsets.
 
-``idset_union()`` creates a new idset that is the union of *a* and *b*.
+:func:`idset_union` creates a new idset that is the union of *a* and *b*.
 
-``idset_difference()`` creates a new idset that is *a* with the members of
+:func:`idset_difference` creates a new idset that is *a* with the members of
 *b* removed.
 
-``idset_intersect()`` creates a new idset containing only members of *a*
+:func:`idset_intersect` creates a new idset containing only members of *a*
 and *b* that are in both sets.
 
-``idset_add()`` adds the members of *b* to *a*.
+:func:`idset_add` adds the members of *b* to *a*.
 
 
-``idset_subtract()`` removes the members of *b* from *a*.
+:func:`idset_subtract` removes the members of *b* from *a*.
 
-``idset_has_intersection()`` tests whether *a* and *b* have any members
+:func:`idset_has_intersection` tests whether *a* and *b* have any members
 in common.
 
-``idset_clear_all()`` removes all members of *x*
+:func:`idset_clear_all` removes all members of *x*
 
 
 RETURN VALUE
 ============
 
-``idset_union()``, ``idset_difference()``, and ``idset_intersect()`` return an
-idset on success which must be freed with ``idset_destroy()``. On error,
-NULL is returned with errno set.
+:func:`idset_union`, :func:`idset_difference`, and :func:`idset_intersect`
+return an idset on success which must be freed with :man3:`idset_destroy`.
+On error, NULL is returned with errno set.
 
-``idset_add()``, ``idset_subtract()``, and ``idset_clear_all()``  return 0
-on success.  On error, -1 is returned with errno set.
+:func:`idset_add`, :func:`idset_subtract`, and :func:`idset_clear_all`
+return 0 on success.  On error, -1 is returned with errno set.
 
-``idset_has_intersection()`` returns true or false.
+:func:`idset_has_intersection` returns true or false.
 
 
 ERRORS

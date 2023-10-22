@@ -23,7 +23,7 @@ DESCRIPTION
 
 When the shell initializes, it subscribes to all events with the
 substring ``shell-JOBID.``, where ``JOBID`` is the jobid under which the
-shell is running. ``flux_shell_add_event_handler()`` registers a handler
+shell is running. :func:`flux_shell_add_event_handler` registers a handler
 to be run for a **subtopic** within the shell's event namespace, e.g.
 registering a handler for ``subtopic`` ``"kill"`` will invoke the handler
 ``cb`` whenever an event named ``shell-JOBID.kill`` is generated.
@@ -33,7 +33,8 @@ RETURN VALUE
 ============
 
 Returns -1 if ``shell``, ``shell->h``, ``subtopic`` or ``cb`` are NULL, or if
-underlying calls to ``asprintf()`` or ``flux_msg_handler_create()`` fail.
+underlying calls to :linux:man3:`asprintf` or :man3:`flux_msg_handler_create`
+fail.
 
 
 ERRORS

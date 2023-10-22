@@ -23,7 +23,7 @@ DESCRIPTION
 ===========
 
 Add extra context that will be emitted with shell standard event
-``name`` using Jansson ``json_pack()`` style arguments. The ``flags``
+``name`` using Jansson :func:`json_pack` style arguments. The ``flags``
 parameter is currently unused.
 
 

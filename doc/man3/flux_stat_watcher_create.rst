@@ -30,7 +30,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_stat_watcher_create()`` creates a reactor watcher that
+:func:`flux_stat_watcher_create` creates a reactor watcher that
 monitors for changes in the status of the file system object
 represented by *path*. If the file system object exists,
 :linux:man7:`inotify` is used, if available; otherwise the reactor polls
@@ -39,7 +39,7 @@ conservative default (currently five seconds).
 
 The callback *revents* argument should be ignored.
 
-``flux_stat_watcher_get_rstat ()`` may be used to obtain the status
+:func:`flux_stat_watcher_get_rstat` may be used to obtain the status
 within *callback*. If non-NULL, *stat* receives the current status.
 If non-NULL, *prev* receives the previous status.
 
@@ -51,7 +51,7 @@ is considered a status change like any other.
 RETURN VALUE
 ============
 
-flux_stat_watcher_create() returns a flux_watcher_t object on success.
+:func:`flux_stat_watcher_create` returns a flux_watcher_t object on success.
 On error, NULL is returned, and errno is set appropriately.
 
 

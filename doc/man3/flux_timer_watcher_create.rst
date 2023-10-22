@@ -30,7 +30,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_timer_watcher_create()`` creates a flux_watcher_t object which
+:func:`flux_timer_watcher_create` creates a flux_watcher_t object which
 monitors for timer events. A timer event occurs when *after* seconds
 have elapsed, and optionally again every *repeat* seconds.
 When events occur, the user-supplied *callback* is invoked.
@@ -47,8 +47,8 @@ Refer to "The special problem of time updates" in the libev manual
 for more information.
 
 To restart a timer that has been automatically stopped, you must reset
-the *after* and *repeat* values with ``flux_timer_watcher_reset()`` before
-calling ``flux_watcher_start()``.
+the *after* and *repeat* values with :func:`flux_timer_watcher_reset` before
+calling :man3:`flux_watcher_start`.
 
 The callback *revents* argument should be ignored.
 
@@ -59,7 +59,7 @@ on the behavior of timers, refer to the libev documentation on ``ev_timer``.
 RETURN VALUE
 ============
 
-``flux_timer_watcher_create()`` returns a flux_watcher_t object on success.
+:func:`flux_timer_watcher_create` returns a flux_watcher_t object on success.
 On error, NULL is returned, and errno is set appropriately.
 
 

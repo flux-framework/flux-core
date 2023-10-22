@@ -19,10 +19,10 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_pollevents()`` returns a bitmask of poll flags for handle *h*.
+:func:`flux_pollevents` returns a bitmask of poll flags for handle *h*.
 
-``flux_pollfd()`` obtains a file descriptor that becomes readable, in
-an edge triggered fashion, when ``flux_pollevents()`` has poll flags
+:func:`flux_pollfd` obtains a file descriptor that becomes readable, in
+an edge triggered fashion, when :func:`flux_pollevents` has poll flags
 raised.
 
 Valid poll flags are:
@@ -44,10 +44,10 @@ socket options provided by ZeroMQ.
 RETURN VALUE
 ============
 
-``flux_pollevents()`` returns flags on success. On error, -1 is returned,
+:func:`flux_pollevents` returns flags on success. On error, -1 is returned,
 and errno is set appropriately.
 
-``flux_pollfd()`` returns a file descriptor on success. On error, -1 is
+:func:`flux_pollfd` returns a file descriptor on success. On error, -1 is
 returned, and errno is set appropriately.
 
 
@@ -70,19 +70,19 @@ There are a total of four different types of libev watcher in the
 composite watcher. libev "prepare" and "check" callbacks are executed
 just before and just after libev blocks internally in the
 :linux:man2:`poll` system call.  Here they are used to test
-``flux_pollevents()``, make user callbacks, and enable/disable no-op
+:func:`flux_pollevents`, make user callbacks, and enable/disable no-op
 "io" and "idle" watchers. The io watcher watches for EV_READ on
-``flux_pollfd()`` file descriptor. The idle watcher, if enabled, is
+:func:`flux_pollfd` file descriptor. The idle watcher, if enabled, is
 always ready and thus causes the event loop to spin.
 
-When ``flux_pollevents()`` has poll flags asserted, the idle watcher is enabled.
-When ``flux_pollevents()`` has no poll flags asserted, the idle watcher is
-disabled and the io watcher is enabled. While the idle and io watchers
-have no callbacks, if either is enabled and ready, the event loop must
-execute the prepare and check callbacks.
+When :func:`flux_pollevents` has poll flags asserted, the idle watcher is
+enabled.  When :func:`flux_pollevents` has no poll flags asserted, the idle
+watcher is disabled and the io watcher is enabled. While the idle and io
+watchers have no callbacks, if either is enabled and ready, the event loop
+must execute the prepare and check callbacks.
 
 The net results are 1) the edge-triggered notification provided by
-``flux_pollfd()`` is integrated with libev's level-triggered watcher
+:func:`flux_pollfd` is integrated with libev's level-triggered watcher
 processing; 2) the handle is able to give control back to the event
 loop between handle event callbacks to preserve fairness, i.e.
 it doesn't have to consume events until they they are gone in one

@@ -32,7 +32,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_shell_get_info()`` returns shell information as a json string
+:func:`flux_shell_get_info` returns shell information as a json string
 with the following layout:
 
 ::
@@ -46,7 +46,7 @@ with the following layout:
    "jobspec":o,
    "R":o
 
-``flux_shell_get_rank_info()`` returns shell rank information as a json
+:func:`flux_shell_get_rank_info` returns shell rank information as a json
 string with the following layout:
 
 ::
@@ -62,7 +62,7 @@ that shell rank, ``taskids`` is a list of task id assignments for those
 tasks (an RFC 22 idset string), and ``resources`` is a dictionary of
 resource name to resource ids assigned to the shell rank.
 
-``flux_shell_info_unpack()`` and ``flux_shell_rank_info_unpack()``
+:func:`flux_shell_info_unpack` and :func:`flux_shell_rank_info_unpack`
 accomplished the same thing with Jansson-style formatting arguments.
 
 If ``shell_rank`` is set to -1, the current shell rank is used.

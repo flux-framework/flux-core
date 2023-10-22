@@ -31,22 +31,26 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_shell_getenv()`` returns the value of an environment variable from the global job environment.
-``flux_shell_get_environ()`` returns 0 on success with ``*json_str`` set
-to an allocated JSON string, or -1 on failure with ``errno`` set.
-``flux_shell_setenvf()`` sets an environment variable in the global job
-environment using :linux:man3:`printf` style format arguments.
-``flux_shell_unsetenv()`` unsets the specified environment variable in the global job environment.
+:func:`flux_shell_getenv` returns the value of an environment variable from
+the global job environment.  :func:`flux_shell_get_environ` returns 0 on
+success with ``*json_str`` set to an allocated JSON string, or -1 on failure
+with ``errno`` set.  :func:`flux_shell_setenvf` sets an environment variable
+in the global job environment using :linux:man3:`printf` style format
+arguments.  :func:`flux_shell_unsetenv` unsets the specified environment
+variable in the global job environment.
 
 
 RETURN VALUE
 ============
 
-``flux_shell_getenv()`` returns NULL if either ``shell`` or ``name`` is NULL, or if the variable is not found.
+:func:`flux_shell_getenv` returns NULL if either ``shell`` or ``name``
+is NULL, or if the variable is not found.
 
-``flux_shell_get_environ()`` returns a json string on success or NULL on failure.
+:func:`flux_shell_get_environ` returns a json string on success or NULL on
+failure.
 
-``flux_shell_setenvf()`` and ``flux_shell_unsetenv()`` return 0 on success and -1 on failure.
+:func:`flux_shell_setenvf` and :func:`flux_shell_unsetenv` return 0 on
+success and -1 on failure.
 
 
 ERRORS
@@ -56,10 +60,11 @@ EINVAL
    ``shell``, ``name`` or ``fmt`` is NULL.
 
 EEXIST
-   The variable already exists and ``overwrite`` was not non-zero (``flux_shell_setenvf()``).
+   The variable already exists and ``overwrite`` was not non-zero
+   (func:`flux_shell_setenvf`).
 
 ENOENT
-   With ``flux_shell_unsetenv()``, the target variable does not exist.
+   With :func:`flux_shell_unsetenv`, the target variable does not exist.
 
 RESOURCES
 =========

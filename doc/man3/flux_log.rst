@@ -23,7 +23,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_log()`` creates RFC 5424 format log messages. The log messages
+:func:`flux_log` creates RFC 5424 format log messages. The log messages
 are sent to the Flux message broker on *h* for handling if it is
 specified. If *h* is NULL, the log message is output to stderr.
 
@@ -58,10 +58,10 @@ When *h* is specified, log messages are are added to the broker's
 circular buffer which can be accessed with :man1:`flux-dmesg`. From there,
 a message's disposition is up to the broker's log configuration.
 
-``flux_log_set_procid()`` may be used to override the default procid,
+:func:`flux_log_set_procid` may be used to override the default procid,
 which is initialized to the calling process's PID.
 
-``flux_log_set_appname()`` may be used to override the default
+:func:`flux_log_set_appname` may be used to override the default
 application name, which is initialized to the value of the *\__progname*
 symbol (normally the argv[0] program name).
 
@@ -75,7 +75,7 @@ Internet RFC 5424.
 
 If the Flux handle *h* is specified, the following Syslog header
 fields are set in a Flux log messages when it is created within
-``flux_log()``:
+:func:`flux_log`:
 
 PRI
    Set to the user-specified severity level combined with the facility,
@@ -104,13 +104,13 @@ The STRUCTURED-DATA portion of the message is empty, and reserved for
 future use by Flux.
 
 The MSG portion is post-processed to ensure it contains no NULL's or non-ASCII
-characters. At this time non-ASCII UTF-8 is not supported by ``flux_log()``.
+characters. At this time non-ASCII UTF-8 is not supported by :func:`flux_log`.
 
 
 RETURN VALUE
 ============
 
-``flux_log()`` normally returns 0 on success, or -1 if there was
+:func:`flux_log` normally returns 0 on success, or -1 if there was
 a problem building or sending the log message, with errno set.
 
 

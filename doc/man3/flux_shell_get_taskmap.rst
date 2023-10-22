@@ -18,7 +18,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_shell_get_taskmap()`` returns the current shell task map. The
+:func:`flux_shell_get_taskmap` returns the current shell task map. The
 task map can be used to map job task ranks to node IDs and get the set
 of tasks assigned to any node ID. The returned ``struct taskmap`` object
 can be queried via the functions exported in ``libflux-taskmap.so``.

@@ -18,7 +18,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-The ``flux_job_timeleft()`` function determines if the calling process
+The :func:`flux_job_timeleft` function determines if the calling process
 is executing within the context of a Flux job (either a parallel job or
 a Flux instance running as a job), then handles querying the appropriate
 service for the remaining time in the job.
@@ -26,7 +26,7 @@ service for the remaining time in the job.
 RETURN VALUE
 ============
 
-``flux_job_timeleft()`` returns 0 on success with the remaining time in
+:func:`flux_job_timeleft` returns 0 on success with the remaining time in
 floating point seconds stored in ``timeleft``. If the job does not have
 an established time limit, then ``timeleft`` is set to ``inf``. If the job
 time limit has expired or the job is no longer running, then ``timeleft``

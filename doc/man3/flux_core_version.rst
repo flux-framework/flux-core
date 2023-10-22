@@ -52,18 +52,18 @@ Functions are also available to access the same values. While the header
 macros tell what version of flux-core your program was compiled against,
 the functions tell what version your program is dynamically linked with.
 
-``flux_core_version()`` sets *major*, *minor*, and *patch* to the values of
+:func:`flux_core_version` sets *major*, *minor*, and *patch* to the values of
 the macros above. If any parameters are NULL, no assignment is attempted.
 
-``flux_core_version_string()`` returns the string value.
+:func:`flux_core_version_string` returns the string value.
 
 
 RETURN VALUE
 ============
 
-``flux_core_version ()`` returns the hex version.
+:func:`flux_core_version` returns the hex version.
 
-``flux_core_version_string ()`` returns the version string
+:func:`flux_core_version_string` returns the version string
 
 
 ERRORS

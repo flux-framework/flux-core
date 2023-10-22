@@ -24,7 +24,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_aux_set()`` attaches application-specific data
+:func:`flux_aux_set` attaches application-specific data
 to the parent object *h*. It stores data *aux* by key *name*,
 with optional destructor *destroy*. The destructor, if non-NULL,
 is called when the parent object is destroyed, or when
@@ -33,9 +33,9 @@ the destructor for a previous value, if any is called,
 but no new value is stored. If *name* is NULL,
 *aux* is stored anonymously.
 
-``flux_aux_get()`` retrieves application-specific data
+:func:`flux_aux_get` retrieves application-specific data
 by *name*. If the data was stored anonymously, it
-cannot be retrieved.  Note that ``flux_aux_get()`` does not scale to a
+cannot be retrieved.  Note that :func:`flux_aux_get` does not scale to a
 large number of items, and flux module handles may persist for a long
 time.
 
@@ -45,9 +45,10 @@ Names beginning with "flux::" are reserved for internal use.
 RETURN VALUE
 ============
 
-``flux_aux_get()`` returns data on success, or NULL on failure, with errno set.
+:func:`flux_aux_get` returns data on success, or NULL on failure,
+with errno set.
 
-``flux_aux_set()`` returns 0 on success, or -1 on failure, with errno set.
+:func:`flux_aux_set` returns 0 on success, or -1 on failure, with errno set.
 
 
 ERRORS
@@ -60,7 +61,7 @@ ENOMEM
    Out of memory.
 
 ENOENT
-   ``flux_aux_get()`` could not find an entry for *key*.
+   :func:`flux_aux_get` could not find an entry for *key*.
 
 
 RESOURCES

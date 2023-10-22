@@ -19,20 +19,20 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_service_register()`` enables a new service *name* to be registered
+:func:`flux_service_register` enables a new service *name* to be registered
 with the flux broker.  On success, request message sent to "name.*" will
-be routed to this handle until ``flux_service_unregister()`` is called
+be routed to this handle until :func:`flux_service_unregister` is called
 for *name*.
 
-While ``flux_service_register()`` registers *name*, the user must
+While :func:`flux_service_register` registers *name*, the user must
 still setup a handler for the service.  One can be setup through
-``flux_msg_handler_addvec(3)``.
+:man3:`flux_msg_handler_addvec`.
 
 
 RETURN VALUE
 ============
 
-``flux_service_register()`` and ``flux_service_unregister()`` return a
+:func:`flux_service_register` and :func:`flux_service_unregister` return a
 ``flux_future_t`` on success, or NULL on failure with errno set
 appropriately.
 

@@ -21,7 +21,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_comms_error_set()`` configures an optional callback *fun* to
+:func:`flux_comms_error_set` configures an optional callback *fun* to
 be called internally by ``libflux_core`` if an error occurs when sending
 or receiving messages on the handle *h*.
 

@@ -29,7 +29,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_request_decode()`` decodes a request message *msg*.
+:func:`flux_request_decode` decodes a request message *msg*.
 
 *topic*, if non-NULL, will be set the message's topic string. The storage
 for this string belongs to *msg* and should not be freed.
@@ -38,12 +38,12 @@ for this string belongs to *msg* and should not be freed.
 If no payload exists, it is set to NULL. The storage for this string belongs
 to *msg* and should not be freed.
 
-``flux_request_unpack()`` decodes a request message with a JSON payload as
+:func:`flux_request_unpack` decodes a request message with a JSON payload as
 above, parsing the payload using variable arguments with a format string
-in the style of jansson's ``json_unpack()`` (used internally). Decoding fails
+in the style of jansson's :func:`json_unpack` (used internally). Decoding fails
 if the message doesn't have a JSON payload.
 
-``flux_request_decode_raw()`` decodes a request message with a raw payload,
+:func:`flux_request_decode_raw` decodes a request message with a raw payload,
 setting *data* and *len* to the payload data and length. The storage for
 the raw payload belongs to *msg* and should not be freed.
 

@@ -23,7 +23,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_msg_cmp()`` compares *msg* to *match* criteria.
+:func:`flux_msg_cmp` compares *msg* to *match* criteria.
 
 If *match.typemask* is nonzero, the type of the message must match
 one of the types in the mask.
@@ -38,7 +38,7 @@ string must match *match.topic_glob* according to the rules of shell wildcards.
 RETURN VALUE
 ============
 
-``flux_msg_cmp()`` returns true on a match, otherwise false.
+:func:`flux_msg_cmp` returns true on a match, otherwise false.
 
 
 RESOURCES

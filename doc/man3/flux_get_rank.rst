@@ -19,7 +19,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_get_rank()`` and ``flux_get_size()`` ask the
+:func:`flux_get_rank` and :func:`flux_get_size` ask the
 Flux broker for its rank in the Flux instance, and the size of the Flux
 instance.
 

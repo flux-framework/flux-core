@@ -19,8 +19,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_send()`` sends *msg* using the Flux Message broker,
-previously opened with ``flux_open()`` on handle *h*.
+:func:`flux_send` sends *msg* using the Flux Message broker,
+previously opened with :man3:`flux_open` on handle *h*.
 
 *flags* is the logical "or" of zero or more of the following flags:
 
@@ -31,12 +31,12 @@ FLUX_O_NONBLOCK
    If unable to send, return an error rather than block.
 
 Internally, flags are the logical "or" of *flags* and the flags provided
-to ``flux_open()`` when the handle was created.
+to :man3:`flux_open` when the handle was created.
 
 The message type, topic string, and nodeid affect how the message
 will be routed by the broker. These attributes are pre-set in the message.
 
-``flux_send_new()`` is the same, except message ownership is transferred
+:func:`flux_send_new` is the same, except message ownership is transferred
 to the handle *h*.  The double pointer *msg* points to a NULL value if
 the message is successfully transferred.  The send fails if the message
 reference count is greater than one.
@@ -45,7 +45,7 @@ reference count is greater than one.
 RETURN VALUE
 ============
 
-``flux_send()`` returns zero on success. On error, -1 is returned, and errno
+:func:`flux_send` returns zero on success. On error, -1 is returned, and errno
 is set appropriately.
 
 
@@ -59,7 +59,7 @@ EINVAL
    Some arguments were invalid.
 
 EAGAIN
-   ``FLUX_O_NONBLOCK`` was selected and ``flux_send()`` would block.
+   ``FLUX_O_NONBLOCK`` was selected and :func:`flux_send` would block.
 
 
 EXAMPLES

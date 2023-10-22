@@ -22,7 +22,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_shell_get_jobspec_info()`` returns jobspec summary information
+:func:`flux_shell_get_jobspec_info` returns jobspec summary information
 from the flux job shell as a json string. The only key guaranteed to
 be in the returned JSON object is the jobspec ``version``, e.g.
 
@@ -47,7 +47,7 @@ is shared with plugins in order to avoid duplication of effort.
 
 Currently only version 1 jobspec is supported.
 
-``flux_shell_jobspec_info_unpack()`` accomplishes the same thing with
+:func:`flux_shell_jobspec_info_unpack` accomplishes the same thing with
 Jansson-style formatting arguments.
 
 

@@ -26,14 +26,14 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux_shell_aux_set() attaches application-specific data to the parent
+:func:`flux_shell_aux_set` attaches application-specific data to the parent
 object. It stores data aux by key name, with optional destructor
 destroy. The destructor, if non-NULL, is called when the parent
 object is destroyed, or when key is overwritten by a new value. If aux
 is NULL, the destructor for a previous value, if any is called, but no
 new value is stored. If name is NULL, aux is stored anonymously.
 
-flux_shell_aux_get() retrieves application-specific data by name. If
+:func:`flux_shell_aux_get` retrieves application-specific data by name. If
 the data was stored anonymously, it cannot be retrieved.
 
 The implementation (as opposed to the header file) uses the variable
@@ -60,9 +60,9 @@ if the destructor exists.
 RETURN VALUE
 ============
 
-``flux_aux_set()`` returns 0 on success, or -1 on failure, with errno set.
+:func:`flux_aux_set` returns 0 on success, or -1 on failure, with errno set.
 
-``flux_shell_aux_get()`` returns data on success, or NULL on failure,
+:func:`flux_shell_aux_get` returns data on success, or NULL on failure,
 with errno set.
 
 
@@ -79,7 +79,7 @@ ENOMEM
    Out of memory.
 
 ENOENT
-   ``flux_aux_get()`` could not find an entry for *key*.
+   :func:`flux_aux_get` could not find an entry for *key*.
 
 
 RESOURCES

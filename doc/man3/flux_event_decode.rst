@@ -39,7 +39,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_event_decode()`` decodes a Flux event message *msg*.
+:func:`flux_event_decode` decodes a Flux event message *msg*.
 
 *topic*, if non-NULL, will be set to the message's topic string. The storage
 for this string belongs to *msg* and should not be freed.
@@ -48,30 +48,30 @@ for this string belongs to *msg* and should not be freed.
 If no payload exists, it is set to NULL. The storage for this string belongs
 to *msg* and should not be freed.
 
-``flux_event_decode_raw()`` decodes an event message with a raw payload,
+:func:`flux_event_decode_raw` decodes an event message with a raw payload,
 setting *data* and *len* to the payload data and length. The storage for
 the raw payload belongs to *msg* and should not be freed.
 
-``flux_event_unpack()`` decodes a Flux event message with a JSON payload as
+:func:`flux_event_unpack` decodes a Flux event message with a JSON payload as
 above, parsing the payload using variable arguments with a format string
-in the style of jansson's ``json_unpack()`` (used internally). Decoding fails
+in the style of jansson's :func:`json_unpack` (used internally). Decoding fails
 if the message doesn't have a JSON payload.
 
-``flux_event_encode()`` encodes a Flux event message with topic string *topic*
+:func:`flux_event_encode` encodes a Flux event message with topic string *topic*
 and optional NULL-terminated string payload *s*. The newly constructed
-message that is returned must be destroyed with ``flux_msg_destroy()``.
+message that is returned must be destroyed with :func:`flux_msg_destroy()`.
 
-``flux_event_encode_raw()`` encodes a Flux event message with topic
+:func:`flux_event_encode_raw` encodes a Flux event message with topic
 string *topic*. If *data* is non-NULL, its contents will be used as
 the message payload, and the payload type set to raw.
 
-``flux_event_pack()`` encodes a Flux event message with a JSON payload as
+:func:`flux_event_pack` encodes a Flux event message with a JSON payload as
 above, encoding the payload using variable arguments with a format string
-in the style of jansson's ``json_pack()`` (used internally). Decoding fails
+in the style of jansson's :func:`json_pack` (used internally). Decoding fails
 if the message doesn't have a JSON payload.
 
 Events propagated to all subscribers. Events will not be received
-without a matching subscription established using ``flux_event_subscribe()``.
+without a matching subscription established using :func:`flux_event_subscribe`.
 
 ENCODING JSON PAYLOADS
 ======================

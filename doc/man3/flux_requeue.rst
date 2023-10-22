@@ -17,8 +17,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_requeue()`` requeues a *msg* in handle *h*. The message
-can be received with ``flux_recv()`` as though it arrived from the broker.
+:func:`flux_requeue` requeues a *msg* in handle *h*. The message
+can be received with :man3:`flux_recv` as though it arrived from the broker.
 
 *flags* must be set to one of the following values:
 
@@ -32,7 +32,7 @@ FLUX_RQ_TAIL
 RETURN VALUE
 ============
 
-``flux_requeue()`` return zero on success.
+:func:`flux_requeue` return zero on success.
 On error, -1 is returned, and errno is set appropriately.
 
 

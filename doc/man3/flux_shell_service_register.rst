@@ -22,7 +22,7 @@ DESCRIPTION
 
 The job shell registers a unique service name with the flux broker on
 startup, and posts the topic string for this service in the context of
-the ``shell.init`` event. ``flux_shell_service_register()`` allows
+the ``shell.init`` event. :func:`flux_shell_service_register` allows
 registration of a request handler ``cb`` for subtopic ``method`` on this
 service endpoint, allowing other job shells and/or flux commands to
 interact with arbitrary services within a job.

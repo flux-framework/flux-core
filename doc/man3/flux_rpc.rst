@@ -53,14 +53,14 @@ DESCRIPTION
 ===========
 
 A remote procedure call (RPC) consists of a matched request and
-response message exchanged with a Flux service. ``flux_rpc()``,
-``flux_rpc_pack()``, and ``flux_rpc_raw()`` encode and send a request message
-via Flux broker handle *h* to a Flux service identified by *topic*
+response message exchanged with a Flux service. :func:`flux_rpc`,
+:func:`flux_rpc_pack`, and :func:`flux_rpc_raw` encode and send a request
+message via Flux broker handle *h* to a Flux service identified by *topic*
 and *nodeid*. A ``flux_future_t`` object is returned which acts as a handle
 for synchronization and a container for the response message which in
 turn contains the RPC result.
 
-A lower-level variant of ``flux_rpc()``, ``flux_rpc_message()`` accepts a
+A lower-level variant of :func:`flux_rpc`, :func:`flux_rpc_message` accepts a
 pre-created request message, assigning *nodeid* and matchtag according
 to *flags*.
 
@@ -69,30 +69,30 @@ to *flags*.
 :man3:`flux_future_wait_for` may be used to block until the
 response has been received. Both accept an optional timeout.
 
-``flux_rpc_get()``, ``flux_rpc_get_unpack()``, and ``flux_rpc_get_raw()``
-decode the RPC result. Internally, they call ``flux_future_get()``
+:func:`flux_rpc_get`, :func:`flux_rpc_get_unpack`, and :func:`flux_rpc_get_raw`
+decode the RPC result. Internally, they call :man3:`flux_future_get`
 to access the response message stored in the future. If the response
 message has not yet been received, these functions block until it is,
 or an error occurs.
 
-``flux_rpc_get_matchtag()`` and ``flux_rpc_get_nodeid()`` are accessors
+:func:`flux_rpc_get_matchtag` and :func:`flux_rpc_get_nodeid` are accessors
 which allow access to the RPC matchtag and target nodeid from the
-future returned from ``flux_rpc(3)``.
+future returned from :func:`flux_rpc`.
 
 
 REQUEST OPTIONS
 ===============
 
 The request message is encoded and sent with or without a payload
-using one of the three ``flux_rpc()`` variants.
+using one of the three :func:`flux_rpc` variants.
 
-``flux_rpc()`` attaches *s*, a NULL terminated string, as request
+:func:`flux_rpc` attaches *s*, a NULL terminated string, as request
 payload. If NULL, the request is encoded without a payload.
 
-``flux_rpc_pack()`` attaches a JSON payload encoded as a NULL terminated
-string using Jansson ``json_pack()`` style arguments (see below).
+:func:`flux_rpc_pack` attaches a JSON payload encoded as a NULL terminated
+string using Jansson :func:`json_pack` style arguments (see below).
 
-``flux_rpc_raw()`` attaches a raw payload *data* of length *len*, in bytes.
+:func:`flux_rpc_raw` attaches a raw payload *data* of length *len*, in bytes.
 If *data* is NULL, the request is encoded without a payload.
 
 *nodeid* affects request routing, and must be set to one of the following
@@ -128,18 +128,18 @@ The response message is stored in the future when the future is fulfilled.
 At that time it is decoded with :man3:`flux_response_decode`. If it cannot
 be decoded, or if the service returned an error, the future is fulfilled
 with an error. Otherwise it is fulfilled with the response message.
-If there was an error, ``flux_future_get()`` or the ``flux_rpc_get()`` variants
-return an error.
+If there was an error, :man3:`flux_future_get` or the :func:`flux_rpc_get`
+variants return an error.
 
-``flux_rpc_get()`` sets *s* (if non-NULL) to the NULL-terminated string
+:func:`flux_rpc_get` sets *s* (if non-NULL) to the NULL-terminated string
 payload contained in the RPC response. If there was no payload, *s*
 is set to NULL.
 
-``flux_rpc_get_unpack()`` decodes the NULL-terminated string payload as JSON
-using Jansson ``json_unpack()`` style arguments (see below). It is an error
+:func:`flux_rpc_get_unpack` decodes the NULL-terminated string payload as JSON
+using Jansson :func:`json_unpack` style arguments (see below). It is an error
 if there is no payload, or if the payload is not JSON.
 
-``flux_rpc_get_raw()`` assigns the raw payload of the RPC response message
+:func:`flux_rpc_get_raw` assigns the raw payload of the RPC response message
 to *data* and its length to *len*. If there is no payload, this function
 will fail.
 
@@ -183,18 +183,20 @@ DECODING JSON PAYLOADS
 RETURN VALUE
 ============
 
-``flux_rpc()``, ``flux_rpc_pack()``, and ``flux_rpc_raw()`` return a flux_future_t
-object on success. On error, NULL is returned, and errno is set appropriately.
+:func:`flux_rpc`, :func:`flux_rpc_pack`, and :func:`flux_rpc_raw` return a
+flux_future_t object on success. On error, NULL is returned, and errno
+is set appropriately.
 
-``flux_rpc_get()``, ``flux_rpc_get_unpack()``, and ``flux_rpc_get_raw()`` return
-zero on success. On error, -1 is returned, and errno is set appropriately.
+:func:`flux_rpc_get`, :func:`flux_rpc_get_unpack`, and :func:`flux_rpc_get_raw`
+return zero on success. On error, -1 is returned, and errno is set
+appropriately.
 
-``flux_rpc_get_matchtag()`` returns the matchtag allocated to the particular
+:func:`flux_rpc_get_matchtag` returns the matchtag allocated to the particular
 RPC request, or ``FLUX_MATCHTAG_NONE`` if no matchtag was allocated (e.g. no
 response is expected), or the future argument does not correspond to an RPC.
 
-``flux_rpc_get_nodeid()`` returns the original ``nodeid`` target of the
-``flux_rpc()`` request, including if the RPC was targeted to
+:func:`flux_rpc_get_nodeid` returns the original ``nodeid`` target of the
+:func:`flux_rpc` request, including if the RPC was targeted to
 ``FLUX_NODEID_ANY`` or ``FLUX_NODEID_UPSTREAM``.
 
 ERRORS

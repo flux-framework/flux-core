@@ -32,8 +32,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_prepare_watcher_create()``, ``flux_check_watcher_create()``, and
-``flux_idle_watcher_create()`` create specialized reactor watchers with
+:func:`flux_prepare_watcher_create`, :func:`flux_check_watcher_create`, and
+:func:`flux_idle_watcher_create` create specialized reactor watchers with
 the following properties:
 
 The prepare watcher is called by the reactor loop immediately before

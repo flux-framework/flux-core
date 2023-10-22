@@ -36,7 +36,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_periodic_watcher_create()`` creates a flux_watcher_t object which
+:func:`flux_periodic_watcher_create` creates a flux_watcher_t object which
 monitors for periodic events. The periodic watcher will trigger when the
 wall clock time *offset* has elapsed, and optionally again ever *interval*
 of wall clock time thereafter. If the *reschedule_cb* parameter is used,
@@ -64,7 +64,7 @@ on ``ev_periodic``.
 RETURN VALUE
 ============
 
-``flux_periodic_watcher_create()`` returns a flux_watcher_t object on success.
+:func:`flux_periodic_watcher_create` returns a flux_watcher_t object on success.
 On error, NULL is returned, and errno is set appropriately.
 
 

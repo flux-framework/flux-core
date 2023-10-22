@@ -28,7 +28,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_handle_watcher_create()`` creates a flux_watcher_t object which
+:func:`flux_handle_watcher_create` creates a flux_watcher_t object which
 monitors for events on a Flux broker handle *h*. When events occur,
 the user-supplied *callback* is invoked.
 
@@ -51,17 +51,17 @@ Events are processed in a level-triggered manner. That is, the
 callback will continue to be invoked as long as the event has not been
 fully consumed or cleared, and the watcher has not been stopped.
 
-``flux_handle_watcher_get_flux()`` is used to obtain the handle from
+:func:`flux_handle_watcher_get_flux` is used to obtain the handle from
 within the callback.
 
 
 RETURN VALUE
 ============
 
-``flux_handle_watcher_create()`` returns a flux_watcher_t object on success.
+:func:`flux_handle_watcher_create` returns a flux_watcher_t object on success.
 On error, NULL is returned, and errno is set appropriately.
 
-``flux_handle_watcher_get_flux()`` returns the handle associated with
+:func:`flux_handle_watcher_get_flux` returns the handle associated with
 the watcher.
 
 
