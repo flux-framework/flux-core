@@ -53,7 +53,7 @@ The Flux Key Value Store is a general purpose distributed storage
 service used by Flux services.
 
 :func:`flux_kvs_lookup` sends a request to the KVS service to look up
-*key* in namespace *ns*. It returns a ``flux_future_t`` object which
+*key* in namespace *ns*. It returns a :type:`flux_future_t` object which
 acts as handle for synchronization and container for the result. The
 namespace *ns* is optional. If set to NULL, :func:`flux_kvs_lookup` uses
 the default namespace, or if set, the namespace from the
@@ -175,7 +175,8 @@ RETURN VALUE
 ============
 
 :func:`flux_kvs_lookup` and :func:`flux_kvs_lookupat` return a
-``flux_future_t`` on success, or NULL on failure with errno set appropriately.
+:type:`flux_future_t` on success, or NULL on failure with errno set
+appropriately.
 
 :func:`flux_kvs_lookup_get`, :func:`flux_kvs_lookup_get_unpack`,
 :func:`flux_kvs_lookup_get_raw`, :func:`flux_kvs_lookup_get_dir`,

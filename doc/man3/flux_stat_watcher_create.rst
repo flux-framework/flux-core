@@ -51,8 +51,8 @@ is considered a status change like any other.
 RETURN VALUE
 ============
 
-:func:`flux_stat_watcher_create` returns a flux_watcher_t object on success.
-On error, NULL is returned, and errno is set appropriately.
+:func:`flux_stat_watcher_create` returns a :type:`flux_watcher_t` object
+on success.  On error, NULL is returned, and errno is set appropriately.
 
 
 ERRORS

@@ -29,9 +29,9 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_reactor_create` creates a flux_reactor_t object which can be used
-to monitor for events on file descriptors, ZeroMQ sockets, timers, and
-flux_t broker handles.
+:func:`flux_reactor_create` creates a :type:`flux_reactor_t` object which can
+be used to monitor for events on file descriptors, ZeroMQ sockets, timers, and
+:type:`flux_t` broker handles.
 
 There is currently only one possible flag for reactor creation:
 
@@ -39,15 +39,15 @@ FLUX_REACTOR_SIGCHLD
    The reactor will internally register a SIGCHLD handler and be capable
    of handling flux child watchers (see :man3:`flux_child_watcher_create`).
 
-For each event source and type that is to be monitored, a flux_watcher_t
+For each event source and type that is to be monitored, a :type:`flux_watcher_t`
 object is created using a type-specific create function, and started
 with :man3:`flux_watcher_start`.
 
-For each event source and type that is to be monitored, a flux_watcher_t
-object is created and associated with a specific reactor using a type-specific
-create function, and started with :man3:`flux_watcher_start`. To receive events,
-control must be transferred to the reactor event loop by calling
-:func:`flux_reactor_run`.
+For each event source and type that is to be monitored, a
+:type:`flux_watcher_t` object is created and associated with a specific
+reactor using a type-specific create function, and started with
+:man3:`flux_watcher_start`. To receive events, control must be transferred
+to the reactor event loop by calling :func:`flux_reactor_run`.
 
 The full list of flux reactor run flags is as follows:
 
@@ -94,7 +94,7 @@ so be sure to stop/incref such a watcher first.
 RETURN VALUE
 ============
 
-:func:`flux_reactor_create` returns a flux_reactor_t object on success.
+:func:`flux_reactor_create` returns a :type:`flux_reactor_t` object on success.
 On error, NULL is returned, and errno is set appropriately.
 
 :func:`flux_reactor_run` returns the number of active watchers on success.

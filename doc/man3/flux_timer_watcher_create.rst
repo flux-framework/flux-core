@@ -30,13 +30,13 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_timer_watcher_create` creates a flux_watcher_t object which
+:func:`flux_timer_watcher_create` creates a :type:`flux_watcher_t` object which
 monitors for timer events. A timer event occurs when *after* seconds
 have elapsed, and optionally again every *repeat* seconds.
 When events occur, the user-supplied *callback* is invoked.
 
-If *after* is 0., the flux_watcher_t will be immediately ready
-when the reactor is started. If *repeat* is 0., the flux_watcher_t
+If *after* is 0., the :type:`flux_watcher_t` will be immediately ready
+when the reactor is started. If *repeat* is 0., the :type:`flux_watcher_t`
 will automatically be stopped when *after* seconds have elapsed.
 
 Note that *after* is internally referenced to reactor time, which is
@@ -59,8 +59,8 @@ on the behavior of timers, refer to the libev documentation on ``ev_timer``.
 RETURN VALUE
 ============
 
-:func:`flux_timer_watcher_create` returns a flux_watcher_t object on success.
-On error, NULL is returned, and errno is set appropriately.
+:func:`flux_timer_watcher_create` returns a :type:`flux_watcher_t` object
+on success.  On error, NULL is returned, and errno is set appropriately.
 
 
 ERRORS

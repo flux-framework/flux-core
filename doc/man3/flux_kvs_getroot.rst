@@ -30,9 +30,10 @@ DESCRIPTION
 ===========
 
 :func:`flux_kvs_getroot` sends a request via handle *h* to the ``kvs``
-service to look up the current root hash for namespace *ns*. A ``flux_future_t``
-object is returned, which acts as handle for synchronization and container
-for the response. *flags* is currently unused and should be set to 0.
+service to look up the current root hash for namespace *ns*. A
+:type:`flux_future_t` object is returned, which acts as handle for
+synchronization and container for the response. *flags* is currently unused
+and should be set to 0.
 
 Upon future fulfillment, these functions can decode the result:
 
@@ -57,8 +58,8 @@ The *flags* mask is currently unused and should be set to 0.
 RETURN VALUE
 ============
 
-:func:`flux_kvs_getroot` returns a ``flux_future_t`` on success, or NULL on
-failure with errno set appropriately.
+:func:`flux_kvs_getroot` returns a :type:`flux_future_t` on success, or NULL
+on failure with errno set appropriately.
 
 The other functions return zero on success, or -1 on failure with errno
 set appropriately.

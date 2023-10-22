@@ -36,7 +36,7 @@ and next tasks, respectively.
 RETURN VALUE
 ============
 
-The relevant ``flux_shell_task_t*`` value, or NULL on error.
+The relevant :type:`flux_shell_task_t` value, or NULL on error.
 
 
 ERRORS

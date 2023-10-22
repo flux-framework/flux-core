@@ -20,14 +20,14 @@ DESCRIPTION
 
 :func:`flux_shell_get_taskmap` returns the current shell task map. The
 task map can be used to map job task ranks to node IDs and get the set
-of tasks assigned to any node ID. The returned ``struct taskmap`` object
+of tasks assigned to any node ID. The :type:`struct taskmap` object
 can be queried via the functions exported in ``libflux-taskmap.so``.
 
 
 RETURN VALUE
 ============
 
-This function returns a pointer to the shell's internal ``struct taskmap``
+This function returns a pointer to the shell's internal :type:`struct taskmap`
 or ``NULL`` on failure with ``errno`` set.
 
 

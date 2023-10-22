@@ -36,7 +36,7 @@ FLUX_POLLOUT
 FLUX_POLLERR
    Handle has experienced an error.
 
-These functions can be used to integrate a ``flux_t`` handle into an
+These functions can be used to integrate a :type:`flux_t` handle into an
 external event loop. They are analogous to the ZMQ_FD and ZMQ_EVENTS
 socket options provided by ZeroMQ.
 

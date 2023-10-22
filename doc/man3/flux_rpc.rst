@@ -56,7 +56,7 @@ A remote procedure call (RPC) consists of a matched request and
 response message exchanged with a Flux service. :func:`flux_rpc`,
 :func:`flux_rpc_pack`, and :func:`flux_rpc_raw` encode and send a request
 message via Flux broker handle *h* to a Flux service identified by *topic*
-and *nodeid*. A ``flux_future_t`` object is returned which acts as a handle
+and *nodeid*. A :type:`flux_future_t` object is returned which acts as a handle
 for synchronization and a container for the response message which in
 turn contains the RPC result.
 
@@ -112,8 +112,8 @@ integer
 
 FLUX_RPC_NORESPONSE
    No response is expected. The request will not be assigned a matchtag,
-   and the returned flux_future_t is immediately fulfilled, and may simply
-   be destroyed.
+   and the returned :type:`flux_future_t` is immediately fulfilled, and may
+   simply be destroyed.
 
 FLUX_RPC_STREAMING
    The RPC is for a service that may send zero or more non-error responses,
@@ -184,7 +184,7 @@ RETURN VALUE
 ============
 
 :func:`flux_rpc`, :func:`flux_rpc_pack`, and :func:`flux_rpc_raw` return a
-flux_future_t object on success. On error, NULL is returned, and errno
+:type:`flux_future_t` object on success. On error, NULL is returned, and errno
 is set appropriately.
 
 :func:`flux_rpc_get`, :func:`flux_rpc_get_unpack`, and :func:`flux_rpc_get_raw`
@@ -204,7 +204,7 @@ ERRORS
 
 ENOSYS
    Service is not available (misspelled topic string, module not loaded, etc),
-   or flux_t handle has no send operation.
+   or :type:`flux_t` handle has no send operation.
 
 EINVAL
    Some arguments were invalid.

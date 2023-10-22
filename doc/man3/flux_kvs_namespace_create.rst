@@ -53,7 +53,7 @@ RETURN VALUE
 ============
 
 :func:`flux_kvs_namespace_create` and :func:`flux_kvs_namespace_remove` return
-a ``flux_future_t`` on success, or NULL on failure with errno set
+a :type:`flux_future_t` on success, or NULL on failure with errno set
 appropriately.
 
 

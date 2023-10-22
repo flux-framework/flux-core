@@ -52,8 +52,8 @@ per program may be created with this capability.
 RETURN VALUE
 ============
 
-:func:`flux_child_watcher_create` returns a flux_watcher_t object on success.
-On error, NULL is returned, and errno is set appropriately.
+:func:`flux_child_watcher_create` returns a :type:`flux_watcher_t` object on
+success.  On error, NULL is returned, and errno is set appropriately.
 
 
 ERRORS

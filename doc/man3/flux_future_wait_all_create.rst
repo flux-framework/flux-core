@@ -31,7 +31,7 @@ DESCRIPTION
 ===========
 
 See :man3:`flux_future_get` for general functions that operate on futures,
-and :man3:`flux_future_create` for a description of the ``flux_future_t``
+and :man3:`flux_future_create` for a description of the :type:`flux_future_t`
 base type. This page covers functions used for composing futures into
 composite types using containers that allow waiting on all or any of a
 set of child futures.
@@ -58,7 +58,7 @@ composite created by either :func:`flux_future_wait_all_create` or
 that the child future can be easily differentiated from other futures
 inside the container once the composite future is fulfilled.
 
-Once a ``flux_future_t`` is pushed onto a composite future with
+Once a :type:`flux_future_t` is pushed onto a composite future with
 :func:`flux_future_push`, the memory for the child future is "adopted" by
 the new parent. Thus, calling :man3:`flux_future_destroy` on the parent
 composite will destroy all children. Therefore, child futures that
@@ -68,7 +68,7 @@ have been the target of :func:`flux_future_push` should **not** have
 :func:`flux_future_first_child` and :func:`flux_future_next_child` are used to
 iterate over child future names in a composite future created with either
 :func:`flux_future_wait_all_create` or :func:`flux_future_wait_any_create`. The
-``flux_future_t`` corresponding to the returned *name* can be then
+:type:`flux_future_t` corresponding to the returned *name* can be then
 fetched with :func:`flux_future_get_child`. :func:`flux_future_next_child` will
 return a ``NULL`` once all children have been iterated.
 
@@ -94,8 +94,8 @@ a NULL is returned.
 targeted composite in no given order. If the last child has already been
 returned then this function returns NULL.
 
-:func:`flux_future_get_child` returns a ``flux_future_t`` corresponding to the
-child future with the supplied string ``name`` parameter. If no future with
+:func:`flux_future_get_child` returns a :type:`flux_future_t` corresponding to
+the child future with the supplied string ``name`` parameter. If no future with
 that name is a child of the composite, then the function returns NULL.
 
 

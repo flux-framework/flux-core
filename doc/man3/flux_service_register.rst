@@ -33,7 +33,7 @@ RETURN VALUE
 ============
 
 :func:`flux_service_register` and :func:`flux_service_unregister` return a
-``flux_future_t`` on success, or NULL on failure with errno set
+:type:`flux_future_t` on success, or NULL on failure with errno set
 appropriately.
 
 

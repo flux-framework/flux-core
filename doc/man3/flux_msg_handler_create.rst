@@ -41,7 +41,7 @@ order to receive messages. Conversely, :func:`flux_msg_handler_stop` causes
 the message handler to stop receiving messages. Starting and stopping
 are idempotent operations.
 
-The handle *h* is monitored for FLUX_POLLIN events on the flux_reactor_t
+The handle *h* is monitored for FLUX_POLLIN events on the :type:`flux_reactor_t`
 associated with the handle as described in :man3:`flux_set_reactor`.
 This internal "handle watcher" is started when the first message handler
 is started, and stopped when the last message handler is stopped.
@@ -75,7 +75,7 @@ stopping it.
 CAVEATS
 =======
 
-Although it is possible to register a message handler in a given `flux_t`
+Although it is possible to register a message handler in a given :type:`flux_t`
 handle for any topic string, :man1:`flux-broker` does not automatically route
 matching requests or events to the handle.
 
@@ -90,8 +90,8 @@ with :man3:`flux_event_subscribe`.
 RETURN VALUE
 ============
 
-:func:`flux_msg_handler_create` returns a flux_msg_handler_t object on success.
-On error, NULL is returned, and errno is set appropriately.
+:func:`flux_msg_handler_create` returns a :type:`flux_msg_handler_t` object on
+success.  On error, NULL is returned, and errno is set appropriately.
 
 
 ERRORS

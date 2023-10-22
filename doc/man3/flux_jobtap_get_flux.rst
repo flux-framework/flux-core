@@ -41,7 +41,7 @@ These interfaces are used by Flux *jobtap* plugins which are used to
 extend the job manager broker module.
 
 :func:`flux_jobtap_get_flux` returns the job manager's Flux handle given
-the plugin's ``flux_plugin_t *``. This can be used by a *jobtap* plugin
+the plugin's :type:`flux_plugin_t`. This can be used by a *jobtap* plugin
 to send RPCs, schedule timer watchers, or other asynchronous work.
 
 :func:`flux_jobtap_service_register` registers a service name ``method``
@@ -80,9 +80,9 @@ function returns ``-1`` so that it may be conveniently called as::
 RETURN VALUE
 ============
 
-:func:`flux_jobtap_get_flux` returns a ``flux_t *`` handle on success. ``NULL``
-is returned with errno set to ``EINVAL`` if the supplied ``flux_plugin_t *p``
-is not a jobtap plugin handle.
+:func:`flux_jobtap_get_flux` returns a :type:`flux_t` handle on success.
+``NULL`` is returned with errno set to ``EINVAL`` if the supplied
+:type:`flux_plugin_t` argument is not a jobtap plugin handle.
 
 :func:`flux_jobtap_reject_job` always returns ``-1`` so that it may be used
 to exit the ``job.validate`` callback.

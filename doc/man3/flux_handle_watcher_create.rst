@@ -28,8 +28,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_handle_watcher_create` creates a flux_watcher_t object which
-monitors for events on a Flux broker handle *h*. When events occur,
+:func:`flux_handle_watcher_create` creates a :type:`flux_watcher_t` object
+which monitors for events on a Flux broker handle *h*. When events occur,
 the user-supplied *callback* is invoked.
 
 The *events* and *revents* arguments are a bitmask containing a
@@ -58,8 +58,8 @@ within the callback.
 RETURN VALUE
 ============
 
-:func:`flux_handle_watcher_create` returns a flux_watcher_t object on success.
-On error, NULL is returned, and errno is set appropriately.
+:func:`flux_handle_watcher_create` returns a :type:`flux_watcher_t` object
+on success.  On error, NULL is returned, and errno is set appropriately.
 
 :func:`flux_handle_watcher_get_flux` returns the handle associated with
 the watcher.

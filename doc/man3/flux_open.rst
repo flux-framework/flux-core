@@ -27,9 +27,9 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_open` and :func:`flux_open_ex` create a ``flux_t`` handle, used
+:func:`flux_open` and :func:`flux_open_ex` create a :type:`flux_t` handle, used
 to communicate with the Flux message broker. :func:`flux_open_ex` takes an
-optional pointer to a ``flux_error_t`` structure which, when non-NULL, will
+optional pointer to a :type:`flux_error_t` structure which, when non-NULL, will
 be used to store any errors which may have otherwise gone to ``stderr``.
 
 The *uri* scheme (before "://") specifies the "connector" that will be used
@@ -76,7 +76,7 @@ may be needed before a client can continue normal operation:
 - Restore service registrations.
 - Restore event subscriptions.
 
-:func:`flux_clone` creates another reference to a ``flux_t`` handle that is
+:func:`flux_clone` creates another reference to a :type:`flux_t` handle that is
 identical to the original in all respects except that it does not inherit
 a copy of the original handle's "aux" hash, or its reactor and message
 dispatcher references. By creating a clone, and calling
@@ -84,15 +84,15 @@ dispatcher references. By creating a clone, and calling
 handle that run on a different reactor than the one associated with the
 original handle.
 
-:func:`flux_close` destroys a ``flux_t`` handle, closing its connection with
+:func:`flux_close` destroys a :type:`flux_t` handle, closing its connection with
 the Flux message broker.
 
 
 RETURN VALUE
 ============
 
-:func:`flux_open` and :func:`flux_clone` return a ``flux_t`` handle on success.
-On error, NULL is returned, with errno set.
+:func:`flux_open` and :func:`flux_clone` return a :type:`flux_t`` handle on
+success.  On error, NULL is returned, with errno set.
 
 
 ERRORS

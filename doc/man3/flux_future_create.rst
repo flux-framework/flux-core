@@ -62,7 +62,7 @@ This page describes the future interfaces used by such classes.
 A class that returns a future usually provides a creation function that
 internally calls :func:`flux_future_create`, and may provide functions to
 access class-specific result(s), that internally call :man3:`flux_future_get`.
-The create function internally registers a *flux_future_init_f*
+The create function internally registers a :type:`flux_future_init_f`
 function that is called lazily by the future implementation to perform
 class-specific reactor setup, such as installing watchers and message
 handlers.
@@ -71,7 +71,7 @@ handlers.
 class-specific initialization callback *cb*, and an opaque argument
 *arg* that will be passed to *cb*. The purpose of the initialization
 callback is to set up class-specific watchers on a reactor obtained
-with :func:`flux_future_get_reactor`, or message handlers on a flux_t
+with :func:`flux_future_get_reactor`, or message handlers on a :type:`flux_t`
 handle obtained with :func:`flux_future_get_flux`, or both.
 :func:`flux_future_get_reactor` and :func:`flux_future_get_flux` return
 different results depending on whether the initialization callback is
@@ -156,9 +156,10 @@ result that depends on which context they are called from.
 When the user calls :man3:`flux_future_then`, this triggers a call to the
 initialization callback. The callback would typically call
 :func:`flux_future_get_reactor` and/or :func:`flux_future_get_flux()` to obtain
-the reactor or flux_t handle to be used to set up watchers or message handlers.
-In this context, the reactor or flux_t handle are exactly the ones passed
-to :func:`flux_future_set_reactor` and :func:`flux_future_set_flux`.
+the reactor or :type:`flux_t` handle to be used to set up watchers or message
+handlers.  In this context, the reactor or :type:`flux_t` handle are exactly
+the ones passed to :func:`flux_future_set_reactor` and
+:func:`flux_future_set_flux`.
 
 When the user calls :man3:`flux_future_wait_for`, this triggers the creation
 of a temporary reactor, then a call to the initialization callback.
@@ -167,11 +168,11 @@ events, without allowing unrelated watchers registered in the main reactor
 to run, which might complicate the application's control flow. In this
 context, :func:`flux_future_get_reactor` returns the temporary reactor, not
 the one passed in with :func:`flux_future_set_reactor`.
-:func:`flux_future_get_flux` returns a temporary flux_t handle cloned from
-the one passed to :func:`flux_future_set_flux`, and associated with the
+:func:`flux_future_get_flux` returns a temporary :type:`flux_t` handle cloned
+from the one passed to :func:`flux_future_set_flux`, and associated with the
 temporary reactor.
 After the internal reactor returns, any messages unmatched by the dispatcher
-on the cloned handle are requeued in the main flux_t handle with
+on the cloned handle are requeued in the main :type:`flux_t` handle with
 :func:`flux_dispatch_requeue`.
 
 Since the init callback may be made in either reactor context (at most once
@@ -194,11 +195,11 @@ returned and errno is set appropriately.
 :func:`flux_future_aux_get` returns the requested object on success. On
 error, NULL is returned and errno is set appropriately.
 
-:func:`flux_future_get_flux` returns a flux_t handle on success. On error,
-NULL is returned and errno is set appropriately.
+:func:`flux_future_get_flux` returns a :type:`flux_t` handle on success.
+On error, NULL is returned and errno is set appropriately.
 
-:func:`flux_future_get_reactor` returns a flux_reactor_t on success. On error,
-NULL is returned and errno is set appropriately.
+:func:`flux_future_get_reactor` returns a :type:`flux_reactor_t` on success.
+On error, NULL is returned and errno is set appropriately.
 
 :func:`flux_future_fulfill_with` returns zero on success. On error, -1 is
 returned with errno set to EINVAL if either *f* or *p* is NULL, or

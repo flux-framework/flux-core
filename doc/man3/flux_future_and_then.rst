@@ -35,7 +35,7 @@ DESCRIPTION
 ===========
 
 See :man3:`flux_future_get` for general functions that operate on futures,
-and :man3:`flux_future_create` for a description of the ``flux_future_t``
+and :man3:`flux_future_create` for a description of the :type:`flux_future_t`
 base type. This page covers functions for the sequential composition of
 futures, i.e. chains of dependent futures.
 
@@ -47,7 +47,7 @@ error, the error from ``f`` is automatically propagated to the "next"
 future in the chain (returned by the function).
 
 :func:`flux_future_and_then` is useful when a series of asynchronous
-operations, each returning a ``flux_future_t``, depend on the result
+operations, each returning a :type:`flux_future_t`, depend on the result
 of a previous operation. That is, :func:`flux_future_and_then` returns a
 placeholder future for an eventual future that can't be created until
 the continuation ``cb`` is run. The returned future can then be
@@ -104,8 +104,8 @@ RETURN VALUE
 ============
 
 :func:`flux_future_and_then` and :func:`flux_future_or_then` return a
-``flux_future_t`` on success, or NULL on error. If both functions are
-called on the same future, the returned ``flux_future_t`` from each will
+:type:`flux_future_t` on success, or NULL on error. If both functions are
+called on the same future, the returned :type:`flux_future_t` from each will
 be the same object.
 
 :func:`flux_future_continue` returns 0 on success, or -1 on error with errno

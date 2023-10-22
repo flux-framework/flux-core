@@ -64,8 +64,8 @@ failure.
 RETURN VALUE
 ============
 
-:func:`flux_kvs_copy` and :func:`flux_kvs_move` return a ``flux_future_t`` on
-success, or NULL on failure with errno set appropriately.
+:func:`flux_kvs_copy` and :func:`flux_kvs_move` return a :type:`flux_future_t`
+on success, or NULL on failure with errno set appropriately.
 
 
 ERRORS

@@ -26,7 +26,7 @@ broker to export information needed by Flux services and utilities.
 :func:`flux_attr_get` retrieves the value of the attribute *name*.
 
 Attributes that have the broker tags as *immutable* are cached automatically
-in the flux_t handle. For example, the "rank" attribute is a frequently
+in the :type:`flux_t` handle. For example, the "rank" attribute is a frequently
 accessed attribute whose value never changes. It will be cached on the first
 access and thereafter does not require an RPC to the broker to access.
 

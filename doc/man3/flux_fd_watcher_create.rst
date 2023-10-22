@@ -28,8 +28,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_fd_watcher_create()` creates a flux_watcher_t object which can be
-used to monitor for events on a file descriptor *fd*. When events occur,
+:func:`flux_fd_watcher_create()` creates a :type:`flux_watcher_t` object which
+can be used to monitor for events on a file descriptor *fd*. When events occur,
 the user-supplied *callback* is invoked.
 
 The *events* and *revents* arguments are a bitmask containing a logical
@@ -52,14 +52,14 @@ will continue to be invoked as long as the event has not been
 fully consumed or cleared, and the watcher has not been stopped.
 
 :func:`flux_fd_watcher_get_fd` is used to obtain the file descriptor from
-within the flux_watcher_f callback.
+within the :type:`flux_watcher_f callback`.
 
 
 RETURN VALUE
 ============
 
-:func:`flux_fd_watcher_create` returns a flux_watcher_t object on success.
-On error, NULL is returned, and errno is set appropriately.
+:func:`flux_fd_watcher_create` returns a :type:`flux_watcher_t` object on
+success.  On error, NULL is returned, and errno is set appropriately.
 
 :func:`flux_fd_watcher_get_fd` returns the file descriptor associated with
 the watcher.

@@ -35,7 +35,7 @@ DESCRIPTION
 :func:`flux_kvs_commit` sends a request via handle *h* to the KVS service
 to commit a transaction *txn*. *txn* is created with
 :man3:`flux_kvs_txn_create` and after commit completion, is destroyed
-with :man3:`flux_kvs_txn_destroy`. A ``flux_future_t`` object is returned,
+with :man3:`flux_kvs_txn_destroy`. A :type:`flux_future_t` object is returned,
 which acts as handle for synchronization and container for the
 response. The *txn* will operate in the namespace specified by *ns*.
 If *ns* is NULL, :func:`flux_kvs_commit` will operate on the default
@@ -59,7 +59,7 @@ block until the response has been received. Both accept an optional timeout.
 :func:`flux_kvs_commit_get_sequence` can decode the response. A return of
 0 indicates success and the entire transaction was committed. A
 return of -1 indicates failure, none of the transaction was committed.
-All can be used on the ``flux_future_t`` returned by :func:`flux_kvs_commit`
+All can be used on the :type:`flux_future_t` returned by :func:`flux_kvs_commit`
 or :func:`flux_kvs_fence`.
 
 In addition to checking for success or failure,
@@ -91,8 +91,9 @@ FLUX_KVS_NO_MERGE
 RETURN VALUE
 ============
 
-:func:`flux_kvs_commit` and :func:`flux_kvs_fence` return a ``flux_future_t`` on
-success, or NULL on failure with errno set appropriately.
+:func:`flux_kvs_commit` and :func:`flux_kvs_fence` return a
+:type:`flux_future_t` on success, or NULL on failure with errno set
+appropriately.
 
 
 ERRORS

@@ -81,7 +81,7 @@ that are in conflict with the requested operation are overwritten.
 
 :func:`flux_kvs_txn_pack` sets *key* to a NULL terminated string encoded
 from a JSON object built with :func:`json_pack` style arguments (see below).
-:func:`flux_kvs_txn_vpack` is a variant that accepts a *va_list* argument.
+:func:`flux_kvs_txn_vpack` is a variant that accepts a :type:`va_list` argument.
 
 :func:`flux_kvs_txn_mkdir` sets *key* to an empty directory.
 
@@ -120,7 +120,7 @@ ENCODING JSON PAYLOADS
 RETURN VALUE
 ============
 
-:func:`flux_kvs_txn_create` returns a ``flux_kvs_txn_t`` object on success,
+:func:`flux_kvs_txn_create` returns a :type:`flux_kvs_txn_t` object on success,
 or NULL on failure with errno set appropriately.
 
 :func:`flux_kvs_txn_put`, :func:`flux_kvs_txn_pack`, :func:`flux_kvs_txn_mkdir`,

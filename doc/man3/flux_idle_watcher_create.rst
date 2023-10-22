@@ -55,7 +55,7 @@ on the behavior of these watchers, refer to the libev documentation on
 RETURN VALUE
 ============
 
-These functions return a flux_watcher_t object on success.
+These functions return a :type:`flux_watcher_t` object on success.
 On error, NULL is returned, and errno is set appropriately.
 
 
