@@ -2,6 +2,7 @@
 flux_comms_error_set(3)
 =======================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

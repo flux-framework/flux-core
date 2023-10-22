@@ -2,6 +2,7 @@
 flux_shell_task_channel_subscribe(3)
 ====================================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

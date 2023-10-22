@@ -2,6 +2,7 @@
 flux_recv(3)
 ============
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

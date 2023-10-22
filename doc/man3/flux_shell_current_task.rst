@@ -2,6 +2,7 @@
 flux_shell_current_task(3)
 ==========================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

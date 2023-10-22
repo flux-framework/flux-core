@@ -2,6 +2,7 @@
 flux_request_encode(3)
 ======================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

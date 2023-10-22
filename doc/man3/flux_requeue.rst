@@ -2,6 +2,7 @@
 flux_requeue(3)
 ===============
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

@@ -2,6 +2,7 @@
 flux_get_rank(3)
 ================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

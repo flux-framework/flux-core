@@ -2,6 +2,7 @@
 flux_open(3)
 ============
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

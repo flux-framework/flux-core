@@ -2,6 +2,7 @@
 flux_future_get(3)
 ==================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

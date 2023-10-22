@@ -2,6 +2,7 @@
 flux_shell_plugstack_call(3)
 ============================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

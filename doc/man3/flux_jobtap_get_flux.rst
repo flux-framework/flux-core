@@ -2,6 +2,7 @@
 flux_jobtap_get_flux(3)
 =======================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

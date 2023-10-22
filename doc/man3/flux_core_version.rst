@@ -2,6 +2,7 @@
 flux_core_version(3)
 ====================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

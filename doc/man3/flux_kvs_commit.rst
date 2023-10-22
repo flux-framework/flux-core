@@ -2,6 +2,7 @@
 flux_kvs_commit(3)
 ==================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

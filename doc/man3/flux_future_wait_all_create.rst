@@ -2,6 +2,7 @@
 flux_future_wait_all_create(3)
 ==============================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

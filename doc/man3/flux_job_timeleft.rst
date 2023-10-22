@@ -2,6 +2,7 @@
 flux_job_timeleft(3)
 ====================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

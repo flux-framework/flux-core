@@ -2,6 +2,7 @@
 flux_kvs_txn_create(3)
 ======================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

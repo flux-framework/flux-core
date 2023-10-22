@@ -2,6 +2,7 @@
 flux_shell_service_register(3)
 ==============================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

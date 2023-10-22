@@ -2,6 +2,7 @@
 flux_log(3)
 ===========
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

@@ -2,6 +2,7 @@
 flux_shell_task_subprocess(3)
 =============================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

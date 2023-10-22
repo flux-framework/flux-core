@@ -2,6 +2,7 @@
 flux_shell_add_event_context(3)
 ===============================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

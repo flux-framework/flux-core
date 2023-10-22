@@ -2,6 +2,7 @@
 flux_flags_set(3)
 =================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

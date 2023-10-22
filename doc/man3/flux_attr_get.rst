@@ -2,6 +2,7 @@
 flux_attr_get(3)
 ================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

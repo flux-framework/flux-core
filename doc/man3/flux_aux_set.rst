@@ -2,6 +2,7 @@
 flux_aux_set(3)
 ===============
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

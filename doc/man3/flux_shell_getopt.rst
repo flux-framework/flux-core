@@ -2,6 +2,7 @@
 flux_shell_getopt(3)
 ====================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

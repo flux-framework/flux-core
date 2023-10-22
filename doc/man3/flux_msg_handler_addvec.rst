@@ -2,6 +2,7 @@
 flux_msg_handler_addvec(3)
 ==========================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

@@ -2,6 +2,7 @@
 idset_add(3)
 ============
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

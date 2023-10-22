@@ -2,6 +2,7 @@
 flux_shell_get_info(3)
 ======================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

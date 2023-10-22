@@ -2,6 +2,7 @@
 flux_msg_cmp(3)
 ===============
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

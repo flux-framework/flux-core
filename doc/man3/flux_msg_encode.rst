@@ -2,6 +2,7 @@
 flux_msg_encode(3)
 ==================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

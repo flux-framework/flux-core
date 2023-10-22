@@ -2,6 +2,7 @@
 flux_response_decode(3)
 =======================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

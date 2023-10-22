@@ -2,6 +2,7 @@
 flux_shell_rpc_pack(3)
 ======================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

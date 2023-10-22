@@ -2,6 +2,7 @@
 flux_send(3)
 ============
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

@@ -2,6 +2,7 @@
 flux_shell_get_hwloc_xml(3)
 ===========================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

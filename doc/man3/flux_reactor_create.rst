@@ -2,6 +2,7 @@
 flux_reactor_create(3)
 ======================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

@@ -2,6 +2,7 @@
 flux_event_subscribe(3)
 =======================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

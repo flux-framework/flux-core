@@ -2,6 +2,7 @@
 flux_sync_create(3)
 ===================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

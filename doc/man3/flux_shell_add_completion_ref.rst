@@ -2,6 +2,7 @@
 flux_shell_add_completion_ref(3)
 ================================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========

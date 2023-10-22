@@ -2,6 +2,7 @@
 flux_watcher_start(3)
 =====================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
