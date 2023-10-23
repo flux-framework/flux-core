@@ -25,20 +25,20 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_kvs_copy` sends a request via handle *h* to the KVS service
-to look up the directory entry of *srckey*. Upon receipt of the response,
-it then sends another request to commit a duplicate at *dstkey*.
-*commit_flags* are passed through to the commit operation.
+:func:`flux_kvs_copy` sends a request via handle :var:`h` to the KVS service
+to look up the directory entry of :var:`srckey`. Upon receipt of the response,
+it then sends another request to commit a duplicate at :var:`dstkey`.
+:var:`commit_flags` are passed through to the commit operation.
 See the FLAGS section of :man3:`flux_kvs_commit`.
 
-The net effect is that all content below *srckey* is copied to *dstkey*.
-Due to the hash tree organization of the KVS name space, only the
-directory entry needs to be duplicated to create a new, fully independent
+The net effect is that all content below :var:`srckey` is copied to
+:var:`dstkey`.  Due to the hash tree organization of the KVS name space, only
+the directory entry needs to be duplicated to create a new, fully independent
 deep copy of the original data.
 
 :func:`flux_kvs_move` first performs a :func:`flux_kvs_copy`, then sends a
-commit request to unlink *srckey*. *commit_flags* are passed through to
-the commit within :func:`flux_kvs_copy`, and to the commit which performs
+commit request to unlink :var:`srckey`. :var:`commit_flags` are passed through
+to the commit within :func:`flux_kvs_copy`, and to the commit which performs
 the unlink.
 
 :func:`flux_kvs_copy` and :func:`flux_kvs_move` are capable of working across

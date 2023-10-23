@@ -33,8 +33,8 @@ DESCRIPTION
 
 :func:`flux_shell_getenv` returns the value of an environment variable from
 the global job environment.  :func:`flux_shell_get_environ` returns 0 on
-success with ``*json_str`` set to an allocated JSON string, or -1 on failure
-with ``errno`` set.  :func:`flux_shell_setenvf` sets an environment variable
+success with :var:`json_str` set to an allocated JSON string, or -1 on failure
+with :var:`errno` set.  :func:`flux_shell_setenvf` sets an environment variable
 in the global job environment using :linux:man3:`printf` style format
 arguments.  :func:`flux_shell_unsetenv` unsets the specified environment
 variable in the global job environment.
@@ -43,7 +43,7 @@ variable in the global job environment.
 RETURN VALUE
 ============
 
-:func:`flux_shell_getenv` returns NULL if either ``shell`` or ``name``
+:func:`flux_shell_getenv` returns NULL if either :var:`shell` or :var:`name`
 is NULL, or if the variable is not found.
 
 :func:`flux_shell_get_environ` returns a json string on success or NULL on
@@ -57,10 +57,10 @@ ERRORS
 ======
 
 EINVAL
-   ``shell``, ``name`` or ``fmt`` is NULL.
+   :var:`shell`, :var:`name` or :var:`fmt` is NULL.
 
 EEXIST
-   The variable already exists and ``overwrite`` was not non-zero
+   The variable already exists and :var:`overwrite` was not non-zero
    (func:`flux_shell_setenvf`).
 
 ENOENT

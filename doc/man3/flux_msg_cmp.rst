@@ -23,16 +23,17 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_msg_cmp` compares *msg* to *match* criteria.
+:func:`flux_msg_cmp` compares :var:`msg` to :var:`match` criteria.
 
-If *match.typemask* is nonzero, the type of the message must match
+If :var:`match.typemask` is nonzero, the type of the message must match
 one of the types in the mask.
 
-If *match.matchtag* is not FLUX_MATCHTAG_NONE, the message matchtag
-must match *match.matchtag*.
+If :var:`match.matchtag` is not FLUX_MATCHTAG_NONE, the message matchtag
+must match :var:`match.matchtag`.
 
-If *match.topic_glob* is not NULL or an empty string, then the message topic
-string must match *match.topic_glob* according to the rules of shell wildcards.
+If :var:`match.topic_glob` is not NULL or an empty string, then the message
+topic string must match :var:`match.topic_glob` according to the rules of
+shell wildcards.
 
 
 RETURN VALUE

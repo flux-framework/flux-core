@@ -32,12 +32,12 @@ DESCRIPTION
 :func:`flux_kvs_namespace_create` creates a KVS namespace. Within a
 namespace, users can get/put KVS values completely independent of
 other KVS namespaces. An owner of the namespace other than the
-instance owner can be chosen by setting *owner*. Otherwise, *owner*
+instance owner can be chosen by setting :var:`owner`. Otherwise, :var:`owner`
 can be set to FLUX_USERID_UNKNOWN.
 
 :func:`flux_kvs_namespace_create_with` is identical to
 :func:`flux_kvs_namespace_create` but will initialize the namespace to
-the specified *rootref*.  This may be useful in several circumstances,
+the specified :var:`rootref`.  This may be useful in several circumstances,
 such as initializing a namespace to an earlier checkpoint.
 
 :func:`flux_kvs_namespace_remove` removes a KVS namespace.
@@ -46,14 +46,14 @@ such as initializing a namespace to an earlier checkpoint.
 FLAGS
 =====
 
-The *flags* mask is currently unused and should be set to 0.
+The :var:`flags` mask is currently unused and should be set to 0.
 
 
 RETURN VALUE
 ============
 
 :func:`flux_kvs_namespace_create` and :func:`flux_kvs_namespace_remove` return
-a :type:`flux_future_t` on success, or NULL on failure with errno set
+a :type:`flux_future_t` on success, or NULL on failure with :var:`errno` set
 appropriately.
 
 

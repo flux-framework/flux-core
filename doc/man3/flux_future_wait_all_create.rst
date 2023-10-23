@@ -52,9 +52,9 @@ future is fulfilled, the caller will need to traverse the child futures
 to determine which was fulfilled. This function is useful to synchronize
 on work where any one of several results is sufficient to continue.
 
-:func:`flux_future_push` places a new child future ``f`` into a future
+:func:`flux_future_push` places a new child future :var:`f` into a future
 composite created by either :func:`flux_future_wait_all_create` or
-:func:`flux_future_wait_any_create`. A ``name`` is provided for the child so
+:func:`flux_future_wait_any_create`. A :var:`name` is provided for the child so
 that the child future can be easily differentiated from other futures
 inside the container once the composite future is fulfilled.
 
@@ -68,7 +68,7 @@ have been the target of :func:`flux_future_push` should **not** have
 :func:`flux_future_first_child` and :func:`flux_future_next_child` are used to
 iterate over child future names in a composite future created with either
 :func:`flux_future_wait_all_create` or :func:`flux_future_wait_any_create`. The
-:type:`flux_future_t` corresponding to the returned *name* can be then
+:type:`flux_future_t` corresponding to the returned :var:`name` can be then
 fetched with :func:`flux_future_get_child`. :func:`flux_future_next_child` will
 return a ``NULL`` once all children have been iterated.
 
@@ -80,11 +80,11 @@ RETURN VALUE
 ============
 
 :func:`flux_future_wait_any_create` and :func:`flux_future_wait_all_create`
-return a future on success. On error, NULL is returned and errno is set
+return a future on success. On error, NULL is returned and :var:`errno` is set
 appropriately.
 
 :func:`flux_future_push` returns zero on success. On error, -1 is
-returned and errno is set appropriately.
+returned and :var:`errno` is set appropriately.
 
 :func:`flux_future_first_child` returns the name of the first child future in
 the targeted composite in no given order. If the composite is empty,
@@ -95,8 +95,8 @@ targeted composite in no given order. If the last child has already been
 returned then this function returns NULL.
 
 :func:`flux_future_get_child` returns a :type:`flux_future_t` corresponding to
-the child future with the supplied string ``name`` parameter. If no future with
-that name is a child of the composite, then the function returns NULL.
+the child future with the supplied string :var:`name` parameter. If no future
+with that name is a child of the composite, then the function returns NULL.
 
 
 ERRORS

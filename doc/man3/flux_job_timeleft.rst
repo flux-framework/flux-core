@@ -27,9 +27,9 @@ RETURN VALUE
 ============
 
 :func:`flux_job_timeleft` returns 0 on success with the remaining time in
-floating point seconds stored in ``timeleft``. If the job does not have
-an established time limit, then ``timeleft`` is set to ``inf``. If the job
-time limit has expired or the job is no longer running, then ``timeleft``
+floating point seconds stored in :var:`timeleft`. If the job does not have
+an established time limit, then :var:`timeleft` is set to ``inf``. If the job
+time limit has expired or the job is no longer running, then :var:`timeleft`
 is set to ``0``.
 
 If the current process is not part of an active job or instance, or another

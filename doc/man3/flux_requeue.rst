@@ -17,23 +17,23 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_requeue` requeues a *msg* in handle *h*. The message
+:func:`flux_requeue` requeues a :var:`msg` in handle :var:`h`. The message
 can be received with :man3:`flux_recv` as though it arrived from the broker.
 
-*flags* must be set to one of the following values:
+:var:`flags` must be set to one of the following values:
 
 FLUX_RQ_TAIL
-   *msg* is placed at the tail of the message queue.
+   :var:`msg` is placed at the tail of the message queue.
 
 FLUX_RQ_TAIL
-   *msg* is placed at the head of the message queue.
+   :var:`msg` is placed at the head of the message queue.
 
 
 RETURN VALUE
 ============
 
 :func:`flux_requeue` return zero on success.
-On error, -1 is returned, and errno is set appropriately.
+On error, -1 is returned, and :var:`errno` is set appropriately.
 
 
 ERRORS

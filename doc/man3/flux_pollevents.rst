@@ -19,7 +19,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_pollevents` returns a bitmask of poll flags for handle *h*.
+:func:`flux_pollevents` returns a bitmask of poll flags for handle :var:`h`.
 
 :func:`flux_pollfd` obtains a file descriptor that becomes readable, in
 an edge triggered fashion, when :func:`flux_pollevents` has poll flags
@@ -45,10 +45,10 @@ RETURN VALUE
 ============
 
 :func:`flux_pollevents` returns flags on success. On error, -1 is returned,
-and errno is set appropriately.
+and :var:`errno` is set appropriately.
 
 :func:`flux_pollfd` returns a file descriptor on success. On error, -1 is
-returned, and errno is set appropriately.
+returned, and :var:`errno` is set appropriately.
 
 
 ERRORS

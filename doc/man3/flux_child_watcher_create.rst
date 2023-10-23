@@ -31,11 +31,11 @@ DESCRIPTION
 ===========
 
 :func:`flux_child_watcher_create` creates a reactor watcher that
-monitors state transitions of child processes. If *trace* is false,
+monitors state transitions of child processes. If :var:`trace` is false,
 only child termination will trigger an event; otherwise, stop and start
 events may be generated.
 
-The callback *revents* argument should be ignored.
+The callback :var:`revents` argument should be ignored.
 
 The process id that had a transition may be obtained by calling
 :func:`flux_child_watcher_get_rpid`.
@@ -53,7 +53,7 @@ RETURN VALUE
 ============
 
 :func:`flux_child_watcher_create` returns a :type:`flux_watcher_t` object on
-success.  On error, NULL is returned, and errno is set appropriately.
+success.  On error, NULL is returned, and :var:`errno` is set appropriately.
 
 
 ERRORS

@@ -70,40 +70,42 @@ consists of a list of operations that are applied to the KVS together,
 in order. The entire transaction either succeeds or fails. After commit
 or fence, the object must be destroyed with :func:`flux_kvs_txn_destroy`.
 
-Each function below adds a single operation to *txn*. *key* is a
+Each function below adds a single operation to :var:`txn`. :var:`key` is a
 hierarchical path name with period (".") used as path separator.
 When the transaction is committed, any existing keys or path components
 that are in conflict with the requested operation are overwritten.
-*flags* can modify the request as described below.
+:var:`flags` can modify the request as described below.
 
-:func:`flux_kvs_txn_put` sets *key* to a NULL terminated string *value*.
-*value* may be NULL indicating that an empty value should be stored.
+:func:`flux_kvs_txn_put` sets :var:`key` to a NULL terminated string
+:var:`value`.  :var:`value` may be NULL indicating that an empty value should
+be stored.
 
-:func:`flux_kvs_txn_pack` sets *key* to a NULL terminated string encoded
+:func:`flux_kvs_txn_pack` sets :var:`key` to a NULL terminated string encoded
 from a JSON object built with :func:`json_pack` style arguments (see below).
 :func:`flux_kvs_txn_vpack` is a variant that accepts a :type:`va_list` argument.
 
-:func:`flux_kvs_txn_mkdir` sets *key* to an empty directory.
+:func:`flux_kvs_txn_mkdir` sets :var:`key` to an empty directory.
 
-:func:`flux_kvs_txn_unlink` removes *key*. If *key* is a directory,
+:func:`flux_kvs_txn_unlink` removes :var:`key`. If :var:`key` is a directory,
 all its contents are removed as well.
 
-:func:`flux_kvs_txn_symlink` sets *key* to a symbolic link pointing to a
-namespace *ns* and a *target* key within that namespace. Neither *ns*
-nor *target* must exist. The namespace *ns* is optional, if set to
-NULL the *target* is assumed to be in the key's current namespace.
+:func:`flux_kvs_txn_symlink` sets :var:`key` to a symbolic link pointing to a
+namespace :var:`ns` and a :var:`target` key within that namespace. Neither
+:var:`ns` nor :var:`target` must exist. The namespace :var:`ns` is optional,
+if set to NULL the :var:`target` is assumed to be in the key's current
+namespace.
 
-:func:`flux_kvs_txn_put_raw` sets *key* to a value containing raw data
-referred to by *data* of length *len*.
+:func:`flux_kvs_txn_put_raw` sets :var:`key` to a value containing raw data
+referred to by :var:`data` of length :var:`len`.
 
-:func:`flux_kvs_txn_put_treeobj` sets *key* to an RFC 11 object, encoded
+:func:`flux_kvs_txn_put_treeobj` sets :var:`key` to an RFC 11 object, encoded
 as a JSON string.
 
 
 FLAGS
 =====
 
-The following are valid bits in a *flags* mask passed as an argument
+The following are valid bits in a :var:`flags` mask passed as an argument
 to :func:`flux_kvs_txn_put` or :func:`flux_kvs_txn_put_raw`.
 
 FLUX_KVS_APPEND
@@ -121,12 +123,12 @@ RETURN VALUE
 ============
 
 :func:`flux_kvs_txn_create` returns a :type:`flux_kvs_txn_t` object on success,
-or NULL on failure with errno set appropriately.
+or NULL on failure with :var:`errno` set appropriately.
 
 :func:`flux_kvs_txn_put`, :func:`flux_kvs_txn_pack`, :func:`flux_kvs_txn_mkdir`,
 :func:`flux_kvs_txn_unlink`, :func:`flux_kvs_txn_symlink`, and
 :func:`flux_kvs_txn_put_raw` returns 0 on success, or -1 on failure with
-errno set appropriately.
+:var:`errno` set appropriately.
 
 
 ERRORS

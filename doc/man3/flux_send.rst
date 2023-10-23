@@ -19,25 +19,25 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_send` sends *msg* using the Flux Message broker,
-previously opened with :man3:`flux_open` on handle *h*.
+:func:`flux_send` sends :var:`msg` using the Flux Message broker,
+previously opened with :man3:`flux_open` on handle :var:`h`.
 
-*flags* is the logical "or" of zero or more of the following flags:
+:var:`flags` is the logical "or" of zero or more of the following flags:
 
 FLUX_O_TRACE
-   Dumps *msg* to stderr.
+   Dumps :var:`msg` to stderr.
 
 FLUX_O_NONBLOCK
    If unable to send, return an error rather than block.
 
-Internally, flags are the logical "or" of *flags* and the flags provided
+Internally, flags are the logical "or" of :var:`flags` and the flags provided
 to :man3:`flux_open` when the handle was created.
 
 The message type, topic string, and nodeid affect how the message
 will be routed by the broker. These attributes are pre-set in the message.
 
 :func:`flux_send_new` is the same, except message ownership is transferred
-to the handle *h*.  The double pointer *msg* points to a NULL value if
+to the handle :var:`h`.  The double pointer :var:`msg` points to a NULL value if
 the message is successfully transferred.  The send fails if the message
 reference count is greater than one.
 
@@ -45,8 +45,8 @@ reference count is greater than one.
 RETURN VALUE
 ============
 
-:func:`flux_send` returns zero on success. On error, -1 is returned, and errno
-is set appropriately.
+:func:`flux_send` returns zero on success. On error, -1 is returned, and
+:var:`errno` is set appropriately.
 
 
 ERRORS

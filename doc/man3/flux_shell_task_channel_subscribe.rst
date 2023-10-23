@@ -20,7 +20,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-Call ``cb`` when shell task output channel ``name`` is ready for reading.
+Call :var:`cb` when shell task output channel :var:`name` is ready for reading.
 
 Callback can then call :man3:`flux_shell_task_get_subprocess` and use
 :man3:`flux_subprocess_read` or :man3:`flux_subprocess_getline` on the

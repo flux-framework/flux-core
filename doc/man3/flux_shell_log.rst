@@ -46,14 +46,14 @@ DESCRIPTION
 ===========
 
 :func:`flux_shell_log` logs a message at for shell component or plugin
-``component`` at ``level`` to all loggers registered to receive messages
+:var:`component` at :var:`level` to all loggers registered to receive messages
 at that severity or greater. See :man3:`flux_log` for a list of supported
 levels.
 
 
 The following macros handle common levels. For external shell plugins,
 the required macro ``FLUX_SHELL_PLUGIN_NAME`` is automatically substituted
-for the ``component`` in all macros.
+for the :var:`component` in all macros.
 
 
 ::
@@ -88,14 +88,14 @@ convenience. Macros include:
 
    #define shell_log_errno(...) \
 
-Note that ``errno`` is the standard global value defined in ``errno.h``
-and ``errn`` is a user-provided error code.
+Note that :var:`errno` is the standard global value defined in ``errno.h``
+and :var:`errn` is a user-provided error code.
 
 func:`flux_shell_fatal` logs a message at FLUX_SHELL_FATAL level and
 schedules termination of the job shell. This may generate an
-exception if tasks are already running. Exits with ``exit_code``.
+exception if tasks are already running. Exits with :var:`exit_code`.
 While the macro names are similar to those using :func:`flux_shell_err`,
-note that the choices of ``errnum`` are either 0 or ``errno``.
+note that the choices of :var:`errnum` are either 0 or :var:`errno`.
 
 ::
 
@@ -106,12 +106,12 @@ note that the choices of ``errnum`` are either 0 or ``errno``.
    #define shell_die_errno(code,...) \
 
 :func:`flux_shell_raise` explicitly raises an exception for the current
-job of the given ``type`` and ``severity``. Exceptions of severity 0
+job of the given :var:`type` and :var:`severity`. Exceptions of severity 0
 will result in termination of the job by the execution system.
 
 :func:`flux_shell_log_setlevel` sets default severity of logging
-destination ``dest`` to ``level``. If ``dest`` is NULL then the internal
-log dispatch level is set (i.e. no messages above severity level will
+destination :var:`dest` to :var:`level`. If :var:`dest` is NULL then the
+internal log dispatch level is set (i.e. no messages above severity level will
 be logged to any log destination). Macros include:
 
 ::
@@ -124,9 +124,9 @@ be logged to any log destination). Macros include:
    #define shell_set_quiet(n) \
    flux_shell_log_setlevel(FLUX_SHELL_NOTICE-n, NULL)
 
-As a special case, if ``level`` is set to ``FLUX_SHELL_QUIET``, then
-logging will be completely disabled to ``dest``. For example, to disable
-logging to ``stderr``, use:
+As a special case, if :var:`level` is set to ``FLUX_SHELL_QUIET``, then
+logging will be completely disabled to :var:`dest`. For example, to disable
+logging to :var:`stderr`, use:
 
 ::
 
@@ -136,12 +136,12 @@ logging to ``stderr``, use:
 RETURN VALUE
 ============
 
-:func:`flux_shell_err` returns -1 with errno = errnum, so that the
+:func:`flux_shell_err` returns -1 with :var:`errno` = :var:`errnum`, so that the
 function can be used as:
 return flux_shell_err(…​);
 
-:func:`flux_shell_log_setlevel` will return -1 and set ``errno`` to EINVAL
-if the requested ``level`` is not valid or if ``dest`` is not a valid
+:func:`flux_shell_log_setlevel` will return -1 and set :var:`errno` to EINVAL
+if the requested :var:`level` is not valid or if :var:`dest` is not a valid
 pointer to a logger shell.
 
 
@@ -149,7 +149,7 @@ ERRORS:
 =======
 
 EINVAL
-   ``level`` or ``dest`` is not valid.
+   :var:`level` or :var:`dest` is not valid.
 
 
 RESOURCES

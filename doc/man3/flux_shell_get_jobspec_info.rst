@@ -24,7 +24,7 @@ DESCRIPTION
 
 :func:`flux_shell_get_jobspec_info` returns jobspec summary information
 from the flux job shell as a json string. The only key guaranteed to
-be in the returned JSON object is the jobspec ``version``, e.g.
+be in the returned JSON object is the jobspec :var:`version`, e.g.
 
 ::
    {"version": 1}
@@ -61,8 +61,8 @@ ERRORS
 ======
 
 EINVAL
-   if ``shell`` is NULL, or either ``json_str`` or ``fmt`` are NULL, or if
-   ``shell_rank`` is less than -1.
+   if :var:`shell` is NULL, or either :var:`json_str` or :var:`fmt` are NULL,
+   or if :var:`shell_rank` is less than -1.
 
 
 RESOURCES

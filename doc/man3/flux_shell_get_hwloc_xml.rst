@@ -35,8 +35,8 @@ ERRORS
 ======
 
 EINVAL
-   ``shell`` or ``hwloc_xml`` are NULL, or the current ``shell`` object
-   is being used uninitialized.
+   :var:`shell` or :var:`hwloc_xml` are NULL, or the current :var:`shell`
+   object is being used uninitialized.
     
 
 

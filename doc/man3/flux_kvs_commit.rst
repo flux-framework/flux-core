@@ -32,23 +32,24 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_kvs_commit` sends a request via handle *h* to the KVS service
-to commit a transaction *txn*. *txn* is created with
+:func:`flux_kvs_commit` sends a request via handle :var:`h` to the KVS service
+to commit a transaction :var:`txn`. :var:`txn` is created with
 :man3:`flux_kvs_txn_create` and after commit completion, is destroyed
 with :man3:`flux_kvs_txn_destroy`. A :type:`flux_future_t` object is returned,
 which acts as handle for synchronization and container for the
-response. The *txn* will operate in the namespace specified by *ns*.
-If *ns* is NULL, :func:`flux_kvs_commit` will operate on the default
+response. The :var:`txn` will operate in the namespace specified by :var:`ns`.
+If :var:`ns` is NULL, :func:`flux_kvs_commit` will operate on the default
 namespace, or if set, the namespace from the FLUX_KVS_NAMESPACE
 environment variable. Note that all transactions operate on the same
 namespace.
 
 :func:`flux_kvs_fence` is a "collective" version of :func:`flux_kvs_commit`
-that supports multiple callers. Each caller uses the same *flags*, *name*,
-and *nprocs* arguments. Once *nprocs* requests are received by the KVS
-service for the named operation, the transactions are combined and committed
-together as one transaction. *name* must be unique across the Flux session
-and should not be reused, even after the fence is complete.
+that supports multiple callers. Each caller uses the same :var:`flags`,
+:var:`name`, and :var:`nprocs` arguments. Once :var:`nprocs` requests are
+received by the KVS service for the named operation, the transactions are
+combined and committed together as one transaction. :var:`name` must be unique
+across the Flux session and should not be reused, even after the fence is
+complete.
 
 :man3:`flux_future_then` may be used to register a reactor callback
 (continuation) to be called once the response to the commit/fence
@@ -78,7 +79,7 @@ for the root.
 FLAGS
 =====
 
-The following are valid bits in a *flags* mask passed as an argument
+The following are valid bits in a :var:`flags` mask passed as an argument
 to :func:`flux_kvs_commit` or :func:`flux_kvs_fence`.
 
 FLUX_KVS_NO_MERGE
@@ -92,7 +93,7 @@ RETURN VALUE
 ============
 
 :func:`flux_kvs_commit` and :func:`flux_kvs_fence` return a
-:type:`flux_future_t` on success, or NULL on failure with errno set
+:type:`flux_future_t` on success, or NULL on failure with :var:`errno` set
 appropriately.
 
 
@@ -115,7 +116,7 @@ ENOTSUP
    An unknown namespace was requested.
 
 EOVERFLOW
-   :func:`flux_kvs_fence` has been called too many times and *nprocs* has
+   :func:`flux_kvs_fence` has been called too many times and :var:`nprocs` has
    been exceeded.
 
 

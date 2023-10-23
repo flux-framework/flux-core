@@ -23,7 +23,7 @@ event messages published periodically at a configurable interval.
 Synchronizing Flux internal overhead to the heartbeat can, in theory,
 reduce disruption to bulk synchronous applications.
 
-If *minimum* is greater than zero, it establishes a minimum time in seconds
+If :var:`minimum` is greater than zero, it establishes a minimum time in seconds
 between fulfillments.  Heartbeats that arrive too soon after the last one
 are ignored.  This may be used to protect from thrashing if the heartbeat
 period is set too fast, or if heartbeats arrive close to one another in time
@@ -41,7 +41,7 @@ RETURN VALUE
 ============
 
 :func:`flux_sync_create` returns a future, or NULL on failure with
-errno set.
+:var:`errno` set.
 
 
 ERRORS
@@ -58,7 +58,8 @@ EXAMPLE
 =======
 
 Set up a continuation callback for each heartbeat that arrives at least
-*sync_min* seconds from the last, with a timeout of *sync_max* seconds:
+:var:`sync_min` seconds from the last, with a timeout of :var:`sync_max`
+seconds:
 
 
 .. literalinclude:: example/sync.c

@@ -45,7 +45,7 @@ excluding other idle watchers, prepare and check watchers.
 While it is active, the reactor loop does not block waiting for
 new events.
 
-The callback *revents* argument should be ignored.
+The callback :var:`revents` argument should be ignored.
 
 Note: the Flux reactor is based on libev. For additional information
 on the behavior of these watchers, refer to the libev documentation on
@@ -56,7 +56,7 @@ RETURN VALUE
 ============
 
 These functions return a :type:`flux_watcher_t` object on success.
-On error, NULL is returned, and errno is set appropriately.
+On error, NULL is returned, and :var:`errno` is set appropriately.
 
 
 ERRORS

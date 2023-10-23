@@ -25,10 +25,10 @@ DESCRIPTION
 ===========
 
 :func:`flux_shell_add_completion_ref` creates a named "completion
-reference" on the shell object ``shell`` so that the shell will
+reference" on the shell object :var:`shell` so that the shell will
 not consider a job "complete" until the reference is released with
 :func:`flux_shell_remove_completion_ref`. Once all references have been
-removed, the shell's reactor ``shell->r`` is stopped with
+removed, the shell's reactor :var:`shell->r` is stopped with
 :man3:`flux_reactor_stop`.
 
 
@@ -45,7 +45,7 @@ ERRORS
 ======
 
 EINVAL
-   Either ``shell`` or ``fmt`` are NULL.
+   Either :var:`shell` or :var:`fmt` are NULL.
 
 
 RESOURCES

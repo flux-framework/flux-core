@@ -24,11 +24,11 @@ DESCRIPTION
 ===========
 
 :func:`flux_log` creates RFC 5424 format log messages. The log messages
-are sent to the Flux message broker on *h* for handling if it is
-specified. If *h* is NULL, the log message is output to stderr.
+are sent to the Flux message broker on :var:`h` for handling if it is
+specified. If :var:`h` is NULL, the log message is output to stderr.
 
-The *level* parameter should be set to one of the :linux:man3:`syslog` severity
-levels, which are, in order of decreasing importance:
+The :var:`level` parameter should be set to one of the :linux:man3:`syslog`
+severity levels, which are, in order of decreasing importance:
 
 *LOG_EMERG*
    system is unusable
@@ -54,7 +54,7 @@ levels, which are, in order of decreasing importance:
 *LOG_DEBUG*
    debug-level message
 
-When *h* is specified, log messages are are added to the broker's
+When :var:`h` is specified, log messages are are added to the broker's
 circular buffer which can be accessed with :man1:`flux-dmesg`. From there,
 a message's disposition is up to the broker's log configuration.
 
@@ -62,8 +62,8 @@ a message's disposition is up to the broker's log configuration.
 which is initialized to the calling process's PID.
 
 :func:`flux_log_set_appname` may be used to override the default
-application name, which is initialized to the value of the *\__progname*
-symbol (normally the argv[0] program name).
+application name, which is initialized to the value of the :var:`__progname`
+symbol (normally the :var:`argv[0]` program name).
 
 
 MAPPING TO SYSLOG
@@ -73,7 +73,7 @@ A Flux log message is formatted as a Flux request with a "raw" payload,
 as defined by Flux RFC 3. The raw payload is formatted according to
 Internet RFC 5424.
 
-If the Flux handle *h* is specified, the following Syslog header
+If the Flux handle :var:`h` is specified, the following Syslog header
 fields are set in a Flux log messages when it is created within
 :func:`flux_log`:
 
@@ -111,7 +111,7 @@ RETURN VALUE
 ============
 
 :func:`flux_log` normally returns 0 on success, or -1 if there was
-a problem building or sending the log message, with errno set.
+a problem building or sending the log message, with :var:`errno` set.
 
 
 ERRORS

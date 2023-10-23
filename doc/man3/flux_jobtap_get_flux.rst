@@ -44,9 +44,9 @@ extend the job manager broker module.
 the plugin's :type:`flux_plugin_t`. This can be used by a *jobtap* plugin
 to send RPCs, schedule timer watchers, or other asynchronous work.
 
-:func:`flux_jobtap_service_register` registers a service name ``method``
+:func:`flux_jobtap_service_register` registers a service name :var:`method`
 under the job manager which will be handled by the provided message
-handler ``cb``.  The constructed service name will be
+handler :var:`cb`.  The constructed service name will be
 ``job-manager.<name>.<method>`` where ``name`` is the name of the plugin
 as returned by :func:`flux_plugin_get_name`. As such, this call may
 fail if the *jobtap* plugin has not yet set a name for itself using
@@ -70,7 +70,7 @@ called as::
 :func:`flux_jobtap_reject_job` is a convenience function which may be used
 by a plugin from the ``job.validate`` callback to reject a job before its
 submission is fully complete. The error and optional message supplied in
-``fmt`` will be returned to the originating job submission request. This
+:var:`fmt` will be returned to the originating job submission request. This
 function returns ``-1`` so that it may be conveniently called as::
 
   return flux_jobtap_reject_job (p, args,

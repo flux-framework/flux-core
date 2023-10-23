@@ -31,7 +31,7 @@ DESCRIPTION
 
 :func:`flux_msg_handler_addvec` creates and starts an array of message handlers,
 terminated by FLUX_MSGHANDLER_TABLE_END. The new message handler objects
-are assigned to an internally allocated array, returned in *handlers*.
+are assigned to an internally allocated array, returned in :var:`handlers`.
 The last entry in the array is set to NULL.
 
 :func:`flux_msg_handler_delvec` stops and destroys an array of message handlers
@@ -51,7 +51,7 @@ RETURN VALUE
 ============
 
 :func:`flux_msg_handler_addvec` returns zero on success.
-On error, -1 is returned, and errno is set appropriately.
+On error, -1 is returned, and :var:`errno` is set appropriately.
 
 
 ERRORS

@@ -68,8 +68,8 @@ class-specific reactor setup, such as installing watchers and message
 handlers.
 
 :func:`flux_future_create` creates a future and registers the
-class-specific initialization callback *cb*, and an opaque argument
-*arg* that will be passed to *cb*. The purpose of the initialization
+class-specific initialization callback :var:`cb`, and an opaque argument
+:var:`arg` that will be passed to :var:`cb`. The purpose of the initialization
 callback is to set up class-specific watchers on a reactor obtained
 with :func:`flux_future_get_reactor`, or message handlers on a :type:`flux_t`
 handle obtained with :func:`flux_future_get_flux`, or both.
@@ -83,23 +83,24 @@ handlers must eventually call :func:`flux_future_fulfill`,
 fulfill the future. See REACTOR CONTEXTS below for more information.
 
 :func:`flux_future_fulfill` fulfills the future, assigning an opaque
-*result* value with optional destructor *free_fn* to the future.
-A NULL *result* is valid and also fulfills the future. The *result*
+:var:`result` value with optional destructor :var:`free_fn` to the future.
+A NULL :var:`result` is valid and also fulfills the future. The :var:`result`
 is contained within the future and can be accessed with :man3:`flux_future_get`
 as needed until the future is destroyed.
 
 :func:`flux_future_fulfill_error` fulfills the future, assigning an
-*errnum* value and an optional error string. After the future is
-fulfilled with an error, :man3:`flux_future_get` will return -1 with errno
-set to *errnum*.
+:var:`errnum` value and an optional error string. After the future is
+fulfilled with an error, :man3:`flux_future_get` will return -1 with
+:var:`errno` set to :var:`errnum`.
 
-:func:`flux_future_fulfill_with` fulfills the target future *f* using a
-fulfilled future *p*. This function copies the pending result or error
-from *p* into *f*, and adds read-only access to the *aux* items for *p*
-from *f*. This ensures that any ``get`` method which requires *aux* items
-for *p* will work with *f*. This function takes a reference to the source
-future *p*, so it safe to call :man3:`flux_future_destroy` on *p* after
-this call.  :func:`flux_future_fulfill_with` returns -1 on error with *errno*
+:func:`flux_future_fulfill_with` fulfills the target future :var:`f` using a
+fulfilled future :var:`p`. This function copies the pending result or error
+from :var:`p` into :var:`f`, and adds read-only access to the :var:`aux` items
+for :var:`p` from :var:`f`. This ensures that any ``get`` method which requires
+:var:`aux` items for :var:`p` will work with :var:`f`. This function takes a
+reference to the source future :var:`p`, so it safe to call
+:man3:`flux_future_destroy` on :var:`p` after this call.
+:func:`flux_future_fulfill_with` returns -1 on error with :var:`errno`
 set on failure.
 
 :func:`flux_future_fulfill`, :func:`flux_future_fulfill_with`, and
@@ -107,25 +108,25 @@ set on failure.
 multiple results or errors. When callers access future results via
 :man3:`flux_future_get`, results or errors will be returned in FIFO order.
 It is an error to call :func:`flux_future_fulfill_with` multiple times on
-the same target future *f* with a different source future *p*.
+the same target future :var:`f` with a different source future :var:`p`.
 
-:func:`flux_future_fatal_error` fulfills the future, assigning an *errnum*
+:func:`flux_future_fatal_error` fulfills the future, assigning an :var:`errnum`
 value and an optional error string. Unlike
 :func:`flux_future_fulfill_error` this fulfillment can only be called once
 and takes precedence over all other fulfillments. It is used for
 catastrophic error paths in future fulfillment.
 
 :func:`flux_future_aux_set` attaches application-specific data
-to the parent object *f*. It stores data *aux* by key *name*,
+to the parent object :var:`f`. It stores data :var:`aux` by key :var:`name`,
 with optional destructor *destroy*. The destructor, if non-NULL,
 is called when the parent object is destroyed, or when
-*key* is overwritten by a new value. If *aux* is NULL,
+:var:`key` is overwritten by a new value. If :var:`aux` is NULL,
 the destructor for a previous value, if any is called,
-but no new value is stored. If *name* is NULL,
-*aux* is stored anonymously.
+but no new value is stored. If :var:`name` is NULL,
+:var:`aux` is stored anonymously.
 
 :func:`flux_future_aux_get` retrieves application-specific data
-by *name*. If the data was stored anonymously, it
+by :var:`name`. If the data was stored anonymously, it
 cannot be retrieved.
 
 Names beginning with "flux::" are reserved for internal use.
@@ -187,24 +188,25 @@ RETURN VALUE
 ============
 
 :func:`flux_future_create` returns a future on success. On error, NULL is
-returned and errno is set appropriately.
+returned and :var:`errno` is set appropriately.
 
 :func:`flux_future_aux_set` returns zero on success. On error, -1 is
-returned and errno is set appropriately.
+returned and :var:`errno` is set appropriately.
 
 :func:`flux_future_aux_get` returns the requested object on success. On
-error, NULL is returned and errno is set appropriately.
+error, NULL is returned and :var:`errno` is set appropriately.
 
 :func:`flux_future_get_flux` returns a :type:`flux_t` handle on success.
-On error, NULL is returned and errno is set appropriately.
+On error, NULL is returned and :var:`errno` is set appropriately.
 
 :func:`flux_future_get_reactor` returns a :type:`flux_reactor_t` on success.
-On error, NULL is returned and errno is set appropriately.
+On error, NULL is returned and :var:`errno` is set appropriately.
 
 :func:`flux_future_fulfill_with` returns zero on success. On error, -1 is
-returned with errno set to EINVAL if either *f* or *p* is NULL, or
-*f* and *p* are the same, EAGAIN if the future *p* is not ready, or
-EEXIST if the function is called multiple times with different *p*.
+returned with :var:`errno` set to EINVAL if either :var:`f` or :var:`p` is
+NULL, or :var:`f` and :var:`p` are the same, EAGAIN if the future :var:`p` is
+not ready, or EEXIST if the function is called multiple times with different
+:var:`p`.
 
 
 ERRORS
@@ -221,11 +223,11 @@ ENOENT
 
 EAGAIN
    The requested operation is not ready. For :func:`flux_future_fulfill_with`,
-   the target future *p* is not fulfilled.
+   the target future :var:`p` is not fulfilled.
 
 EEXIST
    :func:`flux_future_fulfill_with` was called multiple times with a different
-   target future *p*.
+   target future :var:`p`.
 
 
 RESOURCES

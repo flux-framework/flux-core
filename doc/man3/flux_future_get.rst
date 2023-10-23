@@ -53,24 +53,25 @@ DESCRIPTION
 
 :func:`flux_future_get` accesses the result of a fulfilled future. If the
 future is not yet fulfilled, it calls :func:`flux_future_wait_for` internally
-with a negative *timeout*, causing it to block until the future is fulfilled.
-A pointer to the result is assigned to *result* (caller must NOT free),
-or -1 is returned if the future was fulfilled with an error.
+with a negative :var:`timeout`, causing it to block until the future is
+fulfilled.  A pointer to the result is assigned to :var:`result` (caller must
+NOT free), or -1 is returned if the future was fulfilled with an error.
 
-:func:`flux_future_then` sets up a continuation callback *cb* that is called
-with opaque argument *arg* once the future is fulfilled. The continuation
-will normally use :func:`flux_future_get` or a class-specific access function
-to obtain the result from the future container without blocking. The
-continuation may call :func:`flux_future_destroy` or :func:`flux_future_reset`.
-If *timeout* is non-negative, the future must be fulfilled within the
-specified amount of time or the timeout fulfills it with an error (errno
+:func:`flux_future_then` sets up a continuation callback :var:`cb` that is
+called with opaque argument :var:`arg` once the future is fulfilled. The
+continuation will normally use :func:`flux_future_get` or a class-specific
+access function to obtain the result from the future container without
+blocking. The continuation may call :func:`flux_future_destroy` or
+:func:`flux_future_reset`.
+If :var:`timeout` is non-negative, the future must be fulfilled within the
+specified amount of time or the timeout fulfills it with an error (:var:`errno`
 set to ETIMEDOUT).
 
-:func:`flux_future_wait_for` blocks until the future is fulfilled, or *timeout*
-(if non-negative) expires. This function may be called multiple times,
-with different values for *timeout*. If the timeout expires before
-the future is fulfilled, an error is returned (errno set to ETIMEDOUT)
-but the future remains unfulfilled. If *timeout* is zero, function times
+:func:`flux_future_wait_for` blocks until the future is fulfilled, or
+:var:`timeout` (if non-negative) expires. This function may be called multiple
+times, with different values for :var:`timeout`. If the timeout expires before
+the future is fulfilled, an error is returned (:var:`errno` set to ETIMEDOUT)
+but the future remains unfulfilled. If :var:`timeout` is zero, function times
 out immediately if the future has not already been fulfilled.
 
 :func:`flux_future_reset` unfulfills a future, invalidating any result stored
@@ -100,7 +101,7 @@ RETURN VALUE
 
 :func:`flux_future_then`, :func:`flux_future_get`, and
 :func:`flux_future_wait_for` return zero on success. On error, -1 is returned,
-and errno is set appropriately.
+and :var:`errno` is set appropriately.
 
 
 ERRORS

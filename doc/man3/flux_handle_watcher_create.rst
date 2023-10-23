@@ -29,12 +29,12 @@ DESCRIPTION
 ===========
 
 :func:`flux_handle_watcher_create` creates a :type:`flux_watcher_t` object
-which monitors for events on a Flux broker handle *h*. When events occur,
-the user-supplied *callback* is invoked.
+which monitors for events on a Flux broker handle :var:`h`. When events occur,
+the user-supplied :var:`callback` is invoked.
 
-The *events* and *revents* arguments are a bitmask containing a
-logical OR of the following bits. If a bit is set in *events*,
-it indicates interest in this type of event. If a bit is set in *revents*,
+The :var:`events` and :var:`revents` arguments are a bitmask containing a
+logical OR of the following bits. If a bit is set in :var:`events`,
+it indicates interest in this type of event. If a bit is set in :var:`revents`,
 it indicates that this event has occurred.
 
 FLUX_POLLIN
@@ -45,7 +45,7 @@ FLUX_POLLOUT
 
 FLUX_POLLERR
    The handle has encountered an error.
-   This bit is ignored if it is set in *events*.
+   This bit is ignored if it is set in :var:`events`.
 
 Events are processed in a level-triggered manner. That is, the
 callback will continue to be invoked as long as the event has not been

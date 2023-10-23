@@ -35,15 +35,15 @@ DESCRIPTION
 ===========
 
 :func:`flux_respond`, :func:`flux_respond_pack`, :func:`flux_respond_raw`, and
-:func:`flux_respond_error` encode and send a response message on handle *h*,
-deriving topic string, matchtag, and route stack from the provided
-*request*.
+:func:`flux_respond_error` encode and send a response message on handle
+:var:`h`, deriving topic string, matchtag, and route stack from the provided
+:var:`request`.
 
-:func:`flux_respond` sends a response to *request*. If *s* is non-NULL,
-:func:`flux_respond` will send it as the response payload, otherwise there
-will be no payload.
+:func:`flux_respond` sends a response to :var:`request`. If :var:`s` is
+non-NULL, :func:`flux_respond` will send it as the response payload, otherwise
+there will be no payload.
 
-:func:`flux_respond_raw` is identical except if *data* is non-NULL,
+:func:`flux_respond_raw` is identical except if :var:`data` is non-NULL,
 :func:`flux_respond_raw` will send it as the response payload.
 
 :func:`flux_respond_pack` encodes a response message with a JSON payload,
@@ -51,9 +51,10 @@ building the payload using variable arguments with a format string in
 the style of jansson's :func:`json_pack` (used internally).
 
 :func:`flux_respond_error` returns an error response to the sender.
-If *errnum* is zero, EINVAL is used.  If *errmsg* is non-NULL, an error string
-payload is included in the response. The error string may be used to
-provide a more detailed error message than can be conveyed via *errnum*.
+If :var:`errnum` is zero, EINVAL is used.  If :var:`errmsg` is non-NULL,
+an error string payload is included in the response. The error string may be
+used to provide a more detailed error message than can be conveyed via
+:var:`errnum`.
 
 
 STREAMING SERVICES
@@ -80,7 +81,7 @@ RETURN VALUE
 ============
 
 These functions return zero on success. On error, -1 is returned,
-and errno is set appropriately.
+and :var:`errno` is set appropriately.
 
 
 ERRORS

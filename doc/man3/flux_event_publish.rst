@@ -34,17 +34,17 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_event_publish` sends an event message with topic string *topic*,
-*flags* as described below, and optional payload *s*, a NULL-terminated
-string, or NULL indicating no payload. The returned future is
-fulfilled once the event is accepted by the broker and assigned a
+:func:`flux_event_publish` sends an event message with topic string
+:var:`topic`, :var:`flags` as described below, and optional payload :var:`s`,
+a NULL-terminated string, or NULL indicating no payload. The returned future
+is fulfilled once the event is accepted by the broker and assigned a
 global sequence number.
 
 :func:`flux_event_publish_pack` is similar, except the JSON payload
 is constructed using :func:`json_pack` style arguments (see below).
 
-:func:`flux_event_publish_raw` is similar, except the payload is raw *data*
-of length *len*.
+:func:`flux_event_publish_raw` is similar, except the payload is raw
+:var:`data` of length :var:`len`.
 
 :func:`flux_event_publish_get_seq` may be used to retrieve the sequence
 number assigned to the message once the future is fulfilled.
@@ -71,7 +71,7 @@ functions and send it directly with :man3:`flux_send`.
 FLAGS
 =====
 
-The *flags* argument in the above functions must be zero, or the
+The :var:`flags` argument in the above functions must be zero, or the
 logical OR of the following values:
 
 FLUX_MSGFLAG_PRIVATE

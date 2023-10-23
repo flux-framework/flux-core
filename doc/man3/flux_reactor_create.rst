@@ -95,11 +95,12 @@ RETURN VALUE
 ============
 
 :func:`flux_reactor_create` returns a :type:`flux_reactor_t` object on success.
-On error, NULL is returned, and errno is set appropriately.
+On error, NULL is returned, and :var:`errno` is set appropriately.
 
 :func:`flux_reactor_run` returns the number of active watchers on success.
-On failure, it returns -1 with errno set. A failure return is triggered
-when the application sets errno and calls :func:`flux_reactor_stop_error`.
+On failure, it returns -1 with :var:`errno` set. A failure return is triggered
+when the application sets :var:`errno` and calls
+:func:`flux_reactor_stop_error`.
 
 
 ERRORS

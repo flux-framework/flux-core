@@ -30,14 +30,14 @@ callbacks from other plugins.
 RETURN VALUE
 ============
 
-Returns 0 on success and -1 on failure, setting errno.
+Returns 0 on success and -1 on failure, setting :var:`errno`.
 
 
 ERRORS:
 =======
 
 EINVAL
-   ``shell`` or ``topic`` are NULL.
+   :var:`shell` or :var:`topic` are NULL.
 
 
 RESOURCES

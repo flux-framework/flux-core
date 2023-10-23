@@ -24,7 +24,7 @@ to handles that subscribe to them by topic. Topic strings consist of
 one or more words separated by periods, interpreted as a hierarchical
 name space.
 
-:func:`flux_event_subscribe` requests that event messages matching *topic*
+:func:`flux_event_subscribe` requests that event messages matching :var:`topic`
 be delivered via :man3:`flux_recv`. A match consists of a string comparison
 of the event topic and the subscription topic, up to the length of the
 subscription topic. Thus "foo." matches events with topics "foo.bar"
@@ -32,7 +32,7 @@ and "foo.baz", and "" matches all events. This matching algorithm
 is inherited from ZeroMQ. Globs or regular expressions are not allowed
 in subscriptions, and the period delimiter is included in the comparison.
 
-:func:`flux_event_unsubscribe` unsubscribes to a topic. The *topic*
+:func:`flux_event_unsubscribe` unsubscribes to a topic. The :var:`topic`
 argument must exactly match that provided to :func:`flux_event_subscribe`.
 
 Duplicate subscriptions are allowed in the subscription list but

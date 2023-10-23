@@ -47,7 +47,7 @@ ERRORS
 ======
 
 EINVAL
-   If ``task`` or ``json_str`` is NULL.
+   If :var:`task` or :var:`json_str` is NULL.
 
 
 RESOURCES

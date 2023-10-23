@@ -30,12 +30,12 @@ DESCRIPTION
 :func:`flux_open` and :func:`flux_open_ex` create a :type:`flux_t` handle, used
 to communicate with the Flux message broker. :func:`flux_open_ex` takes an
 optional pointer to a :type:`flux_error_t` structure which, when non-NULL, will
-be used to store any errors which may have otherwise gone to ``stderr``.
+be used to store any errors which may have otherwise gone to :var:`stderr`.
 
-The *uri* scheme (before "://") specifies the "connector" that will be used
-to establish the connection. The *uri* path (after "://") is parsed by the
-connector. If *uri* is NULL, the value of $FLUX_URI is used.  If $FLUX_URI is
-not set, a compiled-in default URI is used.
+The :var:`uri` scheme (before "://") specifies the "connector" that will be used
+to establish the connection. The :var:`uri` path (after "://") is parsed by the
+connector. If :var:`uri` is NULL, the value of $FLUX_URI is used.  If
+$FLUX_URI is not set, a compiled-in default URI is used.
 
 *flags* is the logical "or" of zero or more of the following flags:
 
@@ -92,7 +92,7 @@ RETURN VALUE
 ============
 
 :func:`flux_open` and :func:`flux_clone` return a :type:`flux_t`` handle on
-success.  On error, NULL is returned, with errno set.
+success.  On error, NULL is returned, with :var:`errno` set.
 
 
 ERRORS

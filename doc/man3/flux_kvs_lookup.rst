@@ -53,15 +53,15 @@ The Flux Key Value Store is a general purpose distributed storage
 service used by Flux services.
 
 :func:`flux_kvs_lookup` sends a request to the KVS service to look up
-*key* in namespace *ns*. It returns a :type:`flux_future_t` object which
-acts as handle for synchronization and container for the result. The
-namespace *ns* is optional. If set to NULL, :func:`flux_kvs_lookup` uses
+:var:`key` in namespace :var:`ns`. It returns a :type:`flux_future_t` object
+which acts as handle for synchronization and container for the result. The
+namespace :var:`ns` is optional. If set to NULL, :func:`flux_kvs_lookup` uses
 the default namespace, or if set, the namespace from the
-FLUX_KVS_NAMESPACE environment variable. *flags* modifies the request
+FLUX_KVS_NAMESPACE environment variable. :var:`flags` modifies the request
 as described below.
 
 :func:`flux_kvs_lookupat` is identical to :func:`flux_kvs_lookup` except
-*treeobj* is a serialized RFC 11 object that references a particular
+:var:`treeobj` is a serialized RFC 11 object that references a particular
 static set of content within the KVS, effectively a snapshot.
 See :func:`flux_kvs_lookup_get_treeobj` below.
 
@@ -74,7 +74,7 @@ or interpret it in different ways. Results remain valid until
 
 :func:`flux_kvs_lookup_get` interprets the result as a value. If the value
 has length greater than zero, a NULL is appended and it is assigned
-to *value*, otherwise NULL is assigned to *value*.
+to :var:`value`, otherwise NULL is assigned to *value*.
 
 :func:`flux_kvs_lookup_get_unpack` interprets the result as a value, which
 it decodes as JSON according to variable arguments in Jansson
@@ -82,22 +82,22 @@ it decodes as JSON according to variable arguments in Jansson
 
 :func:`flux_kvs_lookup_get_raw` interprets the result as a value. If the value
 has length greater than zero, the value and its length are assigned to
-*buf* and *len*, respectively. Otherwise NULL and zero are assigned.
+:var:`buf` and :var:`len`, respectively. Otherwise NULL and zero are assigned.
 
 :func:`flux_kvs_lookup_get_dir` interprets the result as a directory,
 e.g. in response to a lookup with the FLUX_KVS_READDIR flag set.
-The directory object is assigned to *dir*.
+The directory object is assigned to :var:`dir`.
 
 :func:`flux_kvs_lookup_get_treeobj` interprets the result as any RFC 11 object.
-The object in JSON-encoded form is assigned to *treeobj*. Since all
+The object in JSON-encoded form is assigned to :var:`treeobj`. Since all
 lookup requests return an RFC 11 object of one type or another, this
 function should work on all.
 
 :func:`flux_kvs_lookup_get_symlink` interprets the result as a symlink target,
 e.g. in response to a lookup with the FLUX_KVS_READLINK flag set.
-The result is parsed and symlink namespace is assigned to *ns* and
-the symlink target is assigned to *target*. If a namespace was not assigned
-to the symlink, *ns* is set to NULL.
+The result is parsed and symlink namespace is assigned to :var:`ns` and
+the symlink target is assigned to :var:`target`. If a namespace was not assigned
+to the symlink, :var:`ns` is set to NULL.
 
 :func:`flux_kvs_lookup_get_key` accesses the key argument from the original
 lookup.
@@ -113,15 +113,15 @@ details.
 FLAGS
 =====
 
-The following are valid bits in a *flags* mask passed as an argument
+The following are valid bits in a :var:`flags` mask passed as an argument
 to :func:`flux_kvs_lookup` or :func:`flux_kvs_lookupat`.
 
 FLUX_KVS_READDIR
-   Look up a directory, not a value. The lookup fails if the key does
+   Look up a directory, not a value. The lookup fails if :var:`key` does
    not refer to a directory object.
 
 FLUX_KVS_READLINK
-   If key is a symlink, read the link value. The lookup fails if the key
+   If :var:`key` is a symlink, read the link value. The lookup fails if the key
    does not refer to a symlink object.
 
 FLUX_KVS_TREEOBJ
@@ -133,10 +133,10 @@ FLUX_KVS_TREEOBJ
 
 FLUX_KVS_WATCH
    After the initial response, continue to send responses to the lookup
-   request each time *key* is mentioned verbatim in a committed transaction.
-   After receiving a response, :man3:`flux_future_reset` should be used to
-   consume a response and prepare for the next one. Responses continue
-   until the namespace is removed, the key is removed, the lookup is
+   request each time :var:`key` is mentioned verbatim in a committed
+   transaction.  After receiving a response, :man3:`flux_future_reset` should
+   be used to consume a response and prepare for the next one. Responses
+   continue until the namespace is removed, the key is removed, the lookup is
    canceled with :func:`flux_kvs_lookup_cancel`, or an error occurs. After
    calling :func:`flux_kvs_lookup_cancel`, callers should wait for the future
    to be fulfilled with an ENODATA error to ensure the cancel request has
@@ -144,12 +144,12 @@ FLUX_KVS_WATCH
 
 FLUX_KVS_WATCH_UNIQ
    Specified along with FLUX_KVS_WATCH, this flag will alter watch
-   behavior to only respond when *key* is mentioned verbatim in a
+   behavior to only respond when :var:`key` is mentioned verbatim in a
    committed transaction and the value of the key has changed.
 
 FLUX_KVS_WATCH_APPEND
    Specified along with FLUX_KVS_WATCH, this flag will alter watch
-   behavior to only respond when *key* is mentioned verbatim in a
+   behavior to only respond when :var:`key` is mentioned verbatim in a
    committed transaction and the key has been appended to. The response
    will only contain the additional appended data. Note that only data
    length is considered for appends and no guarantee is made that prior
@@ -182,10 +182,11 @@ appropriately.
 :func:`flux_kvs_lookup_get_raw`, :func:`flux_kvs_lookup_get_dir`,
 :func:`flux_kvs_lookup_get_treeobj`, :func:`flux_kvs_lookup_get_symlink`,
 and :func:`flux_kvs_lookup_cancel` return 0 on success, or -1 on failure with
-errno set appropriately.
+:var:`errno` set appropriately.
 
-:func:`flux_kvs_lookup_get_key` returns key on success, or NULL with errno
-set to EINVAL if its future argument did not come from a KVS lookup.
+:func:`flux_kvs_lookup_get_key` returns key on success, or NULL with
+:var:`errno` set to EINVAL if its future argument did not come from a KVS
+lookup.
 
 
 ERRORS

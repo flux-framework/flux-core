@@ -23,8 +23,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-Send a remote procedure call ``method`` to another shell in the same
-job at shell rank ``shell_rank``.
+Send a remote procedure call :var:`method` to another shell in the same
+job at shell rank :var:`shell_rank`.
 
 
 RETURN VALUE
@@ -37,7 +37,8 @@ ERRORS
 ======
 
 EINVAL
-   ``shell``, ``method`` or ``fmt`` are NULL, or if ``rank`` is less than 0.
+   :var:`shell`, :var:`method` or :var:`fmt` are NULL, or if :var:`rank` is
+   less than 0.
 
 
 RESOURCES

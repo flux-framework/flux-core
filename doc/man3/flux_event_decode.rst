@@ -39,30 +39,31 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_event_decode` decodes a Flux event message *msg*.
+:func:`flux_event_decode` decodes a Flux event message :var:`msg`.
 
-*topic*, if non-NULL, will be set to the message's topic string. The storage
-for this string belongs to *msg* and should not be freed.
+:var:`topic`, if non-NULL, will be set to the message's topic string. The
+storage for this string belongs to :var:`msg` and should not be freed.
 
-*s*, if non-NULL, will be set to the message's NULL-terminated string payload.
-If no payload exists, it is set to NULL. The storage for this string belongs
-to *msg* and should not be freed.
+:var:`s`, if non-NULL, will be set to the message's NULL-terminated string
+payload.  If no payload exists, it is set to NULL. The storage for this string
+belongs to :var:`msg` and should not be freed.
 
 :func:`flux_event_decode_raw` decodes an event message with a raw payload,
-setting *data* and *len* to the payload data and length. The storage for
-the raw payload belongs to *msg* and should not be freed.
+setting :var:`data` and :var:`len` to the payload data and length. The storage
+for the raw payload belongs to :var:`msg` and should not be freed.
 
 :func:`flux_event_unpack` decodes a Flux event message with a JSON payload as
 above, parsing the payload using variable arguments with a format string
 in the style of jansson's :func:`json_unpack` (used internally). Decoding fails
 if the message doesn't have a JSON payload.
 
-:func:`flux_event_encode` encodes a Flux event message with topic string *topic*
-and optional NULL-terminated string payload *s*. The newly constructed
-message that is returned must be destroyed with :func:`flux_msg_destroy()`.
+:func:`flux_event_encode` encodes a Flux event message with topic string
+:var:`topic` and optional NULL-terminated string payload :var:`s`. The newly
+constructed message that is returned must be destroyed with
+:func:`flux_msg_destroy()`.
 
 :func:`flux_event_encode_raw` encodes a Flux event message with topic
-string *topic*. If *data* is non-NULL, its contents will be used as
+string :var:`topic`. If :var:`data` is non-NULL, its contents will be used as
 the message payload, and the payload type set to raw.
 
 :func:`flux_event_pack` encodes a Flux event message with a JSON payload as
@@ -88,17 +89,17 @@ RETURN VALUE
 ============
 
 Decoding functions return 0 on success. On error, -1 is returned, and
-errno is set appropriately.
+:var:`errno` is set appropriately.
 
 Encoding functions return a message on success. On error, NULL is returned,
-and errno is set appropriately.
+and :var:`errno` is set appropriately.
 
 
 ERRORS
 ======
 
 EINVAL
-   The *msg* argument was NULL or there was a problem encoding.
+   The :var:`msg` argument was NULL or there was a problem encoding.
 
 ENOMEM
    Memory was unavailable.

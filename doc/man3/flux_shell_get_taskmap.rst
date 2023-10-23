@@ -28,14 +28,14 @@ RETURN VALUE
 ============
 
 This function returns a pointer to the shell's internal :type:`struct taskmap`
-or ``NULL`` on failure with ``errno`` set.
+or ``NULL`` on failure with :var:`errno` set.
 
 
 ERRORS
 ======
 
 EINVAL
-   if ``shell`` is NULL or the function is called before the initial taskmap
+   if :var:`shell` is NULL or the function is called before the initial taskmap
    is set by the shell.
 
 

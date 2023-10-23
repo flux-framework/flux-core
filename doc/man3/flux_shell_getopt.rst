@@ -34,11 +34,11 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-:func:`flux_shell_getopt` gets shell option ``name`` as a JSON string from
+:func:`flux_shell_getopt` gets shell option :var:`name` as a JSON string from
 jobspec ``attributes.system.shell.options.name``.
 
-:func:`flux_shell_setopt` sets shell option ``name``, making it available to
-subsequent calls from :func:`flux_shell_getopt`. If ``json_str`` is NULL,
+:func:`flux_shell_setopt` sets shell option :var:`name`, making it available to
+subsequent calls from :func:`flux_shell_getopt`. If :var:`json_str` is NULL,
 the option is unset.
 
 :func:`flux_shell_getopt_unpack` and :func:`flux_shell_setopt_unpack` use
@@ -49,7 +49,7 @@ RETURN VALUE
 ============
 
 :func:`flux_shell_getopt` and :func:`flux_shell_getopt_unpack` return 1 on
-success, 0 if ``name`` was not set, and -1 on error,
+success, 0 if :var:`name` was not set, and -1 on error,
 
 :func:`flux_shell_setopt` and :func:`flux_shell_setopt_pack` return 0 on
 success and -1 on error.
@@ -59,7 +59,7 @@ ERRORS
 ======
 
 EINVAL
-   ``name`` or ``shell`` is NULL.
+   :var:`name` or :var:`shell` is NULL.
 
 ENOMEM
    The process has exhausted its memory.
