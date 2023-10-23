@@ -188,7 +188,6 @@ test_cronodate_t_LDADD = \
 	$(builddir)/cronodate.lo \
 	$(top_builddir)/src/common/libidset/libidset.la \
 	$(builddir)/veb.lo \
-	$(builddir)/xzmalloc.lo \
 	$(top_builddir)/src/common/libtap/libtap.la
 
 test_wallclock_t_SOURCES = test/wallclock.c
