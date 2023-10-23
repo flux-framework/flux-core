@@ -96,7 +96,7 @@ static int set_timeleft_watcher (struct shell_signal *sig)
     }
 
     /* Destroy any current watcher in case this function is called due
-     * to an update in a job's expiration (future update).
+     * to an update in a job's expiration.
      */
     flux_watcher_destroy (sig->watcher);
     sig->watcher = NULL;
@@ -212,6 +212,15 @@ error:
     return NULL;
 }
 
+static int resource_update_cb (flux_plugin_t *p,
+                               const char *topic,
+                               flux_plugin_arg_t *args,
+                               void *arg)
+{
+    struct shell_signal *sig = arg;
+    return set_timeleft_watcher (sig);
+}
+
 static int signal_init (flux_plugin_t *p,
                         const char *topic,
                         flux_plugin_arg_t *args,
@@ -246,6 +255,12 @@ static int signal_init (flux_plugin_t *p,
 
     if (set_timeleft_watcher (sig) < 0)
         return -1;
+
+    if (flux_plugin_add_handler (p,
+                                 "shell.resource-update",
+                                 resource_update_cb,
+                                 sig) < 0)
+        shell_log_errno ("unable to subscribe to shell resource updates");
 
     return 0;
 }
