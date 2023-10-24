@@ -17,9 +17,14 @@ libidset_la_SOURCES = idset.c \
 		      idset_private.h \
 		      idset_decode.c \
 		      idset_encode.c \
-		      idset_format.c
+		      idset_format.c \
+		      veb.c \
+		      veb.h
 
-TESTS = test_idset.t
+EXTRA_DIST = veb_mach.c
+
+TESTS = test_veb.t \
+	test_idset.t
 
 check_PROGRAMS = \
 	$(TESTS) \
@@ -29,16 +34,22 @@ TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
 
+test_veb_t_SOURCES = test/veb.c
+test_veb_t_CPPFLAGS = $(AM_CPPFLAGS)
+test_veb_t_LDADD = \
+	$(top_builddir)/src/common/libidset/libidset.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/libtap/libtap.la
+
 test_idset_t_SOURCES = test/idset.c
 test_idset_t_CPPFLAGS = $(AM_CPPFLAGS)
 test_idset_t_LDADD = \
-	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libidset/libidset.la \
-	$(top_builddir)/src/common/libutil/libutil.la
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/libtap/libtap.la
 
 test_idsetutil_SOURCES = test/idsetutil.c
 test_idsetutil_CPPFLAGS = $(AM_CPPFLAGS)
 test_idsetutil_LDADD = \
-	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libidset/libidset.la \
 	$(top_builddir)/src/common/libutil/libutil.la

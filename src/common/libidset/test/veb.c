@@ -15,7 +15,7 @@
 #include <stdlib.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libutil/veb.h"
+#include "veb.h"
 
 void empty_pred_test1 (void)
 {
