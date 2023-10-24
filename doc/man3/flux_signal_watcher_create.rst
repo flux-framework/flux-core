@@ -2,6 +2,7 @@
 flux_signal_watcher_create(3)
 =============================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -26,20 +27,21 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_signal_watcher_create()`` creates a reactor watcher that
-monitors for receipt of signal *signum*.
+:func:`flux_signal_watcher_create` creates a reactor watcher that
+monitors for receipt of signal :var:`signum`.
 
-The callback *revents* argument should be ignored.
+The callback :var:`revents` argument should be ignored.
 
-When one *callback* is shared by multiple watchers, the signal number that
-triggered the event can be obtained with ``flux_signal_watcher_get_signum()``.
+When one :var:`callback` is shared by multiple watchers, the signal number that
+triggered the event can be obtained with
+:func:`flux_signal_watcher_get_signum`.
 
 
 RETURN VALUE
 ============
 
-flux_signal_watcher_create() returns a flux_watcher_t object on success.
-On error, NULL is returned, and errno is set appropriately.
+:func:`flux_signal_watcher_create` returns a :type:`flux_watcher_t` object
+on success.  On error, NULL is returned, and :var:`errno` is set appropriately.
 
 
 ERRORS

@@ -2,6 +2,7 @@
 flux_aux_set(3)
 ===============
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -23,18 +24,18 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_aux_set()`` attaches application-specific data
-to the parent object *h*. It stores data *aux* by key *name*,
-with optional destructor *destroy*. The destructor, if non-NULL,
+:func:`flux_aux_set` attaches application-specific data
+to the parent object :var:`h`. It stores data :var:`aux` by key :var:`name`,
+with optional destructor :var:`destroy`. The destructor, if non-NULL,
 is called when the parent object is destroyed, or when
-*key* is overwritten by a new value. If *aux* is NULL,
+:var:`key` is overwritten by a new value. If :var:`aux` is NULL,
 the destructor for a previous value, if any is called,
-but no new value is stored. If *name* is NULL,
-*aux* is stored anonymously.
+but no new value is stored. If :var:`name` is NULL,
+:var:`aux` is stored anonymously.
 
-``flux_aux_get()`` retrieves application-specific data
-by *name*. If the data was stored anonymously, it
-cannot be retrieved.  Note that ``flux_aux_get()`` does not scale to a
+:func:`flux_aux_get` retrieves application-specific data
+by :var:`name`. If the data was stored anonymously, it
+cannot be retrieved.  Note that :func:`flux_aux_get` does not scale to a
 large number of items, and flux module handles may persist for a long
 time.
 
@@ -44,9 +45,10 @@ Names beginning with "flux::" are reserved for internal use.
 RETURN VALUE
 ============
 
-``flux_aux_get()`` returns data on success, or NULL on failure, with errno set.
+:func:`flux_aux_get` returns data on success, or NULL on failure,
+with :var:`errno` set.
 
-``flux_aux_set()`` returns 0 on success, or -1 on failure, with errno set.
+:func:`flux_aux_set` returns 0 on success, or -1 on failure, with errno set.
 
 
 ERRORS
@@ -59,7 +61,7 @@ ENOMEM
    Out of memory.
 
 ENOENT
-   ``flux_aux_get()`` could not find an entry for *key*.
+   :func:`flux_aux_get` could not find an entry for *key*.
 
 
 RESOURCES

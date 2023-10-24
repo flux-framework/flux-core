@@ -2,6 +2,7 @@
 flux_child_watcher_create(3)
 ============================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -29,18 +30,18 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_child_watcher_create()`` creates a reactor watcher that
-monitors state transitions of child processes. If *trace* is false,
+:func:`flux_child_watcher_create` creates a reactor watcher that
+monitors state transitions of child processes. If :var:`trace` is false,
 only child termination will trigger an event; otherwise, stop and start
 events may be generated.
 
-The callback *revents* argument should be ignored.
+The callback :var:`revents` argument should be ignored.
 
 The process id that had a transition may be obtained by calling
-``flux_child_watcher_get_rpid()``.
+:func:`flux_child_watcher_get_rpid`.
 
 The status value returned by :linux:man2:`waitpid` may be obtained by calling
-``flux_child_watcher_get_rstatus()``.
+:func:`flux_child_watcher_get_rstatus`.
 
 Only a Flux reactor created with the FLUX_REACTOR_SIGCHLD flag can
 be used with child watchers, as the reactor must register a SIGCHLD
@@ -51,8 +52,8 @@ per program may be created with this capability.
 RETURN VALUE
 ============
 
-flux_child_watcher_create() returns a flux_watcher_t object on success.
-On error, NULL is returned, and errno is set appropriately.
+:func:`flux_child_watcher_create` returns a :type:`flux_watcher_t` object on
+success.  On error, NULL is returned, and :var:`errno` is set appropriately.
 
 
 ERRORS

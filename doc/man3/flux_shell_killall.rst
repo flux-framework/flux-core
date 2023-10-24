@@ -2,6 +2,7 @@
 flux_shell_killall(3)
 =====================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -16,9 +17,9 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-Sends the signal ``sig`` to all processes running in ``shell``. No errors are
-set, but the call returns immediately if ``shell`` is NULL or if ``sig`` is
-zero or negative.
+Sends the signal :var:`sig` to all processes running in :var:`shell`. No
+errors are set, but the call returns immediately if :var:`shell` is NULL
+or if :var:`sig` is zero or negative.
 
 
 RETURN VALUE

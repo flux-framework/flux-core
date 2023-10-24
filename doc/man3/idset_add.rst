@@ -2,6 +2,7 @@
 idset_add(3)
 ============
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -40,36 +41,36 @@ DESCRIPTION
 
 Refer to :man3:`idset_create` for a general description of idsets.
 
-``idset_union()`` creates a new idset that is the union of *a* and *b*.
+:func:`idset_union` creates a new idset that is the union of :var:`a` and
+:var:`b.
 
-``idset_difference()`` creates a new idset that is *a* with the members of
-*b* removed.
+:func:`idset_difference` creates a new idset that is :var:`a` with the members
+of :var:`b` removed.
 
-``idset_intersect()`` creates a new idset containing only members of *a*
-and *b* that are in both sets.
+:func:`idset_intersect` creates a new idset containing only members of :var:`a`
+and :var:`b` that are in both sets.
 
-``idset_add()`` adds the members of *b* to *a*.
+:func:`idset_add` adds the members of :var:`b` to :var:`a`.
 
+:func:`idset_subtract` removes the members of :var:`b` from :var:`a`.
 
-``idset_subtract()`` removes the members of *b* from *a*.
+:func:`idset_has_intersection` tests whether :var:`a` and :var:`b` have any
+members in common.
 
-``idset_has_intersection()`` tests whether *a* and *b* have any members
-in common.
-
-``idset_clear_all()`` removes all members of *x*
+:func:`idset_clear_all` removes all members of :var:`x`.
 
 
 RETURN VALUE
 ============
 
-``idset_union()``, ``idset_difference()``, and ``idset_intersect()`` return an
-idset on success which must be freed with ``idset_destroy()``. On error,
-NULL is returned with errno set.
+:func:`idset_union`, :func:`idset_difference`, and :func:`idset_intersect`
+return an idset on success which must be freed with :man3:`idset_destroy`.
+On error, NULL is returned with :var:`errno` set.
 
-``idset_add()``, ``idset_subtract()``, and ``idset_clear_all()``  return 0
-on success.  On error, -1 is returned with errno set.
+:func:`idset_add`, :func:`idset_subtract`, and :func:`idset_clear_all`
+return 0 on success.  On error, -1 is returned with :var:`errno` set.
 
-``idset_has_intersection()`` returns true or false.
+:func:`idset_has_intersection` returns true or false.
 
 
 ERRORS

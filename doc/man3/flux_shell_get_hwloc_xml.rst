@@ -2,6 +2,7 @@
 flux_shell_get_hwloc_xml(3)
 ===========================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -18,24 +19,24 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_shell_get_hwloc_xml()`` returns an hwloc XML string which has
+:func:`flux_shell_get_hwloc_xml` returns an hwloc XML string which has
 been cached by the job shell. This XML string can be used to load an
-hwloc topology via ``hwloc_topology_load()`` without requiring shell
+hwloc topology via :func:`hwloc_topology_load` without requiring shell
 components to rediscover the entire topology by probing the local
 system. This can make loading hwloc topology much more efficient.
 
 RETURN VALUE
 ============
 
-``flux_shell_get_hwloc_xml()`` returns 0 on success and -1 on error.
+:func:`flux_shell_get_hwloc_xml` returns 0 on success and -1 on error.
 
 
 ERRORS
 ======
 
 EINVAL
-   ``shell`` or ``hwloc_xml`` are NULL, or the current ``shell`` object
-   is being used uninitialized.
+   :var:`shell` or :var:`hwloc_xml` are NULL, or the current :var:`shell`
+   object is being used uninitialized.
     
 
 

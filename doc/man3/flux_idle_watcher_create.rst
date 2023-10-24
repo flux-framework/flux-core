@@ -2,6 +2,7 @@
 flux_idle_watcher_create(3)
 ===========================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -31,8 +32,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_prepare_watcher_create()``, ``flux_check_watcher_create()``, and
-``flux_idle_watcher_create()`` create specialized reactor watchers with
+:func:`flux_prepare_watcher_create`, :func:`flux_check_watcher_create`, and
+:func:`flux_idle_watcher_create` create specialized reactor watchers with
 the following properties:
 
 The prepare watcher is called by the reactor loop immediately before
@@ -44,7 +45,7 @@ excluding other idle watchers, prepare and check watchers.
 While it is active, the reactor loop does not block waiting for
 new events.
 
-The callback *revents* argument should be ignored.
+The callback :var:`revents` argument should be ignored.
 
 Note: the Flux reactor is based on libev. For additional information
 on the behavior of these watchers, refer to the libev documentation on
@@ -54,8 +55,8 @@ on the behavior of these watchers, refer to the libev documentation on
 RETURN VALUE
 ============
 
-These functions return a flux_watcher_t object on success.
-On error, NULL is returned, and errno is set appropriately.
+These functions return a :type:`flux_watcher_t` object on success.
+On error, NULL is returned, and :var:`errno` is set appropriately.
 
 
 ERRORS

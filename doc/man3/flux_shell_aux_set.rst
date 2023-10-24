@@ -2,6 +2,7 @@
 flux_shell_aux_set(3)
 =====================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -25,60 +26,61 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux_shell_aux_set() attaches application-specific data to the parent
-object. It stores data aux by key name, with optional destructor
-destroy. The destructor, if non-NULL, is called when the parent
-object is destroyed, or when key is overwritten by a new value. If aux
-is NULL, the destructor for a previous value, if any is called, but no
-new value is stored. If name is NULL, aux is stored anonymously.
+:func:`flux_shell_aux_set` attaches application-specific data to the parent
+object. It stores data :var:`aux` by key :var:`name`, with optional destructor
+:var:`destroy`. The destructor, if non-NULL, is called when the parent
+object is destroyed, or when :var:`name` is overwritten by a new value. If
+:var:`aux` is NULL, the destructor for a previous value, if any is called,
+but no new value is stored. If :var:`name` is NULL, :var:`aux` is stored
+anonymously.
 
-flux_shell_aux_get() retrieves application-specific data by name. If
+:func:`flux_shell_aux_get` retrieves application-specific data by name. If
 the data was stored anonymously, it cannot be retrieved.
 
 The implementation (as opposed to the header file) uses the variable
-names ``shell``, ``key``, ``val`` and ``free_fn``, which may be more
-intuitive.
+names :var:`shell`, :var:`key`, :var:`val` and :var:`free_fn`, which may be
+more intuitive.
 
-In most cases the key, value and free function will be non-null.
-Several exceptions are supported.
+In most cases the :var:`key`, :var:`value` and :var:`free` function will be
+non-null.  Several exceptions are supported.
 
-First, if ``key`` and ``val`` are non-NULL but ``free_fn`` is null, the
-caller is responsible for memory management associated with the
-value.
+First, if :var:`key` and :var:`val` are non-NULL but :var:`free_fn` is null,
+the caller is responsible for memory management associated with the value.
 
-Second, if ``key`` is NULL but ``val`` and ``free_fun`` are not NULL,
+Second, if :var:`key` is NULL but :var:`val` and :var:`free_fun` are not NULL,
 the lifetime of the object is tied to the lifetime of the underlying
 aux object; the object will be destroyed during the destruction
 of the aux. The value cannot be retrieved.
 
-Third, a non-null ``key`` and a null ``val`` deletes the value previously
-associated with the key by calling its previously-associated ``free_fn``,
+Third, a non-null :var:`key` and a null :var:`val` deletes the value previously
+associated with the key by calling its previously-associated :var:`free_fn`,
 if the destructor exists.
 
 
 RETURN VALUE
 ============
 
-``flux_aux_set()`` returns 0 on success, or -1 on failure, with errno set.
+:func:`flux_aux_set` returns 0 on success, or -1 on failure, with :var:`errno`
+set.
 
-``flux_shell_aux_get()`` returns data on success, or NULL on failure,
-with errno set.
+:func:`flux_shell_aux_get` returns data on success, or NULL on failure,
+with :var:`errno` set.
 
 
 ERRORS
 ======
 
 EINVAL
-   | ``shell`` is null; or
-   | both ``name`` (aka ``key``) and ``aux`` (aka ``val``) are null; or
-   | ``free_fn`` is not null but ``aux`` is; or
-   | ``free_fn`` and ``name`` are both null.
+   | :var:`shell` is null; or
+   | both :var:`name` (aka :var:`key`) and :var:`aux` (aka :var:`val`) are null; or
+   | :var:`free_fn` is not null but :var:`aux` is; or
+   | :var:`free_fn` and :var:`name` are both null.
 
 ENOMEM
    Out of memory.
 
 ENOENT
-   ``flux_aux_get()`` could not find an entry for *key*.
+   :func:`flux_aux_get` could not find an entry for :var:`key`.
 
 
 RESOURCES

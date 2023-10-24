@@ -2,6 +2,7 @@
 flux_shell_task_subprocess(3)
 =============================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -18,17 +19,17 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_shell_task_subprocess`` returns the subprocess for a shell
-task in ``task_fork`` and ``task_exit`` callbacks.
+:func:`flux_shell_task_subprocess` returns the subprocess for a shell
+task in var:`task_fork` and :var:`task_exit` callbacks.
 
-``flux_shell_task_cmd`` returns the cmd structure for a shell task.
+:func:`flux_shell_task_cmd` returns the cmd structure for a shell task.
 
 
 RETURN VALUE
 ============
 
-``flux_shell_task_subprocess`` returns the ``proc`` field of the
-``task``, and ``flux_shell_task_cmd`` returns the ``cmd`` field,
+:func:`flux_shell_task_subprocess` returns the :var:`proc` field of the
+:var:`task`, and :func:`flux_shell_task_cmd` returns the :var:`cmd` field,
 or NULL on error.
 
 
@@ -36,7 +37,7 @@ ERRORS
 ======
 
 EINVAL
-   ``task`` is NULL.
+   :var:`task` is NULL.
 
 
 RESOURCES

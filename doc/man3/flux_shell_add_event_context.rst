@@ -2,6 +2,7 @@
 flux_shell_add_event_context(3)
 ===============================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -22,21 +23,21 @@ DESCRIPTION
 ===========
 
 Add extra context that will be emitted with shell standard event
-``name`` using Jansson ``json_pack()`` style arguments. The ``flags``
+:var:`name` using Jansson :func:`json_pack` style arguments. The :var:`flags`
 parameter is currently unused.
 
 
 RETURN VALUE
 ============
 
-Returns 0 on success, -1 if ``shell``, ``name`` or ``fmt`` are NULL.
+Returns 0 on success, -1 if :var:`shell`, :var:`name` or :var:`fmt` are NULL.
 
 
 ERRORS
 ======
 
 EINVAL
-   ``shell``, ``name`` or ``fmt`` are NULL.
+   :var:`shell`, :var:`name` or :var:`fmt` are NULL.
 
 
 RESOURCES

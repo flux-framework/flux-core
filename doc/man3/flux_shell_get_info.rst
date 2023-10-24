@@ -2,6 +2,7 @@
 flux_shell_get_info(3)
 ======================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -31,7 +32,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_shell_get_info()`` returns shell information as a json string
+:func:`flux_shell_get_info` returns shell information as a json string
 with the following layout:
 
 ::
@@ -45,7 +46,7 @@ with the following layout:
    "jobspec":o,
    "R":o
 
-``flux_shell_get_rank_info()`` returns shell rank information as a json
+:func:`flux_shell_get_rank_info` returns shell rank information as a json
 string with the following layout:
 
 ::
@@ -55,16 +56,16 @@ string with the following layout:
    "taskids":s
    "resources": { "cores":s, ... }
 
-where ``broker_rank`` is the broker rank on which the target shell rank
-of the query is running, ``ntasks`` is the number of tasks running under
-that shell rank, ``taskids`` is a list of task id assignments for those
-tasks (an RFC 22 idset string), and ``resources`` is a dictionary of
+where :var:`broker_rank` is the broker rank on which the target shell rank
+of the query is running, :var:`ntasks` is the number of tasks running under
+that shell rank, :var:`taskids` is a list of task id assignments for those
+tasks (an RFC 22 idset string), and :var:`resources` is a dictionary of
 resource name to resource ids assigned to the shell rank.
 
-``flux_shell_info_unpack()`` and ``flux_shell_rank_info_unpack()``
+:func:`flux_shell_info_unpack` and :func:`flux_shell_rank_info_unpack`
 accomplished the same thing with Jansson-style formatting arguments.
 
-If ``shell_rank`` is set to -1, the current shell rank is used.
+If :var:`shell_rank` is set to -1, the current shell rank is used.
 
 
 RETURN VALUE
@@ -77,8 +78,8 @@ ERRORS
 ======
 
 EINVAL
-   if ``shell`` is NULL, or either ``json_str`` or ``fmt`` are NULL, or if
-   ``shell_rank`` is less than -1.
+   if :var:`shell` is NULL, or either :var:`json_str` or :var:`fmt` are NULL,
+   or if :var:`shell_rank` is less than -1.
 
 
 RESOURCES

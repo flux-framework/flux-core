@@ -2,6 +2,7 @@
 idset_create(3)
 ===============
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -59,37 +60,37 @@ comparable to a bitmap, but performs operations (insert, delete,
 lookup, findNext, findPrevious) in O(log(m)) time, where pow (2,m)
 is the number of slots in the idset.
 
-``idset_create()`` creates an idset. *slots* specifies the highest
+:func:`idset_create` creates an idset. :var:`slots` specifies the highest
 numbered *id* it can hold, plus one. The size is fixed unless
-*flags* specify otherwise (see FLAGS below).
+:var:`flags` specify otherwise (see FLAGS below).
 
-``idset_destroy()`` destroys an idset.
+:func:`idset_destroy` destroys an idset.
 
-``idset_copy()`` copies an idset.
+:func:`idset_copy` copies an idset.
 
-``idset_set()`` and ``idset_clear()`` set or clear *id*.
+:func:`idset_set` and :func:`idset_clear` set or clear :var:`id`.
 
-``idset_range_set()`` and ``idset_range_clear()`` set or clear an inclusive
-range of ids, from *lo* to *hi*.
+:func:`idset_range_set` and :func:`idset_range_clear` set or clear an inclusive
+range of ids, from :var:`lo` to :var:`hi`.
 
-``idset_test()`` returns true if *id* is set, false if not.
+:func:`idset_test`` returns true if :var:`id` is set, false if not.
 
-``idset_first()`` and ``idset_next()`` can be used to iterate over ids
-in the set, returning IDSET_INVALID_ID at the end. ``idset_last()``
+:func:`idset_first` and :func:`idset_next` can be used to iterate over ids
+in the set, returning IDSET_INVALID_ID at the end. :func:`idset_last`
 returns the last (highest) id, or IDSET_INVALID_ID if the set is
 empty.
 
-``idset_count()`` returns the number of ids in the set.
+:func:`idset_count` returns the number of ids in the set.
 
-``idset_equal()`` returns true if the two idset objects *set1* and *set2*
-are equal sets, i.e. the sets contain the same set of integers.
+:func:`idset_equal` returns true if the two idset objects :var:`set1` and
+:var:`set2` are equal sets, i.e. the sets contain the same set of integers.
 
 
 FLAGS
 =====
 
 IDSET_FLAG_AUTOGROW
-   Valid for ``idset_create()`` only. If set, the idset will grow to
+   Valid for :func:`idset_create` only. If set, the idset will grow to
    accommodate any id inserted into it. The internal vEB tree is doubled
    in size until until the new id can be inserted. Resizing is a costly
    operation that requires all ids in the old tree to be inserted into
@@ -99,16 +100,16 @@ IDSET_FLAG_AUTOGROW
 RETURN VALUE
 ============
 
-``idset_copy()`` returns an idset on success which must be freed with
-``idset_destroy()``. On error, NULL is returned with errno set.
+:func:`idset_copy` returns an idset on success which must be freed with
+:func:`idset_destroy`. On error, NULL is returned with :var:`errno` set.
 
-``idset_first()``, ``idset_next()``, and ``idset_last()`` return an id,
+:func:`idset_first`, :func:`idset_next`, and :func:`idset_last` return an id,
 or IDSET_INVALID_ID if no id is available.
 
-``idset_equal()`` returns true if *set1* and *set2* are equal sets,
+:func:`idset_equal` returns true if :var:`set1` and :var:`set2` are equal sets,
 or false if they are not equal, or either argument is *NULL*.
 
-Other functions return 0 on success, or -1 on error with errno set.
+Other functions return 0 on success, or -1 on error with :var:`errno` set.
 
 
 ERRORS

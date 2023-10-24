@@ -1,4 +1,4 @@
-Flux API functions that are based on Jansson's json_unpack()
+Flux API functions that are based on Jansson's :func:`json_unpack`
 accept the following tokens in their format string.
 The type in parenthesis denotes the resulting JSON type, and
 the type in brackets (if any) denotes the C type that is expected as

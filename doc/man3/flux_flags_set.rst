@@ -2,6 +2,7 @@
 flux_flags_set(3)
 =================
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -20,14 +21,15 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_flags_set()`` sets new open *flags* in handle *h*. The resulting
-handle flags will be a logical or of the old flags and the new.
+:func:`flux_flags_set` sets new open :var:`flags` in handle :var:`h`. The
+resulting handle flags will be a logical or of the old flags and the new.
 
-``flux_flags_unset()`` clears open *flags* in handle *h*. The resulting
-handle flags will be a logical and of the old flags and the inverse of the new.
+:func:`flux_flags_unset` clears open :var:`flags` in handle :var:`h`. The
+resulting handle flags will be a logical and of the old flags and the
+inverse of the new.
 
-``flux_flags_get()`` can be used to retrieve the current open flags from
-handle *h*.
+:func:`flux_flags_get` can be used to retrieve the current open flags from
+handle :var:`h`.
 
 The valid flags are described in :man3:`flux_open`.
 
@@ -35,7 +37,7 @@ The valid flags are described in :man3:`flux_open`.
 RETURN VALUE
 ============
 
-``flux_flags_get()`` returns the current flags.
+:func:`flux_flags_get` returns the current flags.
 
 
 ERRORS

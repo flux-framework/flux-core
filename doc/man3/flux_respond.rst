@@ -2,6 +2,7 @@
 flux_respond(3)
 ===============
 
+.. default-domain:: c
 
 SYNOPSIS
 ========
@@ -33,26 +34,27 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_respond()``, ``flux_respond_pack()``, ``flux_respond_raw()``, and
-``flux_respond_error()`` encode and send a response message on handle *h*,
-deriving topic string, matchtag, and route stack from the provided
-*request*.
+:func:`flux_respond`, :func:`flux_respond_pack`, :func:`flux_respond_raw`, and
+:func:`flux_respond_error` encode and send a response message on handle
+:var:`h`, deriving topic string, matchtag, and route stack from the provided
+:var:`request`.
 
-``flux_respond()`` sends a response to *request*. If *s* is non-NULL,
-``flux_respond()`` will send it as the response payload, otherwise there
-will be no payload.
+:func:`flux_respond` sends a response to :var:`request`. If :var:`s` is
+non-NULL, :func:`flux_respond` will send it as the response payload, otherwise
+there will be no payload.
 
-``flux_respond_raw()`` is identical except if *data* is non-NULL,
-``flux_respond_raw()`` will send it as the response payload.
+:func:`flux_respond_raw` is identical except if :var:`data` is non-NULL,
+:func:`flux_respond_raw` will send it as the response payload.
 
-``flux_respond_pack()`` encodes a response message with a JSON payload,
+:func:`flux_respond_pack` encodes a response message with a JSON payload,
 building the payload using variable arguments with a format string in
-the style of jansson's ``json_pack()`` (used internally).
+the style of jansson's :func:`json_pack` (used internally).
 
-``flux_respond_error()`` returns an error response to the sender.
-If *errnum* is zero, EINVAL is used.  If *errmsg* is non-NULL, an error string
-payload is included in the response. The error string may be used to
-provide a more detailed error message than can be conveyed via *errnum*.
+:func:`flux_respond_error` returns an error response to the sender.
+If :var:`errnum` is zero, EINVAL is used.  If :var:`errmsg` is non-NULL,
+an error string payload is included in the response. The error string may be
+used to provide a more detailed error message than can be conveyed via
+:var:`errnum`.
 
 
 STREAMING SERVICES
@@ -66,7 +68,7 @@ end-of-stream marker.
 
 It is essential that services which return multiple responses verify that
 requests were made with the FLUX_RPC_STREAMING flag by testing the
-FLUX_MSGFLAG_STREAMING flag, e.g. using ``flux_msg_is_streaming()``.
+FLUX_MSGFLAG_STREAMING flag, e.g. using :man3:`flux_msg_is_streaming`.
 If the flag is not set, the service must return an immediate EPROTO error.
 
 ENCODING JSON PAYLOADS
@@ -79,7 +81,7 @@ RETURN VALUE
 ============
 
 These functions return zero on success. On error, -1 is returned,
-and errno is set appropriately.
+and :var:`errno` is set appropriately.
 
 
 ERRORS
