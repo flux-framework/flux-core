@@ -34,21 +34,28 @@ int validate_idset_flags (int flags, int allowed)
 struct idset *idset_create (size_t size, int flags)
 {
     struct idset *idset;
+    int valid_flags = IDSET_FLAG_AUTOGROW | IDSET_FLAG_INITFULL;
 
-    if (validate_idset_flags (flags, IDSET_FLAG_AUTOGROW) < 0)
+    if (validate_idset_flags (flags, valid_flags) < 0)
         return NULL;
     if (size == 0)
         size = IDSET_DEFAULT_SIZE;
     if (!(idset = malloc (sizeof (*idset))))
         return NULL;
-    idset->T = vebnew (size, 0);
+    if ((flags & IDSET_FLAG_INITFULL))
+        idset->T = vebnew (size, 1);
+    else
+        idset->T = vebnew (size, 0);
     if (!idset->T.D) {
         free (idset);
         errno = ENOMEM;
         return NULL;
     }
     idset->flags = flags;
-    idset->count = 0;
+    if ((flags & IDSET_FLAG_INITFULL))
+        idset->count = size;
+    else
+        idset->count = 0;
     return idset;
 }
 
@@ -137,6 +144,11 @@ static int idset_grow (struct idset *idset, size_t size)
             vebput (T, id);
             id = vebsucc (idset->T, id + 1);
         }
+        if ((idset->flags & IDSET_FLAG_INITFULL)) {
+            for (id = idset->T.M; id < newsize; id++)
+                vebput (T, id);
+            idset->count += (newsize - idset->T.M);
+        }
         free (idset->T.D);
         idset->T = T;
     }
@@ -189,6 +201,14 @@ static void idset_del (struct idset *idset, unsigned int id)
     }
 }
 
+/* Call this variant if id is known to be IN the set
+ */
+static void idset_del_nocheck (struct idset *idset, unsigned int id)
+{
+    idset->count--;
+    vebdel (idset->T, id);
+}
+
 int idset_set (struct idset *idset, unsigned int id)
 {
     if (!idset || !valid_id (id)) {
@@ -196,6 +216,12 @@ int idset_set (struct idset *idset, unsigned int id)
         return -1;
     }
     if (id >= idset_universe_size (idset)) {
+        /* N.B. we do not try to grow the idset to accommodate out of range ids
+         * when the operation is 'set' and IDSET_FLAG_INITFULL is set.
+         * Treat it as a successful no-op.
+         */
+        if ((idset->flags & IDSET_FLAG_INITFULL))
+            return 0;
         if (idset_grow (idset, id + 1) < 0)
             return -1;
         idset_put_nocheck (idset, id);
@@ -224,12 +250,18 @@ int idset_range_set (struct idset *idset, unsigned int lo, unsigned int hi)
     }
     normalize_range (&lo, &hi);
 
+    // see IDSET_FLAG_INITFULL note in idset_set()
     size_t oldsize = idset_universe_size (idset);
-    if (idset_grow (idset, hi + 1) < 0)
-        return -1;
+    if (!(idset->flags & IDSET_FLAG_INITFULL)) {
+        if (idset_grow (idset, hi + 1) < 0)
+            return -1;
+    }
     for (id = lo; id <= hi; id++) {
-        if (id >= oldsize)
+        if (id >= oldsize) {
+            if ((idset->flags & IDSET_FLAG_INITFULL))
+                return 0;
             idset_put_nocheck (idset, id);
+        }
         else
             idset_put (idset, id);
     }
@@ -242,7 +274,19 @@ int idset_clear (struct idset *idset, unsigned int id)
         errno = EINVAL;
         return -1;
     }
-    idset_del (idset, id);
+    if (id >= idset_universe_size (idset)) {
+        /* N.B. we do not try to grow the idset to accommodate out of range ids
+         * when the operation is 'clear' and IDSET_FLAG_INITFULL is NOT set.
+         * Treat this as a successful no-op.
+         */
+        if (!(idset->flags & IDSET_FLAG_INITFULL))
+            return 0;
+        if (idset_grow (idset, id + 1) < 0)
+            return -1;
+        idset_del_nocheck (idset, id);
+    }
+    else
+        idset_del (idset, id);
     return 0;
 }
 
@@ -255,8 +299,21 @@ int idset_range_clear (struct idset *idset, unsigned int lo, unsigned int hi)
         return -1;
     }
     normalize_range (&lo, &hi);
-    for (id = lo; id <= hi && id < idset->T.M; id++)
-        idset_del (idset, id);
+    // see IDSET_FLAG_INITFULL note in idset_clear()
+    size_t oldsize = idset_universe_size (idset);
+    if ((idset->flags & IDSET_FLAG_INITFULL)) {
+        if (idset_grow (idset, hi + 1) < 0)
+            return -1;
+    }
+    for (id = lo; id <= hi; id++) {
+        if (id >= oldsize) {
+            if (!(idset->flags & IDSET_FLAG_INITFULL))
+                return 0;
+            idset_del_nocheck (idset, id);
+        }
+        else
+            idset_del (idset, id);
+    }
     return 0;
 }
 

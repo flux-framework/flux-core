@@ -667,6 +667,8 @@ void test_autogrow (void)
     errno = 0;
     ok (idset_set (idset, 1) < 0 && errno == EINVAL,
         "idset_set 1 fails with EINVAL");
+    ok (idset_clear (idset, 1) == 0,
+        "idset_clear 1 is a no-op");
     idset_destroy (idset);
 
     idset = idset_create (1, IDSET_FLAG_AUTOGROW);
@@ -676,6 +678,9 @@ void test_autogrow (void)
         "idset_universe_size is 1");
     ok (idset_set (idset, 0) == 0,
         "idset_set 0 works");
+    ok (idset_clear (idset, 2) == 0
+        && idset_universe_size (idset) == 1,
+        "idset_clear 2 is a no-op");
     ok (idset_set (idset, 2) == 0,
         "idset_set 2 works");
     ok (idset_universe_size (idset) > 1,
@@ -769,6 +774,57 @@ void issue_2336 (void)
     }
 }
 
+void test_initfull (void)
+{
+    struct idset *idset;
+    size_t size = 128;
+
+    idset = idset_create (size, IDSET_FLAG_INITFULL);
+    ok (idset != NULL,
+        "idset_create size=%zu flags=INITFULL works", size);
+    ok (idset_count (idset) == size,
+        "idset_count returns correct size");
+    ok (idset_test (idset, 0) == true,
+        "idset_test 0 is true");
+    ok (idset_test (idset, size - 1) == true,
+        "idset_test %zu is true", size - 1);
+    ok (idset_first (idset) == 0,
+        "idset_first returns 0");
+    ok (idset_next (idset, 0) == 1,
+        "idset_next prev=0 returns 1");
+    ok (idset_test (idset, size) == false,
+        "idset_test %zu is false", size);
+    idset_destroy (idset);
+
+    // grow by clearing a bit
+    idset = idset_create (0, IDSET_FLAG_INITFULL | IDSET_FLAG_AUTOGROW);
+    ok (idset != NULL,
+        "idset_create size=0 flags=INITFULL|AUTOGROW works");
+    ok (idset_clear (idset, IDSET_DEFAULT_SIZE) == 0,
+        "idset_clear id=size works");
+    ok (idset_count (idset) == IDSET_DEFAULT_SIZE*2 - 1,
+        "idset_count returns 2*default size - 1");
+    ok (idset_test (idset, IDSET_DEFAULT_SIZE) == false,
+        "idset_test id=size is false");
+    ok (idset_test (idset, IDSET_DEFAULT_SIZE + 1) == true,
+        "idset_test id=size+1 is true");
+    ok (idset_test (idset, IDSET_DEFAULT_SIZE*2 - 1) == true,
+        "idset_test id=2*size-1 is true");
+    idset_destroy (idset);
+
+    // setting a bit should not cause growth
+    idset = idset_create (4, IDSET_FLAG_INITFULL | IDSET_FLAG_AUTOGROW);
+    ok (idset != NULL,
+        "idset_create size=4 flags=INITFULL|AUTOGROW works");
+    ok (idset_count (idset) == 4,
+        "idset_count returns 4");
+    ok (idset_set (idset, 4) == 0,
+        "idset_set 4 (out of range) works");
+    ok (idset_count (idset) == 4,
+        "idset_count still returns 4");
+    idset_destroy (idset);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -789,6 +845,7 @@ int main (int argc, char *argv[])
     issue_1974 ();
     issue_2336 ();
     test_ops ();
+    test_initfull();
 
     done_testing ();
 }
