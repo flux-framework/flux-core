@@ -51,9 +51,9 @@ DESCRIPTION
 An idset is a set of numerically sorted, non-negative integers.
 It is internally represented as a van Embde Boas (or vEB) tree.
 Functionally it behaves like a bitmap, and has space efficiency
-comparable to a bitmap, but performs operations (insert, delete,
-lookup, findNext, findPrevious) in O(log(m)) time, where pow (2,m)
-is the number of slots in the idset.
+comparable to a bitmap, but performs *test*, *set*, *clear*, *next*,
+and *prev* operations in :math:`O(log(m))` time (where :math:`2^m` is the
+slot count); and performs *first* and *last* operations in constant time.
 
 :func:`idset_create` creates an idset. :var:`slots` specifies the highest
 numbered *id* it can hold, plus one. The size is fixed unless
