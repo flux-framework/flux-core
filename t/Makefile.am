@@ -147,6 +147,7 @@ TESTSCRIPTS = \
 	t2230-job-info-lookup.t \
 	t2231-job-info-eventlog-watch.t \
 	t2232-job-info-security.t \
+	t2233-job-info-update.t \
 	t2240-queue-cmd.t \
 	t2241-queue-cmd-list.t \
 	t2245-policy-config.t \
@@ -421,6 +422,8 @@ check_PROGRAMS = \
 	job-manager/list-jobs \
 	job-manager/print-constants \
 	job-manager/events_journal_stream \
+	job-info/update_lookup \
+	job-info/update_watch_stream \
 	ingest/submitbench \
 	sched-simple/jj-reader \
 	shell/rcalc \
@@ -764,6 +767,16 @@ job_manager_events_journal_stream_SOURCES = job-manager/events_journal_stream.c
 job_manager_events_journal_stream_CPPFLAGS = $(test_cppflags)
 job_manager_events_journal_stream_LDADD = $(test_ldadd)
 job_manager_events_journal_stream_LDFLAGS = $(test_ldflags)
+
+job_info_update_lookup_SOURCES = job-info/update_lookup.c
+job_info_update_lookup_CPPFLAGS = $(test_cppflags)
+job_info_update_lookup_LDADD = $(test_ldadd)
+job_info_update_lookup_LDFLAGS = $(test_ldflags)
+
+job_info_update_watch_stream_SOURCES = job-info/update_watch_stream.c
+job_info_update_watch_stream_CPPFLAGS = $(test_cppflags)
+job_info_update_watch_stream_LDADD = $(test_ldadd)
+job_info_update_watch_stream_LDFLAGS = $(test_ldflags)
 
 disconnect_watcher_la_SOURCES = disconnect/watcher.c
 disconnect_watcher_la_CPPFLAGS = $(test_cppflags)

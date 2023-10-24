@@ -29,7 +29,7 @@ void watchers_cancel (struct info_ctx *ctx,
 
 void watch_cleanup (struct info_ctx *ctx);
 
-#endif /* ! _FLUX_JOB_INFO_EVENTLOG_WATCH_H */
+#endif /* ! _FLUX_JOB_INFO_WATCH_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

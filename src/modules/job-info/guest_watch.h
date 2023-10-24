@@ -31,7 +31,7 @@ void guest_watchers_cancel (struct info_ctx *ctx,
 
 void guest_watch_cleanup (struct info_ctx *ctx);
 
-#endif /* ! _FLUX_JOB_INFO_EVENTLOG_GUEST_WATCH_H */
+#endif /* ! _FLUX_JOB_INFO_GUEST_WATCH_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

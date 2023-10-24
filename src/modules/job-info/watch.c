@@ -19,13 +19,13 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/job.h"
-#include "src/common/libeventlog/eventlog.h"
 #include "ccan/str/str.h"
 
 #include "job-info.h"
 #include "watch.h"
 #include "guest_watch.h"
 #include "allow.h"
+#include "util.h"
 
 struct watch_ctx {
     struct info_ctx *ctx;
@@ -47,11 +47,13 @@ static void watch_ctx_destroy (void *data)
 {
     if (data) {
         struct watch_ctx *ctx = data;
+        int save_errno = errno;
         flux_msg_decref (ctx->msg);
         free (ctx->path);
         flux_future_destroy (ctx->check_f);
         flux_future_destroy (ctx->watch_f);
         free (ctx);
+        errno = save_errno;
     }
 }
 
@@ -63,7 +65,6 @@ static struct watch_ctx *watch_ctx_create (struct info_ctx *ctx,
                                            int flags)
 {
     struct watch_ctx *w = calloc (1, sizeof (*w));
-    int saved_errno;
 
     if (!w)
         return NULL;
@@ -82,9 +83,7 @@ static struct watch_ctx *watch_ctx_create (struct info_ctx *ctx,
     return w;
 
 error:
-    saved_errno = errno;
     watch_ctx_destroy (w);
-    errno = saved_errno;
     return NULL;
 }
 
@@ -193,52 +192,20 @@ done:
     zlist_remove (ctx->watchers, w);
 }
 
-static bool eventlog_parse_next (const char **pp, const char **tok,
-                                 size_t *toklen)
-{
-    char *term;
-
-    if (!(term = strchr (*pp, '\n')))
-        return false;
-    *tok = *pp;
-    *toklen = term - *pp + 1;
-    *pp = term + 1;
-    return true;
-}
-
 static int check_eventlog_end (struct watch_ctx *w,
                                const char *tok,
                                size_t toklen)
 {
-    char *str = NULL;
-    json_t *o = NULL;
-    const char *name = NULL;
-    int saved_errno, rc = -1;
+    const char *name;
+    json_t *entry = NULL;
+    int rc = 0;
 
-    if (!(str = strndup (tok, toklen))) {
-        flux_log_error (w->ctx->h, "%s: strndup", __FUNCTION__);
-        goto error;
-    }
-
-    if (!(o = eventlog_entry_decode (str))) {
-        flux_log_error (w->ctx->h, "%s: eventlog_entry_decode", __FUNCTION__);
-        goto error;
-    }
-
-    if (eventlog_entry_parse (o, NULL, &name, NULL) < 0) {
-        flux_log_error (w->ctx->h, "%s: eventlog_entry_parse", __FUNCTION__);
-        goto error;
-    }
+    if (eventlog_parse_entry_chunk (w->ctx->h, tok, toklen, &entry, &name, NULL) < 0)
+        return -1;
 
     if (streq (name, "clean"))
         rc = 1;
-    else
-        rc = 0;
-error:
-    saved_errno = errno;
-    free (str);
-    json_decref (o);
-    errno = saved_errno;
+    json_decref (entry);
     return rc;
 }
 
@@ -333,12 +300,12 @@ error:
     zlist_remove (ctx->watchers, w);
 }
 
-int watch (struct info_ctx *ctx,
-           const flux_msg_t *msg,
-           flux_jobid_t id,
-           const char *path,
-           int flags,
-           bool guest)
+static int watch (struct info_ctx *ctx,
+                  const flux_msg_t *msg,
+                  flux_jobid_t id,
+                  const char *path,
+                  int flags,
+                  bool guest)
 {
     struct watch_ctx *w = NULL;
     uint32_t rolemask;

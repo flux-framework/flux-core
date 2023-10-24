@@ -169,13 +169,18 @@ job_info_la_SOURCES = \
 	job-info/watch.h \
 	job-info/watch.c \
 	job-info/guest_watch.h \
-	job-info/guest_watch.c
+	job-info/guest_watch.c \
+	job-info/update.h \
+	job-info/update.c \
+	job-info/util.h \
+	job-info/util.c
 job_info_la_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
 	$(FLUX_SECURITY_CFLAGS)
 job_info_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libjob/libjob.la \
 	$(JANSSON_LIBS) \
 	$(HWLOC_LIBS)
 job_info_la_LDFLAGS = $(fluxmod_ldflags) -module

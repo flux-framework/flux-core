@@ -20,6 +20,7 @@
 #include "lookup.h"
 #include "watch.h"
 #include "guest_watch.h"
+#include "update.h"
 
 static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
@@ -27,6 +28,7 @@ static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
     struct info_ctx *ctx = arg;
     watchers_cancel (ctx, msg, false);
     guest_watchers_cancel (ctx, msg, false);
+    update_watchers_cancel (ctx, msg, false);
 }
 
 static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -36,10 +38,14 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
     int lookups = zlist_size (ctx->lookups);
     int watchers = zlist_size (ctx->watchers);
     int guest_watchers = zlist_size (ctx->guest_watchers);
-    if (flux_respond_pack (h, msg, "{s:i s:i s:i}",
+    int update_lookups = zlist_size (ctx->update_lookups);
+    int update_watchers = update_watch_count (ctx);
+    if (flux_respond_pack (h, msg, "{s:i s:i s:i s:i s:i}",
                            "lookups", lookups,
                            "watchers", watchers,
-                           "guest_watchers", guest_watchers) < 0) {
+                           "guest_watchers", guest_watchers,
+                           "update_lookups", update_lookups,
+                           "update_watchers", update_watchers) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -64,6 +70,21 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.eventlog-watch-cancel",
       .cb           = watch_cancel_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.update-lookup",
+      .cb           = update_lookup_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.update-watch",
+      .cb           = update_watch_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.update-watch-cancel",
+      .cb           = update_watch_cancel_cb,
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
@@ -96,6 +117,14 @@ static void info_ctx_destroy (struct info_ctx *ctx)
             guest_watch_cleanup (ctx);
             zlist_destroy (&ctx->guest_watchers);
         }
+        if (ctx->update_lookups)
+            zlist_destroy (&ctx->update_lookups);
+        if (ctx->update_watchers) {
+            update_watch_cleanup (ctx);
+            zlist_destroy (&ctx->update_watchers);
+        }
+        if (ctx->index_uw)
+            zhashx_destroy (&ctx->index_uw);
         free (ctx);
         errno = saved_errno;
     }
@@ -117,6 +146,14 @@ static struct info_ctx *info_ctx_create (flux_t *h)
     if (!(ctx->watchers = zlist_new ()))
         goto error;
     if (!(ctx->guest_watchers = zlist_new ()))
+        goto error;
+    if (!(ctx->update_lookups = zlist_new ()))
+        goto error;
+    if (!(ctx->update_watchers = zlist_new ()))
+        goto error;
+    /* no destructor for index_uw, destruction handled on
+     * update_watchers list */
+    if (!(ctx->index_uw = zhashx_new ()))
         goto error;
     return ctx;
 error:
