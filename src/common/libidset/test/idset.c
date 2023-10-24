@@ -183,57 +183,57 @@ void test_badparam (void)
 
     errno = 0;
     ok (idset_set (NULL, 1) < 0 && errno == EINVAL,
-        "iset_set(idset=NULL) fails with EINVAL");
+        "idset_set(idset=NULL) fails with EINVAL");
     errno = 0;
     ok (idset_set (idset, IDSET_INVALID_ID) < 0 && errno == EINVAL,
-        "iset_set(id=INVALID) fails with EINVAL");
+        "idset_set(id=INVALID) fails with EINVAL");
     errno = 0;
     ok (idset_set (idset, 101) < 0 && errno == EINVAL,
-        "iset_set(id=out of range) fails with EINVAL");
+        "idset_set(id=out of range) fails with EINVAL");
     errno = 0;
     ok (idset_range_set (NULL, 1, 2) < 0 && errno == EINVAL,
-        "iset_range_set(idset=NULL) fails with EINVAL");
+        "idset_range_set(idset=NULL) fails with EINVAL");
     errno = 0;
     ok (idset_range_set (idset, 1, IDSET_INVALID_ID) < 0 && errno == EINVAL,
-        "iset_range_set(hi=INVALID) fails with EINVAL");
+        "idset_range_set(hi=INVALID) fails with EINVAL");
     errno = 0;
     ok (idset_range_set (idset, IDSET_INVALID_ID, 1) < 0 && errno == EINVAL,
-        "iset_range_set(lo=INVALID) fails with EINVAL");
+        "idset_range_set(lo=INVALID) fails with EINVAL");
     errno = 0;
     ok (idset_range_set (idset, 101, 1) < 0 && errno == EINVAL,
-        "iset_range_set(lo=out of range) fails with EINVAL");
+        "idset_range_set(lo=out of range) fails with EINVAL");
     errno = 0;
     ok (idset_range_set (idset, 1, 101) < 0 && errno == EINVAL,
-        "iset_range_set(hi=out of range) fails with EINVAL");
+        "idset_range_set(hi=out of range) fails with EINVAL");
 
     errno = 0;
     ok (idset_clear (NULL, 1) < 0 && errno == EINVAL,
-        "iset_clear(idset=NULL) fails with EINVAL");
+        "idset_clear(idset=NULL) fails with EINVAL");
     errno = 0;
     ok (idset_clear (idset, IDSET_INVALID_ID) < 0 && errno == EINVAL,
-        "iset_clear(id=INVALID) fails with EINVAL");
+        "idset_clear(id=INVALID) fails with EINVAL");
     errno = 0;
     ok (idset_clear (idset, 101) == 0,
-        "iset_clear(id=out of range) works");
+        "idset_clear(id=out of range) works");
     errno = 0;
     ok (idset_range_clear (NULL, 1, 2) < 0 && errno == EINVAL,
-        "iset_range_clear(idset=NULL) fails with EINVAL");
+        "idset_range_clear(idset=NULL) fails with EINVAL");
     errno = 0;
     ok (idset_range_clear (idset, 1, IDSET_INVALID_ID) < 0 && errno == EINVAL,
-        "iset_range_clear(hi=INVALID) fails with EINVAL");
+        "idset_range_clear(hi=INVALID) fails with EINVAL");
     errno = 0;
     ok (idset_range_clear (idset, IDSET_INVALID_ID, 1) < 0 && errno == EINVAL,
-        "iset_range_clear(lo=INVALID) fails with EINVAL");
+        "idset_range_clear(lo=INVALID) fails with EINVAL");
 
     ok (idset_test (NULL, 1) == false,
-        "iset_test(idset=NULL) returns false");
+        "idset_test(idset=NULL) returns false");
 
     ok (idset_count (NULL) == 0,
-        "iset_count(idset=NULL) returns 0");
+        "idset_count(idset=NULL) returns 0");
 
     errno = 0;
     ok (idset_copy (NULL) == NULL && errno == EINVAL,
-        "iset_copy(idset=NULL) fails with EINVAL");
+        "idset_copy(idset=NULL) fails with EINVAL");
 
     ok (idset_first (NULL) == IDSET_INVALID_ID,
         "idset_first (idset=NULL) returns IDSET_INVALID_ID");
