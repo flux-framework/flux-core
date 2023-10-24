@@ -24,7 +24,7 @@ extern "C" {
 #endif
 
 enum idset_flags {
-    IDSET_FLAG_AUTOGROW = 1, // allow idset size to automatically grow
+    IDSET_FLAG_AUTOGROW = 1, // allow idset universe size to automatically grow
     IDSET_FLAG_BRACKETS = 2, // encode non-singleton idset with brackets
     IDSET_FLAG_RANGE = 4,    // encode with ranges ("2,3,4,8" -> "2-4,8")
 };
@@ -32,13 +32,19 @@ enum idset_flags {
 #define IDSET_INVALID_ID    (UINT_MAX - 1)
 
 /* Create/destroy an idset.
- * Set the initial size to 'size' (0 means implementation uses a default size).
+ * Set the initial universe size to 'size' (0 means implementation uses a
+ * default size).
  * If 'flags' includes IDSET_FLAG_AUTOGROW, the idset is resized to fit if
  * an id >= size is set.
  * Returns idset on success, or NULL on failure with errno set.
  */
 struct idset *idset_create (size_t size, int flags);
 void idset_destroy (struct idset *idset);
+
+/* Get the current universe size of the idset.
+ * A set with a universe size of N holds ids from 0 to N - 1.
+ */
+size_t idset_universe_size (const struct idset *idset);
 
 /* Make an exact duplicate of idset.
  * Returns copy on success, NULL on failure with errno set.

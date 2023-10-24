@@ -231,6 +231,9 @@ void test_badparam (void)
     ok (idset_count (NULL) == 0,
         "idset_count(idset=NULL) returns 0");
 
+    ok (idset_universe_size (NULL) == 0,
+        "idset_universe_size(idset=NULL) returns 0");
+
     errno = 0;
     ok (idset_copy (NULL) == NULL && errno == EINVAL,
         "idset_copy(idset=NULL) fails with EINVAL");
@@ -657,8 +660,8 @@ void test_autogrow (void)
     idset = idset_create (1, 0);
     ok (idset != NULL,
         "idset_create size=1 flags=0 works");
-    ok (idset->T.M == 1,
-        "idset internal size is 1");
+    ok (idset_universe_size (idset) == 1,
+        "idset_universe_size is 1");
     ok (idset_set (idset, 0) == 0,
         "idset_set 0 works");
     errno = 0;
@@ -669,14 +672,14 @@ void test_autogrow (void)
     idset = idset_create (1, IDSET_FLAG_AUTOGROW);
     ok (idset != NULL,
         "idset_create size=1 flags=AUTOGROW works");
-    ok (idset->T.M == 1,
-        "idset internal size is 1");
+    ok (idset_universe_size (idset) == 1,
+        "idset_universe_size is 1");
     ok (idset_set (idset, 0) == 0,
         "idset_set 0 works");
     ok (idset_set (idset, 2) == 0,
         "idset_set 2 works");
-    ok (idset->T.M > 1,
-        "idset internal size grew");
+    ok (idset_universe_size (idset) > 1,
+        "idset_universe_size returned a larger size");
     ok (   idset_test (idset, 0)
         && !idset_test (idset, 1)
         && idset_test (idset, 2)

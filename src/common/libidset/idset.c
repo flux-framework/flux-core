@@ -62,6 +62,11 @@ void idset_destroy (struct idset *idset)
     }
 }
 
+size_t idset_universe_size (const struct idset *idset)
+{
+    return idset ? idset->T.M : 0;
+}
+
 static Veb vebdup (Veb T)
 {
     size_t size = vebsize (T.M);
@@ -106,7 +111,7 @@ static bool valid_id (unsigned int id)
     return true;
 }
 
-/* Double idset size until it has at least 'size' slots.
+/* Double the idset universe size until it is at least 'size'.
  * Return 0 on success, -1 on failure with errno == ENOMEM.
  */
 static int idset_grow (struct idset *idset, size_t size)
