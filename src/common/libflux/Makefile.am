@@ -79,8 +79,6 @@ libflux_la_SOURCES = \
 	module.c \
 	conf_private.h \
 	conf.c \
-	tagpool.h \
-	tagpool.c \
 	ev_flux.h \
 	ev_flux.c \
 	ev_buffer_read.h \
@@ -111,7 +109,6 @@ TESTS = test_message.t \
 	test_request.t \
 	test_response.t \
 	test_event.t \
-	test_tagpool.t \
 	test_future.t \
 	test_composite_future.t \
 	test_reactor.t \
@@ -172,10 +169,6 @@ test_msglist_t_LDADD = $(test_ldadd)
 test_event_t_SOURCES = test/event.c
 test_event_t_CPPFLAGS = $(test_cppflags)
 test_event_t_LDADD = $(test_ldadd)
-
-test_tagpool_t_SOURCES = test/tagpool.c
-test_tagpool_t_CPPFLAGS = $(test_cppflags)
-test_tagpool_t_LDADD = $(test_ldadd)
 
 test_request_t_SOURCES = test/request.c
 test_request_t_CPPFLAGS = $(test_cppflags)

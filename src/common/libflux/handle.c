@@ -33,6 +33,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libidset/idset.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 
@@ -40,7 +41,6 @@
 #include "reactor.h"
 #include "connector.h"
 #include "message.h"
-#include "tagpool.h"
 #include "msg_handler.h" // for flux_sleep_on ()
 #include "flog.h"
 #include "conf.h"
@@ -77,7 +77,7 @@ struct flux_handle {
     struct msg_deque *queue;
     int             pollfd;
 
-    struct tagpool  *tagpool;
+    struct idset    *tagpool;
     flux_msgcounters_t msgcounters;
     flux_comms_error_f comms_error_cb;
     void            *comms_error_arg;
@@ -125,8 +125,6 @@ static flux_t *lookup_clone_ancestor (flux_t *h)
         h = h->parent;
     return h;
 }
-
-void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new);
 
 #if HAVE_CALIPER
 void profiling_context_init (struct profiling_context* prof)
@@ -405,6 +403,45 @@ void flux_close (flux_t *h)
     flux_handle_destroy (h);
 }
 
+/* Create an idset that is configured as an allocator per idset_alloc(3) to
+ * be used as a matchtag allocator.  Remove FLUX_MATCHTAG_NONE from the pool.
+ */
+static struct idset *tagpool_create (void)
+{
+    struct idset *idset;
+    int flags = IDSET_FLAG_AUTOGROW
+              | IDSET_FLAG_INITFULL
+              | IDSET_FLAG_COUNT_LAZY;
+
+    if (!(idset = idset_create (0, flags))
+        || idset_clear (idset, FLUX_MATCHTAG_NONE) < 0) {
+        idset_destroy (idset);
+        return NULL;
+    }
+    return idset;
+}
+
+/* Destroy matchtag allocator.  If 'debug' is true, then print something
+ * if any tags were still allocated.
+ */
+static void tagpool_destroy (struct idset *idset, bool debug)
+{
+    if (idset) {
+        int saved_errno = errno;
+        if (debug) {
+            idset_set (idset, FLUX_MATCHTAG_NONE);
+            uint32_t count = idset_universe_size (idset) - idset_count (idset);
+            if (count > 0) {
+                fprintf (stderr,
+                         "MATCHDEBUG: pool destroy with %d allocated\n",
+                         count);
+            }
+        }
+        idset_destroy (idset);
+        errno = saved_errno;
+    }
+}
+
 flux_t *flux_handle_create (void *impl,
                             const struct flux_handle_ops *ops,
                             int flags)
@@ -419,7 +456,6 @@ flux_t *flux_handle_create (void *impl,
     h->impl = impl;
     if (!(h->tagpool = tagpool_create ()))
         goto error;
-    tagpool_set_grow_cb (h->tagpool, tagpool_grow_notify, h);
     if (!(flags & FLUX_O_NOREQUEUE)) {
         if (!(h->queue = msg_deque_create (MSG_DEQUE_SINGLE_THREAD)))
             goto error;
@@ -516,15 +552,6 @@ int flux_reconnect (flux_t *h)
     return 0;
 }
 
-static void report_leaked_matchtags (struct tagpool *tp)
-{
-    uint32_t count = tagpool_getattr (tp, TAGPOOL_ATTR_SIZE) -
-                     tagpool_getattr (tp, TAGPOOL_ATTR_AVAIL);
-    if (count > 0)
-        fprintf (stderr,
-                 "MATCHDEBUG: pool destroy with %d allocated\n", count);
-}
-
 void flux_handle_destroy (flux_t *h)
 {
     if (h && --h->usecount == 0) {
@@ -540,9 +567,8 @@ void flux_handle_destroy (flux_t *h)
         else {
             if (h->ops->impl_destroy)
                 h->ops->impl_destroy (h->impl);
-            if ((h->flags & FLUX_O_MATCHDEBUG))
-                report_leaked_matchtags (h->tagpool);
-            tagpool_destroy (h->tagpool);
+            tagpool_destroy (h->tagpool,
+                             (h->flags & FLUX_O_MATCHDEBUG) ? true : false);
 #ifndef __SANITIZE_ADDRESS__
             if (h->dso)
                 dlclose (h->dso);
@@ -666,35 +692,63 @@ void flux_clr_msgcounters (flux_t *h)
     memset (&h->msgcounters, 0, sizeof (h->msgcounters));
 }
 
-void tagpool_grow_notify (void *arg, uint32_t old, uint32_t new)
-{
-    flux_t *h = arg;
-    flux_log (h, LOG_INFO, "tagpool expanded from %u to %u entries", old, new);
-}
-
 uint32_t flux_matchtag_alloc (flux_t *h)
 {
+    if (!h)
+        goto inval;
     h = lookup_clone_ancestor (h);
-    uint32_t tag;
-
-    tag = tagpool_alloc (h->tagpool);
-    if (tag == FLUX_MATCHTAG_NONE) {
+    if (!h->tagpool)
+        goto inval;
+    unsigned int id;
+    size_t oldsize = idset_universe_size (h->tagpool);
+    if (idset_alloc (h->tagpool, &id) < 0) {
         flux_log (h, LOG_ERR, "tagpool temporarily out of tags");
-        errno = EBUSY; /* appropriate error? */
+        return FLUX_MATCHTAG_NONE;
     }
-    return tag;
+    size_t newsize = idset_universe_size (h->tagpool);
+    if (newsize > oldsize) {
+        flux_log (h,
+                  LOG_INFO,
+                  "tagpool expanded from %zu to %zu entries",
+                  oldsize,
+                  newsize);
+    }
+    return id;
+inval:
+    errno = EINVAL;
+    return FLUX_MATCHTAG_NONE;
 }
 
 void flux_matchtag_free (flux_t *h, uint32_t matchtag)
 {
+    if (!h)
+        return;
     h = lookup_clone_ancestor (h);
-    tagpool_free (h->tagpool, matchtag);
+    if (!h->tagpool)
+        return;
+    /* fast path */
+    if (!(h->flags & FLUX_O_MATCHDEBUG)) {
+        if (matchtag != FLUX_MATCHTAG_NONE)
+            idset_free (h->tagpool, matchtag);
+        return;
+    }
+    /* MATCHDEBUG path */
+    if (matchtag == FLUX_MATCHTAG_NONE)
+        fprintf (stderr, "MATCHDEBUG: invalid tag=%d", (int)matchtag);
+    else if (idset_free_check (h->tagpool, matchtag) < 0) {
+        if (errno == EEXIST)
+            fprintf (stderr, "MATCHDEBUG: double free tag=%d", (int)matchtag);
+        else
+            fprintf (stderr, "MATCHDEBUG: invalid tag=%d", (int)matchtag);
+    }
 }
 
 uint32_t flux_matchtag_avail (flux_t *h)
 {
+    if (!h)
+        return 0;
     h = lookup_clone_ancestor (h);
-    return tagpool_getattr (h->tagpool, TAGPOOL_ATTR_AVAIL);
+    return h->tagpool ? idset_count (h->tagpool) : 0;
 }
 
 static void update_tx_stats (flux_t *h, const flux_msg_t *msg)
