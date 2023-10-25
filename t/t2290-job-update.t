@@ -100,12 +100,6 @@ test_expect_success 'update affects duration of running job' '
 	flux job info $jobid R \
 	 | jq -e "(.execution|(.expiration - .starttime)*10 + 0.5 | floor) == 1"
 '
-test_expect_success 'update fails for running job' '
-	jobid=$(flux submit -t1m --wait-event=start sleep 60) &&
-	test_expect_code 1 flux update $jobid duration=90s 2>run.err &&
-	test_debug "cat run.err" &&
-	grep "update of duration for running job not supported" run.err
-'
 test_expect_success 'add a duration limit and submit a held job' '
 	echo policy.limits.duration=\"1m\" | flux config load &&
 	jobid=$(flux submit --urgency=hold -t 1m true)
@@ -156,6 +150,12 @@ test_expect_success 'update duration above policy limit now fails' '
 	test_expect_code 1 flux update $jobid duration=1h 2>limit.err &&
 	test_debug "cat limit.err" &&
 	grep "requested duration exceeds policy limit" limit.err
+'
+test_expect_success 'update fails for running job' '
+	jobid=$(flux submit -t1m --wait-event=start sleep 60) &&
+	test_expect_code 1 flux update $jobid duration=90s 2>run.err &&
+	test_debug "cat run.err" &&
+	grep "update of duration for running job not supported" run.err
 '
 test_expect_success 'update of attributes.system.test fails' '
 	test_expect_code 1 flux update $jobid test=foo
