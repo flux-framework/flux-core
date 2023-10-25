@@ -155,7 +155,7 @@ test_expect_success 'update fails for running job' '
 	jobid=$(flux submit -t1m --wait-event=start sleep 60) &&
 	test_expect_code 1 flux update $jobid duration=90s 2>run.err &&
 	test_debug "cat run.err" &&
-	grep "update of duration for running job not supported" run.err
+	grep "duration update of running job requires instance owner" run.err
 '
 test_expect_success 'update of attributes.system.test fails' '
 	test_expect_code 1 flux update $jobid test=foo
