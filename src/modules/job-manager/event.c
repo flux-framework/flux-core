@@ -592,6 +592,10 @@ int event_job_update (struct job *job, json_t *event)
         if (job->state == FLUX_JOB_STATE_SCHED)
             job->state = FLUX_JOB_STATE_PRIORITY;
     }
+    else if (streq (name, "resource-update")) {
+        if (job_apply_resource_updates (job, context) < 0)
+            goto inval;
+    }
     else if (strstarts (name, "dependency-")) {
         if (job->state == FLUX_JOB_STATE_DEPEND
             || job->state == FLUX_JOB_STATE_NEW) {
