@@ -758,6 +758,116 @@ static void test_jobspec_update (void)
     job_decref (job);
 }
 
+static void test_resource_update ()
+{
+    struct job *job;
+    double expiration;
+    json_t *update;
+    int rc;
+
+
+    if (!(job = job_create()))
+        BAIL_OUT ("failed to create empty job");
+    if (!(update = json_pack ("{s:f}", "expiration", 100.)))
+        BAIL_OUT ("failed to create update");
+    ok (update != NULL, "create valid resource-update context");
+
+    rc = job_apply_resource_updates (job, update);
+    ok (rc == -1 && errno == EAGAIN,
+        "job_apply_resource_updates fails on job without R_redacted");
+    json_decref (update);
+
+    job->R_redacted = json_pack ("{s:i s:{s:f s:f}}",
+                                 "version", 1,
+                                 "execution",
+                                 "starttime", 1.,
+                                 "expiration", 2.);
+    if (!job->R_redacted)
+        BAIL_OUT ("Failed to create fake R_redacted");
+    ok (job->R_redacted != NULL,
+        "Create fake job->R_redacted");
+
+    if (!(update = json_pack ("{s:f s:s}",
+                              "expiration", 100.,
+                              "dummy", "test")))
+        BAIL_OUT ("failed to create update");
+    ok (update != NULL,
+        "create resource-update context w/ multiple updates");
+
+    rc = job_apply_resource_updates (job, update);
+    ok (rc == -1 && errno == EINVAL,
+        "job_apply_resource_updates fails with multiple updates");
+    json_decref (update);
+
+    if (!(update = json_pack ("{s:s}", "dummy", "test")))
+        BAIL_OUT ("failed to create update");
+    ok (update != NULL,
+        "create resource-update context w/ invalid update key");
+
+    rc = job_apply_resource_updates (job, update);
+    ok (rc == -1 && errno == EINVAL,
+        "job_apply_resource_updates fails with invalid update key");
+    json_decref (update);
+
+    if (!(update = json_pack ("{s:s}", "expiration", "test")))
+        BAIL_OUT ("failed to create update");
+    ok (update != NULL,
+        "create resource-update context w/ invalid value");
+
+    rc = job_apply_resource_updates (job, update);
+    ok (rc == -1 && errno == EINVAL,
+        "job_apply_resource_updates fails with invalid update value");
+    json_decref (update);
+
+    if (!(update = json_pack ("{s:f}", "expiration", -1.0)))
+        BAIL_OUT ("failed to create update");
+    ok (update != NULL,
+        "create resource-update context w/ negative expiration");
+
+    rc = job_apply_resource_updates (job, update);
+    ok (rc == -1 && errno == EINVAL,
+        "job_apply_resource_updates fails with negative expiration");
+    json_decref (update);
+
+    if (!(update = json_pack ("{s:f}", "expiration", 100.0)))
+        BAIL_OUT ("failed to create update");
+    ok (update != NULL,
+        "create resource-update context w/ valid expiration");
+
+    rc = job_apply_resource_updates (job, update);
+    ok (rc ==0,
+        "job_apply_resource_updates() works with valid expiration");
+    json_decref (update);
+
+    if (json_unpack (job->R_redacted,
+                     "{s:{s:F}}",
+                     "execution",
+                      "expiration", &expiration) < 0)
+        BAIL_OUT ("Failed to unpack new expiration from R_redacted");
+    ok (expiration == 100.,
+        "expiration was updated in R_redacted");
+
+    if (!(update = json_pack ("{s:f}", "expiration", 0.0)))
+        BAIL_OUT ("failed to create update");
+    ok (update != NULL,
+        "create resource-update context w/ 0.0 expiration");
+
+    rc = job_apply_resource_updates (job, update);
+    ok (rc ==0,
+        "job_apply_resource_updates() works with 0.0 expiration");
+    json_decref (update);
+
+    if (json_unpack (job->R_redacted,
+                     "{s:{s:F}}",
+                     "execution",
+                      "expiration", &expiration) < 0)
+        BAIL_OUT ("Failed to unpack new expiration from R_redacted");
+    ok (expiration == 0.0,
+        "expiration was updated in R_redacted");
+
+    job_decref (job);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -769,6 +879,7 @@ int main (int argc, char *argv[])
     test_event_id_cache ();
     test_event_queue ();
     test_jobspec_update ();
+    test_resource_update ();
 
     done_testing ();
 }
