@@ -145,22 +145,42 @@ void test_create_from_eventlog (void)
 
     errno = 0;
     error.text[0] = '\0';
-    ok (job_create_from_eventlog (2, "xyz", "{}", &error) == NULL
-        && errno == EINVAL,
+    job = job_create_from_eventlog (2, "xyz", "{}", NULL, &error);
+    ok (job == NULL && errno == EINVAL,
         "job_create_from_eventlog on bad eventlog fails with EINVAL");
     like (error.text, "failed to decode eventlog",
           "and error.text is set");
 
     errno = 0;
     error.text[0] = '\0';
-    ok (job_create_from_eventlog (2, test_input[0], "}badjson}", &error) == NULL
-        && errno == EINVAL,
+    job = job_create_from_eventlog (2,
+                                    test_input[0],
+                                    "}badjson}",
+                                    NULL,
+                                    &error);
+    ok (job == NULL && errno == EINVAL,
         "job_create_from_eventlog on bad jobspec fails with EINVAL");
     like (error.text, "failed to decode jobspec",
           "and error.text is set");
 
+    errno = 0;
+    error.text[0] = '\0';
+    job = job_create_from_eventlog (2,
+                                    test_input[0],
+                                    "{}",
+                                    "}badjson}",
+                                    &error);
+    ok (job == NULL && errno == EINVAL,
+        "job_create_from_eventlog on bad R fails with EINVAL");
+    like (error.text, "failed to decode R",
+          "and error.text is set");
+
     /* 0 - submit only */
-    job = job_create_from_eventlog (2, test_input[0], "{}", &error);
+    job = job_create_from_eventlog (2,
+                                    test_input[0],
+                                    "{}",
+                                    NULL,
+                                    &error);
     if (job == NULL) {
         BAIL_OUT ("job_create_from_eventlog log=(submit) failed: %s",
                   error.text);
@@ -186,7 +206,11 @@ void test_create_from_eventlog (void)
     job_decref (job);
 
     /* 1 - submit + urgency */
-    job = job_create_from_eventlog (3, test_input[1], "{}", &error);
+    job = job_create_from_eventlog (3,
+                                    test_input[1],
+                                    "{}",
+                                    NULL,
+                                    &error);
     if (job == NULL) {
         BAIL_OUT ("job_create_from_eventlog log=(submit+urgency) failed: %s",
                   error.text);
@@ -208,7 +232,11 @@ void test_create_from_eventlog (void)
     job_decref (job);
 
     /* 2 - submit + depend + priority */
-    job = job_create_from_eventlog (3, test_input[2], "{}", &error);
+    job = job_create_from_eventlog (3,
+                                    test_input[2],
+                                    "{}",
+                                    NULL,
+                                    &error);
     if (job == NULL) {
         BAIL_OUT ("job_create_from_eventlog log=(submit+depend+priority) failed: %s",
                   error.text);
@@ -232,7 +260,11 @@ void test_create_from_eventlog (void)
     job_decref (job);
 
     /* 3 - submit + exception severity 0 */
-    job = job_create_from_eventlog (3, test_input[3], "{}", &error);
+    job = job_create_from_eventlog (3,
+                                    test_input[3],
+                                    "{}",
+                                    NULL,
+                                    &error);
     if (job == NULL) {
         BAIL_OUT ("job_create_from_eventlog log=(submit+ex0) failed: %s",
                   error.text);
@@ -252,7 +284,11 @@ void test_create_from_eventlog (void)
     job_decref (job);
 
     /* 4 - submit + exception severity 1 */
-    job = job_create_from_eventlog (3, test_input[4], "{}", &error);
+    job = job_create_from_eventlog (3,
+                                    test_input[4],
+                                    "{}",
+                                    NULL,
+                                    &error);
     if (job == NULL) {
         BAIL_OUT ("job_create_from_eventlog log=(submit+ex1) failed: %s",
                   error.text);
@@ -266,7 +302,11 @@ void test_create_from_eventlog (void)
     job_decref (job);
 
     /* 5 - submit + depend + priority + alloc */
-    job = job_create_from_eventlog (3, test_input[5], "{}", &error);
+    job = job_create_from_eventlog (3,
+                                    test_input[5],
+                                    "{}",
+                                    "{}",
+                                    &error);
     if (job == NULL) {
         BAIL_OUT ("job_create_from_eventlog log=(submit+depend+priority+alloc) failed: %s",
                   error.text);
@@ -275,6 +315,8 @@ void test_create_from_eventlog (void)
         && !job->free_pending
         && job->has_resources,
         "job_create_from_eventlog log=(submit+depend+priority+alloc) set has_resources flag");
+    ok (job->R_redacted != NULL,
+        "and R is set");
     ok (job->state == FLUX_JOB_STATE_RUN,
         "job_create_from_eventlog log=(submit+depend+priority+alloc) set state=RUN");
     job_decref (job);
@@ -282,14 +324,22 @@ void test_create_from_eventlog (void)
     /* 6 - missing submit */
     errno = 0;
     error.text[0] = '\0';
-    job = job_create_from_eventlog (3, test_input[6], "{}", &error);
+    job = job_create_from_eventlog (3,
+                                    test_input[6],
+                                    "{}",
+                                    "{}",
+                                    &error);
     ok (job == NULL && errno == EINVAL,
         "job_create_from_eventlog log=(alloc) fails with EINVAL");
     ok (strlen (error.text) > 0,
         "and error.text is set");
 
     /* 7 - submit + depend + priority + alloc + ex0 + free */
-    job = job_create_from_eventlog (3, test_input[7], "{}", &error);
+    job = job_create_from_eventlog (3,
+                                    test_input[7],
+                                    "{}",
+                                    "{}",
+                                    &error);
     if (job == NULL) {
         BAIL_OUT ("job_create_from_eventlog log=(submit+depend+priority+alloc+ex0+free) failed: %s",
                   error.text);
@@ -303,7 +353,11 @@ void test_create_from_eventlog (void)
     job_decref (job);
 
     /* 8 - no version (has no validate event) */
-    job = job_create_from_eventlog (3, test_input[8], "{}", &error);
+    job = job_create_from_eventlog (3,
+                                    test_input[8],
+                                    "{}",
+                                    NULL,
+                                    &error);
     ok (job != NULL,
         "job_create_from_eventlog version log=(submit.v0+depend) works");
     ok (job->state == FLUX_JOB_STATE_PRIORITY,
@@ -313,7 +367,11 @@ void test_create_from_eventlog (void)
     /* 9 - invalid version */
     errno = 0;
     error.text[0] = '\0';
-    job = job_create_from_eventlog (3, test_input[9], "{}", &error);
+    job = job_create_from_eventlog (3,
+                                    test_input[9],
+                                    "{}",
+                                    NULL,
+                                    &error);
     ok (job == NULL && errno == EINVAL,
         "job_create_from_eventlog log=(submit.v0) fails with EINVAL");
     like (error.text, "eventlog v.* is unsupported",
@@ -322,7 +380,11 @@ void test_create_from_eventlog (void)
     /* 10 - two submits */
     errno = 0;
     error.text[0] = '\0';
-    job = job_create_from_eventlog (3, test_input[10], "{}", &error);
+    job = job_create_from_eventlog (3,
+                                    test_input[10],
+                                    "{}",
+                                    NULL,
+                                    &error);
     ok (job == NULL && errno == EINVAL,
         "job_create_from_eventlog log=(submit,validate,submit) fails with EINVAL");
     like (error.text, "could not apply",
@@ -331,7 +393,11 @@ void test_create_from_eventlog (void)
     /* 11 - one submit */
     errno = 0;
     error.text[0] = '\0';
-    job = job_create_from_eventlog (3, test_input[11], "{}", &error);
+    job = job_create_from_eventlog (3,
+                                    test_input[11],
+                                    "{}",
+                                    NULL,
+                                    &error);
     ok (job == NULL && errno == EINVAL,
         "job_create_from_eventlog log=(submit) fails with EINVAL");
     like (error.text, "job state .* is invalid after replay",
@@ -624,7 +690,11 @@ static void test_jobspec_update (void)
 
     /* functional tests */
 
-    if (!(job = job_create_from_eventlog (1234, test_input[0], "{}", &error)))
+    if (!(job = job_create_from_eventlog (1234,
+                                          test_input[0],
+                                          "{}",
+                                          NULL,
+                                          &error)))
         BAIL_OUT ("failed to create job w/ empty jobspec");
 
     if (!(o = json_pack ("{s:[{s:[s]}] s:s}",

@@ -207,17 +207,19 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     int type;
     char *note = NULL;
     json_t *annotations = NULL;
+    json_t *R = NULL;
     struct job *job;
     bool cleared = false;
 
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto teardown; // ENOSYS here if scheduler not loaded/shutting down
     if (flux_msg_unpack (msg,
-                         "{s:I s:i s?s s?o}",
+                         "{s:I s:i s?s s?o s?o}",
                          "id", &id,
                          "type", &type,
                          "note", &note,
-                         "annotations", &annotations) < 0)
+                         "annotations", &annotations,
+                         "R", &R) < 0)
         goto teardown;
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         flux_log (h, LOG_ERR, "sched.alloc-response: id=%s not active",
@@ -238,7 +240,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                 flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
             job->handle = NULL;
         }
-        if (job->has_resources) {
+        if (job->has_resources || job->R_redacted) {
             flux_log (h,
                       LOG_ERR,
                       "sched.alloc-response: id=%s already allocated",
@@ -246,6 +248,13 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = EEXIST;
             goto teardown;
         }
+        if (!R) {
+            flux_log (h, LOG_ERR, "sched.alloc-response: protocol error");
+            errno = EPROTO;
+            goto teardown;
+        }
+        job->R_redacted = json_incref (R);
+        (void)json_object_del (job->R_redacted, "scheduling");
         if (annotations_update_and_publish (ctx, job, annotations) < 0)
             flux_log_error (h, "annotations_update: id=%s", idf58 (id));
 

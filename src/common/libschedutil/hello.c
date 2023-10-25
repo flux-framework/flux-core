@@ -61,11 +61,14 @@ static int schedutil_hello_job (schedutil_t *util,
                           msg,
                           R,
                           util->cb_arg) < 0)
-        raise_exception (util->h, id, "failed to reallocate R for running job");
+        raise_exception (util->h,
+                         id,
+                         "failed to reallocate R for running job");
     flux_future_destroy (f);
     return 0;
 error:
-    flux_log_error (util->h, "hello: error loading R for id=%s",
+    flux_log_error (util->h,
+                    "hello: error loading R for id=%s",
                     idf58 (id));
     flux_future_destroy (f);
     return -1;
@@ -80,8 +83,11 @@ int schedutil_hello (schedutil_t *util)
         errno = EINVAL;
         return -1;
     }
-    if (!(f = flux_rpc (util->h, "job-manager.sched-hello",
-                        NULL, FLUX_NODEID_ANY, FLUX_RPC_STREAMING)))
+    if (!(f = flux_rpc (util->h,
+                        "job-manager.sched-hello",
+                        NULL,
+                        FLUX_NODEID_ANY,
+                        FLUX_RPC_STREAMING)))
         return -1;
     while (1) {
         const flux_msg_t *msg;

@@ -188,6 +188,13 @@ static flux_plugin_arg_t *jobtap_args_create (struct jobtap *jobtap,
                               "priority", job->priority,
                               "t_submit", job->t_submit) < 0)
         goto error;
+    if (job->R_redacted) {
+        if (flux_plugin_arg_pack (args,
+                                  FLUX_PLUGIN_ARG_IN,
+                                  "{s:O}",
+                                  "R", job->R_redacted) < 0)
+            goto error;
+    }
     /*
      *  Always start with empty OUT args. This allows unpack of OUT
      *   args to work without error, even if plugin does not set any
@@ -1105,6 +1112,7 @@ int jobtap_call (struct jobtap *jobtap,
 {
     int rc = -1;
     json_t *note = NULL;
+    json_t *R = NULL;
     flux_plugin_arg_t *args;
     int64_t priority = FLUX_JOBTAP_PRIORITY_UNAVAIL;
     va_list ap;
@@ -1132,9 +1140,10 @@ int jobtap_call (struct jobtap *jobtap,
     }
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_OUT,
-                                "{s?I s?o}",
+                                "{s?I s?o s?o}",
                                 "priority", &priority,
-                                "annotations", &note) < 0) {
+                                "annotations", &note,
+                                "R", &R) < 0) {
         if (jobtap_job_raise (jobtap, job,
                               topic, 4,
                               "arg_unpack: %s%s",
@@ -1147,6 +1156,26 @@ int jobtap_call (struct jobtap *jobtap,
                        strerror (errno));
         rc = -1;
     }
+    if (R != NULL) {
+        if (!streq (topic, "job.state.sched")) {
+            flux_log (jobtap->ctx->h,
+                      LOG_ERR,
+                      "jobtap: %s: %s: R may only be set in SCHED state",
+                      topic,
+                      idf58 (job->id));
+            rc = -1;
+        }
+        else if (job->R_redacted) {
+            flux_log (jobtap->ctx->h,
+                      LOG_ERR,
+                      "jobtap: %s: %s: R is already set",
+                      topic,
+                      idf58 (job->id));
+            rc = -1;
+        }
+        else
+            job->R_redacted = json_incref (R);
+    }
     if (note != NULL) {
         /*
          *  Allow plugins to update annotations. (A failure here will be
@@ -1156,12 +1185,12 @@ int jobtap_call (struct jobtap *jobtap,
          *   annotation event published to the journal before the first
          *   job state event may confuse consumers (i.e. job-info).
          */
-        int rc;
+        int ret;
         if (streq (topic, "job.new"))
-            rc = annotations_update (job, ".", note);
+            ret = annotations_update (job, ".", note);
         else
-            rc = annotations_update_and_publish (jobtap->ctx, job, note);
-        if (rc < 0)
+            ret = annotations_update_and_publish (jobtap->ctx, job, note);
+        if (ret < 0)
             flux_log_error (jobtap->ctx->h,
                             "jobtap: %s: %s: annotations_update",
                             topic,

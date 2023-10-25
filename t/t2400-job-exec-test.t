@@ -72,15 +72,6 @@ test_expect_success 'job-exec: mock exception during run' '
 	flux job eventlog ${jobid} > eventlog.${jobid}.out &&
 	grep "finish status=15" eventlog.${jobid}.out
 '
-test_expect_success 'job-exec: R with invalid expiration raises exception' '
-	flux module unload job-exec &&
-	jobid=$(flux job submit basic.json) &&
-	key=$(flux job id --to=kvs $jobid).R &&
-	R=$(flux kvs get --wait $key | jq -c ".execution.expiration = -1.") &&
-	flux kvs put ${key}=${R} &&
-	flux module load job-exec &&
-	flux job wait-event -v $jobid exception
-'
 test_expect_success 'start request with empty payload fails with EPROTO(71)' '
 	${RPC} job-exec.start 71 </dev/null
 '

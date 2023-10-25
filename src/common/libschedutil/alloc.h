@@ -40,7 +40,8 @@ int schedutil_alloc_respond_annotate_pack (schedutil_t *util,
  * Include human readable error message in 'note'.
  * Return 0 on success, -1 on error with errno set.
  */
-int schedutil_alloc_respond_deny (schedutil_t *util, const flux_msg_t *msg,
+int schedutil_alloc_respond_deny (schedutil_t *util,
+                                  const flux_msg_t *msg,
                                   const char *note);
 
 /* Respond to alloc request message - success, allocate R.
@@ -50,7 +51,8 @@ int schedutil_alloc_respond_deny (schedutil_t *util, const flux_msg_t *msg,
 int schedutil_alloc_respond_success_pack (schedutil_t *util,
                                           const flux_msg_t *msg,
                                           const char *R,
-                                          const char *fmt, ...);
+                                          const char *fmt,
+                                          ...);
 
 /* Respond to an alloc request message - canceled.
  * N.B. 'msg' is the alloc request, not the cancel request.
