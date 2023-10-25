@@ -142,6 +142,10 @@ int job_apply_jobspec_updates (struct job *job, json_t *updates);
  */
 json_t *job_jobspec_with_updates (struct job *job, json_t *updates);
 
+/* Apply resource updates to redacted copy of R
+ */
+int job_apply_resource_updates (struct job *job, json_t *updates);
+
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 
 /*
