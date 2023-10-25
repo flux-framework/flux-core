@@ -394,8 +394,15 @@ bool idset_equal (const struct idset *idset1,
 
     if (!idset1 || !idset2)
         return false;
-    if (idset_count (idset1) != idset_count (idset2))
-        return false;
+
+    /* As an optimization, declare the sets unequal if counts differ.
+     * If lazy counts are used, this is potentially slow, so skip.
+     */
+    if (!(idset1->flags & IDSET_FLAG_COUNT_LAZY)
+        && !(idset2->flags & IDSET_FLAG_COUNT_LAZY)) {
+        if (idset_count (idset1) != idset_count (idset2))
+            return false;
+    }
 
     id = vebsucc (idset1->T, 0);
     while (id < idset1->T.M) {
