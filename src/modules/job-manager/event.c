@@ -469,8 +469,6 @@ static int event_handle_dependency (struct job *job,
 static int event_handle_jobspec_update (struct job *job, json_t *context)
 {
     if (!job->jobspec_redacted
-        || job->state == FLUX_JOB_STATE_RUN
-        || job->state == FLUX_JOB_STATE_CLEANUP
         || job_apply_jobspec_updates (job, context) < 0)
         return -1;
     return 0;
