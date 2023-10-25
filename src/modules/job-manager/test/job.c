@@ -736,6 +736,7 @@ static void test_jobspec_update (void)
 
     cpy = job_jobspec_with_updates (job, o);
     ok (cpy != NULL, "job_jobspec_with_updates success");
+    json_decref (o);
 
     ret = json_unpack (cpy,
                        "{s:{s:{s:s}}}",
