@@ -371,7 +371,7 @@ static struct optparse_option info_opts[] =  {
       .usage = "For key \"jobspec\", return the original submitted jobspec",
     },
     { .name = "base", .key = 'b', .has_arg = 0,
-      .usage = "For key \"jobspec\", get base value, "
+      .usage = "For key \"jobspec\" or \"R\", "
                "do not apply updates from eventlog",
     },
     OPTPARSE_TABLE_END
@@ -3463,12 +3463,73 @@ void info_output_jobspec (flux_future_t *f, struct info_ctx *ctx)
     }
 }
 
+void info_output_R (flux_future_t *f, struct info_ctx *ctx)
+{
+    if (ctx->base) {
+        const char *R_str;
+        info_output_get (f, ctx, "R", &R_str);
+        printf ("%s\n", R_str);
+    }
+    else {
+        const char *R_str;
+        const char *eventlog_str;
+        json_t *R;
+        json_t *eventlog;
+        json_error_t error;
+        size_t index;
+        json_t *entry;
+        char *R_updated;
+
+        info_output_get (f, ctx, "R", &R_str);
+        info_output_get (f, ctx, "eventlog", &eventlog_str);
+
+        if (!(R = json_loads (R_str, JSON_DECODE_ANY, &error)))
+            log_msg_exit ("Failed to decode R: %s", error.text);
+
+        if (!(eventlog = eventlog_decode (eventlog_str)))
+            log_err_exit ("Failed to decode eventlog");
+
+        json_array_foreach (eventlog, index, entry) {
+            const char *name;
+            json_t *context;
+            const char *path;
+            json_t *value;
+
+            if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
+                log_err_exit ("Failed to parse eventlog entry");
+
+            if (!streq (name, "resource-update"))
+                continue;
+
+            json_object_foreach (context, path, value) {
+                if (streq (path, "expiration")) {
+                    if (jpath_set (R, "execution.expiration", value) < 0)
+                        log_err_exit ("Failed to update R");
+                }
+            }
+        }
+
+        if (!(R_updated = json_dumps (R, JSON_COMPACT)))
+            log_err_exit ("Failed to decode R object");
+
+        printf ("%s\n", R_updated);
+
+        json_decref (R);
+        json_decref (eventlog);
+        free (R_updated);
+    }
+}
+
 void info_output (flux_future_t *f, const char *key, struct info_ctx *ctx)
 {
     const char *s;
 
     if (streq (key, "jobspec")) {
         info_output_jobspec (f, ctx);
+        return;
+    }
+    else if (streq (key, "R")) {
+        info_output_R (f, ctx);
         return;
     }
 
@@ -3529,6 +3590,13 @@ void info_lookup (flux_t *h,
                 ctx.base = true;
             else
                 /* also get eventlog to build viewed jobspec */
+                extra_key = "eventlog";
+        }
+        else if (streq (key, "R")) {
+            if (optparse_hasopt (p, "base"))
+                ctx.base = true;
+            else
+                /* also get eventlog to build viewed R */
                 extra_key = "eventlog";
         }
 

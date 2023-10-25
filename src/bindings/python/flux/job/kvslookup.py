@@ -15,6 +15,7 @@ from flux.future import WaitAllFuture
 from flux.job import JobID, JobspecV1
 from flux.job.event import EventLogEvent
 from flux.rpc import RPC
+from flux.util import set_treedict
 
 
 def _decode_field(data, key):
@@ -63,6 +64,10 @@ def _setup_lookup_keys(keys, original, base):
         elif not base:
             if "eventlog" not in keys:
                 keys.append("eventlog")
+    if "R" in keys:
+        if not base:
+            if "eventlog" not in keys:
+                keys.append("eventlog")
 
 
 def _get_original_jobspec(job_data):
@@ -87,7 +92,22 @@ def _get_updated_jobspec(job_data):
     return jobspec.dumps()
 
 
+def _get_updated_R(job_data):
+    if isinstance(job_data["R"], str):
+        R = json.loads(job_data["R"])
+    else:
+        R = job_data["R"]
+    for entry in job_data["eventlog"].splitlines():
+        event = EventLogEvent(entry)
+        if event.name == "resource-update":
+            for key, value in event.context.items():
+                if key == "expiration":
+                    set_treedict(R, "execution.expiration", value)
+    return json.dumps(R, ensure_ascii=False)
+
+
 def _update_keys(job_data, decode, keys, original, base):
+    remove_eventlog = False
     if "jobspec" in keys:
         if original:
             job_data["jobspec"] = _get_original_jobspec(job_data)
@@ -100,7 +120,16 @@ def _update_keys(job_data, decode, keys, original, base):
             if decode:
                 _decode_field(job_data, "jobspec")
             if "eventlog" not in keys:
-                job_data.pop("eventlog")
+                remove_eventlog = True
+    if "R" in keys:
+        if not base:
+            job_data["R"] = _get_updated_R(job_data)
+            if decode:
+                _decode_field(job_data, "R")
+            if "eventlog" not in keys:
+                remove_eventlog = True
+    if remove_eventlog:
+        job_data.pop("eventlog")
 
 
 # jobs_kvs_lookup simple variant for one jobid
@@ -110,7 +139,7 @@ def job_kvs_lookup(
     """
     Lookup job kvs data based on a jobid
 
-    Some keys such as "jobspec" may be altered based on update events
+    Some keys such as "jobspec" or "R" may be altered based on update events
     in the eventlog.  Set 'base' to True to skip these updates and
     read exactly what is in the KVS.
 
@@ -121,7 +150,7 @@ def job_kvs_lookup(
              currently decodes "jobspec" and "R" into dicts
              (default True)
     :original: For 'jobspec', return the original submitted jobspec
-    :base: For 'jobspec', get base value, do not apply updates from eventlog
+    :base: For 'jobspec' or 'R', get base value, do not apply updates from eventlog
     """
     keyslookup = list(keys)
     _setup_lookup_keys(keyslookup, original, base)
@@ -182,7 +211,7 @@ class JobKVSLookupFuture(WaitAllFuture):
 class JobKVSLookup:
     """User friendly class to lookup job KVS data
 
-    Some keys such as "jobspec" may be altered based on update events
+    Some keys such as "jobspec" or "R" may be altered based on update events
     in the eventlog.  Set 'base' to True to skip these updates and
     read exactly what is in the KVS.
 
@@ -193,7 +222,7 @@ class JobKVSLookup:
              currently decodes "jobspec" and "R" into dicts
              (default True)
     :original: For 'jobspec', return the original submitted jobspec
-    :base: For 'jobspec', get base value, do not apply updates from eventlog
+    :base: For 'jobspec' or 'R', get base value, do not apply updates from eventlog
     """
 
     def __init__(
