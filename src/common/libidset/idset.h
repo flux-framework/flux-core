@@ -113,6 +113,11 @@ unsigned int idset_prev (const struct idset *idset, unsigned int id);
  */
 size_t idset_count (const struct idset *idset);
 
+/* Return true if idset is empty.
+ * If idset is invalid, return true.
+ */
+bool idset_empty (const struct idset *idset);
+
 /* Return true if the two idsets set1, set2 are equal, i.e. they both
  * have the same integers set.
  */

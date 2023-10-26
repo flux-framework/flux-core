@@ -93,6 +93,10 @@ void test_basic (void)
     idset = idset_create (0, 0);
     ok (idset != NULL,
         "idset_create size=0 works");
+    ok (idset_count (idset) == 0,
+        "idset_count returns 0");
+    ok (idset_empty (idset) == true,
+        "idset_empty returns true");
 
     idset_destroy (idset);
 }
@@ -234,6 +238,9 @@ void test_badparam (void)
     ok (idset_universe_size (NULL) == 0,
         "idset_universe_size(idset=NULL) returns 0");
 
+    ok (idset_empty (NULL) == true,
+        "idset_empty(idset=NULL) returns true");
+
     errno = 0;
     ok (idset_copy (NULL) == NULL && errno == EINVAL,
         "idset_copy(idset=NULL) fails with EINVAL");
@@ -261,12 +268,16 @@ void test_badparam (void)
 void test_iter (void)
 {
     struct idset *idset;
-    struct idset *idset_empty;
+    struct idset *idset_nil;
 
     if (!(idset = idset_decode ("7-9")))
         BAIL_OUT ("idset_decode 7-9 failed");
-    if (!(idset_empty = idset_create (0, 0)))
+    if (!(idset_nil = idset_create (0, 0)))
         BAIL_OUT ("idset_create (0, 0) failed");
+    ok (idset_empty (idset) == false,
+        "idset_empty (idset=[7-9]) returns false");
+    ok (idset_empty (idset_nil) == true,
+        "idset_empty (idset=[]) returns true");
 
     ok (idset_first (idset) == 7,
         "idset_first idset=[7-9] returned 7");
@@ -294,15 +305,15 @@ void test_iter (void)
     ok (idset_prev (idset, IDSET_INVALID_ID) == IDSET_INVALID_ID,
         "idset_prev idset=[7-9] id=INVALID returned INVALID");
 
-    ok (idset_first (idset_empty) == IDSET_INVALID_ID,
+    ok (idset_first (idset_nil) == IDSET_INVALID_ID,
         "idset_first idset=[] returned IDSET_INVALID_ID");
-    ok (idset_last (idset_empty) == IDSET_INVALID_ID,
+    ok (idset_last (idset_nil) == IDSET_INVALID_ID,
         "idset_last idset=[] returned IDSET_INVALID_ID");
-    ok (idset_next (idset_empty, 0) == IDSET_INVALID_ID,
+    ok (idset_next (idset_nil, 0) == IDSET_INVALID_ID,
         "idset_next idset=[] prev=0 returned IDSET_INVALID_ID");
 
     idset_destroy (idset);
-    idset_destroy (idset_empty);
+    idset_destroy (idset_nil);
 }
 
 void test_set (void)

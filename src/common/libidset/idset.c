@@ -399,6 +399,13 @@ size_t idset_count (const struct idset *idset)
     return count;
 }
 
+bool idset_empty (const struct idset *idset)
+{
+    if (!idset || vebsucc (idset->T, 0) == idset->T.M)
+        return true;
+    return false;
+}
+
 bool idset_equal (const struct idset *idset1,
                   const struct idset *idset2)
 {
