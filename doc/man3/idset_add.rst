@@ -11,6 +11,9 @@ SYNOPSIS
 
    #include <flux/idset.h>
 
+   bool idset_equal (const struct idset *a,
+                     const struct idset *b);
+
    struct idset *idset_union (const struct idset *a,
                               const struct idset *b);
 
@@ -35,6 +38,9 @@ DESCRIPTION
 ===========
 
 Refer to :man3:`idset_create` for a general description of idsets.
+
+:func:`idset_equal` returns true if the two idset objects :var:`a` and
+:var:`b` are equal sets, i.e. the sets contain the same set of integers.
 
 :func:`idset_union` creates a new idset that is the union of :var:`a` and
 :var:`b`.
@@ -65,7 +71,7 @@ On error, NULL is returned with :var:`errno` set.
 :func:`idset_add`, :func:`idset_subtract`, and :func:`idset_clear_all`
 return 0 on success.  On error, -1 is returned with :var:`errno` set.
 
-:func:`idset_has_intersection` returns true or false.
+:func:`idset_equal` and :func:`idset_has_intersection` return true or false.
 
 
 ERRORS

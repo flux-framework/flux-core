@@ -40,9 +40,6 @@ SYNOPSIS
 
    size_t idset_count (const struct idset *idset);
 
-   bool idset_equal (const struct idset *set1,
-                     const struct idset *set2);
-
 Link with :command:`-lflux-idset`.
 
 DESCRIPTION
@@ -77,9 +74,6 @@ empty.
 
 :func:`idset_count` returns the number of ids in the set.
 
-:func:`idset_equal` returns true if the two idset objects :var:`set1` and
-:var:`set2` are equal sets, i.e. the sets contain the same set of integers.
-
 
 FLAGS
 =====
@@ -100,9 +94,6 @@ RETURN VALUE
 
 :func:`idset_first`, :func:`idset_next`, and :func:`idset_last` return an id,
 or IDSET_INVALID_ID if no id is available.
-
-:func:`idset_equal` returns true if :var:`set1` and :var:`set2` are equal sets,
-or false if they are not equal, or either argument is *NULL*.
 
 Other functions return 0 on success, or -1 on error with :var:`errno` set.
 
