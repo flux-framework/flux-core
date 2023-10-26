@@ -50,15 +50,14 @@ test_expect_success 'flux job info fails without jobid' '
 '
 
 test_expect_success 'flux job info listing of keys works' '
-	jobid=$(submit_job) &&
-	flux job info $jobid > list_keys.err 2>&1 &&
-	grep "^J" list_keys.err &&
-	grep "^R" list_keys.err &&
-	grep "^eventlog" list_keys.err &&
-	grep "^jobspec" list_keys.err &&
-	grep "^guest.exec.eventlog" list_keys.err &&
-	grep "^guest.input" list_keys.err &&
-	grep "^guest.output" list_keys.err
+	test_must_fail flux job info 2>list_keys.err &&
+	grep J list_keys.err &&
+	grep R list_keys.err &&
+	grep eventlog list_keys.err &&
+	grep jobspec list_keys.err &&
+	grep guest.exec.eventlog list_keys.err &&
+	grep guest.input list_keys.err &&
+	grep guest.output list_keys.err
 '
 
 #

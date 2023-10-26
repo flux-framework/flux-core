@@ -552,7 +552,7 @@ static struct optparse_subcommand subcommands[] = {
       wait_event_opts
     },
     { "info",
-      "id key ...",
+      "id key",
       "Display info for a job",
       cmd_info,
       0,
@@ -3361,14 +3361,17 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
 void info_usage (void)
 {
     fprintf (stderr,
-             "Missing lookup key(s), common keys:\n"
-             "J\n"
-             "R\n"
-             "eventlog\n"
-             "jobspec\n"
-             "guest.exec.eventlog\n"
-             "guest.input\n"
-             "guest.output\n");
+             "Usage: flux job info id key\n"
+             "some useful keys are:\n"
+             "  J                    - signed jobspec\n"
+             "  R                    - allocated resources\n"
+             "  eventlog             - primary job eventlog\n"
+             "  jobspec              - job specification\n"
+             "  guest.exec.eventlog  - execution eventlog\n"
+             "  guest.input          - job input log\n"
+             "  guest.output         - job output log\n"
+             "Use flux job info -h to list available options\n");
+
 }
 
 struct info_ctx {
@@ -3562,6 +3565,9 @@ void info_lookup (flux_t *h,
     flux_future_t *f;
     struct info_ctx ctx = {0};
 
+    if (argc - optindex != 1)
+        log_msg_exit ("only one key may be looked up");
+
     ctx.id_arg = argv[optindex-1];
     ctx.id = id;
     if (!(ctx.keys_input = json_array ()))
@@ -3642,13 +3648,13 @@ int cmd_info (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     flux_jobid_t id;
 
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
-
-    if ((argc - optindex) < 1) {
-        optparse_print_usage (p);
+    // Usage: flux job info id key
+    if (optindex - argc != 3) {
+        info_usage ();
         exit (1);
     }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
 
     id = parse_jobid (argv[optindex++]);
 
