@@ -93,15 +93,20 @@ bool idset_test (const struct idset *idset, unsigned int id);
  */
 unsigned int idset_first (const struct idset *idset);
 
-/* Return the next id after 'prev' in the idset.
- * Returns IDSET_INVALID_ID if prev is the last id.
+/* Return the next id after 'id' in the idset.
+ * Returns IDSET_INVALID_ID if 'id' is the last id.
  */
-unsigned int idset_next (const struct idset *idset, unsigned int prev);
+unsigned int idset_next (const struct idset *idset, unsigned int id);
 
 /* Returns the last id in the idset.
  * Returns IDSET_INVALID_ID if the idset is empty.
  */
 unsigned int idset_last (const struct idset *idset);
+
+/* Return the previous id before 'id' in the idset.
+ * Returns IDSET_INVALID_ID if 'id' is the first id.
+ */
+unsigned int idset_prev (const struct idset *idset, unsigned int id);
 
 /* Return the number of id's in idset.
  * If idset is invalid, return 0.

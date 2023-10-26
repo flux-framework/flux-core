@@ -246,6 +246,12 @@ void test_badparam (void)
         "idset_next (prev=INVALID) returns IDSET_INVALID_ID");
     ok (idset_next (idset, 101) == IDSET_INVALID_ID,
         "idset_next (prev=out of range) returns IDSET_INVALID_ID");
+    ok (idset_prev (NULL, 0) == IDSET_INVALID_ID,
+        "idset_prev (idset=NULL) returns IDSET_INVALID_ID");
+    ok (idset_prev (idset, IDSET_INVALID_ID) == IDSET_INVALID_ID,
+        "idset_prev (id=INVALID) returns IDSET_INVALID_ID");
+    ok (idset_prev (idset, 101) == IDSET_INVALID_ID,
+        "idset_next (id=out of range) returns IDSET_INVALID_ID");
     ok (idset_last (NULL) == IDSET_INVALID_ID,
         "idset_last (idset=NULL) returns IDSET_INVALID_ID");
 
@@ -276,8 +282,17 @@ void test_iter (void)
         "idset_next idset=[7-9] prev=4096 returned INVALID");
     ok (idset_next (idset, IDSET_INVALID_ID) == IDSET_INVALID_ID,
         "idset_next idset=[7-9] prev=INVALID returned INVALID");
+
     ok (idset_last (idset) == 9,
         "idset_last idset=[7-9] returned 9");
+    ok (idset_prev (idset, 9) == 8,
+        "idset_prev idset=[7-9] id=9 returned 8");
+    ok (idset_prev (idset, 8) == 7,
+        "idset_prev idset=[7-9] id=8 returned 7");
+    ok (idset_prev (idset, 7) == IDSET_INVALID_ID,
+        "idset_prev idset=[7-9] id=7 returned INVALID");
+    ok (idset_prev (idset, IDSET_INVALID_ID) == IDSET_INVALID_ID,
+        "idset_prev idset=[7-9] id=INVALID returned INVALID");
 
     ok (idset_first (idset_empty) == IDSET_INVALID_ID,
         "idset_first idset=[] returned IDSET_INVALID_ID");

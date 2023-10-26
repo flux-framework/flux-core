@@ -342,12 +342,12 @@ unsigned int idset_first (const struct idset *idset)
 }
 
 
-unsigned int idset_next (const struct idset *idset, unsigned int prev)
+unsigned int idset_next (const struct idset *idset, unsigned int id)
 {
     unsigned int next = IDSET_INVALID_ID;
 
     if (idset) {
-        next = vebsucc (idset->T, prev + 1);
+        next = vebsucc (idset->T, id + 1);
         if (next == idset->T.M)
             next = IDSET_INVALID_ID;
     }
@@ -364,6 +364,18 @@ unsigned int idset_last (const struct idset *idset)
             last = IDSET_INVALID_ID;
     }
     return last;
+}
+
+unsigned int idset_prev (const struct idset *idset, unsigned int id)
+{
+    unsigned int next = IDSET_INVALID_ID;
+
+    if (idset) {
+        next = vebpred (idset->T, id - 1);
+        if (next == idset->T.M)
+            next = IDSET_INVALID_ID;
+    }
+    return next;
 }
 
 size_t idset_count (const struct idset *idset)
