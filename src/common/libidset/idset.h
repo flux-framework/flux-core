@@ -32,6 +32,10 @@ enum idset_flags {
                              //  idset_set/clear, but slows down idset_count()
 };
 
+typedef struct {
+    char text[160];
+} idset_error_t;
+
 #define IDSET_INVALID_ID    (UINT_MAX - 1)
 
 /* Create/destroy an idset.
@@ -69,6 +73,19 @@ struct idset *idset_decode (const char *s);
  * Returns idset on success, or NULL on failure with errno set.
  */
 struct idset *idset_ndecode (const char *s, size_t len);
+
+/* Parse 'len' chars of string 's' to an idset created with 'size' and 'flags'.
+ * If len < 0, strlen (s) is used.
+ * If size = 0, the implementation's default size is used.
+ * If size < 0, the idset size is made to fit exactly (fail on empty set*).
+ * On failure, a human readable error is placed in 'error'.
+ * [*] Exception: if IDSET_FLAG_AUTOGROW, empty set is created with size of 1.
+ */
+struct idset *idset_decode_ex (const char *s,
+                               ssize_t len,
+                               ssize_t size,
+                               int flags,
+                               idset_error_t *error);
 
 /* Add id (or range [lo-hi]) to idset.
  * Return 0 on success, -1 on failure with errno set.
