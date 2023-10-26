@@ -189,12 +189,12 @@ static char *Rstring_create (struct simple_sched *ss,
 {
     char *s = NULL;
     json_t *R = NULL;
+    l->starttime = now;
+    l->expiration = 0.;
     if (timelimit > 0.) {
-        l->starttime = now;
         l->expiration = now + timelimit;
     }
     else if (ss->rlist->expiration > 0.) {
-        l->starttime = now;
         l->expiration = ss->rlist->expiration;
     }
     if ((R = rlist_to_R (l))) {
