@@ -68,7 +68,7 @@ numbered *id* it can hold, plus one. The size is fixed unless
 :func:`idset_range_set` and :func:`idset_range_clear` set or clear an inclusive
 range of ids, from :var:`lo` to :var:`hi`.
 
-:func:`idset_test`` returns true if :var:`id` is set, false if not.
+:func:`idset_test` returns true if :var:`id` is set, false if not.
 
 :func:`idset_first` and :func:`idset_next` can be used to iterate over ids
 in the set, returning IDSET_INVALID_ID at the end. :func:`idset_last`
