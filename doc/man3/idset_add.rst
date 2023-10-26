@@ -37,7 +37,7 @@ DESCRIPTION
 Refer to :man3:`idset_create` for a general description of idsets.
 
 :func:`idset_union` creates a new idset that is the union of :var:`a` and
-:var:`b.
+:var:`b`.
 
 :func:`idset_difference` creates a new idset that is :var:`a` with the members
 of :var:`b` removed.
