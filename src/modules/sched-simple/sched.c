@@ -28,6 +28,7 @@
 enum module_debug_flags {
     DEBUG_FAIL_ALLOC = 1, // while set, alloc requests fail
     DEBUG_ANNOTATE_REASON_PENDING = 2, // add reason_pending annotation
+    DEBUG_EXPIRATION_UPDATE_DENY = 4,  // deny sched.expiration RPCs
 };
 
 struct jobreq {
@@ -670,6 +671,43 @@ err:
         flux_log_error (h, "feasibility_cb: flux_respond_error");
 }
 
+/* For testing purposes, support the sched.expiration RPC even though
+ * sched-simple is not a planning scheduler.
+ */
+static void expiration_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct simple_sched *ss = arg;
+    flux_jobid_t id;
+    double expiration;
+    const char *errmsg = NULL;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:F}",
+                             "id", &id,
+                             "expiration", &expiration) < 0)
+        goto err;
+    if (expiration < 0.) {
+        errno = EINVAL;
+        goto err;
+    }
+    if (flux_module_debug_test (ss->h,
+                                DEBUG_EXPIRATION_UPDATE_DENY,
+                                false)) {
+        errmsg = "Rejecting expiration update for testing";
+        goto err;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "feasibility_cb: flux_respond_pack");
+    return;
+err:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "expiration_cb: flux_respond_error");
+}
+
 static int ss_resource_update (struct simple_sched *ss, flux_future_t *f)
 {
     const char *up = NULL;
@@ -863,9 +901,12 @@ static int process_args (flux_t *h, struct simple_sched *ss,
     return 0;
 }
 
+
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "*.resource-status", status_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "*.feasibility", feasibility_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "*.expiration", expiration_cb, FLUX_ROLE_OWNER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
