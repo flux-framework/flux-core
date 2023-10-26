@@ -48,6 +48,7 @@
 typedef enum {
     JOB_UPDATE_TYPE_STATE_TRANSITION,
     JOB_UPDATE_TYPE_JOBSPEC_UPDATE,
+    JOB_UPDATE_TYPE_RESOURCE_UPDATE,
 } job_update_type_t;
 
 struct job_update {
@@ -59,8 +60,8 @@ struct job_update {
     int flags;
     flux_job_state_t expected_state;
 
-    /* jobspec_update */
-    json_t *jobspec_update_context;
+    /* jobspec_update, resource_update */
+    json_t *update_context;
 
     /* all updates */
     bool processing;            /* indicates we are waiting for
@@ -359,7 +360,7 @@ static void state_run_lookup_continuation (flux_future_t *f, void *arg)
         goto out;
     }
 
-    if (job_parse_R (job, s) < 0)
+    if (job_parse_R (job, s, NULL) < 0)
         goto out;
 
     updt = zlist_head (job->updates);
@@ -413,7 +414,7 @@ static void job_update_destroy (void *data)
     struct job_update *updt = data;
     if (updt) {
         int saved_errno = errno;
-        json_decref (updt->jobspec_update_context);
+        json_decref (updt->update_context);
         free (updt);
         errno = saved_errno;
     }
@@ -473,14 +474,14 @@ static int add_state_transition (struct job *job,
     return -1;
 }
 
-static int add_jobspec_update (struct job *job, json_t *context)
+static int add_update (struct job *job, json_t *context, job_update_type_t type)
 {
     struct job_update *updt = NULL;
 
-    if (!(updt = job_update_create (JOB_UPDATE_TYPE_JOBSPEC_UPDATE)))
+    if (!(updt = job_update_create (type)))
         return -1;
 
-    updt->jobspec_update_context = json_incref (context);
+    updt->update_context = json_incref (context);
 
     if (append_update (job, updt) < 0)
         goto cleanup;
@@ -490,6 +491,16 @@ static int add_jobspec_update (struct job *job, json_t *context)
  cleanup:
     job_update_destroy (updt);
     return -1;
+}
+
+static int add_jobspec_update (struct job *job, json_t *context)
+{
+    return add_update (job, context, JOB_UPDATE_TYPE_JOBSPEC_UPDATE);
+}
+
+static int add_resource_update (struct job *job, json_t *context)
+{
+    return add_update (job, context, JOB_UPDATE_TYPE_RESOURCE_UPDATE);
 }
 
 static void process_state_transition_update (struct job_state_ctx *jsctx,
@@ -608,7 +619,40 @@ static void process_jobspec_update (struct job_state_ctx *jsctx,
      * example, via the job expiration time in R).
      */
     if (job->state < FLUX_JOB_STATE_RUN)
-        update_jobspec (jsctx, job, updt->jobspec_update_context, true);
+        update_jobspec (jsctx, job, updt->update_context, true);
+    updt->finished = true;
+}
+
+static void update_resource (struct job_state_ctx *jsctx,
+                             struct job *job,
+                             json_t *context)
+{
+    /* we have not loaded the R yet, save off R updates
+     * for an update after jobspec retrieved
+     */
+    if (!job->R) {
+        if (!job->R_updates)
+            job->R_updates = json_incref (context);
+        else {
+            if (json_object_update (job->R_updates, context) < 0)
+                flux_log (jsctx->h, LOG_INFO,
+                          "%s: job %s failed to update R",
+                          __FUNCTION__, idf58 (job->id));
+        }
+        return;
+    }
+
+    job_R_update (job, context);
+}
+
+static void process_resource_update (struct job_state_ctx *jsctx,
+                                     struct job *job,
+                                     struct job_update *updt)
+{
+    /* Generally speaking, resource-update events only have an effect
+     * when a job is running. */
+    if (job->state == FLUX_JOB_STATE_RUN)
+        update_resource (jsctx, job, updt->update_context);
     updt->finished = true;
 }
 
@@ -624,8 +668,10 @@ static void process_updates (struct job_state_ctx *jsctx, struct job *job)
 
         if (updt->type == JOB_UPDATE_TYPE_STATE_TRANSITION)
             process_state_transition_update (jsctx, job, updt);
-        else /* updt->type == JOB_UPDATE_TYPE_JOBSPEC_UPDATE */
+        else if (updt->type == JOB_UPDATE_TYPE_JOBSPEC_UPDATE)
             process_jobspec_update (jsctx, job, updt);
+        else /* updt->type == JOB_UPDATE_TYPE_RESOURCE_UPDATE */
+            process_resource_update (jsctx, job, updt);
 
     next:
         if (updt->finished)
@@ -752,6 +798,9 @@ static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
         else if (streq (name, "jobspec-update")) {
             update_jobspec (jsctx, job, context, false);
         }
+        else if (streq (name, "resource-update")) {
+            update_resource (jsctx, job, context);
+        }
         else if (streq (name, "flux-restart")) {
             revert_job_state (jsctx, job, timestamp);
         }
@@ -852,7 +901,7 @@ static int depthfirst_map_one (struct job_state_ctx *jsctx,
         if (flux_kvs_lookup_get (f3, &R) < 0)
             goto done;
 
-        if (job_parse_R (job, R) < 0)
+        if (job_parse_R (job, R, job->R_updates) < 0)
             goto done;
     }
 
@@ -1379,6 +1428,26 @@ static int journal_jobspec_update_event (struct job_state_ctx *jsctx,
     return 0;
 }
 
+static int journal_resource_update_event (struct job_state_ctx *jsctx,
+                                         struct job *job,
+                                         json_t *context)
+{
+    if (!context) {
+        flux_log (jsctx->h, LOG_ERR,
+                  "%s: resource-update event context invalid: %s",
+                  __FUNCTION__, idf58 (job->id));
+        errno = EPROTO;
+        return -1;
+    }
+
+    if (add_resource_update (job, context) < 0) {
+        flux_log_error (jsctx->h, "%s: add_resource_update", __FUNCTION__);
+        return -1;
+    }
+    process_updates (jsctx, job);
+    return 0;
+}
+
 static int journal_dependency_event (struct job_state_ctx *jsctx,
                                      struct job *job,
                                      const char *cmd,
@@ -1530,6 +1599,10 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
     }
     else if (streq (name, "jobspec-update")) {
         if (journal_jobspec_update_event (jsctx, job, context) < 0)
+            return -1;
+    }
+    else if (streq (name, "resource-update")) {
+        if (journal_resource_update_event (jsctx, job, context) < 0)
             return -1;
     }
     else if (streq (name, "memo")) {

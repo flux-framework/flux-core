@@ -86,8 +86,9 @@ struct job {
     unsigned int states_mask;
     unsigned int states_events_mask;
     void *list_handle;
-    /* if updates in eventlog before jobspec read from KVS */
+    /* if updates in eventlog before jobspec / R read from KVS */
     json_t *jobspec_updates;
+    json_t *R_updates;
 
     int eventlog_seq;           /* last event seq read */
     int submit_version;         /* version number in submit context */
@@ -127,12 +128,17 @@ int job_jobspec_update (struct job *job, json_t *updates);
  * - ncores
  * - ntasks (if necessary)
  */
-int job_parse_R (struct job *job, const char *s);
+int job_parse_R (struct job *job, const char *s, json_t *updates);
 
 /* identical to above, but all nonfatal errors will return error.
  * Primarily used for testing.
  */
-int job_parse_R_fatal (struct job *job, const char *s);
+int job_parse_R_fatal (struct job *job, const char *s, json_t *updates);
+
+/* Update R with RFC21 defined keys
+ * (i.e. "expiration") and value.
+ */
+int job_R_update (struct job *job, json_t *updates);
 
 #endif /* ! _FLUX_JOB_LIST_JOB_DATA_H */
 

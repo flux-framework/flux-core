@@ -41,6 +41,7 @@ void job_destroy (void *data)
         json_decref (job->R);
         json_decref (job->exception_context);
         json_decref (job->jobspec_updates);
+        json_decref (job->R_updates);
         zlist_destroy (&job->updates);
         free (job);
         errno = save_errno;
@@ -385,7 +386,20 @@ int job_parse_jobspec_fatal (struct job *job, const char *s, json_t *updates)
     return job_jobspec_update (job, updates);
 }
 
-static int parse_R (struct job *job, const char *s, bool allow_nonfatal)
+static int load_R (struct job *job, const char *s, bool allow_nonfatal)
+{
+    json_error_t error;
+
+    if (!(job->R = json_loads (s, 0, &error))) {
+        flux_log (job->h, LOG_ERR,
+                  "%s: job %s invalid R: %s",
+                  __FUNCTION__, idf58 (job->id), error.text);
+        return allow_nonfatal ? 0 : -1;
+    }
+    return 0;
+}
+
+static int parse_R (struct job *job, bool allow_nonfatal)
 {
     struct rlist *rl = NULL;
     struct idset *idset = NULL;
@@ -395,13 +409,6 @@ static int parse_R (struct job *job, const char *s, bool allow_nonfatal)
     int core_count = 0;
     struct rnode *rnode;
     int saved_errno, rc = -1;
-
-    if (!(job->R = json_loads (s, 0, &error))) {
-        flux_log (job->h, LOG_ERR,
-                  "%s: job %s invalid R: %s",
-                  __FUNCTION__, idf58 (job->id), error.text);
-        goto nonfatal_error;
-    }
 
     if (!(rl = rlist_from_json (job->R, &error))) {
         flux_log_error (job->h, "rlist_from_json: %s", error.text);
@@ -454,14 +461,22 @@ cleanup:
     return rc;
 }
 
-int job_parse_R (struct job *job, const char *s)
+int job_parse_R (struct job *job, const char *s, json_t *updates)
 {
-    return parse_R (job, s, true);
+    if (load_R (job, s, true) < 0)
+        return -1;
+    if (parse_R (job, true) < 0)
+        return -1;
+    return job_R_update (job, updates);
 }
 
-int job_parse_R_fatal (struct job *job, const char *s)
+int job_parse_R_fatal (struct job *job, const char *s, json_t *updates)
 {
-    return parse_R (job, s, false);
+    if (load_R (job, s, false) < 0)
+        return -1;
+    if (parse_R (job, false) < 0)
+        return -1;
+    return job_R_update (job, updates);
 }
 
 int job_jobspec_update (struct job *job, json_t *updates)
@@ -492,6 +507,29 @@ int job_jobspec_update (struct job *job, json_t *updates)
                       __FUNCTION__, idf58 (job->id), key);
     }
     return parse_jobspec (job, false);
+}
+
+int job_R_update (struct job *job, json_t *updates)
+{
+    const char *key;
+    json_t *value;
+
+    if (!updates)
+        return 0;
+
+    json_object_foreach (updates, key, value) {
+        /* RFC 21 resource-update event only allows update
+         * to:
+         * - expiration
+         */
+        if (streq (key, "expiration"))
+            if (jpath_set (job->R, "execution.expiration", value) < 0)
+                flux_log (job->h, LOG_INFO,
+                          "%s: job %s failed to update R key %s",
+                          __FUNCTION__, idf58 (job->id), key);
+    }
+
+    return parse_R (job, false);
 }
 
 /*

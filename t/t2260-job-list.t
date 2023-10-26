@@ -2237,6 +2237,46 @@ test_expect_success 'remove jobtap plugins and remove queue config' '
 '
 
 #
+# resource-update event testing
+#
+
+# the resource-update-expiration plugin will add 60 minutes to the
+# expiration time of a job
+# N.B. in future, may wish to do test via a `flux update` or similar tool
+test_expect_success 'support resource-update event' '
+	flux jobtap load --remove=all ${PLUGINPATH}/resource-update-expiration.so
+'
+
+test_expect_success 'run a job' '
+	flux submit --time-limit=5m --wait-event=start sleep 300 | flux job id > rupdate1.id
+'
+
+# expiration should be 65m out, make sure it is > 10m, i.e. not 5m
+test_expect_success 'expiration is in the future' '
+	current=$(date +%s) &&
+	testexp=`expr $current + 10 \* 60` &&
+	echo $testexp > test_expiration.out &&
+	flux job list -s active | grep $(cat rupdate1.id) | jq -e ".expiration > $(cat test_expiration.out)"
+'
+
+test_expect_success 'cancel job' '
+	flux cancel $(cat rupdate1.id)
+'
+
+test_expect_success 'reload the job-list module' '
+	flux module reload job-list &&
+	wait_id_inactive $(cat rupdate1.id)
+'
+
+test_expect_success 'job-list returns expected resource changes after reload' '
+	flux job list -s inactive | grep $(cat rupdate1.id) | jq -e ".expiration > $(cat test_expiration.out)"
+'
+
+test_expect_success 'remove jobtap plugins' '
+        flux jobtap remove all
+'
+
+#
 # job list special cases
 #
 
