@@ -124,49 +124,6 @@ test_expect_success 'flux job info --base R works' '
 '
 
 #
-# job info lookup tests (multiple info requests)
-#
-
-test_expect_success 'flux job info multiple keys works (different keys)' '
-	jobid=$(submit_job) &&
-	flux job info $jobid eventlog jobspec J > all_info_a.out &&
-	grep submit all_info_a.out &&
-	grep sleep all_info_a.out
-'
-
-test_expect_success 'flux job info multiple keys works (same key)' '
-	jobid=$(submit_job) &&
-	flux job info $jobid eventlog eventlog eventlog > eventlog_3.out &&
-	test $(grep submit eventlog_3.out | wc -l) -eq 3
-'
-
-test_expect_success 'flux job info multiple keys fails on bad id' '
-	test_must_fail flux job info 12345 eventlog jobspec J
-'
-
-test_expect_success 'flux job info multiple keys fails on 1 bad entry (include eventlog)' '
-	jobid=$(submit_job) &&
-	kvsdir=$(flux job id --to=kvs $jobid) &&
-	flux kvs unlink ${kvsdir}.jobspec &&
-	test_must_fail flux job info $jobid eventlog jobspec J > all_info_b.out
-'
-
-test_expect_success 'flux job info multiple keys fails on 1 bad entry (no eventlog)' '
-	jobid=$(submit_job) &&
-	kvsdir=$(flux job id --to=kvs $jobid) &&
-	flux kvs unlink ${kvsdir}.jobspec &&
-	test_must_fail flux job info $jobid jobspec J > all_info_b.out
-'
-
-# N.B. Issue #5305, jobspec would be output twice, so we check for one
-# output of jobspec
-test_expect_success 'flux job info --original jobspec and J works' '
-	jobid=$(flux submit --env=ORIGINALTHING=t true) &&
-	flux job info --original $jobid J jobspec > J_jobspec_original.out &&
-	test $(grep ORIGINALTHING J_jobspec_original.out | wc -l) -eq 1
-'
-
-#
 # job info lookup tests (via eventlog)
 #
 

@@ -7,4 +7,6 @@ set -x
 id=$(flux submit -n 1 /bin/true)
 flux job attach ${id}
 
-flux job info ${id} eventlog jobspec R >/dev/null
+flux job info ${id} eventlog >/dev/null
+flux job info ${id} jobspec >/dev/null
+flux job info ${id} R >/dev/null
