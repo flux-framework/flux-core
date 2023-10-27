@@ -552,7 +552,7 @@ static struct optparse_subcommand subcommands[] = {
       wait_event_opts
     },
     { "info",
-      "id key ...",
+      "id key",
       "Display info for a job",
       cmd_info,
       0,
@@ -3358,282 +3358,56 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-void info_usage (void)
+char *reconstruct_current_jobspec (const char *jobspec_str,
+                                   const char *eventlog_str)
 {
-    fprintf (stderr,
-             "Missing lookup key(s), common keys:\n"
-             "J\n"
-             "R\n"
-             "eventlog\n"
-             "jobspec\n"
-             "guest.exec.eventlog\n"
-             "guest.input\n"
-             "guest.output\n");
-}
+    json_t *jobspec;
+    json_t *eventlog;
+    size_t index;
+    json_t *entry;
+    char *result;
 
-struct info_ctx {
-    const char *id_arg;
-    flux_jobid_t id;
-    json_t *keys_input;         /* keys input by user */
-    json_t *keys_lookup;        /* keys to lookup */
-    bool original;
-    bool base;
-};
+    if (!(jobspec = json_loads (jobspec_str, 0, NULL)))
+        log_msg_exit ("error decoding jobspec");
+    if (!(eventlog = eventlog_decode (eventlog_str)))
+        log_msg_exit ("error decoding eventlog");
+    json_array_foreach (eventlog, index, entry) {
+        const char *name;
+        json_t *context;
 
-void info_output_get (flux_future_t *f,
-                      struct info_ctx *ctx,
-                      const char *key,
-                      const char **s)
-{
-    if (flux_rpc_get_unpack (f, "{s:s}", key, s) < 0) {
-        if (errno == ENOENT) {
-            flux_future_destroy (f);
-            log_msg_exit ("job %s id or key not found", ctx->id_arg);
-        }
-        else
-            log_err_exit ("flux_rpc_get_unpack");
-    }
-}
-
-void info_output_jobspec (flux_future_t *f, struct info_ctx *ctx)
-{
-
-    if (ctx->original) {
-        const char *J_str;
-        char *jobspec_str;
-        flux_error_t error;
-
-        info_output_get (f, ctx, "J", &J_str);
-        jobspec_str = flux_unwrap_string (J_str, false, NULL, &error);
-        if (!jobspec_str)
-            log_msg_exit ("Failed to unwrap jobspec: %s", error.text);
-        printf ("%s\n", jobspec_str);
-        free (jobspec_str);
-    }
-    else if (ctx->base) {
-        const char *jobspec_str;
-        info_output_get (f, ctx, "jobspec", &jobspec_str);
-        printf ("%s\n", jobspec_str);
-    }
-    else {
-        const char *jobspec_str;
-        const char *eventlog_str;
-        json_t *jobspec;
-        json_t *eventlog;
-        json_error_t error;
-        size_t index;
-        json_t *entry;
-        char *jobspec_updated;
-
-        info_output_get (f, ctx, "jobspec", &jobspec_str);
-        info_output_get (f, ctx, "eventlog", &eventlog_str);
-
-        if (!(jobspec = json_loads (jobspec_str, JSON_DECODE_ANY, &error)))
-            log_msg_exit ("Failed to decode jobspec: %s", error.text);
-
-        if (!(eventlog = eventlog_decode (eventlog_str)))
-            log_err_exit ("Failed to decode eventlog");
-
-        json_array_foreach (eventlog, index, entry) {
-            const char *name;
-            json_t *context;
+        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
+            log_msg_exit ("error decoding eventlog entry");
+        if (streq (name, "jobspec-update")) {
             const char *path;
             json_t *value;
-
-            if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
-                log_err_exit ("Failed to parse eventlog entry");
-
-            if (!streq (name, "jobspec-update"))
-                continue;
 
             json_object_foreach (context, path, value) {
                 if (jpath_set (jobspec, path, value) < 0)
-                    log_err_exit ("Failed to update jobspec");
+                    log_err_exit ("failed to update jobspec");
             }
         }
-
-        if (!(jobspec_updated = json_dumps (jobspec, JSON_COMPACT)))
-            log_err_exit ("Failed to decode jobspec object");
-
-        printf ("%s\n", jobspec_updated);
-
-        json_decref (jobspec);
-        json_decref (eventlog);
-        free (jobspec_updated);
     }
+    if (!(result = json_dumps (jobspec, JSON_COMPACT)))
+        log_msg_exit ("failed to encode jobspec object");
+    json_decref (jobspec);
+    json_decref (eventlog);
+    return result;
 }
 
-void info_output_R (flux_future_t *f, struct info_ctx *ctx)
+void info_usage (void)
 {
-    if (ctx->base) {
-        const char *R_str;
-        info_output_get (f, ctx, "R", &R_str);
-        printf ("%s\n", R_str);
-    }
-    else {
-        const char *R_str;
-        const char *eventlog_str;
-        json_t *R;
-        json_t *eventlog;
-        json_error_t error;
-        size_t index;
-        json_t *entry;
-        char *R_updated;
+    fprintf (stderr,
+             "Usage: flux job info id key\n"
+             "some useful keys are:\n"
+             "  J                    - signed jobspec\n"
+             "  R                    - allocated resources\n"
+             "  eventlog             - primary job eventlog\n"
+             "  jobspec              - job specification\n"
+             "  guest.exec.eventlog  - execution eventlog\n"
+             "  guest.input          - job input log\n"
+             "  guest.output         - job output log\n"
+             "Use flux job info -h to list available options\n");
 
-        info_output_get (f, ctx, "R", &R_str);
-        info_output_get (f, ctx, "eventlog", &eventlog_str);
-
-        if (!(R = json_loads (R_str, JSON_DECODE_ANY, &error)))
-            log_msg_exit ("Failed to decode R: %s", error.text);
-
-        if (!(eventlog = eventlog_decode (eventlog_str)))
-            log_err_exit ("Failed to decode eventlog");
-
-        json_array_foreach (eventlog, index, entry) {
-            const char *name;
-            json_t *context;
-            const char *path;
-            json_t *value;
-
-            if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
-                log_err_exit ("Failed to parse eventlog entry");
-
-            if (!streq (name, "resource-update"))
-                continue;
-
-            json_object_foreach (context, path, value) {
-                if (streq (path, "expiration")) {
-                    if (jpath_set (R, "execution.expiration", value) < 0)
-                        log_err_exit ("Failed to update R");
-                }
-            }
-        }
-
-        if (!(R_updated = json_dumps (R, JSON_COMPACT)))
-            log_err_exit ("Failed to decode R object");
-
-        printf ("%s\n", R_updated);
-
-        json_decref (R);
-        json_decref (eventlog);
-        free (R_updated);
-    }
-}
-
-void info_output (flux_future_t *f, const char *key, struct info_ctx *ctx)
-{
-    const char *s;
-
-    if (streq (key, "jobspec")) {
-        info_output_jobspec (f, ctx);
-        return;
-    }
-    else if (streq (key, "R")) {
-        info_output_R (f, ctx);
-        return;
-    }
-
-    info_output_get (f, ctx, key, &s);
-    printf ("%s\n", s);
-}
-
-void info_continuation (flux_future_t *f, void *arg)
-{
-    struct info_ctx *ctx = arg;
-    size_t index;
-    json_t *key;
-
-    json_array_foreach (ctx->keys_input, index, key) {
-        const char *s = json_string_value (key);
-        info_output (f, s, ctx);
-    }
-
-    flux_future_destroy (f);
-}
-
-void info_lookup (flux_t *h,
-                  optparse_t *p,
-                  int argc,
-                  char **argv,
-                  int optindex,
-                  flux_jobid_t id)
-{
-    const char *topic = "job-info.lookup";
-    flux_future_t *f;
-    struct info_ctx ctx = {0};
-
-    ctx.id_arg = argv[optindex-1];
-    ctx.id = id;
-    if (!(ctx.keys_input = json_array ()))
-        log_msg_exit ("json_array");
-    if (!(ctx.keys_lookup = json_array ()))
-        log_msg_exit ("json_array");
-
-    while (optindex < argc) {
-        json_t *s;
-        const char *key = argv[optindex];
-        const char *extra_key = NULL;
-
-        if (!(s = json_string (key)))
-            log_msg_exit ("json_string");
-        if (json_array_append_new (ctx.keys_input, s) < 0)
-            log_msg_exit ("json_array_append");
-
-        /*  Special cases for key "jobspec" */
-        if (streq (key, "jobspec")) {
-            /* if --original was used fetch J and decode it on behalf of the caller. */
-            if (optparse_hasopt (p, "original")) {
-                ctx.original = true;
-                key = "J";
-            }
-            else if (optparse_hasopt (p, "base"))
-                ctx.base = true;
-            else
-                /* also get eventlog to build viewed jobspec */
-                extra_key = "eventlog";
-        }
-        else if (streq (key, "R")) {
-            if (optparse_hasopt (p, "base"))
-                ctx.base = true;
-            else
-                /* also get eventlog to build viewed R */
-                extra_key = "eventlog";
-        }
-
-        /* N.B. job-info.lookup will ignore duplicate keys, in the
-         * event user specified duplicate keys or options that lead to
-         * duplicate keys: e.g.
-         * - "jobspec" and "eventlog" (and not --base)
-         * - --original and both "jobspec" and "J"
-         */
-
-        if (!(s = json_string (key)))
-            log_msg_exit ("json_string");
-        if (json_array_append_new (ctx.keys_lookup, s) < 0)
-            log_msg_exit ("json_array_append");
-
-        if (extra_key) {
-            if (!(s = json_string (extra_key)))
-                log_msg_exit ("json_string");
-            if (json_array_append_new (ctx.keys_lookup, s) < 0)
-                log_msg_exit ("json_array_append");
-        }
-        optindex++;
-    }
-
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, 0,
-                             "{s:I s:O s:i}",
-                             "id", ctx.id,
-                             "keys", ctx.keys_lookup,
-                             "flags", 0)))
-        log_err_exit ("flux_rpc_pack");
-    if (flux_future_then (f, -1., info_continuation, &ctx) < 0)
-        log_err_exit ("flux_future_then");
-    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
-        log_err_exit ("flux_reactor_run");
-
-    json_decref (ctx.keys_input);
-    json_decref (ctx.keys_lookup);
 }
 
 int cmd_info (optparse_t *p, int argc, char **argv)
@@ -3641,22 +3415,105 @@ int cmd_info (optparse_t *p, int argc, char **argv)
     flux_t *h;
     int optindex = optparse_option_index (p);
     flux_jobid_t id;
+    const char *id_str;
+    const char *key;
+    flux_future_t *f;
+    const char *val;
+    char *new_val = NULL;
+
+    // Usage: flux job info id key
+    if (argc - optindex != 2) {
+        info_usage ();
+        exit (1);
+    }
+    id_str = argv[optindex++];
+    id = parse_jobid (id_str);
+    key = argv[optindex++];
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if ((argc - optindex) < 1) {
-        optparse_print_usage (p);
-        exit (1);
+    /* The --original (pre-frobnication) jobspec is obtained by fetching J.
+     * J is the original jobspec, signed, so we must unwrap it to get to the
+     * delicious jobspec inside.
+     */
+    if (optparse_hasopt (p, "original") && streq (key, "jobspec")) {
+        flux_error_t error;
+        if (!(f = flux_rpc_pack (h,
+                                 "job-info.lookup",
+                                 FLUX_NODEID_ANY,
+                                 0,
+                                 "{s:I s:[s] s:i}",
+                                 "id", id,
+                                 "keys", "J",
+                                 "flags", 0))
+            || flux_rpc_get_unpack (f, "{s:s}", "J", &val) < 0)
+            log_msg_exit ("%s", future_strerror (f, errno ));
+        if (!(new_val = flux_unwrap_string (val, false, NULL, &error)))
+            log_msg_exit ("Failed to unwrap J to get jobspec: %s", error.text);
+        val = new_val;
+    }
+    /* The current (non --base) jobspec has to be reconstructed by fetching
+     * the jobspec and the eventlog and updating the former with the latter.
+     */
+    else if (!optparse_hasopt (p, "base") && streq (key, "jobspec")) {
+        const char *jobspec;
+        const char *eventlog;
+
+        // fetch the two keys in parallel
+        if (!(f = flux_rpc_pack (h,
+                                 "job-info.lookup",
+                                 FLUX_NODEID_ANY,
+                                 0,
+                                 "{s:I s:[ss] s:i}",
+                                 "id", id,
+                                 "keys", "jobspec", "eventlog",
+                                 "flags", 0))
+            || flux_rpc_get_unpack (f,
+                                    "{s:s s:s}",
+                                    "jobspec", &jobspec,
+                                    "eventlog", &eventlog) < 0)
+            log_msg_exit ("%s", future_strerror (f, errno ));
+        val = new_val = reconstruct_current_jobspec (jobspec, eventlog);
+    }
+    /* The current (non --base) R is obtained through the
+     * job-info.update-lookup RPC, not the normal job-info.lookup.
+     */
+    else if (!optparse_hasopt (p, "base") && streq (key, "R")) {
+        json_t *o;
+        if (!(f = flux_rpc_pack (h,
+                                 "job-info.update-lookup",
+                                 FLUX_NODEID_ANY,
+                                 0,
+                                 "{s:I s:s s:i}",
+                                 "id", id,
+                                 "key", key,
+                                 "flags", 0))
+            || flux_rpc_get_unpack (f, "{s:o}", key, &o) < 0)
+            log_msg_exit ("%s", future_strerror (f, errno ));
+        if (!(new_val = json_dumps (o, JSON_COMPACT)))
+            log_msg_exit ("error encoding R object");
+        val = new_val;
+    }
+    /* All other keys are obtained this way.
+     */
+    else {
+        if (!(f = flux_rpc_pack (h,
+                                 "job-info.lookup",
+                                 FLUX_NODEID_ANY,
+                                 0,
+                                 "{s:I s:[s] s:i}",
+                                 "id", id,
+                                 "keys", key,
+                                 "flags", 0))
+            || flux_rpc_get_unpack (f, "{s:s}", key, &val) < 0)
+            log_msg_exit ("%s", future_strerror (f, errno ));
     }
 
-    id = parse_jobid (argv[optindex++]);
+    printf ("%s\n", val);
 
-    if (optindex == argc)
-        info_usage ();
-    else
-        info_lookup (h, p, argc, argv, optindex, id);
-
+    free (new_val);
+    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }
