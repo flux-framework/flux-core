@@ -34,9 +34,9 @@ work there.  A Flux command run from the subinstance can be forced to refer
 to the enclosing instance by supplying the :man1:`flux` --parent option.
 
 Flux commands outside of the subinstance refer to their enclosing instance,
-often a system instance. flux-proxy(1) establishes a connection to a running
-subinstance by jobid, then spawns a shell in which Flux commands refer to
-the subinstance, for example
+often a system instance. :man1:`flux-proxy` establishes a connection to a
+running subinstance by jobid, then spawns a shell in which Flux commands
+refer to the subinstance, for example
 
 ::
 
