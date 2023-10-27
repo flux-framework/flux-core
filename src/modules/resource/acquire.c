@@ -352,6 +352,29 @@ static void reslog_cb (struct reslog *reslog,
                 }
             }
         }
+        else if (streq (name, "resource-update")) {
+            double expiration = -1.;
+
+            /*  Handle resource-update event. Currently the only supported
+             *  context of such an event is an expiration update
+             */
+            if (json_unpack (context,
+                             "{s?F}",
+                             "expiration", &expiration) < 0) {
+                errmsg = "error preparing resource.acquire update response";
+                goto error;
+            }
+            if (expiration >= 0.
+                && flux_respond_pack (h,
+                                      msg,
+                                      "{s:f}",
+                                      "expiration", expiration) < 0) {
+                    flux_log_error (h,
+                                    "error responding to resource.acquire (%s)",
+                                    name);
+                    goto error;
+            }
+        }
         else if (streq (name, "online")
                  || streq (name, "offline")
                  || streq (name, "drain")
