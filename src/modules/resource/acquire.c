@@ -315,7 +315,10 @@ void acquire_disconnect (struct acquire *acquire, const flux_msg_t *msg)
  * FWIW, this function is not called until after the eventlog KVS
  * commit completes.
  */
-static void reslog_cb (struct reslog *reslog, const char *name, void *arg)
+static void reslog_cb (struct reslog *reslog,
+                       const char *name,
+                       json_t *context,
+                       void *arg)
 {
     struct acquire *acquire = arg;
     struct resource_ctx *ctx = acquire->ctx;
