@@ -33,6 +33,9 @@ SYNOPSIS
 
 **flux** **job** **purge** [*OPTIONS*] [*id...*]
 
+**flux** **job** **info** [*OPTIONS*] *id* *key*
+
+
 DESCRIPTION
 ===========
 
@@ -298,10 +301,85 @@ Inactive jobs may also be purged automatically if the job manager is
 configured as described in :man5:`flux-config-job-manager`.
 
 
+flux job info
+-------------
+
+.. program:: flux job info
+
+:program:`flux job info` retrieves the selected low level job object
+and displays it on standard output.  Object formats are described in the
+RFCs listed in `RESOURCES`_.
+
+
+Options:
+
+.. option:: -o, --original
+
+  For :option:`jobspec`, return the original submitted jobspec, prior
+  to any modifications made at ingest, such as setting defaults.
+
+.. option:: -b, --base
+
+  For :option:`jobspec` or :option:`R`, return the base version, prior
+  to any updates posted to the job eventlog.
+
+The following keys are valid:
+
+eventlog
+   The primary job eventlog, consisting of timestamped events that drive the
+   job through various states.  For example, a job that is pending resource
+   allocation in SCHED state transitions to RUN state on the *alloc* event.
+
+guest.exec.eventlog
+   The execution eventlog, consisting of timestamped events posted by the
+   execution system while the job is running.
+
+guest.input, guest.output
+   The job input and output eventlogs, consisting of timestamped chunks of
+   input/output data.
+
+jobspec
+   The job specification.  Three versions are available:
+
+   - default: the *current* jobspec, which may reflect updates,
+     for example if the job duration was extended
+
+   - with :option:`--original`: the original jobspec submitted by the user
+
+   - with :option:`--base`: the jobspec as initially ingested to the KVS, after
+     the frobnicator filled in any default values, but before updates
+
+R
+   The resource set allocated to the job.  Two versions are available:
+
+   - default: the *current* R, which may reflect updates, for example if the job
+     expiration time was extended (default)
+
+   - with :option:`--base`: the initial R allocated by the scheduler
+
+
 RESOURCES
 =========
 
 Flux: http://flux-framework.org
 
-RFC 34: Flux Task Map: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_34.html
+:doc:`rfc:spec_14`
+  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_14.html
 
+:doc:`rfc:spec_18`
+  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_18.html
+
+:doc:`rfc:spec_20`
+  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_20.html
+
+:doc:`rfc:spec_21`
+  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_21.html
+
+:doc:`rfc:spec_24`
+  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_24.html
+
+:doc:`rfc:spec_25`
+  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_25.html
+
+:doc:`rfc:spec_34`
+  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_34.html
