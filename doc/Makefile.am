@@ -403,9 +403,6 @@ EXTRA_DIST = \
 	guide/glossary.rst \
 	$(RST_FILES) \
 	man1/index.rst \
-	man1/index_general.rst \
-	man1/index_job.rst \
-	man1/index_kvs.rst \
 	man1/common/nodeset.rst \
 	man1/common/submit-job-parameters.rst \
 	man1/common/submit-standard-io.rst \
