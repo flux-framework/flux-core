@@ -712,11 +712,13 @@ static int ss_resource_update (struct simple_sched *ss, flux_future_t *f)
 {
     const char *up = NULL;
     const char *down = NULL;
+    double expiration = -1.;
     const char *s;
 
-    int rc = flux_rpc_get_unpack (f, "{s?s s?s}",
+    int rc = flux_rpc_get_unpack (f, "{s?s s?s s?F}",
                                   "up", &up,
-                                  "down", &down);
+                                  "down", &down,
+                                  "expiration", &expiration);
     if (rc < 0) {
         flux_log (ss->h, LOG_ERR, "unpacking acquire response failed");
         goto err;
@@ -732,6 +734,15 @@ static int ss_resource_update (struct simple_sched *ss, flux_future_t *f)
         flux_log_error (ss->h, "failed to update resource state");
         goto err;
     }
+
+    if (expiration >= 0. && ss->rlist->expiration != expiration) {
+        flux_log (ss->h,
+                  LOG_INFO,
+                  "resource expiration updated to %.2f",
+                  expiration);
+        ss->rlist->expiration = expiration;
+    }
+
     rc = 0;
 err:
     flux_future_reset (f);
