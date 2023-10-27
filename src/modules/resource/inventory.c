@@ -93,6 +93,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/jpath.h"
 
 #include "rutil.h"
 #include "resource.h"
@@ -108,6 +109,10 @@ struct inventory {
     char *method;
 
     flux_future_t *put_f;          /* inventory put future */
+
+    flux_t *parent_h;              /* handle to parent instance */
+    flux_future_t *R_watch_f;      /* job-info.update-watch future */
+
     flux_msg_handler_t **handlers;
 };
 
@@ -146,13 +151,26 @@ static void inventory_put_continuation (flux_future_t *f, void *arg)
     (void)inventory_put_finalize (inv);
 }
 
+static flux_future_t *inventory_put_R (struct inventory *inv)
+{
+    flux_kvs_txn_t *txn = NULL;
+    flux_future_t *f = NULL;
+
+    if (!(txn = flux_kvs_txn_create ())
+        || flux_kvs_txn_pack (txn, 0, "resource.R", "O", inv->R) < 0)
+        goto error;
+    f = flux_kvs_commit (inv->ctx->h, NULL, 0, txn);
+error:
+    flux_kvs_txn_destroy (txn);
+    return f;
+}
+
 /* (rank 0) Commit resource.R to the KVS, then upon completion,
  * post resource-define event to resource.eventlog.
  */
 int inventory_put (struct inventory *inv, json_t *R, const char *method)
 
 {
-    flux_kvs_txn_t *txn;
     char *cpy;
 
     if (inv->ctx->rank != 0) {
@@ -163,11 +181,8 @@ int inventory_put (struct inventory *inv, json_t *R, const char *method)
         errno = EEXIST;
         return -1;
     }
-    if (!(txn = flux_kvs_txn_create ()))
-        return -1;
-    if (flux_kvs_txn_pack (txn, 0, "resource.R", "O", R) < 0)
-        goto error;
-    if (!(inv->put_f = flux_kvs_commit (inv->ctx->h, NULL, 0, txn)))
+    inv->R = json_incref (R);
+    if (!(inv->put_f = inventory_put_R (inv)))
         goto error;
     if (flux_future_then (inv->put_f, -1, inventory_put_continuation, inv) < 0)
         goto error;
@@ -176,11 +191,10 @@ int inventory_put (struct inventory *inv, json_t *R, const char *method)
     if (!(cpy = strdup (method)))
         goto error;
     inv->method = cpy;
-    inv->R = json_incref (R);
-    flux_kvs_txn_destroy (txn);
     return 0;
 error:
-    flux_kvs_txn_destroy (txn);
+    flux_future_destroy (inv->put_f);
+    inv->put_f = NULL;
     return -1;
 }
 
@@ -311,17 +325,16 @@ static bool no_duplicates (const char *hosts)
  * thus *Rp should be set to NULL before calling this function.
  * On failure return -1 (errno is not set).
  */
-static int convert_R (flux_t *h, const char *job_R, int size, json_t **Rp)
+static int convert_R (flux_t *h, json_t *R, int size, json_t **Rp)
 {
     struct rlist *rl;
-    json_t *R;
     struct idset *ranks;
     const char *hosts;
     int count;
     int rc = -1;
     flux_error_t err;
 
-    if (!(rl = rlist_from_R (job_R)))
+    if (!(rl = rlist_from_json (R, NULL)))
         return -1;
     if (!(ranks = rlist_ranks (rl)))
         goto error;
@@ -356,9 +369,8 @@ static int convert_R (flux_t *h, const char *job_R, int size, json_t **Rp)
      */
     if (rlist_remap (rl) < 0)
         goto error;
-    if (!(R = rlist_to_R (rl)))
+    if (!(*Rp = rlist_to_R (rl)))
         goto error;
-    *Rp = R;
 noconvert:
     rc = 0;
 error:
@@ -367,14 +379,105 @@ error:
     return rc;
 }
 
-static int get_from_job_info (struct inventory *inv, const char *key)
+/*  Cancel and destroy R job-info.update-watch future
+ */
+static void R_watch_destroy (struct inventory *inv)
+{
+    flux_future_t *f;
+
+    if (!inv->R_watch_f)
+        return;
+
+    f = flux_rpc_pack (inv->ctx->h,
+                       "job-info.update-watch-cancel",
+                       FLUX_NODEID_ANY,
+                       FLUX_RPC_NORESPONSE,
+                       "{s:i}",
+                       "matchtag", flux_rpc_get_matchtag (inv->R_watch_f));
+    if (!f)
+        flux_log_error (inv->ctx->h,
+                        "job-info.update-watch-cancel failed");
+    flux_future_destroy (f);
+    flux_future_destroy (inv->R_watch_f);
+    inv->R_watch_f = NULL;
+}
+
+static void inventory_put_update_cb (flux_future_t *f, void *arg)
+{
+    struct inventory *inv = arg;
+    double expiration = -1.;
+
+    if (flux_future_get (f, NULL) < 0)
+        flux_log_error (inv->ctx->h, "failed to commit updated R to kvs");
+
+    if (json_unpack (inv->R,
+                     "{s:{s:F}}",
+                     "execution",
+                      "expiration", &expiration) < 0)
+        flux_log_error (inv->ctx->h,
+                        "failed to get updated expiration from R");
+
+    if (reslog_post_pack (inv->ctx->reslog,
+                          NULL,
+                          0.,
+                          "resource-update",
+                          "{s:f}",
+                          "expiration",
+                          expiration) < 0) {
+        flux_log_error (inv->ctx->h, "error posting resource-update event");
+    }
+    flux_future_destroy (f);
+    inv->put_f = NULL;
+}
+
+/*  Handle updates to R from parent instance. Currently, the only supported
+ *  update is an adjustment to expiration.
+ */
+static void R_update_cb (flux_future_t *f, void *arg)
+{
+    struct inventory *inv = arg;
+    flux_t *h = inv->ctx->h;
+    double expiration = -1.;
+    json_t *o = NULL;
+
+    if (flux_rpc_get_unpack (f,
+                             "{s:{s:{s:F}}}",
+                             "R",
+                              "execution",
+                               "expiration", &expiration) < 0) {
+        flux_log_error (h, "failed to unpack updated R expiration");
+        goto out;
+    }
+    /*  Update local inventory and send expiration update to scheduler
+     */
+    if (!(o = json_real (expiration))
+        || jpath_set (inv->R, "execution.expiration", o) < 0) {
+        flux_log (h, LOG_ERR, "failed to update expiration in inventory R");
+        goto out;
+    }
+    /*  Update R in KVS, post resource-update event when commit is complete.
+     */
+    if (!(inv->put_f = inventory_put_R (inv))
+        || flux_future_then (inv->put_f,
+                             -1.,
+                             inventory_put_update_cb,
+                             inv) < 0) {
+        flux_future_destroy (inv->put_f);
+        inv->put_f = NULL;
+        goto out;
+    }
+out:
+    json_decref (o);
+    flux_future_reset (f);
+}
+
+static int start_resource_watch (struct inventory *inv)
 {
     flux_t *h = inv->ctx->h;
-    flux_t *parent_h;
     const char *uri;
     const char *jobid;
+    json_t *job_R;
     flux_jobid_t id;
-    const char *job_R;
     flux_future_t *f = NULL;
     json_t *R = NULL;
     int rc = -1;
@@ -386,22 +489,34 @@ static int get_from_job_info (struct inventory *inv, const char *key)
         flux_log_error (h, "error decoding jobid %s", jobid);
         return -1;
     }
-    if (!(parent_h = flux_open (uri, 0))) {
+    if (!(inv->parent_h = flux_open (uri, 0))) {
         flux_log_error (h, "error opening %s", uri);
         goto done;
     }
-    if (!(f = flux_rpc_pack (parent_h,
-                             "job-info.lookup",
+    /*  Associate the main flux_t handle reactor with the parent handle
+     *  reactor so that events from both can be handled with the single
+     *  reactor instance:
+     */
+    if (flux_set_reactor (inv->parent_h, flux_get_reactor (h)) < 0) {
+        flux_log_error (h, "flux_set_reactor");
+        goto done;
+    }
+    if (!(f = flux_rpc_pack (inv->parent_h,
+                             "job-info.update-watch",
                              FLUX_NODEID_ANY,
-                             0,
-                             "{s:I s:[s] s:i}",
+                             FLUX_RPC_STREAMING,
+                             "{s:I s:s s:i}",
                              "id", id,
-                             "keys", key,
+                             "key", "R",
                              "flags", 0))) {
         flux_log_error (h, "error sending request to enclosing instance");
         goto done;
     }
-    if (flux_rpc_get_unpack (f, "{s:s}", "R", &job_R) < 0) {
+    inv->R_watch_f = f;
+
+    /* Get first response synchronously
+     */
+    if (flux_rpc_get_unpack (f, "{s:o}", "R", &job_R) < 0) {
         flux_log_error (h, "lookup R from enclosing instance KVS");
         goto done;
     }
@@ -410,14 +525,25 @@ static int get_from_job_info (struct inventory *inv, const char *key)
         errno = EINVAL;
         goto done;
     }
+    flux_future_reset (f);
     if (R) { // R = NULL if no conversion possible (fall through to discovery)
         if (inventory_put (inv, R, "job-info") < 0)
             goto done;
+        if (flux_future_then (f,
+                              -1.,
+                              R_update_cb,
+                              inv) < 0)
+            flux_log (h, LOG_ERR, "Failed to register callback for R updates");
     }
     rc = 0;
 done:
-    flux_future_destroy (f);
-    flux_close (parent_h);
+    /* Cancel and destroy R watch future if no R obtained through this means
+     */
+    if (!R) {
+        R_watch_destroy (inv);
+        flux_close (inv->parent_h);
+        inv->parent_h = NULL;
+    }
     json_decref (R);
     return rc;
 }
@@ -696,6 +822,8 @@ void inventory_destroy (struct inventory *inv)
         json_decref (inv->R);
         free (inv->method);
         flux_future_destroy (inv->put_f);
+        R_watch_destroy (inv);
+        flux_close (inv->parent_h);
         free (inv);
         errno = saved_errno;
     }
@@ -718,7 +846,7 @@ struct inventory *inventory_create (struct resource_ctx *ctx, json_t *conf_R)
             goto error;
         if (!inv->R && get_from_kvs (inv, "resource.R") < 0)
             goto error;
-        if (!inv->R && get_from_job_info (inv, "R") < 0)
+        if (!inv->R && start_resource_watch (inv) < 0)
             goto error;
     }
     else {
