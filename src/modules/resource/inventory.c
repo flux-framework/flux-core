@@ -107,7 +107,7 @@ struct inventory {
     json_t *R;
     char *method;
 
-    flux_future_t *f;
+    flux_future_t *put_f;          /* inventory put future */
     flux_msg_handler_t **handlers;
 };
 
@@ -115,10 +115,10 @@ static int rank_from_key (const char *key);
 
 static int inventory_put_finalize (struct inventory *inv)
 {
-    const char *method = flux_future_aux_get (inv->f, "method");
+    const char *method = flux_future_aux_get (inv->put_f, "method");
     int rc = -1;
 
-    if (flux_future_get (inv->f, NULL) < 0) {
+    if (flux_future_get (inv->put_f, NULL) < 0) {
         flux_log_error (inv->ctx->h, "error committing R to KVS");
         goto done;
     }
@@ -134,8 +134,8 @@ static int inventory_put_finalize (struct inventory *inv)
     }
     rc = 0;
 done:
-    flux_future_destroy (inv->f);
-    inv->f = NULL;
+    flux_future_destroy (inv->put_f);
+    inv->put_f = NULL;
     return rc;
 }
 
@@ -167,11 +167,11 @@ int inventory_put (struct inventory *inv, json_t *R, const char *method)
         return -1;
     if (flux_kvs_txn_pack (txn, 0, "resource.R", "O", R) < 0)
         goto error;
-    if (!(inv->f = flux_kvs_commit (inv->ctx->h, NULL, 0, txn)))
+    if (!(inv->put_f = flux_kvs_commit (inv->ctx->h, NULL, 0, txn)))
         goto error;
-    if (flux_future_then (inv->f, -1, inventory_put_continuation, inv) < 0)
+    if (flux_future_then (inv->put_f, -1, inventory_put_continuation, inv) < 0)
         goto error;
-    if (flux_future_aux_set (inv->f, "method", (void *)method, NULL) < 0)
+    if (flux_future_aux_set (inv->put_f, "method", (void *)method, NULL) < 0)
         goto error;
     if (!(cpy = strdup (method)))
         goto error;
@@ -695,7 +695,7 @@ void inventory_destroy (struct inventory *inv)
         flux_msg_handler_delvec (inv->handlers);
         json_decref (inv->R);
         free (inv->method);
-        flux_future_destroy (inv->f);
+        flux_future_destroy (inv->put_f);
         free (inv);
         errno = saved_errno;
     }
