@@ -341,7 +341,6 @@ $(RST_FILES): \
 	man1/common/submit-process-resource-limits.rst \
 	man1/common/submit-exit-status.rst \
 	man1/common/submit-other-options.rst \
-	man1/common/submit-bulksubmit.rst \
 	man1/common/submit-shell-options.rst \
 	man1/common/submit-submission-directives.rst \
 	man3/common/json_pack.rst \
@@ -412,7 +411,6 @@ EXTRA_DIST = \
 	man1/common/submit-process-resource-limits.rst \
 	man1/common/submit-exit-status.rst \
 	man1/common/submit-other-options.rst \
-	man1/common/submit-bulksubmit.rst \
 	man1/common/submit-shell-options.rst \
 	man1/common/submit-submission-directives.rst \
 	man3/index.rst \
