@@ -28,8 +28,8 @@ released to the enclosing Flux instance.
 
 If there are no free arguments, the script is read from standard input.
 
-If the *--wrap* option is used, the script is created by wrapping the free
-arguments or standard input in a shell script prefixed with ``#!/bin/sh``.
+If the :option:`--wrap` option is used, the script is created by wrapping the
+free arguments or standard input in a shell script prefixed with ``#!/bin/sh``.
 
 If the job request is accepted, its jobid is printed on standard output and the
 command returns.  The job runs when the Flux scheduler fulfills its resource
@@ -38,7 +38,7 @@ allocation request.  :man1:`flux-jobs` may be used to display the job status.
 Flux commands that are run from the batch script refer to the subinstance.
 For example, :man1:`flux-run` would launch work there.  A Flux command run
 from the script can be forced to refer to the enclosing instance by supplying
-the :man1:`flux` *--parent* option.
+the :option:`flux --parent` option.
 
 Flux commands outside of the batch script refer to their enclosing instance,
 often a system instance.  :man1:`flux-proxy` establishes a connection to a

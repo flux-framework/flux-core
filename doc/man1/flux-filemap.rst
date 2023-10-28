@@ -40,8 +40,8 @@ may be specified to filter the list.
 ``flux-filemap get`` extracts mapped files and may be run on any broker or
 across all brokers using :man1:`flux-exec`.  Optionally, a :man7:`glob` pattern
 may be specified to filter the list.  When extracting mapped files in parallel,
-take care to specify a *--directory* that is not shared and is not on a network
-file system without considering the ramifications.
+take care to specify a :option:`--directory` that is not shared and is not on a
+network file system without considering the ramifications.
 
 ``flux-filemap unmap`` unmaps mapped files.
 

@@ -38,7 +38,7 @@ are printed.
 A Flux system instance requires offline KVS garbage collection to remove
 deleted KVS content and purged job directories, which accrue over time and
 increase storage overhead and restart time.  It is recommended that the
-*--gc* option be used on a routine basis to optimize Flux.
+:option:`--gc` option be used on a routine basis to optimize Flux.
 
 
 OPTIONS
@@ -69,8 +69,8 @@ OPTIONS
    Dump a checkpoint of KVS content to *PATH* using :man1:`flux-dump` after the
    KVS has been unloaded.  The dump may be restored into a new Flux instance
    using :man1:`flux-restore`.  Dump creation adds time to the shutdown
-   sequence, proportional to the amount of data in the KVS.  ``--dump=auto``
-   is a special case equivalent to ``--gc``.
+   sequence, proportional to the amount of data in the KVS.
+   :option:`--dump=auto` is a special case equivalent to :option:`--gc`.
 
 .. option:: --gc
 

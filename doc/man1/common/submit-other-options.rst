@@ -17,10 +17,10 @@ OTHER OPTIONS
 .. option:: -v, --verbose
 
    *(run,alloc,submit,bulksubmit)* Increase verbosity on stderr. For example,
-   currently ``flux run -v`` displays jobid, ``-vv`` displays job events,
-   and ``-vvv`` displays exec events. ``flux alloc -v`` forces the command
-   to print the submitted jobid on stderr.
-   The specific output may change in the future.
+   currently :option:`flux run -v` displays jobid, :option:`-vv` displays job
+   events, and :option:`-vvv` displays exec events. :option:`flux alloc -v`
+   forces the command to print the submitted jobid on stderr.  The specific
+   output may change in the future.
 
 .. option:: -o, --setopt=KEY[=VAL]
 
@@ -62,14 +62,14 @@ OTHER OPTIONS
 
 .. option:: --conf=FILE|KEY=VAL|STRING|NAME
 
-   The ``--conf`` option allows configuration for a Flux instance started
-   via ``flux-batch(1)`` or ``flux-alloc(1)`` to be iteratively built on
-   the command line. On first use, a ``conf.json`` entry is added to the
+   The :option:`--conf`` option allows configuration for a Flux instance
+   started via ``flux-batch(1)`` or ``flux-alloc(1)`` to be iteratively built
+   on the command line. On first use, a ``conf.json`` entry is added to the
    internal jobspec file archive, and ``-c{{tmpdir}}/conf.json`` is added
-   to the flux broker command line. Each subsequent use of the ``--conf``
+   to the flux broker command line. Each subsequent use of the :option:`--conf`
    option updates this configuration.
 
-   The argument to ``--conf`` may be in one of several forms:
+   The argument to :option:`--conf` may be in one of several forms:
 
    * A multiline string, e.g. from a batch directive. In this case the string
      is parsed as JSON or TOML::
@@ -116,8 +116,8 @@ OTHER OPTIONS
    signal name, e.g. ``SIGUSR1`` or ``USR1`` or ``10``. ``TIME`` is
    specified in Flux Standard Duration, e.g. ``30`` for 30s or ``1h`` for
    1 hour. Either parameter may be omitted, with defaults of ``SIGUSR1``
-   and 60s.  For example, ``--signal=USR2`` will send ``SIGUSR2`` to
-   the job 60 seconds before expiration, and ``--signal=@3m`` will send
+   and 60s.  For example, :option:`--signal=USR2` will send ``SIGUSR2`` to
+   the job 60 seconds before expiration, and :option:`--signal=@3m` will send
    ``SIGUSR1`` 3 minutes before expiration. Note that if ``TIME`` is
    greater than the remaining time of a job as it starts, the job will
    be signaled immediately.
@@ -177,24 +177,24 @@ OTHER OPTIONS
 
 .. option:: --wrap
 
-   *(batch only)* The ``--wrap`` option wraps the specified COMMAND and ARGS in
-   a shell script, by prefixing with ``#!/bin/sh``. If no COMMAND is present,
-   then a SCRIPT is read on stdin and wrapped in a /bin/sh script.
+   *(batch only)* The :option:`--wrap` option wraps the specified COMMAND and
+   ARGS in a shell script, by prefixing with ``#!/bin/sh``. If no COMMAND is
+   present, then a SCRIPT is read on stdin and wrapped in a /bin/sh script.
 
 .. option:: --cc=IDSET
 
    *(submit,bulksubmit)* Replicate the job for each ``id`` in ``IDSET``.
    ``FLUX_JOB_CC=id`` will be set in the environment of each submitted job
    to allow the job to alter its execution based on the submission index.
-   (e.g. for reading from a different input file). When using ``--cc``,
+   (e.g. for reading from a different input file). When using :option:`--cc`,
    the substitution string ``{cc}`` may be used in options and commands
    and will be replaced by the current ``id``.
 
 .. option:: --bcc=IDSET
 
-   *(submit,bulksubmit)* Identical to ``--cc``, but do not set
+   *(submit,bulksubmit)* Identical to :option:`--cc`, but do not set
    ``FLUX_JOB_CC`` in each job. All jobs will be identical copies.
-   As with ``--cc``, ``{cc}`` in option arguments and commands will be
+   As with :option:`--cc`, ``{cc}`` in option arguments and commands will be
    replaced with the current ``id``.
 
 .. option:: --quiet
@@ -213,36 +213,36 @@ OTHER OPTIONS
 .. option:: --log-stderr=FILE
 
    *(submit,bulksubmit)* Separate stderr into ``FILE`` instead of sending
-   it to the terminal or a ``FILE`` specified by ``--log``.
+   it to the terminal or a ``FILE`` specified by :option:`--log`.
 
 .. option:: --wait
 
    *(submit,bulksubmit)* Wait on completion of all jobs before exiting.
-   This is equivalent to ``--wait-event=clean``.
+   This is equivalent to :option:`--wait-event=clean`.
 
 .. option:: --wait-event=NAME
 
    *(run,submit,bulksubmit)* Wait until job or jobs have received event ``NAME``
    before exiting. E.g. to submit a job and block until the job begins
-   running, use ``--wait-event=start``. *(submit,bulksubmit only)* If ``NAME``
-   begins with ``exec.``, then wait for an event in the exec eventlog, e.g.
-   ``exec.shell.init``. For ``flux run`` the argument to this option
+   running, use :option:`--wait-event=start`. *(submit,bulksubmit only)* If
+   ``NAME`` begins with ``exec.``, then wait for an event in the exec eventlog,
+   e.g.  ``exec.shell.init``. For ``flux run`` the argument to this option
    when used is passed directly to ``flux job attach``.
 
 .. option:: --watch
 
-   *(submit,bulksubmit)* Display output from all jobs. Implies ``--wait``.
+   *(submit,bulksubmit)* Display output from all jobs. Implies :option:`--wait`.
 
 .. option:: --progress
 
-   *(submit,bulksubmit)* With ``--wait``, display a progress bar showing
-   the progress of job completion. Without ``--wait``, the progress bar
+   *(submit,bulksubmit)* With :option:`--wait`, display a progress bar showing
+   the progress of job completion. Without :option:`--wait`, the progress bar
    will show progress of job submission.
 
 .. option:: --jps
 
-   *(submit,bulksubmit)* With ``--progress``, display throughput statistics
-   (jobs/s) in the progress bar.
+   *(submit,bulksubmit)* With :option:`--progress`, display throughput
+   statistics (jobs/s) in the progress bar.
 
 .. option:: --define=NAME=CODE
 
@@ -260,13 +260,14 @@ OTHER OPTIONS
 
    *(bulksubmit)* Change the separator for file input. The default is
    to separate files (including stdin) by newline. To separate by
-   consecutive whitespace, specify ``--sep=none``.
+   consecutive whitespace, specify :option:`--sep=none`.
 
 .. option:: --dump=[FILE]
 
    *(batch,alloc)* When the job script is complete, archive the Flux
    instance's KVS content to ``FILE``, which should have a suffix known
    to :linux:man3:`libarchive`, and may be a mustache template as described
-   above for ``--output``.  The content may be unarchived directly or examined
-   within a test instance started with the :man1:`flux-start` ``--recovery``
-   option.  If ``FILE`` is unspecified, ``flux-{{jobid}}-dump.tgz`` is used.
+   above for :option:`--output`.  The content may be unarchived directly or
+   examined within a test instance started with the
+   :option:`flux-start --recovery` option.  If ``FILE`` is unspecified,
+   ``flux-{{jobid}}-dump.tgz`` is used.

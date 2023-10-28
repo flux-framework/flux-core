@@ -123,14 +123,14 @@ By default, flux-shell supports the following plugin callback topics:
 
 **taskmap.SCHEME**
   Called when a taskmap scheme *SCHEME* is requested via the taskmap
-  shell option or corresponding ``--taskmap`` option of :man1:`flux-submit`
-  and related commands.  Plugins that want to offer a different taskmap
-  scheme than the defaults of ``block``, ``cyclic``, and ``manual`` can
-  register a ``taskmap.*`` plugin callback and then users can request this
-  mapping with the appropriate ``--taskmap=name`` option. The default block
-  taskmap is passed to the plugin as "taskmap" in the plugin input arguments,
-  and the plugin should return the new taskmap as a string in the output args.
-  This callback is called before ``shell.init``.
+  shell option or corresponding :option:`flux submit --taskmap` option.
+  Plugins that want to offer a different taskmap scheme than the defaults of
+  ``block``, ``cyclic``, and ``manual`` can register a ``taskmap.*`` plugin
+  callback and then users can request this mapping with the appropriate
+  :option:`flux submit --taskmap=name`` option.  The default block taskmap is
+  passed to the plugin as "taskmap" in the plugin input arguments, and the
+  plugin should return the new taskmap as a string in the output args.  This
+  callback is called before ``shell.init``.
 
 **shell.connect**
   Called just after the shell connects to the local Flux broker. (Only
@@ -180,8 +180,8 @@ JOBSPEC OPTIONS
 
 On startup, ``flux-shell`` will examine the jobspec for any shell specific
 options under the ``attributes.system.shell.options`` key.  These options
-may be set by the :man1:`flux-submit` and related commands ``-o, --setopt=OPT``
-option, or explicitly added to the jobspec by other means.
+may be set by the :option:`flux submit -o, --setopt=OPT` option, or explicitly
+added to the jobspec by other means.
 
 Job shell options may be switches to enable or disable a shell feature or
 plugin, or they may take an argument. Because jobspec is a JSON document,
@@ -189,7 +189,7 @@ job shell options in jobspec may take arguments that are themselves
 JSON objects. This allows maximum flexibility in runtime configuration
 of optional job shell behavior. In the list below, if an option doesn't
 include a ``=``, then it is a simple boolean option or switch and may be
-specified simply with ``-o option`` in commands like :man1:`flux run`.
+specified simply with :option:`flux submit -o OPTION`.
 
 Options supported by ``flux-shell`` proper include:
 

@@ -33,7 +33,7 @@ If the connection to the Flux instance is lost, for example when the
 target instance terminates, **flux proxy** will emit an error message,
 send ``SIGHUP`` and ``SIGCONT`` to the spawned shell or other process,
 and wait for it to terminate before exiting.  The delivery of signals
-can be disabled with the ``-n, --nohup`` option, but be aware that Flux
+can be disabled with the :option:`--nohup` option, but be aware that Flux
 commands running under a **flux proxy** which has lost its connection
 will likely result in errors.
 
@@ -54,7 +54,7 @@ OPTIONS
 
    When an error occurs in the proxy connection, **flux proxy** will
    normally shut down the proxy and send ``SIGHUP`` and ``SIGCONT`` to
-   the spawned shell or command. If the ``-n, --nohup`` option is used,
+   the spawned shell or command. If the :option:`--nohup` option is used,
    the ``SIGHUP`` and ``SIGCONT`` signals will not be sent.
    **flux proxy** will still wait for the spawned shell or command to
    exit before terminating to avoid having the child process reparented

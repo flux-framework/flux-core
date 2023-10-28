@@ -38,11 +38,11 @@ COMMANDS
 **sync** [--epsilon=\ *delay*] [*topic*]
    Query and modify the current **sync-event** behavior for the cron module.
    If a sync-event is set, the cron module will defer all task execution
-   until an event matching the sync-event *topic* is received. With *--epsilon*
-   the cron module will **not** delay task execution if the task is normally
-   scheduled to run within *delay* of the matching event. Without any
-   *topic* supplied on command line, *flux cron sync* displays the current
-   setting for sync. If a task is deferred due to sync-event, the
+   until an event matching the sync-event *topic* is received. With
+   :option:`--epsilon` the cron module will **not** delay task execution if
+   the task is normally scheduled to run within *delay* of the matching event.
+   Without any *topic* supplied on command line, *flux cron sync* displays the
+   current setting for sync. If a task is deferred due to sync-event, the
    *stats.deferred* statistic is incremented.
 
 **interval** [OPTIONS] *interval* *command*
@@ -68,20 +68,20 @@ COMMANDS
 
 .. option:: -o, --options=LIST
 
-      The *--options* option allows a comma separated list of extra options to be
-      passed to the flux-cron service. See EXTRA OPTIONS below.
+      The :option:`--options` option allows a comma separated list of extra
+      options to be passed to the flux-cron service. See EXTRA OPTIONS below.
 
 .. option:: -E, --preserve-env
 
-      The *--preserve-env* option allows the current environment to be exported
-      and used for the command being executed as part of the cron job. Normally,
-      the broker environment is used.
+      The :option:`--preserve-env` option allows the current environment to be
+      exported and used for the command being executed as part of the cron job.
+      Normally, the broker environment is used.
 
 .. option:: -d, --working-dir=DIR
 
-      The *--working-dir* option allows the working directory to be set for the command
-      being executed as part of the cron job. Normally, the working directory of
-      the broker is used.
+      The :option:`--working-dir` option allows the working directory to be set
+      for the command being executed as part of the cron job. Normally, the
+      working directory of the broker is used.
 
 **event** [OPTIONS] *topic* *command*
    Create a cron entry to execute *command* after every event matching *topic*.
@@ -94,22 +94,23 @@ COMMANDS
 
 .. option:: -n, --nth=N
 
-      If *--nth* is given then *command* will be run after each *N* events.
+      If :option:`--nth` is given then *command* will be run after each *N*
+      events.
 
 .. option:: -c, --count=N
 
-      With *--count*, the entry is run *N* times then stopped.
+      With :option:`--count`, the entry is run *N* times then stopped.
 
 .. option:: -a, --after=N
 
       Run the first task only after *N* matching events. Then run every event
-      or *N* events with *--nth*.
+      or *N* events with :option:`--nth`.
 
 .. option:: -i, --min-interval=T
 
       Set the minimum interval at which two cron jobs for this event will be run.
-      For example, with --min-interval of 1s, the cron job will be at most run
-      every 1s, even if events are generated more quickly.
+      For example, with :option:`--min-interval` of 1s, the cron job will be
+      at most run every 1s, even if events are generated more quickly.
 
 .. option:: -o, --options=LIST
 
@@ -117,15 +118,15 @@ COMMANDS
 
 .. option:: -E, --preserve-env
 
-      The *--preserve-env* option allows the current environment to be exported
-      and used for the command being executed as part of the cron job. Normally,
-      the broker environment is used.
+      The :option:`--preserve-env` option allows the current environment to be
+      exported and used for the command being executed as part of the cron job.
+      Normally, the broker environment is used.
 
 .. option:: -d, --working-dir=DIR
 
-      The *--working-dir* option allows the working directory to be set for the command
-      being executed as part of the cron job. Normally, the working directory of
-      the broker is used.
+      The :option:`--working-dir` option allows the working directory to be
+      set for the command being executed as part of the cron job. Normally,
+      the working directory of the broker is used.
 
 **tab** [OPTIONS] [*file*]
    Process one or more lines containing crontab expressions from *file*
@@ -152,15 +153,15 @@ COMMANDS
 
 .. option:: -E, --preserve-env
 
-   The *--preserve-env* option allows the current environment to be exported
-   and used for the command being executed as part of the cron job. Normally,
-   the broker environment is used.
+   The :option:`--preserve-env` option allows the current environment to be
+   exported and used for the command being executed as part of the cron job.
+   Normally, the broker environment is used.
 
 .. option:: -d, --working-dir=DIR
 
-   The *--working-dir* option allows the working directory to be set for the command
-   being executed as part of the cron job. Normally, the working directory of
-   the broker is used.
+   The :option:`--working-dir` option allows the working directory to be set
+   for the command being executed as part of the cron job. Normally, the
+   working directory of the broker is used.
 
 **list**
    Display a list of current entries registered with the cron module and
@@ -174,12 +175,12 @@ COMMANDS
    Start a stopped cron entry *id*.
 
 **delete** [--kill] *id*
-   Purge cron entry *id* from the flux-cron entry list. If *--kill* is used,
-   kill any running task associated with entry *id*.
+   Purge cron entry *id* from the flux-cron entry list. If :option:`--kill` is
+   used, kill any running task associated with entry *id*.
 
 **dump** [--key=KEY] *id*
-   Dump all information for cron entry *id*. With *--key* print only the value
-   for key *KEY*. For a list of keys run *flux cron dump ID*.
+   Dump all information for cron entry *id*. With :option:`--key` print only
+   the value for key *KEY*. For a list of keys run *flux cron dump ID*.
 
 
 EXTRA OPTIONS
@@ -187,8 +188,8 @@ EXTRA OPTIONS
 
 .. program:: flux cron tab
 
-For ``flux-cron`` commands allowing ``--options``, the following EXTRA OPTIONS
-are supported:
+For ``flux-cron`` commands allowing :option:`--options`, the following EXTRA
+OPTIONS are supported:
 
 .. option:: -o timeout=N
 
@@ -223,7 +224,7 @@ total number of times to execute the cron job before stopping, and the
 
 All cron entries also support a less common list of options, which may
 be set at creation time via a comma-separated list of *option=value*
-parameters passed to the *-o*, *--option=OPTS*. These options are described
+parameters passed to :option:`-o, --option=OPTS`. These options are described
 in the EXTRA OPTIONS section at the end of this document.
 
 Currently, flux-cron supports only two types of entries. The *interval*
@@ -251,7 +252,7 @@ repeat and stop-on-failure are reset.
 
 Stopped entries are kept in the flux cron until deleted with *flux
 cron delete*. Active cron entries may also be deleted, with currently
-executing tasks optionally killed if the *--kill* option is provided.
+executing tasks optionally killed if the :option:`--kill` option is provided.
 
 
 TASK EXECUTION
@@ -275,10 +276,11 @@ for each cron entry. This information can be viewed either via the
 *flux cron list* or *flux cron dump ID* subcommands. Data such as
 start and end time, exit status, rank, and PID for the task is available.
 The number of tasks kept for each cron entry may be individually tuned
-via the *task-history-count* option, described in the EXTRA OPTIONS section.
+via the :option:`--task-history-count` option, described in the EXTRA OPTIONS
+section.
 
 Commands are normally executed immediately on the interval or event
-trigger for which they are configured. However, if the *sync-event*
+trigger for which they are configured. However, if the :option:`--sync-event`
 option is active on the cron module, tasks execution will be deferred
 until the next synchronization event. See the documentation above
 for *flux cron sync* for more information.

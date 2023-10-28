@@ -39,12 +39,12 @@ OPTIONS
 .. option:: -a
 
    Include jobs in all states, including inactive jobs.
-   This is shorthand for *--filter=pending,running,inactive*.
+   This is shorthand for :option:`--filter=pending,running,inactive`.
    (pgrep only)
 
 .. option:: -A
 
-   Include jobs for all users. This is shorthand for *--user=-all*.
+   Include jobs for all users. This is shorthand for :option:`--user=-all`.
 
 .. option:: -u, --user=USER
 

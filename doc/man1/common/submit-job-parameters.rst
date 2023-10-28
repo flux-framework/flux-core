@@ -21,9 +21,10 @@ These commands take the following common resource allocation options:
 
    Indicate to the scheduler that nodes should be exclusively allocated to
    this job. It is an error to specify this option without also using
-   *-N, --nodes*. If *--nodes* is specified without *--nslots* or *--ntasks*,
-   then this option will be enabled by default and the number of tasks
-   or slots will be set to the number of requested nodes.
+   :option:`--nodes`. If :option:`--nodes` is specified without
+   :option:`--nslots` or :option:`--ntasks`, then this option will be enabled
+   by default and the number of tasks or slots will be set to the number of
+   requested nodes.
 
 
 Per-task options
@@ -65,13 +66,13 @@ listed above:
 
 .. option:: --gpus-per-node=N
 
-   With -N, --nodes, request a specific number of GPUs per node.
+   With :option:`--nodes`, request a specific number of GPUs per node.
 
 .. option:: --tasks-per-core=N
 
    Force a number of tasks per core. Note that this will run *N* tasks per
    *allocated* core. If nodes are exclusively scheduled by configuration or
-   use of the ``--exclusive`` flag, then this option could result in many
+   use of the :option:`--exclusive` flag, then this option could result in many
    more tasks than expected. The default for this option is effectively 1,
    so it is useful only for oversubscribing tasks to cores for testing
    purposes. You probably don't want to use this option.
@@ -113,9 +114,10 @@ These commands also take following job parameters:
 
    Set a time limit for the job in either minutes or Flux standard duration
    (RFC 23). FSD is a floating point number with a single character units
-   suffix ("s", "m", "h", or "d"). The default unit for the ``--time-limit``
-   option is minutes when no units are otherwise specified. If the time
-   limit is unspecified, the job is subject to the system default time limit.
+   suffix ("s", "m", "h", or "d"). The default unit for the
+   :option:`--time-limit` option is minutes when no units are otherwise
+   specified. If the time limit is unspecified, the job is subject to the
+   system default time limit.
 
 .. option:: --job-name=NAME
 

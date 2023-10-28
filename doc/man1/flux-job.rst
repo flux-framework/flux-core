@@ -113,10 +113,10 @@ CANCEL
 .. program:: flux job cancel
 
 One or more jobs by may be canceled with ``flux job cancel``.  An optional
-message included with the cancel exception may be provided via the *-m,
---message=NOTE* option or after the list of jobids. The special argument
-*"--"* forces the end of jobid processing and can be used to separate the
-exception message from the jobids when necessary.
+message included with the cancel exception may be provided via the
+:option:`--message=NOTE` option or after the list of jobids. The special
+argument *"--"* forces the end of jobid processing and can be used to separate
+the exception message from the jobids when necessary.
 
 .. option:: -m, --message=NOTE
 
@@ -195,9 +195,9 @@ When there are no more waitable jobs, it exits with a code of two.  The exit cod
 of two can be used to determine when no more jobs are waitable when using
 ``flux job wait`` in a loop.
 
-``flux job wait --all`` loops through all the waitable jobs as they complete,
-printing their jobids.  If all jobs are successful, it exits with a code of zero.
-If any jobs have failed, it exits with a code of one.
+:option:`flux job wait --all` loops through all the waitable jobs as they
+complete, printing their jobids.  If all jobs are successful, it exits with a
+code of zero.  If any jobs have failed, it exits with a code of one.
 
 .. option:: -a, --all
 
@@ -239,7 +239,7 @@ EXCEPTION
 
 An exception may raised on one or more jobids with ``flux job raise``.
 An optional message included with the job exception may be provided via
-the *-m, --message=NOTE* option or after the list of jobids. The special
+the :option:`--message=NOTE` option or after the list of jobids. The special
 argument *"--"* forces the end of jobid processing and can be used to
 separate the exception message from the jobids when necessary.
 

@@ -32,7 +32,7 @@ of a single input list, ``{}`` will work as the substitution string, e.g.::
     bulksubmit: submit echo 3
     bulksubmit: submit echo 4
 
-With ``--dry-run`` ``bulksubmit`` will print the args and command which
+With :option:`--dry-run` ``bulksubmit`` will print the args and command which
 would have been submitted, but will not perform any job submission.
 
 The ``bulksubmit`` command can also take input lists on the command line.
@@ -91,18 +91,18 @@ These include:
  - ``{.//}`` returns the dirname of the input string
  - ``{seq}`` returns the input sequence number (0 origin)
  - ``{seq1}`` returns the input sequence number (1 origin)
- - ``{cc}`` returns the current ``id`` from use of ``--cc`` or ``--bcc``.
-   Note that replacement of ``{cc}`` is done in a second pass, since the
-   ``--cc`` option argument may itself be replaced in the first substitution
-   pass. If ``--cc/bcc`` were not used, then ``{cc}`` is replaced with an
-   empty string. This is the only substitution supported with
-   :man1:`flux-submit`.
+ - ``{cc}`` returns the current ``id`` from use of :option:`--cc` or
+   :option:`--bcc`.  Note that replacement of ``{cc}`` is done in a second
+   pass, since the :option:`--cc` option argument may itself be replaced in
+   the first substitution pass. If :option:`--cc`/:option:`--bcc` were not
+   used, then ``{cc}`` is replaced with an empty string. This is the only
+   substitution supported with :man1:`flux-submit`.
 
 Note that besides ``{seq}``, ``{seq1}``, and ``{cc}`` these attributes
 can also take the input index, e.g. ``{0.%}`` or ``{1.//}``, when multiple
 inputs are used.
 
-Additional attributes may be defined with the ``--define`` option, e.g.::
+Additional attributes may be defined with the :option:`--define` option, e.g.::
 
     $ flux bulksubmit --dry-run --define=p2='2**int(x)' -n {.p2} hostname \
        ::: $(seq 0 4)

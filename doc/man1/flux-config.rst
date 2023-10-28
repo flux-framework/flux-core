@@ -67,8 +67,8 @@ GET SUBCOMMAND OPTIONS
 
 .. option:: -q, --quiet
 
-   Suppress printing of errors if *NAME* is not set and *--default* was not
-   specified.  This may be convenient to avoid needing to redirect standard
+   Suppress printing of errors if *NAME* is not set and :option:`--default` was
+   not specified.  This may be convenient to avoid needing to redirect standard
    error in a shell script.
 
 .. option:: -t, --type=TYPE

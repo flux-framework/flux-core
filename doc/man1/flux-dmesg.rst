@@ -40,18 +40,19 @@ OPTIONS
 
 .. option:: -H, --human
 
-   Display human-readable output. See also **--color** and **--delta**.
+   Display human-readable output. See also :option:`--color` and
+   :option:`--delta`.
 
 .. option:: -d, --delta
 
-   With **--human**, display the time delta between messages instead
+   With :option:`--human`, display the time delta between messages instead
    of a relative offset since the last absolute timestamp.
 
 .. option:: -L, --color[=WHEN]
 
    Colorize output. The optional argument *WHEN* can be *auto*, *never*,
    or *always*. If *WHEN* is omitted, it defaults to *always*. The default
-   value when the **--color** option is not used is *auto*.
+   value when the :option:`--color` option is not used is *auto*.
 
 EXAMPLES
 ========

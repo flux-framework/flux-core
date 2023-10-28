@@ -30,7 +30,7 @@ CONSTRAINTS
 
    The full specification of Constraint Query Syntax can be found in RFC 35.
 
-   Currently, **--requires** supports the following operators:
+   Currently, :option:`--requires` supports the following operators:
 
    properties
      Require the set of specified properties. Properties may be

@@ -28,19 +28,19 @@ COMMANDS
 
 **pub** [-r] [-l] [-s] [-p] *topic* [*payload*]
    Publish an event with optional payload. If payload is specified,
-   it is interpreted as raw if the *-r* option is used, otherwise it is
+   it is interpreted as raw if the :option:`-r` option is used, otherwise it is
    interpreted as JSON. If the payload spans multiple arguments,
    the arguments are concatenated with one space between them.
-   If *-s* is specified, wait for the event's sequence number to be
+   If :option:`-s` is specified, wait for the event's sequence number to be
    assigned before exiting.
-   If *-l* is specified, subscribe to the published event and wait for
-   it to be received before exiting. *-p* causes the privacy flag to
+   If :option:`-l` is specified, subscribe to the published event and wait for
+   it to be received before exiting. :option:`-p` causes the privacy flag to
    be set on the published event.
 
 **sub** *[-c N]* [*topic*] [*topic*\ …​]
    Subscribe to events matching the topic string(s) provided on the
-   command line. If none are specified, subscribe to all events.
-   If *-c N* is specified, print the first *N* events on stdout and exit;
+   command line. If none are specified, subscribe to all events.  If
+   :option:`-c N` is specified, print the first *N* events on stdout and exit;
    otherwise continue printing events until a signal is received.
    Events are displayed one per line: the topic string, followed by a tab,
    followed by the payload, if any.

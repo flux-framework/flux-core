@@ -28,11 +28,11 @@ OPTIONS
 .. option:: -a
 
    List jobs in all states, including inactive jobs.
-   This is shorthand for *--filter=pending,running,inactive*.
+   This is shorthand for :option:`--filter=pending,running,inactive`.
 
 .. option:: -A
 
-   List jobs of all users. This is shorthand for *--user=all*.
+   List jobs of all users. This is shorthand for :option:`--user=all`.
 
 .. option:: -n, --no-header
 
@@ -58,12 +58,12 @@ OPTIONS
 
    Limit output to jobs that have been active since a given timestamp.  In other
    words, jobs that are currently pending, currently running, or became inactive
-   since the given timestamp.  This option implies ``-a`` if no other
-   ``--filter`` options are specified.  If *WHEN* begins with ``-`` character,
-   then the remainder is considered to be a an offset in Flux standard duration
-   (RFC 23). Otherwise, any datetime expression accepted by the Python
-   `parsedatetime <https://github.com/bear/parsedatetime>`_ module is
-   accepted. Examples: "-6h", "-1d", "yesterday", "2021-06-21 6am",
+   since the given timestamp.  This option implies :option:`-a` if no other
+   :option:`--filter` options are specified.  If *WHEN* begins with ``-``
+   character, then the remainder is considered to be a an offset in Flux
+   standard duration (RFC 23). Otherwise, any datetime expression accepted by
+   the Python `parsedatetime <https://github.com/bear/parsedatetime>`_ module
+   is accepted. Examples: "-6h", "-1d", "yesterday", "2021-06-21 6am",
    "last Monday", etc. It is assumed to be an error if a timestamp in
    the future is supplied.
 
@@ -77,11 +77,12 @@ OPTIONS
 
    Specify a named output format *NAME* or a format string using Python's
    format syntax. See OUTPUT FORMAT below for field names. Named formats
-   may be listed via ``--format=help``.  An alternate default format can be set
-   via the FLUX_JOBS_FORMAT_DEFAULT environment variable.  Additional named
-   formats may be registered with ``flux jobs`` via configuration. See the
+   may be listed via :option:`--format=help`.  An alternate default format can
+   be set via the FLUX_JOBS_FORMAT_DEFAULT environment variable.  Additional
+   named formats may be registered with ``flux jobs`` via configuration. See the
    CONFIGURATION section for more details. A configuration snippet for an
-   existing named format may be generated with ``--format=get-config=NAME``.
+   existing named format may be generated with
+   :option:`--format=get-config=NAME`.
 
 .. option:: --json
 
@@ -89,7 +90,7 @@ OPTIONS
    matching jobs is contained in a ``jobs`` array in the emitted JSON
    object, unless a single job was selected by jobid on the command
    line, in which case a JSON object representing that job is emitted on
-   success. With ``-R, --recursive``, each job which is also an instance
+   success. With :option:`--recursive`, each job which is also an instance
    of Flux will will have any recursively listed jobs in a ``jobs`` array,
    and so on for each sub-child.
 
@@ -99,8 +100,8 @@ OPTIONS
    ``result`` keys, among others. A missing key should be considered
    unavailable.
 
-   The ``--json`` option is incompatible with ``--stats`` and
-   ``--stats-only``, and any ``--format`` is ignored.
+   The :option:`--json` option is incompatible with :option:`--stats` and
+   :option:`--stats-only`, and any :option:`--format` is ignored.
 
 .. option:: --color[=WHEN]
 
@@ -111,7 +112,7 @@ OPTIONS
 .. option:: --stats
 
    Output a summary of job statistics before the header.  By default
-   shows global statistics.  If ``--queue`` is specified, shows
+   shows global statistics.  If :option:`--queue` is specified, shows
    statistics for the specified queue.  May be useful in conjunction
    with utilities like :linux:man1:`watch`, e.g.::
 
@@ -121,54 +122,54 @@ OPTIONS
    running jobs, updated every 2 seconds.
 
    Note that all job failures, including canceled and timeout jobs,
-   are collectively counted as "failed" in ``--stats``.
+   are collectively counted as "failed" in :option:`--stats`.
 
 .. option:: --stats-only
 
    Output a summary of job statistics and exit.  By default shows
-   global statistics.  If ``--queue`` is specified, shows statistics
+   global statistics.  If :option:`--queue` is specified, shows statistics
    for the specified queue.  ``flux jobs`` will exit with non-zero
-   exit status with ``--stats-only`` if there are no active jobs. This
+   exit status with :option:`--stats-only` if there are no active jobs. This
    allows the following loop to work::
 
        $ while flux jobs --stats-only; do sleep 2; done
 
-   All options other than ``--queue`` are ignored when
-   ``--stats-only`` is used.
+   All options other than :option:`--queue` are ignored when
+   :option:`--stats-only` is used.
 
    Note that all job failures, including canceled and timeout jobs,
-   are collectively counted as "failed" in ``--stats-only``.
+   are collectively counted as "failed" in :option:`--stats-only`.
 
 .. option:: -R, --recursive
 
    List jobs recursively. Each child job which is also an instance of
    Flux is prefixed by its jobid "path" followed by the list of jobs,
-   recursively up to any defined ``-L, --level``. If the ``--stats``
+   recursively up to any defined :option:`--level`. If the :option:`--stats`
    option is used, then each child instance in the hierarchy is listed
    with its stats.
 
 .. option:: --recurse-all
 
    By default, jobs not owned by the user running ``flux jobs`` are
-   skipped with ``-R, --recursive``, because normally Flux instances
+   skipped with :option:`--recursive`, because normally Flux instances
    only permit the instance owner to connect. This option forces the
    command to attempt to recurse into the jobs of other users.  Implies
-   ``--recursive``.
+   :option:`--recursive`.
 
 .. option:: -L, --level=N
 
-   With ``-R, --recursive``, stop recursive job listing at level **N**.
+   With :option:`--recursive`, stop recursive job listing at level **N**.
    Levels are counted starting at 0, so ``flux jobs -R --level=0`` is
-   equivalent to ``flux jobs`` without ``-R``, and ``--level=1`` would
-   limit recursive job listing to child jobs of the current instance.
+   equivalent to ``flux jobs`` without :option:`-R`, and :option:`--level=1`
+   would limit recursive job listing to child jobs of the current instance.
 
 .. option:: --threads=N
 
-   When ``flux jobs`` recursively queries job lists (with ``--recursive``)
+   When ``flux jobs`` recursively queries job lists (with :option:`--recursive`)
    or fetches info for jobs that are also instances (see
    ``instance.*`` fields), a pool of threads is used to parallelize
    the required RPCs. Normally, the default number of ThreadPoolExecutor
-   threads is used, but by using the ``--threads``, a specific number
+   threads is used, but by using the :option:`--threads`, a specific number
    of threads can be chosen.
 
 
@@ -196,7 +197,7 @@ these are abbreviated as D, S, R, C, CD, F, CA, and TO respectively.
 OUTPUT FORMAT
 =============
 
-The *--format* option can be used to specify an output format to
+The :option:`--format` option can be used to specify an output format to
 flux-jobs(1) using Python's string format syntax. For example, the
 following is the format used for the default format:
 
@@ -517,7 +518,7 @@ key per format pointing to a table or dictionary with the keys:
 
 **description**
    (optional) A short description of the named format, displayed with
-   ``flux jobs --format=help``
+   :option:`flux jobs --format=help`
 
 If a format name is specified in more than one config file, then the last
 one loaded is used. Due to the order that ``flux-jobs`` loads config files,
@@ -539,7 +540,7 @@ Example::
   """
 
 It may be helpful to start with an existing named format by using the
-``--format=get-config=NAME`` option, e.g.::
+:option:`--format=get-config=NAME` option, e.g.::
 
   $ flux jobs --format=get-config=default >> ~/.config/flux/flux-jobs.toml
 
@@ -558,7 +559,7 @@ jobs of the current user.  It is equivalent to:
     $ flux jobs --filter=pending,running
 
 To list all pending, running, and inactive jobs, of the current user,
-you can use *--filter* option or the *-a* option:
+you can use :option:`--filter` option or the :option:`-a` option:
 
 ::
 
@@ -568,7 +569,7 @@ you can use *--filter* option or the *-a* option:
 
     $ flux jobs --filter=pending,running,inactive
 
-To alter which user's jobs are listed, specify the user with *--user*:
+To alter which user's jobs are listed, specify the user with :option:`--user`:
 
 ::
 
@@ -582,7 +583,7 @@ will list the jobs that have failed or were canceled:
 
     $ flux jobs --filter=failed,canceled
 
-The *--format* option can be used to alter the output format or output
+The :option:`--format` option can be used to alter the output format or output
 additional information.  For example, the following would output all
 jobids for the user in decimal form, and output any annotations the
 scheduler attached to each job:

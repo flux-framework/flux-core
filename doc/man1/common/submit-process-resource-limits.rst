@@ -4,7 +4,7 @@ PROCESS RESOURCE LIMITS
 By default these commands propagate some common resource limits (as described
 in :linux:man2:`getrlimit`) to the job by setting the ``rlimit`` job shell
 option in jobspec.  The set of resource limits propagated can be controlled
-via the ``--rlimit=RULE`` option:
+via the :option:`--rlimit=RULE` option:
 
 .. option:: --rlimit=RULE
 
@@ -12,7 +12,7 @@ via the ``--rlimit=RULE`` option:
     are applied in the order in which they are used on the command line.
     This option may be used multiple times.
 
-The ``--rlimit`` rules work similar to the ``--env`` option rules:
+The :option:`--rlimit` rules work similar to the :option:`--env` option rules:
 
  * If a rule begins with ``-``, then the rest of the rule is a name or
    :linux:man7:`glob` pattern which removes matching resource limits from
@@ -37,13 +37,13 @@ The ``--rlimit`` rules work similar to the ``--env`` option rules:
    that are propagated by default).
 
 We start with a default list of resource limits to propagate,
-then applies all rules specified via ``--rlimit`` on the command line.
+then applies all rules specified via :option:`--rlimit` on the command line.
 Therefore, to propagate only one limit, ``-*`` should first be used to
-start with an empty set, e.g. ``--rlimit=-*,core`` will only propagate the
-``core`` resource limit.
+start with an empty set, e.g. :option:`--rlimit=-*,core` will only propagate
+the ``core`` resource limit.
 
 The set of resource limits propagated by default includes all those except
 ``memlock``, ``ofile``, ``msgqueue``, ``nice``, ``rtprio``, ``rttime``,
 and ``sigpending``. To propagate all possible resource limits, use
-``--rlimit=*``.
+:option:`--rlimit=*`.
 

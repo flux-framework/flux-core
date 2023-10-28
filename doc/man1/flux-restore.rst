@@ -22,10 +22,10 @@ The format of the archive may be any of the formats supported by
 :linux:man3:`libarchive` and is determined on the fly based on the archive
 content.
 
-The snapshot may be restored to a KVS key if *--key=NAME* is used and the
-KVS service is running, or as a checkpoint in the content backing store
-if *--checkpoint* is used, without the KVS running.  One of those two options
-is required.
+The snapshot may be restored to a KVS key if :option:`--key=NAME` is used and
+the KVS service is running, or as a checkpoint in the content backing store
+if :option:`--checkpoint` is used, without the KVS running.  One of those two
+options is required.
 
 
 OPTIONS

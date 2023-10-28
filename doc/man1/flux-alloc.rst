@@ -24,15 +24,15 @@ enclosing Flux instance, and **flux-alloc** returns.
 If no *COMMAND* is specified, an interactive shell is spawned as the initial
 program, and the subinstance runs until the shell is exited.
 
-If the *--bg* option is specified, the subinstance runs without an initial
-program.  **flux-alloc** prints the jobid and returns as soon as the
+If the :option:`--bg` option is specified, the subinstance runs without an
+initial program.  **flux-alloc** prints the jobid and returns as soon as the
 subinstance is ready to accept jobs.  The subinstance runs until it exceeds
 its time limit, is canceled, or is shut down with :man1:`flux-shutdown`.
 
 Flux commands that are run from the subinstance (e.g. from the interactive
 shell) refer to the subinstance. For example, :man1:`flux-run` would launch
 work there.  A Flux command run from the subinstance can be forced to refer
-to the enclosing instance by supplying the :man1:`flux` --parent option.
+to the enclosing instance by supplying the :option:`flux --parent` option.
 
 Flux commands outside of the subinstance refer to their enclosing instance,
 often a system instance. :man1:`flux-proxy` establishes a connection to a

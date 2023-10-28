@@ -19,8 +19,8 @@ flux-start(1) launches a new Flux instance. By default, flux-start
 execs a single :man1:`flux-broker` directly, which will attempt to use
 PMI to fetch job information and bootstrap a flux instance.
 
-If a size is specified via *--test-size*, an instance of that size is to be
-started on the local host with flux-start as the parent.
+If a size is specified via :option:`--test-size`, an instance of that size is
+to be started on the local host with flux-start as the parent.
 
 A failure of the initial program (such as non-zero exit code)
 causes flux-start to exit with a non-zero exit code.
@@ -46,12 +46,12 @@ OPTIONS
 
    Run brokers with Caliper profiling enabled, using a Caliper
    configuration profile named *PROFILE*. Requires a version of Flux
-   built with --enable-caliper. Unless CALI_LOG_VERBOSITY is already
+   built with :option:`--enable-caliper`. Unless CALI_LOG_VERBOSITY is already
    set in the environment, it will default to 0 for all brokers.
 
 .. option:: --rundir=DIR
 
-   (only with *--test-size*) Set the directory that will be
+   (only with :option:`--test-size`) Set the directory that will be
    used as the rundir directory for the instance. If the directory
    does not exist then it will be created during instance startup.
    If a DIR is not set with this option, a unique temporary directory
@@ -90,18 +90,18 @@ OPTIONS
 
    Set the start mode.  If set to ``all``, all brokers are started immediately.
    If set to ``leader``, only the leader is started.  Hint: in ``leader`` mode,
-   use ``--setattr=broker.quorum=1`` to let the initial program start before
-   the other brokers are online.  Default: ``all``.
+   use :option:`--setattr=broker.quorum=1` to let the initial program start
+   before the other brokers are online.  Default: ``all``.
 
 .. option:: --test-rundir=PATH
 
    Set the directory to be used as the broker rundir instead of creating a
    temporary one.  The directory must exist, and is not cleaned up unless
-   ``--test-rundir-cleanup`` is also specified.
+   :option:`--test-rundir-cleanup` is also specified.
 
 .. option:: --test-rundir-cleanup
 
-   Recursively remove the directory specified with ``--test-rundir`` upon
+   Recursively remove the directory specified with :option:`--test-rundir` upon
    completion of flux-start.
 
 .. option:: --test-pmi-clique=MODE
@@ -123,10 +123,10 @@ OPTIONS
 
 .. option:: --sysconfig
 
-   Run the broker with ``--config-path`` set to the default system instance
-   configuration directory.  This option is unnecessary if ``--recovery``
-   is specified without its optional argument.  It may be required if
-   recovering a dump from a system instance.
+   Run the broker with :option:`--config-path` set to the default system
+   instance configuration directory.  This option is unnecessary if
+   :option:`--recovery` is specified without its optional argument.  It may
+   be required if recovering a dump from a system instance.
 
 VERBOSITY LEVELS
 ================

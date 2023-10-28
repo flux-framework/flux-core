@@ -27,15 +27,15 @@ The flux-pstree(1) command supports custom labels for jobs, including
 separately labeling parent jobs, using the same format string syntax
 supported by :man1:`flux-jobs`.
 
-The command lists actively running jobs by default, but a ``-a, --all``
+The command lists actively running jobs by default, but a :option:`--all`
 option lists all jobs in all states for the current user. In the case
-that ``-a`` is used, the job labels will automatically be amended to
+that :option:`-all` is used, the job labels will automatically be amended to
 include the job status (i.e. ``{name}:{status_abbrev}``), though this
 can be overridden on the command line.
 
 The flux-pstree(1) command additionally supports listing extended
-job information before the tree display with the ``-x, --extended``,
-``-d, --details=NAME``, or ``--detail-format=FORMAT``  options, e.g.
+job information before the tree display with the :option:`--extended`,
+:option:`--details=NAME`, or :option:`--detail-format=FORMAT`  options, e.g.
 
 ::
 
@@ -48,7 +48,7 @@ job information before the tree display with the ``-x, --extended``,
      ƒe1j54K user1     R      1      1   8.539s └── flux
     ƒ2MYrwzf user1     R      1      1   4.736s     └── sleep
 
-Several detail formats are available via the ``-d, --details=NAME``
+Several detail formats are available via the :option:`-d, --details=NAME`
 option, including progress, resources, and stats. For example, the
 ``progress`` display attempts to show the overall progress and
 utilization of all Flux instances in a hierarchy by displaying the
@@ -72,16 +72,16 @@ resources divided by total available resources):
 
 By default, flux-pstree(1) truncates lines that exceed the current
 value of the ``COLUMNS`` environment variable or the terminal width
-if ``COLUMNS`` is not set. To disable truncation, use the ``-l, --long``
+if ``COLUMNS`` is not set. To disable truncation, use the :option:`--long`
 option.
 
 
 By default, the enclosing Flux instance, or root of the tree, is included
 in output, unless extended details are displayed as when any of the
-``-x, --extended``, ``-d, --details=NAME`` or ``--detail-format=FORMAT``
-options are used, or if one or more jobids are directly targeted with
-a ``JOBID`` argument. This behavior can be changed via the
-``--skip-root=[yes|no]`` option.
+:option:`--extended`, :option:`--details=NAME` or
+:option:`--detail-format=FORMAT` options are used, or if one or more jobids
+are directly targeted with a ``JOBID`` argument. This behavior can be changed
+via the :option:`--skip-root=[yes|no]` option.
 
 
 OPTIONS
@@ -90,7 +90,7 @@ OPTIONS
 .. option:: -a, --all
 
    Include jobs in all states, including inactive jobs.
-   This is shorthand for *--filter=pending,running,inactive*.
+   This is shorthand for :option:`--filter=pending,running,inactive`.
 
 .. option:: -c, --count=N
 
@@ -117,12 +117,12 @@ OPTIONS
 .. option:: -x, --extended
 
    Print extended details before tree output. This is the same as
-   ``--details=default``.
+   :option:`--details=default`.
 
 .. option:: -d, --detail=NAME
 
    Select a named extended details format. The list of supported names
-   can be seen in ``flux pstree --help`` output.
+   can be seen in :option:`flux pstree --help` output.
 
 .. option:: -n, --no-header
 

@@ -50,49 +50,49 @@ COMMANDS
 **list** [-n] [-o FORMAT] [-s STATE,...] [-i TARGETS]
    Show scheduler view of resources.
 
-   With *-s,--states=STATE,...*, the set of resource states is restricted
-   to a list of provided states. Valid states include "up", "down",
+   With :option:`-s,--states=STATE,...`, the set of resource states is
+   restricted to a list of provided states. Valid states include "up", "down",
    "allocated", "free", and "all". Note that the scheduler represents
    offline, excluded, and drained resources as "down" due to the simplified
    interface with the resource service defined by RFC 27.
 
-   With *-i, --include=TARGETS*, the results are filtered to only include
-   resources matching **TARGETS**, which may be specified either as an idset
-   of broker ranks or list of hosts in hostlist form. It is not an error to
-   specify ranks or hosts which do not exist, the result will be filtered
+   With :option:`-i, --include=TARGETS`, the results are filtered to only
+   include resources matching **TARGETS**, which may be specified either as an
+   idset of broker ranks or list of hosts in hostlist form. It is not an error
+   to specify ranks or hosts which do not exist, the result will be filtered
    to include only those ranks or hosts that are present in *TARGETS*.
 
-   The *-o,--format=FORMAT* option may be used to customize the output
+   The :option:`-o,--format=FORMAT` option may be used to customize the output
    format (See OUTPUT FORMAT section below).
 
-   The *-n,--no-header* option suppresses header from output,
+   The :option:`-n,--no-header` option suppresses header from output,
 
 **info** [-s STATE,...] [-i TARGETS]
    Show a brief, single line summary of scheduler view of resources.
 
-   With *-s, --states=STATE,...*, limit the output to specified resource
-   states as with ``flux resource list``. By default, the *STATE* reported
-   by ``flux resource info`` is "all".
+   With :option:`-s, --states=STATE,...`, limit the output to specified
+   resource states as with ``flux resource list``. By default, the *STATE*
+   reported by ``flux resource info`` is "all".
 
-   With *-i, --include=TARGETS*, the results are filtered to only include
-   resources matching **TARGETS**, which may be specified either as an idset
-   of broker ranks or list of hosts in hostlist form. It is not an error to
-   specify ranks or hosts which do not exist, the result will be filtered
-   to include only those ranks or hosts that are present in *TARGETS*.
+   With :option:`-i, --include=TARGETS`, the results are filtered to only
+   include resources matching **TARGETS**, which may be specified either as
+   an idset of broker ranks or list of hosts in hostlist form. It is not an
+   error to specify ranks or hosts which do not exist, the result will be
+   filtered to include only those ranks or hosts that are present in *TARGETS*.
 
 **R** [-s STATE,..] [-i TARGETS]
    Emit an RFC 20 Resource Set on stdout.
 
-   With *-s,--states=STATE,...*, the set of resource states is restricted
-   to a list of provided states. Valid states include "up", "down",
+   With :option:`-s,--states=STATE,...`, the set of resource states is
+   restricted to a list of provided states. Valid states include "up", "down",
    "allocated", "free", and "all". Note that the scheduler represents
    offline, excluded, and drained resources as "down" due to the simplified
    interface with the resource service defined by RFC 27.
 
-   With *-i, --include=TARGETS*, the results are filtered to only include
-   resources matching **TARGETS**, which may be specified either as an idset
-   of broker ranks or list of hosts in hostlist form. It is not an error to
-   specify ranks or hosts which do not exist, the result will be filtered
+   With :option:`-i, --include=TARGETS`, the results are filtered to only
+   include resources matching **TARGETS**, which may be specified either as an
+   idset of broker ranks or list of hosts in hostlist form. It is not an error
+   to specify ranks or hosts which do not exist, the result will be filtered
    to include only those ranks or hosts that are present in *TARGETS*.
 
 **status**  [-n] [-o FORMAT] [-s STATE,...] [-i TARGETS] [--skip-empty]
@@ -106,47 +106,49 @@ COMMANDS
    (excluded by configuration), "draining" (drained but still allocated),
    or "drained".
 
-   With *-s,--states=STATE,...*, the set of resource states is restricted
-   to a list of provided states or offline/online status. With "online" or
-   "offline", only nodes with the provided status will be displayed. Other
-   valid states include "avail", "exclude", "draining", "drained", and "all".
-   The special "drain" state is shorthand for "drained,draining".
+   With :option:`-s,--states=STATE,...`, the set of resource states is
+   restricted to a list of provided states or offline/online status. With
+   "online" or "offline", only nodes with the provided status will be
+   displayed. Other valid states include "avail", "exclude", "draining",
+   "drained", and "all".  The special "drain" state is shorthand for
+   "drained,draining".
 
-   With *-i, --include=TARGETS*, the results are filtered to only include
-   resources matching **TARGETS**, which may be specified either as an idset
-   of broker ranks or list of hosts in hostlist form. It is not an error to
-   specify ranks or hosts which do not exist, the result will be filtered
-   to include only those ranks or hosts that are present in *TARGETS*.
+   With :option:`-i, --include=TARGETS`, the results are filtered to only
+   include resources matching **TARGETS**, which may be specified either as
+   an idset of broker ranks or list of hosts in hostlist form. It is not an
+   error to specify ranks or hosts which do not exist, the result will be
+   filtered to include only those ranks or hosts that are present in *TARGETS*.
 
-   The *-o,--format=FORMAT* option customizes output formatting (See the
-   OUTPUT FORMAT section below for details).
+   The :option:`-o,--format=FORMAT` option customizes output formatting (See
+   the OUTPUT FORMAT section below for details).
 
-   With *-n,--no-header* the output header is suppressed.
+   With :option:`-n,--no-header` the output header is suppressed.
 
    Normally, ``flux resource status`` skips lines with no resources,
-   unless the ``-s, --states`` option is used. Suppression of empty lines
-   can may be forced with the ``--skip-empty`` option.
+   unless the :option:`-s, --states` option is used. Suppression of empty lines
+   can may be forced with the :option:`--skip-empty` option.
 
 **drain** [-n] [-o FORMAT] [-i TARGETS] [-f] [-u] [targets] [reason ...]
    If specified without arguments, list drained nodes. In this mode,
-   *-n,--no-header* suppresses header from output and *-o,--format=FORMAT*
-   customizes output formatting (see below).  The *targets* argument is an
-   IDSET or HOSTLIST specifying nodes to drain.  Any remaining arguments
-   are assumed to be a reason to be recorded with the drain event.
+   :option:`-n,--no-header` suppresses header from output and
+   :option:`-o,--format=FORMAT` customizes output formatting (see below).
+   The *targets* argument is an IDSET or HOSTLIST specifying nodes to drain.
+   Any remaining arguments are assumed to be a reason to be recorded with the
+   drain event.
 
-   With *-i, --include=TARGETS*, **drain** output is filtered to only include
-   resources matching **TARGETS**, which may be specified either as an idset
-   of broker ranks or list of hosts in hostlist form. It is not an error to
-   specify ranks or hosts which do not exist, the result will be filtered
+   With :option:`-i, --include=TARGETS`, **drain** output is filtered to only
+   include resources matching **TARGETS**, which may be specified either as an
+   idset of broker ranks or list of hosts in hostlist form. It is not an error
+   to specify ranks or hosts which do not exist, the result will be filtered
    to include only those ranks or hosts that are present in *TARGETS*.
 
    By default, **flux resource drain** will fail if any of the *targets*
    are already drained. To change this behavior, use either of the
-   *-f, --force* or *-u, --update* options. With *--force*, the *reason* for
-   all existing drained targets is overwritten. If *--force* is specified
-   twice, then the timestamp is also overwritten. With *--update*,
-   only those ranks that are not already drained or do not have a *reason* set
-   have their *reason* updated.
+   :option:`-f, --force` or :option:`-u, --update` options. With
+   :option:`--force`, the *reason* for all existing drained targets is
+   overwritten. If :option:`--force` is specified twice, then the timestamp is
+   also overwritten. With :option:`--update`, only those ranks that are not
+   already drained or do not have a *reason* set have their *reason* updated.
 
    Resources cannot be both excluded and drained, so **flux resource drain**
    will also fail if any *targets* are currently excluded by configuration.
@@ -161,23 +163,24 @@ COMMANDS
 
 **reload** [-x] [-f] PATH
    Reload the resource inventory from a file in RFC 20 format, or if the
-   *-x,--xml* option, a directory of hwloc ``<rank>.xml`` files.  If
-   *-f,--force*, resources may contain invalid ranks.  This command is
+   :option:`-x,--xml` option, a directory of hwloc ``<rank>.xml`` files.  If
+   :option:`-f,--force`, resources may contain invalid ranks.  This command is
    primarily used in test.
 
 
 OUTPUT FORMAT
 =============
 
-The *--format* option can be used to specify an output format using Python's
-string format syntax or a defined format by name. For a list of built-in and
-configured formats use ``-o help``.  An alternate default format can be set via
-the FLUX_RESOURCE_STATUS_FORMAT_DEFAULT, FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT, and
-FLUX_RESOURCE_LIST_FORMAT_DEFAULT environment variables (for ``flux resource
-status``, ``flux resource drain``, and ``flux resource list`` respectively).  A
-configuration snippet for an existing named format may be generated with
-``--format=get-config=NAME``.  See :man1:`flux-jobs` *OUTPUT FORMAT* section for
-a detailed description of this syntax.
+The :option:`--format` option can be used to specify an output format using
+Python's string format syntax or a defined format by name. For a list of
+built-in and configured formats use :option:`-o help`.  An alternate default
+format can be set via the FLUX_RESOURCE_STATUS_FORMAT_DEFAULT,
+FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT, and FLUX_RESOURCE_LIST_FORMAT_DEFAULT
+environment variables (for ``flux resource status``, ``flux resource drain``,
+and ``flux resource list`` respectively).  A configuration snippet for an
+existing named format may be generated with :option:`--format=get-config=NAME`.
+See :man1:`flux-jobs` *OUTPUT FORMAT* section for a detailed description of
+this syntax.
 
 Resources are combined into a single line of output when possible depending on
 the supplied output format.  Resource counts are not included in the

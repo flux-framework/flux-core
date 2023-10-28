@@ -97,7 +97,7 @@ pid:PID
   then the scheme reads ``FLUX_URI`` from the broker's initial program or
   another child process since ``FLUX_URI`` in the broker's environment
   would refer to *its* parent (or may not be set at all in the case of a
-  test instance started with ``flux start --test-size=N``).
+  test instance started with :option:`flux start --test-size=N`).
 
 slurm:JOBID
   This scheme makes a best-effort to resolve the URI of a Flux instance

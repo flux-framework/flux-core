@@ -25,13 +25,14 @@ COMMANDS
    the new module has entered the running state (see LIST OUTPUT below).
 
 **remove** [--force] *name*
-   Remove module *name*.  If *-f, --force* is used, then do not fail if
-   module *name* is not loaded.
+   Remove module *name*.  If :option:`-f, --force` is used, then do not fail
+   if module *name* is not loaded.
 
 **reload** [--force] *name* [*module-arguments* …​]
    Reload module *name*. This is equivalent to running *flux module remove*
    followed by *flux module load*. It is a fatal error if module *name* is
-   not loaded during removal unless the ``-f, --force`` option is specified.
+   not loaded during removal unless the :option:`-f, --force` option is
+   specified.
 
 **list** [*service*]
    List loaded :man1:`flux-broker` modules.
