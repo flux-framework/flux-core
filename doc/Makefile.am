@@ -33,7 +33,6 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-queue.1 \
 	man1/flux-cron.1 \
 	man1/flux-event.1 \
-	man1/flux-mini.1 \
 	man1/flux-submit.1 \
 	man1/flux-run.1 \
 	man1/flux-bulksubmit.1 \
