@@ -13,6 +13,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux jobs
+
 flux-jobs(1) is used to list jobs run under Flux. By default only
 pending and running jobs for the current user are listed. Additional
 jobs and information can be listed using options listed below.

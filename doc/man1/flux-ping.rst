@@ -12,6 +12,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux ping
+
 flux-ping(1) measures round-trip latency to a Flux service implementing
 the "ping" method in a manner analogous to ping(8). The ping response is
 essentially an echo of the request, with the route taken to the service

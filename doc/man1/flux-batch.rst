@@ -17,6 +17,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux batch
+
 **flux-batch** submits *SCRIPT* to run as the initial program of a Flux
 subinstance.  *SCRIPT* refers to a file that is copied at the time of
 submission.  Once resources are allocated, *SCRIPT* executes on the first

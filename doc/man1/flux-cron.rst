@@ -51,6 +51,8 @@ COMMANDS
    seconds, *m* for minutes, *h* for hours and *d* for days.
    Options:
 
+.. program:: flux cron interval
+
 .. option:: -n, --name=STRING
 
       Set a name for this cron entry to *STRING*.
@@ -83,6 +85,8 @@ COMMANDS
 
 **event** [OPTIONS] *topic* *command*
    Create a cron entry to execute *command* after every event matching *topic*.
+
+.. program:: flux cron event
 
 .. option:: -n, --name=STRING
 
@@ -131,12 +135,16 @@ COMMANDS
    (0-23), *day of month* (1-31), *month* (0-11), and *day of week* (0-6).
    Everything after the day of week is considered a command to be run.
 
+.. program:: flux cron tab
+
 .. option:: -o, options=LIST
 
       Set comma separated EXTRA OPTIONS for all cron entries.
 
 **at** [OPTIONS] *string* *command*
    Run *command* at specific date and time described by *string*
+
+.. program:: flux cron at
 
 .. option:: -o, --options=LIST
 
@@ -176,6 +184,8 @@ COMMANDS
 
 EXTRA OPTIONS
 =============
+
+.. program:: flux cron tab
 
 For ``flux-cron`` commands allowing ``--options``, the following EXTRA OPTIONS
 are supported:

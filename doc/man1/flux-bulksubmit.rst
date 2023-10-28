@@ -15,6 +15,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux bulksubmit
+
 :man1:`flux-bulksubmit` allows rapid bulk submission of jobs using
 an interface similar to GNU parallel or ``xargs``. The command takes
 inputs on stdin or the command line (separated by ``:::``), and submits

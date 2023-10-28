@@ -17,6 +17,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux pgrep
+
 *flux-pgrep* lists jobids that match a supplied expression. The
 expression may contain a pattern which matches the job name, or
 a range of jobids in the form ``jobid1..jobid2``. If both a pattern

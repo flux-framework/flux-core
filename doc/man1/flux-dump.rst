@@ -12,6 +12,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program flux dump
+
 The ``flux-dump`` command writes a KVS snapshot to a portable archive format,
 usually read by :man1:`flux-restore`.
 

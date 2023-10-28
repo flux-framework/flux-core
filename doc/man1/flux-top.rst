@@ -15,6 +15,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux top
+
 The ``flux-top`` command provides a dynamic view of Flux instance status
 and running jobs.  *TARGET*, if specified, selects a Flux instance other
 than the default, and may be either a native Flux URI or a high level URI,

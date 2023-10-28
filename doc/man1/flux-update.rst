@@ -12,6 +12,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux update
+
 flux-update(1) requests an update of one or more attributes for an active
 (pending or running) job. Updates are permitted and validated by the job
 manager before being applied to the job.

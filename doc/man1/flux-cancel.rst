@@ -14,6 +14,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux cancel
+
 flux-cancel(1) cancels one or more jobs by raising a job exception of
 type=cancel. An optional message included with the cancel exception may be
 provided via the *-m, --message=NOTE* option. Canceled jobs are immediately

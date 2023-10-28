@@ -15,6 +15,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux run
+
 flux-run(1) submits a job to run interactively under Flux, blocking until
 the job has completed.  The job consists of *N* copies of COMMAND launched
 together as a parallel job.

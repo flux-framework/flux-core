@@ -44,6 +44,8 @@ flux-job(1) performs various job related housekeeping functions.
 ATTACH
 ======
 
+.. program:: flux job attach
+
 A job can be interactively attached to via ``flux job attach``.  This is
 typically used to watch stdout/stderr while a job is running or after it has
 completed.  It can also be used to feed stdin to a job.
@@ -108,6 +110,8 @@ in the environment.
 CANCEL
 ======
 
+.. program:: flux job cancel
+
 One or more jobs by may be canceled with ``flux job cancel``.  An optional
 message included with the cancel exception may be provided via the *-m,
 --message=NOTE* option or after the list of jobids. The special argument
@@ -118,6 +122,8 @@ exception message from the jobids when necessary.
 
    Set the optional exception note. It is an error to specify the message
    via this option and on the command line after the jobid list.
+
+.. program:: flux job cancelall
 
 Jobs may be canceled in bulk with ``flux job cancelall``.  Target jobs are
 selected with:
@@ -141,6 +147,8 @@ selected with:
 STATUS
 ======
 
+.. program:: flux job status
+
 Wait for job(s) to complete and exit with the largest exit code.
 
 .. option:: -e, --exception-exit-code=N
@@ -158,6 +166,8 @@ Wait for job(s) to complete and exit with the largest exit code.
 
 WAIT
 ====
+
+.. program:: flux job wait
 
 ``flux job wait`` behaves like the UNIX :linux:man2:`wait` system call,
 for jobs submitted with the ``waitable`` flag.  Compared to other methods
@@ -201,11 +211,15 @@ If any jobs have failed, it exits with a code of one.
 SIGNAL
 ======
 
+.. program:: flux job kill
+
 One or more running jobs may be signaled by jobid with ``flux job kill``.
 
 .. option:: -s, --signal=SIG
 
    Send signal SIG (default: SIGTERM).
+
+.. program:: flux job killall
 
 Running jobs may be signaled in bulk with ``flux job killall``.  In addition
 to the option above, target jobs are selected with:
@@ -220,6 +234,8 @@ to the option above, target jobs are selected with:
 
 EXCEPTION
 =========
+
+.. program:: flux job raise
 
 An exception may raised on one or more jobids with ``flux job raise``.
 An optional message included with the job exception may be provided via
@@ -244,6 +260,8 @@ separate the exception message from the jobids when necessary.
 Exceptions may be raised in bulk with ``flux job raiseall``, which requires a
 type (positional argument) and accepts the following options:
 
+.. program:: flux job raiseall
+
 .. option:: -s, --severity=N
 
    Set exception severity.  The severity may range from 0=fatal to
@@ -263,6 +281,8 @@ type (positional argument) and accepts the following options:
 
 TASKMAP
 =======
+
+.. program:: flux job taskmap
 
 The mapping between job task ranks to node IDs is encoded in the RFC 34
 Flux Task Map format and posted to the job's ``shell.start`` event in the
@@ -303,6 +323,8 @@ One one of the above options may be used per call.
 TIMELEFT
 ========
 
+.. program:: flux job timeleft
+
 The ``flux job timeleft`` utility reports the number of whole seconds left
 in the current or specified job time limit. If the job has expired or is
 complete, then this command reports ``0``. If the job does not have a time
@@ -320,6 +342,8 @@ Options:
 
 PURGE
 =====
+
+.. program:: flux job purge
 
 Inactive job data may be purged from the Flux instance with ``flux job purge``.
 Specific job ids may be specified for purging.  If no job ids are

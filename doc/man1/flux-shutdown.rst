@@ -12,6 +12,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux shutdown
+
 The ``flux-shutdown`` command causes the default Flux instance, or the
 instance specified by *TARGET*, to exit RUN state and begin the process
 of shutting down.  *TARGET* may be either a native Flux URI or a high level

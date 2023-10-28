@@ -12,6 +12,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux startlog
+
 List the Flux instance's start and stop times, by interpreting the contents
 of the KVS ``admin.eventlog``.
 

@@ -14,6 +14,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux pstree
+
 flux-pstree(1) displays a tree of running jobs by job name, similar to
 what the :linux:man1:`pstree` command does for system processes.
 

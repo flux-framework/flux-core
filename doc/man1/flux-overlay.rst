@@ -21,6 +21,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux overlay status
+
 ``flux-overlay status`` reports the current status of the tree based
 overlay network.  The possible status values are:
 

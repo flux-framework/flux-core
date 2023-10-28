@@ -15,6 +15,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux proxy
+
 **flux proxy** connects to the Flux instance identified by *TARGET*,
 then spawns a shell with FLUX_URI pointing to a local:// socket
 managed by the proxy program. As long as the shell is running,

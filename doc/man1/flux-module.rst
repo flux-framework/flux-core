@@ -12,6 +12,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux module stats
+
 flux-module(1) manages dynamically loadable :man1:`flux-broker` modules.
 
 
@@ -79,6 +81,8 @@ STATS OPTIONS
 DEBUG OPTIONS
 =============
 
+.. program:: flux module debug
+
 .. option:: -c, --clear
 
    Set debug flags to zero.
@@ -102,6 +106,8 @@ DEBUG OPTIONS
 
 LIST OUTPUT
 ===========
+
+.. program:: flux module list
 
 The *list* command displays one line for each unique (as determined by
 SHA1 hash) loaded module.

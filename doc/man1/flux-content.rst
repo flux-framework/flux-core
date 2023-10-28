@@ -17,6 +17,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux content load
+
 Each Flux instance implements an append-only, content addressable
 storage service, which stores blobs of arbitrary content under
 message digest keys termed "blobrefs".

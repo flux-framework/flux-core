@@ -13,6 +13,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux start
+
 flux-start(1) launches a new Flux instance. By default, flux-start
 execs a single :man1:`flux-broker` directly, which will attempt to use
 PMI to fetch job information and bootstrap a flux instance.

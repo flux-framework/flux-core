@@ -11,6 +11,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux shell
+
 flux-shell(1), the Flux job shell, is the component of Flux which manages
 the startup and execution of user jobs. flux-shell(1) runs as the job user,
 reads the jobspec and assigned resource set R for the job from the KVS,

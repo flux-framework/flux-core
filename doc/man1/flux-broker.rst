@@ -11,6 +11,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux broker
+
 flux-broker(1) is a distributed message broker daemon that provides
 communications services within a Flux instance. It may be
 launched as a parallel program under Flux or other resource managers

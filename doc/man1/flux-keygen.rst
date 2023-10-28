@@ -12,6 +12,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux keygen
+
 flux-keygen(1) generates a long-term CURVE certificate used to secure
 the overlay network of a Flux system instance.
 

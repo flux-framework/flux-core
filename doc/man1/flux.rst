@@ -12,6 +12,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux
+
 Flux is a modular framework for resource management.
 
 flux(1) is a front end for Flux sub-commands.

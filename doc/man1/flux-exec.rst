@@ -10,6 +10,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux exec
+
 flux-exec(1) runs commands across one or more flux-broker ranks using
 the *broker.exec* service. The commands are executed as direct children
 of the broker, and the broker handles buffering stdout and stderr and

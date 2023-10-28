@@ -5,7 +5,6 @@
 flux-alloc(1)
 =============
 
-
 SYNOPSIS
 ========
 
@@ -13,6 +12,8 @@ SYNOPSIS
 
 DESCRIPTION
 ===========
+
+.. program:: flux alloc
 
 **flux-alloc** runs a Flux subinstance with *COMMAND* as the initial program.
 Once resources are allocated, *COMMAND* executes on the first node of the

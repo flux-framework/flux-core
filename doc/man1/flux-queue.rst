@@ -28,6 +28,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux queue
+
 The ``flux-queue`` command controls Flux job queues.
 
 Normally, Flux has a single anonymous queue, but when queues are

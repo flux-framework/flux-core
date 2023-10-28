@@ -11,6 +11,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux logger
+
 flux-logger(1) appends Flux log entries to the local Flux
 broker's circular buffer.
 

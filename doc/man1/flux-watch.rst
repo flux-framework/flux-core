@@ -13,6 +13,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux watch
+
 The flux-watch(1) command is used to monitor the output and state of one
 or more Flux jobs. The command works similarly to the :man1:`flux-submit`
 ``--watch`` option, but can be used to monitor even inactive jobs. For

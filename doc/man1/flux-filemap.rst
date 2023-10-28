@@ -18,6 +18,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux filemap
+
 ``flux-filemap`` uses :linux:man2:`mmap` to map files into the rank 0 broker
 *content cache*.  After mapping, the files may be extracted on any broker rank,
 taking advantage of scalability properties of the distributed cache to move the

@@ -20,6 +20,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux config get
+
 ``flux config reload`` tells :man1:`flux-broker` to reload its TOML
 configuration.  Further details of Flux configuration are described in
 :man5:`flux-config`, including some caveats on configuration updates.
