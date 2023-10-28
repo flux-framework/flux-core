@@ -1,8 +1,8 @@
 .. flux-help-section: jobs
 
-============
-flux-jobs(1)
-============
+=============
+flux-watch(1)
+=============
 
 
 SYNOPSIS
