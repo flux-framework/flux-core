@@ -45,11 +45,13 @@ These operations are only available to the Flux instance owner.
 OPTIONS
 =======
 
-**-b, --bypass-cache**
+.. option:: -b, --bypass-cache
+
    Bypass the in-memory cache, and directly access the backing store,
    if available (see below).
 
-**--chunksize**\ =\ *N*
+.. option:: --chunksize=N
+
    Split a blob into chunks of *N* bytes (store only).
 
 

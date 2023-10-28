@@ -64,10 +64,12 @@ included with Flux, see the URI SCHEMES and EXAMPLES sections below.
 OPTIONS
 =======
 
-**--remote**
+.. option:: --remote
+
    Return the *remote* (``ssh://``)  equivalent of the resolved URI.
 
-**--local**
+.. option:: --local
+
    Return the *local* (``local://``) equivalent of the resolved URI.
    Warning: the resulting URI may be invalid for the current system
    if the network host specified by an ``ssh`` URI is not the current

@@ -43,27 +43,34 @@ exits with exit code 128+signo.
 OPTIONS
 =======
 
-**-l, --label-io**
+.. option:: -l, --label-io
+
    Label lines of output with the source RANK.
 
-**-n, --noinput**
+.. option:: -n, --noinput
+
    Do not attempt to forward stdin. Send EOF to remote process stdin.
 
-**-d, --dir**\ *=DIR*
+.. option:: -d, --dir=DIR
+
    Set the working directory of remote *COMMANDS* to *DIR*. The default is to
    propagate the current working directory of flux-exec(1).
 
-**-r, --rank**\ *=NODESET*
+.. option:: -r, --rank=NODESET
+
    Target specific ranks in *NODESET*. Default is to target "all" ranks.
    See NODESET FORMAT below for more information.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    Run with more verbosity.
 
-**-q, --quiet**
+.. option:: -q, --quiet
+
    Suppress extraneous output (e.g. per-rank error exit status).
 
-**--with-imp**
+.. option:: --with-imp
+
    Prepend ``/path/to/flux-imp run`` to *COMMANDS*. This option is mostly
    meant for testing or as a convenience to execute a configured ``prolog``
    or ``epilog`` command under the IMP. Note: When this option is used,

@@ -51,26 +51,32 @@ COMMANDS
    seconds, *m* for minutes, *h* for hours and *d* for days.
    Options:
 
-   --name=\ *STRING*; -n *STRING*
+.. option:: -n, --name=STRING
+
       Set a name for this cron entry to *STRING*.
 
-   --after=\ *TIME*; -a *TIME*
+.. option:: -a, --after=TIME
+
       The first task will run after a delay of *TIME* instead of *interval*.
       After the first task the entry will continue to execute every *interval*.
 
-   --count=\ *N*; -c *N*
+.. option:: -c, --count=N
+
       The entry will be run a total of *N* times, then stopped.
 
-   --options=\ *LIST*; -o *LIST*
+.. option:: -o, --options=LIST
+
       The *--options* option allows a comma separated list of extra options to be
       passed to the flux-cron service. See EXTRA OPTIONS below.
 
-   --preserve-env; -E
+.. option:: -E, --preserve-env
+
       The *--preserve-env* option allows the current environment to be exported
       and used for the command being executed as part of the cron job. Normally,
       the broker environment is used.
 
-   --working-dir=\ *DIR*; -d *DIR*
+.. option:: -d, --working-dir=DIR
+
       The *--working-dir* option allows the working directory to be set for the command
       being executed as part of the cron job. Normally, the working directory of
       the broker is used.
@@ -78,33 +84,41 @@ COMMANDS
 **event** [OPTIONS] *topic* *command*
    Create a cron entry to execute *command* after every event matching *topic*.
 
-   --name=\ *STRING*; -n *STRING*
+.. option:: -n, --name=STRING
+
       Set a name for this cron entry to *STRING*.
 
-   --nth=\ *N*; -n *N*
+.. option:: -n, --nth=N
+
       If *--nth* is given then *command* will be run after each *N* events.
 
-   --count=\ *N*; -c *N*
+.. option:: -c, --count=N
+
       With *--count*, the entry is run *N* times then stopped.
 
-   --after=\ *N*; -a *N*
+.. option:: -a, --after=N
+
       Run the first task only after *N* matching events. Then run every event
       or *N* events with *--nth*.
 
-   --min-interval=\ *T*; -i *T*
+.. option:: -i, --min-interval=T
+
       Set the minimum interval at which two cron jobs for this event will be run.
       For example, with --min-interval of 1s, the cron job will be at most run
       every 1s, even if events are generated more quickly.
 
-   --options=\ *LIST*; -o *LIST*
+.. option:: -o, --options=LIST
+
       Set comma separated EXTRA OPTIONS for this cron entry.
 
-   --preserve-env; -E
+.. option:: -E, --preserve-env
+
       The *--preserve-env* option allows the current environment to be exported
       and used for the command being executed as part of the cron job. Normally,
       the broker environment is used.
 
-   --working-dir=\ *DIR*; -d *DIR*
+.. option:: -d, --working-dir=DIR
+
       The *--working-dir* option allows the working directory to be set for the command
       being executed as part of the cron job. Normally, the working directory of
       the broker is used.
@@ -117,43 +131,47 @@ COMMANDS
    (0-23), *day of month* (1-31), *month* (0-11), and *day of week* (0-6).
    Everything after the day of week is considered a command to be run.
 
-   --options=\ *LIST*; -o *LIST*
+.. option:: -o, options=LIST
+
       Set comma separated EXTRA OPTIONS for all cron entries.
 
 **at** [OPTIONS] *string* *command*
-Run *command* at specific date and time described by *string*
+   Run *command* at specific date and time described by *string*
 
---options=\ *LIST*; -o *LIST*
+.. option:: -o, --options=LIST
+
    Set comma separated EXTRA OPTIONS for all cron entries.
 
---preserve-env; -E
+.. option:: -E, --preserve-env
+
    The *--preserve-env* option allows the current environment to be exported
    and used for the command being executed as part of the cron job. Normally,
    the broker environment is used.
 
---working-dir=\ *DIR*; -d *DIR*
+.. option:: -d, --working-dir=DIR
+
    The *--working-dir* option allows the working directory to be set for the command
    being executed as part of the cron job. Normally, the working directory of
    the broker is used.
 
-   **list**
-      Display a list of current entries registered with the cron module and
-      their current state, last run time, etc.
+**list**
+   Display a list of current entries registered with the cron module and
+   their current state, last run time, etc.
 
-   **stop** *id*
-      Stop cron entry *id*. The entry will remain in the cron entry list until
-      deleted.
+**stop** *id*
+   Stop cron entry *id*. The entry will remain in the cron entry list until
+   deleted.
 
-   **start** *id*
-      Start a stopped cron entry *id*.
+**start** *id*
+   Start a stopped cron entry *id*.
 
-   **delete** [--kill] *id*
-      Purge cron entry *id* from the flux-cron entry list. If *--kill* is used,
-      kill any running task associated with entry *id*.
+**delete** [--kill] *id*
+   Purge cron entry *id* from the flux-cron entry list. If *--kill* is used,
+   kill any running task associated with entry *id*.
 
-   **dump** [--key=KEY] *id*
-      Dump all information for cron entry *id*. With *--key* print only the value
-      for key *KEY*. For a list of keys run *flux cron dump ID*.
+**dump** [--key=KEY] *id*
+   Dump all information for cron entry *id*. With *--key* print only the value
+   for key *KEY*. For a list of keys run *flux cron dump ID*.
 
 
 EXTRA OPTIONS
@@ -162,17 +180,21 @@ EXTRA OPTIONS
 For ``flux-cron`` commands allowing ``--options``, the following EXTRA OPTIONS
 are supported:
 
-timeout=\ *N*
+.. option:: -o timeout=N
+
    Set a timeout for tasks invoked for this cron entry to *N* seconds, where
    N can be a floating point number. Default is no timeout.
 
-rank=\ *R*
+.. option:: -o rank=R
+
    Set the rank on which to execute the cron command to *R*. Default is rank 0.
 
-task-history-count=\ *N*
+.. option:: -o task-history-count=N
+
    Keep history for the last *N* tasks invoked by this cron entry. Default is 1.
 
-stop-on-failure=\ *N*
+.. option:: -o stop-on-failure=N
+
    Automatically stop a cron entry if the failure count exceeds *N*. If *N* is
    zero (the default) then the cron entry will not be stopped on failure.
 

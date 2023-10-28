@@ -36,16 +36,20 @@ the broker command line, an interactive shell is launched.
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Summarize available options.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    Be annoyingly chatty.
 
-**-S, --setattr**\ =\ *ATTR=VAL*
+.. option:: -S, --setattr=ATTR=VAL
+
    Set initial value for broker attribute.
 
-**-c, --config-path=**\ =\ *PATH*
+.. option:: -c, --config-path=PATH
+
    Set the PATH to broker configuration. If PATH is a directory, then
    read all TOML files from that directory. If PATH is a file, then load
    configuration as JSON if the file extension is ``.json``, otherwise

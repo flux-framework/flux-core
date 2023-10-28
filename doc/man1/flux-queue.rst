@@ -78,35 +78,44 @@ list
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Summarize available options.
 
-**-q, --queue**\ =\ *NAME*
+.. option:: -q, --queue=NAME
+
    Select a queue by name.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    Be chatty.
 
-**--quiet**
+.. option:: --quiet
+
    Be taciturn.
 
-**-a, --all**
+.. option:: -a, --all
+
    Use with *enable*, *disable*, *stop*, or *start* subcommands to
    signify intent to affect all queues, when queues are configured but
    *--queue* is missing.
 
-**--nocheckpoint**
+.. option:: --nocheckpoint
+
    Use with *stop*, to not checkpoint that a queue has been stopped.
    This is often used when tearing down a flux instance, so that the a
    queue's start state is not assumed to be stopped on a restart.
 
-**--timeout** \ =\ *FSD*
+.. option:: --timeout=FSD
+
    Limit the time that ``drain`` or ``idle`` will block.
 
-**-n, --no-header**
+.. option:: -n, --no-header
+
    Do not output column headers in ``list`` output.
 
-**-o, --format** \ =\ *FORMAT*
+.. option:: -o, --format=FORMAT
+
    Specify output format in ``list`` using Python's string format syntax.
    See OUTPUT FORMAT below for field names.
 

@@ -32,21 +32,26 @@ use the *-n --dry-run* option.
 OPTIONS
 =======
 
-**-n, --dry-run**
+.. option:: -n, --dry-run
+
    Do not cancel any jobs, but print a message indicating how many jobs
    would have been canceled.
 
-**-m, --message=NOTE**
+.. option:: -m, --message=NOTE
+
    Set an optional exception note.
 
-**-u, --user=USER**
+.. option:: -u, --user=USER
+
    Set target user.  The instance owner may specify *all* for all users.
 
-**-S, --states=STATES**
+.. option:: -S, --states=STATES
+
    Set target job states (default: active). Valid states include
    depend, priority, sched, run, pending, running, active.
 
-**-q, --quiet**
+.. option:: -q, --quiet
+
    Suppress output if no jobs match
 
 RESOURCES

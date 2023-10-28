@@ -50,21 +50,26 @@ support:
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Summarize available options.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    List keys on stderr as they are dumped instead of a periodic count of
    dumped keys.
 
-**-q, --quiet**
+.. option:: -q, --quiet
+
    Don't show periodic count of dumped keys on stderr.
 
-**--checkpoint**
+.. option:: --checkpoint
+
    Generate snapshot from the latest checkpoint written to the content
    backing store, instead of from the current KVS root.
 
-**--no-cache**
+.. option:: --no-cache
+
    Bypass the broker content cache and interact directly with the backing
    store.  This may be slightly faster, depending on how frequently the same
    content blobs are referenced by multiple keys.

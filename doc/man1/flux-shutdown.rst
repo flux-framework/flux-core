@@ -44,28 +44,34 @@ OPTIONS
 
 ``flux-shutdown`` accepts the following options:
 
-**-h, --help**
+.. option:: -h, --help
+
    Display options and exit
 
-**--background**
+.. option:: --background
+
    Start the shutdown and exit immediately, without monitoring the process
    and displaying log messages.
 
-**--quiet**
+.. option:: --quiet
+
    Show only error log messages (severity level <= LOG_WARNING level).
 
-**--verbose=[LEVEL]**
+.. option:: --verbose=[LEVEL]
+
    Increase output verbosity.  Level 1 shows all log messages.  Higher
    verbosity levels are reserved for future use.
 
-**--dump=PATH**
+.. option:: --dump=PATH
+
    Dump a checkpoint of KVS content to *PATH* using :man1:`flux-dump` after the
    KVS has been unloaded.  The dump may be restored into a new Flux instance
    using :man1:`flux-restore`.  Dump creation adds time to the shutdown
    sequence, proportional to the amount of data in the KVS.  ``--dump=auto``
    is a special case equivalent to ``--gc``.
 
-**--gc**
+.. option:: --gc
+
    Prepare for offline KVS garbage collection by dumping a checkpoint of KVS
    content to ``dump/<date>.tgz`` in *statedir*, if defined, otherwise in
    the broker's current working directory.  Create a symbolic link named
@@ -74,10 +80,12 @@ OPTIONS
    the dump, and the link is removed.  :linux:man8:`systemd-tmpfiles`
    automatically cleans up dump files in ``/var/lib/flux/dump`` after 30 days.
 
-**-y, --yes**
+.. option:: -y, --yes
+
    Answer yes to any yes/no questions.
 
-**-n, --no**
+.. option:: -n, --no
+
    Answer no to any yes/no questions.
 
 

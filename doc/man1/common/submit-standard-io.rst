@@ -7,12 +7,14 @@ KVS, where they may be accessed with the ``flux job attach`` command.
 In addition, :man1:`flux-run` processes standard I/O in real time,
 emitting the job's I/O to its stdout and stderr.
 
-**--input=FILENAME|RANKS**
+.. option:: --input=FILENAME|RANKS
+
    Redirect stdin to the specified filename, bypassing the KVS.
    As a special case for ``flux run``, the argument may specify
    an idset of task ranks in to which to direct standard input.
 
-**--output=TEMPLATE**
+.. option:: --output=TEMPLATE
+
    Specify the filename *TEMPLATE* for stdout redirection, bypassing
    the KVS.  *TEMPLATE* may be a mustache template which supports the
    following tags:
@@ -31,11 +33,13 @@ emitting the job's I/O to its stdout and stderr.
    To force output to KVS so it is available with ``flux job attach``,
    set *TEMPLATE* to *none* or *kvs*.
 
-**--error=TEMPLATE**
+.. option:: --error=TEMPLATE
+
    Redirect stderr to the specified filename *TEMPLATE*, bypassing the KVS.
    *TEMPLATE* is expanded as described above.
 
-**-u, --unbuffered**
+.. option:: -u, --unbuffered
+
    Disable buffering of standard input and output as much as practical.
    Normally, stdout from job tasks is line buffered, as is stdin when
    running a job in the foreground via :man1:`flux-run`. Additionally,
@@ -53,6 +57,7 @@ emitting the job's I/O to its stdout and stderr.
    process run without a terminal may be fully buffered when using
    libc standard I/O streams (See NOTES in :linux:man3:`stdout`).
 
-**-l, --label-io**
+.. option:: -l, --label-io
+
    Add task rank prefixes to each line of output.
 

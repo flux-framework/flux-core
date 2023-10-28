@@ -27,23 +27,28 @@ causes flux-start to exit with a non-zero exit code.
 OPTIONS
 =======
 
-**-o, --broker-opts**\ =\ *option_string*
+.. option:: -o, --broker-opts=OPTIONS
+
    Add options to the message broker daemon, separated by commas.
 
-**-v, --verbose**\ =\ *[LEVEL]*
+.. option:: -v, --verbose=[LEVEL]
+
    This option may be specified multiple times, or with a value, to
    set a verbosity level.  See VERBOSITY LEVELS below.
 
-**-X, --noexec**
+.. option:: -X, --noexec
+
    Don't execute anything. This option is most useful with -v.
 
-**--caliper-profile**\ =\ *PROFILE*
+.. option:: --caliper-profile=PROFILE
+
    Run brokers with Caliper profiling enabled, using a Caliper
    configuration profile named *PROFILE*. Requires a version of Flux
    built with --enable-caliper. Unless CALI_LOG_VERBOSITY is already
    set in the environment, it will default to 0 for all brokers.
 
-**--rundir**\ =\ *DIR*
+.. option:: --rundir=DIR
+
    (only with *--test-size*) Set the directory that will be
    used as the rundir directory for the instance. If the directory
    does not exist then it will be created during instance startup.
@@ -51,52 +56,62 @@ OPTIONS
    will be created. Unless DIR was pre-existing, it will be removed
    when the instance is destroyed.
 
-**--wrap**\ =\ *ARGS,…​*
+.. option:: --wrap=ARGS
+
    Wrap broker execution in a comma-separated list of arguments. This is
    useful for running flux-broker directly under debuggers or valgrind.
 
-**-s, --test-size**\ =\ *N*
+.. option:: -s, --test-size=N
+
    Launch an instance of size *N* on the local host.
 
-**--test-hosts**\ =\ *HOSTLIST*
+.. option:: --test-hosts=HOSTLIST
+
    Set FLUX_FAKE_HOSTNAME in the environment of each broker so that the
    broker can bootstrap from a config file instead of PMI.  HOSTLIST is
    assumed to be in rank order.  The broker will use the fake hostname to
    find its entry in the configured bootstrap host array.
 
-**--test-exit-timeout**\ =\ *FSD*
+.. option:: --test-exit-timeout=FSD
+
    After a broker exits, kill the other brokers after a timeout (default 20s).
 
-**--test-exit-mode**\ =\ *MODE*
+.. option:: --test-exit-mode=MODE
+
    Set the mode for the exit timeout.  If set to ``leader``, the exit timeout
    is only triggered upon exit of the leader broker, and the flux-start exit
    code is that of the leader broker.  If set to ``any``, the exit timeout
    is triggered upon exit of any broker, and the flux-start exit code is the
    highest exit code of all brokers.  Default: ``any``.
 
-**--test-start-mode**\ =\ *MODE*
+.. option:: --test-start-mode=MODE
+
    Set the start mode.  If set to ``all``, all brokers are started immediately.
    If set to ``leader``, only the leader is started.  Hint: in ``leader`` mode,
    use ``--setattr=broker.quorum=1`` to let the initial program start before
    the other brokers are online.  Default: ``all``.
 
-**--test-rundir**\ =\ *PATH*
+.. option:: --test-rundir=PATH
+
    Set the directory to be used as the broker rundir instead of creating a
    temporary one.  The directory must exist, and is not cleaned up unless
    ``--test-rundir-cleanup`` is also specified.
 
-**--test-rundir-cleanup**
+.. option:: --test-rundir-cleanup
+
    Recursively remove the directory specified with ``--test-rundir`` upon
    completion of flux-start.
 
-**--test-pmi-clique**\ =\ *MODE*
+.. option:: --test-pmi-clique=MODE
+
    Set the pmi clique mode, which determines how ``PMI_process_mapping`` is set
    in the PMI server used to bootstrap the brokers.  If ``none``, the mapping
    is not created.  If ``single``, all brokers are placed in one clique. If
    ``per-broker``, each broker is placed in its own clique.
    Default: ``single``.
 
-**-r, --recovery**\ =\ *[TARGET]*
+.. option:: -r, --recovery=[TARGET]
+
    Start the rank 0 broker of an instance in recovery mode.  If *TARGET*
    is a directory, treat it as a *statedir* from a previous instance.
    If *TARGET* is a file, treat it as an archive file from :man1:`flux-dump`.
@@ -104,7 +119,8 @@ OPTIONS
    In recovery mode, any rc1 errors are ignored, broker peers are not allowed
    to connect, and resources are offline.
 
-**--sysconfig**
+.. option:: --sysconfig
+
    Run the broker with ``--config-path`` set to the default system instance
    configuration directory.  This option is unnecessary if ``--recovery``
    is specified without its optional argument.  It may be required if

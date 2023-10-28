@@ -34,31 +34,37 @@ service, is to be pinged. "flux ping 1" is equivalent to
 OPTIONS
 =======
 
-**-r, --rank**\ *=N*
+.. option:: -r, --rank=N
+
    Find target on a specific broker rank. Special case strings “*any*”
    and “*upstream*” available to ping FLUX_NODEID_ANY and FLUX_NODEID_UPSTREAM
    respectively. Default: send to “*any*”.
 
-**-p, --pad**\ *=N*
+.. option:: -p, --pad=N
+
    Include in the payload a string of length *N* bytes. *N* may be a
    floating point number with optional multiplicative suffix k,K=1024,
    M=1024\*1024, or G=1024\*1024\*1024. The payload will be echoed back in
    the response. This option can be used to explore the effect of message
    size on latency. Default: no padding.
 
-**-i, --interval**\ *=N*
+.. option:: -i, --interval=Ns
+
    Specify the delay, in seconds, between successive requests.
    A value of zero is valid and indicates that there should be no delay.
    Requests are sent without waiting for responses. Default: 1.0 seconds.
 
-**-c, --count**\ *=N*
+.. option:: -c, --count=N
+
    Specify the number of requests to send, and terminate the command once
    responses have been received for all the requests. Default: unlimited.
 
-**-b, --batch**
+.. option:: -b, --batch
+
    Begin processing responses after all requests are sent. Requires --count.
 
-**-u, --userid**
+.. option:: -u, --userid
+
    Include userid and rolemask of original request, which are echoed back
    in ping response, in ping output.
 

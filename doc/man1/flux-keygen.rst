@@ -33,12 +33,14 @@ OPTIONS
 
 ``flux-keygen`` accepts the following options:
 
-**-n, --name=NAME**
+.. option:: -n, --name=NAME
+
    Set the certificate metadata ``name`` field.  The value is logged when
    :man1:`flux-broker` authenticates a peer that presents this certificate.
    A cluster name might be appropriate here.  Default: the local hostname.
 
-**--meta=KEY=VAL**
+.. option:: --meta=KEY=VAL
+
    Set arbitrary certificate metadata.  Multiple key-value pairs may be
    specified, separated by commas.  This option may be specified multiple
    times.

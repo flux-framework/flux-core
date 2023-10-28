@@ -54,19 +54,23 @@ standard input (JSON or TOML), or from ``*.toml`` in *PATH*, if specified.
 GET SUBCOMMAND OPTIONS
 ======================
 
-**-h, --help**
+.. option:: -h, --help
+
    Display subcommand help.
 
-**-d, --default**\ =\ *VALUE*
+.. option:: -d, --default=VALUE
+
    Substitute *VALUE* if *NAME* is not set in the configuration, and exit
    with a return code of zero.
 
-**-q, --quiet**
+.. option:: -q, --quiet
+
    Suppress printing of errors if *NAME* is not set and *--default* was not
    specified.  This may be convenient to avoid needing to redirect standard
    error in a shell script.
 
-**-t, --type**\ =\ *TYPE*
+.. option:: -t, --type=TYPE
+
    Require that the value has the specified type, or exit with a nonzero exit
    code.  Valid types are *string*, *integer*, *real*, *boolean*, *object*, and
    *array*.  In addition, types of *fsd*, *fsd-integer*, and *fsd-real* ensure

@@ -6,7 +6,8 @@ in :linux:man2:`getrlimit`) to the job by setting the ``rlimit`` job shell
 option in jobspec.  The set of resource limits propagated can be controlled
 via the ``--rlimit=RULE`` option:
 
-**--rlimit=RULE**
+.. option:: --rlimit=RULE
+
     Control how process resource limits are propagated with *RULE*. Rules
     are applied in the order in which they are used on the command line.
     This option may be used multiple times.

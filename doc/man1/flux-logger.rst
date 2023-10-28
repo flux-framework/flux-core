@@ -29,10 +29,12 @@ message when it is created.
 OPTIONS
 =======
 
-**-s, --severity**\ =\ *SEVERITY*
+.. option:: -s, --severity=SEVERITY
+
    Specify the log message severity. The default severity is *info*.
 
-**-n, --appname**\ =\ *NAME*
+.. option:: -n, --appname=NAME
+
    Specify a user-defined application name to associate with the log message.
    The default appname is *logger*.
 

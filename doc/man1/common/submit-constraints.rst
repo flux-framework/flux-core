@@ -1,7 +1,8 @@
 CONSTRAINTS
 ===========
 
-**--requires=CONSTRAINT**
+.. option:: --requires=CONSTRAINT**
+
    Specify a set of allowable properties and other attributes to consider
    when matching resources for a job. The **CONSTRAINT** is expressed in
    a simple syntax described in RFC 35 (Constraint Query Syntax) which is

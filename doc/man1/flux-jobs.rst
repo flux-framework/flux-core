@@ -23,29 +23,37 @@ only list those job IDs.
 OPTIONS
 =======
 
-**-a**
+.. option:: -a
+
    List jobs in all states, including inactive jobs.
    This is shorthand for *--filter=pending,running,inactive*.
 
-**-A**
+.. option:: -A
+
    List jobs of all users. This is shorthand for *--user=all*.
 
-**-n, --no-header**
+.. option:: -n, --no-header
+
    For default output, do not output column headers.
 
-**-u, --user**\ *=[USERNAME|UID]*
+.. option:: -u, --user=[USERNAME|UID]
+
    List jobs for a specific username or userid. Specify *all* for all users.
 
-**--name**\ *=[JOB NAME]*
+.. option:: --name=[JOB NAME]
+
    List jobs with a specific job name.
 
-**--queue**\ *=[QUEUE]*
+.. option:: --queue=[QUEUE]
+
    List jobs in a specific queue.
 
-**-c, --count**\ *=N*
+.. option:: -c, --count=N
+
    Limit output to N jobs (default 1000)
 
-**--since**\ *WHEN*
+.. option:: --since=WHEN
+
    Limit output to jobs that have been active since a given timestamp.  In other
    words, jobs that are currently pending, currently running, or became inactive
    since the given timestamp.  This option implies ``-a`` if no other
@@ -57,12 +65,14 @@ OPTIONS
    "last Monday", etc. It is assumed to be an error if a timestamp in
    the future is supplied.
 
-**-f, --filter**\ *=STATE|RESULT*
+.. option:: -f, --filter=STATE|RESULT
+
    List jobs with specific job state or result. Multiple states or
    results can be listed separated by comma. See JOB STATUS below for
    additional information. Defaults to *pending,running*.
 
-**-o, --format**\ *=NAME|FORMAT*
+.. option:: -o, --format=NAME|FORMAT
+
    Specify a named output format *NAME* or a format string using Python's
    format syntax. See OUTPUT FORMAT below for field names. Named formats
    may be listed via ``--format=help``.  An alternate default format can be set
@@ -71,7 +81,8 @@ OPTIONS
    CONFIGURATION section for more details. A configuration snippet for an
    existing named format may be generated with ``--format=get-config=NAME``.
 
-**--json**
+.. option:: --json
+
    Emit data for selected jobs in JSON format. The data for multiple
    matching jobs is contained in a ``jobs`` array in the emitted JSON
    object, unless a single job was selected by jobid on the command
@@ -89,12 +100,14 @@ OPTIONS
    The ``--json`` option is incompatible with ``--stats`` and
    ``--stats-only``, and any ``--format`` is ignored.
 
-**--color**\ *[=WHEN]*
+.. option:: --color[=WHEN]
+
    Control output coloring.  The optional argument *WHEN* can be
    *auto*, *never*, or *always*.  If *WHEN* is omitted, it defaults to
    *always*.  Otherwise the default is *auto*.
 
-**--stats**
+.. option:: --stats
+
    Output a summary of job statistics before the header.  By default
    shows global statistics.  If ``--queue`` is specified, shows
    statistics for the specified queue.  May be useful in conjunction
@@ -108,7 +121,8 @@ OPTIONS
    Note that all job failures, including canceled and timeout jobs,
    are collectively counted as "failed" in ``--stats``.
 
-**--stats-only**
+.. option:: --stats-only
+
    Output a summary of job statistics and exit.  By default shows
    global statistics.  If ``--queue`` is specified, shows statistics
    for the specified queue.  ``flux jobs`` will exit with non-zero
@@ -123,27 +137,31 @@ OPTIONS
    Note that all job failures, including canceled and timeout jobs,
    are collectively counted as "failed" in ``--stats-only``.
 
-**-R, --recursive**
+.. option:: -R, --recursive
+
    List jobs recursively. Each child job which is also an instance of
    Flux is prefixed by its jobid "path" followed by the list of jobs,
    recursively up to any defined ``-L, --level``. If the ``--stats``
    option is used, then each child instance in the hierarchy is listed
    with its stats.
 
-**--recurse-all**
+.. option:: --recurse-all
+
    By default, jobs not owned by the user running ``flux jobs`` are
    skipped with ``-R, --recursive``, because normally Flux instances
    only permit the instance owner to connect. This option forces the
    command to attempt to recurse into the jobs of other users.  Implies
    ``--recursive``.
 
-**-L, --level**\ *=N*
+.. option:: -L, --level=N
+
    With ``-R, --recursive``, stop recursive job listing at level **N**.
    Levels are counted starting at 0, so ``flux jobs -R --level=0`` is
    equivalent to ``flux jobs`` without ``-R``, and ``--level=1`` would
    limit recursive job listing to child jobs of the current instance.
 
-**--threads**\ *=N*
+.. option:: --threads=N
+
    When ``flux jobs`` recursively queries job lists (with ``--recursive``)
    or fetches info for jobs that are also instances (see
    ``instance.*`` fields), a pool of threads is used to parallelize

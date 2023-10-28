@@ -25,18 +25,22 @@ bypassing the sub-command search path.
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Display help on options, and a list of the core Flux sub-commands.
 
-**-p, --parent**
+.. option:: -p, --parent
+
    If current instance is a child, connect to parent instead. Also sets
    *FLUX_KVS_NAMESPACE* if current instance is confined to a KVS namespace
    in the parent. This option may be specified multiple times.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    Display command environment, and the path search for *CMD*.
 
-**-V, --version**
+.. option:: -V, --version
+
    Convenience option to run :man1:`flux-version`.
 
 

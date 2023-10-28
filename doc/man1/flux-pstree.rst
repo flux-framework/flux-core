@@ -85,65 +85,81 @@ a ``JOBID`` argument. This behavior can be changed via the
 OPTIONS
 =======
 
-**-a, --all**
+.. option:: -a, --all
+
    Include jobs in all states, including inactive jobs.
    This is shorthand for *--filter=pending,running,inactive*.
 
-**-c, --count**\ *=N*
+.. option:: -c, --count=N
+
    Limit output to N jobs at every level (default 1000).
 
-**-f, --filter**\ *=STATE|RESULT*
+.. option:: -f, --filter=STATE|RESULT
+
    Include jobs with specific job state or result. Multiple states or
    results can be listed separated by comma. See the JOB STATUS section
    of the :man1:`flux-jobs` manual for more detail.
 
-**-l, --long**
+.. option:: -l, --long
+
    Do not truncate long lines at ``COLUMNS`` characters.
 
-**-p, --parent-ids**
+.. option:: -p, --parent-ids
+
    Prepend jobid to parent labels.
 
-**-L, --level** *=N*
+.. option:: -L, --level=N
+
    Only descend *N* levels of the job hierarchy.
 
-**-x, --extended**
+.. option:: -x, --extended
+
    Print extended details before tree output. This is the same as
    ``--details=default``.
 
-**-d, --detail**\ *=NAME*
+.. option:: -d, --detail=NAME
+
    Select a named extended details format. The list of supported names
    can be seen in ``flux pstree --help`` output.
 
-**-n, --no-header**
+.. option:: -n, --no-header
+
    For output with extended details, do not print header row.
 
-**-X, --no-combine**
+.. option:: -X, --no-combine
+
    Typically, identical child jobs that are leaves in the tree display
    are combined as ``n*[label]``. With this option, the combination of
    like jobs is disabled.
 
-**-o, --label**\ *=FORMAT*
+.. option:: -o, --label=FORMAT
+
    Specify output format for node labels using Python format strings.
    Supports all format fields supported by :man1:`flux-jobs`.
 
-**--parent-label**\ *=FORMAT*
+.. option:: --parent-label=FORMAT
+
    Label tree parents with a different format than child jobs.
 
-**--detail-format**\ *=FORMAT*
+.. option:: --detail-format=FORMAT
+
    Specify an explicit details format to display before the tree part.
    Care should be taken that each line of the format is the same width
    to ensure that the tree display is rendered correctly (i.e. by judicious
    use of format field widths, e.g. ``{id.f58:>12}`` instead of just
    ``{id.f58}``.
 
-**--skip-root**\ *=yes|no*
+.. option:: --skip-root=yes|no
+
    Explicitly skip (yes)  or force (no) display of the enclosing instance,
    or root of the tree, in output.
 
-**-C, --compact**
+.. option:: -C, --compact
+
    Use compact tree connectors. Usefully for deep hierarchies.
 
-**--ascii**
+.. option:: --ascii
+
    Use ascii tree connectors.
 
 

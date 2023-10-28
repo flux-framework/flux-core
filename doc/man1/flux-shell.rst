@@ -35,10 +35,12 @@ format and features.
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Summarize available options.
 
-**--reconnect**
+.. option:: --reconnect
+
    Attempt to reconnect if broker connection is lost.
 
 OPERATION

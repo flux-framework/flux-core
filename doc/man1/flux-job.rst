@@ -59,40 +59,50 @@ a status line while the job is pending, e.g
 This status line may be suppressed by setting ``FLUX_ATTACH_NONINTERACTIVE``
 in the environment.
 
-**-l, --label-io**
+.. option:: -l, --label-io
+
    Label output by rank
 
-**-u, --unbuffered**
+.. option:: -u, --unbuffered
+
    Do not buffer stdin. Note that when ``flux job attach`` is used in a
    terminal, the terminal itself may line buffer stdin.
 
-**-i, --stdin-ranks=RANKS**
+.. option:: -i, --stdin-ranks=RANKS
+
    Send stdin to only those ranks in the **RANKS** idset. The standard input
    for tasks not in **RANKS** will be closed. The default is to broadcast
    stdin to all ranks.
 
-**--read-only**
+.. option:: --read-only
+
    Operate in read-only mode. Disable reading of stdin and capturing of
    signals.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    Increase verbosity.
 
-**-w, --wait-event=EVENT**
+.. option:: -w, --wait-event=EVENT
+
    Wait for event *EVENT* before detaching from eventlog. The default is
    ``finish``.
 
-**-E, --show-events**
+.. option:: -E, --show-events
+
    Show job events on stderr. This option also suppresses the status line
    if enabled.
 
-**-X, --show-exec**
+.. option:: -X, --show-exec
+
    Show exec eventlog events on stderr.
 
-**--show-status**
+.. option:: --show-status
+
    Force immediate display of the status line.
 
-**--debug***
+.. option:: --debug
+
    Enable parallel debugger attach.
 
 CANCEL
@@ -104,23 +114,28 @@ message included with the cancel exception may be provided via the *-m,
 *"--"* forces the end of jobid processing and can be used to separate the
 exception message from the jobids when necessary.
 
-**-m, --message=NOTE**
+.. option:: -m, --message=NOTE
+
    Set the optional exception note. It is an error to specify the message
    via this option and on the command line after the jobid list.
 
 Jobs may be canceled in bulk with ``flux job cancelall``.  Target jobs are
 selected with:
 
-**-u, --user=USER**
+.. option:: -u, --user=USER
+
    Set target user.  The instance owner may specify *all* for all users.
 
-**-S, --states=STATES**
+.. option:: -S, --states=STATES
+
    Set target job states (default: ACTIVE).
 
-**-f, --force**
+.. option:: -f, --force
+
    Confirm the command
 
-**-q, --quiet**
+.. option:: -q, --quiet
+
    Suppress output if no jobs match
 
 STATUS
@@ -128,14 +143,17 @@ STATUS
 
 Wait for job(s) to complete and exit with the largest exit code.
 
-**-e, --exception-exit-code=N**
+.. option:: -e, --exception-exit-code=N
+
    Set the exit code for any jobs that terminate with an exception
    (e.g. canceled jobs) to ``N``.
 
-**-j, --json**
+.. option:: -j, --json
+
    Dump job result information from job eventlog.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    Increase verbosity of output.
 
 WAIT
@@ -171,11 +189,13 @@ of two can be used to determine when no more jobs are waitable when using
 printing their jobids.  If all jobs are successful, it exits with a code of zero.
 If any jobs have failed, it exits with a code of one.
 
-**-a, --all**
+.. option:: -a, --all
+
    Wait for all waitable jobs and exit with error if any jobs are
    not successful.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    Emit a line of output for all jobs, not just failing ones.
 
 SIGNAL
@@ -183,16 +203,19 @@ SIGNAL
 
 One or more running jobs may be signaled by jobid with ``flux job kill``.
 
-**-s, --signal=SIG**
+.. option:: -s, --signal=SIG
+
    Send signal SIG (default: SIGTERM).
 
 Running jobs may be signaled in bulk with ``flux job killall``.  In addition
 to the option above, target jobs are selected with:
 
-**-u, --user=USER**
+.. option:: -u, --user=USER
+
    Set target user.  The instance owner may specify *all* for all users.
 
-**-f, --force**
+.. option:: -f, --force
+
    Confirm the command.
 
 EXCEPTION
@@ -204,30 +227,38 @@ the *-m, --message=NOTE* option or after the list of jobids. The special
 argument *"--"* forces the end of jobid processing and can be used to
 separate the exception message from the jobids when necessary.
 
-**-m, --message=NOTE**
+.. option:: -m, --message=NOTE
+
    Set the optional exception note. It is an error to specify the message
    via this option and on the command line after the jobid list.
-**-s, --severity=N**
+
+.. option:: -s, --severity=N
+
    Set exception severity.  The severity may range from 0=fatal to
    7=least severe (default: 0).
 
-**-t, --type=TYPE**
+.. option:: -t, --type=TYPE
+
    Set exception type (default: cancel).
 
 Exceptions may be raised in bulk with ``flux job raiseall``, which requires a
 type (positional argument) and accepts the following options:
 
-**-s, --severity=N**
+.. option:: -s, --severity=N
+
    Set exception severity.  The severity may range from 0=fatal to
    7=least severe (default: 7).
 
-**-u, --user=USER**
+.. option:: -u, --user=USER
+
    Set target user.  The instance owner may specify *all* for all users.
 
-**-S, --states=STATES**
+.. option:: -S, --states=STATES
+
    Set target job states (default: ACTIVE)
 
-**-f, --force**
+.. option:: -f, --force
+
    Confirm the command.
 
 TASKMAP
@@ -246,19 +277,24 @@ a nodeid to a list of tasks, or to query on which node or host a given
 taskid ran. The command may also be used to convert between different
 support task mapping formats:
 
-**--taskids=NODEID**
+.. option:: --taskids=NODEID
+
    Print an idset of tasks which ran on node  *NODEID*
 
-**--ntasks=NODEID**
+.. option:: --ntasks=NODEID
+
    Print the number of tasks  which ran on node *NODEID*
 
-**--nodeid=TASKID**
+.. option:: --nodeid=TASKID
+
    Print the node ID that ran task *TASKID*
 
-**--hostname=TASKID**
+.. option:: --hostname=TASKID
+
    Print the hostname of the node that rank task *TASKID*
 
-**--to=raw|pmi|multiline**
+.. option:: --to=raw|pmi|multiline
+
    Convert the taskmap to *raw* or *pmi* formats (described in RFC 34), or
    *multiline* which prints the node ID of each task, one per line.
 
@@ -278,7 +314,8 @@ an error and diagnostic message.
 
 Options:
 
-**-H, --human**
+.. option:: -H, --human
+
   Generate human readable output. Report results in Flux Standard Duration.
 
 PURGE
@@ -288,13 +325,16 @@ Inactive job data may be purged from the Flux instance with ``flux job purge``.
 Specific job ids may be specified for purging.  If no job ids are
 specified, the following options may be used for selection criteria:
 
-**--age-limit=FSD**
+.. option:: --age-limit=FSD
+
    Purge inactive jobs older than the specified Flux Standard Duration.
 
-**--num-limit=COUNT**
+.. option:: --num-limit=COUNT
+
    Purge the oldest inactive jobs until there are at most COUNT left.
 
-**-f, --force**
+.. option:: -f, --force
+
    Confirm the command.
 
 Inactive jobs may also be purged automatically if the job manager is

@@ -1,10 +1,12 @@
 OTHER OPTIONS
 =============
 
-**--cwd=DIRECTORY**
+.. option:: --cwd=DIRECTORY
+
    Set job working directory.
 
-**--urgency=N**
+.. option:: --urgency=N
+
    Specify job urgency, which affects queue order. Numerically higher urgency
    jobs are considered by the scheduler first. Guests may submit jobs with
    urgency in the range of 0 to 16, while instance owners may submit jobs
@@ -12,20 +14,23 @@ OTHER OPTIONS
    numerical values, the special names ``hold`` (0), ``default`` (16),
    and ``expedite`` (31) are also accepted.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    *(run,alloc,submit,bulksubmit)* Increase verbosity on stderr. For example,
    currently ``flux run -v`` displays jobid, ``-vv`` displays job events,
    and ``-vvv`` displays exec events. ``flux alloc -v`` forces the command
    to print the submitted jobid on stderr.
    The specific output may change in the future.
 
-**-o, --setopt=KEY[=VAL]**
+.. option:: -o, --setopt=KEY[=VAL]
+
    Set shell option. Keys may include periods to denote hierarchy.
    VAL is optional and may be valid JSON (bare values, objects, or arrays),
    otherwise VAL is interpreted as a string. If VAL is not set, then the
    default value is 1. See SHELL OPTIONS below.
 
-**--setattr=KEY[=VAL]**
+.. option:: --setattr=KEY[=VAL]
+
    Set jobspec attribute. Keys may include periods to denote hierarchy.
    If KEY does not begin with ``system.``, ``user.``, or ``.``, then
    ``system.`` is assumed.  VAL is optional and may be valid JSON (bare
@@ -34,7 +39,8 @@ OTHER OPTIONS
    character, then VAL is interpreted as a file, which must be valid JSON,
    to use as the attribute value.
 
-**--add-file=[NAME=]ARG**
+.. option:: --add-file=[NAME=]ARG
+
    Add a file to the RFC 37 file archive in jobspec before submission. Both
    the file metadata and content are stored in the archive, so modification
    or deletion of a file after being processed by this option will have no
@@ -54,7 +60,8 @@ OTHER OPTIONS
       files, binaries, and directories, the :man1:`flux-shell` ``stage-in``
       plugin will be more appropriate.
 
-**--conf=FILE|KEY=VAL|STRING|NAME**
+.. option:: --conf=FILE|KEY=VAL|STRING|NAME
+
    The ``--conf`` option allows configuration for a Flux instance started
    via ``flux-batch(1)`` or ``flux-alloc(1)`` to be iteratively built on
    the command line. On first use, a ``conf.json`` entry is added to the
@@ -91,7 +98,8 @@ OTHER OPTIONS
        ``XDG_CONFIG_DIRS`` is not set. Note that ``XDG_CONFIG_DIRS`` may
        be a colon-separated path.
 
-**--begin-time=+FSD|DATETIME**
+.. option:: --begin-time=+FSD|DATETIME
+
    Convenience option for setting a ``begin-time`` dependency for a job.
    The job is guaranteed to start after the specified date and time.
    If argument begins with a ``+`` character, then the remainder is
@@ -101,7 +109,8 @@ OTHER OPTIONS
    is accepted, e.g. ``2021-06-21 8am``, ``in an hour``,
    ``tomorrow morning``, etc.
 
-**--signal=SIG@TIME**
+.. option:: --signal=SIG@TIME
+
    Send signal ``SIG`` to job ``TIME`` before the job time limit. ``SIG``
    can specify either an integer signal number or a full or abbreviated
    signal name, e.g. ``SIGUSR1`` or ``USR1`` or ``10``. ``TIME`` is
@@ -115,7 +124,8 @@ OTHER OPTIONS
 
    The default behavior is to not send any warning signal to jobs.
 
-**--taskmap=SCHEME[:VALUE]**
+.. option:: --taskmap=SCHEME[:VALUE]
+
    Choose an alternate method for mapping job task IDs to nodes of the
    job. The job shell maps tasks using a "block" distribution scheme by
    default (consecutive tasks share nodes) This option allows the
@@ -137,17 +147,20 @@ OTHER OPTIONS
    check the current job shell configuration for a full list of supported
    taskmap schemes.
 
-**--dry-run**
+.. option:: --dry-run
+
    Don't actually submit job. Just emit jobspec on stdout and exit for
    ``run``, ``submit``, ``alloc``, and ``batch``. For ``bulksubmit``,
    emit a line of output including relevant options for each job which
    would have been submitted,
 
-**--debug**
+.. option:: --debug
+
    Enable job debug events, primarily for debugging Flux itself.
    The specific effects of this option may change in the future.
 
-**--bg**
+.. option:: --bg
+
    *(alloc only)* Do not interactively attach to the instance. Instead,
    print jobid on stdout once the instance is ready to accept jobs. The
    instance will run indefinitely until a time limit is reached, the
@@ -157,16 +170,19 @@ OTHER OPTIONS
    interactively attach to the job (though it will print any errors or
    output).
 
-**-B, --broker-opts=OPT**
+.. option:: -B, --broker-opts=OPT
+
    *(batch only)* For batch jobs, pass specified options to the Flux brokers
    of the new instance. This option may be specified multiple times.
 
-**--wrap**
+.. option:: --wrap
+
    *(batch only)* The ``--wrap`` option wraps the specified COMMAND and ARGS in
    a shell script, by prefixing with ``#!/bin/sh``. If no COMMAND is present,
    then a SCRIPT is read on stdin and wrapped in a /bin/sh script.
 
-**--cc=IDSET**
+.. option:: --cc=IDSET
+
    *(submit,bulksubmit)* Replicate the job for each ``id`` in ``IDSET``.
    ``FLUX_JOB_CC=id`` will be set in the environment of each submitted job
    to allow the job to alter its execution based on the submission index.
@@ -174,16 +190,19 @@ OTHER OPTIONS
    the substitution string ``{cc}`` may be used in options and commands
    and will be replaced by the current ``id``.
 
-**--bcc=IDSET**
+.. option:: --bcc=IDSET
+
    *(submit,bulksubmit)* Identical to ``--cc``, but do not set
    ``FLUX_JOB_CC`` in each job. All jobs will be identical copies.
    As with ``--cc``, ``{cc}`` in option arguments and commands will be
    replaced with the current ``id``.
 
-**--quiet**
+.. option:: --quiet
+
    *(submit,bulksubmit)* Suppress logging of jobids to stdout.
 
-**--log=FILE**
+.. option:: --log=FILE
+
    *(submit,bulksubmit)* Log command output and stderr to ``FILE``
    instead of the terminal. If a replacement (e.g. ``{}`` or ``{cc}``)
    appears in ``FILE``, then one or more output files may be opened.
@@ -191,15 +210,18 @@ OTHER OPTIONS
 
       flux submit --cc=1-4 --log=job{cc}.id hostname
 
-**--log-stderr=FILE**
+.. option:: --log-stderr=FILE
+
    *(submit,bulksubmit)* Separate stderr into ``FILE`` instead of sending
    it to the terminal or a ``FILE`` specified by ``--log``.
 
-**--wait**
+.. option:: --wait
+
    *(submit,bulksubmit)* Wait on completion of all jobs before exiting.
    This is equivalent to ``--wait-event=clean``.
 
-**--wait-event=NAME**
+.. option:: --wait-event=NAME
+
    *(run,submit,bulksubmit)* Wait until job or jobs have received event ``NAME``
    before exiting. E.g. to submit a job and block until the job begins
    running, use ``--wait-event=start``. *(submit,bulksubmit only)* If ``NAME``
@@ -207,34 +229,41 @@ OTHER OPTIONS
    ``exec.shell.init``. For ``flux run`` the argument to this option
    when used is passed directly to ``flux job attach``.
 
-**--watch**
+.. option:: --watch
+
    *(submit,bulksubmit)* Display output from all jobs. Implies ``--wait``.
 
-**--progress**
+.. option:: --progress
+
    *(submit,bulksubmit)* With ``--wait``, display a progress bar showing
    the progress of job completion. Without ``--wait``, the progress bar
    will show progress of job submission.
 
-**--jps**
+.. option:: --jps
+
    *(submit,bulksubmit)* With ``--progress``, display throughput statistics
    (jobs/s) in the progress bar.
 
-**--define=NAME=CODE**
+.. option:: --define=NAME=CODE
+
    *(bulksubmit)* Define a named method that will be made available as an
    attribute during command and option replacement. The string being
    processed is available as ``x``. For example::
 
    $ seq 1 8 | flux bulksubmit --define=pow="2**int(x)" -n {.pow} ...
 
-**--shuffle**
+.. option:: --shuffle
+
    *(bulksubmit)* Shuffle the list of commands before submission.
 
-**--sep=STRING**
+.. option:: --sep=STRING
+
    *(bulksubmit)* Change the separator for file input. The default is
    to separate files (including stdin) by newline. To separate by
    consecutive whitespace, specify ``--sep=none``.
 
-**--dump=[FILE]**
+.. option:: --dump=[FILE]
+
    *(batch,alloc)* When the job script is complete, archive the Flux
    instance's KVS content to ``FILE``, which should have a suffix known
    to :linux:man3:`libarchive`, and may be a mustache template as described

@@ -30,19 +30,23 @@ batch job.
 OPTIONS
 =======
 
-**-a, --active**
+.. option:: -a, --active
+
    Watch all active jobs.
    This is equivalent to  *--filter=pending,running*.
 
-**-A, --all**
+.. option:: -A, --all
+
    Watch all jobs. This is equivalent to *--filter=pending,running,inactive*.
 
-**-c, --count**\ *=N*
+.. option:: -c, --count=N
+
    Limit output to N jobs (default 1000). This is a safety measure to
    protect against watching too many jobs with the ``--all`` option. The
    limit can be disabled with ``--count=0``.
 
-**--since**\ *=WHEN*
+.. option:: --since=WHEN
+
    Limit output to jobs that have been active since a given timestamp.
    This option implies ``-a`` if no other ``--filter`` options are specified.
    If *WHEN* begins with ``-`` character, then the remainder is considered
@@ -52,12 +56,14 @@ OPTIONS
    "-6h", "-1d", "yesterday", "2021-06-21 6am", "last Monday", etc. It is
    assumed to be an error if a timestamp in the future is supplied.
 
-**-f, --filter**\ *=STATE|RESULT*
+.. option:: -f, --filter=STATE|RESULT
+
    Watch jobs with specific job state or result. Multiple states or results
    can be listed separated by comma. See the JOB STATUS section in the
    :man1:`flux-jobs` manual for additional information.
 
-**--progress**
+.. option:: --progress
+
    Display a progress bar showing the completion progress of monitored
    jobs.  Jobs that are already inactive will immediately have their
    progress updated in the progress bar, with output later copied to the
@@ -67,7 +73,8 @@ OPTIONS
    starttime of the instance with ``--all``, in order to reflect the real
    elapsed time for the jobs being monitored.
 
-**--jps**
+.. option:: --jps
+
    With ``--progress``, display throughput statistics (job/s) in the
    progress bar instead of an elapsed timer. Note: The throughput will be
    calculated based on the elapsed time as described in the description

@@ -47,25 +47,31 @@ COMMANDS
 STATS OPTIONS
 =============
 
-**-p, --parse**\ *=OBJNAME*
+.. option:: -p, --parse=OBJNAME
+
    OBJNAME is a period delimited list of field names that should be walked
    to obtain a specific value or object in the returned JSON.
 
-**-t, --type**\ *=int|double*
+.. option:: -t, --type=int|double
+
    Force the returned value to be converted to int or double.
 
-**-s, --scale**\ *=N*
+.. option:: -s, --scale=N
+
    Multiply the returned (int or double) value by the specified
    floating point value.
 
-**-R, --rusage**
+.. option:: -R, --rusage
+
    Return a JSON object representing an *rusage* structure
    returned by :linux:man2:`getrusage`.
 
-**-c, --clear**
+.. option:: -c, --clear
+
    Send a request message to clear statistics in the target module.
 
-**-C, --clear-all**
+.. option:: -C, --clear-all
+
    Broadcast an event message to clear statistics in the target module
    on all ranks.
 
@@ -73,19 +79,23 @@ STATS OPTIONS
 DEBUG OPTIONS
 =============
 
-**-c, --clear**
+.. option:: -c, --clear
+
    Set debug flags to zero.
 
-**-S, --set**\ *=MASK*
+.. option:: -S, --set=MASK
+
    Set debug flags to MASK.
    The value may be prefixed with 0x to indicate hexadecimal or 0
    to indicate octal, otherwise the value is interpreted as decimal.
 
-**-c, --clearbit**\ *=MASK*
+.. option:: -c, --clearbit=MASK
+
    Clear the debug bits specified in MASK without disturbing other bits.
    The value is interpreted as above.
 
-**-s, --setbit**\ *=MASK*
+.. option:: -s, --setbit=MASK
+
    Set the debug bits specified in MASK without disturbing other bits.
    The value is interpreted as above.
 

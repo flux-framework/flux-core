@@ -57,11 +57,13 @@ section below.
 OPTIONS
 =======
 
-**-n, --dry-run**
+.. option:: -n, --dry-run
+
   Do not send update to job manager, but print the updates in JSON to
   stdout.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
   Print updated keys on success.
 
 SPECIAL KEYS

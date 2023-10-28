@@ -27,15 +27,18 @@ and the job listing pane, which are described in detail below.
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Summarize available options.
 
-**--color**\ *[=WHEN]*
+.. option:: --color[=WHEN]
+
    Colorize output.  The optional argument *WHEN* can be *auto*, *never*,
    or *always*.  If *WHEN* is omitted, it defaults to *always*. The default
    value when the **--color** option is not used is *auto*.
 
-**-q, --queue**\ =\ *NAME*
+.. option:: -q, --queue=NAME
+
    Limit status and jobs to specific queue.
 
 

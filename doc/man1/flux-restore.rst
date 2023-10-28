@@ -29,31 +29,38 @@ is required.
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Summarize available options.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    List keys on stderr as they are restored instead of a periodic count of
    restored keys.
 
-**-q, --quiet**
+.. option:: -q, --quiet
+
    Don't show a periodic count of restored keys on stderr.
 
-**--checkpoint**
+.. option:: --checkpoint
+
    After restoring the archived content, write the final root blobref
    to the KVS checkpoint area in the content backing store.  The checkpoint
    is used as the initial KVS root when the KVS module is loaded.  Unload
    the KVS module before restoring with this option.
 
-**--key**\ =\ *NAME*
+.. option:: --key=NAME
+
    After restoring the archived content, write the final root blobref
    to a KVS key, so the key becomes the restored root directory.
 
-**--no-cache**
+.. option:: --no-cache
+
    Bypass the broker content cache and interact directly with the backing
    store.  Performance will vary depending on the content of the archive.
 
-**--size-limit**\ =\ *SIZE*
+.. option:: --size-limit=SIZE
+
    Skip restoring keys that exceed SIZE bytes (default: no limit). SIZE may
    be specified as a floating point number with an optional multiplicative
    suffix k or K=1024, M=1024\*1024, or G=1024\*1024\*1024 (up to

@@ -43,11 +43,13 @@ requires authentication.
 OPTIONS
 =======
 
-**-f, --force**
+.. option:: -f, --force
+
    Allow the proxy command to connect to a broker running a different
    version of Flux with a warning message instead of a fatal error.
 
-**-n, --nohup**
+.. option:: -n, --nohup
+
    When an error occurs in the proxy connection, **flux proxy** will
    normally shut down the proxy and send ``SIGHUP`` and ``SIGCONT`` to
    the spawned shell or command. If the ``-n, --nohup`` option is used,
@@ -56,7 +58,8 @@ OPTIONS
    exit before terminating to avoid having the child process reparented
    and possibly lose its controlling tty.
 
-**--reconnect**
+.. option:: --reconnect
+
    If broker communication fails, drop the current connection and try to
    reconnect every 2 seconds until the connection succeeds.  Any event
    subscriptions and service registrations that were made on behalf of
