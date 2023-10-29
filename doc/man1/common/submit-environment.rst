@@ -8,7 +8,7 @@ give fine control over the requested environment submitted with the job.
 .. option:: --env=RULE
 
    Control how environment variables are exported with *RULE*. See
-   *ENV RULE SYNTAX* section below for more information. Rules are
+   the `ENV RULES`_ section below for more information. Rules are
    applied in the order in which they are used on the command line.
    This option may be specified multiple times.
 

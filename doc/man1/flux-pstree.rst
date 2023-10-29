@@ -99,8 +99,8 @@ OPTIONS
 .. option:: -f, --filter=STATE|RESULT
 
    Include jobs with specific job state or result. Multiple states or
-   results can be listed separated by comma. See the JOB STATUS section
-   of the :man1:`flux-jobs` manual for more detail.
+   results can be listed separated by comma. See the :ref:`flux_jobs_job_status`
+   section of the :man1:`flux-jobs` manual for more detail.
 
 .. option:: -l, --long
 

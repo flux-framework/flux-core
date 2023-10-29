@@ -36,7 +36,7 @@ OPTIONS
 .. option:: -v, --verbose=[LEVEL]
 
    This option may be specified multiple times, or with a value, to
-   set a verbosity level.  See VERBOSITY LEVELS below.
+   set a verbosity level.  See `VERBOSITY LEVELS`_ below.
 
 .. option:: -X, --noexec
 

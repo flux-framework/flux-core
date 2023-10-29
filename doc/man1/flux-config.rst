@@ -37,7 +37,7 @@ string values, which are printed without quotes to simplify their use in shell
 scripts.
 
 :program:`flux config builtin` prints compiled-in Flux configuration values.
-See BUILTIN VALUES below for a list of builtin
+See `BUILTIN VALUES`_ below for a list of builtin
 configuration key names.  This command is available to all users.
 
 .. note::

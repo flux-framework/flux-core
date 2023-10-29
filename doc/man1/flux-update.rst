@@ -29,7 +29,7 @@ would request an update of ``attributes.system.myattr`` to the string value
 ``"value"``.
 
 The :program:`flux update` command may also support other convenient key
-aliases.  Key aliases are listed in the SPECIAL KEYS section below.
+aliases.  Key aliases are listed in the `SPECIAL KEYS`_ section below.
 
 Updates will be sent to the job manager update service, which checks that
 the current user is permitted to apply all updates, and that all updates

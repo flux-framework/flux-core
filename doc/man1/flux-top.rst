@@ -86,7 +86,7 @@ The summary pane shows the following information:
 
 - The amount of time until the job's expiration time, in Flux Standard Duration
   format.  If the expiration time is unknown, the infinity symbol is
-  displayed (see CAVEATS below).
+  displayed (see `CAVEATS`_ below).
 
 - The nodes bargraph, which shows the fraction of used and down/excluded nodes
   vs total nodes.  The graph of used nodes is colored yellow and extends from

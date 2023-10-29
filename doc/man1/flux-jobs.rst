@@ -70,18 +70,18 @@ OPTIONS
 .. option:: -f, --filter=STATE|RESULT
 
    List jobs with specific job state or result. Multiple states or
-   results can be listed separated by comma. See JOB STATUS below for
+   results can be listed separated by comma. See `JOB STATUS`_ below for
    additional information. Defaults to *pending,running*.
 
 .. option:: -o, --format=NAME|FORMAT
 
    Specify a named output format *NAME* or a format string using Python's
-   format syntax. See OUTPUT FORMAT below for field names. Named formats
+   format syntax. See `OUTPUT FORMAT`_ below for field names. Named formats
    may be listed via :option:`--format=help`.  An alternate default format can
    be set via the FLUX_JOBS_FORMAT_DEFAULT environment variable.  Additional
    named formats may be registered with :program:`flux jobs` via configuration.
-   See the CONFIGURATION section for more details. A configuration snippet for
-   an existing named format may be generated with
+   See the `CONFIGURATION`_ section for more details. A configuration snippet
+   for an existing named format may be generated with
    :option:`--format=get-config=NAME`.
 
 .. option:: --json
@@ -173,6 +173,7 @@ OPTIONS
    threads is used, but by using the :option:`--threads`, a specific number
    of threads can be chosen.
 
+.. _flux_jobs_job_status:
 
 JOB STATUS
 ==========
@@ -194,6 +195,8 @@ of the following statuses: DEPEND, SCHED, RUN, CLEANUP, COMPLETED,
 FAILED, CANCELED, or TIMEOUT. Under the *status_abbrev* field name,
 these are abbreviated as D, S, R, C, CD, F, CA, and TO respectively.
 
+
+.. _flux_jobs_output_format:
 
 OUTPUT FORMAT
 =============
@@ -490,6 +493,8 @@ the state of the job or other context:
    "Canceled", or signal.  If available, other contextual information
    will also be provided such as the exit ``returncode`` or
    cancellation message.
+
+.. _flux_jobs_configuration:
 
 CONFIGURATION
 =============

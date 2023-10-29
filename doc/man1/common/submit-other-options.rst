@@ -27,7 +27,7 @@ OTHER OPTIONS
    Set shell option. Keys may include periods to denote hierarchy.
    VAL is optional and may be valid JSON (bare values, objects, or arrays),
    otherwise VAL is interpreted as a string. If VAL is not set, then the
-   default value is 1. See SHELL OPTIONS below.
+   default value is 1. See `SHELL OPTIONS`_ below.
 
 .. option:: --setattr=KEY[=VAL]
 

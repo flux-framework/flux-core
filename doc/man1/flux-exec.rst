@@ -61,7 +61,7 @@ OPTIONS
 .. option:: -r, --rank=NODESET
 
    Target specific ranks in *NODESET*. Default is to target "all" ranks.
-   See NODESET FORMAT below for more information.
+   See `NODESET FORMAT`_ below for more information.
 
 .. option:: -v, --verbose
 

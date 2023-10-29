@@ -121,7 +121,7 @@ OPTIONS
 .. option:: -o, --format=FORMAT
 
    Specify output format in ``list`` using Python's string format syntax.
-   See OUTPUT FORMAT below for field names.
+   See `OUTPUT FORMAT`_ below for field names.
 
 
 OUTPUT FORMAT

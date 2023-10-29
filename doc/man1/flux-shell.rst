@@ -25,13 +25,13 @@ The design of the Flux job shell allows customization through a set of
 builtin and runtime loadable shell plugins. These plugins are used to
 handle standard I/O redirection, PMI, CPU and GPU affinity, debugger
 support and more. Details of the :program:`flux shell` plugin capabilities and
-design can be found in the PLUGINS section below.
+design can be found in the `PLUGINS`_ section below.
 
 :program:`flux shell` also supports configuration via a Lua-based configuration
 file, called the shell ``initrc``, from which shell plugins may be loaded
 or shell options and data examined or set. The :program:`flux shell` initrc may
 even extend the shell itself via simple shell plugins developed directly
-in Lua. See the SHELL INITRC section below for details of the ``initrc``
+in Lua. See the `SHELL INITRC`_ section below for details of the ``initrc``
 format and features.
 
 OPTIONS
@@ -66,7 +66,7 @@ execution of the job:
    typically ``<userid>-shell-<jobid>``
  * load the system default ``initrc.lua``
    (``$sysconfdir/flux/shell/initrc.lua``), unless overridden by
-   configuration (See JOBSPEC OPTIONS and INITRC sections below)
+   configuration (See `JOBSPEC OPTIONS`_ and `SHELL INITRC`_ sections below)
  * call ``shell.init`` plugin callbacks
  * change working directory to the cwd of the job
  * enter a barrier to ensure shell initialization is complete on all shells
@@ -117,7 +117,7 @@ These callbacks are defined by "topic strings" to which plugins can
    the shell option is set before the builtin attempts to read them.
 
 Simple plugins may also be developed directly in the shell ``initrc.lua``
-file itself (see INITRC section, ``plugin.register()`` below)
+file itself (see `SHELL INITRC`_ section, ``plugin.register()`` below)
 
 By default, :program:`flux shell` supports the following plugin callback
 topics:
@@ -207,7 +207,7 @@ Options supported by :program:`flux shell` proper include:
 **initrc**\ =\ *FILE*
   Load :program:`flux shell` initrc.lua file from *FILE* instead of the default
   initrc path. For details of the job shell initrc.lua file format,
-  see the INITRC section below.
+  see the `SHELL INITRC`_ section below.
 
 Job shell plugins may also support configuration via shell options in
 the jobspec. For specific information about runtime-loaded plugins,
