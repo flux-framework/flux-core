@@ -15,7 +15,7 @@ DESCRIPTION
 .. program:: flux dmesg
 
 Each broker rank maintains a circular buffer of log entries
-which can be printed using flux-dmesg(1).
+which can be printed using :program`flux dmesg`.
 
 
 OPTIONS

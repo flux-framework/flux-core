@@ -28,13 +28,13 @@ connecting to the enclosing instance. However, connecting to a *different*
 Flux instance will require discovery of the fully-resolved URI for that
 instance.
 
-**flux uri** attempts to resolve its *TARGET* argument to a native local
+:program:`flux uri` attempts to resolve its *TARGET* argument to a native local
 or remote URI. The *TARGET* is itself a URI which specifies the method
 to use in URI resolution via the scheme part, with the path and query
 parts passed to a plugin which implements the resolution method.
 
 As a convenience, if *TARGET* is specified with no scheme, then the scheme
-is assumed to be ``jobid``.  This allows ``flux uri`` to be used to look
+is assumed to be ``jobid``.  This allows :program:`flux uri` to be used to look
 up the URI for a Flux instance running as a job in the current enclosing
 instance with:
 
@@ -55,13 +55,13 @@ all *TARGET* URIs support the special query arguments ``local`` or
 would return the ``local://`` URI for *JOBID* (if the URI can be resolved).
 
 A special environment variable FLUX_URI_RESOLVE_LOCAL will force
-``flux uri`` to always resolve URIs to local form.  This is often useful if
-the local connector is known to be on the local system (i.e. within a test
+:program:`flux uri` to always resolve URIs to local form.  This is often useful
+if the local connector is known to be on the local system (i.e. within a test
 Flux instance), and ssh to localhost does not work.
 
 A list of supported URI schemes will be listed at the bottom of
-``flux uri --help`` message. For a description of the URI resolver schemes
-included with Flux, see the URI SCHEMES and EXAMPLES sections below.
+:option:`flux uri --help` message. For a description of the URI resolver
+schemes included with Flux, see the URI SCHEMES and EXAMPLES sections below.
 
 OPTIONS
 =======
@@ -85,7 +85,7 @@ The following URI schemes are included by default:
 jobid:ID[/ID...]
    This scheme attempts to get the URI for a Flux instance running as a
    job in the current enclosing instance. This is the assumed scheme if no
-   ``scheme:`` is provided in *TARGET* passed to ``flux uri``, so the
+   ``scheme:`` is provided in *TARGET* passed to :program:`flux uri`, so the
    ``jobid:`` prefix is optional. A hierarchy of Flux jobids is supported,
    so ``f1234/f3456`` will resolve the URI for job ``f3456`` running in
    job ``f1234`` in the current instance. This scheme will raise an error

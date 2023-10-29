@@ -16,14 +16,14 @@ DESCRIPTION
 
 .. program:: flux pstree
 
-flux-pstree(1) displays a tree of running jobs by job name, similar to
+:program:`flux pstree` displays a tree of running jobs by job name, similar to
 what the :linux:man1:`pstree` command does for system processes.
 
-Like pstree(1), identical leaves of the job tree are combined, which
+Like :command:`pstree`, identical leaves of the job tree are combined, which
 results in a more compact output when many jobs within a Flux instance
 share the same job name.
 
-The flux-pstree(1) command supports custom labels for jobs, including
+The :program:`flux pstree` command supports custom labels for jobs, including
 separately labeling parent jobs, using the same format string syntax
 supported by :man1:`flux-jobs`.
 
@@ -33,7 +33,7 @@ that :option:`-all` is used, the job labels will automatically be amended to
 include the job status (i.e. ``{name}:{status_abbrev}``), though this
 can be overridden on the command line.
 
-The flux-pstree(1) command additionally supports listing extended
+The :program:`flux pstree` command additionally supports listing extended
 job information before the tree display with the :option:`--extended`,
 :option:`--details=NAME`, or :option:`--detail-format=FORMAT`  options, e.g.
 
@@ -70,7 +70,7 @@ resources divided by total available resources):
     ƒ2b6cPMS      1                             0:00:01     └── sleep
 
 
-By default, flux-pstree(1) truncates lines that exceed the current
+By default, :program:`flux pstree` truncates lines that exceed the current
 value of the ``COLUMNS`` environment variable or the terminal width
 if ``COLUMNS`` is not set. To disable truncation, use the :option:`--long`
 option.
@@ -168,7 +168,7 @@ OPTIONS
 EXAMPLES
 ========
 
-The default output of flux-pstree(1) shows all running jobs for the
+The default output of :program:`flux pstree` shows all running jobs for the
 current user by name, including any running sub-jobs. If there are
 currently no running jobs for the current user, only the enclosing
 instance is displayed as a ``.``, to indicate the root of the tree:

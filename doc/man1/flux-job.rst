@@ -46,13 +46,13 @@ ATTACH
 
 .. program:: flux job attach
 
-A job can be interactively attached to via ``flux job attach``.  This is
+A job can be interactively attached to via :program:`flux job attach`.  This is
 typically used to watch stdout/stderr while a job is running or after it has
 completed.  It can also be used to feed stdin to a job.
 
-When ``flux job attach`` is run interactively -- that is all of ``stdout``,
-``stderr`` and ``stdin`` are attached to a tty -- the command may display
-a status line while the job is pending, e.g
+When :program:`flux job attach` is run interactively -- that is all of
+``stdout``, ``stderr`` and ``stdin`` are attached to a tty -- the command may
+display a status line while the job is pending, e.g
 
 ::
 
@@ -112,8 +112,8 @@ CANCEL
 
 .. program:: flux job cancel
 
-One or more jobs by may be canceled with ``flux job cancel``.  An optional
-message included with the cancel exception may be provided via the
+One or more jobs by may be canceled with :program:`flux job cancel`.  An
+optional message included with the cancel exception may be provided via the
 :option:`--message=NOTE` option or after the list of jobids. The special
 argument *"--"* forces the end of jobid processing and can be used to separate
 the exception message from the jobids when necessary.
@@ -125,8 +125,8 @@ the exception message from the jobids when necessary.
 
 .. program:: flux job cancelall
 
-Jobs may be canceled in bulk with ``flux job cancelall``.  Target jobs are
-selected with:
+Jobs may be canceled in bulk with :program:`flux job cancelall`.  Target jobs
+are selected with:
 
 .. option:: -u, --user=USER
 
@@ -169,31 +169,32 @@ WAIT
 
 .. program:: flux job wait
 
-``flux job wait`` behaves like the UNIX :linux:man2:`wait` system call,
+:program:`flux job wait` behaves like the UNIX :linux:man2:`wait` system call,
 for jobs submitted with the ``waitable`` flag.  Compared to other methods
 of synchronizing on job completion and obtaining results, it is very
 lightweight.
 
 The result of a waitable job may only be consumed once.  This is a design
-feature that makes it possible to call ``flux job wait`` in a loop until all
-results are consumed.
+feature that makes it possible to call :program:`flux job wait` in a loop
+until all results are consumed.
 
 .. note::
   Only the instance owner is permitted to submit jobs with the ``waitable``
   flag.
 
-When run with a jobid argument, ``flux job wait`` blocks until the specified
-job completes.  If the job was successful, it silently exits with a code of
-zero.  If the job has failed, an error is printed on stderr, and it exits with
-a code of one.  If the jobid is invalid or the job is not waitable, ``flux job wait``
-exits with a code of two.  This special exit code of two is used to differentiate
-between a failed job and not being able to wait on the job.
+When run with a jobid argument, :program:`flux job wait` blocks until the
+specified job completes.  If the job was successful, it silently exits with a
+code of zero.  If the job has failed, an error is printed on stderr, and it
+exits with a code of one.  If the jobid is invalid or the job is not waitable,
+:program:`flux job wait` exits with a code of two.  This special exit code of
+two is used to differentiate between a failed job and not being able to wait
+on the job.
 
-When run without arguments, ``flux job wait`` blocks until the next waitable
-job completes and behaves as above except that the jobid is printed to stdout.
-When there are no more waitable jobs, it exits with a code of two.  The exit code
-of two can be used to determine when no more jobs are waitable when using
-``flux job wait`` in a loop.
+When run without arguments, :program:`flux job wait` blocks until the next
+waitable job completes and behaves as above except that the jobid is printed
+to stdout.  When there are no more waitable jobs, it exits with a code of two.
+The exit code of two can be used to determine when no more jobs are waitable
+when using :program:`flux job wait` in a loop.
 
 :option:`flux job wait --all` loops through all the waitable jobs as they
 complete, printing their jobids.  If all jobs are successful, it exits with a
@@ -213,7 +214,7 @@ SIGNAL
 
 .. program:: flux job kill
 
-One or more running jobs may be signaled by jobid with ``flux job kill``.
+One or more running jobs may be signaled by jobid with :program:`flux job kill`.
 
 .. option:: -s, --signal=SIG
 
@@ -221,8 +222,8 @@ One or more running jobs may be signaled by jobid with ``flux job kill``.
 
 .. program:: flux job killall
 
-Running jobs may be signaled in bulk with ``flux job killall``.  In addition
-to the option above, target jobs are selected with:
+Running jobs may be signaled in bulk with :program:`flux job killall`.  In
+addition to the option above, target jobs are selected with:
 
 .. option:: -u, --user=USER
 
@@ -237,7 +238,7 @@ EXCEPTION
 
 .. program:: flux job raise
 
-An exception may raised on one or more jobids with ``flux job raise``.
+An exception may raised on one or more jobids with :program:`flux job raise`.
 An optional message included with the job exception may be provided via
 the :option:`--message=NOTE` option or after the list of jobids. The special
 argument *"--"* forces the end of jobid processing and can be used to
@@ -257,8 +258,8 @@ separate the exception message from the jobids when necessary.
 
    Set exception type (default: cancel).
 
-Exceptions may be raised in bulk with ``flux job raiseall``, which requires a
-type (positional argument) and accepts the following options:
+Exceptions may be raised in bulk with :program:`flux job raiseall`, which
+requires a type (positional argument) and accepts the following options:
 
 .. program:: flux job raiseall
 
@@ -286,7 +287,7 @@ TASKMAP
 
 The mapping between job task ranks to node IDs is encoded in the RFC 34
 Flux Task Map format and posted to the job's ``shell.start`` event in the
-exec eventlog. The ``flux job taskmap`` utility is provided to assist in
+exec eventlog. The :program:`flux job taskmap` utility is provided to assist in
 working with these task maps.
 
 When executed with a jobid argument and no options, the taskmap for the job
@@ -325,12 +326,12 @@ TIMELEFT
 
 .. program:: flux job timeleft
 
-The ``flux job timeleft`` utility reports the number of whole seconds left
-in the current or specified job time limit. If the job has expired or is
+The :program:`flux job timeleft` utility reports the number of whole seconds
+left in the current or specified job time limit. If the job has expired or is
 complete, then this command reports ``0``. If the job does not have a time
 limit, then a large number (``UINT_MAX``) is reported.
 
-If ``flux job timeleft`` is called outside the context of a Flux job, or
+If :program:`flux job timeleft` is called outside the context of a Flux job, or
 an invalid or pending job is targeted, then this command will exit with
 an error and diagnostic message.
 
@@ -345,9 +346,10 @@ PURGE
 
 .. program:: flux job purge
 
-Inactive job data may be purged from the Flux instance with ``flux job purge``.
-Specific job ids may be specified for purging.  If no job ids are
-specified, the following options may be used for selection criteria:
+Inactive job data may be purged from the Flux instance with
+:program:`flux job purge`.  Specific job ids may be specified for purging.
+If no job ids are specified, the following options may be used for selection
+criteria:
 
 .. option:: --age-limit=FSD
 

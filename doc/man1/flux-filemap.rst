@@ -20,13 +20,14 @@ DESCRIPTION
 
 .. program:: flux filemap
 
-``flux-filemap`` uses :linux:man2:`mmap` to map files into the rank 0 broker
-*content cache*.  After mapping, the files may be extracted on any broker rank,
-taking advantage of scalability properties of the distributed cache to move the
-data.  The files are treated as read-only and must not change while mapped.
+:program:`flux filemap` uses :linux:man2:`mmap` to map files into the rank 0
+broker *content cache*.  After mapping, the files may be extracted on any
+broker rank, taking advantage of scalability properties of the distributed
+cache to move the data.  The files are treated as read-only and must not
+change while mapped.
 
-``flux-filemap map`` maps one or more file *PATH* arguments.  It must be run
-on the rank 0 broker, such as within a batch script, and the files must be
+:program:`flux filemap map` maps one or more file *PATH* arguments.  It must be
+run on the rank 0 broker, such as within a batch script, and the files must be
 directly accessible by the rank 0 broker.  If a PATH refers to a directory,
 the directory is recursively mapped.  If a file is encountered that is not
 readable, or has a type other than regular file, directory, or symbolic link,
@@ -34,16 +35,16 @@ a fatal error occurs.  Sparse files such as file system images for virtual
 machines are mapped efficiently.  File discretionary access permission are
 preserved, but file attributes, ACLs, and group ownership are not.
 
-``flux-filemap list`` lists mapped files.  Optionally, a :man7:`glob` pattern
-may be specified to filter the list.
+:program:`flux filemap list` lists mapped files.  Optionally, a :man7:`glob`
+pattern may be specified to filter the list.
 
-``flux-filemap get`` extracts mapped files and may be run on any broker or
-across all brokers using :man1:`flux-exec`.  Optionally, a :man7:`glob` pattern
-may be specified to filter the list.  When extracting mapped files in parallel,
-take care to specify a :option:`--directory` that is not shared and is not on a
-network file system without considering the ramifications.
+:program:`flux filemap get` extracts mapped files and may be run on any broker
+or across all brokers using :man1:`flux-exec`.  Optionally, a :man7:`glob`
+pattern may be specified to filter the list.  When extracting mapped files in
+parallel, take care to specify a :option:`--directory` that is not shared and
+is not on a network file system without considering the ramifications.
 
-``flux-filemap unmap`` unmaps mapped files.
+:option:`flux filemap unmap` unmaps mapped files.
 
 The ``stage-in`` shell plugin described in :man1:`flux-shell` may be used to
 extract previously mapped files into $FLUX_JOB_TMPDIR or another directory.

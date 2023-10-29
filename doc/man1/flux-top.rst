@@ -17,13 +17,13 @@ DESCRIPTION
 
 .. program:: flux top
 
-The ``flux-top`` command provides a dynamic view of Flux instance status
+The :program:`flux top` command provides a dynamic view of Flux instance status
 and running jobs.  *TARGET*, if specified, selects a Flux instance other
 than the default, and may be either a native Flux URI or a high level URI,
 as described in :man1:`flux-uri`.
 
-The ``flux-top`` display window is divided into two parts:  the summary pane,
-and the job listing pane, which are described in detail below.
+The :program:`flux top` display window is divided into two parts:  the summary
+pane, and the job listing pane, which are described in detail below.
 
 
 OPTIONS
@@ -47,7 +47,7 @@ OPTIONS
 KEYS
 ====
 
-``flux-top`` responds to the following key presses:
+:program:`flux top` responds to the following key presses:
 
 j, down-arrow
    Move cursor down in the job listing.
@@ -63,8 +63,8 @@ d
 
 enter
    Open the job at the current cursor position.  Only Flux instances (colored
-   blue in the job listing) owned by the user running ``flux-top`` may be
-   opened.  The display changes to show a new Flux instance, with its jobid
+   blue in the job listing) owned by the user running :program:`flux top` may
+   be opened.  The display changes to show a new Flux instance, with its jobid
    added to the path in the summary pane.  Nothing happens if the selected
    job cannot be opened.
 
@@ -73,7 +73,7 @@ q
    if any.  If the original Flux instance is being displayed, quit the program.
 
 control-l
-   Force a redraw of the ``flux-top`` window.
+   Force a redraw of the :program:`flux top` window.
 
 
 SUMMARY PANE
@@ -129,15 +129,16 @@ as :man1:`flux-jobs`.
 
 The newest jobs are shown at the top of the display.
 
-``flux-top`` subscribes to job state update events, and tries to update its
-display within 2s of receiving new job information.
+:program:`flux top` subscribes to job state update events, and tries to update
+its display within 2s of receiving new job information.
 
 
 CAVEATS
 =======
 
-``flux-top`` employs a few UTF-8 characters to maximize cuteness.  If your
-heart emoji looks like a cartoon expletive, consult your system administrator.
+:program:`flux top` employs a few UTF-8 characters to maximize cuteness.  If
+your heart emoji looks like a cartoon expletive, consult your system
+administrator.
 
 The infinity symbol in the expiration field does not really mean the Flux
 instance will run forever.  The field width of the timestamp portion of the

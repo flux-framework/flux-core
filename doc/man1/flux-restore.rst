@@ -14,8 +14,8 @@ DESCRIPTION
 
 .. program:: flux restore
 
-The ``flux-restore`` command reads a KVS snapshot from a portable archive
-format, usually written by :man1:`flux-dump`.
+The :program:`flux restore` command reads a KVS snapshot from a portable
+archive format, usually written by :man1:`flux-dump`.
 
 The archive source may be specified as a file path or *-* for standard input.
 The format of the archive may be any of the formats supported by

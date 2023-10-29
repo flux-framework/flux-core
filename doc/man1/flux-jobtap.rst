@@ -11,7 +11,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-The flux-jobtap(1) command is used to query, load, and remove *jobtap*
+The :program:`flux jobtap` command is used to query, load, and remove *jobtap*
 plugins from the Flux job-manager module at runtime.
 
 COMMANDS

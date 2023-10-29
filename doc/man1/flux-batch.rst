@@ -19,7 +19,7 @@ DESCRIPTION
 
 .. program:: flux batch
 
-**flux-batch** submits *SCRIPT* to run as the initial program of a Flux
+:program:`flux-batch` submits *SCRIPT* to run as the initial program of a Flux
 subinstance.  *SCRIPT* refers to a file that is copied at the time of
 submission.  Once resources are allocated, *SCRIPT* executes on the first
 node of the allocation, with any remaining free arguments supplied as *SCRIPT*
@@ -96,7 +96,7 @@ The available OPTIONS are detailed below.
 SUBMISSION DIRECTIVES
 =====================
 
-The :man1:`flux-batch` command supports submission directives
+The :program:`flux batch` command supports submission directives
 mixed within the submission script. The submission directive specification
 is fully detailed in RFC 36, but is summarized here for convenience:
 
@@ -128,7 +128,7 @@ is fully detailed in RFC 36, but is summarized here for convenience:
      # flux: """
 
 Submission directives may be used to set default command line options for
-:man1:`flux-batch` for a given script. Options given on the command line
+:program:`flux batch` for a given script. Options given on the command line
 override those in the submission script, e.g.: ::
 
    $ flux batch --job-name=test-name --wrap <<-EOF

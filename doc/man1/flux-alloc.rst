@@ -15,18 +15,18 @@ DESCRIPTION
 
 .. program:: flux alloc
 
-**flux-alloc** runs a Flux subinstance with *COMMAND* as the initial program.
-Once resources are allocated, *COMMAND* executes on the first node of the
-allocation with any free arguments supplied as *COMMAND* arguments.  When
+:program:`flux alloc` runs a Flux subinstance with *COMMAND* as the initial
+program.  Once resources are allocated, *COMMAND* executes on the first node of
+the allocation with any free arguments supplied as *COMMAND* arguments.  When
 *COMMAND* exits, the Flux subinstance exits, resources are released to the
-enclosing Flux instance, and **flux-alloc** returns.
+enclosing Flux instance, and :program:`flux alloc` returns.
 
 If no *COMMAND* is specified, an interactive shell is spawned as the initial
 program, and the subinstance runs until the shell is exited.
 
 If the :option:`--bg` option is specified, the subinstance runs without an
-initial program.  **flux-alloc** prints the jobid and returns as soon as the
-subinstance is ready to accept jobs.  The subinstance runs until it exceeds
+initial program.  :program:`flux alloc` prints the jobid and returns as soon as
+the subinstance is ready to accept jobs.  The subinstance runs until it exceeds
 its time limit, is canceled, or is shut down with :man1:`flux-shutdown`.
 
 Flux commands that are run from the subinstance (e.g. from the interactive

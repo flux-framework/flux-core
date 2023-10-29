@@ -23,21 +23,21 @@ Each Flux instance implements an append-only, content addressable
 storage service, which stores blobs of arbitrary content under
 message digest keys termed "blobrefs".
 
-**flux content store** reads data from standard input to EOF, stores it
+:program:`flux content store` reads data from standard input to EOF, stores it
 (possibly splitting into multiple blobs), and prints blobref(s) on
 standard output, one per line.
 
-**flux content load** reads blobrefs from standard input, one per line, or
-parses blobrefs on the command line (but not both).  It then loads the
+:program:`flux content load` reads blobrefs from standard input, one per line,
+or parses blobrefs on the command line (but not both).  It then loads the
 corresponding blob(s), and concatenates them on standard output.
 
 After a store operation completes on any rank, the blobs may be
 retrieved from any other rank.
 
 The content service includes a cache on each broker which improves
-scalability. The **flux content flush** command initiates store requests
+scalability. The :program:`flux content flush` command initiates store requests
 for any dirty entries in the local cache and waits for them to complete.
-This is mainly used in testing. The **flux content dropcache** command
+This is mainly used in testing. The :program:`flux content dropcache` command
 drops all non-essential entries in the local cache; that is, entries
 which can be removed without data loss.
 

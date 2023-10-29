@@ -30,14 +30,14 @@ DESCRIPTION
 
 .. program:: flux queue
 
-The ``flux-queue`` command controls Flux job queues.
+The :program:`flux queue` command controls Flux job queues.
 
 Normally, Flux has a single anonymous queue, but when queues are
 configured, all queues are named.  At this time, the *disable*,
 *enable*, *stop*, *start*, and *status* subcommands can be applied to
 a single, named queue.  The rest affect all queues.
 
-``flux-queue`` has the following subcommands:
+:program:`flux queue` has the following subcommands:
 
 disable
   Prevent jobs from being submitted to the queue, with a reason that is
@@ -65,14 +65,14 @@ start
 
 drain
   Block until all queues become empty.  It is sometimes useful to run after
-  ``flux queue disable``, to wait until the system is quiescent and can be
-  taken down for maintenance.
+  :program:`flux queue disable`, to wait until the system is quiescent and can
+  be taken down for maintenance.
 
 idle
   Block until all queues become `idle` (no jobs in RUN or CLEANUP state,
   and no outstanding alloc requests to the scheduler).  It may be useful to run
-  after ``flux queue stop`` to wait until the scheduler and execution system
-  are quiescent before maintenance involving them.
+  after :program:`flux queue stop` to wait until the scheduler and execution
+  system are quiescent before maintenance involving them.
 
 list
   Show queue defaults and limits. The :option:`--no-header` option suppresses

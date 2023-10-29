@@ -23,7 +23,7 @@ DESCRIPTION
 
 .. program:: flux overlay status
 
-``flux-overlay status`` reports the current status of the tree based
+:program:`flux overlay status` reports the current status of the tree based
 overlay network.  The possible status values are:
 
 full
@@ -115,7 +115,7 @@ Finally, translation between hostnames and broker ranks is accomplished with
 OPTIONS
 =======
 
-``flux-overlay status`` accepts the following options:
+:program:`flux overlay status` accepts the following options:
 
 .. option:: -h, --help
 

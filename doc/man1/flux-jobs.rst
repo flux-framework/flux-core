@@ -15,7 +15,7 @@ DESCRIPTION
 
 .. program:: flux jobs
 
-flux-jobs(1) is used to list jobs run under Flux. By default only
+:program:`flux jobs` is used to list jobs run under Flux. By default only
 pending and running jobs for the current user are listed. Additional
 jobs and information can be listed using options listed below.
 Alternately, specific job ids can be listed on the command line to
@@ -79,9 +79,9 @@ OPTIONS
    format syntax. See OUTPUT FORMAT below for field names. Named formats
    may be listed via :option:`--format=help`.  An alternate default format can
    be set via the FLUX_JOBS_FORMAT_DEFAULT environment variable.  Additional
-   named formats may be registered with ``flux jobs`` via configuration. See the
-   CONFIGURATION section for more details. A configuration snippet for an
-   existing named format may be generated with
+   named formats may be registered with :program:`flux jobs` via configuration.
+   See the CONFIGURATION section for more details. A configuration snippet for
+   an existing named format may be generated with
    :option:`--format=get-config=NAME`.
 
 .. option:: --json
@@ -94,10 +94,10 @@ OPTIONS
    of Flux will will have any recursively listed jobs in a ``jobs`` array,
    and so on for each sub-child.
 
-   Only the attributes which are available at the time of the flux-jobs
-   query will be present in the returned JSON object for a job. For
-   instance a pending job will not have ``runtime``, ``waitstatus`` or
-   ``result`` keys, among others. A missing key should be considered
+   Only the attributes which are available at the time of the
+   :program:`flux jobs` query will be present in the returned JSON object for
+   a job. For instance a pending job will not have ``runtime``, ``waitstatus``
+   or ``result`` keys, among others. A missing key should be considered
    unavailable.
 
    The :option:`--json` option is incompatible with :option:`--stats` and
@@ -128,7 +128,7 @@ OPTIONS
 
    Output a summary of job statistics and exit.  By default shows
    global statistics.  If :option:`--queue` is specified, shows statistics
-   for the specified queue.  ``flux jobs`` will exit with non-zero
+   for the specified queue.  :program:`flux jobs` will exit with non-zero
    exit status with :option:`--stats-only` if there are no active jobs. This
    allows the following loop to work::
 
@@ -150,7 +150,7 @@ OPTIONS
 
 .. option:: --recurse-all
 
-   By default, jobs not owned by the user running ``flux jobs`` are
+   By default, jobs not owned by the user running :program:`flux jobs` are
    skipped with :option:`--recursive`, because normally Flux instances
    only permit the instance owner to connect. This option forces the
    command to attempt to recurse into the jobs of other users.  Implies
@@ -159,15 +159,16 @@ OPTIONS
 .. option:: -L, --level=N
 
    With :option:`--recursive`, stop recursive job listing at level **N**.
-   Levels are counted starting at 0, so ``flux jobs -R --level=0`` is
-   equivalent to ``flux jobs`` without :option:`-R`, and :option:`--level=1`
-   would limit recursive job listing to child jobs of the current instance.
+   Levels are counted starting at 0, so :option:`flux jobs -R --level=0` is
+   equivalent to :program:`flux jobs` without :option:`-R`, and
+   :option:`--level=1` would limit recursive job listing to child jobs of the
+   current instance.
 
 .. option:: --threads=N
 
-   When ``flux jobs`` recursively queries job lists (with :option:`--recursive`)
-   or fetches info for jobs that are also instances (see
-   ``instance.*`` fields), a pool of threads is used to parallelize
+   When :program:`flux jobs` recursively queries job lists (with
+   :option:`--recursive`) or fetches info for jobs that are also instances
+   (see ``instance.*`` fields), a pool of threads is used to parallelize
    the required RPCs. Normally, the default number of ThreadPoolExecutor
    threads is used, but by using the :option:`--threads`, a specific number
    of threads can be chosen.
@@ -198,7 +199,7 @@ OUTPUT FORMAT
 =============
 
 The :option:`--format` option can be used to specify an output format to
-flux-jobs(1) using Python's string format syntax. For example, the
+:program:`flux jobs` using Python's string format syntax. For example, the
 following is the format used for the default format:
 
 ::
@@ -232,7 +233,7 @@ by including a ``+`` character when truncation occurs. If both *h* and
 Additionally, the custom job formatter supports a set of special
 conversion flags. Conversion flags follow the format field and are
 used to transform the value before formatting takes place. Currently,
-the following conversion flags are supported by *flux-jobs*:
+the following conversion flags are supported by :program:`flux jobs`:
 
 **!D**
    convert a timestamp field to ISO8601 date and time (e.g. 2020-01-07T13:31:00).
@@ -493,7 +494,7 @@ the state of the job or other context:
 CONFIGURATION
 =============
 
-The ``flux-jobs`` command supports registration of named output formats
+The :program:`flux jobs` command supports registration of named output formats
 in configuration files. The command loads configuration files from
 ``flux-jobs.EXT`` from the following paths in order of increasing precedence:
 
@@ -521,9 +522,9 @@ key per format pointing to a table or dictionary with the keys:
    :option:`flux jobs --format=help`
 
 If a format name is specified in more than one config file, then the last
-one loaded is used. Due to the order that ``flux-jobs`` loads config files,
-this allows user configuration to override system configuration. It is an
-error to override any internally defined formats (such as ``default``).
+one loaded is used. Due to the order that :program:`flux jobs` loads config
+files, this allows user configuration to override system configuration. It is
+an error to override any internally defined formats (such as ``default``).
 
 If a format name or string is not specified on the command line the
 internally defined format ``default`` is used.
@@ -551,7 +552,7 @@ error to redefine the default format string.
 EXAMPLES
 ========
 
-The default output of flux-jobs(1) will list the pending and running
+The default output of :program:`flux jobs` will list the pending and running
 jobs of the current user.  It is equivalent to:
 
 ::

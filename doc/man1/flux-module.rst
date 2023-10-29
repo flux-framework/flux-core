@@ -14,7 +14,7 @@ DESCRIPTION
 
 .. program:: flux module stats
 
-flux-module(1) manages dynamically loadable :man1:`flux-broker` modules.
+:program:`flux module` manages dynamically loadable :man1:`flux-broker` modules.
 
 
 COMMANDS
@@ -29,10 +29,10 @@ COMMANDS
    if module *name* is not loaded.
 
 **reload** [--force] *name* [*module-arguments* …​]
-   Reload module *name*. This is equivalent to running *flux module remove*
-   followed by *flux module load*. It is a fatal error if module *name* is
-   not loaded during removal unless the :option:`-f, --force` option is
-   specified.
+   Reload module *name*. This is equivalent to running
+   :program:`flux module remove` followed by :program:`flux module load`. It
+   is a fatal error if module *name* is not loaded during removal unless the
+   :option:`-f, --force` option is specified.
 
 **list** [*service*]
    List loaded :man1:`flux-broker` modules.

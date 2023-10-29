@@ -14,7 +14,7 @@ DESCRIPTION
 
 The Flux key-value store (KVS) is a simple, distributed data storage
 service used a building block by other Flux components.
-flux-kvs(1) is a command line utility that operates on the KVS.
+:program:`flux kvs` is a command line utility that operates on the KVS.
 It is a very thin layer on top of a C API.
 
 The Flux KVS stores values under string keys. The keys are
@@ -39,7 +39,7 @@ default KVS namespace "primary". An alternate namespace can be
 specified in most kvs commands via the *--namespace* option, or by
 setting the namespace in the environment variable FLUX_KVS_NAMESPACE.
 
-flux-kvs(1) runs a KVS *COMMAND*. The possible commands and their
+:program:`flux kvs` runs a KVS *COMMAND*. The possible commands and their
 arguments are described below.
 
 

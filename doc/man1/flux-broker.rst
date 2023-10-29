@@ -13,7 +13,7 @@ DESCRIPTION
 
 .. program:: flux broker
 
-flux-broker(1) is a distributed message broker daemon that provides
+:program:`flux broker` is a distributed message broker daemon that provides
 communications services within a Flux instance. It may be
 launched as a parallel program under Flux or other resource managers
 that support PMI.
@@ -30,7 +30,7 @@ using Flux API services.
 A logging service aggregates Flux log messages across the instance and
 emits them to a configured destination on rank 0.
 
-After its overlay network has completed wire-up, flux-broker(1)
+After its overlay network has completed wire-up, :program:`flux broker`
 starts the initial program on rank 0. If none is specified on
 the broker command line, an interactive shell is launched.
 

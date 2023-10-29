@@ -17,7 +17,7 @@ DESCRIPTION
 
 .. program:: flux bulksubmit
 
-:man1:`flux-bulksubmit` allows rapid bulk submission of jobs using
+:program:`flux bulksubmit` allows rapid bulk submission of jobs using
 an interface similar to GNU parallel or ``xargs``. The command takes
 inputs on stdin or the command line (separated by ``:::``), and submits
 the supplied command template and options as one job per input combination.
@@ -32,12 +32,13 @@ of a single input list, ``{}`` will work as the substitution string, e.g.::
     bulksubmit: submit echo 3
     bulksubmit: submit echo 4
 
-With :option:`--dry-run` ``bulksubmit`` will print the args and command which
-would have been submitted, but will not perform any job submission.
+With :option:`--dry-run` :program:`flux bulksubmit` will print the args and
+command which would have been submitted, but will not perform any job
+submission.
 
-The ``bulksubmit`` command can also take input lists on the command line.
-The inputs are separated from each other and the command  with the special
-delimiter ``:::``::
+The :program:`flux bulksubmit` command can also take input lists on the command
+line.  The inputs are separated from each other and the command  with the
+special delimiter ``:::``::
 
     $ flux bulksubmit echo {} ::: 1 2 3 4
     bulksubmit: submit echo 1

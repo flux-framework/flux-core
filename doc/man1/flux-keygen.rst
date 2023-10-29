@@ -14,7 +14,7 @@ DESCRIPTION
 
 .. program:: flux keygen
 
-flux-keygen(1) generates a long-term CURVE certificate used to secure
+:program:`flux keygen` generates a long-term CURVE certificate used to secure
 the overlay network of a Flux system instance.
 
 The Flux overlay network implements cryptographic privacy and data integrity
@@ -33,7 +33,7 @@ public keys are exchanged with PMI.
 OPTIONS
 =======
 
-``flux-keygen`` accepts the following options:
+:program:`flux keygen` accepts the following options:
 
 .. option:: -n, --name=NAME
 

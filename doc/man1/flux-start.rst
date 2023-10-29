@@ -15,15 +15,15 @@ DESCRIPTION
 
 .. program:: flux start
 
-flux-start(1) launches a new Flux instance. By default, flux-start
-execs a single :man1:`flux-broker` directly, which will attempt to use
-PMI to fetch job information and bootstrap a flux instance.
+:program:`flux start` launches a new Flux instance. By default,
+:program:`flux start` execs a single :man1:`flux-broker` directly, which
+will attempt to use PMI to fetch job information and bootstrap a flux instance.
 
 If a size is specified via :option:`--test-size`, an instance of that size is
-to be started on the local host with flux-start as the parent.
+to be started on the local host with :program:`flux start` as the parent.
 
 A failure of the initial program (such as non-zero exit code)
-causes flux-start to exit with a non-zero exit code.
+causes :program:`flux start` to exit with a non-zero exit code.
 
 
 OPTIONS
@@ -81,10 +81,11 @@ OPTIONS
 .. option:: --test-exit-mode=MODE
 
    Set the mode for the exit timeout.  If set to ``leader``, the exit timeout
-   is only triggered upon exit of the leader broker, and the flux-start exit
-   code is that of the leader broker.  If set to ``any``, the exit timeout
-   is triggered upon exit of any broker, and the flux-start exit code is the
-   highest exit code of all brokers.  Default: ``any``.
+   is only triggered upon exit of the leader broker, and the
+   :program:`flux start` exit code is that of the leader broker.  If set to
+   ``any``, the exit timeout is triggered upon exit of any broker, and the
+   :program:`flux start` exit code is the highest exit code of all brokers.
+   Default: ``any``.
 
 .. option:: --test-start-mode=MODE
 
@@ -102,7 +103,7 @@ OPTIONS
 .. option:: --test-rundir-cleanup
 
    Recursively remove the directory specified with :option:`--test-rundir` upon
-   completion of flux-start.
+   completion of :program:`flux start`.
 
 .. option:: --test-pmi-clique=MODE
 

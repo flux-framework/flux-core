@@ -14,8 +14,8 @@ DESCRIPTION
 
 .. program flux dump
 
-The ``flux-dump`` command writes a KVS snapshot to a portable archive format,
-usually read by :man1:`flux-restore`.
+The :program:`flux dump` command writes a KVS snapshot to a portable archive
+format, usually read by :man1:`flux-restore`.
 
 The snapshot source is the primary namespace of the current KVS root by default.
 If :option:`--checkpoint` is specified, the snapshot source is the last KVS
@@ -81,13 +81,13 @@ OTHER NOTES
 ===========
 
 KVS commits are atomic and propagate to the root of the namespace.  Because of
-this, when ``flux-dump`` archives a snapshot of a live system, it reflects one
-point in time, and does not include any changes committed while the dump is
-in progress.
+this, when :program:`flux dump` archives a snapshot of a live system, it
+reflects one point in time, and does not include any changes committed while
+the dump is in progress.
 
-Since ``flux-dump`` generates the archive by interacting directly with the
-content store, the :option:`--checkpoint` option may be used to dump the most
-recent state of the KVS when the KVS module is not loaded.
+Since :program:`flux dump` generates the archive by interacting directly with
+the content store, the :option:`--checkpoint` option may be used to dump the
+most recent state of the KVS when the KVS module is not loaded.
 
 Only regular values and symbolic links are dumped to the archive.  Directories
 are not dumped as independent objects, so empty directories are omitted from
@@ -100,11 +100,11 @@ The KVS path separator is converted to the UNIX-compatible slash so that the
 archive can be unpacked into a file system if desired.
 
 The modification time of files in the archive is set to the time that
-``flux-dump`` is started if dumping the current KVS root, or to the timestamp
-of the checkpoint if :option:`--checkpoint` is used.
+:program:`flux dump` is started if dumping the current KVS root, or to the
+timestamp of the checkpoint if :option:`--checkpoint` is used.
 
 The owner and group of files in the archive are set to the credentials of the
-user that ran ``flux-dump``.
+user that ran :program:`flux-dump`.
 
 The mode of files in the archive is set to 0644.
 

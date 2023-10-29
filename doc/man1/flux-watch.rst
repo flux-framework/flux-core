@@ -15,8 +15,8 @@ DESCRIPTION
 
 .. program:: flux watch
 
-The flux-watch(1) command is used to monitor the output and state of one
-or more Flux jobs. The command works similarly to the
+The :program:`flux watch` command is used to monitor the output and state of
+one or more Flux jobs. The command works similarly to the
 :option:`flux submit --watch` option, but can be used to monitor even inactive
 jobs. For example, to copy all job output to the terminal after submitting a
 series of jobs with :man1:`flux-submit` or :man1:`flux-bulksubmit`, use
@@ -85,9 +85,9 @@ OPTIONS
 EXIT STATUS
 ===========
 
-The exit status of ``flux watch`` is 0 if no jobs match the job selection
-options or if all jobs complete with success. Otherwise, the command exits
-with the largest exit status of all monitored jobs, or 2 if there is an
+The exit status of :program:`flux watch` is 0 if no jobs match the job
+selection options or if all jobs complete with success. Otherwise, the command
+exits with the largest exit status of all monitored jobs, or 2 if there is an
 error during option processing.
 
 RESOURCES

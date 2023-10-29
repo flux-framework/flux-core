@@ -19,7 +19,7 @@ DESCRIPTION
 
 .. program:: flux pgrep
 
-*flux-pgrep* lists jobids that match a supplied expression. The
+:program:`flux pgrep` lists jobids that match a supplied expression. The
 expression may contain a pattern which matches the job name, or
 a range of jobids in the form ``jobid1..jobid2``. If both a pattern
 and jobid range are supplied then both must match.
@@ -31,7 +31,7 @@ prefixing the pattern with ``name:``, e.g. ``name:fr..123``.
 
 By default, only active jobs for the current user are considered.
 
-*flux-pkill* cancels matching jobs instead of listing them.
+:program:`flux pkill` cancels matching jobs instead of listing them.
 
 OPTIONS
 =======

@@ -21,7 +21,7 @@ reached. As with :man1:`flux-exec`, these tasks run as direct children
 of the flux-broker and run outside of the control of any loaded
 job scheduling service.
 
-The flux-cron(1) utility offers an interface to create, stop, start,
+The :program:`flux cron` utility offers an interface to create, stop, start,
 query, and destroy these entries in the Flux cron service.
 
 For a detailed description of the cron service operation and how
@@ -41,9 +41,9 @@ COMMANDS
    until an event matching the sync-event *topic* is received. With
    :option:`--epsilon` the cron module will **not** delay task execution if
    the task is normally scheduled to run within *delay* of the matching event.
-   Without any *topic* supplied on command line, *flux cron sync* displays the
-   current setting for sync. If a task is deferred due to sync-event, the
-   *stats.deferred* statistic is incremented.
+   Without any *topic* supplied on command line, :program:`flux cron sync`
+   displays the current setting for sync. If a task is deferred due to
+   sync-event, the *stats.deferred* statistic is incremented.
 
 **interval** [OPTIONS] *interval* *command*
    Create a cron entry to execute *command* every *interval*, where *interval*
@@ -132,7 +132,7 @@ COMMANDS
    Process one or more lines containing crontab expressions from *file*
    (stdin by default) Each valid crontab line will result in a new cron
    entry registered with the flux-cron service. The cron expression format
-   supported by ``flux cron tab`` has 5 fields: *minutes* (0-59), *hours*
+   supported by :program:`flux cron tab` has 5 fields: *minutes* (0-59), *hours*
    (0-23), *day of month* (1-31), *month* (0-11), and *day of week* (0-6).
    Everything after the day of week is considered a command to be run.
 
@@ -175,12 +175,13 @@ COMMANDS
    Start a stopped cron entry *id*.
 
 **delete** [--kill] *id*
-   Purge cron entry *id* from the flux-cron entry list. If :option:`--kill` is
+   Purge cron entry *id* from the cron entry list. If :option:`--kill` is
    used, kill any running task associated with entry *id*.
 
 **dump** [--key=KEY] *id*
    Dump all information for cron entry *id*. With :option:`--key` print only
-   the value for key *KEY*. For a list of keys run *flux cron dump ID*.
+   the value for key *KEY*. For a list of keys run
+   :program:`flux cron dump ID`.
 
 
 EXTRA OPTIONS
@@ -188,8 +189,8 @@ EXTRA OPTIONS
 
 .. program:: flux cron tab
 
-For ``flux-cron`` commands allowing :option:`--options`, the following EXTRA
-OPTIONS are supported:
+For :program:`flux cron` commands allowing :option:`--options`, the following
+EXTRA OPTIONS are supported:
 
 .. option:: -o timeout=N
 
@@ -227,14 +228,14 @@ be set at creation time via a comma-separated list of *option=value*
 parameters passed to :option:`-o, --option=OPTS`. These options are described
 in the EXTRA OPTIONS section at the end of this document.
 
-Currently, flux-cron supports only two types of entries. The *interval*
+Currently, Flux cron supports only two types of entries. The *interval*
 entry supports executing a command once every configured duration,
 optionally starting after a different time period. More detailed
 information about the interval type can be found in the documentation for
-the flux-cron *interval* command above. The *event* type entry supports
+the :program:`flux cron interval` command above. The *event* type entry supports
 running a command once every N events matching the configured event topic.
 More information about this type can be found in the documentation for
-*flux cron event*.
+:program:`flux cron event`.
 
 The Flux cron module additionally keeps a common set of statistics for
 each entry, regardless of type . These include the creation time, last
@@ -245,14 +246,15 @@ the *flux cron dump* subcommand *stats.\** output.
 
 When registered, cron entries are automatically *started*, meaning they
 are eligible to run the configured command when the trigger condition
-is met. Entries may be *stopped*, either by use of the *flux cron stop*
+is met. Entries may be *stopped*, either by use of the :program:`flux cron stop`
 command, or if a *stop-on-failure* value is set. Stopped entries are
-restarted using *flux cron start*, at which point counters used for
+restarted using :program:`flux cron start`, at which point counters used for
 repeat and stop-on-failure are reset.
 
-Stopped entries are kept in the flux cron until deleted with *flux
-cron delete*. Active cron entries may also be deleted, with currently
-executing tasks optionally killed if the :option:`--kill` option is provided.
+Stopped entries are kept in the flux cron until deleted with
+:program:`flux cron delete`. Active cron entries may also be deleted, with
+currently executing tasks optionally killed if the :option:`--kill` option is
+provided.
 
 
 TASK EXECUTION
@@ -271,19 +273,19 @@ On task failure, the cron job is stopped if *stop-on-failure* is set, and
 the current failure count exceeds the configured value. By default,
 *stop-on-failure* is not set.
 
-By default, flux-cron module keeps information for the last task executed
+By default, the Flux cron module keeps information for the last task executed
 for each cron entry. This information can be viewed either via the
-*flux cron list* or *flux cron dump ID* subcommands. Data such as
-start and end time, exit status, rank, and PID for the task is available.
-The number of tasks kept for each cron entry may be individually tuned
-via the :option:`--task-history-count` option, described in the EXTRA OPTIONS
-section.
+:program:`flux cron list` or :program:`flux cron dump ID` subcommands. Data
+such as start and end time, exit status, rank, and PID for the task is
+available.  The number of tasks kept for each cron entry may be individually
+tuned via the :option:`--task-history-count` option, described in the
+EXTRA OPTIONS section.
 
 Commands are normally executed immediately on the interval or event
 trigger for which they are configured. However, if the :option:`--sync-event`
 option is active on the cron module, tasks execution will be deferred
 until the next synchronization event. See the documentation above
-for *flux cron sync* for more information.
+for :program:`flux cron sync` for more information.
 
 
 RESOURCES

@@ -14,19 +14,19 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-resource(1) lists and manipulates Flux resources.  The resource inventory
-is maintained and monitored by the resource service.  The scheduler acquires
-a subset of resources from the resource service to allocate to jobs, and relies
-on the resource service to inform it of status changes that affect the
-usability of resources by jobs as described in RFC 27.
+:program:`flux resource` lists and manipulates Flux resources.  The resource
+inventory is maintained and monitored by the resource service.  The scheduler
+acquires a subset of resources from the resource service to allocate to jobs,
+and relies on the resource service to inform it of status changes that affect
+the usability of resources by jobs as described in RFC 27.
 
-The flux-resource(1) **list** subcommand queries the scheduler for its view
+The :program:`flux resource list` subcommand queries the scheduler for its view
 of resources, including allocated/free status.
 
-The other flux-resource(1) subcommands operate on the resource service and
-are primarily of interest to system administrators of a Flux system instance.
-For example, they can show whether or not a node is booted, and may be used to
-administratively drain and undrain nodes.
+The other :program:`flux resource` subcommands operate on the resource service
+and are primarily of interest to system administrators of a Flux system
+instance.  For example, they can show whether or not a node is booted, and may
+be used to administratively drain and undrain nodes.
 
 A few notes on drained nodes:
 
@@ -35,9 +35,9 @@ A few notes on drained nodes:
 - When an instance is restarted, drained nodes remain drained.
 - The scheduler may determine that a job request is *feasible* if the total
   resource set, including drained nodes, would allow it to run.
-- In ``flux resource status`` and ``flux resource drain``, the drain state
-  of a node will be presented as "drained" if the node has no job allocations,
-  and "draining" if there are still jobs running on the node.
+- In :program:`flux resource status` and :program:`flux resource drain`, the
+  drain state of a node will be presented as "drained" if the node has no job
+  allocations, and "draining" if there are still jobs running on the node.
 - If a node is drained and offline, then "drained*" will be displayed.
 
 Some further background on resource service operation may be found in the
@@ -71,8 +71,8 @@ COMMANDS
    Show a brief, single line summary of scheduler view of resources.
 
    With :option:`-s, --states=STATE,...`, limit the output to specified
-   resource states as with ``flux resource list``. By default, the *STATE*
-   reported by ``flux resource info`` is "all".
+   resource states as with :program:`flux resource list`. By default, the
+   *STATE* reported by :program:`flux resource info` is "all".
 
    With :option:`-i, --include=TARGETS`, the results are filtered to only
    include resources matching **TARGETS**, which may be specified either as
@@ -124,7 +124,7 @@ COMMANDS
 
    With :option:`-n,--no-header` the output header is suppressed.
 
-   Normally, ``flux resource status`` skips lines with no resources,
+   Normally, :program:`flux resource status` skips lines with no resources,
    unless the :option:`-s, --states` option is used. Suppression of empty lines
    can may be forced with the :option:`--skip-empty` option.
 
@@ -142,7 +142,7 @@ COMMANDS
    to specify ranks or hosts which do not exist, the result will be filtered
    to include only those ranks or hosts that are present in *TARGETS*.
 
-   By default, **flux resource drain** will fail if any of the *targets*
+   By default, :program:`flux resource drain` will fail if any of the *targets*
    are already drained. To change this behavior, use either of the
    :option:`-f, --force` or :option:`-u, --update` options. With
    :option:`--force`, the *reason* for all existing drained targets is
@@ -150,9 +150,10 @@ COMMANDS
    also overwritten. With :option:`--update`, only those ranks that are not
    already drained or do not have a *reason* set have their *reason* updated.
 
-   Resources cannot be both excluded and drained, so **flux resource drain**
-   will also fail if any *targets* are currently excluded by configuration.
-   There is no option to force an excluded node into the drain state.
+   Resources cannot be both excluded and drained, so
+   :program:`flux resource drain` will also fail if any *targets* are
+   currently excluded by configuration.  There is no option to force an
+   excluded node into the drain state.
 
    This command, when run with arguments, is restricted to the Flux instance
    owner.
@@ -176,11 +177,11 @@ Python's string format syntax or a defined format by name. For a list of
 built-in and configured formats use :option:`-o help`.  An alternate default
 format can be set via the FLUX_RESOURCE_STATUS_FORMAT_DEFAULT,
 FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT, and FLUX_RESOURCE_LIST_FORMAT_DEFAULT
-environment variables (for ``flux resource status``, ``flux resource drain``,
-and ``flux resource list`` respectively).  A configuration snippet for an
-existing named format may be generated with :option:`--format=get-config=NAME`.
-See :man1:`flux-jobs` *OUTPUT FORMAT* section for a detailed description of
-this syntax.
+environment variables (for :program:`flux resource status`,
+:program:`flux resource drain`, and :program:`flux resource list`
+respectively).  A configuration snippet for an existing named format may be
+generated with :option:`--format=get-config=NAME`.  See :man1:`flux-jobs`
+*OUTPUT FORMAT* section for a detailed description of this syntax.
 
 Resources are combined into a single line of output when possible depending on
 the supplied output format.  Resource counts are not included in the
@@ -265,13 +266,13 @@ The following field names can be specified for the **list** subcommand:
 CONFIGURATION
 =============
 
-Similar to :man1:`flux-jobs`, the ``flux-resource`` command supports loading
-a set of config files for customizing utility output formats. Currently
+Similar to :man1:`flux-jobs`, the :program:`flux resource` command supports
+loading a set of config files for customizing utility output formats. Currently
 this can be used to register named format strings for the ``status``,
 ``list``, and ``drain`` subcommands.
 
-Configuration for each ``flux-resource`` subcommand is defined in a separate
-table, so to add a new format ``myformat`` for ``flux resource list``,
+Configuration for each :program:`flux resource` subcommand is defined in a
+separate table, so to add a new format ``myformat`` for ``flux resource list``,
 the following config file could be used::
 
   # $HOME/.config/flux/flux-resource.toml

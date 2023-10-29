@@ -14,7 +14,7 @@ DESCRIPTION
 
 .. program:: flux shutdown
 
-The ``flux-shutdown`` command causes the default Flux instance, or the
+The :program:`flux shutdown` command causes the default Flux instance, or the
 instance specified by *TARGET*, to exit RUN state and begin the process
 of shutting down.  *TARGET* may be either a native Flux URI or a high level
 URI, as described in :man1:`flux-uri`.
@@ -44,7 +44,7 @@ increase storage overhead and restart time.  It is recommended that the
 OPTIONS
 =======
 
-``flux-shutdown`` accepts the following options:
+:program:`flux shutdown` accepts the following options:
 
 .. option:: -h, --help
 

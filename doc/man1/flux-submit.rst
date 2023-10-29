@@ -17,8 +17,8 @@ DESCRIPTION
 
 .. program:: flux submit
 
-flux-submit(1) enqueues a job to run under Flux and prints its numerical
-jobid on standard output.  The job consists of *N* copies of COMMAND
+:program:`flux submit` enqueues a job to run under Flux and prints its
+numerical jobid on standard output.  The job consists of *N* copies of COMMAND
 launched together as a parallel job.
 
 If :option:`--ntasks` is unspecified, a value of *N=1* is assumed.

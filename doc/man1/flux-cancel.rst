@@ -16,12 +16,12 @@ DESCRIPTION
 
 .. program:: flux cancel
 
-flux-cancel(1) cancels one or more jobs by raising a job exception of
+:program:`flux cancel` cancels one or more jobs by raising a job exception of
 type=cancel. An optional message included with the cancel exception may be
 provided via the :option:`--message` option. Canceled jobs are immediately
 sent SIGTERM followed by SIGKILL after a configurable timeout (default=5s).
 
-flux-cancel(1) can target multiple jobids by either taking them on the
+:program:`flux cancel` can target multiple jobids by either taking them on the
 command line, or via the selection options :option:`--all`, :option:`--user`,
 or :option:`--states`. It is an error to provide jobids on the command line
 and use one or more of the selection options.
@@ -29,7 +29,7 @@ and use one or more of the selection options.
 By default :option:`--all` will target all jobs for the current user. To
 target all jobs for all users, use :option:`--user=all` (only the instance
 owner is allowed to use :option:`--user=all`). To see how many jobs
-flux-cancel(1) would kill, use the :option:`--dry-run` option.
+:program:`flux cancel` would kill, use the :option:`--dry-run` option.
 
 OPTIONS
 =======
