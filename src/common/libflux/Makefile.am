@@ -132,7 +132,8 @@ TESTS = test_message.t \
 	test_plugin.t \
 	test_sync.t \
 	test_disconnect.t \
-	test_msg_deque.t
+	test_msg_deque.t \
+	test_rpcscale.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libtestutil/libtestutil.la \
@@ -219,6 +220,12 @@ test_version_t_LDADD = $(test_ldadd)
 test_rpc_t_SOURCES = test/rpc.c
 test_rpc_t_CPPFLAGS = $(test_cppflags)
 test_rpc_t_LDADD = $(test_ldadd)
+
+test_rpcscale_t_SOURCES = test/rpcscale.c
+test_rpcscale_t_CPPFLAGS = $(test_cppflags)
+test_rpcscale_t_LDADD = \
+	$(top_builddir)/src/common/liboptparse/liboptparse.la \
+	$(test_ldadd)
 
 test_rpc_chained_t_SOURCES = test/rpc_chained.c
 test_rpc_chained_t_CPPFLAGS = $(test_cppflags)
