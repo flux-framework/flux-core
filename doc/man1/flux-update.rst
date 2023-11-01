@@ -75,7 +75,9 @@ SPECIAL KEYS
   Updates of the job ``duration`` can take the form of of *[+-]FSD*, where
   ``+`` or ``-`` indicate an adjustment of the existing duration, and *FSD*
   is any string or number in RFC 23 Flux Standard Duration. Examples include
-  ``60``, ``1m``, ``1.5h``, ``+10m``, ``-1h``.
+  ``60``, ``1m``, ``1.5h``, ``+10m``, ``-1h``. Updates to the duration of
+  a running job may be allowed (instance owner only) and are handled as a
+  special case. For details see `DURATION UPDATE OF A RUNNING JOB`_ below.
 
 *attributes.system.queue*, *queue*
   Updates of a pending job's ``queue`` to another enabled queue may
@@ -85,6 +87,39 @@ SPECIAL KEYS
 
 *name*
   Alias for job name, i.e. ``attributes.system.job.name``
+
+
+DURATION UPDATE OF A RUNNING JOB
+================================
+
+As a special case, an update of the duration of a running job may be allowed
+when performed by the instance owner and validated by the scheduler. When
+a running job's duration is updated, this triggers a ``resource-update``
+event in the main eventlog which contains the updated resource set
+(R) expiration time. This event then triggers the following actions to
+propagate the updated job expiration through the system:
+
+ - The updated expiration is forwarded to the job execution system which
+   modifies its expiration timer for the job.
+ - If the user enabled the job shell option to signal a job before the
+   time limit, then the job shell receives the updated R and resets this
+   timer.
+ - If the job is a subinstance of Flux (e.g. started with :man1:`flux-alloc`
+   or :man1:`flux-batch`), the instance resource module also receives
+   notification of the updated R, replaces its internal copy, writes
+   the update to ``resource.R`` in the KVS, and issues a ``resource-update``
+   event to the ``resource.eventlog``.
+ - The ``resource-update`` event in the eventlog results in a new
+   RFC 28 ``resource.acquire`` response to the scheduler containing the
+   updated expiration.
+ - The instance scheduler accepts the new response and updates its
+   internal resource set representation.
+ - The update service in the job-manager is notified of the R update,
+   and if the expiration has been increased, it walks the list of running
+   jobs and issues a ``resource-update`` event for any job which had
+   its expiration set based on the previous instance expiration.
+ - For any job that has its expiration extended due to an instance expiration
+   update, all these steps are repeated.
 
 EXIT STATUS
 ===========
