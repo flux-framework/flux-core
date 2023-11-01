@@ -1,7 +1,8 @@
 CONSTRAINTS
 ===========
 
-**--requires=CONSTRAINT**
+.. option:: --requires=CONSTRAINT**
+
    Specify a set of allowable properties and other attributes to consider
    when matching resources for a job. The **CONSTRAINT** is expressed in
    a simple syntax described in RFC 35 (Constraint Query Syntax) which is
@@ -29,7 +30,7 @@ CONSTRAINTS
 
    The full specification of Constraint Query Syntax can be found in RFC 35.
 
-   Currently, **--requires** supports the following operators:
+   Currently, :option:`--requires` supports the following operators:
 
    properties
      Require the set of specified properties. Properties may be

@@ -20,53 +20,62 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux config reload`` tells :man1:`flux-broker` to reload its TOML
+.. program:: flux config get
+
+:program:`flux config reload` tells :man1:`flux-broker` to reload its TOML
 configuration.  Further details of Flux configuration are described in
 :man5:`flux-config`, including some caveats on configuration updates.
-On Flux instances started with :linux:man1:`systemd`, ``systemctl reload flux``
-invokes this command.  This command is restricted to the instance owner.
+On Flux instances started with :linux:man1:`systemd`,
+:program:`systemctl reload flux` invokes this command.  This command is
+restricted to the instance owner.
 
-``flux config get`` queries the TOML configuration for a given Flux broker.
-if *NAME* is unspecified, it dumps the entire configuration object.  Otherwise,
-*NAME* is expected to be a period-delimited path name representing a TOML key.
-Return values are printed in string-encoded JSON form, except for string values,
-which are printed without quotes to simplify their use in shell scripts.
+:program:`flux config get` queries the TOML configuration for a given Flux
+broker.  if *NAME* is unspecified, it dumps the entire configuration object.
+Otherwise, *NAME* is expected to be a period-delimited path name representing
+a TOML key.  Return values are printed in string-encoded JSON form, except for
+string values, which are printed without quotes to simplify their use in shell
+scripts.
 
-``flux config builtin`` prints compiled-in Flux configuration values.
-See BUILTIN VALUES below for a list of builtin
+:program:`flux config builtin` prints compiled-in Flux configuration values.
+See `BUILTIN VALUES`_ below for a list of builtin
 configuration key names.  This command is available to all users.
 
 .. note::
-   ``flux config get`` and ``flux config builtin`` refer to disjoint key
-   namespaces.  Flux behavior is determined by a combination of these values,
-   :man7:`flux-broker-attributes`, and other factors.  This disjoint
-   configuration scheme is subject to change in future releases of Flux.
+   :program:`flux config get` and :program:`flux config builtin` refer to
+   disjoint key namespaces.  Flux behavior is determined by a combination of
+   these values, :man7:`flux-broker-attributes`, and other factors.  This
+   disjoint configuration scheme is subject to change in future releases of
+   Flux.
 
 .. note::
-   ``flux config builtin`` uses a heuristic to determine if :man1:`flux`
+   :program:`flux config builtin` uses a heuristic to determine if :man1:`flux`
    was run from the flux-core source tree, and substitutes source tree
    specific values if found to be in tree.  This enables Flux testing without
    requiring installation.
 
-``flux config load`` replaces the current config with an object read from
-standard input (JSON or TOML), or from ``*.toml`` in *PATH*, if specified.
+:program:`flux config load` replaces the current config with an object read
+from standard input (JSON or TOML), or from ``*.toml`` in *PATH*, if specified.
 
 GET SUBCOMMAND OPTIONS
 ======================
 
-**-h, --help**
+.. option:: -h, --help
+
    Display subcommand help.
 
-**-d, --default**\ =\ *VALUE*
+.. option:: -d, --default=VALUE
+
    Substitute *VALUE* if *NAME* is not set in the configuration, and exit
    with a return code of zero.
 
-**-q, --quiet**
-   Suppress printing of errors if *NAME* is not set and *--default* was not
-   specified.  This may be convenient to avoid needing to redirect standard
+.. option:: -q, --quiet
+
+   Suppress printing of errors if *NAME* is not set and :option:`--default` was
+   not specified.  This may be convenient to avoid needing to redirect standard
    error in a shell script.
 
-**-t, --type**\ =\ *TYPE*
+.. option:: -t, --type=TYPE
+
    Require that the value has the specified type, or exit with a nonzero exit
    code.  Valid types are *string*, *integer*, *real*, *boolean*, *object*, and
    *array*.  In addition, types of *fsd*, *fsd-integer*, and *fsd-real* ensure
@@ -78,7 +87,8 @@ GET SUBCOMMAND OPTIONS
 BUILTIN VALUES
 ==============
 
-The following configuration keys may be printed with ``flux config builtin``:
+The following configuration keys may be printed with
+:program:`flux config builtin`:
 
 **rc1_path**
    The rc1 script path used by :man1:`flux-broker`, unless overridden by

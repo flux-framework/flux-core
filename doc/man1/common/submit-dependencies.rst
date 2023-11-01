@@ -8,7 +8,8 @@ DEPENDENCIES
 
 Dependencies may be specified on the command line using the following options:
 
-**--dependency=URI**
+.. option:: --dependency=URI
+
    Specify a dependency of the submitted job using RFC 26 dependency URI
    format. The URI format is **SCHEME:VALUE[?key=val[&key=val...]]**.
    The URI will be converted into RFC 26 JSON object form and appended to
@@ -17,7 +18,7 @@ Dependencies may be specified on the command line using the following options:
    submitted job will be rejected with an error message indicating this
    fact.
 
-   The ``--dependency`` option may be specified multiple times. Each use
+   The :option:`--dependency` option may be specified multiple times. Each use
    appends a new dependency object to the ``attributes.system.dependencies``
    array.
 

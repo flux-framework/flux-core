@@ -14,19 +14,19 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-resource(1) lists and manipulates Flux resources.  The resource inventory
-is maintained and monitored by the resource service.  The scheduler acquires
-a subset of resources from the resource service to allocate to jobs, and relies
-on the resource service to inform it of status changes that affect the
-usability of resources by jobs as described in RFC 27.
+:program:`flux resource` lists and manipulates Flux resources.  The resource
+inventory is maintained and monitored by the resource service.  The scheduler
+acquires a subset of resources from the resource service to allocate to jobs,
+and relies on the resource service to inform it of status changes that affect
+the usability of resources by jobs as described in RFC 27.
 
-The flux-resource(1) **list** subcommand queries the scheduler for its view
+The :program:`flux resource list` subcommand queries the scheduler for its view
 of resources, including allocated/free status.
 
-The other flux-resource(1) subcommands operate on the resource service and
-are primarily of interest to system administrators of a Flux system instance.
-For example, they can show whether or not a node is booted, and may be used to
-administratively drain and undrain nodes.
+The other :program:`flux resource` subcommands operate on the resource service
+and are primarily of interest to system administrators of a Flux system
+instance.  For example, they can show whether or not a node is booted, and may
+be used to administratively drain and undrain nodes.
 
 A few notes on drained nodes:
 
@@ -35,9 +35,9 @@ A few notes on drained nodes:
 - When an instance is restarted, drained nodes remain drained.
 - The scheduler may determine that a job request is *feasible* if the total
   resource set, including drained nodes, would allow it to run.
-- In ``flux resource status`` and ``flux resource drain``, the drain state
-  of a node will be presented as "drained" if the node has no job allocations,
-  and "draining" if there are still jobs running on the node.
+- In :program:`flux resource status` and :program:`flux resource drain`, the
+  drain state of a node will be presented as "drained" if the node has no job
+  allocations, and "draining" if there are still jobs running on the node.
 - If a node is drained and offline, then "drained*" will be displayed.
 
 Some further background on resource service operation may be found in the
@@ -50,49 +50,49 @@ COMMANDS
 **list** [-n] [-o FORMAT] [-s STATE,...] [-i TARGETS]
    Show scheduler view of resources.
 
-   With *-s,--states=STATE,...*, the set of resource states is restricted
-   to a list of provided states. Valid states include "up", "down",
+   With :option:`-s,--states=STATE,...`, the set of resource states is
+   restricted to a list of provided states. Valid states include "up", "down",
    "allocated", "free", and "all". Note that the scheduler represents
    offline, excluded, and drained resources as "down" due to the simplified
    interface with the resource service defined by RFC 27.
 
-   With *-i, --include=TARGETS*, the results are filtered to only include
-   resources matching **TARGETS**, which may be specified either as an idset
-   of broker ranks or list of hosts in hostlist form. It is not an error to
-   specify ranks or hosts which do not exist, the result will be filtered
+   With :option:`-i, --include=TARGETS`, the results are filtered to only
+   include resources matching **TARGETS**, which may be specified either as an
+   idset of broker ranks or list of hosts in hostlist form. It is not an error
+   to specify ranks or hosts which do not exist, the result will be filtered
    to include only those ranks or hosts that are present in *TARGETS*.
 
-   The *-o,--format=FORMAT* option may be used to customize the output
-   format (See OUTPUT FORMAT section below).
+   The :option:`-o,--format=FORMAT` option may be used to customize the output
+   format (See `OUTPUT FORMAT`_ section below).
 
-   The *-n,--no-header* option suppresses header from output,
+   The :option:`-n,--no-header` option suppresses header from output,
 
 **info** [-s STATE,...] [-i TARGETS]
    Show a brief, single line summary of scheduler view of resources.
 
-   With *-s, --states=STATE,...*, limit the output to specified resource
-   states as with ``flux resource list``. By default, the *STATE* reported
-   by ``flux resource info`` is "all".
+   With :option:`-s, --states=STATE,...`, limit the output to specified
+   resource states as with :program:`flux resource list`. By default, the
+   *STATE* reported by :program:`flux resource info` is "all".
 
-   With *-i, --include=TARGETS*, the results are filtered to only include
-   resources matching **TARGETS**, which may be specified either as an idset
-   of broker ranks or list of hosts in hostlist form. It is not an error to
-   specify ranks or hosts which do not exist, the result will be filtered
-   to include only those ranks or hosts that are present in *TARGETS*.
+   With :option:`-i, --include=TARGETS`, the results are filtered to only
+   include resources matching **TARGETS**, which may be specified either as
+   an idset of broker ranks or list of hosts in hostlist form. It is not an
+   error to specify ranks or hosts which do not exist, the result will be
+   filtered to include only those ranks or hosts that are present in *TARGETS*.
 
 **R** [-s STATE,..] [-i TARGETS]
    Emit an RFC 20 Resource Set on stdout.
 
-   With *-s,--states=STATE,...*, the set of resource states is restricted
-   to a list of provided states. Valid states include "up", "down",
+   With :option:`-s,--states=STATE,...`, the set of resource states is
+   restricted to a list of provided states. Valid states include "up", "down",
    "allocated", "free", and "all". Note that the scheduler represents
    offline, excluded, and drained resources as "down" due to the simplified
    interface with the resource service defined by RFC 27.
 
-   With *-i, --include=TARGETS*, the results are filtered to only include
-   resources matching **TARGETS**, which may be specified either as an idset
-   of broker ranks or list of hosts in hostlist form. It is not an error to
-   specify ranks or hosts which do not exist, the result will be filtered
+   With :option:`-i, --include=TARGETS`, the results are filtered to only
+   include resources matching **TARGETS**, which may be specified either as an
+   idset of broker ranks or list of hosts in hostlist form. It is not an error
+   to specify ranks or hosts which do not exist, the result will be filtered
    to include only those ranks or hosts that are present in *TARGETS*.
 
 **status**  [-n] [-o FORMAT] [-s STATE,...] [-i TARGETS] [--skip-empty]
@@ -106,51 +106,54 @@ COMMANDS
    (excluded by configuration), "draining" (drained but still allocated),
    or "drained".
 
-   With *-s,--states=STATE,...*, the set of resource states is restricted
-   to a list of provided states or offline/online status. With "online" or
-   "offline", only nodes with the provided status will be displayed. Other
-   valid states include "avail", "exclude", "draining", "drained", and "all".
-   The special "drain" state is shorthand for "drained,draining".
+   With :option:`-s,--states=STATE,...`, the set of resource states is
+   restricted to a list of provided states or offline/online status. With
+   "online" or "offline", only nodes with the provided status will be
+   displayed. Other valid states include "avail", "exclude", "draining",
+   "drained", and "all".  The special "drain" state is shorthand for
+   "drained,draining".
 
-   With *-i, --include=TARGETS*, the results are filtered to only include
-   resources matching **TARGETS**, which may be specified either as an idset
-   of broker ranks or list of hosts in hostlist form. It is not an error to
-   specify ranks or hosts which do not exist, the result will be filtered
-   to include only those ranks or hosts that are present in *TARGETS*.
+   With :option:`-i, --include=TARGETS`, the results are filtered to only
+   include resources matching **TARGETS**, which may be specified either as
+   an idset of broker ranks or list of hosts in hostlist form. It is not an
+   error to specify ranks or hosts which do not exist, the result will be
+   filtered to include only those ranks or hosts that are present in *TARGETS*.
 
-   The *-o,--format=FORMAT* option customizes output formatting (See the
-   OUTPUT FORMAT section below for details).
+   The :option:`-o,--format=FORMAT` option customizes output formatting (See
+   the `OUTPUT FORMAT`_ section below for details).
 
-   With *-n,--no-header* the output header is suppressed.
+   With :option:`-n,--no-header` the output header is suppressed.
 
-   Normally, ``flux resource status`` skips lines with no resources,
-   unless the ``-s, --states`` option is used. Suppression of empty lines
-   can may be forced with the ``--skip-empty`` option.
+   Normally, :program:`flux resource status` skips lines with no resources,
+   unless the :option:`-s, --states` option is used. Suppression of empty lines
+   can may be forced with the :option:`--skip-empty` option.
 
 **drain** [-n] [-o FORMAT] [-i TARGETS] [-f] [-u] [targets] [reason ...]
    If specified without arguments, list drained nodes. In this mode,
-   *-n,--no-header* suppresses header from output and *-o,--format=FORMAT*
-   customizes output formatting (see below).  The *targets* argument is an
-   IDSET or HOSTLIST specifying nodes to drain.  Any remaining arguments
-   are assumed to be a reason to be recorded with the drain event.
+   :option:`-n,--no-header` suppresses header from output and
+   :option:`-o,--format=FORMAT` customizes output formatting (see below).
+   The *targets* argument is an IDSET or HOSTLIST specifying nodes to drain.
+   Any remaining arguments are assumed to be a reason to be recorded with the
+   drain event.
 
-   With *-i, --include=TARGETS*, **drain** output is filtered to only include
-   resources matching **TARGETS**, which may be specified either as an idset
-   of broker ranks or list of hosts in hostlist form. It is not an error to
-   specify ranks or hosts which do not exist, the result will be filtered
+   With :option:`-i, --include=TARGETS`, **drain** output is filtered to only
+   include resources matching **TARGETS**, which may be specified either as an
+   idset of broker ranks or list of hosts in hostlist form. It is not an error
+   to specify ranks or hosts which do not exist, the result will be filtered
    to include only those ranks or hosts that are present in *TARGETS*.
 
-   By default, **flux resource drain** will fail if any of the *targets*
+   By default, :program:`flux resource drain` will fail if any of the *targets*
    are already drained. To change this behavior, use either of the
-   *-f, --force* or *-u, --update* options. With *--force*, the *reason* for
-   all existing drained targets is overwritten. If *--force* is specified
-   twice, then the timestamp is also overwritten. With *--update*,
-   only those ranks that are not already drained or do not have a *reason* set
-   have their *reason* updated.
+   :option:`-f, --force` or :option:`-u, --update` options. With
+   :option:`--force`, the *reason* for all existing drained targets is
+   overwritten. If :option:`--force` is specified twice, then the timestamp is
+   also overwritten. With :option:`--update`, only those ranks that are not
+   already drained or do not have a *reason* set have their *reason* updated.
 
-   Resources cannot be both excluded and drained, so **flux resource drain**
-   will also fail if any *targets* are currently excluded by configuration.
-   There is no option to force an excluded node into the drain state.
+   Resources cannot be both excluded and drained, so
+   :program:`flux resource drain` will also fail if any *targets* are
+   currently excluded by configuration.  There is no option to force an
+   excluded node into the drain state.
 
    This command, when run with arguments, is restricted to the Flux instance
    owner.
@@ -161,23 +164,26 @@ COMMANDS
 
 **reload** [-x] [-f] PATH
    Reload the resource inventory from a file in RFC 20 format, or if the
-   *-x,--xml* option, a directory of hwloc ``<rank>.xml`` files.  If
-   *-f,--force*, resources may contain invalid ranks.  This command is
+   :option:`-x,--xml` option, a directory of hwloc ``<rank>.xml`` files.  If
+   :option:`-f,--force`, resources may contain invalid ranks.  This command is
    primarily used in test.
 
 
 OUTPUT FORMAT
 =============
 
-The *--format* option can be used to specify an output format using Python's
-string format syntax or a defined format by name. For a list of built-in and
-configured formats use ``-o help``.  An alternate default format can be set via
-the FLUX_RESOURCE_STATUS_FORMAT_DEFAULT, FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT, and
-FLUX_RESOURCE_LIST_FORMAT_DEFAULT environment variables (for ``flux resource
-status``, ``flux resource drain``, and ``flux resource list`` respectively).  A
-configuration snippet for an existing named format may be generated with
-``--format=get-config=NAME``.  See :man1:`flux-jobs` *OUTPUT FORMAT* section for
-a detailed description of this syntax.
+The :option:`--format` option can be used to specify an output format using
+Python's string format syntax or a defined format by name. For a list of
+built-in and configured formats use :option:`-o help`.  An alternate default
+<<<<<<< HEAD
+format can be set via the FLUX_RESOURCE_STATUS_FORMAT_DEFAULT,
+FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT, and FLUX_RESOURCE_LIST_FORMAT_DEFAULT
+environment variables (for :program:`flux resource status`,
+:program:`flux resource drain`, and :program:`flux resource list`
+respectively).  A configuration snippet for an existing named format may be
+generated with :option:`--format=get-config=NAME`.  See :man1:`flux-jobs`
+:ref:`flux_jobs_output_format` section for a detailed description of this
+syntax.
 
 Resources are combined into a single line of output when possible depending on
 the supplied output format.  Resource counts are not included in the
@@ -262,13 +268,13 @@ The following field names can be specified for the **list** subcommand:
 CONFIGURATION
 =============
 
-Similar to :man1:`flux-jobs`, the ``flux-resource`` command supports loading
-a set of config files for customizing utility output formats. Currently
+Similar to :man1:`flux-jobs`, the :program:`flux resource` command supports
+loading a set of config files for customizing utility output formats. Currently
 this can be used to register named format strings for the ``status``,
 ``list``, and ``drain`` subcommands.
 
-Configuration for each ``flux-resource`` subcommand is defined in a separate
-table, so to add a new format ``myformat`` for ``flux resource list``,
+Configuration for each :program:`flux resource` subcommand is defined in a
+separate table, so to add a new format ``myformat`` for ``flux resource list``,
 the following config file could be used::
 
   # $HOME/.config/flux/flux-resource.toml
@@ -276,8 +282,8 @@ the following config file could be used::
   description = "My flux resource list format"
   format = "{state} {nodelist}"
 
-See :man1:`flux-jobs` *CONFIGURATION* section for more information about the
-order of precedence for loading these config files.
+See :man1:`flux-jobs` :ref:`flux_jobs_configuration` section for more
+information about the order of precedence for loading these config files.
 
 RESOURCE INVENTORY
 ==================

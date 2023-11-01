@@ -33,7 +33,6 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-queue.1 \
 	man1/flux-cron.1 \
 	man1/flux-event.1 \
-	man1/flux-mini.1 \
 	man1/flux-submit.1 \
 	man1/flux-run.1 \
 	man1/flux-bulksubmit.1 \
@@ -342,9 +341,7 @@ $(RST_FILES): \
 	man1/common/submit-process-resource-limits.rst \
 	man1/common/submit-exit-status.rst \
 	man1/common/submit-other-options.rst \
-	man1/common/submit-bulksubmit.rst \
 	man1/common/submit-shell-options.rst \
-	man1/common/submit-submission-directives.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst
 endif
@@ -403,9 +400,6 @@ EXTRA_DIST = \
 	guide/glossary.rst \
 	$(RST_FILES) \
 	man1/index.rst \
-	man1/index_general.rst \
-	man1/index_job.rst \
-	man1/index_kvs.rst \
 	man1/common/nodeset.rst \
 	man1/common/submit-job-parameters.rst \
 	man1/common/submit-standard-io.rst \
@@ -416,9 +410,7 @@ EXTRA_DIST = \
 	man1/common/submit-process-resource-limits.rst \
 	man1/common/submit-exit-status.rst \
 	man1/common/submit-other-options.rst \
-	man1/common/submit-bulksubmit.rst \
 	man1/common/submit-shell-options.rst \
-	man1/common/submit-submission-directives.rst \
 	man3/index.rst \
 	man3/index_general.rst \
 	man3/index_idset.rst \

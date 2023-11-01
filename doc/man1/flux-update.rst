@@ -12,8 +12,10 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-update(1) requests an update of one or more attributes for an active
-(pending or running) job. Updates are permitted and validated by the job
+.. program:: flux update
+
+:program:`flux update` requests an update of one or more attributes for an
+active (pending or running) job. Updates are permitted and validated by the job
 manager before being applied to the job.
 
 Keys are expressed as period-delimited strings corresponding to an attribute
@@ -26,8 +28,8 @@ the key is assumed to be prefixed with ``attributes.system.``, such that::
 would request an update of ``attributes.system.myattr`` to the string value
 ``"value"``.
 
-The flux-update(1) command may also support other convenient key aliases.
-Key aliases are listed in the SPECIAL KEYS section below.
+The :program:`flux update` command may also support other convenient key
+aliases.  Key aliases are listed in the `SPECIAL KEYS`_ section below.
 
 Updates will be sent to the job manager update service, which checks that
 the current user is permitted to apply all updates, and that all updates
@@ -50,18 +52,20 @@ updates to the job by the guest user are denied with an error message::
 This is necessary to prevent possible unintended bypass of limits or
 other checks on a job by a guest.
 
-The flux-update(1) command may also support special handling of values
+The :program:`flux update` command may also support special handling of values
 for specific keys. Those special cases are documented in the SPECIAL KEYS
 section below.
 
 OPTIONS
 =======
 
-**-n, --dry-run**
+.. option:: -n, --dry-run
+
   Do not send update to job manager, but print the updates in JSON to
   stdout.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
   Print updated keys on success.
 
 SPECIAL KEYS

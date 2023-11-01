@@ -14,26 +14,28 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-pstree(1) displays a tree of running jobs by job name, similar to
+.. program:: flux pstree
+
+:program:`flux pstree` displays a tree of running jobs by job name, similar to
 what the :linux:man1:`pstree` command does for system processes.
 
-Like pstree(1), identical leaves of the job tree are combined, which
+Like :command:`pstree`, identical leaves of the job tree are combined, which
 results in a more compact output when many jobs within a Flux instance
 share the same job name.
 
-The flux-pstree(1) command supports custom labels for jobs, including
+The :program:`flux pstree` command supports custom labels for jobs, including
 separately labeling parent jobs, using the same format string syntax
 supported by :man1:`flux-jobs`.
 
-The command lists actively running jobs by default, but a ``-a, --all``
+The command lists actively running jobs by default, but a :option:`--all`
 option lists all jobs in all states for the current user. In the case
-that ``-a`` is used, the job labels will automatically be amended to
+that :option:`-all` is used, the job labels will automatically be amended to
 include the job status (i.e. ``{name}:{status_abbrev}``), though this
 can be overridden on the command line.
 
-The flux-pstree(1) command additionally supports listing extended
-job information before the tree display with the ``-x, --extended``,
-``-d, --details=NAME``, or ``--detail-format=FORMAT``  options, e.g.
+The :program:`flux pstree` command additionally supports listing extended
+job information before the tree display with the :option:`--extended`,
+:option:`--details=NAME`, or :option:`--detail-format=FORMAT`  options, e.g.
 
 ::
 
@@ -46,7 +48,7 @@ job information before the tree display with the ``-x, --extended``,
      ƒe1j54K user1     R      1      1   8.539s └── flux
     ƒ2MYrwzf user1     R      1      1   4.736s     └── sleep
 
-Several detail formats are available via the ``-d, --details=NAME``
+Several detail formats are available via the :option:`-d, --details=NAME`
 option, including progress, resources, and stats. For example, the
 ``progress`` display attempts to show the overall progress and
 utilization of all Flux instances in a hierarchy by displaying the
@@ -68,89 +70,105 @@ resources divided by total available resources):
     ƒ2b6cPMS      1                             0:00:01     └── sleep
 
 
-By default, flux-pstree(1) truncates lines that exceed the current
+By default, :program:`flux pstree` truncates lines that exceed the current
 value of the ``COLUMNS`` environment variable or the terminal width
-if ``COLUMNS`` is not set. To disable truncation, use the ``-l, --long``
+if ``COLUMNS`` is not set. To disable truncation, use the :option:`--long`
 option.
 
 
 By default, the enclosing Flux instance, or root of the tree, is included
 in output, unless extended details are displayed as when any of the
-``-x, --extended``, ``-d, --details=NAME`` or ``--detail-format=FORMAT``
-options are used, or if one or more jobids are directly targeted with
-a ``JOBID`` argument. This behavior can be changed via the
-``--skip-root=[yes|no]`` option.
+:option:`--extended`, :option:`--details=NAME` or
+:option:`--detail-format=FORMAT` options are used, or if one or more jobids
+are directly targeted with a ``JOBID`` argument. This behavior can be changed
+via the :option:`--skip-root=[yes|no]` option.
 
 
 OPTIONS
 =======
 
-**-a, --all**
-   Include jobs in all states, including inactive jobs.
-   This is shorthand for *--filter=pending,running,inactive*.
+.. option:: -a, --all
 
-**-c, --count**\ *=N*
+   Include jobs in all states, including inactive jobs.
+   This is shorthand for :option:`--filter=pending,running,inactive`.
+
+.. option:: -c, --count=N
+
    Limit output to N jobs at every level (default 1000).
 
-**-f, --filter**\ *=STATE|RESULT*
-   Include jobs with specific job state or result. Multiple states or
-   results can be listed separated by comma. See the JOB STATUS section
-   of the :man1:`flux-jobs` manual for more detail.
+.. option:: -f, --filter=STATE|RESULT
 
-**-l, --long**
+   Include jobs with specific job state or result. Multiple states or
+   results can be listed separated by comma. See the :ref:`flux_jobs_job_status`
+   section of the :man1:`flux-jobs` manual for more detail.
+
+.. option:: -l, --long
+
    Do not truncate long lines at ``COLUMNS`` characters.
 
-**-p, --parent-ids**
+.. option:: -p, --parent-ids
+
    Prepend jobid to parent labels.
 
-**-L, --level** *=N*
+.. option:: -L, --level=N
+
    Only descend *N* levels of the job hierarchy.
 
-**-x, --extended**
+.. option:: -x, --extended
+
    Print extended details before tree output. This is the same as
-   ``--details=default``.
+   :option:`--details=default`.
 
-**-d, --detail**\ *=NAME*
+.. option:: -d, --detail=NAME
+
    Select a named extended details format. The list of supported names
-   can be seen in ``flux pstree --help`` output.
+   can be seen in :option:`flux pstree --help` output.
 
-**-n, --no-header**
+.. option:: -n, --no-header
+
    For output with extended details, do not print header row.
 
-**-X, --no-combine**
+.. option:: -X, --no-combine
+
    Typically, identical child jobs that are leaves in the tree display
    are combined as ``n*[label]``. With this option, the combination of
    like jobs is disabled.
 
-**-o, --label**\ *=FORMAT*
+.. option:: -o, --label=FORMAT
+
    Specify output format for node labels using Python format strings.
    Supports all format fields supported by :man1:`flux-jobs`.
 
-**--parent-label**\ *=FORMAT*
+.. option:: --parent-label=FORMAT
+
    Label tree parents with a different format than child jobs.
 
-**--detail-format**\ *=FORMAT*
+.. option:: --detail-format=FORMAT
+
    Specify an explicit details format to display before the tree part.
    Care should be taken that each line of the format is the same width
    to ensure that the tree display is rendered correctly (i.e. by judicious
    use of format field widths, e.g. ``{id.f58:>12}`` instead of just
    ``{id.f58}``.
 
-**--skip-root**\ *=yes|no*
+.. option:: --skip-root=yes|no
+
    Explicitly skip (yes)  or force (no) display of the enclosing instance,
    or root of the tree, in output.
 
-**-C, --compact**
+.. option:: -C, --compact
+
    Use compact tree connectors. Usefully for deep hierarchies.
 
-**--ascii**
+.. option:: --ascii
+
    Use ascii tree connectors.
 
 
 EXAMPLES
 ========
 
-The default output of flux-pstree(1) shows all running jobs for the
+The default output of :program:`flux pstree` shows all running jobs for the
 current user by name, including any running sub-jobs. If there are
 currently no running jobs for the current user, only the enclosing
 instance is displayed as a ``.``, to indicate the root of the tree:

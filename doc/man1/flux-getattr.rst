@@ -22,12 +22,12 @@ Flux broker attributes are both a simple, general-purpose key-value
 store with scope limited to the local broker rank, and a method for the
 broker to export information needed by Flux services and utilities.
 
-flux-getattr(1) retrieves the value of an attribute.
+:program:`flux getattr` retrieves the value of an attribute.
 
-flux-setattr(1) assigns a new value to an attribute, or optionally
+:program:`flux setattr` assigns a new value to an attribute, or optionally
 removes an attribute.
 
-flux-lsattr(1) lists attribute names, optionally with their values.
+:program:`flux lsattr` lists attribute names, optionally with their values.
 
 
 RESOURCES

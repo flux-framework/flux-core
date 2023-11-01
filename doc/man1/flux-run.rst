@@ -15,11 +15,13 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-run(1) submits a job to run interactively under Flux, blocking until
-the job has completed.  The job consists of *N* copies of COMMAND launched
-together as a parallel job.
+.. program:: flux run
 
-If *--ntasks* is unspecified, a value of *N=1* is assumed.
+:program:`flux run` submits a job to run interactively under Flux, blocking
+until the job has completed.  The job consists of *N* copies of COMMAND
+launched together as a parallel job.
+
+If :option:`--ntasks` is unspecified, a value of *N=1* is assumed.
 
 The available OPTIONS are detailed below.
 

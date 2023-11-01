@@ -11,7 +11,9 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-logger(1) appends Flux log entries to the local Flux
+.. program:: flux logger
+
+:program:`flux logger` appends Flux log entries to the local Flux
 broker's circular buffer.
 
 Log entries are associated with a :linux:man3:`syslog` style severity.
@@ -29,10 +31,12 @@ message when it is created.
 OPTIONS
 =======
 
-**-s, --severity**\ =\ *SEVERITY*
+.. option:: -s, --severity=SEVERITY
+
    Specify the log message severity. The default severity is *info*.
 
-**-n, --appname**\ =\ *NAME*
+.. option:: -n, --appname=NAME
+
    Specify a user-defined application name to associate with the log message.
    The default appname is *logger*.
 

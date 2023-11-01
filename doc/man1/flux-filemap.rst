@@ -18,13 +18,16 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux-filemap`` uses :linux:man2:`mmap` to map files into the rank 0 broker
-*content cache*.  After mapping, the files may be extracted on any broker rank,
-taking advantage of scalability properties of the distributed cache to move the
-data.  The files are treated as read-only and must not change while mapped.
+.. program:: flux filemap
 
-``flux-filemap map`` maps one or more file *PATH* arguments.  It must be run
-on the rank 0 broker, such as within a batch script, and the files must be
+:program:`flux filemap` uses :linux:man2:`mmap` to map files into the rank 0
+broker *content cache*.  After mapping, the files may be extracted on any
+broker rank, taking advantage of scalability properties of the distributed
+cache to move the data.  The files are treated as read-only and must not
+change while mapped.
+
+:program:`flux filemap map` maps one or more file *PATH* arguments.  It must be
+run on the rank 0 broker, such as within a batch script, and the files must be
 directly accessible by the rank 0 broker.  If a PATH refers to a directory,
 the directory is recursively mapped.  If a file is encountered that is not
 readable, or has a type other than regular file, directory, or symbolic link,
@@ -32,16 +35,16 @@ a fatal error occurs.  Sparse files such as file system images for virtual
 machines are mapped efficiently.  File discretionary access permission are
 preserved, but file attributes, ACLs, and group ownership are not.
 
-``flux-filemap list`` lists mapped files.  Optionally, a :man7:`glob` pattern
-may be specified to filter the list.
+:program:`flux filemap list` lists mapped files.  Optionally, a :man7:`glob`
+pattern may be specified to filter the list.
 
-``flux-filemap get`` extracts mapped files and may be run on any broker or
-across all brokers using :man1:`flux-exec`.  Optionally, a :man7:`glob` pattern
-may be specified to filter the list.  When extracting mapped files in parallel,
-take care to specify a *--directory* that is not shared and is not on a network
-file system without considering the ramifications.
+:program:`flux filemap get` extracts mapped files and may be run on any broker
+or across all brokers using :man1:`flux-exec`.  Optionally, a :man7:`glob`
+pattern may be specified to filter the list.  When extracting mapped files in
+parallel, take care to specify a :option:`--directory` that is not shared and
+is not on a network file system without considering the ramifications.
 
-``flux-filemap unmap`` unmaps mapped files.
+:option:`flux filemap unmap` unmaps mapped files.
 
 The ``stage-in`` shell plugin described in :man1:`flux-shell` may be used to
 extract previously mapped files into $FLUX_JOB_TMPDIR or another directory.
@@ -49,49 +52,60 @@ extract previously mapped files into $FLUX_JOB_TMPDIR or another directory.
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Display options and exit
 
-**-T, --tags=LIST**
+.. option:: -T, --tags=LIST
+
    Specify a comma separated list of *tags*.  If no tags are specified,
    the *main* tag is assumed.
 
-**-C, --directory=DIR**
+.. option:: -C, --directory=DIR
+
    Change to the specified directory before performing the operation
    (*map* and *get* subcommands only).
 
-**-v, --verbose=[LEVEL]**
+.. option:: -v, --verbose=[LEVEL]
+
    Increase output verbosity (*map* and *get* subcommands only).
 
-**-l, --long**
+.. option:: -l, --long
+
    Include more detail in file listing (*list* subcommand only).
 
-**--small-file-threshold=N**
+.. option:: --small-file-threshold=N
+
    Set the threshold in bytes over which a regular file is mapped through
    the distributed content cache. Set to 0 to always use the content cache.
    N may be specified as a floating point number with multiplicative suffix
    k,K=1024, M=1024\*1024, or G=1024\*1024\*1024 up to ``INT_MAX``.
    The default is 4K (*map* subcommand only).
 
-**--disable-mmap**
+.. option:: --disable-mmap
+
    Never map a regular file through the distributed content cache.
 
-**--chunksize=N**
+.. option:: --chunksize=N
+
    Limit the content mapped blob size to N bytes.  Set to 0 for unlimited.
    N may be specified as a floating point number with multiplicative suffix
    k,K=1024, M=1024\*1024, or G=1024\*1024\*1024 up to ``INT_MAX``.
    The default is 1M (*map* subcommand only).
 
-**--direct**
+.. option:: --direct
+
    Avoid indirection through the content cache when fetching the top level
    data for each file.  This may be fastest for a single or small number of
    clients, but will scale poorly when performed in parallel (*get* subcommand
    only).
 
-**--blobref**
+.. option:: --blobref
+
    List blobrefs (*list* subcommand only).
 
-**--raw**
+.. option:: --raw
+
    List RFC 37 file system objects (*list* subcommand only).
 
 EXAMPLE

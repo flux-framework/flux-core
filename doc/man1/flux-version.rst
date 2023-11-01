@@ -14,7 +14,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-version(1) prints version information for flux components.
+:program:`flux version` prints version information for flux components.
 At a minimum, the version of flux commands and the currently linked
 libflux-core.so library is displayed. If running within an instance,
 the version of the flux-broker found and FLUX_URI are also included.

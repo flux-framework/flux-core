@@ -11,7 +11,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-The flux-jobtap(1) command is used to query, load, and remove *jobtap*
+The :program:`flux jobtap` command is used to query, load, and remove *jobtap*
 plugins from the Flux job-manager module at runtime.
 
 COMMANDS
@@ -19,12 +19,12 @@ COMMANDS
 
 **list** [*-a, --all*]
   Print the currently loaded list of plugins. Builtin plugins will only
-  be displayed when the *--all* option is used. Plugins built in to the
+  be displayed when the :option:`--all` option is used. Plugins built in to the
   job manager have a leading ``.`` in the name, e.g. ``.priority-default``.
 
 **load** [*-r*, *--remove=NAME*] PLUGIN [KEY=VAL, KEY=VAL...]
   Load a new plugin into the job-manager, optionally removing plugin NAME
-  first. With *--remove* NAME may be a :linux:man7:`glob` pattern
+  first. With :option:`--remove` NAME may be a :linux:man7:`glob` pattern
   match. Optional KEY=VAL occurring after PLUGIN will set config KEY
   to VAL for PLUGIN.
 

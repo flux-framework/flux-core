@@ -17,7 +17,9 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-**flux-batch** submits *SCRIPT* to run as the initial program of a Flux
+.. program:: flux batch
+
+:program:`flux-batch` submits *SCRIPT* to run as the initial program of a Flux
 subinstance.  *SCRIPT* refers to a file that is copied at the time of
 submission.  Once resources are allocated, *SCRIPT* executes on the first
 node of the allocation, with any remaining free arguments supplied as *SCRIPT*
@@ -26,8 +28,8 @@ released to the enclosing Flux instance.
 
 If there are no free arguments, the script is read from standard input.
 
-If the *--wrap* option is used, the script is created by wrapping the free
-arguments or standard input in a shell script prefixed with ``#!/bin/sh``.
+If the :option:`--wrap` option is used, the script is created by wrapping the
+free arguments or standard input in a shell script prefixed with ``#!/bin/sh``.
 
 If the job request is accepted, its jobid is printed on standard output and the
 command returns.  The job runs when the Flux scheduler fulfills its resource
@@ -36,7 +38,7 @@ allocation request.  :man1:`flux-jobs` may be used to display the job status.
 Flux commands that are run from the batch script refer to the subinstance.
 For example, :man1:`flux-run` would launch work there.  A Flux command run
 from the script can be forced to refer to the enclosing instance by supplying
-the :man1:`flux` *--parent* option.
+the :option:`flux --parent` option.
 
 Flux commands outside of the batch script refer to their enclosing instance,
 often a system instance.  :man1:`flux-proxy` establishes a connection to a
@@ -69,7 +71,7 @@ automatically.  For example:
    $
 
 Batch scripts may contain submission directives denoted by ``flux:``
-as described in RFC 36.  See :ref:`submission_directives` below.
+as described in RFC 36.  See `SUBMISSION DIRECTIVES`_ below.
 
 The available OPTIONS are detailed below.
 
@@ -91,7 +93,53 @@ The available OPTIONS are detailed below.
 
 .. include:: common/submit-shell-options.rst
 
-.. include:: common/submit-submission-directives.rst
+SUBMISSION DIRECTIVES
+=====================
+
+The :program:`flux batch` command supports submission directives
+mixed within the submission script. The submission directive specification
+is fully detailed in RFC 36, but is summarized here for convenience:
+
+ * A submission directive is indicated by a line that starts with
+   a prefix of non-alphanumeric characters followed by a tag ``FLUX:`` or
+   ``flux:``. The prefix plus tag is called the *directive sentinel*. E.g.,
+   in the example below the sentinel is ``# flux:``: ::
+
+     #!/bin/sh
+     # flux: -N4 -n16
+     flux run -n16 hostname
+
+ * All directives in a file must use the same sentinel pattern, otherwise
+   an error will be raised.
+ * Directives must be grouped together - it is an error to include a
+   directive after any non-blank line that doesn't start with the common
+   prefix.
+ * The directive starts after the sentinel to the end of the line.
+ * The ``#`` character is supported as a comment character in directives.
+ * UNIX shell quoting is supported in directives.
+ * Triple quoted strings can be used to include newlines and quotes without
+   further escaping. If a triple quoted string is used across multiple lines,
+   then the opening and closing triple quotes must appear at the end of the
+   line. For example ::
+
+     # flux: --setattr=user.conf="""
+     # flux: [config]
+     # flux:   item = "foo"
+     # flux: """
+
+Submission directives may be used to set default command line options for
+:program:`flux batch` for a given script. Options given on the command line
+override those in the submission script, e.g.: ::
+
+   $ flux batch --job-name=test-name --wrap <<-EOF
+   > #flux: -N4
+   > #flux: --job-name=name
+   > flux run -N4 hostname
+   > EOF
+   ƒ112345
+   $ flux jobs -no {name} ƒ112345
+   test-name
+
 
 
 RESOURCES

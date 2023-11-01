@@ -52,7 +52,6 @@ man_pages = [
     ('man1/flux-keygen', 'flux-keygen', 'generate keys for Flux security', [author], 1),
     ('man1/flux-kvs', 'flux-kvs', 'Flux key-value store utility', [author], 1),
     ('man1/flux-logger', 'flux-logger', 'create a Flux log entry', [author], 1),
-    ('man1/flux-mini', 'flux-mini', 'Minimal Job Submission Tool', [author], 1),
     ('man1/flux-submit', 'flux-submit', 'submit a job to a Flux instance', [author], 1),
     ('man1/flux-run', 'flux-run', 'run a Flux job interactively', [author], 1),
     ('man1/flux-bulksubmit', 'flux-bulksubmit', 'submit jobs in bulk to a Flux instance', [author], 1),

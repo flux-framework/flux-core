@@ -17,7 +17,9 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-*flux-pgrep* lists jobids that match a supplied expression. The
+.. program:: flux pgrep
+
+:program:`flux pgrep` lists jobids that match a supplied expression. The
 expression may contain a pattern which matches the job name, or
 a range of jobids in the form ``jobid1..jobid2``. If both a pattern
 and jobid range are supplied then both must match.
@@ -29,37 +31,45 @@ prefixing the pattern with ``name:``, e.g. ``name:fr..123``.
 
 By default, only active jobs for the current user are considered.
 
-*flux-pkill* cancels matching jobs instead of listing them.
+:program:`flux pkill` cancels matching jobs instead of listing them.
 
 OPTIONS
 =======
 
-**-a**
+.. option:: -a
+
    Include jobs in all states, including inactive jobs.
-   This is shorthand for *--filter=pending,running,inactive*.
+   This is shorthand for :option:`--filter=pending,running,inactive`.
    (pgrep only)
 
-**-A**
-   Include jobs for all users. This is shorthand for *--user=-all*.
+.. option:: -A
 
-**-u, --user**\ *=USER*
+   Include jobs for all users. This is shorthand for :option:`--user=-all`.
+
+.. option:: -u, --user=USER
+
    Fetch jobs only for the given user, instead of the current UID.
 
-**-f, --filter**\ *=STATE|RESULT*
+.. option:: -f, --filter=STATE|RESULT
+
    Include jobs with specific job state or result. Multiple states or
    results can be listed separated by comma. See the JOB STATUS section
    of the :man1:`flux-jobs` manual for more detail.
 
-**-q, --queue**\ *=QUEUE*
+.. option:: -q, --queue=QUEUE
+
    Only include jobs in the named queue *QUEUE*.
 
-**-c, --count**\ *=N*
+.. option:: -c, --count=N
+
    Limit output to the first *N* matches (default 1000).
 
-**--max-entries**\ *=N*
+.. option:: --max-entries=N
+
    Limit the number of jobs to consider to *N* entries (default 1000).
 
-**-o, --format**\ *=NAME|FORMAT*
+.. option:: -o, --format=NAME|FORMAT
+
    Specify a named output format *NAME* or a format string using Python's
    format syntax.  An alternate default format can be set via the
    FLUX_PGREP_FORMAT_DEFAULT environment variable.  For full documentation of
@@ -69,10 +79,12 @@ OPTIONS
    builtin named formats include *default*, *full*, *long*, and *deps*. The
    default format emits the matched jobids only. (pgrep only)
 
-**-n, --no-header**
+.. option:: -n, --no-header
+
    Suppress printing of the header line. (pgrep only)
 
-**-w, --wait**
+.. option:: -w, --wait
+
    Wait for jobs to finish after cancel. (pkill only)
 
 EXIT STATUS

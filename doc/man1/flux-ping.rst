@@ -12,53 +12,61 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-ping(1) measures round-trip latency to a Flux service implementing
+.. program:: flux ping
+
+:program:`flux ping` measures round-trip latency to a Flux service implementing
 the "ping" method in a manner analogous to ping(8). The ping response is
 essentially an echo of the request, with the route taken to the service
 added by the service. This route is displayed in the output and can
 give insight into how various addresses are routed.
 
 *target* may be the name of a Flux service, e.g. "kvs".
-flux-ping(1) will send a request to "kvs.ping". As a shorthand,
+:program:`flux ping` will send a request to "kvs.ping". As a shorthand,
 *target* can include a rank or host prefix delimited by an exclamation point.
-"flux ping 4!kvs" is equivalent to "flux ping --rank 4 kvs" (see --rank
-option below). Don't forget to quote the exclamation point if it is
-interpreted by your shell.
+:program:`flux ping 4!kvs` is equivalent to :option:`flux ping --rank 4 kvs`
+(see :option:`--rank` option below). Don't forget to quote the exclamation
+point if it is interpreted by your shell.
 
 As a shorthand, *target* may also simply be a rank or host by itself
 indicating that the broker on that rank/host, rather than a Flux
-service, is to be pinged. "flux ping 1" is equivalent to
-"flux ping --rank 1 broker".
+service, is to be pinged. :command:`flux ping 1` is equivalent to
+:option:`flux ping --rank 1 broker`.
 
 
 OPTIONS
 =======
 
-**-r, --rank**\ *=N*
+.. option:: -r, --rank=N
+
    Find target on a specific broker rank. Special case strings “*any*”
    and “*upstream*” available to ping FLUX_NODEID_ANY and FLUX_NODEID_UPSTREAM
    respectively. Default: send to “*any*”.
 
-**-p, --pad**\ *=N*
+.. option:: -p, --pad=N
+
    Include in the payload a string of length *N* bytes. *N* may be a
    floating point number with optional multiplicative suffix k,K=1024,
    M=1024\*1024, or G=1024\*1024\*1024. The payload will be echoed back in
    the response. This option can be used to explore the effect of message
    size on latency. Default: no padding.
 
-**-i, --interval**\ *=N*
+.. option:: -i, --interval=Ns
+
    Specify the delay, in seconds, between successive requests.
    A value of zero is valid and indicates that there should be no delay.
    Requests are sent without waiting for responses. Default: 1.0 seconds.
 
-**-c, --count**\ *=N*
+.. option:: -c, --count=N
+
    Specify the number of requests to send, and terminate the command once
    responses have been received for all the requests. Default: unlimited.
 
-**-b, --batch**
+.. option:: -b, --batch
+
    Begin processing responses after all requests are sent. Requires --count.
 
-**-u, --userid**
+.. option:: -u, --userid
+
    Include userid and rolemask of original request, which are echoed back
    in ping response, in ping output.
 

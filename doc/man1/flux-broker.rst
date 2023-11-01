@@ -11,7 +11,9 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-broker(1) is a distributed message broker daemon that provides
+.. program:: flux broker
+
+:program:`flux broker` is a distributed message broker daemon that provides
 communications services within a Flux instance. It may be
 launched as a parallel program under Flux or other resource managers
 that support PMI.
@@ -28,7 +30,7 @@ using Flux API services.
 A logging service aggregates Flux log messages across the instance and
 emits them to a configured destination on rank 0.
 
-After its overlay network has completed wire-up, flux-broker(1)
+After its overlay network has completed wire-up, :program:`flux broker`
 starts the initial program on rank 0. If none is specified on
 the broker command line, an interactive shell is launched.
 
@@ -36,16 +38,20 @@ the broker command line, an interactive shell is launched.
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Summarize available options.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    Be annoyingly chatty.
 
-**-S, --setattr**\ =\ *ATTR=VAL*
+.. option:: -S, --setattr=ATTR=VAL
+
    Set initial value for broker attribute.
 
-**-c, --config-path=**\ =\ *PATH*
+.. option:: -c, --config-path=PATH
+
    Set the PATH to broker configuration. If PATH is a directory, then
    read all TOML files from that directory. If PATH is a file, then load
    configuration as JSON if the file extension is ``.json``, otherwise

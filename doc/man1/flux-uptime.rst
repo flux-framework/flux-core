@@ -15,7 +15,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-The ``flux-uptime`` command displays the following information about the
+The :program:`flux uptime` command displays the following information about the
 current Flux instance, on one or two lines:
 
 - The current wall clock time.

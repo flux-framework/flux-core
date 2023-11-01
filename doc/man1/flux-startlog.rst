@@ -12,6 +12,8 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux startlog
+
 List the Flux instance's start and stop times, by interpreting the contents
 of the KVS ``admin.eventlog``.
 
@@ -31,17 +33,21 @@ This command is not available to guest users.
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Summarize available options.
 
-**--check**
+.. option:: --check
+
    If the instance has most recently restarted from a crash, exit with a
    return code of 1, otherwise 0.
 
-**--quiet**
+.. option:: --quiet
+
    Suppress non-error output.
 
-**-v, --show-version**
+.. option:: -v, --show-version
+
    Show the flux-core software version associated with each start event.
 
 

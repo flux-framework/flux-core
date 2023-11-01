@@ -14,39 +14,46 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-cancel(1) cancels one or more jobs by raising a job exception of
+.. program:: flux cancel
+
+:program:`flux cancel` cancels one or more jobs by raising a job exception of
 type=cancel. An optional message included with the cancel exception may be
-provided via the *-m, --message=NOTE* option. Canceled jobs are immediately
+provided via the :option:`--message` option. Canceled jobs are immediately
 sent SIGTERM followed by SIGKILL after a configurable timeout (default=5s).
 
-flux-cancel(1) can target multiple jobids by either taking them on the
-command line, or via the selection options *--all*, *-u, --user*, or *-S,
---states=STATES*. It is an error to provide jobids on the command line
+:program:`flux cancel` can target multiple jobids by either taking them on the
+command line, or via the selection options :option:`--all`, :option:`--user`,
+or :option:`--states`. It is an error to provide jobids on the command line
 and use one or more of the selection options.
 
-By default *--all* will target all jobs for the current user. To target all
-jobs for all users, use *--user=all* (only the instance owner is allowed
-to use *--user=all*). To see how many jobs flux-cancel(1) would kill,
-use the *-n --dry-run* option.
+By default :option:`--all` will target all jobs for the current user. To
+target all jobs for all users, use :option:`--user=all` (only the instance
+owner is allowed to use :option:`--user=all`). To see how many jobs
+:program:`flux cancel` would kill, use the :option:`--dry-run` option.
 
 OPTIONS
 =======
 
-**-n, --dry-run**
+.. option:: -n, --dry-run
+
    Do not cancel any jobs, but print a message indicating how many jobs
    would have been canceled.
 
-**-m, --message=NOTE**
+.. option:: -m, --message=NOTE
+
    Set an optional exception note.
 
-**-u, --user=USER**
+.. option:: -u, --user=USER
+
    Set target user.  The instance owner may specify *all* for all users.
 
-**-S, --states=STATES**
+.. option:: -S, --states=STATES
+
    Set target job states (default: active). Valid states include
    depend, priority, sched, run, pending, running, active.
 
-**-q, --quiet**
+.. option:: -q, --quiet
+
    Suppress output if no jobs match
 
 RESOURCES

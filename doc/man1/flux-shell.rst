@@ -11,10 +11,12 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-shell(1), the Flux job shell, is the component of Flux which manages
-the startup and execution of user jobs. flux-shell(1) runs as the job user,
-reads the jobspec and assigned resource set R for the job from the KVS,
-and using this data determines what local job tasks to execute. While
+.. program:: flux shell
+
+:program:`flux shell`, the Flux job shell, is the component of Flux which
+manages the startup and execution of user jobs.  :program:`flux shell` runs as
+the job user, reads the jobspec and assigned resource set R for the job from
+the KVS, and using this data determines what local job tasks to execute. While
 job tasks are running, the job shell acts as the interface between the
 Flux instance and the job by handling standard I/O, signals, and finally
 collecting the exit status of tasks as they complete.
@@ -22,47 +24,49 @@ collecting the exit status of tasks as they complete.
 The design of the Flux job shell allows customization through a set of
 builtin and runtime loadable shell plugins. These plugins are used to
 handle standard I/O redirection, PMI, CPU and GPU affinity, debugger
-support and more. Details of the flux-shell(1) plugin capabilities and
-design can be found in the PLUGINS section below.
+support and more. Details of the :program:`flux shell` plugin capabilities and
+design can be found in the `PLUGINS`_ section below.
 
-flux-shell(1) also supports configuration via a Lua-based configuration
+:program:`flux shell` also supports configuration via a Lua-based configuration
 file, called the shell ``initrc``, from which shell plugins may be loaded
-or shell options and data examined or set. The flux-shell(1) initrc may
+or shell options and data examined or set. The :program:`flux shell` initrc may
 even extend the shell itself via simple shell plugins developed directly
-in Lua. See the SHELL INITRC section below for details of the ``initrc``
+in Lua. See the `SHELL INITRC`_ section below for details of the ``initrc``
 format and features.
 
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Summarize available options.
 
-**--reconnect**
+.. option:: --reconnect
+
    Attempt to reconnect if broker connection is lost.
 
 OPERATION
 =========
 
-When a job has been granted resources by a Flux instance, a flux-shell(1)
-process is invoked on each broker rank involved in the job. The job
-shell runs as the job user, and will always have ``FLUX_KVS_NAMESPACE``
-set such that the root of the job shell's KVS accesses will be the guest
-namespace for the job.
+When a job has been granted resources by a Flux instance, a
+:program:`flux shell` process is invoked on each broker rank involved in the
+job. The job shell runs as the job user, and will always have
+``FLUX_KVS_NAMESPACE`` set such that the root of the job shell's
+KVS accesses will be the guest namespace for the job.
 
-Each flux-shell(1) connects to the local broker, fetches the jobspec and
-resource set **R** for the job from the job-info module, and uses this
+Each :program:`flux shell` connects to the local broker, fetches the jobspec
+and resource set **R** for the job from the job-info module, and uses this
 information to plan which tasks to locally execute.
 
 Once the job shell has successfully gathered job information, the
-flux-shell(1) then goes through the following general steps to manage
+:program:`flux shell` then goes through the following general steps to manage
 execution of the job:
 
  * register service endpoint specific to the job and userid,
    typically ``<userid>-shell-<jobid>``
  * load the system default ``initrc.lua``
    (``$sysconfdir/flux/shell/initrc.lua``), unless overridden by
-   configuration (See JOBSPEC OPTIONS and INITRC sections below)
+   configuration (See `JOBSPEC OPTIONS`_ and `SHELL INITRC`_ sections below)
  * call ``shell.init`` plugin callbacks
  * change working directory to the cwd of the job
  * enter a barrier to ensure shell initialization is complete on all shells
@@ -113,20 +117,21 @@ These callbacks are defined by "topic strings" to which plugins can
    the shell option is set before the builtin attempts to read them.
 
 Simple plugins may also be developed directly in the shell ``initrc.lua``
-file itself (see INITRC section, ``plugin.register()`` below)
+file itself (see `SHELL INITRC`_ section, ``plugin.register()`` below)
 
-By default, flux-shell supports the following plugin callback topics:
+By default, :program:`flux shell` supports the following plugin callback
+topics:
 
 **taskmap.SCHEME**
   Called when a taskmap scheme *SCHEME* is requested via the taskmap
-  shell option or corresponding ``--taskmap`` option of :man1:`flux-submit`
-  and related commands.  Plugins that want to offer a different taskmap
-  scheme than the defaults of ``block``, ``cyclic``, and ``manual`` can
-  register a ``taskmap.*`` plugin callback and then users can request this
-  mapping with the appropriate ``--taskmap=name`` option. The default block
-  taskmap is passed to the plugin as "taskmap" in the plugin input arguments,
-  and the plugin should return the new taskmap as a string in the output args.
-  This callback is called before ``shell.init``.
+  shell option or corresponding :option:`flux submit --taskmap` option.
+  Plugins that want to offer a different taskmap scheme than the defaults of
+  ``block``, ``cyclic``, and ``manual`` can register a ``taskmap.*`` plugin
+  callback and then users can request this mapping with the appropriate
+  :option:`flux submit --taskmap=name`` option.  The default block taskmap is
+  passed to the plugin as "taskmap" in the plugin input arguments, and the
+  plugin should return the new taskmap as a string in the output args.  This
+  callback is called before ``shell.init``.
 
 **shell.connect**
   Called just after the shell connects to the local Flux broker. (Only
@@ -148,7 +153,7 @@ By default, flux-shell supports the following plugin callback topics:
 
 **task.fork**
   Called for each task after the task if forked from the parent
-  process (flux-shell process)
+  process (:program:`flux shell` process)
 
 **task.exit**
   Called for each task after it exits and wait_status is available.
@@ -174,10 +179,10 @@ available in a given shell instance.
 JOBSPEC OPTIONS
 ===============
 
-On startup, ``flux-shell`` will examine the jobspec for any shell specific
-options under the ``attributes.system.shell.options`` key.  These options
-may be set by the :man1:`flux-submit` and related commands ``-o, --setopt=OPT``
-option, or explicitly added to the jobspec by other means.
+On startup, :program:`flux shell` will examine the jobspec for any shell
+specific options under the ``attributes.system.shell.options`` key.  These
+options may be set by the :option:`flux submit -o, --setopt=OPT` option,
+or explicitly added to the jobspec by other means.
 
 Job shell options may be switches to enable or disable a shell feature or
 plugin, or they may take an argument. Because jobspec is a JSON document,
@@ -185,9 +190,9 @@ job shell options in jobspec may take arguments that are themselves
 JSON objects. This allows maximum flexibility in runtime configuration
 of optional job shell behavior. In the list below, if an option doesn't
 include a ``=``, then it is a simple boolean option or switch and may be
-specified simply with ``-o option`` in commands like :man1:`flux run`.
+specified simply with :option:`flux submit -o OPTION`.
 
-Options supported by ``flux-shell`` proper include:
+Options supported by :program:`flux shell` proper include:
 
 **verbose**\ =\ *INT*
   Set the shell verbosity to *INT*. A larger value indicates increased
@@ -200,14 +205,14 @@ Options supported by ``flux-shell`` proper include:
   delivered only to direct children of the shell.
 
 **initrc**\ =\ *FILE*
-  Load flux-shell initrc.lua file from *FILE* instead of the default
+  Load :program:`flux shell` initrc.lua file from *FILE* instead of the default
   initrc path. For details of the job shell initrc.lua file format,
-  see the INITRC section below.
+  see the `SHELL INITRC`_ section below.
 
 Job shell plugins may also support configuration via shell options in
 the jobspec. For specific information about runtime-loaded plugins,
 see the documentation for the specific plugin in question. The following
-options are supported by the builtin plugins of ``flux-shell``:
+options are supported by the builtin plugins of :program:`flux shell`:
 
 **pty**
   Allocate a pty to all task ranks for non-interactive use. Output
@@ -226,7 +231,7 @@ options are supported by the builtin plugins of ``flux-shell``:
 
 **pty.interactive**
   Enable a a pty on rank 0 that is set up for interactive attach by
-  a front-end program (i.e. ``flux job attach``). With no other **pty**
+  a front-end program (i.e. :program:`flux job attach`). With no other **pty**
   options, only rank 0 will be assigned a pty and output will not
   be captured. These defaults can be changed by setting other
   **pty** options after **pty.interactive**, e.g.
@@ -370,8 +375,8 @@ options are supported by the builtin plugins of ``flux-shell``:
 SHELL INITRC
 ============
 
-At initialization, flux-shell(1) reads a Lua initrc file which can be used
-to customize the shell operation. The initrc is loaded by default from
+At initialization, :program:`flux shell` reads a Lua initrc file which can be
+used to customize the shell operation. The initrc is loaded by default from
 ``$sysconfdir/flux/shell/initrc.lua`` (or ``/etc/flux/shell/initrc.lua``
 for a "standard" install), but a different path may be specified when
 launching a job via the ``initrc`` shell option.
@@ -461,8 +466,8 @@ supported. Job shell specific functions and tables are described below:
   ``cpu-affinity`` shell option to ``per-task``.
 
 **shell.options.verbose**
-  Current flux-shell verbosity. This value may be changed at runtime,
-  e.g. ``shell.options.verbose = 2`` to set maximum verbosity.
+  Current :program:`flux shell` verbosity. This value may be changed at
+  runtime, e.g. ``shell.options.verbose = 2`` to set maximum verbosity.
 
 **shell.info**
   Returns a Lua table of shell information obtained via
@@ -473,7 +478,7 @@ supported. Job shell specific functions and tables are described below:
   **rank**
     The rank of the current shell within the job.
   **size**
-    The number of flux-shell processes participating in this job.
+    The number of :program:`flux shell` processes participating in this job.
   **ntasks**
     The total number of tasks in this job.
   **service**

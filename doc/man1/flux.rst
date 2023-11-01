@@ -12,11 +12,13 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
+.. program:: flux
+
 Flux is a modular framework for resource management.
 
-flux(1) is a front end for Flux sub-commands.
-"flux -h" summarizes the core Flux commands.
-"flux help *CMD*" displays the manual page for *CMD*.
+:program:`flux` is a front end for Flux sub-commands.
+:option:`flux -h` summarizes the core Flux commands.
+:program:`flux help CMD` displays the manual page for *CMD*.
 
 If *CMD* contains a slash "/" character, it is executed directly,
 bypassing the sub-command search path.
@@ -25,25 +27,29 @@ bypassing the sub-command search path.
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Display help on options, and a list of the core Flux sub-commands.
 
-**-p, --parent**
+.. option:: -p, --parent
+
    If current instance is a child, connect to parent instead. Also sets
    *FLUX_KVS_NAMESPACE* if current instance is confined to a KVS namespace
    in the parent. This option may be specified multiple times.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    Display command environment, and the path search for *CMD*.
 
-**-V, --version**
+.. option:: -V, --version
+
    Convenience option to run :man1:`flux-version`.
 
 
 SUB-COMMAND ENVIRONMENT
 =======================
 
-flux(1) uses compiled-in install paths and its environment
+:program:`flux` uses compiled-in install paths and its environment
 to construct the environment for sub-commands.
 
 Sub-command search path

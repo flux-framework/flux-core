@@ -12,7 +12,9 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-module(1) manages dynamically loadable :man1:`flux-broker` modules.
+.. program:: flux module stats
+
+:program:`flux module` manages dynamically loadable :man1:`flux-broker` modules.
 
 
 COMMANDS
@@ -23,13 +25,14 @@ COMMANDS
    the new module has entered the running state (see LIST OUTPUT below).
 
 **remove** [--force] *name*
-   Remove module *name*.  If *-f, --force* is used, then do not fail if
-   module *name* is not loaded.
+   Remove module *name*.  If :option:`-f, --force` is used, then do not fail
+   if module *name* is not loaded.
 
 **reload** [--force] *name* [*module-arguments* …​]
-   Reload module *name*. This is equivalent to running *flux module remove*
-   followed by *flux module load*. It is a fatal error if module *name* is
-   not loaded during removal unless the ``-f, --force`` option is specified.
+   Reload module *name*. This is equivalent to running
+   :program:`flux module remove` followed by :program:`flux module load`. It
+   is a fatal error if module *name* is not loaded during removal unless the
+   :option:`-f, --force` option is specified.
 
 **list** [*service*]
    List loaded :man1:`flux-broker` modules.
@@ -47,25 +50,31 @@ COMMANDS
 STATS OPTIONS
 =============
 
-**-p, --parse**\ *=OBJNAME*
+.. option:: -p, --parse=OBJNAME
+
    OBJNAME is a period delimited list of field names that should be walked
    to obtain a specific value or object in the returned JSON.
 
-**-t, --type**\ *=int|double*
+.. option:: -t, --type=int|double
+
    Force the returned value to be converted to int or double.
 
-**-s, --scale**\ *=N*
+.. option:: -s, --scale=N
+
    Multiply the returned (int or double) value by the specified
    floating point value.
 
-**-R, --rusage**
+.. option:: -R, --rusage
+
    Return a JSON object representing an *rusage* structure
    returned by :linux:man2:`getrusage`.
 
-**-c, --clear**
+.. option:: -c, --clear
+
    Send a request message to clear statistics in the target module.
 
-**-C, --clear-all**
+.. option:: -C, --clear-all
+
    Broadcast an event message to clear statistics in the target module
    on all ranks.
 
@@ -73,25 +82,33 @@ STATS OPTIONS
 DEBUG OPTIONS
 =============
 
-**-c, --clear**
+.. program:: flux module debug
+
+.. option:: -c, --clear
+
    Set debug flags to zero.
 
-**-S, --set**\ *=MASK*
+.. option:: -S, --set=MASK
+
    Set debug flags to MASK.
    The value may be prefixed with 0x to indicate hexadecimal or 0
    to indicate octal, otherwise the value is interpreted as decimal.
 
-**-c, --clearbit**\ *=MASK*
+.. option:: -c, --clearbit=MASK
+
    Clear the debug bits specified in MASK without disturbing other bits.
    The value is interpreted as above.
 
-**-s, --setbit**\ *=MASK*
+.. option:: -s, --setbit=MASK
+
    Set the debug bits specified in MASK without disturbing other bits.
    The value is interpreted as above.
 
 
 LIST OUTPUT
 ===========
+
+.. program:: flux module list
 
 The *list* command displays one line for each unique (as determined by
 SHA1 hash) loaded module.

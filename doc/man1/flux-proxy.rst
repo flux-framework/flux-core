@@ -15,7 +15,9 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-**flux proxy** connects to the Flux instance identified by *TARGET*,
+.. program:: flux proxy
+
+:program:`flux proxy` connects to the Flux instance identified by *TARGET*,
 then spawns a shell with FLUX_URI pointing to a local:// socket
 managed by the proxy program. As long as the shell is running,
 the proxy program routes messages between the instance and the
@@ -28,14 +30,14 @@ URI, or a resolvable URI with a scheme supported by a ``flux uri``
 plugin.  See :man1:`flux-uri` for details.
 
 If the connection to the Flux instance is lost, for example when the
-target instance terminates, **flux proxy** will emit an error message,
+target instance terminates, :program:`flux proxy` will emit an error message,
 send ``SIGHUP`` and ``SIGCONT`` to the spawned shell or other process,
 and wait for it to terminate before exiting.  The delivery of signals
-can be disabled with the ``-n, --nohup`` option, but be aware that Flux
+can be disabled with the :option:`--nohup` option, but be aware that Flux
 commands running under a **flux proxy** which has lost its connection
 will likely result in errors.
 
-The purpose of **flux proxy** is to allow a connection to be reused,
+The purpose of :program:`flux proxy` is to allow a connection to be reused,
 for example where connection establishment has high latency or
 requires authentication.
 
@@ -43,20 +45,23 @@ requires authentication.
 OPTIONS
 =======
 
-**-f, --force**
+.. option:: -f, --force
+
    Allow the proxy command to connect to a broker running a different
    version of Flux with a warning message instead of a fatal error.
 
-**-n, --nohup**
-   When an error occurs in the proxy connection, **flux proxy** will
+.. option:: -n, --nohup
+
+   When an error occurs in the proxy connection, :program:`flux proxy` will
    normally shut down the proxy and send ``SIGHUP`` and ``SIGCONT`` to
-   the spawned shell or command. If the ``-n, --nohup`` option is used,
+   the spawned shell or command. If the :option:`--nohup` option is used,
    the ``SIGHUP`` and ``SIGCONT`` signals will not be sent.
-   **flux proxy** will still wait for the spawned shell or command to
+   :program:`flux proxy` will still wait for the spawned shell or command to
    exit before terminating to avoid having the child process reparented
    and possibly lose its controlling tty.
 
-**--reconnect**
+.. option:: --reconnect
+
    If broker communication fails, drop the current connection and try to
    reconnect every 2 seconds until the connection succeeds.  Any event
    subscriptions and service registrations that were made on behalf of

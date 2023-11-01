@@ -12,48 +12,57 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-The ``flux-restore`` command reads a KVS snapshot from a portable archive
-format, usually written by :man1:`flux-dump`.
+.. program:: flux restore
+
+The :program:`flux restore` command reads a KVS snapshot from a portable
+archive format, usually written by :man1:`flux-dump`.
 
 The archive source may be specified as a file path or *-* for standard input.
 The format of the archive may be any of the formats supported by
 :linux:man3:`libarchive` and is determined on the fly based on the archive
 content.
 
-The snapshot may be restored to a KVS key if *--key=NAME* is used and the
-KVS service is running, or as a checkpoint in the content backing store
-if *--checkpoint* is used, without the KVS running.  One of those two options
-is required.
+The snapshot may be restored to a KVS key if :option:`--key=NAME` is used and
+the KVS service is running, or as a checkpoint in the content backing store
+if :option:`--checkpoint` is used, without the KVS running.  One of those two
+options is required.
 
 
 OPTIONS
 =======
 
-**-h, --help**
+.. option:: -h, --help
+
    Summarize available options.
 
-**-v, --verbose**
+.. option:: -v, --verbose
+
    List keys on stderr as they are restored instead of a periodic count of
    restored keys.
 
-**-q, --quiet**
+.. option:: -q, --quiet
+
    Don't show a periodic count of restored keys on stderr.
 
-**--checkpoint**
+.. option:: --checkpoint
+
    After restoring the archived content, write the final root blobref
    to the KVS checkpoint area in the content backing store.  The checkpoint
    is used as the initial KVS root when the KVS module is loaded.  Unload
    the KVS module before restoring with this option.
 
-**--key**\ =\ *NAME*
+.. option:: --key=NAME
+
    After restoring the archived content, write the final root blobref
    to a KVS key, so the key becomes the restored root directory.
 
-**--no-cache**
+.. option:: --no-cache
+
    Bypass the broker content cache and interact directly with the backing
    store.  Performance will vary depending on the content of the archive.
 
-**--size-limit**\ =\ *SIZE*
+.. option:: --size-limit=SIZE
+
    Skip restoring keys that exceed SIZE bytes (default: no limit). SIZE may
    be specified as a floating point number with an optional multiplicative
    suffix k or K=1024, M=1024\*1024, or G=1024\*1024\*1024 (up to

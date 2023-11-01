@@ -21,7 +21,9 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux-overlay status`` reports the current status of the tree based
+.. program:: flux overlay status
+
+:program:`flux overlay status` reports the current status of the tree based
 overlay network.  The possible status values are:
 
 full
@@ -113,43 +115,54 @@ Finally, translation between hostnames and broker ranks is accomplished with
 OPTIONS
 =======
 
-``flux-overlay status`` accepts the following options:
+:program:`flux overlay status` accepts the following options:
 
-**-h, --help**
+.. option:: -h, --help
+
    Display options and exit.
 
-**-r, --rank=[RANK]**
+.. option:: -r, --rank=[RANK]
+
    Check health of sub-tree rooted at NODEID (default 0).
 
-**-v, --verbose=[LEVEL]**
+.. option:: -v, --verbose=[LEVEL]
+
    Increase reporting detail: 1=show time since current state was entered,
    2=show round-trip RPC times.
 
-**-t, --timeout=FSD**
+.. option:: -t, --timeout=FSD
+
    Set RPC timeout, 0=disable (default 0.5s)
 
-**--summary**
+.. option:: --summary
+
    Show only the root sub-tree status.
 
-**--down**
+.. option:: --down
+
    Show only the partial/degraded sub-trees.
 
-**--no-pretty**
+.. option:: --no-pretty
+
    Do not indent entries and use line drawing characters to show overlay
    tree structure
 
-**--no-ghost**
+.. option:: --no-ghost
+
    Do not fill in presumed state of nodes that are inaccessible behind
    offline/lost overlay parents.
 
-**-L, --color=WHEN**
+.. option:: -L, --color=WHEN
+
    Colorize output when supported; WHEN can be 'always' (default if omitted),
    'never', or 'auto' (default).
 
-**-H, --highlight=TARGET**
+.. option:: -H, --highlight=TARGET
+
    Highlight one or more targets and their ancestors.
 
-**-w, --wait=STATE**
+.. option:: -w, --wait=STATE
+
    Wait until sub-tree enters *STATE* before reporting (full, partial, offline,
    degraded, lost)>
 
