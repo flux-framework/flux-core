@@ -1218,6 +1218,43 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+static void expiration_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct job_exec_ctx *ctx = arg;
+    flux_jobid_t id;
+    double expiration;
+    struct jobinfo *job;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:F}",
+                             "id", &id,
+                             "expiration", &expiration) < 0)
+        goto error;
+
+    if (!(job = zhashx_lookup (ctx->jobs, &id))) {
+        errno = ENOENT;
+        goto error;
+    }
+    resource_set_update_expiration (job->R, expiration);
+    if (jobinfo_set_expiration (job) < 0)
+        goto error;
+    flux_log (h,
+              LOG_DEBUG,
+              "updated expiration of %s to %.2f",
+              idf58 (job->id),
+              resource_set_expiration (job->R));
+    if (flux_respond (ctx->h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to expiration update RPC");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "expiration_cb: flux_respond_error");
+}
+
 static void job_exec_ctx_destroy (struct job_exec_ctx *ctx)
 {
     if (ctx == NULL)
@@ -1365,6 +1402,7 @@ static const struct flux_msg_handler_spec htab[]  = {
        critical_ranks_cb,
        FLUX_ROLE_USER
     },
+    { FLUX_MSGTYPE_REQUEST, "job-exec.expiration", expiration_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END
 };
 
