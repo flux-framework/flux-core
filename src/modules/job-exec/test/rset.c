@@ -179,6 +179,10 @@ int main (int ac, char *av[])
                 ok (expiration == e->expiration,
                     "%s: expect expiration %.2f (got %.2f)", e->descr,
                     e->expiration, expiration);
+                resource_set_update_expiration (r, 120.);
+                ok (resource_set_expiration (r) == 120.,
+                    "%s: resource_set_update_expiration() works",
+                    e->descr);
             }
             else {
                 fail ("%s: %d:[%s]",

@@ -167,6 +167,12 @@ double resource_set_expiration (struct resource_set *r)
     return r->expiration;
 }
 
+void resource_set_update_expiration (struct resource_set *r,
+                                     double expiration)
+{
+    r->expiration = expiration;
+}
+
 uint32_t resource_set_nth_rank (struct resource_set *r, int n)
 {
     uint32_t rank;

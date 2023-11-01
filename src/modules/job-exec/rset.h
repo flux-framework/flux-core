@@ -35,6 +35,9 @@ double resource_set_starttime (struct resource_set *rset);
 
 double resource_set_expiration (struct resource_set *rset);
 
+void resource_set_update_expiration (struct resource_set *rset,
+                                     double expiration);
+
 #endif /* !HAVE_JOB_EXEC_RSET_H */
 
 
