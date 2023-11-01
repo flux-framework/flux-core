@@ -853,6 +853,16 @@ int event_job_process_entry (struct event *event,
      */
     (void) event_jobtap_call (event, job, name, entry, old_state);
 
+    /*  After processing a resource-update event, send the updated
+     *  expiration to the job execution service.
+     */
+    if (streq (name, "resource-update")
+        && start_send_expiration_update (event->ctx->start, job, context) < 0)
+        flux_log (event->ctx->h,
+                  LOG_ERR,
+                  "%s: failed to send expiration update to exec service",
+                  idf58 (job->id));
+
     return event_job_action (event, job);
 }
 

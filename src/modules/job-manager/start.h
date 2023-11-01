@@ -20,6 +20,10 @@ void start_ctx_destroy (struct start *start);
 
 int start_send_request (struct start *start, struct job *job);
 
+int start_send_expiration_update (struct start *start,
+                                  struct job *job,
+                                  json_t *context);
+
 #endif /* ! _FLUX_JOB_MANAGER_START_H */
 
 /*

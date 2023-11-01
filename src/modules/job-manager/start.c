@@ -91,6 +91,7 @@
 
 #include "job.h"
 #include "event.h"
+#include "raise.h"
 
 #include "start.h"
 
@@ -98,6 +99,7 @@ struct start {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
     char *topic;
+    char *update_topic;
 };
 
 static void hello_cb (flux_t *h,
@@ -125,9 +127,12 @@ static void hello_cb (flux_t *h,
             job = zhashx_next (ctx->active_jobs);
         }
         free (start->topic);
+        free (start->update_topic);
         start->topic = NULL;
+        start->update_topic = NULL;
     }
-    if (asprintf (&start->topic, "%s.start", service_name) < 0)
+    if (asprintf (&start->topic, "%s.start", service_name) < 0
+        || asprintf (&start->update_topic, "%s.expiration", service_name) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
@@ -349,12 +354,65 @@ error:
     return -1;
 }
 
+static void expiration_update_cb (flux_future_t *f, void *arg)
+{
+    struct job *job = arg;
+    if (flux_future_get (f, NULL) < 0) {
+        struct job_manager *ctx = flux_future_aux_get (f, "job-manager::ctx");
+        const char *note = "failed to send expiration update to exec system: "
+                           "job termination may not coincide with expiration";
+        if (ctx != NULL
+            && raise_job_exception (ctx,
+                                    job,
+                                    "exec",
+                                    1,
+                                    FLUX_USERID_UNKNOWN,
+                                    note) < 0)
+            flux_log_error (ctx->h, "expiration_update: raise_job_exception");
+    }
+    job_aux_delete (job, "job-manager::R-update");
+}
+
+/* Send <exec_service>.expiration request to adjust job expiration
+ */
+int start_send_expiration_update (struct start *start,
+                                  struct job *job,
+                                  json_t *context)
+{
+    struct job_manager *ctx = start->ctx;
+    flux_future_t *f = NULL;
+    double expiration;
+
+    if (json_unpack (context, "{s:F}", "expiration", &expiration) < 0
+        || !(f = flux_rpc_pack (start->ctx->h,
+                                start->update_topic,
+                                0,
+                                0,
+                                "{s:I s:f}",
+                                "id", job->id,
+                                "expiration", expiration))
+        || job_aux_set (job,
+                        "job-manager::R-update",
+                        f,
+                        (flux_free_f) flux_future_destroy) < 0
+        || flux_future_then (f, -1., expiration_update_cb, job) < 0
+        || flux_future_aux_set (f, "job-manager::ctx", ctx, NULL) < 0) {
+        int saved_errno = errno;
+        (void) job_aux_delete (job, "job-manager::R-update");
+        flux_future_destroy (f);
+        errno = saved_errno;
+        return -1;
+    }
+    return 0;
+}
+
 void start_ctx_destroy (struct start *start)
 {
     if (start) {
         int saved_errno = errno;;
         flux_msg_handler_delvec (start->handlers);
         free (start->topic);
+        free (start->update_topic);
         free (start);
         errno = saved_errno;
     }
