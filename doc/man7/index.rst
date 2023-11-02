@@ -3,6 +3,6 @@ Section 7 - Flux Miscellany
 
 .. toctree::
    :maxdepth: 1
+   :glob:
 
-   flux-broker-attributes
-   flux-jobtap-plugins
+   *

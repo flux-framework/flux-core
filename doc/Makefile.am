@@ -319,7 +319,8 @@ MAN7_FILES = $(MAN7_FILES_PRIMARY)
 
 MAN7_FILES_PRIMARY = \
 	man7/flux-broker-attributes.7 \
-	man7/flux-jobtap-plugins.7
+	man7/flux-jobtap-plugins.7 \
+	man7/flux-environment.7
 
 
 RST_FILES  = \
