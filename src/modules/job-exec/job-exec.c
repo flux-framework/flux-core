@@ -106,6 +106,8 @@
 
 static double kill_timeout=5.0;
 
+#define DEBUG_FAIL_EXPIRATION 1
+
 extern struct exec_implementation testexec;
 extern struct exec_implementation bulkexec;
 
@@ -1228,6 +1230,12 @@ static void expiration_cb (flux_t *h,
     double expiration;
     struct jobinfo *job;
 
+    /*  Respond with error if module debug flag set for testing purposes
+     */
+    if (flux_module_debug_test (h, DEBUG_FAIL_EXPIRATION, false)) {
+        errno = EINVAL;
+        goto error;
+    }
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:I s:F}",
