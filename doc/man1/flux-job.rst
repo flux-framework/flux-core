@@ -58,8 +58,8 @@ display a status line while the job is pending, e.g
 
     flux-job: ƒJqUHUCzX9 waiting for resources                 00:00:08
 
-This status line may be suppressed by setting ``FLUX_ATTACH_NONINTERACTIVE``
-in the environment.
+This status line may be suppressed by setting
+:envvar:`FLUX_ATTACH_NONINTERACTIVE` in the environment.
 
 .. option:: -l, --label-io
 

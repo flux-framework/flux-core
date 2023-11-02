@@ -92,11 +92,11 @@ OTHER OPTIONS
      within the following search path, in order of precedence:
 
      - ``XDG_CONFIG_HOME/flux/config`` or ``$HOME/.config/flux/config`` if
-       ``XDG_CONFIG_HOME`` is not set
+       :envvar:`XDG_CONFIG_HOME` is not set
 
      - ``$XDG_CONFIG_DIRS/flux/config`` or ``/etc/xdg/flux/config`` if
-       ``XDG_CONFIG_DIRS`` is not set. Note that ``XDG_CONFIG_DIRS`` may
-       be a colon-separated path.
+       :envvar:`XDG_CONFIG_DIRS` is not set. Note that :envvar:`XDG_CONFIG_DIRS`
+       may be a colon-separated path.
 
 .. option:: --begin-time=+FSD|DATETIME
 
@@ -184,16 +184,16 @@ OTHER OPTIONS
 .. option:: --cc=IDSET
 
    *(submit,bulksubmit)* Replicate the job for each ``id`` in ``IDSET``.
-   ``FLUX_JOB_CC=id`` will be set in the environment of each submitted job
-   to allow the job to alter its execution based on the submission index.
-   (e.g. for reading from a different input file). When using :option:`--cc`,
-   the substitution string ``{cc}`` may be used in options and commands
-   and will be replaced by the current ``id``.
+   :envvar:`FLUX_JOB_CC` will be set to ``id`` in the environment of each
+   submitted job to allow the job to alter its execution based on the
+   submission index.  (e.g. for reading from a different input file). When
+   using :option:`--cc`, the substitution string ``{cc}`` may be used in
+   options and commands and will be replaced by the current ``id``.
 
 .. option:: --bcc=IDSET
 
    *(submit,bulksubmit)* Identical to :option:`--cc`, but do not set
-   ``FLUX_JOB_CC`` in each job. All jobs will be identical copies.
+   :envvar:`FLUX_JOB_CC` in each job. All jobs will be identical copies.
    As with :option:`--cc`, ``{cc}`` in option arguments and commands will be
    replaced with the current ``id``.
 

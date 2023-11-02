@@ -175,15 +175,14 @@ OUTPUT FORMAT
 The :option:`--format` option can be used to specify an output format using
 Python's string format syntax or a defined format by name. For a list of
 built-in and configured formats use :option:`-o help`.  An alternate default
-<<<<<<< HEAD
-format can be set via the FLUX_RESOURCE_STATUS_FORMAT_DEFAULT,
-FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT, and FLUX_RESOURCE_LIST_FORMAT_DEFAULT
-environment variables (for :program:`flux resource status`,
-:program:`flux resource drain`, and :program:`flux resource list`
-respectively).  A configuration snippet for an existing named format may be
-generated with :option:`--format=get-config=NAME`.  See :man1:`flux-jobs`
-:ref:`flux_jobs_output_format` section for a detailed description of this
-syntax.
+format can be set via the :envvar:`FLUX_RESOURCE_STATUS_FORMAT_DEFAULT`,
+:envvar:`FLUX_RESOURCE_DRAIN_FORMAT_DEFAULT`, and
+:envvar:`FLUX_RESOURCE_LIST_FORMAT_DEFAULT` environment variables (for
+:program:`flux resource status`, :program:`flux resource drain`, and
+:program:`flux resource list` respectively).  A configuration snippet for an
+existing named format may be generated with :option:`--format=get-config=NAME`.
+See :man1:`flux-jobs` :ref:`flux_jobs_output_format` section for a detailed
+description of this syntax.
 
 Resources are combined into a single line of output when possible depending on
 the supplied output format.  Resource counts are not included in the

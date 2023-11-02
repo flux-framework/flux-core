@@ -51,7 +51,7 @@ OPERATION
 When a job has been granted resources by a Flux instance, a
 :program:`flux shell` process is invoked on each broker rank involved in the
 job. The job shell runs as the job user, and will always have
-``FLUX_KVS_NAMESPACE`` set such that the root of the job shell's
+:envvar:`FLUX_KVS_NAMESPACE` set such that the root of the job shell's
 KVS accesses will be the guest namespace for the job.
 
 Each :program:`flux shell` connects to the local broker, fetches the jobspec
@@ -259,7 +259,7 @@ options are supported by the builtin plugins of :program:`flux shell`:
 
 **gpu-affinity**\ =\ *OPT*
   Adjust operation of the builtin shell ``gpubind`` plugin, which simply
-  sets ``CUDA_VISIBLE_DEVICES`` to the GPU IDs allocated to the job.
+  sets :envvar:`CUDA_VISIBLE_DEVICES` to the GPU IDs allocated to the job.
   *OPT* may be set to ``off`` to disable the plugin, or ``per-task``
   to divide allocated GPUs among tasks launched by the shell (sets a
   different GPU ID or IDs for each launched task). If *OPT* starts with
@@ -334,8 +334,8 @@ options are supported by the builtin plugins of :program:`flux shell`:
   virtual tree fanout of ``N`` for key gather/broadcast.  The default is 2.
 
 **stage-in**
-  Copy files to $FLUX_JOB_TMPDIR that were previously mapped using
-  :man1:`flux-filemap`.
+  Copy files to the directory referenced by :envvar:`FLUX_JOB_TMPDIR` that
+  were previously mapped using :man1:`flux-filemap`.
 
 **stage-in.tags**\ =\ *LIST*
   Select files to copy by specifying a comma-separated list of tags.
@@ -345,12 +345,12 @@ options are supported by the builtin plugins of :program:`flux shell`:
   Further filter the selected files to copy using a :man7:`glob` pattern.
 
 **stage-in.destination**\ =\ *[SCOPE:]PATH*
-  Copy files to the specified destination instead of $FLUX_JOB_TMPDIR.
-  The argument is a directory with optional *scope* prefix.  A scope of
-  ``local`` denotes a local file system (the default), and a scope of
-  ``global`` denotes a global file system.  The copy takes place on all the
-  job's nodes if the scope is local, versus only the first node of the
-  job if the scope is global.
+  Copy files to the specified destination instead of the directory referenced
+  by :envvar:`FLUX_JOB_TMPDIR`.  The argument is a directory with optional
+  *scope* prefix.  A scope of ``local`` denotes a local file system (the
+  default), and a scope of ``global`` denotes a global file system.  The copy
+  takes place on all the job's nodes if the scope is local, versus only the
+  first node of the job if the scope is global.
 
 **signal=OPTION**
   Deliver signal ``SIGUSR1`` to the job 60s before job expiration.
@@ -366,11 +366,11 @@ options are supported by the builtin plugins of :program:`flux shell`:
   Send signal ``signal.signum`` *TIME* seconds before job expiration.
 
 .. warning::
-  The $FLUX_JOB_TMPDIR is cleaned up when the job ends, is guaranteed to
-  be unique, and is generally on fast local storage such as a *tmpfs*.
-  If a destination is explicitly specified, use the ``global:`` prefix
-  where appropriate to avoid overwhelming a shared file system, and be sure
-  to clean up.
+  The directory referenced by :envvar:`FLUX_JOB_TMPDIR` is cleaned up when the
+  job ends, is guaranteed to be unique, and is generally on fast local storage
+  such as a *tmpfs*.  If a destination is explicitly specified, use the
+  ``global:`` prefix where appropriate to avoid overwhelming a shared file
+  system, and be sure to clean up.
 
 SHELL INITRC
 ============

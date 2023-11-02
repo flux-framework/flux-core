@@ -130,10 +130,10 @@ OUTPUT FORMAT
 The :option:`--format` option can be used to specify an output format using
 Python's string format syntax or a defined format by name. For a list of
 built-in and configured formats use :option:`-o help`.  An alternate default
-format can be set via the FLUX_QUEUE_LIST_FORMAT_DEFAULT environment variable.
-A configuration snippet for an existing named format may be generated with
-:option:`--format=get-config=NAME`.  See :man1:`flux-jobs` *OUTPUT FORMAT*
-section for a detailed description of this syntax.
+format can be set via the :envvar:`FLUX_QUEUE_LIST_FORMAT_DEFAULT` environment
+variable.  A configuration snippet for an existing named format may be
+generated with :option:`--format=get-config=NAME`.  See :man1:`flux-jobs`
+*OUTPUT FORMAT* section for a detailed description of this syntax.
 
 The following field names can be specified:
 

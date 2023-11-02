@@ -20,7 +20,7 @@ connection, and are typically either *local*, with a  ``local`` URI
 scheme, or *remote*, with a ``ssh`` URI scheme. These URIs are considered
 fully-resolved, native Flux URIs.
 
-Processes running within a Flux instance will have the ``FLUX_URI``
+Processes running within a Flux instance will have the :envvar:`FLUX_URI`
 environment variable set to a native URI which :man3:`flux_open` will
 use by default, with fallback to a compiled-in native URI for the system
 instance of Flux. Therefore, there is usually no need to specify a URI when
@@ -54,7 +54,7 @@ all *TARGET* URIs support the special query arguments ``local`` or
 
 would return the ``local://`` URI for *JOBID* (if the URI can be resolved).
 
-A special environment variable FLUX_URI_RESOLVE_LOCAL will force
+A special environment variable :envvar:`FLUX_URI_RESOLVE_LOCAL` will force
 :program:`flux uri` to always resolve URIs to local form.  This is often useful
 if the local connector is known to be on the local system (i.e. within a test
 Flux instance), and ssh to localhost does not work.
@@ -92,10 +92,10 @@ jobid:ID[/ID...]
    if the target job is not running.
 
 pid:PID
-  This scheme attempts to read the ``FLUX_URI`` value from the process id
+  This scheme attempts to read the :envvar:`FLUX_URI` value from the process id
   *PID* using ``/proc/PID/environ``. If *PID* refers to a ``flux-broker``,
-  then the scheme reads ``FLUX_URI`` from the broker's initial program or
-  another child process since ``FLUX_URI`` in the broker's environment
+  then the scheme reads :envvar:`FLUX_URI` from the broker's initial program or
+  another child process since :envvar:`FLUX_URI` in the broker's environment
   would refer to *its* parent (or may not be set at all in the case of a
   test instance started with :option:`flux start --test-size=N`).
 
@@ -103,7 +103,7 @@ slurm:JOBID
   This scheme makes a best-effort to resolve the URI of a Flux instance
   launched under Slurm. It invokes ``srun`` to run ``scontrol listpids``
   on the first node of the job, and then uses the ``pid`` resolver until
-  it finds a valid ``FLUX_URI``.
+  it finds a valid :envvar:`FLUX_URI`.
 
 
 EXAMPLES

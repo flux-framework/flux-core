@@ -46,6 +46,7 @@ overridden in some cases:
 
 .. option:: -o stage-in
 
-   Copy files previously mapped with :man1:`flux-filemap` to $FLUX_JOB_TMPDIR.
-   See :man1:`flux-shell` for more *stage-in* options.
+   Copy files previously mapped with :man1:`flux-filemap` to the directory
+   referred to by :envvar:`FLUX_JOB_TMPDIR`.  See :man1:`flux-shell` for more
+   *stage-in* options.
 

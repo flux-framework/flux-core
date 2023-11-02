@@ -120,32 +120,36 @@ The following configuration keys may be printed with
    The configured ``${libexecdir/flux/cmd`` directory.
 
 **lua_cpath_add**
-   Consulted by :man1:`flux` when setting the LUA_CPATH environment variable.
+   Consulted by :man1:`flux` when setting the :envvar:`LUA_CPATH` environment
+   variable.
 
 **lua_path_add**
-   Consulted by :man1:`flux` when setting the LUA_PATH environment variable.
+   Consulted by :man1:`flux` when setting the :envvar:`LUA_PATH` environment
+   variable.
 
 **python_path**
-   Consulted by :man1:`flux` when setting the PYTHONPATH environment variable.
+   Consulted by :man1:`flux` when setting the :envvar:`PYTHONPATH` environment
+   variable.
 
 **man_path**
-   Consulted by :man1:`flux` when setting the MANPATH environment variable.
+   Consulted by :man1:`flux` when setting the :envvar:`MANPATH` environment
+   variable.
 
 **exec_path**
-   Consulted by :man1:`flux` when setting the FLUX_EXEC_PATH environment
-   variable.
+   Consulted by :man1:`flux` when setting the :envvar:`FLUX_EXEC_PATH`
+   environment variable.
 
 **connector_path**
-   Consulted by :man1:`flux` when setting the FLUX_CONNECTOR_PATH environment
-   variable.
+   Consulted by :man1:`flux` when setting the :envvar:`FLUX_CONNECTOR_PATH`
+   environment variable.
 
 **module_path**
-   Consulted by :man1:`flux` when setting the FLUX_MODULE_PATH environment
-   variable.
+   Consulted by :man1:`flux` when setting the :envvar:`FLUX_MODULE_PATH`
+   environment variable.
 
 **pmi_library_path**
-   Consulted by :man1:`flux` when setting the FLUX_PMI_LIBRARY_PATH environment
-   variable.
+   Consulted by :man1:`flux` when setting the :envvar:`FLUX_PMI_LIBRARY_PATH`
+   environment variable.
 
 **cmdhelp_pattern**
    Used by :man1:`flux` to generate a list of common commands when run without

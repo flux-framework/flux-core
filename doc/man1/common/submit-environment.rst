@@ -54,9 +54,9 @@ via a set of *RULE* expressions. The currently supported rules are
    simple substitution supports the following syntax:
 
      * ``$$`` is an escape; it is replaced with ``$``
-     * ``$var`` will substitute ``var`` from the current environment,
+     * ``$var`` will substitute :envvar:`var` from the current environment,
        falling back to the process environment. An error will be thrown
-       if environment variable ``var`` is not set.
+       if environment variable :envvar:`var` is not set.
      * ``${var}`` is equivalent to ``$var``
      * Advanced parameter substitution is not allowed, e.g. ``${var:-foo}``
        will raise an error.
@@ -66,12 +66,12 @@ via a set of *RULE* expressions. The currently supported rules are
 
  * Otherwise, the rule is considered a pattern from which to match
    variables from the process environment if they do not exist in
-   the generated environment. E.g. ``PATH`` will export ``PATH`` from the
+   the generated environment. E.g. ``PATH`` will export :envvar:`PATH` from the
    current environment (if it has not already been set in the generated
    environment), and ``OMP*`` would copy all environment variables that
-   start with ``OMP`` and are not already set in the generated environment.
-   It is important to note that if the pattern does not match any variables,
-   then the rule is a no-op, i.e. an error is *not* generated.
+   start with :envvar:`OMP` and are not already set in the generated
+   environment.  It is important to note that if the pattern does not match
+   any variables, then the rule is a no-op, i.e. an error is *not* generated.
 
    Examples:
        ``PATH``, ``FLUX_*_PATH``, ``/^OMP.*/``
@@ -80,7 +80,7 @@ Since we always starts with a copy of the current environment,
 the default implicit rule is ``*`` (or :option:`--env=*`). To start with an
 empty environment instead, the ``-*`` rule or :option:`--env-remove=*` option
 should be used. For example, the following will only export the current
-``PATH`` to a job:
+:envvar:`PATH` to a job:
 
 ::
 
@@ -111,6 +111,6 @@ This works particularly well when specifying rules in a file:
     BAR=${FOO}/baz
 
 The above file would first clear the environment, then copy all variables
-starting with ``OMP`` from the current environment, set ``FOO=bar``,
+starting with :envvar:`OMP` from the current environment, set ``FOO=bar``,
 and then set ``BAR=bar/baz``.
 
