@@ -315,7 +315,10 @@ void acquire_disconnect (struct acquire *acquire, const flux_msg_t *msg)
  * FWIW, this function is not called until after the eventlog KVS
  * commit completes.
  */
-static void reslog_cb (struct reslog *reslog, const char *name, void *arg)
+static void reslog_cb (struct reslog *reslog,
+                       const char *name,
+                       json_t *context,
+                       void *arg)
 {
     struct acquire *acquire = arg;
     struct resource_ctx *ctx = acquire->ctx;
@@ -349,16 +352,48 @@ static void reslog_cb (struct reslog *reslog, const char *name, void *arg)
                 }
             }
         }
-        else if (streq (name, "online") || streq (name, "offline")
-                || streq (name, "drain") || streq (name, "undrain")) {
+        else if (streq (name, "resource-update")) {
+            double expiration = -1.;
+
+            /*  Handle resource-update event. Currently the only supported
+             *  context of such an event is an expiration update
+             */
+            if (json_unpack (context,
+                             "{s?F}",
+                             "expiration", &expiration) < 0) {
+                errmsg = "error preparing resource.acquire update response";
+                goto error;
+            }
+            if (expiration >= 0.
+                && flux_respond_pack (h,
+                                      msg,
+                                      "{s:f}",
+                                      "expiration", expiration) < 0) {
+                    flux_log_error (h,
+                                    "error responding to resource.acquire (%s)",
+                                    name);
+                    goto error;
+            }
+        }
+        else if (streq (name, "online")
+                 || streq (name, "offline")
+                 || streq (name, "drain")
+                 || streq (name, "undrain")) {
             if (ar->response_count > 0) {
                 struct idset *up, *dn;
-                if (acquire_request_update (ar, acquire, name, &up, &dn) < 0) {
+                if (acquire_request_update (ar,
+                                            acquire,
+                                            name,
+                                            &up,
+                                            &dn) < 0) {
                     errmsg = "error preparing resource.acquire update response";
                     goto error;
                 }
                 if (up || dn) {
-                    if (acquire_respond_next (h, msg, up, dn) < 0) {
+                    if (acquire_respond_next (h,
+                                              msg,
+                                              up,
+                                              dn) < 0) {
                         flux_log_error (h,
                                     "error responding to resource.acquire (%s)",
                                     name);
@@ -403,7 +438,9 @@ void acquire_destroy (struct acquire *acquire)
 
             msg = flux_msglist_first (acquire->requests);
             while (msg) {
-                if (flux_respond_error (h, msg, ECANCELED,
+                if (flux_respond_error (h,
+                                        msg,
+                                        ECANCELED,
                                         "the resource module was unloaded") < 0)
                     flux_log_error (h, "error responding to acquire request");
                 flux_msglist_delete (acquire->requests);
@@ -425,7 +462,10 @@ struct acquire *acquire_create (struct resource_ctx *ctx)
     acquire->ctx = ctx;
     if (!(acquire->requests = flux_msglist_create ()))
         goto error;
-    if (flux_msg_handler_addvec (ctx->h, htab, acquire, &acquire->handlers) < 0)
+    if (flux_msg_handler_addvec (ctx->h,
+                                 htab,
+                                 acquire,
+                                 &acquire->handlers) < 0)
         goto error;
     reslog_set_callback (ctx->reslog, reslog_cb, acquire);
     return acquire;

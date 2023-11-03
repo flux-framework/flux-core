@@ -15,6 +15,7 @@ struct reslog;
 
 typedef void (*reslog_cb_f)(struct reslog *reslog,
                             const char *name,
+                            json_t *context,
                             void *arg);
 
 struct reslog *reslog_create (flux_t *h);

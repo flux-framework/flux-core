@@ -56,10 +56,16 @@ static int duration_update_cb (flux_plugin_t *p,
     }
     if (state == FLUX_JOB_STATE_RUN
         || state == FLUX_JOB_STATE_CLEANUP) {
-        flux_jobtap_error (p,
-                           args,
-                           "update of duration for running job not supported");
-        return -1;
+        /*  Allow update of duration of running job for instance owner
+         *  only:
+         */
+        if (!(cred.rolemask & FLUX_ROLE_OWNER) || !owner_allow_any) {
+            flux_jobtap_error (p,
+                               args,
+                               "duration update of running job requires"
+                               " instance owner privileges");
+            return -1;
+        }
     }
     if ((cred.rolemask & FLUX_ROLE_OWNER) && owner_allow_any) {
         /* If owner is allowed to make any duration adjustment, then

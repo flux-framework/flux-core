@@ -663,6 +663,30 @@ json_t *job_jobspec_with_updates (struct job *job, json_t *updates)
     return jobspec;
 }
 
+int job_apply_resource_updates (struct job *job, json_t *updates)
+{
+    json_t *val;
+
+    if (!job->R_redacted) {
+        errno = EAGAIN;
+        return -1;
+    }
+    /* Currently only an expiration key is allowed in a resource-update
+     * event. Return an error with errno=EINVAL if there is more than one
+     * key in the updates object or the existing key is not 'expiration':
+     */
+    if (json_object_size (updates) != 1
+        || !(val = json_object_get (updates, "expiration"))
+        || !json_is_number (val)
+        || json_number_value (val) < 0.) {
+        errno = EINVAL;
+        return -1;
+    }
+    /*  Update redacted copy of R in place.
+     */
+    return jpath_set (job->R_redacted, "execution.expiration", val);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

@@ -39,12 +39,16 @@ static void notify_callback (struct reslog *reslog, json_t *event)
 {
     if (reslog->cb) {
         const char *name;
+        json_t *context;
 
-        if (json_unpack (event, "{s:s}", "name", &name) < 0) {
+        if (json_unpack (event,
+                         "{s:s s:o}",
+                         "name", &name,
+                         "context", &context) < 0) {
             flux_log (reslog->h, LOG_ERR, "error unpacking event for callback");
             return;
         }
-        reslog->cb (reslog, name, reslog->cb_arg);
+        reslog->cb (reslog, name, context, reslog->cb_arg);
     }
 }
 

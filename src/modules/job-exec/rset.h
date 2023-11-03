@@ -25,7 +25,7 @@ void resource_set_destroy (struct resource_set *rset);
 
 json_t *resource_set_get_json (struct resource_set *rset);
 
-const struct idset * resource_set_ranks (struct resource_set *rset);
+const struct idset *resource_set_ranks (struct resource_set *rset);
 
 uint32_t resource_set_nth_rank (struct resource_set *r, int n);
 
@@ -34,6 +34,9 @@ uint32_t resource_set_rank_index (struct resource_set *r, uint32_t rank);
 double resource_set_starttime (struct resource_set *rset);
 
 double resource_set_expiration (struct resource_set *rset);
+
+void resource_set_update_expiration (struct resource_set *rset,
+                                     double expiration);
 
 #endif /* !HAVE_JOB_EXEC_RSET_H */
 

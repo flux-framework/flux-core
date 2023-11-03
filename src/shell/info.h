@@ -34,6 +34,7 @@ struct shell_info {
     struct taskmap *taskmap;
     struct idset *taskids;
     char *hwloc_xml;
+    flux_future_t *R_watch_future;
 };
 
 /* Create shell_info.

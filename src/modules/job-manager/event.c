@@ -469,8 +469,6 @@ static int event_handle_dependency (struct job *job,
 static int event_handle_jobspec_update (struct job *job, json_t *context)
 {
     if (!job->jobspec_redacted
-        || job->state == FLUX_JOB_STATE_RUN
-        || job->state == FLUX_JOB_STATE_CLEANUP
         || job_apply_jobspec_updates (job, context) < 0)
         return -1;
     return 0;
@@ -591,6 +589,10 @@ int event_job_update (struct job *job, json_t *event)
          */
         if (job->state == FLUX_JOB_STATE_SCHED)
             job->state = FLUX_JOB_STATE_PRIORITY;
+    }
+    else if (streq (name, "resource-update")) {
+        if (job_apply_resource_updates (job, context) < 0)
+            goto inval;
     }
     else if (strstarts (name, "dependency-")) {
         if (job->state == FLUX_JOB_STATE_DEPEND
@@ -850,6 +852,16 @@ int event_job_process_entry (struct event *event,
      *   errors at some point (perhaps raise a job exception).
      */
     (void) event_jobtap_call (event, job, name, entry, old_state);
+
+    /*  After processing a resource-update event, send the updated
+     *  expiration to the job execution service.
+     */
+    if (streq (name, "resource-update")
+        && start_send_expiration_update (event->ctx->start, job, context) < 0)
+        flux_log (event->ctx->h,
+                  LOG_ERR,
+                  "%s: failed to send expiration update to exec service",
+                  idf58 (job->id));
 
     return event_job_action (event, job);
 }

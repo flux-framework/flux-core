@@ -409,6 +409,7 @@ static int parse_R (struct job *job, bool allow_nonfatal)
     int core_count = 0;
     struct rnode *rnode;
     int saved_errno, rc = -1;
+    char *tmp;
 
     if (!(rl = rlist_from_json (job->R, &error))) {
         flux_log_error (job->h, "rlist_from_json: %s", error.text);
@@ -421,8 +422,10 @@ static int parse_R (struct job *job, bool allow_nonfatal)
         goto nonfatal_error;
 
     job->nnodes = idset_count (idset);
-    if (!(job->ranks = idset_encode (idset, flags)))
+    if (!(tmp = idset_encode (idset, flags)))
         goto nonfatal_error;
+    free (job->ranks);
+    job->ranks = tmp;
 
     /* reading nodelist from R directly would avoid the creation /
      * destruction of a hostlist.  However, we get a hostlist to
@@ -432,8 +435,10 @@ static int parse_R (struct job *job, bool allow_nonfatal)
     if (!(hl = rlist_nodelist (rl)))
         goto nonfatal_error;
 
-    if (!(job->nodelist = hostlist_encode (hl)))
+    if (!(tmp = hostlist_encode (hl)))
         goto nonfatal_error;
+    free (job->nodelist);
+    job->nodelist = tmp;
 
     rnode = zlistx_first (rl->nodes);
     while (rnode) {

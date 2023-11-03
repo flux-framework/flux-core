@@ -49,8 +49,17 @@
  * in the plugin out arguments. The updates key follows the same format as
  * the RFC 21 jobspec-update event and the update request defined here.
  *
+ * As a special case, if a job is running and a duration update is
+ * being applied, the update service will send a sched.expiration RPC to
+ * the scheduler to ensure the expiration can be adjusted. If this RPC
+ * fails with an error other than ENOSYS, then the update is rejected.
+ *
  * If all steps above are successful, then a `jobspec-update`event is
  * posted for the job and a success response sent to the caller.
+ *
+ * If a job is running, and the update results in a change in `R`, then
+ * a resource-update event MAY also be emitted for the job. Currently,
+ * only an update of the expiration in R is supported.
  *
  * FUTURE WORK
  *
@@ -62,7 +71,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <math.h>       /* INFINITY */
 #include <flux/core.h>
+
+#include "src/common/libutil/errprintf.h"
+#include "src/common/libjob/idf58.h"
 
 #include "update.h"
 #include "job-manager.h"
@@ -73,11 +86,15 @@ struct update {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
     zlistx_t *pending_requests;
+
+    flux_future_t *kvs_watch_f;
+    double instance_expiration;
 };
 
 struct update_request {
     void *handle;                 /* zlistx_t handle                       */
     flux_future_t *feasibility_f; /* feasibility request future            */
+    flux_future_t *expiration_f;  /* sched.expiration request future       */
     struct update *update;        /* pointer back to update struct         */
     const flux_msg_t *msg;        /* original update request msg           */
     struct flux_msg_cred cred;    /* update request credentials            */
@@ -91,6 +108,7 @@ static void update_request_destroy (struct update_request *req)
     if (req) {
         int saved_errno = errno;
         flux_future_destroy (req->feasibility_f);
+        flux_future_destroy (req->expiration_f);
         flux_msg_decref (req->msg);
         job_decref (req->job);
         free (req);
@@ -127,6 +145,69 @@ update_request_create (struct update *update,
     return req;
 }
 
+static int expiration_from_duration (struct job *job,
+                                     flux_error_t *errp,
+                                     double duration,
+                                     double *expiration)
+{
+    if (duration == 0.)
+        *expiration = 0.;
+    else {
+        /*  Decode starttime of job's current R and add updated duration:
+        */
+        double starttime = -1.0;
+        if (!job->R_redacted
+            || json_unpack (job->R_redacted,
+                            "{s:{s?F}}",
+                            "execution",
+                            "starttime", &starttime) < 0
+            || starttime <= 0.) {
+            errprintf (errp, "unable to get job starttime");
+            return -1;
+        }
+        *expiration = starttime + duration;
+        if (*expiration <= flux_reactor_time ()) {
+            errprintf (errp,
+                       "requested duration places job expiration in the past");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int post_resource_updates (struct job_manager *ctx,
+                                  struct job *job,
+                                  json_t *updates,
+                                  flux_error_t *errp)
+{
+    double duration, expiration;
+
+    /*  Updates for a running job may require a corresponding
+     *  resource-update event. Currently this only applies to
+     *  a duration update for a running job.
+     */
+    if (json_unpack (updates,
+                     "{s:F}",
+                     "attributes.system.duration", &duration) < 0)
+        return 0;
+
+    if (expiration_from_duration (job, errp, duration, &expiration) < 0) {
+        return -1;
+    }
+    /*  Post resource-update event to modify expiration:
+     */
+    if (event_job_post_pack (ctx->event,
+                             job,
+                             "resource-update",
+                             0,
+                             "{s:f}",
+                             "expiration", expiration) < 0) {
+        errprintf (errp, "failed to pack resource-update event");
+        return -1;
+    }
+    return 0;
+}
+
 static void post_job_updates (struct job_manager *ctx,
                               const flux_msg_t *msg,
                               struct flux_msg_cred cred,
@@ -134,7 +215,7 @@ static void post_job_updates (struct job_manager *ctx,
                               json_t *updates,
                               int validate)
 {
-    const char *errstr = NULL;
+    flux_error_t error;
 
     /*  If this update was requested by the instance owner, and the
      *  job owner is not the instance owner, and job validation was
@@ -162,7 +243,7 @@ static void post_job_updates (struct job_manager *ctx,
                                 0,
                                 "{s:[s]}",
                                 "flags", "immutable") < 0) {
-            errstr = "failed to set job immutable flag";
+            errprintf (&error, "failed to set job immutable flag");
             goto error;
         }
 
@@ -177,14 +258,22 @@ static void post_job_updates (struct job_manager *ctx,
                              0,
                              "O",
                              updates) < 0) {
-        errstr = "failed to pack jobspec-update event";
+        errprintf (&error, "failed to pack jobspec-update event");
         goto error;
     }
+
+    /*  If job is running, then post any necessary resource-update events:
+     */
+    if (job->state & FLUX_JOB_STATE_RUNNING
+        && post_resource_updates (ctx, job, updates, &error) < 0) {
+        goto error;
+    }
+
     if (flux_respond (ctx->h, msg, NULL) < 0)
         flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
     return;
 error:
-    if (flux_respond_error (ctx->h, msg, errno, errstr) < 0)
+    if (flux_respond_error (ctx->h, msg, errno, error.text) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
 }
 
@@ -196,6 +285,29 @@ static void feasibility_cb (flux_future_t *f, void *arg)
                                 req->msg,
                                 errno,
                                 future_strerror (f, errno)) < 0)
+            flux_log_error (req->update->ctx->h,
+                            "%s: flux_respond_error",
+                            __FUNCTION__);
+    }
+    else {
+        post_job_updates (req->update->ctx,
+                          req->msg,
+                          req->cred,
+                          req->job,
+                          req->updates,
+                          req->validate);
+    }
+    zlistx_delete (req->update->pending_requests, req->handle);
+}
+
+static void sched_expiration_cb (flux_future_t *f, void *arg)
+{
+    struct update_request *req = arg;
+    if (flux_future_get (f, NULL) < 0 && errno != ENOSYS) {
+        if (flux_respond_error (req->update->ctx->h,
+                                req->msg,
+                                errno,
+                                "scheduler refused expiration update") < 0)
             flux_log_error (req->update->ctx->h,
                             "%s: flux_respond_error",
                             __FUNCTION__);
@@ -268,6 +380,55 @@ error:
 
 }
 
+static int sched_expiration_check (struct update *update,
+                                   flux_error_t *errp,
+                                   const flux_msg_t *msg,
+                                   struct flux_msg_cred cred,
+                                   struct job *job,
+                                   json_t *updates,
+                                   int validate)
+{
+    struct update_request *req = NULL;
+    flux_future_t *f = NULL;
+    double expiration, duration;
+
+    if (json_unpack (updates,
+                     "{s:F}",
+                     "attributes.system.duration", &duration) < 0) {
+        errprintf (errp, "failed to unpack attributes.system.duration");
+        return -1;
+    }
+    if (expiration_from_duration (job, errp, duration, &expiration) < 0)
+        return -1;
+
+    if (!(req = pending_request_create (update,
+                                        msg,
+                                        cred,
+                                        job,
+                                        updates,
+                                        validate))
+        || !(f = flux_rpc_pack (update->ctx->h,
+                                "sched.expiration",
+                                0,
+                                0,
+                                "{s:I s:f}",
+                                "id", job->id,
+                                "expiration", expiration))
+        || flux_future_then (f, -1., sched_expiration_cb, req) < 0) {
+        errprintf (errp,
+                   "failed to send sched.expiration rpc: %s",
+                   strerror (errno));
+        goto error;
+    }
+    req->expiration_f = f;
+    return 0;
+error:
+    update_request_destroy (req);
+    flux_future_destroy (f);
+    return -1;
+}
+
+
 static void update_job (struct update *update,
                         const flux_msg_t *msg,
                         struct flux_msg_cred cred,
@@ -327,6 +488,20 @@ static void update_job (struct update *update,
 
     if (feasibility)
         update_feasibility_check (update, msg, cred, job, updates, validate);
+    else if (job->state & FLUX_JOB_STATE_RUNNING
+             && json_object_get (updates, "attributes.system.duration")) {
+        flux_error_t ferror;
+        if (sched_expiration_check (update,
+                                    &ferror,
+                                    msg,
+                                    cred,
+                                    job,
+                                    updates,
+                                    validate) < 0) {
+            error = strdup (ferror.text);
+            goto error;
+        }
+    }
     else
         post_job_updates (ctx, msg, cred, job, updates, validate);
 
@@ -418,11 +593,145 @@ static void send_error_responses (struct update *update)
     }
 }
 
+static void update_expiration_from_lookup_response (struct update *update,
+                                                    flux_future_t *f)
+{
+    flux_t *h = update->ctx->h;
+    const char *R;
+    json_t *o = NULL;
+    json_error_t error;
+
+    error.text[0] = '\0';
+
+    if (flux_kvs_lookup_get (f, &R) < 0
+        || !(o = json_loads (R, 0, NULL))
+        || json_unpack_ex (o, &error, 0,
+                           "{s:{s:F}}",
+                           "execution",
+                            "expiration", &update->instance_expiration) < 0)
+        flux_log (h,
+                  LOG_ERR,
+                  "failed to unpack current instance expiration: %s",
+                  error.text);
+    json_decref (o);
+}
+
+static inline double expiration_diff (double old, double new)
+{
+    /*  If the old expiration was 0. (unlimited) then return -inf since
+     *  this best represents the reduction of expiration from unlimited.
+     *  If new expiration is unlimited, then return +inf.
+     *  O/w, return difference between new and old.
+     */
+    if (old == 0.)
+        return -INFINITY;
+    if (new == 0.)
+        return INFINITY;
+    return new - old;
+}
+
+/*  An update to resource.R has occurred. Adjust expiration of all running
+ *  jobs where no duration is set in jobspec, but the job currently has a set
+ *  expiration. This implies the expiration was set automatically by the
+ *  scheduler and needs an update.
+ *
+ *  The motivating case here is an administrative extension of a batch or
+ *  alloc job time limit. This code extends that expiration update to all
+ *  running jobs, which otherwise may have their expiration set to the
+ *  previous instance time limit.
+ */
+
+static void resource_update_cb (flux_future_t *f, void *arg)
+{
+    struct update *update = arg;
+    flux_t *h = update->ctx->h;
+    struct job *job;
+    double old_expiration = update->instance_expiration;
+
+    update_expiration_from_lookup_response (update, f);
+    flux_future_reset (f);
+
+    /*  If this is the first successful update, or there are no
+     *  running jobs, then there is nothing left to do.
+     */
+    if (old_expiration == -1. || update->ctx->running_jobs == 0)
+        return;
+
+    flux_log (h,
+              LOG_INFO,
+              "resource expiration updated from %.2f to %.2f (%+.6g)",
+              old_expiration,
+              update->instance_expiration,
+              expiration_diff (old_expiration, update->instance_expiration));
+
+
+    /*  Otherwise, check each running job to determine if an adjustment
+     *  of its expiration is required:
+     */
+    job = zhashx_first (update->ctx->active_jobs);
+    while (job) {
+        if (job->state == FLUX_JOB_STATE_RUN) {
+            double expiration = -1.;
+            double duration = 0.;
+            /*
+             *  Get current job expiration (if set) and jobspec duration.
+             *  Assume the expiration job of the job needs to be updated
+             *  only if and expiration was set for the job _and_ the job
+             *  duration was unset or 0. This indicates that the expiration
+             *  was likely automatically set by the scheduler based on
+             *  the instance expiration (which is now being updated).
+             *
+             */
+            if (json_unpack (job->R_redacted,
+                            "{s:{s?F}}",
+                            "execution",
+                             "expiration", &expiration) < 0
+                || json_unpack (job->jobspec_redacted,
+                                "{s:{s:{s?F}}}",
+                                "attributes",
+                                 "system",
+                                  "duration", &duration) < 0) {
+                flux_log (h,
+                          LOG_ERR,
+                          "failed to unpack job %s data for expiration update",
+                          idf58 (job->id));
+            }
+            /*  Job needs an update if no or unlimited duration specified
+             *  in jobspec (duration == 0.) but an expiration was set in R
+             *  (expiration >= 0.):
+             */
+            if (expiration >= 0 && duration == 0.) {
+                flux_log (h,
+                          LOG_INFO,
+                          "updated expiration of %s from %.2f to %.2f (%+.6g)",
+                          idf58 (job->id),
+                          expiration,
+                          update->instance_expiration,
+                          expiration_diff (expiration,
+                                           update->instance_expiration));
+                if (event_job_post_pack (update->ctx->event,
+                                         job,
+                                         "resource-update",
+                                         0,
+                                         "{s:f}",
+                                         "expiration",
+                                         update->instance_expiration) < 0)
+                    flux_log (h,
+                              LOG_ERR,
+                              "failed to pack resource-update event");
+            }
+        }
+        job = zhashx_next (update->ctx->active_jobs);
+    }
+}
+
 void update_ctx_destroy (struct update *update)
 {
     if (update) {
         int saved_errno = errno;
         send_error_responses (update);
+        flux_kvs_lookup_cancel (update->kvs_watch_f);
+        flux_future_destroy (update->kvs_watch_f);
         flux_msg_handler_delvec (update->handlers);
         zlistx_destroy (&update->pending_requests);
         free (update);
@@ -455,6 +764,22 @@ struct update *update_ctx_create (struct job_manager *ctx)
     }
     zlistx_set_destructor (update->pending_requests,
                            update_request_destructor);
+
+    /*  Watch resource.R in KVS for updates
+     */
+    update->kvs_watch_f = flux_kvs_lookup (ctx->h,
+                                           NULL,
+                                           FLUX_KVS_WATCH | FLUX_KVS_WAITCREATE,
+                                           "resource.R");
+    if (!update->kvs_watch_f
+        || flux_future_then (update->kvs_watch_f,
+                             -1.,
+                             resource_update_cb,
+                             update) < 0) {
+        flux_log_error (ctx->h, "failed to setup watch on resource.R");
+        goto error;
+    }
+    update->instance_expiration = -1.;
     return update;
 error:
     update_ctx_destroy (update);

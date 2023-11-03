@@ -106,6 +106,8 @@
 
 static double kill_timeout=5.0;
 
+#define DEBUG_FAIL_EXPIRATION 1
+
 extern struct exec_implementation testexec;
 extern struct exec_implementation bulkexec;
 
@@ -448,6 +450,9 @@ static int jobinfo_set_expiration (struct jobinfo *job)
         return -1;
     }
 
+    flux_watcher_destroy (job->expiration_timer);
+    job->expiration_timer = NULL;
+
     /* Timelimit disabled if expiration is set to 0.
      */
     if (expiration == 0.)
@@ -458,6 +463,8 @@ static int jobinfo_set_expiration (struct jobinfo *job)
      *  remaining, we should be as accurate as possible.
      */
     now = flux_reactor_time ();
+    if (job->t0 == 0.)
+       job->t0 = now;
 
     /* Adjust expiration time based on delay between when scheduler
      *  created R and when we received this job. O/w jobs may be
@@ -466,12 +473,14 @@ static int jobinfo_set_expiration (struct jobinfo *job)
      *  start events.
      */
     if (starttime > 0.)
-        expiration += now - starttime;
+        expiration += job->t0 - starttime;
 
     offset = expiration - now;
-    if (offset <= 0.) {
-        jobinfo_fatal_error (job, 0, "job started after expiration");
-        return -1;
+    if (offset < 0.) {
+        /*  Expiration has already passed. Just set offset to 0. so that
+         *  the expiration timer will fire immediately.
+         */
+        offset = 0.;
     }
     if (!(w = flux_timer_watcher_create (flux_get_reactor(job->h),
                                          offset,
@@ -1211,6 +1220,49 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+static void expiration_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct job_exec_ctx *ctx = arg;
+    flux_jobid_t id;
+    double expiration;
+    struct jobinfo *job;
+
+    /*  Respond with error if module debug flag set for testing purposes
+     */
+    if (flux_module_debug_test (h, DEBUG_FAIL_EXPIRATION, false)) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:F}",
+                             "id", &id,
+                             "expiration", &expiration) < 0)
+        goto error;
+
+    if (!(job = zhashx_lookup (ctx->jobs, &id))) {
+        errno = ENOENT;
+        goto error;
+    }
+    resource_set_update_expiration (job->R, expiration);
+    if (jobinfo_set_expiration (job) < 0)
+        goto error;
+    flux_log (h,
+              LOG_DEBUG,
+              "updated expiration of %s to %.2f",
+              idf58 (job->id),
+              resource_set_expiration (job->R));
+    if (flux_respond (ctx->h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to expiration update RPC");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "expiration_cb: flux_respond_error");
+}
+
 static void job_exec_ctx_destroy (struct job_exec_ctx *ctx)
 {
     if (ctx == NULL)
@@ -1358,6 +1410,7 @@ static const struct flux_msg_handler_spec htab[]  = {
        critical_ranks_cb,
        FLUX_ROLE_USER
     },
+    { FLUX_MSGTYPE_REQUEST, "job-exec.expiration", expiration_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END
 };
 

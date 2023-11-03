@@ -110,9 +110,8 @@ test_expect_success 'flux job info applies resource updates' '
 	jobid=$(flux submit --wait-event=start sleep 300) &&
 	echo $jobid > updated_R.id &&
 	flux job info $jobid R | jq -e ".execution.expiration == 0.0" &&
-	kvspath=`flux job id --to=kvs ${jobid}` &&
-	flux kvs eventlog append ${kvspath}.eventlog resource-update "{\"expiration\": 1000.0}" &&
-	flux job info $jobid R | jq -e ".execution.expiration == 1000.0" &&
+	flux update $jobid duration=300 &&
+	flux job info $jobid R | jq -e ".execution.expiration > 0.0" &&
 	flux job info $jobid eventlog &&
 	flux cancel $jobid
 '
