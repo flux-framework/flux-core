@@ -321,7 +321,6 @@ static void proxy_command_destroy_usock_and_router (struct proxy_command *ctx)
     ctx->server = NULL;
     router_destroy (ctx->router);
     ctx->router = NULL;
-    free (ctx->remote_uri_authority);
 }
 
 /* Attempt to reconnect to broker.  If successful, wait for for broker to
@@ -481,6 +480,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     }
 done:
     proxy_command_destroy_usock_and_router (&ctx);
+    free (ctx.remote_uri_authority);
 
     if (ctx.exit_code)
         exit (ctx.exit_code);
