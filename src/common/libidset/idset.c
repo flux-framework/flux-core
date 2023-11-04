@@ -143,16 +143,34 @@ static int idset_grow (struct idset *idset, size_t size)
     return 0;
 }
 
-/* Wrapper for vebput() which increments idset count if needed
+/* Helper to avoid costly idset_test() operation in idset_put()/idset_del()
+ * in some cases that may commonly arise in idset_encode(), for example.
+ * This function runs in constant time.  Return true if id is definitely not
+ * in set.  A false result is indeterminate.
+ */
+static bool nonmember_fast (struct idset *idset, unsigned int id)
+{
+    unsigned int last = idset_last (idset);
+    if (last == IDSET_INVALID_ID || id > last)
+        return true;
+    unsigned int first = idset_first (idset);
+    if (first == IDSET_INVALID_ID || id < first)
+        return true;
+    return false;
+}
+
+/* Wrapper for vebput() which increments idset count.
+ * The operation is skipped if id is already in the set.
  */
 static void idset_put (struct idset *idset, unsigned int id)
 {
-    if (!idset_test (idset, id))
+    if (nonmember_fast (idset, id) || !idset_test (idset, id)) {
         idset->count++;
-    vebput (idset->T, id);
+        vebput (idset->T, id);
+    }
 }
 
-/* Call this variant if id is known not to be in the set.
+/* Call this variant if id is known to NOT be in the set
  */
 static void idset_put_nocheck (struct idset *idset, unsigned int id)
 {
@@ -160,13 +178,15 @@ static void idset_put_nocheck (struct idset *idset, unsigned int id)
     vebput (idset->T, id);
 }
 
-/* Wrapper for vebdel() which decrements idset count if needed
+/* Wrapper for vebdel() which decrements idset count.
+ * The operation is skipped if id is not in the set.
  */
 static void idset_del (struct idset *idset, unsigned int id)
 {
-    if (idset_test (idset, id))
+    if (!nonmember_fast (idset, id) && idset_test (idset, id)) {
         idset->count--;
-    vebdel (idset->T, id);
+        vebdel (idset->T, id);
+    }
 }
 
 int idset_set (struct idset *idset, unsigned int id)
