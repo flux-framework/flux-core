@@ -152,6 +152,14 @@ static void idset_put (struct idset *idset, unsigned int id)
     vebput (idset->T, id);
 }
 
+/* Call this variant if id is known not to be in the set.
+ */
+static void idset_put_nocheck (struct idset *idset, unsigned int id)
+{
+    idset->count++;
+    vebput (idset->T, id);
+}
+
 /* Wrapper for vebdel() which decrements idset count if needed
  */
 static void idset_del (struct idset *idset, unsigned int id)
@@ -167,9 +175,13 @@ int idset_set (struct idset *idset, unsigned int id)
         errno = EINVAL;
         return -1;
     }
-    if (idset_grow (idset, id + 1) < 0)
-        return -1;
-    idset_put (idset, id);
+    if (id >= idset_universe_size (idset)) {
+        if (idset_grow (idset, id + 1) < 0)
+            return -1;
+        idset_put_nocheck (idset, id);
+    }
+    else
+        idset_put (idset, id);
     return 0;
 }
 
@@ -191,10 +203,16 @@ int idset_range_set (struct idset *idset, unsigned int lo, unsigned int hi)
         return -1;
     }
     normalize_range (&lo, &hi);
+
+    size_t oldsize = idset_universe_size (idset);
     if (idset_grow (idset, hi + 1) < 0)
         return -1;
-    for (id = lo; id <= hi; id++)
-        idset_put (idset, id);
+    for (id = lo; id <= hi; id++) {
+        if (id >= oldsize)
+            idset_put_nocheck (idset, id);
+        else
+            idset_put (idset, id);
+    }
     return 0;
 }
 
