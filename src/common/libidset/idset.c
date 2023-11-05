@@ -34,7 +34,9 @@ int validate_idset_flags (int flags, int allowed)
 struct idset *idset_create (size_t size, int flags)
 {
     struct idset *idset;
-    int valid_flags = IDSET_FLAG_AUTOGROW | IDSET_FLAG_INITFULL;
+    int valid_flags = IDSET_FLAG_AUTOGROW
+                    | IDSET_FLAG_INITFULL
+                    | IDSET_FLAG_COUNT_LAZY;
 
     if (validate_idset_flags (flags, valid_flags) < 0)
         return NULL;
@@ -176,7 +178,9 @@ static bool nonmember_fast (struct idset *idset, unsigned int id)
  */
 static void idset_put (struct idset *idset, unsigned int id)
 {
-    if (nonmember_fast (idset, id) || !idset_test (idset, id)) {
+    if ((idset->flags & IDSET_FLAG_COUNT_LAZY)
+        || nonmember_fast (idset, id)
+        || !idset_test (idset, id)) {
         idset->count++;
         vebput (idset->T, id);
     }
@@ -195,7 +199,8 @@ static void idset_put_nocheck (struct idset *idset, unsigned int id)
  */
 static void idset_del (struct idset *idset, unsigned int id)
 {
-    if (!nonmember_fast (idset, id) && idset_test (idset, id)) {
+    if ((idset->flags & IDSET_FLAG_COUNT_LAZY)
+        || (!nonmember_fast (idset, id) && idset_test (idset, id))) {
         idset->count--;
         vebdel (idset->T, id);
     }
@@ -365,7 +370,21 @@ size_t idset_count (const struct idset *idset)
 {
     if (!idset)
         return 0;
-    return idset->count;
+    if (!(idset->flags & IDSET_FLAG_COUNT_LAZY))
+        return idset->count;
+
+    /* IDSET_FLAG_COUNT_LAZY was set, causing set/clear operations to ignore
+     * safeguards that kept idset->count accurate.  Pay now by iterating.
+     */
+    unsigned int id;
+    size_t count = 0;
+
+    id = idset_first (idset);
+    while (id != IDSET_INVALID_ID) {
+        count++;
+        id = idset_next (idset, id);
+    }
+    return count;
 }
 
 bool idset_equal (const struct idset *idset1,

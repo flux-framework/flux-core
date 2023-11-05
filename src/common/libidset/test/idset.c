@@ -825,7 +825,7 @@ void test_initfull (void)
     idset_destroy (idset);
 }
 
-void test_alloc (void)
+void test_alloc (int flags)
 {
     struct idset *idset;
     unsigned int ids[64];
@@ -834,11 +834,13 @@ void test_alloc (void)
     size_t size_before;
     size_t size_after;
 
-    idset = idset_create (16,
-                          IDSET_FLAG_AUTOGROW
-                        | IDSET_FLAG_INITFULL);
+    flags |= IDSET_FLAG_AUTOGROW | IDSET_FLAG_INITFULL;
+    idset = idset_create (16, flags);
     if (!idset)
         BAIL_OUT ("could not create idset");
+
+    ok (idset_count (idset) == 16,
+        "idset_count returns 16");
 
     size_before = idset_universe_size (idset);
     errors = 0;
@@ -860,6 +862,8 @@ void test_alloc (void)
     ok (size_before < size_after,
         "idset size grew automatically");
     diag ("before=%zu after=%zu", size_before, size_after);
+    ok (idset_count (idset) == 0,
+        "idset_count returns 0");
 
     errors = 0;
     for (int i = 0; i < ARRAY_SIZE (ids); i += 2) {
@@ -870,6 +874,8 @@ void test_alloc (void)
     }
     ok (errors == 0,
         "idset_free_check freed multiple ids with no errors");
+    ok (idset_count (idset) == 32,
+        "idset_count returns 32");
 
     errors = 0;
     for (int i = 0; i < ARRAY_SIZE (ids); i += 2) {
@@ -887,6 +893,8 @@ void test_alloc (void)
         }
     ok (errors == 0,
         "ids were allocated monotonically");
+    ok (idset_count (idset) == 0,
+        "idset_count returns 0");
 
     for (int i = 0; i < ARRAY_SIZE (ids); i++)
         idset_free (idset, ids[i]);
@@ -972,7 +980,8 @@ int main (int argc, char *argv[])
     issue_2336 ();
     test_ops ();
     test_initfull();
-    test_alloc();
+    test_alloc (0);
+    test_alloc (IDSET_FLAG_COUNT_LAZY);
     test_alloc_badparam();
 
     done_testing ();

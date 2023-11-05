@@ -28,6 +28,8 @@ enum idset_flags {
     IDSET_FLAG_BRACKETS = 2, // encode non-singleton idset with brackets
     IDSET_FLAG_RANGE = 4,    // encode with ranges ("2,3,4,8" -> "2-4,8")
     IDSET_FLAG_INITFULL = 8, // initilize/grow idset with all ids set
+    IDSET_FLAG_COUNT_LAZY = 16, // disable running count, which speeds up
+                             //  idset_set/clear, but slows down idset_count()
 };
 
 #define IDSET_INVALID_ID    (UINT_MAX - 1)
