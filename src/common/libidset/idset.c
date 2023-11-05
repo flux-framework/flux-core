@@ -501,6 +501,60 @@ struct idset *idset_intersect (const struct idset *a, const struct idset *b)
     return result;
 }
 
+/* Find the next available id.  If there isn't one, try to grow the set.
+ * The grow attempt will fail if IDSET_FLAG_AUTOGROW is not set.
+ * Finally call vebdel() to take the id out of the set and return it.
+ */
+int idset_alloc (struct idset *idset, unsigned int *val)
+{
+    unsigned int id;
+
+    if (!idset || !(idset->flags & IDSET_FLAG_INITFULL) || !val) {
+        errno = EINVAL;
+        return -1;
+    }
+    id = idset_first (idset);
+    if (id == IDSET_INVALID_ID) {
+        id = idset_universe_size (idset);
+        if (idset_grow (idset, id + 1) < 0)
+            return -1;
+    }
+    // code above ensures that id is a member of idset
+    idset_del_nocheck (idset, id);
+    *val = id;
+    return 0;
+}
+
+/* Return an id to the set, ignoring invalid or out of range ones.
+ * This does not catch double-frees.
+ */
+void idset_free (struct idset *idset, unsigned int val)
+{
+    if (!idset || !(idset->flags & IDSET_FLAG_INITFULL))
+        return;
+    idset_put (idset, val);
+}
+
+/* Same as above but fail if the id is already in the set.
+ */
+int idset_free_check (struct idset *idset, unsigned int val)
+{
+    if (!idset
+        || !(idset->flags & IDSET_FLAG_INITFULL)
+        || !valid_id (val)
+        || val >= idset_universe_size (idset)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (idset_test (idset, val)) {
+        errno = EEXIST;
+        return -1;
+    }
+    // code above ensures that id is NOT a member of idset
+    idset_put_nocheck (idset, val);
+    return 0;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

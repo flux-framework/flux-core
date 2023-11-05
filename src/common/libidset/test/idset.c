@@ -825,6 +825,132 @@ void test_initfull (void)
     idset_destroy (idset);
 }
 
+void test_alloc (void)
+{
+    struct idset *idset;
+    unsigned int ids[64];
+    unsigned int id;
+    int errors;
+    size_t size_before;
+    size_t size_after;
+
+    idset = idset_create (16,
+                          IDSET_FLAG_AUTOGROW
+                        | IDSET_FLAG_INITFULL);
+    if (!idset)
+        BAIL_OUT ("could not create idset");
+
+    size_before = idset_universe_size (idset);
+    errors = 0;
+    for (int i = 0; i < ARRAY_SIZE (ids); i++) {
+        if (idset_alloc (idset, &ids[i]) < 0)
+            errors++;
+    }
+    size_after = idset_universe_size (idset);
+    ok (errors == 0,
+        "idset_alloc allocated multiple ids with no errors");
+    errors = 0;
+    for (int i = 0; i < ARRAY_SIZE (ids); i++)
+        if (ids[i] != i) {
+            diag ("allocation %d is %lu", i, ids[i]);
+            errors++;
+        }
+    ok (errors == 0,
+        "ids were allocated monotonically");
+    ok (size_before < size_after,
+        "idset size grew automatically");
+    diag ("before=%zu after=%zu", size_before, size_after);
+
+    errors = 0;
+    for (int i = 0; i < ARRAY_SIZE (ids); i += 2) {
+        if (idset_free_check (idset, ids[i]) < 0) {
+            diag ("idset_free_check %lu: %s", ids[i], strerror (errno));
+            errors++;
+        }
+    }
+    ok (errors == 0,
+        "idset_free_check freed multiple ids with no errors");
+
+    errors = 0;
+    for (int i = 0; i < ARRAY_SIZE (ids); i += 2) {
+        if (idset_alloc (idset, &ids[i]) < 0)
+            errors++;
+    }
+    ok (errors == 0,
+        "idset_alloc re-allocated multiple ids with no errors");
+
+    errors = 0;
+    for (int i = 0; i < ARRAY_SIZE (ids); i++)
+        if (ids[i] != i) {
+            diag ("allocation %d is %lu", i, ids[i]);
+            errors++;
+        }
+    ok (errors == 0,
+        "ids were allocated monotonically");
+
+    for (int i = 0; i < ARRAY_SIZE (ids); i++)
+        idset_free (idset, ids[i]);
+    ok (idset_count (idset) == idset_universe_size (idset),
+        "idset_free freed all ids");
+
+    idset_destroy (idset);
+    idset = idset_create (16, IDSET_FLAG_INITFULL);
+    if (!idset)
+        BAIL_OUT ("could not create idset");
+    for (int i = 0; i < 16; i++)
+        if (idset_alloc (idset, &id) < 0)
+            BAIL_OUT ("could not allocate ids in existing universe");
+    errno = 0;
+    ok (idset_alloc (idset, &id) < 0 && errno == EINVAL,
+        "idset_alloc fails with EINVAL when universe is full and no autofree");
+    idset_destroy (idset);
+}
+
+void test_alloc_badparam (void)
+{
+    unsigned int id;
+    struct idset *idset;
+    struct idset *idset2;
+
+    idset = idset_create (16, IDSET_FLAG_INITFULL | IDSET_FLAG_AUTOGROW);
+    if (!idset)
+        BAIL_OUT ("could not create idset");
+    idset2 = idset_create (16, 0);
+    if (!idset2)
+        BAIL_OUT ("could not create idset");
+
+    errno = 0;
+    ok (idset_alloc (NULL, &id) < 0 && errno == EINVAL,
+        "idset_alloc idset=NULL fails with EINVAL");
+    errno = 0;
+    ok (idset_alloc (idset2, &id) < 0 && errno == EINVAL,
+        "idset_alloc fails with EINVAL without IDSET_FLAG_INITFULL");
+    errno = 0;
+    ok (idset_alloc (idset, NULL) < 0 && errno == EINVAL,
+        "idset_alloc id=NULL fails with EINVAL");
+
+    lives_ok ({idset_free (NULL, 42);},
+        "idset_free idset=NULL doesn't crash");
+    idset_free (idset2, 2);
+    diag ("idset_free without IDSET_FLAG_INITFULL is a no-op");
+
+    errno = 0;
+    ok (idset_free_check (NULL, 2) < 0 && errno == EINVAL,
+        "idset_free_check idset=NULL fails with EINVAL");
+    errno = 0;
+    ok (idset_free_check (idset2, 2) < 0 && errno == EINVAL,
+        "idset_free_check without IDSET_FLAG_INITFULL fails with EINVAL");
+    errno = 0;
+    ok (idset_free_check (idset, 16) < 0 && errno == EINVAL,
+        "idset_free_check without out of range fails with EINVAL");
+    errno = 0;
+    ok (idset_free_check (idset, 2) < 0 && errno == EEXIST,
+        "idset_free_check on non-free id fails with EEXIST");
+
+    idset_destroy (idset);
+    idset_destroy (idset2);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -846,6 +972,8 @@ int main (int argc, char *argv[])
     issue_2336 ();
     test_ops ();
     test_initfull();
+    test_alloc();
+    test_alloc_badparam();
 
     done_testing ();
 }

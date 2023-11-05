@@ -144,6 +144,15 @@ struct idset *idset_intersect (const struct idset *a, const struct idset *b);
  */
 bool idset_has_intersection (const struct idset *a, const struct idset *b);
 
+/* Convenience interfaces for using idset as an "integer allocator".
+ * The set must be created with IDSET_FLAG_INITFULL.
+ * idset_free() doesn't check for double frees, but idset_free_check() does.
+ * It returns -1 and sets errno to EEXIST when that happens.
+ */
+int idset_alloc (struct idset *idset, unsigned int *val);
+void idset_free (struct idset *idset, unsigned int val);
+int idset_free_check (struct idset *idset, unsigned int val);
+
 #ifdef __cplusplus
 }
 #endif
