@@ -129,9 +129,6 @@ broker.exit-restart [Updates: C, R]
 broker.starttime
    Timestamp of broker startup from :man3:`flux_reactor_now`.
 
-conf.connector_path
-   The value of the broker's :envvar:`FLUX_CONNECTOR_PATH` environment variable.
-
 conf.exec_path
    The value of the broker's :envvar:`FLUX_EXEC_PATH` environment variable.
 
