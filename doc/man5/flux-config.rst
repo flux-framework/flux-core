@@ -8,9 +8,10 @@ DESCRIPTION
 Flux normally operates without configuration files.  If configuration is
 needed, the :man1:`flux-broker` **--config-path=PATH** option may be used
 to instruct Flux to parse a config file or, if **PATH** is a directory, all
-files matching the glob **PATH/*.toml**.  Alternatively, the FLUX_CONF_DIR
-environment variable may be used to set the configuration file or directory
-path. If both are set, the command line argument takes precedence.
+files matching the glob **PATH/*.toml**.  Alternatively, the
+:envvar:`FLUX_CONF_DIR` environment variable may be used to set the
+configuration file or directory path. If both are set, the command line
+argument takes precedence.
 
 The Flux systemd unit file starts the system instance broker with
 ``--config-path=${sysconfdir}/flux/system/conf.d``.  Further discussion of the

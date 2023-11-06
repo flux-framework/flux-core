@@ -46,8 +46,8 @@ OPTIONS
 
    Run brokers with Caliper profiling enabled, using a Caliper
    configuration profile named *PROFILE*. Requires a version of Flux
-   built with :option:`--enable-caliper`. Unless CALI_LOG_VERBOSITY is already
-   set in the environment, it will default to 0 for all brokers.
+   built with :option:`--enable-caliper`. Unless :envvar:`CALI_LOG_VERBOSITY`
+   is already set in the environment, it will default to 0 for all brokers.
 
 .. option:: --rundir=DIR
 
@@ -69,8 +69,8 @@ OPTIONS
 
 .. option:: --test-hosts=HOSTLIST
 
-   Set FLUX_FAKE_HOSTNAME in the environment of each broker so that the
-   broker can bootstrap from a config file instead of PMI.  HOSTLIST is
+   Set :envvar:`FLUX_FAKE_HOSTNAME` in the environment of each broker so that
+   the broker can bootstrap from a config file instead of PMI.  HOSTLIST is
    assumed to be in rank order.  The broker will use the fake hostname to
    find its entry in the configured bootstrap host array.
 

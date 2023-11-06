@@ -37,7 +37,7 @@ Different KVS namespaces can be created in which kvs values can be
 read from/written to. By default, all KVS operations operate on the
 default KVS namespace "primary". An alternate namespace can be
 specified in most kvs commands via the *--namespace* option, or by
-setting the namespace in the environment variable FLUX_KVS_NAMESPACE.
+setting the namespace in the environment variable :envvar:`FLUX_KVS_NAMESPACE`.
 
 :program:`flux kvs` runs a KVS *COMMAND*. The possible commands and their
 arguments are described below.

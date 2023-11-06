@@ -34,8 +34,8 @@ be used to store any errors which may have otherwise gone to :var:`stderr`.
 
 The :var:`uri` scheme (before "://") specifies the "connector" that will be used
 to establish the connection. The :var:`uri` path (after "://") is parsed by the
-connector. If :var:`uri` is NULL, the value of $FLUX_URI is used.  If
-$FLUX_URI is not set, a compiled-in default URI is used.
+connector. If :var:`uri` is NULL, the value of :envvar:`FLUX_URI` is used.  If
+:envvar:`FLUX_URI` is not set, a compiled-in default URI is used.
 
 *flags* is the logical "or" of zero or more of the following flags:
 

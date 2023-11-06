@@ -61,9 +61,9 @@ local-uri [Updates: C]
    existing directory.
 
 parent-uri
-   The value of the broker's ``FLUX_URI`` environment variable.  This is the
-   URI that should be passed to :man3:`flux_open` to establish a connection to
-   the enclosing instance.
+   The value of the broker's :envvar:`FLUX_URI` environment variable.  This is
+   the URI that should be passed to :man3:`flux_open` to establish a connection
+   to the enclosing instance.
 
 instance-level
    The nesting level of this Flux instance, or ``0`` if there is no enclosing
@@ -75,7 +75,7 @@ jobid
    other than a Flux job ID if Flux was started by another means.
 
 parent-kvs-namespace
-   The value of the broker's ``FLUX_KVS_NAMESPACE`` environment variable.
+   The value of the broker's :envvar:`FLUX_KVS_NAMESPACE` environment variable.
    This is the KVS namespace assigned to this Flux instance by its enclosing
    instance, if it was launched by Flux as a job.
 
@@ -130,16 +130,17 @@ broker.starttime
    Timestamp of broker startup from :man3:`flux_reactor_now`.
 
 conf.connector_path
-   The value of the broker's ``FLUX_CONNECTOR_PATH`` environment variable.
+   The value of the broker's :envvar:`FLUX_CONNECTOR_PATH` environment variable.
 
 conf.exec_path
-   The value of the broker's ``FLUX_EXEC_PATH`` environment variable.
+   The value of the broker's :envvar:`FLUX_EXEC_PATH` environment variable.
 
 conf.module_path
-   The value of the broker's ``FLUX_MODULE_PATH`` environment variable.
+   The value of the broker's :envvar:`FLUX_MODULE_PATH` environment variable.
 
 conf.pmi_library_path
-   The value of the broker's ``FLUX_PMI_LIBRARY_PATH`` environment variable.
+   The value of the broker's :envvar:`FLUX_PMI_LIBRARY_PATH` environment
+   variable.
 
 conf.shell_initrc [Updates: C, R]
    The path to the :man1:`flux-shell` initrc script.  Default:
@@ -151,7 +152,7 @@ conf.shell_pluginpath [Updates: C, R]
 
 config.path [Updates: see below]
    A config file or directory (containing ``*.toml`` config files) for
-   this Flux instance. This attribute may be set via the FLUX_CONF_DIR
+   this Flux instance. This attribute may be set via the :envvar:`FLUX_CONF_DIR`
    environment variable, or the :man1:`flux-broker` ``--config-path``
    command line argument.  Default: none.  See also :man5:`flux-config`.
 

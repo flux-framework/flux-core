@@ -18,7 +18,7 @@ DESCRIPTION
 .. program:: flux proxy
 
 :program:`flux proxy` connects to the Flux instance identified by *TARGET*,
-then spawns a shell with FLUX_URI pointing to a local:// socket
+then spawns a shell with :envvar:`FLUX_URI` pointing to a local:// socket
 managed by the proxy program. As long as the shell is running,
 the proxy program routes messages between the instance and the
 local:// socket. Once the shell terminates, the proxy program
@@ -72,7 +72,7 @@ OPTIONS
 EXAMPLES
 ========
 
-Connect to a job running on the localhost which has a FLUX_URI
+Connect to a job running on the localhost which has a :envvar:`FLUX_URI`
 of ``local:///tmp/flux-123456-abcdef/0/local`` and spawn an interactive
 shell:
 

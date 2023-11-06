@@ -57,8 +57,8 @@ service used by Flux services.
 which acts as handle for synchronization and container for the result. The
 namespace :var:`ns` is optional. If set to NULL, :func:`flux_kvs_lookup` uses
 the default namespace, or if set, the namespace from the
-FLUX_KVS_NAMESPACE environment variable. :var:`flags` modifies the request
-as described below.
+:envvar:`FLUX_KVS_NAMESPACE` environment variable. :var:`flags` modifies the
+request as described below.
 
 :func:`flux_kvs_lookupat` is identical to :func:`flux_kvs_lookup` except
 :var:`treeobj` is a serialized RFC 11 object that references a particular

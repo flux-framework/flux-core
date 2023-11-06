@@ -78,10 +78,10 @@ OPTIONS
    Specify a named output format *NAME* or a format string using Python's
    format syntax. See `OUTPUT FORMAT`_ below for field names. Named formats
    may be listed via :option:`--format=help`.  An alternate default format can
-   be set via the FLUX_JOBS_FORMAT_DEFAULT environment variable.  Additional
-   named formats may be registered with :program:`flux jobs` via configuration.
-   See the `CONFIGURATION`_ section for more details. A configuration snippet
-   for an existing named format may be generated with
+   be set via the :envvar:`FLUX_JOBS_FORMAT_DEFAULT` environment variable.
+   Additional named formats may be registered with :program:`flux jobs` via
+   configuration.  See the `CONFIGURATION`_ section for more details. A
+   configuration snippet for an existing named format may be generated with
    :option:`--format=get-config=NAME`.
 
 .. option:: --json
@@ -503,12 +503,13 @@ The :program:`flux jobs` command supports registration of named output formats
 in configuration files. The command loads configuration files from
 ``flux-jobs.EXT`` from the following paths in order of increasing precedence:
 
- * ``$XDG_CONFIG_DIRS/flux`` or ``/etc/xdg/flux`` if ``XDG_CONFIG_DIRS`` is
-   not set. Note that ``XDG_CONFIG_DIRS`` is traversed in reverse order
-   such that entries first in the colon separated path are highest priority.
+ * ``$XDG_CONFIG_DIRS/flux`` or ``/etc/xdg/flux`` if :envvar:`XDG_CONFIG_DIRS`
+   is not set. Note that :envvar:`XDG_CONFIG_DIRS` is traversed in reverse
+   order such that entries first in the colon separated path are highest
+   priority.
 
- * ``XDG_CONFIG_HOME/flux`` or ``$HOME/.config/flux`` if ``XDG_CONFIG_HOME``
-   is not set
+ * ``$XDG_CONFIG_HOME/flux`` or ``$HOME/.config/flux`` if
+   :envvar:`XDG_CONFIG_HOME` is not set
 
 where ``EXT`` can be one of ``toml``, ``yaml``, or ``json``.
 

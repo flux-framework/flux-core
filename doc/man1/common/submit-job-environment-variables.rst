@@ -1,29 +1,33 @@
 JOB ENVIRONMENT VARIABLES
 =========================
 
-Flux creates several environment variables for every job task.  They are as follows:
+The job environment is described in more detail in the :man7:`flux-environment`
+:ref:`job_environment` section.  A summary of the most commonly used variables
+is provided below:
 
-**FLUX_JOB_ID**
-    The jobid for this job
+.. list-table::
+   :header-rows: 1
 
-**FLUX_URI**
-    The URI of the enclosing Flux instance
+   * - Name
+     - Description
 
-**FLUX_JOB_TMPDIR**
-    Path to temporary directory created for job
+   * - :envvar:`FLUX_JOB_ID`
+     - the current jobid
 
-**FLUX_TASK_LOCAL_ID**
-    The task id local to the node
+   * - :envvar:`FLUX_JOB_SIZE`
+     - the number of tasks in the current job
 
-**FLUX_TASK_RANK**
-    The global rank for this task
+   * - :envvar:`FLUX_JOB_NNODES`
+     - the total number of nodes hosting tasks on behalf of the job
 
-**FLUX_JOB_NNODES**
-    The total number of nodes in the job
+   * - :envvar:`FLUX_TASK_RANK`
+     - the global task rank (zero origin)
 
-**FLUX_JOB_SIZE**
-    The count of job shells in the job, typical the same value as FLUX_JOB_NNODES
+   * - :envvar:`FLUX_TASK_LOCAL_ID`
+     - the local task rank (zero origin)
 
-**FLUX_KVS_NAMESPACE**
-    The identifier of the KVS guest namespace of the job. This redirects KVS command and
-    API calls to the job guest namespace instead of the root namespace.
+   * - :envvar:`FLUX_JOB_TMPDIR`
+     - path to temporary, per-job directory, usually in ``/tmp``
+
+   * - :envvar:`FLUX_URI`
+     - the URI of the enclosing Flux instance

@@ -47,7 +47,8 @@ is not on a network file system without considering the ramifications.
 :option:`flux filemap unmap` unmaps mapped files.
 
 The ``stage-in`` shell plugin described in :man1:`flux-shell` may be used to
-extract previously mapped files into $FLUX_JOB_TMPDIR or another directory.
+extract previously mapped files into the directory referred to by
+:envvar:`FLUX_JOB_TMPDIR` or another directory.
 
 OPTIONS
 =======
@@ -132,7 +133,7 @@ by multiple jobs.
   flux filemap unmap
 
 Example 2: a batch script that maps two data sets with tags, then uses the
-``stage-in`` shell plugin to selectively copy them to $FLUX_JOB_TMPDIR,
+``stage-in`` shell plugin to selectively copy them to :envvar:`FLUX_JOB_TMPDIR`
 which is automatically cleaned up after each job.
 
 .. code-block:: console

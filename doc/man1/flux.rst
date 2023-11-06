@@ -34,8 +34,8 @@ OPTIONS
 .. option:: -p, --parent
 
    If current instance is a child, connect to parent instead. Also sets
-   *FLUX_KVS_NAMESPACE* if current instance is confined to a KVS namespace
-   in the parent. This option may be specified multiple times.
+   :envvar:`FLUX_KVS_NAMESPACE` if current instance is confined to a KVS
+   namespace in the parent. This option may be specified multiple times.
 
 .. option:: -v, --verbose
 
@@ -50,50 +50,33 @@ SUB-COMMAND ENVIRONMENT
 =======================
 
 :program:`flux` uses compiled-in install paths and its environment
-to construct the environment for sub-commands.
+to construct the environment for sub-commands.  More detail is available in the
+:man7:`flux-environment` :ref:`sub_command_environment` section.  A summary
+is provided below:
 
-Sub-command search path
-   Look for "flux-*CMD*" executable by searching a path constructed
-   with the following prototype:
+.. list-table::
+   :header-rows: 1
 
-   ::
+   * - Name
+     - Description
 
-      [getenv FLUX_EXEC_PATH_PREPEND]:install-path:\
-        [getenv FLUX_EXEC_PATH]
+   * - :envvar:`FLUX_EXEC_PATH`
+     - where to look for "flux-*CMD*" executables
 
-setenv FLUX_MODULE_PATH
-   Set up broker module search path according to:
+   * - :envvar:`FLUX_MODULE_PATH`
+     - directories to look for broker modules
 
-   ::
+   * - :envvar:`FLUX_CONNECTOR_PATH`
+     - directories to search for connector modules
 
-      [getenv FLUX_MODULE_PATH_PREPEND]:install-path:\
-        [getenv FLUX_MODULE_PATH]
+   * - :envvar:`LUA_PATH`
+     - Lua module search path
 
-setenv FLUX_CONNECTOR_PATH
-   Set up search path for connector modules used by libflux to open a connection
-   to the broker
+   * - :envvar:`LUA_CPATH`
+     - Lua binary module search path
 
-   ::
-
-      [getenv FLUX_CONNECTOR_PATH_PREPEND]:install-path:\
-        [getenv FLUX_CONNECTOR_PATH]
-
-setenv LUA_PATH
-   Set Lua module search path:
-
-   [getenv FLUX_LUA_PATH_PREPEND];[getenv LUA_PATH];install-path;
-
-setenv LUA_CPATH
-   Set Lua binary module search path:
-
-   [getenv FLUX_LUA_CPATH_PREPEND];[getenv LUA_CPATH];install-path;
-
-setenv PYTHONPATH
-   Set Python module search path:
-
-   ::
-
-      [getenv FLUX_PYTHONPATH_PREPEND]:[getenv PYTHONPATH];install-path
+   * - :envvar:`PYTHONPATH`
+     - Python module search path:
 
 
 RESOURCES
