@@ -178,7 +178,6 @@ static void test_one_echo (flux_t *h)
     flux_msg_t *rmsg;
     int fd;
     struct usock_client *client;
-    struct flux_msg_cred cred;
 
     if (!(msg = flux_request_encode ("a", NULL)))
         BAIL_OUT ("flux_request_encode failed");
@@ -191,10 +190,6 @@ static void test_one_echo (flux_t *h)
     fd = usock_client_connect (sockpath, USOCK_RETRY_DEFAULT);
     ok (fd >= 0,
         "usock_client_connect %s works", sockpath);
-    ok (usock_get_cred (fd, &cred) == 0,
-        "usock_get_cred works");
-    ok (cred.userid == getuid (),
-        "and returned cred.userid matches test uid");
     ok ((client = usock_client_create (fd)) != NULL,
         "usock_client_create works");
 

@@ -163,19 +163,10 @@ void client_invalid (void)
 {
     struct usock_retry_params retry = USOCK_RETRY_NONE;
     char *longstr;
-    struct flux_msg_cred cred;
 
     if (!(longstr = calloc (1, PATH_MAX + 1)))
         BAIL_OUT ("malloc failed");
     memset (longstr, 'a', PATH_MAX);
-
-    errno = 0;
-    ok (usock_get_cred (-1, &cred) < 0 && errno == EINVAL,
-        "usock_get_cred fd=-1 fails with EINVAL");
-
-    errno = 0;
-    ok (usock_get_cred (0, NULL) < 0 && errno == EINVAL,
-        "usock_get_cred cred=NULL fails with EINVAL");
 
     errno = 0;
     ok (usock_client_create (-1) == NULL && errno == EINVAL,

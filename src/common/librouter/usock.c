@@ -385,7 +385,7 @@ void usock_server_destroy (struct usock_server *server)
     }
 }
 
-int usock_get_cred (int fd, struct flux_msg_cred *cred)
+static int usock_get_cred (int fd, struct flux_msg_cred *cred)
 {
     struct ucred ucred;
     socklen_t crlen;
