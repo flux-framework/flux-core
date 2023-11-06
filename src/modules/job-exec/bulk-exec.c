@@ -541,7 +541,8 @@ void bulk_exec_kill_log_error (flux_future_t *f, flux_jobid_t id)
     const char *name = flux_future_first_child (f);
     while (name) {
         flux_future_t *cf = flux_future_get_child (f, name);
-        if (flux_future_get (cf, NULL) < 0) {
+        if (flux_future_is_ready (cf)
+            && flux_future_get (cf, NULL) < 0) {
             uint32_t rank = flux_rpc_get_nodeid (cf);
             flux_log_error (h,
                             "%s: exec_kill: %s (rank %lu)",
