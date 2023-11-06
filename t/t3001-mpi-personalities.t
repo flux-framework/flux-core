@@ -20,21 +20,6 @@ test_expect_success 'LD_LIBRARY_PATH is not being set by MPI personalties' '
 	test_must_fail flux run --env-remove=* printenv LD_LIBRARY_PATH
 '
 
-test_expect_success "intel mpi rewrites I_MPI_MPI_LIBRARY" '
-	export I_MPI_PMI_LIBRARY="foobar" &&
-	test_when_finished "unset I_MPI_PMI_LIBRARY" &&
-	run_program 15 \
-	  ${SIZE} ${SIZE} printenv I_MPI_PMI_LIBRARY > intel-mpi.set &&
-	test "$(uniq intel-mpi.set)" = "$(flux getattr conf.pmi_library_path)"
-'
-
-test_expect_success "intel mpi only rewrites when necessary" '
-	 echo $I_MPI_PMI_LIBRARY &&
-	 run_program 15 ${SIZE} ${SIZE} printenv | grep I_MPI_PMI_LIBRARY \
-	     | tee intel-mpi.unset &&
-	 test "$(wc -l intel-mpi.unset | cut -f 1 -d " ")" = "0"
-'
-
 test_expect_success NO_ASAN "spectrum mpi only enabled with option" '
 	LD_PRELOAD_saved=${LD_PRELOAD} &&
 	unset LD_PRELOAD &&

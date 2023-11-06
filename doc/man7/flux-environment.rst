@@ -149,6 +149,7 @@ instance*:
  - :envvar:`FLUX_TASK_LOCAL_ID`
  - :envvar:`FLUX_KVS_NAMESPACE`
  - :envvar:`FLUX_PROXY_REMOTE`
+ - :envvar:`I_MPI_PMI_LIBRARY`
  - :envvar:`PMI_*`
  - :envvar:`SLURM_*`
 
