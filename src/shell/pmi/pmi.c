@@ -670,6 +670,13 @@ static int shell_pmi_task_init (flux_plugin_t *p,
         return -1;
     if (flux_shell_task_channel_subscribe (task, "PMI_FD", pmi_fd_cb, pmi) < 0)
         return -1;
+    /* N.B. The pre-v5 OpenMPI flux MCA plugin dlopens the library pointed to
+     * by FLUX_PMI_LIBRARY_PATH.  Since the library only works when this shell
+     * plugin is active, set it here.
+     */
+    const char *s = flux_conf_builtin_get ("pmi_library_path", FLUX_CONF_AUTO);
+    if (!s || flux_cmd_setenvf (cmd, 1, "FLUX_PMI_LIBRARY_PATH", "%s", s) < 0)
+        return -1;
     return 0;
 }
 

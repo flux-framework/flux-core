@@ -148,8 +148,8 @@ The following configuration keys may be printed with
    environment variable.
 
 **pmi_library_path**
-   Consulted by :man1:`flux` when setting the :envvar:`FLUX_PMI_LIBRARY_PATH`
-   environment variable.
+   Consulted by the :man1:`flux-shell` pmi plugin when setting the
+   :envvar:`FLUX_PMI_LIBRARY_PATH` environment variable.
 
 **cmdhelp_pattern**
    Used by :man1:`flux` to generate a list of common commands when run without

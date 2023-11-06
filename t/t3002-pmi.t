@@ -17,6 +17,9 @@ pmi2_info=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi2_info
 test_expect_success 'flux run sets PMI_FD' '
 	flux run printenv PMI_FD
 '
+test_expect_success 'flux run sets FLUX_PMI_LIBRARY_PATH' '
+	flux run printenv FLUX_PMI_LIBRARY_PATH
+'
 test_expect_success 'flux run -o pmi=simple sets PMI_FD' '
 	flux run -o pmi=simple printenv PMI_FD
 '
@@ -37,6 +40,9 @@ test_expect_success 'flux run -o pmi=unknown does not set PMI_FD' '
 '
 test_expect_success 'flux run -o pmi=off does not set PMI_FD' '
 	test_must_fail flux run -o pmi=off printenv PMI_FD
+'
+test_expect_success 'flux run -o pmi=off does not set FLUX_PMI_LIBRARY_PATH' '
+	test_must_fail flux run -o pmi=off printenv FLUX_PMI_LIBRARY_PATH
 '
 test_expect_success 'flux run -o pmi.badopt fails' '
 	test_must_fail flux run -o pmi.badopt /bin/true
@@ -204,7 +210,7 @@ test_expect_success 'flux-pmi -opmi=off --method=simple fails' '
 '
 # method=libpmi
 test_expect_success 'get pmi library path' '
-	flux getattr conf.pmi_library_path >libpmi
+	flux config builtin pmi_library_path >libpmi
 '
 test_expect_success 'flux-pmi --method=libpmi:/bad/path fails' '
 	test_must_fail flux run \
@@ -234,7 +240,7 @@ test_expect_success 'flux broker refuses the Flux libpmi.so and goes single' '
 '
 # method=libpmi2
 test_expect_success 'get pmi2 library path' '
-	flux getattr conf.pmi_library_path | sed s/libpmi/libpmi2/ >libpmi2
+	flux config builtin pmi_library_path | sed s/libpmi/libpmi2/ >libpmi2
 '
 test_expect_success 'flux-pmi --method=libpmi2:/bad/path fails' '
 	test_must_fail flux run \

@@ -107,10 +107,20 @@ The following are set in the environment of each task spawned by
 	    PMI_SIZE
 	    PMI_FD
 	    PMI_SPAWNED
+	    FLUX_PMI_LIBRARY_PATH
 
    The ``pmi`` shell plugin sets these variables in the job environment to
    aid in the bootstrap of parallel programs.  They are not set when the simple
    PMI server is disabled, e.g.  with :option:`flux run -opmi=none`.
+
+   The :envvar:`PMI_*` variables are standard for PMI-1 and are described
+   in Flux RFC 13.
+
+   :envvar:`FLUX_PMI_LIBRARY_PATH` is set to the full path of Flux's
+   ``libpmi.so`` shared library, which is normally not installed to standard
+   system paths.  This exists as an aid to the pre-v5 OpenMPI Flux MCA plugins
+   so that an MPI program running under Flux knows where to :func:`dlopen`
+   the library for bootstrap.
 
 .. envvar:: CUDA_VISIBLE_DEVICES
             CUDA_DEVICE_ORDER
@@ -125,12 +135,6 @@ The following are set in the environment of each task spawned by
    in the Flux API, and by extension all the Flux commands.  In the job
    environment, it points to the local broker responsible for the job.
 
-.. envvar:: FLUX_PMI_LIBRARY_PATH
-
-   The full path of Flux's ``libpmi.so`` shared library, which is normally not
-   installed to standard system paths.  This exists as an aid to the old
-   OpenMPI Flux MCA plugins (now defunct) so that an MPI program running
-   under Flux knows where to :func:`dlopen` the library for bootstrap.
 
 INITIAL PROGRAM ENVIRONMENT
 ===========================
@@ -149,6 +153,8 @@ instance*:
  - :envvar:`FLUX_TASK_LOCAL_ID`
  - :envvar:`FLUX_KVS_NAMESPACE`
  - :envvar:`FLUX_PROXY_REMOTE`
+ - :envvar:`FLUX_PMI_LIBRARY_PATH`
+ - :envvar:`I_MPI_PMI_LIBRARY`
  - :envvar:`PMI_*`
  - :envvar:`SLURM_*`
 

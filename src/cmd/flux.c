@@ -210,10 +210,6 @@ int main (int argc, char *argv[])
     if (getenv ("FLUX_URI"))
         environment_from_env (env, "FLUX_URI", "", 0); /* pass-thru */
 
-    environment_from_env (env,
-                          "FLUX_PMI_LIBRARY_PATH",
-                          flux_conf_builtin_get ("pmi_library_path", flags), 0);
-
     /*  Deduplicate any other FLUX_* PATH-type environment variables by
      *   calling environment_from_env() on them
      */

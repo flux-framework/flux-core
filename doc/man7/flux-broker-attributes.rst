@@ -138,10 +138,6 @@ conf.exec_path
 conf.module_path
    The value of the broker's :envvar:`FLUX_MODULE_PATH` environment variable.
 
-conf.pmi_library_path
-   The value of the broker's :envvar:`FLUX_PMI_LIBRARY_PATH` environment
-   variable.
-
 conf.shell_initrc [Updates: C, R]
    The path to the :man1:`flux-shell` initrc script.  Default:
    ``${prefix}/etc/flux/shell/initrc.lua``.
