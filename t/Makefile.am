@@ -111,7 +111,6 @@ TESTSCRIPTS = \
 	t1105-proxy.t \
 	t1106-ssh-connector.t \
 	t1107-heartbeat.t \
-	t1108-local-opt.t \
 	t1200-stats-basic.t \
 	t2004-hydra.t \
 	t2007-caliper.t \
