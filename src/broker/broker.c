@@ -546,7 +546,6 @@ struct attrmap {
 static struct attrmap attrmap[] = {
     { "FLUX_EXEC_PATH",         "conf.exec_path",           1, 0 },
     { "FLUX_CONNECTOR_PATH",    "conf.connector_path",      1, 0 },
-    { "FLUX_MODULE_PATH",       "conf.module_path",         1, 0 },
 
     { "FLUX_URI",               "parent-uri",               0, 1 },
     { "FLUX_KVS_NAMESPACE",     "parent-kvs-namespace",     0, 1 },
@@ -1174,8 +1173,8 @@ static int load_module (broker_ctx_t *ctx,
     module_t *p;
 
     if (!strchr (path, '/')) {
-        if (attr_get (ctx->attrs, "conf.module_path", &searchpath, NULL) < 0) {
-            errprintf (error, "conf.module_path attribute is not set");
+        if (!(searchpath = getenv ("FLUX_MODULE_PATH"))) {
+            errprintf (error, "FLUX_MODULE_PATH is not set in the environment");
             errno = EINVAL;
             return -1;
         }
