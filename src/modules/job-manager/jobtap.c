@@ -1432,8 +1432,7 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
     flux_plugin_t *p = NULL;
     char *conf_str = NULL;
 
-    if (errp)
-        memset (errp->text, 0, sizeof (errp->text));
+    err_init (errp);
 
     if (conf && !json_is_null (conf)) {
         if (!json_is_object (conf)) {
