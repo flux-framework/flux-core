@@ -128,7 +128,10 @@ struct shell_task *shell_task_create (flux_shell_t *shell,
         goto error;
     if (flux_cmd_setenvf (task->cmd, 1, "FLUX_JOB_SIZE", "%d", task->size) < 0)
         goto error;
-    if (flux_cmd_setenvf (task->cmd, 1, "FLUX_JOB_NNODES", "%d",
+    if (flux_cmd_setenvf (task->cmd,
+                          1,
+                          "FLUX_JOB_NNODES",
+                          "%d",
                           info->shell_size) < 0)
         goto error;
 
@@ -145,13 +148,19 @@ struct shell_task *shell_task_create (flux_shell_t *shell,
     flux_cmd_unsetenv (task->cmd, "FLUX_PROXY_REMOTE");
     flux_cmd_unsetenv (task->cmd, "FLUX_URI");
     if (getenv ("FLUX_URI")) {
-        if (flux_cmd_setenvf (task->cmd, 1, "FLUX_URI", "%s",
+        if (flux_cmd_setenvf (task->cmd,
+                              1,
+                              "FLUX_URI",
+                              "%s",
                               getenv ("FLUX_URI")) < 0)
             goto error;
     }
     flux_cmd_unsetenv (task->cmd, "FLUX_KVS_NAMESPACE");
     if (getenv ("FLUX_KVS_NAMESPACE")) {
-        if (flux_cmd_setenvf (task->cmd, 1, "FLUX_KVS_NAMESPACE", "%s",
+        if (flux_cmd_setenvf (task->cmd,
+                              1,
+                              "FLUX_KVS_NAMESPACE",
+                              "%s",
                               getenv ("FLUX_KVS_NAMESPACE")) < 0)
             goto error;
     }

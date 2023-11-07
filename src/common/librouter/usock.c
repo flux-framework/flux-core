@@ -385,7 +385,7 @@ void usock_server_destroy (struct usock_server *server)
     }
 }
 
-int usock_get_cred (int fd, struct flux_msg_cred *cred)
+static int usock_get_cred (int fd, struct flux_msg_cred *cred)
 {
     struct ucred ucred;
     socklen_t crlen;
@@ -463,7 +463,7 @@ static struct usock_conn *server_accept (struct usock_server *server,
     if ((cfd = accept4 (server->fd, NULL, NULL, SOCK_CLOEXEC)) < 0)
         return NULL;
     if (!(conn = usock_conn_create (r, cfd, cfd))
-                        || usock_get_cred (cfd, &conn->cred) < 0) {
+        || usock_get_cred (cfd, &conn->cred) < 0) {
         ERRNO_SAFE_WRAP (close, cfd);
         return NULL;
     }
@@ -680,8 +680,11 @@ int usock_client_connect (const char *sockpath,
     useconds_t delay_usec = retry.min_delay * 1E6; // sec -> usec
     int retries = 0;
 
-    if (!sockpath || strlen (sockpath) == 0 || retry.max_retry < 0
-                  || retry.min_delay < 0 || retry.max_delay < 0) {
+    if (!sockpath
+        || strlen (sockpath) == 0
+        || retry.max_retry < 0
+        || retry.min_delay < 0
+        || retry.max_delay < 0) {
         errno = EINVAL;
         return -1;
     }

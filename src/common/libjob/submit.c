@@ -86,19 +86,29 @@ flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int urgency,
 #if HAVE_FLUX_SECURITY
         flux_security_t *sec;
         const char *mech = NULL;
-        uint32_t owner;
+        const char *owner;
 
         /* Security note:
          * Instance owner jobs do not need a cryptographic signature since
          * they do not require the IMP to be executed.  Force the signing
-         * mechanism to 'none' if the connector can provide owner userid and
-         * owner == getuid().  This side-steps the requirement that the
-         * munge daemon is running for single user instances compiled
-         * --with-flux-security, as described in flux-framework/flux-core#3305.
+         * mechanism to 'none' if the broker security.owner matches getuid ().
+         * This side-steps the requirement that the munge daemon is running
+         * for single user instances compiled --with-flux-security, as
+         * described in flux-framework/flux-core#3305.
+         *
+         * This method also works with flux-proxy(1) as described in
+         * flux-framework/flux-core#5530.
+         *
+         * N.B. Guest submissions signed with mech=none are summarily rejected
+         * by job-ingest so the impact of getting this code wrong is job
+         * submission failure, not any weakening of security.
          */
-        if (flux_opt_get (h, "flux::owner", &owner, sizeof (owner)) == 0
-                && getuid () == owner)
-            mech = "none";
+        if ((owner = flux_attr_get (h, "security.owner"))) {
+            errno = 0;
+            unsigned int userid = strtoul (owner, NULL, 10);
+            if (errno == 0 && userid == getuid ())
+                mech = "none";
+        }
         if (!(sec = get_security_ctx (h, &f)))
             return f;
         if (!(J = flux_sign_wrap (sec, jobspec, strlen (jobspec), mech, 0)))

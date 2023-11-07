@@ -22,7 +22,6 @@ struct local_connector {
     struct usock_client *uclient;
     uint32_t testing_userid;
     uint32_t testing_rolemask;
-    uint32_t owner;
     flux_t *h;
     int fd;
     char *path;
@@ -125,32 +124,6 @@ done:
     return rc;
 }
 
-static int op_getopt (void *impl,
-                      const char *option,
-                      void *val,
-                      size_t size)
-{
-    struct local_connector *ctx = impl;
-    size_t val_size;
-    int rc = -1;
-
-    if (streq (option, "flux::owner")) {
-        val_size = sizeof (ctx->owner);
-        if (size != val_size || !val) {
-            errno = EINVAL;
-            goto done;
-        }
-        memcpy (val, &ctx->owner, val_size);
-    }
-    else {
-        errno = EINVAL;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
 static void op_fini (void *impl)
 {
     struct local_connector *ctx = impl;
@@ -196,7 +169,6 @@ flux_t *connector_local_init (const char *path, int flags, flux_error_t *errp)
 
     ctx->testing_userid = FLUX_USERID_UNKNOWN;
     ctx->testing_rolemask = FLUX_ROLE_NONE;
-    ctx->owner = FLUX_USERID_UNKNOWN;
     ctx->fd = -1;
 
     if (!(ctx->path = strdup (path)))
@@ -226,20 +198,16 @@ static void local_disconnect (struct local_connector *ctx)
         close (ctx->fd);
         ctx->fd = -1;
     }
-    ctx->owner = FLUX_USERID_UNKNOWN;
 }
 
 static int local_connect (struct local_connector *ctx)
 {
     struct usock_retry_params retry = USOCK_RETRY_DEFAULT;
-    struct flux_msg_cred server_cred;
 
     if (override_retry_count (&retry) < 0
         || (ctx->fd = usock_client_connect (ctx->path, retry)) < 0
-        || usock_get_cred (ctx->fd, &server_cred) < 0
         || !(ctx->uclient = usock_client_create (ctx->fd)))
         return -1;
-    ctx->owner = server_cred.userid;
     return 0;
 }
 
@@ -258,7 +226,6 @@ static const struct flux_handle_ops handle_ops = {
     .recv = op_recv,
     .reconnect = op_reconnect,
     .setopt = op_setopt,
-    .getopt = op_getopt,
     .impl_destroy = op_fini,
 };
 

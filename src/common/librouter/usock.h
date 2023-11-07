@@ -47,8 +47,6 @@ typedef void (*usock_conn_recv_f)(struct usock_conn *conn,
                                   flux_msg_t *msg,
                                   void *arg);
 
-int usock_get_cred (int fd, struct flux_msg_cred *cred);
-
 /* Server
  */
 
