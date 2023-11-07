@@ -50,7 +50,9 @@ test_expect_success 'job-manager: multiple plugins can be loaded' '
 '
 test_expect_success 'job-manager: loading duplicate plugins fails' '
 	flux jobtap load ${PLUGINPATH}/args.so &&
-	test_must_fail flux jobtap load ${PLUGINPATH}/args.so &&
+	test_must_fail flux jobtap load ${PLUGINPATH}/args.so >dup.log 2>&1 &&
+	test_debug "cat dup.log" &&
+	grep "already loaded" dup.log &&
 	flux jobtap remove args.so
 '
 test_expect_success 'job-manager: query of plugin works' '
