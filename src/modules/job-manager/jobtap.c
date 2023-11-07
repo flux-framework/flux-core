@@ -1383,8 +1383,7 @@ static int plugin_try_load (struct jobtap *jobtap,
     if (zlistx_find (jobtap->plugins, (void *) jobtap_plugin_name (p))) {
         errno = EEXIST;
         return errprintf (errp,
-                          "%s: %s already loaded",
-                          fullpath,
+                          "%s already loaded",
                           jobtap_plugin_name (p));
     }
     return 0;
