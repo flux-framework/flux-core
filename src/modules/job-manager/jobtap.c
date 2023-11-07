@@ -708,7 +708,8 @@ static int jobtap_stack_call (struct jobtap *jobtap,
     while (p) {
         int rc = flux_plugin_call (p, topic, args);
         if (rc < 0)  {
-            flux_log (jobtap->ctx->h, LOG_DEBUG,
+            flux_log (jobtap->ctx->h,
+                      LOG_DEBUG,
                       "jobtap: %s: %s: rc=%d",
                       jobtap_plugin_name (p),
                       topic,
@@ -767,7 +768,8 @@ int jobtap_get_priority (struct jobtap *jobtap,
                                     FLUX_PLUGIN_ARG_OUT,
                                     "{s?I}",
                                     "priority", &priority) < 0) {
-            flux_log (jobtap->ctx->h, LOG_ERR,
+            flux_log (jobtap->ctx->h,
+                      LOG_ERR,
                       "jobtap: job.priority.get: arg_unpack: %s",
                       flux_plugin_arg_strerror (args));
             /*  Note failure, but keep current priority */
@@ -787,7 +789,8 @@ int jobtap_get_priority (struct jobtap *jobtap,
              *   in this case and make no change to priority.
              */
             if (job->state == FLUX_JOB_STATE_SCHED)
-                flux_log (jobtap->ctx->h, LOG_ERR,
+                flux_log (jobtap->ctx->h,
+                          LOG_ERR,
                           "jobtap: %s: BUG: plugin didn't return priority",
                           idf58 (job->id));
         }
@@ -800,7 +803,8 @@ int jobtap_get_priority (struct jobtap *jobtap,
          *  priority.get callback was run and failed. Log the error
          *   and return the current priority.
          */
-        flux_log (jobtap->ctx->h, LOG_ERR,
+        flux_log (jobtap->ctx->h,
+                  LOG_ERR,
                   "jobtap: job.priority.get: callback failed");
         priority = job->priority;
     }
@@ -890,7 +894,9 @@ static int make_dependency_topic (struct jobtap *jobtap,
     *schemep = NULL;
     if (json_unpack (entry, "{s:s}", "scheme", schemep) < 0
         || *schemep == NULL) {
-        error_asprintf (jobtap, job, errp,
+        error_asprintf (jobtap,
+                        job,
+                        errp,
                         "dependency[%d] missing string scheme",
                         index);
         return -1;
@@ -955,7 +961,9 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
     if (rc == 0) {
         /*  No handler for job.dependency.<scheme>. return an error.
          */
-        error_asprintf (jobtap, job, errp,
+        error_asprintf (jobtap,
+                        job,
+                        errp,
                         "dependency scheme \"%s\" not supported",
                         scheme);
         rc = -1;
@@ -993,7 +1001,9 @@ static int dependencies_unpack (struct jobtap * jobtap,
                         "attributes",
                           "system",
                             "dependencies", &dependencies) < 0) {
-        error_asprintf (jobtap, job, errp,
+        error_asprintf (jobtap,
+                        job,
+                        errp,
                         "unable to unpack dependencies: %s",
                         error.text);
         return -1;
@@ -1003,7 +1013,9 @@ static int dependencies_unpack (struct jobtap * jobtap,
         return 0;
 
     if (!json_is_array (dependencies)) {
-        error_asprintf (jobtap, job, errp,
+        error_asprintf (jobtap,
+                        job,
+                        errp,
                         "dependencies object must be an array");
         return -1;
     }
@@ -1031,7 +1043,9 @@ int jobtap_check_dependencies (struct jobtap *jobtap,
         return rc;
 
     if (!(args = jobtap_args_create (jobtap, job))) {
-        error_asprintf (jobtap, job, errp,
+        error_asprintf (jobtap,
+                        job,
+                        errp,
                         "jobtap_check_dependencies: failed to create args");
         return -1;
     }
@@ -1047,7 +1061,8 @@ int jobtap_check_dependencies (struct jobtap *jobtap,
         if (rc < 0) {
             if (!raise_exception)
                 goto out;
-            if (jobtap_job_raise (jobtap, job,
+            if (jobtap_job_raise (jobtap,
+                                  job,
                                   "dependency",
                                   4, /* LOG_WARNING */
                                   "%s (job may be stuck in DEPEND state)",
@@ -1081,7 +1096,8 @@ int jobtap_notify_subscribers (struct jobtap *jobtap,
         return 0;
 
     if (snprintf (topic, topiclen, "job.event.%s", name) >= topiclen) {
-        flux_log (jobtap->ctx->h, LOG_ERR,
+        flux_log (jobtap->ctx->h,
+                  LOG_ERR,
                   "jobtap: %s: %s: event topic name too long",
                   name,
                   idf58 (job->id));
@@ -1092,7 +1108,8 @@ int jobtap_notify_subscribers (struct jobtap *jobtap,
     args = jobtap_args_vcreate (jobtap, job, fmt, ap);
     va_end (ap);
     if (!args) {
-        flux_log (jobtap->ctx->h, LOG_ERR,
+        flux_log (jobtap->ctx->h,
+                  LOG_ERR,
                   "jobtap: %s: %s: failed to create plugin args",
                   topic,
                   idf58 (job->id));
@@ -1122,7 +1139,8 @@ int jobtap_call (struct jobtap *jobtap,
 
     va_start (ap, fmt);
     if (!(args = jobtap_args_vcreate (jobtap, job, fmt, ap))) {
-        flux_log (jobtap->ctx->h, LOG_ERR,
+        flux_log (jobtap->ctx->h,
+                  LOG_ERR,
                   "jobtap: %s: %s: failed to create plugin args",
                   topic,
                   idf58 (job->id));
@@ -1134,7 +1152,8 @@ int jobtap_call (struct jobtap *jobtap,
 
     rc = jobtap_stack_call (jobtap, jobtap->plugins, job, topic, args);
     if (rc < 0) {
-        flux_log (jobtap->ctx->h, LOG_ERR,
+        flux_log (jobtap->ctx->h,
+                  LOG_ERR,
                   "jobtap: %s: callback returned error",
                   topic);
     }
@@ -1144,13 +1163,15 @@ int jobtap_call (struct jobtap *jobtap,
                                 "priority", &priority,
                                 "annotations", &note,
                                 "R", &R) < 0) {
-        if (jobtap_job_raise (jobtap, job,
+        if (jobtap_job_raise (jobtap,
+                              job,
                               topic, 4,
                               "arg_unpack: %s%s",
                               flux_plugin_arg_strerror (args),
                               job->state == FLUX_JOB_STATE_PRIORITY ?
                               " (job may be stuck in PRIORITY state)" : "") < 0)
-            flux_log (jobtap->ctx->h, LOG_ERR,
+            flux_log (jobtap->ctx->h,
+                      LOG_ERR,
                       "%s: jobtap_job_raise: %s",
                        topic,
                        strerror (errno));
