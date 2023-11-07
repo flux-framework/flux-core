@@ -1380,11 +1380,13 @@ static int plugin_try_load (struct jobtap *jobtap,
         return errprintf (errp,
                           "%s: unable to set a plugin name",
                            fullpath);
-    if (zlistx_find (jobtap->plugins, (void *) jobtap_plugin_name (p)))
+    if (zlistx_find (jobtap->plugins, (void *) jobtap_plugin_name (p))) {
+        errno = EEXIST;
         return errprintf (errp,
                           "%s: %s already loaded",
                           fullpath,
                           jobtap_plugin_name (p));
+    }
     return 0;
 }
 
