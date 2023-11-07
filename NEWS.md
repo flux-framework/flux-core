@@ -1,3 +1,60 @@
+flux-core version 0.56.0 - 2023-11-07
+-------------------------------------
+
+## New Features
+
+ * support duration update for running jobs (#5522)
+ * job-list: support resource-update event (#5463)
+ * flux-job: get updated version of R (#5464)
+ * cache R in the job manager (#5472)
+ * job-info: support new update-lookup and update-watch service (#5467)
+ * libflux: make local connector built-in (#5504)
+ * make the loop:// connector built-in rather than a DSO (#5486)
+ * libflux: add `flux_send_new()` (#5499)
+ * add interthread connector that does not require zeromq (#5495)
+ * broker: use interthread connector between broker modules (#5496)
+
+## Fixes
+
+ * fix job submission to a multi-user instance over flux-proxy (#5533)
+ * job-manager: fix error message on duplicate plugin load (#5537)
+ * set `FLUX_PMI_LIBRARY_PATH` only in the job environment when simple pmi
+   is active (#5535)
+ * job-exec: fix potential hang after exec kill error (#5534)
+ * flux-proxy: fix double-free on lost connection (#5529)
+ * cron: handle ENOMEM without asserting (#5515)
+ * connectors: avoid future ABI issues with `_pad[]` (#5505)
+ * python: return more precise result from `flux.util.parse_datetime("now")`
+   (#5507)
+ * python: fix handling of JobInfo properties and `to_dict()` method with
+   missing attributes (#5493)
+
+## Documentation
+
+ * flux-environment(7): add new man page (#5527)
+ * man1: improve HTML formatting of man pages (#5521)
+ * man3: improve HTML formatting of man pages (#5517)
+ * man3: improve HTML formatting of SYNOPSIS sections and C examples (#5503)
+ * python: add flux.job.list docstrings (#5500)
+ * doc: add interacting with flux section (#5492)
+
+## Cleanup
+
+ * drop broker `conf.module_path`, `conf.connector_path`, `conf.exec_path`
+   attributes (#5536)
+ * flux job info: drop multiple key support, clean up code, add man page
+   entry (#5520)
+ * build: reduce junk content in DSOs (#5516)
+ * shell: drop job shell standalone mode (#5512)
+ * misc build system cleanup (#5511)
+ * libflux: refactor internal message queues (#5508)
+
+## Testsuite
+
+ * testsuite: trivial test fixes (#5498)
+ * ci: add flux-pmix, flux-pam builds to CI (#5489)
+
+
 flux-core version 0.55.0 - 2023-10-03
 -------------------------------------
 
