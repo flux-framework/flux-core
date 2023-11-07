@@ -129,9 +129,6 @@ broker.exit-restart [Updates: C, R]
 broker.starttime
    Timestamp of broker startup from :man3:`flux_reactor_now`.
 
-conf.exec_path
-   The value of the broker's :envvar:`FLUX_EXEC_PATH` environment variable.
-
 conf.shell_initrc [Updates: C, R]
    The path to the :man1:`flux-shell` initrc script.  Default:
    ``${prefix}/etc/flux/shell/initrc.lua``.

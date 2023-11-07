@@ -544,8 +544,6 @@ struct attrmap {
 };
 
 static struct attrmap attrmap[] = {
-    { "FLUX_EXEC_PATH",         "conf.exec_path",           1, 0 },
-
     { "FLUX_URI",               "parent-uri",               0, 1 },
     { "FLUX_KVS_NAMESPACE",     "parent-kvs-namespace",     0, 1 },
     { NULL, NULL, 0, 0 },
