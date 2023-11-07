@@ -256,6 +256,15 @@ bool idset_decode_empty (const char *str, ssize_t len)
     return true;
 }
 
+int idset_decode_info (const char *str,
+                       ssize_t len,
+                       size_t *count,
+                       unsigned int *maxid,
+                       idset_error_t *error)
+{
+    return decode_and_set_with_info (NULL, str, len, count, maxid, error);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

@@ -1086,6 +1086,62 @@ void test_decode_empty (void)
         "idset_decode_empty NULL returns false");
 }
 
+struct infovec {
+    const char *input;
+    int errnum;
+    size_t count;
+    unsigned int maxid;
+};
+
+struct infovec infovec[] = {
+    { "[]", 0, 0, IDSET_INVALID_ID },
+    { "", 0, 0, IDSET_INVALID_ID },
+    { "[", EINVAL, 0, 0 },
+    { NULL, EINVAL, 0, 0 },
+    { "0", 0, 1, 0 },
+    { "1,2", 0, 2, 2 },
+    { "1,2-1024", 0, 1024, 1024 },
+    { "0-3", 0, 4, 3 },
+};
+
+
+void test_decode_info (void)
+{
+    for (int i = 0; i < ARRAY_SIZE (infovec); i++) {
+        idset_error_t error;
+        size_t count = 0;
+        unsigned int maxid = 0;
+        int rc;
+
+        errno = 0;
+        error.text[0] = '\0';
+
+        rc = idset_decode_info (infovec[i].input,
+                                -1,
+                                &count,
+                                &maxid,
+                                &error);
+        if (infovec[i].errnum != 0) {
+            ok (rc < 0
+                && errno == infovec[i].errnum
+                && strlen (error.text) > 0,
+                "idset_decode_info %s failed with expected error",
+                infovec[i].input ? infovec[i].input : "NULL");
+            diag ("%s", error.text);
+        }
+        else {
+            ok (rc == 0
+                && count == infovec[i].count
+                && maxid == infovec[i].maxid,
+                "idset_decode_info %s  works",
+                infovec[i].input);
+        }
+    }
+
+    ok (idset_decode_info ("1", -1, NULL, NULL, NULL) == 0,
+        "idset_decode_info accepts NULL maxid/count");
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1112,6 +1168,7 @@ int main (int argc, char *argv[])
     test_alloc_badparam();
     test_decode_ex ();
     test_decode_empty ();
+    test_decode_info ();
 
     done_testing ();
 }
