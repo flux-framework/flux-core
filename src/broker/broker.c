@@ -536,35 +536,6 @@ cleanup:
     return ctx.exit_rc;
 }
 
-struct attrmap {
-    const char *env;
-    const char *attr;
-    uint8_t required:1;
-    uint8_t sanitize:1;
-};
-
-static struct attrmap attrmap[] = {
-    { "FLUX_URI",               "parent-uri",               0, 1 },
-    { "FLUX_KVS_NAMESPACE",     "parent-kvs-namespace",     0, 1 },
-    { NULL, NULL, 0, 0 },
-};
-
-static void init_attrs_from_environment (attr_t *attrs)
-{
-    struct attrmap *m;
-    const char *val;
-
-    for (m = &attrmap[0]; m->env != NULL; m++) {
-        val = getenv (m->env);
-        if (!val && m->required)
-            log_msg_exit ("required environment variable %s is not set", m->env);
-        if (attr_add (attrs, m->attr, val, ATTR_IMMUTABLE) < 0)
-            log_err_exit ("attr_add %s", m->attr);
-        if (m->sanitize)
-            unsetenv (m->env);
-    }
-}
-
 static void init_attrs_broker_pid (attr_t *attrs, pid_t pid)
 {
     char *attrname = "broker.pid";
@@ -618,12 +589,18 @@ static void init_attrs_starttime (attr_t *attrs, double starttime)
 
 static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
 {
-    /* Initialize config attrs from environment set up by flux(1)
-     */
-    init_attrs_from_environment (attrs);
+    const char *val;
 
-    /* Initialize other miscellaneous attrs
-     */
+    val = getenv ("FLUX_URI");
+    if (attr_add (attrs, "parent-uri", val, ATTR_IMMUTABLE) < 0)
+        log_err_exit ("setattr parent-uri");
+    unsetenv ("FLUX_URI");
+
+    val = getenv ("FLUX_KVS_NAMESPACE");
+    if (attr_add (attrs, "parent-kvs-namespace", val, ATTR_IMMUTABLE) < 0)
+        log_err_exit ("setattr parent-kvs-namespace");
+    unsetenv ("FLUX_KVS_NAMESPACE");
+
     init_attrs_broker_pid (attrs, pid);
     init_attrs_rc_paths (attrs);
     init_attrs_shell_paths (attrs);
