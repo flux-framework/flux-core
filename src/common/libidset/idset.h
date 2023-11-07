@@ -105,6 +105,27 @@ int idset_decode_info (const char *s,
                        unsigned int *maxid,
                        idset_error_t *error);
 
+/* Parse 'len' chars of string 's' and add it to 'idset',
+ * without creating an intermediate idset.
+ * If len < 0, strlen (s) is used.
+ * On failure, a human readable error is placed in 'error'.
+ */
+int idset_decode_add (struct idset *idset,
+                      const char *s,
+                      ssize_t len,
+                      idset_error_t *error);
+
+/* Parse 'len' chars of string 's' and subtract it from 'idset',
+ * without creating an intermediate idset.
+ * If len < 0, strlen (s) is used.
+ * On failure, a human readable error is placed in 'error'.
+ */
+int idset_decode_subtract (struct idset *idset,
+                           const char *s,
+                           ssize_t len,
+                           idset_error_t *error);
+
+
 /* Add id (or range [lo-hi]) to idset.
  * Return 0 on success, -1 on failure with errno set.
  */

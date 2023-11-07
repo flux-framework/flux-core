@@ -1142,6 +1142,52 @@ void test_decode_info (void)
         "idset_decode_info accepts NULL maxid/count");
 }
 
+void test_decode_addsub (void)
+{
+    struct idset *idset;
+    idset_error_t error;
+
+    if (!(idset = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        BAIL_OUT ("idset_create failed");
+
+    ok (idset_decode_add (idset, "1-4", -1, &error) == 0
+        && idset_count (idset) == 4,
+        "idset_decode_add 1-4 works");
+    ok (idset_decode_add (idset, "5-8", -1, &error) == 0
+        && idset_count (idset) == 8,
+        "idset_decode_add 5-8 works");
+    ok (idset_decode_add (idset, "1,5", -1, &error) == 0
+        && idset_count (idset) == 8,
+        "idset_decode_add 1,5 works");
+    ok (idset_decode_subtract (idset, "1,5", -1, &error) == 0
+        && idset_count (idset) == 6,
+        "idset_decode_subtract 1,5 works");
+    ok (idset_decode_subtract (idset, "", -1, &error) == 0
+        && idset_count (idset) == 6,
+        "idset_decode_subtract \"\"  works");
+    ok (idset_decode_subtract (idset, "0-100", -1, &error) == 0
+        && idset_count (idset) == 0,
+        "idset_decode_subtract 0-100 works");
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok  (idset_decode_add (idset, "[", -1, &error) < 0
+         && errno == EINVAL
+         && strlen (error.text) > 0,
+         "idset_decode_add [ fails with errno and error");
+    diag ("%s", error.text);
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok  (idset_decode_subtract (idset, "]", -1, &error) < 0
+         && errno == EINVAL
+         && strlen (error.text) > 0,
+         "idset_decode_subtract ] fails with errno and error");
+    diag ("%s", error.text);
+
+    idset_destroy (idset);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1169,6 +1215,7 @@ int main (int argc, char *argv[])
     test_decode_ex ();
     test_decode_empty ();
     test_decode_info ();
+    test_decode_addsub ();
 
     done_testing ();
 }

@@ -134,6 +134,36 @@ error:
     return -1;
 }
 
+/* like append_element() except remove one element from 'idset' and
+ * don't maintain the count.  We still need maxid to enforce range order.
+ */
+static int remove_element (struct idset *idset,
+                           const char *s,
+                           unsigned int *maxid,
+                           idset_error_t *error)
+{
+    unsigned int hi, lo;
+
+    if (parse_range (s, &hi, &lo) < 0) {
+        errprintf (error, "error parsing range '%s'", s);
+        goto inval;
+    }
+    if (*maxid != IDSET_INVALID_ID && lo <= *maxid) {
+        errprintf (error, "range '%s' is out of order", s);
+        goto inval;
+    }
+    if (idset && idset_range_clear (idset, lo, hi) < 0) {
+        errprintf (error, "error clearing '%s': %s", s, strerror (errno));
+        goto error;
+    }
+    *maxid = hi;
+    return 0;
+inval:
+    errno = EINVAL;
+error:
+    return -1;
+}
+
 /* Trim brackets by dropping a \0 on the tail of 's' and returning a starting
  * pointer within 's'.  On failure return NULL with errno and error set.
  */
@@ -151,6 +181,23 @@ static char *trim_brackets (char *s, idset_error_t *error)
         return NULL;
     }
     return s;
+}
+
+static char *dup_input (const char *str, ssize_t len, idset_error_t *error)
+{
+    char *cpy;
+    if (!str) {
+        errprintf (error, "input is NULL");
+        errno = EINVAL;
+        return NULL;
+    }
+    if (len < 0)
+        len = strlen (str);
+    if (!(cpy = strndup (str, len))) {
+        errprintf (error, "out of memory");
+        return NULL;
+    }
+    return cpy;
 }
 
 /* Decode 'str' (up to 'len') and add it to 'idset'.
@@ -172,17 +219,8 @@ static int decode_and_set_with_info (struct idset *idset,
     unsigned int maxid = IDSET_INVALID_ID;
     size_t count = 0;
 
-    if (!str) {
-        errprintf (error, "input is NULL");
-        errno = EINVAL;
+    if (!(cpy = dup_input (str, len, error)))
         return -1;
-    }
-    if (len < 0)
-        len = strlen (str);
-    if (!(cpy = strndup (str, len))) {
-        errprintf (error, "out of memory");
-        return -1;
-    }
     if (!(a1 = trim_brackets (cpy, error)))
         goto error;
     saveptr = NULL;
@@ -263,6 +301,43 @@ int idset_decode_info (const char *str,
                        idset_error_t *error)
 {
     return decode_and_set_with_info (NULL, str, len, count, maxid, error);
+}
+
+int idset_decode_add (struct idset *idset,
+                      const char *str,
+                      ssize_t len,
+                      idset_error_t *error)
+{
+    return decode_and_set_with_info (idset, str, len, NULL, NULL, error);
+}
+
+int idset_decode_subtract (struct idset *idset,
+                           const char *str,
+                           ssize_t len,
+                           idset_error_t *error)
+{
+    char *cpy;
+    char *tok, *saveptr, *a1;
+    int saved_errno;
+    unsigned int maxid = IDSET_INVALID_ID;
+
+    if (!(cpy = dup_input (str, len, error)))
+        return -1;
+    if (!(a1 = trim_brackets (cpy, error)))
+        goto error;
+    saveptr = NULL;
+    while ((tok = strtok_r (a1, ",", &saveptr))) {
+        if (remove_element (idset, tok, &maxid, error) < 0)
+            goto error;
+        a1 = NULL;
+    }
+    free (cpy);
+    return 0;
+error:
+    saved_errno = errno;
+    free (cpy);
+    errno = saved_errno;
+    return -1;
 }
 
 /*
