@@ -87,6 +87,12 @@ struct idset *idset_decode_ex (const char *s,
                                int flags,
                                idset_error_t *error);
 
+/* Parse 'len' chars of string 's' to determine if it is the empty set.
+ * Return false on parse error.  This may be useful when representing the
+ * empty set as a NULL.
+ */
+bool idset_decode_empty (const char *s, ssize_t len);
+
 /* Add id (or range [lo-hi]) to idset.
  * Return 0 on success, -1 on failure with errno set.
  */

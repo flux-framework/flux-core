@@ -247,6 +247,15 @@ struct idset *idset_decode (const char *str)
     return idset_decode_ex (str, -1, 0, IDSET_FLAG_AUTOGROW, NULL);
 }
 
+bool idset_decode_empty (const char *str, ssize_t len)
+{
+    size_t count;
+    if (decode_and_set_with_info (NULL, str, len, &count, NULL, NULL) < 0
+        || count > 0)
+        return false;
+    return true;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

@@ -1072,6 +1072,20 @@ void test_decode_ex (void)
     idset_destroy (idset);
 }
 
+void test_decode_empty (void)
+{
+    ok (idset_decode_empty ("[]", -1) == true,
+        "idset_decode_empty [] returns true");
+    ok (idset_decode_empty ("", -1) == true,
+        "idset_decode_empty \"\" returns true");
+    ok (idset_decode_empty ("1-4", -1) == false,
+        "idset_decode_empty 1-4 returns false");
+    ok (idset_decode_empty ("[", -1) == false,
+        "idset_decode_empty [ returns false");
+    ok (idset_decode_empty (NULL, -1) == false,
+        "idset_decode_empty NULL returns false");
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1097,6 +1111,7 @@ int main (int argc, char *argv[])
     test_alloc (IDSET_FLAG_COUNT_LAZY);
     test_alloc_badparam();
     test_decode_ex ();
+    test_decode_empty ();
 
     done_testing ();
 }
