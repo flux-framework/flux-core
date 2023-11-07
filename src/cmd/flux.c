@@ -393,7 +393,6 @@ static void push_parent_environment (optparse_t *p, struct environment *env)
 {
     const char *uri;
     const char *ns;
-    const char *path;
     flux_t *h = flux_open_internal (p, NULL);
 
     if (h == NULL)
@@ -415,14 +414,11 @@ static void push_parent_environment (optparse_t *p, struct environment *env)
     else
         environment_unset (env, "FLUX_KVS_NAMESPACE");
 
-    /*  Now close current handle and connect to parent URI, pushing
-     *   parent exec path onto env
+    /*  Now close current handle and connect to parent URI.
      */
     flux_close_internal (p);
     if (!(h = flux_open_internal (p, uri)))
         log_err_exit ("flux_open (parent)");
-    if ((path = flux_attr_get (h, "conf.exec_path")))
-        environment_push (env, "FLUX_EXEC_PATH", path);
 }
 
 static void print_environment (struct environment *env)
