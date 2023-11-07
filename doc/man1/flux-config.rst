@@ -107,7 +107,7 @@ The following configuration keys may be printed with
 
 **shell_initrc**
    The initrc script path used by :man1:`flux-shell`, unless overridden by
-   setting the ``conf.shell_pluginpath`` broker attribute.
+   setting the ``conf.shell_initrc`` broker attribute.
 
 **jobtap_pluginpath**
    The search path used by the job manager to locate
