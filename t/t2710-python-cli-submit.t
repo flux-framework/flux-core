@@ -259,6 +259,19 @@ test_expect_success 'flux submit --cc works' '
 	EOF
 	test_cmp cc.output.expected cc.output.sorted
 '
+test_expect_success 'flux submit --cc substitutes {cc}' '
+	flux submit --quiet --watch --cc=0-3 echo {cc} \
+	    | sort >substitute-cc.out &&
+	test_debug "cat substitute-cc.out" &&
+	test $(wc -l < substitute-cc.out) -eq 4 &&
+	cat <<-EOF >substitute-cc.expected &&
+	0
+	1
+	2
+	3
+	EOF
+	test_cmp substitute-cc.expected substitute-cc.out
+'
 test_expect_success 'flux submit does not substitute {} without --cc' '
 	flux submit \
 		--env=-* \
