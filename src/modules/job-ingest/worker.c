@@ -69,7 +69,7 @@ struct worker {
 
 static int worker_start (struct worker *w);
 static void worker_stop (struct worker *w);
-
+static void worker_unexpected_exit (struct worker *w);
 
 static void worker_cleanup_process (struct worker *w, flux_subprocess_t *p)
 {
@@ -125,6 +125,7 @@ static void worker_state_cb (flux_subprocess_t *p,
                       "%s: %s: %s", w->name,
                       flux_subprocess_state_string (state),
                       strerror (flux_subprocess_fail_errno (p)));
+            worker_unexpected_exit (w);
             worker_cleanup_process (w, p);
             break;
         case FLUX_SUBPROCESS_EXITED:
