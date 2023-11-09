@@ -1546,7 +1546,7 @@ class SubmitBulkCmd(SubmitBaseCmd):
 
         for i in cclist:
             #  substitute any {cc} in args (only if --cc or --bcc):
-            xargs = Xcmd(args, cc=i) if i else args
+            xargs = Xcmd(args, cc=i) if isinstance(i, int) else args
             jobspec = self.jobspec_create(xargs)
 
             #  For now, an idset argument to args.input is not supported
