@@ -1,6 +1,17 @@
+# Versions of jansson shipped by distros:
+# sles15-sp5    ships 2.9  (flux-framework/flux-core#5544)
+# centos7/TOSS3 ships 2.10 (flux-framework/flux-core#3239)
+# centos8/TOSS4 ships 2.11
+# Ubuntu 18.04  ships 2.11
+# Ubuntu 20.04  ships 2.12
+#
+# Some modern jansson features used in flux-core:
+# - json_pack ("O?")     from 2.8
+# - json_string_length() from 2.7
+#
 AC_DEFUN([X_AC_JANSSON], [
 
-    PKG_CHECK_MODULES([JANSSON], [jansson >= 2.10], [], [])
+    PKG_CHECK_MODULES([JANSSON], [jansson >= 2.9], [], [])
 
     ac_save_LIBS="$LIBS"
     LIBS="$LIBS $JANSSON_LIBS"
