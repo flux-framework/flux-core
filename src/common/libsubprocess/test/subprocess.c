@@ -1079,6 +1079,41 @@ void test_write_after_close (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 }
 
+void test_write_enospc (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-O", "-E", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (3, av, environ)) != NULL, "flux_cmd_create");
+    ok (flux_cmd_setopt (cmd, "stdin_BUFSIZE", "5") == 0,
+        "set stdin buffer size to 5 bytes");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = output_cb
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    ok (flux_subprocess_write (p, "stdin", "hi\n", 3) == 3,
+        "flux_subprocess_write success");
+    ok (flux_subprocess_write (p, "stdin", "hello\n", 6) < 0
+        && errno == ENOSPC,
+        "flux_subprocess_write returns ENOSPC if buffer exceeded");
+
+    ok (flux_subprocess_close (p, "stdin") == 0,
+        "flux_subprocess_close success");
+
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
 #if 0
 /* disable test.  libtap has an issue with fallthrough
  * stdout/stderr in forked process */
@@ -2875,6 +2910,8 @@ int main (int argc, char *argv[])
     test_basic_read_line_until_eof_error (r);
     diag ("write_after_close");
     test_write_after_close (r);
+    diag ("write_enospc");
+    test_write_enospc (r);
     diag ("env_passed");
     test_env_passed (r);
 #if 0
