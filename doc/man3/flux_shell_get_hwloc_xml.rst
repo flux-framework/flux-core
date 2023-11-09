@@ -44,5 +44,3 @@ RESOURCES
 =========
 
 Flux: http://flux-framework.org
-
-Jansson: https://jansson.readthedocs.io/en/2.10/apiref.html

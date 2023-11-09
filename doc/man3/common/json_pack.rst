@@ -72,6 +72,6 @@ the corresponding argument or arguments.
 
 Whitespace, **:** (colon) and **,** (comma) are ignored.
 
-These descriptions came from the Jansson 2.10 manual.
+These descriptions came from the Jansson 2.9 manual.
 
-See also: Jansson API: Building Values: http://jansson.readthedocs.io/en/2.10/apiref.html#building-values
+See also: Jansson API: Building Values: http://jansson.readthedocs.io/en/2.9/apiref.html#building-values
