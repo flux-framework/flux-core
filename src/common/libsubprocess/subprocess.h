@@ -246,6 +246,9 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
  *   - stdout_BUFSIZE - set buffer size on stdout
  *   - stderr_BUFSIZE - set buffer size on stderr
  *
+ *   The BUFSIZE string may be a floating point quantity scaled by
+ *   an optional suffix from the set 'kKMG'.
+ *
  *  "LINE_BUFFER" option
  *
  *    By default, output callbacks such as 'on_stdout' and 'on_stderr'
