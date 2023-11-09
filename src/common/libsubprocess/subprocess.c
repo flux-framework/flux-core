@@ -790,7 +790,10 @@ int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
             log_err ("flux_buffer_write_watcher_get_buffer");
             return -1;
         }
-
+        if (flux_buffer_space (fb) < len) {
+            errno = ENOSPC;
+            return -1;
+        }
         if ((ret = flux_buffer_write (fb, buf, len)) < 0) {
             log_err ("flux_buffer_write");
             return -1;
@@ -800,6 +803,10 @@ int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
         if (p->state != FLUX_SUBPROCESS_INIT
             && p->state != FLUX_SUBPROCESS_RUNNING) {
             errno = EPIPE;
+            return -1;
+        }
+        if (flux_buffer_space (c->write_buffer) < len) {
+            errno = ENOSPC;
             return -1;
         }
         if ((ret = flux_buffer_write (c->write_buffer, buf, len)) < 0) {

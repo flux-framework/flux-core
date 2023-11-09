@@ -341,7 +341,10 @@ int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream);
  *  Write data to "stream" stream of subprocess `p`.  'stream' can be
  *  "stdin" or the name of a stream specified with flux_cmd_add_channel().
  *
- *  Returns the total amount of data successfully buffered.
+ *  Returns the total amount of data successfully buffered or -1 on error
+ *  with errno set. Note: this function will not return a short write. If
+ *  all `len` bytes cannot fit in the destination buffer, then no bytes
+ *  will be written and -1 will be returned with errno=ENOSPC.
  */
 int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
                            const char *buf, size_t len);
