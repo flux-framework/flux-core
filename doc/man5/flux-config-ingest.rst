@@ -32,6 +32,11 @@ batch-count
    ``batch-count`` key is nonzero then jobs are batched based on a counter
    instead. This is mostly useful for testing.
 
+buffer-size
+   (optional) Set the input buffer size for job-ingest module workers.
+   The value is string indicating the buffer size with optional SI units
+   (e.g. "102400", "4.5M", "1024K") The default value is ``10M``.
+
 FROBNICATOR KEYS
 ================
 
