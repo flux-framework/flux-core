@@ -650,13 +650,6 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
 
     if (policy_validate (conf, error) < 0)
         return -1;
-    if (pipeline_configure (ctx->pipeline,
-                            conf,
-                            argc,
-                            argv,
-                            NULL,
-                            error) < 0)
-        return -1;
     if (flux_conf_unpack (conf,
                           &conf_error,
                           "{s?{s?i}}",
@@ -689,7 +682,12 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
             return -1;
         }
     }
-    return 0;
+    return pipeline_configure (ctx->pipeline,
+                               conf,
+                               argc,
+                               argv,
+                               NULL,
+                               error);
 }
 
 static void reload_cb (flux_t *h,
