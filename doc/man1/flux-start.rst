@@ -128,7 +128,8 @@ OPTIONS
 .. option:: -v, --verbose=[LEVEL]
 
    This option may be specified multiple times, or with a value, to
-   set a verbosity level.  See `VERBOSITY LEVELS`_ below.
+   set a verbosity level (1: display commands before executing them,
+   2: trace PMI server requests in `TEST MODE`_ only).
 
 .. option:: -X, --noexec
 
@@ -220,15 +221,6 @@ OPTIONS
    instance configuration directory.  This option is unnecessary if
    :option:`--recovery` is specified without its optional argument.  It may
    be required if recovering a dump from a system instance.
-
-VERBOSITY LEVELS
-================
-
-level 1 and above
-   Display commands before executing them.
-
-level 2 and above
-   Trace PMI server requests (test mode only).
 
 
 EXAMPLES
