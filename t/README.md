@@ -128,7 +128,7 @@ to run tests under valgrind.
 Skipping Tests
 --------------
 
-The environment variable `SHARNESS_SKIP_TESTS` is a space separated
+The environment variable `SKIP_TESTS` is a space separated
 list of *patterns* that tells which tests to skip, and can either
 match the test number `t[0-]{4}` to skip an entire test script,
 or have an appended `.$number` to skip test `$number` in the
