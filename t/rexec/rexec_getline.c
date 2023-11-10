@@ -47,17 +47,14 @@ void completion_cb (flux_subprocess_t *p)
 void stdin2stream (flux_subprocess_t *p, const char *stream)
 {
     char *buf = NULL;
-    int tmp, len;
+    int len;
 
     if ((len = read_all (STDIN_FILENO, (void **)&buf)) < 0)
         log_err_exit ("read_all");
 
     if (len) {
-        if ((tmp = flux_subprocess_write (p, stream, buf, len)) < 0)
+        if (flux_subprocess_write (p, stream, buf, len) < 0)
             log_err_exit ("flux_subprocess_write");
-
-        if (tmp != len)
-            log_err_exit ("overflow in write");
     }
 
     /* do not close for channel, b/c can race w/ data coming back */

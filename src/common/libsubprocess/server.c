@@ -416,10 +416,6 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (data && len) {
         int rc = flux_subprocess_write (p, stream, data, len);
-        if (rc >= 0 && rc < len) { // short write is promoted to fatal error
-            errno = ENOSPC;
-            rc = -1;
-        }
         if (rc < 0) {
             llog_error (s,
                         "Error writing %d bytes to subprocess pid %d %s",
