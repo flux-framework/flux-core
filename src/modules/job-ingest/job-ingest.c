@@ -779,6 +779,9 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
     ctx->h = h;
     flux_error_t error;
 
+    /*  Default worker input buffer size is 10MB */
+    ctx->buffer_size = "10M";
+
     if (!(ctx->pipeline = pipeline_create (h))) {
         flux_log_error (h, "error initializing job preprocessing pipeline");
         return -1;
