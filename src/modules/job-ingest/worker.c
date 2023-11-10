@@ -440,6 +440,14 @@ int worker_set_cmdline (struct worker *w, int argc, char **argv)
     return 0;
 }
 
+int worker_set_bufsize (struct worker *w, const char *bufsize)
+{
+    int rc = 0;
+    if (bufsize)
+        rc = flux_cmd_setopt (w->cmd, "stdin_BUFSIZE", bufsize);
+    return rc;
+}
+
 struct worker *worker_create (flux_t *h, double inactivity_timeout,
                               const char *name)
 {

@@ -25,6 +25,7 @@ int pipeline_configure (struct pipeline *pl,
                         const flux_conf_t *conf,
                         int argc,
                         char **argv,
+                        const char *bufsize,
                         flux_error_t *error);
 
 int pipeline_process_job (struct pipeline *pl,

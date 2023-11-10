@@ -43,11 +43,15 @@ struct workcrew *workcrew_create (flux_t *h);
  *
  * args should be a comma-delimited list of additional arguments, or NULL.
  * The list is split into separate command line arguments.
+ *
+ * bufsize should be a string buffer size represented as a floating point
+ * value with optional scale suffix [kKMG].
  */
 int workcrew_configure (struct workcrew *crew,
                         const char *cmdname,
                         const char *plugins,
-                        const char *args);
+                        const char *args,
+                        const char *bufsize);
 
 void workcrew_destroy (struct workcrew *crew);
 

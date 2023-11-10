@@ -21,6 +21,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fdwalk.h"
+#include "src/common/libutil/parse_size.h"
 
 #include "subprocess.h"
 #include "subprocess_private.h"
@@ -52,16 +53,14 @@ int cmd_option_bufsize (flux_subprocess_t *p, const char *name)
         goto cleanup;
 
     if ((val = flux_cmd_getopt (p->cmd, var))) {
-        char *endptr;
-        errno = 0;
-        rv = strtol (val, &endptr, 10);
-        if (errno
-            || endptr[0] != '\0'
-            || rv <= 0) {
-            rv = -1;
-            errno = EINVAL;
+        uint64_t size;
+        if (parse_size (val, &size) < 0)
+            goto cleanup;
+        if (size > INT_MAX) {
+            errno = EOVERFLOW;
             goto cleanup;
         }
+        rv = (int) size;
     }
     else
         rv = SUBPROCESS_DEFAULT_BUFSIZE;

@@ -24,6 +24,7 @@
 #include "src/common/libutil/fluid.h"
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/parse_size.h"
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libfluxutil/policy.h"
 #include "ccan/str/str.h"
@@ -89,6 +90,7 @@ struct job_ingest_ctx {
     flux_watcher_t *timer;
 
     int batch_count;            // if nonzero, batch by count not timer
+    const char *buffer_size;
 
     bool shutdown;
 };
@@ -633,6 +635,7 @@ error:
  *
  *  [ingest]
  *  batch-count = N
+ *  buffer-size = "40M"
  *
  *  [ingest.validator]
  *  disable = false
@@ -647,16 +650,16 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
                                  flux_error_t *error)
 {
     flux_error_t conf_error;
+    const char *buffer_size = NULL;
 
     if (policy_validate (conf, error) < 0)
         return -1;
-    if (pipeline_configure (ctx->pipeline, conf, argc, argv, error) < 0)
-        return -1;
     if (flux_conf_unpack (conf,
                           &conf_error,
-                          "{s?{s?i}}",
+                          "{s?{s?i s?s}}",
                           "ingest",
-                            "batch-count", &ctx->batch_count) < 0) {
+                            "batch-count", &ctx->batch_count,
+                            "buffer-size", &buffer_size) < 0) {
         errprintf (error,
                   "error reading [ingest] config table: %s",
                   conf_error.text);
@@ -678,13 +681,32 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
                 return -1;
             }
         }
+        else if (strstarts (argv[i], "buffer-size=")) {
+            buffer_size = argv[i]+12;
+        }
         else {
             errprintf (error, "Invalid option: %s", argv[i]);
             errno = EINVAL;
             return -1;
         }
     }
-    return 0;
+    if (buffer_size) {
+        uint64_t val;
+        if (parse_size (buffer_size, &val) < 0
+            || val > INT_MAX)
+            return errprintf (error, "Invalid buffer-size: '%s'", buffer_size);
+        ctx->buffer_size = buffer_size;
+        flux_log (ctx->h,
+                  LOG_DEBUG,
+                  "worker input buffer set to %s",
+                  ctx->buffer_size);
+    }
+    return pipeline_configure (ctx->pipeline,
+                               conf,
+                               argc,
+                               argv,
+                               ctx->buffer_size,
+                               error);
 }
 
 static void reload_cb (flux_t *h,
@@ -756,6 +778,9 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
     memset (ctx, 0, sizeof (*ctx));
     ctx->h = h;
     flux_error_t error;
+
+    /*  Default worker input buffer size is 10MB */
+    ctx->buffer_size = "10M";
 
     if (!(ctx->pipeline = pipeline_create (h))) {
         flux_log_error (h, "error initializing job preprocessing pipeline");
