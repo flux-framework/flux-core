@@ -650,7 +650,12 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
 
     if (policy_validate (conf, error) < 0)
         return -1;
-    if (pipeline_configure (ctx->pipeline, conf, argc, argv, error) < 0)
+    if (pipeline_configure (ctx->pipeline,
+                            conf,
+                            argc,
+                            argv,
+                            NULL,
+                            error) < 0)
         return -1;
     if (flux_conf_unpack (conf,
                           &conf_error,
