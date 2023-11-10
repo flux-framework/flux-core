@@ -786,3 +786,9 @@ ogpu
 opmi
 printenv
 XMLFILE
+initio
+mortem
+natively
+execvp
+gdb
+libtool

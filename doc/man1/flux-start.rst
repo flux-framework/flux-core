@@ -15,15 +15,107 @@ DESCRIPTION
 
 .. program:: flux start
 
-:program:`flux start` launches a new Flux instance. By default,
-:program:`flux start` execs a single :man1:`flux-broker` directly, which
-will attempt to use PMI to fetch job information and bootstrap a flux instance.
+:program:`flux start` assists with launching a new Flux instance, which
+consists of one or more :man1:`flux-broker` processes functioning as a
+distributed system.  It is primarily useful in environments that don't run
+Flux natively, or when a standalone Flux instance is required for test,
+development, or post-mortem debugging of another Flux instance.
 
-If a size is specified via :option:`--test-size`, an instance of that size is
-to be started on the local host with :program:`flux start` as the parent.
+When already running under Flux, single-user Flux instances can be more
+conveniently started with :man1:`flux-batch` and :man1:`flux-alloc`.
+The `Flux Administration Guide
+<https://flux-framework.readthedocs.io/en/latest/guides/admin-guide.html>`_
+covers setting up a multi-user Flux "system instance", where Flux natively
+manages a cluster's resources and those commands work ab initio for its users.
 
-A failure of the initial program (such as non-zero exit code)
-causes :program:`flux start` to exit with a non-zero exit code.
+:program:`flux start` operates in two modes.  In `NORMAL MODE`_, it does not
+launch broker processes; it *becomes* a single broker which joins an externally
+bootstrapped parallel program.  In `TEST MODE`_, it starts one or more brokers
+locally, provides their bootstrap environment, and then cleans up when the
+instance terminates.
+
+NORMAL MODE
+===========
+
+Normal mode is used when an external launcher like Slurm or Hydra starts
+the broker processes and provides the bootstrap environment.  It is selected
+when the :option:`--test-size` option is *not* specified.
+
+In normal mode, :program:`flux start` replaces itself with a broker process
+by calling :linux:man2:`execvp`.  The brokers bootstrap as a parallel program
+and establish overlay network connections.  The usual bootstrap method is
+some variant of the Process Management Interface (PMI) provided by the
+launcher.
+
+For example, Hydra provides a simple PMI server.  The following command
+starts brokers on the hosts listed in a file called ``hosts``.  The
+instance's initial program prints a URI that can be used with
+:man1:`flux-proxy` and then sleeps forever::
+
+  mpiexec.hydra -f hosts -launcher ssh \
+    flux start "flux uri --remote \$FLUX_URI; sleep inf"
+
+Slurm has a PMI-2 server plugin with backwards compatibility to the simple
+PMI-1 wire protocol that Flux prefers.  The following command starts a two
+node Flux instance in a Slurm allocation, with an interactive shell as the
+initial program (the default if none is specified)::
+
+  srun -N2 --pty --mpi=pmi2 flux start
+
+When Flux is started by a launcher that is not Flux, resources are probed
+using `HWLOC <https://www.open-mpi.org/projects/hwloc/>`_.  If all goes well,
+when Slurm launches Flux :option:`flux resource info` in Flux should show all
+the nodes, cores, and GPUs that Slurm allocated to the job.
+
+TEST MODE
+=========
+
+Test mode, selected by specifying the :option:`--test-size` option, launches
+a single node Flux instance that is independent of any configured resource
+management on the node.  In test mode, :program:`flux start` provides the
+bootstrap environment and launches the broker process(es).  It remains running
+as long as the Flux instance is running.  It covers the following use cases:
+
+- Start an interactive Flux instance on one node such as a developer system
+  ::
+
+    flux start --test-size=1
+
+  Jobs can be submitted from the interactive shell started as the initial
+  program, similar to the experience of running on a one node cluster.
+
+- Mock a multi-node (multi-broker) Flux instance on one node
+  ::
+
+    flux start --test-size=64
+
+  When the test size is greater than one, the actual resource inventory is
+  multiplied by the test size, since each broker thinks it
+  is running on a different node and re-discovers the same resources.
+
+- Start a Flux instance to run a continuous integration test.  A test
+  that runs jobs in Flux can be structured as::
+
+    flux start --test-size=1 test.sh
+
+  where ``test.sh`` (the initial program) runs work under Flux.  The exit
+  status of :program:`flux start` reflects the exit status of ``test.sh``.
+  This is how many of Flux's own tests work.
+
+- Start a Flux instance to access job data from an inactive batch job that
+  was configured to leave a dump file::
+
+   flux start --test-size=1 --recovery=dump.tar
+
+- Start a Flux instance to repair the on-disk state of a crashed system
+  instance (experts only)::
+
+   sudo -u flux flux start --test-size=1 --recovery
+
+- Run the broker under :linux:man1:`gdb` from the source tree::
+
+   ${top_builddir}/src/cmd/flux start --test-size=1 \
+      --wrap=libtool,e,gdb
 
 
 OPTIONS
