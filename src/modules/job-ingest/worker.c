@@ -69,7 +69,7 @@ struct worker {
 
 static int worker_start (struct worker *w);
 static void worker_stop (struct worker *w);
-
+static void worker_unexpected_exit (struct worker *w);
 
 static void worker_cleanup_process (struct worker *w, flux_subprocess_t *p)
 {
@@ -120,9 +120,12 @@ static void worker_state_cb (flux_subprocess_t *p,
         case FLUX_SUBPROCESS_RUNNING:
             break;
         case FLUX_SUBPROCESS_FAILED:
-            flux_log (w->h, LOG_ERR, "%s: %s: %s", w->name,
+            flux_log (w->h,
+                      LOG_ERR,
+                      "%s: %s: %s", w->name,
                       flux_subprocess_state_string (state),
                       strerror (flux_subprocess_fail_errno (p)));
+            worker_unexpected_exit (w);
             worker_cleanup_process (w, p);
             break;
         case FLUX_SUBPROCESS_EXITED:
@@ -173,9 +176,11 @@ static void worker_fulfill_future (struct worker *w, flux_future_t *f, const cha
         errnum = EINVAL;
         goto error;
     }
-    if (json_unpack (o, "{s:i s?s s?o}", "errnum", &errnum,
-                                         "errstr", &errstr,
-                                         "data", &data) < 0) {
+    if (json_unpack (o,
+                     "{s:i s?s s?o}",
+                     "errnum", &errnum,
+                     "errstr", &errstr,
+                     "data", &data) < 0) {
         flux_log (w->h, LOG_ERR, "%s: json_unpack '%s' failed", w->name, s);
         errnum = EINVAL;
         goto error;
@@ -346,7 +351,8 @@ flux_future_t *worker_kill (struct worker *w, int signo)
 {
     flux_future_t *f = NULL;
     if (w->p) {
-        flux_log (w->h, LOG_DEBUG,
+        flux_log (w->h,
+                  LOG_DEBUG,
                   "killing %s (pid=%ld)",
                   w->name,
                   (long) flux_subprocess_pid (w->p));
@@ -360,7 +366,8 @@ static int worker_start (struct worker *w)
     if (!w->p) {
         if (!(w->p = flux_rexec_ex (w->h,
                                     "rexec",
-                                    FLUX_NODEID_ANY, 0,
+                                    FLUX_NODEID_ANY,
+                                    0,
                                     w->cmd,
                                     &worker_ops,
                                     flux_llog,
@@ -443,8 +450,11 @@ struct worker *worker_create (flux_t *h, double inactivity_timeout,
         return NULL;
     w->h = h;
     w->inactivity_timeout = inactivity_timeout;
-    if (!(w->timer = flux_timer_watcher_create (r, inactivity_timeout,
-                                                0., worker_timeout, w)))
+    if (!(w->timer = flux_timer_watcher_create (r,
+                                                inactivity_timeout,
+                                                0.,
+                                                worker_timeout,
+                                                w)))
         goto error;
     if (!(w->trash = zlist_new()))
         goto error;
