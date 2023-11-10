@@ -39,6 +39,12 @@ struct worker *worker_create (flux_t *h,
  */
 int worker_set_cmdline (struct worker *w, int argc, char **argv);
 
+/*  (re)set stdin buffer size for worker `w`.
+ *  `bufsize` may be a floating point value with optional scale suffix:
+ *  'kKMG'
+ */
+int worker_set_bufsize (struct worker *w, const char *bufsize);
+
 /* Tell worker to stop.
  * Return a count of running processes.
  * If nonzero, arrange for callback to be called each time a process exits.
