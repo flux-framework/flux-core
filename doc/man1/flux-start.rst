@@ -223,36 +223,6 @@ OPTIONS
    be required if recovering a dump from a system instance.
 
 
-EXAMPLES
-========
-
-Launch an 8-way local Flux instance with an interactive shell as the
-initial program and all logs output to stderr:
-
-::
-
-   flux start -s8 -o,--setattr=log-stderr-level=7
-
-Launch an 8-way Flux instance within a slurm job, with an interactive
-shell as the initial program:
-
-::
-
-   srun --pty -N8 flux start
-
-Start the system instance rank 0 broker in recovery mode:
-
-::
-
-   sudo -u flux flux start --recovery
-
-Start a non-system instance in recovery mode:
-
-::
-
-   flux start --recovery=/tmp/statedir
-
-
 RESOURCES
 =========
 
