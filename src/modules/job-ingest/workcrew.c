@@ -141,7 +141,8 @@ error:
 int workcrew_configure (struct workcrew *crew,
                         const char *cmdname,
                         const char *plugins,
-                        const char *args)
+                        const char *args,
+                        const char *bufsize)
 {
     int rc = -1;
     int argc;
@@ -169,6 +170,8 @@ int workcrew_configure (struct workcrew *crew,
                 goto error;
         }
         if (worker_set_cmdline (crew->worker[i], argc, argv) < 0)
+            goto error;
+        if (bufsize && worker_set_bufsize (crew->worker[i], bufsize) < 0)
             goto error;
     }
     /* Close stdin of current workers and allow them to restart on demand.

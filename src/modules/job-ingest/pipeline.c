@@ -348,7 +348,8 @@ int pipeline_configure (struct pipeline *pl,
     if (workcrew_configure (pl->frobnicate,
                             cmd_frobnicator,
                             frobnicator_plugins,
-                            frobnicator_args) < 0) {
+                            frobnicator_args,
+                            NULL) < 0) {
         errprintf (error,
                    "Error (re-)configuring frobnicator workcrew: %s",
                    strerror (errno));
@@ -365,7 +366,8 @@ int pipeline_configure (struct pipeline *pl,
     if (workcrew_configure (pl->validate,
                             cmd_validator,
                             validator_plugins,
-                            validator_args) < 0) {
+                            validator_args,
+                            NULL) < 0) {
         errprintf (error,
                    "Error (re-)configuring validator workcrew: %s",
                    strerror (errno));
@@ -422,10 +424,18 @@ struct pipeline *pipeline_create (flux_t *h)
                                                           pl)))
         goto error;
     if (!(pl->validate = workcrew_create (pl->h))
-        || workcrew_configure (pl->validate, cmd_validator, NULL, NULL) < 0)
+        || workcrew_configure (pl->validate,
+                               cmd_validator,
+                               NULL,
+                               NULL,
+                               NULL) < 0)
         goto error;
     if (!(pl->frobnicate = workcrew_create (pl->h))
-        || workcrew_configure (pl->frobnicate, cmd_frobnicator, NULL, NULL) < 0)
+        || workcrew_configure (pl->frobnicate,
+                               cmd_frobnicator,
+                               NULL,
+                               NULL,
+                               NULL) < 0)
         goto error;
     return pl;
 error:
