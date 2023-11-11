@@ -88,27 +88,6 @@ These commands take the following common resource allocation options:
 
 .. include:: common/job-param-common.rst
 
-Per-task options
-----------------
-
-:man1:`flux-run`, :man1:`flux-submit` and :man1:`flux-bulksubmit` take two
-sets of mutually exclusive options to specify the size of the job request.
-The most common form uses the total number of tasks to run along with
-the amount of resources required per task to specify the resources for
-the entire job:
-
-.. include:: common/job-param-pertask.rst
-
-Per-resource options
---------------------
-
-The second set of options allows an amount of resources to be specified
-with the number of tasks per core or node set on the command line. It is
-an error to specify any of these options when using any per-task option
-listed above:
-
-.. include:: common/job-param-perres.rst
-
 Batch job options
 -----------------
 
