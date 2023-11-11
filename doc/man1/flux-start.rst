@@ -8,7 +8,9 @@ flux-start(1)
 SYNOPSIS
 ========
 
-**flux** **start** [*OPTIONS*] [initial-program [args...]]
+[**launcher**] **flux** **start** [*OPTIONS*] [initial-program [args...]]
+
+**flux** **start** *--test-size=N* [*OPTIONS*] [initial-program [args...]]
 
 DESCRIPTION
 ===========
