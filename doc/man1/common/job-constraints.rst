@@ -1,6 +1,3 @@
-CONSTRAINTS
-===========
-
 .. option:: --requires=CONSTRAINT**
 
    Specify a set of allowable properties and other attributes to consider

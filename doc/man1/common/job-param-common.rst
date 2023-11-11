@@ -1,8 +1,3 @@
-Common resource options
------------------------
-
-These commands take the following common resource allocation options:
-
 .. option:: -N, --nodes=N
 
    Set the number of nodes to assign to the job. Tasks will be distributed

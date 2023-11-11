@@ -1,11 +1,3 @@
-Per-resource options
---------------------
-
-The second set of options allows an amount of resources to be specified
-with the number of tasks per core or node set on the command line. It is
-an error to specify any of these options when using any per-task option
-listed above:
-
 .. option:: --cores=N
 
    Set the total number of cores.

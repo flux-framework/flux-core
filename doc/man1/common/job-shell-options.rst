@@ -1,9 +1,3 @@
-SHELL OPTIONS
-=============
-
-These options are provided by built-in shell plugins that may be
-overridden in some cases:
-
 .. option:: -o mpi=spectrum
 
    Load the MPI personality plugin for IBM Spectrum MPI. All other MPI

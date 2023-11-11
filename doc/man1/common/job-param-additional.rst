@@ -1,8 +1,3 @@
-Additional job options
-----------------------
-
-These commands also take following job parameters:
-
 .. option:: -q, --queue=NAME
 
    Submit a job to a specific named queue. If a queue is not specified

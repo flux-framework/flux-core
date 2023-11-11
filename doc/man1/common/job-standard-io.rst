@@ -1,12 +1,3 @@
-STANDARD I/O
-============
-
-By default, task stdout and stderr streams are redirected to the
-KVS, where they may be accessed with the ``flux job attach`` command.
-
-In addition, :man1:`flux-run` processes standard I/O in real time,
-emitting the job's I/O to its stdout and stderr.
-
 .. option:: --input=FILENAME|RANKS
 
    Redirect stdin to the specified filename, bypassing the KVS.

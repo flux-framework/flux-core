@@ -1,6 +1,3 @@
-OTHER OPTIONS
-=============
-
 .. option:: --cwd=DIRECTORY
 
    Set job working directory.

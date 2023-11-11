@@ -334,7 +334,6 @@ if ENABLE_DOCS
 man_MANS = $(MAN1_FILES) $(MAN3_FILES) $(MAN5_FILES) $(MAN7_FILES)
 $(RST_FILES): \
 	man1/common/nodeset.rst \
-	man1/common/job-parameters.rst \
 	man1/common/job-param-additional.rst \
 	man1/common/job-param-batch.rst \
 	man1/common/job-param-common.rst \
@@ -347,7 +346,6 @@ $(RST_FILES): \
 	man1/common/job-env-rules.rst \
 	man1/common/job-environment-variables.rst \
 	man1/common/job-process-resource-limits.rst \
-	man1/common/job-exit-status.rst \
 	man1/common/job-other-options.rst \
 	man1/common/job-shell-options.rst \
 	man3/common/json_pack.rst \
@@ -409,7 +407,6 @@ EXTRA_DIST = \
 	$(RST_FILES) \
 	man1/index.rst \
 	man1/common/nodeset.rst \
-	man1/common/job-parameters.rst \
 	man1/common/job-param-additional.rst \
 	man1/common/job-param-batch.rst \
 	man1/common/job-param-common.rst \
@@ -422,7 +419,6 @@ EXTRA_DIST = \
 	man1/common/job-env-rules.rst \
 	man1/common/job-environment-variables.rst \
 	man1/common/job-process-resource-limits.rst \
-	man1/common/job-exit-status.rst \
 	man1/common/job-other-options.rst \
 	man1/common/job-shell-options.rst \
 	man3/index.rst \

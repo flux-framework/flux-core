@@ -1,6 +1,3 @@
-ENV RULES
-=========
-
 The `ENVIRONMENT`_ options allow control of the environment exported to jobs
 via a set of *RULE* expressions. The currently supported rules are
 

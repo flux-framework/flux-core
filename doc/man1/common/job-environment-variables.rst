@@ -1,10 +1,3 @@
-JOB ENVIRONMENT VARIABLES
-=========================
-
-The job environment is described in more detail in the :man7:`flux-environment`
-:ref:`job_environment` section.  A summary of the most commonly used variables
-is provided below:
-
 .. list-table::
    :header-rows: 1
 

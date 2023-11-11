@@ -1,10 +1,3 @@
-ENVIRONMENT
-===========
-
-By default, these commands duplicate the current environment when submitting
-jobs. However, a set of environment manipulation options are provided to
-give fine control over the requested environment submitted with the job.
-
 .. option:: --env=RULE
 
    Control how environment variables are exported with *RULE*. See
