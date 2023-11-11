@@ -8,22 +8,116 @@ flux-start(1)
 SYNOPSIS
 ========
 
-**flux** **start** [*OPTIONS*] [initial-program [args...]]
+[**launcher**] **flux** **start** [*OPTIONS*] [initial-program [args...]]
+
+**flux** **start** *--test-size=N* [*OPTIONS*] [initial-program [args...]]
 
 DESCRIPTION
 ===========
 
 .. program:: flux start
 
-:program:`flux start` launches a new Flux instance. By default,
-:program:`flux start` execs a single :man1:`flux-broker` directly, which
-will attempt to use PMI to fetch job information and bootstrap a flux instance.
+:program:`flux start` assists with launching a new Flux instance, which
+consists of one or more :man1:`flux-broker` processes functioning as a
+distributed system.  It is primarily useful in environments that don't run
+Flux natively, or when a standalone Flux instance is required for test,
+development, or post-mortem debugging of another Flux instance.
 
-If a size is specified via :option:`--test-size`, an instance of that size is
-to be started on the local host with :program:`flux start` as the parent.
+When already running under Flux, single-user Flux instances can be more
+conveniently started with :man1:`flux-batch` and :man1:`flux-alloc`.
+The `Flux Administration Guide
+<https://flux-framework.readthedocs.io/en/latest/guides/admin-guide.html>`_
+covers setting up a multi-user Flux "system instance", where Flux natively
+manages a cluster's resources and those commands work ab initio for its users.
 
-A failure of the initial program (such as non-zero exit code)
-causes :program:`flux start` to exit with a non-zero exit code.
+:program:`flux start` operates in two modes.  In `NORMAL MODE`_, it does not
+launch broker processes; it *becomes* a single broker which joins an externally
+bootstrapped parallel program.  In `TEST MODE`_, it starts one or more brokers
+locally, provides their bootstrap environment, and then cleans up when the
+instance terminates.
+
+NORMAL MODE
+===========
+
+Normal mode is used when an external launcher like Slurm or Hydra starts
+the broker processes and provides the bootstrap environment.  It is selected
+when the :option:`--test-size` option is *not* specified.
+
+In normal mode, :program:`flux start` replaces itself with a broker process
+by calling :linux:man2:`execvp`.  The brokers bootstrap as a parallel program
+and establish overlay network connections.  The usual bootstrap method is
+some variant of the Process Management Interface (PMI) provided by the
+launcher.
+
+For example, Hydra provides a simple PMI server.  The following command
+starts brokers on the hosts listed in a file called ``hosts``.  The
+instance's initial program prints a URI that can be used with
+:man1:`flux-proxy` and then sleeps forever::
+
+  mpiexec.hydra -f hosts -launcher ssh \
+    flux start "flux uri --remote \$FLUX_URI; sleep inf"
+
+Slurm has a PMI-2 server plugin with backwards compatibility to the simple
+PMI-1 wire protocol that Flux prefers.  The following command starts a two
+node Flux instance in a Slurm allocation, with an interactive shell as the
+initial program (the default if none is specified)::
+
+  srun -N2 --pty --mpi=pmi2 flux start
+
+When Flux is started by a launcher that is not Flux, resources are probed
+using `HWLOC <https://www.open-mpi.org/projects/hwloc/>`_.  If all goes well,
+when Slurm launches Flux :option:`flux resource info` in Flux should show all
+the nodes, cores, and GPUs that Slurm allocated to the job.
+
+TEST MODE
+=========
+
+Test mode, selected by specifying the :option:`--test-size` option, launches
+a single node Flux instance that is independent of any configured resource
+management on the node.  In test mode, :program:`flux start` provides the
+bootstrap environment and launches the broker process(es).  It remains running
+as long as the Flux instance is running.  It covers the following use cases:
+
+- Start an interactive Flux instance on one node such as a developer system
+  ::
+
+    flux start --test-size=1
+
+  Jobs can be submitted from the interactive shell started as the initial
+  program, similar to the experience of running on a one node cluster.
+
+- Mock a multi-node (multi-broker) Flux instance on one node
+  ::
+
+    flux start --test-size=64
+
+  When the test size is greater than one, the actual resource inventory is
+  multiplied by the test size, since each broker thinks it
+  is running on a different node and re-discovers the same resources.
+
+- Start a Flux instance to run a continuous integration test.  A test
+  that runs jobs in Flux can be structured as::
+
+    flux start --test-size=1 test.sh
+
+  where ``test.sh`` (the initial program) runs work under Flux.  The exit
+  status of :program:`flux start` reflects the exit status of ``test.sh``.
+  This is how many of Flux's own tests work.
+
+- Start a Flux instance to access job data from an inactive batch job that
+  was configured to leave a dump file::
+
+   flux start --test-size=1 --recovery=dump.tar
+
+- Start a Flux instance to repair the on-disk state of a crashed system
+  instance (experts only)::
+
+   sudo -u flux flux start --test-size=1 --recovery
+
+- Run the broker under :linux:man1:`gdb` from the source tree::
+
+   ${top_builddir}/src/cmd/flux start --test-size=1 \
+      --wrap=libtool,e,gdb
 
 
 OPTIONS
@@ -36,7 +130,8 @@ OPTIONS
 .. option:: -v, --verbose=[LEVEL]
 
    This option may be specified multiple times, or with a value, to
-   set a verbosity level.  See `VERBOSITY LEVELS`_ below.
+   set a verbosity level (1: display commands before executing them,
+   2: trace PMI server requests in `TEST MODE`_ only).
 
 .. option:: -X, --noexec
 
@@ -129,44 +224,78 @@ OPTIONS
    :option:`--recovery` is specified without its optional argument.  It may
    be required if recovering a dump from a system instance.
 
-VERBOSITY LEVELS
-================
 
-level 1 and above
-   Display commands before executing them.
+TROUBLESHOOTING
+===============
 
-level 2 and above
-   Trace PMI server requests (test mode only).
+`NORMAL MODE`_ requires Flux, the launcher, and the network to cooperate.
+If :program:`flux start` appears to hang, the following tips may be helpful:
 
+#. Reduce the size of the Flux instance to at most two nodes.  This reduces the
+   volume of log data to look at and may be easier to allocate on a busy
+   system.  Rule out the simple problems that can be reproduced with a small
+   allocation first.
 
-EXAMPLES
-========
+#. Use an initial program that prints something and exits rather than the
+   default interactive shell, in case there are problems with the launcher's
+   pty setup.  Something like::
 
-Launch an 8-way local Flux instance with an interactive shell as the
-initial program and all logs output to stderr:
+     [launcher] flux start [options] echo hello world
 
-::
+#. Ensure that standard output and error are being captured and add launcher
+   options to add rank prefixes to the output.
 
-   flux start -s8 -o,--setattr=log-stderr-level=7
+   .. list-table::
 
-Launch an 8-way Flux instance within a slurm job, with an interactive
-shell as the initial program:
+     * - Slurm
+       - :option:`--label`
 
-::
+     * - Hydra
+       - :option:`-prepend-rank`
 
-   srun --pty -N8 flux start
+     * - :man1:`flux-run`
+       - :option:`--label-io`
 
-Start the system instance rank 0 broker in recovery mode:
+#. Tell the broker to print its rank, size, and network endpoint by adding
+   the :option:`flux start -o,-v` option.  If this doesn't happen, most likely
+   the PMI bootstrap is getting stuck.
 
-::
+#. Trace Flux's PMI client on stderr by setting the FLUX_PMI_DEBUG environment
+   variable::
 
-   sudo -u flux flux start --recovery
+     FLUX_PMI_DEBUG=1 [launcher] flux start ...
 
-Start a non-system instance in recovery mode:
+#. Consider altering :envvar:`FLUX_PMI_CLIENT_METHODS` to better match the
+   launcher's PMI offerings.  See :man7:`flux-environment`.
 
-::
+#. A launcher's PMI capabilities can also be explored in a simplified way
+   using the :man1:`flux-pmi` client.
 
-   flux start --recovery=/tmp/statedir
+#. If PMI is successful but the initial program fails to run, the brokers
+   may not be able to reach each other over the network.  After one minute,
+   the rank 0 broker should log a "quorum delayed" message if this is true.
+
+#. Examine the network endpoints in the output above.  Flux preferentially
+   binds to the IPv4 network address associated with the default route and
+   a random port.  The address choice can be modified by setting the
+   :envvar:`FLUX_IPADDR_HOSTNAME` and/or :envvar:`FLUX_IPADDR_V6`.
+   See :man7:`flux-environment`.
+
+#. More logging can be enabled by adding the
+   :option:`flux start -o,-Slog-stderr-level=7` option, which instructs the
+   broker to forward its internal log buffer to stderr.  See
+   :man7:`flux-broker-attributes`.
+
+Another common failure mode is getting a single node instance when multiple
+nodes were expected.  This can occur if no viable PMI server was found and the
+brokers fell back to singleton operation.  It may be helpful to enable PMI
+tracing, check into launcher PMI options, and possibly adjust the order of
+options that Flux tries using :envvar:`FLUX_PMI_CLIENT_METHODS` as described
+above.
+
+Finally, if Flux starts but GPUs are missing from :option:`flux resource info`
+output, verify that the version of HWLOC that Flux is using was built with
+the appropriate GPU plugins.
 
 
 RESOURCES
