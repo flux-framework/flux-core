@@ -223,6 +223,79 @@ OPTIONS
    be required if recovering a dump from a system instance.
 
 
+TROUBLESHOOTING
+===============
+
+`NORMAL MODE`_ requires Flux, the launcher, and the network to cooperate.
+If :program:`flux start` appears to hang, the following tips may be helpful:
+
+#. Reduce the size of the Flux instance to at most two nodes.  This reduces the
+   volume of log data to look at and may be easier to allocate on a busy
+   system.  Rule out the simple problems that can be reproduced with a small
+   allocation first.
+
+#. Use an initial program that prints something and exits rather than the
+   default interactive shell, in case there are problems with the launcher's
+   pty setup.  Something like::
+
+     [launcher] flux start [options] echo hello world
+
+#. Ensure that standard output and error are being captured and add launcher
+   options to add rank prefixes to the output.
+
+   .. list-table::
+
+     * - Slurm
+       - :option:`--label`
+
+     * - Hydra
+       - :option:`-prepend-rank`
+
+     * - :man1:`flux-run`
+       - :option:`--label-io`
+
+#. Tell the broker to print its rank, size, and network endpoint by adding
+   the :option:`flux start -o,-v` option.  If this doesn't happen, most likely
+   the PMI bootstrap is getting stuck.
+
+#. Trace Flux's PMI client on stderr by setting the FLUX_PMI_DEBUG environment
+   variable::
+
+     FLUX_PMI_DEBUG=1 [launcher] flux start ...
+
+#. Consider altering :envvar:`FLUX_PMI_CLIENT_METHODS` to better match the
+   launcher's PMI offerings.  See :man7:`flux-environment`.
+
+#. A launcher's PMI capabilities can also be explored in a simplified way
+   using the :man1:`flux-pmi` client.
+
+#. If PMI is successful but the initial program fails to run, the brokers
+   may not be able to reach each other over the network.  After one minute,
+   the rank 0 broker should log a "quorum delayed" message if this is true.
+
+#. Examine the network endpoints in the output above.  Flux preferentially
+   binds to the IPv4 network address associated with the default route and
+   a random port.  The address choice can be modified by setting the
+   :envvar:`FLUX_IPADDR_HOSTNAME` and/or :envvar:`FLUX_IPADDR_V6`.
+   See :man7:`flux-environment`.
+
+#. More logging can be enabled by adding the
+   :option:`flux start -o,-Slog-stderr-level=7` option, which instructs the
+   broker to forward its internal log buffer to stderr.  See
+   :man7:`flux-broker-attributes`.
+
+Another common failure mode is getting a single node instance when multiple
+nodes were expected.  This can occur if no viable PMI server was found and the
+brokers fell back to singleton operation.  It may be helpful to enable PMI
+tracing, check into launcher PMI options, and possibly adjust the order of
+options that Flux tries using :envvar:`FLUX_PMI_CLIENT_METHODS` as described
+above.
+
+Finally, if Flux starts but GPUs are missing from :option:`flux resource info`
+output, verify that the version of HWLOC that Flux is using was built with
+the appropriate GPU plugins.
+
+
 RESOURCES
 =========
 
