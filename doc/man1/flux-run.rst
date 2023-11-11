@@ -25,25 +25,25 @@ If :option:`--ntasks` is unspecified, a value of *N=1* is assumed.
 
 The available OPTIONS are detailed below.
 
-.. include:: common/submit-job-parameters.rst
+.. include:: common/job-parameters.rst
 
-.. include:: common/submit-standard-io.rst
+.. include:: common/job-standard-io.rst
 
-.. include:: common/submit-constraints.rst
+.. include:: common/job-constraints.rst
 
-.. include:: common/submit-dependencies.rst
+.. include:: common/job-dependencies.rst
 
-.. include:: common/submit-environment.rst
+.. include:: common/job-environment.rst
 
-.. include:: common/submit-process-resource-limits.rst
+.. include:: common/job-process-resource-limits.rst
 
-.. include:: common/submit-job-environment-variables.rst
+.. include:: common/job-environment-variables.rst
 
-.. include:: common/submit-exit-status.rst
+.. include:: common/job-exit-status.rst
 
-.. include:: common/submit-other-options.rst
+.. include:: common/job-other-options.rst
 
-.. include:: common/submit-shell-options.rst
+.. include:: common/job-shell-options.rst
 
 
 RESOURCES
