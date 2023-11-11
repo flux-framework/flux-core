@@ -43,6 +43,7 @@ man_pages = [
     ('man1/flux-cancel', 'flux-cancel', 'cancel one or more jobs', [author], 1),
     ('man1/flux-pgrep', 'flux-pgrep', 'search or cancel matching jobs', [author], 1),
     ('man1/flux-pgrep', 'flux-pkill', 'search or cancel matching jobs', [author], 1),
+    ('man1/flux-pmi', 'flux-pmi', 'PMI client test tool', [author], 1),
     ('man1/flux-jobtap', 'flux-jobtap', 'List, remove, and load job-manager plugins', [author], 1),
     ('man1/flux-shutdown', 'flux-shutdown', 'Shut down a Flux instance', [author], 1),
     ('man1/flux-uri', 'flux-uri', 'resolve Flux URIs', [author], 1),
