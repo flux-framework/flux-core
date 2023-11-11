@@ -85,6 +85,8 @@ The available OPTIONS are detailed below.
 
 .. include:: common/job-environment.rst
 
+.. include:: common/job-env-rules.rst
+
 .. include:: common/job-process-resource-limits.rst
 
 .. include:: common/job-exit-status.rst

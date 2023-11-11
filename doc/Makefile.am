@@ -339,6 +339,7 @@ $(RST_FILES): \
 	man1/common/job-constraints.rst \
 	man1/common/job-dependencies.rst \
 	man1/common/job-environment.rst \
+	man1/common/job-env-rules.rst \
 	man1/common/job-environment-variables.rst \
 	man1/common/job-process-resource-limits.rst \
 	man1/common/job-exit-status.rst \
@@ -408,6 +409,7 @@ EXTRA_DIST = \
 	man1/common/job-constraints.rst \
 	man1/common/job-dependencies.rst \
 	man1/common/job-environment.rst \
+	man1/common/job-env-rules.rst \
 	man1/common/job-environment-variables.rst \
 	man1/common/job-process-resource-limits.rst \
 	man1/common/job-exit-status.rst \
