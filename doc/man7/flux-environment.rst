@@ -196,11 +196,13 @@ affect the broker's PMI client.
    simple
       Use the PMI-1 simple wire protocol.
 
-   libpmi2
-      :func:`dlopen` ``libpmi2.so`` and use the PMI-2 API.
+   libpmi2[:PATH]
+      :func:`dlopen` ``libpmi2.so`` and use the PMI-2 API, optionally at
+      a specific *PATH*.
 
-   libpmi
-      :func:`dlopen` ``libpmi.so`` and use the PMI-1 API.
+   libpmi[:PATH]
+      :func:`dlopen` ``libpmi.so`` and use the PMI-1 API, optionally at
+      a specific *PATH*.
 
    single
       Become a singleton.  This always succeeds so should be the last method.
