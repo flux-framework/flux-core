@@ -149,6 +149,8 @@ OTHER OPTIONS
 
 .. include:: common/job-other-options.rst
 
+.. include:: common/job-other-batch.rst
+
 SHELL OPTIONS
 =============
 

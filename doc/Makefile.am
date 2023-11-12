@@ -347,6 +347,8 @@ $(RST_FILES): \
 	man1/common/job-environment-variables.rst \
 	man1/common/job-process-resource-limits.rst \
 	man1/common/job-other-options.rst \
+	man1/common/job-other-batch.rst \
+	man1/common/job-other-run.rst \
 	man1/common/job-shell-options.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst
@@ -420,6 +422,8 @@ EXTRA_DIST = \
 	man1/common/job-environment-variables.rst \
 	man1/common/job-process-resource-limits.rst \
 	man1/common/job-other-options.rst \
+	man1/common/job-other-batch.rst \
+	man1/common/job-other-run.rst \
 	man1/common/job-shell-options.rst \
 	man3/index.rst \
 	man3/index_general.rst \
