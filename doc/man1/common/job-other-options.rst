@@ -4,12 +4,34 @@
 
 .. option:: --urgency=N
 
-   Specify job urgency, which affects queue order. Numerically higher urgency
-   jobs are considered by the scheduler first. Guests may submit jobs with
-   urgency in the range of 0 to 16, while instance owners may submit jobs
-   with urgency in the range of 0 to 31 (default 16).  In addition to
-   numerical values, the special names ``hold`` (0), ``default`` (16),
-   and ``expedite`` (31) are also accepted.
+   Specify job urgency.  *N* has a range of 0 to 16 for guest users, 0 to 31
+   for instance owners, and a default value of 16.  In addition to numerical
+   values, the following special names are accepted:
+
+   hold (0)
+      Hold the job until the urgency is raised with :option:`flux job urgency`.
+
+   default (16)
+      The default urgency for all users.
+
+   expedite (31)
+      Assign the highest possible priority to the job (restricted to instance
+      owner).
+
+   Urgency is one factor used to calculate job priority, which affects the
+   order in which the scheduler considers jobs.  By default, priority is
+   calculated from the urgency and the time elapsed since job submission.
+   This calculation may be overridden by configuration.  For example, in a
+   multi-user Flux instance with the Flux accounting priority plugin loaded,
+   the calculation includes other factors such as past usage and bank
+   allocations.
+
+   A job with an urgency value of 0 is treated specially:  it is never
+   considered by the scheduler and is effectively *held*.  Similarly, a job
+   with an urgency of 31 is always assigned the maximum priority, regardless
+   of other factors and is considered *expedited*.
+
+   :option:`flux jobs -o deps` lists jobs with urgency and priority fields.
 
 .. option:: -v, --verbose
 
