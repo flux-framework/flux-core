@@ -8,7 +8,7 @@ flux-alloc(1)
 SYNOPSIS
 ========
 
-**flux** **alloc** [OPTIONS] *--nslots=N* [COMMAND...]
+**flux** **alloc** [OPTIONS] [COMMAND...]
 
 DESCRIPTION
 ===========
@@ -55,30 +55,12 @@ The available OPTIONS are detailed below.
 JOB PARAMETERS
 ==============
 
-These commands accept only the simplest parameters for expressing
-the size of the parallel program and the geometry of its task slots:
-
-Common resource options
------------------------
-
-These commands take the following common resource allocation options:
-
-.. include:: common/job-param-common.rst
-
-Batch job options
------------------
-
-:man1:`flux-batch` and :man1:`flux-alloc` do not launch tasks directly, and
-therefore job parameters are specified in terms of resource slot size
-and number of slots. A resource slot can be thought of as the minimal
+:program:`flux batch` and :program:`flux alloc` do not launch tasks directly,
+and therefore job parameters are normally specified in terms of resource slot
+size and number of slots. A resource slot can be thought of as the minimal
 resources required for a virtual task. The default slot size is 1 core.
 
 .. include:: common/job-param-batch.rst
-
-Additional job options
-----------------------
-
-These commands also take following job parameters:
 
 .. include:: common/job-param-additional.rst
 
