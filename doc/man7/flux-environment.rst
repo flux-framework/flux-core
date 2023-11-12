@@ -474,6 +474,16 @@ of compiled-in install paths and the environment.
 
    Values may include multiple directories separated by colons.
 
+.. note::
+   Flux commands written in Python further modify Python's
+   `sys.path <https://docs.python.org/3/library/sys.html#sys.path>`_
+   to ensure that interpreter default paths appear before any custom values
+   set in :envvar:`PYTHONPATH`. This is an attempt to  avoid incompatible
+   modules interfering with the operation of Flux commands. If it becomes
+   necessary to force a non-standard module first in the search path (e.g.
+   for testing, instrumentation, etc.) then :envvar:`FLUX_PYTHONPATH_PREPEND`
+   should be used.
+
 .. envvar:: LUA_PATH
             LUA_CPATH
             FLUX_LUA_PATH_PREPEND
