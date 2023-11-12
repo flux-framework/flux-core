@@ -64,17 +64,6 @@ resources required for a virtual task. The default slot size is 1 core.
 
 .. include:: common/job-param-additional.rst
 
-STANDARD I/O
-============
-
-By default, task stdout and stderr streams are redirected to the
-KVS, where they may be accessed with the ``flux job attach`` command.
-
-In addition, :man1:`flux-run` processes standard I/O in real time,
-emitting the job's I/O to its stdout and stderr.
-
-.. include:: common/job-standard-io.rst
-
 CONSTRAINTS
 ===========
 
