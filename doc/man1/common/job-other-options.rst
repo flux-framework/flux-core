@@ -13,7 +13,7 @@
 
 .. option:: -v, --verbose
 
-   *(run,alloc,submit,bulksubmit)* Increase verbosity on stderr. For example,
+   Increase verbosity on stderr. For example,
    currently :option:`flux run -v` displays jobid, :option:`-vv` displays job
    events, and :option:`-vvv` displays exec events. :option:`flux alloc -v`
    forces the command to print the submitted jobid on stderr.  The specific
