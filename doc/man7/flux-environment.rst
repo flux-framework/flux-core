@@ -421,6 +421,18 @@ SUB-COMMAND ENVIRONMENT
 :man1:`flux` sets up the environment for sub-commands using a combination
 of compiled-in install paths and the environment.
 
+.. note::
+   The PREPEND versions of environment variables below may
+   be necessary when developing and testing a new version
+   of a Flux command (:envvar:`FLUX_EXEC_PATH_PREPEND`),
+   module (:envvar:`FLUX_MODULE_PATH_PREPEND`), connector
+   (:envvar:`FLUX_CONNECTOR_PATH_PREPEND`), or Python module
+   (:envvar:`FLUX_PYTHONPATH_PREPEND`) when an existing version of that
+   component is already installed in the system default paths. Otherwise,
+   the installed component would always be used by the system Flux, since
+   the installed paths are always placed first in the subcommand environment
+   created by :man1:`flux`.
+
 .. envvar:: FLUX_EXEC_PATH
             FLUX_EXEC_PATH_PREPEND
 
