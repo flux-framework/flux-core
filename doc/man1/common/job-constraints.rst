@@ -1,4 +1,4 @@
-.. option:: --requires=CONSTRAINT**
+.. option:: --requires=CONSTRAINT
 
    Specify a set of allowable properties and other attributes to consider
    when matching resources for a job. The **CONSTRAINT** is expressed in
