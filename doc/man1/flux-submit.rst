@@ -97,7 +97,7 @@ give fine control over the requested environment submitted with the job.
 .. include:: common/job-environment.rst
 
 ENV RULES
-=========
+---------
 
 .. include:: common/job-env-rules.rst
 
