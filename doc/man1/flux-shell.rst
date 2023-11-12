@@ -66,7 +66,7 @@ execution of the job:
    typically ``<userid>-shell-<jobid>``
  * load the system default ``initrc.lua``
    (``$sysconfdir/flux/shell/initrc.lua``), unless overridden by
-   configuration (See `JOBSPEC OPTIONS`_ and `SHELL INITRC`_ sections below)
+   configuration (See `SHELL OPTIONS`_ and `SHELL INITRC`_ sections below)
  * call ``shell.init`` plugin callbacks
  * change working directory to the cwd of the job
  * enter a barrier to ensure shell initialization is complete on all shells
@@ -175,9 +175,10 @@ Note however, that plugins may also call into the plugin stack to create
 new callbacks at runtime, so more topics than those listed above may be
 available in a given shell instance.
 
+.. _flux_shell_options:
 
-JOBSPEC OPTIONS
-===============
+SHELL OPTIONS
+=============
 
 On startup, :program:`flux shell` will examine the jobspec for any shell
 specific options under the ``attributes.system.shell.options`` key.  These
@@ -192,7 +193,12 @@ of optional job shell behavior. In the list below, if an option doesn't
 include a ``=``, then it is a simple boolean option or switch and may be
 specified simply with :option:`flux submit -o OPTION`.
 
-Options supported by :program:`flux shell` proper include:
+Job shell plugins may also support configuration via shell options in
+the jobspec. For specific information about runtime-loaded plugins,
+see the documentation for the specific plugin in question.
+
+Shell options supported by :program:`flux shell` itself and its built-in
+plugins include:
 
 **verbose**\ =\ *INT*
   Set the shell verbosity to *INT*. A larger value indicates increased
@@ -208,11 +214,6 @@ Options supported by :program:`flux shell` proper include:
   Load :program:`flux shell` initrc.lua file from *FILE* instead of the default
   initrc path. For details of the job shell initrc.lua file format,
   see the `SHELL INITRC`_ section below.
-
-Job shell plugins may also support configuration via shell options in
-the jobspec. For specific information about runtime-loaded plugins,
-see the documentation for the specific plugin in question. The following
-options are supported by the builtin plugins of :program:`flux shell`:
 
 **pty**
   Allocate a pty to all task ranks for non-interactive use. Output
@@ -371,6 +372,8 @@ options are supported by the builtin plugins of :program:`flux shell`:
   such as a *tmpfs*.  If a destination is explicitly specified, use the
   ``global:`` prefix where appropriate to avoid overwhelming a shared file
   system, and be sure to clean up.
+
+.. _flux_shell_initrc:
 
 SHELL INITRC
 ============
