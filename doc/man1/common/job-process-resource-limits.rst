@@ -1,11 +1,3 @@
-PROCESS RESOURCE LIMITS
-=======================
-
-By default these commands propagate some common resource limits (as described
-in :linux:man2:`getrlimit`) to the job by setting the ``rlimit`` job shell
-option in jobspec.  The set of resource limits propagated can be controlled
-via the :option:`--rlimit=RULE` option:
-
 .. option:: --rlimit=RULE
 
     Control how process resource limits are propagated with *RULE*. Rules

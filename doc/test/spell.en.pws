@@ -794,3 +794,6 @@ gdb
 libtool
 prepend
 noflux
+param
+perres
+pertask

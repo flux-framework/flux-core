@@ -1,6 +1,3 @@
-DEPENDENCIES
-============
-
 .. note::
    Flux supports a simple but powerful job dependency specification in jobspec.
    See Flux Framework RFC 26 for more detailed information about the generic

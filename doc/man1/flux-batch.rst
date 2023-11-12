@@ -9,9 +9,9 @@ flux-batch(1)
 SYNOPSIS
 ========
 
-**flux** **batch** [OPTIONS] *--nslots=N* SCRIPT ...
+**flux** **batch** [OPTIONS] SCRIPT ...
 
-**flux** **batch** [OPTIONS] *--nslots=N* --wrap COMMAND ...
+**flux** **batch** [OPTIONS] --wrap COMMAND ...
 
 
 DESCRIPTION
@@ -75,23 +75,72 @@ as described in RFC 36.  See `SUBMISSION DIRECTIVES`_ below.
 
 The available OPTIONS are detailed below.
 
-.. include:: common/submit-job-parameters.rst
+JOB PARAMETERS
+==============
 
-.. include:: common/submit-standard-io.rst
+:man1:`flux-batch` and :man1:`flux-alloc` do not launch tasks directly, and
+therefore job parameters are specified in terms of resource slot size
+and number of slots. A resource slot can be thought of as the minimal
+resources required for a virtual task. The default slot size is 1 core.
 
-.. include:: common/submit-constraints.rst
+.. include:: common/job-param-batch.rst
 
-.. include:: common/submit-dependencies.rst
+.. include:: common/job-param-additional.rst
 
-.. include:: common/submit-environment.rst
+CONSTRAINTS
+===========
 
-.. include:: common/submit-process-resource-limits.rst
+.. include:: common/job-constraints.rst
 
-.. include:: common/submit-exit-status.rst
+DEPENDENCIES
+============
 
-.. include:: common/submit-other-options.rst
+.. include:: common/job-dependencies.rst
 
-.. include:: common/submit-shell-options.rst
+ENVIRONMENT
+===========
+
+By default, these commands duplicate the current environment when submitting
+jobs. However, a set of environment manipulation options are provided to
+give fine control over the requested environment submitted with the job.
+
+.. include:: common/job-environment.rst
+
+ENV RULES
+---------
+
+.. include:: common/job-env-rules.rst
+
+PROCESS RESOURCE LIMITS
+=======================
+
+By default these commands propagate some common resource limits (as described
+in :linux:man2:`getrlimit`) to the job by setting the ``rlimit`` job shell
+option in jobspec.  The set of resource limits propagated can be controlled
+via the :option:`--rlimit=RULE` option:
+
+.. include:: common/job-process-resource-limits.rst
+
+EXIT STATUS
+===========
+
+The job exit status is normally the batch script exit status.
+This result is stored in the KVS.
+
+OTHER OPTIONS
+=============
+
+.. include:: common/job-other-options.rst
+
+.. include:: common/job-other-batch.rst
+
+SHELL OPTIONS
+=============
+
+These options are provided by built-in shell plugins that may be
+overridden in some cases:
+
+.. include:: common/job-shell-options.rst
 
 SUBMISSION DIRECTIVES
 =====================
