@@ -57,6 +57,11 @@ int overlay_set_topology (struct overlay *ov, struct topology *topo);
 int overlay_sendmsg (struct overlay *ov,
                      const flux_msg_t *msg,
                      overlay_where_t where);
+/* same as above but steals reference to 'msg' on success.
+ */
+int overlay_sendmsg_new (struct overlay *ov,
+                         flux_msg_t **msg,
+                         overlay_where_t where);
 
 /* Each broker has a public, private CURVE key-pair.  Call overlay_authorize()
  * with the public key of each downstream peer to authorize it to connect,
