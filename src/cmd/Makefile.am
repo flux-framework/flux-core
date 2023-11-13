@@ -117,7 +117,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-cancel.py \
 	flux-watch.py \
 	flux-update.py \
-	flux-imp-exec-helper
+	flux-imp-exec-helper \
+	py-runner.py
 
 fluxcmd_PROGRAMS = \
 	flux-terminus \
