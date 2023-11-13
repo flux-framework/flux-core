@@ -200,7 +200,7 @@ see the documentation for the specific plugin in question.
 Shell options supported by :program:`flux shell` itself and its built-in
 plugins include:
 
-.. option:: verbose=INT
+.. option:: verbose[=INT]
 
   Set the shell verbosity to *INT*. A larger value indicates increased
   verbosity, though setting this value larger than 2 currently has no
