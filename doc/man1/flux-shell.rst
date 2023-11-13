@@ -254,28 +254,49 @@ plugins include:
 
 .. option:: cpu-affinity=OPT
 
-  Adjust the operation of the builtin shell ``affinity`` plugin.
-  *OPT* may be set to ``off`` to disable the affinity plugin, or
-  ``per-task`` to have available CPUs distributed to tasks.
-  If *OPT* starts with ``map:``, then the rest of the option is taken
-  as a semicolon-delimited list of cpus to allocate to each task. Each
-  entry in the list can be in one of the :linux:man7:`hwloc` list,
-  bitmask, or taskset formats (See
-  `hwlocality_bitmap(3) <https://www.open-mpi.org/projects/hwloc/doc/v2.9.0/a00181.php>`_,
-  especially the ``hwloc_bitmap_list_snprintf()``, ``hwloc_bitmap_snprintf()``
-  and ``hwloc_bitmap_taskset_snprintf()`` functions).  The default is ``on``,
-  which binds all tasks to the assigned set of cores in the job.
+  Adjust the operation of the builtin shell ``affinity`` plugin.  If the
+  option is unspecified, ``on`` is assumed.  *OPT* may be set to:
+
+  on
+    Bind each task to the full set of cores allocated to the job.
+
+  off
+    Disable the affinity plugin.  This may be useful if using another plugin
+    such as `mpibind <https://github.com/LLNL/mpibind>`_ to manage CPU
+    affinity.
+
+  per-task
+    Bind each task to an evenly populated subset of the cores allocated to
+    the job.  Tasks share cores only if there are more tasks than cores.
+
+  map:LIST
+    Bind each task to *LIST*, a semicolon-delimited list of cores.
+    Each entry in the list can be in one of the :linux:man7:`hwloc`
+    *list*, *bitmask*, or *taskset* formats. See `hwlocality_bitmap(3)
+    <https://www.open-mpi.org/projects/hwloc/doc/v2.9.0/a00181.php>`_,
+    especially the :func:`hwloc_bitmap_list_snprintf`,
+    :func:`hwloc_bitmap_snprintf` and :func:`hwloc_bitmap_taskset_snprintf`
+    functions.
 
 .. option:: gpu-affinity=OPT
 
-  Adjust operation of the builtin shell ``gpubind`` plugin, which simply
+  Adjust operation of the builtin shell ``gpubind`` plugin.  This plugin
   sets :envvar:`CUDA_VISIBLE_DEVICES` to the GPU IDs allocated to the job.
-  *OPT* may be set to ``off`` to disable the plugin, or ``per-task``
-  to divide allocated GPUs among tasks launched by the shell (sets a
-  different GPU ID or IDs for each launched task). If *OPT* starts with
-  ``map:``, then the rest of the option is a semicolon-delimited list
-  of GPUs to assign to each task. See :option:`cpu-affinity` documentation
-  for a description of the ``map:`` list format.
+  If the option is unspecified, ``on`` is assumed.  *OPT* may be set to:
+
+  on
+    Constrain each task to the full set of GPUs allocated to the job.
+
+  off
+    Disable the gpu-affinity plugin.
+
+  per-task
+    Constrain each task to an evenly populated subset of the GPUs allocated
+    to the job.  Tasks share GPUs only if there are more tasks than GPUs.
+
+  map:LIST
+    Constrain each task to *LIST*, a semicolon-delimited list of GPUs.
+    See :option:`cpu-affinity` above for a description of *LIST* format.
 
 .. option:: stop-tasks-in-exec
 
