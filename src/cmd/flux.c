@@ -189,7 +189,8 @@ int main (int argc, char *argv[])
     }
 
     environment_from_env (env, "FLUX_EXEC_PATH", "", ':');
-    environment_push (env, "FLUX_EXEC_PATH",
+    environment_push (env,
+                      "FLUX_EXEC_PATH",
                       flux_conf_builtin_get ("exec_path", flags));
     environment_push (env, "FLUX_EXEC_PATH", getenv ("FLUX_EXEC_PATH_PREPEND"));
 
@@ -197,14 +198,16 @@ int main (int argc, char *argv[])
     environment_push (env,
                       "FLUX_CONNECTOR_PATH",
                       flux_conf_builtin_get ("connector_path", flags));
-    environment_push (env, "FLUX_CONNECTOR_PATH",
+    environment_push (env,
+                      "FLUX_CONNECTOR_PATH",
                       getenv ("FLUX_CONNECTOR_PATH_PREPEND"));
 
     environment_from_env (env, "FLUX_MODULE_PATH", "", ':');
     environment_push (env,
                       "FLUX_MODULE_PATH",
                       flux_conf_builtin_get ("module_path", flags));
-    environment_push (env, "FLUX_MODULE_PATH",
+    environment_push (env,
+                      "FLUX_MODULE_PATH",
                       getenv ("FLUX_MODULE_PATH_PREPEND"));
 
     if (getenv ("FLUX_URI"))
@@ -319,9 +322,10 @@ void exec_subcommand_py (bool vopt, const char *dir,
 	                     const char *prefix)
 {
     char *path = xasprintf ("%s%s%s%s.py",
-            dir ? dir : "",
-            dir ? "/" : "",
-            prefix ? prefix : "", argv[0]);
+                            dir ? dir : "",
+                            dir ? "/" : "",
+                            prefix ? prefix : "", argv[0]);
+
     if (access (path, R_OK|X_OK) == 0) {
         char *av [argc+2];
         av[0] = PYTHON_INTERPRETER;
@@ -339,9 +343,9 @@ void exec_subcommand_dir (bool vopt, const char *dir, char *argv[],
         const char *prefix)
 {
     char *path = xasprintf ("%s%s%s%s",
-            dir ? dir : "",
-            dir ? "/" : "",
-            prefix ? prefix : "", argv[0]);
+                            dir ? dir : "",
+                            dir ? "/" : "",
+                            prefix ? prefix : "", argv[0]);
     if (vopt)
         log_msg ("trying to exec %s", path);
     execvp (path, argv); /* no return if successful */
@@ -366,7 +370,8 @@ void exec_subcommand (const char *searchpath, bool vopt, int argc, char *argv[])
             a1 = NULL;
         }
         free (cpy);
-        log_msg_exit ("`%s' is not a flux command.  See 'flux --help'", argv[0]);
+        log_msg_exit ("`%s' is not a flux command.  See 'flux --help'",
+                      argv[0]);
     }
 }
 
