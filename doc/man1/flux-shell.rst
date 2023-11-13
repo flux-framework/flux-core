@@ -206,9 +206,9 @@ plugins include:
   verbosity, though setting this value larger than 2 currently has no
   effect.
 
-.. option:: nosetpgrp=INT
+.. option:: nosetpgrp
 
-  If nonzero, disables the use of :linux:man2:`setpgrp` to launch each
+  Disable the use of :linux:man2:`setpgrp` to launch each
   job task in its own process group. This will cause signals to be
   delivered only to direct children of the shell.
 
