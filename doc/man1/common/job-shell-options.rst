@@ -1,46 +1,38 @@
-.. option:: -o mpi=spectrum
+.. Once we advance to sphinx 5.3+, :option: will x-ref with arguments
+.. e.g. :option:`cpu-affinity=OFF`.  For now, leave options off to get x-ref.
 
-   Load the MPI personality plugin for IBM Spectrum MPI. All other MPI
-   plugins are loaded by default.
+.. list-table::
+   :header-rows: 1
 
-.. option:: -o cpu-affinity=per-task
+   * - Name
+     - Description
 
-   Tasks are distributed across the assigned resources.
+   * - :option:`cpu-affinity`
+     - Set task affinity to cores (:option:`off|per-task|map:LIST|on`)
 
-.. option:: -o cpu-affinity=off
+   * - :option:`gpu-affinity`
+     - Set task affinity to GPUs (:option:`off|per-task|map:LIST|on`)
 
-   Disable task affinity plugin.
+   * - :option:`verbose`
+     - Increase shell log verbosity (1 or 2).
 
-.. option:: -o gpu-affinity=per-task
+   * - :option:`nosetpgrp`
+     - Don't run each task in its own process group.
 
-   GPU devices are distributed evenly among local tasks. Otherwise,
-   GPU device affinity is to the job.
+   * - :option:`pmi`
+     - Set PMI service(s) for launched programs (:option:`off|simple|LIST`)
 
-.. option:: -o gpu-affinity=off
+   * - :option:`stage-in`
+     - Copy files previously mapped with :man1:`flux-filemap` to
+       :envvar:`FLUX_JOB_TMPDIR`.
 
-   Disable GPU affinity for this job.
+   * - :option:`pty.interactive`
+     - Enable a pty on rank 0 for :program:`flux job attach`.
 
-.. option:: -o verbose
+   * - :option:`exit-timeout`
+     - Start fatal job exception timer after first task exits
+       (:option:`none|FSD`)
 
-   Increase verbosity of the job shell log.
-
-.. option:: -o nosetpgrp
-
-   Normally the job shell runs each task in its own process group to
-   facilitate delivering signals to tasks which may call :linux:man2:`fork`.
-   With this option, the shell avoids calling :linux:man2:`setpgrp`, and
-   each task will run in the process group of the shell. This will cause
-   signals to be delivered only to direct children of the shell.
-
-.. option:: -o pmi=off
-
-   Disable the process management interface (PMI-1) which is required for
-   bootstrapping most parallel program environments.  See :man1:`flux-shell`
-   for more pmi options.
-
-.. option:: -o stage-in
-
-   Copy files previously mapped with :man1:`flux-filemap` to the directory
-   referred to by :envvar:`FLUX_JOB_TMPDIR`.  See :man1:`flux-shell` for more
-   *stage-in* options.
-
+   * - :option:`exit-on-error`
+     - Raise a fatal job exception immediately if first task exits with
+       nonzero exit code.
