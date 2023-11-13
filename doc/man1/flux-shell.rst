@@ -66,7 +66,7 @@ execution of the job:
    typically ``<userid>-shell-<jobid>``
  * load the system default ``initrc.lua``
    (``$sysconfdir/flux/shell/initrc.lua``), unless overridden by
-   configuration (See `JOBSPEC OPTIONS`_ and `SHELL INITRC`_ sections below)
+   configuration (See `SHELL OPTIONS`_ and `SHELL INITRC`_ sections below)
  * call ``shell.init`` plugin callbacks
  * change working directory to the cwd of the job
  * enter a barrier to ensure shell initialization is complete on all shells
@@ -175,9 +175,10 @@ Note however, that plugins may also call into the plugin stack to create
 new callbacks at runtime, so more topics than those listed above may be
 available in a given shell instance.
 
+.. _flux_shell_options:
 
-JOBSPEC OPTIONS
-===============
+SHELL OPTIONS
+=============
 
 On startup, :program:`flux shell` will examine the jobspec for any shell
 specific options under the ``attributes.system.shell.options`` key.  These
@@ -192,49 +193,56 @@ of optional job shell behavior. In the list below, if an option doesn't
 include a ``=``, then it is a simple boolean option or switch and may be
 specified simply with :option:`flux submit -o OPTION`.
 
-Options supported by :program:`flux shell` proper include:
+Job shell plugins may also support configuration via shell options in
+the jobspec. For specific information about runtime-loaded plugins,
+see the documentation for the specific plugin in question.
 
-**verbose**\ =\ *INT*
+Shell options supported by :program:`flux shell` itself and its built-in
+plugins include:
+
+.. option:: verbose[=INT]
+
   Set the shell verbosity to *INT*. A larger value indicates increased
   verbosity, though setting this value larger than 2 currently has no
   effect.
 
-**nosetpgrp**\ =\ *INT*
-  If nonzero, disables the use of :linux:man2:`setpgrp` to launch each
+.. option:: nosetpgrp
+
+  Disable the use of :linux:man2:`setpgrp` to launch each
   job task in its own process group. This will cause signals to be
   delivered only to direct children of the shell.
 
-**initrc**\ =\ *FILE*
+.. option:: initrc=FILE
+
   Load :program:`flux shell` initrc.lua file from *FILE* instead of the default
   initrc path. For details of the job shell initrc.lua file format,
   see the `SHELL INITRC`_ section below.
 
-Job shell plugins may also support configuration via shell options in
-the jobspec. For specific information about runtime-loaded plugins,
-see the documentation for the specific plugin in question. The following
-options are supported by the builtin plugins of :program:`flux shell`:
+.. option:: pty
 
-**pty**
   Allocate a pty to all task ranks for non-interactive use. Output
   from all ranks will be captured to the same location as ``stdout``.
-  This is the same as setting **pty.ranks=all** and **pty.capture**.
+  This is the same as setting :option:`pty.ranks=all` and :option:`pty.capture`.
   (see below).
 
-**pty.ranks**\ =\ *OPT*
+.. option:: pty.ranks=OPT
+
   Set the task ranks for which to allocate a pty. *OPT* may be either
   an RFC 22 IDset of target ranks, an integer rank, or the string "all"
   to indicate all ranks.
 
-**pty.capture**
-  Enable capture of pty output to the same location as stdout. This is
-  the default unless **pty.interactive** is set.
+.. option:: pty.capture
 
-**pty.interactive**
+  Enable capture of pty output to the same location as stdout. This is
+  the default unless :option:`pty.interactive` is set.
+
+.. option:: pty.interactive
+
   Enable a a pty on rank 0 that is set up for interactive attach by
-  a front-end program (i.e. :program:`flux job attach`). With no other **pty**
-  options, only rank 0 will be assigned a pty and output will not
+  a front-end program (i.e. :program:`flux job attach`). With no other
+  :option:`pty` options, only rank 0 will be assigned a pty and output will not
   be captured. These defaults can be changed by setting other
-  **pty** options after **pty.interactive**, e.g.
+  :option:`pty` options after :option:`pty.interactive`, e.g.
 
   .. code-block:: console
 
@@ -244,34 +252,59 @@ options are supported by the builtin plugins of :program:`flux shell`:
   pty session to the KVS (so it can be displayed after the job exits
   with ``flux job attach``).
 
-**cpu-affinity**\ =\ *OPT*
-  Adjust the operation of the builtin shell ``affinity`` plugin.
-  *OPT* may be set to ``off`` to disable the affinity plugin, or
-  ``per-task`` to have available CPUs distributed to tasks.
-  If *OPT* starts with ``map:``, then the rest of the option is taken
-  as a semicolon-delimited list of cpus to allocate to each task. Each
-  entry in the list can be in one of the :linux:man7:`hwloc` list,
-  bitmask, or taskset formats (See
-  `hwlocality_bitmap(3) <https://www.open-mpi.org/projects/hwloc/doc/v2.9.0/a00181.php>`_,
-  especially the ``hwloc_bitmap_list_snprintf()``, ``hwloc_bitmap_snprintf()``
-  and ``hwloc_bitmap_taskset_snprintf()`` functions).  The default is ``on``,
-  which binds all tasks to the assigned set of cores in the job.
+.. option:: cpu-affinity=OPT
 
-**gpu-affinity**\ =\ *OPT*
-  Adjust operation of the builtin shell ``gpubind`` plugin, which simply
+  Adjust the operation of the builtin shell ``affinity`` plugin.  If the
+  option is unspecified, ``on`` is assumed.  *OPT* may be set to:
+
+  on
+    Bind each task to the full set of cores allocated to the job.
+
+  off
+    Disable the affinity plugin.  This may be useful if using another plugin
+    such as `mpibind <https://github.com/LLNL/mpibind>`_ to manage CPU
+    affinity.
+
+  per-task
+    Bind each task to an evenly populated subset of the cores allocated to
+    the job.  Tasks share cores only if there are more tasks than cores.
+
+  map:LIST
+    Bind each task to *LIST*, a semicolon-delimited list of cores.
+    Each entry in the list can be in one of the :linux:man7:`hwloc`
+    *list*, *bitmask*, or *taskset* formats. See `hwlocality_bitmap(3)
+    <https://www.open-mpi.org/projects/hwloc/doc/v2.9.0/a00181.php>`_,
+    especially the :func:`hwloc_bitmap_list_snprintf`,
+    :func:`hwloc_bitmap_snprintf` and :func:`hwloc_bitmap_taskset_snprintf`
+    functions.
+
+.. option:: gpu-affinity=OPT
+
+  Adjust operation of the builtin shell ``gpubind`` plugin.  This plugin
   sets :envvar:`CUDA_VISIBLE_DEVICES` to the GPU IDs allocated to the job.
-  *OPT* may be set to ``off`` to disable the plugin, or ``per-task``
-  to divide allocated GPUs among tasks launched by the shell (sets a
-  different GPU ID or IDs for each launched task). If *OPT* starts with
-  ``map:``, then the rest of the option is a semicolon-delimited list
-  of GPUs to assign to each task. See **cpu-affinity** documentation
-  for a description of the ``map:`` list format.
+  If the option is unspecified, ``on`` is assumed.  *OPT* may be set to:
 
-**stop-tasks-in-exec**
+  on
+    Constrain each task to the full set of GPUs allocated to the job.
+
+  off
+    Disable the gpu-affinity plugin.
+
+  per-task
+    Constrain each task to an evenly populated subset of the GPUs allocated
+    to the job.  Tasks share GPUs only if there are more tasks than GPUs.
+
+  map:LIST
+    Constrain each task to *LIST*, a semicolon-delimited list of GPUs.
+    See :option:`cpu-affinity` above for a description of *LIST* format.
+
+.. option:: stop-tasks-in-exec
+
   Stops tasks in ``exec()`` using ``PTRACE_TRACEME``. Used for debugging
   parallel jobs. Users should not need to set this option directly.
 
-**output.{stdout,stderr}.type**\ =\ *TYPE*
+.. option:: output.{stdout,stderr}.type=TYPE
+
   Set job output to for **stderr** or **stdout** to *TYPE*. *TYPE* may
   be one of ``term``, ``kvs`` or ``file`` (Default: ``kvs``). If only
   ``output.stdout.type`` is set, then this option applies to both
@@ -280,71 +313,103 @@ options are supported by the builtin plugins of :program:`flux shell`:
   this option directly, as it will be set automatically by options
   of higher level commands such as :man1:`flux-submit`.
 
-**output.{stdout,stderr}.path**\ =\ *PATH*
+.. option:: output.{stdout,stderr}.path=PATH
+
   Set job stderr/out file output to PATH.
 
-**input.stdin.type**\ =\ *TYPE*
+.. option:: input.stdin.type=TYPE
+
   Set job input for **stdin** to *TYPE*. *TYPE* may be either ``service``
   or ``file``. Users should not need to set this option directly as it
   will be handled by options of higher level commands like :man1:`flux-submit`.
 
-**exit-timeout**\ =\ *VALUE*
+.. option:: exit-timeout=VALUE
+
   A fatal exception is raised on the job 30s after the first task exits.
   The timeout period may be altered by providing a different value in
   Flux Standard Duration form.  A value of ``none`` disables generation of
   the exception.
 
-**exit-on-error**
+.. option:: exit-on-error
+
   If the first task to exit was signaled or exited with a nonzero status,
   raise a fatal exception on the job immediately.
 
-**rlimit**
+.. option:: rlimit
+
   A dictionary of soft process resource limits to apply to the job before
   starting tasks. Resource limits are set to integer values by lowercase
   name without the ``RLIMIT_`` prefix, e.g. ``core`` or ``nofile``. Users
   should not need to set this shell option as it is handled by commands
   like :man1:`flux-submit`.
 
-**taskmap**
+.. option:: taskmap
+
   Request an alternate job task mapping. This option is an object
   consisting of required key ``scheme`` and optional key ``value``. The
   shell will attempt to call a ``taskmap.scheme`` plugin callback in the
   shell to invoke the alternate requested mapping. If ``value`` is set,
   this will also be passed to the invoked plugin. Normally, this option will
-  be set by the :man1:`flux-submit` and related commands --taskmap`` option.
+  be set by the :man1:`flux-submit` and related commands :option:`--taskmap`
+  option.
 
-**pmi=off**
-  Disable the process management interface for parallel jobs (see below).
+.. option:: pmi=LIST
 
-**pmi=LIST**
   Specify a comma-separated list of PMI implementations to enable.  If the
-  option is unspecified, the ``simple`` PMI-1 wire protocol implementation
-  is enabled.  Other options such as ``cray-pals`` or ``pmix`` may be
-  installed on your system.
+  option is unspecified, ``simple`` is assumed.  To disable, set *LIST* to
+  ``off``.  Available implementations include
 
-**pmi-simple.nomap**
-  Skip populating the PMI ``flux.taskmap`` and ``PMI_process_mapping`` keys.
+  simple
+    The simple PMI-1 wire protocol.  This implementation works by passing an
+    open file descriptor to clients via the :envvar:`PMI_FD` environment
+    variable.  It must be enabled when Flux's ``libpmi.so`` or ``libpmi2.so``
+    libraries are used, and is preferred by :man1:`flux-broker`
+    when Flux launches Flux, e.g. by means of :man1:`flux-batch` or
+    :man1:`flux-alloc`.
 
-**pmi-simple.kvs=native**
+  pmi1, pmi2
+    Aliases for ``simple``.
+
+  cray-pals
+    Provided via external plugin from the
+    `flux-coral2 <https://github.com/flux-framework/flux-coral2>`_ project.
+
+  pmix
+    Provided via external plugin from the
+    `flux-pmix <https://github.com/flux-framework/flux-pmix>`_ project.
+
+.. option:: pmi-simple.nomap
+
+  Skip pre-populating the ``flux.taskmap`` and ``PMI_process_mapping`` keys
+  in the ``simple`` implementation.
+
+.. option:: pmi-simple.kvs=native
+
   Use the native Flux KVS instead of the PMI plugin's built-in key exchange
-  algorithm.
+  algorithm in the ``simple`` implementation.
 
-**pmi-simple.exchange.k=N**
+.. option:: pmi-simple.exchange.k=N
+
   Configure the PMI plugin's built-in key exchange algorithm to use a
-  virtual tree fanout of ``N`` for key gather/broadcast.  The default is 2.
+  virtual tree fanout of ``N`` for key gather/broadcast in the ``simple``
+  implementation.  The default is 2.
 
-**stage-in**
+.. option:: stage-in
+
   Copy files to the directory referenced by :envvar:`FLUX_JOB_TMPDIR` that
   were previously mapped using :man1:`flux-filemap`.
 
-**stage-in.tags**\ =\ *LIST*
+.. option:: stage-in.tags=LIST
+
   Select files to copy by specifying a comma-separated list of tags.
   If no tags are specified, the ``main`` tag is assumed.
 
-**stage-in.pattern**\ =\ *PATTERN*
+.. option:: stage-in.pattern=PATTERN
+
   Further filter the selected files to copy using a :man7:`glob` pattern.
 
-**stage-in.destination**\ =\ *[SCOPE:]PATH*
+.. option:: stage-in.destination=[SCOPE:]PATH
+
   Copy files to the specified destination instead of the directory referenced
   by :envvar:`FLUX_JOB_TMPDIR`.  The argument is a directory with optional
   *scope* prefix.  A scope of ``local`` denotes a local file system (the
@@ -352,18 +417,21 @@ options are supported by the builtin plugins of :program:`flux shell`:
   takes place on all the job's nodes if the scope is local, versus only the
   first node of the job if the scope is global.
 
-**signal=OPTION**
+.. option:: signal=OPTION
+
   Deliver signal ``SIGUSR1`` to the job 60s before job expiration.
   To customize the signal number or amount of time before expiration to
   deliver the signal, the ``signal`` option may be an object with one
   or both of the keys ``signum`` or ``timeleft``. (See below)
 
-**signal.signum**\ =\ *NUMBER*
-  Send signal *NUMBER* to the job ``signal.timeleft`` seconds before
+.. option:: signal.signum=NUMBER
+
+  Send signal *NUMBER* to the job :option:`signal.timeleft` seconds before
   the time limit.
 
-**signal.timeleft**\ =\ *TIME*
-  Send signal ``signal.signum`` *TIME* seconds before job expiration.
+.. option:: signal.timeleft=TIME
+
+  Send signal :option:`signal.signum` *TIME* seconds before job expiration.
 
 .. warning::
   The directory referenced by :envvar:`FLUX_JOB_TMPDIR` is cleaned up when the
@@ -371,6 +439,8 @@ options are supported by the builtin plugins of :program:`flux shell`:
   such as a *tmpfs*.  If a destination is explicitly specified, use the
   ``global:`` prefix where appropriate to avoid overwhelming a shared file
   system, and be sure to clean up.
+
+.. _flux_shell_initrc:
 
 SHELL INITRC
 ============
