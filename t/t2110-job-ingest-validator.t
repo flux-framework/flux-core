@@ -37,6 +37,19 @@ ingest_module ()
 test_expect_success 'flux job-validator works' '
 	flux run --dry-run hostname | flux job-validator --jobspec-only
 '
+#  Attempt to trick validator into loading a bad urllib by modification
+#  of PYTHONPATH (issue #5547 reproducer). This affects all Python utils,
+#  but we test the validator as a surrogate for the rest:
+#
+test_expect_success 'flux job-validator works with malicious PYTHONPATH' '
+	mkdir -p badmod/urllib &&
+	cat <<-EOF >badmod/urllib/__init__.py &&
+	raise ValueError("incorrect urllib Python module loaded")
+	EOF
+	flux run --dry-run hostname \
+	  | PYTHONPATH=$(pwd)/badmod:${PYTHONPATH} \
+	       flux job-validator --jobspec-only
+'
 test_expect_success 'flux job-validator --list-plugins works' '
 	flux job-validator --list-plugins >list-plugins.output 2>&1 &&
 	test_debug "cat list-plugins.output" &&
