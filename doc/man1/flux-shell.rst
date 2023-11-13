@@ -332,30 +332,46 @@ plugins include:
   be set by the :man1:`flux-submit` and related commands :option:`--taskmap`
   option.
 
-.. option:: pmi=off
-
-  Disable the process management interface for parallel jobs (see below).
-
 .. option:: pmi=LIST
 
   Specify a comma-separated list of PMI implementations to enable.  If the
-  option is unspecified, the ``simple`` PMI-1 wire protocol implementation
-  is enabled.  Other options such as ``cray-pals`` or ``pmix`` may be
-  installed on your system.
+  option is unspecified, ``simple`` is assumed.  To disable, set *LIST* to
+  ``off``.  Available implementations include
+
+  simple
+    The simple PMI-1 wire protocol.  This implementation works by passing an
+    open file descriptor to clients via the :envvar:`PMI_FD` environment
+    variable.  It must be enabled when Flux's ``libpmi.so`` or ``libpmi2.so``
+    libraries are used, and is preferred by :man1:`flux-broker`
+    when Flux launches Flux, e.g. by means of :man1:`flux-batch` or
+    :man1:`flux-alloc`.
+
+  pmi1, pmi2
+    Aliases for ``simple``.
+
+  cray-pals
+    Provided via external plugin from the
+    `flux-coral2 <https://github.com/flux-framework/flux-coral2>`_ project.
+
+  pmix
+    Provided via external plugin from the
+    `flux-pmix <https://github.com/flux-framework/flux-pmix>`_ project.
 
 .. option:: pmi-simple.nomap
 
-  Skip populating the PMI ``flux.taskmap`` and ``PMI_process_mapping`` keys.
+  Skip pre-populating the ``flux.taskmap`` and ``PMI_process_mapping`` keys
+  in the ``simple`` implementation.
 
 .. option:: pmi-simple.kvs=native
 
   Use the native Flux KVS instead of the PMI plugin's built-in key exchange
-  algorithm.
+  algorithm in the ``simple`` implementation.
 
 .. option:: pmi-simple.exchange.k=N
 
   Configure the PMI plugin's built-in key exchange algorithm to use a
-  virtual tree fanout of ``N`` for key gather/broadcast.  The default is 2.
+  virtual tree fanout of ``N`` for key gather/broadcast in the ``simple``
+  implementation.  The default is 2.
 
 .. option:: stage-in
 
