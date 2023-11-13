@@ -26,9 +26,9 @@ typedef enum {
 struct overlay;
 
 typedef void (*overlay_monitor_f)(struct overlay *ov, uint32_t rank, void *arg);
-typedef void (*overlay_recv_f)(const flux_msg_t *msg,
-                               overlay_where_t from,
-                               void *arg);
+typedef int (*overlay_recv_f)(flux_msg_t **msg,
+                              overlay_where_t from,
+                              void *arg);
 
 /* Create overlay network, registering 'cb' to be called with each
  * received message.

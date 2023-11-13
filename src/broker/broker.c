@@ -88,9 +88,7 @@ static void h_internal_watcher (flux_reactor_t *r,
                                 int revents,
                                 void *arg);
 
-static void overlay_recv_cb (const flux_msg_t *msg,
-                             overlay_where_t where,
-                             void *arg);
+static int overlay_recv_cb (flux_msg_t **msg, overlay_where_t where, void *arg);
 
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
@@ -1662,23 +1660,22 @@ static void broker_remove_services (flux_msg_handler_t *handlers[])
 
 /* Handle messages received from overlay peers.
  */
-static void overlay_recv_cb (const flux_msg_t *msg,
-                             overlay_where_t where,
-                             void *arg)
+static int overlay_recv_cb (flux_msg_t **msg, overlay_where_t where, void *arg)
 {
     broker_ctx_t *ctx = arg;
     int type;
-    bool dropped = false;
 
-    if (flux_msg_get_type (msg, &type) < 0)
-        return;
+    if (flux_msg_get_type (*msg, &type) < 0)
+        return -1;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            broker_request_sendmsg (ctx, msg); // handles errors internally
+            /* broker_request_sendmsg() generates a response on error.
+             */
+            broker_request_sendmsg (ctx, *msg);
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            if (broker_response_sendmsg (ctx, msg) < 0)
-                dropped = true;
+            if (broker_response_sendmsg (ctx, *msg) < 0)
+                goto drop;
             break;
         case FLUX_MSGTYPE_EVENT:
             /* If event originated from upstream peer, then it has already been
@@ -1686,29 +1683,34 @@ static void overlay_recv_cb (const flux_msg_t *msg,
              * Otherwise, take the next step to get the event published.
              */
             if (where == OVERLAY_UPSTREAM) {
-                if (handle_event (ctx, msg) < 0)
-                    dropped = true;
+                if (handle_event (ctx, *msg) < 0)
+                    goto drop;
             }
             else {
-                if (broker_event_sendmsg (ctx, msg) < 0)
-                    dropped = true;
+                if (broker_event_sendmsg (ctx, *msg) < 0)
+                    goto drop;
             }
             break;
         default:
             break;
     }
+    flux_msg_decref (*msg);
+    *msg = NULL;
+    return 0;
+drop:
     /* Suppress logging if a response could not be sent due to ENOSYS,
      * which happens if sending module unloads before finishing all RPCs.
      */
-    if (dropped && (type != FLUX_MSGTYPE_RESPONSE || errno != ENOSYS)) {
+    if (type != FLUX_MSGTYPE_RESPONSE || errno != ENOSYS) {
         const char *topic = "unknown";
-        (void)flux_msg_get_topic (msg, &topic);
+        (void)flux_msg_get_topic (*msg, &topic);
         flux_log_error (ctx->h,
                         "DROP %s %s topic=%s",
                         where == OVERLAY_UPSTREAM ? "upstream" : "downstream",
                         flux_msg_typestr (type),
                         topic);
     }
+    return -1;
 }
 
 /* Distribute events downstream, and to module and broker-resident subscribers.

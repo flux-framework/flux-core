@@ -975,7 +975,9 @@ static void child_cb (flux_reactor_t *r,
         case FLUX_MSGTYPE_EVENT:
             break;
     }
-    ov->recv_cb (msg, OVERLAY_DOWNSTREAM, ov->recv_arg);
+    if (ov->recv_cb (&msg, OVERLAY_DOWNSTREAM, ov->recv_arg) < 0)
+        goto done;
+    return;
 done:
     flux_msg_decref (msg);
 }
@@ -1061,7 +1063,9 @@ static void parent_cb (flux_reactor_t *r,
         default:
             break;
     }
-    ov->recv_cb (msg, OVERLAY_UPSTREAM, ov->recv_arg);
+    if (ov->recv_cb (&msg, OVERLAY_UPSTREAM, ov->recv_arg) < 0)
+        goto done;
+    return;
 done:
     flux_msg_destroy (msg);
 }

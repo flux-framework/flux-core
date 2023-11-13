@@ -224,14 +224,16 @@ void single (flux_t *h)
     ctx_destroy (ctx);
 }
 
-void recv_cb (const flux_msg_t *msg, overlay_where_t from, void *arg)
+int recv_cb (flux_msg_t **msg, overlay_where_t from, void *arg)
 {
     struct context *ctx = arg;
 
     diag ("%s message received",
           from == OVERLAY_UPSTREAM ? "upstream" : "downstream");
-    ctx->msg = flux_msg_incref (msg);
+    ctx->msg = *msg;
+    *msg = NULL;
     flux_reactor_stop (flux_get_reactor (ctx->h));
+    return 0;
 }
 
 void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
