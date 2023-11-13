@@ -327,13 +327,19 @@ void exec_subcommand_py (bool vopt, const char *dir,
                             prefix ? prefix : "", argv[0]);
 
     if (access (path, R_OK|X_OK) == 0) {
-        char *av [argc+2];
+        const char *wrapper = flux_conf_builtin_get ("python_wrapper",
+                                                     FLUX_CONF_AUTO);
+        char *av [argc+3];
         av[0] = PYTHON_INTERPRETER;
-        av[1] = path;
-        for (int i = 2; i < argc+2; i++)
-            av[i] = argv[i-1];
+        av[1] = (char *) wrapper;
+        av[2] = path;
+        for (int i = 3; i < argc+3; i++)
+            av[i] = argv[i-2];
         if (vopt)
-            log_msg ("trying to exec %s %s", PYTHON_INTERPRETER, path);
+            log_msg ("trying to exec %s %s %s",
+                     PYTHON_INTERPRETER,
+                     wrapper,
+                     path);
         execvp (PYTHON_INTERPRETER, av);
     }
     free (path);
