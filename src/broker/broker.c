@@ -78,7 +78,7 @@
 
 
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
-static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
+static int broker_response_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
 static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
                                             const flux_msg_t *msg);
@@ -1674,7 +1674,7 @@ static int overlay_recv_cb (flux_msg_t **msg, overlay_where_t where, void *arg)
             broker_request_sendmsg (ctx, *msg);
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            if (broker_response_sendmsg (ctx, *msg) < 0)
+            if (broker_response_sendmsg_new (ctx, msg) < 0)
                 goto drop;
             break;
         case FLUX_MSGTYPE_EVENT:
@@ -1797,7 +1797,7 @@ static void module_cb (module_t *p, void *arg)
         goto done;
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
-            (void)broker_response_sendmsg (ctx, msg);
+            (void)broker_response_sendmsg_new (ctx, &msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
             count = flux_msg_route_count (msg);
@@ -2073,20 +2073,30 @@ static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
  * If the next hop is an overlay peer, route up or down the TBON.
  * If not a peer, look up a module by uuid.
  */
-static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
+static int broker_response_sendmsg_new (broker_ctx_t *ctx,
+                                        flux_msg_t **msg)
 {
-    int rc;
     const char *uuid;
 
-    if (!(uuid = flux_msg_route_last (msg)))
-        rc = flux_send (ctx->h_internal, msg, 0);
-    else if (overlay_uuid_is_parent (ctx->overlay, uuid))
-        rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM);
-    else if (overlay_uuid_is_child (ctx->overlay, uuid))
-        rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_DOWNSTREAM);
-    else
-        rc = modhash_response_sendmsg (ctx->modhash, msg);
-    return rc;
+    if (!(uuid = flux_msg_route_last (*msg))) {
+        if (flux_send_new (ctx->h_internal, msg, 0) < 0)
+            return -1;
+    }
+    else if (overlay_uuid_is_parent (ctx->overlay, uuid)) {
+        if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0)
+            return -1;
+    }
+    else if (overlay_uuid_is_child (ctx->overlay, uuid)) {
+        if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_DOWNSTREAM) < 0)
+            return -1;
+    }
+    else {
+        if (modhash_response_sendmsg (ctx->modhash, *msg) < 0)
+            return -1;
+        flux_msg_decref (*msg);
+        *msg = NULL;
+    }
+    return 0;
 }
 
 /* Events are forwarded up the TBON to rank 0, then published per RFC 3.
@@ -2118,23 +2128,26 @@ static void h_internal_watcher (flux_reactor_t *r,
     int type;
 
     if (!(msg = flux_recv (h, FLUX_MATCH_ANY, 0))
-        || flux_msg_get_type (msg, &type) < 0) {
-        flux_msg_destroy (msg);
-        return;
-    }
+        || flux_msg_get_type (msg, &type) < 0)
+        goto error;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
             broker_request_sendmsg_internal (ctx, msg);
+            flux_msg_destroy (msg);
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            broker_response_sendmsg (ctx, msg);
+            if (broker_response_sendmsg_new (ctx, &msg) < 0)
+                goto error;
             break;
         case FLUX_MSGTYPE_EVENT:
             broker_event_sendmsg (ctx, msg);
+            flux_msg_destroy (msg);
             break;
         default:
-            break;
+            goto error;
     }
+    return;
+error:
     flux_msg_destroy (msg);
 }
 
