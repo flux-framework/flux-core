@@ -79,9 +79,9 @@
 
 static int broker_event_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
 static int broker_response_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
-static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
-static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
-                                            const flux_msg_t *msg);
+static void broker_request_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
+static int broker_request_sendmsg_new_internal (broker_ctx_t *ctx,
+                                                flux_msg_t **msg);
 
 static void h_internal_watcher (flux_reactor_t *r,
                                 flux_watcher_t *w,
@@ -1669,9 +1669,9 @@ static int overlay_recv_cb (flux_msg_t **msg, overlay_where_t where, void *arg)
         return -1;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            /* broker_request_sendmsg() generates a response on error.
+            /* broker_request_sendmsg_new() generates a response on error.
              */
-            broker_request_sendmsg (ctx, *msg);
+            broker_request_sendmsg_new (ctx, msg);
             break;
         case FLUX_MSGTYPE_RESPONSE:
             if (broker_response_sendmsg_new (ctx, msg) < 0)
@@ -1760,7 +1760,10 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 void disconnect_send_cb (const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    broker_request_sendmsg (ctx, msg);
+    flux_msg_t *cpy;
+    if (!(cpy = flux_msg_copy (msg, false)))
+        return;
+    broker_request_sendmsg_new (ctx, &cpy);
 }
 
 /* If a message from a connector-routed client is not matched by this function,
@@ -1824,7 +1827,7 @@ static void module_cb (module_t *p, void *arg)
                     flux_log_error (ctx->h, "send offline response message");
                 break;
             }
-            broker_request_sendmsg (ctx, msg);
+            broker_request_sendmsg_new (ctx, &msg);
             break;
         case FLUX_MSGTYPE_EVENT:
             if (broker_event_sendmsg_new (ctx, &msg) < 0) {
@@ -2000,20 +2003,20 @@ static void signal_cb (flux_reactor_t *r,
 /* Route request.
  * On success, return 0.  On failure, return -1 with errno set.
  */
-static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
-                                            const flux_msg_t *msg)
+static int broker_request_sendmsg_new_internal (broker_ctx_t *ctx,
+                                                flux_msg_t **msg)
 {
     uint32_t nodeid;
     uint8_t flags;
 
-    if (flux_msg_get_nodeid (msg, &nodeid) < 0)
+    if (flux_msg_get_nodeid (*msg, &nodeid) < 0)
         return -1;
-    if (flux_msg_get_flags (msg, &flags) < 0)
+    if (flux_msg_get_flags (*msg, &flags) < 0)
         return -1;
     /* Route up TBON if destination if upstream of this broker.
      */
     if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == ctx->rank) {
-        if (overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0)
+        if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0)
             return -1;
     }
     /* Deliver to local service if destination *could* be this broker.
@@ -2021,10 +2024,10 @@ static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
      */
     else if (((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != ctx->rank)
                                               || nodeid == FLUX_NODEID_ANY) {
-        if (service_send (ctx->services, msg) < 0) {
+        if (service_send_new (ctx->services, msg) < 0) {
             if (errno != ENOSYS)
                 return -1;
-            if (overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0) {
+            if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0) {
                 if (errno == EHOSTUNREACH)
                     errno = ENOSYS;
                 return -1;
@@ -2034,13 +2037,13 @@ static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
     /* Deliver to local service if this broker is the addressed rank.
      */
     else if (nodeid == ctx->rank) {
-        if (service_send (ctx->services, msg) < 0)
+        if (service_send_new (ctx->services, msg) < 0)
             return -1;
     }
     /* Send the request up or down TBON as addressed.
      */
     else {
-        if (overlay_sendmsg (ctx->overlay, msg, OVERLAY_ANY) < 0)
+        if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_ANY) < 0)
             return -1;
     }
     return 0;
@@ -2050,21 +2053,23 @@ static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
  * generate an error response.  Make an extra effort to return a useful
  * error message if ENOSYS indicates an unmatched service name.
  */
-static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
+static void broker_request_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg)
 {
-    if (broker_request_sendmsg_internal (ctx, msg) < 0) {
+    if (broker_request_sendmsg_new_internal (ctx, msg) < 0) {
         const char *topic;
         char errbuf[64];
         const char *errstr = NULL;
 
-        if (errno == ENOSYS && flux_msg_get_topic (msg, &topic) == 0) {
+        if (errno == ENOSYS && flux_msg_get_topic (*msg, &topic) == 0) {
             snprintf (errbuf,
                       sizeof (errbuf),
                       "No service matching %s is registered", topic);
             errstr = errbuf;
         }
-        if (flux_respond_error (ctx->h, msg, errno, errstr) < 0)
+        if (flux_respond_error (ctx->h, *msg, errno, errstr) < 0)
             flux_log_error (ctx->h, "flux_respond");
+        flux_msg_decref (*msg);
+        *msg = NULL;
     }
 }
 
@@ -2136,8 +2141,8 @@ static void h_internal_watcher (flux_reactor_t *r,
         goto error;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            broker_request_sendmsg_internal (ctx, msg);
-            flux_msg_destroy (msg);
+            if (broker_request_sendmsg_new_internal (ctx, &msg) < 0)
+                goto error;
             break;
         case FLUX_MSGTYPE_RESPONSE:
             if (broker_response_sendmsg_new (ctx, &msg) < 0)
