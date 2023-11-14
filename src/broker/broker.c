@@ -83,9 +83,15 @@ static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
                                             const flux_msg_t *msg);
 
+static void h_internal_watcher (flux_reactor_t *r,
+                                flux_watcher_t *w,
+                                int revents,
+                                void *arg);
+
 static void overlay_recv_cb (const flux_msg_t *msg,
                              overlay_where_t where,
                              void *arg);
+
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void signal_cb (flux_reactor_t *r,
@@ -122,8 +128,6 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs);
 static int init_critical_ranks_attr (struct overlay *ov, attr_t *attrs);
 
 static int execute_parental_notifications (struct broker *ctx);
-
-static const struct flux_handle_ops broker_handle_ops;
 
 static struct optparse_option opts[] = {
     { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
@@ -260,15 +264,33 @@ int main (int argc, char *argv[])
         || sigaction (SIGTERM, NULL, &old_sigact_term) < 0)
         log_err_exit ("error setting signal mask");
 
-    /* Set up the flux reactor with support for child watchers.
-     * Associate an internal flux_t handle with the reactor.
+    /* Set up two interthread flux_t handles, connected back to back.
+     * ctx.h is used conventionally within the broker for RPCs, message
+     * handlers, etc.  ctx.h_internal belongs to the broker's routing logic
+     * and is accessed using flux_send() and flux_recv() only.  Both handles
+     * share a reactor, which is created with FLUX_REACTOR_SIGCHLD in order
+     * to support libsubprocess.
+     *
+     * N.B. since both handles are in the same thread, synchronous RPCs on
+     * ctx.h will deadlock.  The main broker reactor must run in order
+     * to move messages from the interthread queue to the routing logic.
+     * Careful with flux_attr_get(), which hides a synchronous RPC if the
+     * requested value is not cached.
      */
     if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD))
-        || !(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0))
-        || flux_set_reactor (ctx.h, ctx.reactor) < 0) {
+        || !(ctx.h = flux_open ("interthread://broker", 0))
+        || flux_set_reactor (ctx.h, ctx.reactor) < 0
+        || !(ctx.h_internal = flux_open ("interthread://broker", 0))
+        || flux_set_reactor (ctx.h_internal, ctx.reactor) < 0
+        || !(ctx.w_internal = flux_handle_watcher_create (ctx.reactor,
+                                                          ctx.h_internal,
+                                                          FLUX_POLLIN,
+                                                          h_internal_watcher,
+                                                          &ctx))) {
         log_err ("error setting up broker reactor/flux_t handle");
         goto cleanup;
     }
+    flux_watcher_start (ctx.w_internal);
 
     const char *val;
     if (attr_get (ctx.attrs, "broker.sd-notify", &val, NULL) == 0
@@ -535,6 +557,8 @@ cleanup:
     publisher_destroy (ctx.publisher);
     brokercfg_destroy (ctx.config);
     runat_destroy (ctx.runat);
+    flux_watcher_destroy (ctx.w_internal);
+    flux_close (ctx.h_internal);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     subhash_destroy (ctx.sub);
@@ -1420,8 +1444,10 @@ static void broker_disconnect_cb (flux_t *h,
 static int route_to_handle (const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
-        flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
+    if (flux_send (ctx->h_internal, msg, 0) < 0) {
+        flux_log_error (ctx->h, "send failed on internal broker handle");
+        return -1;
+    }
     return 0;
 }
 
@@ -1720,8 +1746,8 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     /* Internal services may install message handlers for events.
      */
     if (subhash_topic_match (ctx->sub, topic)) {
-        if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
-            flux_log_error (ctx->h, "%s: flux_requeue\n", __FUNCTION__);
+        if (flux_send (ctx->h_internal, msg, 0) < 0)
+            flux_log_error (ctx->h, "send failed on internal broker handle");
     }
     /* Finally, route to local module subscribers.
      */
@@ -2052,7 +2078,7 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
     const char *uuid;
 
     if (!(uuid = flux_msg_route_last (msg)))
-        rc = flux_requeue (ctx->h, msg, FLUX_RQ_TAIL);
+        rc = flux_send (ctx->h_internal, msg, 0);
     else if (overlay_uuid_is_parent (ctx->overlay, uuid))
         rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM);
     else if (overlay_uuid_is_child (ctx->overlay, uuid))
@@ -2077,56 +2103,39 @@ static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
     return rc;
 }
 
-/**
- ** Broker's internal flux_t implementation
- ** N.B. recv() method is missing because messages are "received"
- ** when routing logic calls flux_requeue().
- **/
-
-static int broker_send (void *impl, const flux_msg_t *msg, int flags)
+/* Handle messages received from the "router end" of the back to back
+ * interthread handles.  Hand the message off to routing logic.
+ */
+static void h_internal_watcher (flux_reactor_t *r,
+                                flux_watcher_t *w,
+                                int revents,
+                                void *arg)
 {
-    broker_ctx_t *ctx = impl;
+    flux_t *h = flux_handle_watcher_get_flux (w);
+    broker_ctx_t *ctx = arg;
+    flux_msg_t *msg;
     int type;
-    struct flux_msg_cred cred;
-    flux_msg_t *cpy = NULL;
-    int rc = -1;
 
-    if (!(cpy = flux_msg_copy (msg, true)))
-        goto done;
-    if (flux_msg_get_type (cpy, &type) < 0)
-        goto done;
-    if (flux_msg_get_cred (cpy, &cred) < 0)
-        goto done;
-    if (cred.userid == FLUX_USERID_UNKNOWN)
-        cred.userid = ctx->cred.userid;
-    if (cred.rolemask == FLUX_ROLE_NONE)
-        cred.rolemask = ctx->cred.rolemask;
-    if (flux_msg_set_cred (cpy, cred) < 0)
-        goto done;
-
+    if (!(msg = flux_recv (h, FLUX_MATCH_ANY, 0))
+        || flux_msg_get_type (msg, &type) < 0) {
+        flux_msg_destroy (msg);
+        return;
+    }
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg_internal (ctx, cpy);
+            broker_request_sendmsg_internal (ctx, msg);
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            rc = broker_response_sendmsg (ctx, cpy);
+            broker_response_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_EVENT:
-            rc = broker_event_sendmsg (ctx, cpy);
+            broker_event_sendmsg (ctx, msg);
             break;
         default:
-            errno = EINVAL;
             break;
     }
-done:
-    flux_msg_destroy (cpy);
-    return rc;
+    flux_msg_destroy (msg);
 }
-
-static const struct flux_handle_ops broker_handle_ops = {
-    .send = broker_send,
-};
-
 
 #if HAVE_VALGRIND
 /* Disable dlclose() during valgrind operation

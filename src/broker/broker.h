@@ -18,6 +18,8 @@
 struct broker {
     void *zctx;
     flux_t *h;
+    flux_t *h_internal;
+    flux_watcher_t *w_internal;
     flux_reactor_t *reactor;
     optparse_t *opts;
 
