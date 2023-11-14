@@ -224,17 +224,6 @@ int service_send_new (struct service_switch *sw, flux_msg_t **msg)
     return svc->cb (msg, svc->cb_arg);
 }
 
-int service_send (struct service_switch *sw, const flux_msg_t *msg)
-{
-    flux_msg_t *cpy;
-    if (!(cpy = flux_msg_copy (msg, true))
-        || service_send_new (sw, &cpy) < 0) {
-        flux_msg_destroy (cpy);
-        return -1;
-    }
-    return 0;
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
