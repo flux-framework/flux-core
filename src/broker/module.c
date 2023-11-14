@@ -442,20 +442,6 @@ int module_sendmsg_new (module_t *p, flux_msg_t **msg)
     return flux_send_new (p->h_broker, msg, 0);
 }
 
-int module_sendmsg (module_t *p, const flux_msg_t *msg)
-{
-    flux_msg_t *cpy;
-
-    if (!msg)
-        return 0;
-    if (!(cpy = flux_msg_copy (msg, true))
-        || module_sendmsg_new (p, &cpy) < 0) {
-        flux_msg_decref (cpy);
-        return -1;
-    }
-    return 0;
-}
-
 int module_disconnect_arm (module_t *p,
                            const flux_msg_t *msg,
                            disconnect_send_f cb,
@@ -647,8 +633,12 @@ int module_event_cast (module_t *p, const flux_msg_t *msg)
     if (flux_msg_get_topic (msg, &topic) < 0)
         return -1;
     if (subhash_topic_match (p->sub, topic)) {
-        if (module_sendmsg (p, msg) < 0)
+        flux_msg_t *cpy;
+        if (!(cpy = flux_msg_copy (msg, true))
+            || module_sendmsg_new (p, &cpy) < 0) {
+            flux_msg_decref (cpy);
             return -1;
+        }
     }
     return 0;
 }
