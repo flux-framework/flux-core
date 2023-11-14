@@ -63,6 +63,11 @@ static struct builtin builtin_tab[] = {
                       ABS_TOP_SRCDIR "/src/bindings/python",
     },
     {
+        .key = "python_wrapper",
+        .val_installed = FLUXCMDDIR "/py-runner.py",
+        .val_intree = ABS_TOP_SRCDIR "/src/cmd/py-runner.py",
+    },
+    {
         .key = "man_path",
         .val_installed = X_MANDIR,
         .val_intree =  ABS_TOP_BUILDDIR "/doc",

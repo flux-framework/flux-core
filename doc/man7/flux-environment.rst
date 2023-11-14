@@ -421,6 +421,18 @@ SUB-COMMAND ENVIRONMENT
 :man1:`flux` sets up the environment for sub-commands using a combination
 of compiled-in install paths and the environment.
 
+.. note::
+   The PREPEND versions of environment variables below may
+   be necessary when developing and testing a new version
+   of a Flux command (:envvar:`FLUX_EXEC_PATH_PREPEND`),
+   module (:envvar:`FLUX_MODULE_PATH_PREPEND`), connector
+   (:envvar:`FLUX_CONNECTOR_PATH_PREPEND`), or Python module
+   (:envvar:`FLUX_PYTHONPATH_PREPEND`) when an existing version of that
+   component is already installed in the system default paths. Otherwise,
+   the installed component would always be used by the system Flux, since
+   the installed paths are always placed first in the subcommand environment
+   created by :man1:`flux`.
+
 .. envvar:: FLUX_EXEC_PATH
             FLUX_EXEC_PATH_PREPEND
 
@@ -461,6 +473,16 @@ of compiled-in install paths and the environment.
       $FLUX_PYTHONPATH_PREPEND : install-path : $PYTHONPATH
 
    Values may include multiple directories separated by colons.
+
+.. note::
+   Flux commands written in Python further modify Python's
+   `sys.path <https://docs.python.org/3/library/sys.html#sys.path>`_
+   to ensure that interpreter default paths appear before any custom values
+   set in :envvar:`PYTHONPATH`. This is an attempt to  avoid incompatible
+   modules interfering with the operation of Flux commands. If it becomes
+   necessary to force a non-standard module first in the search path (e.g.
+   for testing, instrumentation, etc.) then :envvar:`FLUX_PYTHONPATH_PREPEND`
+   should be used.
 
 .. envvar:: LUA_PATH
             LUA_CPATH
