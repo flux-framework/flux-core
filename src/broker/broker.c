@@ -77,7 +77,7 @@
 #include "broker.h"
 
 
-static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
+static int broker_event_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
 static int broker_response_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg);
 static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
@@ -1687,7 +1687,7 @@ static int overlay_recv_cb (flux_msg_t **msg, overlay_where_t where, void *arg)
                     goto drop;
             }
             else {
-                if (broker_event_sendmsg (ctx, *msg) < 0)
+                if (broker_event_sendmsg_new (ctx, msg) < 0)
                     goto drop;
             }
             break;
@@ -1827,9 +1827,9 @@ static void module_cb (module_t *p, void *arg)
             broker_request_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_EVENT:
-            if (broker_event_sendmsg (ctx, msg) < 0) {
+            if (broker_event_sendmsg_new (ctx, &msg) < 0) {
                 flux_log_error (ctx->h,
-                                "%s(%s): broker_event_sendmsg %s",
+                                "%s(%s): broker_event_sendmsg_new %s",
                                 __FUNCTION__,
                                 module_get_name (p),
                                 flux_msg_typestr (type));
@@ -2103,15 +2103,19 @@ static int broker_response_sendmsg_new (broker_ctx_t *ctx,
  * An alternate publishing mechanism that allows the event sequence number
  * to be obtained is to send an RPC to event.pub.
  */
-static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
+static int broker_event_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg)
 {
-    int rc;
-
-    if (ctx->rank > 0)
-        rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM);
-    else
-        rc = publisher_send (ctx->publisher, msg);
-    return rc;
+    if (ctx->rank > 0) {
+        if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0)
+            return -1;
+    }
+    else {
+        if (publisher_send (ctx->publisher, *msg) < 0)
+            return -1;
+        flux_msg_decref (*msg);
+        *msg = NULL;
+    }
+    return 0;
 }
 
 /* Handle messages received from the "router end" of the back to back
@@ -2140,8 +2144,8 @@ static void h_internal_watcher (flux_reactor_t *r,
                 goto error;
             break;
         case FLUX_MSGTYPE_EVENT:
-            broker_event_sendmsg (ctx, msg);
-            flux_msg_destroy (msg);
+            if (broker_event_sendmsg_new (ctx, &msg) < 0)
+                goto error;
             break;
         default:
             goto error;
