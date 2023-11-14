@@ -2096,10 +2096,8 @@ static int broker_response_sendmsg_new (broker_ctx_t *ctx,
             return -1;
     }
     else {
-        if (modhash_response_sendmsg (ctx->modhash, *msg) < 0)
+        if (modhash_response_sendmsg_new (ctx->modhash, msg) < 0)
             return -1;
-        flux_msg_decref (*msg);
-        *msg = NULL;
     }
     return 0;
 }

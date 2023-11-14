@@ -27,14 +27,14 @@ struct modhash {
     zhash_t *zh_byuuid;
 };
 
-int modhash_response_sendmsg (modhash_t *mh, const flux_msg_t *msg)
+int modhash_response_sendmsg_new (modhash_t *mh, flux_msg_t **msg)
 {
     const char *uuid;
     module_t *p;
 
-    if (!msg)
+    if (!*msg)
         return 0;
-    if (!(uuid = flux_msg_route_last (msg))) {
+    if (!(uuid = flux_msg_route_last (*msg))) {
         errno = EPROTO;
         return -1;
     }
@@ -42,7 +42,7 @@ int modhash_response_sendmsg (modhash_t *mh, const flux_msg_t *msg)
         errno = ENOSYS;
         return -1;
     }
-    return module_sendmsg (p, msg);
+    return module_sendmsg_new (p, msg);
 }
 
 void modhash_add (modhash_t *mh, module_t *p)
