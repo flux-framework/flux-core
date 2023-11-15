@@ -26,7 +26,11 @@
 #include <assert.h>
 #include <locale.h>
 #include <jansson.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <sys/ioctl.h>
 #include <signal.h>
 #include <flux/core.h>

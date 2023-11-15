@@ -14,7 +14,11 @@
 
 #include <stdlib.h>
 #include <sys/types.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <envz.h>
 #include <assert.h>
 #include <fnmatch.h>

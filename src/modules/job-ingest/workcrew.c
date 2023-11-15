@@ -25,7 +25,11 @@
 #include "config.h"
 #endif
 #include <unistd.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <jansson.h>
 #include <assert.h>
 #include <signal.h>

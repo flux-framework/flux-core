@@ -14,7 +14,11 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <getopt.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"

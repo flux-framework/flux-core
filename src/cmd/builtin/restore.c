@@ -17,7 +17,11 @@
 #include <time.h>
 #include <archive.h>
 #include <archive_entry.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libkvs/treeobj.h"

@@ -22,7 +22,11 @@
 #include <unistd.h>
 #include <signal.h>
 #include <assert.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <jansson.h>
 #if HAVE_LIBSYSTEMD
 #include <systemd/sd-daemon.h>

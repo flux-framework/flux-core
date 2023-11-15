@@ -16,7 +16,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdlib.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"

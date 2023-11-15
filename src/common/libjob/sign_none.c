@@ -16,7 +16,11 @@
 #include <string.h>
 #include <assert.h>
 #include <errno.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 
 #include "ccan/base64/base64.h"
 #include "ccan/str/str.h"

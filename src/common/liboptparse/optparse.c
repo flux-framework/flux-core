@@ -18,7 +18,11 @@
 #include <sys/param.h>
 #include <ctype.h>
 #include <stdarg.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <math.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
