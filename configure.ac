@@ -207,6 +207,7 @@ AC_CHECK_FUNCS( \
 AC_REPLACE_FUNCS( \
   strlcpy \
   argz_add \
+  envz_add \
 )
 X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(rt, clock_gettime)

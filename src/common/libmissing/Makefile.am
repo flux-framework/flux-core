@@ -29,6 +29,12 @@
 # https://www.gnu.org/software/automake/manual/html_node/LIBOBJS.html
 # https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.71/html_node/Generic-Functions.html
 #
+AM_CFLAGS = \
+        $(WARNING_CFLAGS) \
+        $(CODE_COVERAGE_CFLAGS)
+
+AM_CPPFLAGS =
+
 noinst_LTLIBRARIES = libmissing.la
 
 libmissing_la_LIBADD = $(LTLIBOBJS)
@@ -37,4 +43,6 @@ libmissing_la_SOURCES =
 EXTRA_libmissing_la_SOURCES = \
 	strlcpy.h \
 	argz.h \
-	argz.c
+	argz.c \
+	envz.h \
+	envz.c
