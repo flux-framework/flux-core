@@ -203,6 +203,9 @@ AC_CHECK_FUNCS( \
   setlocale \
   uselocale \
 )
+# See src/common/libmissing/Makefile.am
+AC_REPLACE_FUNCS( \
+)
 X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
 X_AC_CHECK_COND_LIB(dl, dlerror)
@@ -562,6 +565,7 @@ AC_CONFIG_FILES( \
   src/common/libtaskmap/Makefile \
   src/common/libfilemap/Makefile \
   src/common/libsdexec/Makefile \
+  src/common/libmissing/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
