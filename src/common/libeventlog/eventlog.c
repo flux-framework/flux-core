@@ -13,7 +13,6 @@
 #endif
 #include <flux/core.h>
 #include <jansson.h>
-#include <argz.h>
 #include <time.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
