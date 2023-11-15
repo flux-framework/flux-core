@@ -11,6 +11,7 @@
 #ifndef _UTIL_TIMESTAMP_H
 #define _UTIL_TIMESTAMP_H
 
+#include <sys/time.h>
 #include <time.h>
 
 /* Convert time_t (GMT) to ISO 8601 timestamp string,
