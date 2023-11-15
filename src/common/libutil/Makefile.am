@@ -104,9 +104,7 @@ libutil_la_SOURCES = \
 	sigutil.h \
 	sigutil.c \
 	parse_size.h \
-	parse_size.c \
-	strlcpy.h \
-	strlcpy.c
+	parse_size.c
 
 EXTRA_DIST = veb_mach.c
 

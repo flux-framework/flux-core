@@ -34,4 +34,5 @@ noinst_LTLIBRARIES = libmissing.la
 libmissing_la_LIBADD = $(LTLIBOBJS)
 libmissing_la_SOURCES =
 
-EXTRA_libmissing_la_SOURCES =
+EXTRA_libmissing_la_SOURCES = \
+	strlcpy.h

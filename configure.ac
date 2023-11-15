@@ -205,6 +205,7 @@ AC_CHECK_FUNCS( \
 )
 # See src/common/libmissing/Makefile.am
 AC_REPLACE_FUNCS( \
+  strlcpy
 )
 X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
