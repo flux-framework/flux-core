@@ -42,10 +42,8 @@ static int rlimit_name_to_string (const char *name)
         return RLIMIT_STACK;
     if (streq (name, "core"))
         return RLIMIT_CORE;
-    if (streq (name, "nofile"))
+    if (streq (name, "nofile") || streq (name, "ofile"))
         return RLIMIT_NOFILE;
-    if (streq (name, "ofile"))
-        return RLIMIT_OFILE;
     if (streq (name, "as"))
         return RLIMIT_AS;
     if (streq (name, "rss"))
