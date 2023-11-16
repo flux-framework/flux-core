@@ -19,6 +19,7 @@ export MAN_DISABLE_SECCOMP=1
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 startctl=${SHARNESS_TEST_SRCDIR}/scripts/startctl.py
+path_printenv=$(which printenv)
 
 test_expect_success 'TEST_NAME is set' '
 	test -n "$TEST_NAME"
@@ -690,14 +691,14 @@ test_expect_success HAVE_MAN 'flux-help returns nonzero exit code from man(1)' '
 		eval FLUX_IGNORE_NO_DOCS=y flux help notacommand
 '
 test_expect_success 'flux appends colon to missing or unset MANPATH' '
-	(unset MANPATH && flux /usr/bin/printenv | grep "MANPATH=.*:$") &&
-	MANPATH= flux /usr/bin/printenv | grep "MANPATH=.*:$"
+	(unset MANPATH && flux $path_printenv | grep "MANPATH=.*:$") &&
+	MANPATH= flux $path_printenv | grep "MANPATH=.*:$"
 '
 test_expect_success 'flux deduplicates FLUX_RC_EXTRA & FLUX_SHELL_RC_PATH' '
 	FLUX_RC_EXTRA=/foo:/bar:/foo \
-		flux /usr/bin/printenv FLUX_RC_EXTRA | grep "^/foo:/bar$" &&
+		flux $path_printenv FLUX_RC_EXTRA | grep "^/foo:/bar$" &&
 	FLUX_SHELL_RC_PATH=/foo:/bar:/foo \
-		flux /usr/bin/printenv FLUX_SHELL_RC_PATH | grep "^/foo:/bar$"
+		flux $path_printenv FLUX_SHELL_RC_PATH | grep "^/foo:/bar$"
 '
 test_expect_success 'builtin test_size_large () works' '
 	size=$(test_size_large)  &&
