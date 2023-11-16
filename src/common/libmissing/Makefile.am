@@ -45,4 +45,5 @@ EXTRA_libmissing_la_SOURCES = \
 	argz.h \
 	argz.c \
 	envz.h \
-	envz.c
+	envz.c \
+	macros.h

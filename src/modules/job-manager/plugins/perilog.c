@@ -45,6 +45,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include "src/common/libmissing/macros.h"
 #define EXIT_CODE(x) __W_EXITCODE(x,0)
 
 #include <jansson.h>
