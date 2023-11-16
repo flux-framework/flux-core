@@ -12,7 +12,7 @@
 # include "config.h"
 #endif
 
-#include <wait.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <errno.h>
 
