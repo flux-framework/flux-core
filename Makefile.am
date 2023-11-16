@@ -33,7 +33,8 @@ CODE_COVERAGE_IGNORE_PATTERN = \
 	"*/common/libtestutil/*" \
 	"*/common/libyuarel/*" \
 	"*/common/libczmqcontainers/*" \
-	"*/common/libccan/*"
+	"*/common/libccan/*" \
+	"*/common/libmissing/*"
 
 CODE_COVERAGE_LCOV_OPTIONS =
 @CODE_COVERAGE_RULES@
