@@ -44,7 +44,8 @@ static int parse_int (char **cp, int def, char sep, int *value)
 
     errno = 0;
     v = strtol (*cp, &endptr, 10);
-    if (errno != 0)
+    // standard says EINVAL may be set if zero is returned for nothing parsed
+    if (v != 0 && errno != 0)
         return -1;
     if (endptr == *cp) {    // no digits
         if ((*cp)[0] == sep)
