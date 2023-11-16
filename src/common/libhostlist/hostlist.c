@@ -491,6 +491,9 @@ static struct hostlist * hostlist_create_bracketed (const char *hostlist,
     char *p, *tok, *str, *orig;
     char cur_tok[1024];
 
+    if (!new)
+        return NULL;
+
     if (hostlist == NULL)
         return new;
 
