@@ -40,7 +40,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <sys/poll.h>
+#include <poll.h>
 #include <sys/eventfd.h>
 #include <unistd.h>
 #include <pthread.h>
