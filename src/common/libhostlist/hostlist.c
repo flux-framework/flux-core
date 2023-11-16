@@ -22,6 +22,8 @@
 #include <sys/param.h>
 #include <unistd.h>
 
+#include "src/common/libutil/errno_safe.h"
+
 #include "hostlist.h"
 #include "hostrange.h"
 #include "util.h"
@@ -502,7 +504,7 @@ static struct hostlist * hostlist_create_bracketed (const char *hostlist,
     if (!(orig = str = strdup (hostlist))
         || !(ctx = calloc (1, sizeof (*ctx)))) {
         hostlist_destroy (new);
-        free (orig);
+        ERRNO_SAFE_WRAP (free, orig);
         return NULL;
     }
 
@@ -550,8 +552,8 @@ static struct hostlist * hostlist_create_bracketed (const char *hostlist,
     errno = EINVAL;
   error:
     hostlist_destroy (new);
-    free (orig);
-    free (ctx);
+    ERRNO_SAFE_WRAP (free, orig);
+    ERRNO_SAFE_WRAP (free, ctx);
     return NULL;
 }
 
