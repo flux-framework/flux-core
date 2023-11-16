@@ -97,7 +97,7 @@ int main(int argc, char** argv)
         "popen2 /noexist failed with ENOENT");
 
     /* open/close (child exit error) */
-    ok ((p = popen2 ("/bin/false", av, 0)) != NULL,
+    ok ((p = popen2 ("/bin/false", (char*[]){ "/bin/false", NULL }, 0)) != NULL,
         "popen2 /bin/false OK");
     ok (pclose2 (p) == 0x100,
         "pclose2 returns child exit code 1");
