@@ -704,19 +704,18 @@ static void watcher_respond_ns (struct ns_monitor *nsm)
  */
 static void watcher_cancel (struct ns_monitor *nsm,
                             struct watcher *w,
-                            const flux_msg_t *msg,
+                            struct flux_msg_match *match,
                             bool cancel)
 {
-    bool match;
-    if (cancel)
-        match = flux_cancel_match (msg, w->request);
-    else
-        match = flux_disconnect_match (msg, w->request);
-    if (match) {
-        w->canceled = true;
-        w->mute = !cancel;
-        watcher_respond (nsm, w);
+    if (cancel) {
+        if (!flux_cancel_match_ex (match, w->request))
+            return;
     }
+    else if (!flux_disconnect_match_ex (match, w->request))
+        return;
+    w->canceled = true;
+    w->mute = !cancel;
+    watcher_respond (nsm, w);
 }
 
 /* Cancel all namespace watchers that match:
@@ -725,7 +724,7 @@ static void watcher_cancel (struct ns_monitor *nsm,
  * Suppress response if cancel is false
  */
 static void watcher_cancel_ns (struct ns_monitor *nsm,
-                               const flux_msg_t *msg,
+                               struct flux_msg_match *match,
                                bool cancel)
 {
     zlist_t *l;
@@ -734,7 +733,7 @@ static void watcher_cancel_ns (struct ns_monitor *nsm,
     if ((l = zlist_dup (nsm->watchers))) {
         w = zlist_first (l);
         while (w) {
-            watcher_cancel (nsm, w, msg, cancel);
+            watcher_cancel (nsm, w, match, cancel);
             w = zlist_next (l);
         }
         zlist_destroy (&l);
@@ -755,12 +754,16 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
     zlist_t *l;
     char *name;
     struct ns_monitor *nsm;
+    struct flux_msg_match match;
+
+    if (flux_msg_match_init (&match, msg) < 0)
+        return;
 
     if ((l = zhash_keys (ctx->namespaces))) {
         name = zlist_first (l);
         while (name) {
             nsm = zhash_lookup (ctx->namespaces, name);
-            watcher_cancel_ns (nsm, msg, cancel);
+            watcher_cancel_ns (nsm, &match, cancel);
             name = zlist_next (l);
         }
         zlist_destroy (&l);
