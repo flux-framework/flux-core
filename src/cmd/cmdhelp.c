@@ -13,7 +13,11 @@
 #endif
 #include <glob.h>
 #include <string.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <jansson.h>
 
 #include "src/common/libutil/log.h"

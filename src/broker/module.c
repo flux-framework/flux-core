@@ -12,7 +12,11 @@
 #include "config.h"
 #endif
 #include <dlfcn.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/syscall.h>

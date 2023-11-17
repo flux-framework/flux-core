@@ -25,7 +25,11 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <flux/core.h>
 #include <jansson.h>
 #include <assert.h>

@@ -21,7 +21,11 @@
 #include <sys/resource.h>
 #include <libgen.h>
 #include <signal.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <sys/ioctl.h>
 #include <jansson.h>
 #include <flux/core.h>

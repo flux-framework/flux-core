@@ -45,7 +45,7 @@ int timestamp_tostr (time_t t, char *buf, int size)
     struct tm tm;
     if (t < 0 || !gmtime_r (&t, &tm))
         return -1;
-    if (strftime (buf, size, "%FT%TZ", &tm) == 0)
+    if (strftime (buf, size, "%Y-%m-%dT%TZ", &tm) == 0)
         return -1;
     return 0;
 }
@@ -54,7 +54,7 @@ int timestamp_fromstr (const char *s, time_t *tp)
 {
     struct tm tm;
     time_t t;
-    if (!strptime (s, "%FT%TZ", &tm))
+    if (!strptime (s, "%Y-%m-%dT%TZ", &tm))
         return -1;
     if ((t = portable_timegm (&tm)) < 0)
         return -1;
@@ -76,7 +76,7 @@ int timestamp_parse (const char *s,
         return -1;
     }
 
-    if (!(extra = strptime (s, "%FT%T", &gm_tm))
+    if (!(extra = strptime (s, "%Y-%m-%dT%T", &gm_tm))
         || (t = portable_timegm (&gm_tm)) < (time_t) -1) {
         errno = EINVAL;
         return -1;

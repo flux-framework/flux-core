@@ -16,7 +16,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <jansson.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <ctype.h>
 #include <sys/ioctl.h>
 

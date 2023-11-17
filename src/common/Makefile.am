@@ -111,6 +111,7 @@ libflux_optparse_la_LIBADD = \
 	$(builddir)/liblsd/liblsd.la \
 	$(builddir)/libutil/fsd.lo \
 	$(builddir)/libutil/parse_size.lo \
+	$(builddir)/libmissing/libmissing.la \
 	$(LIBPTHREAD)
 libflux_optparse_la_LDFLAGS = \
 	-Wl,--version-script=$(srcdir)/libflux-optparse.map \

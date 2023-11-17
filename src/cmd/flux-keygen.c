@@ -41,7 +41,7 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
 
     if (!localtime_r (&now, &tm))
         return (NULL);
-    strftime (buf, sz, "%FT%T", &tm);
+    strftime (buf, sz, "%Y-%m-%dT%T", &tm);
 
     return (buf);
 }

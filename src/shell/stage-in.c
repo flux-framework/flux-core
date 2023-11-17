@@ -20,7 +20,11 @@
 #include <stdlib.h>
 #include <libgen.h>
 #include <jansson.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <archive.h>
 #include <archive_entry.h>
 #include <flux/core.h>

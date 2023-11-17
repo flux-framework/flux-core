@@ -14,8 +14,16 @@
 
 #include <stdlib.h>
 #include <sys/types.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
+#ifdef HAVE_ENVZ_ADD
 #include <envz.h>
+#else
+#include "src/common/libmissing/envz.h"
+#endif
 #include <assert.h>
 #include <fnmatch.h>
 

@@ -482,7 +482,7 @@ void test_load_rtld_now ()
         "flux_plugin_set_flags (p, RTLD_NOW) == 0");
     ok (flux_plugin_load_dso (p, "test/.libs/plugin_bar.so") < 0,
         "load of plugin with invalid symbol fails immediately");
-    like (flux_plugin_strerror (p), "^dlopen: .*: undefined symbol",
+    like (flux_plugin_strerror (p), "^dlopen: .*: (undefined symbol|symbol not found)",
         "got expected error message: %s", flux_plugin_strerror (p));
 
     flux_plugin_destroy (p);

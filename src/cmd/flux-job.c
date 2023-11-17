@@ -26,7 +26,11 @@
 #include <assert.h>
 #include <locale.h>
 #include <jansson.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <sys/ioctl.h>
 #include <signal.h>
 #include <flux/core.h>
@@ -3056,7 +3060,7 @@ static int event_timestr (struct entry_format *e, double timestamp,
         struct tm tm;
         if (!gmtime_r (&sec, &tm))
             return -1;
-        if (strftime (buf, size, "%FT%T", &tm) == 0)
+        if (strftime (buf, size, "%Y-%m-%dT%T", &tm) == 0)
             return -1;
         size -= strlen (buf);
         buf += strlen (buf);

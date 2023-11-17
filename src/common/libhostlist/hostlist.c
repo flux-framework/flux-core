@@ -22,6 +22,8 @@
 #include <sys/param.h>
 #include <unistd.h>
 
+#include "src/common/libutil/errno_safe.h"
+
 #include "hostlist.h"
 #include "hostrange.h"
 #include "util.h"
@@ -485,22 +487,29 @@ static struct hostlist * hostlist_create_bracketed (const char *hostlist,
                                                     char *r_op)
 {
     struct hostlist * new = hostlist_create ();
-    struct _range ranges[MAX_RANGES];
+    struct {
+        struct _range ranges[MAX_RANGES];
+        char cur_tok[1024];
+    } *ctx;
     int nr;
     int rc;
     char *p, *tok, *str, *orig;
-    char cur_tok[1024];
+
+    if (!new)
+        return NULL;
 
     if (hostlist == NULL)
         return new;
 
-    if (!(orig = str = strdup (hostlist))) {
+    if (!(orig = str = strdup (hostlist))
+        || !(ctx = calloc (1, sizeof (*ctx)))) {
         hostlist_destroy (new);
+        ERRNO_SAFE_WRAP (free, orig);
         return NULL;
     }
 
     while ((tok = next_tok (sep, &str)) != NULL) {
-        strncpy (cur_tok, tok, 1024 - 1);
+        strncpy (ctx->cur_tok, tok, 1024 - 1);
 
         if ((p = strchr (tok, '[')) != NULL) {
             char *q, *prefix = tok;
@@ -508,7 +517,7 @@ static struct hostlist * hostlist_create_bracketed (const char *hostlist,
 
             if ((q = strchr (p, ']'))) {
                 *q = '\0';
-                nr = parse_range_list (p, ranges, MAX_RANGES);
+                nr = parse_range_list (p, ctx->ranges, MAX_RANGES);
                 if (nr < 0)
                     goto error;
 
@@ -516,12 +525,12 @@ static struct hostlist * hostlist_create_bracketed (const char *hostlist,
                     rc = append_range_list_with_suffix (new,
                                                         prefix,
                                                         q,
-                                                        ranges,
+                                                        ctx->ranges,
                                                         nr);
                 else
                     rc = append_range_list (new,
                                             prefix,
-                                            ranges,
+                                            ctx->ranges,
                                             nr);
                 if (rc < 0)
                     goto error;
@@ -532,17 +541,19 @@ static struct hostlist * hostlist_create_bracketed (const char *hostlist,
         } else if (strchr (tok, ']')) /* Error: brackets must be balanced */
             goto error_unmatched;
         else                          /* Ok: No brackets found, single host */
-            hostlist_append_host (new, cur_tok);
+            hostlist_append_host (new, ctx->cur_tok);
     }
 
     free (orig);
+    free (ctx);
     return new;
 
   error_unmatched:
     errno = EINVAL;
   error:
     hostlist_destroy (new);
-    free (orig);
+    ERRNO_SAFE_WRAP (free, orig);
+    ERRNO_SAFE_WRAP (free, ctx);
     return NULL;
 }
 

@@ -13,7 +13,11 @@
 #endif
 #include <stdio.h>
 #include <libgen.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <ctype.h>
 #include <flux/core.h>
 #include <flux/optparse.h>

@@ -25,7 +25,11 @@
 #include <errno.h>
 #include <libgen.h>
 #include <stdbool.h>
+#ifdef HAVE_ARGZ_ADD
 #include <argz.h>
+#else
+#include "src/common/libmissing/argz.h"
+#endif
 #include <glob.h>
 #include <inttypes.h>
 #include <termios.h>

@@ -18,6 +18,7 @@
 #include <sys/wait.h>
 #include <flux/core.h>
 
+#include "src/common/libmissing/macros.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/aux.h"
 #include "ccan/str/str.h"
