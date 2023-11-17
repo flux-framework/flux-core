@@ -29,7 +29,9 @@
 
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/strstrip.h"
-#include "src/common/libutil/strlcpy.h"
+#ifndef HAVE_STRLCPY
+#include "src/common/libmissing/strlcpy.h"
+#endif
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 

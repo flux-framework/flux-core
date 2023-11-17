@@ -28,7 +28,8 @@ SUBDIRS = \
 	libzmqutil \
 	libtaskmap \
 	libfilemap \
-	libsdexec
+	libsdexec \
+	libmissing
 
 AM_CFLAGS = $(WARNING_CFLAGS) $(CODE_COVERAGE_CFLAGS)
 AM_LDFLAGS = $(CODE_COVERAGE_LIBS)
@@ -54,6 +55,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libczmqcontainers/libczmqcontainers.la \
 	$(builddir)/libcontent/libcontent.la \
 	$(builddir)/libtaskmap/libtaskmap.la \
+	$(builddir)/libmissing/libmissing.la \
 	$(JANSSON_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(LIBPTHREAD) \
@@ -176,7 +178,7 @@ flux_libpmi_la_LIBADD = \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libpmi/libpmi_common.la \
 	$(builddir)/libutil/aux.lo \
-	$(builddir)/libutil/strlcpy.lo
+	$(builddir)/libmissing/libmissing.la
 
 flux_libpmi_la_LDFLAGS = \
 	-Wl,--version-script=$(srcdir)/libpmi.map \
@@ -193,7 +195,7 @@ flux_libpmi2_la_LIBADD = \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libpmi/libpmi_common.la \
 	$(builddir)/libutil/aux.lo \
-	$(builddir)/libutil/strlcpy.lo
+	$(builddir)/libmissing/libmissing.la
 flux_libpmi2_la_LDFLAGS = \
 	-Wl,--version-script=$(srcdir)/libpmi2.map \
 	-version-info 0:0:0 \

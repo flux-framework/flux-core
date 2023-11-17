@@ -50,7 +50,9 @@
 #include <string.h>
 
 #include "ccan/str/str.h"
-#include "src/common/libutil/strlcpy.h"
+#ifndef HAVE_STRLCPY
+#include "src/common/libmissing/strlcpy.h"
+#endif
 
 #include "pmi.h"
 #include "pmi2.h"
