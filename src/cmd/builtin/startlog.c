@@ -144,7 +144,7 @@ static int format_timestamp (char *buf, size_t size, time_t t)
     struct tm tm;
     if (t < 0 || !localtime_r (&t, &tm))
         return -1;
-    if (strftime (buf, size, "%F %R", &tm) == 0)
+    if (strftime (buf, size, "%Y-%m-%d %R", &tm) == 0)
         return -1;
     return 0;
 }

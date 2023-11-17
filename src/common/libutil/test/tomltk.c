@@ -73,7 +73,7 @@ static bool check_ts (json_t *ts, const char *timestr)
         return false;
     if (!gmtime_r (&t, &tm))
         return false;
-    if (strftime (buf, sizeof (buf), "%FT%TZ", &tm) == 0)
+    if (strftime (buf, sizeof (buf), "%Y-%m-%dT%TZ", &tm) == 0)
         return false;
     diag ("%s: %s ?= %s", __FUNCTION__, buf, timestr);
     return streq (buf, timestr);

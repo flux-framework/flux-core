@@ -44,7 +44,7 @@ int wallclock_get_zulu (char *buf, size_t len)
         errno = EINVAL;
         return -1;
     }
-    if (strftime (buf, len, "%FT%T", &tm) == 0) {
+    if (strftime (buf, len, "%Y-%m-%dT%T", &tm) == 0) {
         errno = EINVAL;
         return -1;
     }
