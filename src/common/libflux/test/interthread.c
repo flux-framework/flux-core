@@ -11,7 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <sys/poll.h>
+#include <poll.h>
 #include <pthread.h>
 #include <flux/core.h>
 

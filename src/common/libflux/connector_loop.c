@@ -14,7 +14,7 @@
 #include "config.h"
 #endif
 #include <unistd.h>
-#include <sys/poll.h>
+#include <poll.h>
 
 #include <flux/core.h>
 

@@ -13,7 +13,6 @@
 #endif
 
 #include <sys/types.h>
-#include <wait.h>
 #include <unistd.h>
 #include <errno.h>
 

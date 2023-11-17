@@ -13,6 +13,7 @@
 #endif
 #include <assert.h>
 #include <libgen.h>
+#include <signal.h>
 #include <locale.h>
 #include <inttypes.h>
 #include <sys/prctl.h>

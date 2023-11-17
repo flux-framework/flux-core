@@ -14,7 +14,6 @@
 #include <flux/core.h>
 #include <uuid.h>
 #include <pthread.h>
-#include <sys/poll.h>
 
 #include "ccan/str/str.h"
 #include "src/common/libtap/tap.h"

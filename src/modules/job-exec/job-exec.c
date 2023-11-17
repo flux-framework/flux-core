@@ -89,6 +89,7 @@
 #endif
 #include <assert.h>
 #include <unistd.h>
+#include <signal.h>
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"

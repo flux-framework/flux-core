@@ -12,7 +12,6 @@
 #include "config.h"
 #endif
 #include <dlfcn.h>
-#include <argz.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <jansson.h>
