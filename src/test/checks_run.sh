@@ -16,6 +16,7 @@
 #  DISTCHECK     Run `make distcheck` if set
 #  RECHECK       Run `make recheck` if `make check` fails the first time
 #  UNIT_TEST_ONLY Only run `make check` under ./src
+#  QUICK_CHECK   Run only `make check-prep` and a simple test
 #  PRELOAD       Set as LD_PRELOAD for make and tests
 #  POISON        Install poison libflux and flux(1) in image
 #  INCEPTION     Run tests under a flux instance
@@ -170,6 +171,11 @@ fi
 
 if test -n "$UNIT_TEST_ONLY"; then
   CHECKCMDS="(cd src && $CHECKCMDS)"
+fi
+
+if test -n "$QUICK_CHECK"; then
+  CHECKCMDS="make -j ${JOBS} check-prep && \
+	     src/cmd/flux start -s 2 flux submit --cc=1-5 --watch -vvv hostname"
 fi
 
 # CI has limited resources, even though number of processors might
