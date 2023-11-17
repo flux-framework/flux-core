@@ -59,6 +59,8 @@
    contain conflicting prototypes for getopt.  */
 # include <stdlib.h>
 # include <unistd.h>
+#else
+# include <alloca.h>
 #endif	/* GNU C library.  */
 
 #include <string.h>
