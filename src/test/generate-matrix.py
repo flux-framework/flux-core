@@ -270,6 +270,20 @@ matrix.add_build(
     docker_tag=True,
 )
 
+matrix.add_build(
+    name="alpine - quick check",
+    image="alpine",
+    command_args="--quick-check",
+    args=(
+        "--prefix=/usr"
+        " --sysconfdir=/etc"
+        " --with-systemdsystemunitdir=/etc/systemd/system"
+        " --localstatedir=/var"
+        " --with-flux-security"
+    ),
+    docker_tag=True
+)
+
 # inception
 matrix.add_build(
     name="inception",
