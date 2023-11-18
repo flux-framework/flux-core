@@ -16,7 +16,7 @@ JOBS=2
 MOUNT_HOME_ARGS="--volume=$HOME:/home/$USER -e HOME"
 
 if test "$PROJECT" = "flux-core"; then
-  FLUX_SECURITY_VERSION=0.10.0
+  FLUX_SECURITY_VERSION=0.11.0
   POISON=t
 fi
 
@@ -25,7 +25,7 @@ declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,unit-test-only,inception,platform:,workdir:,system"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,unit-test-only,quick-check,inception,platform:,workdir:,system"
 declare -r short_opts="hqIdi:S:j:t:D:Prup:"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
@@ -50,6 +50,7 @@ Options:\n\
  -d, --distcheck               Run 'make distcheck' instead of 'make check'\n\
  -r, --recheck                 Run 'make recheck' after failure\n\
  -u, --unit-test-only          Only run unit tests\n\
+     --quick-check             Only run check-prep and one basic test\n\
  -P, --no-poison               Do not install poison libflux and flux(1)\n\
  -D, --build-directory=DIRNAME Name of a subdir to build in, will be made\n\
      --workdir=PATH            Use PATH as working directory for build\n\
@@ -81,6 +82,7 @@ while true; do
       -d|--distcheck)              DISTCHECK=t;                shift   ;;
       -r|--recheck)                RECHECK=t;                  shift   ;;
       -u|--unit-test-only)         UNIT_TEST_ONLY=t;           shift   ;;
+      --quick-check)               QUICK_CHECK=t;              shift   ;;
       -D|--build-directory)        BUILD_DIR="$2";             shift 2 ;;
       --build-arg)                 BUILD_ARG=" --build-arg $2" shift 2 ;;
       --workdir)                   WORKDIR="$2";               shift 2 ;;
@@ -105,6 +107,7 @@ if docker buildx >/dev/null 2>&1; then
 else
     DOCKER_BUILD="docker build"
 fi
+DOCKER_BUILD="docker build"
 
 # distcheck incompatible with some configure args
 if test "$DISTCHECK" = "t"; then
@@ -172,6 +175,7 @@ export JOBS
 export DISTCHECK
 export RECHECK
 export UNIT_TEST_ONLY
+export QUICK_CHECK
 export BUILD_DIR
 export COVERAGE
 export chain_lint
@@ -214,6 +218,7 @@ else
         -e DISTCHECK \
         -e RECHECK \
         -e UNIT_TEST_ONLY \
+        -e QUICK_CHECK \
         -e chain_lint \
         -e JOBS \
         -e USER \
