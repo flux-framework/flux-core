@@ -115,6 +115,7 @@ test_expect_success 'ssh:// with missing path component fails in flux_open()' '
 
 test_expect_success 'create test ssh that emits errors on stderr' '
 	cat <<-EOF >ssh.sh &&
+	#!/bin/sh
 	printf "error from ssh\n" >&2
 	exit 1
 	EOF
