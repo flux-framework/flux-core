@@ -3,6 +3,9 @@
 #  project-local sharness code for Flux
 #
 
+# add scripts directory to path
+export PATH="${SHARNESS_TEST_SRCDIR}/scripts:$PATH"
+
 #
 #  Extra functions for Flux testsuite
 #
