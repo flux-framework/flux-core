@@ -303,6 +303,7 @@ EXTRA_DIST= \
 	shell/output \
 	shell/initrc/tests \
 	flux-jobs/tests \
+	scripts/strerror_symbol \
 	scripts/run_timeout.py \
 	scripts/startctl.py \
 	scripts/groups.py \
