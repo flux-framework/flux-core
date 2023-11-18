@@ -52,10 +52,8 @@ test_expect_success 'exec to non-existent rank is an error' '
 test_expect_success 'exec to valid and invalid ranks works' '
         # But, flux-exec should return failure:
 	! flux exec -n -r 0,$(invalid_rank) echo working 1>stdout 2>stderr </dev/null &&
-	count1=$(grep -c working stdout) &&
-	count2=$(grep -c "No route to host" stderr) &&
-	test "$count1" = "1" &&
-	test "$count2" = "1"
+	grep "working" stdout &&
+	grep -q "$(strerror_symbol EHOSTUNREACH)" stderr
 '
 
 test_expect_success 'test_on_rank works' '

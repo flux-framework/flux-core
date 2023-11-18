@@ -431,7 +431,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence gets ENOTSUP when names
         wait_fencecount_nonzero 0 $NAMESPACETMP-REMOVE-FENCE0 &&
         flux kvs namespace remove $NAMESPACETMP-REMOVE-FENCE0 &&
         wait $watchpid &&
-        grep "flux_future_get: Operation not supported" fence_out
+        grep "flux_future_get: $(strerror_symbol ENOTSUP)" fence_out
 '
 
 
@@ -447,7 +447,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: incomplete fence on rank 1 gets ENOTSUP 
         wait_fencecount_nonzero 1 $NAMESPACETMP-REMOVE-FENCE1 &&
         flux kvs namespace remove $NAMESPACETMP-REMOVE-FENCE1 &&
         wait $watchpid &&
-        grep "flux_future_get: Operation not supported" fence_out
+        grep "flux_future_get: $(strerror_symbol ENOTSUP)" fence_out
 '
 
 test_expect_success NO_CHAIN_LINT 'kvs: wait recognizes removed namespace' '
@@ -459,7 +459,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait recognizes removed namespace' '
         wait_versionwaiters_nonzero $NAMESPACETMP-REMOVE-WAIT &&
         flux kvs namespace remove $NAMESPACETMP-REMOVE-WAIT &&
         ! wait $waitpid &&
-        grep "flux_kvs_wait_version: Operation not supported" wait_out
+        grep "flux_kvs_wait_version: $(strerror_symbol ENOTSUP)" wait_out
 '
 
 #

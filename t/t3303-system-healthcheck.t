@@ -182,7 +182,7 @@ test_expect_success 'kill broker 14' '
 
 # Ensure an EHOSTUNREACH is encountered to trigger connected state change.
 test_expect_success 'ping to rank 14 fails with EHOSTUNREACH' '
-	echo "flux-ping: 14!broker.ping: No route to host" >ping.exp &&
+	echo "flux-ping: 14!broker.ping: $(strerror_symbol EHOSTUNREACH)" >ping.exp &&
 	test_must_fail flux ping 14 2>ping.err &&
 	test_cmp ping.exp ping.err
 '
@@ -269,7 +269,7 @@ test_expect_success 'stop broker 12' '
 
 test_expect_success 'flux overlay status prints connection timed out on 12' '
 	flux overlay status --no-pretty >status.out &&
-	grep "fake12: Connection timed out" status.out
+	grep "fake12: $(strerror_symbol ETIMEDOUT)" status.out
 '
 
 test_expect_success 'continue broker 12' '
