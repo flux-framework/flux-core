@@ -177,7 +177,7 @@ static void test_send_and_exit (flux_t *h, int count)
     int i;
     char sockpath[PATH_MAX + 1];
     flux_msg_t *msg;
-    flux_msg_t *nmsg;
+    flux_msg_t *nmsg = NULL;
     int fd;
     struct usock_client *client;
 
