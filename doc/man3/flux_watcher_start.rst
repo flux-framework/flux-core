@@ -44,7 +44,7 @@ is supposed to trigger next. This function only works for :var:`timer` and
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 
 SEE ALSO

@@ -333,6 +333,7 @@ RST_FILES  = \
 if ENABLE_DOCS
 man_MANS = $(MAN1_FILES) $(MAN3_FILES) $(MAN5_FILES) $(MAN7_FILES)
 $(RST_FILES): \
+	man1/common/resources.rst \
 	man1/common/nodeset.rst \
 	man1/common/job-param-additional.rst \
 	man1/common/job-param-batch.rst \
@@ -350,8 +351,11 @@ $(RST_FILES): \
 	man1/common/job-other-batch.rst \
 	man1/common/job-other-run.rst \
 	man1/common/job-shell-options.rst \
+	man3/common/resources.rst \
 	man3/common/json_pack.rst \
-	man3/common/json_unpack.rst
+	man3/common/json_unpack.rst \
+	man5/common/resources.rst \
+	man7/common/resources.rst
 endif
 
 SUFFIXES = .rst .1 .3 .5 .7
@@ -408,6 +412,7 @@ EXTRA_DIST = \
 	guide/glossary.rst \
 	$(RST_FILES) \
 	man1/index.rst \
+	man1/common/resources.rst \
 	man1/common/nodeset.rst \
 	man1/common/job-param-additional.rst \
 	man1/common/job-param-batch.rst \
@@ -425,6 +430,7 @@ EXTRA_DIST = \
 	man1/common/job-other-batch.rst \
 	man1/common/job-other-run.rst \
 	man1/common/job-shell-options.rst \
+	man3/common/resources.rst \
 	man3/index.rst \
 	man3/index_general.rst \
 	man3/index_idset.rst \
@@ -436,8 +442,10 @@ EXTRA_DIST = \
 	man3/index_shell.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst \
+	man5/common/resources.rst \
 	man5/index.rst \
 	man7/index.rst \
+	man7/common/resources.rst \
 	man7/flux-undocumented.rst
 
 CLEANFILES = \

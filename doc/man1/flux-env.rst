@@ -23,4 +23,4 @@ environment is set and the command is run as it would be by the
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst

@@ -97,4 +97,4 @@ round-trip latency is a bit over half a millisecond. The route hops are:
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst

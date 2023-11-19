@@ -262,7 +262,7 @@ content.hash (Updates: C)
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 RFC 13: Simple Process Manager Interface v1: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_13.html
 

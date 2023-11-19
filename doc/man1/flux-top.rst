@@ -149,7 +149,7 @@ a Flux instance's lifetime of about 35 years.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 RFC 19: Flux Locally Unique ID (FLUID): https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_19.html
 

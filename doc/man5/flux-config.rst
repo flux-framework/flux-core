@@ -71,7 +71,7 @@ next instance restart.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 Flux Administrator's Guide: https://flux-framework.readthedocs.io/en/latest/adminguide.html
 

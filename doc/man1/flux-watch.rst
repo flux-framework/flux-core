@@ -93,7 +93,7 @@ error during option processing.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 SEE ALSO
 ========

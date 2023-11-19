@@ -81,7 +81,7 @@ EXAMPLES
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 RFC 15: Flux Security: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_15.html
 

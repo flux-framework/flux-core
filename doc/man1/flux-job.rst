@@ -427,7 +427,7 @@ R
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 :doc:`rfc:spec_14`
   https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_14.html

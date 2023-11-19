@@ -241,7 +241,7 @@ Usage: :option:`flux bulksubmit -o NAME[=ARG]`.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 
 SEE ALSO

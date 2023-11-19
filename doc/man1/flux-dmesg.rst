@@ -67,7 +67,7 @@ To dump the ring buffer on all ranks
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 
 SEE ALSO

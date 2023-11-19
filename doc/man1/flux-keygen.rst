@@ -51,7 +51,7 @@ OPTIONS
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 ZAP: http://rfc.zeromq.org/spec:27
 

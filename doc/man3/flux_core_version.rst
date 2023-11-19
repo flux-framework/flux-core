@@ -77,6 +77,6 @@ These functions cannot fail.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 Semantic Versioning 2.0.0: http://semver.org

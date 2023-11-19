@@ -41,4 +41,4 @@ error occurs, then this function returns ``-1`` with an error string set in
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst

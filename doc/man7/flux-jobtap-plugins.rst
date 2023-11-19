@@ -430,7 +430,7 @@ Multiple prolog or epilog actions can be active at the same time.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 
 SEE ALSO
