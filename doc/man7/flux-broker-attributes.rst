@@ -264,13 +264,17 @@ RESOURCES
 
 .. include:: common/resources.rst
 
-RFC 13: Simple Process Manager Interface v1: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_13.html
 
-RFC 22: Idset String Representation: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_22.html
+FLUX RFC
+========
 
-RFC 23: Flux Standard Duration: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_23.html
+:doc:`rfc:spec_13`
 
-RFC 29: Hostlist Format: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_29.html
+:doc:`rfc:spec_22`
+
+:doc:`rfc:spec_23`
+
+:doc:`rfc:spec_29`
 
 
 SEE ALSO

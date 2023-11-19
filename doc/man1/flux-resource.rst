@@ -332,6 +332,10 @@ RESOURCES
 
 .. include:: common/resources.rst
 
-RFC 20: Resource Set Specification Version 1: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_20.html
 
-RFC 27: Flux Resource Allocation Protocol Version 1: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_27.html
+FLUX RFC
+========
+
+:doc:`rfc:spec_20`
+
+:doc:`rfc:spec_27`

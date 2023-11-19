@@ -90,9 +90,13 @@ RESOURCES
 
 .. include:: common/resources.rst
 
-RFC 22: Idset String Representation: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_22.html
 
-RFC 29: Hostlist Format: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_29.html
+FLUX RFC
+========
+
+:doc:`rfc:spec_22`
+
+:doc:`rfc:spec_29`
 
 
 SEE ALSO

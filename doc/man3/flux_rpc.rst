@@ -236,7 +236,11 @@ RESOURCES
 
 .. include:: common/resources.rst
 
-RFC 6: Flux Remote Procedure Call Protocol: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_6.html
+
+FLUX RFC
+========
+
+:doc:`rfc:spec_6`
 
 
 SEE ALSO

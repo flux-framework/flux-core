@@ -151,9 +151,13 @@ RESOURCES
 
 .. include:: common/resources.rst
 
-RFC 19: Flux Locally Unique ID (FLUID): https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_19.html
 
-RFC 23: Flux Standard Duration: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_23.html
+FLUX RFC
+========
+
+:doc:`rfc:spec_19`
+
+:doc:`rfc:spec_23`
 
 
 SEE ALSO

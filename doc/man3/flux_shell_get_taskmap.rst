@@ -45,4 +45,8 @@ RESOURCES
 
 .. include:: common/resources.rst
 
-RFC 34 - Flux Task Map: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_34.html
+
+FLUX RFC
+========
+
+:doc:`rfc:spec_34`

@@ -143,4 +143,8 @@ RESOURCES
 
 .. include:: common/resources.rst
 
-RFC 10: Content Storage Service: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_10.html
+
+FLUX RFC
+========
+
+:doc:`rfc:spec_10`

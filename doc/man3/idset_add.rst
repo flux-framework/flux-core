@@ -83,7 +83,12 @@ RESOURCES
 
 .. include:: common/resources.rst
 
-RFC 22: Idset String Representation: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_22.html
+
+FLUX RFC
+========
+
+:doc:`rfc:spec_22`
+
 
 
 SEE ALSO

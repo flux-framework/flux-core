@@ -56,9 +56,13 @@ RESOURCES
 
 .. include:: common/resources.rst
 
-RFC 18: KVS Event Log Format: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_18.html
 
-RFC 23: Flux Standard Duration: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_23.html
+FLUX RFC
+========
+
+:doc:`rfc:spec_18`
+
+:doc:`rfc:spec_23`
 
 
 SEE ALSO
