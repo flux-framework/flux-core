@@ -7,6 +7,7 @@ test_description='Test flux job info lookup service'
 test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+INFOLOOKUP=${FLUX_BUILD_DIR}/t/job-info/info_lookup
 
 fj_wait_event() {
 	flux job wait-event --timeout=20 "$@"
@@ -202,6 +203,34 @@ test_expect_success 'flux job eventlog -p works (guest.exec.eventlog)' '
 test_expect_success 'flux job eventlog -p fails on invalid path' '
 	jobid=$(submit_job) &&
 	test_must_fail flux job eventlog -p "foobar" $jobid
+'
+
+#
+# job info lookup tests (multiple keys in info request)
+#
+
+test_expect_success 'job-info.lookup multiple keys works (different keys)' '
+	jobid=$(submit_job) &&
+	${INFOLOOKUP} $jobid eventlog jobspec J > all_info_a.out &&
+	grep submit all_info_a.out &&
+	grep sleep all_info_a.out
+'
+
+test_expect_success 'job-info.lookup multiple keys works (same key)' '
+	jobid=$(submit_job) &&
+	${INFOLOOKUP} $jobid eventlog eventlog eventlog > eventlog_3.out &&
+	test $(grep submit eventlog_3.out | wc -l) -eq 3
+'
+
+test_expect_success 'job-info.lookup multiple keys fails on bad id' '
+	test_must_fail ${INFOLOOKUP} 12345 eventlog jobspec J
+'
+
+test_expect_success 'job-info.lookup multiple keys fails on 1 bad entry' '
+	jobid=$(submit_job) &&
+	kvsdir=$(flux job id --to=kvs $jobid) &&
+	flux kvs unlink ${kvsdir}.jobspec &&
+	test_must_fail ${INFOLOOKUP} $jobid eventlog jobspec J > all_info_b.out
 '
 
 #
