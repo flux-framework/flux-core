@@ -25,6 +25,7 @@ SYNOPSIS
 
   void flux_reactor_active_decref (flux_reactor_t *r);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

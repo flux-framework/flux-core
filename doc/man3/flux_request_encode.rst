@@ -17,6 +17,7 @@ SYNOPSIS
                                         void *data,
                                         int len);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

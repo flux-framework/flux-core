@@ -28,6 +28,7 @@ SYNOPSIS
 
    void flux_msg_handler_stop (flux_msg_handler_t *mh);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

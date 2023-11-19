@@ -23,6 +23,7 @@ SYNOPSIS
 
    int flux_reconnect (flux_t *h);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

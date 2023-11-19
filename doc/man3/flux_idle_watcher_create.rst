@@ -28,6 +28,7 @@ SYNOPSIS
                                              flux_watcher_f callback,
                                              void *arg);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

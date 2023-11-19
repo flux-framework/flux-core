@@ -25,6 +25,7 @@ SYNOPSIS
 
    int flux_kvs_getroot_get_owner (flux_future_t *f, uint32_t *owner);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

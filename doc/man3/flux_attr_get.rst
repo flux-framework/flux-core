@@ -15,6 +15,7 @@ SYNOPSIS
 
    int flux_attr_set (flux_t *h, const char *name, const char *val);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

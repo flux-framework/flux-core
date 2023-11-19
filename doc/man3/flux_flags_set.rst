@@ -17,6 +17,7 @@ SYNOPSIS
 
   int flux_flags_get (flux_t *h);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

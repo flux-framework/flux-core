@@ -22,6 +22,7 @@ SYNOPSIS
    void * flux_shell_aux_get (flux_shell_t *shell,
                               const char *key);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

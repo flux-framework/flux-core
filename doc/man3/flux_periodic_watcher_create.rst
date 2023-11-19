@@ -32,6 +32,7 @@ SYNOPSIS
                                      double offset,
                                      double interval);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

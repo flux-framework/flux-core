@@ -15,6 +15,7 @@ SYNOPSIS
 
   double flux_reactor_time (void);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

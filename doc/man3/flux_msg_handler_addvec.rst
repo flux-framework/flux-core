@@ -25,6 +25,7 @@ SYNOPSIS
 
    void flux_msg_handler_delvec (flux_msg_handler_t *handlers[]);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

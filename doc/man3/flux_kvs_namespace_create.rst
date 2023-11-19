@@ -25,6 +25,7 @@ SYNOPSIS
    flux_future_t *flux_kvs_namespace_remove (flux_t *h,
                                              const char *namespace);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

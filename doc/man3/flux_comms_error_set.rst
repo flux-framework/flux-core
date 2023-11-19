@@ -17,6 +17,7 @@ SYNOPSIS
                               flux_comms_error_f fun,
                               void *arg);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

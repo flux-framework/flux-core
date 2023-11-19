@@ -15,6 +15,7 @@ SYNOPSIS
 
   int flux_set_reactor (flux_t *h, flux_reactor_t *r);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

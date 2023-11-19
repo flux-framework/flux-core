@@ -15,6 +15,7 @@ SYNOPSIS
 
    int flux_send_new (flux_t *h, flux_msg_t **msg, int flags);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

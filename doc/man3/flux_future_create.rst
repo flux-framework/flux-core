@@ -46,6 +46,7 @@ SYNOPSIS
 
    flux_t *flux_future_get_flux (flux_future_t *f);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

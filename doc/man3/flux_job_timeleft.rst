@@ -15,6 +15,8 @@ SYNOPSIS
                           flux_error_t *error,
                           double *timeleft);
 
+Link with :command:`-lflux-core`.
+
 DESCRIPTION
 ===========
 

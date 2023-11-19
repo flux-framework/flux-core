@@ -15,6 +15,7 @@ SYNOPSIS
 
    flux_future_t *flux_service_unregister (flux_t *h, const char *name);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

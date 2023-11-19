@@ -18,6 +18,7 @@ SYNOPSIS
 
    flux_shell_task_t *flux_shell_task_next (flux_shell_t *shell);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

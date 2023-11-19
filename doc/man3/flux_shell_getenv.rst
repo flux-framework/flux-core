@@ -27,6 +27,7 @@ SYNOPSIS
    int flux_shell_unsetenv (flux_shell_t *shell,
                             const char *name);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

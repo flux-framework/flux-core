@@ -26,6 +26,7 @@ SYNOPSIS
    flux_future_t *flux_future_get_child (flux_future_t *cf,
                                          const char *name);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

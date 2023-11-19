@@ -29,12 +29,7 @@ SYNOPSIS
 
    #define idset_clear_all (x) idset_subtract (x, x)
 
-
-USAGE
-=====
-
-cc [flags] files -lflux-idset [libraries]
-
+Link with :command:`-lflux-idset`.
 
 DESCRIPTION
 ===========

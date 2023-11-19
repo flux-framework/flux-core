@@ -43,12 +43,7 @@ SYNOPSIS
    bool idset_equal (const struct idset *set1,
                      const struct idset *set2);
 
-
-USAGE
-=====
-
-cc [flags] files -lflux-idset [libraries]
-
+Link with :command:`-lflux-idset`.
 
 DESCRIPTION
 ===========

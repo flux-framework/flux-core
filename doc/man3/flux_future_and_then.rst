@@ -30,6 +30,7 @@ SYNOPSIS
                                  void *result,
                                  flux_free_f free_fn);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

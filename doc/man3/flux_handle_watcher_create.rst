@@ -24,6 +24,7 @@ SYNOPSIS
 
    flux_t *flux_handle_watcher_get_flux (flux_watcher_t *w);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

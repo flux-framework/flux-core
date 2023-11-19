@@ -26,6 +26,7 @@ SYNOPSIS
 
    int flux_child_watcher_get_rstatus (flux_watcher_t *w);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

@@ -19,6 +19,7 @@ SYNOPSIS
 
    bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

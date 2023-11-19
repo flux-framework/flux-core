@@ -15,6 +15,7 @@ SYNOPSIS
    int flux_shell_get_hwloc_xml (flux_shell_t *shell,
                                  const char **hwloc_xml);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

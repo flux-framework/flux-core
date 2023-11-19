@@ -17,6 +17,7 @@ SYNOPSIS
 
   double flux_watcher_next_wakeup (flux_watcher_t *w);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

@@ -23,6 +23,7 @@ SYNOPSIS
    int flux_response_decode_error (const flux_msg_t *msg,
                                    const char *errstr);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========
