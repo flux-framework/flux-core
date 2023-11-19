@@ -271,9 +271,8 @@ matrix.add_build(
 )
 
 matrix.add_build(
-    name="alpine - quick check",
+    name="alpine",
     image="alpine",
-    command_args="--quick-check",
     args=(
         "--prefix=/usr"
         " --sysconfdir=/etc"
