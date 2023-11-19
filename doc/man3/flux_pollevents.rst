@@ -15,6 +15,7 @@ SYNOPSIS
 
   int flux_pollfd (flux_t *h);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

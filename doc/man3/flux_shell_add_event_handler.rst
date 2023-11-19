@@ -17,6 +17,7 @@ SYNOPSIS
                                      flux_msg_handler_f cb,
                                      void *arg);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

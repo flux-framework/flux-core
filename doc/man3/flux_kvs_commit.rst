@@ -28,6 +28,7 @@ SYNOPSIS
 
    int flux_kvs_commit_get_sequence (flux_future_t *f, int *seq);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

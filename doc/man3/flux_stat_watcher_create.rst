@@ -26,6 +26,7 @@ SYNOPSIS
                                      struct stat *stat,
                                      struct stat *prev);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

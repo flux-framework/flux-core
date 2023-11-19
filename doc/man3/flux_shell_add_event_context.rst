@@ -17,7 +17,7 @@ SYNOPSIS
                                      int flags,
                                      const char *fmt,
                                      ...);
-
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

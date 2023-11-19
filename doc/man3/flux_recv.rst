@@ -15,6 +15,7 @@ SYNOPSIS
                          struct flux_match match,
                          int flags);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

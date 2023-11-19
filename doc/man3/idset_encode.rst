@@ -17,12 +17,7 @@ SYNOPSIS
 
    struct idset *idset_ndecode (const char *s, size_t len);
 
-
-USAGE
-=====
-
-cc [flags] files -lflux-idset [libraries]
-
+Link with :command:`-lflux-idset`.
 
 DESCRIPTION
 ===========

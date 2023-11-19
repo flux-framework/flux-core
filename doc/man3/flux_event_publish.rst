@@ -30,6 +30,7 @@ SYNOPSIS
 
    int flux_event_publish_get_seq (flux_future_t *f, int *seq);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

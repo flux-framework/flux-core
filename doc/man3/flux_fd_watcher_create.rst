@@ -24,6 +24,7 @@ SYNOPSIS
 
    int flux_fd_watcher_get_fd (flux_watcher_t *w);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

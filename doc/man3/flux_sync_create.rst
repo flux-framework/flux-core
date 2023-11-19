@@ -13,6 +13,7 @@ SYNOPSIS
 
    flux_future_t *flux_sync_create (flux_t *h, double minimum);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

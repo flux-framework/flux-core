@@ -13,6 +13,7 @@ SYNOPSIS
 
    void flux_shell_killall (flux_shell_t *shell, int sig);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

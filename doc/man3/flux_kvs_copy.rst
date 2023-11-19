@@ -21,6 +21,7 @@ SYNOPSIS
                                  const char *dstkey,
                                  int commit_flags);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

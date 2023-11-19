@@ -41,6 +41,7 @@ SYNOPSIS
 
    int flux_shell_log_setlevel (int level, const char *dest);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

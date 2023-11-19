@@ -57,6 +57,7 @@ SYNOPSIS
                                  const char *key,
                                  const char *treeobj);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

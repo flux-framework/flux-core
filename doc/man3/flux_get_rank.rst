@@ -15,6 +15,7 @@ SYNOPSIS
 
   int flux_get_size (flux_t *h, uint32_t *size);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

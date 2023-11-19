@@ -48,6 +48,7 @@ SYNOPSIS
 
    uint32_t flux_rpc_get_nodeid (flux_future_t *f);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

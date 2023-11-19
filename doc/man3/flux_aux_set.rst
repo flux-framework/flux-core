@@ -20,6 +20,7 @@ SYNOPSIS
                      void *aux,
                      flux_free_f destroy);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

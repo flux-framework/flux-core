@@ -14,6 +14,7 @@ SYNOPSIS
 
    const struct taskmap * flux_shell_get_taskmap (flux_shell_t *shell);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

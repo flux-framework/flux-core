@@ -15,6 +15,7 @@ SYNOPSIS
 
   int flux_event_unsubscribe (flux_t *h, const char *topic);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

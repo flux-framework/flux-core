@@ -15,6 +15,7 @@ SYNOPSIS
                                   const char *topic,
                                   flux_plugin_arg_t *args);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

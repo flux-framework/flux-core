@@ -15,6 +15,7 @@ SYNOPSIS
 
    const char *flux_core_version_string (void);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

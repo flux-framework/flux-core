@@ -13,6 +13,7 @@ SYNOPSIS
 
   int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

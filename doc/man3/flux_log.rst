@@ -19,6 +19,7 @@ SYNOPSIS
 
   void flux_log_set_procid (flux_t *h, const char *s);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

@@ -30,6 +30,7 @@ SYNOPSIS
                                const char *fmt,
                                ...);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

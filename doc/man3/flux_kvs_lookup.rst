@@ -45,6 +45,7 @@ SYNOPSIS
 
    int flux_kvs_lookup_cancel (flux_future_t *f);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

@@ -30,6 +30,7 @@ SYNOPSIS
 
    const char *flux_future_error_string (flux_future_t *f);
 
+Link with :command:`-lflux-core`.
 
 OVERVIEW
 ========

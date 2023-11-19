@@ -26,6 +26,7 @@ SYNOPSIS
                                   double after,
                                   double repeat);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

@@ -23,6 +23,7 @@ SYNOPSIS
 
    int flux_signal_watcher_get_signum (flux_watcher_t *w);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

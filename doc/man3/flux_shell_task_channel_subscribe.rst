@@ -16,6 +16,7 @@ SYNOPSIS
                                           flux_shell_task_io_f cb,
                                           void *arg);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

@@ -30,6 +30,7 @@ SYNOPSIS
                            int errnum,
                            const char *errmsg);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========

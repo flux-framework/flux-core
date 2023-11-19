@@ -13,6 +13,7 @@ SYNOPSIS
 
    flux_t *flux_shell_get_flux (flux_shell_t *shell);
 
+Link with :command:`-lflux-core`.
 
 DESCRIPTION
 ===========
