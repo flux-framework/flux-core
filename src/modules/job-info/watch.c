@@ -200,7 +200,7 @@ static int check_eventlog_end (struct watch_ctx *w,
     json_t *entry = NULL;
     int rc = 0;
 
-    if (eventlog_parse_entry_chunk (w->ctx->h, tok, toklen, &entry, &name, NULL) < 0)
+    if (parse_eventlog_entry (w->ctx->h, tok, toklen, &entry, &name, NULL) < 0)
         return -1;
 
     if (streq (name, "clean"))
@@ -247,7 +247,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
     }
 
     input = s;
-    while (eventlog_parse_next (&input, &tok, &toklen)) {
+    while (get_next_eventlog_entry (&input, &tok, &toklen)) {
         if (flux_respond_pack (ctx->h, w->msg,
                                "{s:s#}",
                                "event", tok, toklen) < 0) {

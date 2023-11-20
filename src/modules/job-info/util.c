@@ -45,9 +45,9 @@ error:
     return rv;
 }
 
-bool eventlog_parse_next (const char **pp,
-                          const char **tok,
-                          size_t *toklen)
+bool get_next_eventlog_entry (const char **pp,
+                              const char **tok,
+                              size_t *toklen)
 {
     char *term;
 
@@ -59,12 +59,12 @@ bool eventlog_parse_next (const char **pp,
     return true;
 }
 
-int eventlog_parse_entry_chunk (flux_t *h,
-                                const char *tok,
-                                size_t toklen,
-                                json_t **entry,
-                                const char **name,
-                                json_t **context)
+int parse_eventlog_entry (flux_t *h,
+                          const char *tok,
+                          size_t toklen,
+                          json_t **entry,
+                          const char **name,
+                          json_t **context)
 {
     char *str = NULL;
     json_t *o = NULL;

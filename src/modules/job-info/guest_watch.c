@@ -733,7 +733,7 @@ static void main_namespace_lookup_continuation (flux_future_t *f, void *arg)
     }
 
     input = s + gw->offset;
-    while (eventlog_parse_next (&input, &tok, &toklen)) {
+    while (get_next_eventlog_entry (&input, &tok, &toklen)) {
         if (flux_respond_pack (ctx->h, gw->msg,
                                "{s:s#}",
                                "event", tok, toklen) < 0) {
