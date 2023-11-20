@@ -75,7 +75,7 @@ struct guest_watch_ctx {
     flux_jobid_t id;
     char *path;
     int flags;
-    bool cancel;
+    bool eventlog_watch_canceled;
 
     /* transition possibilities
      *
@@ -178,9 +178,10 @@ error:
     return NULL;
 }
 
-static int send_cancel (struct guest_watch_ctx *gw, flux_future_t *f)
+static int send_eventlog_watch_cancel (struct guest_watch_ctx *gw,
+                                       flux_future_t *f)
 {
-    if (!gw->cancel) {
+    if (!gw->eventlog_watch_canceled) {
         flux_future_t *f2;
         int matchtag;
 
@@ -194,7 +195,7 @@ static int send_cancel (struct guest_watch_ctx *gw, flux_future_t *f)
                  * cancel to "job-info.eventlog-watch-cancel".  Just return
                  * ENODATA to the caller.
                  */
-                gw->cancel = true;
+                gw->eventlog_watch_canceled = true;
                 if (flux_respond_error (gw->ctx->h,
                                         gw->msg,
                                         ENODATA,
@@ -204,8 +205,9 @@ static int send_cancel (struct guest_watch_ctx *gw, flux_future_t *f)
                 return 0;
             }
             else {
-                /* gw->state == GUEST_WATCH_STATE_INIT */
-                gw->cancel = true;
+                /* gw->state == GUEST_WATCH_STATE_INIT, eventlog-watch
+                 * never started so sort of "auto-canceled" */
+                gw->eventlog_watch_canceled = true;
                 return 0;
             }
         }
@@ -222,7 +224,7 @@ static int send_cancel (struct guest_watch_ctx *gw, flux_future_t *f)
             return -1;
         }
         flux_future_destroy (f2);
-        gw->cancel = true;
+        gw->eventlog_watch_canceled = true;
     }
     return 0;
 }
@@ -323,7 +325,7 @@ static void get_main_eventlog_continuation (flux_future_t *f, void *arg)
         goto error;
     }
 
-    if (gw->cancel) {
+    if (gw->eventlog_watch_canceled) {
         if (flux_respond_error (ctx->h, gw->msg, ENODATA, NULL) < 0)
             flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
         goto done;
@@ -455,7 +457,7 @@ static void wait_guest_namespace_continuation (flux_future_t *f, void *arg)
             if (gw->guest_started) {
                 /* check for racy cancel - user canceled while this
                  * error was in transit */
-                if (gw->cancel) {
+                if (gw->eventlog_watch_canceled) {
                     errno = ENODATA;
                     goto error;
                 }
@@ -470,7 +472,7 @@ static void wait_guest_namespace_continuation (flux_future_t *f, void *arg)
         goto error;
     }
 
-    if (gw->cancel) {
+    if (gw->eventlog_watch_canceled) {
         errno = ENODATA;
         goto error;
     }
@@ -488,8 +490,8 @@ static void wait_guest_namespace_continuation (flux_future_t *f, void *arg)
         flux_future_t *f2;
 
         /* cancel this watcher, and once its canceled, watch the guest
-         * namespace.  Don't call send_cancel(), this is not an error
-         * or "full" cancel */
+         * namespace.  Don't call send_eventlog_watch_cancel(), this
+         * is not an error or "full" cancel */
         if (!(f2 = flux_rpc_pack (gw->ctx->h,
                                   "job-info.eventlog-watch-cancel",
                                   FLUX_NODEID_ANY,
@@ -508,9 +510,9 @@ static void wait_guest_namespace_continuation (flux_future_t *f, void *arg)
 error_cancel:
     /* If we haven't sent a cancellation yet, must do so so that
      * the future's matchtag will eventually be freed */
-    if (!gw->cancel) {
+    if (!gw->eventlog_watch_canceled) {
         int save_errno = errno;
-        (void) send_cancel (gw, gw->wait_guest_namespace_f);
+        (void) send_eventlog_watch_cancel (gw, gw->wait_guest_namespace_f);
         errno = save_errno;
     }
 
@@ -591,7 +593,7 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
              */
             /* check for racy cancel - user canceled while this
              * error was in transit */
-            if (gw->cancel) {
+            if (gw->eventlog_watch_canceled) {
                 errno = ENODATA;
                 goto error;
             }
@@ -610,9 +612,12 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
         }
     }
 
-    if (gw->cancel) {
-        errno = ENODATA;
-        goto error;
+    if (gw->eventlog_watch_canceled) {
+        if (gw->cancel) {
+            errno = ENODATA;
+            goto error;
+        }
+        goto cleanup;
     }
 
     if (flux_respond_pack (ctx->h, gw->msg, "{s:s}", "event", event) < 0) {
@@ -628,9 +633,9 @@ static void guest_namespace_watch_continuation (flux_future_t *f, void *arg)
 error_cancel:
     /* If we haven't sent a cancellation yet, must do so so that
      * the future's matchtag will eventually be freed */
-    if (!gw->cancel) {
+    if (!gw->eventlog_watch_canceled) {
         int save_errno = errno;
-        (void) send_cancel (gw, gw->guest_namespace_watch_f);
+        (void) send_eventlog_watch_cancel (gw, gw->guest_namespace_watch_f);
         errno = save_errno;
     }
 
@@ -727,8 +732,9 @@ static void main_namespace_lookup_continuation (flux_future_t *f, void *arg)
         goto error;
     }
 
-    if (gw->cancel) {
-        /* already sent ENODATA via send_cancel(), so just cleanup */
+    if (gw->eventlog_watch_canceled) {
+        /* already sent ENODATA via send_eventlog_watch_cancel(), so
+         * just cleanup */
         goto cleanup;
     }
 
@@ -797,7 +803,7 @@ static void guest_watch_cancel (struct info_ctx *ctx,
     else
         match = flux_disconnect_match (msg, gw->msg);
     if (match)
-        send_cancel (gw, NULL);
+        send_eventlog_watch_cancel (gw, NULL);
 }
 
 void guest_watchers_cancel (struct info_ctx *ctx,
@@ -818,7 +824,7 @@ void guest_watch_cleanup (struct info_ctx *ctx)
     struct guest_watch_ctx *gw;
 
     while ((gw = zlist_pop (ctx->guest_watchers))) {
-        send_cancel (gw, NULL);
+        send_eventlog_watch_cancel (gw, NULL);
 
         if (flux_respond_error (ctx->h, gw->msg, ENOSYS, NULL) < 0)
             flux_log_error (ctx->h, "%s: flux_respond_error",
