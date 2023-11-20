@@ -13,15 +13,18 @@ invalid_rank() {
 }
 
 test_expect_success 'ping: 10K 1K byte echo requests' '
-	run_timeout 25 flux ping --pad 1024 --count 10240 --interval 0 0
+	run_timeout 25 flux ping --pad 1024 --count 10240 --interval 0 0 \
+	    >/dev/null
 '
 
 test_expect_success 'ping: 1K 10K byte echo requests' '
-	run_timeout 15 flux ping --pad 10K --count 1024 --interval 0 0
+	run_timeout 15 flux ping --pad 10K --count 1024 --interval 0 0 \
+	    >/dev/null
 '
 
 test_expect_success 'ping: 100 100K byte echo requests' '
-	run_timeout 15 flux ping --pad 100K --count 100 --interval 0 0
+	run_timeout 15 flux ping --pad 100K --count 100 --interval 0 0 \
+	    >/dev/null
 '
 
 test_expect_success 'ping: 10 1M byte echo requests' '
@@ -33,7 +36,8 @@ test_expect_success 'ping: 10 1M byte echo requests (batched)' '
 '
 
 test_expect_success 'ping: 1K 10K byte echo requests (batched)' '
-	run_timeout 20 flux ping --pad 10K --count 1024 --batch --interval 0 0
+	run_timeout 20 flux ping --pad 10K --count 1024 --batch --interval 0 0 \
+	    >/dev/null
 '
 
 test_expect_success 'ping --rank 1 works' '
@@ -50,12 +54,12 @@ test_expect_success 'ping 1!broker works' '
 
 test_expect_success 'ping fails on invalid rank (specified as target)' '
 	test_must_fail run_timeout 15 flux ping --count 1 $(invalid_rank) 2>stderr &&
-	grep -q "No route to host" stderr
+	grep "$(strerror_symbol EHOSTUNREACH)" stderr
 '
 
 test_expect_success 'ping fails on invalid rank (specified in option)' '
 	test_must_fail run_timeout 15 flux ping --count 1 --rank $(invalid_rank) broker 2>stderr &&
-	grep -q "No route to host" stderr
+	grep "$(strerror_symbol EHOSTUNREACH)" stderr
 '
 
 test_expect_success 'ping fails on invalid target' '
@@ -115,7 +119,7 @@ test_expect_success 'ping output format for specific rank is correct (format 3)'
 
 test_expect_success 'ping with "upstream" fails on rank 0' '
         test_must_fail run_timeout 15 flux exec -n --rank 0 flux ping --count 1 --rank upstream broker 2>stderr &&
-	grep -q "No route to host" stderr
+	grep "$(strerror_symbol EHOSTUNREACH)" stderr
 '
 
 test_expect_success 'ping with "upstream" works (format 1)' '

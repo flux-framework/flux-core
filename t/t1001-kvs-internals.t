@@ -187,7 +187,7 @@ test_expect_success 'kvs: valref that points to zero size content store data can
 test_expect_success 'kvs: valref can point to other treeobjs' '
 	flux kvs unlink -Rf $DIR &&
         flux kvs mkdir $DIR.a.b.c &&
-        dirhash=`flux kvs get --treeobj $DIR.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
+        dirhash=`flux kvs get --treeobj $DIR.a.b.c | grep -E "sha1-[A-Za-z0-9]+" -o` &&
 	flux kvs put --treeobj $DIR.value="{\"data\":[\"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
         flux kvs get --raw $DIR.value | grep dir
 '
@@ -237,7 +237,7 @@ test_expect_success 'kvs: multi blob-ref valref with a blobref pointing to a tre
         flux kvs unlink -Rf $DIR &&
 	hashval1=`echo -n "abcd" | flux content store` &&
         flux kvs mkdir $DIR.a.b.c &&
-        dirhash=`flux kvs get --treeobj $DIR.a.b.c | grep -P "sha1-[A-Za-z0-9]+" -o` &&
+        dirhash=`flux kvs get --treeobj $DIR.a.b.c | grep -E "sha1-[A-Za-z0-9]+" -o` &&
 	flux kvs put --treeobj $DIR.multival="{\"data\":[\"${hashval1}\", \"${dirhash}\"],\"type\":\"valref\",\"ver\":1}" &&
         flux kvs get --raw $DIR.multival | grep dir
 '

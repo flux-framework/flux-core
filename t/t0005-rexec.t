@@ -57,8 +57,8 @@ test_expect_success 'basic rexec functionality (echo stdout/err)' '
 '
 
 test_expect_success 'basic rexec invalid rank' '
-	! $rexec -r 32 /bin/true > output 2>&1 &&
-	grep -q "No route to host" output
+	test_must_fail $rexec -r 32 /bin/true > output 2>&1 &&
+	grep -q "$(strerror_symbol EHOSTUNREACH)" output
 '
 
 test_expect_success 'basic rexec fail exec()' '

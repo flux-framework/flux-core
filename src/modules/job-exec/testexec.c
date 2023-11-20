@@ -481,6 +481,8 @@ static int testexec_config (flux_t *h, int argc, char **argv)
 static void testexec_unload (void)
 {
     testexec_ctx_destroy (testexec_ctx);
+    // Ensure a reload will not re-use a freed value
+    testexec_ctx = NULL;
 }
 
 struct exec_implementation testexec = {

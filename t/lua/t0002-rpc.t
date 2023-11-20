@@ -51,6 +51,6 @@ note ("ping to non-existent rank")
 local packet = { seq = "1", pad = "xxxxxx" }
 local msg, err = f:rpc ("broker.ping", packet, 99)
 is (msg, nil, "rpc: nil return indicates error")
-is (err, "No route to host", "rpc: err is 'No route to host'")
+ok (err == "No route to host" or err == "Host is unreachable", "rpc: err is 'No route to host' or 'Host is unreachable'")
 
 done_testing ()

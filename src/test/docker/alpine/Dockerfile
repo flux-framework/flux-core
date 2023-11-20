@@ -16,6 +16,7 @@ RUN apk add \
     make \
     cmake \
     musl-dev \
+    musl-dbg \
     python3-dev \
     python3 \
     py3-cffi \

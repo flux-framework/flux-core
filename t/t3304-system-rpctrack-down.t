@@ -45,13 +45,13 @@ test_expect_success NO_CHAIN_LINT 'background RPC fails with EHOSTUNREACH (track
 	pid=$(cat health.pid) &&
 	echo waiting for pid $pid &&
 	test_expect_code 1 wait $pid &&
-	grep "No route to host" health.err
+	grep "$(strerror_symbol EHOSTUNREACH)" health.err
 '
 
 test_expect_success 'new RPC to rank 2 fails with EHOSTUNREACH' '
 	test_expect_code 1 flux overlay status \
 		--timeout=0 --rank=2 2>health2.err &&
-	grep "No route to host" health2.err
+	grep "$(strerror_symbol EHOSTUNREACH)" health2.err
 '
 
 test_expect_success 'broker 1 tracked child rpc count is zero' '
@@ -84,7 +84,7 @@ test_expect_success 'stop broker 1 hard and wait for it to exit' '
 # state change.  Note: existing traffic like heartbeat probably also serve
 # this purpose, but do it anyway to ensure repeatability.
 test_expect_success 'ping to rank 1 fails with EHOSTUNREACH' '
-	echo "flux-ping: 1!broker.ping: No route to host" >ping.exp &&
+	echo "flux-ping: 1!broker.ping: $(strerror_symbol EHOSTUNREACH)" >ping.exp &&
 	test_must_fail flux ping 1 2>ping.err &&
 	test_cmp ping.exp ping.err
 '
@@ -93,13 +93,13 @@ test_expect_success NO_CHAIN_LINT 'background RPC fails with EHOSTUNREACH (track
 	pid=$(cat health3.pid) &&
 	echo waiting for pid $pid &&
 	test_expect_code 1 wait $pid &&
-	grep "No route to host" health3.err
+	grep "$(strerror_symbol EHOSTUNREACH)" health3.err
 '
 
 test_expect_success 'new RPC to rank 1 fails with EHOSTUNREACH' '
 	test_expect_code 1 flux overlay status \
 		--timeout=0 --rank=1 2>health4.err &&
-	grep "No route to host" health4.err
+	grep "$(strerror_symbol EHOSTUNREACH)" health4.err
 '
 
 test_expect_success 'broker 0 tracked child rpc count is zero' '

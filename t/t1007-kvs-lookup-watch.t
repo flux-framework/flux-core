@@ -225,7 +225,7 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, create 
                   --pattern="0" waitcreate4.out >/dev/null &&
         flux kvs namespace remove ns_create_and_remove &&
         ! wait $pid &&
-        grep "Operation not supported" waitcreate4.out
+        grep "$(strerror_symbol ENOTSUP)" waitcreate4.out
 '
 
 test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, doesnt work on removed namespace' '
@@ -237,7 +237,7 @@ test_expect_success NO_CHAIN_LINT 'flux kvs get, --watch & --waitcreate, doesnt 
         wait_watcherscount_nonzero ns_remove &&
         flux kvs namespace remove ns_remove &&
         ! wait $pid &&
-        grep "Operation not supported" waitcreate5.out
+        grep "$(strerror_symbol ENOTSUP)" waitcreate5.out
 '
 
 #

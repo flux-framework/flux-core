@@ -273,7 +273,12 @@ def main():
         if args.input and args.input == "none":
 
             def write_eof(fd):
-                os.write(fd, bytes([termios.CEOF]))
+                if hasattr(termios, "CEOF"):
+                    value = bytes([termios.CEOF])
+                else:
+                    # No CEOF in termios, assume Ctrl-D/EOT (0x4)
+                    value = bytes([4])
+                os.write(fd, value)
 
             #  Sometimes the shell (if that is the target of runpty)
             #   does not read EOF if it is sent too soon. Therefore send

@@ -44,7 +44,7 @@ test_expect_success 'resource status shows no drained nodes' '
 
 test_expect_success 'flux exec -r 1 fails with EHOSTUNREACH' '
 	test_must_fail run_timeout 30 flux exec -r 1 /bin/true 2>unreach.err &&
-	grep "No route to host" unreach.err
+	grep "$(strerror_symbol EHOSTUNREACH)" unreach.err
 '
 
 test_expect_success 'single node job can run with only rank 0 up' '
