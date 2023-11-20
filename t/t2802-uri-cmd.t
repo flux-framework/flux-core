@@ -163,7 +163,9 @@ test_expect_success 'setup fake csm_allocation_query for mock lsf testing' '
 '
 test_expect_success 'flux-uri mock testing of lsf resolver works' '
 	result=$(SHELL=/bin/sh flux uri --local lsf:12345) &&
-	test "$result" = "$FLUX_URI"
+	FLUX_URI_1=$(flux exec -r 1 flux getattr local-uri) &&
+	test_debug "echo checking if $result is $FLUX_URI or $FLUX_URI_1" &&
+	test "$result" = "$FLUX_URI" -o "$result" = "$FLUX_URI_1"
 '
 test_expect_success 'cleanup jobs' '
 	flux cancel --all &&
