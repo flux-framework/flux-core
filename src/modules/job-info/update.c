@@ -90,10 +90,8 @@ static struct update_ctx *update_ctx_create (struct info_ctx *ctx,
     uc->ctx = ctx;
     uc->type = type;
     uc->id = id;
-    if (!(uc->key = strdup (key))) {
-        errno = ENOMEM;
+    if (!(uc->key = strdup (key)))
         goto error;
-    }
     if (streq (key, "R"))
         uc->update_name = "resource-update";
     else {
