@@ -37,7 +37,7 @@ struct watch_ctx {
     flux_future_t *check_f;
     flux_future_t *watch_f;
     bool allow;
-    bool cancel;
+    bool kvs_watch_canceled;
 };
 
 static void watch_continuation (flux_future_t *f, void *arg);
@@ -172,7 +172,7 @@ static void check_eventlog_continuation (flux_future_t *f, void *arg)
 
     /* There is a chance user canceled before we began legitimately
      * "watching" the desired eventlog */
-    if (w->cancel) {
+    if (w->kvs_watch_canceled) {
         if (flux_respond_error (ctx->h, w->msg, ENODATA, NULL) < 0)
             flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
         goto done;
@@ -235,7 +235,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
         goto error;
     }
 
-    if (w->cancel) {
+    if (w->kvs_watch_canceled) {
         errno = ENODATA;
         goto error;
     }
@@ -283,7 +283,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
 error_cancel:
     /* If we haven't sent a cancellation yet, must do so so that
      * the future's matchtag will eventually be freed */
-    if (!w->cancel) {
+    if (!w->kvs_watch_canceled) {
         int save_errno = errno;
         if (flux_kvs_lookup_cancel (w->watch_f) < 0)
             flux_log_error (ctx->h, "%s: flux_kvs_lookup_cancel",
@@ -416,10 +416,10 @@ error:
 
 /* Cancel watch 'w' if it matches message.
  */
-static void watch_cancel (struct info_ctx *ctx,
-                          struct watch_ctx *w,
-                          const flux_msg_t *msg,
-                          bool cancel)
+static void send_kvs_watch_cancel (struct info_ctx *ctx,
+                                   struct watch_ctx *w,
+                                   const flux_msg_t *msg,
+                                   bool cancel)
 {
     bool match;
     if (cancel)
@@ -427,7 +427,7 @@ static void watch_cancel (struct info_ctx *ctx,
     else
         match = flux_disconnect_match (msg, w->msg);
     if (match) {
-        w->cancel = true;
+        w->kvs_watch_canceled = true;
 
         /* if the watching hasn't started yet, no need to cancel */
         if (w->watch_f) {
@@ -444,7 +444,7 @@ void watchers_cancel (struct info_ctx *ctx, const flux_msg_t *msg, bool cancel)
 
     w = zlist_first (ctx->watchers);
     while (w) {
-        watch_cancel (ctx, w, msg, cancel);
+        send_kvs_watch_cancel (ctx, w, msg, cancel);
         w = zlist_next (ctx->watchers);
     }
 }
