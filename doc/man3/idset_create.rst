@@ -123,4 +123,4 @@ FLUX RFC
 SEE ALSO
 ========
 
-:man3:`idset_encode`, :man3:`idset_add`
+:man3:`idset_encode`, :man3:`idset_add`, :man3:`idset_alloc`
