@@ -43,7 +43,7 @@ on the behavior of reactor time, refer to the libev documentation on
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 libev: http://software.schmorp.de/pkg/libev.html
 

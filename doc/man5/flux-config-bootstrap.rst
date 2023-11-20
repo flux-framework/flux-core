@@ -218,9 +218,13 @@ create a tree topology with three levels.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
-RFC 29: Hostlist Format: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_29.html
+
+FLUX RFC
+========
+
+:doc:`rfc:spec_29`
 
 
 SEE ALSO

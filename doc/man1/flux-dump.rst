@@ -112,13 +112,15 @@ The mode of files in the archive is set to 0644.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
-
-RFC 10: Content Storage Service: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_10.html
-
-RFC 11: Key Value Store Tree Object Format v1: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_11.html
+.. include:: common/resources.rst
 
 
+FLUX RFC
+========
+
+:doc:`rfc:spec_10`
+
+:doc:`rfc:spec_11`
 
 
 SEE ALSO

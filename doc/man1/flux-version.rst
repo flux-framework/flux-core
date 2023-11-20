@@ -25,4 +25,4 @@ of the currently linked libflux-security is included.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst

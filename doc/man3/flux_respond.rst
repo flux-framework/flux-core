@@ -101,11 +101,15 @@ EPROTO
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
-RFC 6: Flux Remote Procedure Call Protocol: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_6.html
 
-RFC 3: Flux Message Protocol: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_3.html
+FLUX_RFC
+========
+
+:doc:`rfc:spec_6`
+
+:doc:`rfc:spec_3`
 
 
 SEE ALSO

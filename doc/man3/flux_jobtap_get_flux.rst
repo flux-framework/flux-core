@@ -93,7 +93,7 @@ The remaining functions return 0 on success, -1 on failure.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 
 SEE ALSO

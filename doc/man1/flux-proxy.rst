@@ -116,4 +116,4 @@ Connect to a Flux instance started in Slurm job 1234
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst

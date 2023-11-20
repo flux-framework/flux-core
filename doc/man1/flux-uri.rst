@@ -154,4 +154,4 @@ Get the URI for a Flux instance running as a Slurm job:
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst

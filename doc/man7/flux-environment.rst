@@ -498,6 +498,11 @@ of compiled-in install paths and the environment.
 
    Values may include multiple directories separated by semicolons.
 
+RESOURCES
+=========
+
+.. include:: common/resources.rst
+
 SEE ALSO
 ========
 

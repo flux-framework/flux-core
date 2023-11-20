@@ -51,7 +51,7 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+.. include:: common/resources.rst
 
 
 SEE ALSO

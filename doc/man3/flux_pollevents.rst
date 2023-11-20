@@ -190,7 +190,7 @@ handle events pending.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 libev API: http://pod.tst.eu/http://cvs.schmorp.de/libev/ev.pod
 

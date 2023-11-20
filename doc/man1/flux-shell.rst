@@ -635,7 +635,7 @@ generated if they are accessed from any other context.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 
 SEE ALSO

@@ -75,7 +75,7 @@ This example opens the Flux broker and publishes an event message.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 
 SEE ALSO

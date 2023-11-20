@@ -128,7 +128,7 @@ ENOMEM
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 RFC 5424 The Syslog Protocol: https://tools.ietf.org/html/rfc5424
 

@@ -291,7 +291,7 @@ for :program:`flux cron sync` for more information.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 
 SEE ALSO

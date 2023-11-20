@@ -55,7 +55,7 @@ ENOMEM
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 libev: http://software.schmorp.de/pkg/libev.html
 

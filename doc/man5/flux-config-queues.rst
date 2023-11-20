@@ -72,11 +72,16 @@ Queue resources should not overlap.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
-RFC 20: Resource Set Specification Version 1: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_20.html
 
-RFC 33: Flux Job Queues: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_33.html
+FLUX RFC
+========
+
+:doc:`rfc:spec_20`
+
+:doc:`rfc:spec_33`
+
 
 SEE ALSO
 ========

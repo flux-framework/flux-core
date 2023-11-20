@@ -119,7 +119,7 @@ and path, requests the broker rank, and finally closes the broker handle.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 
 SEE ALSO

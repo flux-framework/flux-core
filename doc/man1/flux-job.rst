@@ -427,25 +427,22 @@ R
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
+
+
+FLUX RFC
+========
 
 :doc:`rfc:spec_14`
-  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_14.html
 
 :doc:`rfc:spec_18`
-  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_18.html
 
 :doc:`rfc:spec_20`
-  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_20.html
 
 :doc:`rfc:spec_21`
-  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_21.html
 
 :doc:`rfc:spec_24`
-  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_24.html
 
 :doc:`rfc:spec_25`
-  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_25.html
 
 :doc:`rfc:spec_34`
-  https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_34.html

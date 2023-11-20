@@ -611,7 +611,7 @@ user can learn why a job failed.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 SEE ALSO
 ========

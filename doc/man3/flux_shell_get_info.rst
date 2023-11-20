@@ -86,6 +86,6 @@ EINVAL
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 Jansson: https://jansson.readthedocs.io/en/2.9/apiref.html

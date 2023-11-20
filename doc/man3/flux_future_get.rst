@@ -125,7 +125,7 @@ EDEADLOCK
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 C++ std::future: http://en.cppreference.com/w/cpp/thread/future
 

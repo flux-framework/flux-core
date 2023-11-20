@@ -97,11 +97,16 @@ EXAMPLE
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
-RFC 23: Flux Standard Duration: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_23.html
 
-RFC 33: Flux Job Queues: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_33.html
+FLUX RFC
+========
+
+:doc:`rfc:spec_23`
+
+:doc:`rfc:spec_33`
+
 
 SEE ALSO
 ========

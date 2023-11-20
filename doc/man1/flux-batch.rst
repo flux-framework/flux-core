@@ -202,7 +202,7 @@ override those in the submission script, e.g.: ::
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
 
 SEE ALSO
 ========

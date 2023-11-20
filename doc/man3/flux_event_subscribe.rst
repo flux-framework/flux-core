@@ -74,4 +74,4 @@ displays one, then quits.
 RESOURCES
 =========
 
-Flux: http://flux-framework.org
+.. include:: common/resources.rst
