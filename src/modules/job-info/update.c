@@ -289,9 +289,9 @@ static void lookup_continuation (flux_future_t *f, void *arg)
     struct info_ctx *ctx = uc->ctx;
     const char *key_str;
     const char *eventlog_str;
-    const char *input;
-    const char *tok;
-    size_t toklen;
+    json_t *eventlog = NULL;
+    size_t index;
+    json_t *entry;
     const char *errmsg = NULL;
     bool job_ended = false;
     bool submit_parsed = false;
@@ -315,17 +315,15 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         goto error;
     }
 
-    input = eventlog_str;
-    while (eventlog_parse_next (&input, &tok, &toklen)) {
-        json_t *entry = NULL;
+    if (!(eventlog = eventlog_decode (eventlog_str))) {
+        errno = EINVAL;
+        errmsg = "lookup eventlog cannot be parsed";
+        goto error;
+    }
+    json_array_foreach (eventlog, index, entry) {
         const char *name;
         json_t *context = NULL;
-        if (eventlog_parse_entry_chunk (uc->ctx->h,
-                                        tok,
-                                        toklen,
-                                        &entry,
-                                        &name,
-                                        &context) < 0) {
+        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
             errmsg = "error parsing eventlog";
             goto error;
         }
@@ -347,7 +345,6 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         }
         else if (streq (name, "clean"))
             job_ended = true;
-        json_decref (entry);
     }
 
     /* double check, generally speaking should be impossible */
@@ -401,6 +398,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
     if (eventlog_watch (uc) < 0)
         goto error;
 
+    json_decref (eventlog);
     return;
 
 error:
@@ -420,6 +418,7 @@ cleanup:
     }
     else
         zlist_remove (ctx->update_lookups, uc);
+    json_decref (eventlog);
 }
 
 static int update_lookup (struct info_ctx *ctx,
