@@ -43,6 +43,10 @@ chmod +x job_manager_get_R
 
 export PATH=$(pwd):$PATH
 
+# some tests grep for job id via flux proxy.  To ensure job id is consistent
+# across all tests and instances, set FLUX_F58_FORCE_ASCII to true.
+export FLUX_F58_FORCE_ASCII=1
+
 job_manager_get_expiration() {
 	job_manager_get_R $1 | jq .R.execution.expiration
 }
