@@ -423,6 +423,7 @@ check_PROGRAMS = \
 	job-manager/list-jobs \
 	job-manager/print-constants \
 	job-manager/events_journal_stream \
+	job-info/info_lookup \
 	job-info/update_lookup \
 	job-info/update_watch_stream \
 	ingest/submitbench \
@@ -769,6 +770,11 @@ job_manager_events_journal_stream_SOURCES = job-manager/events_journal_stream.c
 job_manager_events_journal_stream_CPPFLAGS = $(test_cppflags)
 job_manager_events_journal_stream_LDADD = $(test_ldadd)
 job_manager_events_journal_stream_LDFLAGS = $(test_ldflags)
+
+job_info_info_lookup_SOURCES = job-info/info_lookup.c
+job_info_info_lookup_CPPFLAGS = $(test_cppflags)
+job_info_info_lookup_LDADD = $(test_ldadd)
+job_info_info_lookup_LDFLAGS = $(test_ldflags)
 
 job_info_update_lookup_SOURCES = job-info/update_lookup.c
 job_info_update_lookup_CPPFLAGS = $(test_cppflags)
