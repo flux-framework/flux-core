@@ -290,6 +290,9 @@ MAN3_FILES_SECONDARY = \
 	man3/idset_first.3 \
 	man3/idset_last.3 \
 	man3/idset_next.3 \
+	man3/idset_prev.3 \
+	man3/idset_empty.3 \
+	man3/idset_universe_size.3 \
 	man3/idset_count.3 \
 	man3/idset_equal.3 \
 	man3/idset_subtract.3 \
