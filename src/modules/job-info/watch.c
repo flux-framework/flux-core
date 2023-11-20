@@ -38,6 +38,7 @@ struct watch_ctx {
     flux_future_t *watch_f;
     bool allow;
     bool kvs_watch_canceled;
+    bool cancel;
 };
 
 static void watch_continuation (flux_future_t *f, void *arg);
@@ -173,8 +174,10 @@ static void check_eventlog_continuation (flux_future_t *f, void *arg)
     /* There is a chance user canceled before we began legitimately
      * "watching" the desired eventlog */
     if (w->kvs_watch_canceled) {
-        if (flux_respond_error (ctx->h, w->msg, ENODATA, NULL) < 0)
-            flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+        if (w->cancel) {
+            if (flux_respond_error (ctx->h, w->msg, ENODATA, NULL) < 0)
+                flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+        }
         goto done;
     }
 
@@ -222,6 +225,8 @@ static void watch_continuation (flux_future_t *f, void *arg)
     if (flux_kvs_lookup_get (f, &s) < 0) {
         if (errno != ENOENT && errno != ENODATA && errno != ENOTSUP)
             flux_log_error (ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+        if (errno == ENODATA && w->kvs_watch_canceled && !w->cancel)
+            goto cleanup;
         goto error;
     }
 
@@ -236,8 +241,11 @@ static void watch_continuation (flux_future_t *f, void *arg)
     }
 
     if (w->kvs_watch_canceled) {
-        errno = ENODATA;
-        goto error;
+        if (w->cancel) {
+            errno = ENODATA;
+            goto error;
+        }
+        goto cleanup;
     }
 
     if (!w->allow) {
@@ -294,7 +302,7 @@ error_cancel:
 error:
     if (flux_respond_error (ctx->h, w->msg, errno, errmsg) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-
+cleanup:
     /* flux future destroyed in watch_ctx_destroy, which is called
      * via zlist_remove() */
     zlist_remove (ctx->watchers, w);
@@ -428,6 +436,7 @@ static void send_kvs_watch_cancel (struct info_ctx *ctx,
         match = flux_disconnect_match (msg, w->msg);
     if (match) {
         w->kvs_watch_canceled = true;
+        w->cancel = cancel;
 
         /* if the watching hasn't started yet, no need to cancel */
         if (w->watch_f) {
