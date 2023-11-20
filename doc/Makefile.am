@@ -280,9 +280,14 @@ MAN3_FILES_SECONDARY = \
 	man3/idset_destroy.3 \
 	man3/idset_decode.3 \
 	man3/idset_ndecode.3 \
+	man3/idset_copy.3 \
+	man3/idset_test.3 \
 	man3/idset_set.3 \
+	man3/idset_range_set.3 \
 	man3/idset_clear.3 \
+	man3/idset_range_clear.3 \
 	man3/idset_first.3 \
+	man3/idset_last.3 \
 	man3/idset_next.3 \
 	man3/idset_count.3 \
 	man3/idset_equal.3 \

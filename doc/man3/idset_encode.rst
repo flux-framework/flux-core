@@ -37,17 +37,8 @@ of valid input strings are:
 ::
 
    1,2,5,4
-
-::
-
    1-4,7,9-10
-
-::
-
    42
-
-::
-
    [99-101]
 
 :func:`idset_ndecode` creates an idset from a sub-string :var:`s` defined by
