@@ -637,27 +637,15 @@ static void update_watch_cancel (struct update_ctx *uc,
                                  const flux_msg_t *msg,
                                  bool cancel)
 {
-    const flux_msg_t *cmpmsg;
-
-    cmpmsg = flux_msglist_first (uc->msglist);
-    while (cmpmsg) {
-        bool match;
-
-        if (cancel)
-            match = flux_cancel_match (msg, cmpmsg);
-        else
-            match = flux_disconnect_match (msg, cmpmsg);
-
-        if (match) {
-            if (flux_respond_error (uc->ctx->h, cmpmsg, ENODATA, NULL) < 0)
-                flux_log_error (uc->ctx->h,
-                                "%s: flux_respond_error",
-                                __FUNCTION__);
-            /* deletes at cursor */
-            flux_msglist_delete (uc->msglist);
-        }
-
-        cmpmsg = flux_msglist_next (uc->msglist);
+    if (cancel) {
+        if (flux_msglist_cancel (uc->ctx->h, uc->msglist, msg) < 0)
+            flux_log_error (uc->ctx->h,
+                            "error handling job-info.update-watch-cancel");
+    }
+    else {
+        if (flux_msglist_disconnect (uc->msglist, msg) < 0)
+            flux_log_error (uc->ctx->h,
+                            "error handling job-info.update-watch disconnect");
     }
 
     if (flux_msglist_count (uc->msglist) == 0)
