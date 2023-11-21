@@ -280,6 +280,11 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_kvs_move.3 \
 	man3/flux_core_version_string.3 \
 	man3/idset_destroy.3 \
+	man3/idset_decode_ex.3 \
+	man3/idset_decode_empty.3 \
+	man3/idset_decode_info.3 \
+	man3/idset_decode_add.3 \
+	man3/idset_decode_subtract.3 \
 	man3/idset_copy.3 \
 	man3/idset_test.3 \
 	man3/idset_set.3 \
