@@ -69,10 +69,16 @@ char *idset_encode (const struct idset *idset, int flags);
  */
 struct idset *idset_decode (const char *s);
 
+#ifndef FLUX_DEPRECATED
+#define FLUX_DEPRECATED(...) __VA_ARGS__ __attribute__((deprecated))
+#endif
+
 /* Decode 'len' chars of string 's' to an idset.
  * Returns idset on success, or NULL on failure with errno set.
  */
-struct idset *idset_ndecode (const char *s, size_t len);
+FLUX_DEPRECATED(
+struct idset *idset_ndecode (const char *s, size_t len)
+);
 
 /* Parse 'len' chars of string 's' to an idset created with 'size' and 'flags'.
  * If len < 0, strlen (s) is used.

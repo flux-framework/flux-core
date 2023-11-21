@@ -13,8 +13,6 @@ SYNOPSIS
 
    struct idset *idset_decode (const char *s);
 
-   struct idset *idset_ndecode (const char *s, size_t len);
-
 Link with :command:`-lflux-idset`.
 
 DESCRIPTION
@@ -35,16 +33,12 @@ of valid input strings are:
    42
    [99-101]
 
-:func:`idset_ndecode` creates an idset from a sub-string :var:`s` defined by
-length :var:`len`.
-
 
 RETURN VALUE
 ============
 
-:func:`idset_decode` and :func:`idset_ndecode` return idset on success which
-must be freed with :man3:`idset_destroy`. On error, NULL is returned with
-:var:`errno` set.
+:func:`idset_decode` returns an idset on success which must be freed with
+:man3:`idset_destroy`. On error, NULL is returned with :var:`errno` set.
 
 
 ERRORS

@@ -286,7 +286,6 @@ man_pages = [
     ('man3/idset_create', 'idset_count', 'Manipulate numerically sorted sets of non-negative integers', [author], 3),
     ('man3/idset_encode','idset_encode', 'Convert idset to string', [author], 3),
     ('man3/idset_decode','idset_decode', 'Convert string to idset', [author], 3),
-    ('man3/idset_decode','idset_ndecode', 'Convert string to idset', [author], 3),
     ('man3/idset_add', 'idset_equal', 'Perform set operations on idsets', [author], 3),
     ('man3/idset_add','idset_union', 'Perform set operations on idsets', [author], 3),
     ('man3/idset_add','idset_add', 'Perform set operations on idsets', [author], 3),
