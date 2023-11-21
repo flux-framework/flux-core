@@ -34,21 +34,30 @@ int validate_idset_flags (int flags, int allowed)
 struct idset *idset_create (size_t size, int flags)
 {
     struct idset *idset;
+    int valid_flags = IDSET_FLAG_AUTOGROW
+                    | IDSET_FLAG_INITFULL
+                    | IDSET_FLAG_COUNT_LAZY;
 
-    if (validate_idset_flags (flags, IDSET_FLAG_AUTOGROW) < 0)
+    if (validate_idset_flags (flags, valid_flags) < 0)
         return NULL;
     if (size == 0)
         size = IDSET_DEFAULT_SIZE;
     if (!(idset = malloc (sizeof (*idset))))
         return NULL;
-    idset->T = vebnew (size, 0);
+    if ((flags & IDSET_FLAG_INITFULL))
+        idset->T = vebnew (size, 1);
+    else
+        idset->T = vebnew (size, 0);
     if (!idset->T.D) {
         free (idset);
         errno = ENOMEM;
         return NULL;
     }
     idset->flags = flags;
-    idset->count = 0;
+    if ((flags & IDSET_FLAG_INITFULL))
+        idset->count = size;
+    else
+        idset->count = 0;
     return idset;
 }
 
@@ -60,6 +69,11 @@ void idset_destroy (struct idset *idset)
         free (idset);
         errno = saved_errno;
     }
+}
+
+size_t idset_universe_size (const struct idset *idset)
+{
+    return idset ? idset->T.M : 0;
 }
 
 static Veb vebdup (Veb T)
@@ -106,7 +120,7 @@ static bool valid_id (unsigned int id)
     return true;
 }
 
-/* Double idset size until it has at least 'size' slots.
+/* Double the idset universe size until it is at least 'size'.
  * Return 0 on success, -1 on failure with errno == ENOMEM.
  */
 static int idset_grow (struct idset *idset, size_t size)
@@ -132,27 +146,71 @@ static int idset_grow (struct idset *idset, size_t size)
             vebput (T, id);
             id = vebsucc (idset->T, id + 1);
         }
+        if ((idset->flags & IDSET_FLAG_INITFULL)) {
+            for (id = idset->T.M; id < newsize; id++)
+                vebput (T, id);
+            idset->count += (newsize - idset->T.M);
+        }
         free (idset->T.D);
         idset->T = T;
     }
     return 0;
 }
 
-/* Wrapper for vebput() which increments idset count if needed
+/* Helper to avoid costly idset_test() operation in idset_put()/idset_del()
+ * in some cases that may commonly arise in idset_encode(), for example.
+ * This function runs in constant time.  Return true if id is definitely not
+ * in set.  A false result is indeterminate.
+ */
+static bool nonmember_fast (struct idset *idset, unsigned int id)
+{
+    unsigned int last = idset_last (idset);
+    if (last == IDSET_INVALID_ID || id > last)
+        return true;
+    unsigned int first = idset_first (idset);
+    if (first == IDSET_INVALID_ID || id < first)
+        return true;
+    return false;
+}
+
+/* Wrapper for vebput() which increments idset count.
+ * The operation is skipped if id is already in the set.
  */
 static void idset_put (struct idset *idset, unsigned int id)
 {
-    if (!idset_test (idset, id))
+    if ((idset->flags & IDSET_FLAG_COUNT_LAZY)
+        || nonmember_fast (idset, id)
+        || !idset_test (idset, id)) {
         idset->count++;
+        vebput (idset->T, id);
+    }
+}
+
+/* Call this variant if id is known to NOT be in the set
+ */
+static void idset_put_nocheck (struct idset *idset, unsigned int id)
+{
+    idset->count++;
     vebput (idset->T, id);
 }
 
-/* Wrapper for vebdel() which decrements idset count if needed
+/* Wrapper for vebdel() which decrements idset count.
+ * The operation is skipped if id is not in the set.
  */
 static void idset_del (struct idset *idset, unsigned int id)
 {
-    if (idset_test (idset, id))
+    if ((idset->flags & IDSET_FLAG_COUNT_LAZY)
+        || (!nonmember_fast (idset, id) && idset_test (idset, id))) {
         idset->count--;
+        vebdel (idset->T, id);
+    }
+}
+
+/* Call this variant if id is known to be IN the set
+ */
+static void idset_del_nocheck (struct idset *idset, unsigned int id)
+{
+    idset->count--;
     vebdel (idset->T, id);
 }
 
@@ -162,9 +220,19 @@ int idset_set (struct idset *idset, unsigned int id)
         errno = EINVAL;
         return -1;
     }
-    if (idset_grow (idset, id + 1) < 0)
-        return -1;
-    idset_put (idset, id);
+    if (id >= idset_universe_size (idset)) {
+        /* N.B. we do not try to grow the idset to accommodate out of range ids
+         * when the operation is 'set' and IDSET_FLAG_INITFULL is set.
+         * Treat it as a successful no-op.
+         */
+        if ((idset->flags & IDSET_FLAG_INITFULL))
+            return 0;
+        if (idset_grow (idset, id + 1) < 0)
+            return -1;
+        idset_put_nocheck (idset, id);
+    }
+    else
+        idset_put (idset, id);
     return 0;
 }
 
@@ -186,10 +254,22 @@ int idset_range_set (struct idset *idset, unsigned int lo, unsigned int hi)
         return -1;
     }
     normalize_range (&lo, &hi);
-    if (idset_grow (idset, hi + 1) < 0)
-        return -1;
-    for (id = lo; id <= hi; id++)
-        idset_put (idset, id);
+
+    // see IDSET_FLAG_INITFULL note in idset_set()
+    size_t oldsize = idset_universe_size (idset);
+    if (!(idset->flags & IDSET_FLAG_INITFULL)) {
+        if (idset_grow (idset, hi + 1) < 0)
+            return -1;
+    }
+    for (id = lo; id <= hi; id++) {
+        if (id >= oldsize) {
+            if ((idset->flags & IDSET_FLAG_INITFULL))
+                return 0;
+            idset_put_nocheck (idset, id);
+        }
+        else
+            idset_put (idset, id);
+    }
     return 0;
 }
 
@@ -199,7 +279,19 @@ int idset_clear (struct idset *idset, unsigned int id)
         errno = EINVAL;
         return -1;
     }
-    idset_del (idset, id);
+    if (id >= idset_universe_size (idset)) {
+        /* N.B. we do not try to grow the idset to accommodate out of range ids
+         * when the operation is 'clear' and IDSET_FLAG_INITFULL is NOT set.
+         * Treat this as a successful no-op.
+         */
+        if (!(idset->flags & IDSET_FLAG_INITFULL))
+            return 0;
+        if (idset_grow (idset, id + 1) < 0)
+            return -1;
+        idset_del_nocheck (idset, id);
+    }
+    else
+        idset_del (idset, id);
     return 0;
 }
 
@@ -212,8 +304,21 @@ int idset_range_clear (struct idset *idset, unsigned int lo, unsigned int hi)
         return -1;
     }
     normalize_range (&lo, &hi);
-    for (id = lo; id <= hi && id < idset->T.M; id++)
-        idset_del (idset, id);
+    // see IDSET_FLAG_INITFULL note in idset_clear()
+    size_t oldsize = idset_universe_size (idset);
+    if ((idset->flags & IDSET_FLAG_INITFULL)) {
+        if (idset_grow (idset, hi + 1) < 0)
+            return -1;
+    }
+    for (id = lo; id <= hi; id++) {
+        if (id >= oldsize) {
+            if (!(idset->flags & IDSET_FLAG_INITFULL))
+                return 0;
+            idset_del_nocheck (idset, id);
+        }
+        else
+            idset_del (idset, id);
+    }
     return 0;
 }
 
@@ -237,12 +342,12 @@ unsigned int idset_first (const struct idset *idset)
 }
 
 
-unsigned int idset_next (const struct idset *idset, unsigned int prev)
+unsigned int idset_next (const struct idset *idset, unsigned int id)
 {
     unsigned int next = IDSET_INVALID_ID;
 
     if (idset) {
-        next = vebsucc (idset->T, prev + 1);
+        next = vebsucc (idset->T, id + 1);
         if (next == idset->T.M)
             next = IDSET_INVALID_ID;
     }
@@ -261,11 +366,44 @@ unsigned int idset_last (const struct idset *idset)
     return last;
 }
 
+unsigned int idset_prev (const struct idset *idset, unsigned int id)
+{
+    unsigned int next = IDSET_INVALID_ID;
+
+    if (idset) {
+        next = vebpred (idset->T, id - 1);
+        if (next == idset->T.M)
+            next = IDSET_INVALID_ID;
+    }
+    return next;
+}
+
 size_t idset_count (const struct idset *idset)
 {
     if (!idset)
         return 0;
-    return idset->count;
+    if (!(idset->flags & IDSET_FLAG_COUNT_LAZY))
+        return idset->count;
+
+    /* IDSET_FLAG_COUNT_LAZY was set, causing set/clear operations to ignore
+     * safeguards that kept idset->count accurate.  Pay now by iterating.
+     */
+    unsigned int id;
+    size_t count = 0;
+
+    id = idset_first (idset);
+    while (id != IDSET_INVALID_ID) {
+        count++;
+        id = idset_next (idset, id);
+    }
+    return count;
+}
+
+bool idset_empty (const struct idset *idset)
+{
+    if (!idset || vebsucc (idset->T, 0) == idset->T.M)
+        return true;
+    return false;
 }
 
 bool idset_equal (const struct idset *idset1,
@@ -275,8 +413,15 @@ bool idset_equal (const struct idset *idset1,
 
     if (!idset1 || !idset2)
         return false;
-    if (idset_count (idset1) != idset_count (idset2))
-        return false;
+
+    /* As an optimization, declare the sets unequal if counts differ.
+     * If lazy counts are used, this is potentially slow, so skip.
+     */
+    if (!(idset1->flags & IDSET_FLAG_COUNT_LAZY)
+        && !(idset2->flags & IDSET_FLAG_COUNT_LAZY)) {
+        if (idset_count (idset1) != idset_count (idset2))
+            return false;
+    }
 
     id = vebsucc (idset1->T, 0);
     while (id < idset1->T.M) {
@@ -399,6 +544,60 @@ struct idset *idset_intersect (const struct idset *a, const struct idset *b)
         id = idset_next (a, id);
     }
     return result;
+}
+
+/* Find the next available id.  If there isn't one, try to grow the set.
+ * The grow attempt will fail if IDSET_FLAG_AUTOGROW is not set.
+ * Finally call vebdel() to take the id out of the set and return it.
+ */
+int idset_alloc (struct idset *idset, unsigned int *val)
+{
+    unsigned int id;
+
+    if (!idset || !(idset->flags & IDSET_FLAG_INITFULL) || !val) {
+        errno = EINVAL;
+        return -1;
+    }
+    id = idset_first (idset);
+    if (id == IDSET_INVALID_ID) {
+        id = idset_universe_size (idset);
+        if (idset_grow (idset, id + 1) < 0)
+            return -1;
+    }
+    // code above ensures that id is a member of idset
+    idset_del_nocheck (idset, id);
+    *val = id;
+    return 0;
+}
+
+/* Return an id to the set, ignoring invalid or out of range ones.
+ * This does not catch double-frees.
+ */
+void idset_free (struct idset *idset, unsigned int val)
+{
+    if (!idset || !(idset->flags & IDSET_FLAG_INITFULL))
+        return;
+    idset_put (idset, val);
+}
+
+/* Same as above but fail if the id is already in the set.
+ */
+int idset_free_check (struct idset *idset, unsigned int val)
+{
+    if (!idset
+        || !(idset->flags & IDSET_FLAG_INITFULL)
+        || !valid_id (val)
+        || val >= idset_universe_size (idset)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (idset_test (idset, val)) {
+        errno = EEXIST;
+        return -1;
+    }
+    // code above ensures that id is NOT a member of idset
+    idset_put_nocheck (idset, val);
+    return 0;
 }
 
 /*

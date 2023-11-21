@@ -799,3 +799,10 @@ perres
 pertask
 mpibind
 sys
+allocator
+INITFULL
+ITER
+maxid
+unallocated
+NUL
+ssize

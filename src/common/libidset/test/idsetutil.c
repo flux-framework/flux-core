@@ -67,7 +67,7 @@ error:
 void usage (void)
 {
     fprintf (stderr,
-             "Usage: isdetutil CMD ARGS\n"
+             "Usage: idsetutil CMD ARGS\n"
              "where CMD is one of:\n"
              "expand [IDSET]\n"
              );

@@ -34,7 +34,6 @@ test_taskmap_t_LDADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libtaskmap/libtaskmap.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/libutil/veb.lo \
 	$(top_builddir)/src/common/libidset/libidset.la \
 	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
 	$(JANSSON_LIBS)

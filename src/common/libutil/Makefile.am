@@ -29,8 +29,6 @@ libutil_la_SOURCES = \
 	setenvf.h \
 	tstat.c \
 	tstat.h \
-	veb.c \
-	veb.h \
 	read_all.c \
 	read_all.h \
 	cleanup.c \
@@ -106,8 +104,6 @@ libutil_la_SOURCES = \
 	parse_size.h \
 	parse_size.c
 
-EXTRA_DIST = veb_mach.c
-
 TESTS = test_sha1.t \
 	test_sha256.t \
 	test_popen2.t \
@@ -115,7 +111,6 @@ TESTS = test_sha1.t \
 	test_cronodate.t \
 	test_wallclock.t \
 	test_stdlog.t \
-	test_veb.t \
 	test_lru_cache.t \
 	test_unlink.t \
 	test_cleanup.t \
@@ -186,7 +181,6 @@ test_cronodate_t_CPPFLAGS = $(test_cppflags)
 test_cronodate_t_LDADD = \
 	$(builddir)/cronodate.lo \
 	$(top_builddir)/src/common/libidset/libidset.la \
-	$(builddir)/veb.lo \
 	$(top_builddir)/src/common/libtap/libtap.la
 
 test_wallclock_t_SOURCES = test/wallclock.c
@@ -196,10 +190,6 @@ test_wallclock_t_LDADD = $(test_ldadd)
 test_stdlog_t_SOURCES = test/stdlog.c
 test_stdlog_t_CPPFLAGS = $(test_cppflags)
 test_stdlog_t_LDADD = $(test_ldadd)
-
-test_veb_t_SOURCES = test/veb.c
-test_veb_t_CPPFLAGS = $(test_cppflags)
-test_veb_t_LDADD = $(test_ldadd)
 
 test_lru_cache_t_SOURCES = test/lru_cache.c
 test_lru_cache_t_CPPFLAGS = $(test_cppflags)

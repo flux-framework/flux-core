@@ -79,8 +79,6 @@ libflux_la_SOURCES = \
 	module.c \
 	conf_private.h \
 	conf.c \
-	tagpool.h \
-	tagpool.c \
 	ev_flux.h \
 	ev_flux.c \
 	ev_buffer_read.h \
@@ -111,7 +109,6 @@ TESTS = test_message.t \
 	test_request.t \
 	test_response.t \
 	test_event.t \
-	test_tagpool.t \
 	test_future.t \
 	test_composite_future.t \
 	test_reactor.t \
@@ -132,7 +129,8 @@ TESTS = test_message.t \
 	test_plugin.t \
 	test_sync.t \
 	test_disconnect.t \
-	test_msg_deque.t
+	test_msg_deque.t \
+	test_rpcscale.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libtestutil/libtestutil.la \
@@ -171,10 +169,6 @@ test_msglist_t_LDADD = $(test_ldadd)
 test_event_t_SOURCES = test/event.c
 test_event_t_CPPFLAGS = $(test_cppflags)
 test_event_t_LDADD = $(test_ldadd)
-
-test_tagpool_t_SOURCES = test/tagpool.c
-test_tagpool_t_CPPFLAGS = $(test_cppflags)
-test_tagpool_t_LDADD = $(test_ldadd)
 
 test_request_t_SOURCES = test/request.c
 test_request_t_CPPFLAGS = $(test_cppflags)
@@ -219,6 +213,12 @@ test_version_t_LDADD = $(test_ldadd)
 test_rpc_t_SOURCES = test/rpc.c
 test_rpc_t_CPPFLAGS = $(test_cppflags)
 test_rpc_t_LDADD = $(test_ldadd)
+
+test_rpcscale_t_SOURCES = test/rpcscale.c
+test_rpcscale_t_CPPFLAGS = $(test_cppflags)
+test_rpcscale_t_LDADD = \
+	$(top_builddir)/src/common/liboptparse/liboptparse.la \
+	$(test_ldadd)
 
 test_rpc_chained_t_SOURCES = test/rpc_chained.c
 test_rpc_chained_t_CPPFLAGS = $(test_cppflags)

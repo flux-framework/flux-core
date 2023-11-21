@@ -93,6 +93,10 @@ void test_basic (void)
     idset = idset_create (0, 0);
     ok (idset != NULL,
         "idset_create size=0 works");
+    ok (idset_count (idset) == 0,
+        "idset_count returns 0");
+    ok (idset_empty (idset) == true,
+        "idset_empty returns true");
 
     idset_destroy (idset);
 }
@@ -183,57 +187,63 @@ void test_badparam (void)
 
     errno = 0;
     ok (idset_set (NULL, 1) < 0 && errno == EINVAL,
-        "iset_set(idset=NULL) fails with EINVAL");
+        "idset_set(idset=NULL) fails with EINVAL");
     errno = 0;
     ok (idset_set (idset, IDSET_INVALID_ID) < 0 && errno == EINVAL,
-        "iset_set(id=INVALID) fails with EINVAL");
+        "idset_set(id=INVALID) fails with EINVAL");
     errno = 0;
     ok (idset_set (idset, 101) < 0 && errno == EINVAL,
-        "iset_set(id=out of range) fails with EINVAL");
+        "idset_set(id=out of range) fails with EINVAL");
     errno = 0;
     ok (idset_range_set (NULL, 1, 2) < 0 && errno == EINVAL,
-        "iset_range_set(idset=NULL) fails with EINVAL");
+        "idset_range_set(idset=NULL) fails with EINVAL");
     errno = 0;
     ok (idset_range_set (idset, 1, IDSET_INVALID_ID) < 0 && errno == EINVAL,
-        "iset_range_set(hi=INVALID) fails with EINVAL");
+        "idset_range_set(hi=INVALID) fails with EINVAL");
     errno = 0;
     ok (idset_range_set (idset, IDSET_INVALID_ID, 1) < 0 && errno == EINVAL,
-        "iset_range_set(lo=INVALID) fails with EINVAL");
+        "idset_range_set(lo=INVALID) fails with EINVAL");
     errno = 0;
     ok (idset_range_set (idset, 101, 1) < 0 && errno == EINVAL,
-        "iset_range_set(lo=out of range) fails with EINVAL");
+        "idset_range_set(lo=out of range) fails with EINVAL");
     errno = 0;
     ok (idset_range_set (idset, 1, 101) < 0 && errno == EINVAL,
-        "iset_range_set(hi=out of range) fails with EINVAL");
+        "idset_range_set(hi=out of range) fails with EINVAL");
 
     errno = 0;
     ok (idset_clear (NULL, 1) < 0 && errno == EINVAL,
-        "iset_clear(idset=NULL) fails with EINVAL");
+        "idset_clear(idset=NULL) fails with EINVAL");
     errno = 0;
     ok (idset_clear (idset, IDSET_INVALID_ID) < 0 && errno == EINVAL,
-        "iset_clear(id=INVALID) fails with EINVAL");
+        "idset_clear(id=INVALID) fails with EINVAL");
     errno = 0;
     ok (idset_clear (idset, 101) == 0,
-        "iset_clear(id=out of range) works");
+        "idset_clear(id=out of range) works");
     errno = 0;
     ok (idset_range_clear (NULL, 1, 2) < 0 && errno == EINVAL,
-        "iset_range_clear(idset=NULL) fails with EINVAL");
+        "idset_range_clear(idset=NULL) fails with EINVAL");
     errno = 0;
     ok (idset_range_clear (idset, 1, IDSET_INVALID_ID) < 0 && errno == EINVAL,
-        "iset_range_clear(hi=INVALID) fails with EINVAL");
+        "idset_range_clear(hi=INVALID) fails with EINVAL");
     errno = 0;
     ok (idset_range_clear (idset, IDSET_INVALID_ID, 1) < 0 && errno == EINVAL,
-        "iset_range_clear(lo=INVALID) fails with EINVAL");
+        "idset_range_clear(lo=INVALID) fails with EINVAL");
 
     ok (idset_test (NULL, 1) == false,
-        "iset_test(idset=NULL) returns false");
+        "idset_test(idset=NULL) returns false");
 
     ok (idset_count (NULL) == 0,
-        "iset_count(idset=NULL) returns 0");
+        "idset_count(idset=NULL) returns 0");
+
+    ok (idset_universe_size (NULL) == 0,
+        "idset_universe_size(idset=NULL) returns 0");
+
+    ok (idset_empty (NULL) == true,
+        "idset_empty(idset=NULL) returns true");
 
     errno = 0;
     ok (idset_copy (NULL) == NULL && errno == EINVAL,
-        "iset_copy(idset=NULL) fails with EINVAL");
+        "idset_copy(idset=NULL) fails with EINVAL");
 
     ok (idset_first (NULL) == IDSET_INVALID_ID,
         "idset_first (idset=NULL) returns IDSET_INVALID_ID");
@@ -243,6 +253,12 @@ void test_badparam (void)
         "idset_next (prev=INVALID) returns IDSET_INVALID_ID");
     ok (idset_next (idset, 101) == IDSET_INVALID_ID,
         "idset_next (prev=out of range) returns IDSET_INVALID_ID");
+    ok (idset_prev (NULL, 0) == IDSET_INVALID_ID,
+        "idset_prev (idset=NULL) returns IDSET_INVALID_ID");
+    ok (idset_prev (idset, IDSET_INVALID_ID) == IDSET_INVALID_ID,
+        "idset_prev (id=INVALID) returns IDSET_INVALID_ID");
+    ok (idset_prev (idset, 101) == IDSET_INVALID_ID,
+        "idset_next (id=out of range) returns IDSET_INVALID_ID");
     ok (idset_last (NULL) == IDSET_INVALID_ID,
         "idset_last (idset=NULL) returns IDSET_INVALID_ID");
 
@@ -252,12 +268,16 @@ void test_badparam (void)
 void test_iter (void)
 {
     struct idset *idset;
-    struct idset *idset_empty;
+    struct idset *idset_nil;
 
     if (!(idset = idset_decode ("7-9")))
         BAIL_OUT ("idset_decode 7-9 failed");
-    if (!(idset_empty = idset_create (0, 0)))
+    if (!(idset_nil = idset_create (0, 0)))
         BAIL_OUT ("idset_create (0, 0) failed");
+    ok (idset_empty (idset) == false,
+        "idset_empty (idset=[7-9]) returns false");
+    ok (idset_empty (idset_nil) == true,
+        "idset_empty (idset=[]) returns true");
 
     ok (idset_first (idset) == 7,
         "idset_first idset=[7-9] returned 7");
@@ -273,18 +293,27 @@ void test_iter (void)
         "idset_next idset=[7-9] prev=4096 returned INVALID");
     ok (idset_next (idset, IDSET_INVALID_ID) == IDSET_INVALID_ID,
         "idset_next idset=[7-9] prev=INVALID returned INVALID");
+
     ok (idset_last (idset) == 9,
         "idset_last idset=[7-9] returned 9");
+    ok (idset_prev (idset, 9) == 8,
+        "idset_prev idset=[7-9] id=9 returned 8");
+    ok (idset_prev (idset, 8) == 7,
+        "idset_prev idset=[7-9] id=8 returned 7");
+    ok (idset_prev (idset, 7) == IDSET_INVALID_ID,
+        "idset_prev idset=[7-9] id=7 returned INVALID");
+    ok (idset_prev (idset, IDSET_INVALID_ID) == IDSET_INVALID_ID,
+        "idset_prev idset=[7-9] id=INVALID returned INVALID");
 
-    ok (idset_first (idset_empty) == IDSET_INVALID_ID,
+    ok (idset_first (idset_nil) == IDSET_INVALID_ID,
         "idset_first idset=[] returned IDSET_INVALID_ID");
-    ok (idset_last (idset_empty) == IDSET_INVALID_ID,
+    ok (idset_last (idset_nil) == IDSET_INVALID_ID,
         "idset_last idset=[] returned IDSET_INVALID_ID");
-    ok (idset_next (idset_empty, 0) == IDSET_INVALID_ID,
+    ok (idset_next (idset_nil, 0) == IDSET_INVALID_ID,
         "idset_next idset=[] prev=0 returned IDSET_INVALID_ID");
 
     idset_destroy (idset);
-    idset_destroy (idset_empty);
+    idset_destroy (idset_nil);
 }
 
 void test_set (void)
@@ -657,26 +686,31 @@ void test_autogrow (void)
     idset = idset_create (1, 0);
     ok (idset != NULL,
         "idset_create size=1 flags=0 works");
-    ok (idset->T.M == 1,
-        "idset internal size is 1");
+    ok (idset_universe_size (idset) == 1,
+        "idset_universe_size is 1");
     ok (idset_set (idset, 0) == 0,
         "idset_set 0 works");
     errno = 0;
     ok (idset_set (idset, 1) < 0 && errno == EINVAL,
         "idset_set 1 fails with EINVAL");
+    ok (idset_clear (idset, 1) == 0,
+        "idset_clear 1 is a no-op");
     idset_destroy (idset);
 
     idset = idset_create (1, IDSET_FLAG_AUTOGROW);
     ok (idset != NULL,
         "idset_create size=1 flags=AUTOGROW works");
-    ok (idset->T.M == 1,
-        "idset internal size is 1");
+    ok (idset_universe_size (idset) == 1,
+        "idset_universe_size is 1");
     ok (idset_set (idset, 0) == 0,
         "idset_set 0 works");
+    ok (idset_clear (idset, 2) == 0
+        && idset_universe_size (idset) == 1,
+        "idset_clear 2 is a no-op");
     ok (idset_set (idset, 2) == 0,
         "idset_set 2 works");
-    ok (idset->T.M > 1,
-        "idset internal size grew");
+    ok (idset_universe_size (idset) > 1,
+        "idset_universe_size returned a larger size");
     ok (   idset_test (idset, 0)
         && !idset_test (idset, 1)
         && idset_test (idset, 2)
@@ -766,6 +800,191 @@ void issue_2336 (void)
     }
 }
 
+void test_initfull (void)
+{
+    struct idset *idset;
+    size_t size = 128;
+
+    idset = idset_create (size, IDSET_FLAG_INITFULL);
+    ok (idset != NULL,
+        "idset_create size=%zu flags=INITFULL works", size);
+    ok (idset_count (idset) == size,
+        "idset_count returns correct size");
+    ok (idset_test (idset, 0) == true,
+        "idset_test 0 is true");
+    ok (idset_test (idset, size - 1) == true,
+        "idset_test %zu is true", size - 1);
+    ok (idset_first (idset) == 0,
+        "idset_first returns 0");
+    ok (idset_next (idset, 0) == 1,
+        "idset_next prev=0 returns 1");
+    ok (idset_test (idset, size) == false,
+        "idset_test %zu is false", size);
+    idset_destroy (idset);
+
+    // grow by clearing a bit
+    idset = idset_create (0, IDSET_FLAG_INITFULL | IDSET_FLAG_AUTOGROW);
+    ok (idset != NULL,
+        "idset_create size=0 flags=INITFULL|AUTOGROW works");
+    ok (idset_clear (idset, IDSET_DEFAULT_SIZE) == 0,
+        "idset_clear id=size works");
+    ok (idset_count (idset) == IDSET_DEFAULT_SIZE*2 - 1,
+        "idset_count returns 2*default size - 1");
+    ok (idset_test (idset, IDSET_DEFAULT_SIZE) == false,
+        "idset_test id=size is false");
+    ok (idset_test (idset, IDSET_DEFAULT_SIZE + 1) == true,
+        "idset_test id=size+1 is true");
+    ok (idset_test (idset, IDSET_DEFAULT_SIZE*2 - 1) == true,
+        "idset_test id=2*size-1 is true");
+    idset_destroy (idset);
+
+    // setting a bit should not cause growth
+    idset = idset_create (4, IDSET_FLAG_INITFULL | IDSET_FLAG_AUTOGROW);
+    ok (idset != NULL,
+        "idset_create size=4 flags=INITFULL|AUTOGROW works");
+    ok (idset_count (idset) == 4,
+        "idset_count returns 4");
+    ok (idset_set (idset, 4) == 0,
+        "idset_set 4 (out of range) works");
+    ok (idset_count (idset) == 4,
+        "idset_count still returns 4");
+    idset_destroy (idset);
+}
+
+void test_alloc (int flags)
+{
+    struct idset *idset;
+    unsigned int ids[64];
+    unsigned int id;
+    int errors;
+    size_t size_before;
+    size_t size_after;
+
+    flags |= IDSET_FLAG_AUTOGROW | IDSET_FLAG_INITFULL;
+    idset = idset_create (16, flags);
+    if (!idset)
+        BAIL_OUT ("could not create idset");
+
+    ok (idset_count (idset) == 16,
+        "idset_count returns 16");
+
+    size_before = idset_universe_size (idset);
+    errors = 0;
+    for (int i = 0; i < ARRAY_SIZE (ids); i++) {
+        if (idset_alloc (idset, &ids[i]) < 0)
+            errors++;
+    }
+    size_after = idset_universe_size (idset);
+    ok (errors == 0,
+        "idset_alloc allocated multiple ids with no errors");
+    errors = 0;
+    for (int i = 0; i < ARRAY_SIZE (ids); i++)
+        if (ids[i] != i) {
+            diag ("allocation %d is %lu", i, ids[i]);
+            errors++;
+        }
+    ok (errors == 0,
+        "ids were allocated monotonically");
+    ok (size_before < size_after,
+        "idset size grew automatically");
+    diag ("before=%zu after=%zu", size_before, size_after);
+    ok (idset_count (idset) == 0,
+        "idset_count returns 0");
+
+    errors = 0;
+    for (int i = 0; i < ARRAY_SIZE (ids); i += 2) {
+        if (idset_free_check (idset, ids[i]) < 0) {
+            diag ("idset_free_check %lu: %s", ids[i], strerror (errno));
+            errors++;
+        }
+    }
+    ok (errors == 0,
+        "idset_free_check freed multiple ids with no errors");
+    ok (idset_count (idset) == 32,
+        "idset_count returns 32");
+
+    errors = 0;
+    for (int i = 0; i < ARRAY_SIZE (ids); i += 2) {
+        if (idset_alloc (idset, &ids[i]) < 0)
+            errors++;
+    }
+    ok (errors == 0,
+        "idset_alloc re-allocated multiple ids with no errors");
+
+    errors = 0;
+    for (int i = 0; i < ARRAY_SIZE (ids); i++)
+        if (ids[i] != i) {
+            diag ("allocation %d is %lu", i, ids[i]);
+            errors++;
+        }
+    ok (errors == 0,
+        "ids were allocated monotonically");
+    ok (idset_count (idset) == 0,
+        "idset_count returns 0");
+
+    for (int i = 0; i < ARRAY_SIZE (ids); i++)
+        idset_free (idset, ids[i]);
+    ok (idset_count (idset) == idset_universe_size (idset),
+        "idset_free freed all ids");
+
+    idset_destroy (idset);
+    idset = idset_create (16, IDSET_FLAG_INITFULL);
+    if (!idset)
+        BAIL_OUT ("could not create idset");
+    for (int i = 0; i < 16; i++)
+        if (idset_alloc (idset, &id) < 0)
+            BAIL_OUT ("could not allocate ids in existing universe");
+    errno = 0;
+    ok (idset_alloc (idset, &id) < 0 && errno == EINVAL,
+        "idset_alloc fails with EINVAL when universe is full and no autofree");
+    idset_destroy (idset);
+}
+
+void test_alloc_badparam (void)
+{
+    unsigned int id;
+    struct idset *idset;
+    struct idset *idset2;
+
+    idset = idset_create (16, IDSET_FLAG_INITFULL | IDSET_FLAG_AUTOGROW);
+    if (!idset)
+        BAIL_OUT ("could not create idset");
+    idset2 = idset_create (16, 0);
+    if (!idset2)
+        BAIL_OUT ("could not create idset");
+
+    errno = 0;
+    ok (idset_alloc (NULL, &id) < 0 && errno == EINVAL,
+        "idset_alloc idset=NULL fails with EINVAL");
+    errno = 0;
+    ok (idset_alloc (idset2, &id) < 0 && errno == EINVAL,
+        "idset_alloc fails with EINVAL without IDSET_FLAG_INITFULL");
+    errno = 0;
+    ok (idset_alloc (idset, NULL) < 0 && errno == EINVAL,
+        "idset_alloc id=NULL fails with EINVAL");
+
+    lives_ok ({idset_free (NULL, 42);},
+        "idset_free idset=NULL doesn't crash");
+    idset_free (idset2, 2);
+    diag ("idset_free without IDSET_FLAG_INITFULL is a no-op");
+
+    errno = 0;
+    ok (idset_free_check (NULL, 2) < 0 && errno == EINVAL,
+        "idset_free_check idset=NULL fails with EINVAL");
+    errno = 0;
+    ok (idset_free_check (idset2, 2) < 0 && errno == EINVAL,
+        "idset_free_check without IDSET_FLAG_INITFULL fails with EINVAL");
+    errno = 0;
+    ok (idset_free_check (idset, 16) < 0 && errno == EINVAL,
+        "idset_free_check without out of range fails with EINVAL");
+    errno = 0;
+    ok (idset_free_check (idset, 2) < 0 && errno == EEXIST,
+        "idset_free_check on non-free id fails with EEXIST");
+
+    idset_destroy (idset);
+    idset_destroy (idset2);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -786,6 +1005,10 @@ int main (int argc, char *argv[])
     issue_1974 ();
     issue_2336 ();
     test_ops ();
+    test_initfull();
+    test_alloc (0);
+    test_alloc (IDSET_FLAG_COUNT_LAZY);
+    test_alloc_badparam();
 
     done_testing ();
 }

@@ -122,8 +122,7 @@ libflux_optparse_la_LDFLAGS = \
 
 libflux_idset_la_SOURCES =
 libflux_idset_la_LIBADD = \
-	$(builddir)/libidset/libidset.la \
-	$(builddir)/libutil/veb.lo
+	$(builddir)/libidset/libidset.la
 libflux_idset_la_LDFLAGS = \
 	-Wl,--version-script=$(srcdir)/libflux-idset.map \
 	-version-info @LIBFLUX_IDSET_VERSION_INFO@ \
