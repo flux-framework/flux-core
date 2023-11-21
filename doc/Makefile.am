@@ -136,6 +136,7 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_core_version.3 \
 	man3/idset_create.3 \
 	man3/idset_encode.3 \
+	man3/idset_decode.3 \
 	man3/idset_add.3 \
 	man3/idset_alloc.3 \
 	man3/flux_jobtap_get_flux.3 \
@@ -279,7 +280,6 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_kvs_move.3 \
 	man3/flux_core_version_string.3 \
 	man3/idset_destroy.3 \
-	man3/idset_decode.3 \
 	man3/idset_ndecode.3 \
 	man3/idset_copy.3 \
 	man3/idset_test.3 \
