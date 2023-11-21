@@ -13,10 +13,6 @@ SYNOPSIS
 
    char *idset_encode (const struct idset *idset, int flags);
 
-   struct idset *idset_decode (const char *s);
-
-   struct idset *idset_ndecode (const char *s, size_t len);
-
 Link with :command:`-lflux-idset`.
 
 DESCRIPTION
@@ -28,42 +24,21 @@ Refer to :man3:`idset_create` for a general description of idsets.
 a comma-separated list of ids, potentially modified by :var:`flags`
 (see FLAGS below).
 
-:func:`idset_decode` creates an idset from a string :var:`s`. The string may
-have been produced by :func:`idset_encode`. It must consist of comma-separated
-non-negative integer ids, and may also contain hyphenated ranges.
-If enclosed in square brackets, the brackets are ignored. Some examples
-of valid input strings are:
-
-::
-
-   1,2,5,4
-   1-4,7,9-10
-   42
-   [99-101]
-
-:func:`idset_ndecode` creates an idset from a sub-string :var:`s` defined by
-length :var:`len`.
-
 
 FLAGS
 =====
 
 IDSET_FLAG_BRACKETS
-   Valid for :func:`idset_encode` only. If set, the encoded string will be
-   enclosed in brackets, unless the idset is a singleton (contains only
-   one id).
+   If set, the encoded string will be enclosed in brackets, unless the idset
+   is a singleton (contains only one id).
 
 IDSET_FLAG_RANGE
-   Valid for :func:`idset_encode` only. If set, any consecutive ids are
-   compressed into hyphenated ranges in the encoded string.
+   If set, any consecutive ids are compressed into hyphenated ranges in the
+   encoded string.
 
 
 RETURN VALUE
 ============
-
-:func:`idset_decode` and :func:`idset_ndecode` return idset on success which
-must be freed with :man3:`idset_destroy`. On error, NULL is returned with
-:var:`errno` set.
 
 :func:`idset_encode` returns a string on success which must be freed
 with :linux:man3:`free`. On error, NULL is returned with :var:`errno` set.

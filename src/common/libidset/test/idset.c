@@ -66,6 +66,7 @@ struct inout test_inputs[] = {
     /* expected failures */
     { "4.2",            0,          NULL },
     { "x",              0,          NULL },
+    { "1-2x",           0,          NULL },
     { "01,2",           0,          NULL },
     { "00",             0,          NULL },
     { "3,2",            0,          NULL },
@@ -985,6 +986,208 @@ void test_alloc_badparam (void)
     idset_destroy (idset2);
 }
 
+void test_decode_ex (void)
+{
+    struct idset *idset;
+    idset_error_t error;
+
+    /* First, for fun, just generate some run of the mill parsing errors that
+     * are already tested above and show the textual errors on the diag output.
+     */
+    errno = 0;
+    error.text[0] = '\0';
+    idset = idset_decode_ex ("0", 1, 0, 0xffff, &error);
+    ok (idset == NULL && errno == EINVAL && strlen (error.text) > 0,
+        "idset_decode_ex flags=0xffff fails with EINVAL");
+    diag ("%s", error.text);
+
+    errno = 0;
+    error.text[0] = '\0';
+    idset = idset_decode_ex ("[0-1", 4, 0, 0, &error);
+    ok (idset == NULL && errno == EINVAL && strlen (error.text) > 0,
+        "idset_decode_ex s=[0-1 fails with EINVAL");
+    diag ("%s", error.text);
+
+    errno = 0;
+    error.text[0] = '\0';
+    idset = idset_decode_ex ("2,1,0", 4, 0, 0, &error);
+    ok (idset == NULL && errno == EINVAL && strlen (error.text) > 0,
+        "idset_decode_ex s=2,1,0 fails with EINVAL");
+    diag ("%s", error.text);
+
+    errno = 0;
+    error.text[0] = '\0';
+    idset = idset_decode_ex ("0-255xxx", 8, 0, 0, &error);
+    ok (idset == NULL && errno == EINVAL && strlen (error.text) > 0,
+        "idset_decode_ex s=0-255xxx fails with EINVAL");
+    diag ("%s", error.text);
+
+    /* Decode to a fixed size (256) set
+     * This works because len=5 turns the input into 0-255
+     */
+    idset = idset_decode_ex ("0-255,256", 5, 256, 0, &error);
+    ok (idset != NULL,
+        "idset_decode_ex s=0-255,256 len=5 size=256 works");
+    idset_destroy (idset);
+
+    /* Overflow a fixed size (256) set
+     */
+    errno = 0;
+    error.text[0] = '\0';
+    idset = idset_decode_ex ("0-255,256", 9, 256, 0, &error);
+    ok (idset == NULL && errno == EINVAL && strlen (error.text) > 0,
+        "idset_decode_ex s=0-255,256 len=9 size=256 fails with EINVAL");
+    diag ("%s", error.text);
+
+    /* Show that overflow is handled with AUTOGROW.
+     */
+    idset = idset_decode_ex ("255,256", 7, 256, IDSET_FLAG_AUTOGROW, &error);
+    ok (idset != NULL,
+        "idset_decode_ex s=255,256 size=256 works with AUTOGROW");
+    idset_destroy (idset);
+
+    /* An empty set with size=-1 is not allowed without AUTOGROW.
+     */
+    errno = 0;
+    error.text[0] = '\0';
+    idset = idset_decode_ex ("", -1, -1, 0, &error);
+    ok (idset == NULL && errno == EINVAL && strlen (error.text) > 0,
+        "idset_decode_ex s=\"\" size=-1 fails with EINVAL");
+    diag ("%s", error.text);
+
+    /* But an empty set with size=-1 and AUTOGROW is allowed.
+     */
+    idset = idset_decode_ex ("", -1, -1, IDSET_FLAG_AUTOGROW, &error);
+    ok (idset != NULL,
+        "idset_decode_ex s=\"\" size=-1 works with AUTOGROW");
+    idset_destroy (idset);
+
+    /* A set with size-1 exactly fits the max id
+     */
+    idset = idset_decode_ex ("1,3,5", -1, -1, 0, &error);
+    ok (idset != NULL,
+        "idset_decode_ex s=1,3,5 size=-1 works");
+    ok (idset_universe_size (idset) == 6,
+        "idset_universe_size returns 6");
+    idset_destroy (idset);
+}
+
+void test_decode_empty (void)
+{
+    ok (idset_decode_empty ("[]", -1) == true,
+        "idset_decode_empty [] returns true");
+    ok (idset_decode_empty ("", -1) == true,
+        "idset_decode_empty \"\" returns true");
+    ok (idset_decode_empty ("1-4", -1) == false,
+        "idset_decode_empty 1-4 returns false");
+    ok (idset_decode_empty ("[", -1) == false,
+        "idset_decode_empty [ returns false");
+    ok (idset_decode_empty (NULL, -1) == false,
+        "idset_decode_empty NULL returns false");
+}
+
+struct infovec {
+    const char *input;
+    int errnum;
+    size_t count;
+    unsigned int maxid;
+};
+
+struct infovec infovec[] = {
+    { "[]", 0, 0, IDSET_INVALID_ID },
+    { "", 0, 0, IDSET_INVALID_ID },
+    { "[", EINVAL, 0, 0 },
+    { NULL, EINVAL, 0, 0 },
+    { "0", 0, 1, 0 },
+    { "1,2", 0, 2, 2 },
+    { "1,2-1024", 0, 1024, 1024 },
+    { "0-3", 0, 4, 3 },
+};
+
+
+void test_decode_info (void)
+{
+    for (int i = 0; i < ARRAY_SIZE (infovec); i++) {
+        idset_error_t error;
+        size_t count = 0;
+        unsigned int maxid = 0;
+        int rc;
+
+        errno = 0;
+        error.text[0] = '\0';
+
+        rc = idset_decode_info (infovec[i].input,
+                                -1,
+                                &count,
+                                &maxid,
+                                &error);
+        if (infovec[i].errnum != 0) {
+            ok (rc < 0
+                && errno == infovec[i].errnum
+                && strlen (error.text) > 0,
+                "idset_decode_info %s failed with expected error",
+                infovec[i].input ? infovec[i].input : "NULL");
+            diag ("%s", error.text);
+        }
+        else {
+            ok (rc == 0
+                && count == infovec[i].count
+                && maxid == infovec[i].maxid,
+                "idset_decode_info %s  works",
+                infovec[i].input);
+        }
+    }
+
+    ok (idset_decode_info ("1", -1, NULL, NULL, NULL) == 0,
+        "idset_decode_info accepts NULL maxid/count");
+}
+
+void test_decode_addsub (void)
+{
+    struct idset *idset;
+    idset_error_t error;
+
+    if (!(idset = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        BAIL_OUT ("idset_create failed");
+
+    ok (idset_decode_add (idset, "1-4", -1, &error) == 0
+        && idset_count (idset) == 4,
+        "idset_decode_add 1-4 works");
+    ok (idset_decode_add (idset, "5-8", -1, &error) == 0
+        && idset_count (idset) == 8,
+        "idset_decode_add 5-8 works");
+    ok (idset_decode_add (idset, "1,5", -1, &error) == 0
+        && idset_count (idset) == 8,
+        "idset_decode_add 1,5 works");
+    ok (idset_decode_subtract (idset, "1,5", -1, &error) == 0
+        && idset_count (idset) == 6,
+        "idset_decode_subtract 1,5 works");
+    ok (idset_decode_subtract (idset, "", -1, &error) == 0
+        && idset_count (idset) == 6,
+        "idset_decode_subtract \"\"  works");
+    ok (idset_decode_subtract (idset, "0-100", -1, &error) == 0
+        && idset_count (idset) == 0,
+        "idset_decode_subtract 0-100 works");
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok  (idset_decode_add (idset, "[", -1, &error) < 0
+         && errno == EINVAL
+         && strlen (error.text) > 0,
+         "idset_decode_add [ fails with errno and error");
+    diag ("%s", error.text);
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok  (idset_decode_subtract (idset, "]", -1, &error) < 0
+         && errno == EINVAL
+         && strlen (error.text) > 0,
+         "idset_decode_subtract ] fails with errno and error");
+    diag ("%s", error.text);
+
+    idset_destroy (idset);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1009,6 +1212,10 @@ int main (int argc, char *argv[])
     test_alloc (0);
     test_alloc (IDSET_FLAG_COUNT_LAZY);
     test_alloc_badparam();
+    test_decode_ex ();
+    test_decode_empty ();
+    test_decode_info ();
+    test_decode_addsub ();
 
     done_testing ();
 }

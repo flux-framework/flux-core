@@ -32,6 +32,10 @@ enum idset_flags {
                              //  idset_set/clear, but slows down idset_count()
 };
 
+typedef struct {
+    char text[160];
+} idset_error_t;
+
 #define IDSET_INVALID_ID    (UINT_MAX - 1)
 
 /* Create/destroy an idset.
@@ -65,10 +69,68 @@ char *idset_encode (const struct idset *idset, int flags);
  */
 struct idset *idset_decode (const char *s);
 
+#ifndef FLUX_DEPRECATED
+#define FLUX_DEPRECATED(...) __VA_ARGS__ __attribute__((deprecated))
+#endif
+
 /* Decode 'len' chars of string 's' to an idset.
  * Returns idset on success, or NULL on failure with errno set.
  */
-struct idset *idset_ndecode (const char *s, size_t len);
+FLUX_DEPRECATED(
+struct idset *idset_ndecode (const char *s, size_t len)
+);
+
+/* Parse 'len' chars of string 's' to an idset created with 'size' and 'flags'.
+ * If len < 0, strlen (s) is used.
+ * If size = 0, the implementation's default size is used.
+ * If size < 0, the idset size is made to fit exactly (fail on empty set*).
+ * On failure, a human readable error is placed in 'error'.
+ * [*] Exception: if IDSET_FLAG_AUTOGROW, empty set is created with size of 1.
+ */
+struct idset *idset_decode_ex (const char *s,
+                               ssize_t len,
+                               ssize_t size,
+                               int flags,
+                               idset_error_t *error);
+
+/* Parse 'len' chars of string 's' to determine if it is the empty set.
+ * Return false on parse error.  This may be useful when representing the
+ * empty set as a NULL.
+ */
+bool idset_decode_empty (const char *s, ssize_t len);
+
+/* Parse 'len' chars of string 's' to determine the id count and maximum id
+ * without creating an idset.  Either of the return parameters may be NULL.
+ * If len < 0, strlen (s) is used.
+ * If the set is empty, maxid is IDSET_INVALID_ID.
+ * On failure, a human readable error is placed in 'error'.
+ */
+int idset_decode_info (const char *s,
+                       ssize_t len,
+                       size_t *count,
+                       unsigned int *maxid,
+                       idset_error_t *error);
+
+/* Parse 'len' chars of string 's' and add it to 'idset',
+ * without creating an intermediate idset.
+ * If len < 0, strlen (s) is used.
+ * On failure, a human readable error is placed in 'error'.
+ */
+int idset_decode_add (struct idset *idset,
+                      const char *s,
+                      ssize_t len,
+                      idset_error_t *error);
+
+/* Parse 'len' chars of string 's' and subtract it from 'idset',
+ * without creating an intermediate idset.
+ * If len < 0, strlen (s) is used.
+ * On failure, a human readable error is placed in 'error'.
+ */
+int idset_decode_subtract (struct idset *idset,
+                           const char *s,
+                           ssize_t len,
+                           idset_error_t *error);
+
 
 /* Add id (or range [lo-hi]) to idset.
  * Return 0 on success, -1 on failure with errno set.
