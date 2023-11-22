@@ -18,7 +18,7 @@ SYNOPSIS
 | **flux** **job** **killall** [*OPTIONS*]
 | **flux** **job** **raise** [*OPTIONS*] *ids...* [*--*] [*message...*]
 | **flux** **job** **raiseall** [*OPTIONS*] *type* [*message...*]
-| **flux** **job** **taskmap** [*OPTIONS*] *id*|*taskmap*
+| **flux** **job** **taskmap** [*OPTIONS*] *id* | *taskmap*
 | **flux** **job** **timeleft** [*OPTIONS*] [*id*]
 | **flux** **job** **purge** [*OPTIONS*] [*id...*]
 | **flux** **job** **info** [*OPTIONS*] *id* *key*
