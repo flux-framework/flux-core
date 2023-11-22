@@ -27,7 +27,18 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-flux-job(1) performs various job related housekeeping functions.
+:program:`flux job` performs various job related housekeeping functions.
+
+
+OPTIONS
+=======
+
+.. program:: flux job
+
+.. option:: -h, --help
+
+   Display a list of :program:`flux job` sub-commands.
+
 
 ATTACH
 ======
