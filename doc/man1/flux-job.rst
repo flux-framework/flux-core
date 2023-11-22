@@ -9,31 +9,19 @@ flux-job(1)
 SYNOPSIS
 ========
 
-**flux** **job** **attach** [*OPTIONS*] *id*
-
-**flux** **job** **cancel** [*OPTIONS*] *ids...* [*--*] [*message...*]
-
-**flux** **job** **cancelall** [*OPTIONS*] [*message...*]
-
-**flux** **job** **status** [*OPTIONS*] *id [*id...*]
-
-**flux** **job** **wait** [*OPTIONS*] [*id*]
-
-**flux** **job** **kill** [*--signal=SIG*] *id* [*id...*]
-
-**flux** **job** **killall** [*OPTIONS*]
-
-**flux** **job** **raise** [*OPTIONS*] *ids...* [*--*] [*message...*]
-
-**flux** **job** **raiseall** [*OPTIONS*] *type* [*message...*]
-
-**flux** **job** **taskmap** [*OPTIONS*] *id*|*taskmap*
-
-**flux** **job** **timeleft** [*OPTIONS*] [*id*]
-
-**flux** **job** **purge** [*OPTIONS*] [*id...*]
-
-**flux** **job** **info** [*OPTIONS*] *id* *key*
+| **flux** **job** **attach** [*OPTIONS*] *id*
+| **flux** **job** **cancel** [*OPTIONS*] *ids...* [*--*] [*message...*]
+| **flux** **job** **cancelall** [*OPTIONS*] [*message...*]
+| **flux** **job** **status** [*OPTIONS*] *id [*id...*]
+| **flux** **job** **wait** [*OPTIONS*] [*id*]
+| **flux** **job** **kill** [*--signal=SIG*] *id* [*id...*]
+| **flux** **job** **killall** [*OPTIONS*]
+| **flux** **job** **raise** [*OPTIONS*] *ids...* [*--*] [*message...*]
+| **flux** **job** **raiseall** [*OPTIONS*] *type* [*message...*]
+| **flux** **job** **taskmap** [*OPTIONS*] *id*|*taskmap*
+| **flux** **job** **timeleft** [*OPTIONS*] [*id*]
+| **flux** **job** **purge** [*OPTIONS*] [*id...*]
+| **flux** **job** **info** [*OPTIONS*] *id* *key*
 
 
 DESCRIPTION
