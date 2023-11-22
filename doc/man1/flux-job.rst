@@ -10,8 +10,6 @@ SYNOPSIS
 ========
 
 | **flux** **job** **attach** [*OPTIONS*] *id*
-| **flux** **job** **cancel** [*OPTIONS*] *ids...* [*--*] [*message...*]
-| **flux** **job** **cancelall** [*OPTIONS*] [*message...*]
 | **flux** **job** **status** [*OPTIONS*] *id [*id...*]
 | **flux** **job** **wait** [*OPTIONS*] [*id*]
 | **flux** **job** **kill** [*--signal=SIG*] *id* [*id...*]
@@ -110,46 +108,6 @@ This status line may be suppressed by setting
 .. option:: --debug
 
    Enable parallel debugger attach.
-
-cancel
-------
-
-.. program:: flux job cancel
-
-One or more jobs by may be canceled with :program:`flux job cancel`.  An
-optional message included with the cancel exception may be provided via the
-:option:`--message=NOTE` option or after the list of jobids. The special
-argument *"--"* forces the end of jobid processing and can be used to separate
-the exception message from the jobids when necessary.
-
-.. option:: -m, --message=NOTE
-
-   Set the optional exception note. It is an error to specify the message
-   via this option and on the command line after the jobid list.
-
-cancelall
----------
-
-.. program:: flux job cancelall
-
-Jobs may be canceled in bulk with :program:`flux job cancelall`.  Target jobs
-are selected with:
-
-.. option:: -u, --user=USER
-
-   Set target user.  The instance owner may specify *all* for all users.
-
-.. option:: -S, --states=STATES
-
-   Set target job states (default: ACTIVE).
-
-.. option:: -f, --force
-
-   Confirm the command
-
-.. option:: -q, --quiet
-
-   Suppress output if no jobs match
 
 status
 ------
