@@ -40,8 +40,13 @@ OPTIONS
    Display a list of :program:`flux job` sub-commands.
 
 
-ATTACH
-======
+COMMANDS
+========
+
+Several subcommands are available to perform various operations on jobs.
+
+attach
+------
 
 .. program:: flux job attach
 
@@ -106,8 +111,8 @@ This status line may be suppressed by setting
 
    Enable parallel debugger attach.
 
-CANCEL
-======
+cancel
+------
 
 .. program:: flux job cancel
 
@@ -121,6 +126,9 @@ the exception message from the jobids when necessary.
 
    Set the optional exception note. It is an error to specify the message
    via this option and on the command line after the jobid list.
+
+cancelall
+---------
 
 .. program:: flux job cancelall
 
@@ -143,8 +151,8 @@ are selected with:
 
    Suppress output if no jobs match
 
-STATUS
-======
+status
+------
 
 .. program:: flux job status
 
@@ -163,8 +171,8 @@ Wait for job(s) to complete and exit with the largest exit code.
 
    Increase verbosity of output.
 
-WAIT
-====
+wait
+----
 
 .. program:: flux job wait
 
@@ -208,8 +216,8 @@ code of zero.  If any jobs have failed, it exits with a code of one.
 
    Emit a line of output for all jobs, not just failing ones.
 
-SIGNAL
-======
+kill
+----
 
 .. program:: flux job kill
 
@@ -219,10 +227,12 @@ One or more running jobs may be signaled by jobid with :program:`flux job kill`.
 
    Send signal SIG (default: SIGTERM).
 
+killall
+-------
+
 .. program:: flux job killall
 
-Running jobs may be signaled in bulk with :program:`flux job killall`.  In
-addition to the option above, target jobs are selected with:
+Running jobs may be signaled in bulk with :program:`flux job killall`.
 
 .. option:: -u, --user=USER
 
@@ -232,8 +242,12 @@ addition to the option above, target jobs are selected with:
 
    Confirm the command.
 
-EXCEPTION
-=========
+.. option:: -s, --signal=SIG
+
+   Send signal SIG (default: SIGTERM).
+
+raise
+-----
 
 .. program:: flux job raise
 
@@ -257,6 +271,9 @@ separate the exception message from the jobids when necessary.
 
    Set exception type (default: cancel).
 
+raiseall
+--------
+
 Exceptions may be raised in bulk with :program:`flux job raiseall`, which
 requires a type (positional argument) and accepts the following options:
 
@@ -279,8 +296,8 @@ requires a type (positional argument) and accepts the following options:
 
    Confirm the command.
 
-TASKMAP
-=======
+taskmap
+-------
 
 .. program:: flux job taskmap
 
@@ -320,8 +337,8 @@ support task mapping formats:
 
 One one of the above options may be used per call.
 
-TIMELEFT
-========
+timeleft
+--------
 
 .. program:: flux job timeleft
 
@@ -340,8 +357,8 @@ Options:
 
   Generate human readable output. Report results in Flux Standard Duration.
 
-PURGE
-=====
+purge
+-----
 
 .. program:: flux job purge
 
@@ -366,15 +383,14 @@ Inactive jobs may also be purged automatically if the job manager is
 configured as described in :man5:`flux-config-job-manager`.
 
 
-flux job info
--------------
+info
+----
 
 .. program:: flux job info
 
 :program:`flux job info` retrieves the selected low level job object
 and displays it on standard output.  Object formats are described in the
 RFCs listed in `RESOURCES`_.
-
 
 Options:
 
