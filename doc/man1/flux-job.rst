@@ -12,6 +12,7 @@ SYNOPSIS
 | **flux** **job** **attach** [*OPTIONS*] *id*
 | **flux** **job** **status** [*OPTIONS*] *id [*id...*]
 | **flux** **job** **last** [*N* | *SLICE*]
+| **flux** **job** **urgency** [*-v*] *id* *N*
 | **flux** **job** **wait** [*OPTIONS*] [*id*]
 | **flux** **job** **kill** [*--signal=SIG*] *id* [*id...*]
 | **flux** **job** **killall** [*OPTIONS*]
@@ -161,6 +162,30 @@ Examples:
 :command:`flux job last [::-1]`
   List all jobids in submission order
 
+urgency
+-------
+
+.. program:: flux job wait
+
+:program:`flux job urgency` changes a job's urgency value.  The urgency
+may also be specified at job submission time.  The argument *N* has a range
+of 0 to 16 for guest users, or 0 to 31 for instance owners.  In lieu of a
+numerical value, the following special names are also accepted:
+
+hold (0)
+  Hold the job until the urgency is raised with :option:`flux job urgency`.
+
+default (16)
+  The default urgency for all users.
+
+expedite (31)
+  Assign the highest possible priority to the job (restricted to instance
+  owner).
+
+Urgency is one factor used to calculate job priority, which affects the
+order in which the scheduler considers jobs.  For more information, refer
+to :man1:`flux-submit` description of the :option:`flux submit --urgency`
+option.
 
 wait
 ----
