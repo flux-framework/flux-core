@@ -474,14 +474,14 @@ static struct optparse_subcommand subcommands[] = {
       "[OPTIONS] ids... [--] [message ...]",
       "Cancel one or more jobs",
       cmd_cancel,
-      0,
+      OPTPARSE_SUBCMD_HIDDEN,
       cancel_opts,
     },
     { "cancelall",
       "[OPTIONS] [message ...]",
       "Cancel multiple jobs",
       cmd_cancelall,
-      0,
+      OPTPARSE_SUBCMD_HIDDEN,
       cancelall_opts,
     },
     { "raise",
@@ -1192,6 +1192,9 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
 
     parse_jobids_and_note (p, argv + optindex, &args, &note);
 
+    fprintf (stderr,
+             "WARNING: this command is deprecated.  Use flux-cancel(1).\n");
+
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
@@ -1241,6 +1244,8 @@ int cmd_cancelall (optparse_t *p, int argc, char **argv)
         userid = getuid ();
     if (optparse_hasopt (p, "force"))
         dry_run = 0;
+    fprintf (stderr,
+             "WARNING: this command is deprecated.  Use flux-cancel(1).\n");
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     count = raiseall (h,
