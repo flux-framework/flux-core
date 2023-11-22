@@ -9,19 +9,19 @@ flux-job(1)
 SYNOPSIS
 ========
 
-| **flux** **job** **attach** [*OPTIONS*] *id*
-| **flux** **job** **status** [*OPTIONS*] *id [*id...*]
+| **flux** **job** **attach** [*--label-io*] [*-E*] [*--wait-event=EVENT*] *id*
+| **flux** **job** **status** [*-v*] [*--json*] [-e CODE] *id [*id...*]
 | **flux** **job** **last** [*N* | *SLICE*]
 | **flux** **job** **urgency** [*-v*] *id* *N*
-| **flux** **job** **wait** [*OPTIONS*] [*id*]
-| **flux** **job** **kill** [*--signal=SIG*] *id* [*id...*]
-| **flux** **job** **killall** [*OPTIONS*]
-| **flux** **job** **raise** [*OPTIONS*] *ids...* [*--*] [*message...*]
-| **flux** **job** **raiseall** [*OPTIONS*] *type* [*message...*]
+| **flux** **job** **wait** [*-v*] [*--all*] [*id*]
+| **flux** **job** **kill** [*--signal=SIG*] *ids...*
+| **flux** **job** **killall** [*-f*] [*--user=USER*] [*--signal=SIG*]
+| **flux** **job** **raise** [*-severity=N*] [*--type=TYPE*] *ids...* [*--*] [*message...*]
+| **flux** **job** **raiseall** [*--severity=N*] [*--user=USER*] [*--states=STATES*] *type* [ [*--*] [*message...*]
 | **flux** **job** **taskmap** [*OPTIONS*] *id* | *taskmap*
-| **flux** **job** **timeleft** [*OPTIONS*] [*id*]
-| **flux** **job** **purge** [*OPTIONS*] [*id...*]
-| **flux** **job** **info** [*OPTIONS*] *id* *key*
+| **flux** **job** **timeleft** [*-H*] [*id*]
+| **flux** **job** **purge** [*-f*] [*--age-limit=FSD*] [*--num-limit=N*] [*ids...*]
+| **flux** **job** **info** [*--original*] [*--base*] *id* *key*
 
 
 DESCRIPTION
