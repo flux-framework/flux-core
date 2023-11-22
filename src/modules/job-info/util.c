@@ -23,8 +23,6 @@ flux_msg_t *cred_msg_pack (const char *topic,
                            ...)
 {
     flux_msg_t *newmsg = NULL;
-    json_t *payload = NULL;
-    char *payloadstr = NULL;
     flux_msg_t *rv = NULL;
     int save_errno;
     va_list ap;
@@ -35,30 +33,21 @@ flux_msg_t *cred_msg_pack (const char *topic,
         goto error;
     if (flux_msg_set_cred (newmsg, cred) < 0)
         goto error;
-    if (!(payload = json_vpack_ex (NULL, 0, fmt, ap)))
+    if (flux_msg_vpack (newmsg, fmt, ap) < 0)
         goto error;
-    if (!(payloadstr = json_dumps (payload, JSON_COMPACT))) {
-        errno = ENOMEM;
-        goto error;
-    }
-    if (flux_msg_set_string (newmsg, payloadstr) < 0)
-        goto error;
-
     rv = newmsg;
 error:
     save_errno = errno;
     if (!rv)
         flux_msg_destroy (newmsg);
-    json_decref (payload);
-    free (payloadstr);
     va_end (ap);
     errno = save_errno;
     return rv;
 }
 
-bool eventlog_parse_next (const char **pp,
-                          const char **tok,
-                          size_t *toklen)
+bool get_next_eventlog_entry (const char **pp,
+                              const char **tok,
+                              size_t *toklen)
 {
     char *term;
 
@@ -70,12 +59,12 @@ bool eventlog_parse_next (const char **pp,
     return true;
 }
 
-int eventlog_parse_entry_chunk (flux_t *h,
-                                const char *tok,
-                                size_t toklen,
-                                json_t **entry,
-                                const char **name,
-                                json_t **context)
+int parse_eventlog_entry (flux_t *h,
+                          const char *tok,
+                          size_t toklen,
+                          json_t **entry,
+                          const char **name,
+                          json_t **context)
 {
     char *str = NULL;
     json_t *o = NULL;

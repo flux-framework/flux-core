@@ -90,10 +90,8 @@ static struct update_ctx *update_ctx_create (struct info_ctx *ctx,
     uc->ctx = ctx;
     uc->type = type;
     uc->id = id;
-    if (!(uc->key = strdup (key))) {
-        errno = ENOMEM;
+    if (!(uc->key = strdup (key)))
         goto error;
-    }
     if (streq (key, "R"))
         uc->update_name = "resource-update";
     else {
@@ -291,9 +289,9 @@ static void lookup_continuation (flux_future_t *f, void *arg)
     struct info_ctx *ctx = uc->ctx;
     const char *key_str;
     const char *eventlog_str;
-    const char *input;
-    const char *tok;
-    size_t toklen;
+    json_t *eventlog = NULL;
+    size_t index;
+    json_t *entry;
     const char *errmsg = NULL;
     bool job_ended = false;
     bool submit_parsed = false;
@@ -317,17 +315,15 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         goto error;
     }
 
-    input = eventlog_str;
-    while (eventlog_parse_next (&input, &tok, &toklen)) {
-        json_t *entry = NULL;
+    if (!(eventlog = eventlog_decode (eventlog_str))) {
+        errno = EINVAL;
+        errmsg = "lookup eventlog cannot be parsed";
+        goto error;
+    }
+    json_array_foreach (eventlog, index, entry) {
         const char *name;
         json_t *context = NULL;
-        if (eventlog_parse_entry_chunk (uc->ctx->h,
-                                        tok,
-                                        toklen,
-                                        &entry,
-                                        &name,
-                                        &context) < 0) {
+        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
             errmsg = "error parsing eventlog";
             goto error;
         }
@@ -349,7 +345,6 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         }
         else if (streq (name, "clean"))
             job_ended = true;
-        json_decref (entry);
     }
 
     /* double check, generally speaking should be impossible */
@@ -403,6 +398,7 @@ static void lookup_continuation (flux_future_t *f, void *arg)
     if (eventlog_watch (uc) < 0)
         goto error;
 
+    json_decref (eventlog);
     return;
 
 error:
@@ -422,6 +418,7 @@ cleanup:
     }
     else
         zlist_remove (ctx->update_lookups, uc);
+    json_decref (eventlog);
 }
 
 static int update_lookup (struct info_ctx *ctx,
@@ -639,34 +636,24 @@ static void update_watch_cancel (struct update_ctx *uc,
                                  const flux_msg_t *msg,
                                  bool cancel)
 {
-    const flux_msg_t *cmpmsg;
-
-    cmpmsg = flux_msglist_first (uc->msglist);
-    while (cmpmsg) {
-        bool match;
-
-        if (cancel)
-            match = flux_cancel_match (msg, cmpmsg);
-        else
-            match = flux_disconnect_match (msg, cmpmsg);
-
-        if (match) {
-            if (flux_respond_error (uc->ctx->h, cmpmsg, ENODATA, NULL) < 0)
-                flux_log_error (uc->ctx->h,
-                                "%s: flux_respond_error",
-                                __FUNCTION__);
-            /* deletes at cursor */
-            flux_msglist_delete (uc->msglist);
-        }
-
-        cmpmsg = flux_msglist_next (uc->msglist);
+    if (cancel) {
+        if (flux_msglist_cancel (uc->ctx->h, uc->msglist, msg) < 0)
+            flux_log_error (uc->ctx->h,
+                            "error handling job-info.update-watch-cancel");
+    }
+    else {
+        if (flux_msglist_disconnect (uc->msglist, msg) < 0)
+            flux_log_error (uc->ctx->h,
+                            "error handling job-info.update-watch disconnect");
     }
 
     if (flux_msglist_count (uc->msglist) == 0)
         eventlog_watch_cancel (uc);
 }
 
-void update_watchers_cancel (struct info_ctx *ctx, const flux_msg_t *msg, bool cancel)
+void update_watchers_cancel (struct info_ctx *ctx,
+                             const flux_msg_t *msg,
+                             bool cancel)
 {
     struct update_ctx *uc;
 

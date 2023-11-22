@@ -37,6 +37,7 @@ struct watch_ctx {
     flux_future_t *check_f;
     flux_future_t *watch_f;
     bool allow;
+    bool kvs_watch_canceled;
     bool cancel;
 };
 
@@ -172,9 +173,11 @@ static void check_eventlog_continuation (flux_future_t *f, void *arg)
 
     /* There is a chance user canceled before we began legitimately
      * "watching" the desired eventlog */
-    if (w->cancel) {
-        if (flux_respond_error (ctx->h, w->msg, ENODATA, NULL) < 0)
-            flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+    if (w->kvs_watch_canceled) {
+        if (w->cancel) {
+            if (flux_respond_error (ctx->h, w->msg, ENODATA, NULL) < 0)
+                flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+        }
         goto done;
     }
 
@@ -200,7 +203,7 @@ static int check_eventlog_end (struct watch_ctx *w,
     json_t *entry = NULL;
     int rc = 0;
 
-    if (eventlog_parse_entry_chunk (w->ctx->h, tok, toklen, &entry, &name, NULL) < 0)
+    if (parse_eventlog_entry (w->ctx->h, tok, toklen, &entry, &name, NULL) < 0)
         return -1;
 
     if (streq (name, "clean"))
@@ -222,6 +225,8 @@ static void watch_continuation (flux_future_t *f, void *arg)
     if (flux_kvs_lookup_get (f, &s) < 0) {
         if (errno != ENOENT && errno != ENODATA && errno != ENOTSUP)
             flux_log_error (ctx->h, "%s: flux_kvs_lookup_get", __FUNCTION__);
+        if (errno == ENODATA && w->kvs_watch_canceled && !w->cancel)
+            goto cleanup;
         goto error;
     }
 
@@ -235,9 +240,12 @@ static void watch_continuation (flux_future_t *f, void *arg)
         goto error;
     }
 
-    if (w->cancel) {
-        errno = ENODATA;
-        goto error;
+    if (w->kvs_watch_canceled) {
+        if (w->cancel) {
+            errno = ENODATA;
+            goto error;
+        }
+        goto cleanup;
     }
 
     if (!w->allow) {
@@ -247,7 +255,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
     }
 
     input = s;
-    while (eventlog_parse_next (&input, &tok, &toklen)) {
+    while (get_next_eventlog_entry (&input, &tok, &toklen)) {
         if (flux_respond_pack (ctx->h, w->msg,
                                "{s:s#}",
                                "event", tok, toklen) < 0) {
@@ -283,7 +291,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
 error_cancel:
     /* If we haven't sent a cancellation yet, must do so so that
      * the future's matchtag will eventually be freed */
-    if (!w->cancel) {
+    if (!w->kvs_watch_canceled) {
         int save_errno = errno;
         if (flux_kvs_lookup_cancel (w->watch_f) < 0)
             flux_log_error (ctx->h, "%s: flux_kvs_lookup_cancel",
@@ -294,7 +302,7 @@ error_cancel:
 error:
     if (flux_respond_error (ctx->h, w->msg, errno, errmsg) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-
+cleanup:
     /* flux future destroyed in watch_ctx_destroy, which is called
      * via zlist_remove() */
     zlist_remove (ctx->watchers, w);
@@ -416,10 +424,10 @@ error:
 
 /* Cancel watch 'w' if it matches message.
  */
-static void watch_cancel (struct info_ctx *ctx,
-                          struct watch_ctx *w,
-                          const flux_msg_t *msg,
-                          bool cancel)
+static void send_kvs_watch_cancel (struct info_ctx *ctx,
+                                   struct watch_ctx *w,
+                                   const flux_msg_t *msg,
+                                   bool cancel)
 {
     bool match;
     if (cancel)
@@ -427,7 +435,8 @@ static void watch_cancel (struct info_ctx *ctx,
     else
         match = flux_disconnect_match (msg, w->msg);
     if (match) {
-        w->cancel = true;
+        w->kvs_watch_canceled = true;
+        w->cancel = cancel;
 
         /* if the watching hasn't started yet, no need to cancel */
         if (w->watch_f) {
@@ -444,7 +453,7 @@ void watchers_cancel (struct info_ctx *ctx, const flux_msg_t *msg, bool cancel)
 
     w = zlist_first (ctx->watchers);
     while (w) {
-        watch_cancel (ctx, w, msg, cancel);
+        send_kvs_watch_cancel (ctx, w, msg, cancel);
         w = zlist_next (ctx->watchers);
     }
 }
