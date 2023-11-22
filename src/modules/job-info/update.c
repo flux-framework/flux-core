@@ -651,7 +651,9 @@ static void update_watch_cancel (struct update_ctx *uc,
         eventlog_watch_cancel (uc);
 }
 
-void update_watchers_cancel (struct info_ctx *ctx, const flux_msg_t *msg, bool cancel)
+void update_watchers_cancel (struct info_ctx *ctx,
+                             const flux_msg_t *msg,
+                             bool cancel)
 {
     struct update_ctx *uc;
 
