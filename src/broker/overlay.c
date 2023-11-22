@@ -188,7 +188,7 @@ struct overlay {
     struct flux_msglist *health_requests;
 };
 
-static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg);
+static void overlay_mcast_child (struct overlay *ov, flux_msg_t *msg);
 static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg);
 static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg);
 static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg);
@@ -572,20 +572,18 @@ error:
     return -1;
 }
 
-int overlay_sendmsg (struct overlay *ov,
-                     const flux_msg_t *msg,
-                     overlay_where_t where)
+int overlay_sendmsg_new (struct overlay *ov,
+                         flux_msg_t **msg,
+                         overlay_where_t where)
 {
     int type;
     uint8_t flags;
-    flux_msg_t *cpy = NULL;
     const char *uuid;
     uint32_t nodeid;
     struct child *child = NULL;
-    int rc;
 
-    if (flux_msg_get_type (msg, &type) < 0
-        || flux_msg_get_flags (msg, &flags) < 0)
+    if (flux_msg_get_type (*msg, &type) < 0
+        || flux_msg_get_flags (*msg, &flags) < 0)
         return -1;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
@@ -595,23 +593,19 @@ int overlay_sendmsg (struct overlay *ov,
              * select the peer, and our uuid remains as part of the source addr.
              */
             if (where == OVERLAY_ANY) {
-                if (flux_msg_get_nodeid (msg, &nodeid) < 0)
-                    goto error;
+                if (flux_msg_get_nodeid (*msg, &nodeid) < 0)
+                    return -1;
                 if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == ov->rank)
                     where = OVERLAY_UPSTREAM;
                 else {
                     if ((child = child_lookup_route (ov, nodeid))) {
                         if (!subtree_is_online (child->status)) {
                             errno = EHOSTUNREACH;
-                            goto error;
+                            return -1;
                         }
-                        if (!(cpy = flux_msg_copy (msg, true)))
-                            goto error;
-                        if (flux_msg_route_push (cpy, ov->uuid) < 0)
-                            goto error;
-                        if (flux_msg_route_push (cpy, child->uuid) < 0)
-                            goto error;
-                        msg = cpy;
+                        if (flux_msg_route_push (*msg, ov->uuid) < 0
+                            || flux_msg_route_push (*msg, child->uuid) < 0)
+                            return -1;
                         where = OVERLAY_DOWNSTREAM;
                     }
                     else
@@ -619,23 +613,20 @@ int overlay_sendmsg (struct overlay *ov,
                 }
             }
             if (where == OVERLAY_UPSTREAM) {
-                rc = overlay_sendmsg_parent (ov, msg);
-                if (rc == 0)
-                    rpc_track_update (ov->parent.tracker, msg);
+                if (overlay_sendmsg_parent (ov, *msg) < 0)
+                    return -1;
+                rpc_track_update (ov->parent.tracker, *msg);
             }
             else {
-                rc = overlay_sendmsg_child (ov, msg);
-                if (rc == 0) {
-                    if (!child) {
-                        if ((uuid = flux_msg_route_last (msg)))
-                            child = child_lookup_online (ov, ov->uuid);
-                    }
-                    if (child)
-                        rpc_track_update (child->tracker, msg);
+                if (overlay_sendmsg_child (ov, *msg) < 0)
+                    return -1;
+                if (!child) {
+                    if ((uuid = flux_msg_route_last (*msg)))
+                        child = child_lookup_online (ov, ov->uuid);
                 }
+                if (child)
+                    rpc_track_update (child->tracker, *msg);
             }
-            if (rc < 0)
-                goto error;
             break;
         case FLUX_MSGTYPE_RESPONSE:
             /* Assume if next route matches parent, the message goes upstream;
@@ -644,46 +635,57 @@ int overlay_sendmsg (struct overlay *ov,
              */
             if (where == OVERLAY_ANY) {
                 if (ov->rank > 0
-                    && (uuid = flux_msg_route_last (msg)) != NULL
+                    && (uuid = flux_msg_route_last (*msg)) != NULL
                     && streq (uuid, ov->parent.uuid))
                     where = OVERLAY_UPSTREAM;
                 else
                     where = OVERLAY_DOWNSTREAM;
             }
-            if (where == OVERLAY_UPSTREAM)
-                rc = overlay_sendmsg_parent (ov, msg);
-            else
-                rc = overlay_sendmsg_child (ov, msg);
-            if (rc < 0)
-                goto error;
+            if (where == OVERLAY_UPSTREAM) {
+                if (overlay_sendmsg_parent (ov, *msg) < 0)
+                    return -1;
+            }
+            else {
+                if (overlay_sendmsg_child (ov, *msg) < 0)
+                    return -1;
+            }
             break;
         case FLUX_MSGTYPE_EVENT:
             if (where == OVERLAY_DOWNSTREAM || where == OVERLAY_ANY)
-                overlay_mcast_child (ov, msg);
+                overlay_mcast_child (ov, *msg);
             else {
                 /* N.B. add route delimiter if needed to pass unpublished
                  * event message upstream through router socket.
                  */
                 if (!(flags & FLUX_MSGFLAG_ROUTE)) {
-                    if (!(cpy = flux_msg_copy (msg, true)))
-                        goto error;
-                    flux_msg_route_enable (cpy);
-                    msg = cpy;
+                    flux_msg_route_enable (*msg);
                 }
-                if (overlay_sendmsg_parent (ov, msg) < 0)
-                    goto error;
+                if (overlay_sendmsg_parent (ov, *msg) < 0)
+                    return -1;
             }
             break;
         default:
-            goto inval;
+            errno = EINVAL;
+            return -1;
     }
-    flux_msg_decref (cpy);
+    flux_msg_decref (*msg);
+    *msg = NULL;
     return 0;
-inval:
-    errno = EINVAL;
-error:
-    flux_msg_decref (cpy);
-    return -1;
+}
+
+int overlay_sendmsg (struct overlay *ov,
+                     const flux_msg_t *msg,
+                     overlay_where_t where)
+{
+    flux_msg_t *cpy;
+
+    if (!(cpy = flux_msg_copy (msg, true)))
+        return -1;
+    if (overlay_sendmsg_new (ov, &cpy, where) < 0) {
+        flux_msg_destroy (cpy);
+        return -1;
+    }
+    return 0;
 }
 
 static void sync_cb (flux_future_t *f, void *arg)
@@ -801,29 +803,24 @@ done:
     return rc;
 }
 
+/* Push child->uuid onto the message, then pop it off again after sending.
+ */
 static int overlay_mcast_child_one (struct overlay *ov,
-                                    const flux_msg_t *msg,
+                                    flux_msg_t *msg,
                                     struct child *child)
 {
-    flux_msg_t *cpy;
-    int rc = -1;
-
-    if (!(cpy = flux_msg_copy (msg, true)))
+    if (flux_msg_route_push (msg, child->uuid) < 0)
         return -1;
-    flux_msg_route_enable (cpy);
-    if (flux_msg_route_push (cpy, child->uuid) < 0)
-        goto done;
-    if (overlay_sendmsg_child (ov, cpy) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_msg_destroy (cpy);
+    int rc = overlay_sendmsg_child (ov, msg);
+    (void)flux_msg_route_delete_last (msg);
     return rc;
 }
 
-static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
+static void overlay_mcast_child (struct overlay *ov, flux_msg_t *msg)
 {
     struct child *child;
+
+    flux_msg_route_enable (msg);
 
     foreach_overlay_child (ov, child) {
         if (subtree_is_online (child->status)) {
@@ -841,7 +838,8 @@ static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
 static void logdrop (struct overlay *ov,
                      overlay_where_t where,
                      const flux_msg_t *msg,
-                     const char *fmt, ...)
+                     const char *fmt,
+                     ...)
 {
     char reason[128];
     va_list ap;
@@ -883,8 +881,10 @@ static int clear_msg_role (flux_msg_t *msg, uint32_t role)
 
 /* Handle a message received from TBON child (downstream).
  */
-static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void child_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     struct overlay *ov = arg;
     flux_msg_t *msg;
@@ -972,7 +972,9 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
         case FLUX_MSGTYPE_EVENT:
             break;
     }
-    ov->recv_cb (msg, OVERLAY_DOWNSTREAM, ov->recv_arg);
+    if (ov->recv_cb (&msg, OVERLAY_DOWNSTREAM, ov->recv_arg) < 0)
+        goto done;
+    return;
 done:
     flux_msg_decref (msg);
 }
@@ -991,8 +993,10 @@ static void fail_parent_rpc (const flux_msg_t *msg, void *arg)
         log_tracker_error (ov->h, msg, errno);
 }
 
-static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
-                       int revents, void *arg)
+static void parent_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
 {
     struct overlay *ov = arg;
     flux_msg_t *msg;
@@ -1056,7 +1060,9 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
         default:
             break;
     }
-    ov->recv_cb (msg, OVERLAY_UPSTREAM, ov->recv_arg);
+    if (ov->recv_cb (&msg, OVERLAY_UPSTREAM, ov->recv_arg) < 0)
+        goto done;
+    return;
 done:
     flux_msg_destroy (msg);
 }
@@ -1203,8 +1209,11 @@ static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg)
         errno = saved_errno;
         goto error;
     }
-    flux_log (ov->h, LOG_DEBUG, "hello parent %lu %s",
-              (unsigned long)ov->parent.rank, uuid);
+    flux_log (ov->h,
+              LOG_DEBUG,
+              "hello parent %lu %s",
+              (unsigned long)ov->parent.rank,
+              uuid);
     snprintf (ov->parent.uuid, sizeof (ov->parent.uuid), "%s", uuid);
     ov->parent.hello_responded = true;
     ov->parent.hello_error = false;

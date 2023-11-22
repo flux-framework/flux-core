@@ -44,7 +44,7 @@ void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg);
 /* Send/recv a message for to/from a specific module.
  */
 flux_msg_t *module_recvmsg (module_t *p);
-int module_sendmsg (module_t *p, const flux_msg_t *msg);
+int module_sendmsg_new (module_t *p, flux_msg_t **msg);
 
 /* Pass module's requests through this function to enable disconnect
  * messages to be sent when the module is unloaded.  The callback will

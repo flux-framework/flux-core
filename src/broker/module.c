@@ -420,15 +420,15 @@ flux_msg_t *module_recvmsg (module_t *p)
     return flux_recv (p->h_broker, FLUX_MATCH_ANY, FLUX_O_NONBLOCK);
 }
 
-int module_sendmsg (module_t *p, const flux_msg_t *msg)
+int module_sendmsg_new (module_t *p, flux_msg_t **msg)
 {
     int type;
     const char *topic;
 
-    if (!msg)
+    if (!msg || !*msg)
         return 0;
-    if (flux_msg_get_type (msg, &type) < 0
-        || flux_msg_get_topic (msg, &topic) < 0)
+    if (flux_msg_get_type (*msg, &type) < 0
+        || flux_msg_get_topic (*msg, &topic) < 0)
         return -1;
     /* Muted modules only accept response to broker.module-status
      */
@@ -439,7 +439,7 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
             return -1;
         }
     }
-    return flux_send (p->h_broker, msg, 0);
+    return flux_send_new (p->h_broker, msg, 0);
 }
 
 int module_disconnect_arm (module_t *p,
@@ -633,8 +633,12 @@ int module_event_cast (module_t *p, const flux_msg_t *msg)
     if (flux_msg_get_topic (msg, &topic) < 0)
         return -1;
     if (subhash_topic_match (p->sub, topic)) {
-        if (module_sendmsg (p, msg) < 0)
+        flux_msg_t *cpy;
+        if (!(cpy = flux_msg_copy (msg, true))
+            || module_sendmsg_new (p, &cpy) < 0) {
+            flux_msg_decref (cpy);
             return -1;
+        }
     }
     return 0;
 }

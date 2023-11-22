@@ -144,8 +144,11 @@ void service_remove_byuuid (struct service_switch *sw, const char *uuid)
     }
 }
 
-int service_add (struct service_switch *sh, const char *name,
-                 const char *uuid, service_send_f cb, void *arg)
+int service_add (struct service_switch *sh,
+                 const char *name,
+                 const char *uuid,
+                 service_send_f cb,
+                 void *arg)
 {
     struct service *svc = NULL;
 
@@ -172,7 +175,8 @@ error:
  * Avoid an extra malloc here if the substring is short.
  */
 static struct service *service_lookup_subtopic (struct service_switch *sw,
-                                                const char *topic, int length)
+                                                const char *topic,
+                                                int length)
 {
     char buf[16];
     char *cpy = NULL;
@@ -202,13 +206,13 @@ done:
  * If found, call the service's callback and return its return value.
  * If not found, return -1 with errno set (usually ENOSYS).
  */
-int service_send (struct service_switch *sw, const flux_msg_t *msg)
+int service_send_new (struct service_switch *sw, flux_msg_t **msg)
 {
     const char *topic, *p;
     int length;
     struct service *svc;
 
-    if (flux_msg_get_topic (msg, &topic) < 0)
+    if (flux_msg_get_topic (*msg, &topic) < 0)
         return -1;
     if ((p = strchr (topic, '.')))
         length = p - topic;

@@ -37,7 +37,7 @@ int modhash_event_mcast (modhash_t *mh, const flux_msg_t *msg);
 /* Send a response message to the module whose uuid matches the
  * next hop in the routing stack.
  */
-int modhash_response_sendmsg (modhash_t *mh, const flux_msg_t *msg);
+int modhash_response_sendmsg_new (modhash_t *mh, flux_msg_t **msg);
 
 /* Find a module matching 'uuid'.
  */
