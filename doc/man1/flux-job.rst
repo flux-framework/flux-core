@@ -11,6 +11,7 @@ SYNOPSIS
 
 | **flux** **job** **attach** [*OPTIONS*] *id*
 | **flux** **job** **status** [*OPTIONS*] *id [*id...*]
+| **flux** **job** **last** [*N* | *SLICE*]
 | **flux** **job** **wait** [*OPTIONS*] [*id*]
 | **flux** **job** **kill** [*--signal=SIG*] *id* [*id...*]
 | **flux** **job** **killall** [*OPTIONS*]
@@ -128,6 +129,38 @@ Wait for job(s) to complete and exit with the largest exit code.
 .. option:: -v, --verbose
 
    Increase verbosity of output.
+
+last
+-----
+
+.. program:: flux job last
+
+Print the most recently submitted jobid for the current user.
+
+If the optional argument is specified as a number *N*, print the *N* most
+recently submitted jobids in reverse submission order, one per line.  If it
+is enclosed in brackets, the argument is interpreted as a `python-style slice
+<https://python-reference.readthedocs.io/en/latest/docs/brackets/slicing.html>`_
+in :option:`[start:stop[:step]]` form which slices the job history array,
+where index 0 is the most recently submitted job.
+
+Examples:
+
+:command:`flux job last 4`
+  List the last four jobids in reverse submission order
+
+:command:`flux job last [0:4]`
+  Same as above
+
+:command:`flux job last [-1:]`
+  List the least recently submitted jobid
+
+:command:`flux job last [:]`
+  List all jobids in reverse submission order
+
+:command:`flux job last [::-1]`
+  List all jobids in submission order
+
 
 wait
 ----
