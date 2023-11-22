@@ -68,7 +68,7 @@ test_expect_success 'duration update is processed by execution system' '
 	flux update $jobid duration=+1m &&
 	$SHARNESS_TEST_SRCDIR/scripts/dmesg-grep.py \
 		-vt 30 "job-exec.*updated expiration of $jobid" &&
-	flux job cancel $jobid &&
+	flux cancel $jobid &&
 	flux job wait-event $jobid clean
 '
 #  Test that the job shell correctly processes an expiration update.

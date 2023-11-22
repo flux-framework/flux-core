@@ -149,7 +149,7 @@ test_expect_success 'cancel test job' '
 test_expect_success NO_CHAIN_LINT 'flux-proxy attempts to restore terminal on error' '
 	cat <<-EOF >test.sh &&
 	#!/bin/bash
-	flux --parent job cancel \$(flux getattr jobid)
+	flux --parent cancel \$(flux getattr jobid)
 	while flux getattr jobid; do sleep 0.1; done
 	EOF
 	chmod +x test.sh
@@ -163,7 +163,7 @@ test_expect_success NO_CHAIN_LINT 'flux-proxy sends SIGHUP to children without -
 	SHELL=/bin/sh &&
 	cat <<-EOF >test.sh &&
 	#!/bin/bash
-	flux --parent job cancel \$(flux getattr jobid)
+	flux --parent cancel \$(flux getattr jobid)
 	while true; do sleep 0.1; done
 	EOF
 	chmod +x test.sh
