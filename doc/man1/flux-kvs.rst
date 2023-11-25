@@ -6,7 +6,30 @@ flux-kvs(1)
 SYNOPSIS
 ========
 
-**flux** **kvs** *COMMAND* [*OPTIONS*]
+| **flux** **kvs** **get** [*--waitcreate*] [*--watch*] [*--raw*] *key...*
+| **flux** **kvs** **put** [*--append*] [*--raw*] *key=value...*
+| **flux** **kvs** **dir** [*-R*] [*-d*] [*key*]
+| **flux** **kvs** **ls** [*-R*] [*-d*] [*-1*] [*-F*]  *key...*
+| **flux** **kvs** **unlink** [*-R*] [*-f*] *key...*
+| **flux** **kvs** **link** *target* *linkname*
+| **flux** **kvs** **readlink** *key...*
+| **flux** **kvs** **mkdir** *key...*
+| **flux** **kvs** **dropcache**
+
+| **flux** **kvs** **copy** *source* *destination*
+| **flux** **kvs** **move** *source* *destination*
+
+| **flux** **kvs** **getroot**
+| **flux** **kvs** **version**
+| **flux** **kvs** **wait** *version*
+
+| **flux** **kvs** **namespace** **create** [*-o owner*] *name...*
+| **flux** **kvs** **namespace** **remove** *name...*
+| **flux** **kvs** **namespace** **list**
+
+| **flux** **kvs** **eventlog** **append** *key* *name* [*context...*]
+| **flux** **kvs** **eventlog** **get** [*--waitcreate*] [*--watch*] [*-u*] *key*
+| **flux** **kvs** **eventlog** **wait-event** [*-v*] [*--waitcreate*] *key* *event*
 
 
 DESCRIPTION
