@@ -9,6 +9,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux \
+	-DABS_TOP_BUILDDIR=\"${abs_top_builddir}\" \
 	$(ZMQ_CFLAGS) \
 	$(LIBUUID_CFLAGS) \
 	$(JANSSON_CFLAGS) \

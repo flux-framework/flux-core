@@ -18,6 +18,7 @@
 #include <inttypes.h>
 #include <sys/prctl.h>
 #include <sys/resource.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/un.h>
 #include <sys/types.h>
@@ -51,11 +52,18 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/intree.h"
 #include "src/common/librouter/subhash.h"
 #include "src/common/libfluxutil/method.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 #include "ccan/ptrint/ptrint.h"
+#ifndef HAVE_STRLCPY
+#include "src/common/libmissing/strlcpy.h"
+#endif
+#ifndef HAVE_STRLCAT
+#include "src/common/libmissing/strlcat.h"
+#endif
 
 #include "module.h"
 #include "modhash.h"
@@ -812,6 +820,37 @@ static int check_statedir (attr_t *attrs)
     return 0;
 }
 
+static int create_rundir_symlinks (const char *run_dir, flux_error_t *error)
+{
+    char path[1024];
+    size_t size = sizeof (path);
+    const char *target;
+
+    if (strlcpy (path, run_dir, size) >= size
+        || strlcat (path, "/bin", size) >= size)
+        goto overflow;
+    if (mkdir (path, 0755) < 0) {
+        errprintf (error, "mkdir %s: %s", path, strerror (errno));
+        return -1;
+    }
+    cleanup_push_string (cleanup_directory_recursive, path);
+    if (strlcat (path, "/flux", size) >= size)
+        goto overflow;
+    if (executable_is_intree () == 1)
+        target = ABS_TOP_BUILDDIR "/src/cmd/flux";
+    else
+        target = X_BINDIR "/flux";
+    if (symlink (target, path) < 0) {
+        errprintf (error, "symlink %s: %s", path, strerror (errno));
+        return -1;
+    }
+    return 0;
+overflow:
+    errprintf (error, "buffer overflow");
+    errno = EOVERFLOW;
+    return -1;
+}
+
 /*  Handle global rundir attribute.
  */
 static int create_rundir (attr_t *attrs)
@@ -880,6 +919,16 @@ static int create_rundir (attr_t *attrs)
         log_err ("error setting rundir broker attribute flags");
         goto done;
     }
+
+    /*  Create $rundir/bin/flux so flux-relay can be found - see #5583.
+     */
+    flux_error_t error;
+    if (create_rundir_symlinks (run_dir, &error) < 0) {
+        if (errno != EEXIST)
+            log_err ("error creating rundir symlinks: %s", error.text);
+        // if this fails, soldier on
+    }
+
     rc = 0;
 done:
     if (do_cleanup && run_dir != NULL)
