@@ -94,6 +94,8 @@ static struct update_ctx *update_ctx_create (struct info_ctx *ctx,
         goto error;
     if (streq (key, "R"))
         uc->update_name = "resource-update";
+    else if (streq (key, "jobspec"))
+        uc->update_name = "jobspec-update";
     else {
         errno = EINVAL;
         goto error;
@@ -165,6 +167,22 @@ static void apply_updates_R (struct update_ctx *uc,
     }
 }
 
+static void apply_updates_jobspec (struct update_ctx *uc,
+                                   json_t *context)
+{
+    const char *key;
+    json_t *value;
+
+    json_object_foreach (context, key, value) {
+        if (jpath_set (uc->update_object,
+                       key,
+                       value) < 0)
+            flux_log (uc->ctx->h, LOG_INFO,
+                      "%s: failed to update job %s %s",
+                      __FUNCTION__, idf58 (uc->id), uc->key);
+    }
+}
+
 static void eventlog_continuation (flux_future_t *f, void *arg)
 {
     struct update_ctx *uc = arg;
@@ -210,6 +228,8 @@ static void eventlog_continuation (flux_future_t *f, void *arg)
         if (uc->watch_update_count > uc->initial_update_count) {
             if (streq (uc->key, "R"))
                 apply_updates_R (uc, context);
+            else if (streq (uc->key, "jobspec"))
+                apply_updates_jobspec (uc, context);
 
             msg = flux_msglist_first (uc->msglist);
             while (msg) {
@@ -341,6 +361,8 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         else if (streq (name, uc->update_name)) {
             if (streq (uc->key, "R"))
                 apply_updates_R (uc, context);
+            else if (streq (uc->key, "jobspec"))
+                apply_updates_jobspec (uc, context);
             uc->initial_update_count++;
         }
         else if (streq (name, "clean"))
@@ -515,7 +537,7 @@ void update_lookup_cb (flux_t *h, flux_msg_handler_t *mh,
         errmsg = "update-lookup request rejected with invalid flag";
         goto error;
     }
-    if (!streq (key, "R")) {
+    if (!streq (key, "R") && !streq (key, "jobspec")) {
         errno = EINVAL;
         errmsg = "update-lookup unsupported key specified";
         goto error;
@@ -585,7 +607,7 @@ void update_watch_cb (flux_t *h, flux_msg_handler_t *mh,
         errmsg = "update-watch request rejected without streaming RPC flag";
         goto error;
     }
-    if (!streq (key, "R")) {
+    if (!streq (key, "R") && !streq (key, "jobspec")) {
         errno = EINVAL;
         errmsg = "update-watch unsupported key specified";
         goto error;
