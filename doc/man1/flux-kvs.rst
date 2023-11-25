@@ -38,7 +38,6 @@ DESCRIPTION
 The Flux key-value store (KVS) is a simple, distributed data storage
 service used a building block by other Flux components.
 :program:`flux kvs` is a command line utility that operates on the KVS.
-It is a very thin layer on top of a C API.
 
 The Flux KVS stores values under string keys. The keys are
 hierarchical, using "." as a path separator, analogous to "/"
@@ -49,21 +48,17 @@ The KVS is distributed among the broker ranks of a Flux instance. Rank 0
 is the leader, and other ranks are caching followers. All writes are flushed
 to the leader during a commit operation. Data is stored in a hash tree
 such that every commit results in a new root hash. Each new root hash
-is multicast across the session. When followers update their root hash,
+is multicast across the Flux instance. When followers update their root hash,
 they atomically update their view to match the leader. There may be a
 delay after a commit while old data is served on a follower that has not yet
-updated its root hash, thus the Flux KVS consistency model is "eventually
-consistent". Followers cache data temporally and fault in new data through
-their parent in the overlay network.
+updated its root hash, thus the Flux KVS cache is "eventually consistent".
+Followers expire cache data after a period of disuse, and fault in new data
+through their parent in the overlay network.
 
-Different KVS namespaces can be created in which kvs values can be
-read from/written to. By default, all KVS operations operate on the
-default KVS namespace "primary". An alternate namespace can be
-specified in most kvs commands via the *--namespace* option, or by
-setting the namespace in the environment variable :envvar:`FLUX_KVS_NAMESPACE`.
-
-:program:`flux kvs` runs a KVS *COMMAND*. The possible commands and their
-arguments are described below.
+The primary KVS namespace is only accessible to the Flux instance owner.
+Other namespaces may be created and assigned to guest users.  Although the
+cache is shared across namespaces, each has an independent root directory,
+which permits commits in multiple namespaces to complete in parallel.
 
 
 COMMANDS
