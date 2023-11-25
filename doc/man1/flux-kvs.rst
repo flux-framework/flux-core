@@ -549,3 +549,5 @@ FLUX RFC
 ========
 
 :doc:`rfc:spec_11`
+
+:doc:`rfc:spec_18`
