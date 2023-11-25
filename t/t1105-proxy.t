@@ -87,7 +87,7 @@ test_expect_success 'flux-proxy forwards LD_LIBRARY_PATH' '
 		export FLUX_SSH=./proxinator.sh &&
 		test_must_fail flux proxy ssh://hostname/baz/local) &&
 	test_debug "cat ./proxinator.log" &&
-	grep -E "ssh.* LD_LIBRARY_PATH=[^ ]*:?/foo .*/flux relay" ./proxinator.log
+	grep -E "ssh.* LD_LIBRARY_PATH=[^ ]*:?/foo .*flux relay" ./proxinator.log
 '
 
 test_expect_success 'set bogus broker version' '
