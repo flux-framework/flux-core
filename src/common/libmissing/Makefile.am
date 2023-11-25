@@ -42,6 +42,7 @@ libmissing_la_SOURCES =
 
 EXTRA_libmissing_la_SOURCES = \
 	strlcpy.h \
+	strlcat.h \
 	argz.h \
 	argz.c \
 	envz.h \
