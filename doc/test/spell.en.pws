@@ -806,3 +806,6 @@ maxid
 unallocated
 NUL
 ssize
+waitcreate
+unformatted
+uniq
