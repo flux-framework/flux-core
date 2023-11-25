@@ -37,7 +37,7 @@ enum job_lookup_flags {
     FLUX_JOB_LOOKUP_JSON_DECODE = 1,
     /* get current value of special fields by applying eventlog
      * updates for those fields
-     * - currently works for R
+     * - currently works for jobspec and R
      */
     FLUX_JOB_LOOKUP_CURRENT = 2,
 };

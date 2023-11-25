@@ -173,6 +173,8 @@ static int lookup_current (struct lookup_ctx *l,
 
     if (streq (key, "R"))
         update_event_name = "resource-update";
+    else if (streq (key, "jobspec"))
+        update_event_name = "jobspec-update";
 
     if (!(value_object = json_loads (value, 0, NULL))) {
         errno = EINVAL;
@@ -205,6 +207,12 @@ static int lookup_current (struct lookup_ctx *l,
         if (streq (name, update_event_name)) {
             if (streq (key, "R"))
                 apply_updates_R (l->ctx->h, l->id, key, value_object, context);
+            else if (streq (key, "jobspec"))
+                apply_updates_jobspec (l->ctx->h,
+                                       l->id,
+                                       key,
+                                       value_object,
+                                       context);
         }
     }
 
@@ -288,7 +296,8 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
         }
 
         if ((l->flags & FLUX_JOB_LOOKUP_CURRENT)
-            && streq (keystr, "R")) {
+            && (streq (keystr, "R")
+                || streq (keystr, "jobspec"))) {
             if (lookup_current (l, fall, keystr, s, &current_value) < 0)
                 goto error;
             s = current_value;
@@ -442,7 +451,7 @@ static int lookup_cached (struct lookup_ctx *l)
 
     key_str = json_string_value (key);
 
-    if (!streq (key_str, "R"))
+    if (!streq (key_str, "R") && !streq (key_str, "jobspec"))
         return 0;
 
     if ((ret = update_watch_get_cached (l->ctx,

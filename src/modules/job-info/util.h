@@ -42,6 +42,13 @@ void apply_updates_R (flux_t *h,
                       json_t *R,
                       json_t *context);
 
+/* apply context updates to the jobspec object */
+void apply_updates_jobspec (flux_t *h,
+                            flux_jobid_t id,
+                            const char *key,
+                            json_t *jobspec,
+                            json_t *context);
+
 #endif /* ! _FLUX_JOB_INFO_UTIL_H */
 
 /*

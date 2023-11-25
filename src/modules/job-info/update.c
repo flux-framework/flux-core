@@ -83,6 +83,8 @@ static struct update_ctx *update_ctx_create (struct info_ctx *ctx,
         goto error;
     if (streq (key, "R"))
         uc->update_name = "resource-update";
+    else if (streq (key, "jobspec"))
+        uc->update_name = "jobspec-update";
     else {
         errno = EINVAL;
         goto error;
@@ -180,6 +182,12 @@ static void eventlog_continuation (flux_future_t *f, void *arg)
                                  uc->key,
                                  uc->update_object,
                                  context);
+            else if (streq (uc->key, "jobspec"))
+                apply_updates_jobspec (uc->ctx->h,
+                                       uc->id,
+                                       uc->key,
+                                       uc->update_object,
+                                       context);
 
             msg = flux_msglist_first (uc->msglist);
             while (msg) {
@@ -315,6 +323,12 @@ static void lookup_continuation (flux_future_t *f, void *arg)
                                  uc->key,
                                  uc->update_object,
                                  context);
+            else if (streq (uc->key, "jobspec"))
+                apply_updates_jobspec (uc->ctx->h,
+                                       uc->id,
+                                       uc->key,
+                                       uc->update_object,
+                                       context);
             uc->initial_update_count++;
         }
         else if (streq (name, "clean"))
@@ -474,7 +488,7 @@ void update_watch_cb (flux_t *h, flux_msg_handler_t *mh,
         errmsg = "update-watch request rejected without streaming RPC flag";
         goto error;
     }
-    if (!streq (key, "R")) {
+    if (!streq (key, "R") && !streq (key, "jobspec")) {
         errno = EINVAL;
         errmsg = "update-watch unsupported key specified";
         goto error;
