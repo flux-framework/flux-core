@@ -3367,42 +3367,6 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-char *reconstruct_current_jobspec (const char *jobspec_str,
-                                   const char *eventlog_str)
-{
-    json_t *jobspec;
-    json_t *eventlog;
-    size_t index;
-    json_t *entry;
-    char *result;
-
-    if (!(jobspec = json_loads (jobspec_str, 0, NULL)))
-        log_msg_exit ("error decoding jobspec");
-    if (!(eventlog = eventlog_decode (eventlog_str)))
-        log_msg_exit ("error decoding eventlog");
-    json_array_foreach (eventlog, index, entry) {
-        const char *name;
-        json_t *context;
-
-        if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
-            log_msg_exit ("error decoding eventlog entry");
-        if (streq (name, "jobspec-update")) {
-            const char *path;
-            json_t *value;
-
-            json_object_foreach (context, path, value) {
-                if (jpath_set (jobspec, path, value) < 0)
-                    log_err_exit ("failed to update jobspec");
-            }
-        }
-    }
-    if (!(result = json_dumps (jobspec, JSON_COMPACT)))
-        log_msg_exit ("failed to encode jobspec object");
-    json_decref (jobspec);
-    json_decref (eventlog);
-    return result;
-}
-
 void info_usage (void)
 {
     fprintf (stderr,
@@ -3462,33 +3426,11 @@ int cmd_info (optparse_t *p, int argc, char **argv)
             log_msg_exit ("Failed to unwrap J to get jobspec: %s", error.text);
         val = new_val;
     }
-    /* The current (non --base) jobspec has to be reconstructed by fetching
-     * the jobspec and the eventlog and updating the former with the latter.
-     */
-    else if (!optparse_hasopt (p, "base") && streq (key, "jobspec")) {
-        const char *jobspec;
-        const char *eventlog;
-
-        // fetch the two keys in parallel
-        if (!(f = flux_rpc_pack (h,
-                                 "job-info.lookup",
-                                 FLUX_NODEID_ANY,
-                                 0,
-                                 "{s:I s:[ss] s:i}",
-                                 "id", id,
-                                 "keys", "jobspec", "eventlog",
-                                 "flags", 0))
-            || flux_rpc_get_unpack (f,
-                                    "{s:s s:s}",
-                                    "jobspec", &jobspec,
-                                    "eventlog", &eventlog) < 0)
-            log_msg_exit ("%s", future_strerror (f, errno ));
-        val = new_val = reconstruct_current_jobspec (jobspec, eventlog);
-    }
-    /* The current (non --base) R is obtained through the
+    /* The current (non --base) R and jobspec are obtained through the
      * job-info.update-lookup RPC, not the normal job-info.lookup.
      */
-    else if (!optparse_hasopt (p, "base") && streq (key, "R")) {
+    else if (!optparse_hasopt (p, "base")
+             && (streq (key, "R") || streq (key, "jobspec"))) {
         json_t *o;
         if (!(f = flux_rpc_pack (h,
                                  "job-info.update-lookup",
