@@ -274,10 +274,10 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
      * inside flux_open() rather than in some less obvious context later.
      */
     if (!(ctx->uclient = usock_client_create (popen2_get_fd (ctx->p)))) {
-        char *buf = NULL;
-        if (read_all (popen2_get_stderr_fd (ctx->p), (void **) &buf) > 0)
-            errprintf (errp, "%s", strstrip (buf));
-        free (buf);
+        char *data = NULL;
+        if (read_all (popen2_get_stderr_fd (ctx->p), (void **) &data) > 0)
+            errprintf (errp, "%s", strstrip (data));
+        free (data);
         goto error;
     }
     if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))
