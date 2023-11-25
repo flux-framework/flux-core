@@ -151,5 +151,11 @@ test_expect_success 'flux alloc: no duplication of output with pty.capture' '
 	$runpty -o duplicates.out flux alloc -o pty.capture -n1 echo testing &&
 	test $(grep -c testing duplicates.out) -eq 1
 '
-
+test_expect_success 'flux alloc: instance can bootstrap without update-watch RPC' '
+	flux alloc -N2 \
+	  --broker-opts=-Slog-stderr-level=7 \
+	  --conf=resource.no-update-watch=true /bin/true >alloc.log 2>&1 &&
+	test_debug "cat alloc.log" &&
+	grep "falling back to job-info.lookup" alloc.log
+'
 test_done
