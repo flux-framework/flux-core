@@ -267,6 +267,38 @@ test_expect_success NO_CHAIN_LINT 'job-info: update lookup returns cached R from
 '
 
 #
+# update-lookup/watch works with jobspec
+#
+
+test_expect_success 'job-info: update lookup works with jobspec' '
+	jobid=$(flux submit --urgency=hold true) &&
+	${UPDATE_LOOKUP} $jobid jobspec | jq -e ".attributes.system.duration == 0" &&
+	flux update $jobid duration=100s &&
+	${UPDATE_LOOKUP} $jobid jobspec | jq -e ".attributes.system.duration == 100.0" &&
+	flux update $jobid duration=200s &&
+	${UPDATE_LOOKUP} $jobid jobspec | jq -e ".attributes.system.duration == 200.0" &&
+	flux cancel $jobid
+'
+
+test_expect_success NO_CHAIN_LINT 'job-info: update watch works with jobspec' '
+	jobid=$(flux submit --urgency=hold true) &&
+	flux update $jobid duration=100s &&
+	watchers=$(get_update_watchers)
+	${UPDATE_WATCH} $jobid jobspec > watchjobspec.out &
+	watchpid=$! &&
+	wait_update_watchers $((watchers+1)) &&
+	${WAITFILE} --count=1 --timeout=30 --pattern="duration" watchjobspec.out &&
+	flux update $jobid duration=200s &&
+	${WAITFILE} --count=2 --timeout=30 --pattern="duration" watchjobspec.out &&
+	flux cancel $jobid &&
+	wait $watchpid &&
+	test $(cat watchjobspec.out | wc -l) -eq 2 &&
+	head -n1 watchjobspec.out | jq -e ".attributes.system.duration == 100.0" &&
+	tail -n1 watchjobspec.out | jq -e ".attributes.system.duration == 200.0"
+'
+
+
+#
 # security tests
 #
 
@@ -284,6 +316,7 @@ test_expect_success 'job-info: non job owner cannot lookup key' '
 	jobid=`flux submit --wait-event=start sleep inf` &&
 	set_userid 9999 &&
 	test_must_fail ${UPDATE_LOOKUP} $jobid R &&
+	test_must_fail ${UPDATE_LOOKUP} $jobid jobspec &&
 	unset_userid &&
 	flux cancel $jobid
 '
@@ -292,6 +325,7 @@ test_expect_success 'job-info: non job owner cannot watch key' '
 	jobid=`flux submit --wait-event=start sleep inf` &&
 	set_userid 9999 &&
 	test_must_fail ${UPDATE_WATCH} $jobid R &&
+	test_must_fail ${UPDATE_WATCH} $jobid jobspec &&
 	unset_userid &&
 	flux cancel $jobid
 '
