@@ -55,6 +55,38 @@ def job_info_lookup(flux_handle, jobid, keys=["jobspec"]):
     return rpc
 
 
+# a few keys are special, convert dicts to strings
+def encode_special_data(data):
+    for key in ("jobspec", "R"):
+        if key in data:
+            data[key] = json.dumps(data[key])
+
+
+# job-info.update-lookup returns "decoded" data by default, so it
+# works opposite of job-info.lookup.  For consistency to
+# JobInfoLookupRPC, we will encode it in get() and do nothing in
+# get_decode().
+class JobInfoUpdateLookupRPC(RPC):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.jobid = None
+
+    def get(self):
+        data = super().get()
+        encode_special_data(data)
+        return data
+
+    def get_decode(self):
+        return super().get()
+
+
+def job_info_update_lookup(flux_handle, jobid, key="jobspec"):
+    payload = {"id": int(jobid), "key": key, "flags": 0}
+    rpc = JobInfoUpdateLookupRPC(flux_handle, "job-info.update-lookup", payload)
+    rpc.jobid = jobid
+    return rpc
+
+
 def _setup_lookup_keys(keys, original, base):
     if "jobspec" in keys:
         if original:
