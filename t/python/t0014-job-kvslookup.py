@@ -10,6 +10,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import errno
 import json
 import os
 import unittest
@@ -181,6 +182,25 @@ class TestJob(unittest.TestCase):
         rpc = flux.job.job_info_lookup(self.fh, self.jobid1, keys=["foo"])
         with self.assertRaises(FileNotFoundError):
             rpc.get()
+
+    def test_info_00_job_info_update_lookup(self):
+        rpc = flux.job.job_info_update_lookup(self.fh, self.jobid1)
+        data = rpc.get()
+        self.check_jobspec_str(data, self.jobid1, 100.0)
+        data = rpc.get_decode()
+        self.check_jobspec_decoded(data, self.jobid1, 100.0)
+        self.assertEqual(data["id"], self.jobid1)
+
+    def test_info_01_job_info_update_lookup_badid(self):
+        rpc = flux.job.job_info_update_lookup(self.fh, 123456789)
+        with self.assertRaises(FileNotFoundError):
+            rpc.get()
+
+    def test_info_02_job_info_update_lookup_badkey(self):
+        rpc = flux.job.job_info_update_lookup(self.fh, self.jobid1, key="foo")
+        with self.assertRaises(OSError) as e:
+            rpc.get()
+        self.assertEqual(e.exception.errno, errno.EINVAL)
 
     def test_lookup_01_job_kvs_lookup(self):
         data = flux.job.job_kvs_lookup(self.fh, self.jobid1)
