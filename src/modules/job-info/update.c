@@ -233,7 +233,8 @@ static void eventlog_continuation (flux_future_t *f, void *arg)
 
             msg = flux_msglist_first (uc->msglist);
             while (msg) {
-                if (flux_respond_pack (uc->ctx->h, msg, "{s:O}",
+                if (flux_respond_pack (uc->ctx->h, msg, "{s:I s:O}",
+                                       "id", uc->id,
                                        uc->key, uc->update_object) < 0) {
                     flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
                     goto error_cancel;
@@ -388,7 +389,8 @@ static void lookup_continuation (flux_future_t *f, void *arg)
             goto next;
         }
 
-        if (flux_respond_pack (uc->ctx->h, msg, "{s:O}",
+        if (flux_respond_pack (uc->ctx->h, msg, "{s:I s:O}",
+                               "id", uc->id,
                                uc->key, uc->update_object) < 0) {
             flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
             goto error;
@@ -553,7 +555,8 @@ void update_lookup_cb (flux_t *h, flux_msg_handler_t *mh,
         && uc->update_object) {
         if (flux_msg_authorize (msg, uc->userid) < 0)
             goto error;
-        if (flux_respond_pack (uc->ctx->h, msg, "{s:O}",
+        if (flux_respond_pack (uc->ctx->h, msg, "{s:I s:O}",
+                               "id", uc->id,
                                uc->key, uc->update_object) < 0) {
             flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
             goto error;
@@ -630,7 +633,8 @@ void update_watch_cb (flux_t *h, flux_msg_handler_t *mh,
         if (uc->update_object) {
             if (flux_msg_authorize (msg, uc->userid) < 0)
                 goto error;
-            if (flux_respond_pack (uc->ctx->h, msg, "{s:O}",
+            if (flux_respond_pack (uc->ctx->h, msg, "{s:I s:O}",
+                                   "id", uc->id,
                                    uc->key, uc->update_object) < 0) {
                 flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
                 goto error;
