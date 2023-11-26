@@ -57,7 +57,7 @@ test_expect_success 'ssh:// with local sockdir, user, and port works' '
 
 test_expect_success 'ssh:// can handle nontrivial message load' '
 	FLUX_URI=ssh://localhost$TEST_SOCKDIR FLUX_SSH=$TEST_SSH \
-	  flux ping --count=100 -i 0.001 broker
+	  flux ping --count=100 -i 0.001 broker >/dev/null
 '
 
 test_expect_success 'ssh:// can work with events' '
