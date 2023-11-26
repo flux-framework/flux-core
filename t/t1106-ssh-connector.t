@@ -90,26 +90,35 @@ test_expect_success 'ssh:// cannot shadow a broker service (EEXIST)' "
 "
 
 test_expect_success 'ssh:// with bad query option fails in flux_open()' '
-	! FLUX_URI=ssh://localhost$TEST_SOCKDIR?badarg=bar FLUX_SSH=$TEST_SSH \
-	  flux getattr size 2>badarg.out &&
+	test_must_fail env \
+	    FLUX_URI=ssh://localhost$TEST_SOCKDIR?badarg=bar \
+	    FLUX_SSH=$TEST_SSH \
+	    flux getattr size 2>badarg.out &&
 	grep -q "flux_open:" badarg.out
 '
 
 test_expect_success 'ssh:// with bad FLUX_SSH value fails in flux_open()' '
-	! FLUX_URI=ssh://localhost$TEST_SOCKDIR FLUX_SSH=/noexist \
-	  flux getattr size 2>noexist.out &&
+	test_must_fail env \
+	    FLUX_URI=ssh://localhost$TEST_SOCKDIR \
+	    FLUX_SSH=/noexist \
+	    flux getattr size 2>noexist.out &&
 	grep -q "flux_open:" noexist.out
 '
 
 test_expect_success 'ssh:// with bad FLUX_SSH_RCMD value fails in flux_open()' '
-	! FLUX_URI=ssh://localhost$TEST_SOCKDIR FLUX_SSH=$TEST_SSH \
-	  FLUX_SSH_RCMD=/nocmd flux getattr size 2>nocmd.out &&
+	test_must_fail env \
+	    FLUX_URI=ssh://localhost$TEST_SOCKDIR \
+	    FLUX_SSH=$TEST_SSH \
+	    FLUX_SSH_RCMD=/nocmd \
+	    flux getattr size 2>nocmd.out &&
 	grep -q "flux_open:" nocmd.out
 '
 
 test_expect_success 'ssh:// with missing path component fails in flux_open()' '
-	! FLUX_URI=ssh://localhost FLUX_SSH=$TEST_SSH \
-	  flux getattr size 2>nopath.out &&
+	test_must_fail env \
+	    FLUX_URI=ssh://localhost \
+	    FLUX_SSH=$TEST_SSH \
+	    flux getattr size 2>nopath.out &&
 	grep -q "flux_open:" nopath.out
 '
 
