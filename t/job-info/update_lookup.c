@@ -23,6 +23,7 @@ int main (int argc, char *argv[])
     flux_t *h;
     flux_future_t *f;
     flux_jobid_t id;
+    flux_jobid_t check_id;
     const char *key;
     json_t *value;
     char *s;
@@ -50,9 +51,14 @@ int main (int argc, char *argv[])
                              "flags", 0)))
         log_err_exit ("flux_rpc_pack");
 
-    if (flux_rpc_get_unpack (f, "{s:o}", key, &value) < 0)
-        log_msg_exit ("job-info.update-lookup: %s",
+    if (flux_rpc_get_unpack (f, "{s:I}", "id", &check_id) < 0)
+        log_msg_exit ("job-info.update-lookup: id: %s",
                       future_strerror (f, errno));
+    if (id != check_id)
+        log_msg_exit ("job-info.update-lookup returned invalid jobid");
+    if (flux_rpc_get_unpack (f, "{s:o}", key, &value) < 0)
+        log_msg_exit ("job-info.update-lookup: %s: %s",
+                      key, future_strerror (f, errno));
     if (!(s = json_dumps (value, 0)))
         log_msg_exit ("invalid json result");
     printf ("%s\n", s);

@@ -67,14 +67,23 @@ int main (int argc, char *argv[])
         log_err_exit ("signal");
 
     while (1) {
+        flux_jobid_t check_id;
         json_t *value;
         char *s;
-        if (flux_rpc_get_unpack (f, "{s:o}", key, &value) < 0) {
+
+        if (flux_rpc_get_unpack (f, "{s:I}", "id", &check_id) < 0) {
             if (errno == ENODATA)
                 break;
-            log_msg_exit ("job-info.update-watch: %s",
-                          future_strerror (f, errno));
+            log_msg_exit ("job-info.update-watch: id: %s",
+                      future_strerror (f, errno));
         }
+
+        if (id != check_id)
+            log_msg_exit ("job-info.update-watch returned invalid jobid");
+
+        if (flux_rpc_get_unpack (f, "{s:o}", key, &value) < 0)
+            log_msg_exit ("job-info.update-watch: %s: %s",
+                          key, future_strerror (f, errno));
         if (!(s = json_dumps (value, 0)))
             log_msg_exit ("invalid json result");
         printf ("%s\n", s);
