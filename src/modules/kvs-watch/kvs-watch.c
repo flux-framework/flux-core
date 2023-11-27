@@ -41,6 +41,7 @@ struct watcher {
     struct ns_monitor *nsm;     // back pointer for removal
     json_t *prev;               // previous watch value for KVS_WATCH_FULL/UNIQ
     int append_offset;          // offset for KVS_WATCH_APPEND
+    void *handle;               // zlistx_t handle
 };
 
 /* Current KVS root.
@@ -63,7 +64,7 @@ struct ns_monitor {
     int fatal_errnum;           // non-skippable error pending for all watchers
     int errnum;                 // if non-zero, error pending for all watchers
     struct watch_ctx *ctx;      // back-pointer to watch_ctx
-    zlist_t *watchers;          // list of watchers of this namespace
+    zlistx_t *watchers;         // list of watchers of this namespace
     char *topic;                // topic string for subscription
     bool subscribed;            // subscription active
     flux_future_t *getrootf;    // initial getroot future
@@ -152,12 +153,7 @@ static void namespace_destroy (struct ns_monitor *nsm)
     if (nsm) {
         int saved_errno = errno;
         commit_destroy (nsm->commit);
-        if (nsm->watchers) {
-            struct watcher *w;
-            while ((w = zlist_pop (nsm->watchers)))
-                watcher_destroy (w);
-            zlist_destroy (&nsm->watchers);
-        }
+        zlistx_destroy (&nsm->watchers);
         if (nsm->subscribed)
             (void)flux_event_unsubscribe (nsm->ctx->h, nsm->topic);
         free (nsm->topic);
@@ -168,14 +164,24 @@ static void namespace_destroy (struct ns_monitor *nsm)
     }
 }
 
+static void watcher_destructor (void **item)
+{
+    if (item) {
+        struct watcher *w = *item;
+        watcher_destroy (w);
+        *item = NULL;
+    }
+}
+
 static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
                                             const char *ns)
 {
     struct ns_monitor *nsm = calloc (1, sizeof (*nsm));
     if (!nsm)
         return NULL;
-    if (!(nsm->watchers = zlist_new ()))
+    if (!(nsm->watchers = zlistx_new ()))
         goto error;
+    zlistx_set_destructor (nsm->watchers, watcher_destructor);
     if (!(nsm->ns_name = strdup (ns)))
         goto error;
     /* We are subscribing to the kvs.namespace-<NS> substring.
@@ -222,12 +228,10 @@ static bool key_match (json_t *o, const char *key)
 static void watcher_cleanup (struct ns_monitor *nsm, struct watcher *w)
 {
     /* wait for all in flight lookups to complete before destroying watcher */
-    if (zlist_size (w->lookups) == 0) {
-        zlist_remove (nsm->watchers, w);
-        watcher_destroy (w);
-    }
+    if (zlist_size (w->lookups) == 0)
+        zlistx_delete (nsm->watchers, w->handle);
     /* if nsm->getrootf, destroy when getroot_continuation completes */
-    if (zlist_size (nsm->watchers) == 0
+    if (zlistx_size (nsm->watchers) == 0
         && !nsm->getrootf)
         zhash_delete (nsm->ctx->namespaces, nsm->ns_name);
 }
@@ -676,25 +680,25 @@ finished:
 }
 
 /* Respond to all ready watchers.
- * N.B. watcher_respond() may call zlist_remove() on nsm->watchers.
- * Since zlist_t is not deletion-safe for traversal, a temporary duplicate
- * must be created here.
+ * N.B. watcher_respond() may call zlistx_delete() on nsm->watchers.
  */
 static void watcher_respond_ns (struct ns_monitor *nsm)
 {
-    zlist_t *l;
     struct watcher *w;
 
-    if ((l = zlist_dup (nsm->watchers))) {
-        w = zlist_first (l);
-        while (w) {
-            watcher_respond (nsm, w);
-            w = zlist_next (l);
-        }
-        zlist_destroy (&l);
+    w = zlistx_first (nsm->watchers);
+    while (w) {
+        /* Note: get next watcher before calling watcher_respond() since
+         * `nsm` may be destroyed when next == NULL:
+         */
+        struct watcher *next = zlistx_next (nsm->watchers);
+        watcher_respond (nsm, w);
+
+        /* Note: No use-after-free possible since `nsm` may only be destroyed
+         * if nsm->watchers is empty and and thus next == NULL
+         */
+        w = next;
     }
-    else
-        flux_log_error (nsm->ctx->h, "%s: zlist_dup", __FUNCTION__);
 }
 
 /* Cancel watcher 'w' if it matches:
@@ -705,18 +709,20 @@ static void watcher_respond_ns (struct ns_monitor *nsm)
 static void watcher_cancel (struct ns_monitor *nsm,
                             struct watcher *w,
                             const flux_msg_t *msg,
+                            uint32_t matchtag,
                             bool cancel)
 {
-    bool match;
-    if (cancel)
-        match = flux_cancel_match (msg, w->request);
-    else
-        match = flux_disconnect_match (msg, w->request);
-    if (match) {
-        w->canceled = true;
-        w->mute = !cancel;
-        watcher_respond (nsm, w);
+    if (!flux_disconnect_match (msg, w->request))
+        return;
+    if (cancel) {
+        uint32_t tag;
+        if (flux_msg_get_matchtag (w->request, &tag) < 0
+            || tag != matchtag)
+            return;
     }
+    w->canceled = true;
+    w->mute = !cancel;
+    watcher_respond (nsm, w);
 }
 
 /* Cancel all namespace watchers that match:
@@ -726,21 +732,24 @@ static void watcher_cancel (struct ns_monitor *nsm,
  */
 static void watcher_cancel_ns (struct ns_monitor *nsm,
                                const flux_msg_t *msg,
+                               uint32_t matchtag,
                                bool cancel)
 {
-    zlist_t *l;
     struct watcher *w;
 
-    if ((l = zlist_dup (nsm->watchers))) {
-        w = zlist_first (l);
-        while (w) {
-            watcher_cancel (nsm, w, msg, cancel);
-            w = zlist_next (l);
-        }
-        zlist_destroy (&l);
+    w = zlistx_first (nsm->watchers);
+    while (w) {
+        /* Note: get next watcher before calling watcher_respond() since
+         * `nsm` may be destroyed when next == NULL:
+         */
+        struct watcher *next = zlistx_next (nsm->watchers);
+        watcher_cancel (nsm, w, msg, matchtag, cancel);
+
+        /* Note: No use-after-free possible since `nsm` may only be destroyed
+         * if nsm->watchers is empty and and thus next == NULL
+         */
+        w = next;
     }
-    else
-        flux_log_error (nsm->ctx->h, "%s: zlist_dup", __FUNCTION__);
 }
 
 /* Cancel all watchers that match:
@@ -755,12 +764,19 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
     zlist_t *l;
     char *name;
     struct ns_monitor *nsm;
+    uint32_t matchtag = FLUX_MATCHTAG_NONE;
+
+    if (cancel
+        && flux_msg_unpack (msg, "{s:i}", "matchtag", &matchtag) < 0) {
+        flux_log_error (ctx->h, "failed to get matchtag from cancel request");
+        return;
+    }
 
     if ((l = zhash_keys (ctx->namespaces))) {
         name = zlist_first (l);
         while (name) {
             nsm = zhash_lookup (ctx->namespaces, name);
-            watcher_cancel_ns (nsm, msg, cancel);
+            watcher_cancel_ns (nsm, msg, matchtag, cancel);
             name = zlist_next (l);
         }
         zlist_destroy (&l);
@@ -881,7 +897,7 @@ static void namespace_getroot_continuation (flux_future_t *f, void *arg)
     struct commit *commit;
 
     /* small racy chance watcher canceled before getroot completes */
-    if (zlist_size (nsm->watchers) == 0) {
+    if (zlistx_size (nsm->watchers) == 0) {
         zhash_delete (nsm->ctx->namespaces, nsm->ns_name);
         return;
     }
@@ -976,7 +992,7 @@ static void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(w = watcher_create (msg, key, flags)))
         goto error;
     w->nsm = nsm;
-    if (zlist_append (nsm->watchers, w) < 0) {
+    if (!(w->handle = zlistx_add_end (nsm->watchers, w))) {
         watcher_destroy (w);
         errno = ENOMEM;
         goto error;
@@ -1031,14 +1047,14 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                                                       : -1,
                                "rootref", nsm->commit ? nsm->commit->rootref
                                                       : "(null)",
-                               "watchers", (int)zlist_size (nsm->watchers));
+                               "watchers", (int)zlistx_size (nsm->watchers));
         if (!o)
             goto nomem;
         if (json_object_set_new (stats, nsm->ns_name, o) < 0) {
             json_decref (o);
             goto nomem;
         }
-        watchers += zlist_size (nsm->watchers);
+        watchers += zlistx_size (nsm->watchers);
         nsm = zhash_next (ctx->namespaces);
     }
     if (flux_respond_pack (h, msg, "{s:i s:i s:O}",
