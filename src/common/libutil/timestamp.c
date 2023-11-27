@@ -82,11 +82,8 @@ int timestamp_parse (const char *s,
         return -1;
     }
 
-    if (tm) {
-        memset (tm, 0, sizeof (*tm));
-        if (!(localtime_r (&t, tm)))
+    if (tm && !(localtime_r (&t, tm)))
             return -1;
-    }
 
     if (tv)
         tv->tv_sec = t;
@@ -109,6 +106,29 @@ int timestamp_parse (const char *s,
          *  allow the truncation to simulate floor(3).
          */
         tv->tv_usec = (d * 1000000) + 0.5;
+    }
+    return 0;
+}
+
+int timestamp_from_double (double ts, struct tm *tm, struct timeval *tv)
+{
+    if (ts < 0. || (!tm && !tv)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (tm) {
+        time_t t = (time_t) ts;
+        memset (tm, 0, sizeof (*tm));
+        if (!localtime_r (&t, tm))
+            return -1;
+    }
+    if (tv) {
+        tv->tv_sec = ts;
+        /*  Note: cast to integer type truncates. To handle underflow from
+         *  double arithmetic (e.g. result = 1234.999), add 0.5 and then
+         *  allow the truncation to simulate floor(3).
+         */
+        tv->tv_usec = ((ts - tv->tv_sec) * 1000000) + 0.5;
     }
     return 0;
 }
