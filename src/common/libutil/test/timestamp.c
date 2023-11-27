@@ -13,6 +13,7 @@
 #endif
 
 #include <errno.h>
+#include <string.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/timestamp.h"
@@ -195,6 +196,11 @@ static void test_invalid ()
     ok (timestamp_parse (te->entry, NULL, NULL) < 0 && errno == EINVAL,
         "timestamp_parse (NULL, &tm, &tv) fails with EINVAL");
 
+    ok (timestamp_from_double (-1., &tm, &tv) < 0 && errno == EINVAL,
+        "timestamp_from_double (-1, &tm, &tv) fails with EINVAL");
+    ok (timestamp_from_double (0., NULL, NULL) < 0 && errno == EINVAL,
+        "timestamp_from_double (0., NULL, NULL) fails with EINVAL");
+
     ok (timestamp_parse (te->entry, &tm, NULL) == 0,
         "timestamp_parse (ts, &tm, NULL) works");
     ok (tm.tm_year == te->year - 1900
@@ -211,6 +217,35 @@ static void test_invalid ()
         "timsestamp is expected value");
 }
 
+static void test_entry_check (struct test_entry *test,
+                              struct tm tm,
+                              struct timeval tv)
+{
+    ok (tm.tm_sec == test->sec,
+        "tm_sec == %d (expected %d)", tm.tm_sec, test->sec);
+    ok (tm.tm_min == test->min,
+        "tm_min == %d (expected %d)", tm.tm_min, test->min);
+    /* N.B.: We do not test tm_hour since this may be influenced
+     * by incorrect, missing, or updated DST values in the local
+     * system's tzdata.
+    ok (tm.tm_mday == test->mday,
+        "tm_mday == %d (expected %d)", tm.tm_mday, test->mday);
+     */
+    /* tm_mon is months since Jan 0-11
+     */
+    ok (tm.tm_mon == test->mon - 1,
+        "tm_mon == %d (expected %d)", tm.tm_mon, test->mon - 1);
+    /* tm_year is number of years since 1900
+     */
+    ok (tm.tm_year == test->year - 1900,
+        "tm_year == %d (expected %d)", tm.tm_year, test->year - 1900);
+
+    ok (tv.tv_sec == test->ts,
+        "tv_sec == %u (expected %u)", tv.tv_sec, test->ts);
+    ok (tv.tv_usec == test->us,
+        "tv_usec == %u (expected %u)", tv.tv_usec, test->us);
+}
+
 static void test_all ()
 {
     struct test_entry *test;
@@ -224,29 +259,19 @@ static void test_all ()
             "timestamp_parse: %s", test->entry);
         timestamp_tostr ((time_t) tv.tv_sec, buf, sizeof (buf));
         diag ("%s", buf);
-        ok (tm.tm_sec == test->sec,
-            "tm_sec == %d (expected %d)", tm.tm_sec, test->sec);
-        ok (tm.tm_min == test->min,
-            "tm_min == %d (expected %d)", tm.tm_min, test->min);
-        /* N.B.: We do not test tm_hour since this may be influenced
-         * by incorrect, missing, or updated DST values in the local
-         * system's tzdata.
-        ok (tm.tm_mday == test->mday,
-            "tm_mday == %d (expected %d)", tm.tm_mday, test->mday);
-         */
-        /* tm_mon is months since Jan 0-11
-         */
-        ok (tm.tm_mon == test->mon - 1,
-            "tm_mon == %d (expected %d)", tm.tm_mon, test->mon - 1);
-        /* tm_year is number of years since 1900
-         */
-        ok (tm.tm_year == test->year - 1900,
-            "tm_year == %d (expected %d)", tm.tm_year, test->year - 1900);
+        test_entry_check (test, tm, tv);
 
-        ok (tv.tv_sec == test->ts,
-            "tv_sec == %u (expected %u)", tv.tv_sec, test->ts);
-        ok (tv.tv_usec == test->us,
-            "tv_usec == %u (expected %u)", tv.tv_usec, test->us);
+        /* Now test timestamp_from_double()
+         */
+        double ts = tv.tv_sec + ((double) tv.tv_usec / 1000000);
+
+        memset (&tm, 0, sizeof (tm));
+        memset (&tv, 0, sizeof (tv));
+        ok (timestamp_from_double (ts, &tm, &tv) == 0,
+            "timestamp_from_double (%f) works",
+            ts);
+        test_entry_check (test, tm, tv);
+
         ++test;
     }
 }
