@@ -510,7 +510,7 @@ done:
     return rc;
 }
 
-static int start_resource_watch (struct inventory *inv)
+static int start_resource_watch (struct inventory *inv, bool no_resource_watch)
 {
     flux_t *h = inv->ctx->h;
     const char *uri;
@@ -520,6 +520,14 @@ static int start_resource_watch (struct inventory *inv)
     flux_future_t *f = NULL;
     json_t *R = NULL;
     int rc = -1;
+    const char *service = "job-info.update-watch";
+
+    /*  Testing-only: send update-watch request to wrong service name to
+     *  simulate start under an older instance that does not support this
+     *  RPC.
+     */
+    if (no_resource_watch)
+        service = "job-info.update-watch-fake";
 
     if (!(uri = flux_attr_get (h, "parent-uri"))
             || !(jobid = flux_attr_get (h, "jobid")))
@@ -541,7 +549,7 @@ static int start_resource_watch (struct inventory *inv)
         goto done;
     }
     if (!(f = flux_rpc_pack (inv->parent_h,
-                             "job-info.update-watch",
+                             service,
                              FLUX_NODEID_ANY,
                              FLUX_RPC_STREAMING,
                              "{s:I s:s s:i}",
@@ -561,6 +569,11 @@ static int start_resource_watch (struct inventory *inv)
              *  Fall back to job-info.lookup and return:
              */
             flux_future_destroy (f);
+            flux_log (inv->ctx->h,
+                      LOG_DEBUG,
+                      "no support for %s in parent, falling back to %s",
+                      service,
+                      "job-info.lookup");
             return lookup_R_fallback (inv, id);
         }
         else {
@@ -878,7 +891,9 @@ void inventory_destroy (struct inventory *inv)
     }
 }
 
-struct inventory *inventory_create (struct resource_ctx *ctx, json_t *conf_R)
+struct inventory *inventory_create (struct resource_ctx *ctx,
+                                    json_t *conf_R,
+                                    bool no_update_watch)
 {
     struct inventory *inv;
     json_t *R = NULL;
@@ -895,7 +910,7 @@ struct inventory *inventory_create (struct resource_ctx *ctx, json_t *conf_R)
             goto error;
         if (!inv->R && get_from_kvs (inv, "resource.R") < 0)
             goto error;
-        if (!inv->R && start_resource_watch (inv) < 0)
+        if (!inv->R && start_resource_watch (inv, no_update_watch) < 0)
             goto error;
     }
     else {

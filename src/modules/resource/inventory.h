@@ -15,7 +15,9 @@
  * R is configured resource object, if any (ref taken).
  * R is obtained from enclosing Flux instance or probed dynamically otherwise.
  */
-struct inventory *inventory_create (struct resource_ctx *ctx, json_t *R);
+struct inventory *inventory_create (struct resource_ctx *ctx,
+                                    json_t *R,
+                                    bool no_update_watch);
 void inventory_destroy (struct inventory *inv);
 
 /* Get resource object.
