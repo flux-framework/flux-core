@@ -43,12 +43,6 @@ struct dmesg_ctx {
 };
 
 enum {
-    DMESG_COLOR_MODE_AUTO,
-    DMESG_COLOR_MODE_NEVER,
-    DMESG_COLOR_MODE_ALWAYS
-};
-
-enum {
     DMESG_COLOR_NAME,
     DMESG_COLOR_TIME,
     DMESG_COLOR_TIMEBREAK,
