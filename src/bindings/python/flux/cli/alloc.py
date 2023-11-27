@@ -169,5 +169,9 @@ class AllocCmd(base.MiniCmd):
         attach_args.append(jobid.f58.encode("utf-8", errors="surrogateescape"))
 
         # Exec flux-job attach, searching for it in FLUX_EXEC_PATH.
-        os.environ["PATH"] = os.environ["FLUX_EXEC_PATH"] + ":" + os.environ["PATH"]
+        old_path = os.environ.get("PATH")
+        os.environ["PATH"] = os.environ["FLUX_EXEC_PATH"]
+        if old_path:
+            os.environ["PATH"] += f":{old_path}"
+
         os.execvp("flux-job", attach_args)
