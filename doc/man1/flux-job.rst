@@ -9,40 +9,44 @@ flux-job(1)
 SYNOPSIS
 ========
 
-**flux** **job** **attach** [*OPTIONS*] *id*
-
-**flux** **job** **cancel** [*OPTIONS*] *ids...* [*--*] [*message...*]
-
-**flux** **job** **cancelall** [*OPTIONS*] [*message...*]
-
-**flux** **job** **status** [*OPTIONS*] *id [*id...*]
-
-**flux** **job** **wait** [*OPTIONS*] [*id*]
-
-**flux** **job** **kill** [*--signal=SIG*] *id* [*id...*]
-
-**flux** **job** **killall** [*OPTIONS*]
-
-**flux** **job** **raise** [*OPTIONS*] *ids...* [*--*] [*message...*]
-
-**flux** **job** **raiseall** [*OPTIONS*] *type* [*message...*]
-
-**flux** **job** **taskmap** [*OPTIONS*] *id*|*taskmap*
-
-**flux** **job** **timeleft** [*OPTIONS*] [*id*]
-
-**flux** **job** **purge** [*OPTIONS*] [*id...*]
-
-**flux** **job** **info** [*OPTIONS*] *id* *key*
+| **flux** **job** **attach** [*--label-io*] [*-E*] [*--wait-event=EVENT*] *id*
+| **flux** **job** **status** [*-v*] [*--json*] [-e CODE] *id [*id...*]
+| **flux** **job** **last** [*N* | *SLICE*]
+| **flux** **job** **urgency** [*-v*] *id* *N*
+| **flux** **job** **wait** [*-v*] [*--all*] [*id*]
+| **flux** **job** **kill** [*--signal=SIG*] *ids...*
+| **flux** **job** **killall** [*-f*] [*--user=USER*] [*--signal=SIG*]
+| **flux** **job** **raise** [*-severity=N*] [*--type=TYPE*] *ids...* [*--*] [*message...*]
+| **flux** **job** **raiseall** [*--severity=N*] [*--user=USER*] [*--states=STATES*] *type* [ [*--*] [*message...*]
+| **flux** **job** **taskmap** [*OPTIONS*] *id* | *taskmap*
+| **flux** **job** **timeleft** [*-H*] [*id*]
+| **flux** **job** **purge** [*-f*] [*--age-limit=FSD*] [*--num-limit=N*] [*ids...*]
+| **flux** **job** **info** [*--original*] [*--base*] *id* *key*
 
 
 DESCRIPTION
 ===========
 
-flux-job(1) performs various job related housekeeping functions.
+:program:`flux job` performs various job related housekeeping functions.
 
-ATTACH
-======
+
+OPTIONS
+=======
+
+.. program:: flux job
+
+.. option:: -h, --help
+
+   Display a list of :program:`flux job` sub-commands.
+
+
+COMMANDS
+========
+
+Several subcommands are available to perform various operations on jobs.
+
+attach
+------
 
 .. program:: flux job attach
 
@@ -107,45 +111,8 @@ This status line may be suppressed by setting
 
    Enable parallel debugger attach.
 
-CANCEL
-======
-
-.. program:: flux job cancel
-
-One or more jobs by may be canceled with :program:`flux job cancel`.  An
-optional message included with the cancel exception may be provided via the
-:option:`--message=NOTE` option or after the list of jobids. The special
-argument *"--"* forces the end of jobid processing and can be used to separate
-the exception message from the jobids when necessary.
-
-.. option:: -m, --message=NOTE
-
-   Set the optional exception note. It is an error to specify the message
-   via this option and on the command line after the jobid list.
-
-.. program:: flux job cancelall
-
-Jobs may be canceled in bulk with :program:`flux job cancelall`.  Target jobs
-are selected with:
-
-.. option:: -u, --user=USER
-
-   Set target user.  The instance owner may specify *all* for all users.
-
-.. option:: -S, --states=STATES
-
-   Set target job states (default: ACTIVE).
-
-.. option:: -f, --force
-
-   Confirm the command
-
-.. option:: -q, --quiet
-
-   Suppress output if no jobs match
-
-STATUS
-======
+status
+------
 
 .. program:: flux job status
 
@@ -164,8 +131,64 @@ Wait for job(s) to complete and exit with the largest exit code.
 
    Increase verbosity of output.
 
-WAIT
-====
+last
+-----
+
+.. program:: flux job last
+
+Print the most recently submitted jobid for the current user.
+
+If the optional argument is specified as a number *N*, print the *N* most
+recently submitted jobids in reverse submission order, one per line.  If it
+is enclosed in brackets, the argument is interpreted as a `python-style slice
+<https://python-reference.readthedocs.io/en/latest/docs/brackets/slicing.html>`_
+in :option:`[start:stop[:step]]` form which slices the job history array,
+where index 0 is the most recently submitted job.
+
+Examples:
+
+:command:`flux job last 4`
+  List the last four jobids in reverse submission order
+
+:command:`flux job last [0:4]`
+  Same as above
+
+:command:`flux job last [-1:]`
+  List the least recently submitted jobid
+
+:command:`flux job last [:]`
+  List all jobids in reverse submission order
+
+:command:`flux job last [::-1]`
+  List all jobids in submission order
+
+urgency
+-------
+
+.. program:: flux job wait
+
+:program:`flux job urgency` changes a job's urgency value.  The urgency
+may also be specified at job submission time.  The argument *N* has a range
+of 0 to 16 for guest users, or 0 to 31 for instance owners.  In lieu of a
+numerical value, the following special names are also accepted:
+
+hold (0)
+  Hold the job until the urgency is raised with :option:`flux job urgency`.
+
+default (16)
+  The default urgency for all users.
+
+expedite (31)
+  Assign the highest possible priority to the job (restricted to instance
+  owner).
+
+Urgency is one factor used to calculate job priority, which affects the
+order in which the scheduler considers jobs.  For more information, refer
+to :man1:`flux-submit` description of the :option:`flux submit --urgency`
+option.
+
+wait
+----
 
 .. program:: flux job wait
 
@@ -209,8 +232,8 @@ code of zero.  If any jobs have failed, it exits with a code of one.
 
    Emit a line of output for all jobs, not just failing ones.
 
-SIGNAL
-======
+kill
+----
 
 .. program:: flux job kill
 
@@ -220,10 +243,12 @@ One or more running jobs may be signaled by jobid with :program:`flux job kill`.
 
    Send signal SIG (default: SIGTERM).
 
+killall
+-------
+
 .. program:: flux job killall
 
-Running jobs may be signaled in bulk with :program:`flux job killall`.  In
-addition to the option above, target jobs are selected with:
+Running jobs may be signaled in bulk with :program:`flux job killall`.
 
 .. option:: -u, --user=USER
 
@@ -233,8 +258,12 @@ addition to the option above, target jobs are selected with:
 
    Confirm the command.
 
-EXCEPTION
-=========
+.. option:: -s, --signal=SIG
+
+   Send signal SIG (default: SIGTERM).
+
+raise
+-----
 
 .. program:: flux job raise
 
@@ -258,6 +287,9 @@ separate the exception message from the jobids when necessary.
 
    Set exception type (default: cancel).
 
+raiseall
+--------
+
 Exceptions may be raised in bulk with :program:`flux job raiseall`, which
 requires a type (positional argument) and accepts the following options:
 
@@ -280,8 +312,8 @@ requires a type (positional argument) and accepts the following options:
 
    Confirm the command.
 
-TASKMAP
-=======
+taskmap
+-------
 
 .. program:: flux job taskmap
 
@@ -321,8 +353,8 @@ support task mapping formats:
 
 One one of the above options may be used per call.
 
-TIMELEFT
-========
+timeleft
+--------
 
 .. program:: flux job timeleft
 
@@ -341,8 +373,8 @@ Options:
 
   Generate human readable output. Report results in Flux Standard Duration.
 
-PURGE
-=====
+purge
+-----
 
 .. program:: flux job purge
 
@@ -367,15 +399,14 @@ Inactive jobs may also be purged automatically if the job manager is
 configured as described in :man5:`flux-config-job-manager`.
 
 
-flux job info
--------------
+info
+----
 
 .. program:: flux job info
 
 :program:`flux job info` retrieves the selected low level job object
 and displays it on standard output.  Object formats are described in the
 RFCs listed in `RESOURCES`_.
-
 
 Options:
 

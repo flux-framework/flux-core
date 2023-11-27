@@ -490,7 +490,8 @@ test_expect_success 'flux job: the queue contains active jobs' '
 
 test_expect_success 'flux job: cancelall with no args works' '
 	count=$(flux job list | wc -l) &&
-	flux job cancelall 2>cancelall.err &&
+	flux job cancelall 2>cancelall.tmp &&
+	grep -v WARNING cancelall.tmp >cancelall.err &&
 	cat <<-EOT >cancelall.exp &&
 	flux-job: Command matched ${count} jobs (-f to confirm)
 	EOT
@@ -502,13 +503,15 @@ test_expect_success 'flux-job: cancelall with bad broker connection fails' '
 '
 
 test_expect_success 'flux job: cancelall with reason works' '
-	flux job cancelall this is a reason 2>cancelall_reason.err &&
+	flux job cancelall this is a reason 2>cancelall_reason.tmp &&
+	grep -v WARNING cancelall_reason.tmp >cancelall_reason.err &&
 	test_cmp cancelall.exp cancelall_reason.err
 '
 
 test_expect_success 'flux job: cancelall --force works' '
 	count=$(flux job list | wc -l) &&
-	flux job cancelall --force 2>cancelall_f.err &&
+	flux job cancelall --force 2>cancelall_f.tmp &&
+	grep -v WARNING cancelall_f.tmp >cancelall_f.err &&
 	cat <<-EOT >cancelall_f.exp &&
 	flux-job: Canceled ${count} jobs (0 errors)
 	EOT
@@ -522,7 +525,8 @@ test_expect_success 'flux job: the queue is empty' '
 test_expect_success 'flux-job: cancelall --user all fails for guest' '
 	id=$(($(id -u)+1)) &&
 	test_must_fail runas ${id} \
-		flux job cancelall --user all 2> cancelall_all_guest.err &&
+		flux job cancelall --user all 2> cancelall_all_guest.tmp &&
+	grep -v WARNING cancelall_all_guest.tmp >cancelall_all_guest.err &&
 	cat <<-EOF >cancelall_all_guest.exp &&
 	flux-job: raiseall: guests can only raise exceptions on their own jobs
 	EOF
@@ -653,7 +657,8 @@ test_expect_success 'flux-job: raiseall -f returns correct count' '
 '
 
 test_expect_success 'flux-job: cancelall -f returns correct count' '
-	flux job cancelall -f 2>cancelall_testf.err &&
+	flux job cancelall -f 2>cancelall_testf.tmp &&
+	grep -v WARNING cancelall_testf.tmp >cancelall_testf.err &&
 	cat <<-EOT >cancelall_testf.exp &&
 	flux-job: Canceled 3 jobs (0 errors)
 	EOT

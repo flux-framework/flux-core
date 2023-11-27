@@ -47,7 +47,7 @@ test_expect_success 'job-exec: status is maximum job shell exit codes' '
 test_expect_success 'job-exec: job exception kills job shells' '
 	id=$(flux submit -n4 -N4 sleep 300) &&
 	flux job wait-event -vt 5 $id start &&
-	flux job cancel $id &&
+	flux cancel $id &&
 	flux job wait-event -vt 5 $id clean &&
 	flux job eventlog $id | grep status=15
 '

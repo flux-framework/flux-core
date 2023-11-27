@@ -51,7 +51,7 @@ test_expect_success 'flux-watch: --all watches inactive jobs' '
 test_expect_success 'flux-watch: run some failed jobs' '
 	id=$(flux submit sh -c "echo test3; exit 2") &&
 	id2=$(flux submit --urgency hold true) &&
-	flux job cancel $id2
+	flux cancel $id2
 '
 test_expect_success 'flux-watch: exits with highest job exit code' '
 	test_expect_code 2 flux watch --all
