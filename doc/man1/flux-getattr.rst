@@ -6,28 +6,53 @@ flux-getattr(1)
 SYNOPSIS
 ========
 
-**flux** **getattr** *name*
-
-**flux** **setattr** *name* *value*
-
-**flux** **setattr** *name*
-
-**flux** **lsattr** [*--values*]
+| **flux** **getattr** *name*
+| **flux** **setattr** *name* *value*
+| **flux** **lsattr** [*--values*]
 
 
 DESCRIPTION
 ===========
 
-Flux broker attributes are both a simple, general-purpose key-value
-store with scope limited to the local broker rank, and a method for the
-broker to export information needed by Flux services and utilities.
+The Flux broker attribute subsystem provides a primitive key-value
+configuration mechanism for the broker.  Attributes can be set on the
+broker command line with :option:`flux broker --setattr`, then read,
+written, or listed using :program:`flux getattr`, :program:`flux setattr`,
+or :program:`flux lsattr` after the broker is running.
+
+Attribute scope is local to an individual broker.  That is, broker ranks
+may have different values for a given attribute.
+
+:man7:`flux-broker-attributes` provides a catalog of attributes.
+
+COMMANDS
+========
+
+getattr
+-------
+
+.. program:: flux getattr
 
 :program:`flux getattr` retrieves the value of an attribute.
 
-:program:`flux setattr` assigns a new value to an attribute, or optionally
-removes an attribute.
+setattr
+-------
 
-:program:`flux lsattr` lists attribute names, optionally with their values.
+.. program:: flux setattr
+
+:program:`flux setattr` assigns a value to an attribute.  If the attribute
+does not exist, it is created.
+
+lsattr
+------
+
+.. program:: flux lsattr
+
+:program:`flux lsattr` lists attributes.
+
+.. option:: -v, --values
+
+  List the attribute values too.
 
 
 RESOURCES
