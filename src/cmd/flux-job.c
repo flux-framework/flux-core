@@ -333,6 +333,10 @@ static struct optparse_option eventlog_opts[] =  {
     { .name = "time-format", .key = 'T', .has_arg = 1, .arginfo = "FORMAT",
       .usage = "Specify time format: raw, iso, offset",
     },
+    { .name = "human", .key = 'H', .has_arg = 0,
+      .usage = "Display human-readable output. See also --color, --format, "
+               "and --time-format.",
+    },
     { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
       .usage = "Colorize output when supported; WHEN can be 'always' "
                "(default if omitted), 'never', or 'auto' (default)."
@@ -350,6 +354,10 @@ static struct optparse_option wait_event_opts[] =  {
     },
     { .name = "time-format", .key = 'T', .has_arg = 1, .arginfo = "FORMAT",
       .usage = "Specify time format: raw, iso, offset",
+    },
+    { .name = "human", .key = 'H', .has_arg = 0,
+      .usage = "Display human-readable output. See also --color, --format, "
+               "and --time-format.",
     },
     { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
       .usage = "timeout after DURATION",
@@ -551,14 +559,14 @@ static struct optparse_subcommand subcommands[] = {
       id_opts
     },
     { "eventlog",
-      "[-f text|json] [-T raw|iso|offset] [-L] [-p path] id",
+      "[-f text|json] [-T raw|iso|offset] [-HL] [-p path] id",
       "Display eventlog for a job",
       cmd_eventlog,
       0,
       eventlog_opts
     },
     { "wait-event",
-      "[-f text|json] [-T raw|iso|offset] [-L] [-t seconds] [-m key=val] [-c <num>] "
+      "[-f text|json] [-T raw|iso|offset] [-HL] [-t seconds] [-m key=val] [-c <num>] "
       "[-p path] [-W] [-q] [-v] id event",
       "Wait for an event ",
       cmd_wait_event,
@@ -3046,6 +3054,12 @@ void formatter_parse_options (optparse_t *p,
     const char *format = optparse_get_str (p, "format", "text");
     const char *time_format = optparse_get_str (p, "time-format", "raw");
     const char *when = optparse_get_str (p, "color", "auto");
+
+    if (optparse_hasopt (p, "human")) {
+        format = "text",
+        time_format = "human";
+        when = "auto";
+    }
 
     if (eventlog_formatter_set_format (evf, format) < 0)
         log_msg_exit ("invalid format type '%s'", format);
