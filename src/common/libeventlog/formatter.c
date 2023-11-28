@@ -20,6 +20,7 @@
 #include <jansson.h>
 
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/timestamp.h"
 
 #include "eventlog.h"
 #include "formatter.h"
@@ -32,7 +33,8 @@ enum entry_format {
 enum timestamp_format {
     EVENTLOG_TIMESTAMP_RAW,
     EVENTLOG_TIMESTAMP_ISO,
-    EVENTLOG_TIMESTAMP_OFFSET
+    EVENTLOG_TIMESTAMP_OFFSET,
+    EVENTLOG_TIMESTAMP_HUMAN,
 };
 
 struct eventlog_formatter {
@@ -48,6 +50,10 @@ struct eventlog_formatter {
 
     /*  Initial timestamp */
     double t0;
+
+    /*  For relative timestamp output */
+    struct tm last_tm;
+    double last_ts;
 };
 
 void eventlog_formatter_destroy (struct eventlog_formatter *evf)
@@ -93,6 +99,9 @@ int eventlog_formatter_set_timestamp_format (struct eventlog_formatter *evf,
     }
     if (strcasecmp (format, "raw") == 0)
         evf->ts_format = EVENTLOG_TIMESTAMP_RAW;
+    else if (strcasecmp (format, "human") == 0
+             || strcasecmp (format, "reltime") == 0)
+        evf->ts_format = EVENTLOG_TIMESTAMP_HUMAN;
     else if (strcasecmp (format, "iso") == 0)
         evf->ts_format = EVENTLOG_TIMESTAMP_ISO;
     else if (strcasecmp (format, "offset") == 0)
@@ -126,8 +135,58 @@ void eventlog_formatter_reset (struct eventlog_formatter *evf)
 {
     if (evf) {
         evf->t0 = 0.;
+        evf->last_ts = 0.;
+        memset (&evf->last_tm, 0, sizeof (struct tm));
     }
 }
+
+static const char *months[] = {
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+    NULL
+};
+
+static int event_timestamp_human (struct eventlog_formatter *evf,
+                                  double timestamp,
+                                  char *buf,
+                                  size_t size)
+{
+    struct tm tm;
+
+    if (timestamp_from_double (timestamp, &tm, NULL) < 0)
+        return snprintf (buf, size, "[%+11.6f]", timestamp);
+
+    if (tm.tm_year == evf->last_tm.tm_year
+        && tm.tm_mon == evf->last_tm.tm_mon
+        && tm.tm_mday == evf->last_tm.tm_mday
+        && tm.tm_hour == evf->last_tm.tm_hour
+        && tm.tm_min == evf->last_tm.tm_min) {
+        /*  Within same minute, print offset in sec */
+        return snprintf (buf, size, "[%+11.6f]", timestamp - evf->last_ts);
+    }
+    /* New minute. Save last timestamp,  print datetime */
+    evf->last_ts = timestamp;
+    evf->last_tm = tm;
+
+    return snprintf (buf,
+                     size,
+                     "[%s%02d %02d:%02d]",
+                     months [tm.tm_mon],
+                     tm.tm_mday,
+                     tm.tm_hour,
+                     tm.tm_min);
+}
+
 
 static int event_timestamp (struct eventlog_formatter *evf,
                             flux_error_t *errp,
@@ -138,6 +197,11 @@ static int event_timestamp (struct eventlog_formatter *evf,
     if (evf->ts_format == EVENTLOG_TIMESTAMP_RAW) {
         if (snprintf (buf, size, "%lf", timestamp) >= size)
             return errprintf (errp, "buffer truncated writing timestamp");
+    }
+    else if (evf->ts_format == EVENTLOG_TIMESTAMP_HUMAN) {
+        if (event_timestamp_human (evf, timestamp, buf, size) >= size)
+            return errprintf (errp,
+                              "buffer truncated writing relative timestamp");
     }
     else if (evf->ts_format == EVENTLOG_TIMESTAMP_ISO) {
         time_t sec = timestamp;
