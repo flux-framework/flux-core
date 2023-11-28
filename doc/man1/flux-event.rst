@@ -6,7 +6,8 @@ flux-event(1)
 SYNOPSIS
 ========
 
-**flux** **event** *COMMAND* [*OPTIONS*]
+| **flux** **event** **pub** [*--raw*] [*--synchronous*] [*--private*] *topic* [*payload*]
+| **flux** **event** **sub** [*--count=N*] *topic...*
 
 
 DESCRIPTION
@@ -26,27 +27,56 @@ A subscription to the empty string matches all events.
 COMMANDS
 ========
 
-**pub** [-r] [-l] [-s] [-p] *topic* [*payload*]
-   Publish an event with optional payload. If payload is specified,
-   it is interpreted as raw if the :option:`-r` option is used, otherwise it is
-   interpreted as JSON. If the payload spans multiple arguments,
-   the arguments are concatenated with one space between them.
-   If :option:`-s` is specified, wait for the event's sequence number to be
-   assigned before exiting.
-   If :option:`-l` is specified, subscribe to the published event and wait for
-   it to be received before exiting. :option:`-p` causes the privacy flag to
-   be set on the published event.
+pub
+---
 
-**sub** *[-c N]* [*topic*] [*topic*\ …​]
-   Subscribe to events matching the topic string(s) provided on the
-   command line. If none are specified, subscribe to all events.  If
-   :option:`-c N` is specified, print the first *N* events on stdout and exit;
-   otherwise continue printing events until a signal is received.
-   Events are displayed one per line: the topic string, followed by a tab,
-   followed by the payload, if any.
+.. program:: flux event pub
+
+Publish an event on *topic* with optional *payload*. If payload is specified,
+it is interpreted as JSON unless other options are selected.  If the payload
+spans multiple arguments, the arguments are concatenated with one space
+between them.
+
+.. option:: -r, --raw
+
+  Interpret event payload as raw instead of JSON.
+
+.. option:: -s, --synchronous
+
+  Wait for the event's sequence number to be assigned before exiting.
+
+.. option:: -l, --loopback
+
+  Subscribe to the published event and wait for it to be received before
+  exiting.
+
+.. option:: -p, --private
+
+  Set the privacy flag on the published event.
+
+sub
+---
+
+.. program:: flux event sub
+
+Subscribe to events matching the topic string(s) provided on the
+command line. If none are specified, subscribe to all events.
+Events are displayed one per line: the topic string, followed by a tab,
+followed by the payload, if any.
+
+.. option:: -c, --count=N
+
+ Print the first *N* events on stdout and exit.  Otherwise events are
+ processed until a signal is received.
 
 
 RESOURCES
 =========
 
 .. include:: common/resources.rst
+
+
+FLUX RFC
+========
+
+:doc:`rfc:spec_3`
