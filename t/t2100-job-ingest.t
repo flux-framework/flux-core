@@ -105,9 +105,9 @@ test_expect_success 'job-ingest: KVS jobspec lacks environment' '
 test_expect_success 'job-ingest: job announced to job manager' '
 	jobid=$(flux job submit --urgency=10 basic.json | flux job id) &&
 	flux kvs eventlog get ${DUMMY_EVENTLOG} \
-		| grep "\"id\":${jobid}" >jobman.out &&
-	grep -q "\"urgency\":10" jobman.out &&
-	grep -q "\"userid\":$(id -u)" jobman.out
+		| grep "id=${jobid}" >jobman.out &&
+	grep -q "urgency=10" jobman.out &&
+	grep -q "userid=$(id -u)" jobman.out
 '
 
 test_expect_success 'job-ingest: instance owner can submit urgency=31' '

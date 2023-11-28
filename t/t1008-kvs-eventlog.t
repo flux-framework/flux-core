@@ -29,7 +29,7 @@ test_expect_success 'flux kvs eventlog append works w/ context' '
 	flux kvs eventlog append test.c foo {\"data\":\"bar\"} &&
 	flux kvs eventlog get test.c >get_c.out &&
 	grep -q foo get_c.out &&
-        grep -q "\"data\":\"bar\"" get_c.out
+        grep -q "data=\"bar\"" get_c.out
 '
 
 test_expect_success 'flux kvs eventlog get --watch --count=N works' '
