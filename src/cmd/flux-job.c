@@ -559,15 +559,14 @@ static struct optparse_subcommand subcommands[] = {
       id_opts
     },
     { "eventlog",
-      "[-f text|json] [-T raw|iso|offset] [-HL] [-p path] id",
+      "[OPTIONS] id",
       "Display eventlog for a job",
       cmd_eventlog,
       0,
       eventlog_opts
     },
     { "wait-event",
-      "[-f text|json] [-T raw|iso|offset] [-HL] [-t seconds] [-m key=val] [-c <num>] "
-      "[-p path] [-W] [-q] [-v] id event",
+      "[OPTIONS] id event",
       "Wait for an event ",
       cmd_wait_event,
       0,
