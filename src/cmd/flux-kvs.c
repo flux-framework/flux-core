@@ -557,7 +557,8 @@ int cmd_namespace_list (optparse_t *p, int argc, char **argv)
         if (!(o = json_array_get (array, i)))
             log_err_exit ("json_array_get");
 
-        if (json_unpack (o, "{ s:s s:i s:i }",
+        if (json_unpack (o,
+                         "{ s:s s:i s:i }",
                          "namespace", &ns,
                          "owner", &owner,
                          "flags", &flags) < 0)
@@ -641,9 +642,11 @@ kv_printf (const char *key, int maxcol, const char *fmt, ...)
     if (rc < 0)
         log_err_exit ("%s", __FUNCTION__);
 
-    if (asprintf (&kv, "%s%s%s", key ? key : "",
-                                 key ? " = " : "",
-                                 val) < 0)
+    if (asprintf (&kv,
+                  "%s%s%s",
+                  key ? key : "",
+                  key ? " = " : "",
+                  val) < 0)
         log_err_exit ("%s", __FUNCTION__);
 
     /* There will be no truncation of output if maxcol = 0.
@@ -670,8 +673,9 @@ kv_printf (const char *key, int maxcol, const char *fmt, ...)
             }
         }
     }
-    printf ("%s%s\n", kv,
-                      overflow ? "..." : "");
+    printf ("%s%s\n",
+            kv,
+            overflow ? "..." : "");
 
     free (val);
     free (kv);
@@ -690,8 +694,9 @@ void lookup_continuation (flux_future_t *f, void *arg)
     struct lookup_ctx *ctx = arg;
     const char *key = flux_kvs_lookup_get_key (f);
 
-    if (optparse_hasopt (ctx->p, "watch") && flux_rpc_get (f, NULL) < 0
-                                          && errno == ENODATA) {
+    if (optparse_hasopt (ctx->p, "watch")
+        && flux_rpc_get (f, NULL) < 0
+        && errno == ENODATA) {
         flux_future_destroy (f);
         return; // EOF
     }
@@ -1421,7 +1426,8 @@ static bool need_newline (int col, int col_width, int win_width)
 /* List the content of 'dir', arranging output in columns that fit 'win_width',
  * and using a custom column width selected based on the longest entry name.
  */
-static void list_kvs_dir_single (const flux_kvsdir_t *dir, int win_width,
+static void list_kvs_dir_single (const flux_kvsdir_t *dir,
+                                 int win_width,
                                  optparse_t *p)
 {
     flux_kvsitr_t *itr;
@@ -1462,8 +1468,12 @@ static void list_kvs_dir_single (const flux_kvsdir_t *dir, int win_width,
 /* List contents of directory pointed to by 'key', descending into subdirs
  * if -R was specified.  First the directory is listed, then its subdirs.
  */
-static void list_kvs_dir (flux_t *h, const char *ns, const char *key,
-                          optparse_t *p, int win_width, bool print_label,
+static void list_kvs_dir (flux_t *h,
+                          const char *ns,
+                          const char *key,
+                          optparse_t *p,
+                          int win_width,
+                          bool print_label,
                           bool print_vspace)
 {
     flux_future_t *f;
@@ -1543,8 +1553,11 @@ static int sort_cmp (void *item1, void *item2)
 /* links are special.  If it points to a value, output the link name.
  * If it points to a dir, output contents of the dir.  If it points to
  * an illegal key, still output the link name. */
-static int categorize_link (flux_t *h, const char *ns, char *nkey,
-                            zlist_t *dirs, zlist_t *singles)
+static int categorize_link (flux_t *h,
+                            const char *ns,
+                            char *nkey,
+                            zlist_t *dirs,
+                            zlist_t *singles)
 {
     flux_future_t *f;
 
@@ -1574,8 +1587,12 @@ static int categorize_link (flux_t *h, const char *ns, char *nkey,
  * its contents are to be listed or not.  If -F is specified,
  * 'singles' key names are decorated based on their type.
  */
-static int categorize_key (flux_t *h, optparse_t *p, const char *ns,
-                           const char *key, zlist_t *dirs, zlist_t *singles)
+static int categorize_key (flux_t *h,
+                           optparse_t *p,
+                           const char *ns,
+                           const char *key,
+                           zlist_t *dirs,
+                           zlist_t *singles)
 {
     flux_future_t *f;
     const char *json_str;
@@ -1950,10 +1967,11 @@ static void eventlog_prettyprint (json_t *event)
             log_msg_exit ("json_dumps");
     }
 
-    printf ("%lf %s%s%s\n", timestamp,
-                            name,
-                            context_str ? " " : "",
-                            context_str ? context_str : "");
+    printf ("%lf %s%s%s\n",
+            timestamp,
+            name,
+            context_str ? " " : "",
+            context_str ? context_str : "");
 
     free (context_str);
     fflush (stdout);
@@ -1980,8 +1998,9 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
      * Destroy the future and return (reactor will then terminate).
      * Errors other than ENODATA are handled by the flux_kvs_lookup_get().
      */
-    if (optparse_hasopt (ctx->p, "watch") && flux_rpc_get (f, NULL) < 0
-                                          && errno == ENODATA) {
+    if (optparse_hasopt (ctx->p, "watch")
+        && flux_rpc_get (f, NULL) < 0
+        && errno == ENODATA) {
         flux_future_destroy (f);
         return;
     }
