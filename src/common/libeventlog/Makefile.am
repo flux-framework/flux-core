@@ -20,7 +20,9 @@ libeventlog_la_SOURCES = \
 	formatter.h \
 	formatter.c
 
-TESTS = test_eventlog.t
+TESTS = \
+	test_eventlog.t \
+	test_formatter.t
 
 check_PROGRAMS = $(TESTS)
 
@@ -34,5 +36,15 @@ test_eventlog_t_LDADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libeventlog/libeventlog.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
+	$(JANSSON_LIBS) \
+	$(LIBRT)
+
+test_formatter_t_SOURCES = test/formatter.c
+test_formatter_t_CPPFLAGS = $(AM_CPPFLAGS)
+test_formatter_t_LDADD = \
+	$(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/common/libeventlog/libeventlog.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(top_builddir)/src/common/libmissing/libmissing.la \
 	$(JANSSON_LIBS) \
 	$(LIBRT)
