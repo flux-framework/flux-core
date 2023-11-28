@@ -809,3 +809,6 @@ ssize
 waitcreate
 unformatted
 uniq
+unreferenced
+restartable
+ramdisk
