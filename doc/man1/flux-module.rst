@@ -6,13 +6,19 @@ flux-module(1)
 SYNOPSIS
 ========
 
-**flux** **module** *COMMAND* [*OPTIONS*]
+| **flux** **module** **load** [*--name*] *module* [*args...*]
+| **flux** **module** **reload** [*--name*] [*--force*] *module* [*args...*]
+| **flux** **module** **remove** [*--force*] *name*
+| **flux** **module** **list** [*-l*]
+| **flux** **module** **stats** [*-R*] [*--clear*] *name*
+| **flux** **module** **debug** [*--setbit=VAL*] [*--clearbit=VAL*] [*--set=MASK*] [*--clear=MASK*] *name*
+
 
 
 DESCRIPTION
 ===========
 
-.. program:: flux module stats
+.. program:: flux module
 
 :program:`flux module` manages dynamically loadable :man1:`flux-broker` modules.
 
@@ -20,64 +26,121 @@ DESCRIPTION
 COMMANDS
 ========
 
-**load** *name* [*module-arguments* …​]
-   Load module *name*.  When the load command completes successfully,
-   the new module has entered the running state (see LIST OUTPUT below).
+load
+----
 
-**remove** [--force] *name*
-   Remove module *name*.  If :option:`-f, --force` is used, then do not fail
-   if module *name* is not loaded.
+.. program:: flux module load
 
-**reload** [--force] *name* [*module-arguments* …​]
-   Reload module *name*. This is equivalent to running
-   :program:`flux module remove` followed by :program:`flux module load`. It
-   is a fatal error if module *name* is not loaded during removal unless the
-   :option:`-f, --force` option is specified.
+Load *module*, which may be either the path to a shared object file, including
+the ``.so`` suffix, or the basename of a shared object file on the
+:envvar:`FLUX_MODULE_PATH`, without the suffix.
 
-**list** [*service*]
-   List loaded :man1:`flux-broker` modules.
+When :program:`flux module load` completes successfully, the new module has
+entered the running state (see LIST OUTPUT below).
 
-**stats** [*OPTIONS*] [*name*]
-   Request statistics from module *name*. A JSON object containing a set of
-   counters for each type of Flux message is returned by default, however
-   the object may be customized on a module basis.
+.. option:: -n, --name=NAME
 
-**debug** [*OPTIONS*] [*name*]
-   Manipulate debug flags in module *name*. The interpretation of debug
-   flag bits is private to the module and its test drivers.
+  Override the default module name.  A single shared object file may be
+  loaded multiple times under different names.
 
+reload
+------
 
-STATS OPTIONS
-=============
+.. program:: flux module reload
+
+Reload module *name*. This is equivalent to running
+:program:`flux module remove` followed by :program:`flux module load`.
+
+.. option:: -f, --force
+
+  Suppress failure if *module* is not loaded and proceed with loading.
+
+.. option:: -n, --name=NAME
+
+  Override the default module name.
+
+remove
+------
+
+.. program:: flux module reload
+
+Remove module *name*.
+
+.. option:: -f, --force
+
+  Suppress failure if module *name* is not loaded.
+
+list
+----
+
+.. program:: flux module list
+
+List the loaded modules.
+
+.. option:: -l, --long
+
+  Include the full DSO path for each module.
+
+stats
+-----
+
+.. program:: flux module stats
+
+Request statistics from module *name*. A JSON object containing a set of
+counters for each type of Flux message is returned by default, however
+the object may be customized on a module basis.
 
 .. option:: -p, --parse=OBJNAME
 
-   OBJNAME is a period delimited list of field names that should be walked
-   to obtain a specific value or object in the returned JSON.
+  *OBJNAME* is a period delimited list of field names that should be walked
+  to obtain a specific value or object in the returned JSON.
 
 .. option:: -t, --type=int|double
 
-   Force the returned value to be converted to int or double.
+  Force the returned value to be converted to int or double.
 
 .. option:: -s, --scale=N
 
-   Multiply the returned (int or double) value by the specified
-   floating point value.
+  Multiply the returned (int or double) value by the specified
+  floating point value.
 
 .. option:: -R, --rusage
 
-   Return a JSON object representing an *rusage* structure
-   returned by :linux:man2:`getrusage`.
+  Return a JSON object representing an *rusage* structure
+  returned by :linux:man2:`getrusage`.
 
 .. option:: -c, --clear
 
-   Send a request message to clear statistics in the target module.
+  Send a request message to clear statistics in the target module.
 
 .. option:: -C, --clear-all
 
-   Broadcast an event message to clear statistics in the target module
-   on all ranks.
+  Broadcast an event message to clear statistics in the target module
+  on all ranks.
 
+debug
+-----
+
+.. program:: flux module debug
+
+Manipulate debug flags in module *name*. The interpretation of debug
+flag bits is private to the module and its test drivers.
+
+.. option:: -C, --clear
+
+  Set all debug flags to 0.
+
+.. option:: -S, --set=MASK
+
+  Set debug flags to *MASK*.
+
+.. option:: -s, --setbit=VAL
+
+  Set one debug flag *VAL* to 1.
+
+.. option:: -c, --clearbit=VAL
+
+  Set one debug flag *VAL* to 0.
 
 DEBUG OPTIONS
 =============
@@ -151,6 +214,12 @@ RESOURCES
 =========
 
 .. include:: common/resources.rst
+
+
+FLUX RFC
+========
+
+:doc:`rfc:spec_5`
 
 
 SEE ALSO
