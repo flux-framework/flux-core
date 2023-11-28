@@ -6,7 +6,10 @@ flux-jobtap(1)
 SYNOPSIS
 ========
 
-**flux** **jobtap** *COMMAND* [*OPTIONS*] ARGS...
+| **flux** **jobtap** **load** [*--remove=NAME*] *plugin* [*key=val...*]
+| **flux** **jobtap** **remove** *plugin*
+| **flux** **jobtap** **list** [*--all*]
+| **flux** **jobtap** **query** *plugin*
 
 DESCRIPTION
 ===========
@@ -17,30 +20,53 @@ plugins from the Flux job-manager module at runtime.
 COMMANDS
 ========
 
-**list** [*-a, --all*]
-  Print the currently loaded list of plugins. Builtin plugins will only
-  be displayed when the :option:`--all` option is used. Plugins built in to the
-  job manager have a leading ``.`` in the name, e.g. ``.priority-default``.
+load
+----
 
-**load** [*-r*, *--remove=NAME*] PLUGIN [KEY=VAL, KEY=VAL...]
-  Load a new plugin into the job-manager, optionally removing plugin NAME
-  first. With :option:`--remove` NAME may be a :linux:man7:`glob` pattern
-  match. Optional KEY=VAL occurring after PLUGIN will set config KEY
-  to VAL for PLUGIN.
+.. program:: flux jobtap load
 
-**remove** NAME
-  Remove plugin NAME. NAME may be a :linux:man7:`glob` pattern in
-  which case all matching, non-builtin plugins are removed. The
-  special value `all` may be used to remove all loaded jobtap
-  plugins. Builtin plugins (those starting with a leading ``.``) must
-  be removed explicitly or by preceding *NAME* with ``.``,
-  e.g. ``.*``.
+Load a new plugin into the job-manager.  Optional *key=val* arguments
+occurring after *plugin*  will set config *key* to *val* for *plugin*.
 
-**query** NAME
-  Print a JSON object with extended information about plugin NAME. This
-  includes at least the plugin name and path (or "builtin" if the plugin
-  was loaded internally), but may contain plugin-specific data if the plugin
-  supports the ``plugin.query`` callback topic.
+.. option:: --remove=NAME
+
+  Remove plugin *NAME* before loading *plugin*.  *NAME* may be a
+  :linux:man7:`glob` pattern match.
+
+remove
+------
+
+.. program:: flux jobtap remove
+
+Remove *plugin*. *plugin* may be a :linux:man7:`glob` pattern in
+which case all matching, non-builtin plugins are removed. The
+special value ``all`` may be used to remove all loaded jobtap
+plugins. Builtin plugins (those starting with a leading ``.``) must
+be removed explicitly or by preceding *NAME* with ``.``,
+e.g. ``.*``.
+
+list
+----
+
+.. program:: flux jobtap list
+
+Print the currently loaded list of plugins.  Plugins built in to the job
+manager have a leading ``.`` in the name, e.g. ``.priority-default``.
+They are not displayed by default.
+
+.. option:: -a, --all
+
+  List builtin plugins too.
+
+query
+-----
+
+.. program:: flux jobtap query
+
+Print a JSON object with extended information about *plugin*. This
+includes at least the plugin name and path (or "builtin" if the plugin
+was loaded internally), but may contain plugin-specific data if the plugin
+supports the ``plugin.query`` callback topic.
 
 RESOURCES
 =========
