@@ -19,13 +19,13 @@ To learn more, help is available within most commands, and many have
    * - Example
      - Description
 
-   * - ``flux help``
+   * - :command:`flux help`
 
-       ``flux help run``
+       :command:`flux help run`
 
-       ``flux run --help``
+       :command:`flux run --help`
 
-       ``flux job kill --help``
+       :command:`flux job kill --help`
 
      - Print a brief command summary.
 
@@ -33,33 +33,33 @@ To learn more, help is available within most commands, and many have
 
        Summarize run options.
 
-       List usage and options for ``flux job kill`` sub-command.
+       List usage and options for :option:`flux job kill` sub-command.
 
-   * - ``flux start -s16``
+   * - :command:`flux start -s16`
 
      -  Start a test instance that mocks 16 nodes.  See :man1:`flux-start`.
 
-   * - ``flux version``
+   * - :command:`flux version`
 
-       ``flux uptime``
+       :command:`flux uptime`
 
      - Print the Flux version.  See :man1:`flux-version`.
 
        Show brief Flux instance info.  See :man1:`flux-uptime`.
 
-   * - ``flux ping 15``
+   * - :command:`flux ping 15`
 
-       ``flux exec -x 0 cmd``
+       :command:`flux exec -x 0 cmd`
 
      - Bounce a message off broker rank 15.  See :man1:`flux-ping`.
 
        Run cmd on all ranks except rank 0.  Not a job. See :man1:`flux-exec`.
 
-   * - ``flux resource info``
+   * - :command:`flux resource info`
 
-       ``flux resource list``
+       :command:`flux resource list`
 
-       ``flux resource status``
+       :command:`flux resource status`
 
      - Show a single line summary of scheduler view of resources.
 
@@ -67,11 +67,11 @@ To learn more, help is available within most commands, and many have
 
        Show system view of resources.  See :man1:`flux-resource`.
 
-   * - ``flux run sleep 5``
+   * - :command:`flux run sleep 5`
 
-       ``flux run -N8 -n16 hostname``
+       :command:`flux run -N8 -n16 hostname`
 
-       ``flux run -n64 hostname``
+       :command:`flux run -n64 hostname`
 
      - Run a job with 1 :linux:man1:`sleep` command.  Blocks until done.
 
@@ -79,11 +79,11 @@ To learn more, help is available within most commands, and many have
 
        Run a job with 64 tasks with 1 cpu per task.  See :man1:`flux-run`.
 
-   * - ``flux submit -n64 -c2 hostname``
+   * - :command:`flux submit -n64 -c2 hostname`
 
-       ``flux submit --cc 1-5 sleep 30``
+       :command:`flux submit --cc 1-5 sleep 30`
 
-       ``flux watch --all``
+       :command:`flux watch --all`
 
      - Submit a job with 64 tasks, 2 cpus per task.  See :man1:`flux-submit`.
 
@@ -91,11 +91,11 @@ To learn more, help is available within most commands, and many have
 
        Watch all job output and wait for completion.  See :man1:`flux-watch`.
 
-   * - ``flux alloc -N4``
+   * - :command:`flux alloc -N4`
 
-       ``flux bulksubmit sleep {} ::: 8 9``
+       :command:`flux bulksubmit sleep {} ::: 8 9`
 
-       ``flux top``
+       :command:`flux top`
 
      - Start an interactive 4 node instance.  See :man1:`flux-alloc`.
 
@@ -103,25 +103,25 @@ To learn more, help is available within most commands, and many have
 
        View the progress of running jobs.  See :man1:`flux-top`.
 
-   * - ``flux batch -N4 script.sh``
+   * - :command:`flux batch -N4 script.sh`
 
-       ``flux batch -N1 --wrap sleep 60``
+       :command:`flux batch -N1 --wrap sleep 60`
 
-       ``flux pstree``
+       :command:`flux pstree`
 
-     - Submit job to run ``script.sh`` in a 4 node instance.
+     - Submit job to run :command:`script.sh` in a 4 node instance.
 
        Submit job to run :linux:man1:`sleep` in a 1 node instance.  See :man1:`flux-batch`.
 
        Display tree of running jobs by name.  See :man1:`flux-pstree`.
 
-   * - ``flux jobs -A``
+   * - :command:`flux jobs -A`
 
-       ``flux jobs -a``
+       :command:`flux jobs -a`
 
-       ``flux jobs -o endreason ƒuAsjAo``
+       :command:`flux jobs -o endreason ƒuAsjAo`
 
-       ``flux job last``
+       :command:`flux job last`
 
      - List active jobs for all users.  See :man1:`flux-jobs`.
 
@@ -131,13 +131,13 @@ To learn more, help is available within most commands, and many have
 
        Print my most recently submitted jobid.  See :man1:`flux-job`.
 
-   * - ``flux cancel ƒuAsjAo``
+   * - :command:`flux cancel ƒuAsjAo`
 
-       ``flux job kill -s HUP ƒuAsjAo``
+       :command:`flux job kill -s HUP ƒuAsjAo`
 
-       ``flux pgrep -f pending .``
+       :command:`flux pgrep -f pending .`
 
-       ``flux pkill sl..p``
+       :command:`flux pkill sl..p`
 
      - Cancel specified job.  See :man1:`flux-cancel`.
 
