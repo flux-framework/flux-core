@@ -19,6 +19,11 @@
 struct eventlog_formatter *eventlog_formatter_create (void);
 void eventlog_formatter_destroy (struct eventlog_formatter *evf);
 
+/*  Set color: when can be "always", "never", or "auto":
+ */
+int eventlog_formatter_colors_init (struct eventlog_formatter *evf,
+                                    const char *when);
+
 /*  Reset an eventlog formatter. (Clear t0 timestamp).
  *  Formatting options remain unchanged.
  */

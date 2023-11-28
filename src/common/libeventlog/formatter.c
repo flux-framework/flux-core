@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 
+#include <unistd.h>
 #include <string.h>
 #include <time.h>
 #include <errno.h>
@@ -19,11 +20,47 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "ccan/str/str.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/timestamp.h"
 
 #include "eventlog.h"
 #include "formatter.h"
+
+#define ANSI_COLOR_RED        "\x1b[31m"
+#define ANSI_COLOR_GREEN      "\x1b[32m"
+#define ANSI_COLOR_YELLOW     "\x1b[33m"
+#define ANSI_COLOR_BLUE       "\x1b[34m"
+#define ANSI_COLOR_MAGENTA    "\x1b[35m"
+#define ANSI_COLOR_CYAN       "\x1b[36m"
+#define ANSI_COLOR_GRAY       "\x1b[37m"
+
+#define ANSI_COLOR_RESET      "\x1b[0m"
+#define ANSI_COLOR_BOLD       "\x1b[1m"
+#define ANSI_COLOR_HALFBRIGHT "\x1b[2m"
+#define ANSI_COLOR_REVERSE    "\x1b[7m"
+
+#define ANSI_COLOR_RESET      "\x1b[0m"
+
+enum {
+    EVENTLOG_COLOR_NAME,
+    EVENTLOG_COLOR_TIME,
+    EVENTLOG_COLOR_TIMEBREAK,
+    EVENTLOG_COLOR_KEY,
+    EVENTLOG_COLOR_VALUE,
+    EVENTLOG_COLOR_VALUE_NUM,
+    EVENTLOG_COLOR_EXCEPTION,
+};
+
+static const char *eventlog_colors[] = {
+    [EVENTLOG_COLOR_NAME]      = ANSI_COLOR_YELLOW,
+    [EVENTLOG_COLOR_TIME]      = ANSI_COLOR_GREEN,
+    [EVENTLOG_COLOR_TIMEBREAK] = ANSI_COLOR_BOLD ANSI_COLOR_GREEN,
+    [EVENTLOG_COLOR_KEY]       = ANSI_COLOR_BLUE,
+    [EVENTLOG_COLOR_VALUE]     = ANSI_COLOR_MAGENTA,
+    [EVENTLOG_COLOR_VALUE_NUM] = ANSI_COLOR_GRAY,
+    [EVENTLOG_COLOR_EXCEPTION] = ANSI_COLOR_BOLD ANSI_COLOR_RED,
+};
 
 enum entry_format {
     EVENTLOG_ENTRY_TEXT,
@@ -37,12 +74,19 @@ enum timestamp_format {
     EVENTLOG_TIMESTAMP_HUMAN,
 };
 
+
 struct eventlog_formatter {
     /*  End of line separator for entries */
     const char *endl;
 
     /*  Emit unformatted output (RFC 18 JSON) */
     unsigned int unformatted:1;
+
+    /*  Enable color: */
+    unsigned int color:1;
+
+    /*  Also color event context key/values: */
+    unsigned int context_color:1;
 
     /*  Timestamp and entry formats for non RFC 18 operation: */
     enum timestamp_format ts_format;
@@ -73,6 +117,30 @@ struct eventlog_formatter *eventlog_formatter_create ()
         return NULL;
     evf->endl = "\n";
     return evf;
+}
+
+int eventlog_formatter_colors_init (struct eventlog_formatter *evf,
+                                    const char *when)
+{
+    if (!evf || !when) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (streq (when, "always"))
+        evf->color = 1;
+    else if (streq (when, "never"))
+        evf->color = 0;
+    else if (streq (when, "auto"))
+        evf->color = isatty (STDOUT_FILENO) ? 1 : 0;
+    else {
+        errno = EINVAL;
+        return -1;
+    }
+    /* For now, always enable context colorization if evf->color is set:
+     * (This is a separate variable to allow for future possible disablement)
+     */
+    evf->context_color = evf->color;
+    return 0;
 }
 
 void eventlog_formatter_set_no_newline (struct eventlog_formatter *evf)
@@ -140,6 +208,50 @@ void eventlog_formatter_reset (struct eventlog_formatter *evf)
     }
 }
 
+static const char *eventlog_color (struct eventlog_formatter *evf, int type)
+{
+    if (evf->color)
+        return eventlog_colors [type];
+    return "";
+}
+
+/*  Color the name of specific events
+ */
+static const char *eventlog_color_event_name (struct eventlog_formatter *evf,
+                                              const char *name)
+{
+    if (evf->color) {
+        if (streq (name, "exception"))
+            return eventlog_colors [EVENTLOG_COLOR_EXCEPTION];
+        else
+            return eventlog_colors [EVENTLOG_COLOR_NAME];
+    }
+    return "";
+}
+
+static const char *eventlog_context_color (struct eventlog_formatter *evf,
+                                           int type)
+{
+    if (evf->context_color)
+        return eventlog_color (evf, type);
+    return "";
+}
+
+static const char *eventlog_color_reset (struct eventlog_formatter *evf)
+{
+    if (evf->color)
+        return ANSI_COLOR_RESET;
+    return "";
+}
+
+static const char *
+eventlog_context_color_reset (struct eventlog_formatter *evf)
+{
+    if (evf->context_color)
+        return eventlog_color_reset (evf);
+    return "";
+}
+
 static const char *months[] = {
     "Jan",
     "Feb",
@@ -164,7 +276,12 @@ static int event_timestamp_human (struct eventlog_formatter *evf,
     struct tm tm;
 
     if (timestamp_from_double (timestamp, &tm, NULL) < 0)
-        return snprintf (buf, size, "[%+11.6f]", timestamp);
+        return snprintf (buf,
+                         size,
+                         "%s[%+11.6f]%s",
+                         eventlog_color (evf, EVENTLOG_COLOR_TIME),
+                         timestamp,
+                         eventlog_color_reset (evf));
 
     if (tm.tm_year == evf->last_tm.tm_year
         && tm.tm_mon == evf->last_tm.tm_mon
@@ -172,7 +289,12 @@ static int event_timestamp_human (struct eventlog_formatter *evf,
         && tm.tm_hour == evf->last_tm.tm_hour
         && tm.tm_min == evf->last_tm.tm_min) {
         /*  Within same minute, print offset in sec */
-        return snprintf (buf, size, "[%+11.6f]", timestamp - evf->last_ts);
+        return snprintf (buf,
+                         size,
+                         "%s[%+11.6f]%s",
+                         eventlog_color (evf, EVENTLOG_COLOR_TIME),
+                         timestamp - evf->last_ts,
+                         eventlog_color_reset (evf));
     }
     /* New minute. Save last timestamp,  print datetime */
     evf->last_ts = timestamp;
@@ -180,11 +302,13 @@ static int event_timestamp_human (struct eventlog_formatter *evf,
 
     return snprintf (buf,
                      size,
-                     "[%s%02d %02d:%02d]",
+                     "%s[%s%02d %02d:%02d]%s",
+                     eventlog_color (evf, EVENTLOG_COLOR_TIMEBREAK),
                      months [tm.tm_mon],
                      tm.tm_mday,
                      tm.tm_hour,
-                     tm.tm_min);
+                     tm.tm_min,
+                     eventlog_color_reset (evf));
 }
 
 
@@ -195,7 +319,12 @@ static int event_timestamp (struct eventlog_formatter *evf,
                             size_t size)
 {
     if (evf->ts_format == EVENTLOG_TIMESTAMP_RAW) {
-        if (snprintf (buf, size, "%lf", timestamp) >= size)
+        if (snprintf (buf,
+                      size,
+                      "%s%lf%s",
+                      eventlog_color (evf, EVENTLOG_COLOR_TIME),
+                      timestamp,
+                      eventlog_color_reset (evf)) >= size)
             return errprintf (errp, "buffer truncated writing timestamp");
     }
     else if (evf->ts_format == EVENTLOG_TIMESTAMP_HUMAN) {
@@ -212,6 +341,14 @@ static int event_timestamp (struct eventlog_formatter *evf,
                               "gmtime(%lf): %s",
                               timestamp,
                               strerror (errno));
+        if (snprintf (buf,
+                      size,
+                      "%s",
+                      eventlog_color (evf, EVENTLOG_COLOR_TIME)) >= size)
+            return errprintf (errp,
+                              "failed to write timestamp color to buffer");
+        size -= strlen (buf);
+        buf += strlen (buf);
         if (strftime (buf, size, "%Y-%m-%dT%T", &tm) == 0)
             return errprintf (errp,
                               "strftime(%lf): %s",
@@ -219,14 +356,23 @@ static int event_timestamp (struct eventlog_formatter *evf,
                               strerror (errno));
         size -= strlen (buf);
         buf += strlen (buf);
-        if (snprintf (buf, size, ".%.6luZ", usec) >= size)
+        if (snprintf (buf,
+                      size,
+                      ".%.6luZ%s",
+                      usec,
+                      eventlog_color_reset (evf)) >= size)
             return errprintf (errp,
                               "buffer truncated writing ISO 8601 timestamp");
     }
     else { /* EVENTLOG_TIMESTAMP_OFFSET */
         eventlog_formatter_update_t0 (evf, timestamp);
         timestamp -= evf->t0;
-        if (snprintf (buf, size, "%lf", timestamp) >= size)
+        if (snprintf (buf,
+                      size,
+                      "%s%lf%s",
+                      eventlog_color (evf, EVENTLOG_COLOR_TIME),
+                      timestamp,
+                      eventlog_color_reset (evf)) >= size)
             return errprintf (errp,
                               "buffer truncated writing timestamp offset");
     }
@@ -246,7 +392,12 @@ static int entry_format_text (struct eventlog_formatter *evf,
     if (event_timestamp (evf, errp, timestamp, ts, sizeof (ts)) < 0)
         return -1;
 
-    if (fprintf (fp, "%s %s", ts, name) < 0)
+    if (fprintf (fp,
+                 "%s %s%s%s",
+                 ts,
+                 eventlog_color_event_name (evf, name),
+                 name,
+                 eventlog_color_reset (evf)) < 0)
         return errprintf (errp, "fprintf: %s", strerror (errno));
 
     if (context) {
@@ -255,13 +406,24 @@ static int entry_format_text (struct eventlog_formatter *evf,
         json_object_foreach (context, key, value) {
             char *sval;
             int rc;
+            int color = EVENTLOG_COLOR_VALUE;
+            if (json_is_number (value))
+                color = EVENTLOG_COLOR_VALUE_NUM;
             sval = json_dumps (value, JSON_ENCODE_ANY|JSON_COMPACT);
-            rc = fprintf (fp, " %s=%s", key, sval);
+            rc = fprintf (fp,
+                          " %s%s%s=%s%s%s",
+                          eventlog_context_color (evf, EVENTLOG_COLOR_KEY),
+                          key,
+                          eventlog_context_color_reset (evf),
+                          eventlog_context_color (evf, color),
+                          sval,
+                          eventlog_context_color_reset (evf));
             free (sval);
             if (rc < 0)
                 return errprintf (errp, "fprintf: %s", strerror (errno));
         }
     }
+
     fputs (evf->endl, fp);
     return 0;
 }
