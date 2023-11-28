@@ -16,7 +16,9 @@ libeventlog_la_SOURCES = \
 	eventlog.h \
 	eventlog.c \
 	eventlogger.h \
-	eventlogger.c
+	eventlogger.c \
+	formatter.h \
+	formatter.c
 
 TESTS = test_eventlog.t
 
