@@ -333,6 +333,10 @@ static struct optparse_option eventlog_opts[] =  {
     { .name = "time-format", .key = 'T', .has_arg = 1, .arginfo = "FORMAT",
       .usage = "Specify time format: raw, iso, offset",
     },
+    { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .usage = "Colorize output when supported; WHEN can be 'always' "
+               "(default if omitted), 'never', or 'auto' (default)."
+    },
     { .name = "path", .key = 'p', .has_arg = 1, .arginfo = "PATH",
       .usage = "Specify alternate eventlog path suffix "
                "(e.g. \"guest.exec.eventlog\")",
@@ -361,6 +365,10 @@ static struct optparse_option wait_event_opts[] =  {
     },
     { .name = "verbose", .key = 'v', .has_arg = 0,
       .usage = "Output all events before matched event",
+    },
+    { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .usage = "Colorize output when supported; WHEN can be 'always' "
+               "(default if omitted), 'never', or 'auto' (default)."
     },
     { .name = "path", .key = 'p', .has_arg = 1, .arginfo = "PATH",
       .usage = "Specify alternate eventlog path suffix "
@@ -543,14 +551,14 @@ static struct optparse_subcommand subcommands[] = {
       id_opts
     },
     { "eventlog",
-      "[-f text|json] [-T raw|iso|offset] [-p path] id",
+      "[-f text|json] [-T raw|iso|offset] [-L] [-p path] id",
       "Display eventlog for a job",
       cmd_eventlog,
       0,
       eventlog_opts
     },
     { "wait-event",
-      "[-f text|json] [-T raw|iso|offset] [-t seconds] [-m key=val] [-c <num>] "
+      "[-f text|json] [-T raw|iso|offset] [-L] [-t seconds] [-m key=val] [-c <num>] "
       "[-p path] [-W] [-q] [-v] id event",
       "Wait for an event ",
       cmd_wait_event,
@@ -3037,11 +3045,14 @@ void formatter_parse_options (optparse_t *p,
 {
     const char *format = optparse_get_str (p, "format", "text");
     const char *time_format = optparse_get_str (p, "time-format", "raw");
+    const char *when = optparse_get_str (p, "color", "auto");
 
     if (eventlog_formatter_set_format (evf, format) < 0)
         log_msg_exit ("invalid format type '%s'", format);
     if (eventlog_formatter_set_timestamp_format (evf, time_format) < 0)
         log_msg_exit ("invalid time-format type '%s'", time_format);
+    if (eventlog_formatter_colors_init (evf, when ? when : "always") < 0)
+        log_msg_exit ("invalid value: --color=%s", when);
 }
 
 void eventlog_continuation (flux_future_t *f, void *arg)
