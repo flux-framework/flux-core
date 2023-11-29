@@ -9,110 +9,40 @@ flux-queue(1)
 SYNOPSIS
 ========
 
-**flux** **queue** **disable** [*--queue=NAME*] *reason...*
+| **flux** **queue** **list** [-n] [-o FORMAT]
+| **flux** **queue** **status** [*-q* *NAME* | *-a*] [*-v*]
 
-**flux** **queue** **enable** [*--queue=NAME*]
+| **flux** **queue** **disable** [*-q* *NAME* | *-a*] [*-v*] [*--quiet*] [*--nocheckpoint*] *reason*
+| **flux** **queue** **enable** [*-q* *NAME* | *-a*] [*-v*] [*--quiet*]
 
-**flux** **queue** **status** [*--queue=NAME*]
+| **flux** **queue** **stop** [*-q* *NAME* | *-a*] [*-v*] [*--quiet*] [*--nocheckpoint*] *reason*
+| **flux** **queue** **start** [*-q* *NAME* | *-a*] [*-v*] [*--quiet*]
 
-**flux** **queue** **stop** [*--queue=NAME*]
+| **flux** **queue** **drain** [*--timeout=DURATION*]
+| **flux** **queue** **idle** [*--timeout=DURATION*]
 
-**flux** **queue** **start** [*--queue=NAME*]
-
-**flux** **queue** **drain** [*--timeout=DURATION*]
-
-**flux** **queue** **idle** [*--timeout=DURATION*]
-
-**flux** **queue** **list** [-n] [-o FORMAT]
 
 DESCRIPTION
 ===========
 
 .. program:: flux queue
 
-The :program:`flux queue` command controls Flux job queues.
+The :program:`flux queue` command operates on Flux job queue(s).
 
-Normally, Flux has a single anonymous queue, but when queues are
-configured, all queues are named.  At this time, the *disable*,
-*enable*, *stop*, *start*, and *status* subcommands can be applied to
-a single, named queue.  The rest affect all queues.
+By default, Flux has one anonymous queue.  Multiple named queues may be
+configured - see :man5:`flux-config-queues`.
+
+COMMANDS
+========
 
 :program:`flux queue` has the following subcommands:
 
-disable
-  Prevent jobs from being submitted to the queue, with a reason that is
-  shown to submitting users.  If multiple queues are configured, either the
-  :option:`--queue` or the :option:`--all` option is required.
-
-enable
-  Allow jobs to be submitted to the queue.  If multiple queues are configured,
-  either the :option:`--queue` or the :option:`--all` option is required.
-
-status
-  Report the current queue status.  If multiple queues are configured,
-  all queues are shown unless one is specified with :option:`--queue`.
-
-stop
-  Stop allocating resources to jobs.  Pending jobs remain enqueued, and
-  running jobs continue to run, but no new jobs are allocated
-  resources.  If multiple queues are configured, either the :option:`--queue`
-  or the :option:`--all` option is required.
-
-start
-  Start allocating resources to jobs.  If multiple queues are
-  configured, either the :option:`--queue` or the :option:`--all` option is
-  required.
-
-drain
-  Block until all queues become empty.  It is sometimes useful to run after
-  :program:`flux queue disable`, to wait until the system is quiescent and can
-  be taken down for maintenance.
-
-idle
-  Block until all queues become `idle` (no jobs in RUN or CLEANUP state,
-  and no outstanding alloc requests to the scheduler).  It may be useful to run
-  after :program:`flux queue stop` to wait until the scheduler and execution
-  system are quiescent before maintenance involving them.
-
 list
-  Show queue defaults and limits. The :option:`--no-header` option suppresses
-  header from output, :option:`--format=FORMAT`, customizes output formatting
-  (see below).
+----
 
-OPTIONS
-=======
+.. program:: flux queue list
 
-.. option:: -h, --help
-
-   Summarize available options.
-
-.. option:: -q, --queue=NAME
-
-   Select a queue by name.
-
-.. option:: -v, --verbose
-
-   Be chatty.
-
-.. option:: --quiet
-
-   Be taciturn.
-
-.. option:: -a, --all
-
-   Use with *enable*, *disable*, *stop*, or *start* subcommands to
-   signify intent to affect all queues, when queues are configured but
-   :option:`--queue` is missing.
-
-.. option:: --nocheckpoint
-
-   Use with *stop*, to not checkpoint that a queue has been stopped.
-   This is often used when tearing down a flux instance, so that the a
-   queue's start state is not assumed to be stopped on a restart.
-
-.. option:: --timeout=FSD
-
-   Limit the time that ``drain`` or ``idle`` will block.
+List queue defaults and limits.
 
 .. option:: -n, --no-header
 
@@ -123,15 +53,161 @@ OPTIONS
    Specify output format in ``list`` using Python's string format syntax.
    See `OUTPUT FORMAT`_ below for field names.
 
+status
+------
+
+.. program:: flux queue status
+
+Report the current queue status.
+
+.. option:: -q, --queue=NAME
+
+   Select a queue by name.
+
+.. option:: -v, --verbose
+
+   Display more detail about internal job manager state.
+
+disable
+-------
+
+.. program:: flux queue disable
+
+Prevent jobs from being submitted to the queue, with a reason that is
+shown to submitting users.
+
+.. option:: -q, --queue=NAME
+
+   Select a queue by name.
+
+.. option:: -a, --all
+
+   Select all queues.
+
+.. option:: -v, --verbose
+
+   Display more detail about internal job manager state.
+
+.. option:: --quiet
+
+   Display only errors.
+
+.. option:: --nocheckpoint
+
+   Do not preserve the new queue stop state across a Flux instance restart.
+
+enable
+------
+
+.. program:: flux queue enable
+
+Allow jobs to be submitted to the queue.
+
+.. option:: -q, --queue=NAME
+
+   Select a queue by name.
+
+.. option:: -a, --all
+
+   Select all queues.
+
+.. option:: -v, --verbose
+
+   Display more detail about internal job manager state.
+
+.. option:: --quiet
+
+   Display only errors.
+
+stop
+----
+
+.. program:: flux queue stop
+
+Stop allocating resources to jobs.  Pending jobs remain enqueued, and
+running jobs continue to run, but no new jobs are allocated
+resources.
+
+.. option:: -q, --queue=NAME
+
+   Select a queue by name.
+
+.. option:: -a, --all
+
+   Select all queues.
+
+.. option:: -v, --verbose
+
+   Display more detail about internal job manager state.
+
+.. option:: --quiet
+
+   Display only errors.
+
+.. option:: --nocheckpoint
+
+   Do not preserve the new queue stop state across a Flux instance restart.
+
+start
+-----
+
+.. program:: flux queue start
+
+Start allocating resources to jobs.
+
+.. option:: -q, --queue=NAME
+
+   Select a queue by name.
+
+.. option:: -a, --all
+
+   Select all queues.
+
+.. option:: -v, --verbose
+
+   Display more detail about internal job manager state.
+
+.. option:: --quiet
+
+   Display only errors.
+
+drain
+-----
+
+.. program:: flux queue drain
+
+Block until all queues become empty.  It is sometimes useful to run after
+:program:`flux queue disable`, to wait until the system is quiescent and can
+be taken down for maintenance.
+
+.. option:: --timeout=FSD
+
+   Limit the time that the command` will block.
+
+idle
+----
+
+.. program:: flux queue idle
+
+Block until all queues become `idle` (no jobs in RUN or CLEANUP state,
+and no outstanding alloc requests to the scheduler).  It may be useful to run
+after :program:`flux queue stop` to wait until the scheduler and execution
+system are quiescent before maintenance involving them.
+
+.. option:: --timeout=FSD
+
+   Limit the time that the command` will block.
+
 
 OUTPUT FORMAT
 =============
 
-The :option:`--format` option can be used to specify an output format using
-Python's string format syntax or a defined format by name. For a list of
-built-in and configured formats use :option:`-o help`.  An alternate default
-format can be set via the :envvar:`FLUX_QUEUE_LIST_FORMAT_DEFAULT` environment
-variable.  A configuration snippet for an existing named format may be
+The :option:`flux queue list --format` option can be used to specify an
+output format using Python's string format syntax or a defined format by
+name. For a list of built-in and configured formats use :option:`-o help`.
+An alternate default format can be set via the
+:envvar:`FLUX_QUEUE_LIST_FORMAT_DEFAULT` environment variable.
+A configuration snippet for an existing named format may be
 generated with :option:`--format=get-config=NAME`.  See :man1:`flux-jobs`
 *OUTPUT FORMAT* section for a detailed description of this syntax.
 
@@ -186,7 +262,8 @@ RESOURCES
 FLUX RFC
 ========
 
-:doc:`rfc:spec_23`
+| :doc:`rfc:spec_23`
+| :doc:`rfc:spec_33`
 
 
 SEE ALSO
