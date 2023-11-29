@@ -694,6 +694,7 @@ test_expect_success 'flux-job: load modules for live kill tests' '
 # N.B. SIGTERM == 15
 test_expect_success 'flux-job: kill basic works' '
 	id=$(flux submit --wait-event=start sleep 100) &&
+	flux job wait-event -vt 30 -p guest.exec.eventlog $id shell.start &&
 	flux job kill ${id} &&
 	flux job wait-event -t 30 ${id} finish > kill1.out &&
 	grep status=$((15+128<<8)) kill1.out
@@ -702,6 +703,7 @@ test_expect_success 'flux-job: kill basic works' '
 # N.B. SIGUSR1 == 10
 test_expect_success 'flux-job: kill --signal works' '
 	id=$(flux submit --wait-event=start sleep 100) &&
+	flux job wait-event -vt 30 -p guest.exec.eventlog $id shell.start &&
 	flux job kill --signal=SIGUSR1 ${id} &&
 	flux job wait-event -t 30 ${id} finish > kill2.out &&
 	grep status=$((10+128<<8)) kill2.out
