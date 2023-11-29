@@ -32,6 +32,86 @@ test_expect_success 'flux kvs eventlog append works w/ context' '
         grep -q "data=\"bar\"" get_c.out
 '
 
+test_expect_success 'flux kvs eventlog get --human works' '
+	flux kvs eventlog append --timestamp=120 test.human primus &&
+	flux kvs eventlog append --timestamp=121 test.human secondus &&
+	flux kvs eventlog get --human test.human >test_human.out &&
+	test_debug "cat test_human.out" &&
+	cat <<-EOF >test_human.exp &&
+	[Jan01 00:02] primus
+	[  +1.000000] secondus
+	EOF
+	test_cmp test_human.exp test_human.out
+'
+
+test_expect_success 'flux kvs eventlog get/wait-event fails with -u and -H' '
+	test_must_fail flux kvs eventlog get -Hu test.human &&
+	test_must_fail flux kvs eventlog wait-event -Hu test.human primus
+'
+
+test_expect_success 'flux kvs eventlog wait-event --human works' '
+	flux kvs eventlog wait-event -v --human test.human secondus \
+		>test_human.wait-event.out &&
+	test_debug "cat test_human.wait-event.out" &&
+	cat <<-EOF >test_human.wait-event.exp &&
+	[Jan01 00:02] primus
+	[  +1.000000] secondus
+	EOF
+	test_cmp test_human.wait-event.exp test_human.wait-event.out
+'
+
+has_color() {
+	# To grep for ansi escape we need the help of the non-shell builtin
+  	# printf(1), so run under env(1) so we don't get shell builtin:
+        grep "$(env printf "\x1b\[")" $1 >/dev/null
+}
+test_expect_success 'flux kvs eventlog get/wait-event reject invalid --color' '
+	test_must_fail flux kvs eventlog get --color=foo test.human &&
+	test_must_fail flux kvs eventlog wait-event --color=foo test.human primus
+'
+for opt in "-L" "--color" "--color=always"; do
+	test_expect_success "flux kvs eventlog get $opt forces color on" '
+		name=notty${opt##--color=} &&
+		outfile=color-${name:-default}.out &&
+		flux kvs eventlog get ${opt} test.human >$outfile &&
+		test_debug "cat $outfile" &&
+		has_color $outfile
+	'
+	test_expect_success "flux kvs eventlog wait-event $opt forces color on" '
+		name=notty${opt##--color=} &&
+		outfile=color-${name:-default}.wait-event.out &&
+		flux kvs eventlog wait-event ${opt} test.human primus >$outfile &&
+		test_debug "cat $outfile" &&
+		has_color $outfile
+	'
+done
+
+for opt in "" "--color" "--color=always" "--color=auto" "-H"; do
+	test_expect_success "flux kvs eventlog get $opt displays color on tty" '
+		name=${opt##--color=} &&
+		outfile=color-${name:-default}.out &&
+		runpty.py flux kvs eventlog get ${opt} test.human >$outfile &&
+		test_debug "cat $outfile" &&
+		has_color $outfile
+	'
+	test_expect_success "flux kvs eventlog wait-event $opt displays color on tty" '
+		name=${opt##--color=} &&
+		outfile=color-${name:-default}.wait-event.out &&
+		runpty.py flux kvs eventlog wait-event ${opt} test.human primus >$outfile &&
+		test_debug "cat $outfile" &&
+		has_color $outfile
+	'
+done
+
+test_expect_success "flux kvs eventlog get --color=never disables color on tty" '
+	opt="--color=never" &&
+	name=${opt##--color=} &&
+	outfile=color-${name:-default}.out &&
+	runpty.py flux kvs eventlog get ${opt} test.human >$outfile &&
+	test_debug "cat $outfile" &&
+	test_must_fail has_color $outfile
+'
+
 test_expect_success 'flux kvs eventlog get --watch --count=N works' '
 	flux kvs eventlog append --timestamp=42 test.d foo &&
 	flux kvs eventlog append --timestamp=43 test.d bar &&
