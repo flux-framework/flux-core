@@ -90,7 +90,7 @@ reload
 .. program:: flux config reload
 
 :program:`flux config reload` tells :man1:`flux-broker` to reload its TOML
-configuration.
+configuration after it has been modified.
 
 On Flux instances started with :linux:man1:`systemd`,
 :program:`systemctl reload flux` invokes this command.
