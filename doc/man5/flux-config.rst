@@ -39,6 +39,7 @@ The configuration may be altered at runtime by changing the files, then running
 ``flux config reload`` on each broker, or ``systemctl reload flux`` on each
 node of the system instance.  However see CAVEATS below.
 
+.. _flux_config_caveats:
 
 CAVEATS
 =======
