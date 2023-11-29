@@ -54,6 +54,10 @@ between them.
 
   Set the privacy flag on the published event.
 
+Example: publish an event with topic ``foo.hello`` and no payload::
+
+  flux event pub foo.hello
+
 sub
 ---
 
@@ -68,6 +72,10 @@ followed by the payload, if any.
 
  Print the first *N* events on stdout and exit.  Otherwise events are
  processed until a signal is received.
+
+Example: subscribe to all events with topic prefix of ``foo.``::
+
+  flux event sub foo.
 
 
 RESOURCES
