@@ -51,31 +51,45 @@ expiration_add() {
 	echo $new
 }
 
+# Usage: check_expiration jobid VALUE
+# Check and wait for expiration to reach VALUE.
+#
+check_expiration() {
+	local jobid=$1
+	local value=$2
+	local i=0
+	while (! ${UPDATE_LOOKUP} ${jobid} R | jq -e ".execution.expiration == ${value}" \
+		&& [ $i -lt 200 ] )
+	do
+		sleep 0.1
+		i=$((i + 1))
+	done
+	if [ "$i" -eq "200" ]
+	then
+		return 1
+	fi
+	return 0
+}
+
 test_expect_success 'job-info: update lookup with no update events works (job active)' '
 	jobid=$(flux submit --wait-event=start sleep 300) &&
-	${UPDATE_LOOKUP} $jobid R > lookup1.out &&
-	flux cancel $jobid &&
-	test_debug "cat lookup1.out" &&
-	cat lookup1.out | jq -e ".execution.expiration == 0.0"
+	check_expiration $jobid 0.0 &&
+	flux cancel $jobid
 '
 
 test_expect_success 'job-info: update lookup with no update events works (job inactive)' '
 	jobid=$(flux submit --wait-event=clean hostname) &&
-	${UPDATE_LOOKUP} $jobid R > lookup2.out &&
-	test_debug "cat lookup2.out" &&
-	cat lookup2.out | jq -e ".execution.expiration == 0.0"
+	check_expiration $jobid 0.0
 '
 
 test_expect_success 'job-info: update lookup with update events works (job active)' '
 	jobid=$(flux submit --wait-event=start sleep 300) &&
 	update1=$(expiration_add $jobid 100) &&
 	flux job eventlog $jobid &&
-	${UPDATE_LOOKUP} $jobid R > lookup3A.out &&
+	check_expiration $jobid ${update1} &&
 	update2=$(expiration_add $jobid 200) &&
-	${UPDATE_LOOKUP} $jobid R > lookup3B.out &&
-	flux cancel $jobid &&
-	cat lookup3A.out | jq -e ".execution.expiration == ${update1}" &&
-	cat lookup3B.out | jq -e ".execution.expiration == ${update2}"
+	check_expiration $jobid ${update2} &&
+	flux cancel $jobid
 '
 
 test_expect_success 'job-info: update lookup with update events works (job inactive)' '
@@ -83,8 +97,7 @@ test_expect_success 'job-info: update lookup with update events works (job inact
 	update1=$(expiration_add $jobid 100) &&
 	update2=$(expiration_add $jobid 100) &&
 	flux cancel $jobid &&
-	${UPDATE_LOOKUP} $jobid R > lookup4.out &&
-	cat lookup4.out | jq -e ".execution.expiration == ${update2}"
+	check_expiration $jobid ${update2}
 '
 
 test_expect_success 'job-info: update watch with no update events works (job inactive)' '
