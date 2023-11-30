@@ -145,6 +145,8 @@ void basic (void)
     txn = flux_kvs_txn_create ();
     ok (txn != NULL,
         "flux_kvs_txn_create works");
+    ok (flux_kvs_txn_is_empty (txn) == true,
+        "flux_kvs_txn_is_empty returns true immediately after create");
     rc = flux_kvs_txn_pack (txn, FLUX_KVS_APPEND, "foo.bar.baz",  "i", 42);
     ok (rc == 0,
         "1: flux_kvs_txn_pack(i) flags=FLUX_KVS_APPEND works");
@@ -172,21 +174,11 @@ void basic (void)
     rc = flux_kvs_txn_symlink (txn, 0, "f.f.f", "g.g.g", "h.h.h");
     ok (rc == 0,
         "9: flux_kvs_txn_symlink works (namespace)");
-    errno = 0;
-    rc = flux_kvs_txn_pack (txn, 0xFFFF, "foo.bar.blorp",  "s", "foo");
-    ok (rc < 0 && errno == EINVAL,
-        "error: flux_kvs_txn_pack(bad flags) fails with EINVAL");
-    errno = 0;
-    rc = flux_kvs_txn_mkdir (txn, 0xFFFF, "b.b.b");
-    ok (rc < 0 && errno == EINVAL,
-        "error: flux_kvs_txn_mkdir works");
-    errno = 0;
-    rc = flux_kvs_txn_put (txn, 0xFFFF, "f", "42");
-    ok (rc < 0 && errno == EINVAL,
-        "error: flux_kvs_txn_put(bad flags) fails with EINVAL");
 
     /* Verify transaction contents
      */
+    ok (flux_kvs_txn_is_empty (txn) == false,
+        "flux_kvs_txn_is_empty returns false after transactions added");
     ok (txn_get_op_count (txn) == 9,
         "txn contains 9 ops");
     ok (txn_get_op (txn, 0, &entry) == 0
@@ -293,6 +285,15 @@ void basic (void)
     ok (txn_get_op (txn, 9, &entry) < 0 && errno == EINVAL,
         "10: invalid (end of transaction)");
 
+    ok (flux_kvs_txn_clear (txn) == 0,
+        "flux_kvs_txn_clear success");
+
+    ok (txn_get_op_count (txn) == 0,
+        "txn contains 0 ops");
+
+    ok (flux_kvs_txn_is_empty (txn) == true,
+        "flux_kvs_txn_is_empty returns true after clear");
+
     flux_kvs_txn_destroy (txn);
 }
 
@@ -309,18 +310,6 @@ void test_raw_values (void)
     txn = flux_kvs_txn_create ();
     ok (txn != NULL,
         "flux_kvs_txn_create works");
-
-    /* Try some bad params
-     */
-    errno = 0;
-    ok (flux_kvs_txn_put_raw (txn, FLUX_KVS_TREEOBJ, "a.b.c",
-                              buf, sizeof (buf)) < 0
-        && errno == EINVAL,
-        "flux_kvs_txn_put_raw fails with EINVAL when fed TREEOBJ flag");
-    errno = 0;
-    ok (flux_kvs_txn_put_raw (txn, 0, NULL, buf, sizeof (buf)) < 0
-        && errno == EINVAL,
-        "flux_kvs_txn_put_raw fails with EINVAL when fed NULL key");
 
     /* Put an empty buffer.
      */
@@ -367,8 +356,11 @@ void test_raw_values (void)
 
 void test_corner_cases (void)
 {
+    flux_kvs_txn_t *txn;
     json_t *val;
     json_t *op;
+    char *treeobj;
+    int rc;
 
     ok (txn_encode_op (NULL, 0, NULL, NULL) < 0 && errno == EINVAL,
         "txn_encode_op fails on bad input");
@@ -378,7 +370,99 @@ void test_corner_cases (void)
     ok (txn_encode_op ("key", 0x44, val, &op) < 0 && errno == EINVAL,
         "txn_encode_op fails on bad flags");
 
+    if (!(txn = flux_kvs_txn_create()))
+        BAIL_OUT ("flux_kvs_txn_create failed");
+
+    errno = 0;
+    rc = flux_kvs_txn_put (NULL, 0, NULL, NULL);
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_put fails w/ EINVAL on bad inputs");
+
+    errno = 0;
+    rc = flux_kvs_txn_vpack (NULL, 0, NULL, NULL, NULL);
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_vpack fails w/ EINVAL on bad inputs");
+
+    errno = 0;
+    rc = flux_kvs_txn_pack (NULL, 0, NULL, NULL);
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_pack fails w/ EINVAL on bad inputs");
+
+    errno = 0;
+    rc = flux_kvs_txn_put_raw (NULL, 0, NULL, NULL, 0);
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_put_raw fails w/ EINVAL on bad inputs");
+
+    errno = 0;
+    rc = flux_kvs_txn_put_treeobj (NULL, 0, NULL, NULL);
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_put_treeobj fails w/ EINVAL on bad inputs");
+
+    errno = 0;
+    rc = flux_kvs_txn_mkdir (NULL, 0, NULL);
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_mkdir fails w/ EINVAL on bad inputs");
+
+    errno = 0;
+    rc = flux_kvs_txn_unlink (NULL, 0, NULL);
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_unlink fails w/ EINVAL on bad inputs");
+
+    errno = 0;
+    rc = flux_kvs_txn_symlink (NULL, 0, NULL, NULL, NULL);
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_symlink fails w/ EINVAL on bad inputs");
+
+    errno = 0;
+    rc = flux_kvs_txn_clear (NULL);
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_clear fails w/ EINVAL on bad input");
+
+    ok (flux_kvs_txn_is_empty (NULL) == true,
+        "flux_kvs_txn_is_empty returns true on NULL input");
+
+    errno = 0;
+    rc = flux_kvs_txn_put (txn, 0xFFFF, "a", "42");
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_put fails with EINVAL on bad flags");
+
+    errno = 0;
+    rc = flux_kvs_txn_pack (txn, 0xFFFF, "b",  "s", "foo");
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_pack fails with EINVAL on bad flags");
+
+    errno = 0;
+    rc = flux_kvs_txn_put_raw (txn, 0xFFFF, "c", "bar", 3);
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_put_raw fails with EINVAL on bad flags");
+
+    treeobj = json_dumps (val, 0);
+    if (!treeobj)
+        BAIL_OUT ("failed to created treeobj string");
+
+    errno = 0;
+    rc = flux_kvs_txn_put_treeobj (txn, 0xFFFF, "d", treeobj);
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_put_treeobj fails with EINVAL on bad flags");
+
+    errno = 0;
+    rc = flux_kvs_txn_mkdir (txn, 0xFFFF, "e");
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_mkdir fails with EINVAL on bad flags");
+
+    errno = 0;
+    rc = flux_kvs_txn_unlink (txn, 0xFFFF, "f");
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_unlink fails with EINVAL on bad flags");
+
+    errno = 0;
+    rc = flux_kvs_txn_symlink (txn, 0xFFFF, "g", "ns", "h");
+    ok (rc < 0 && errno == EINVAL,
+        "flux_kvs_txn_symlink fails with EINVAL on bad flags");
+
     json_decref (val);
+    free (treeobj);
+    flux_kvs_txn_destroy (txn);
 }
 
 int main (int argc, char *argv[])
