@@ -6,136 +6,114 @@ flux-content(1)
 SYNOPSIS
 ========
 
-**flux** **content** **load** [*--bypass-cache*] [*blobref* ...]
+| **flux** **content** **load** [*--bypass-cache*] [*blobref* ...]
+| **flux** **content** **store** [*--bypass-cache*] [*--chunksize=N*]
+| **flux** **content** **flush**
+| **flux** **content** **dropcache**
 
-**flux** **content** **store** [*--bypass-cache*] [*--chunksize=N*]
-
-**flux** **content** **flush**
-
-**flux** **content** **dropcache**
 
 DESCRIPTION
 ===========
 
-.. program:: flux content load
+Each Flux instance implements an append-only, content addressable storage
+service.  The content service stores blobs of arbitrary data under
+"blobref" keys.  Blobrefs are derived from a hash of the data and thus can
+be computed in advance and always refer to the same blob.
 
-Each Flux instance implements an append-only, content addressable
-storage service, which stores blobs of arbitrary content under
-message digest keys termed "blobrefs".
+The leader broker (rank 0) holds the full data set, and normally offloads
+blobs to a sqlite database on disk.  The database usually resides in the
+broker ``rundir`` which is created anew when Flux starts, and is cleaned
+up when Flux terminates.  However if the ``statedir`` broker attribute is
+set, the database resides there and can persist across Flux restarts, but
+see `CAVEATS`_ below.
+
+The content service was designed for, and is primarily used by, the Flux KVS.
+Access is restricted to the instance owner.
+
+
+COMMANDS
+========
+
+store
+-----
+
+.. program:: flux content store
 
 :program:`flux content store` reads data from standard input to EOF, stores it
 (possibly splitting into multiple blobs), and prints blobref(s) on
 standard output, one per line.
 
-:program:`flux content load` reads blobrefs from standard input, one per line,
-or parses blobrefs on the command line (but not both).  It then loads the
-corresponding blob(s), and concatenates them on standard output.
-
 After a store operation completes on any rank, the blobs may be
 retrieved from any other rank.
-
-The content service includes a cache on each broker which improves
-scalability. The :program:`flux content flush` command initiates store requests
-for any dirty entries in the local cache and waits for them to complete.
-This is mainly used in testing. The :program:`flux content dropcache` command
-drops all non-essential entries in the local cache; that is, entries
-which can be removed without data loss.
-
-These operations are only available to the Flux instance owner.
-
-
-OPTIONS
-=======
 
 .. option:: -b, --bypass-cache
 
    Bypass the in-memory cache, and directly access the backing store,
-   if available (see below).
+   if available.
 
 .. option:: --chunksize=N
 
-   Split a blob into chunks of *N* bytes (store only).
+   Split a blob into chunks of *N* bytes.
+
+load
+----
+
+.. program:: flux content load
+
+:program:`flux content load` reads blobrefs from standard input, one per line,
+or parses blobrefs on the command line (but not both).  It then loads the
+corresponding blob(s), and concatenates them on standard output.
+
+.. option:: -b, --bypass-cache
+
+   Bypass the in-memory cache, and directly access the backing store,
+   if available.
+
+flush
+-----
+
+.. program:: flux content flush
+
+The content service includes a cache on each broker which improves
+scalability. The :program:`flux content flush` command initiates store requests
+for any dirty entries in the local cache and waits for them to complete.
+This is mainly used in testing.
+
+dropcache
+---------
+
+.. program:: flux content dropcache
+
+The :program:`flux content dropcache` command drops all non-essential entries
+in the local cache; that is, entries which can be removed without data loss.
 
 
-BACKING STORE
-=============
+CAVEATS
+=======
 
-The rank 0 cache retains all content until a module providing
-the "content.backing" service is loaded which can offload content
-to some other place. The **content-sqlite** module provides this
-service, and is loaded by default.
+The KVS implements its hierarchical key space using a hash tree, where
+the hashes refer to content entries.  As the KVS is used, the append-only
+nature of the content service results in an accumulation of unreferenced
+data.  In restartable Flux instances, this is mitigated by
+:option:`flux shutdown --gc` offline garbage collection, where a dump of
+the current KVS root snapshot is created at shutdown, and the content
+database is removed and recreated from the dump at restart.  This presents
+a problem for other users of the content service.  If content needs to be
+preserved in this situation, the best recourse is to ensure it is linked
+into the KVS hash tree before the instance is shut down. The
+:option:`flux kvs put --treeobj` option is available for this purpose.
 
-Content database files are stored persistently on rank 0 if the
-persist-directory broker attribute is set to a directory name for
-the session. Otherwise they are stored in the directory defined
-by the rundir attribute and are cleaned up when the instance terminates.
+A large or long-running Flux instance might generate a lot of content
+that is offloaded to ``rundir`` on the leader broker.  If the file system
+(usually ``/tmp``) containing ``rundir`` is a ramdisk, this can lead to less
+memory available for applications on the leader broker, or to catastrophic
+failures if the file system fills up.  Some workarounds for batch jobs are::
 
-When one of these modules is loaded, it informs the rank 0
-cache of its availability, which triggers the cache to begin
-offloading entries. Once entries are offloaded, they are eligible
-for expiration from the rank 0 cache.
+  # exclude the leader (rank 0) broker from scheduling
+  flux batch --conf=resource.exclude=\"0\"
 
-To avoid data loss, once a content backing module is loaded,
-do not unload it unless the content cache on rank 0 has been flushed
-and the system is shutting down.
-
-
-CACHE EXPIRATION
-================
-
-The parameters affecting local cache expiration may be tuned with
-flux-setattr(1):
-
-**content.purge-target-size**
-   The cache is purged to bring the sum of the size of cached blobs less
-   than or equal to this value
-   (default 16777216)
-
-**content.purge-old-entry**
-   Only entries that have not been accessed in **old-entry** seconds
-   are eligible for purge (default 10).
-
-Expiration becomes active on every heartbeat.  Dirty or invalid entries are
-not eligible for purge.
-
-
-CACHE ACCOUNTING
-================
-
-Some accounting info for the local cache can be viewed with :man1:`flux-getattr`:
-
-**content.acct-entries**
-   The total number of cache entries.
-
-**content.acct-size**
-   The sum of the size of cached blobs.
-
-**content.acct-dirty**
-   The number of dirty cache entries.
-
-**content.acct-valid**
-   The number of valid cache entries.
-
-
-CACHE SEMANTICS
-===============
-
-The cache is write-through with respect to the rank 0 cache;
-that is, a store operation does not receive a response until it
-is valid in the rank 0 cache.
-
-The cache on rank 0 is write-back with respect to the backing store,
-if any; that is, a store operation may receive a response before
-it has been stored on the backing store.
-
-The cache is hierarchical. Rank 0 (the root of the tree based
-overlay network) holds all blobs stored in the instance.
-Other ranks keep only what a they heuristically determine to
-be of benefit. On ranks > 0, a load operation that cannot be fulfilled
-from the local cache is "faulted" in from the level above it.
-A store operation that reaches a level that has already cached the
-same content is "squashed"; that is, it receives a response without
-traveling further up the tree.
+  # redirect storage to a global file system (pre-create empty)
+  flux batch --broker-opts=--setattr=statedir=/path/to/directory
 
 
 RESOURCES
@@ -148,3 +126,11 @@ FLUX RFC
 ========
 
 :doc:`rfc:spec_10`
+
+:doc:`rfc:spec_11`
+
+
+SEE ALSO
+========
+
+:man1:`flux-kvs`, :man7:`flux-broker-attributes`

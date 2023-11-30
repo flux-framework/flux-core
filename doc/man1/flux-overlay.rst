@@ -9,42 +9,109 @@ flux-overlay(1)
 SYNOPSIS
 ========
 
-**flux** **overlay** **status** [*OPTIONS*]
-
-**flux** **overlay** **lookup** [*OPTIONS*] *TARGET*
-
-**flux** **overlay** **parentof** [*OPTIONS*] *RANK*
-
-**flux** **overlay** **disconnect** [*OPTIONS*] *TARGET*
+| **flux** **overlay** **status** [*-v*] [*--timeout=FSD*] [*--rank=N*]
+| **flux** **overlay** **lookup** *target*
+| **flux** **overlay** **parentof** *rank*
+| **flux** **overlay** **disconnect** [*--parent=RANK*] *target*
 
 
 DESCRIPTION
 ===========
 
+.. program:: flux overlay
+
+:program:`flux overlay` is a utility for the Flux tree based overlay network.
+
+COMMANDS
+========
+
+status
+------
+
 .. program:: flux overlay status
 
 :program:`flux overlay status` reports the current status of the tree based
-overlay network.  The possible status values are:
+overlay network.  The possible status values are shown in `SUBTREE STATUS`_
+below.
 
-full
-    Node is online and no children are in *partial*, *offline*, *degraded*, or
-    *lost* state.
+.. option:: -r, --rank=[RANK]
 
-partial
-    Node is online, and some children are in *partial* or *offline* state; no
-    children are in *degraded* or *lost* state.
+   Check health of sub-tree rooted at NODEID (default 0).
 
-degraded
-    Node is online, and some children are in *degraded* or *lost* state.
+.. option:: -v, --verbose=[LEVEL]
 
-lost
-    Node has gone missing, from the parent perspective.
+   Increase reporting detail: 1=show time since current state was entered,
+   2=show round-trip RPC times.
 
-offline
-    Node has not yet joined the instance, or has been cleanly shut down.
+.. option:: -t, --timeout=FSD
 
-By default, the status of the full Flux instance is shown in graphical form,
-e.g.
+   Set RPC timeout, 0=disable (default 0.5s)
+
+.. option:: --summary
+
+   Show only the root sub-tree status.
+
+.. option:: --down
+
+   Show only the partial/degraded sub-trees.
+
+.. option:: --no-pretty
+
+   Do not indent entries and use line drawing characters to show overlay
+   tree structure
+
+.. option:: --no-ghost
+
+   Do not fill in presumed state of nodes that are inaccessible behind
+   offline/lost overlay parents.
+
+.. option:: -L, --color=WHEN
+
+   Colorize output when supported; WHEN can be 'always' (default if omitted),
+   'never', or 'auto' (default).
+
+.. option:: -H, --highlight=TARGET
+
+   Highlight one or more targets and their ancestors.
+
+.. option:: -w, --wait=STATE
+
+   Wait until sub-tree enters *STATE* before reporting (full, partial, offline,
+   degraded, lost).
+
+lookup
+------
+
+.. program:: flux overlay lookup
+
+Translate a hostlist *target* to a rank idset or a rank idset *target* to
+hostlist.
+
+parentof
+--------
+
+.. program:: flux overlay parentof
+
+Show the parent of *rank*.
+
+disconnect
+----------
+
+.. program:: flux overlay disconnect
+
+Disconnect a subtree rooted at *target* (hostname or rank).
+
+.. option:: -r, --parent=NODEID
+
+  Set parent rank to *NODEID*.  By default, the parent is determined from
+  the topology.
+
+
+EXAMPLES
+========
+
+By default, :program:`flux overlay status` shows the status of the full
+Flux instance in graphical form, e.g.
 
 ::
 
@@ -112,65 +179,38 @@ Finally, translation between hostnames and broker ranks is accomplished with
   2
 
 
-OPTIONS
-=======
+SUBTREE STATUS
+==============
 
-:program:`flux overlay status` accepts the following options:
+The possible overlay subtree status values are:
 
-.. option:: -h, --help
+full
+    Node is online and no children are in *partial*, *offline*, *degraded*, or
+    *lost* state.
 
-   Display options and exit.
+partial
+    Node is online, and some children are in *partial* or *offline* state; no
+    children are in *degraded* or *lost* state.
 
-.. option:: -r, --rank=[RANK]
+degraded
+    Node is online, and some children are in *degraded* or *lost* state.
 
-   Check health of sub-tree rooted at NODEID (default 0).
+lost
+    Node has gone missing, from the parent perspective.
 
-.. option:: -v, --verbose=[LEVEL]
-
-   Increase reporting detail: 1=show time since current state was entered,
-   2=show round-trip RPC times.
-
-.. option:: -t, --timeout=FSD
-
-   Set RPC timeout, 0=disable (default 0.5s)
-
-.. option:: --summary
-
-   Show only the root sub-tree status.
-
-.. option:: --down
-
-   Show only the partial/degraded sub-trees.
-
-.. option:: --no-pretty
-
-   Do not indent entries and use line drawing characters to show overlay
-   tree structure
-
-.. option:: --no-ghost
-
-   Do not fill in presumed state of nodes that are inaccessible behind
-   offline/lost overlay parents.
-
-.. option:: -L, --color=WHEN
-
-   Colorize output when supported; WHEN can be 'always' (default if omitted),
-   'never', or 'auto' (default).
-
-.. option:: -H, --highlight=TARGET
-
-   Highlight one or more targets and their ancestors.
-
-.. option:: -w, --wait=STATE
-
-   Wait until sub-tree enters *STATE* before reporting (full, partial, offline,
-   degraded, lost)>
+offline
+    Node has not yet joined the instance, or has been cleanly shut down.
 
 
 RESOURCES
 =========
 
 .. include:: common/resources.rst
+
+FLUX RFC
+========
+
+:doc:`rfc:spec_3`
 
 
 SEE ALSO

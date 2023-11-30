@@ -64,6 +64,10 @@ domainrefs = {
         'text': '%s(3)',
         'url': 'https://linux.die.net/man/3/%s',
     },
+    'linux:man5': {
+        'text': '%s(5)',
+        'url': 'https://linux.die.net/man/5/%s',
+    },
     'linux:man7': {
         'text': '%s(7)',
         'url': 'https://linux.die.net/man/7/%s',

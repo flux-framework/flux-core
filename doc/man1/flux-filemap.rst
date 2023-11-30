@@ -6,13 +6,10 @@ flux-filemap(1)
 SYNOPSIS
 ========
 
-**flux** **filemap** **map** [*--tags=LIST*] [*-C DIR*] *PATH* ...
-
-**flux** **filemap** **unmap** [*--tags=LIST*]
-
-**flux** **filemap** **list** [*--tags=LIST*] [*--long*] [*PATTERN*]
-
-**flux** **filemap** **get** [*--tags=LIST*] [*-C DIR*] [*PATTERN*]
+| **flux** **filemap** **map** [*--tags=LIST*] [*-C DIR*] *PATH* ...
+| **flux** **filemap** **list** [*--tags=LIST*] [*--long*] [*PATTERN*]
+| **flux** **filemap** **unmap** [*--tags=LIST*]
+| **flux** **filemap** **get** [*--tags=LIST*] [*-C DIR*] [*PATTERN*]
 
 
 DESCRIPTION
@@ -26,54 +23,46 @@ broker rank, taking advantage of scalability properties of the distributed
 cache to move the data.  The files are treated as read-only and must not
 change while mapped.
 
-:program:`flux filemap map` maps one or more file *PATH* arguments.  It must be
-run on the rank 0 broker, such as within a batch script, and the files must be
-directly accessible by the rank 0 broker.  If a PATH refers to a directory,
-the directory is recursively mapped.  If a file is encountered that is not
-readable, or has a type other than regular file, directory, or symbolic link,
-a fatal error occurs.  Sparse files such as file system images for virtual
-machines are mapped efficiently.  File discretionary access permission are
-preserved, but file attributes, ACLs, and group ownership are not.
-
-:program:`flux filemap list` lists mapped files.  Optionally, a :man7:`glob`
-pattern may be specified to filter the list.
-
-:program:`flux filemap get` extracts mapped files and may be run on any broker
-or across all brokers using :man1:`flux-exec`.  Optionally, a :man7:`glob`
-pattern may be specified to filter the list.  When extracting mapped files in
-parallel, take care to specify a :option:`--directory` that is not shared and
-is not on a network file system without considering the ramifications.
-
-:option:`flux filemap unmap` unmaps mapped files.
-
 The ``stage-in`` shell plugin described in :man1:`flux-shell` may be used to
 extract previously mapped files into the directory referred to by
 :envvar:`FLUX_JOB_TMPDIR` or another directory.
 
-OPTIONS
-=======
 
-.. option:: -h, --help
+COMMANDS
+========
 
-   Display options and exit
+map
+---
 
-.. option:: -T, --tags=LIST
+.. program:: flux filemap map
 
-   Specify a comma separated list of *tags*.  If no tags are specified,
-   the *main* tag is assumed.
+:program:`flux filemap map` maps one or more file *PATH* arguments.  It must be
+run on the rank 0 broker, such as within a batch script, and the files must be
+directly accessible by the rank 0 broker.  If a *PATH* refers to a directory,
+the directory is recursively mapped.  If a file is encountered that is not
+readable, or has a type other than regular file, directory, or symbolic link,
+a fatal error occurs.
+
+Sparse files such as file system images for virtual machines are mapped
+efficiently.
+
+File discretionary access permission are preserved, but file attributes,
+ACLs, and group ownership are not.
 
 .. option:: -C, --directory=DIR
 
-   Change to the specified directory before performing the operation
-   (*map* and *get* subcommands only).
+   Change to the specified directory before performing the operation.
 
 .. option:: -v, --verbose=[LEVEL]
 
-   Increase output verbosity (*map* and *get* subcommands only).
+   Increase output verbosity.
 
-.. option:: -l, --long
+.. option:: --chunksize=N
 
-   Include more detail in file listing (*list* subcommand only).
+   Limit the content mapped blob size to N bytes.  Set to 0 for unlimited.
+   N may be specified as a floating point number with multiplicative suffix
+   k,K=1024, M=1024\*1024, or G=1024\*1024\*1024 up to ``INT_MAX``.
+   The default is 1M.
 
 .. option:: --small-file-threshold=N
 
@@ -81,33 +70,85 @@ OPTIONS
    the distributed content cache. Set to 0 to always use the content cache.
    N may be specified as a floating point number with multiplicative suffix
    k,K=1024, M=1024\*1024, or G=1024\*1024\*1024 up to ``INT_MAX``.
-   The default is 4K (*map* subcommand only).
+   The default is 4K.
 
 .. option:: --disable-mmap
 
    Never map a regular file through the distributed content cache.
 
-.. option:: --chunksize=N
+.. option:: -T, --tags=LIST
 
-   Limit the content mapped blob size to N bytes.  Set to 0 for unlimited.
-   N may be specified as a floating point number with multiplicative suffix
-   k,K=1024, M=1024\*1024, or G=1024\*1024\*1024 up to ``INT_MAX``.
-   The default is 1M (*map* subcommand only).
+   Specify a comma separated list of *tags*.  If no tags are specified,
+   the *main* tag is assumed.
+
+
+list
+----
+
+.. program:: flux filemap list
+
+:program:`flux filemap list` lists mapped files.  Optionally, a :man7:`glob`
+pattern may be specified to filter the list.
+
+.. option:: -l, --long
+
+   Include more detail in file listing.
+
+.. option:: --blobref
+
+   List blobrefs.
+
+.. option:: --raw
+
+   List RFC 37 file system objects.
+
+.. option:: -T, --tags=LIST
+
+   Specify a comma separated list of *tags*.  If no tags are specified,
+   the *main* tag is assumed.
+
+get
+---
+
+.. program:: flux filemap get
+
+:program:`flux filemap get` extracts mapped files and may be run on any broker
+or across all brokers using :man1:`flux-exec`.  Optionally, a :man7:`glob`
+pattern may be specified to filter the list.  When extracting mapped files in
+parallel, take care to specify a :option:`--directory` that is not shared and
+is not on a network file system without considering the ramifications.
+
+.. option:: -C, --directory=DIR
+
+   Change to the specified directory before performing the operation.
+
+.. option:: -v, --verbose=[LEVEL]
+
+   Increase output verbosity.
 
 .. option:: --direct
 
    Avoid indirection through the content cache when fetching the top level
    data for each file.  This may be fastest for a single or small number of
-   clients, but will scale poorly when performed in parallel (*get* subcommand
-   only).
+   clients, but will scale poorly when performed in parallel.
 
-.. option:: --blobref
+.. option:: -T, --tags=LIST
 
-   List blobrefs (*list* subcommand only).
+   Specify a comma separated list of *tags*.  If no tags are specified,
+   the *main* tag is assumed.
 
-.. option:: --raw
+unmap
+-----
 
-   List RFC 37 file system objects (*list* subcommand only).
+.. program:: flux filemap unmap
+
+:program:`flux filemap unmap` unmaps mapped files.
+
+.. option:: -T, --tags=LIST
+
+   Specify a comma separated list of *tags*.  If no tags are specified,
+   the *main* tag is assumed.
+
 
 EXAMPLE
 =======
@@ -169,6 +210,11 @@ RESOURCES
 =========
 
 .. include:: common/resources.rst
+
+FLUX RFC
+========
+
+:doc:`rfc:spec_37`
 
 
 SEE ALSO

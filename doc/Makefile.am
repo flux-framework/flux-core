@@ -447,14 +447,6 @@ EXTRA_DIST = \
 	man1/common/job-shell-options.rst \
 	man3/common/resources.rst \
 	man3/index.rst \
-	man3/index_general.rst \
-	man3/index_idset.rst \
-	man3/index_job.rst \
-	man3/index_jobtap.rst \
-	man3/index_kvs.rst \
-	man3/index_message.rst \
-	man3/index_reactor.rst \
-	man3/index_shell.rst \
 	man3/common/json_pack.rst \
 	man3/common/json_unpack.rst \
 	man5/common/resources.rst \

@@ -6,7 +6,9 @@ flux-pmi(1)
 SYNOPSIS
 ========
 
-[**launcher**] **flux-pmi** [*OPTIONS*] *SUBCOMMAND* [OPTIONS]
+| [**launcher**] **flux-pmi** [*-v*] [*--method=URI*] barrier [*--count=N*]
+| [**launcher**] **flux-pmi** [*-v*] [*--method=URI*] exchange [*--count=N*]
+| [**launcher**] **flux-pmi** [*-v*] [*--method=URI*] get [*--ranks=IDSET*]
 
 
 DESCRIPTION
@@ -25,33 +27,10 @@ starting a Flux instance.
 initializes.  Alternatively, the specific plugin can be forced with the
 :option:`--method` option.  Initialization is followed by a subcommand-specific
 sequence of PMI operations that mimics a common pattern, and then PMI
-finalization.  The subcommand operations are as follows:
+finalization.
 
-barrier
-  #. Execute PMI barrier
-  #. Execute PMI barrier
-  #. Print elapsed time of (2)
-
-exchange
-  #. Execute PMI barrier
-  #. Put rank specific key to PMI KVS
-  #. Execute PMI barrier
-  #. Get rank specific key from PMI KVS for all other ranks
-  #. Execute PMI barrier
-  #. Print elapsed time of (2-5)
-
-get
-  Fetch a pre-set key from the PMI KVS.
-
-
-GENERAL OPTIONS
-===============
-
-General options are placed before the subcommand.
-
-.. option:: -h, --help
-
-   Summarize the general options.
+OPTIONS
+=======
 
 .. option:: -v, --verbose[=LEVEL]
 
@@ -91,34 +70,48 @@ General options are placed before the subcommand.
    - Encode all KVS values with base64.
    - Immediately fail an attempt to fetch any KVS with a ``flux.`` prefix.
 
-BARRIER OPTIONS
-===============
+COMMANDS
+========
 
-.. option:: -h, --help
+barrier
+-------
 
-   Summarize the barrier subcommand options.
+.. program:: flux pmi barrier
 
-.. option:: --count=N
+:program:`flux pmi barrier` does the following:
 
-   Execute *N* barrier operations (default 1).
-
-EXCHANGE OPTIONS
-================
-
-.. option:: -h, --help
-
-   Summarize the exchange subcommand options.
+  #. Execute PMI barrier
+  #. Execute PMI barrier
+  #. Print elapsed time of (2)
 
 .. option:: --count=N
 
-   Execute *N* exchange operations (default 1).
+  Execute N barrier (step 2) operations (default 1).
 
-GET OPTIONS
-===========
+exchange
+--------
 
-.. option:: -h, --help
+.. program:: flux pmi exchange
 
-   Summarize the get subcommand options.
+:program:`flux pmi exchange` does the following:
+
+  #. Execute PMI barrier
+  #. Put rank specific key to PMI KVS
+  #. Execute PMI barrier
+  #. Get rank specific key from PMI KVS for all other ranks
+  #. Execute PMI barrier
+  #. Print elapsed time of (2-5)
+
+.. option:: --count=N
+
+  Execute N exchange (step 2-5) operations (default 1).
+
+get
+---
+
+.. program:: flux pmi get
+
+:program:`flux pmi get` fetches a pre-set key from the PMI KVS.
 
 .. option:: --ranks=RANKS
 
@@ -129,6 +122,12 @@ RESOURCES
 =========
 
 .. include:: common/resources.rst
+
+
+FLUX RFC
+========
+
+:doc:`rfc:spec_13`
 
 
 SEE ALSO
