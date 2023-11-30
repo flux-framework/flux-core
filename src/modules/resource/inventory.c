@@ -471,7 +471,46 @@ out:
     flux_future_reset (f);
 }
 
-static int start_resource_watch (struct inventory *inv)
+static int lookup_R_fallback (struct inventory *inv, flux_jobid_t id)
+{
+    flux_t *h = inv->ctx->h;
+    int rc = -1;
+    flux_future_t *f;
+    char *s;
+    json_t *job_R = NULL;
+    json_t *R = NULL;
+
+    if (!(f = flux_rpc_pack (inv->parent_h,
+                             "job-info.lookup",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:I s:[s] s:i}",
+                             "id", id,
+                             "keys", "R",
+                             "flags", 0))
+        || flux_rpc_get_unpack (f, "{s:s}", "R", &s) < 0
+        || !(job_R = json_loads (s, 0, NULL))) {
+        flux_log_error (h, "lookup R from enclosing instance (fallback)");
+        goto done;
+    }
+    if (convert_R (h, job_R, inv->ctx->size, &R) < 0) {
+        flux_log (h, LOG_ERR, "fatal error while normalizing R");
+        errno = EINVAL;
+        goto done;
+    }
+    rc = inventory_put (inv, R, "job-info");
+done:
+    /*  Parent handle is not used again in fallback case:
+     */
+    flux_close (inv->parent_h);
+    inv->parent_h = NULL;
+    json_decref (R);
+    json_decref (job_R);
+    flux_future_destroy (f);
+    return rc;
+}
+
+static int start_resource_watch (struct inventory *inv, bool no_resource_watch)
 {
     flux_t *h = inv->ctx->h;
     const char *uri;
@@ -481,6 +520,14 @@ static int start_resource_watch (struct inventory *inv)
     flux_future_t *f = NULL;
     json_t *R = NULL;
     int rc = -1;
+    const char *service = "job-info.update-watch";
+
+    /*  Testing-only: send update-watch request to wrong service name to
+     *  simulate start under an older instance that does not support this
+     *  RPC.
+     */
+    if (no_resource_watch)
+        service = "job-info.update-watch-fake";
 
     if (!(uri = flux_attr_get (h, "parent-uri"))
             || !(jobid = flux_attr_get (h, "jobid")))
@@ -502,7 +549,7 @@ static int start_resource_watch (struct inventory *inv)
         goto done;
     }
     if (!(f = flux_rpc_pack (inv->parent_h,
-                             "job-info.update-watch",
+                             service,
                              FLUX_NODEID_ANY,
                              FLUX_RPC_STREAMING,
                              "{s:I s:s s:i}",
@@ -512,13 +559,27 @@ static int start_resource_watch (struct inventory *inv)
         flux_log_error (h, "error sending request to enclosing instance");
         goto done;
     }
-    inv->R_watch_f = f;
 
     /* Get first response synchronously
      */
     if (flux_rpc_get_unpack (f, "{s:o}", "R", &job_R) < 0) {
-        flux_log_error (h, "lookup R from enclosing instance KVS");
-        goto done;
+        if (errno == ENOSYS) {
+            /*  Parent instance doesn't support job-info.update-watch.
+             *  Note: job-info.update-watch was added in v0.56.0.
+             *  Fall back to job-info.lookup and return:
+             */
+            flux_future_destroy (f);
+            flux_log (inv->ctx->h,
+                      LOG_DEBUG,
+                      "no support for %s in parent, falling back to %s",
+                      service,
+                      "job-info.lookup");
+            return lookup_R_fallback (inv, id);
+        }
+        else {
+            flux_log_error (h, "lookup R from enclosing instance KVS");
+            goto done;
+        }
     }
     if (convert_R (h, job_R, inv->ctx->size, &R) < 0) {
         flux_log (h, LOG_ERR, "fatal error while normalizing R");
@@ -526,6 +587,7 @@ static int start_resource_watch (struct inventory *inv)
         goto done;
     }
     flux_future_reset (f);
+    inv->R_watch_f = f;
     if (R) { // R = NULL if no conversion possible (fall through to discovery)
         if (inventory_put (inv, R, "job-info") < 0)
             goto done;
@@ -829,7 +891,9 @@ void inventory_destroy (struct inventory *inv)
     }
 }
 
-struct inventory *inventory_create (struct resource_ctx *ctx, json_t *conf_R)
+struct inventory *inventory_create (struct resource_ctx *ctx,
+                                    json_t *conf_R,
+                                    bool no_update_watch)
 {
     struct inventory *inv;
     json_t *R = NULL;
@@ -846,7 +910,7 @@ struct inventory *inventory_create (struct resource_ctx *ctx, json_t *conf_R)
             goto error;
         if (!inv->R && get_from_kvs (inv, "resource.R") < 0)
             goto error;
-        if (!inv->R && start_resource_watch (inv) < 0)
+        if (!inv->R && start_resource_watch (inv, no_update_watch) < 0)
             goto error;
     }
     else {

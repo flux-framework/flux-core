@@ -44,18 +44,17 @@ static int set_instance_level_attr (struct upmi *upmi,
                                     attr_t *attrs)
 {
     int rc;
-    char *val;
+    char *val = NULL;
     const char *level = "0";
     const char *jobid = NULL;
 
-    rc = upmi_get (upmi, "flux.instance-level", -1, &val, NULL);
-    if (rc == 0)
+    if (upmi_get (upmi, "flux.instance-level", -1, &val, NULL) == 0) {
         level = val;
-    if (attr_add (attrs, "instance-level", level, ATTR_IMMUTABLE) < 0)
-        return -1;
-    if (rc == 0)
         jobid = name;
-    if (attr_add (attrs, "jobid", jobid, ATTR_IMMUTABLE) < 0)
+    }
+    rc = attr_add (attrs, "instance-level", level, ATTR_IMMUTABLE);
+    free (val);
+    if (rc < 0 || attr_add (attrs, "jobid", jobid, ATTR_IMMUTABLE) < 0)
         return -1;
     return 0;
 }

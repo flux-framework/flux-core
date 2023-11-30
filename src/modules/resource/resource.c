@@ -51,6 +51,10 @@
  *
  * norestrict = false
  *   When generating hwloc topology XML, do not restrict to current cpumask
+ *
+ * no-update-watch = false
+ *   For testing purposes, simulate missing job-info.update-watch service
+ *   in parent instance by sending to an invalid service name.
  */
 static int parse_config (struct resource_ctx *ctx,
                          const flux_conf_t *conf,
@@ -58,6 +62,7 @@ static int parse_config (struct resource_ctx *ctx,
                          json_t **R,
                          bool *noverifyp,
                          bool *norestrictp,
+                         bool *no_update_watchp,
                          flux_error_t *errp)
 {
     flux_error_t error;
@@ -65,18 +70,20 @@ static int parse_config (struct resource_ctx *ctx,
     const char *path = NULL;
     int noverify = 0;
     int norestrict = 0;
+    int no_update_watch = 0;
     json_t *o = NULL;
     json_t *config = NULL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?{s?s s?o s?s s?b s?b !}}",
+                          "{s?{s?s s?o s?s s?b s?b s?b !}}",
                           "resource",
                             "path", &path,
                             "config", &config,
                             "exclude", &exclude,
                             "norestrict", &norestrict,
-                            "noverify", &noverify) < 0) {
+                            "noverify", &noverify,
+                            "no-update-watch", &no_update_watch) < 0) {
         errprintf (errp,
                    "error parsing [resource] configuration: %s",
                    error.text);
@@ -122,6 +129,8 @@ static int parse_config (struct resource_ctx *ctx,
         *noverifyp = noverify ? true : false;
     if (norestrictp)
         *norestrictp = norestrict ? true : false;
+    if (no_update_watchp)
+        *no_update_watchp = no_update_watch ? true : false;
     if (R)
         *R = o;
     else
@@ -145,7 +154,7 @@ static void config_reload_cb (flux_t *h,
 
     if (flux_conf_reload_decode (msg, &conf) < 0)
         goto error;
-    if (parse_config (ctx, conf, NULL, NULL, NULL, NULL, &error) < 0) {
+    if (parse_config (ctx, conf, NULL, NULL, NULL, NULL, NULL, &error) < 0) {
         errstr = error.text;
         goto error;
     }
@@ -375,7 +384,8 @@ int parse_args (flux_t *h,
                 int argc,
                 char **argv,
                 bool *monitor_force_up,
-                bool *noverify)
+                bool *noverify,
+                bool *no_update_watch)
 {
     int i;
     for (i = 0; i < argc; i++) {
@@ -405,6 +415,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     bool monitor_force_up = false;
     bool noverify = false;
     bool norestrict = false;
+    bool no_update_watch = false;
     json_t *R_from_config;
 
     if (!(ctx = resource_ctx_create (h)))
@@ -419,11 +430,17 @@ int mod_main (flux_t *h, int argc, char **argv)
                       &R_from_config,
                       &noverify,
                       &norestrict,
+                      &no_update_watch,
                       &error) < 0) {
         flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
     }
-    if (parse_args (h, argc, argv, &monitor_force_up, &noverify) < 0)
+    if (parse_args (h,
+                    argc,
+                    argv,
+                    &monitor_force_up,
+                    &noverify,
+                    &no_update_watch) < 0)
         goto error;
     if (flux_attr_get (ctx->h, "broker.recovery-mode"))
         noverify = true;
@@ -432,7 +449,9 @@ int mod_main (flux_t *h, int argc, char **argv)
      *  Create inventory on all ranks first, since it is required by
      *  the exclude and drain subsystems on rank 0.
      */
-    if (!(ctx->inventory = inventory_create (ctx, R_from_config)))
+    if (!(ctx->inventory = inventory_create (ctx,
+                                             R_from_config,
+                                             no_update_watch)))
         goto error;
     /*  Done with R_from_config now, so free it.
      */
