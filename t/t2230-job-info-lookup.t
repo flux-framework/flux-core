@@ -206,6 +206,83 @@ test_expect_success 'flux job eventlog -p fails on invalid path' '
 '
 
 #
+#  Color and human-readable output tests for flux job eventlog/wait-event
+#  
+test_expect_success 'flux job eventlog -H, --human works' '
+	#
+        #  Note: --human option should format first timestamp of eventlog
+        #   as [MmmDD HH:MM] and second line should be an offset thereof
+        #   e.g. [  +0.NNNNNN]. The following regexes attempt to verify
+        #   that --human produced this pattern.
+        #
+        flux job eventlog --human $jobid | sed -n 1p \
+            | grep "^\[[A-Z][a-z][a-z][0-3][0-9] [0-9][0-9]:[0-9][0-9]\]" &&
+        flux job eventlog --human $jobid | sed -n 2p \
+            | grep "^\[ *+[0-9]*\.[0-9]*\]"
+'
+test_expect_success 'flux job wait-event -H, --human works' '
+	#
+        #  As above, but here we also verify that wait-event displays
+	#   the datetime form on first matching event when -v is not used
+	#
+        flux job wait-event -v --human $jobid depend | sed -n 1p \
+            | grep "^\[[A-Z][a-z][a-z][0-3][0-9] [0-9][0-9]:[0-9][0-9]\]" &&
+        flux job wait-event -v --human $jobid depend | sed -n 2p \
+            | grep "^\[ *+[0-9]*\.[0-9]*\]" &&
+        flux job wait-event --human $jobid depend \
+            | grep "^\[[A-Z][a-z][a-z][0-3][0-9] [0-9][0-9]:[0-9][0-9]\]"
+'
+has_color() {
+	# To grep for ansi escape we need the help of the non-shell builtin
+  	# printf(1), so run under env(1) so we don't get shell builtin:
+        grep "$(env printf "\x1b\[")" $1 >/dev/null
+}
+test_expect_success 'flux job eventlog/wait-event reject invalid --color' '
+        test_must_fail flux job eventlog --color=foo $jobid &&
+        test_must_fail flux job wait-event --color=foo $jobid
+'
+for opt in "-L" "--color" "--color=always"; do
+        test_expect_success "flux job eventlog $opt forces color on" '
+                name=notty${opt##--color=} &&
+                outfile=color-${name:-default}.out &&
+                flux job eventlog ${opt} $jobid >$outfile &&
+                test_debug "cat $outfile" &&
+                has_color $outfile
+        '
+        test_expect_success "flux job wait-event $opt forces color on" '
+                name=notty${opt##--color=} &&
+                outfile=color-${name:-default}.wait-event.out &&
+                flux job wait-event ${opt} $jobid submit >$outfile &&
+                test_debug "cat $outfile" &&
+                has_color $outfile
+        '
+done
+for opt in "" "--color" "--color=always" "--color=auto" "-H"; do
+        test_expect_success "flux job eventlog $opt displays color on tty" '
+                name=${opt##--color=} &&
+                outfile=color-${name:-default}.out &&
+                runpty.py flux job eventlog ${opt} $jobid >$outfile &&
+                test_debug "cat $outfile" &&
+                has_color $outfile
+        '
+        test_expect_success "flux kvs eventlog wait-event $opt displays color on tty" '
+                name=${opt##--color=} &&
+                outfile=color-${name:-default}.wait-event.out &&
+                runpty.py flux job wait-event ${opt} $jobid submit >$outfile &&
+                test_debug "cat $outfile" &&
+                has_color $outfile
+        '
+done
+test_expect_success "flux job eventlog --color=never disables color on tty" '
+        opt="--color=never" &&
+        name=${opt##--color=} &&
+        outfile=color-${name:-default}.out &&
+        runpty.py flux job eventlog ${opt} $jobid >$outfile &&
+        test_debug "cat $outfile" &&
+        test_must_fail has_color $outfile
+'
+
+#
 # job info lookup tests (multiple keys in info request)
 #
 

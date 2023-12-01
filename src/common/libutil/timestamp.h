@@ -35,6 +35,11 @@ int timestamp_parse (const char *s,
                      struct timeval *tv);
 
 
+/* Convert a double precision timestamp to struct tm and timeval.
+ * At least one of 'tm' or 'tv' must be provided.
+ */
+int timestamp_from_double (double ts, struct tm *tm, struct timeval *tv);
+
 #endif /* !_UTIL_TIMESTAMP_H */
 
 /*

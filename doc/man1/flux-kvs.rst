@@ -496,6 +496,16 @@ Display the contents of an RFC 18 KVS eventlog referred to by *key*.
 
   Display the eventlog in raw RFC 18 form.
 
+.. option:: -H, --human
+
+  Display the eventlog in human-readable form.
+
+.. option:: -L, --color[=WHEN]
+
+  Control output colorization. The optional argument *WHEN* can be one of
+  'auto', 'never', or 'always'. The default value of *WHEN* if omitted is
+  'always'. The default is 'auto' if the option is unused.
+
 eventlog append
 ---------------
 
@@ -537,6 +547,17 @@ referred to by *key*.
 .. option:: -v, --verbose
 
   Display events prior to the matched event.
+
+.. option:: -H, --human
+
+  Display eventlog events in human-readable form.
+
+.. option:: -L, --color[=WHEN]
+
+  Control output colorization. The optional argument *WHEN* can be one of
+  'auto', 'never', or 'always'. The default value of *WHEN* if omitted is
+  'always'. The default is 'auto' if the option is unused.
+
 
 
 RESOURCES

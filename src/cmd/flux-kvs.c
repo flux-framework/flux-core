@@ -30,6 +30,7 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libeventlog/formatter.h"
 #include "ccan/str/str.h"
 
 int cmd_namespace (optparse_t *p, int argc, char **argv);
@@ -557,7 +558,8 @@ int cmd_namespace_list (optparse_t *p, int argc, char **argv)
         if (!(o = json_array_get (array, i)))
             log_err_exit ("json_array_get");
 
-        if (json_unpack (o, "{ s:s s:i s:i }",
+        if (json_unpack (o,
+                         "{ s:s s:i s:i }",
                          "namespace", &ns,
                          "owner", &owner,
                          "flags", &flags) < 0)
@@ -641,9 +643,11 @@ kv_printf (const char *key, int maxcol, const char *fmt, ...)
     if (rc < 0)
         log_err_exit ("%s", __FUNCTION__);
 
-    if (asprintf (&kv, "%s%s%s", key ? key : "",
-                                 key ? " = " : "",
-                                 val) < 0)
+    if (asprintf (&kv,
+                  "%s%s%s",
+                  key ? key : "",
+                  key ? " = " : "",
+                  val) < 0)
         log_err_exit ("%s", __FUNCTION__);
 
     /* There will be no truncation of output if maxcol = 0.
@@ -670,8 +674,9 @@ kv_printf (const char *key, int maxcol, const char *fmt, ...)
             }
         }
     }
-    printf ("%s%s\n", kv,
-                      overflow ? "..." : "");
+    printf ("%s%s\n",
+            kv,
+            overflow ? "..." : "");
 
     free (val);
     free (kv);
@@ -690,8 +695,9 @@ void lookup_continuation (flux_future_t *f, void *arg)
     struct lookup_ctx *ctx = arg;
     const char *key = flux_kvs_lookup_get_key (f);
 
-    if (optparse_hasopt (ctx->p, "watch") && flux_rpc_get (f, NULL) < 0
-                                          && errno == ENODATA) {
+    if (optparse_hasopt (ctx->p, "watch")
+        && flux_rpc_get (f, NULL) < 0
+        && errno == ENODATA) {
         flux_future_destroy (f);
         return; // EOF
     }
@@ -1421,7 +1427,8 @@ static bool need_newline (int col, int col_width, int win_width)
 /* List the content of 'dir', arranging output in columns that fit 'win_width',
  * and using a custom column width selected based on the longest entry name.
  */
-static void list_kvs_dir_single (const flux_kvsdir_t *dir, int win_width,
+static void list_kvs_dir_single (const flux_kvsdir_t *dir,
+                                 int win_width,
                                  optparse_t *p)
 {
     flux_kvsitr_t *itr;
@@ -1462,8 +1469,12 @@ static void list_kvs_dir_single (const flux_kvsdir_t *dir, int win_width,
 /* List contents of directory pointed to by 'key', descending into subdirs
  * if -R was specified.  First the directory is listed, then its subdirs.
  */
-static void list_kvs_dir (flux_t *h, const char *ns, const char *key,
-                          optparse_t *p, int win_width, bool print_label,
+static void list_kvs_dir (flux_t *h,
+                          const char *ns,
+                          const char *key,
+                          optparse_t *p,
+                          int win_width,
+                          bool print_label,
                           bool print_vspace)
 {
     flux_future_t *f;
@@ -1543,8 +1554,11 @@ static int sort_cmp (void *item1, void *item2)
 /* links are special.  If it points to a value, output the link name.
  * If it points to a dir, output contents of the dir.  If it points to
  * an illegal key, still output the link name. */
-static int categorize_link (flux_t *h, const char *ns, char *nkey,
-                            zlist_t *dirs, zlist_t *singles)
+static int categorize_link (flux_t *h,
+                            const char *ns,
+                            char *nkey,
+                            zlist_t *dirs,
+                            zlist_t *singles)
 {
     flux_future_t *f;
 
@@ -1574,8 +1588,12 @@ static int categorize_link (flux_t *h, const char *ns, char *nkey,
  * its contents are to be listed or not.  If -F is specified,
  * 'singles' key names are decorated based on their type.
  */
-static int categorize_key (flux_t *h, optparse_t *p, const char *ns,
-                           const char *key, zlist_t *dirs, zlist_t *singles)
+static int categorize_key (flux_t *h,
+                           optparse_t *p,
+                           const char *ns,
+                           const char *key,
+                           zlist_t *dirs,
+                           zlist_t *singles)
 {
     flux_future_t *f;
     const char *json_str;
@@ -1913,6 +1931,7 @@ struct eventlog_get_ctx {
     optparse_t *p;
     int maxcount;
     int count;
+    struct eventlog_formatter *evf;
 };
 
 struct eventlog_wait_event_ctx {
@@ -1920,51 +1939,40 @@ struct eventlog_wait_event_ctx {
     const char *key;
     const char *wait_event;
     bool got_event;
+    struct eventlog_formatter *evf;
 };
 
-/* print event in raw form */
-void eventlog_unformatted_print (json_t *event)
+static struct eventlog_formatter *formatter_create (optparse_t *p)
 {
-    char *e;
+    struct eventlog_formatter *evf;
+    const char *color = optparse_get_str (p, "color", "auto");
+    bool human = optparse_hasopt (p, "human");
+    bool unformatted = optparse_hasopt (p, "unformatted");
 
-    if (!(e = json_dumps (event, JSON_COMPACT)))
-        log_msg_exit ("json_dumps");
-    printf ("%s\n", e);
-    free (e);
-}
-
-/* print event with human-readable time
- */
-static void eventlog_prettyprint (json_t *event)
-{
-    double timestamp;
-    const char *name;
-    json_t *context = NULL;
-    char *context_str = NULL;
-
-    if (eventlog_entry_parse (event, &timestamp, &name, &context) < 0)
-        log_err_exit ("eventlog_entry_parse");
-
-    if (context) {
-        if (!(context_str = json_dumps (context, JSON_COMPACT)))
-            log_msg_exit ("json_dumps");
+    if (unformatted && (human || streq (color, "always"))) {
+        log_msg ("Do not specify --unformatted with --human or --color=always");
+        return NULL;
     }
-
-    printf ("%lf %s%s%s\n", timestamp,
-                            name,
-                            context_str ? " " : "",
-                            context_str ? context_str : "");
-
-    free (context_str);
-    fflush (stdout);
-}
-
-static void eventlog_print (optparse_t *p, json_t *event)
-{
-    if (optparse_hasopt (p, "unformatted"))
-        eventlog_unformatted_print (event);
-    else
-        eventlog_prettyprint (event);
+    if (!(evf = eventlog_formatter_create ()))
+        return NULL;
+    if (unformatted) {
+        if (eventlog_formatter_set_format (evf, "json") < 0) {
+            log_err ("failed to set json output");
+            goto error;
+        }
+    }
+    if (human && eventlog_formatter_set_timestamp_format (evf, "human") < 0) {
+        log_err ("failed to set human timestamp format");
+        goto error;
+    }
+    if (eventlog_formatter_colors_init (evf, color ? color : "always") < 0) {
+        log_err ("invalid value: --color=%s", color);
+        goto error;
+    }
+    return evf;
+error:
+    eventlog_formatter_destroy (evf);
+    return NULL;
 }
 
 void eventlog_get_continuation (flux_future_t *f, void *arg)
@@ -1974,14 +1982,16 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
     json_t *a;
     size_t index;
     json_t *value;
+    flux_error_t error;
     bool limit_reached = false;
 
     /* Handle canceled lookup (FLUX_KVS_WATCH flag only).
      * Destroy the future and return (reactor will then terminate).
      * Errors other than ENODATA are handled by the flux_kvs_lookup_get().
      */
-    if (optparse_hasopt (ctx->p, "watch") && flux_rpc_get (f, NULL) < 0
-                                          && errno == ENODATA) {
+    if (optparse_hasopt (ctx->p, "watch")
+        && flux_rpc_get (f, NULL) < 0
+        && errno == ENODATA) {
         flux_future_destroy (f);
         return;
     }
@@ -1993,8 +2003,10 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
         log_err_exit ("eventlog_decode");
 
     json_array_foreach (a, index, value) {
-        if (ctx->maxcount == 0 || ctx->count < ctx->maxcount)
-            eventlog_print (ctx->p, value);
+        if (ctx->maxcount == 0 || ctx->count < ctx->maxcount) {
+            if (eventlog_entry_dumpf (ctx->evf, stdout, &error, value) < 0)
+                log_msg ("failed to print eventlog entry: %s", error.text);
+        }
         if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount)
             limit_reached = true;
     }
@@ -2046,6 +2058,9 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
     ctx.count = 0;
     ctx.maxcount = optparse_get_int (p, "count", 0);
 
+    if (!(ctx.evf = formatter_create (p)))
+        log_msg_exit ("failed to create eventlog formatter");
+
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     if (!(f = flux_kvs_lookup (h, ns, flags, key)))
@@ -2056,6 +2071,7 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_reactor_run");
 
     flux_close (h);
+    eventlog_formatter_destroy (ctx.evf);
     return (0);
 }
 
@@ -2093,19 +2109,27 @@ void eventlog_wait_event_continuation (flux_future_t *f, void *arg)
 
     json_array_foreach (a, index, value) {
         const char *name;
+        double timestamp;
+        flux_error_t error;
 
-        if (eventlog_entry_parse (value, NULL, &name, NULL) < 0)
+        if (eventlog_entry_parse (value, &timestamp, &name, NULL) < 0)
             log_err_exit ("eventlog_entry_parse");
 
+        eventlog_formatter_update_t0 (ctx->evf, timestamp);
+
         if (streq (name, ctx->wait_event)) {
-            if (!optparse_hasopt (ctx->p, "quiet"))
-                eventlog_print (ctx->p, value);
+            if (!optparse_hasopt (ctx->p, "quiet")) {
+                if (eventlog_entry_dumpf (ctx->evf, stdout, &error, value) < 0)
+                    log_msg ("failed to dump event %s: %s", name, error.text);
+            }
             ctx->got_event = true;
             break;
         }
         else if (optparse_hasopt (ctx->p, "verbose")) {
-            if (!ctx->got_event)
-                eventlog_print (ctx->p, value);
+            if (!ctx->got_event) {
+                if (eventlog_entry_dumpf (ctx->evf, stdout, &error, value) < 0)
+                    log_msg ("failed to dump event %s: %s", name, error.text);
+            }
         }
     }
 
@@ -2140,6 +2164,9 @@ int cmd_eventlog_wait_event (optparse_t *p, int argc, char **argv)
     ctx.wait_event = argv[optindex++];
     ctx.got_event = false;
 
+    if (!(ctx.evf = formatter_create (p)))
+        log_msg_exit ("failed to create eventlog formatter");
+
     timeout = optparse_get_duration (p, "timeout", -1.0);
 
     flags |= FLUX_KVS_WATCH;
@@ -2160,6 +2187,7 @@ int cmd_eventlog_wait_event (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_reactor_run");
 
     flux_close (h);
+    eventlog_formatter_destroy (ctx.evf);
     return (0);
 }
 
@@ -2189,6 +2217,13 @@ static struct optparse_option eventlog_get_opts[] =  {
     { .name = "unformatted", .key = 'u', .has_arg = 0,
       .usage = "Show event in RFC 18 form",
     },
+    { .name = "human", .key = 'H', .has_arg = 0,
+      .usage = "Display human-readable output",
+    },
+    { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .usage = "Colorize output when supported; WHEN can be 'always' "
+               "(default if omitted), 'never', or 'auto' (default)."
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -2211,6 +2246,13 @@ static struct optparse_option eventlog_wait_event_opts[] =  {
     { .name = "verbose", .key = 'v', .has_arg = 0,
       .usage = "Output all events before matched event",
     },
+    { .name = "human", .key = 'H', .has_arg = 0,
+      .usage = "Display human-readable output",
+    },
+    { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .usage = "Colorize output when supported; WHEN can be 'always' "
+               "(default if omitted), 'never', or 'auto' (default)."
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -2223,14 +2265,15 @@ static struct optparse_subcommand eventlog_subcommands[] = {
       eventlog_append_opts,
     },
     { "get",
-      "[-N ns] [-u] [-W] [-w] [-c COUNT] key",
+      "[-N ns] [-u] [-W] [-w] [-c COUNT] [-H] [-L auto|always|never] key",
       "Get eventlog",
       cmd_eventlog_get,
       0,
       eventlog_get_opts,
     },
     { "wait-event",
-      "[-N ns] [-t seconds] [-u] [-W] [-q] [-v] key event",
+      "[-N ns] [-t seconds] [-u] [-W] [-q] [-v] [-L auto|always|never] "
+      "key event",
       "Wait for an event",
       cmd_eventlog_wait_event,
       0,
