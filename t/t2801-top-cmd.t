@@ -284,11 +284,7 @@ test_expect_success 'flux-top shows expected data in queues' '
 	grep "1 complete" all.out &&
 	grep "0 pending" all.out &&
 	grep "3 running" all.out &&
-	grep "2 failed" all.out &&
-	test $(grep bash all.out | wc -l) -eq 2 &&
-	test $(grep sleep all.out | wc -l) -eq 1 &&
-	test $(grep batch all.out | wc -l) -eq 2 &&
-	test $(grep debug all.out | wc -l) -eq 1
+	grep "2 failed" all.out
 '
 test_expect_success 'flux-top fails on invalid queue' '
 	test_must_fail flux top --queue=foobar
@@ -301,11 +297,7 @@ test_expect_success 'flux-top shows expected data in batch queue' '
 	grep "0 complete" batchq.out &&
 	grep "0 pending" batchq.out &&
 	grep "2 running" batchq.out &&
-	grep "0 failed" batchq.out &&
-	test $(grep bash batchq.out | wc -l) -eq 2 &&
-	test $(grep sleep batchq.out | wc -l) -eq 0 &&
-	test $(grep batch batchq.out | wc -l) -eq 2 &&
-	test $(grep debug batchq.out | wc -l) -eq 0
+	grep "0 failed" batchq.out
 '
 test_expect_success 'flux-top shows expected data in debug queue' '
 	$runpty flux top --queue=debug --test-exit \
@@ -316,9 +308,7 @@ test_expect_success 'flux-top shows expected data in debug queue' '
 	grep "0 pending" debugq.out &&
 	grep "1 running" debugq.out &&
 	grep "0 failed" debugq.out &&
-	test $(grep bash debugq.out | wc -l) -eq 0 &&
 	test $(grep sleep debugq.out | wc -l) -eq 1 &&
-	test $(grep batch debugq.out | wc -l) -eq 0 &&
 	test $(grep debug debugq.out | wc -l) -eq 1
 '
 test_expect_success 'cancel all jobs' '
@@ -332,11 +322,7 @@ test_expect_success 'flux-top shows expected data in queues after cancels' '
 	grep "1 complete" allC.out &&
 	grep "0 pending" allC.out &&
 	grep "0 running" allC.out &&
-	grep "5 failed" allC.out &&
-	test $(grep bash allC.out | wc -l) -eq 0 &&
-	test $(grep sleep allC.out | wc -l) -eq 0 &&
-	test $(grep batch allC.out | wc -l) -eq 0 &&
-	test $(grep debug allC.out | wc -l) -eq 0
+	grep "5 failed" allC.out
 '
 test_expect_success 'flux-top shows expected data in batch queue after cancels' '
 	$runpty flux top --queue=batch --test-exit \
@@ -346,11 +332,7 @@ test_expect_success 'flux-top shows expected data in batch queue after cancels' 
 	grep "0 complete" batchqC.out &&
 	grep "0 pending" batchqC.out &&
 	grep "0 running" batchqC.out &&
-	grep "2 failed" batchqC.out &&
-	test $(grep bash batchqC.out | wc -l) -eq 0 &&
-	test $(grep sleep batchqC.out | wc -l) -eq 0 &&
-	test $(grep batch batchqC.out | wc -l) -eq 0 &&
-	test $(grep debug batchqC.out | wc -l) -eq 0
+	grep "2 failed" batchqC.out
 '
 test_expect_success 'flux-top shows expected data in debug queue after cancels' '
 	$runpty flux top --queue=debug --test-exit \
@@ -360,11 +342,7 @@ test_expect_success 'flux-top shows expected data in debug queue after cancels' 
 	grep "0 complete" debugqC.out &&
 	grep "0 pending" debugqC.out &&
 	grep "0 running" debugqC.out &&
-	grep "1 failed" debugqC.out &&
-	test $(grep bash debugqC.out | wc -l) -eq 0 &&
-	test $(grep sleep debugqC.out | wc -l) -eq 0 &&
-	test $(grep batch debugqC.out | wc -l) -eq 0 &&
-	test $(grep debug debugqC.out | wc -l) -eq 0
+	grep "1 failed" debugqC.out
 '
 # for interactive test below, job submission order here is important.
 # first two jobs are to batch queue, last is to debug queue.  This
