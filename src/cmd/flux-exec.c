@@ -506,15 +506,12 @@ int main (int argc, char *argv[])
         && !streq (optargp, "all")) {
         if (!(ns = idset_decode (optargp)))
             log_err_exit ("idset_decode");
-        if (!(rank_count = idset_count (ns)))
-            log_err_exit ("idset_count");
     }
     else {
         if (!(ns = idset_create (0, IDSET_FLAG_AUTOGROW)))
             log_err_exit ("idset_create");
         if (idset_range_set (ns, 0, rank_range - 1) < 0)
             log_err_exit ("idset_range_set");
-        rank_count = rank_range;
     }
 
     if (optparse_hasopt (opts, "exclude")) {
@@ -527,6 +524,9 @@ int main (int argc, char *argv[])
         idset_destroy (xset);
     }
 
+    rank_count = idset_count (ns);
+    if (rank_count == 0)
+        log_msg_exit ("No targets specified");
     if (!(hanging = idset_copy (ns)))
         log_err_exit ("idset_copy");
 
