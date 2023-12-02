@@ -1572,6 +1572,39 @@ static void finalize_transaction_bynames (struct kvs_ctx *ctx,
     }
 }
 
+static int guest_treeobj_authorize (json_t *treeobj, flux_error_t *error)
+{
+    if (json_is_null (treeobj)
+        || treeobj_is_val (treeobj)
+        || (treeobj_is_dir (treeobj) && treeobj_get_count (treeobj) == 0))
+        return 0;
+
+    const char *type = treeobj_get_type (treeobj);
+    errprintf (error,
+               "guests may not commit %s%s objects",
+               treeobj_is_dir (treeobj) ? "non-empty " : "",
+               type ? type : "???");
+    errno = EPERM;
+    return -1;
+}
+
+static int guest_commit_authorize (json_t *ops, flux_error_t *error)
+{
+    size_t index;
+    json_t *op;
+
+    json_array_foreach (ops, index, op) {
+        json_t *treeobj;
+        if (txn_decode_op (op, NULL, NULL, &treeobj) < 0) {
+            errprintf (error, "could not decode commit operation");
+            return -1;
+        }
+        if (guest_treeobj_authorize (treeobj, error) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 /* kvs.relaycommit (rank 0 only, no response).
  */
 static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -1630,12 +1663,19 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     bool stall = false;
     json_t *ops = NULL;
     treq_t *tr;
+    flux_error_t error;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{ s:o s:s s:i }",
                              "ops", &ops,
                              "namespace", &ns,
                              "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+        goto error;
+    }
+    if (flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0
+        && guest_commit_authorize (ops, &error) < 0) {
+        errmsg = error.text;
         goto error;
     }
 
@@ -1707,7 +1747,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
@@ -1814,6 +1854,8 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     bool stall = false;
     json_t *ops = NULL;
     treq_t *tr;
+    flux_error_t error;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{ s:o s:s s:s s:i s:i }",
                              "ops", &ops,
@@ -1822,6 +1864,12 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
                              "flags", &flags,
                              "nprocs", &nprocs) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+        goto error;
+    }
+    if (flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0
+        && guest_commit_authorize (ops, &error) < 0) {
+        errno = EPERM;
+        errmsg = error.text;
         goto error;
     }
 
@@ -1916,7 +1964,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 stall:
     return;

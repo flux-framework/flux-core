@@ -274,14 +274,6 @@ test_expect_success 'kvs: symlinkw/ Namespace fails (wrong user)' '
         unset_userid
 '
 
-test_expect_success 'kvs: symlink w/ Namespace works (user)' '
-        set_userid 9001 &&
-        flux kvs put --namespace=${NAMESPACETMP}-SYMLINKNS3 $DIR.linktest=3 &&
-        flux kvs link --namespace=${NAMESPACETMP}-SYMLINKNS2 --target-namespace=${NAMESPACETMP}-SYMLINKNS3 $DIR.linktest $DIR.link &&
-        test_kvs_key_namespace ${NAMESPACETMP}-SYMLINKNS2 $DIR.link 3 &&
-        unset_userid
-'
-
 #
 # Basic tests, user can't perform non-namespace operations
 #
