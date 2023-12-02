@@ -225,16 +225,14 @@ class TestJobOutput(unittest.TestCase):
             return stdout, stderr
 
         jobid = self.submit(hold=True)
-        future = self.executor.submit(event_watch, jobid)
 
-        # Due to #5344, output_event_watch(nowait=True) won't error until
-        # job starts
+        #  Note: We don't test for FileNotFoundError here because there
+        #  ultimately no way to make a race free test. There would have to
+        #  be some way to ensure the watch request has been registered first.
         self.release_job(jobid)
-        with self.assertRaises(FileNotFoundError):
-            stdout, stderr = future.result()
+        event_wait(self.fh, jobid, "shell.init", "guest.exec.eventlog")
 
         # Now nowait should work:
-        event_wait(self.fh, jobid, "shell.init", "guest.exec.eventlog")
         stdout, stderr = event_watch(jobid)
         self.assertEqual(stdout, self.test_stdout)
         self.assertEqual(stderr, self.test_stderr)
