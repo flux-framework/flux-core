@@ -42,18 +42,23 @@ static int count = -1;
 static char *prefix = NULL;
 static char *fence_name;
 static bool syncflag = false;
+static bool symlinkflag = false;
 static const char *namespace = NULL;
 
-#define OPTIONS "n:S"
+#define OPTIONS "n:Ss"
 static const struct option longopts[] = {
     {"namespace", required_argument, 0, 'n'},
     {"sync",      no_argument,       0, 'S'},
+    {"symlink",   no_argument,       0, 's'},
     {0, 0, 0, 0},
 };
 
 static void usage (void)
 {
-    fprintf (stderr, "Usage: fence_api [--sync] [--namespace=ns] count prefix\n");
+    fprintf (stderr,
+             "Usage: fence_api "
+             "[--sync] [--symlink] [--namespace=ns] "
+             "count prefix\n");
     exit (1);
 }
 
@@ -86,8 +91,14 @@ void *thread (void *arg)
 
     key = xasprintf ("%s.%"PRIu32".%d", prefix, rank, t->n);
 
-    if (flux_kvs_txn_pack (txn, 0, key, "i", 42) < 0)
-        log_err_exit ("%s", key);
+    if (symlinkflag) {
+        if (flux_kvs_txn_symlink (txn, 0, key, NULL, "a-target") < 0)
+            log_err_exit ("%s", key);
+    }
+    else {
+        if (flux_kvs_txn_pack (txn, 0, key, "i", 42) < 0)
+            log_err_exit ("%s", key);
+    }
 
     if (syncflag)
         flags |= FLUX_KVS_SYNC;
@@ -132,6 +143,9 @@ int main (int argc, char *argv[])
         switch (ch) {
         case 'S':
             syncflag = true;
+            break;
+        case 's':
+            symlinkflag = true;
             break;
         case 'n':
             namespace = optarg;
