@@ -412,6 +412,65 @@ static const char *get_flux_imp_path (flux_t *h)
     return imp;
 }
 
+/*  Return true if all ids in `idset` are valid indices into `ranks`.
+ */
+static bool check_valid_indices (struct idset *ranks,
+                                 struct idset *idset)
+{
+    /*  idset of NULL is valid since it will be treated as all ids
+     */
+    if (idset == NULL)
+        return true;
+    return (idset_last (idset) < idset_count (ranks));
+}
+
+static void filter_ranks (struct idset *ranks,
+                          const char *include,
+                          const char *exclude)
+{
+    unsigned int i;
+    int n = 0;
+    struct idset *include_ids = NULL;
+    struct idset *exclude_ids = NULL;
+
+    if (!streq (include, "all")
+        && !(include_ids = idset_decode (include)))
+        log_err_exit ("failed to decode idset '%s'", include);
+
+    /*  include_ids is a set of indices into the `ranks` idset.
+     *  (This works because we always start with ranks [0, size-1])
+     *
+     *  Check that each index in include_ids is valid before proceeding.
+     */
+    if (!check_valid_indices (ranks, include_ids))
+        log_msg_exit ("One or more invalid --ranks specified: %s",
+                      include);
+
+    if (exclude && !(exclude_ids = idset_decode (exclude)))
+        log_err_exit ("error decoding --exclude idset");
+
+    /*  Note: it is not an error if exclude_ids falls outside of the
+     *  ranks idset, this is simply ignored.
+     */
+
+    i = idset_first (ranks);
+    while (i != IDSET_INVALID_ID) {
+        /*
+         * Remove this id from ranks if it is in exclude_ids, or if
+         * include_ids is set and the current index n is not in that
+         * idset.
+         */
+        if (idset_test (exclude_ids, i)
+            || (include_ids && !idset_test (include_ids, n))) {
+            if (idset_clear (ranks, i) < 0)
+                log_err_exit ("idset_clear");
+        }
+        i = idset_next (ranks, i);
+        n++;
+    }
+    idset_destroy (include_ids);
+    idset_destroy (exclude_ids);
+}
 
 int main (int argc, char *argv[])
 {
@@ -502,29 +561,18 @@ int main (int argc, char *argv[])
                                      &imp_path);
     }
 
-    if (optparse_getopt (opts, "rank", &optargp) > 0
-        && !streq (optargp, "all")) {
-        if (!(targets = idset_decode (optargp)))
-            log_err_exit ("idset_decode");
-    }
-    else {
-        if (!(targets = idset_create (0, IDSET_FLAG_AUTOGROW)))
-            log_err_exit ("idset_create");
-        if (idset_range_set (targets, 0, rank_range - 1) < 0)
-            log_err_exit ("idset_range_set");
-    }
+    /* Set targets to all possible ranks by default
+     */
+    if (!(targets = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        log_err_exit ("idset_create");
+    if (idset_range_set (targets, 0, rank_range - 1) < 0)
+        log_err_exit ("idset_range_set");
 
-    if (optparse_hasopt (opts, "exclude")) {
-        struct idset *xset;
-
-        if (!(xset = idset_decode (optparse_get_str (opts, "exclude", NULL))))
-            log_err_exit ("error decoding --exclude idset");
-        if (idset_range_clear (targets,
-                               idset_first (xset),
-                               idset_last (xset)) < 0)
-            log_err_exit ("error apply --exclude idset");
-        idset_destroy (xset);
-    }
+    /* Include and exclude ranks based on --rank and --exclude options
+     */
+    filter_ranks (targets,
+                  optparse_get_str (opts, "rank", "all"),
+                  optparse_get_str (opts, "exclude", NULL));
 
     rank_count = idset_count (targets);
     if (rank_count == 0)

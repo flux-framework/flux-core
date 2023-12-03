@@ -61,13 +61,6 @@ test_expect_success 'exec to non-existent rank is an error' '
 	test_must_fail flux exec -n -r $(invalid_rank) /bin/true
 '
 
-test_expect_success 'exec to valid and invalid ranks works' '
-        # But, flux-exec should return failure:
-	! flux exec -n -r 0,$(invalid_rank) echo working 1>stdout 2>stderr </dev/null &&
-	grep "working" stdout &&
-	grep -q "$(strerror_symbol EHOSTUNREACH)" stderr
-'
-
 test_expect_success 'test_on_rank works' '
 	test_on_rank 1 /bin/true
 '
@@ -141,9 +134,6 @@ test_expect_success 'flux exec exits with code 126 for non executable' '
 	grep "Permission denied" exec.stderr2
 '
 
-test_expect_success 'flux exec exits with code 68 (EX_NOHOST) for rank not found' '
-	test_expect_code 68 run_timeout 10 flux exec -n -r 1000 ./nosuchprocess
-'
 test_expect_success NO_ASAN 'flux exec passes non-zero exit status' '
 	test_expect_code 2 flux exec -n sh -c "exit 2" &&
 	test_expect_code 3 flux exec -n sh -c "exit 3" &&
