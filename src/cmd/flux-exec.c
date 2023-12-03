@@ -418,7 +418,7 @@ int main (int argc, char *argv[])
     const char *optargp;
     int optindex;
     flux_reactor_t *r;
-    struct idset *ns;
+    struct idset *targets;
     uint32_t rank;
     flux_cmd_t *cmd;
     char *cwd = NULL;
@@ -504,13 +504,13 @@ int main (int argc, char *argv[])
 
     if (optparse_getopt (opts, "rank", &optargp) > 0
         && !streq (optargp, "all")) {
-        if (!(ns = idset_decode (optargp)))
+        if (!(targets = idset_decode (optargp)))
             log_err_exit ("idset_decode");
     }
     else {
-        if (!(ns = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        if (!(targets = idset_create (0, IDSET_FLAG_AUTOGROW)))
             log_err_exit ("idset_create");
-        if (idset_range_set (ns, 0, rank_range - 1) < 0)
+        if (idset_range_set (targets, 0, rank_range - 1) < 0)
             log_err_exit ("idset_range_set");
     }
 
@@ -519,21 +519,23 @@ int main (int argc, char *argv[])
 
         if (!(xset = idset_decode (optparse_get_str (opts, "exclude", NULL))))
             log_err_exit ("error decoding --exclude idset");
-        if (idset_range_clear (ns, idset_first (xset), idset_last (xset)) < 0)
+        if (idset_range_clear (targets,
+                               idset_first (xset),
+                               idset_last (xset)) < 0)
             log_err_exit ("error apply --exclude idset");
         idset_destroy (xset);
     }
 
-    rank_count = idset_count (ns);
+    rank_count = idset_count (targets);
     if (rank_count == 0)
         log_msg_exit ("No targets specified");
-    if (!(hanging = idset_copy (ns)))
+    if (!(hanging = idset_copy (targets)))
         log_err_exit ("idset_copy");
 
     monotime (&t0);
     if (optparse_getopt (opts, "verbose", NULL) > 0) {
         const char *argv0 = flux_cmd_arg (cmd, 0);
-        char *nodeset = idset_encode (ns,
+        char *nodeset = idset_encode (targets,
                                       IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS);
         if (!nodeset)
             log_err_exit ("idset_encode");
@@ -552,7 +554,7 @@ int main (int argc, char *argv[])
         log_err_exit ("zhashx_new()");
 
     service_name = optparse_get_str (opts, "service", "rexec");
-    rank = idset_first (ns);
+    rank = idset_first (targets);
     while (rank != IDSET_INVALID_ID) {
         flux_subprocess_t *p;
         if (!(p = flux_rexec_ex (h,
@@ -568,7 +570,7 @@ int main (int argc, char *argv[])
             log_err_exit ("zlist_append");
         if (!zlist_freefn (subprocesses, p, subprocess_destroy, true))
             log_err_exit ("zlist_freefn");
-        rank = idset_next (ns, rank);
+        rank = idset_next (targets, rank);
     }
 
     if (optparse_getopt (opts, "verbose", NULL) > 0)
@@ -630,7 +632,7 @@ int main (int argc, char *argv[])
 
     /* Clean up.
      */
-    idset_destroy (ns);
+    idset_destroy (targets);
     free (cwd);
     flux_cmd_destroy(cmd);
     flux_close (h);
