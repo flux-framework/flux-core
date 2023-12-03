@@ -53,7 +53,7 @@ static const struct option longopts[] = {
 
 static void usage (void)
 {
-    fprintf (stderr, "Usage: fence_api [--sync] [--namespace] count prefix\n");
+    fprintf (stderr, "Usage: fence_api [--sync] [--namespace=ns] count prefix\n");
     exit (1);
 }
 
