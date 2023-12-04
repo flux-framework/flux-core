@@ -65,6 +65,10 @@ test_expect_success 'exec to non-existent rank is an error' '
 	test_must_fail flux exec -n -r $(invalid_rank) /bin/true
 '
 
+test_expect_success 'exec to empty idset is an error' '
+	test_must_fail flux exec -n -r 0-1 -x 0-1 /bin/true
+'
+
 test_expect_success 'test_on_rank works' '
 	test_on_rank 1 /bin/true
 '
