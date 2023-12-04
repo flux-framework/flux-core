@@ -430,7 +430,8 @@ static bool check_valid_indices (struct idset *ranks,
 
 static void filter_ranks (struct idset *ranks,
                           const char *include,
-                          const char *exclude)
+                          const char *exclude,
+                          bool relative)
 {
     unsigned int i;
     int n = 0;
@@ -460,11 +461,12 @@ static void filter_ranks (struct idset *ranks,
     i = idset_first (ranks);
     while (i != IDSET_INVALID_ID) {
         /*
-         * Remove this id from ranks if it is in exclude_ids, or if
-         * include_ids is set and the current index n is not in that
-         * idset.
+         * Remove this id from ranks if one of the following is true
+         *  - it is in exclude_ids if relative == false
+         *  - the index of this id is in exclude_ids if relative == true
+         *  - the index of this id is in include_ids if include_ids != NULL.
          */
-        if (idset_test (exclude_ids, i)
+        if (idset_test (exclude_ids, relative ? n : i)
             || (include_ids && !idset_test (include_ids, n))) {
             if (idset_clear (ranks, i) < 0)
                 log_err_exit ("idset_clear");
@@ -657,10 +659,12 @@ int main (int argc, char *argv[])
     }
 
     /* Include and exclude ranks based on --rank and --exclude options
+     * Make rank exclusion relative to job ranks if --jobid was used.
      */
     filter_ranks (targets,
                   optparse_get_str (opts, "rank", "all"),
-                  optparse_get_str (opts, "exclude", NULL));
+                  optparse_get_str (opts, "exclude", NULL),
+                  optparse_hasopt (opts, "jobid"));
 
     rank_count = idset_count (targets);
     if (rank_count == 0)
