@@ -40,6 +40,10 @@ test_expect_success 'exec to all except a set of ranks' '
 	1
 	EOT
 '
+test_expect_success 'exec with --ranks and --exclude works' '
+	flux exec -r 2-3 -x 3 flux getattr rank &&
+	test $(flux exec -r 2-3 -x 3 flux getattr rank) -eq 2
+'
 test_expect_success 'configure access.allow-guest-user = true' '
 	flux config load <<-EOT
 	access.allow-guest-user = true
