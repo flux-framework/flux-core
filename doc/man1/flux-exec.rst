@@ -63,6 +63,10 @@ OPTIONS
    Target specific ranks in *NODESET*. Default is to target "all" ranks.
    See `NODESET FORMAT`_ below for more information.
 
+.. option:: -x, --exclude=NODESET
+
+   Exclude ranks in *NODESET*.
+
 .. option:: -v, --verbose
 
    Run with more verbosity.
