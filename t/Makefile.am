@@ -68,6 +68,7 @@ TESTSCRIPTS = \
 	t0004-event.t \
 	t0005-exec.t \
 	t0005-rexec.t \
+	t0005-exec-jobid.t \
 	t0007-ping.t \
 	t0008-attr.t \
 	t0009-dmesg.t \
