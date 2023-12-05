@@ -67,6 +67,16 @@ OPTIONS
 
    Exclude ranks in *NODESET*.
 
+.. option:: -j, --jobid=JOBID
+
+   Use the job shell exec service for job *JOBID* instead of the broker's
+   exec service. The default *NODESET* will be set to the nodes assigned
+   to the job, and the :option:`--rank` and :option:`--exclude` options are
+   applied relative to this set. For example, :option:`flux exec -j ID -r 0`
+   will run only on the first node assigned to *JOBID*, and :option:`flux
+   exec -j ID -x 0` will run on all nodes assigned to *JOBID* except the
+   first node.
+
 .. option:: -v, --verbose
 
    Run with more verbosity.
