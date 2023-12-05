@@ -271,10 +271,20 @@ static void f_logf (void *arg,
     flux_log (h, level, "%s:%d: %s: %s", file, line, func, buf);
 }
 
+static void unregister_cb (flux_future_t *f, void *arg)
+{
+    if (flux_future_get (f, NULL) < 0)
+        log_err ("failed to unregister terminus service");
+    flux_reactor_stop ((flux_reactor_t *) arg);
+}
+
 static void empty_cb (struct flux_terminus_server *ts,
                       void *arg)
 {
-    flux_reactor_stop ((flux_reactor_t *) arg);
+    flux_future_t *f;
+    if (!(f = flux_terminus_server_unregister (ts))
+        || flux_future_then (f, -1., unregister_cb, arg) < 0)
+        log_err_exit ("failed to unregister terminus service");
 }
 
 static int run_service (const char *service, int fd)
