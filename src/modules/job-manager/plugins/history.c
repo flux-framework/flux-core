@@ -37,6 +37,24 @@ struct history {
 
 #define COMPARE_NUM_REVERSE(a,b) ((a)>(b)?-1:(a)<(b)?1:0)
 
+/* Keys in history->users are calculated from int2ptr(uid), but that won't
+ * work for root.  Substitute (uid_t)-1 in that case as it's reserved per
+ * POSIX.  See also: flux-framework/flux-core#5475.
+ */
+static const void *userid2key (int userid)
+{
+    if (userid == 0)
+        return int2ptr ((uid_t)-1);
+    return int2ptr (userid);
+}
+
+static int key2userid (const void *key)
+{
+    if (key == int2ptr ((uid_t)-1))
+        return 0;
+    return ptr2int (key);
+}
+
 static void job_entry_destroy (struct job_entry *entry)
 {
     if (entry) {
@@ -76,13 +94,13 @@ static int job_entry_comparator (const void *item1, const void *item2)
 // zhashx_hash_fn footprint
 static size_t userid_hasher (const void *key)
 {
-    return ptr2int (key);
+    return key2userid (key);
 }
 
 // zhashx_comparator_fn footprint
 static int userid_comparator (const void *item1, const void *item2)
 {
-    return COMPARE_NUM_REVERSE (ptr2int (item1), ptr2int (item2));
+    return COMPARE_NUM_REVERSE (key2userid (item1), key2userid (item2));
 }
 
 static void history_destroy (struct history *hist)
@@ -124,6 +142,7 @@ static int jobtap_cb (flux_plugin_t *p,
     struct history *hist = arg;
     struct job_entry *entry;
     int userid;
+    const void *key;
 
     if (!(entry = job_entry_create ()))
         return -1;
@@ -134,24 +153,25 @@ static int jobtap_cb (flux_plugin_t *p,
                                 "t_submit", &entry->t_submit,
                                 "userid", &userid) < 0)
         return -1;
+    key = userid2key (userid);
     if (streq (topic, "job.inactive-remove")) {
         void *handle;
-        if ((handle = hola_list_find (hist->users, int2ptr (userid), entry)))
-            hola_list_delete (hist->users, int2ptr (userid), handle);
+        if ((handle = hola_list_find (hist->users, key, entry)))
+            hola_list_delete (hist->users, key, handle);
         job_entry_destroy (entry);
     }
     else if (streq (topic, "job.inactive-add")) {
-        if (hola_list_find (hist->users, int2ptr (userid), entry)) {
+        if (hola_list_find (hist->users, key, entry)) {
             job_entry_destroy (entry);
             return 0;
         }
-        if (!hola_list_insert (hist->users, int2ptr (userid), entry, false)) {
+        if (!hola_list_insert (hist->users, key, entry, false)) {
             job_entry_destroy (entry);
             return -1;
         }
     }
     else if (streq (topic, "job.new")) {
-        if (!hola_list_insert (hist->users, int2ptr (userid), entry, false)) {
+        if (!hola_list_insert (hist->users, key, entry, false)) {
             job_entry_destroy (entry);
             return -1;
         }
@@ -221,7 +241,7 @@ static json_t *history_slice (struct history *hist,
     size_t list_size = 0;
     int rc;
 
-    if ((l = hola_hash_lookup (hist->users, int2ptr (userid))))
+    if ((l = hola_hash_lookup (hist->users, userid2key (userid))))
         list_size = zlistx_size (l);
     if (slice_parse (&sl, slice, list_size) < 0) {
         errprintf (error, "could not parse python-style slice expression");
