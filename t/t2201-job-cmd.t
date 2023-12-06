@@ -711,13 +711,17 @@ test_expect_success 'flux-job: kill --signal works' '
 
 test_expect_success 'flux job: killall -f kills one job' '
 	id=$(flux submit sleep 600) &&
-	flux job wait-event $id start &&
+	flux job wait-event -vt 30 -p guest.exec.eventlog $id shell.init &&
 	flux job killall -f &&
 	run_timeout 60 flux queue drain
 '
 
 test_expect_success 'flux job: cancel can operate on multiple jobs' '
 	ids=$(flux submit --bcc=1-3 sleep 600) &&
+	for id in ${ids}; do
+		flux job wait-event \
+			-vt 30 -p guest.exec.eventlog $id shell.init
+	done &&
 	flux job cancel ${ids} cancel multiple jobs &&
 	for id in ${ids}; do
 		flux job wait-event -t 30 ${id} exception >exception.out &&
@@ -737,6 +741,10 @@ test_expect_success 'flux job: raise can operate on multiple jobs' '
 # N.B. SIGTERM == 15
 test_expect_success 'flux job: kill can operate on multiple jobs' '
 	ids=$(flux submit --wait-event=start --bcc=1-3 sleep 600) &&
+	for id in ${ids}; do
+		flux job wait-event \
+			-t 30 -p guest.exec.eventlog ${id} shell.init
+	done &&
 	flux job kill ${ids} &&
 	for id in ${ids}; do
 		flux job wait-event -t 30 ${id} finish >killmulti.out &&
