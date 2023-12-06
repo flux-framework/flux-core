@@ -97,6 +97,8 @@ test_expect_success NO_CHAIN_LINT 'flux alloc --bg can be interrupted' '
 	run_mini_bg &&
 	$waitfile -t 180 -v -p waiting sigint.log &&
 	kill -INT $(cat sigint.pid) &&
+	sleep 0.1 &&
+	(kill -INT $(cat sigint.pid) || true) &&
 	$waitfile -t 180 -v -p Interrupt sigint.log &&
 	wait $pid
 '
