@@ -14,6 +14,15 @@ transition through lost occurs.
 
 . `dirname $0`/sharness.sh
 
+#
+#  With --chain-lint, most tests below are skipped and this can cause
+#  the final test to hang. Therefore just skip all tests with chain-lint.
+#
+if ! test_have_prereq NO_CHAIN_LINT; then
+	skip_all='test may hang with --chain-lint, skipping all.'
+	test_done
+fi
+
 test_under_flux 2 system
 
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
@@ -23,7 +32,7 @@ test_expect_success 'tell brokers to log to stderr' '
 '
 
 # Degraded at parent means child was lost
-test_expect_success NO_CHAIN_LINT 'start overlay status wait in the background' '
+test_expect_success 'start overlay status wait in the background' '
 	flux overlay status --timeout=0 --wait degraded &
 	echo $! >subtree.pid
 '
@@ -37,7 +46,7 @@ test_expect_success 'restart broker 1' '
 	$startctl run 1
 '
 
-test_expect_success NO_CHAIN_LINT 'ensure child was lost' '
+test_expect_success 'ensure child was lost' '
 	wait $(cat subtree.pid)
 '
 
