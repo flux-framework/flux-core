@@ -4,6 +4,8 @@ test_description='Test the flux job last command'
 
 . $(dirname $0)/sharness.sh
 
+flux version | grep -q libflux-security && test_set_prereq FLUX_SECURITY
+
 test_under_flux 1
 
 test_expect_success 'flux-job last fails on invalid arguments' '
@@ -48,6 +50,24 @@ test_expect_success 'flux-job last does not list purged jobs' '
 	flux job purge --force --num-limit=0 &&
 	test_must_fail flux job last 2>nojob2.err &&
 	grep "job history is empty" nojob2.err
+'
+
+submit_as_root()
+{
+        FAKE_USERID=0
+        test_debug "echo running flux run $@ as userid $FAKE_USERID"
+        flux run --dry-run "$@" | \
+          flux python ${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py $FAKE_USERID \
+            >job.signed
+        FLUX_HANDLE_USERID=$FAKE_USERID \
+          flux job submit --flags=signed job.signed
+}
+
+# issue #5475
+# Execution may fail but submission should work - enough for this test
+test_expect_success FLUX_SECURITY 'run a job as fake root' '
+	submit_as_root true &&
+	FLUX_HANDLE_USERID=0 flux job last
 '
 
 test_done
