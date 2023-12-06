@@ -864,6 +864,12 @@ error:
     return -1;
 }
 
+flux_future_t *
+flux_terminus_server_unregister (struct flux_terminus_server *ts)
+{
+    return flux_service_unregister (ts->h, ts->service);
+}
+
 struct flux_terminus_server *
 flux_terminus_server_create (flux_t *h, const char *service)
 {

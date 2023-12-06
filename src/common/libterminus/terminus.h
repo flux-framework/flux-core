@@ -71,6 +71,14 @@ flux_terminus_server_session_open (struct flux_terminus_server *ts,
 int flux_terminus_server_session_close (struct flux_terminus_server *ts,
                                         struct flux_pty *pty,
                                         int status);
+
+/*  Unregister the terminus server service.
+ *  Returns a future that will be fulfilled when the service is successfully
+ *  unregistered.
+ */
+flux_future_t *
+flux_terminus_server_unregister (struct flux_terminus_server *ts);
+
 #endif /* !FLUX_TERMINUS_H */
 
 /*
