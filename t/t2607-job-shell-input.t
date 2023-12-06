@@ -60,9 +60,9 @@ test_expect_success NO_CHAIN_LINT 'flux-shell: attach twice, one with data' '
         mkfifo stdin4.pipe
         id=$(flux submit -n1 \
              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
-        flux job attach $id < stdin4.pipe > pipe4A.out 2> pipe4A.err &
+        flux job attach $id < stdin4.pipe > pipe4A.out &
         pid1=$!
-        flux job attach $id < input_stdin_file > pipe4B.out 2> pipe4B.err &
+        flux job attach $id < input_stdin_file > pipe4B.out &
         pid2=$!
         exec 9> stdin4.pipe &&
         wait $pid1 &&
@@ -79,7 +79,7 @@ test_expect_success 'flux-shell: multiple jobs, each want stdin' '
 	i=1 &&
 	for id in $(cat pipe5.jobids); do
 	    flux job attach $id \
-	        <input_stdin_file >pipe5_${i}.out 2>pipe5_${i}.err &&
+	        <input_stdin_file >pipe5_${i}.out &&
             test_cmp input_stdin_file pipe5_${i}.out &&
 	    i=$((i+1))
 	done
@@ -87,10 +87,10 @@ test_expect_success 'flux-shell: multiple jobs, each want stdin' '
 
 test_expect_success NO_CHAIN_LINT 'flux-shell: no stdin desired in job' '
         id=$(flux submit -n1 sleep 60)
-        flux job attach $id < input_stdin_file 2> pipe6A.err &
+        flux job attach $id < input_stdin_file &
         pid=$! &&
-        flux job wait-event -W -p guest.input -m eof=true $id data 2> pipe6C.err &&
-        flux cancel $id 2> pipe6D.err &&
+        flux job wait-event -W -p guest.input -m eof=true $id data &&
+        flux cancel $id  &&
         test_expect_code 143 wait $pid
 '
 
@@ -103,24 +103,24 @@ test_expect_success NO_CHAIN_LINT 'flux-shell: no stdin desired in job' '
 test_expect_success 'flux-shell: task completed, try to pipe into stdin' '
         ${LPTEST} 79 500 > big_dataset &&
         id=$(flux submit -n1 cat big_dataset) &&
-        flux job wait-event $id clean 2> pipe7A.err &&
-        test_must_fail flux job attach $id < input_stdin_file 2> pipe7B.err
+        flux job wait-event $id clean &&
+        test_must_fail flux job attach $id < input_stdin_file
 '
 
 test_expect_success 'flux-shell: task completed, try to pipe into stdin, no error if read only' '
         ${LPTEST} 79 500 > big_dataset &&
         id=$(flux submit -n1 cat big_dataset) &&
-        flux job wait-event $id clean 2> pipe8A.err &&
-        flux job attach --read-only $id < input_stdin_file 2> pipe8B.err
+        flux job wait-event $id clean  &&
+        flux job attach --read-only $id < input_stdin_file
 '
 
 test_expect_success NO_CHAIN_LINT 'flux-shell: pipe to stdin twice, second fails' '
         id=$(flux submit -n1 sleep 60)
-        flux job attach $id < input_stdin_file 2> pipe9A.err &
+        flux job attach $id < input_stdin_file &
         pid=$!
-        flux job wait-event -W -p guest.input -m eof=true $id data 2> pipe9C.err &&
-        test_must_fail flux job attach $id < input_stdin_file 2> pipe9D.err &&
-        flux cancel $id 2> pipe9E.err &&
+        flux job wait-event -W -p guest.input -m eof=true $id data &&
+        test_must_fail flux job attach $id < input_stdin_file &&
+        flux cancel $id &&
         test_expect_code 143 wait $pid
 '
 
@@ -154,7 +154,7 @@ test_expect_success 'flux-shell: multiple jobs, each want stdin via file' '
 	test_debug "cat file2.jobids" &&
 	i=1 &&
 	for id in $(cat file2.jobids); do
-	    flux job attach $id >file2_${i}.out 2>file2_${i}.err &&
+	    flux job attach $id >file2_${i}.out &&
             test_cmp input_stdin_file file2_${i}.out &&
 	    i=$((i+1))
 	done
