@@ -134,6 +134,7 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_kvs_getroot.3 \
 	man3/flux_kvs_copy.3 \
 	man3/flux_core_version.3 \
+	man3/hostlist_create.3 \
 	man3/idset_create.3 \
 	man3/idset_encode.3 \
 	man3/idset_decode.3 \
@@ -279,6 +280,23 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_kvs_namespace_remove.3 \
 	man3/flux_kvs_move.3 \
 	man3/flux_core_version_string.3 \
+	man3/hostlist_destroy.3 \
+	man3/hostlist_decode.3 \
+	man3/hostlist_encode.3 \
+	man3/hostlist_copy.3 \
+	man3/hostlist_append.3 \
+	man3/hostlist_append_list.3 \
+	man3/hostlist_nth.3 \
+	man3/hostlist_find.3 \
+	man3/hostlist_delete.3 \
+	man3/hostlist_count.3 \
+	man3/hostlist_sort.3 \
+	man3/hostlist_uniq.3 \
+	man3/hostlist_first.3 \
+	man3/hostlist_last.3 \
+	man3/hostlist_next.3 \
+	man3/hostlist_current.3 \
+	man3/hostlist_remove_current.3 \
 	man3/idset_destroy.3 \
 	man3/idset_decode_ex.3 \
 	man3/idset_decode_empty.3 \
