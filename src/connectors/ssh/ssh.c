@@ -18,6 +18,7 @@
 #else
 #include "src/common/libmissing/argz.h"
 #endif
+#include <libgen.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/popen2.h"
@@ -26,6 +27,12 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/strstrip.h"
 #include "src/common/libyuarel/yuarel.h"
+#ifndef HAVE_STRLCPY
+#include "src/common/libmissing/strlcpy.h"
+#endif
+#ifndef HAVE_STRLCAT
+#include "src/common/libmissing/strlcat.h"
+#endif
 #include "src/common/librouter/usock.h"
 
 struct ssh_connector {
@@ -77,7 +84,7 @@ static void op_fini (void *impl)
     }
 }
 
-static char *which (const char *prog, char *buf, size_t size)
+static const char *which_dir (const char *prog, char *buf, size_t size)
 {
     char *path = getenv ("PATH");
     char *cpy = path ? strdup (path) : NULL;
@@ -91,7 +98,7 @@ static char *which (const char *prog, char *buf, size_t size)
             if (stat (buf, &sb) == 0
                 && S_ISREG (sb.st_mode)
                 && access (buf, X_OK) == 0) {
-                result = buf;
+                result = dirname (buf);
                 break;
             }
             a1 = NULL;
@@ -99,6 +106,46 @@ static char *which (const char *prog, char *buf, size_t size)
     }
     free (cpy);
     return result;
+}
+
+static int make_path (char *path, size_t size, const char *sockpath)
+{
+    char *sockpath_cpy;
+    char buf[1024];
+    const char *rundir;
+    const char *bindir;
+    int rc = -1;
+
+    if (strlcpy (path, "PATH=", size) >= size
+        || !(sockpath_cpy = strdup (sockpath)))
+        return -1;
+
+    // append rundir/bin
+    rundir = dirname (sockpath_cpy);
+    if (rundir[0] != '/') {
+        if (strlcat (path, "/", size) >= size)
+            goto error;
+    }
+    if (strlcat (path, rundir, size) >= size)
+        goto error;
+    if (strlcat (path, "/bin", size) >= size)
+        goto error;
+
+    // append directory in which flux(1) was found locally
+    if ((bindir = which_dir ("flux", buf, sizeof (buf)))) {
+        if (strlcat (path, ":", size) >= size)
+            goto error;
+        if (strlcat (path, bindir, size) >= size)
+            goto error;
+    }
+
+    // append system bin so libtool wrappers can work if necessary
+    if (strlcat (path, ":/bin:/usr/bin", size) >= size)
+        goto error;
+    rc = 0;
+error:
+    free (sockpath_cpy);
+    return rc;
 }
 
 /* uri_path is interpreted as:
@@ -155,10 +202,21 @@ int build_ssh_command (const char *uri_path,
             goto nomem;
     }
 
-    /* LD_LIBRARY_PATH */
-    if (ld_lib_path) {
+    /* [env] */
+    if (ld_lib_path || !flux_cmd) {
         if (argz_add (&argz, &argz_len, "env") != 0)
             goto nomem;
+    }
+    /* [PATH=remote_path] */
+    if (!flux_cmd) {
+        if (make_path (buf, sizeof (buf), yuri.path) == 0) {
+            if (argz_add (&argz, &argz_len, buf) != 0)
+                goto nomem;
+        }
+        flux_cmd = "flux";
+    }
+    /* [LD_LIBRARY_PATH=ld_lib_path] */
+    if (ld_lib_path) {
         (void)snprintf (buf, sizeof (buf), "LD_LIBRARY_PATH=%s", ld_lib_path);
         if (argz_add (&argz, &argz_len, buf) != 0)
             goto nomem;
@@ -199,7 +257,6 @@ error:
 flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
 {
     struct ssh_connector *ctx;
-    char buf[PATH_MAX + 1];
     const char *ssh_cmd;
     const char *flux_cmd;
     const char *ld_lib_path;
@@ -215,15 +272,10 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
      */
     if (!(ssh_cmd = getenv ("FLUX_SSH")))
         ssh_cmd = PATH_SSH;
-    /* FLUX_SSH_RCMD may be used to select a different path to the flux
-     * command front end than the default.  The default is to use the one
-     * from the client's PATH.
+    /* FLUX_SSH_RCMD may be used to force a specific path to the flux
+     * command front end.
      */
     flux_cmd = getenv ("FLUX_SSH_RCMD");
-    if (!flux_cmd)
-        flux_cmd = which ("flux", buf, sizeof (buf));
-    if (!flux_cmd)
-        flux_cmd = "flux"; // maybe this will work for installed version
 
     /* ssh and rsh do not forward environment variables, thus LD_LIBRARY_PATH
      * is not guaranteed to be set on the remote node where the flux command is
@@ -274,10 +326,10 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
      * inside flux_open() rather than in some less obvious context later.
      */
     if (!(ctx->uclient = usock_client_create (popen2_get_fd (ctx->p)))) {
-        char *buf = NULL;
-        if (read_all (popen2_get_stderr_fd (ctx->p), (void **) &buf) > 0)
-            errprintf (errp, "%s", strstrip (buf));
-        free (buf);
+        char *data = NULL;
+        if (read_all (popen2_get_stderr_fd (ctx->p), (void **) &data) > 0)
+            errprintf (errp, "%s", strstrip (data));
+        free (data);
         goto error;
     }
     if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))

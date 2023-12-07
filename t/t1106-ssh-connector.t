@@ -12,6 +12,22 @@ export TEST_SOCKDIR=$(echo $FLUX_URI | sed -e "s!local://!!") &&
 export TEST_SSH=${SHARNESS_TEST_SRCDIR}/scripts/tssh
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
+extract_env_command() {
+	grep cmd= \
+	    | sed s/cmd=\"env\ // \
+	    | sed s/\ flux\ relay.*// \
+	    | xargs -n1
+}
+
+test_expect_success 'rundir/bin directory exists' '
+	test -d $(dirname $TEST_SOCKDIR)/bin
+'
+test_expect_success 'rundir/bin/flux symlink exists' '
+	test -h $(dirname $TEST_SOCKDIR)/bin/flux
+'
+test_expect_success 'rundir/bin/flux points to an executable' '
+	test -x $(dirname $TEST_SOCKDIR)/bin/flux
+'
 test_expect_success 'load heartbeat module with fast rate' '
         flux module load heartbeat period=0.1s
 '
@@ -21,14 +37,39 @@ test_expect_success 'ssh:// with local sockdir works' '
 	  grep hostname=localhost basic.err &&
 	  grep cmd= basic.err | grep "flux relay $TEST_SOCKDIR"
 '
+test_expect_success 'remote PATH is set' '
+	extract_env_command <basic.err >basic.env &&
+	grep -q "^PATH=" basic.env
+'
+test_expect_success 'remote PATH has rundir/bin first' '
+	grep -q "^PATH=$(dirname $TEST_SOCKDIR)/bin:" basic.env
+'
+test_expect_success 'remote PATH includes local flux bindir' '
+	fbindir=$(dirname $(which flux)) &&
+	grep -q "^PATH=.*:$fbindir" basic.env
+'
+test_expect_success 'remote PATH includes system bindirs' '
+	grep -q "^PATH=.*:/bin:/usr/bin" basic.env
+'
+# N.B. ensure LD_LIBRARY_PATH is set so env(1) is used when PATH is not set
+# For in tree testing it is set by libtool wrappers
+test_expect_success 'ssh:// with FLUX_SSH_RCMD does not set remote PATH' '
+	env FLUX_URI=ssh://localhost$TEST_SOCKDIR \
+	    FLUX_SSH=$TEST_SSH \
+	    FLUX_SSH_RCMD=flux \
+	    LD_LIBRARY_PATH=${LD_LIBRARY_PATH=-/foo/bar} \
+	    flux getattr size 2>basic_rcmd.err &&
+	extract_env_command <basic_rcmd.err >basic_rcmd.env &&
+	test_must_fail grep "^PATH=" basic_rcmd.env
+'
 test -x /bin/tcsh && test_set_prereq HAVE_TCSH
 test_expect_success HAVE_TCSH 'ssh:// with local sockdir and SHELL=tcsh works' '
 	FLUX_URI=ssh://localhost${TEST_SOCKDIR} \
 	FLUX_SSH=$TEST_SSH \
 	SHELL=/bin/tcsh \
-	  flux getattr size 2>basic.err &&
-	  grep hostname=localhost basic.err &&
-	  grep cmd= basic.err | grep "flux relay $TEST_SOCKDIR"
+	  flux getattr size 2>basic_tcsh.err &&
+	  grep hostname=localhost basic_tcsh.err &&
+	  grep cmd= basic_tcsh.err | grep "flux relay $TEST_SOCKDIR"
 '
 
 test_expect_success 'ssh:// with local sockdir and port works' '
@@ -57,7 +98,7 @@ test_expect_success 'ssh:// with local sockdir, user, and port works' '
 
 test_expect_success 'ssh:// can handle nontrivial message load' '
 	FLUX_URI=ssh://localhost$TEST_SOCKDIR FLUX_SSH=$TEST_SSH \
-	  flux ping --count=100 -i 0.001 broker
+	  flux ping --count=100 -i 0.001 broker >/dev/null
 '
 
 test_expect_success 'ssh:// can work with events' '
@@ -90,26 +131,35 @@ test_expect_success 'ssh:// cannot shadow a broker service (EEXIST)' "
 "
 
 test_expect_success 'ssh:// with bad query option fails in flux_open()' '
-	! FLUX_URI=ssh://localhost$TEST_SOCKDIR?badarg=bar FLUX_SSH=$TEST_SSH \
-	  flux getattr size 2>badarg.out &&
+	test_must_fail env \
+	    FLUX_URI=ssh://localhost$TEST_SOCKDIR?badarg=bar \
+	    FLUX_SSH=$TEST_SSH \
+	    flux getattr size 2>badarg.out &&
 	grep -q "flux_open:" badarg.out
 '
 
 test_expect_success 'ssh:// with bad FLUX_SSH value fails in flux_open()' '
-	! FLUX_URI=ssh://localhost$TEST_SOCKDIR FLUX_SSH=/noexist \
-	  flux getattr size 2>noexist.out &&
+	test_must_fail env \
+	    FLUX_URI=ssh://localhost$TEST_SOCKDIR \
+	    FLUX_SSH=/noexist \
+	    flux getattr size 2>noexist.out &&
 	grep -q "flux_open:" noexist.out
 '
 
 test_expect_success 'ssh:// with bad FLUX_SSH_RCMD value fails in flux_open()' '
-	! FLUX_URI=ssh://localhost$TEST_SOCKDIR FLUX_SSH=$TEST_SSH \
-	  FLUX_SSH_RCMD=/nocmd flux getattr size 2>nocmd.out &&
+	test_must_fail env \
+	    FLUX_URI=ssh://localhost$TEST_SOCKDIR \
+	    FLUX_SSH=$TEST_SSH \
+	    FLUX_SSH_RCMD=/nocmd \
+	    flux getattr size 2>nocmd.out &&
 	grep -q "flux_open:" nocmd.out
 '
 
 test_expect_success 'ssh:// with missing path component fails in flux_open()' '
-	! FLUX_URI=ssh://localhost FLUX_SSH=$TEST_SSH \
-	  flux getattr size 2>nopath.out &&
+	test_must_fail env \
+	    FLUX_URI=ssh://localhost \
+	    FLUX_SSH=$TEST_SSH \
+	    flux getattr size 2>nopath.out &&
 	grep -q "flux_open:" nopath.out
 '
 

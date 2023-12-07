@@ -206,6 +206,7 @@ AC_CHECK_FUNCS( \
 # See src/common/libmissing/Makefile.am
 AC_REPLACE_FUNCS( \
   strlcpy \
+  strlcat \
   argz_add \
   envz_add \
 )
