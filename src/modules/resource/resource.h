@@ -22,9 +22,22 @@ struct resource_ctx {
     struct acquire *acquire;
     struct reslog *reslog;
 
+    flux_t *parent_h;
+    int parent_refcount;
+
     uint32_t rank;
     uint32_t size;
 };
+
+/*  Get a shared handle to he parent instance if the parent-uri attribute
+ *  is set. Adds a reference to the shared parent handle. Caller must call
+ *  resource_parent_handle_close().
+ *
+ *  Returns NULL on error with errno set to ENOENT if there is no parent-uri,
+ *  or error from flux_open(3).
+ */
+flux_t *resource_parent_handle_open (struct resource_ctx *ctx);
+void resource_parent_handle_close (struct resource_ctx *ctx);
 
 #endif /* !_FLUX_RESOURCE_H */
 

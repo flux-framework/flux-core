@@ -502,7 +502,7 @@ static int lookup_R_fallback (struct inventory *inv, flux_jobid_t id)
 done:
     /*  Parent handle is not used again in fallback case:
      */
-    flux_close (inv->parent_h);
+    resource_parent_handle_close (inv->ctx);
     inv->parent_h = NULL;
     json_decref (R);
     json_decref (job_R);
@@ -513,7 +513,6 @@ done:
 static int start_resource_watch (struct inventory *inv, bool no_resource_watch)
 {
     flux_t *h = inv->ctx->h;
-    const char *uri;
     const char *jobid;
     json_t *job_R;
     flux_jobid_t id;
@@ -529,17 +528,15 @@ static int start_resource_watch (struct inventory *inv, bool no_resource_watch)
     if (no_resource_watch)
         service = "job-info.update-watch-fake";
 
-    if (!(uri = flux_attr_get (h, "parent-uri"))
-            || !(jobid = flux_attr_get (h, "jobid")))
+    if (!(jobid = flux_attr_get (h, "jobid")))
         return 0;
     if (flux_job_id_parse (jobid, &id) < 0) {
         flux_log_error (h, "error decoding jobid %s", jobid);
         return -1;
     }
-    if (!(inv->parent_h = flux_open (uri, 0))) {
-        flux_log_error (h, "error opening %s", uri);
+    if (!(inv->parent_h = resource_parent_handle_open (inv->ctx)))
         goto done;
-    }
+
     /*  Associate the main flux_t handle reactor with the parent handle
      *  reactor so that events from both can be handled with the single
      *  reactor instance:
@@ -603,7 +600,7 @@ done:
      */
     if (!R) {
         R_watch_destroy (inv);
-        flux_close (inv->parent_h);
+        resource_parent_handle_close (inv->ctx);
         inv->parent_h = NULL;
     }
     json_decref (R);
@@ -885,7 +882,7 @@ void inventory_destroy (struct inventory *inv)
         free (inv->method);
         flux_future_destroy (inv->put_f);
         R_watch_destroy (inv);
-        flux_close (inv->parent_h);
+        resource_parent_handle_close (inv->ctx);
         free (inv);
         errno = saved_errno;
     }
