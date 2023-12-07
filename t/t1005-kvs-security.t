@@ -14,6 +14,8 @@ SIZE=$(test_size_large)
 test_under_flux ${SIZE} kvs
 echo "# $0: flux session size will be ${SIZE}"
 
+FENCEAPI="${FLUX_BUILD_DIR}/t/kvs/fence_api"
+
 DIR=test.a.b
 
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
@@ -274,12 +276,133 @@ test_expect_success 'kvs: symlinkw/ Namespace fails (wrong user)' '
         unset_userid
 '
 
-test_expect_success 'kvs: symlink w/ Namespace works (user)' '
-        set_userid 9001 &&
-        flux kvs put --namespace=${NAMESPACETMP}-SYMLINKNS3 $DIR.linktest=3 &&
-        flux kvs link --namespace=${NAMESPACETMP}-SYMLINKNS2 --target-namespace=${NAMESPACETMP}-SYMLINKNS3 $DIR.linktest $DIR.link &&
-        test_kvs_key_namespace ${NAMESPACETMP}-SYMLINKNS2 $DIR.link 3 &&
-        unset_userid
+#
+# Basic tests, guest commits are limited
+#
+
+test_expect_success 'kvs: create test ns for user 9999' '
+	flux kvs namespace create -o 9999 $NAMESPACETMP-SYMLINK
+'
+test_expect_success 'kvs: owner can make a symlink in the test ns' '
+	flux kvs link --namespace=$NAMESPACETMP-SYMLINK a b
+'
+test_expect_success 'kvs: guest can put a val in the test ns' '
+	set_userid 9999 &&
+	flux kvs put --namespace=$NAMESPACETMP-SYMLINK aa=42 &&
+	unset_userid
+'
+test_expect_success 'kvs: guest can unlink a val in the test ns' '
+	set_userid 9999 &&
+	flux kvs unlink --namespace=$NAMESPACETMP-SYMLINK aa &&
+	unset_userid
+'
+test_expect_success 'kvs: guest can make an empty dir in the test ns' '
+	set_userid 9999 &&
+	flux kvs mkdir --namespace=$NAMESPACETMP-SYMLINK bb &&
+	unset_userid
+'
+test_expect_success 'kvs: guest can unlink a dir in the test ns' '
+	set_userid 9999 &&
+	flux kvs unlink --namespace=$NAMESPACETMP-SYMLINK bb &&
+	unset_userid
+'
+test_expect_success 'kvs: guest cannot make a symlink in the test ns' '
+	set_userid 9999 &&
+	test_must_fail flux kvs link \
+	    --namespace=$NAMESPACETMP-SYMLINK c d 2>link.err &&
+	grep "Operation not permitted" link.err &&
+	unset_userid
+'
+test_expect_success 'kvs: guest can put a val treeobj' "
+	set_userid 9999 &&
+	flux kvs put --treeobj \
+	    --namespace=$NAMESPACETMP-SYMLINK \
+	    cc='{\"data\":\"Yg==\",\"type\":\"val\",\"ver\":1}' &&
+	unset_userid
+"
+test_expect_success 'kvs: guest cannot put a symlink treeobj' "
+	set_userid 9999 &&
+	test_must_fail flux kvs put --treeobj \
+	    --namespace=$NAMESPACETMP-SYMLINK \
+	    y='{\"data\":{\"target\":\"x\"},\"type\":\"symlink\",\"ver\":1}' \
+	    2>treeobj_symlink.err &&
+	grep 'Operation not permitted' treeobj_symlink.err &&
+	unset_userid
+"
+test_expect_success 'kvs: guest cannot put a valref treeobj' "
+	set_userid 9999 &&
+	test_must_fail flux kvs put --treeobj \
+	    --namespace=$NAMESPACETMP-SYMLINK \
+	    z='{\"data\":[\"sha1-8727ddf86fd56772f4ed38703d24d93e9d9e7fa6\"],\"type\":\"valref\",\"ver\":1}' \
+	    2>treeobj_valref.err &&
+	grep 'Operation not permitted' treeobj_valref.err &&
+	unset_userid
+"
+test_expect_success 'kvs: guest cannot put a dirref treeobj' "
+	set_userid 9999 &&
+	test_must_fail flux kvs put --treeobj \
+	    --namespace=$NAMESPACETMP-SYMLINK \
+	    z='{\"data\":[\"sha1-8727ddf86fd56772f4ed38703d24d93e9d9e7fa6\"],\"type\":\"dirref\",\"ver\":1}' \
+	    2>treeobj_dirref.err &&
+	grep 'Operation not permitted' treeobj_dirref.err &&
+	unset_userid
+"
+test_expect_success 'kvs: guest cannot put a non-empty dir treeobj' "
+	set_userid 9999 &&
+	test_must_fail flux kvs put --treeobj \
+	    --namespace=$NAMESPACETMP-SYMLINK \
+	    q='{\"data\":{\"b\":{\"data\":\"NDI=\",\"type\":\"val\",\"ver\":1}},\"type\":\"dir\",\"ver\":1}' \
+	    2>treeobj_nonemptydir.err &&
+	grep 'Operation not permitted' treeobj_nonemptydir.err &&
+	unset_userid
+"
+test_expect_success 'kvs: guest cannot put a dir treeobj containing symlink' "
+	set_userid 9999 &&
+	test_must_fail flux kvs put --treeobj \
+	    --namespace=$NAMESPACETMP-SYMLINK \
+	    qq='{\"data\":{\"b\":{\"data\":{\"target\":\"x\"},\"type\":\"symlink\",\"ver\":1}},\"type\":\"dir\",\"ver\":1}' \
+	    2>treeobj_symdir.err &&
+	    grep 'Operation not permitted' treeobj_symdir.err &&
+	unset_userid
+"
+test_expect_success 'kvs: owner can make a symlink in the test ns on rank 1' '
+	flux exec -n -r 1 \
+	    sh -c "flux kvs link --namespace=$NAMESPACETMP-SYMLINK e f"
+'
+test_expect_success 'kvs: guest cannot make a symlink in the test ns on rank 1' '
+	test_must_fail flux exec -n -r 1 \
+	    sh -c "FLUX_HANDLE_USERID=9999 FLUX_HANDLE_ROLEMASK=0x2 \
+		flux kvs link --namespace=$NAMESPACETMP-SYMLINK g h" \
+	    2>link2.err &&
+	grep "Operation not permitted" link2.err
+'
+
+test_expect_success 'kvs: owner can make a symlink via fence' '
+	${FENCEAPI} --namespace=$NAMESPACETMP-SYMLINK --symlink 4 fencetest1
+'
+
+test_expect_success 'kvs: guest cannot make a symlink via fence' '
+	set_userid 9999 &&
+	test_must_fail ${FENCEAPI} \
+	    --namespace=$NAMESPACETMP-SYMLINK --symlink 4 fencetest2 \
+	    2>link5.err &&
+	grep "Operation not permitted" link5.err &&
+	unset_userid
+'
+
+test_expect_success 'kvs: owner can make a symlink via fence on rank 1' '
+	flux exec -n -r 1 \
+	    sh -c "${FENCEAPI} --namespace=$NAMESPACETMP-SYMLINK \
+		--symlink 4 fencetest3"
+'
+
+test_expect_success 'kvs: guest cannot make a symlink via fence on rank 1' '
+	test_must_fail flux exec -n -r 1 \
+	    sh -c "FLUX_HANDLE_USERID=9999 FLUX_HANDLE_ROLEMASK=0x2 \
+		${FENCEAPI} --namespace=$NAMESPACETMP-SYMLINK \
+		--symlink 4 fencetest4" \
+		2>link6.err &&
+	grep "Operation not permitted" link6.err
 '
 
 #
