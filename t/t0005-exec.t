@@ -192,6 +192,7 @@ test_expect_success 'signal forwarding works' '
 	cat >test_signal.sh <<-EOF &&
 	#!/bin/bash
 	sig=\${1-INT}
+	rm -f sleepready.out
 	mkfifo input.fifo
 	stdbuf --output=L \
 	    flux exec -v -n awk "BEGIN {print \"hi\"} {print}" input.fifo \

@@ -252,6 +252,8 @@ test_expect_success NO_CHAIN_LINT 'job-info: update watch can be canceled (multi
 	wait $watchpidA &&
 	kill -s USR1 $watchpidB &&
 	wait $watchpidB &&
+	test_debug "echo watch10A: $(cat watch10A.out)" &&
+	test_debug "echo watch10B: $(cat watch10B.out)" &&
 	flux cancel $jobid &&
 	test $(cat watch10A.out | wc -l) -eq 2 &&
 	test $(cat watch10B.out | wc -l) -eq 1 &&

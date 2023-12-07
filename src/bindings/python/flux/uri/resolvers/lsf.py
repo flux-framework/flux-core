@@ -48,9 +48,13 @@ def lsf_find_compute_node(jobid):
 
 
 def check_lsf_jobid(pid, jobid):
-    with open(f"/proc/{pid}/environ", encoding="utf-8") as envfile:
-        if f"LSB_JOBID={jobid}" in envfile.read():
-            return True
+    try:
+        with open(f"/proc/{pid}/environ", encoding="utf-8") as envfile:
+            if f"LSB_JOBID={jobid}" in envfile.read():
+                return True
+    except FileNotFoundError:
+        # if pid disappears while we try to read it, this is a False
+        pass
     return False
 
 

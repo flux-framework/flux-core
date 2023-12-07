@@ -1863,6 +1863,7 @@ test_expect_success 'verify task count preserved across restart' '
 	jobid1=`cat success1.id` &&
 	jobid2=`cat success2.id` &&
 	obj=$(flux job list -s inactive | grep ${jobid1}) &&
+	test_debug "echo $obj | jq -S ." &&
 	echo $obj | jq -e ".success == true" &&
 	obj=$(flux job list -s inactive | grep ${jobid2}) &&
 	echo $obj | jq -e ".success == false"
@@ -1875,6 +1876,7 @@ test_expect_success 'flux job list outputs exceptions correctly (no exception)' 
 	echo $jobid > exceptions1.id &&
 	wait_jobid_state $jobid inactive &&
 	obj=$(flux job list -s inactive | grep $jobid) &&
+	test_debug "echo $obj | jq -S ." &&
 	echo $obj | jq -e ".exception_occurred == false" &&
 	echo $obj | jq -e ".exception_severity == null" &&
 	echo $obj | jq -e ".exception_type == null" &&
@@ -1886,6 +1888,7 @@ test_expect_success 'flux job list outputs exceptions correctly (exception)' '
 	echo $jobid > exceptions2.id &&
 	wait_jobid_state $jobid inactive &&
 	obj=$(flux job list -s inactive | grep $jobid) &&
+	test_debug "echo $obj | jq -S ." &&
 	echo $obj | jq -e ".exception_occurred == true" &&
 	echo $obj | jq -e ".exception_severity == 0" &&
 	echo $obj | jq -e ".exception_type == \"exec\"" &&
@@ -1901,6 +1904,7 @@ test_expect_success 'flux job list outputs exceptions correctly (exception cance
 	flux cancel $jobid &&
 	wait_jobid_state $jobid inactive &&
 	obj=$(flux job list -s inactive | grep $jobid) &&
+	test_debug "echo $obj | jq -S ." &&
 	echo $obj | jq -e ".exception_occurred == true" &&
 	echo $obj | jq -e ".exception_severity == 0" &&
 	echo $obj | jq -e ".exception_type == \"cancel\"" &&
@@ -1916,6 +1920,7 @@ test_expect_success 'flux job list outputs exceptions correctly (exception cance
 	flux cancel -m "mecanceled" $jobid &&
 	wait_jobid_state $jobid inactive &&
 	obj=$(flux job list -s inactive | grep $jobid) &&
+	test_debug "echo $obj | jq -S ." &&
 	echo $obj | jq -e ".exception_occurred == true" &&
 	echo $obj | jq -e ".exception_severity == 0" &&
 	echo $obj | jq -e ".exception_type == \"cancel\"" &&
@@ -1927,10 +1932,15 @@ test_expect_success 'flux job list outputs exceptions correctly (exception cance
 test_expect_success 'flux job list outputs exceptions correctly (user exception)' '
 	jobid=`flux submit ./sleepinf.sh | flux job id` &&
 	echo $jobid > exceptions5.id &&
+	test_debug "echo started $jobid, waiting for first line of output" &&
 	flux job wait-event -W -p guest.output $jobid data &&
+	test_debug "echo raising user exception foo" &&
 	flux job raise --type=foo --severity=0 -m "foobar" $jobid &&
+	test_debug "echo waiting for $jobid to become inactive" &&
 	wait_jobid_state $jobid inactive &&
+	test_debug "flux job list -s inactive | jq" &&
 	obj=$(flux job list -s inactive | grep $jobid) &&
+	test_debug "echo $obj | jq -S ." &&
 	echo $obj | jq -e ".exception_occurred == true" &&
 	echo $obj | jq -e ".exception_severity == 0" &&
 	echo $obj | jq -e ".exception_type == \"foo\"" &&

@@ -119,7 +119,13 @@ test_expect_success 'cmddriver inserts its path at end of PATH' '
 '
 # Ensure a PATH that already returns current flux first is not modified
 # by flux(1)
-test_expect_success READLINK 'cmddriver does not adjust PATH if unnecessary' '
+#
+# The following test assumes flux(1) is not in /bin or /usr/bin. Skip the
+# test if so.
+#
+fluxdir=$(dirname $fluxcmd)
+test "$fluxdir" = "/bin" -o "$fluxdir" = "/usr/bin" || test_set_prereq NOBINDIR
+test_expect_success READLINK,NOBINDIR 'cmddriver does not adjust PATH if unnecessary' '
 	fluxdir=$(dirname $fluxcmd) &&
 	mypath=/foo:/bar:$fluxdir:/usr/bin:/bin &&
 	newpath=$(PATH=$mypath $fluxcmd env $path_printenv PATH) &&

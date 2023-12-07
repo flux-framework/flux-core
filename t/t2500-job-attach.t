@@ -173,7 +173,7 @@ test_expect_success 'attach: cannot attach to interactive pty when --read-only s
 test_expect_success 'attach: --stdin-ranks works' '
 	id=$(flux submit -N4 -t20s cat) &&
 	echo hello from 0 \
-		| flux job attach --label-io -i0 $id >stdin-ranks.out 2>&1 &&
+		| flux job attach --label-io -i0 $id >stdin-ranks.out &&
 	flux job eventlog -p guest.input $id &&
 	cat <<-EOF >stdin-ranks.expected &&
 	0: hello from 0
