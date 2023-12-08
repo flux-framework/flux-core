@@ -43,11 +43,16 @@ enum kvs_commit_flags {
     FLUX_KVS_SYNC = 4, /* flush and checkpoint after commit is done */
 };
 
-flux_future_t *flux_kvs_commit (flux_t *h, const char *ns, int flags,
+flux_future_t *flux_kvs_commit (flux_t *h,
+                                const char *ns,
+                                int flags,
                                 flux_kvs_txn_t *txn);
 
-flux_future_t *flux_kvs_fence (flux_t *h, const char *ns, int flags,
-                               const char *name, int nprocs,
+flux_future_t *flux_kvs_fence (flux_t *h,
+                               const char *ns,
+                               int flags,
+                               const char *name,
+                               int nprocs,
                                flux_kvs_txn_t *txn);
 
 /* accessors can be used for commit or fence futures */

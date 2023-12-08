@@ -43,8 +43,11 @@ static struct commit_ctx *alloc_ctx (void)
     return ctx;
 }
 
-flux_future_t *flux_kvs_fence (flux_t *h, const char *ns, int flags,
-                               const char *name, int nprocs,
+flux_future_t *flux_kvs_fence (flux_t *h,
+                               const char *ns,
+                               int flags,
+                               const char *name,
+                               int nprocs,
                                flux_kvs_txn_t *txn)
 {
     flux_future_t *f;
@@ -75,7 +78,10 @@ flux_future_t *flux_kvs_fence (flux_t *h, const char *ns, int flags,
     if (!(ctx = alloc_ctx ()))
         return NULL;
 
-    if (!(f = flux_rpc_pack (h, "kvs.fence", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "kvs.fence",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:s s:i s:s s:i s:O}",
                              "name", name,
                              "nprocs", nprocs,
@@ -96,7 +102,9 @@ error:
     return NULL;
 }
 
-flux_future_t *flux_kvs_commit (flux_t *h, const char *ns, int flags,
+flux_future_t *flux_kvs_commit (flux_t *h,
+                                const char *ns,
+                                int flags,
                                 flux_kvs_txn_t *txn)
 {
     flux_future_t *f;
@@ -127,7 +135,10 @@ flux_future_t *flux_kvs_commit (flux_t *h, const char *ns, int flags,
     if (!(ctx = alloc_ctx ()))
         return NULL;
 
-    if (!(f = flux_rpc_pack (h, "kvs.commit", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "kvs.commit",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:s s:i s:O}",
                              "namespace", ns,
                              "flags", flags,
@@ -146,13 +157,15 @@ error:
     return NULL;
 }
 
-static int decode_response (flux_future_t *f, const char **rootrefp,
+static int decode_response (flux_future_t *f,
+                            const char **rootrefp,
                             int *rootseqp)
 {
     const char *rootref;
     int rootseq;
 
-    if (flux_rpc_get_unpack (f, "{s:s s:i}",
+    if (flux_rpc_get_unpack (f,
+                             "{s:s s:i}",
                              "rootref", &rootref,
                              "rootseq", &rootseq) < 0)
         return -1;

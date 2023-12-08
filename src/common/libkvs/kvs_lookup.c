@@ -115,7 +115,9 @@ flux_future_t *flux_kvs_lookup (flux_t *h,
     const char *topic = "kvs.lookup";
     int rpc_flags = 0;
 
-    if (!h || !key || strlen (key) == 0
+    if (!h
+        || !key
+        || strlen (key) == 0
         || validate_lookup_flags (flags, true) < 0) {
         errno = EINVAL;
         return NULL;
@@ -131,7 +133,10 @@ flux_future_t *flux_kvs_lookup (flux_t *h,
         topic = "kvs-watch.lookup"; // redirect to kvs-watch module
     if ((flags & FLUX_KVS_WATCH))
         rpc_flags |= FLUX_RPC_STREAMING;
-    if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, rpc_flags,
+    if (!(f = flux_rpc_pack (h,
+                             topic,
+                             FLUX_NODEID_ANY,
+                             rpc_flags,
                              "{s:s s:s s:i}",
                              "key", key,
                              "namespace", ns,
@@ -147,7 +152,9 @@ flux_future_t *flux_kvs_lookup (flux_t *h,
     return f;
 }
 
-flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
+flux_future_t *flux_kvs_lookupat (flux_t *h,
+                                  int flags,
+                                  const char *key,
                                   const char *treeobj)
 {
     flux_future_t *f;
@@ -156,7 +163,10 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
 
     /* N.B. FLUX_KVS_WATCH is not valid for lookupat (r/o snapshot).
      */
-    if (!h || !key || strlen (key) == 0 || !treeobj
+    if (!h
+        || !key
+        || strlen (key) == 0
+        || !treeobj
         || validate_lookup_flags (flags, false) < 0) {
         errno = EINVAL;
         return NULL;
@@ -169,7 +179,10 @@ flux_future_t *flux_kvs_lookupat (flux_t *h, int flags, const char *key,
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "kvs.lookup", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "kvs.lookup",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:s s:i s:O}",
                              "key", key,
                              "flags", flags,
@@ -257,8 +270,9 @@ int flux_kvs_lookup_get (flux_future_t *f, const char **value)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->val_valid) {
-        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
-                                              &ctx->val_len) < 0)
+        if (treeobj_decode_val (ctx->treeobj,
+                                &ctx->val_data,
+                                &ctx->val_len) < 0)
             return -1;
         ctx->val_valid = true;
         // N.B. val_data includes xtra 0 byte term not reflected in val_len
@@ -296,14 +310,17 @@ int flux_kvs_lookup_get_unpack (flux_future_t *f, const char *fmt, ...)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->val_valid) {
-        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
-                                              &ctx->val_len) < 0)
+        if (treeobj_decode_val (ctx->treeobj,
+                                &ctx->val_data,
+                                &ctx->val_len) < 0)
             return -1;
         ctx->val_valid = true;
     }
     if (!ctx->val_obj) {
-        if (!(ctx->val_obj = json_loadb (ctx->val_data, ctx->val_len,
-                                         JSON_DECODE_ANY, NULL))) {
+        if (!(ctx->val_obj = json_loadb (ctx->val_data,
+                                         ctx->val_len,
+                                         JSON_DECODE_ANY,
+                                         NULL))) {
             errno = EINVAL;
             return -1;
         }
@@ -325,8 +342,9 @@ int flux_kvs_lookup_get_raw (flux_future_t *f, const void **data, int *len)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->val_valid) {
-        if (treeobj_decode_val (ctx->treeobj, &ctx->val_data,
-                                              &ctx->val_len) < 0)
+        if (treeobj_decode_val (ctx->treeobj,
+                                &ctx->val_data,
+                                &ctx->val_len) < 0)
             return -1;
         ctx->val_valid = true;
     }
@@ -346,8 +364,10 @@ int flux_kvs_lookup_get_dir (flux_future_t *f, const flux_kvsdir_t **dirp)
     if (parse_response (f, ctx) < 0)
         return -1;
     if (!ctx->dir) {
-        if (!(ctx->dir = kvsdir_create_fromobj (ctx->h, ctx->atref,
-                                                ctx->key, ctx->treeobj)))
+        if (!(ctx->dir = kvsdir_create_fromobj (ctx->h,
+                                                ctx->atref,
+                                                ctx->key,
+                                                ctx->treeobj)))
             return -1;
     }
     if (dirp)
