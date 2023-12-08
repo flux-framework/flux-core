@@ -1,3 +1,67 @@
+flux-core version 0.57.0 - 2023-12-07
+-------------------------------------
+
+## New Features
+ * support colorized, human-readable output from eventlog commands (#5602)
+ * python: add KVSTxn class to KVS module (#5374)
+ * libidset: implement API for integer allocator use case (#5580)
+ * port to Alpine linux (#5568)
+ * job-ingest: make worker input buffer configurable with a default of 10MB
+   (#5550)
+
+## Fixes
+ * kvs: limit the content of guest commits (#5612)
+ * history: track root jobs (#5608)
+ * improve ssh connector reliability with different installation paths (#5591)
+ * flux-terminus: fix potential hang in terminus client commands (#5607)
+ * support start under older versions of Flux without the
+   job-info.update-watch RPC (#5589)
+ * kvs-watch: improve performance of kvs-watch disconnect/cleanup handling
+   (#5585)
+ * cli: avoid KeyError when PATH isn't set in environment (#5590)
+ * broker: eliminate some message copies (#5559)
+ * libidset: improve decoding functions (#5584)
+ * fix improper include directives in source files impacting portability
+   (#5567)
+ * make flux Python commands more resilient to changes in PYTHONPATH (#5553)
+ * job-ingest: fix cleanup when a pipeline worker process fails (#5549)
+ * libsubprocess: do not allow short writes with `flux_subprocess_write()`
+   (#5548)
+ * flux-submit: fix substitution of `{cc}` when cc=0 (#5541)
+
+## Documentation
+ * doc: use common format for commands with sub-commands (#5597)
+ * flux-kvs(1): improve man page formatting (#5588)
+ * clean up idset man pages (#5578)
+ * doc: improve --urgency option description in job submission commands
+   (#5571)
+ * doc: improve RFC references in man pages (#5573)
+ * man3: add Link with... instruction to SYNOPSIS (#5574)
+ * flux-shell(1): improve option descriptions and x-ref (#5557)
+ * doc: remove options from flux-alloc(1) et al that don't work (#5555)
+ * flux-pmi(1): add new manual page (#5554)
+ * flux-start(1): add more description and troubleshooting info (#5552)
+
+## Build
+ * build: reduce minimum jansson version to 2.9 (#5546)
+ * build: add libmissing, a convenience library for replacements for missing
+   functions (#5560)
+
+## Cleanup
+ * deprecate flux job cancel and improve flux-job(1) documentation (#5587)
+ * job-info: misc cleanup (#5586)
+ * broker: cleanup up attribute initialization code (#5543)
+
+## Testsuite
+ * testsuite: fix some test races and improve debugging (#5609)
+ * testsuite: fix race in job info update lookups (#5598)
+ * testsuite: improve reliability of a couple job signal/cancel tests (#5599)
+ * testsuite: fix fancy f grep inconsistency (#5576)
+ * get sharness tests working on alpine linux (#5564)
+ * testsuite: add multiple key job-info lookup tests (#5575)
+ * ci: add alpine Dockerfile and CI build (#5565)
+
+
 flux-core version 0.56.0 - 2023-11-07
 -------------------------------------
 
