@@ -27,15 +27,12 @@
 
 /*  Common hwloc_topology_init() and flags for Flux hwloc usage:
  */
-static int topo_init_common (hwloc_topology_t *tp)
+static int topo_init_common (hwloc_topology_t *tp, unsigned long flags)
 {
     if (hwloc_topology_init (tp) < 0)
         return -1;
 #if HWLOC_API_VERSION < 0x20000
-    /*  N.B.: hwloc_topology_set_flags may cause memory leaks on some systems
-     */
-    if (hwloc_topology_set_flags (*tp, HWLOC_TOPOLOGY_FLAG_IO_DEVICES) < 0)
-        return -1;
+    flags |= HWLOC_TOPOLOGY_FLAG_IO_DEVICES;
     if (hwloc_topology_ignore_type (*tp, HWLOC_OBJ_CACHE) < 0)
         return -1;
 #else
@@ -52,12 +49,18 @@ static int topo_init_common (hwloc_topology_t *tp)
         < 0)
         return -1;
 #endif
+    /*  N.B.: hwloc_topology_set_flags may cause memory leaks on some systems
+     */
+    if (hwloc_topology_set_flags (*tp, flags) < 0)
+        return -1;
     return 0;
 }
 
-static int init_topo_from_xml (hwloc_topology_t *tp, const char *xml)
+static int init_topo_from_xml (hwloc_topology_t *tp,
+                               const char *xml,
+                               unsigned long flags)
 {
-    if ((topo_init_common (tp) < 0)
+    if ((topo_init_common (tp, flags) < 0)
         || (hwloc_topology_set_xmlbuffer (*tp, xml, strlen (xml) + 1) < 0)
         || (hwloc_topology_load (*tp) < 0)) {
         hwloc_topology_destroy (*tp);
@@ -69,7 +72,7 @@ static int init_topo_from_xml (hwloc_topology_t *tp, const char *xml)
 hwloc_topology_t rhwloc_xml_topology_load (const char *xml)
 {
     hwloc_topology_t topo = NULL;
-    if (init_topo_from_xml (&topo, xml) < 0)
+    if (init_topo_from_xml (&topo, xml, 0) < 0)
         return NULL;
     return topo;
 }
@@ -127,7 +130,7 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
         && (topo = rhwloc_xml_topology_load_file (xml)))
         return topo;
 
-    if (topo_init_common (&topo) < 0)
+    if (topo_init_common (&topo, 0) < 0)
         goto err;
 #if HWLOC_API_VERSION >= 0x20100
     /* gl probes the NV-CONTROL X server extension, and requires X auth
