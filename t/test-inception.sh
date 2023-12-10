@@ -14,9 +14,14 @@ stats() {
 stats &
 PID=$!
 export FLUX_TESTS_LOGFILE=t
-flux bulksubmit -o pty --watch --quiet \
-	sh -c './{} --root=$FLUX_JOB_TMPDIR' \
-	::: t[0-9]*.t python/t*.py lua/t*.t
+# run sharness tests with -d -v
+flux bulksubmit -o pty --quiet \
+	sh -c './{} -d -v --root=$FLUX_JOB_TMPDIR' \
+	::: t[0-9]*.t
+# python and lua tests do not support -d, -v, or --root options
+flux bulksubmit -o pty --quiet flux python {} ::: python/t*.py
+flux bulksubmit -o pty --quiet ./{} ::: lua/t*.t
+flux watch --all
 RC=$?
 kill $PID
 wait
