@@ -23,7 +23,7 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags);
 
 /*  As above, but return hwloc_topoology_t from XML
  */
-hwloc_topology_t rhwloc_xml_topology_load (const char *xml);
+hwloc_topology_t rhwloc_xml_topology_load (const char *xml, int flags);
 
 /*  Load local topology and return XML as allocated string
  */

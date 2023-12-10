@@ -69,10 +69,10 @@ static int init_topo_from_xml (hwloc_topology_t *tp,
     return (0);
 }
 
-hwloc_topology_t rhwloc_xml_topology_load (const char *xml)
+hwloc_topology_t rhwloc_xml_topology_load (const char *xml, int flags)
 {
     hwloc_topology_t topo = NULL;
-    if (init_topo_from_xml (&topo, xml, 0) < 0)
+    if (init_topo_from_xml (&topo, xml, flags) < 0)
         return NULL;
     return topo;
 }
@@ -92,7 +92,7 @@ hwloc_topology_t rhwloc_xml_topology_load_file (const char *path)
     /*  Load hwloc from XML file, add current system information from uname(2)
      *  unless already set.
      */
-    if ((topo = rhwloc_xml_topology_load (buf))
+    if ((topo = rhwloc_xml_topology_load (buf, 0))
         && !rhwloc_hostname (topo)) {
         struct utsname utsname;
         int depth = hwloc_get_type_depth (topo, HWLOC_OBJ_MACHINE);
