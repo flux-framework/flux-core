@@ -77,6 +77,29 @@ hwloc_topology_t rhwloc_xml_topology_load (const char *xml, int flags)
     return topo;
 }
 
+static char *topo_xml_export (hwloc_topology_t topo)
+{
+    char *buf = NULL;
+    int buflen;
+    char *result = NULL;
+
+    if (!topo)
+        return NULL;
+
+#if HWLOC_API_VERSION >= 0x20000
+    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen, 0) < 0) {
+#else
+    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen) < 0) {
+#endif
+        goto out;
+    }
+    result = strdup (buf);
+out:
+    if (buf)
+        hwloc_free_xmlbuffer (topo, buf);
+    return result;
+}
+
 hwloc_topology_t rhwloc_xml_topology_load_file (const char *path,
                                                 rhwloc_flags_t flags)
 {
@@ -161,23 +184,11 @@ err:
 
 char *rhwloc_local_topology_xml (rhwloc_flags_t rflags)
 {
-    char *buf;
-    int buflen;
-    char *copy;
+    char *result;
     hwloc_topology_t topo = rhwloc_local_topology_load (rflags);
-    if (topo == NULL)
-        return (NULL);
-#if HWLOC_API_VERSION >= 0x20000
-    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen, 0) < 0) {
-#else
-    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen) < 0) {
-#endif
-        return NULL;
-    }
-    copy = strdup (buf);
-    hwloc_free_xmlbuffer (topo, buf);
+    result = topo_xml_export (topo);
     hwloc_topology_destroy (topo);
-    return (copy);
+    return result;
 }
 
 const char * rhwloc_hostname (hwloc_topology_t topo)
