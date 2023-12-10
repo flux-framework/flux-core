@@ -63,8 +63,10 @@ flux_kvsdir_t *flux_kvsdir_copy (const flux_kvsdir_t *dir)
  * so that subsequent flux_kvsdir_get_* accesses can be relative to that
  * snapshot.  Otherwise, they are relative to the current root.
  */
-flux_kvsdir_t *flux_kvsdir_create (flux_t *h, const char *rootref,
-                                   const char *key, const char *json_str)
+flux_kvsdir_t *flux_kvsdir_create (flux_t *h,
+                                   const char *rootref,
+                                   const char *key,
+                                   const char *json_str)
 {
     flux_kvsdir_t *dir = NULL;
     json_t *dirobj = NULL;
@@ -227,8 +229,10 @@ nomem:
 
 /* kvs_txn_private.h */
 
-flux_kvsdir_t *kvsdir_create_fromobj (flux_t *handle, const char *rootref,
-                                      const char *key, json_t *treeobj)
+flux_kvsdir_t *kvsdir_create_fromobj (flux_t *handle,
+                                      const char *rootref,
+                                      const char *key,
+                                      json_t *treeobj)
 {
     flux_kvsdir_t *dir = NULL;
 

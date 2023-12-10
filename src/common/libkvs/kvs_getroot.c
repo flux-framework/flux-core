@@ -58,7 +58,10 @@ flux_future_t *flux_kvs_getroot (flux_t *h, const char *ns, int flags)
         return NULL;
     if (!ns && !(ns = kvs_get_namespace ()))
         goto error;
-    if (!(f = flux_rpc_pack (h, "kvs.getroot", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "kvs.getroot",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:s s:i}",
                              "namespace", ns,
                              "flags", flags)))
@@ -74,15 +77,18 @@ error:
     return NULL;
 }
 
-static int decode_response (flux_future_t *f, const char **rootrefp,
-                            int *rootseqp, uint32_t *ownerp)
+static int decode_response (flux_future_t *f,
+                            const char **rootrefp,
+                            int *rootseqp,
+                            uint32_t *ownerp)
 {
     const char *rootref;
     int rootseq;
     int owner;
     int flags;
 
-    if (flux_rpc_get_unpack (f, "{s:s s:i s:i s:i}",
+    if (flux_rpc_get_unpack (f,
+                             "{s:s s:i s:i s:i}",
                              "rootref", &rootref,
                              "rootseq", &rootseq,
                              "owner", &owner,

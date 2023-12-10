@@ -379,7 +379,7 @@ void test_corner_cases (void)
         "flux_kvs_txn_put fails w/ EINVAL on bad inputs");
 
     errno = 0;
-    rc = flux_kvs_txn_vpack (NULL, 0, NULL, NULL, NULL);
+    rc = flux_kvs_txn_vpack (NULL, 0, NULL, NULL, (va_list){0});
     ok (rc < 0 && errno == EINVAL,
         "flux_kvs_txn_vpack fails w/ EINVAL on bad inputs");
 

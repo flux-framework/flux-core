@@ -35,8 +35,10 @@ typedef struct flux_kvsitr flux_kvsitr_t;
  * are not freed until the reference count reaches zero.  The object is
  * initially created with a reference count of one.
  */
-flux_kvsdir_t *flux_kvsdir_create (flux_t *handle, const char *rootref,
-                                   const char *key, const char *json_str);
+flux_kvsdir_t *flux_kvsdir_create (flux_t *handle,
+                                   const char *rootref,
+                                   const char *key,
+                                   const char *json_str);
 void flux_kvsdir_destroy (flux_kvsdir_t *dir);
 
 flux_kvsdir_t *flux_kvsdir_copy (const flux_kvsdir_t *dir);

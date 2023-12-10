@@ -21,8 +21,10 @@
 #include "treeobj.h"
 #include "kvs_util_private.h"
 
-flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *ns,
-                                          uint32_t owner, int flags)
+flux_future_t *flux_kvs_namespace_create (flux_t *h,
+                                          const char *ns,
+                                          uint32_t owner,
+                                          int flags)
 {
     flux_future_t *rv = NULL;
     const char *hash_name;
@@ -53,21 +55,26 @@ flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *ns,
         goto cleanup;
 
     /* N.B. owner cast to int */
-    rv = flux_rpc_pack (h, "kvs.namespace-create", 0, 0,
-                           "{ s:s s:s s:i s:i }",
-                           "namespace", ns,
-                           "rootref", rootref,
-                           "owner", owner,
-                           "flags", flags);
+    rv = flux_rpc_pack (h,
+                        "kvs.namespace-create",
+                        0,
+                        0,
+                        "{ s:s s:s s:i s:i }",
+                        "namespace", ns,
+                        "rootref", rootref,
+                        "owner", owner,
+                        "flags", flags);
 cleanup:
     json_decref (rootdir);
     free (data);
     return rv;
 }
 
-flux_future_t *flux_kvs_namespace_create_with (flux_t *h, const char *ns,
+flux_future_t *flux_kvs_namespace_create_with (flux_t *h,
+                                               const char *ns,
                                                const char *rootref,
-                                               uint32_t owner, int flags)
+                                               uint32_t owner,
+                                               int flags)
 {
     if (!ns || !rootref || flags) {
         errno = EINVAL;
@@ -75,7 +82,10 @@ flux_future_t *flux_kvs_namespace_create_with (flux_t *h, const char *ns,
     }
 
     /* N.B. owner cast to int */
-    return flux_rpc_pack (h, "kvs.namespace-create", 0, 0,
+    return flux_rpc_pack (h,
+                          "kvs.namespace-create",
+                          0,
+                          0,
                           "{ s:s s:s s:i s:i }",
                           "namespace", ns,
                           "rootref", rootref,
@@ -90,7 +100,10 @@ flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *ns)
         return NULL;
     }
 
-    return flux_rpc_pack (h, "kvs.namespace-remove", 0, 0,
+    return flux_rpc_pack (h,
+                          "kvs.namespace-remove",
+                          0,
+                          0,
                           "{ s:s }",
                           "namespace", ns);
 }
@@ -105,7 +118,11 @@ int flux_kvs_get_version (flux_t *h, const char *ns, int *versionp)
         if (!(ns = kvs_get_namespace ()))
             return -1;
     }
-    if (!(f = flux_rpc_pack (h, "kvs.getroot", FLUX_NODEID_ANY, 0, "{ s:s }",
+    if (!(f = flux_rpc_pack (h,
+                             "kvs.getroot",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{ s:s }",
                              "namespace", ns)))
         goto done;
     if (flux_rpc_get_unpack (f, "{ s:i }", "rootseq", &version) < 0)
@@ -127,7 +144,10 @@ int flux_kvs_wait_version (flux_t *h, const char *ns, int version)
         if (!(ns = kvs_get_namespace ()))
             return -1;
     }
-    if (!(f = flux_rpc_pack (h, "kvs.wait-version", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "kvs.wait-version",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{ s:i s:s }",
                              "rootseq", version,
                              "namespace", ns)))

@@ -47,11 +47,15 @@ enum kvs_op {
  *   namespace will official be removed.  The removal is "eventually
  *   consistent".
  */
-flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *ns,
-                                          uint32_t owner, int flags);
-flux_future_t *flux_kvs_namespace_create_with (flux_t *h, const char *ns,
+flux_future_t *flux_kvs_namespace_create (flux_t *h,
+                                          const char *ns,
+                                          uint32_t owner,
+                                          int flags);
+flux_future_t *flux_kvs_namespace_create_with (flux_t *h,
+                                               const char *ns,
                                                const char *rootref,
-                                               uint32_t owner, int flags);
+                                               uint32_t owner,
+                                               int flags);
 flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *ns);
 
 /* Synchronization:
