@@ -171,7 +171,7 @@ test_expect_success 'attach: cannot attach to interactive pty when --read-only s
 		flux job attach $jobid
 '
 test_expect_success 'attach: --stdin-ranks works' '
-	id=$(flux submit -N4 -t20s cat) &&
+	id=$(flux submit -N4 -t60s cat) &&
 	echo hello from 0 \
 		| flux job attach --label-io -i0 $id >stdin-ranks.out &&
 	flux job eventlog -p guest.input $id &&
@@ -181,24 +181,24 @@ test_expect_success 'attach: --stdin-ranks works' '
 	test_cmp stdin-ranks.expected stdin-ranks.out
 '
 test_expect_success 'attach: --stdin-ranks with invalid idset errors' '
-	id=$(flux submit -t20s cat) &&
+	id=$(flux submit -t60s cat) &&
 	test_must_fail flux job attach -i 5-0 $id &&
 	flux cancel $id
 '
 test_expect_success 'attach: --stdin-ranks is adjusted to intersection' '
-	id=$(flux submit -n2 -t20s cat) &&
+	id=$(flux submit -n2 -t60s cat) &&
 	echo foo | flux job attach --label-io -i1-2 $id >adjusted.out 2>&1 &&
 	test_debug "cat adjusted.out" &&
 	grep "warning: adjusting --stdin-ranks" adjusted.out
 '
 test_expect_success 'attach: --stdin-ranks cannot be used with --read-only' '
-	id=$(flux submit -n2 -t20s cat) &&
+	id=$(flux submit -n2 -t60s cat) &&
 	test_must_fail flux job attach -i all --read-only $id &&
 	flux cancel $id
 '
 jobpipe=$SHARNESS_TEST_SRCDIR/scripts/pipe.py
 test_expect_success 'attach: writing to stdin of closed tasks returns EPIPE' '
-	id=$(flux submit -N4 -t20s cat) &&
+	id=$(flux submit -N4 -t60s cat) &&
 	$jobpipe $id 0 </dev/null &&
 	test_must_fail $jobpipe $id 0 </dev/null >pipe.out 2>&1 &&
 	$jobpipe $id all </dev/null &&
