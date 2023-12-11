@@ -108,7 +108,7 @@ test_expect_success 'job-info: update watch with no update events works (job ina
 '
 
 test_expect_success NO_CHAIN_LINT 'job-info: update watch with no update events works (job run/canceled)' '
-	jobid=$(flux submit --wait-event=start sleep inf)
+	jobid=$(flux submit --wait-event=exec.shell.init sleep inf)
 	watchers=$(get_update_watchers)
 	${UPDATE_WATCH} $jobid R > watch2.out &
 	watchpid=$! &&
@@ -132,7 +132,7 @@ test_expect_success 'job-info: update watch with update events works (job inacti
 '
 
 test_expect_success NO_CHAIN_LINT 'job-info: update watch with update events works (before watch)' '
-	jobid=$(flux submit --wait-event=start sleep inf) &&
+	jobid=$(flux submit --wait-event=exec.shell.init sleep inf) &&
 	update1=$(expiration_add $jobid 100) &&
 	update2=$(expiration_add $jobid 200) &&
 	watchers=$(get_update_watchers)
@@ -147,7 +147,7 @@ test_expect_success NO_CHAIN_LINT 'job-info: update watch with update events wor
 '
 
 test_expect_success NO_CHAIN_LINT 'job-info: update watch with update events works (after watch)' '
-	jobid=$(flux submit --wait-event=start sleep inf) &&
+	jobid=$(flux submit --wait-event=exec.shell.init sleep inf) &&
 	watchers=$(get_update_watchers)
 	${UPDATE_WATCH} $jobid R > watch5.out &
 	watchpid=$! &&
@@ -165,7 +165,7 @@ test_expect_success NO_CHAIN_LINT 'job-info: update watch with update events wor
 '
 
 test_expect_success NO_CHAIN_LINT 'job-info: update watch with update events works (before/after watch)' '
-	jobid=$(flux submit --wait-event=start sleep inf) &&
+	jobid=$(flux submit --wait-event=exec.shell.init sleep inf) &&
 	update1=$(expiration_add $jobid 100) &&
 	watchers=$(get_update_watchers)
 	${UPDATE_WATCH} $jobid R > watch6.out &
@@ -183,7 +183,7 @@ test_expect_success NO_CHAIN_LINT 'job-info: update watch with update events wor
 
 # signaling the update watch tool with SIGUSR1 will cancel the stream
 test_expect_success NO_CHAIN_LINT 'job-info: update watch can be canceled (single watcher)' '
-	jobid=$(flux submit --wait-event=start sleep inf) &&
+	jobid=$(flux submit --wait-event=exec.shell.init sleep inf) &&
 	watchers=$(get_update_watchers)
 	${UPDATE_WATCH} $jobid R > watch7.out &
 	watchpid=$! &&
@@ -203,7 +203,7 @@ test_expect_success NO_CHAIN_LINT 'job-info: update watch can be canceled (singl
 # At the end, the first watcher should see 3 R versions, the second
 # one 2, and the last one only 1.
 test_expect_success NO_CHAIN_LINT 'job-info: update watch with multiple watchers works' '
-	jobid=$(flux submit --wait-event=start sleep inf)
+	jobid=$(flux submit --wait-event=exec.shell.init sleep inf)
 	watchers=$(get_update_watchers)
 	${UPDATE_WATCH} $jobid R > watch8A.out &
 	watchpidA=$! &&
@@ -237,7 +237,7 @@ test_expect_success NO_CHAIN_LINT 'job-info: update watch with multiple watchers
 
 # signaling the update watch tool with SIGUSR1 will cancel the stream
 test_expect_success NO_CHAIN_LINT 'job-info: update watch can be canceled (multiple watchers)' '
-	jobid=$(flux submit --wait-event=start sleep inf)
+	jobid=$(flux submit --wait-event=exec.shell.init sleep inf)
 	watchers=$(get_update_watchers)
 	${UPDATE_WATCH} $jobid R > watch10A.out &
 	watchpidA=$! &&
@@ -265,7 +265,7 @@ test_expect_success NO_CHAIN_LINT 'job-info: update watch can be canceled (multi
 # If someone is already doing an update-watch on a jobid/key, update-lookup can
 # return the cached info
 test_expect_success NO_CHAIN_LINT 'job-info: update lookup returns cached R from update watch' '
-	jobid=$(flux submit --wait-event=start sleep inf) &&
+	jobid=$(flux submit --wait-event=exec.shell.init sleep inf) &&
 	watchers=$(get_update_watchers)
 	${UPDATE_WATCH} $jobid R > watch9.out &
 	watchpid=$! &&
@@ -314,7 +314,7 @@ test_expect_success 'job-info: non job owner cannot watch key' '
 # this test checks security on a second watcher, which is trying to
 # access cached info
 test_expect_success NO_CHAIN_LINT 'job-info: non job owner cannot watch key (second watcher)' '
-	jobid=`flux submit --wait-event=start sleep inf`
+	jobid=`flux submit --wait-event=exec.shell.init sleep inf`
 	watchers=$(get_update_watchers)
 	${UPDATE_WATCH} $jobid R > watchsecurity.out &
 	watchpid=$! &&
@@ -329,7 +329,7 @@ test_expect_success NO_CHAIN_LINT 'job-info: non job owner cannot watch key (sec
 
 # update-lookup cannot read cached watch data
 test_expect_success NO_CHAIN_LINT 'job-info: non job owner cannot lookup key (piggy backed)' '
-	jobid=`flux submit --wait-event=start sleep inf`
+	jobid=`flux submit --wait-event=exec.shell.init sleep inf`
 	watchers=$(get_update_watchers)
 	${UPDATE_WATCH} $jobid R > lookupsecurity.out &
 	watchpid=$! &&
