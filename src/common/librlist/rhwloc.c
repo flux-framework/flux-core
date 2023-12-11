@@ -69,11 +69,34 @@ static int init_topo_from_xml (hwloc_topology_t *tp,
     return (0);
 }
 
-hwloc_topology_t rhwloc_xml_topology_load (const char *xml, int flags)
+static int topo_restrict (hwloc_topology_t topo)
+{
+    hwloc_bitmap_t set = NULL;
+    int rc = -1;
+    if (!(set = hwloc_bitmap_alloc ())
+        || hwloc_get_cpubind (topo, set, HWLOC_CPUBIND_PROCESS) < 0
+        || hwloc_topology_restrict (topo, set, 0) < 0)
+        goto err;
+    rc = 0;
+err:
+    hwloc_bitmap_free (set);
+    return rc;
+}
+
+hwloc_topology_t rhwloc_xml_topology_load (const char *xml,
+                                           rhwloc_flags_t in_flags)
 {
     hwloc_topology_t topo = NULL;
+    int flags = 0;
+    if (!(in_flags & RHWLOC_NO_RESTRICT))
+        flags |= HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM;
     if (init_topo_from_xml (&topo, xml, flags) < 0)
         return NULL;
+    if (!(in_flags & RHWLOC_NO_RESTRICT)
+        && topo_restrict (topo) < 0) {
+        hwloc_topology_destroy (topo);
+        return NULL;
+    }
     return topo;
 }
 
@@ -139,7 +162,6 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
 {
     const char *xml;
     hwloc_topology_t topo = NULL;
-    hwloc_bitmap_t rset = NULL;
     uint32_t hwloc_version = hwloc_get_api_version ();
 
     if ((hwloc_version >> 16) != (HWLOC_API_VERSION >> 16))
@@ -169,15 +191,10 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
         goto err;
     if (flags & RHWLOC_NO_RESTRICT)
         return (topo);
-    if (!(rset = hwloc_bitmap_alloc ())
-        || (hwloc_get_cpubind (topo, rset, HWLOC_CPUBIND_PROCESS) < 0))
+    if (topo_restrict (topo) < 0)
         goto err;
-    if (hwloc_topology_restrict (topo, rset, 0) < 0)
-        goto err;
-    hwloc_bitmap_free (rset);
     return (topo);
 err:
-    hwloc_bitmap_free (rset);
     hwloc_topology_destroy (topo);
     return NULL;
 }

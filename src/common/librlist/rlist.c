@@ -2354,7 +2354,7 @@ struct rlist *rlist_from_hwloc (int rank, const char *xml)
         return NULL;
 
     if (xml)
-        topo = rhwloc_xml_topology_load (xml, 0);
+        topo = rhwloc_xml_topology_load (xml, RHWLOC_NO_RESTRICT);
     else
         topo = rhwloc_local_topology_load (0);
     if (!topo)
