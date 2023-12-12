@@ -2,10 +2,10 @@
 flux-exec(1)
 ============
 
-
 SYNOPSIS
---------
-**flux** **exec** [--noinput] [*--label-io] [*—dir=DIR'] [*--rank=NODESET*] [*--verbose*] COMMANDS...
+========
+
+**flux** **exec** [*--noinput*] [*--label-io*] [*—dir=DIR*] [*--rank=NODESET*] [*--verbose*] *COMMANDS...*
 
 DESCRIPTION
 ===========
