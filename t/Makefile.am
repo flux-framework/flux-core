@@ -320,6 +320,7 @@ dist_check_SCRIPTS = \
 	system/0001-basic.t \
 	system/0002-exec-with-imp.t \
 	system/0004-recovery.t \
+	system/0005-exec.t \
 	issues/t0441-kvs-put-get.sh \
 	issues/t0505-msg-handler-reg.lua \
 	issues/t0821-kvs-segfault.sh \
