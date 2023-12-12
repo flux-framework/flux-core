@@ -440,7 +440,18 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
         return NULL;
     }
 
-    if (job->state == FLUX_JOB_STATE_NEW) {
+    /*  Always return job in inactive state, even if a requested state was
+     *  provided. This avoids no response when a job does not enter a given
+     *  state before becoming inactive, e.g. when a pending job is canceled.
+     */
+    if (job->state == FLUX_JOB_STATE_INACTIVE)
+        return job_to_json (job, attrs, errp);
+
+    /*  Otherwise, wait for given state if the job is still NEW or a specific
+     *  state was requested that has not yet in the job states mask:
+     */
+    if ((state && !(job->states_mask & state))
+        || job->state == FLUX_JOB_STATE_NEW) {
         if (stall) {
             /* Must wait for job-list to see state change */
             if (idsync_wait_valid_id (jsctx->isctx, id, msg, attrs, state) < 0) {
