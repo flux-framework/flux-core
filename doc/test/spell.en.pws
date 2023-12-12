@@ -65,7 +65,6 @@ graphviz
 prepended
 multipart
 Tpng
-nodesets
 keepalives
 emerg
 gettimeofday
@@ -117,7 +116,6 @@ ary
 baz
 EPGM
 modopts
-nodeset
 noexec
 pre
 slurm

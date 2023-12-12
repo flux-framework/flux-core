@@ -5,7 +5,7 @@ flux-exec(1)
 SYNOPSIS
 ========
 
-**flux** **exec** [*--noinput*] [*--label-io*] [*—dir=DIR*] [*--rank=NODESET*] [*--verbose*] *COMMAND...*
+**flux** **exec** [*--noinput*] [*--label-io*] [*—dir=DIR*] [*--rank=IDSET*] [*--verbose*] *COMMAND...*
 
 DESCRIPTION
 ===========
@@ -50,19 +50,18 @@ OPTIONS
    Set the working directory of remote *COMMAND* to *DIR*. The default is to
    propagate the current working directory of flux-exec(1).
 
-.. option:: -r, --rank=NODESET
+.. option:: -r, --rank=IDSET
 
-   Target specific ranks in *NODESET*. Default is to target "all" ranks.
-   See `NODESET FORMAT`_ below for more information.
+   Target specific ranks in *IDSET*. Default is to target "all" ranks.
 
-.. option:: -x, --exclude=NODESET
+.. option:: -x, --exclude=IDSET
 
-   Exclude ranks in *NODESET*.
+   Exclude ranks in *IDSET*.
 
 .. option:: -j, --jobid=JOBID
 
    Use the job shell exec service for job *JOBID* instead of the broker's
-   exec service. The default *NODESET* will be set to the nodes assigned
+   exec service. The default *IDSET* will be set to the nodes assigned
    to the job, and the :option:`--rank` and :option:`--exclude` options are
    applied relative to this set. For example, :option:`flux exec -j ID -r 0`
    will run only on the first node assigned to *JOBID*, and :option:`flux
@@ -87,12 +86,6 @@ OPTIONS
    signal remote commands instead of the normal builtin subprocess signaling
    mechanism.
 
-
-NODESET FORMAT
-==============
-
-.. include:: common/nodeset.rst
-
 EXIT STATUS
 ===========
 
@@ -109,3 +102,8 @@ RESOURCES
 =========
 
 .. include:: common/resources.rst
+
+FLUX RFC
+========
+
+:doc:`rfc:spec_22`
