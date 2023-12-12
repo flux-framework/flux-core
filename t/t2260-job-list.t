@@ -705,6 +705,29 @@ test_expect_success 'job stats lists jobs in correct state (mix)' '
 	test ${queuelength} -eq 0
 '
 
+# Note: these wait-state tests must be before all jobs are canceled below
+test_expect_success 'flux job list-ids works with --wait-state' '
+	id=`head -n 1 pending.ids` &&
+	flux job list-ids --wait-state=sched $id | jq -e ".state == 8"  &&
+	id=`head -n 1 running.ids` &&
+	flux job list-ids --wait-state=sched $id > /dev/null &&
+	flux job list-ids --wait-state=run $id | jq -e ".state == 16" &&
+	id=`head -n 1 completed.ids` &&
+	flux job list-ids --wait-state=sched $id > /dev/null &&
+	flux job list-ids --wait-state=run $id > /dev/null &&
+	flux job list-ids --wait-state=inactive $id | jq -e ".state == 64" &&
+	id=`head -n 1 canceled.ids` &&
+	flux job list-ids --wait-state=sched $id > /dev/null &&
+	flux job list-ids --wait-state=run $id > /dev/null &&
+	flux job list-ids --wait-state=inactive $id | jq -e ".state == 64"
+'
+
+test_expect_success 'flux job list-ids fail with bad --wait-state' '
+	id=`head -n 1 pending.ids` &&
+	test_must_fail flux job list-ids --wait-state=foo $id > /dev/null
+'
+
+
 test_expect_success 'cleanup job listing jobs ' '
 	# NOTE: do not use flux cancel `cat active.ids` as it races
 	# with the reconstruction of job-list somehow
@@ -868,27 +891,6 @@ test_expect_success 'flux job list-ids fails with one bad ID out of several' '
 	test_must_fail flux job list-ids ${id1} ${id2} 1234567890 ${id3} \
 		> list_ids_error4.out 2>&1 &&
 	grep "No such file or directory" list_ids_error4.out
-'
-
-test_expect_success 'flux job list-ids works with --wait-state' '
-	id=`head -n 1 pending.ids` &&
-	flux job list-ids --wait-state=sched $id > /dev/null &&
-	id=`head -n 1 running.ids` &&
-	flux job list-ids --wait-state=sched $id > /dev/null &&
-	flux job list-ids --wait-state=run $id > /dev/null &&
-	id=`head -n 1 completed.ids` &&
-	flux job list-ids --wait-state=sched $id > /dev/null &&
-	flux job list-ids --wait-state=run $id > /dev/null &&
-	flux job list-ids --wait-state=inactive $id > /dev/null &&
-	id=`head -n 1 canceled.ids` &&
-	flux job list-ids --wait-state=sched $id > /dev/null &&
-	flux job list-ids --wait-state=run $id > /dev/null &&
-	flux job list-ids --wait-state=inactive $id > /dev/null
-'
-
-test_expect_success 'flux job list-ids fail with bad --wait-state' '
-	id=`head -n 1 pending.ids` &&
-	test_must_fail flux job list-ids --wait-state=foo $id > /dev/null
 '
 
 # In order to test potential racy behavior, use job state pause/unpause to pause
