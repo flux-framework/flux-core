@@ -34,19 +34,6 @@ the received signal to the remote processes.  When standard input of
 SIGINT.  Two of those in short succession can force :program:`flux exec`
 to exit in the event that remote processes are hanging.
 
-EXIT STATUS
-===========
-
-In the case that all processes are successfully launched, the exit status
-of :program:`flux exec` is the largest of the remote process exit codes.
-
-If a non-existent rank is targeted, :program:`flux exec` will return with
-code 68 (EX_NOHOST from sysexits.h).
-
-If one or more remote commands are terminated by a signal, then
-:program:`flux exec` exits with exit code 128+signo.
-
-
 OPTIONS
 =======
 
@@ -106,6 +93,17 @@ NODESET FORMAT
 
 .. include:: common/nodeset.rst
 
+EXIT STATUS
+===========
+
+In the case that all processes are successfully launched, the exit status
+of :program:`flux exec` is the largest of the remote process exit codes.
+
+If a non-existent rank is targeted, :program:`flux exec` will return with
+code 68 (EX_NOHOST from sysexits.h).
+
+If one or more remote commands are terminated by a signal, then
+:program:`flux exec` exits with exit code 128+signo.
 
 RESOURCES
 =========
