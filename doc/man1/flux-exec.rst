@@ -39,7 +39,8 @@ OPTIONS
 
 .. option:: -l, --label-io
 
-   Label lines of output with the source RANK.
+   Label lines of output with the source broker RANK.  This option is not
+   affected by :option:`--jobid`.
 
 .. option:: -n, --noinput
 
@@ -52,21 +53,34 @@ OPTIONS
 
 .. option:: -r, --rank=IDSET
 
-   Target specific ranks in *IDSET*. Default is to target "all" ranks.
+   Target specific ranks, where *IDSET* is a set of zero-origin node ranks in
+   RFC 22 format.  If :option:`--jobid` is specified, the ranks are interpreted
+   as an index into the list of nodes assigned to the job.  Otherwise, they
+   refer to the nodes assigned to the Flux instance.
+
+   The default is to target all ranks.  As a special case, :option:`--rank=all`
+   is accepted and behaves the same as the default.
 
 .. option:: -x, --exclude=IDSET
 
-   Exclude ranks in *IDSET*.
+   Exclude specific ranks.  *IDSET* is as described in :option:`--rank`.
 
 .. option:: -j, --jobid=JOBID
 
-   Use the job shell exec service for job *JOBID* instead of the broker's
-   exec service. The default *IDSET* will be set to the nodes assigned
-   to the job, and the :option:`--rank` and :option:`--exclude` options are
-   applied relative to this set. For example, :option:`flux exec -j ID -r 0`
-   will run only on the first node assigned to *JOBID*, and :option:`flux
-   exec -j ID -x 0` will run on all nodes assigned to *JOBID* except the
-   first node.
+   Run *COMMAND* on the nodes allocated to *JOBID* instead of the nodes
+   assigned to the Flux instance.
+
+   This uses the exec service embedded in :man1:`flux-shell` rather than
+   :man1:`flux-broker`.
+
+   The interpretation of :option:`--rank` and :option:`--exclude` is adjusted
+   as noted in their descriptions.  For example, :option:`flux exec -j ID -r 0`
+   will run only on the first node assigned to *JOBID*, and
+   :option:`flux exec -j ID -x 0` will run on all nodes assigned to *JOBID*
+   except the first node.
+
+   This option is only available when the job owner is the same as the Flux
+   instance owner.
 
 .. option:: -v, --verbose
 
