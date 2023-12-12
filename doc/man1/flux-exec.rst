@@ -100,6 +100,14 @@ OPTIONS
    signal remote commands instead of the normal builtin subprocess signaling
    mechanism.
 
+CAVEATS
+=======
+
+In a multi-user flux instance, access to the rank 0 broker execution
+service is restricted to requests that originate from the local broker.
+Therefore, :program:`flux exec` (without :option:`--jobid`) must be run
+from the rank 0 broker if rank 0 is included in the target *IDSET*.
+
 EXIT STATUS
 ===========
 
