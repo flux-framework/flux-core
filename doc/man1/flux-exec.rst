@@ -12,22 +12,27 @@ DESCRIPTION
 
 .. program:: flux exec
 
-:program:`flux exec` runs commands across one or more Flux broker ranks using
-the *broker.exec* service. The commands are executed as direct children
-of the broker, and the broker handles buffering stdout and stderr and
-sends the output back to :program:`flux exec` which copies output to its own
-stdout and stderr.
+:program:`flux exec` remotely executes one or more copies of *COMMAND*,
+similar to :linux:man1:`pdsh`.  It bypasses the scheduler and is intended
+for launching administrative commands or tool daemons, not for launching
+parallel jobs.  For that, see :man1:`flux-run`.
 
-On receipt of SIGINT and SIGTERM signals, :program:`flux exec` shall forward
-the received signal to all currently running remote processes.
+By default, *COMMAND* runs across all :man1:`flux-broker` processes.  If the
+:option:`--jobid` option is specified, the commands are run across a job's
+:man1:`flux-shell` processes.  Normally this means that one copy of *COMMAND*
+is executed per node, but in unusual cases it could mean more (e.g. if the
+Flux instance was started with multiple brokers per node).
 
-In the event subprocesses are hanging or ignoring SIGINT, two SIGINT
-signals (typically sent via Ctrl+C) in short succession can force
-:program:`flux exec` to exit.
+Standard output and standard error of the remote commands are captured
+and combined on the :program:`flux exec` standard output and standard error.
+Standard input of :program:`flux exec` is captured and broadcast to standard
+input of the remote commands.
 
-:program:`flux exec` is meant as an administrative and test utility, and cannot
-be used to launch Flux jobs.
-
+On receipt of SIGINT and SIGTERM signals, :program:`flux exec` forwards
+the received signal to the remote processes.  When standard input of
+:program:`flux exec` is a terminal, :kbd:`Control-C` may be used to send
+SIGINT.  Two of those in short succession can force :program:`flux exec`
+to exit in the event that remote processes are hanging.
 
 EXIT STATUS
 ===========
