@@ -409,8 +409,10 @@ static int cache_load (struct content_cache *cache, struct cache_entry *e)
     return 0;
 }
 
-static void content_load_request (flux_t *h, flux_msg_handler_t *mh,
-                                  const flux_msg_t *msg, void *arg)
+static void content_load_request (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
 {
     struct content_cache *cache = arg;
     const void *hash;
@@ -537,12 +539,18 @@ static void cache_store_continuation (flux_future_t *f, void *arg)
     assert (cache->flush_batch_count > 0);
     cache->flush_batch_count--;
     if (content_store_get_hash (f, &hash, &hash_size) < 0) {
-        if (cache->rank == 0 && errno == ENOSYS)
-            flux_log (cache->h, LOG_DEBUG, "content store: %s",
+        if (cache->rank == 0 && errno == ENOSYS) {
+            flux_log (cache->h,
+                      LOG_DEBUG,
+                      "content store: %s",
                       "backing store service unavailable");
-        else
-            flux_log (cache->h, LOG_CRIT, "content store: %s",
+        }
+        else {
+            flux_log (cache->h,
+                      LOG_CRIT,
+                      "content store: %s",
                       strerror (errno));
+        }
         goto error;
     }
     if (hash_size != content_hash_size
@@ -604,8 +612,10 @@ static int cache_store (struct content_cache *cache, struct cache_entry *e)
     return 0;
 }
 
-static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void content_store_request (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     struct content_cache *cache = arg;
     const void *data;
@@ -808,8 +818,10 @@ error:
  * valid and clean.
  */
 
-static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
-                                       const flux_msg_t *msg, void *arg)
+static void content_dropcache_request (flux_t *h,
+                                       flux_msg_handler_t *mh,
+                                       const flux_msg_t *msg,
+                                       void *arg)
 {
     struct content_cache *cache = arg;
     int orig_size;
@@ -831,12 +843,16 @@ static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
 /* Return stats about the cache.
  */
 
-static void content_stats_request (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void content_stats_request (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     struct content_cache *cache = arg;
 
-    if (flux_respond_pack (h, msg, "{s:i s:i s:i s:I s:i}",
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:i s:i s:I s:i}",
                            "count", zhashx_size (cache->entries),
                            "valid", cache->acct_valid,
                            "dirty", cache->acct_dirty,
@@ -875,8 +891,10 @@ static void flush_respond (struct content_cache *cache)
     }
 }
 
-static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void content_flush_request (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     struct content_cache *cache = arg;
 
@@ -1124,7 +1142,9 @@ struct content_cache *content_cache_create (flux_t *h, int argc, char **argv)
     if (flux_get_rank (h, &cache->rank) < 0)
         goto error;
 
-    if (!(cache->checkpoint = content_checkpoint_create (h, cache->rank, cache)))
+    if (!(cache->checkpoint = content_checkpoint_create (h,
+                                                         cache->rank,
+                                                         cache)))
         goto error;
     if (cache->rank == 0) {
         if (!(cache->mmap = content_mmap_create (h,
