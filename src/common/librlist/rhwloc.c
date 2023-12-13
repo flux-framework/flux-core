@@ -123,6 +123,21 @@ out:
     return result;
 }
 
+/*  Restrict an XML topology by loading it with no flags (which automatically
+ *  restricts to current resource binding), then re-export to XML:
+ */
+char *rhwloc_topology_xml_restrict (const char *xml)
+{
+    char *result;
+    hwloc_topology_t topo;
+
+    if (!(topo = rhwloc_xml_topology_load (xml, 0)))
+        return NULL;
+    result = topo_xml_export (topo);
+    hwloc_topology_destroy (topo);
+    return result;
+}
+
 hwloc_topology_t rhwloc_xml_topology_load_file (const char *path,
                                                 rhwloc_flags_t flags)
 {
