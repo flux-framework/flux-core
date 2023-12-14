@@ -181,13 +181,11 @@ int flux_msg_get_payload (const flux_msg_t *msg, const void **buf, int *size);
 int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size);
 bool flux_msg_has_payload (const flux_msg_t *msg);
 
-/* Get/set flags
- * Users should avoid using flux_msg_set_flags(), and instead use the
- * higher level functions that manipulate message flags.  It is exposed
- * mainly for testing.
+/* Test/set/clear message flags
  */
-int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *flags);
-int flux_msg_set_flags (flux_msg_t *msg, uint8_t flags);
+bool flux_msg_has_flag (const flux_msg_t *msg, int flag);
+int flux_msg_set_flag (flux_msg_t *msg, int flag);
+int flux_msg_clear_flag (flux_msg_t *msg, int flag);
 
 /* Get/set string payload.
  * flux_msg_set_string() accepts a NULL 's' (no payload).

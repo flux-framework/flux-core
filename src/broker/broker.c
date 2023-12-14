@@ -2055,24 +2055,21 @@ static void signal_cb (flux_reactor_t *r,
 static int broker_request_sendmsg_new_internal (broker_ctx_t *ctx,
                                                 flux_msg_t **msg)
 {
+    bool upstream = flux_msg_has_flag (*msg, FLUX_MSGFLAG_UPSTREAM);
     uint32_t nodeid;
-    uint8_t flags;
 
     if (flux_msg_get_nodeid (*msg, &nodeid) < 0)
         return -1;
-    if (flux_msg_get_flags (*msg, &flags) < 0)
-        return -1;
     /* Route up TBON if destination if upstream of this broker.
      */
-    if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == ctx->rank) {
+    if (upstream && nodeid == ctx->rank) {
         if (overlay_sendmsg_new (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0)
             return -1;
     }
     /* Deliver to local service if destination *could* be this broker.
      * If there is no such service locally (ENOSYS), route up TBON.
      */
-    else if (((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != ctx->rank)
-                                              || nodeid == FLUX_NODEID_ANY) {
+    else if ((upstream && nodeid != ctx->rank) || nodeid == FLUX_NODEID_ANY) {
         if (service_send_new (ctx->services, msg) < 0) {
             if (errno != ENOSYS)
                 return -1;

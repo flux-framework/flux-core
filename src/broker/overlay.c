@@ -577,13 +577,11 @@ int overlay_sendmsg_new (struct overlay *ov,
                          overlay_where_t where)
 {
     int type;
-    uint8_t flags;
     const char *uuid;
     uint32_t nodeid;
     struct child *child = NULL;
 
-    if (flux_msg_get_type (*msg, &type) < 0
-        || flux_msg_get_flags (*msg, &flags) < 0)
+    if (flux_msg_get_type (*msg, &type) < 0)
         return -1;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
@@ -595,7 +593,8 @@ int overlay_sendmsg_new (struct overlay *ov,
             if (where == OVERLAY_ANY) {
                 if (flux_msg_get_nodeid (*msg, &nodeid) < 0)
                     return -1;
-                if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == ov->rank)
+                if (flux_msg_has_flag (*msg, FLUX_MSGFLAG_UPSTREAM)
+                    && nodeid == ov->rank)
                     where = OVERLAY_UPSTREAM;
                 else {
                     if ((child = child_lookup_route (ov, nodeid))) {
@@ -657,9 +656,8 @@ int overlay_sendmsg_new (struct overlay *ov,
                 /* N.B. add route delimiter if needed to pass unpublished
                  * event message upstream through router socket.
                  */
-                if (!(flags & FLUX_MSGFLAG_ROUTE)) {
+                if (flux_msg_route_count (*msg) < 0)
                     flux_msg_route_enable (*msg);
-                }
                 if (overlay_sendmsg_parent (ov, *msg) < 0)
                     return -1;
             }

@@ -106,7 +106,7 @@ int disconnect_hashkey (const flux_msg_t *msg, char *buf, int len)
 {
     const char *topic;
     uint32_t nodeid;
-    uint8_t flags;
+    int flags = 0;
     int used, n;
 
     if (!msg || !buf) {
@@ -114,18 +114,15 @@ int disconnect_hashkey (const flux_msg_t *msg, char *buf, int len)
         return -1;
     }
     if (flux_msg_get_topic (msg, &topic) < 0
-            || flux_msg_get_nodeid (msg, &nodeid) < 0
-            || flux_msg_get_flags (msg, &flags) < 0)
+        || flux_msg_get_nodeid (msg, &nodeid) < 0)
         return -1;
+    if (flux_msg_has_flag (msg, FLUX_MSGFLAG_UPSTREAM))
+        flags = FLUX_MSGFLAG_UPSTREAM;
     if ((used = disconnect_topic (topic, buf, len)) < 0)
         return -1;
     len -= used;
     buf += used;
-    n = snprintf (buf,
-                  len,
-                  ":%lu:%d",
-                  (unsigned long)nodeid,
-                  (int)flags & FLUX_MSGFLAG_UPSTREAM);
+    n = snprintf (buf, len, ":%lu:%d", (unsigned long)nodeid, flags);
     if (n >= len) {
         errno = EINVAL;
         return -1;

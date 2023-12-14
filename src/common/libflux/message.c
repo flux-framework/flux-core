@@ -344,24 +344,34 @@ int flux_msg_get_type (const flux_msg_t *msg, int *type)
     return 0;
 }
 
-int flux_msg_set_flags (flux_msg_t *msg, uint8_t flags)
+bool flux_msg_has_flag (const flux_msg_t *msg, int flag)
+{
+    if (msg_validate (msg) < 0)
+        return false;
+    return msg_has_flag (msg, flag) ? true : false;
+}
+
+int flux_msg_set_flag (flux_msg_t *msg, int flag)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!msgflags_is_valid (flags)) {
+    if (!msgflags_is_valid (flag)) {
         errno = EINVAL;
         return -1;
     }
-    msg->proto.flags = flags;
+    msg_set_flag (msg, flag);
     return 0;
 }
 
-int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *flags)
+int flux_msg_clear_flag (flux_msg_t *msg, int flag)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (flags)
-        *flags = msg->proto.flags;
+    if (!msgflags_is_valid (flag)) {
+        errno = EINVAL;
+        return -1;
+    }
+    msg_clear_flag (msg, flag);
     return 0;
 }
 
@@ -1223,7 +1233,7 @@ static struct flagmap flagmap[] = {
     { "streaming", FLUX_MSGFLAG_STREAMING},
 };
 
-static void flags2str (uint8_t flags, char *buf, int buflen)
+static void flags2str (int flags, char *buf, int buflen)
 {
     int i, len = 0;
     buf[0] = '\0';
