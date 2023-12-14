@@ -142,8 +142,10 @@ const flux_msg_t *flux_msg_incref (const flux_msg_t *const_msg)
  * allow msg to be "annotated" for convenience.
  * The message content is otherwise unchanged.
  */
-int flux_msg_aux_set (const flux_msg_t *const_msg, const char *name,
-                      void *aux, flux_free_f destroy)
+int flux_msg_aux_set (const flux_msg_t *const_msg,
+                      const char *name,
+                      void *aux,
+                      flux_free_f destroy)
 {
     flux_msg_t *msg = (flux_msg_t *)const_msg;
     if (msg_validate (msg) < 0)
@@ -490,8 +492,9 @@ int flux_msg_cred_authorize (struct flux_msg_cred cred, uint32_t userid)
 {
     if ((cred.rolemask & FLUX_ROLE_OWNER))
         return 0;
-    if ((cred.rolemask & FLUX_ROLE_USER) && cred.userid != FLUX_USERID_UNKNOWN
-                                         && cred.userid == userid)
+    if ((cred.rolemask & FLUX_ROLE_USER)
+        && cred.userid != FLUX_USERID_UNKNOWN
+        && cred.userid == userid)
         return 0;
     errno = EPERM;
     return -1;
@@ -818,7 +821,7 @@ char *flux_msg_route_string (const flux_msg_t *msg)
         return NULL;
     }
     if ((hops = flux_msg_route_count (msg)) < 0
-                    || (len = flux_msg_route_size (msg)) < 0)
+        || (len = flux_msg_route_size (msg)) < 0)
         return NULL;
     if (!(cp = buf = malloc (len + hops + 1)))
         return NULL;
@@ -1449,7 +1452,8 @@ int flux_match_asprintf (struct flux_match *m, const char *fmt, ...)
     return 0;
 }
 
-bool flux_msg_route_match_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
+bool flux_msg_route_match_first (const flux_msg_t *msg1,
+                                 const flux_msg_t *msg2)
 {
     const char *id1 = flux_msg_route_first (msg1);
     const char *id2 = flux_msg_route_first (msg2);
@@ -1464,4 +1468,3 @@ bool flux_msg_route_match_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

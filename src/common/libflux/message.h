@@ -56,7 +56,7 @@ enum {
 struct flux_match {
     int typemask;           /* bitmask of matching message types (or 0) */
     uint32_t matchtag;      /* matchtag (or FLUX_MATCHTAG_NONE) */
-    const char *topic_glob;       /* glob matching topic string (or NULL) */
+    const char *topic_glob; /* glob matching topic string (or NULL) */
 };
 
 struct flux_match flux_match_init (int typemask,
@@ -102,8 +102,10 @@ void flux_msg_destroy (flux_msg_t *msg);
 /* Access auxiliary data members in Flux message.
  * These are for convenience only - they are not sent over the wire.
  */
-int flux_msg_aux_set (const flux_msg_t *msg, const char *name,
-                      void *aux, flux_free_f destroy);
+int flux_msg_aux_set (const flux_msg_t *msg,
+                      const char *name,
+                      void *aux,
+                      flux_free_f destroy);
 void *flux_msg_aux_get (const flux_msg_t *msg, const char *name);
 
 /* Duplicate msg, omitting payload if 'payload' is false.
