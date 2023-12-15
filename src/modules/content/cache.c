@@ -150,7 +150,7 @@ static void msgstack_destroy (struct msgstack **msp)
  */
 static void request_list_respond_raw (struct msgstack **l,
                                       flux_t *h,
-                                      bool user1_flag,
+                                      int flag,
                                       const void *data,
                                       int len,
                                       const char *type)
@@ -160,7 +160,7 @@ static void request_list_respond_raw (struct msgstack **l,
         flux_msg_t *response;
         if (!(response = flux_response_derive (msg, 0))
             || flux_msg_set_payload (response, data, len) < 0
-            || (user1_flag && flux_msg_set_user1 (response) < 0)
+            || flux_msg_set_flag (response, flag) < 0
             || flux_send (h, response, 0) < 0)
             flux_log_error (h, "%s (%s):", __FUNCTION__, type);
         flux_msg_decref (response);
@@ -252,7 +252,7 @@ static void cache_entry_dirty_clear (struct content_cache *cache,
 
         request_list_respond_raw (&e->store_requests,
                                   cache->h,
-                                  false,
+                                  0,
                                   e->hash,
                                   content_hash_size,
                                   "store");
@@ -364,7 +364,7 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
         }
         e->data_container = (void *)flux_msg_incref (msg);
         e->valid = 1;
-        if (flux_msg_is_user1 (msg))
+        if (flux_msg_has_flag (msg, FLUX_MSGFLAG_USER1))
             e->ephemeral = 1;
         cache->acct_valid++;
         cache->acct_size += e->len;
@@ -372,7 +372,7 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
         e->lastused = flux_reactor_now (cache->reactor);
         request_list_respond_raw (&e->load_requests,
                                   cache->h,
-                                  e->ephemeral ? true : 0, // FLUX_MSGFLAG_USER1
+                                  e->ephemeral ? FLUX_MSGFLAG_USER1 : 0,
                                   e->data,
                                   e->len,
                                   "load");
@@ -486,7 +486,8 @@ static void content_load_request (flux_t *h,
     flux_msg_t *response;
     if (!(response = flux_response_derive (msg, 0))
         || flux_msg_set_payload (response, e->data, e->len) < 0
-        || (e->ephemeral && flux_msg_set_user1 (response) < 0)
+        || (e->ephemeral
+            && flux_msg_set_flag (response, FLUX_MSGFLAG_USER1) < 0)
         || flux_send (h, response, 0) < 0) {
         flux_log_error (h, "content load: error sending response");
     }
@@ -666,7 +667,7 @@ static void content_store_request (flux_t *h,
         cache->acct_dirty++;
         request_list_respond_raw (&e->load_requests,
                                   cache->h,
-                                  false,
+                                  0,
                                   e->data,
                                   e->len,
                                   "load");
@@ -874,7 +875,7 @@ static void flush_respond (struct content_cache *cache)
     if (!cache->acct_dirty) {
         request_list_respond_raw (&cache->flush_requests,
                                   cache->h,
-                                  false,
+                                  0,
                                   NULL,
                                   0,
                                   "flush");

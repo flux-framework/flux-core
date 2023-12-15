@@ -304,11 +304,6 @@ void check_cornercase (void)
     ok ((flux_msg_route_string (msg) == NULL && errno == EPROTO),
         "flux_msg_route_string returns NULL errno EPROTO on msg "
         "w/o routes enabled");
-    errno = 0;
-    ok (flux_msg_set_user1 (NULL) < 0 && errno == EINVAL,
-        "flux_msg_set_user1 msg=NULL fails with EINVAL");
-    ok (flux_msg_is_user1 (NULL) == false,
-        "flux_msg_is_user1 msg=NULL returns false");
 
     flux_msg_destroy (msg);
 }
@@ -1203,12 +1198,12 @@ void check_flags (void)
         "flags are initially zero");
 
     /* FLUX_MSGFLAG_USER1 */
-    ok (flux_msg_is_user1 (msg) == false,
-        "flux_msg_is_user1 = false");
-    ok (flux_msg_set_user1 (msg) == 0,
-        "flux_msg_set_user1_works");
-    ok (flux_msg_is_user1 (msg) == true,
-        "flux_msg_is_user1 = true");
+    ok (flux_msg_has_flag (msg, FLUX_MSGFLAG_USER1) == false,
+        "flux_msg_has_flag FLUX_MSGFLAG_USER1 = false");
+    ok (flux_msg_set_flag (msg, FLUX_MSGFLAG_USER1) == 0,
+        "flux_msg_set_flag FLUX_MSGFLAG_USER1 works");
+    ok (flux_msg_has_flag (msg, FLUX_MSGFLAG_USER1) == true,
+        "flux_msg_has_flag FLUX_MSGFLAG_USER1 = true");
 
     /* FLUX_MSGFLAG_PRIVATE */
     ok (flux_msg_is_private (msg) == false,

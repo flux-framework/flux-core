@@ -422,22 +422,6 @@ bool flux_msg_is_noresponse (const flux_msg_t *msg)
     return msg_has_noresponse (msg) ? true : false;
 }
 
-int flux_msg_set_user1 (flux_msg_t *msg)
-{
-    if (msg_validate (msg) < 0)
-        return -1;
-    msg_set_flag (msg, FLUX_MSGFLAG_USER1);
-    return 0;
-}
-
-bool flux_msg_is_user1 (const flux_msg_t *msg)
-{
-    if (msg_validate (msg) < 0)
-        return false;
-    return msg_has_user1 (msg) ? true : false;
-}
-
-
 int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 {
     if (msg_validate (msg) < 0)
