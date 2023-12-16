@@ -113,6 +113,7 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_idle_watcher_create.3 \
 	man3/flux_msg_handler_create.3 \
 	man3/flux_msg_cmp.3 \
+	man3/flux_msg_create.3 \
 	man3/flux_msg_handler_addvec.3 \
 	man3/flux_child_watcher_create.3 \
 	man3/flux_signal_watcher_create.3 \
@@ -254,6 +255,10 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_future_or_then.3 \
 	man3/flux_future_continue.3 \
 	man3/flux_future_continue_error.3 \
+	man3/flux_msg_copy.3 \
+	man3/flux_msg_incref.3 \
+	man3/flux_msg_decref.3 \
+	man3/flux_msg_destroy.3 \
 	man3/flux_rpc_pack.3 \
 	man3/flux_rpc_raw.3 \
 	man3/flux_rpc_message.3 \
