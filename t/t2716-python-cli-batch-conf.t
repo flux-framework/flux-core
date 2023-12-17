@@ -206,7 +206,7 @@ test_expect_success 'flux-batch multiline --conf + --conf=KEY=VAL override works
 '
 test_expect_success 'flux-batch --conf end-to-end test' '
 	jobid=$(flux batch --conf=resource.exclude=\"0\" \
-		--output=batchtest.out batch.sh) &&
+		--output=batchtest.out --error=batchtest.err batch.sh) &&
 	flux job wait-event $jobid clean &&
 	jq -e ".resource.noverify" <batchtest.out &&
 	jq -e ".resource.exclude == \"0\"" <batchtest.out
