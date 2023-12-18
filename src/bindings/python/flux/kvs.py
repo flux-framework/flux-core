@@ -15,6 +15,7 @@ import os
 from typing import Any, Mapping
 
 from _flux._core import ffi, lib
+from flux.future import Future
 from flux.rpc import RPC
 from flux.wrapper import Wrapper, WrapperPimpl
 
@@ -268,6 +269,46 @@ def commit(flux_handle, flags: int = 0, namespace=None, _kvstxn=None):
             RAW.flux_future_destroy(future)
 
 
+def commit_async(flux_handle, flags: int = 0, namespace=None, _kvstxn=None):
+    """Commit changes to the KVS.  Identical to commit(), but returns
+    a Future to wait on for RPC to complete.
+
+    Must be called after put(), put_mkdir(), put_unlink(), or
+    put_symlink() to write staged changes to the KVS.
+
+    Args:
+        flux_handle: A Flux handle obtained from flux.Flux()
+        flags: defaults to 0, possible flag options:
+          flux.constants.FLUX_KVS_NO_MERGE - disallow merging of different commits
+          flux.constants.FLUX_KVS_TXN_COMPACT - if possible compact changes
+          flux.constants.FLUX_KVS_SYNC - flush & checkpoint commit (only against primary KVS)
+        namespace: namespace to write to, defaults to None.  If namespace
+          is None, the namespace specified in the FLUX_KVS_NAMESPACE
+          environment variable will be used.  If FLUX_KVS_NAMESPACE is not
+          set, the primary namespace will be used.
+
+    Returns:
+        Future: a future fulfilled when the commit RPC returns
+    """
+    if _kvstxn is None:
+        # If _kvstxn is None, use the default txn stored in the flux
+        # handle.  If aux_txn is None, make an empty txn for the
+        # commit.
+        if flux_handle.aux_txn is None:
+            flux_handle.aux_txn = RAW.flux_kvs_txn_create()
+        future = RAW.flux_kvs_commit(flux_handle, namespace, flags, flux_handle.aux_txn)
+        RAW.flux_kvs_txn_destroy(flux_handle.aux_txn)
+        flux_handle.aux_txn = None
+        return Future(future)
+    else:
+        # if _kvstxn is type KVSTxn, get the RAW kvs txn stored within
+        # it.  If not type KVSTxn, it is assumed to of type RAW txn.
+        if isinstance(_kvstxn, KVSTxn):
+            _kvstxn = _kvstxn.txn
+        future = RAW.flux_kvs_commit(flux_handle, namespace, flags, _kvstxn)
+        return Future(future)
+
+
 def namespace_create(flux_handle, namespace, owner=os.getuid(), flags: int = 0):
     """Create KVS Namespace
 
@@ -384,6 +425,16 @@ class KVSTxn:
             raise
         finally:
             self.clear()
+
+    def commit_async(self, flags=0):
+        """Commit changes to the KVS.  Identical to commit(), but returns a
+        Future to wait on for RPC to complete.
+        """
+        future = commit_async(
+            self.fhdl, flags=flags, namespace=self.namespace, _kvstxn=self.txn
+        )
+        self.clear()
+        return Future(future)
 
     def put(self, key, value):
         """Put key=value in the KVS"""
@@ -525,6 +576,14 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
             raise
         finally:
             self.kvstxn.clear()
+
+    def commit_async(self, flags=0):
+        """Commit changes to the KVS.  Identical to commit(), but returns a
+        Future to wait on for RPC to complete.
+        """
+        future = self.kvstxn.commit_async(flags=flags)
+        self.kvstxn.clear()
+        return Future(future)
 
     def key_at(self, key):
         """Get full path to KVS key"""
