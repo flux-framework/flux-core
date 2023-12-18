@@ -248,5 +248,5 @@ SEE ALSO
 ========
 
 :man1:`flux-run`, :man1:`flux-submit`, :man1:`flux-alloc`,
-:man1:`flux-batch`
+:man1:`flux-batch`, :man7:`flux-environment`
 

@@ -136,4 +136,4 @@ SEE ALSO
 ========
 
 :man1:`flux-run`, :man1:`flux-submit`, :man1:`flux-batch`,
-:man1:`flux-bulksubmit`
+:man1:`flux-bulksubmit`, :man7:`flux-environment`
