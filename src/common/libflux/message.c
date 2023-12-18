@@ -79,25 +79,32 @@ static void msg_setup_type (flux_msg_t *msg)
     }
 }
 
-flux_msg_t *flux_msg_create (int type)
+flux_msg_t *msg_create (void)
 {
     flux_msg_t *msg;
-
-    if (!msgtype_is_valid (type) && type != FLUX_MSGTYPE_ANY) {
-        errno = EINVAL;
-        return NULL;
-    }
 
     if (!(msg = calloc (1, sizeof (*msg))))
         return NULL;
     list_head_init (&msg->routes);
     list_node_init (&msg->list);
-    msg->proto.type = type;
-    if (msg_type_is_valid (msg))
-        msg_setup_type (msg);
     msg->proto.userid = FLUX_USERID_UNKNOWN;
     msg->proto.rolemask = FLUX_ROLE_NONE;
     msg->refcount = 1;
+    return msg;
+}
+
+flux_msg_t *flux_msg_create (int type)
+{
+    flux_msg_t *msg;
+
+    if (!msgtype_is_valid (type)) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(msg = msg_create ()))
+        return NULL;
+    msg->proto.type = type;
+    msg_setup_type (msg);
     return msg;
 }
 
@@ -284,8 +291,6 @@ flux_msg_t *flux_msg_decode (const void *buf, size_t size)
     int iovlen = 0;
     int iovcnt = 0;
 
-    if (!(msg = flux_msg_create (FLUX_MSGTYPE_ANY)))
-        return NULL;
     while (p - (uint8_t *)buf < size) {
         size_t n = *p++;
         if (n == 0xff) {
@@ -312,13 +317,12 @@ flux_msg_t *flux_msg_decode (const void *buf, size_t size)
         iovcnt++;
         p += n;
     }
-    if (iovec_to_msg (msg, iov, iovcnt) < 0)
+    if (!(msg = iovec_to_msg (iov, iovcnt)))
         goto error;
     free (iov);
     return msg;
 error:
     ERRNO_SAFE_WRAP (free, iov);
-    flux_msg_destroy (msg);
     return NULL;
 }
 
@@ -1135,7 +1139,7 @@ flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
     if (msg_validate (msg) < 0)
         return NULL;
 
-    if (!(cpy = flux_msg_create (FLUX_MSGTYPE_ANY)))
+    if (!(cpy = msg_create ()))
         return NULL;
 
     cpy->proto = msg->proto;

@@ -40,6 +40,8 @@ struct flux_msg {
     struct list_node list; // for use by msg_deque container only
 };
 
+flux_msg_t *msg_create (void);
+
 #define msgtype_is_valid(tp) \
     ((tp) == FLUX_MSGTYPE_REQUEST || (tp) == FLUX_MSGTYPE_RESPONSE \
      || (tp) == FLUX_MSGTYPE_EVENT || (tp) == FLUX_MSGTYPE_CONTROL)
