@@ -241,6 +241,8 @@ def commit(flux_handle, flags: int = 0, namespace=None, _kvstxn=None):
           set, the primary namespace will be used.
     """
     if _kvstxn is None:
+        # If _kvstxn is None, use the default txn stored in the flux
+        # handle.  If aux_txn is None, there is nothing to commit.
         if flux_handle.aux_txn is None:
             return
         future = RAW.flux_kvs_commit(flux_handle, namespace, flags, flux_handle.aux_txn)
@@ -253,6 +255,8 @@ def commit(flux_handle, flags: int = 0, namespace=None, _kvstxn=None):
             flux_handle.aux_txn = None
             RAW.flux_future_destroy(future)
     else:
+        # if _kvstxn is type KVSTxn, get the RAW kvs txn stored within
+        # it.  If not type KVSTxn, it is assumed to of type RAW txn.
         if isinstance(_kvstxn, KVSTxn):
             _kvstxn = _kvstxn.txn
         future = RAW.flux_kvs_commit(flux_handle, namespace, flags, _kvstxn)
