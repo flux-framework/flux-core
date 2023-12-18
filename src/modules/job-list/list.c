@@ -372,9 +372,11 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
                 goto cleanup;
             }
             if (flux_respond_pack (jsctx->h, isd->msg, "{s:O}", "job", o) < 0) {
+                json_decref (o);
                 flux_log_error (jsctx->h, "%s: flux_respond_pack", __FUNCTION__);
                 goto cleanup;
             }
+            json_decref (o);
         }
     }
 
