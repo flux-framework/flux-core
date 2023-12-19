@@ -20,15 +20,17 @@
 #include "src/common/libutil/log.h"
 #include "ccan/str/str.h"
 
-#define OPTIONS "j"
+#define OPTIONS "jc"
 static const struct option longopts[] = {
     {"json-decode", no_argument, 0, 'j'},
+    {"current", no_argument, 0, 'c'},
     { 0, 0, 0, 0 },
 };
 
 static void usage (void)
 {
-    fprintf (stderr, "Usage: info_lookup [--json-decode] <jobid> <key> ...\n");
+    fprintf (stderr, "Usage: info_lookup [--json-decode] "
+                     "[--current] <jobid> <key> ...\n");
     exit (1);
 }
 
@@ -45,6 +47,9 @@ int main (int argc, char *argv[])
         switch (ch) {
         case 'j': /* --json-decode */
             flags |= FLUX_JOB_LOOKUP_JSON_DECODE;
+            break;
+        case 'c': /* --current */
+            flags |= FLUX_JOB_LOOKUP_CURRENT;
             break;
         default:
             usage ();
@@ -104,7 +109,7 @@ int main (int argc, char *argv[])
             free (s);
         }
         else {
-            char *s;
+            const char *s;
             if (flux_rpc_get_unpack (f, "{s:s}", argv[i], &s) < 0)
                 log_msg_exit ("job-info.lookup: %s",
                               future_strerror (f, errno));

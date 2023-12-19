@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test flux job info service update lookup/watch'
+test_description='Test flux job info service lookup w/ update and update-watch'
 
 . $(dirname $0)/sharness.sh
 
@@ -8,6 +8,7 @@ test_under_flux 1 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 RPC_STREAM=${FLUX_BUILD_DIR}/t/request/rpc_stream
+INFO_LOOKUP=${FLUX_BUILD_DIR}/t/job-info/info_lookup
 UPDATE_LOOKUP=${FLUX_BUILD_DIR}/t/job-info/update_lookup
 UPDATE_WATCH=${FLUX_BUILD_DIR}/t/job-info/update_watch_stream
 WAITFILE="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
@@ -58,6 +59,26 @@ check_expiration() {
 	local jobid=$1
 	local value=$2
 	local i=0
+	while (! ${INFO_LOOKUP} -c ${jobid} R | jq -e ".execution.expiration == ${value}" \
+		&& [ $i -lt 200 ] )
+	do
+		sleep 0.1
+		i=$((i + 1))
+	done
+	if [ "$i" -eq "200" ]
+	then
+		return 1
+	fi
+	return 0
+}
+
+# Usage: check_expiration_legacy jobid VALUE
+# Check and wait for expiration to reach VALUE.
+#
+check_expiration_legacy() {
+	local jobid=$1
+	local value=$2
+	local i=0
 	while (! ${UPDATE_LOOKUP} ${jobid} R | jq -e ".execution.expiration == ${value}" \
 		&& [ $i -lt 200 ] )
 	do
@@ -71,33 +92,38 @@ check_expiration() {
 	return 0
 }
 
-test_expect_success 'job-info: update lookup with no update events works (job active)' '
+test_expect_success 'job-info: lookup current with no update events works (job active)' '
 	jobid=$(flux submit --wait-event=start sleep 300) &&
 	check_expiration $jobid 0.0 &&
+	check_expiration_legacy $jobid 0.0 &&
 	flux cancel $jobid
 '
 
-test_expect_success 'job-info: update lookup with no update events works (job inactive)' '
+test_expect_success 'job-info: lookup current with no update events works (job inactive)' '
 	jobid=$(flux submit --wait-event=clean hostname) &&
-	check_expiration $jobid 0.0
+	check_expiration $jobid 0.0 &&
+	check_expiration_legacy $jobid 0.0
 '
 
-test_expect_success 'job-info: update lookup with update events works (job active)' '
+test_expect_success 'job-info: lookup current with update events works (job active)' '
 	jobid=$(flux submit --wait-event=start sleep 300) &&
 	update1=$(expiration_add $jobid 100) &&
 	flux job eventlog $jobid &&
 	check_expiration $jobid ${update1} &&
+	check_expiration_legacy $jobid ${update1} &&
 	update2=$(expiration_add $jobid 200) &&
 	check_expiration $jobid ${update2} &&
+	check_expiration_legacy $jobid ${update2} &&
 	flux cancel $jobid
 '
 
-test_expect_success 'job-info: update lookup with update events works (job inactive)' '
+test_expect_success 'job-info: lookup current with update events works (job inactive)' '
 	jobid=$(flux submit --wait-event=start sleep 300) &&
 	update1=$(expiration_add $jobid 100) &&
 	update2=$(expiration_add $jobid 100) &&
 	flux cancel $jobid &&
-	check_expiration $jobid ${update2}
+	check_expiration $jobid ${update2} &&
+	check_expiration_legacy $jobid ${update2}
 '
 
 test_expect_success 'job-info: update watch with no update events works (job inactive)' '
@@ -262,9 +288,9 @@ test_expect_success NO_CHAIN_LINT 'job-info: update watch can be canceled (multi
 	cat watch10B.out | jq -e ".execution.expiration == ${update1}"
 '
 
-# If someone is already doing an update-watch on a jobid/key, update-lookup can
+# If someone is already doing an update-watch on a jobid/key, lookup w/ update can
 # return the cached info
-test_expect_success NO_CHAIN_LINT 'job-info: update lookup returns cached R from update watch' '
+test_expect_success NO_CHAIN_LINT 'job-info: lookup current returns cached R from update watch' '
 	jobid=$(flux submit --wait-event=exec.shell.init sleep inf) &&
 	watchers=$(get_update_watchers)
 	${UPDATE_WATCH} $jobid R > watch9.out &
@@ -272,13 +298,15 @@ test_expect_success NO_CHAIN_LINT 'job-info: update lookup returns cached R from
 	wait_update_watchers $((watchers+1)) &&
 	update1=$(expiration_add $jobid 100) &&
 	${WAITFILE} --count=2 --timeout=30 --pattern="expiration" watch9.out &&
-	${UPDATE_LOOKUP} $jobid R > lookup9.out &&
+	${INFO_LOOKUP} -c $jobid R > lookup9A.out &&
+	${UPDATE_LOOKUP} $jobid R > lookup9B.out &&
 	flux cancel $jobid &&
 	wait $watchpid &&
 	test $(cat watch9.out | wc -l) -eq 2 &&
 	head -n1 watch9.out | jq -e ".execution.expiration == 0.0" &&
 	tail -n1 watch9.out | jq -e ".execution.expiration == ${update1}" &&
-	cat lookup9.out | jq -e ".execution.expiration == ${update1}"
+	cat lookup9A.out | jq -e ".execution.expiration == ${update1}" &&
+	cat lookup9B.out | jq -e ".execution.expiration == ${update1}"
 '
 
 #
@@ -327,7 +355,7 @@ test_expect_success NO_CHAIN_LINT 'job-info: non job owner cannot watch key (sec
 	wait $watchpid
 '
 
-# update-lookup cannot read cached watch data
+# lookup current cannot read cached watch data
 test_expect_success NO_CHAIN_LINT 'job-info: non job owner cannot lookup key (piggy backed)' '
 	jobid=`flux submit --wait-event=exec.shell.init sleep inf`
 	watchers=$(get_update_watchers)
@@ -336,6 +364,7 @@ test_expect_success NO_CHAIN_LINT 'job-info: non job owner cannot lookup key (pi
 	wait_update_watchers $((watchers+1)) &&
 	${WAITFILE} --count=1 --timeout=30 --pattern="expiration" lookupsecurity.out &&
 	set_userid 9999 &&
+	test_must_fail ${INFO_LOOKUP} -c $jobid R &&
 	test_must_fail ${UPDATE_LOOKUP} $jobid R &&
 	unset_userid &&
 	flux cancel $jobid &&
