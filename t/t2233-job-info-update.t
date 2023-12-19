@@ -272,7 +272,7 @@ test_expect_success NO_CHAIN_LINT 'job-info: update lookup returns cached R from
 	wait_update_watchers $((watchers+1)) &&
 	update1=$(expiration_add $jobid 100) &&
 	${WAITFILE} --count=2 --timeout=30 --pattern="expiration" watch9.out &&
-        ${UPDATE_LOOKUP} $jobid R > lookup9.out &&
+	${UPDATE_LOOKUP} $jobid R > lookup9.out &&
 	flux cancel $jobid &&
 	wait $watchpid &&
 	test $(cat watch9.out | wc -l) -eq 2 &&
