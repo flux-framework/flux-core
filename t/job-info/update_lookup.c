@@ -8,6 +8,10 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* Note that the job-info.update-lookup RPC target is deprecated.
+ * This is to test legacy behavior.
+ */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
