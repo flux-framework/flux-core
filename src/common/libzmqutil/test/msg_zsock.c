@@ -28,7 +28,7 @@ static void *zctx;
 void check_sendzsock (void)
 {
     void *zsock[2] = { NULL, NULL };
-    flux_msg_t *any, *msg, *msg2;
+    flux_msg_t *msg, *msg2;
     const char *topic;
     int type;
     const char *uri = "inproc://test";
@@ -43,9 +43,6 @@ void check_sendzsock (void)
         || zsetsockopt_int (zsock[1], ZMQ_LINGER, 5) < 0)
         BAIL_OUT ("could not set ZMQ_LINGER socket option");
 
-    if (!(any = flux_msg_create (FLUX_MSGTYPE_ANY)))
-        BAIL_OUT ("flux_msg_create failed");
-
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL
             && flux_msg_set_topic (msg, "foo.bar") == 0,
         "created test message");
@@ -53,12 +50,8 @@ void check_sendzsock (void)
     /* corner case tests */
     ok (zmqutil_msg_send (NULL, msg) < 0 && errno == EINVAL,
         "zmqutil_msg_send returns < 0 and EINVAL on dest = NULL");
-    ok (zmqutil_msg_send (zsock[1], any) < 0 && errno == EPROTO,
-        "zmqutil_msg_send returns < 0 and EPROTO on msg w/ type = ANY");
     ok (zmqutil_msg_send_ex (NULL, msg, true) < 0 && errno == EINVAL,
         "zmqutil_msg_send_ex returns < 0 and EINVAL on dest = NULL");
-    ok (zmqutil_msg_send_ex (zsock[1], any, true) < 0 && errno == EPROTO,
-        "zmqutil_msg_send_ex returns < 0 and EPROTO on msg w/ type = ANY");
     ok (zmqutil_msg_recv (NULL) == NULL && errno == EINVAL,
         "zmqutil_msg_recv returns NULL and EINVAL on dest = NULL");
 
@@ -85,7 +78,6 @@ void check_sendzsock (void)
             && flux_msg_has_payload (msg2) == false,
         "try2: decoded message looks like what was sent");
     flux_msg_destroy (msg2);
-    flux_msg_destroy (any);
     flux_msg_destroy (msg);
 
     zmq_close (zsock[0]);

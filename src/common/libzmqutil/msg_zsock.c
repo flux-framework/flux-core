@@ -116,9 +116,7 @@ flux_msg_t *zmqutil_msg_recv (void *sock)
             break;
     }
 
-    if (!(msg = flux_msg_create (FLUX_MSGTYPE_ANY)))
-        goto error;
-    if (iovec_to_msg (msg, iov, iovcnt) < 0)
+    if (!(msg = iovec_to_msg (iov, iovcnt)))
         goto error;
     rv = msg;
 error:

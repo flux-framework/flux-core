@@ -23,9 +23,7 @@ struct msg_iovec {
     void *transport_data;
 };
 
-int iovec_to_msg (flux_msg_t *msg,
-                  struct msg_iovec *iov,
-                  int iovcnt);
+flux_msg_t *iovec_to_msg (struct msg_iovec *iov, int iovcnt);
 
 int msg_to_iovec (const flux_msg_t *msg,
                   uint8_t *proto,

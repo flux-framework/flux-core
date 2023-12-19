@@ -24,28 +24,28 @@
 #include "message_proto.h"
 #include "message_iovec.h"
 
-int iovec_to_msg (flux_msg_t *msg,
-                  struct msg_iovec *iov,
-                  int iovcnt)
+flux_msg_t *iovec_to_msg (struct msg_iovec *iov, int iovcnt)
 {
     unsigned int index = 0;
+    flux_msg_t *msg;
 
-    assert (msg);
     assert (iov);
 
     if (iovcnt < 1) {
         errno = EPROTO;
-        return -1;
+        return NULL;
     }
+    if (!(msg = msg_create ()))
+        return NULL;
 
     /* proto frame is last frame */
     if (proto_decode (&msg->proto,
                       iov[iovcnt - 1].data,
                       iov[iovcnt - 1].size) < 0)
-        return -1;
+        goto error;
     if (!msg_type_is_valid (msg)) {
         errno = EPROTO;
-        return -1;
+        goto error;
     }
     if (msg_has_route (msg)) {
         /* On first access index == 0 && iovcnt > 0 guaranteed
@@ -58,7 +58,7 @@ int iovec_to_msg (flux_msg_t *msg,
             if (msg_route_append (msg,
                                   (char *)iov[index].data,
                                   iov[index].size) < 0)
-                return -1;
+                goto error;
             index++;
         }
         if (index < iovcnt)
@@ -67,22 +67,22 @@ int iovec_to_msg (flux_msg_t *msg,
     if (msg_has_topic (msg)) {
         if (index == iovcnt) {
             errno = EPROTO;
-            return -1;
+            goto error;
         }
         if (!(msg->topic = strndup ((char *)iov[index].data,
                                     iov[index].size)))
-            return -1;
+            goto error;
         if (index < iovcnt)
             index++;
     }
     if (msg_has_payload (msg)) {
         if (index == iovcnt) {
             errno = EPROTO;
-            return -1;
+            goto error;
         }
         msg->payload_size = iov[index].size;
         if (!(msg->payload = malloc (msg->payload_size)))
-            return -1;
+            goto error;
         memcpy (msg->payload, iov[index].data, msg->payload_size);
         if (index < iovcnt)
             index++;
@@ -90,9 +90,12 @@ int iovec_to_msg (flux_msg_t *msg,
     /* proto frame required */
     if (index == iovcnt) {
         errno = EPROTO;
-        return -1;
+        goto error;
     }
-    return 0;
+    return msg;
+error:
+    flux_msg_decref (msg);
+    return NULL;
 }
 
 int msg_to_iovec (const flux_msg_t *msg,
