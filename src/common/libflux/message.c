@@ -1405,7 +1405,7 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
     flux_msg_fprint_ts (f, msg, -1);
 }
 
-int flux_msg_frames (const flux_msg_t *msg)
+int msg_frames (const flux_msg_t *msg)
 {
     int n = 1; /* 1 for proto frame */
     if (msg_validate (msg) < 0)
