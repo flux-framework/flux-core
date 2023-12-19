@@ -250,7 +250,6 @@ static flux_future_t *flux_rpc_message_send_new (flux_t *h,
 {
     struct flux_rpc *rpc = NULL;
     flux_future_t *f;
-    uint8_t msgflags;
 
     if (!(f = flux_future_create (initialize_cb, NULL)))
         goto error;
@@ -263,19 +262,20 @@ static flux_future_t *flux_rpc_message_send_new (flux_t *h,
     }
     if (flux_msg_set_matchtag (*msg, rpc->matchtag) < 0)
         goto error;
-    if (flux_msg_get_flags (*msg, &msgflags) < 0)
-        goto error;
     if (nodeid == FLUX_NODEID_UPSTREAM) {
-        msgflags |= FLUX_MSGFLAG_UPSTREAM;
+        if (flux_msg_set_flag (*msg, FLUX_MSGFLAG_UPSTREAM) < 0)
+            goto error;
         if (flux_get_rank (h, &nodeid) < 0)
             goto error;
     }
-    if ((flags & FLUX_RPC_STREAMING))
-        msgflags |= FLUX_MSGFLAG_STREAMING;
-    if ((flags & FLUX_RPC_NORESPONSE))
-        msgflags |= FLUX_MSGFLAG_NORESPONSE;
-    if (flux_msg_set_flags (*msg, msgflags) < 0)
-        goto error;
+    if ((flags & FLUX_RPC_STREAMING)) {
+        if (flux_msg_set_flag (*msg, FLUX_MSGFLAG_STREAMING) < 0)
+            goto error;
+    }
+    if ((flags & FLUX_RPC_NORESPONSE)) {
+        if (flux_msg_set_flag (*msg, FLUX_MSGFLAG_NORESPONSE) < 0)
+            goto error;
+    }
     if (flux_msg_set_nodeid (*msg, nodeid) < 0)
         goto error;
 #if HAVE_CALIPER

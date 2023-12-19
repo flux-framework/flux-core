@@ -56,7 +56,7 @@ enum {
 struct flux_match {
     int typemask;           /* bitmask of matching message types (or 0) */
     uint32_t matchtag;      /* matchtag (or FLUX_MATCHTAG_NONE) */
-    const char *topic_glob;       /* glob matching topic string (or NULL) */
+    const char *topic_glob; /* glob matching topic string (or NULL) */
 };
 
 struct flux_match flux_match_init (int typemask,
@@ -102,8 +102,10 @@ void flux_msg_destroy (flux_msg_t *msg);
 /* Access auxiliary data members in Flux message.
  * These are for convenience only - they are not sent over the wire.
  */
-int flux_msg_aux_set (const flux_msg_t *msg, const char *name,
-                      void *aux, flux_free_f destroy);
+int flux_msg_aux_set (const flux_msg_t *msg,
+                      const char *name,
+                      void *aux,
+                      flux_free_f destroy);
 void *flux_msg_aux_get (const flux_msg_t *msg, const char *name);
 
 /* Duplicate msg, omitting payload if 'payload' is false.
@@ -158,11 +160,6 @@ bool flux_msg_is_streaming (const flux_msg_t *msg);
 int flux_msg_set_noresponse (flux_msg_t *msg);
 bool flux_msg_is_noresponse (const flux_msg_t *msg);
 
-/* Get/set USER1 flag.
- */
-int flux_msg_set_user1 (flux_msg_t *msg);
-bool flux_msg_is_user1 (const flux_msg_t *msg);
-
 /* Get/set/compare message topic string.
  * set adds/deletes/replaces topic frame as needed.
  */
@@ -179,13 +176,11 @@ int flux_msg_get_payload (const flux_msg_t *msg, const void **buf, int *size);
 int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size);
 bool flux_msg_has_payload (const flux_msg_t *msg);
 
-/* Get/set flags
- * Users should avoid using flux_msg_set_flags(), and instead use the
- * higher level functions that manipulate message flags.  It is exposed
- * mainly for testing.
+/* Test/set/clear message flags
  */
-int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *flags);
-int flux_msg_set_flags (flux_msg_t *msg, uint8_t flags);
+bool flux_msg_has_flag (const flux_msg_t *msg, int flag);
+int flux_msg_set_flag (flux_msg_t *msg, int flag);
+int flux_msg_clear_flag (flux_msg_t *msg, int flag);
 
 /* Get/set string payload.
  * flux_msg_set_string() accepts a NULL 's' (no payload).

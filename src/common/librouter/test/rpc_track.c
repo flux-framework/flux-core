@@ -56,7 +56,6 @@ flux_msg_t *create_response (const flux_msg_t *req, int errnum)
 flux_msg_t *create_request (uint32_t matchtag, int setflags, bool add_uuid)
 {
     flux_msg_t *msg;
-    uint8_t flags;
     uuid_t uuid;
     char uuid_str[UUID_STR_LEN];
 
@@ -64,12 +63,8 @@ flux_msg_t *create_request (uint32_t matchtag, int setflags, bool add_uuid)
         BAIL_OUT ("flux_request_create failed");
     if (flux_msg_set_matchtag (msg, matchtag) < 0)
         BAIL_OUT ("flux_msg_set_matchtag failed");
-
-    if (flux_msg_get_flags (msg, &flags) < 0)
-        BAIL_OUT ("flux_msg_get_flags failed");
-    flags |= setflags;
-    if (flux_msg_set_flags (msg, flags) < 0)
-        BAIL_OUT ("flux_msg_set_flags failed");
+    if (flux_msg_set_flag (msg, setflags) < 0)
+        BAIL_OUT ("flux_msg_set_flag failed");
 
     flux_msg_route_enable (msg);
     if (add_uuid) {

@@ -15,9 +15,12 @@
 #include <jansson.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libflux/message_proto.h"
+#include "src/common/libflux/message_private.h"
 #include "src/common/libtestutil/util.h"
 #include "src/common/libtestutil/util_rpc.h"
 #include "ccan/str/str.h"
+
 
 /* increment integer and send it back */
 void rpctest_incr_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -40,17 +43,14 @@ void rpctest_nodeid_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     uint32_t nodeid;
-    uint8_t flags;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     if (flux_msg_get_nodeid (msg, &nodeid) < 0)
         goto error;
-    if (flux_msg_get_flags (msg, &flags) < 0)
-        goto error;
     if (flux_respond_pack (h, msg, "s:i s:i",
                                    "nodeid", (int)nodeid,
-                                   "flags", flags) < 0)
+                                   "flags", msg->proto.flags) < 0)
         BAIL_OUT ("flux_respond_pack: %s", flux_strerror (errno));
     return;
 error:
@@ -159,7 +159,6 @@ void rpctest_multi_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     int i, count;
-    uint8_t flags;
     int noterm;
 
     if (flux_request_unpack (msg, NULL, "{s:i s:i}", "count", &count,
@@ -169,11 +168,12 @@ void rpctest_multi_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-    if (flux_msg_get_flags (msg, &flags) < 0)
-        goto error;
     for (i = 0; i < count; i++) {
-        if (flux_respond_pack (h, msg, "{s:i s:i}", "seq", i,
-                                                    "flags", flags) < 0)
+        if (flux_respond_pack (h,
+                               msg,
+                               "{s:i s:i}",
+                               "seq", i,
+                               "flags", msg->proto.flags) < 0)
             BAIL_OUT ("flux_respond_pack: %s", flux_strerror (errno));
     }
     if (noterm)
@@ -570,7 +570,7 @@ void test_multi_response (flux_t *h)
     flux_future_t *f;
     int seq = -1;
     int inflags = 0;
-    uint8_t outflags = 0;
+    int outflags = 0;
     int count = 0;
     int t1, t2;
     const flux_msg_t *response;
@@ -583,7 +583,7 @@ void test_multi_response (flux_t *h)
     while (flux_rpc_get_unpack (f, "{s:i s:i}", "seq", &seq,
                                                 "flags", &inflags) == 0) {
         if (flux_future_get (f, (const void **)&response) == 0)
-            (void)flux_msg_get_flags (response, &outflags);
+            outflags = response->proto.flags;
         count++;
         flux_future_reset (f);
     }

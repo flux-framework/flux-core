@@ -25,20 +25,20 @@
 
 static bool be_pull_u32 (const char **p, size_t *max_len, uint32_t *val)
 {
-        beint32_t v;
+    beint32_t v;
 
-        if (pull_bytes (p, max_len, &v, sizeof (v))) {
-                if (val)
-                        *val = be32_to_cpu (v);
-                return true;
-        }
-        return false;
+    if (pull_bytes (p, max_len, &v, sizeof (v))) {
+        if (val)
+            *val = be32_to_cpu (v);
+        return true;
+    }
+    return false;
 }
 
 static bool be_push_u32(char **p, size_t *len, uint32_t val)
 {
-        beint32_t v = cpu_to_be32 (val);
-        return push_bytes (p, len, &v, sizeof (v));
+    beint32_t v = cpu_to_be32 (val);
+    return push_bytes (p, len, &v, sizeof (v));
 }
 
 /* Realloc(3) replacement for push() that simply returns the pointer, unless

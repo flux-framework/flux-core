@@ -22,20 +22,16 @@ struct stab {
     const char *topic;
     const char *out;
     uint32_t nodeid;
-    uint8_t flags;
+    int flags;
 };
 
 flux_msg_t *gen_request (const char *topic, uint32_t nodeid, uint8_t flags)
 {
-    uint8_t tmp;
     flux_msg_t *msg;
 
     if (!(msg = flux_request_encode (topic, NULL)))
         return NULL;
-    if (flux_msg_get_flags (msg, &tmp) < 0)
-        goto error;
-    tmp |= flags;
-    if (flux_msg_set_flags (msg, tmp) < 0)
+    if (flux_msg_set_flag (msg, flags) < 0)
         goto error;
     if (flux_msg_set_nodeid (msg, nodeid) < 0)
         goto error;

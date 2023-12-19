@@ -204,14 +204,18 @@ error:
 flux_msg_t *flux_response_derive (const flux_msg_t *request, int errnum)
 {
     flux_msg_t *msg;
+    uint32_t matchtag;
 
     if (!request || flux_msg_is_noresponse (request)) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(msg = flux_msg_copy (request, false)))
+    if (flux_msg_get_matchtag (request, &matchtag) < 0
+        || !(msg = flux_msg_copy (request, false)))
         return NULL;
     if (flux_msg_set_type (msg, FLUX_MSGTYPE_RESPONSE) < 0)
+        goto error;
+    if (flux_msg_set_matchtag (msg, matchtag) < 0)
         goto error;
     if (flux_msg_set_userid (msg, FLUX_USERID_UNKNOWN) < 0)
         goto error;

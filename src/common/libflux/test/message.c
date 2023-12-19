@@ -20,6 +20,7 @@
 
 #include "src/common/libflux/message.h"
 #include "src/common/libflux/message_proto.h"
+#include "src/common/libflux/message_private.h"
 #include "src/common/libtap/tap.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
@@ -36,7 +37,6 @@ void check_cornercase (void)
     size_t encodesize = 64;
     int type, errnum, status;
     uint32_t tag;
-    uint8_t flags;
     const char *topic;
     const void *payload;
     int payload_size;
@@ -140,21 +140,27 @@ void check_cornercase (void)
         "flux_msg_has_payload returns false on msg = NULL");
 
     errno = 0;
-    ok (flux_msg_get_flags (NULL, &flags) < 0 && errno == EINVAL,
-        "flux_msg_get_flags msg=NULL fails with EINVAL");
-    lives_ok ({flux_msg_get_flags (msg, NULL);},
-        "flux_msg_get_flags flags=NULL does not segfault");
-    errno = 0;
-    ok (flux_msg_set_flags (NULL, 0) < 0 && errno == EINVAL,
-        "flux_msg_set_flags msg=NULL fails with EINVAL");
-    errno = 0;
-    ok (flux_msg_set_flags (msg, 0xff) < 0 && errno == EINVAL,
-        "flux_msg_set_flags flags=(invalid) fails with EINVAL");
-    errno = 0;
-    ok (flux_msg_set_flags (msg, FLUX_MSGFLAG_STREAMING
-                                | FLUX_MSGFLAG_NORESPONSE) < 0
+    ok (flux_msg_set_flag (NULL, FLUX_MSGFLAG_STREAMING) < 0
         && errno == EINVAL,
-        "flux_msg_set_flags streaming|noresponse fails with EINVAL");
+        "flux_msg_set_flag msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_clear_flag (NULL, FLUX_MSGFLAG_STREAMING) < 0
+        && errno == EINVAL,
+        "flux_msg_clear_flag msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_set_flag (msg, 0x80000000) < 0 && errno == EINVAL,
+        "flux_msg_set_flag flag=0x80000000 fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_clear_flag (msg, 0x80000000) < 0 && errno == EINVAL,
+        "flux_msg_clear_flag flag=0x80000000 fails with EINVAL");
+    lives_ok ({flux_msg_has_flag (NULL, FLUX_MSGFLAG_STREAMING);},
+       "flux_msg_has_flag msg=NULL does not segfault");
+
+    errno = 0;
+    ok (flux_msg_set_flag (msg, FLUX_MSGFLAG_STREAMING
+                              | FLUX_MSGFLAG_NORESPONSE) < 0
+        && errno == EINVAL,
+        "flux_msg_set_flag streaming|noresponse fails with EINVAL");
 
     errno = 0;
     ok (flux_msg_pack (NULL, "{s:i}", "foo", 42) < 0 && errno == EINVAL,
@@ -298,11 +304,6 @@ void check_cornercase (void)
     ok ((flux_msg_route_string (msg) == NULL && errno == EPROTO),
         "flux_msg_route_string returns NULL errno EPROTO on msg "
         "w/o routes enabled");
-    errno = 0;
-    ok (flux_msg_set_user1 (NULL) < 0 && errno == EINVAL,
-        "flux_msg_set_user1 msg=NULL fails with EINVAL");
-    ok (flux_msg_is_user1 (NULL) == false,
-        "flux_msg_is_user1 msg=NULL returns false");
 
     flux_msg_destroy (msg);
 }
@@ -1128,7 +1129,8 @@ void check_print (void)
         "created test message");
     ok (flux_msg_set_rolemask (msg, FLUX_ROLE_USER) == 0,
         "set rolemask");
-    ok (flux_msg_set_flags (msg, FLUX_MSGFLAG_NORESPONSE | FLUX_MSGFLAG_UPSTREAM) == 0,
+    ok (flux_msg_set_flag (msg, FLUX_MSGFLAG_NORESPONSE) == 0
+        && flux_msg_set_flag (msg, FLUX_MSGFLAG_UPSTREAM) == 0,
         "set new flags");
     lives_ok ({flux_msg_fprint (f, msg);},
         "flux_msg_fprint doesn't segfault on request settings #2");
@@ -1138,7 +1140,8 @@ void check_print (void)
         "created test message");
     ok (flux_msg_set_rolemask (msg, FLUX_ROLE_ALL) == 0,
         "set rolemask");
-    ok (flux_msg_set_flags (msg, FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING) == 0,
+    ok (flux_msg_set_flag (msg, FLUX_MSGFLAG_PRIVATE) == 0
+        && flux_msg_set_flag (msg, FLUX_MSGFLAG_STREAMING) == 0,
         "set new flags");
     lives_ok ({flux_msg_fprint (f, msg);},
         "flux_msg_fprint doesn't segfault on request settings #3");
@@ -1188,23 +1191,19 @@ void check_print_rolemask (void)
 void check_flags (void)
 {
     flux_msg_t *msg;
-    uint8_t flags;
 
     if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
         BAIL_OUT ("flux_msg_create failed");
-    ok (flux_msg_get_flags (msg, &flags) == 0,
-        "flux_msg_get_flags works");
-    ok (flags == 0,
+    ok (msg->proto.flags == 0,
         "flags are initially zero");
 
     /* FLUX_MSGFLAG_USER1 */
-    ok (flux_msg_is_user1 (msg) == false,
-        "flux_msg_is_user1 = false");
-    ok (flux_msg_set_user1 (msg) == 0,
-        "flux_msg_set_user1_works");
-    ok (flux_msg_is_user1 (msg) == true,
-        "flux_msg_is_user1 = true");
-
+    ok (flux_msg_has_flag (msg, FLUX_MSGFLAG_USER1) == false,
+        "flux_msg_has_flag FLUX_MSGFLAG_USER1 = false");
+    ok (flux_msg_set_flag (msg, FLUX_MSGFLAG_USER1) == 0,
+        "flux_msg_set_flag FLUX_MSGFLAG_USER1 works");
+    ok (flux_msg_has_flag (msg, FLUX_MSGFLAG_USER1) == true,
+        "flux_msg_has_flag FLUX_MSGFLAG_USER1 = true");
 
     /* FLUX_MSGFLAG_PRIVATE */
     ok (flux_msg_is_private (msg) == false,
@@ -1243,18 +1242,15 @@ void check_flags (void)
         "flux_msg_set_streaming clears noresponse flag");
 
     ok (flux_msg_set_topic (msg, "foo") == 0
-        && flux_msg_get_flags (msg, &flags) == 0
-        && (flags & FLUX_MSGFLAG_TOPIC),
+        && flux_msg_has_flag (msg, FLUX_MSGFLAG_TOPIC),
         "flux_msg_set_topic sets FLUX_MSGFLAG_TOPIC");
 
     ok (flux_msg_set_payload (msg, "foo", 3) == 0
-        && flux_msg_get_flags (msg, &flags) == 0
-        && (flags & FLUX_MSGFLAG_PAYLOAD),
+        && flux_msg_has_flag (msg, FLUX_MSGFLAG_PAYLOAD),
         "flux_msg_set_payload sets FLUX_MSGFLAG_PAYLOAD");
 
     flux_msg_route_enable (msg);
-    ok (flux_msg_get_flags (msg, &flags) == 0
-        && (flags & FLUX_MSGFLAG_ROUTE),
+    ok (flux_msg_has_flag (msg, FLUX_MSGFLAG_ROUTE),
         "flux_msg_route_enable sets FLUX_MSGFLAG_ROUTE");
 
     flux_msg_destroy (msg);

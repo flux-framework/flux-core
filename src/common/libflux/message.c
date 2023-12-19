@@ -142,8 +142,10 @@ const flux_msg_t *flux_msg_incref (const flux_msg_t *const_msg)
  * allow msg to be "annotated" for convenience.
  * The message content is otherwise unchanged.
  */
-int flux_msg_aux_set (const flux_msg_t *const_msg, const char *name,
-                      void *aux, flux_free_f destroy)
+int flux_msg_aux_set (const flux_msg_t *const_msg,
+                      const char *name,
+                      void *aux,
+                      flux_free_f destroy)
 {
     flux_msg_t *msg = (flux_msg_t *)const_msg;
     if (msg_validate (msg) < 0)
@@ -342,24 +344,34 @@ int flux_msg_get_type (const flux_msg_t *msg, int *type)
     return 0;
 }
 
-int flux_msg_set_flags (flux_msg_t *msg, uint8_t flags)
+bool flux_msg_has_flag (const flux_msg_t *msg, int flag)
+{
+    if (msg_validate (msg) < 0)
+        return false;
+    return msg_has_flag (msg, flag) ? true : false;
+}
+
+int flux_msg_set_flag (flux_msg_t *msg, int flag)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!msgflags_is_valid (flags)) {
+    if (!msgflags_is_valid (flag)) {
         errno = EINVAL;
         return -1;
     }
-    msg->proto.flags = flags;
+    msg_set_flag (msg, flag);
     return 0;
 }
 
-int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *flags)
+int flux_msg_clear_flag (flux_msg_t *msg, int flag)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (flags)
-        *flags = msg->proto.flags;
+    if (!msgflags_is_valid (flag)) {
+        errno = EINVAL;
+        return -1;
+    }
+    msg_clear_flag (msg, flag);
     return 0;
 }
 
@@ -409,22 +421,6 @@ bool flux_msg_is_noresponse (const flux_msg_t *msg)
         return true;
     return msg_has_noresponse (msg) ? true : false;
 }
-
-int flux_msg_set_user1 (flux_msg_t *msg)
-{
-    if (msg_validate (msg) < 0)
-        return -1;
-    msg_set_flag (msg, FLUX_MSGFLAG_USER1);
-    return 0;
-}
-
-bool flux_msg_is_user1 (const flux_msg_t *msg)
-{
-    if (msg_validate (msg) < 0)
-        return false;
-    return msg_has_user1 (msg) ? true : false;
-}
-
 
 int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 {
@@ -490,8 +486,9 @@ int flux_msg_cred_authorize (struct flux_msg_cred cred, uint32_t userid)
 {
     if ((cred.rolemask & FLUX_ROLE_OWNER))
         return 0;
-    if ((cred.rolemask & FLUX_ROLE_USER) && cred.userid != FLUX_USERID_UNKNOWN
-                                         && cred.userid == userid)
+    if ((cred.rolemask & FLUX_ROLE_USER)
+        && cred.userid != FLUX_USERID_UNKNOWN
+        && cred.userid == userid)
         return 0;
     errno = EPERM;
     return -1;
@@ -818,7 +815,7 @@ char *flux_msg_route_string (const flux_msg_t *msg)
         return NULL;
     }
     if ((hops = flux_msg_route_count (msg)) < 0
-                    || (len = flux_msg_route_size (msg)) < 0)
+        || (len = flux_msg_route_size (msg)) < 0)
         return NULL;
     if (!(cp = buf = malloc (len + hops + 1)))
         return NULL;
@@ -1220,7 +1217,7 @@ static struct flagmap flagmap[] = {
     { "streaming", FLUX_MSGFLAG_STREAMING},
 };
 
-static void flags2str (uint8_t flags, char *buf, int buflen)
+static void flags2str (int flags, char *buf, int buflen)
 {
     int i, len = 0;
     buf[0] = '\0';
@@ -1449,7 +1446,8 @@ int flux_match_asprintf (struct flux_match *m, const char *fmt, ...)
     return 0;
 }
 
-bool flux_msg_route_match_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
+bool flux_msg_route_match_first (const flux_msg_t *msg1,
+                                 const flux_msg_t *msg2)
 {
     const char *id1 = flux_msg_route_first (msg1);
     const char *id2 = flux_msg_route_first (msg2);
@@ -1464,4 +1462,3 @@ bool flux_msg_route_match_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

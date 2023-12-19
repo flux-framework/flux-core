@@ -99,6 +99,7 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_event_publish.3 \
 	man3/flux_pollevents.3 \
 	man3/flux_msg_encode.3 \
+	man3/flux_msg_has_flag.3 \
 	man3/flux_rpc.3 \
 	man3/flux_get_rank.3 \
 	man3/flux_attr_get.3 \
@@ -183,6 +184,14 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_event_publish_get_seq.3 \
 	man3/flux_pollfd.3 \
 	man3/flux_msg_decode.3 \
+	man3/flux_msg_set_flag.3 \
+	man3/flux_msg_clear_flag.3 \
+	man3/flux_msg_is_private.3 \
+	man3/flux_msg_set_private.3 \
+	man3/flux_msg_is_streaming.3 \
+	man3/flux_msg_set_streaming.3 \
+	man3/flux_msg_is_noresponse.3 \
+	man3/flux_msg_set_noresponse.3 \
 	man3/flux_get_size.3 \
 	man3/flux_attr_set.3 \
 	man3/flux_set_reactor.3 \
