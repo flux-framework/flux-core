@@ -116,7 +116,7 @@ int msg_to_iovec (const flux_msg_t *msg,
     if (proto_encode (&msg->proto, proto, proto_len) < 0)
         return -1;
 
-    if ((frame_count = flux_msg_frames (msg)) < 0)
+    if ((frame_count = msg_frames (msg)) < 0)
         return -1;
 
     assert (frame_count);

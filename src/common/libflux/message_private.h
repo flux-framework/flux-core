@@ -42,6 +42,8 @@ struct flux_msg {
 
 flux_msg_t *msg_create (void);
 
+int msg_frames (const flux_msg_t *msg);
+
 #define msgtype_is_valid(tp) \
     ((tp) == FLUX_MSGTYPE_REQUEST || (tp) == FLUX_MSGTYPE_RESPONSE \
      || (tp) == FLUX_MSGTYPE_EVENT || (tp) == FLUX_MSGTYPE_CONTROL)
