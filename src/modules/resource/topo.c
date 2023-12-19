@@ -275,19 +275,61 @@ void topo_destroy (struct topo *topo)
     }
 }
 
+static char *topo_get_local_xml (struct resource_ctx *ctx, bool no_restrict)
+{
+    flux_t *parent_h;
+    flux_future_t *f = NULL;
+    char *result = NULL;
+    const char *xml;
+
+    errno = 0;
+    if (!(parent_h = resource_parent_handle_open (ctx))
+        || !(f = flux_rpc (parent_h,
+                           "resource.topo-get",
+                           NULL,
+                           FLUX_NODEID_ANY,
+                           0))
+        || flux_rpc_get (f, &xml) < 0) {
+        rhwloc_flags_t flags = no_restrict ? RHWLOC_NO_RESTRICT : 0;
+        /*  ENOENT just means there is no parent instance.
+         *  No need for an error.
+         */
+        if (errno && errno != ENOENT)
+            flux_log (ctx->h,
+                      LOG_DEBUG,
+                      "resource.topo-get to parent failed: %s",
+                      strerror (errno));
+        result = rhwloc_local_topology_xml (flags);
+        goto out;
+    }
+    flux_log (ctx->h,
+              LOG_INFO,
+              "retrieved local hwloc XML from parent");
+    if (no_restrict) {
+        result = strdup (xml);
+        goto out;
+    }
+    /*  restrict topology to current CPU binding
+     */
+    result = rhwloc_topology_xml_restrict (xml);
+out:
+    flux_future_destroy (f);
+    resource_parent_handle_close (ctx);
+    return result;
+}
+
 struct topo *topo_create (struct resource_ctx *ctx,
                           bool no_verify,
                           bool no_restrict)
 {
     struct topo *topo;
     json_t *R;
-    int flags = no_restrict ? RHWLOC_NO_RESTRICT : 0;
 
     if (!(topo = calloc (1, sizeof (*topo))))
         return NULL;
     topo->ctx = ctx;
-    if (!(topo->xml = rhwloc_local_topology_xml (flags))) {
-        flux_log_error (ctx->h, "error loading hwloc topology");
+    if (!(topo->xml = topo_get_local_xml (ctx, no_restrict))) {
+        flux_log (ctx->h, LOG_ERR, "error loading hwloc topology");
         goto error;
     }
     if (!(topo->r_local = rlist_from_hwloc (ctx->rank, topo->xml))) {
