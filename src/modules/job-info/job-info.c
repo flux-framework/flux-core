@@ -117,8 +117,10 @@ static void info_ctx_destroy (struct info_ctx *ctx)
             guest_watch_cleanup (ctx);
             zlist_destroy (&ctx->guest_watchers);
         }
-        if (ctx->update_lookups)
+        if (ctx->update_lookups) {
+            update_lookup_cleanup (ctx);
             zlist_destroy (&ctx->update_lookups);
+        }
         if (ctx->update_watchers) {
             update_watch_cleanup (ctx);
             zlist_destroy (&ctx->update_watchers);

@@ -32,6 +32,8 @@ void update_watchers_cancel (struct info_ctx *ctx,
 
 void update_watch_cleanup (struct info_ctx *ctx);
 
+void update_lookup_cleanup (struct info_ctx *ctx);
+
 int update_watch_count (struct info_ctx *ctx);
 
 #endif /* ! _FLUX_JOB_INFO_UPDATE_H */

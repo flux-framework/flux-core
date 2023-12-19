@@ -689,6 +689,23 @@ void update_watch_cleanup (struct info_ctx *ctx)
     }
 }
 
+void update_lookup_cleanup (struct info_ctx *ctx)
+{
+    struct update_ctx *uc;
+
+    while ((uc = zlist_pop (ctx->update_lookups))) {
+        const flux_msg_t *msg;
+        msg = flux_msglist_first (uc->msglist);
+        while (msg) {
+            if (flux_respond_error (ctx->h, msg, ENOSYS, NULL) < 0)
+                flux_log_error (ctx->h, "%s: flux_respond_error",
+                                __FUNCTION__);
+            msg = flux_msglist_next (uc->msglist);
+        }
+        update_ctx_destroy (uc);
+    }
+}
+
 int update_watch_count (struct info_ctx *ctx)
 {
     struct update_ctx *uc;
