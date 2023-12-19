@@ -136,6 +136,8 @@ The following are set in the environment of each task spawned by
    environment, it points to the local broker responsible for the job.
 
 
+.. _initial_program_environment:
+
 INITIAL PROGRAM ENVIRONMENT
 ===========================
 

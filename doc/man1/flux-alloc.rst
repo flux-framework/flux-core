@@ -77,9 +77,15 @@ DEPENDENCIES
 ENVIRONMENT
 ===========
 
-By default, these commands duplicate the current environment when submitting
-jobs. However, a set of environment manipulation options are provided to
-give fine control over the requested environment submitted with the job.
+By default, :man1:`flux-alloc` duplicates the current environment when
+submitting jobs. However, a set of environment manipulation options are
+provided to give fine control over the requested environment submitted
+with the job.
+
+.. note::
+   The actual environment of the initial program is subject to the caveats
+   described in the :ref:`initial_program_environment` section of
+   :man7:`flux-environment`.
 
 .. include:: common/job-environment.rst
 
@@ -136,4 +142,4 @@ SEE ALSO
 ========
 
 :man1:`flux-run`, :man1:`flux-submit`, :man1:`flux-batch`,
-:man1:`flux-bulksubmit`
+:man1:`flux-bulksubmit`, :man7:`flux-environment`
