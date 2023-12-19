@@ -311,6 +311,22 @@ test_expect_success 'job-info.lookup multiple keys fails on 1 bad entry' '
 '
 
 #
+# job info json decode tests
+#
+
+test_expect_success 'job-info.lookup: decode non-json returns string' '
+	jobid=$(submit_job) &&
+	${INFOLOOKUP} --json-decode $jobid eventlog > info_decode_1.out &&
+	grep submit info_decode_1.out
+'
+
+test_expect_success 'job-info.lookup: decode json returns object' '
+	jobid=$(submit_job) &&
+	${INFOLOOKUP} --json-decode $jobid jobspec > info_decode_2.out &&
+	grep sleep info_decode_2.out
+'
+
+#
 # stats & corner cases
 #
 
