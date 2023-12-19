@@ -26,7 +26,6 @@ struct info_ctx {
     zlist_t *lookups;
     zlist_t *watchers;
     zlist_t *guest_watchers;
-    zlist_t *update_lookups;
     zlist_t *update_watchers;
     zhashx_t *index_uw;        /* update_watchers lookup */
 };

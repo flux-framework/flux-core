@@ -8,8 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* update.c - handle job-info.update-watch &
- * job-info.eventlog-update-cancel for job-info */
+/* update.c - handle job-info.update-watch for job-info */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -19,23 +18,15 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/job.h"
-#include "src/common/libjob/idf58.h"
 #include "src/common/libeventlog/eventlog.h"
-#include "src/common/libutil/jpath.h"
 #include "ccan/str/str.h"
 
 #include "job-info.h"
 #include "update.h"
 #include "util.h"
 
-typedef enum {
-    UPDATE_TYPE_LOOKUP,
-    UPDATE_TYPE_WATCH,
-} update_type_t;
-
 struct update_ctx {
     struct info_ctx *ctx;
-    update_type_t type;
     struct flux_msglist *msglist;
     uint32_t userid;
     flux_jobid_t id;
@@ -48,7 +39,7 @@ struct update_ctx {
     json_t *update_object;
     int initial_update_count;
     int watch_update_count;
-    char *index_key;            /* for watch */
+    char *index_key;
 };
 
 static void update_ctx_destroy (void *data)
@@ -76,7 +67,6 @@ static char *get_index_key (flux_jobid_t id, const char *key)
 }
 
 static struct update_ctx *update_ctx_create (struct info_ctx *ctx,
-                                             update_type_t type,
                                              const flux_msg_t *msg,
                                              flux_jobid_t id,
                                              const char *key,
@@ -88,7 +78,6 @@ static struct update_ctx *update_ctx_create (struct info_ctx *ctx,
         return NULL;
 
     uc->ctx = ctx;
-    uc->type = type;
     uc->id = id;
     if (!(uc->key = strdup (key)))
         goto error;
@@ -105,13 +94,11 @@ static struct update_ctx *update_ctx_create (struct info_ctx *ctx,
         goto error;
     flux_msglist_append (uc->msglist, msg);
 
-    if (uc->type == UPDATE_TYPE_WATCH) {
-        /* use jobid + key as lookup key, in future we may support other
-         * keys other than R
-         */
-        if (!(uc->index_key = get_index_key (uc->id, uc->key)))
-            goto error;
-    }
+    /* use jobid + key as lookup key, in future we may support other
+     * keys other than R
+     */
+    if (!(uc->index_key = get_index_key (uc->id, uc->key)))
+        goto error;
 
     return uc;
 
@@ -142,27 +129,6 @@ static void eventlog_watch_cancel (struct update_ctx *uc)
     }
     flux_future_destroy (f);
     uc->eventlog_watch_canceled = true;
-}
-
-static void apply_updates_R (struct update_ctx *uc,
-                             json_t *context)
-{
-    const char *key;
-    json_t *value;
-
-    json_object_foreach (context, key, value) {
-        /* RFC 21 resource-update event only allows update
-         * to:
-         * - expiration
-         */
-        if (streq (key, "expiration"))
-            if (jpath_set (uc->update_object,
-                           "execution.expiration",
-                           value) < 0)
-                flux_log (uc->ctx->h, LOG_INFO,
-                          "%s: failed to update job %s %s",
-                          __FUNCTION__, idf58 (uc->id), uc->key);
-    }
 }
 
 static void eventlog_continuation (flux_future_t *f, void *arg)
@@ -209,7 +175,11 @@ static void eventlog_continuation (flux_future_t *f, void *arg)
          * initial lookup */
         if (uc->watch_update_count > uc->initial_update_count) {
             if (streq (uc->key, "R"))
-                apply_updates_R (uc, context);
+                apply_updates_R (uc->ctx->h,
+                                 uc->id,
+                                 uc->key,
+                                 uc->update_object,
+                                 context);
 
             msg = flux_msglist_first (uc->msglist);
             while (msg) {
@@ -340,7 +310,11 @@ static void lookup_continuation (flux_future_t *f, void *arg)
         }
         else if (streq (name, uc->update_name)) {
             if (streq (uc->key, "R"))
-                apply_updates_R (uc, context);
+                apply_updates_R (uc->ctx->h,
+                                 uc->id,
+                                 uc->key,
+                                 uc->update_object,
+                                 context);
             uc->initial_update_count++;
         }
         else if (streq (name, "clean"))
@@ -381,11 +355,6 @@ static void lookup_continuation (flux_future_t *f, void *arg)
     if (flux_msglist_count (uc->msglist) == 0)
         goto cleanup;
 
-    /* If this is a lookup, we're done, only continue on if this is a
-     * watcher */
-    if (uc->type == UPDATE_TYPE_LOOKUP)
-        goto cleanup;
-
     /* this job has ended, no need to watch the eventlog for future
      * updates */
     if (job_ended) {
@@ -412,17 +381,12 @@ error:
 cleanup:
     /* flux future destroyed in update_ctx_destroy, which is called
      * via zlist_remove() */
-    if (uc->type == UPDATE_TYPE_WATCH) {
-        zhashx_delete (ctx->index_uw, uc->index_key);
-        zlist_remove (ctx->update_watchers, uc);
-    }
-    else
-        zlist_remove (ctx->update_lookups, uc);
+    zhashx_delete (ctx->index_uw, uc->index_key);
+    zlist_remove (ctx->update_watchers, uc);
     json_decref (eventlog);
 }
 
 static int update_lookup (struct info_ctx *ctx,
-                          update_type_t type,
                           const flux_msg_t *msg,
                           flux_jobid_t id,
                           const char *key,
@@ -432,7 +396,6 @@ static int update_lookup (struct info_ctx *ctx,
     const char *topic = "job-info.lookup";
 
     if (!(uc = update_ctx_create (ctx,
-                                  type,
                                   msg,
                                   id,
                                   key,
@@ -460,24 +423,15 @@ static int update_lookup (struct info_ctx *ctx,
         goto error;
     }
 
-    if (type == UPDATE_TYPE_WATCH) {
-        if (zlist_append (ctx->update_watchers, uc) < 0) {
-            flux_log_error (ctx->h, "%s: zlist_append", __FUNCTION__);
-            goto error;
-        }
-        zlist_freefn (ctx->update_watchers, uc, update_ctx_destroy, true);
-
-        if (zhashx_insert (ctx->index_uw, uc->index_key, uc) < 0) {
-            flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
-            goto error_list;
-        }
+    if (zlist_append (ctx->update_watchers, uc) < 0) {
+        flux_log_error (ctx->h, "%s: zlist_append", __FUNCTION__);
+        goto error;
     }
-    else {
-        if (zlist_append (ctx->update_lookups, uc) < 0) {
-            flux_log_error (ctx->h, "%s: zlist_append", __FUNCTION__);
-            goto error;
-        }
-        zlist_freefn (ctx->update_lookups, uc, update_ctx_destroy, true);
+    zlist_freefn (ctx->update_watchers, uc, update_ctx_destroy, true);
+
+    if (zhashx_insert (ctx->index_uw, uc->index_key, uc) < 0) {
+        flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
+        goto error_list;
     }
 
     return 0;
@@ -489,71 +443,6 @@ error_list:
 error:
     update_ctx_destroy (uc);
     return -1;
-}
-
-void update_lookup_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
-{
-    struct info_ctx *ctx = arg;
-    struct update_ctx *uc = NULL;
-    flux_jobid_t id;
-    const char *key = NULL;
-    int flags;
-    int valid_flags = 0;
-    const char *errmsg = NULL;
-    char *index_key = NULL;
-
-    if (flux_request_unpack (msg, NULL, "{s:I s:s s:i}",
-                             "id", &id,
-                             "key", &key,
-                             "flags", &flags) < 0) {
-        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
-        goto error;
-    }
-    if ((flags & ~valid_flags)) {
-        errno = EPROTO;
-        errmsg = "update-lookup request rejected with invalid flag";
-        goto error;
-    }
-    if (!streq (key, "R")) {
-        errno = EINVAL;
-        errmsg = "update-lookup unsupported key specified";
-        goto error;
-    }
-
-    if (!(index_key = get_index_key (id, key)))
-        goto error;
-
-    /* is somebody watching this jobid + key already, return the
-     * cached result */
-
-    if ((uc = zhashx_lookup (ctx->index_uw, index_key))
-        && uc->update_object) {
-        if (flux_msg_authorize (msg, uc->userid) < 0)
-            goto error;
-        if (flux_respond_pack (uc->ctx->h, msg, "{s:O}",
-                               uc->key, uc->update_object) < 0) {
-            flux_log_error (ctx->h, "%s: flux_respond", __FUNCTION__);
-            goto error;
-        }
-    }
-    else {
-        if (update_lookup (ctx,
-                           UPDATE_TYPE_LOOKUP,
-                           msg,
-                           id,
-                           key,
-                           flags) < 0)
-            goto error;
-    }
-
-    free (index_key);
-    return;
-
-error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-    free (index_key);
 }
 
 void update_watch_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -597,7 +486,6 @@ void update_watch_cb (flux_t *h, flux_msg_handler_t *mh,
     /* if no watchers for this jobid yet, start it */
     if (!(uc = zhashx_lookup (ctx->index_uw, index_key))) {
         if (update_lookup (ctx,
-                           UPDATE_TYPE_WATCH,
                            msg,
                            id,
                            key,
@@ -628,6 +516,33 @@ error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     free (index_key);
+}
+
+int update_watch_get_cached (struct info_ctx *ctx,
+                             flux_jobid_t id,
+                             const char *key,
+                             json_t **current_object)
+{
+    struct update_ctx *uc;
+    char *index_key;
+    int rv = 0;
+
+    /* if somebody is already watching this jobid + key, we read the
+     * cached value */
+
+    if (!(index_key = get_index_key (id, key))) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    if ((uc = zhashx_lookup (ctx->index_uw, index_key))
+        && uc->update_object) {
+        (*current_object) = json_incref (uc->update_object);
+        rv = 1;
+    }
+
+    free (index_key);
+    return rv;
 }
 
 /* Cancel update_watch if it matches message.
@@ -678,23 +593,6 @@ void update_watch_cleanup (struct info_ctx *ctx)
     while ((uc = zlist_pop (ctx->update_watchers))) {
         const flux_msg_t *msg;
         eventlog_watch_cancel (uc);
-        msg = flux_msglist_first (uc->msglist);
-        while (msg) {
-            if (flux_respond_error (ctx->h, msg, ENOSYS, NULL) < 0)
-                flux_log_error (ctx->h, "%s: flux_respond_error",
-                                __FUNCTION__);
-            msg = flux_msglist_next (uc->msglist);
-        }
-        update_ctx_destroy (uc);
-    }
-}
-
-void update_lookup_cleanup (struct info_ctx *ctx)
-{
-    struct update_ctx *uc;
-
-    while ((uc = zlist_pop (ctx->update_lookups))) {
-        const flux_msg_t *msg;
         msg = flux_msglist_first (uc->msglist);
         while (msg) {
             if (flux_respond_error (ctx->h, msg, ENOSYS, NULL) < 0)

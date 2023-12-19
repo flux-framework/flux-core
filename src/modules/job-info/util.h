@@ -35,6 +35,13 @@ int parse_eventlog_entry (flux_t *h,
                           const char **name,
                           json_t **context);
 
+/* apply context updates to the R object */
+void apply_updates_R (flux_t *h,
+                      flux_jobid_t id,
+                      const char *key,
+                      json_t *R,
+                      json_t *context);
+
 #endif /* ! _FLUX_JOB_INFO_UTIL_H */
 
 /*
