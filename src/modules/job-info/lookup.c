@@ -29,7 +29,7 @@ struct lookup_ctx {
     const flux_msg_t *msg;
     flux_jobid_t id;
     json_t *keys;
-    bool check_eventlog;
+    bool lookup_eventlog;
     int flags;
     flux_future_t *f;
     bool allow;
@@ -125,7 +125,7 @@ static int lookup_keys (struct lookup_ctx *l)
     }
     flux_future_set_flux (fall, l->ctx->h);
 
-    if (l->check_eventlog) {
+    if (l->lookup_eventlog) {
         if (lookup_key (l, fall, "eventlog") < 0)
             goto error;
     }
@@ -288,7 +288,7 @@ static int check_keys_for_eventlog (struct lookup_ctx *l)
             return 0;
     }
 
-    l->check_eventlog = true;
+    l->lookup_eventlog = true;
     return 0;
 }
 
