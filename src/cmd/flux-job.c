@@ -3427,23 +3427,19 @@ int cmd_info (optparse_t *p, int argc, char **argv)
         val = new_val = reconstruct_current_jobspec (jobspec, eventlog);
     }
     /* The current (non --base) R is obtained through the
-     * job-info.update-lookup RPC, not the normal job-info.lookup.
+     * job-info.lookup RPC w/ the CURRENT flag.
      */
     else if (!optparse_hasopt (p, "base") && streq (key, "R")) {
-        json_t *o;
         if (!(f = flux_rpc_pack (h,
-                                 "job-info.update-lookup",
+                                 "job-info.lookup",
                                  FLUX_NODEID_ANY,
                                  0,
-                                 "{s:I s:s s:i}",
+                                 "{s:I s:[s] s:i}",
                                  "id", id,
-                                 "key", key,
-                                 "flags", 0))
-            || flux_rpc_get_unpack (f, "{s:o}", key, &o) < 0)
+                                 "keys", key,
+                                 "flags", FLUX_JOB_LOOKUP_CURRENT))
+            || flux_rpc_get_unpack (f, "{s:s}", key, &val) < 0)
             log_msg_exit ("%s", future_strerror (f, errno));
-        if (!(new_val = json_dumps (o, JSON_COMPACT)))
-            log_msg_exit ("error encoding R object");
-        val = new_val;
     }
     /* All other keys are obtained this way.
      */
