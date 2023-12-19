@@ -14,7 +14,6 @@
 #include <assert.h>
 #include <libgen.h>
 #include <pthread.h>
-#include <getopt.h>
 #include <inttypes.h>
 #include <jansson.h>
 #include <flux/core.h>
