@@ -751,6 +751,34 @@ class TestKVS(unittest.TestCase):
 
         self.assertEqual(flux.kvs.get(self.f, "kvstxntestkeepref.dir1.dir2.a"), 1)
 
+    def test_commic_async_01_basic(self):
+        flux.kvs.put(self.f, "commicasync1", "foo")
+        f = flux.kvs.commit_async(self.f)
+        f.get()
+        self.assertEqual(flux.kvs.get(self.f, "commicasync1"), "foo")
+
+    def test_commic_async_02_with_kvstxn(self):
+        txn = flux.kvs.KVSTxn(self.f)
+        txn.put("commitasync2", "bar")
+
+        f = flux.kvs.commit_async(self.f, _kvstxn=txn)
+        f.get()
+        self.assertEqual(flux.kvs.get(self.f, "commitasync2"), "bar")
+
+    def test_commic_async_03_kvstxn(self):
+        txn = flux.kvs.KVSTxn(self.f)
+        txn.put("commitasync3", "baz")
+        f = txn.commit_async()
+        f.get()
+        self.assertEqual(flux.kvs.get(self.f, "commitasync3"), "baz")
+
+    def test_commic_async_04_kvsdir(self):
+        kd = flux.kvs.KVSDir(self.f)
+        kd["commitasync4"] = "qux"
+        f = kd.commit_async()
+        f.get()
+        self.assertEqual(flux.kvs.get(self.f, "commitasync4"), "qux")
+
 
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
