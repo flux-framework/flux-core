@@ -193,7 +193,7 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
     json_array_foreach (l->keys, index, key) {
         flux_future_t *f;
         const char *keystr = json_string_value (key); /* validated earlier */
-        json_t *str = NULL;
+        json_t *val = NULL;
 
         if (!(f = flux_future_get_child (fall, keystr))) {
             flux_log_error (ctx->h, "%s: flux_future_get_child", __FUNCTION__);
@@ -212,11 +212,21 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
             goto error;
         }
 
-        if (!(str = json_string (s)))
-            goto enomem;
+        if ((l->flags & FLUX_JOB_LOOKUP_JSON_DECODE)
+            && (streq (keystr, "jobspec")
+                || streq (keystr, "R"))) {
+            /* We assume if it was stored in the KVS it's valid JSON,
+             * so failure is ENOMEM */
+            if (!(val = json_loads (s, 0, NULL)))
+                goto enomem;
+        }
+        else {
+            if (!(val = json_string (s)))
+                goto enomem;
+        }
 
-        if (json_object_set_new (o, keystr, str) < 0) {
-            json_decref (str);
+        if (json_object_set_new (o, keystr, val) < 0) {
+            json_decref (val);
             goto enomem;
         }
     }
@@ -288,7 +298,7 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_jobid_t id;
     uint32_t rolemask;
     int flags;
-    int valid_flags = 0;
+    int valid_flags = FLUX_JOB_LOOKUP_JSON_DECODE;
     const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:I s:o s:i}",
