@@ -77,7 +77,8 @@ hwloc_topology_t rhwloc_xml_topology_load (const char *xml, int flags)
     return topo;
 }
 
-hwloc_topology_t rhwloc_xml_topology_load_file (const char *path)
+hwloc_topology_t rhwloc_xml_topology_load_file (const char *path,
+                                                rhwloc_flags_t flags)
 {
     hwloc_topology_t topo;
     int fd;
@@ -92,7 +93,7 @@ hwloc_topology_t rhwloc_xml_topology_load_file (const char *path)
     /*  Load hwloc from XML file, add current system information from uname(2)
      *  unless already set.
      */
-    if ((topo = rhwloc_xml_topology_load (buf, 0))
+    if ((topo = rhwloc_xml_topology_load (buf, flags))
         && !rhwloc_hostname (topo)) {
         struct utsname utsname;
         int depth = hwloc_get_type_depth (topo, HWLOC_OBJ_MACHINE);
@@ -127,7 +128,7 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
      *  to normal topology load.
      */
     if ((xml = getenv ("FLUX_HWLOC_XMLFILE"))
-        && (topo = rhwloc_xml_topology_load_file (xml)))
+        && (topo = rhwloc_xml_topology_load_file (xml, flags)))
         return topo;
 
     if (topo_init_common (&topo, 0) < 0)
