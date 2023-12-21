@@ -304,7 +304,8 @@ static char *topo_get_local_xml (struct resource_ctx *ctx, bool no_restrict)
     }
     flux_log (ctx->h,
               LOG_INFO,
-              "retrieved local hwloc XML from parent");
+              "retrieved local hwloc XML from parent (norestrict=%s)",
+              no_restrict ? "true" : "false");
     if (no_restrict) {
         result = strdup (xml);
         goto out;

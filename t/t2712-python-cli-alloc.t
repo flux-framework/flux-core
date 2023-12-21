@@ -160,4 +160,15 @@ test_expect_success 'flux alloc: instance can bootstrap without update-watch RPC
 	test_debug "cat alloc.log" &&
 	grep "falling back to job-info.lookup" alloc.log
 '
+test_expect_success 'flux alloc: resource.norestrict works in subinstance' '
+	cat <<-EOF >topo-get.py &&
+	import flux
+	print(flux.Flux().rpc("resource.topo-get").get_str())
+	EOF
+	chmod +x topo-get.py &&
+	flux python ./topo-get.py >topo.expected &&
+	flux alloc -n1 --conf=resource.norestrict=true \
+		flux python ./topo-get.py >topo.out &&
+	test_cmp topo.expected topo.out
+'
 test_done
