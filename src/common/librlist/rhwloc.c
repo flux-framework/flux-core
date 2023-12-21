@@ -27,15 +27,12 @@
 
 /*  Common hwloc_topology_init() and flags for Flux hwloc usage:
  */
-static int topo_init_common (hwloc_topology_t *tp)
+static int topo_init_common (hwloc_topology_t *tp, unsigned long flags)
 {
     if (hwloc_topology_init (tp) < 0)
         return -1;
 #if HWLOC_API_VERSION < 0x20000
-    /*  N.B.: hwloc_topology_set_flags may cause memory leaks on some systems
-     */
-    if (hwloc_topology_set_flags (*tp, HWLOC_TOPOLOGY_FLAG_IO_DEVICES) < 0)
-        return -1;
+    flags |= HWLOC_TOPOLOGY_FLAG_IO_DEVICES;
     if (hwloc_topology_ignore_type (*tp, HWLOC_OBJ_CACHE) < 0)
         return -1;
 #else
@@ -52,12 +49,18 @@ static int topo_init_common (hwloc_topology_t *tp)
         < 0)
         return -1;
 #endif
+    /*  N.B.: hwloc_topology_set_flags may cause memory leaks on some systems
+     */
+    if (hwloc_topology_set_flags (*tp, flags) < 0)
+        return -1;
     return 0;
 }
 
-static int init_topo_from_xml (hwloc_topology_t *tp, const char *xml)
+static int init_topo_from_xml (hwloc_topology_t *tp,
+                               const char *xml,
+                               unsigned long flags)
 {
-    if ((topo_init_common (tp) < 0)
+    if ((topo_init_common (tp, flags) < 0)
         || (hwloc_topology_set_xmlbuffer (*tp, xml, strlen (xml) + 1) < 0)
         || (hwloc_topology_load (*tp) < 0)) {
         hwloc_topology_destroy (*tp);
@@ -66,15 +69,77 @@ static int init_topo_from_xml (hwloc_topology_t *tp, const char *xml)
     return (0);
 }
 
-hwloc_topology_t rhwloc_xml_topology_load (const char *xml)
+static int topo_restrict (hwloc_topology_t topo)
+{
+    hwloc_bitmap_t set = NULL;
+    int rc = -1;
+    if (!(set = hwloc_bitmap_alloc ())
+        || hwloc_get_cpubind (topo, set, HWLOC_CPUBIND_PROCESS) < 0
+        || hwloc_topology_restrict (topo, set, 0) < 0)
+        goto err;
+    rc = 0;
+err:
+    hwloc_bitmap_free (set);
+    return rc;
+}
+
+hwloc_topology_t rhwloc_xml_topology_load (const char *xml,
+                                           rhwloc_flags_t in_flags)
 {
     hwloc_topology_t topo = NULL;
-    if (init_topo_from_xml (&topo, xml) < 0)
+    int flags = 0;
+    if (!(in_flags & RHWLOC_NO_RESTRICT))
+        flags |= HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM;
+    if (init_topo_from_xml (&topo, xml, flags) < 0)
         return NULL;
+    if (!(in_flags & RHWLOC_NO_RESTRICT)
+        && topo_restrict (topo) < 0) {
+        hwloc_topology_destroy (topo);
+        return NULL;
+    }
     return topo;
 }
 
-hwloc_topology_t rhwloc_xml_topology_load_file (const char *path)
+static char *topo_xml_export (hwloc_topology_t topo)
+{
+    char *buf = NULL;
+    int buflen;
+    char *result = NULL;
+
+    if (!topo)
+        return NULL;
+
+#if HWLOC_API_VERSION >= 0x20000
+    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen, 0) < 0) {
+#else
+    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen) < 0) {
+#endif
+        goto out;
+    }
+    result = strdup (buf);
+out:
+    if (buf)
+        hwloc_free_xmlbuffer (topo, buf);
+    return result;
+}
+
+/*  Restrict an XML topology by loading it with no flags (which automatically
+ *  restricts to current resource binding), then re-export to XML:
+ */
+char *rhwloc_topology_xml_restrict (const char *xml)
+{
+    char *result;
+    hwloc_topology_t topo;
+
+    if (!(topo = rhwloc_xml_topology_load (xml, 0)))
+        return NULL;
+    result = topo_xml_export (topo);
+    hwloc_topology_destroy (topo);
+    return result;
+}
+
+hwloc_topology_t rhwloc_xml_topology_load_file (const char *path,
+                                                rhwloc_flags_t flags)
 {
     hwloc_topology_t topo;
     int fd;
@@ -89,7 +154,7 @@ hwloc_topology_t rhwloc_xml_topology_load_file (const char *path)
     /*  Load hwloc from XML file, add current system information from uname(2)
      *  unless already set.
      */
-    if ((topo = rhwloc_xml_topology_load (buf))
+    if ((topo = rhwloc_xml_topology_load (buf, flags))
         && !rhwloc_hostname (topo)) {
         struct utsname utsname;
         int depth = hwloc_get_type_depth (topo, HWLOC_OBJ_MACHINE);
@@ -112,7 +177,6 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
 {
     const char *xml;
     hwloc_topology_t topo = NULL;
-    hwloc_bitmap_t rset = NULL;
     uint32_t hwloc_version = hwloc_get_api_version ();
 
     if ((hwloc_version >> 16) != (HWLOC_API_VERSION >> 16))
@@ -124,10 +188,10 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
      *  to normal topology load.
      */
     if ((xml = getenv ("FLUX_HWLOC_XMLFILE"))
-        && (topo = rhwloc_xml_topology_load_file (xml)))
+        && (topo = rhwloc_xml_topology_load_file (xml, flags)))
         return topo;
 
-    if (topo_init_common (&topo) < 0)
+    if (topo_init_common (&topo, 0) < 0)
         goto err;
 #if HWLOC_API_VERSION >= 0x20100
     /* gl probes the NV-CONTROL X server extension, and requires X auth
@@ -142,38 +206,21 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
         goto err;
     if (flags & RHWLOC_NO_RESTRICT)
         return (topo);
-    if (!(rset = hwloc_bitmap_alloc ())
-        || (hwloc_get_cpubind (topo, rset, HWLOC_CPUBIND_PROCESS) < 0))
+    if (topo_restrict (topo) < 0)
         goto err;
-    if (hwloc_topology_restrict (topo, rset, 0) < 0)
-        goto err;
-    hwloc_bitmap_free (rset);
     return (topo);
 err:
-    hwloc_bitmap_free (rset);
     hwloc_topology_destroy (topo);
     return NULL;
 }
 
 char *rhwloc_local_topology_xml (rhwloc_flags_t rflags)
 {
-    char *buf;
-    int buflen;
-    char *copy;
+    char *result;
     hwloc_topology_t topo = rhwloc_local_topology_load (rflags);
-    if (topo == NULL)
-        return (NULL);
-#if HWLOC_API_VERSION >= 0x20000
-    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen, 0) < 0) {
-#else
-    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen) < 0) {
-#endif
-        return NULL;
-    }
-    copy = strdup (buf);
-    hwloc_free_xmlbuffer (topo, buf);
+    result = topo_xml_export (topo);
     hwloc_topology_destroy (topo);
-    return (copy);
+    return result;
 }
 
 const char * rhwloc_hostname (hwloc_topology_t topo)

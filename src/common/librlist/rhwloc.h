@@ -22,12 +22,19 @@ typedef enum {
 hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags);
 
 /*  As above, but return hwloc_topoology_t from XML
+ *  Topology is restricted to current CPU binding unless RHWLOC_NO_RESTRICT
+ *  flag is used.
  */
-hwloc_topology_t rhwloc_xml_topology_load (const char *xml);
+hwloc_topology_t rhwloc_xml_topology_load (const char *xml,
+                                           rhwloc_flags_t flags);
 
 /*  Load local topology and return XML as allocated string
  */
 char *rhwloc_local_topology_xml (rhwloc_flags_t flags);
+
+/*  Restrict an XML topology to current CPU binding and return result.
+ */
+char *rhwloc_topology_xml_restrict (const char *xml);
 
 /*  Return HostName from an hwloc topology object
  */

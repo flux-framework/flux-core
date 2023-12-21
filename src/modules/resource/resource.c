@@ -234,6 +234,29 @@ error:
     json_decref (o);
 }
 
+flux_t *resource_parent_handle_open (struct resource_ctx *ctx)
+{
+    if (!ctx->parent_h) {
+        const char *uri = flux_attr_get (ctx->h, "parent-uri");
+        if (!uri || !flux_attr_get (ctx->h, "jobid")) {
+            errno = ENOENT;
+            return NULL;
+        }
+        if (!(ctx->parent_h = flux_open (uri, 0)))
+            flux_log_error (ctx->h, "error opening %s", uri);
+    }
+    ctx->parent_refcount++;
+    return ctx->parent_h;
+}
+
+void resource_parent_handle_close (struct resource_ctx *ctx)
+{
+    if (ctx && --ctx->parent_refcount == 0) {
+        flux_close (ctx->parent_h);
+        ctx->parent_h = NULL;
+    }
+}
+
 static void resource_ctx_destroy (struct resource_ctx *ctx)
 {
     if (ctx) {
