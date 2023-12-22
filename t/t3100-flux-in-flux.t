@@ -84,5 +84,13 @@ test_expect_success "flux sets jobid attribute" '
 	flux job attach $id >jobid.out &&
 	test_cmp jobid.exp jobid.out
 '
-
+test_expect_success 'flux can launch multiple brokers per node' '
+	flux alloc --exclusive -N2 -o per-resource.count=2 \
+		flux resource info
+'
+test_expect_success 'flux can launch multiple brokers per node (R lookup fallback)' '
+	flux alloc -N2 --exclusive -o per-resource.count=2 \
+		--conf=resource.no-update-watch=true \
+		flux resource info
+'
 test_done
