@@ -498,7 +498,13 @@ static int lookup_R_fallback (struct inventory *inv, flux_jobid_t id)
         errno = EINVAL;
         goto done;
     }
-    rc = inventory_put (inv, R, "job-info");
+    /*  Only call inventory_put() if conversion of R was successful,
+     *  i.e. R != NULL. (if conversion failed, fall-through to dynamic
+     *  discovery will call inventory_put() later).
+     */
+    if (R && inventory_put (inv, R, "job-info") < 0)
+        goto done;
+    rc = 0;
 done:
     /*  Parent handle is not used again in fallback case:
      */
