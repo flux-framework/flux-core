@@ -130,7 +130,7 @@ static int lookup_keys (struct lookup_ctx *l)
             goto error;
     }
 
-    json_array_foreach(l->keys, index, key) {
+    json_array_foreach (l->keys, index, key) {
         const char *keystr;
         if (!(keystr = json_string_value (key))) {
             errno = EINVAL;
@@ -195,7 +195,7 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
         goto enomem;
     }
 
-    json_array_foreach(l->keys, index, key) {
+    json_array_foreach (l->keys, index, key) {
         flux_future_t *f;
         const char *keystr;
         json_t *str = NULL;
@@ -278,7 +278,7 @@ static int check_keys_for_eventlog (struct lookup_ctx *l)
         return 0;
     }
 
-    json_array_foreach(l->keys, index, key) {
+    json_array_foreach (l->keys, index, key) {
         const char *keystr;
         if (!(keystr = json_string_value (key))) {
             errno = EINVAL;
