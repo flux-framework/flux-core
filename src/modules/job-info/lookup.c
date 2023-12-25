@@ -131,12 +131,7 @@ static int lookup_keys (struct lookup_ctx *l)
     }
 
     json_array_foreach (l->keys, index, key) {
-        const char *keystr;
-        if (!(keystr = json_string_value (key))) {
-            errno = EINVAL;
-            goto error;
-        }
-        if (lookup_key (l, fall, keystr) < 0)
+        if (lookup_key (l, fall, json_string_value (key)) < 0)
             goto error;
     }
 
@@ -197,13 +192,8 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
 
     json_array_foreach (l->keys, index, key) {
         flux_future_t *f;
-        const char *keystr;
+        const char *keystr = json_string_value (key); /* validated earlier */
         json_t *str = NULL;
-
-        if (!(keystr = json_string_value (key))) {
-            errno = EINVAL;
-            goto error;
-        }
 
         if (!(f = flux_future_get_child (fall, keystr))) {
             flux_log_error (ctx->h, "%s: flux_future_get_child", __FUNCTION__);
@@ -279,12 +269,7 @@ static int check_keys_for_eventlog (struct lookup_ctx *l)
     }
 
     json_array_foreach (l->keys, index, key) {
-        const char *keystr;
-        if (!(keystr = json_string_value (key))) {
-            errno = EINVAL;
-            return -1;
-        }
-        if (streq (keystr, "eventlog"))
+        if (streq (json_string_value (key), "eventlog"))
             return 0;
     }
 
@@ -297,6 +282,8 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct info_ctx *ctx = arg;
     struct lookup_ctx *l = NULL;
+    size_t index;
+    json_t *key;
     json_t *keys;
     flux_jobid_t id;
     uint32_t rolemask;
@@ -316,6 +303,19 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         errmsg = "lookup request rejected with invalid flag";
         goto error;
+    }
+
+    /* validate keys is an array and all fields are strings */
+    if (!json_is_array (keys)) {
+        errno = EPROTO;
+        goto error;
+    }
+
+    json_array_foreach (keys, index, key) {
+        if (!json_is_string (key)) {
+            errno = EPROTO;
+            goto error;
+        }
     }
 
     if (!(l = lookup_ctx_create (ctx, msg, id, keys, flags)))
