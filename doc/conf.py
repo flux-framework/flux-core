@@ -77,6 +77,18 @@ domainrefs = {
         'text': '%s(8)',
         'url': 'http://man7.org/linux/man-pages/man8/%s.8.html'
     },
+    'security:man3': {
+        'text': '%s(3)',
+        'url': 'https://flux-framework.readthedocs.io/projects/flux-security/en/latest/man3/%s.html'
+    },
+    'security:man5': {
+        'text': '%s(5)',
+        'url': 'https://flux-framework.readthedocs.io/projects/flux-security/en/latest/man5/%s.html'
+    },
+    'security:man8': {
+        'text': '%s(8)',
+        'url': 'https://flux-framework.readthedocs.io/projects/flux-security/en/latest/man8/%s.html'
+    },
 }
 
 # Disable "smartquotes" to avoid things such as turning long-options
