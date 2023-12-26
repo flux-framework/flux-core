@@ -23,6 +23,7 @@
 struct match_ctx {
     flux_t *h;
     uint64_t max_comparisons;
+    uint32_t max_hostlist;
 };
 
 struct match_ctx *match_ctx_create (flux_t *h);
