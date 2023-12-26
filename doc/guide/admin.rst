@@ -20,6 +20,11 @@ resource manager on a cluster.
 Overview and Background
 ***********************
 
+:doc:`start` and :doc:`interact` provide recipes for starting Flux and
+navigating a hierarchy of Flux instance that do not require administrator
+privilege or configuration.  It may be helpful to develop some perspective
+on Flux in these contexts before configuring a Flux system instance.
+
 Flux Architecture
 =================
 
