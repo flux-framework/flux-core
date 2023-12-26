@@ -30,7 +30,7 @@ Flux Architecture
 A *Flux instance* consists of one or more Flux brokers communicating over a
 tree-based overlay network.  Most of Flux's distributed systems and services
 that aren't directly associated with a running job are embedded in the
-:core:man1:`flux-broker` executable or its dynamically loaded plugins.
+:man1:`flux-broker` executable or its dynamically loaded plugins.
 
 Flux may be used in *single-user mode*, where a Flux instance is launched as
 a parallel job, and the *instance owner* (the user that submitted the parallel
@@ -87,7 +87,7 @@ time the primary component types are
 broker modules
   Each broker module runs in its own thread as part of the broker executable,
   communicating with other components using messages.  Broker modules are
-  dynamically loadable with the :core:man1:`flux-module` command.  Core
+  dynamically loadable with the :man1:`flux-module` command.  Core
   services like the KVS, job manager, and scheduler are implemented using
   broker modules.
 
@@ -95,28 +95,28 @@ jobtap plugins
   The job manager orchestrates a job's life cycle.  Jobtap plugins extend the
   job manager, arranging for callbacks at different points in the job life
   cycle.  Jobtap plugins may be dynamically loaded with the
-  :core:man1:`flux-jobtap` command.  An example of a jobtap plugin is the Flux
+  :man1:`flux-jobtap` command.  An example of a jobtap plugin is the Flux
   accounting multi-factor priority plugin, which updates a job's priority value
   when it enters the PRIORITY state.
 
 shell plugins
-  When a job is started, the :core:man1:`flux-shell` is the process parent
+  When a job is started, the :man1:`flux-shell` is the process parent
   of job tasks on each node.  Shell plugins extend the job environment and
   can be configured on a per-job basis using the ``--setopt`` option of
-  :core:man1:`flux-run` and related job submission commands.  ``affinity``,
+  :man1:`flux-run` and related job submission commands.  ``affinity``,
   ``pmi``, and ``pty`` are examples of Flux shell plugins.
 
 connectors
   Flux commands open a connection to a particular Flux instance by specifying
   a URI.  The *scheme* portion of the URI may refer to a *native* connection
   method such as ``local`` or ``ssh``.  Native connection methods are
-  implemented as plugins called *connectors*.  See :core:man3:`flux_open`.
+  implemented as plugins called *connectors*.  See :man3:`flux_open`.
 
 URI resolver plugins
   Other URI schemes must be *resolved* to a native form before they can be used.
   Resolvers for new schemes may be added as plugins.  For example, the ``lsf``
   resolver plugin enables LSF users to connect to Flux instances running as LSF
-  jobs by specifying a ``lsf:JOBID`` URI.  See :core:man1:`flux-uri`.
+  jobs by specifying a ``lsf:JOBID`` URI.  See :man1:`flux-uri`.
 
 validator plugins
   Jobs may be rejected at ingest if their jobspec fails one of a set of
@@ -124,17 +124,17 @@ validator plugins
   conforms to the jobspec specification.  The ``feasibility`` plugin rejects
   job that the scheduler determines would be unable to run given the instance's
   resource set.  The ``require-instance`` plugin rejects jobs that do not run
-  in a new Flux instance.  See :core:man5:`flux-config-ingest`.
+  in a new Flux instance.  See :man5:`flux-config-ingest`.
 
 frobnicator plugins
   The frobnicator allows a set of configured plugins to modify jobspec at
   submission time.  For example the ``defaults`` plugin sets configured default
   values for jobspec attributes such as *duration* and *queue*.  See
-  :core:man5:`flux-config-ingest`.
+  :man5:`flux-config-ingest`.
 
 Independently developed Flux components are generally packaged and versioned
 separately.  Each package may provide one or more of the above components
-as well as man pages and :core:man1:`flux` subcommands.  At this stage of Flux
+as well as man pages and :man1:`flux` subcommands.  At this stage of Flux
 development, it is good practice to combine only contemporaneously released
 components as the interfaces are not stable yet.
 
@@ -223,7 +223,7 @@ drain request messages that have the owner role.  Similarly, any job can be
 canceled by a cancel request message with the owner role, but in addition, jobs
 can be canceled by guests whose message userid matches the target job userid.
 
-A Flux job is launched when brokers launch one :core:man1:`flux-shell` per
+A Flux job is launched when brokers launch one :man1:`flux-shell` per
 node with the credentials of the user that submitted the job.  When that is a
 guest user, Flux employs a setuid helper called the :security:man8:`flux-imp`
 to launch the shells with the guest credentials.  The shells in turn launch
@@ -351,7 +351,7 @@ into multiple files.  In the examples below, one file per configuration space
 is used.
 
 For more information on the three configuration spaces, please refer to
-:core:man5:`flux-config`, :security:man5:`flux-config-security`, and
+:man5:`flux-config`, :security:man5:`flux-config-security`, and
 :security:man5:`flux-config-security-imp`.
 
 Configuring flux-security
@@ -435,7 +435,7 @@ Configuring the Network Certificate
 
 Overlay network security requires a certificate to be distributed to all nodes.
 It should be readable only by the ``flux`` user.  To create a new certificate,
-run :core:man1:`flux-keygen` as the ``flux`` user, then copy the result to
+run :man1:`flux-keygen` as the ``flux`` user, then copy the result to
 ``/etc/flux/system`` since the ``flux`` user will not have write access to
 this location:
 
@@ -547,11 +547,11 @@ Example file installed path: ``/etc/flux/system/conf.d/system.toml``
  match-policy = "lonodex"
  match-format = "rv1_nosched"
 
-See also: :core:man5:`flux-config-exec`, :core:man5:`flux-config-access`
-:core:man5:`flux-config-bootstrap`, :core:man5:`flux-config-tbon`,
-:core:man5:`flux-config-resource`, :core:man5:`flux-config-ingest`,
-:core:man5:`flux-config-archive`, :core:man5:`flux-config-job-manager`,
-:core:man5:`flux-config-policy`, :core:man5:`flux-config-kvs`,
+See also: :man5:`flux-config-exec`, :man5:`flux-config-access`
+:man5:`flux-config-bootstrap`, :man5:`flux-config-tbon`,
+:man5:`flux-config-resource`, :man5:`flux-config-ingest`,
+:man5:`flux-config-archive`, :man5:`flux-config-job-manager`,
+:man5:`flux-config-policy`, :man5:`flux-config-kvs`,
 :sched:man5:`flux-config-sched-fluxion-qmanager`,
 :sched:man5:`flux-config-sched-fluxion-resource`.
 
@@ -674,7 +674,7 @@ these directories can be ignored and should be empty or nonexistent.
 To run scripts from a different directory, use the ``-d, --exec-directory``
 option in the configured ``command``.
 
-See also: :core:man5:`flux-config-job-manager`,
+See also: :man5:`flux-config-job-manager`,
 :security:man5:`flux-config-security-imp`.
 
 Adding Job Request Validation
@@ -716,8 +716,8 @@ considered for scheduling.
 
 The ``require-instance`` plugin rejects jobs that do not start another
 instance of Flux. That is, jobs are required to be submitted via tools
-like :core:man1:`flux-batch` and :core:man1:`flux-alloc`, or the equivalent.
-For example, with this plugin enabled, a user running :core:man1:`flux-run`
+like :man1:`flux-batch` and :man1:`flux-alloc`, or the equivalent.
+For example, with this plugin enabled, a user running :man1:`flux-run`
 will have their job rejected with the message:
 
 .. code-block:: console
@@ -725,7 +725,7 @@ will have their job rejected with the message:
   $ flux run -n 1000 myapp
   flux-run: ERROR: [Errno 22] Direct job submission is disabled for this instance. Please use the flux-batch(1) or flux-alloc(1) commands.
 
-See also: :core:man5:`flux-config-ingest`.
+See also: :man5:`flux-config-ingest`.
 
 Adding Queues
 =============
@@ -770,7 +770,7 @@ Here is an example that puts these concepts together:
  requires = ["batch"]
  policy.limits.duration = "4h"
 
-When named queues are configured, :core:man1:`flux-queue` may be used to
+When named queues are configured, :man1:`flux-queue` may be used to
 list them:
 
 .. code-block:: console
@@ -780,8 +780,8 @@ list them:
  debug: Job submission is enabled
  Scheduling is enabled
 
-See also: :core:man5:`flux-config-policy`, :core:man5:`flux-config-queues`,
-:core:man5:`flux-config-resource`, :core:man1:`flux-queue`.
+See also: :man5:`flux-config-policy`, :man5:`flux-config-queues`,
+:man5:`flux-config-resource`, :man1:`flux-queue`.
 
 Policy Limits
 =============
@@ -823,7 +823,7 @@ an example which implements duration and job size limits for two queues:
  policy.limits.job-size.max.nnodes = 16
  policy.limits.job-size.max.ncores = 128
 
-See also: :core:man5:`flux-config-policy`.
+See also: :man5:`flux-config-policy`.
 
 Use PAM to Restrict Access to Compute Nodes
 ===========================================
@@ -861,8 +861,8 @@ until their parent in the tree based overlay network is available.
 
 If Flux was not shut down properly, for example if the rank 0 broker
 crashed or was killed, then Flux starts in a safe mode with job submission
-and scheduling disabled.  :core:man1:`flux-uptime` shows the general state
-of Flux, and :core:man1:`flux-startlog` prints a record of Flux starts and
+and scheduling disabled.  :man1:`flux-uptime` shows the general state
+of Flux, and :man1:`flux-startlog` prints a record of Flux starts and
 stops, including any crashes.
 
 Stopping Flux
@@ -878,7 +878,7 @@ the following on the rank 0 node:
 This kills any running jobs, but preserves job history and the queue of
 jobs that have been submitted but have not yet allocated resources.
 This state is held in the ``content.sqlite`` that was configured above.
-See also :core:man1:`flux-shutdown`.
+See also :man1:`flux-shutdown`.
 
 .. note::
     ``flux-shutdown --gc`` should be used from time to time to perform offline
@@ -917,7 +917,7 @@ at job launch.
 
 .. warning::
     Many configuration changes have no effect until the Flux broker restarts.
-    This should be assumed unless otherwise noted.  See :core:man5:`flux-config`
+    This should be assumed unless otherwise noted.  See :man5:`flux-config`
     for more information.
 
 Viewing resource status
@@ -1045,7 +1045,7 @@ This queue can be managed using the ``flux-queue`` command.
     drain           Wait for queue to become empty.
     idle            Wait for queue to become idle.
 
-The queue may be listed with the :core:man1:`flux-jobs` command.
+The queue may be listed with the :man1:`flux-jobs` command.
 
 Disabling job submission
 ------------------------
@@ -1230,7 +1230,7 @@ of RANK may be listed with
 Using ``flux ping`` and ``flux overlay parentof`` iteratively, one should
 be able to isolate the problem rank.
 
-See also :core:man1:`flux-overlay`, :core:man1:`flux-ping`.
+See also :man1:`flux-overlay`, :man1:`flux-ping`.
 
 Systemd journal
 ===============
