@@ -366,7 +366,8 @@ struct state_constraint *state_constraint_create (json_t *constraint, flux_error
             }
             if (streq (op, "userid")
                 || streq (op, "name")
-                || streq (op, "queue"))
+                || streq (op, "queue")
+                || streq (op, "hostlist"))
                 return state_constraint_new (match_maybe, NULL, errp);
             else if (streq (op, "results"))
                 return state_constraint_new (match_result, NULL, errp);
