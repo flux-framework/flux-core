@@ -14,6 +14,7 @@
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "src/common/libhostlist/hostlist.h"
 #include "src/common/libutil/grudgeset.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
@@ -54,6 +55,7 @@ struct job {
     int nnodes;
     char *ranks;
     char *nodelist;
+    struct hostlist *nodelist_hl; /* cache of nodelist in hl form */
     double expiration;
     int wait_status;
     bool success;

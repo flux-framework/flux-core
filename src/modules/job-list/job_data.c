@@ -35,6 +35,7 @@ void job_destroy (void *data)
         int save_errno = errno;
         free (job->ranks);
         free (job->nodelist);
+        hostlist_destroy (job->nodelist_hl);
         json_decref (job->annotations);
         grudgeset_destroy (job->dependencies);
         json_decref (job->jobspec);
