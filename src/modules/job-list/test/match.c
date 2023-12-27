@@ -231,7 +231,16 @@ static void test_basic_userid (void)
         while (tests->userid) {
             struct job *job;
             bool rv;
-            job = setup_job (tests->userid, NULL, NULL, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0);
+            job = setup_job (tests->userid,
+                             NULL,
+                             NULL,
+                             0,
+                             0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0);
             rv = job_match (job, c);
             ok (rv == tests->expected,
                 "basic userid job match test #%d/#%d",
@@ -308,7 +317,16 @@ static void test_basic_name (void)
         while (!tests->end) {
             struct job *job;
             bool rv;
-            job = setup_job (0, tests->name, NULL, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0);
+            job = setup_job (0,
+                             tests->name,
+                             NULL,
+                             0,
+                             0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0);
             rv = job_match (job, c);
             ok (rv == tests->expected,
                 "basic name job match test #%d/#%d",
@@ -385,7 +403,16 @@ static void test_basic_queue (void)
         while (!tests->end) {
             struct job *job;
             bool rv;
-            job = setup_job (0, NULL, tests->queue, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0);
+            job = setup_job (0,
+                             NULL,
+                             tests->queue,
+                             0,
+                             0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0);
             rv = job_match (job, c);
             ok (rv == tests->expected,
                 "basic queue job match test #%d/#%d",
@@ -466,7 +493,16 @@ static void test_basic_states (void)
         while (tests->state) {
             struct job *job;
             bool rv;
-            job = setup_job (0, NULL, NULL, tests->state, 0, 0.0, 0.0, 0.0, 0.0, 0.0);
+            job = setup_job (0,
+                             NULL,
+                             NULL,
+                             tests->state,
+                             0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0);
             rv = job_match (job, c);
             ok (rv == tests->expected,
                 "basic states job match test #%d/#%d",
@@ -550,7 +586,16 @@ static void test_basic_results (void)
         while (tests->state) {  /* result can be 0, iterate on state > 0 */
             struct job *job;
             bool rv;
-            job = setup_job (0, NULL, NULL, tests->state, tests->result, 0.0, 0.0, 0.0, 0.0, 0.0);
+            job = setup_job (0,
+                             NULL,
+                             NULL,
+                             tests->state,
+                             tests->result,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0);
             rv = job_match (job, c);
             ok (rv == tests->expected,
                 "basic results job match test #%d/#%d",
@@ -1046,7 +1091,16 @@ static void test_basic_conditionals (void)
         while (tests->userid) {
             struct job *job;
             bool rv;
-            job = setup_job (tests->userid, tests->name, NULL, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0);
+            job = setup_job (tests->userid,
+                             tests->name,
+                             NULL,
+                             0,
+                             0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0);
             rv = job_match (job, c);
             ok (rv == tests->expected,
                 "basic conditionals job match test #%d/#%d",
