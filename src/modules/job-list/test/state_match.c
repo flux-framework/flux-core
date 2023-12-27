@@ -1108,6 +1108,7 @@ struct state_match_constraint_test {
              { \"userid\": [ 42 ] }, \
              { \"name\": [ \"foo\" ] }, \
              { \"queue\": [ \"foo\" ] }, \
+             { \"hostlist\": [ \"bar\" ] }, \
              { \"states\": [ \"running\" ] }, \
              { \"results\": [ \"completed\" ] }, \
              { \"t_submit\": [ \">=500.0\" ] }, \
