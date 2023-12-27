@@ -1099,6 +1099,36 @@ struct state_match_constraint_test {
             true,
         },
     },
+    /* cover every constraint operator
+     * - every test here should fail as we AND several impossible things
+     */
+    {
+        "{ \"and\": \
+           [ \
+             { \"userid\": [ 42 ] }, \
+             { \"name\": [ \"foo\" ] }, \
+             { \"queue\": [ \"foo\" ] }, \
+             { \"states\": [ \"running\" ] }, \
+             { \"results\": [ \"completed\" ] }, \
+             { \"t_submit\": [ \">=500.0\" ] }, \
+             { \"t_depend\": [ \">=100.0\" ] }, \
+             { \"t_run\": [ \"<=100.0\" ] }, \
+             { \"t_cleanup\": [ \">=100.0\" ] }, \
+             { \"t_inactive\": [ \"<=100.0\" ] } \
+           ] \
+        }",
+        {
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+        },
+    },
     {
         NULL,
         {
