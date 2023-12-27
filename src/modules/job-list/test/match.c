@@ -22,7 +22,9 @@
 /* normally created by job-list "main code" and passed to job_match().
  * we create a global one here and initialize it manually.
  */
-struct match_ctx mctx = { .h = NULL, .max_comparisons = 0 };
+struct match_ctx mctx = { .h = NULL,
+                          .max_hostlist = 1024,
+                          .max_comparisons = 0 };
 
 static void list_constraint_create_corner_case (const char *str,
                                                 const char *fmt,
@@ -100,6 +102,7 @@ static void test_corner_case (void)
 static struct job *setup_job (uint32_t userid,
                               const char *name,
                               const char *queue,
+                              const char *nodelist,
                               flux_job_state_t state,
                               flux_job_result_t result,
                               double t_submit,
@@ -117,6 +120,11 @@ static struct job *setup_job (uint32_t userid,
         job->name = name;
     if (queue)
         job->queue = queue;
+    if (nodelist) {
+        /* N.B. internally is not const, so strdup it */
+        if (!(job->nodelist = strdup (nodelist)))
+            BAIL_OUT ("failed to strdup nodelist");
+    }
     job->state = state;
     if (state) {
         /* Assume all jobs run, we don't skip any states, so add bitmask
@@ -160,7 +168,17 @@ static struct list_constraint *create_list_constraint (const char *constraint)
 
 static void test_basic_special_cases (void)
 {
-    struct job *job = setup_job (0, NULL, NULL, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0);
+    struct job *job = setup_job (0,
+                                 NULL,
+                                 NULL,
+                                 NULL,
+                                 0,
+                                 0,
+                                 0.0,
+                                 0.0,
+                                 0.0,
+                                 0.0,
+                                 0.0);
     struct list_constraint *c;
     flux_error_t error;
     int rv;
@@ -244,6 +262,7 @@ static void test_basic_userid (void)
             flux_error_t error;
             int rv;
             job = setup_job (tests->userid,
+                             NULL,
                              NULL,
                              NULL,
                              0,
@@ -333,6 +352,7 @@ static void test_basic_name (void)
             job = setup_job (0,
                              tests->name,
                              NULL,
+                             NULL,
                              0,
                              0,
                              0.0,
@@ -420,6 +440,7 @@ static void test_basic_queue (void)
             job = setup_job (0,
                              NULL,
                              tests->queue,
+                             NULL,
                              0,
                              0,
                              0.0,
@@ -509,6 +530,7 @@ static void test_basic_states (void)
             flux_error_t error;
             int rv;
             job = setup_job (0,
+                             NULL,
                              NULL,
                              NULL,
                              tests->state,
@@ -605,6 +627,7 @@ static void test_basic_results (void)
             job = setup_job (0,
                              NULL,
                              NULL,
+                             NULL,
                              tests->state,
                              tests->result,
                              0.0,
@@ -615,6 +638,133 @@ static void test_basic_results (void)
             rv = job_match (job, c, &error);
             ok (rv == tests->expected,
                 "basic results job match test #%d/#%d",
+                index, index2);
+            job_destroy (job);
+            index2++;
+            tests++;
+        }
+
+        index++;
+        list_constraint_destroy (c);
+        ctests++;
+    }
+}
+
+static void test_corner_case_hostlist (void)
+{
+    struct list_constraint *c;
+    flux_error_t error;
+    json_error_t jerror;
+    json_t *jc = NULL;
+
+    /* hostrange exceeds maximum allowed */
+
+    if (!(jc = json_loads ("{ \"hostlist\": [ \"foo[1-5000]\" ] }", 0, &jerror)))
+        BAIL_OUT ("json constraint invalid: %s", jerror.text);
+
+    c = list_constraint_create (&mctx, jc, &error);
+    ok (c == NULL,
+        "list_constraint_create fail hostlist with excess hosts: %s",
+        error.text);
+
+    json_decref (jc);
+}
+
+struct basic_hostlist_test {
+    const char *nodelist;
+    bool expected;
+    bool end;                   /* nodelist can be NULL */
+};
+
+struct basic_hostlist_constraint_test {
+    const char *constraint;
+    struct basic_hostlist_test tests[9];
+} basic_hostlist_tests[] = {
+    {
+        "{ \"hostlist\": [ ] }",
+        {
+            /* N.B. nodelist can potentially be NULL */
+            {  NULL, false, false, },
+            {  NULL, false,  true, },
+        },
+    },
+    {
+        "{ \"hostlist\": [ \"foo1\" ] }",
+        {
+            /* N.B. host can potentially be NULL */
+            {  NULL,      false, false, },
+            { "foo1",      true, false, },
+            { "foo2",     false, false, },
+            { "foo[1-2]",  true, false, },
+            { "foo[2-3]", false, false, },
+            {  NULL,      false,  true, },
+        },
+    },
+    {
+        "{ \"hostlist\": [ \"foo[1-2]\" ] }",
+        {
+            /* N.B. host can potentially be NULL */
+            {  NULL,      false, false, },
+            { "foo1",      true, false, },
+            { "foo2",      true, false, },
+            { "foo[1-2]",  true, false, },
+            { "foo[2-3]",  true, false, },
+            { "foo[3-4]", false, false, },
+            {  NULL,      false,  true, },
+        },
+    },
+    {
+        "{ \"hostlist\": [ \"foo1\", \"foo2\", \"foo3\" ] }",
+        {
+            /* N.B. host can potentially be NULL */
+            {  NULL,      false, false, },
+            { "foo1",      true, false, },
+            { "foo2",      true, false, },
+            { "foo[1-2]",  true, false, },
+            { "foo[2-3]",  true, false, },
+            { "foo[3-4]",  true, false, },
+            { "foo4",     false, false, },
+            { "foo[4-5]", false, false, },
+            {  NULL,      false,  true, },
+        },
+    },
+    {
+        NULL,
+        {
+            { NULL, false,  true, },
+        },
+    },
+};
+
+static void test_basic_hostlist (void)
+{
+    struct basic_hostlist_constraint_test *ctests = basic_hostlist_tests;
+    int index = 0;
+
+    while (ctests->constraint) {
+        struct basic_hostlist_test *tests = ctests->tests;
+        struct list_constraint *c;
+        int index2 = 0;
+
+        c = create_list_constraint (ctests->constraint);
+        while (!tests->end) {
+            struct job *job;
+            flux_error_t error;
+            int rv;
+            job = setup_job (0,
+                             NULL,
+                             NULL,
+                             tests->nodelist,
+                             0,
+                             0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0,
+                             0.0);
+            rv = job_match (job, c, &error);
+            ok (rv == tests->expected,
+                "basic host job match test #%d/#%d",
                 index, index2);
             job_destroy (job);
             index2++;
@@ -905,6 +1055,7 @@ static void test_basic_timestamp (void)
             job = setup_job (0,
                              NULL,
                              NULL,
+                             NULL,
                              tests->state,
                              0,
                              tests->t_submit,
@@ -1112,6 +1263,7 @@ static void test_basic_conditionals (void)
             job = setup_job (tests->userid,
                              tests->name,
                              NULL,
+                             NULL,
                              0,
                              0,
                              0.0,
@@ -1139,8 +1291,10 @@ struct realworld_test {
     uint32_t userid;
     const char *name;
     const char *queue;
+    const char *nodelist;
     flux_job_state_t state;
     flux_job_result_t result;
+    double t_run;
     double t_inactive;
     int expected;
 };
@@ -1162,17 +1316,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_DEPEND,
                 0,
                 0.0,
-                true,
-            },
-            {
-                42,
-                "foo",
-                "batch",
-                FLUX_JOB_STATE_RUN,
-                0,
                 0.0,
                 true,
             },
@@ -1180,8 +1327,21 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
+                FLUX_JOB_STATE_RUN,
+                0,
+                0.0,
+                0.0,
+                true,
+            },
+            {
+                42,
+                "foo",
+                "batch",
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
+                0.0,
                 2000.0,
                 true,
             },
@@ -1189,8 +1349,10 @@ struct realworld_constraint_test {
                 43,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
+                0.0,
                 2000.0,
                 false,
             },
@@ -1198,8 +1360,10 @@ struct realworld_constraint_test {
                 0,
                 NULL,
                 NULL,
+                NULL,
                 0,
                 0,
+                0.0,
                 0.0,
                 false
             },
@@ -1218,8 +1382,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_FAILED,
+                0.0,
                 2000.0,
                 true,
             },
@@ -1227,8 +1393,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_CANCELED,
+                0.0,
                 2000.0,
                 true,
             },
@@ -1236,8 +1404,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_TIMEOUT,
+                0.0,
                 2000.0,
                 true,
             },
@@ -1245,8 +1415,10 @@ struct realworld_constraint_test {
                 43,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_FAILED,
+                0.0,
                 2000.0,
                 false,
             },
@@ -1254,8 +1426,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_DEPEND,
                 0,
+                0.0,
                 0.0,
                 false,
             },
@@ -1263,8 +1437,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
+                0.0,
                 0.0,
                 false,
             },
@@ -1272,8 +1448,10 @@ struct realworld_constraint_test {
                 0,
                 NULL,
                 NULL,
+                NULL,
                 0,
                 0,
+                0.0,
                 0.0,
                 false
             },
@@ -1293,8 +1471,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_DEPEND,
                 0,
+                0.0,
                 0.0,
                 true,
             },
@@ -1302,8 +1482,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "debug",
+                NULL,
                 FLUX_JOB_STATE_DEPEND,
                 0,
+                0.0,
                 0.0,
                 true,
             },
@@ -1311,8 +1493,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "debug",
+                NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
+                0.0,
                 0.0,
                 true,
             },
@@ -1320,8 +1504,10 @@ struct realworld_constraint_test {
                 43,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_DEPEND,
                 0,
+                0.0,
                 0.0,
                 false,
             },
@@ -1329,8 +1515,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
+                0.0,
                 2000.0,
                 false,
             },
@@ -1338,8 +1526,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "gpu",
+                NULL,
                 FLUX_JOB_STATE_DEPEND,
                 0,
+                0.0,
                 0.0,
                 false,
             },
@@ -1347,8 +1537,10 @@ struct realworld_constraint_test {
                 0,
                 NULL,
                 NULL,
+                NULL,
                 0,
                 0,
+                0.0,
                 0.0,
                 false
             },
@@ -1369,8 +1561,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
+                0.0,
                 0.0,
                 true,
             },
@@ -1378,8 +1572,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_CLEANUP,
                 0,
+                0.0,
                 0.0,
                 true,
             },
@@ -1387,8 +1583,10 @@ struct realworld_constraint_test {
                 43,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
+                0.0,
                 0.0,
                 false,
             },
@@ -1396,8 +1594,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "debug",
+                NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
+                0.0,
                 0.0,
                 false,
             },
@@ -1405,8 +1605,10 @@ struct realworld_constraint_test {
                 42,
                 "bar",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_RUN,
                 0,
+                0.0,
                 0.0,
                 false,
             },
@@ -1414,8 +1616,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
+                0.0,
                 2000.0,
                 false,
             },
@@ -1423,8 +1627,10 @@ struct realworld_constraint_test {
                 0,
                 NULL,
                 NULL,
+                NULL,
                 0,
                 0,
+                0.0,
                 0.0,
                 false
             },
@@ -1443,17 +1649,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_SCHED,
                 0,
                 0.0,
-                false,
-            },
-            {
-                42,
-                "foo",
-                "batch",
-                FLUX_JOB_STATE_RUN,
-                0,
                 0.0,
                 false,
             },
@@ -1461,8 +1660,21 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
+                FLUX_JOB_STATE_RUN,
+                0,
+                0.0,
+                0.0,
+                false,
+            },
+            {
+                42,
+                "foo",
+                "batch",
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
+                0.0,
                 100.0,
                 false,
             },
@@ -1470,8 +1682,10 @@ struct realworld_constraint_test {
                 42,
                 "foo",
                 "batch",
+                NULL,
                 FLUX_JOB_STATE_INACTIVE,
                 FLUX_JOB_RESULT_COMPLETED,
+                0.0,
                 1000.0,
                 true,
             },
@@ -1479,8 +1693,177 @@ struct realworld_constraint_test {
                 0,
                 NULL,
                 NULL,
+                NULL,
                 0,
                 0,
+                0.0,
+                0.0,
+                false
+            },
+        },
+    },
+    {
+        /* jobs for a user that ran on specific hostlist */
+        "{ \"and\": \
+           [ \
+             { \"userid\": [ 42 ] }, \
+             { \"hostlist\": [ \"node1\", \"node2\" ] } \
+           ] \
+        }",
+        {
+            {
+                42,
+                "foo",
+                "batch",
+                "node[1-3]",
+                FLUX_JOB_STATE_INACTIVE,
+                FLUX_JOB_RESULT_COMPLETED,
+                0.0,
+                0.0,
+                true,
+            },
+            {
+                43,
+                "foo",
+                "batch",
+                "node[1-3]",
+                FLUX_JOB_STATE_INACTIVE,
+                FLUX_JOB_RESULT_COMPLETED,
+                0.0,
+                0.0,
+                false,
+            },
+            {
+                42,
+                "foo",
+                "batch",
+                "node[2-4]",
+                FLUX_JOB_STATE_INACTIVE,
+                FLUX_JOB_RESULT_COMPLETED,
+                0.0,
+                0.0,
+                true,
+            },
+            {
+                42,
+                "foo",
+                "batch",
+                "node[3-4]",
+                FLUX_JOB_STATE_INACTIVE,
+                FLUX_JOB_RESULT_COMPLETED,
+                0.0,
+                0.0,
+                false,
+            },
+            {
+                0,
+                NULL,
+                NULL,
+                NULL,
+                0,
+                0,
+                0.0,
+                0.0,
+                false
+            },
+        },
+    },
+    {
+        /* jobs that ran on specific hostlist during a time period
+         */
+        "{ \"and\": \
+           [ \
+             { \"hostlist\": [ \"node1\", \"node2\" ] }, \
+             { \"t_run\": [ \">=500.0\" ] }, \
+             { \"t_inactive\": [ \"<=5000.0\" ] } \
+           ] \
+        }",
+        {
+            {
+                42,
+                "foo",
+                "batch",
+                "node[1-3]",
+                FLUX_JOB_STATE_RUN,
+                0,
+                1000.0,
+                0.0,
+                false,
+            },
+            {
+                42,
+                "foo",
+                "batch",
+                "node[1-3]",
+                FLUX_JOB_STATE_INACTIVE,
+                FLUX_JOB_RESULT_COMPLETED,
+                1000.0,
+                2000.0,
+                true,
+            },
+            {
+                42,
+                "foo",
+                "batch",
+                "node[2-3]",
+                FLUX_JOB_STATE_RUN,
+                0,
+                1000.0,
+                0.0,
+                false,
+            },
+            {
+                42,
+                "foo",
+                "batch",
+                "node[2-3]",
+                FLUX_JOB_STATE_INACTIVE,
+                FLUX_JOB_RESULT_COMPLETED,
+                1000.0,
+                2000.0,
+                true,
+            },
+            {
+                42,
+                "foo",
+                "batch",
+                "node[2-3]",
+                FLUX_JOB_STATE_INACTIVE,
+                FLUX_JOB_RESULT_COMPLETED,
+                1000.0,
+                6000.0,
+                false,
+            },
+            {
+                42,
+                "foo",
+                "batch",
+                "node[3-4]",
+                FLUX_JOB_STATE_RUN,
+                0,
+                1000.0,
+                0.0,
+                false,
+            },
+            {
+                42,
+                "foo",
+                "batch",
+                "node[3-4]",
+                FLUX_JOB_STATE_INACTIVE,
+                FLUX_JOB_RESULT_COMPLETED,
+                1000.0,
+                2000.0,
+                false,
+            },
+            {
+                0,
+                NULL,
+                NULL,
+                NULL,
+                0,
+                0,
+                0.0,
                 0.0,
                 false
             },
@@ -1493,8 +1876,10 @@ struct realworld_constraint_test {
                 0,
                 NULL,
                 NULL,
+                NULL,
                 0,
                 0,
+                0.0,
                 0.0,
                 false
             },
@@ -1520,11 +1905,12 @@ static void test_realworld (void)
             job = setup_job (tests->userid,
                              tests->name,
                              tests->queue,
+                             tests->nodelist,
                              tests->state,
                              tests->result,
                              0.0,
                              0.0,
-                             0.0,
+                             tests->t_run,
                              0.0,
                              tests->t_inactive);
             rv = job_match (job, c, &error);
@@ -1553,6 +1939,8 @@ int main (int argc, char *argv[])
     test_basic_queue ();
     test_basic_states ();
     test_basic_results ();
+    test_corner_case_hostlist ();
+    test_basic_hostlist ();
     test_basic_timestamp ();
     test_basic_conditionals ();
     test_realworld ();
