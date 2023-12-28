@@ -19,6 +19,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <termios.h>
 #include <unistd.h>
 #include <signal.h>
 #include <assert.h>
@@ -66,6 +67,7 @@ struct runat {
     zhashx_t *entries;
     flux_msg_handler_t **handlers;
     bool sd_notify;
+    struct termios saved_termios;
 };
 
 static void runat_command_destroy (struct runat_command *cmd);
@@ -174,8 +176,15 @@ static void completion_cb (flux_subprocess_t *p)
     }
     if (rc != 0 && entry->exit_code == 0) // capture first exit error
         entry->exit_code = rc;
-    if (entry->foreground && tcsetpgrp (STDIN_FILENO, getpgrp ()) < 0)
+    if (entry->foreground) {
+        /*  This entry was moved to the foreground. Now that it has exited,
+         *  restore the current process group to the foreground and
+         *  reset terminal state.
+         */
+        if (tcsetpgrp (STDIN_FILENO, getpgrp ()) < 0
+            || tcsetattr (STDIN_FILENO, TCSAFLUSH, &r->saved_termios) < 0)
         flux_log_error (r->h, "failed to reset foreground process group");
+    }
     runat_command_destroy (zlist_pop (entry->commands));
     start_next_command (r, entry);
 }
@@ -694,6 +703,9 @@ struct runat *runat_create (flux_t *h, const char *local_uri, bool sdnotify)
     r->h = h;
     r->local_uri = local_uri;
     r->sd_notify = sdnotify;
+    if (isatty (STDIN_FILENO)
+        && tcgetattr (STDIN_FILENO, &r->saved_termios) < 0)
+        flux_log_error (r->h, "failed to save terminal attributes");
     return r;
 error:
     runat_destroy (r);
