@@ -15,6 +15,11 @@ This test verifies that the invariant holds when the router crashes.
 
 export TEST_UNDER_FLUX_TOPO=kary:1
 
+# A test below intentionally sends SIGSEGV to a broker process --
+# avoid an unnecessary corefile by ensuring the corefile limit is 0
+# before calling test_under_flux():
+ulimit -c 0
+
 test_under_flux 3 system
 
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
