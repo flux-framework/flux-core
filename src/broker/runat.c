@@ -55,6 +55,7 @@ struct runat_entry {
     bool aborted;
     bool completed;
     bool interactive;
+    bool foreground;
     runat_completion_f cb;
     void *cb_arg;
 };
@@ -173,6 +174,8 @@ static void completion_cb (flux_subprocess_t *p)
     }
     if (rc != 0 && entry->exit_code == 0) // capture first exit error
         entry->exit_code = rc;
+    if (entry->foreground && tcsetpgrp (STDIN_FILENO, getpgrp ()) < 0)
+        flux_log_error (r->h, "failed to reset foreground process group");
     runat_command_destroy (zlist_pop (entry->commands));
     start_next_command (r, entry);
 }
@@ -186,7 +189,7 @@ static void state_change_cb (flux_subprocess_t *p,
 {
     struct runat *r = flux_subprocess_aux_get (p, "runat");
     struct runat_entry *entry = flux_subprocess_aux_get (p, "runat_entry");
-    flux_future_t *f;
+    flux_future_t *f = NULL;
 
     switch (state) {
         case FLUX_SUBPROCESS_INIT:
@@ -194,16 +197,24 @@ static void state_change_cb (flux_subprocess_t *p,
         case FLUX_SUBPROCESS_FAILED:
             break;
         case FLUX_SUBPROCESS_STOPPED:
-            /*  If this process is non-interactive, and stdin was a tty,
-             *  then likely the subprocess was stopped due to SIGTTIN/TTOU.
-             *  To avoid what would be a permanent hang, log an error and
-             *  kill the child process.
+            /*
+             *  If stdin is a tty and the broker is in a foreground process
+             *  group, the subprocess may have stopped due to SIGTTIN/SIGTTOU.
+             *  Attempt to bring the subprocess into the foreground and
+             *  continue it. Set the foreground flag on the entry so that the
+             *  broker knows to bring its own process group back into the
+             *  foreground after this subprocess is complete.
              */
-            if (!entry->interactive && isatty (STDIN_FILENO)) {
-                flux_log (r->h, LOG_ERR,
-                          "%s: Killing stopped non-interactive process",
-                          entry->name);
-                flux_subprocess_kill (p, SIGKILL);
+            if (isatty (STDIN_FILENO)
+                && tcgetpgrp (STDIN_FILENO) == getpgrp ()) {
+                entry->foreground = true;
+                if (tcsetpgrp (STDIN_FILENO, flux_subprocess_pid (p)) < 0
+                    || !(f = flux_subprocess_kill (p, SIGCONT))) {
+                    flux_log_error (r->h,
+                                    "error bringing %s into foreground",
+                                    entry->name);
+                }
+                flux_future_destroy (f);
             }
             break;
         case FLUX_SUBPROCESS_RUNNING:
