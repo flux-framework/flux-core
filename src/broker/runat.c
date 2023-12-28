@@ -339,6 +339,11 @@ static struct runat_command *runat_command_create (char **env, int flags)
         cmd->flags |= FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH;
     if (flags & RUNAT_FLAG_FORK_EXEC)
         cmd->flags |= FLUX_SUBPROCESS_FLAGS_FORK_EXEC;
+    /*
+     * Always run runat command in separate process group so that any
+     * processes spawned by command are signaled by flux_subprocess_signal()
+     */
+    cmd->flags |= FLUX_SUBPROCESS_FLAGS_SETPGRP;
     if (!(cmd->cmd = flux_cmd_create (0, NULL, env)))
         goto error;
     return cmd;
@@ -475,15 +480,6 @@ int runat_push_shell_command (struct runat *r,
     }
     if (!(cmd = runat_command_create (environ, flags)))
         return -1;
-
-    /*   For shell commands run the target cmdline in a separate process
-     *   group so that any processes spawned by the shell will be signaled
-     *   in runat_abort(). This does not work for an interactive shell
-     *   (seems to disable access to the pty), so this flag is not set in
-     *   runat_push_shell().
-     */
-    cmd->flags |= FLUX_SUBPROCESS_FLAGS_SETPGRP;
-
     if (runat_command_set_cmdline (cmd, NULL, cmdline) < 0)
         goto error;
     if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
@@ -535,13 +531,6 @@ int runat_push_command (struct runat *r,
     }
     if (!(cmd = runat_command_create (environ, flags)))
         return -1;
-
-    /*   Run the target cmdline in a separate process group so that any
-     *   processes spawned by the new process are also signaled in
-     *   runat_abort().
-     */
-    cmd->flags |= FLUX_SUBPROCESS_FLAGS_SETPGRP;
-
     if (runat_command_set_argz (cmd, argz, argz_len) < 0)
         goto error;
     if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
