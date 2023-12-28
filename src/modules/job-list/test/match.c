@@ -1427,7 +1427,7 @@ struct realworld_constraint_test {
                 "batch",
                 FLUX_JOB_STATE_SCHED,
                 0,
-                0,
+                0.0,
                 false,
             },
             {
@@ -1436,7 +1436,7 @@ struct realworld_constraint_test {
                 "batch",
                 FLUX_JOB_STATE_RUN,
                 0,
-                0,
+                0.0,
                 false,
             },
             {
