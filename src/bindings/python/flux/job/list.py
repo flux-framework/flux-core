@@ -199,6 +199,9 @@ class JobList:
           not empty.
     :user: Username or userid for which to fetch jobs. Default is all users.
     :max_entries: Maximum number of jobs to return
+    :since: Limit jobs to those that have been active since a given timestamp.
+    :name: Limit jobs to those with a specific name.
+    :queue: Limit jobs to those submitted to a specific queue.
     """
 
     # pylint: disable=too-many-instance-attributes
