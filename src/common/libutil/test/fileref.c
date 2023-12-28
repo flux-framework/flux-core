@@ -109,6 +109,28 @@ bool test_sparse (void)
     return result;
 }
 
+bool is_sparse (const char *name)
+{
+    bool result = false;
+#ifdef SEEK_HOLE
+    int fd;
+    struct stat sb;
+    off_t offset;
+
+    fd = open (mkpath (name), O_RDONLY);
+    if (fd < 0)
+        return false;
+    if (fstat (fd, &sb) < 0 || !S_ISREG (sb.st_mode))
+        goto error;
+    offset = lseek (fd, 0, SEEK_HOLE);
+    if (offset < sb.st_size)
+        result = true;
+error:
+    close (fd);
+#endif /* SEEK_HOLE */
+    return result;
+}
+
 /* Create test file 'name' under test directory.
  * Each character in  'spec' represents one block filled with that character,
  * except for "-" which tries to create a hole (if supported by file system).
@@ -478,10 +500,11 @@ void test_vec (void)
         json_t *o;
         bool rc;
 
-        skip (strchr (testvec[i].spec, '-') && !have_sparse,
-              1, "test directory does not support sparse files");
-
         mkfile ("testfile", 4096, testvec[i].spec);
+        skip ((strchr (testvec[i].spec, '-')
+              && (!have_sparse || !is_sparse ("testfile"))),
+              1, "sparse %s test file could not be created", testvec[i].spec);
+
         o = xfileref_create_vec (mkpath ("testfile"),
                              testvec[i].hashtype,
                              testvec[i].chunksize);
@@ -493,9 +516,8 @@ void test_vec (void)
             testvec[i].exp_blobs,
             testvec[i].hashtype);
         json_decref (o);
-        rmfile ("testfile");
-
         end_skip;
+        rmfile ("testfile");
     }
 }
 
