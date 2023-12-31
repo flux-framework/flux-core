@@ -926,6 +926,11 @@ class MiniCmd:
             help="Don't actually submit job, just emit jobspec",
         )
         parser.add_argument(
+            "--quiet",
+            action="store_true",
+            help="Do not print jobid to stdout on submission",
+        )
+        parser.add_argument(
             "--debug-emulate", action="store_true", help=argparse.SUPPRESS
         )
         return parser
@@ -1331,11 +1336,6 @@ class SubmitBulkCmd(SubmitBaseCmd):
         self.t0 = None
 
         super().__init__(prog, usage, description)
-        self.parser.add_argument(
-            "--quiet",
-            action="store_true",
-            help="Do not print jobid to stdout on submission",
-        )
         self.parser.add_argument(
             "--cc",
             metavar="IDSET",
