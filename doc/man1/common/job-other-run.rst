@@ -39,7 +39,7 @@
 
 .. option:: --quiet
 
-   *(submit,bulksubmit)* Suppress logging of jobids to stdout.
+   Suppress logging of jobids to stdout
 
 .. option:: --log=FILE
 
