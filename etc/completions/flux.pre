@@ -168,10 +168,10 @@ _flux_update()
         -n, --dry-run \
     "
     if [[ $cur != -* ]]; then
-        #  Attempt to substitute a pending jobid
+        #  Attempt to substitute an active jobid
         compopt +o filenames
-        pending_jobs=$(flux jobs -f pending -no {id})
-        COMPREPLY=( $(compgen -W "${pending_jobs}" -- "$cur") )
+        active_jobs="$(flux jobs -no {id})"
+        COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
         return 0
     fi
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
