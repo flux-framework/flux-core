@@ -11,11 +11,12 @@ import json
 import logging
 import os
 import pty
+import re
 import struct
 import sys
 import termios
 import time
-from signal import SIGINT, SIGTERM, SIGUSR1, SIGWINCH, signal
+from signal import SIGALRM, SIGINT, SIGTERM, SIGUSR1, SIGWINCH, alarm, signal
 
 from flux import util
 
@@ -129,6 +130,7 @@ def parse_args():
         help="set an input file in asciicast format. "
         + "Use the special value 'none' to close stdin of pty immediately.",
     )
+    parser.add_argument("--expect", help="set an expected output file")
     parser.add_argument("--stderr", help="redirect stderr of process")
     parser.add_argument(
         "-f",
@@ -164,6 +166,85 @@ def parse_args():
     return parser.parse_args()
 
 
+class ExpectEntry:
+    """
+    A single Expect/Send entry with optional timeout
+
+    An entry has the form
+
+        {"expect":s, "send":s, "timeout"?i}
+
+    Where 'expect' is a pattern, 'send' is the string to send as input
+    after the expected pattern matches, and 'timeout' is an optional
+    integer number of seconds after which the pattern match times out.
+    """
+
+    def __init__(self, entry):
+        self.expect = re.compile(entry["expect"])
+        self.send = entry["send"]
+        self.timeout = int(entry.get("timeout", 60.0))
+
+    def __str__(self):
+        return self.expect.pattern
+
+
+class Expecter:
+    """
+    Class which represents a list of expected output patterns along with
+    responses that are input after a pattern match. Responses are popped
+    off the stack as they are used.
+    """
+
+    def __init__(self):
+        self.entries = []
+        self.current = None
+        self.data = ""
+
+    def add_file(self, input_file):
+        """
+        Add a set of expect/send entries from a JSON file. The file should
+        contain a JSON array of ExpectEntry objects.
+        """
+        for entry in json.load(input_file):
+            self.entries.append(ExpectEntry(entry))
+        self.next()
+
+    def next(self, data=""):
+        """
+        Advance to the next expect entry
+        """
+        if self.entries:
+            self.current = self.entries.pop(0)
+            self.data = data
+            alarm(self.current.timeout)
+        else:
+            self.current = None
+            self.data = ""
+            alarm(0)
+
+    def match(self, data):
+        """
+        Accumulate data in the expect match buffer and return True if
+        the currently active pattern matches the buffer.
+        """
+        if self.current and data:
+            self.data += data
+            if re.search(self.current.expect, self.data):
+                return True
+        return False
+
+    def pop(self):
+        """
+        Return the current data to send after a match and advance to the
+        next expected pattern.
+        """
+        if self.current:
+            data = self.current.send
+            self.next()
+            return data.encode("utf-8")
+        return None
+
+
 class TTYBuffer:
     def __init__(self, fd, linebuffer=False, bufsize=1024):
         self.linebuffered = linebuffer
@@ -183,6 +264,9 @@ class TTYBuffer:
             pass
         except OSError:
             self.eof = True
+
+    def peek(self):
+        return self.data.decode("utf-8", errors="surrogateescape")
 
     def get(self):
         data = bytes(self.data)
@@ -303,8 +387,21 @@ def main():
                     if event_type == "i":
                         loop.call_later(float(timestamp), write_tty, data)
 
+        expect = Expecter()
+        if args.expect:
+            with open(args.expect) as fp:
+                expect.add_file(fp)
+
+        def timeout(sig, _):
+            os.kill(pid, SIGTERM)
+            log.error("timeout waiting for pattern '%s'", expect.current)
+
+        signal(SIGALRM, timeout)
+
         def read_tty():
             buf.read()
+            if expect.match(buf.peek()):
+                os.write(fd, expect.pop())
             buf.send_data(ofile.write_entry)
             if buf.eof:
                 loop.stop()
