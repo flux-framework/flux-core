@@ -67,3 +67,7 @@
    examined within a test instance started with the
    :option:`flux-start --recovery` option.  If ``FILE`` is unspecified,
    ``flux-{{jobid}}-dump.tgz`` is used.
+
+.. option:: --quiet
+
+   Suppress logging of jobids to stdout

@@ -14,6 +14,10 @@ flux setattr log-stderr-level 1
 NCORES=$(flux kvs get resource.R | flux R decode --count=core)
 test ${NCORES} -gt 4 && test_set_prereq MULTICORE
 
+test_expect_success 'flux-batch --quiet works' '
+	flux batch --quiet -n1 --wrap hostname >quiet.out &&
+	test_must_be_empty quiet.out
+'
 test_expect_success 'flux-batch: create test configs' '
 	cat <<-EOF >conf.json &&
 	{"resource": {"noverify": true}}

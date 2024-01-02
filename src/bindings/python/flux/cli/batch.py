@@ -140,4 +140,5 @@ class BatchCmd(base.MiniCmd):
         self.script, args = self.process_script(args)
 
         jobid = self.submit(args)
-        print(jobid, file=sys.stdout)
+        if not args.quiet:
+            print(jobid, file=sys.stdout)
