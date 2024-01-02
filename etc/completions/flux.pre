@@ -258,6 +258,7 @@ _flux_mini()
     "
     local BATCH_OPTIONS="\
         --wrap \
+        --quiet \
     "
     local ALLOC_OPTIONS="\
         -v --verbose \
@@ -476,6 +477,8 @@ _flux_job()
         -f --format= \
         -T --time-format= \
         -p --path= \
+        -H --human \
+        -L --color= \
     "
     local wait_event_OPTS="\
         -f --format= \
@@ -487,9 +490,12 @@ _flux_job()
         -v --verbose \
         -p --path= \
         -W --waitcreate \
+        -H --human \
+        -L --color= \
     "
     local info_OPTS="\
         -o --original \
+        -b --base \
     "
     local wait_OPTS="\
         -a --all \
@@ -617,6 +623,8 @@ _flux_kvs_eventlog()
         -w --watch \
         -c --count= \
         -u --unformatted \
+        -H --human \
+        -L --color= \
     "
     local wait_event_OPTS="\
         -N --namespace= \
@@ -624,6 +632,8 @@ _flux_kvs_eventlog()
         -u --unformatted \
         -q --quiet \
         -v --verbose \
+        -H --human \
+        -L --color= \
     "
      if [[ $cmd != "eventlog" ]]; then
         var="${cmd//-/_}_OPTS"
