@@ -19,6 +19,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <termios.h>
 #include <unistd.h>
 #include <signal.h>
 #include <assert.h>
@@ -55,6 +56,7 @@ struct runat_entry {
     bool aborted;
     bool completed;
     bool interactive;
+    bool foreground;
     runat_completion_f cb;
     void *cb_arg;
 };
@@ -65,6 +67,7 @@ struct runat {
     zhashx_t *entries;
     flux_msg_handler_t **handlers;
     bool sd_notify;
+    struct termios saved_termios;
 };
 
 static void runat_command_destroy (struct runat_command *cmd);
@@ -173,6 +176,15 @@ static void completion_cb (flux_subprocess_t *p)
     }
     if (rc != 0 && entry->exit_code == 0) // capture first exit error
         entry->exit_code = rc;
+    if (entry->foreground) {
+        /*  This entry was moved to the foreground. Now that it has exited,
+         *  restore the current process group to the foreground and
+         *  reset terminal state.
+         */
+        if (tcsetpgrp (STDIN_FILENO, getpgrp ()) < 0
+            || tcsetattr (STDIN_FILENO, TCSAFLUSH, &r->saved_termios) < 0)
+        flux_log_error (r->h, "failed to reset foreground process group");
+    }
     runat_command_destroy (zlist_pop (entry->commands));
     start_next_command (r, entry);
 }
@@ -186,7 +198,7 @@ static void state_change_cb (flux_subprocess_t *p,
 {
     struct runat *r = flux_subprocess_aux_get (p, "runat");
     struct runat_entry *entry = flux_subprocess_aux_get (p, "runat_entry");
-    flux_future_t *f;
+    flux_future_t *f = NULL;
 
     switch (state) {
         case FLUX_SUBPROCESS_INIT:
@@ -194,16 +206,24 @@ static void state_change_cb (flux_subprocess_t *p,
         case FLUX_SUBPROCESS_FAILED:
             break;
         case FLUX_SUBPROCESS_STOPPED:
-            /*  If this process is non-interactive, and stdin was a tty,
-             *  then likely the subprocess was stopped due to SIGTTIN/TTOU.
-             *  To avoid what would be a permanent hang, log an error and
-             *  kill the child process.
+            /*
+             *  If stdin is a tty and the broker is in a foreground process
+             *  group, the subprocess may have stopped due to SIGTTIN/SIGTTOU.
+             *  Attempt to bring the subprocess into the foreground and
+             *  continue it. Set the foreground flag on the entry so that the
+             *  broker knows to bring its own process group back into the
+             *  foreground after this subprocess is complete.
              */
-            if (!entry->interactive && isatty (STDIN_FILENO)) {
-                flux_log (r->h, LOG_ERR,
-                          "%s: Killing stopped non-interactive process",
-                          entry->name);
-                flux_subprocess_kill (p, SIGKILL);
+            if (isatty (STDIN_FILENO)
+                && tcgetpgrp (STDIN_FILENO) == getpgrp ()) {
+                entry->foreground = true;
+                if (tcsetpgrp (STDIN_FILENO, flux_subprocess_pid (p)) < 0
+                    || !(f = flux_subprocess_kill (p, SIGCONT))) {
+                    flux_log_error (r->h,
+                                    "error bringing %s into foreground",
+                                    entry->name);
+                }
+                flux_future_destroy (f);
             }
             break;
         case FLUX_SUBPROCESS_RUNNING:
@@ -328,6 +348,11 @@ static struct runat_command *runat_command_create (char **env, int flags)
         cmd->flags |= FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH;
     if (flags & RUNAT_FLAG_FORK_EXEC)
         cmd->flags |= FLUX_SUBPROCESS_FLAGS_FORK_EXEC;
+    /*
+     * Always run runat command in separate process group so that any
+     * processes spawned by command are signaled by flux_subprocess_signal()
+     */
+    cmd->flags |= FLUX_SUBPROCESS_FLAGS_SETPGRP;
     if (!(cmd->cmd = flux_cmd_create (0, NULL, env)))
         goto error;
     return cmd;
@@ -464,15 +489,6 @@ int runat_push_shell_command (struct runat *r,
     }
     if (!(cmd = runat_command_create (environ, flags)))
         return -1;
-
-    /*   For shell commands run the target cmdline in a separate process
-     *   group so that any processes spawned by the shell will be signaled
-     *   in runat_abort(). This does not work for an interactive shell
-     *   (seems to disable access to the pty), so this flag is not set in
-     *   runat_push_shell().
-     */
-    cmd->flags |= FLUX_SUBPROCESS_FLAGS_SETPGRP;
-
     if (runat_command_set_cmdline (cmd, NULL, cmdline) < 0)
         goto error;
     if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
@@ -524,13 +540,6 @@ int runat_push_command (struct runat *r,
     }
     if (!(cmd = runat_command_create (environ, flags)))
         return -1;
-
-    /*   Run the target cmdline in a separate process group so that any
-     *   processes spawned by the new process are also signaled in
-     *   runat_abort().
-     */
-    cmd->flags |= FLUX_SUBPROCESS_FLAGS_SETPGRP;
-
     if (runat_command_set_argz (cmd, argz, argz_len) < 0)
         goto error;
     if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
@@ -694,6 +703,9 @@ struct runat *runat_create (flux_t *h, const char *local_uri, bool sdnotify)
     r->h = h;
     r->local_uri = local_uri;
     r->sd_notify = sdnotify;
+    if (isatty (STDIN_FILENO)
+        && tcgetattr (STDIN_FILENO, &r->saved_termios) < 0)
+        flux_log_error (r->h, "failed to save terminal attributes");
     return r;
 error:
     runat_destroy (r);

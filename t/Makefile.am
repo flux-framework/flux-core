@@ -350,7 +350,6 @@ dist_check_SCRIPTS = \
 	issues/t4583-free-range-test.sh \
 	issues/t4612-eventlog-overwrite-crash.sh \
 	issues/t4711-job-list-purge-inactive.sh \
-	issues/t4771-flux-start-bash.sh \
 	issues/t4852-t_submit-legacy.sh \
 	issues/t5105-signal-propagation.sh \
 	issues/t5308-kvsdir-initial-path.py \

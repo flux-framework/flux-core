@@ -171,4 +171,25 @@ test_expect_success 'flux alloc: resource.norestrict works in subinstance' '
 		flux python ./topo-get.py >topo.out &&
 	test_cmp topo.expected topo.out
 '
+test_expect_success 'flux alloc: flux alloc vi works' '
+	cat <<-'EOF' >input.json &&
+	[{"expect":"test\\\.txt", "send":":q!\n", "timeout":30}]
+	EOF
+	cat <<-EOF >test.txt &&
+	test text file
+	EOF
+	$runpty -o vi.out --expect=input.json flux alloc -n1 vi test.txt &&
+	grep "test text file" vi.out
+'
+test_expect_success 'flux alloc: flux alloc flux alloc works' '
+	cat <<-'EOF' >input2.json &&
+	[{"expect":"prompt>", "send":"flux resource info\n", "timeout":120},
+	 {"expect":"prompt>", "send":"exit\n", "timeout":30}
+	]
+	EOF
+	PROMPT_COMMAND="PS1=\"prompt>\"" \
+		$runpty -o allocx2.out --expect=input2.json \
+		flux alloc -n1 flux alloc -n1 bash --norc &&
+	grep prompt allocx2.out
+'
 test_done
