@@ -53,17 +53,11 @@ test_expect_success 'create helper job submission script' '
 # - alternate userid job listing
 
 test_expect_success 'submit jobs for job list testing' '
-	#  Create `hostname` and `sleep` jobspec
-	#  N.B. Used w/ `flux job submit` for serial job submission
-	#  for efficiency (vs serial `flux submit`.
-	#
-	flux submit --dry-run hostname >hostname.json &&
-	flux submit --dry-run --time-limit=5m sleep 600 > sleeplong.json &&
 	#
 	# submit jobs that will complete
 	#
 	for i in $(seq 0 3); do
-		flux job submit hostname.json >> inactiveids
+		flux submit hostname >> inactiveids
 		fj_wait_event `tail -n 1 inactiveids` clean
 	done &&
 	#
@@ -117,20 +111,20 @@ test_expect_success 'submit jobs for job list testing' '
 	#  Submit 8 sleep jobs to fill up resources
 	#
 	for i in $(seq 0 7); do
-		flux job submit sleeplong.json >> runningids
+		flux submit --time-limit=5m sleep 600 >> runningids
 	done &&
 	tac runningids | flux job id > running.ids &&
 	#
 	#  Submit a set of jobs with misc urgencies
 	#
-	id1=$(flux job submit -u20 hostname.json) &&
-	id2=$(flux job submit	   hostname.json) &&
-	id3=$(flux job submit -u31 hostname.json) &&
-	id4=$(flux job submit -u0  hostname.json) &&
-	id5=$(flux job submit -u20 hostname.json) &&
-	id6=$(flux job submit	   hostname.json) &&
-	id7=$(flux job submit -u31 hostname.json) &&
-	id8=$(flux job submit -u0  hostname.json) &&
+	id1=$(flux submit --urgency=20 hostname) &&
+	id2=$(flux submit	       hostname) &&
+	id3=$(flux submit --urgency=31 hostname) &&
+	id4=$(flux submit --urgency=0  hostname) &&
+	id5=$(flux submit --urgency=20 hostname) &&
+	id6=$(flux submit	       hostname) &&
+	id7=$(flux submit --urgency=31 hostname) &&
+	id8=$(flux submit --urgency=0  hostname) &&
 	flux job id $id3 > pending.ids &&
 	flux job id $id7 >> pending.ids &&
 	flux job id $id1 >> pending.ids &&
@@ -2798,6 +2792,7 @@ test_expect_success 'reload job-ingest without validator' '
 '
 
 test_expect_success 'create illegal jobspec with empty command array' '
+	flux submit --dry-run hostname > hostname.json &&
 	cat hostname.json | $jq ".tasks[0].command = []" > bad_jobspec.json
 '
 
