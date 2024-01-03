@@ -164,8 +164,8 @@ _flux_update()
 {
     local cmd=$1
     OPTS="\
-        -v, --verbose \
-        -n, --dry-run \
+        -v --verbose \
+        -n --dry-run \
     "
     if [[ $cur != -* ]]; then
         #  Attempt to substitute an active jobid
