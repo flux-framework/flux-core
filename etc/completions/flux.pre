@@ -146,7 +146,6 @@ _flux_cancel()
     "
     if [[ $cur != -* ]]; then
         #  Attempt to substitute an active jobid
-        compopt +o filenames
         active_jobs=$(flux jobs -no {id})
         COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
         return 0
@@ -164,14 +163,13 @@ _flux_update()
 {
     local cmd=$1
     OPTS="\
-        -v, --verbose \
-        -n, --dry-run \
+        -v --verbose \
+        -n --dry-run \
     "
     if [[ $cur != -* ]]; then
-        #  Attempt to substitute a pending jobid
-        compopt +o filenames
-        pending_jobs=$(flux jobs -f pending -no {id})
-        COMPREPLY=( $(compgen -W "${pending_jobs}" -- "$cur") )
+        #  Attempt to substitute an active jobid
+        active_jobs="$(flux jobs -no {id})"
+        COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
         return 0
     fi
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
@@ -258,6 +256,7 @@ _flux_mini()
     "
     local BATCH_OPTIONS="\
         --wrap \
+        --quiet \
     "
     local ALLOC_OPTIONS="\
         -v --verbose \
@@ -290,7 +289,7 @@ _flux_mini()
 
     if [[ $cmd != "mini" ]]; then
         if [[ $cur != -* ]]; then
-            compopt -o filenames
+            compopt -o bashdefault -o default
         fi
         if _flux_complete_queue; then
             return 0
@@ -476,6 +475,8 @@ _flux_job()
         -f --format= \
         -T --time-format= \
         -p --path= \
+        -H --human \
+        -L --color= \
     "
     local wait_event_OPTS="\
         -f --format= \
@@ -487,9 +488,12 @@ _flux_job()
         -v --verbose \
         -p --path= \
         -W --waitcreate \
+        -H --human \
+        -L --color= \
     "
     local info_OPTS="\
         -o --original \
+        -b --base \
     "
     local wait_OPTS="\
         -a --all \
@@ -519,7 +523,6 @@ _flux_job()
         if [[ $cur != -* ]]; then
            if _flux_contains_word ${cmd} ${subcmds}; then
                 #  These commands take active jobids by default:
-                compopt +o filenames
                 active_jobs=$(flux jobs -no {id})
                 COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
                 return 0
@@ -617,6 +620,8 @@ _flux_kvs_eventlog()
         -w --watch \
         -c --count= \
         -u --unformatted \
+        -H --human \
+        -L --color= \
     "
     local wait_event_OPTS="\
         -N --namespace= \
@@ -624,6 +629,8 @@ _flux_kvs_eventlog()
         -u --unformatted \
         -q --quiet \
         -v --verbose \
+        -H --human \
+        -L --color= \
     "
      if [[ $cmd != "eventlog" ]]; then
         var="${cmd//-/_}_OPTS"
@@ -889,8 +896,7 @@ _flux_module()
         if [[ $cur != -* ]]; then
             if _flux_contains_word ${cmd} ${subcmds_module_arg}; then
                 #  These commands take loaded module as args
-                compopt +o filenames
-                modules=$(flux module list | grep -v Size | awk '{print $1}')
+                modules=$(flux module list | grep -v Module | awk '{print $1}')
                 COMPREPLY=( $(compgen -W "${modules}" -- "$cur") )
                 return 0
             fi
@@ -926,8 +932,7 @@ _flux_jobtap()
         if [[ $cur != -* ]]; then
             if _flux_contains_word ${cmd} ${subcmds_plugin_arg}; then
                 #  These commands take loaded plugins as args
-                compopt +o filenames
-                plugins=$(flux jobtap list)
+                plugins=$(flux jobtap list 2>/dev/null)
                 COMPREPLY=( $(compgen -W "${plugins}" -- "$cur") )
                 return 0
             fi
@@ -1082,7 +1087,6 @@ _flux_watch()
     "
     if [[ $cur != -* ]]; then
         #  Attempt to substitute an active jobid
-        compopt +o filenames
         active_jobs=$(flux jobs -no {id})
         COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
         return 0
@@ -1235,7 +1239,6 @@ _flux_cron()
         if [[ $cur != -* ]]; then
             if _flux_contains_word ${cmd} ${cron_entry_subcmds}; then
                 #  These commands take cron entries as args
-                compopt +o filenames
                 entries=$(flux cron list | grep -v ID | awk '{print $1}')
                 COMPREPLY=( $(compgen -W "${entries}" -- "$cur") )
                 return 0
@@ -1335,6 +1338,9 @@ _flux_exec()
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
         compopt -o nospace
+    else
+        # Reset to default completions for path/executable
+        compopt -o bashdefault -o default
     fi
     return 0
 }
@@ -1521,6 +1527,6 @@ _flux_core()
     return 0
 }
 
-complete -o default -o bashdefault -F _flux_core flux
+complete -F _flux_core flux
 
 # vi: ts=4 sw=4 expandtab
