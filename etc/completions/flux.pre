@@ -937,7 +937,7 @@ _flux_jobtap()
             if _flux_contains_word ${cmd} ${subcmds_plugin_arg}; then
                 #  These commands take loaded plugins as args
                 compopt +o filenames
-                plugins=$(flux jobtap list)
+                plugins=$(flux jobtap list 2>/dev/null)
                 COMPREPLY=( $(compgen -W "${plugins}" -- "$cur") )
                 return 0
             fi
