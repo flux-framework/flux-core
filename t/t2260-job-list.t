@@ -26,6 +26,15 @@ wait_jobid_state() {
 	flux job list-ids --wait-state=$2 $1 > /dev/null
 }
 
+test_expect_success 'setup specific fake hostnames' '
+	flux R encode -r 0-3 -c 0-1 -H node[0-3] \
+	   | tr -d "\n" \
+	   | flux kvs put -r resource.R=- &&
+	flux module unload sched-simple &&
+	flux module reload resource noverify &&
+	flux module load sched-simple
+'
+
 test_expect_success 'create helper job submission script' '
 	cat >sleepinf.sh <<-EOT &&
 	#!/bin/sh
@@ -57,7 +66,7 @@ test_expect_success 'submit jobs for job list testing' '
 	# submit jobs that will complete
 	#
 	for i in $(seq 0 3); do
-		flux submit hostname >> inactiveids
+		flux submit --requires=host:node${i} hostname >> inactiveids
 		fj_wait_event `tail -n 1 inactiveids` clean
 	done &&
 	#
@@ -68,7 +77,7 @@ test_expect_success 'submit jobs for job list testing' '
 	#  Run a job that will fail, copy its JOBID to both inactive and
 	#	failed lists.
 	#
-	! jobid=`flux submit --wait nosuchcommand` &&
+	! jobid=`flux submit --requires=host:node0 --wait nosuchcommand` &&
 	echo $jobid >> inactiveids &&
 	flux job id $jobid > failedids &&
 	#
@@ -78,7 +87,7 @@ test_expect_success 'submit jobs for job list testing' '
 	# N.B. sleepinf.sh and wait-event on job data to workaround
 	# rare job startup race.  See #5210
 	#
-	jobid=`flux submit ./sleepinf.sh` &&
+	jobid=`flux submit --requires=host:node0 ./sleepinf.sh` &&
 	flux job wait-event -W -p guest.output $jobid data &&
 	flux job kill $jobid &&
 	fj_wait_event $jobid clean &&
@@ -92,7 +101,7 @@ test_expect_success 'submit jobs for job list testing' '
 	# N.B. sleepinf.sh and wait-event on job data to workaround
 	# rare job startup race.  See #5210
 	#
-	jobid=`flux submit ./sleepinf.sh` &&
+	jobid=`flux submit --requires=host:node0 ./sleepinf.sh` &&
 	flux job wait-event -W -p guest.output $jobid data &&
 	flux job raise --type=myexception --severity=0 -m "myexception" $jobid &&
 	fj_wait_event $jobid clean &&
@@ -103,12 +112,15 @@ test_expect_success 'submit jobs for job list testing' '
 	#  Run a job that will timeout, copy its JOBID to both inactive and
 	#	timeout lists.
 	#
-	jobid=`flux submit --time-limit=0.5s sleep 30` &&
+	jobid=`flux submit --requires=host:node0 --time-limit=0.5s sleep 30` &&
 	echo $jobid >> inactiveids &&
 	flux job id $jobid > timeout.ids &&
 	fj_wait_event ${jobid} clean &&
 	#
 	#  Submit 8 sleep jobs to fill up resources
+	#
+	#  N.B. no need to specify --requires:host, will be distributed
+	#  evenly
 	#
 	for i in $(seq 0 7); do
 		flux submit --time-limit=5m sleep 600 >> runningids
@@ -116,6 +128,8 @@ test_expect_success 'submit jobs for job list testing' '
 	tac runningids | flux job id > running.ids &&
 	#
 	#  Submit a set of jobs with misc urgencies
+	#
+	#  N.B. no need to specify --requires:host, these jobs wont run
 	#
 	id1=$(flux submit --urgency=20 hostname) &&
 	id2=$(flux submit	       hostname) &&
