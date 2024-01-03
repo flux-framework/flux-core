@@ -900,7 +900,7 @@ _flux_module()
             if _flux_contains_word ${cmd} ${subcmds_module_arg}; then
                 #  These commands take loaded module as args
                 compopt +o filenames
-                modules=$(flux module list | grep -v Size | awk '{print $1}')
+                modules=$(flux module list | grep -v Module | awk '{print $1}')
                 COMPREPLY=( $(compgen -W "${modules}" -- "$cur") )
                 return 0
             fi
