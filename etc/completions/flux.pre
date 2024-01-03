@@ -146,7 +146,6 @@ _flux_cancel()
     "
     if [[ $cur != -* ]]; then
         #  Attempt to substitute an active jobid
-        compopt +o filenames
         active_jobs=$(flux jobs -no {id})
         COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
         return 0
@@ -169,7 +168,6 @@ _flux_update()
     "
     if [[ $cur != -* ]]; then
         #  Attempt to substitute an active jobid
-        compopt +o filenames
         active_jobs="$(flux jobs -no {id})"
         COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
         return 0
@@ -291,7 +289,7 @@ _flux_mini()
 
     if [[ $cmd != "mini" ]]; then
         if [[ $cur != -* ]]; then
-            compopt -o filenames
+            compopt -o bashdefault -o default
         fi
         if _flux_complete_queue; then
             return 0
@@ -525,7 +523,6 @@ _flux_job()
         if [[ $cur != -* ]]; then
            if _flux_contains_word ${cmd} ${subcmds}; then
                 #  These commands take active jobids by default:
-                compopt +o filenames
                 active_jobs=$(flux jobs -no {id})
                 COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
                 return 0
@@ -899,7 +896,6 @@ _flux_module()
         if [[ $cur != -* ]]; then
             if _flux_contains_word ${cmd} ${subcmds_module_arg}; then
                 #  These commands take loaded module as args
-                compopt +o filenames
                 modules=$(flux module list | grep -v Module | awk '{print $1}')
                 COMPREPLY=( $(compgen -W "${modules}" -- "$cur") )
                 return 0
@@ -936,7 +932,6 @@ _flux_jobtap()
         if [[ $cur != -* ]]; then
             if _flux_contains_word ${cmd} ${subcmds_plugin_arg}; then
                 #  These commands take loaded plugins as args
-                compopt +o filenames
                 plugins=$(flux jobtap list 2>/dev/null)
                 COMPREPLY=( $(compgen -W "${plugins}" -- "$cur") )
                 return 0
@@ -1092,7 +1087,6 @@ _flux_watch()
     "
     if [[ $cur != -* ]]; then
         #  Attempt to substitute an active jobid
-        compopt +o filenames
         active_jobs=$(flux jobs -no {id})
         COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
         return 0
@@ -1245,7 +1239,6 @@ _flux_cron()
         if [[ $cur != -* ]]; then
             if _flux_contains_word ${cmd} ${cron_entry_subcmds}; then
                 #  These commands take cron entries as args
-                compopt +o filenames
                 entries=$(flux cron list | grep -v ID | awk '{print $1}')
                 COMPREPLY=( $(compgen -W "${entries}" -- "$cur") )
                 return 0
@@ -1345,6 +1338,9 @@ _flux_exec()
     if [[ "${COMPREPLY[@]}" == *= ]]; then
         # Add space if there is not a '=' in suggestions
         compopt -o nospace
+    else
+        # Reset to default completions for path/executable
+        compopt -o bashdefault -o default
     fi
     return 0
 }
@@ -1531,6 +1527,6 @@ _flux_core()
     return 0
 }
 
-complete -o default -o bashdefault -F _flux_core flux
+complete -F _flux_core flux
 
 # vi: ts=4 sw=4 expandtab
