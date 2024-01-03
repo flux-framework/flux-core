@@ -74,4 +74,8 @@ def rerun_under_flux(size=1, personality="full"):
         command, env=child_env, bufsize=-1, stdout=sys.stdout, stderr=sys.stderr
     )
     p.wait()
+    if p.returncode > 0:
+        sys.exit(p.returncode)
+    elif p.returncode < 0:
+        sys.exit(128 + -p.returncode)
     return False
