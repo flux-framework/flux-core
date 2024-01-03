@@ -20,10 +20,6 @@
      Expands to the current job name. If a name is not set for the job,
      then the basename of the command will be used.
 
-   For :man1:`flux-batch` the default *TEMPLATE* is *flux-{{id}}.out*.
-   To force output to KVS so it is available with ``flux job attach``,
-   set *TEMPLATE* to *none* or *kvs*.
-
 .. option:: --error=TEMPLATE
 
    Redirect stderr to the specified filename *TEMPLATE*, bypassing the KVS.

@@ -87,6 +87,16 @@ resources required for a virtual task. The default slot size is 1 core.
 
 .. include:: common/job-param-additional.rst
 
+STANDARD I/O
+============
+
+For :man1:`flux-batch` the default :option:`--output` *TEMPLATE*
+is *flux-{{id}}.out*.  To force output to KVS so it is available with
+``flux job attach`` or :man1:`flux-watch` , set the :option:`--output`
+*TEMPLATE* to *none* or *kvs*.
+
+.. include:: common/job-standard-io.rst
+
 CONSTRAINTS
 ===========
 
