@@ -22,7 +22,7 @@ __all__ = ["Message", "MessageWatcher", "msg_typestr"]
 
 def msg_typestr(msg_type):
     # the returned string is guaranteed to be ascii
-    return ffi.string(raw.flux_msg_typestr(msg_type)).decode("ascii")
+    return raw.flux_msg_typestr(msg_type).decode("ascii")
 
 
 class Message(WrapperPimpl):
