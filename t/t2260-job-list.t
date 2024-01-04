@@ -617,6 +617,113 @@ test_expect_success 'flux job list all via t_depend (3)' '
 '
 
 #
+# nodelist / hostlist constraint filtering
+#
+
+# N.B. all failed and timeout jobs we explicitly ran on node0, so
+# tests below don't test against node0 to make things easier.
+
+# N.B. failed.ids are jobs that failed after running, thus will have
+# had a node assigned.  timeout.ids obviously ran on a node, but timed
+# out.
+test_expect_success 'flux job list all jobs that ran on any node (1)' '
+	constraint="{ and: [ {hostlist:[\"node[0-3]\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist1.out &&
+	numlines=$(cat completed.ids running.ids failed.ids timeout.ids | wc -l) &&
+	test $(cat constraint_hostlist1.out | wc -l) -eq ${numlines}
+'
+
+test_expect_success 'flux job list all jobs that ran on any node (2)' '
+	constraint="{ and: [ {hostlist:[\"node[2-3]\", \"node1\", \"node0\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist2.out &&
+	numlines=$(cat completed.ids running.ids failed.ids timeout.ids | wc -l) &&
+	test $(cat constraint_hostlist2.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed non-bad jobs on nodes, so should be half of the jobs
+test_expect_success 'flux job list all jobs that ran on nodes[1-2] (1)' '
+	constraint="{ and: [ {hostlist:[\"node[1-2]\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist3.out &&
+	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist3.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed non-bad jobs on nodes, so should be half of the jobs
+test_expect_success 'flux job list all jobs that ran on nodes[1-2] (2)' '
+	constraint="{ and: [ {hostlist:[\"node1\", \"node2\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist4.out &&
+	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist4.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed non-bad jobs on nodes, so should be quarter of the jobs
+test_expect_success 'flux job list all jobs that ran on node3' '
+	constraint="{ and: [ {hostlist:[\"node3\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist5.out &&
+	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 4) &&
+	test $(cat constraint_hostlist5.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed completed jobs on nodes, so should be quarter of the jobs
+test_expect_success 'flux job list completed jobs that ran on node3' '
+	state=`${JOB_CONV} strtostate INACTIVE` &&
+	constraint="{ and: [ {hostlist:[\"node3\"]}, {states:[${state}]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist6.out &&
+	numlines=$(expr $(cat completed.ids | wc -l) / 4) &&
+	test $(cat constraint_hostlist6.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed running jobs on nodes, so should be quarter of the jobs
+test_expect_success 'flux job list running jobs that ran on node3' '
+	state=`${JOB_CONV} strtostate RUNNING` &&
+	constraint="{ and: [ {hostlist:[\"node3\"]}, {states:[${state}]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist7.out &&
+	numlines=$(expr $(cat running.ids | wc -l) / 4) &&
+	test $(cat constraint_hostlist7.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed running jobs on nodes, so should be half of the jobs
+# For this test, get start time of first running job
+test_expect_success 'flux job list of running jobs that ran on node[1-2] after certain time (1)' '
+	id=`tail -n1 running.ids` &&
+	t_submit=`flux job list-ids ${id} | $jq .t_submit` &&
+	constraint="{ and: [ {hostlist:[\"node[1-2]\"]}, {t_submit:[\">=${t_submit}\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist8.out &&
+	numlines=$(expr $(cat running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist8.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed running jobs on nodes, so should be half of the jobs
+# For this test, get last inactive time of completed jobs
+test_expect_success 'flux job list of running jobs that ran on node[1-2] after certain time (2)' '
+	id=`head -n1 completed.ids` &&
+	t_inactive=`flux job list-ids ${id} | $jq .t_inactive` &&
+	constraint="{ and: [ {hostlist:[\"node[1-2]\"]}, {t_submit:[\">${t_inactive}\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist9.out &&
+	numlines=$(expr $(cat running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist9.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed completed & running jobs on nodes, so should be half of the jobs
+test_expect_success 'flux job list of all jobs that ran on node[1-2] after certain time' '
+	id=`head -n1 completed.ids` &&
+	constraint="{ and: [ {hostlist:[\"node[1-2]\"]}, {t_submit:[\">5\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist9.out &&
+	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist9.out | wc -l) -eq ${numlines}
+'
+
+#
 # legacy RPC tests
 #
 
