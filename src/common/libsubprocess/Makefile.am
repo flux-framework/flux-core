@@ -41,6 +41,8 @@ fluxcoreinclude_HEADERS = \
 TESTS = \
 	test_cmd.t \
 	test_subprocess.t \
+	test_stdio.t \
+	test_channel.t \
 	test_remote.t \
 	test_iostress.t \
 	test_iochan.t
@@ -89,6 +91,20 @@ test_subprocess_t_CPPFLAGS = \
 	$(test_cppflags)
 test_subprocess_t_LDADD = $(test_ldadd)
 test_subprocess_t_LDFLAGS = $(test_ldflags)
+
+test_stdio_t_SOURCES = test/stdio.c
+test_stdio_t_CPPFLAGS = \
+	-DTEST_SUBPROCESS_DIR=\"$(top_builddir)/src/common/libsubprocess/\" \
+	$(test_cppflags)
+test_stdio_t_LDADD = $(test_ldadd)
+test_stdio_t_LDFLAGS = $(test_ldflags)
+
+test_channel_t_SOURCES = test/channel.c
+test_channel_t_CPPFLAGS = \
+	-DTEST_SUBPROCESS_DIR=\"$(top_builddir)/src/common/libsubprocess/\" \
+	$(test_cppflags)
+test_channel_t_LDADD = $(test_ldadd)
+test_channel_t_LDFLAGS = $(test_ldflags)
 
 test_remote_t_SOURCES = test/remote.c
 test_remote_t_CPPFLAGS = $(test_cppflags)
