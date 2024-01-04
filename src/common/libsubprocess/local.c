@@ -68,8 +68,10 @@ static void local_channel_flush (struct subprocess_channel *c)
     }
 }
 
-static void local_in_cb (flux_reactor_t *r, flux_watcher_t *w,
-                         int revents, void *arg)
+static void local_in_cb (flux_reactor_t *r,
+                         flux_watcher_t *w,
+                         int revents,
+                         void *arg)
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     int err = 0;
@@ -95,7 +97,8 @@ static void local_in_cb (flux_reactor_t *r, flux_watcher_t *w,
 }
 
 static void local_output (struct subprocess_channel *c,
-                          flux_watcher_t *w, int revents,
+                          flux_watcher_t *w,
+                          int revents,
                           flux_subprocess_output_f output_cb)
 {
     if (revents & FLUX_POLLIN) {
@@ -144,8 +147,10 @@ static void local_output (struct subprocess_channel *c,
         subprocess_check_completed (c->p);
 }
 
-static void local_out_cb (flux_reactor_t *r, flux_watcher_t *w,
-                          int revents, void *arg)
+static void local_out_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     local_output (c, w, revents, c->p->ops.on_channel_out);
@@ -374,8 +379,10 @@ static void close_child_fds (flux_subprocess_t *p)
     }
 }
 
-static void child_watch_cb (flux_reactor_t *r, flux_watcher_t *w,
-                            int revents, void *arg)
+static void child_watch_cb (flux_reactor_t *r,
+                            flux_watcher_t *w,
+                            int revents,
+                            void *arg)
 {
     flux_subprocess_t *p = arg;
     int status;

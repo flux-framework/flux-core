@@ -269,8 +269,10 @@ error:
     proc_internal_fatal (p);
 }
 
-static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
+static void server_exec_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     subprocess_server_t *s = arg;
     json_t *cmd_obj;
@@ -374,8 +376,10 @@ error:
     flux_subprocess_unref (p);
 }
 
-static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void server_write_cb (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     flux_subprocess_t *p;
     subprocess_server_t *s = arg;
@@ -387,7 +391,9 @@ static void server_write_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *io = NULL;
     flux_error_t error;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i s:o }",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:i s:o }",
                              "pid", &pid,
                              "io", &io) < 0
         || iodecode (io, &stream, NULL, &data, &len, &eof) < 0) {
@@ -444,8 +450,10 @@ error:
     proc_internal_fatal (p);
 }
 
-static void server_kill_cb (flux_t *h, flux_msg_handler_t *mh,
-                            const flux_msg_t *msg, void *arg)
+static void server_kill_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     subprocess_server_t *s = arg;
     pid_t pid;
@@ -453,7 +461,9 @@ static void server_kill_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_error_t error;
     const char *errmsg = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i s:i }",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:i s:i }",
                              "pid", &pid,
                              "signum", &signum) < 0)
         goto error;
@@ -505,8 +515,10 @@ static json_t *process_info (flux_subprocess_t *p)
     return info;
 }
 
-static void server_list_cb (flux_t *h, flux_msg_handler_t *mh,
-                            const flux_msg_t *msg, void *arg)
+static void server_list_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
 {
     subprocess_server_t *s = arg;
     flux_subprocess_t *p;

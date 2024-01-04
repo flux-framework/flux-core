@@ -153,7 +153,8 @@ void flux_cmd_destroy (flux_cmd_t *cmd);
 /*
  *  Append formatted string to argv of `cmd`.
  */
-int flux_cmd_argv_appendf (flux_cmd_t *cmd, const char *fmt, ...)
+int flux_cmd_argv_appendf (flux_cmd_t *cmd,
+		           const char *fmt, ...)
                            __attribute__ ((format (printf, 2, 3)));
 
 /*
@@ -190,8 +191,11 @@ char *flux_cmd_stringify (const flux_cmd_t *cmd);
  *  Set a single environment variable (name) to formatted string `fmt`.
  *   If `overwrite` is non-zero then overwrite any existing setting for `name`.
  */
-int flux_cmd_setenvf (flux_cmd_t *cmd, int overwrite,
-                      const char *name, const char *fmt, ...)
+int flux_cmd_setenvf (flux_cmd_t *cmd,
+		      int overwrite,
+                      const char *name,
+		      const char *fmt,
+		      ...)
                       __attribute__ ((format (printf, 4, 5)));
 
 /*
@@ -314,7 +318,9 @@ flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
                                        subprocess_log_f log_fn,
                                        void *log_data);
 
-flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
+flux_subprocess_t *flux_rexec (flux_t *h,
+		               int rank,
+			       int flags,
                                const flux_cmd_t *cmd,
                                const flux_subprocess_ops_t *ops);
 
@@ -349,8 +355,10 @@ int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream);
  *  all `len` bytes cannot fit in the destination buffer, then no bytes
  *  will be written and -1 will be returned with errno=ENOSPC.
  */
-int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
-                           const char *buf, size_t len);
+int flux_subprocess_write (flux_subprocess_t *p,
+		           const char *stream,
+                           const char *buf,
+			   size_t len);
 
 /*
  *  Close "stream" stream of subprocess `p` and schedule EOF to be sent.
@@ -372,7 +380,8 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
  */
 const char *flux_subprocess_read (flux_subprocess_t *p,
                                   const char *stream,
-                                  int len, int *lenp);
+                                  int len,
+				  int *lenp);
 
 /*
  *  Read line unread data from stream `stream`.  'stream' can be
@@ -497,7 +506,9 @@ flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p);
  *  Returns 0 on success
  */
 int flux_subprocess_aux_set (flux_subprocess_t *p,
-                             const char *name, void *ctx, flux_free_f free);
+                             const char *name,
+			     void *ctx,
+			     flux_free_f free);
 
 /*
  *  Return pointer to any context associated with `p` under `name`. If

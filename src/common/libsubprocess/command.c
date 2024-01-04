@@ -80,8 +80,10 @@ static int init_argz (char **argzp, size_t *argz_lenp, char * const av[])
  *  Same as init_argz, but pass argument count (ac) and verify that
  *   the argument vector av has NULL as its final element.
  */
-static int init_argz_count (char **argzp, size_t *argz_lenp,
-                            int ac, char * const av[])
+static int init_argz_count (char **argzp,
+                            size_t *argz_lenp,
+                            int ac,
+                            char * const av[])
 {
     if (av && (av[ac] != NULL)) {
         errno = EINVAL;
@@ -93,8 +95,10 @@ static int init_argz_count (char **argzp, size_t *argz_lenp,
 /*
  *  Append string defined by [fmt, ap] to argz vector in argzp
  */
-static int argz_appendv (char **argzp, size_t *argz_lenp,
-                         const char *fmt,  va_list ap)
+static int argz_appendv (char **argzp,
+                         size_t *argz_lenp,
+                         const char *fmt,
+                         va_list ap)
 {
     int e;
     char *s;
@@ -559,7 +563,9 @@ int flux_cmd_argv_append (flux_cmd_t *cmd, const char *arg)
     return 0;
 }
 
-static int flux_cmd_setenv (flux_cmd_t *cmd, const char *k, const char *v,
+static int flux_cmd_setenv (flux_cmd_t *cmd,
+                            const char *k,
+                            const char *v,
                             int overwrite)
 {
     if (overwrite || !envz_entry (cmd->envz, cmd->envz_len, k)) {
@@ -571,8 +577,10 @@ static int flux_cmd_setenv (flux_cmd_t *cmd, const char *k, const char *v,
     return 0;
 }
 
-int flux_cmd_setenvf (flux_cmd_t *cmd, int overwrite,
-                      const char *name, const char *fmt, ...)
+int flux_cmd_setenvf (flux_cmd_t *cmd,
+                      int overwrite,
+                      const char *name,
+                      const char *fmt, ...)
 {
     va_list ap;
     char *val;
@@ -653,7 +661,7 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name)
         return -1;
     }
     /* autofree is set on cmd->channels, so name is automatically strdup'd */
-    return zlist_append (cmd->channels, (char *) name);
+    return zlist_append (cmd->channels, (char *)name);
 }
 
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val)
@@ -663,7 +671,7 @@ int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val)
         return -1;
     }
     /* autofree is set on cmd->opts, so val is automatically strdup'd */
-    zhash_update (cmd->opts, var, (char *) val);
+    zhash_update (cmd->opts, var, (char *)val);
     return 0;
 }
 
@@ -708,12 +716,15 @@ flux_cmd_t *cmd_fromjson (json_t *o, json_error_t *errp)
         errnum = ENOMEM;
         goto fail;
     }
-    if (json_unpack_ex (o, errp, 0, "{s?s, s:o, s:o, s:o, s:o}",
-                "cwd", &cwd,
-                "cmdline", &jargv,
-                "env", &jenv,
-                "opts", &jopts,
-                "channels", &jchans) < 0) {
+    if (json_unpack_ex (o,
+                        errp,
+                        0,
+                        "{s?s, s:o, s:o, s:o, s:o}",
+                        "cwd", &cwd,
+                        "cmdline", &jargv,
+                        "env", &jenv,
+                        "opts", &jopts,
+                        "channels", &jchans) < 0) {
         errnum = EPROTO;
         goto fail;
     }
