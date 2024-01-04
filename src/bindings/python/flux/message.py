@@ -22,7 +22,7 @@ __all__ = ["Message", "MessageWatcher", "msg_typestr"]
 
 def msg_typestr(msg_type):
     # the returned string is guaranteed to be ascii
-    return ffi.string(raw.flux_msg_typestr(msg_type)).decode("ascii")
+    return raw.flux_msg_typestr(msg_type).decode("ascii")
 
 
 class Message(WrapperPimpl):
@@ -108,6 +108,37 @@ class Message(WrapperPimpl):
     @property
     def type_str(self):
         return msg_typestr(self.type)
+
+    def decode(self):
+        """Decode a message
+
+        Attempt to decode a message and return the message type, topic,
+        and payload string if successful.
+
+        Returns:
+            type: FLUX_MSGTYPE_REQUEST or FLUX_MSGTYPE_RESPONSE
+            topic: topic string
+            payload: payload string if one exists
+        Raises:
+            OSError: if message is an error response, raises OSError with
+                exception.errno set
+        """
+        topic_string = ffi.new("char *[1]")
+        string = ffi.new("char *[1]")
+        if self.type == flux.constants.FLUX_MSGTYPE_REQUEST:
+            raw.flux_request_decode(self.handle, topic_string, string)
+        elif self.type == flux.constants.FLUX_MSGTYPE_RESPONSE:
+            raw.flux_response_decode(self.handle, topic_string, string)
+        elif self.type == flux.constants.FLUX_MSGTYPE_EVENT:
+            raw.flux_event_decode(self.handle, topic_string, string)
+        payload_str = None
+        if string[0] != ffi.NULL:
+            payload_str = ffi.string(string[0]).decode("utf-8")
+        return (
+            self.type,
+            ffi.string(topic_string[0]).decode("utf-8"),
+            payload_str,
+        )
 
 
 # Residing here to avoid cyclic references
