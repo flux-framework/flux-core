@@ -325,14 +325,13 @@ static int copy_match (struct flux_match *dst,
 
 static void call_handler (flux_msg_handler_t *mh, const flux_msg_t *msg)
 {
-    uint32_t rolemask, matchtag;
+    uint32_t rolemask;
 
     if (flux_msg_get_rolemask (msg, &rolemask) < 0)
         return;
     if (!(rolemask & mh->rolemask)) {
         if (flux_msg_cmp (msg, FLUX_MATCH_REQUEST)
-            && flux_msg_get_matchtag (msg, &matchtag) == 0
-            && matchtag != FLUX_MATCHTAG_NONE) {
+            && !flux_msg_has_flag (msg, FLUX_MSGFLAG_NORESPONSE)) {
             const char *errmsg;
             if (mh->rolemask == 0 || mh->rolemask == FLUX_ROLE_OWNER)
                 errmsg = "Request requires owner credentials";
