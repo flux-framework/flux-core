@@ -1,3 +1,48 @@
+flux-core version 0.58.0 - 2024-01-04
+-------------------------------------
+
+## New Features
+ * flux-batch: support `--quiet` option (#5645)
+ * resource: get local hwloc XML from parent when possible (#5636)
+ * python: Add `kvs.commit_async()` (#5627)
+ * python: add `decode` method to Flux `Message` class (#5653)
+ * python: add rolemask parameter to `msg_handler_create()` (#5650)
+
+## Fixes
+ * libflux: respond to denied, matchtagless requests (#5652)
+ * minor updates and improvements to bash completions (#5647)
+ * broker: improve handling of interactive initial programs (#5646)
+ * resource: fix initialization of multiple brokers per node when fallback
+   to job-info.lookup is used (#5639)
+ * libflux: add include for `ssize_t` to message.h (#5638)
+ * libflux: don't accept `FLUX_MSGTYPE_ANY` in `flux_msg_create()` (#5631)
+ * job-list: fix json object mem-leak (#5626)
+ * job-list: fix `flux job list-ids --wait-state` (#5620)
+
+## Documentation
+ * doc: add missing standard-io options to flux-batch(1) (#5648)
+ * doc: expand glossary (#5634)
+ * doc: reference flux-environment(7) in job submission cli man pages (#5629)
+ * misc doc fixes (#5604)
+
+## Cleanup
+ * libflux: drop `flux_msg_frames()` (#5632)
+ * libflux: deprecate some message flag accessors and add new and improved
+   ones (#5630)
+ * maint: remove flux spack docker (#5628)
+
+## Testsuite
+ * testsuite: fix fileref unit test failure on tmpfs (#5643)
+ * testsuite: avoid artificial corefile in test (#5641)
+ * testsuite: fixes for Lassen (#5551)
+ * testsuite: fix test corner case on stderr (#5625)
+ * testsuite: more reliability improvements in tests (#5621)
+ * testsuite: fix t2260-job-list.t with `-d -v` and run inception tests
+   with these args to prevent future similar errors (#5618)
+ * libkvs: fix test failure in aarch64 CI (#5617)
+ * testsuite: fix t2233-job-info-update.t with debug=t (#5616)
+
+
 flux-core version 0.57.0 - 2023-12-07
 -------------------------------------
 
