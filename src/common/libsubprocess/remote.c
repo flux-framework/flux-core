@@ -306,13 +306,13 @@ static void remote_out_check_cb (flux_reactor_t *r,
              || (c->read_eof_received
                  && flux_buffer_bytes (c->read_buffer) > 0)))
         || (!c->line_buffered && flux_buffer_bytes (c->read_buffer) > 0)) {
-        c->output_f (c->p, c->name);
+        c->output_cb (c->p, c->name);
     }
 
     if (!flux_buffer_bytes (c->read_buffer)
         && c->read_eof_received
         && !c->eof_sent_to_caller) {
-        c->output_f (c->p, c->name);
+        c->output_cb (c->p, c->name);
         c->eof_sent_to_caller = true;
         c->p->channels_eof_sent++;
     }
@@ -335,7 +335,7 @@ static void remote_out_check_cb (flux_reactor_t *r,
 }
 
 static int remote_channel_setup (flux_subprocess_t *p,
-                                 flux_subprocess_output_f output_f,
+                                 flux_subprocess_output_f output_cb,
                                  const char *name,
                                  int channel_flags)
 {
@@ -344,7 +344,7 @@ static int remote_channel_setup (flux_subprocess_t *p,
     int save_errno;
     int buffer_size;
 
-    if (!(c = channel_create (p, output_f, name, channel_flags))) {
+    if (!(c = channel_create (p, output_cb, name, channel_flags))) {
         llog_debug (p, "channel_create: %s", strerror (errno));
         goto error;
     }

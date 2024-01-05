@@ -67,7 +67,7 @@ void channel_destroy (void *arg)
 }
 
 struct subprocess_channel *channel_create (flux_subprocess_t *p,
-                                           flux_subprocess_output_f output_f,
+                                           flux_subprocess_output_f output_cb,
                                            const char *name,
                                            int flags)
 {
@@ -78,7 +78,7 @@ struct subprocess_channel *channel_create (flux_subprocess_t *p,
         return NULL;
 
     c->p = p;
-    c->output_f = output_f;
+    c->output_cb = output_cb;
     if (!(c->name = strdup (name)))
         goto error;
     c->flags = flags;
