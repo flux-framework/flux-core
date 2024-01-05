@@ -86,6 +86,14 @@ class TestTimer(unittest.TestCase):
         ) as mw:
             self.assertIsNotNone(mw)
 
+    def test_msg_watcher_rolemask(self):
+        with self.f.msg_watcher_create(
+            lambda handle, x, y, z: handle.fatal_error("cb should not run"),
+            topic_glob="foo.*",
+            rolemask=flux.constants.FLUX_ROLE_ALL,
+        ) as mw:
+            self.assertIsNotNone(mw)
+
 
 class TestSignal(unittest.TestCase):
     @classmethod

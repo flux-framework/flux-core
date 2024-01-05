@@ -247,8 +247,11 @@ class Flux(Wrapper):
         topic_glob="*",
         args=None,
         match_tag=raw.FLUX_MATCHTAG_NONE,
+        rolemask=None,
     ):
-        return MessageWatcher(self, type_mask, callback, topic_glob, match_tag, args)
+        return MessageWatcher(
+            self, type_mask, callback, topic_glob, match_tag, rolemask, args
+        )
 
     def timer_watcher_create(self, after, callback, repeat=0.0, args=None):
         return TimerWatcher(self, after, callback, repeat=repeat, args=args)

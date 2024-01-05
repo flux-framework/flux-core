@@ -169,6 +169,7 @@ class MessageWatcher(Watcher):
         callback,
         topic_glob="*",
         match_tag=flux.constants.FLUX_MATCHTAG_NONE,
+        rolemask=None,
         args=None,
     ):
         self.callback = callback
@@ -197,6 +198,8 @@ class MessageWatcher(Watcher):
                 self.wargs,
             ),
         )
+        if rolemask:
+            flux_handle.msg_handler_allow_rolemask(self.handle, rolemask)
 
     def start(self):
         raw.flux_msg_handler_start(self.handle)
