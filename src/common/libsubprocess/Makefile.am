@@ -40,7 +40,7 @@ fluxcoreinclude_HEADERS = \
 	subprocess.h
 
 TESTS = \
-	test_cmd.t \
+	test_command.t \
 	test_subprocess.t \
 	test_stdio.t \
 	test_channel.t \
@@ -81,10 +81,10 @@ test_libutil_la_SOURCES = \
 	test/rcmdsrv.h \
 	test/rcmdsrv.c
 
-test_cmd_t_SOURCES = test/cmd.c
-test_cmd_t_CPPFLAGS = $(test_cppflags)
-test_cmd_t_LDADD = $(test_ldadd)
-test_cmd_t_LDFLAGS = $(test_ldflags)
+test_command_t_SOURCES = test/command.c
+test_command_t_CPPFLAGS = $(test_cppflags)
+test_command_t_LDADD = $(test_ldadd)
+test_command_t_LDFLAGS = $(test_ldflags)
 
 test_subprocess_t_SOURCES = test/subprocess.c
 test_subprocess_t_CPPFLAGS = \
