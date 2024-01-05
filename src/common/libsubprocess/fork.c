@@ -23,7 +23,7 @@
 #include "src/common/libutil/llog.h"
 
 #include "subprocess_private.h"
-#include "command.h"
+#include "command_private.h"
 
 static int sigmask_unblock_all (void)
 {

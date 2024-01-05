@@ -26,7 +26,7 @@
 
 #include "subprocess.h"
 #include "subprocess_private.h"
-#include "command.h"
+#include "command_private.h"
 #include "server.h"
 #include "client.h"
 

@@ -16,6 +16,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libsubprocess/command.h"
+#include "src/common/libsubprocess/command_private.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 

@@ -17,7 +17,7 @@ noinst_LTLIBRARIES = \
 
 libsubprocess_la_SOURCES = \
 	command.c \
-	command.h \
+	command_private.h \
 	local.c \
 	local.h \
 	fork.c \
@@ -36,6 +36,7 @@ libsubprocess_la_SOURCES = \
 	client.c
 
 fluxcoreinclude_HEADERS = \
+	command.h \
 	subprocess.h
 
 TESTS = \

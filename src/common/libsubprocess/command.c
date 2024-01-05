@@ -32,6 +32,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
+#include "command_private.h"
 #include "command.h"
 
 struct flux_command {

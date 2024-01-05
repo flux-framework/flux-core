@@ -22,7 +22,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 
-#include "command.h"
+#include "command_private.h"
 #include "client.h"
 
 struct rexec_io {
