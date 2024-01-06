@@ -311,18 +311,13 @@ static void getroot_completion (flux_future_t *f, void *arg)
     msg = flux_future_aux_get (f, "msg");
     assert (msg);
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }",
-                             "namespace", &ns) < 0) {
-        flux_log_error (ctx->h, "%s: flux_request_unpack", __FUNCTION__);
-        goto error;
-    }
-
     /* N.B. owner read into uint32_t */
-    if (flux_rpc_get_unpack (f, "{ s:i s:i s:s s:i }",
+    if (flux_rpc_get_unpack (f, "{ s:i s:i s:s s:i s:s }",
                              "owner", &owner,
                              "rootseq", &rootseq,
                              "rootref", &ref,
-                             "flags", &flags) < 0) {
+                             "flags", &flags,
+                             "namespace", &ns) < 0) {
         if (errno != ENOTSUP)
             flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto error;
