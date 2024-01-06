@@ -355,6 +355,7 @@ dist_check_SCRIPTS = \
 	issues/t5105-signal-propagation.sh \
 	issues/t5308-kvsdir-initial-path.py \
 	issues/t5368-kvs-commit-clear.py \
+	issues/t5657-kvs-getroot-namespace.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
