@@ -377,8 +377,7 @@ static int getroot_request_send (struct kvs_ctx *ctx,
                                  const char *ns,
                                  flux_msg_handler_t *mh,
                                  const flux_msg_t *msg,
-                                 lookup_t *lh,
-                                 flux_msg_handler_f cb)
+                                 lookup_t *lh)
 {
     flux_future_t *f = NULL;
     flux_msg_t *msgcpy = NULL;
@@ -422,7 +421,6 @@ static struct kvsroot *getroot (struct kvs_ctx *ctx, const char *ns,
                                 flux_msg_handler_t *mh,
                                 const flux_msg_t *msg,
                                 lookup_t *lh,
-                                flux_msg_handler_f cb,
                                 bool *stall)
 {
     struct kvsroot *root;
@@ -435,7 +433,7 @@ static struct kvsroot *getroot (struct kvs_ctx *ctx, const char *ns,
             return NULL;
         }
         else {
-            if (getroot_request_send (ctx, ns, mh, msg, lh, cb) < 0) {
+            if (getroot_request_send (ctx, ns, mh, msg, lh) < 0) {
                 flux_log_error (ctx->h, "getroot_request_send");
                 return NULL;
             }
@@ -1386,7 +1384,7 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
         ns = lookup_missing_namespace (lh);
         assert (ns);
 
-        root = getroot (ctx, ns, mh, msg, lh, replay_cb, &stall);
+        root = getroot (ctx, ns, mh, msg, lh, &stall);
         assert (!root);
 
         if (stall)
@@ -1679,13 +1677,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx,
-                          ns,
-                          mh,
-                          msg,
-                          NULL,
-                          commit_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
         if (stall)
             return;
         goto error;
@@ -1873,13 +1865,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx,
-                          ns,
-                          mh,
-                          msg,
-                          NULL,
-                          fence_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
         if (stall)
             goto stall;
         goto error;
@@ -1986,8 +1972,7 @@ static void wait_version_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx, ns, mh, msg, NULL, wait_version_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
         if (stall)
             return;
         goto error;
@@ -2047,8 +2032,7 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
          * first.
          */
         bool stall = false;
-        if (!(root = getroot (ctx, ns, mh, msg, NULL,
-                              getroot_request_cb, &stall))) {
+        if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
             if (stall)
                 return;
             goto error;
@@ -2678,13 +2662,7 @@ static void setroot_pause_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx,
-                          ns,
-                          mh,
-                          msg,
-                          NULL,
-                          setroot_pause_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
         if (stall)
             return;
         goto error;
@@ -2749,13 +2727,7 @@ static void setroot_unpause_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx,
-                          ns,
-                          mh,
-                          msg,
-                          NULL,
-                          setroot_unpause_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
         if (stall)
             return;
         goto error;
