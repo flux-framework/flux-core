@@ -2040,11 +2040,12 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     /* N.B. owner cast into int */
-    if (flux_respond_pack (h, msg, "{ s:i s:i s:s s:i }",
+    if (flux_respond_pack (h, msg, "{ s:i s:i s:s s:i s:s }",
                            "owner", root->owner,
                            "rootseq", root->seq,
                            "rootref", root->ref,
-                           "flags", root->flags) < 0)
+                           "flags", root->flags,
+                           "namespace", root->ns_name) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     return;
 error:
