@@ -26,7 +26,7 @@ can be received with :man3:`flux_recv` as though it arrived from the broker.
 FLUX_RQ_TAIL
    :var:`msg` is placed at the tail of the message queue.
 
-FLUX_RQ_TAIL
+FLUX_RQ_HEAD
    :var:`msg` is placed at the head of the message queue.
 
 
