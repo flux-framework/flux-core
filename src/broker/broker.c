@@ -629,7 +629,14 @@ static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
 {
     const char *val;
 
-    val = getenv ("FLUX_URI");
+    /* Set the parent-uri attribute IFF this instance was run as a job
+     * in the enclosing instance.  "parent" in this context reflects
+     * a hierarchy of resource allocation.
+     */
+    if (getenv ("FLUX_JOB_ID"))
+        val = getenv ("FLUX_URI");
+    else
+        val = NULL;
     if (attr_add (attrs, "parent-uri", val, ATTR_IMMUTABLE) < 0)
         log_err_exit ("setattr parent-uri");
     unsetenv ("FLUX_URI");
