@@ -137,6 +137,11 @@ is not on a network file system without considering the ramifications.
    Specify a comma separated list of *tags*.  If no tags are specified,
    the *main* tag is assumed.
 
+.. option:: --overwrite
+
+   Overwrite existing files when extracting.  :program:`flux filemap get`
+   normally refuses to do this and treats it as a fatal error.
+
 unmap
 -----
 
