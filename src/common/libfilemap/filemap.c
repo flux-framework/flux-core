@@ -156,10 +156,16 @@ static int extract_blob (flux_t *h,
                                   buf,
                                   size,
                                   entry.offset) != ARCHIVE_OK) {
-        return errprintf (errp,
-                          "%s: write: %s",
-                          path,
-                          archive_error_string (archive));
+        /* When ARCHIVE_EXTRACT_NO_OVERWRITE is set, the overwrite error from
+         * libarchive-3.6 is "Attempt to write to an empty file". This is
+         * going to be confusing when the file is not empty, such as the common
+         * situation where source and destination of a copy operation are the
+         * same file.  Rewrite that message.
+         */
+        const char *errstr = archive_error_string (archive);
+        if (strstarts (errstr, "Attempt to write to an empty file"))
+            errstr = "Attempt to overwrite existing file";
+        return errprintf (errp, "%s: write: %s", path, errstr);
     }
     flux_future_destroy (f);
     return 0;
