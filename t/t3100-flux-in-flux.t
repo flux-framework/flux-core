@@ -39,9 +39,9 @@ test_expect_success "flux --parent works in subinstance" '
 '
 
 test_expect_success "flux --parent --parent works in subinstance" '
-	id=$(flux submit \
-		flux start ${ARGS} \
-		flux start ${ARGS} flux --parent --parent kvs put test=ok) &&
+	id=$(flux batch -n1 --wrap \
+		flux run flux start ${ARGS} \
+		flux --parent --parent kvs put test=ok) &&
 	flux job attach $id &&
 	flux job info $id guest.test > guest2.test &&
 	cat <<-EOF >guest2.test.exp &&
