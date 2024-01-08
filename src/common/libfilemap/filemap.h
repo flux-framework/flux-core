@@ -51,6 +51,7 @@ flux_future_t *filemap_mmap_list (flux_t *h,
 int filemap_extract (flux_t *h,
                      json_t *files,
                      bool direct,
+		     int libarchive_flags,
                      flux_error_t *errp,
                      filemap_trace_f trace_cb,
                      void *arg);

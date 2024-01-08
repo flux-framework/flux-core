@@ -19,7 +19,6 @@
 #include <libgen.h>
 #include <jansson.h>
 #include <archive.h>
-#include <archive_entry.h>
 
 #include "ccan/base64/base64.h"
 #include "ccan/str/str.h"
@@ -310,13 +309,16 @@ static void trace_fn (void *arg,
 
 static void extract (flux_t *h,
                      optparse_t *p,
-                     struct archive *archive,
                      const char *pattern)
 {
     json_t *tags = get_list_option (p, "tags", "main");
     bool direct = optparse_hasopt (p, "direct");
     flux_future_t *f;
     flux_error_t error;
+    int opts = 0;
+
+    if (!optparse_hasopt (p, "overwrite"))
+        opts |= ARCHIVE_EXTRACT_NO_OVERWRITE;
 
     if (!(f = filemap_mmap_list (h, !direct, tags, pattern)))
         log_err_exit ("mmap-list");
@@ -328,7 +330,7 @@ static void extract (flux_t *h,
                 break; // end of stream
             log_msg_exit ("mmap-list: %s", future_strerror (f, errno));
         }
-        if (filemap_extract (h, files, direct, &error, trace_fn, p) < 0)
+        if (filemap_extract (h, files, direct, opts, &error, trace_fn, p) < 0)
             log_msg_exit ("%s", error.text);
         flux_future_reset (f);
     }
@@ -341,7 +343,6 @@ static int subcmd_get (optparse_t *p, int ac, char *av[])
     const char *directory = optparse_get_str (p, "directory", NULL);
     const char *pattern = NULL;
     flux_t *h;
-    struct archive *archive;
 
     if (n < ac)
         pattern = av[n++];
@@ -355,10 +356,7 @@ static int subcmd_get (optparse_t *p, int ac, char *av[])
     }
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(archive = archive_write_disk_new ()))
-        log_msg_exit ("error creating libarchive context");
-    extract (h, p, archive, pattern);
-    archive_write_free (archive);
+    extract (h, p, pattern);
     flux_close (h);
     return 0;
 }
@@ -421,6 +419,8 @@ static struct optparse_option get_opts[] = {
       .usage = "Specify comma-separated tags (default: main)", },
     { .name = "direct", .has_arg = 0,
       .usage = "Fetch filerefs directly (fastest for single client)", },
+    { .name = "overwrite", .has_arg = 0,
+      .usage = "Overwrite existing files when extracting", },
       OPTPARSE_TABLE_END
 };
 
@@ -447,7 +447,7 @@ static struct optparse_subcommand filemap_subcmds[] = {
       list_opts,
     },
     { "get",
-      "[--tags=LIST] [--directory=DIR] [PATTERN]",
+      "[--tags=LIST] [--directory=DIR] [--overwrite] [PATTERN]",
       "Extract files from content cache",
       subcmd_get,
       0,

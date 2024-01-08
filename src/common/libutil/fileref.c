@@ -334,7 +334,6 @@ json_t *fileref_create_ex (const char *path,
     struct stat sb;
     struct blobvec_mapinfo mapinfo = { .base = MAP_FAILED, .size = 0 };
     int saved_errno;
-    int rc;
 
     if (param) {
         if (param->chunksize < 0
@@ -355,14 +354,19 @@ json_t *fileref_create_ex (const char *path,
     if (strlen (relative_path) == 0)
         relative_path = ".";
     /* Avoid TOCTOU in S_ISREG case by opening before checking its type.
+     * If open fails due to O_NOFOLLOW (ELOOP), get link info with lstat(2).
      */
-    if ((fd = open (fullpath, O_RDONLY | O_NOFOLLOW)) < 0)
-        rc = lstat (fullpath, &sb);
-    else
-        rc = fstat (fd, &sb);
-    if (rc < 0) {
-        errprintf (error, "%s: %s", path, strerror (errno));
-        goto error;
+    if ((fd = open (fullpath, O_RDONLY | O_NOFOLLOW)) < 0) {
+        if (errno != ELOOP || lstat (fullpath, &sb) < 0) {
+            errprintf (error, "%s: %s", path, strerror (errno));
+            goto error;
+        }
+    }
+    else {
+        if (fstat (fd, &sb) < 0) {
+            errprintf (error, "%s: %s", path, strerror (errno));
+            goto error;
+        }
     }
     /* Empty reg file, possibly sparse with size > 0.
      */

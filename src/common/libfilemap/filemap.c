@@ -155,11 +155,18 @@ static int extract_blob (flux_t *h,
     if (archive_write_data_block (archive,
                                   buf,
                                   size,
-                                  entry.offset) != ARCHIVE_OK)
-        return errprintf (errp,
-                          "%s: write: %s",
-                          path,
-                          archive_error_string (archive));
+                                  entry.offset) != ARCHIVE_OK) {
+        /* When ARCHIVE_EXTRACT_NO_OVERWRITE is set, the overwrite error from
+         * libarchive-3.6 is "Attempt to write to an empty file". This is
+         * going to be confusing when the file is not empty, such as the common
+         * situation where source and destination of a copy operation are the
+         * same file.  Rewrite that message.
+         */
+        const char *errstr = archive_error_string (archive);
+        if (strstarts (errstr, "Attempt to write to an empty file"))
+            errstr = "Attempt to overwrite existing file";
+        return errprintf (errp, "%s: write: %s", path, errstr);
+    }
     flux_future_destroy (f);
     return 0;
 }
@@ -334,6 +341,7 @@ static int extract_fileref (flux_t *h,
 int filemap_extract (flux_t *h,
                      json_t *files,
                      bool direct,
+                     int libarchive_flags,
                      flux_error_t *errp,
                      filemap_trace_f trace_cb,
                      void *arg)
@@ -344,8 +352,12 @@ int filemap_extract (flux_t *h,
     struct archive *archive;
     int rc = -1;
 
-    if (!(archive = archive_write_disk_new ()))
-        return errprintf (errp, "error creating libarchive context");
+    if (!(archive = archive_write_disk_new ())
+        || archive_write_disk_set_options (archive,
+                                           libarchive_flags) != ARCHIVE_OK) {
+        errprintf (errp, "error creating libarchive context");
+        goto out;
+    }
 
     if (json_is_array (files)) {
         json_array_foreach (files, index, entry) {
