@@ -155,11 +155,12 @@ static int extract_blob (flux_t *h,
     if (archive_write_data_block (archive,
                                   buf,
                                   size,
-                                  entry.offset) != ARCHIVE_OK)
+                                  entry.offset) != ARCHIVE_OK) {
         return errprintf (errp,
                           "%s: write: %s",
                           path,
                           archive_error_string (archive));
+    }
     flux_future_destroy (f);
     return 0;
 }
@@ -334,6 +335,7 @@ static int extract_fileref (flux_t *h,
 int filemap_extract (flux_t *h,
                      json_t *files,
                      bool direct,
+                     int libarchive_flags,
                      flux_error_t *errp,
                      filemap_trace_f trace_cb,
                      void *arg)
@@ -344,8 +346,12 @@ int filemap_extract (flux_t *h,
     struct archive *archive;
     int rc = -1;
 
-    if (!(archive = archive_write_disk_new ()))
-        return errprintf (errp, "error creating libarchive context");
+    if (!(archive = archive_write_disk_new ())
+        || archive_write_disk_set_options (archive,
+                                           libarchive_flags) != ARCHIVE_OK) {
+        errprintf (errp, "error creating libarchive context");
+        goto out;
+    }
 
     if (json_is_array (files)) {
         json_array_foreach (files, index, entry) {

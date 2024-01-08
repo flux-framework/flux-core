@@ -328,7 +328,7 @@ static void extract (flux_t *h,
                 break; // end of stream
             log_msg_exit ("mmap-list: %s", future_strerror (f, errno));
         }
-        if (filemap_extract (h, files, direct, &error, trace_fn, p) < 0)
+        if (filemap_extract (h, files, direct, 0, &error, trace_fn, p) < 0)
             log_msg_exit ("%s", error.text);
         flux_future_reset (f);
     }

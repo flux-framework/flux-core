@@ -130,6 +130,7 @@ static int extract (struct stage_in *ctx)
         if (filemap_extract (ctx->h,
                              files,
                              ctx->direct,
+                             0,
                              &error,
                              trace_cb,
                              ctx) < 0) {
