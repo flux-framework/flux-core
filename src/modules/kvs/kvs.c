@@ -311,18 +311,13 @@ static void getroot_completion (flux_future_t *f, void *arg)
     msg = flux_future_aux_get (f, "msg");
     assert (msg);
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }",
-                             "namespace", &ns) < 0) {
-        flux_log_error (ctx->h, "%s: flux_request_unpack", __FUNCTION__);
-        goto error;
-    }
-
     /* N.B. owner read into uint32_t */
-    if (flux_rpc_get_unpack (f, "{ s:i s:i s:s s:i }",
+    if (flux_rpc_get_unpack (f, "{ s:i s:i s:s s:i s:s }",
                              "owner", &owner,
                              "rootseq", &rootseq,
                              "rootref", &ref,
-                             "flags", &flags) < 0) {
+                             "flags", &flags,
+                             "namespace", &ns) < 0) {
         if (errno != ENOTSUP)
             flux_log_error (ctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto error;
@@ -377,8 +372,7 @@ static int getroot_request_send (struct kvs_ctx *ctx,
                                  const char *ns,
                                  flux_msg_handler_t *mh,
                                  const flux_msg_t *msg,
-                                 lookup_t *lh,
-                                 flux_msg_handler_f cb)
+                                 lookup_t *lh)
 {
     flux_future_t *f = NULL;
     flux_msg_t *msgcpy = NULL;
@@ -422,7 +416,6 @@ static struct kvsroot *getroot (struct kvs_ctx *ctx, const char *ns,
                                 flux_msg_handler_t *mh,
                                 const flux_msg_t *msg,
                                 lookup_t *lh,
-                                flux_msg_handler_f cb,
                                 bool *stall)
 {
     struct kvsroot *root;
@@ -435,7 +428,7 @@ static struct kvsroot *getroot (struct kvs_ctx *ctx, const char *ns,
             return NULL;
         }
         else {
-            if (getroot_request_send (ctx, ns, mh, msg, lh, cb) < 0) {
+            if (getroot_request_send (ctx, ns, mh, msg, lh) < 0) {
                 flux_log_error (ctx->h, "getroot_request_send");
                 return NULL;
             }
@@ -1386,7 +1379,7 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
         ns = lookup_missing_namespace (lh);
         assert (ns);
 
-        root = getroot (ctx, ns, mh, msg, lh, replay_cb, &stall);
+        root = getroot (ctx, ns, mh, msg, lh, &stall);
         assert (!root);
 
         if (stall)
@@ -1679,13 +1672,7 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx,
-                          ns,
-                          mh,
-                          msg,
-                          NULL,
-                          commit_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
         if (stall)
             return;
         goto error;
@@ -1873,13 +1860,7 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx,
-                          ns,
-                          mh,
-                          msg,
-                          NULL,
-                          fence_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
         if (stall)
             goto stall;
         goto error;
@@ -1986,8 +1967,7 @@ static void wait_version_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx, ns, mh, msg, NULL, wait_version_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
         if (stall)
             return;
         goto error;
@@ -2047,8 +2027,7 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
          * first.
          */
         bool stall = false;
-        if (!(root = getroot (ctx, ns, mh, msg, NULL,
-                              getroot_request_cb, &stall))) {
+        if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
             if (stall)
                 return;
             goto error;
@@ -2056,11 +2035,12 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     /* N.B. owner cast into int */
-    if (flux_respond_pack (h, msg, "{ s:i s:i s:s s:i }",
+    if (flux_respond_pack (h, msg, "{ s:i s:i s:s s:i s:s }",
                            "owner", root->owner,
                            "rootseq", root->seq,
                            "rootref", root->ref,
-                           "flags", root->flags) < 0)
+                           "flags", root->flags,
+                           "namespace", root->ns_name) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     return;
 error:
@@ -2678,13 +2658,7 @@ static void setroot_pause_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx,
-                          ns,
-                          mh,
-                          msg,
-                          NULL,
-                          setroot_pause_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
         if (stall)
             return;
         goto error;
@@ -2749,13 +2723,7 @@ static void setroot_unpause_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx,
-                          ns,
-                          mh,
-                          msg,
-                          NULL,
-                          setroot_unpause_request_cb,
-                          &stall))) {
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, &stall))) {
         if (stall)
             return;
         goto error;
