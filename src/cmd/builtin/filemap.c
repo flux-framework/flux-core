@@ -315,6 +315,10 @@ static void extract (flux_t *h,
     bool direct = optparse_hasopt (p, "direct");
     flux_future_t *f;
     flux_error_t error;
+    int opts = 0;
+
+    if (!optparse_hasopt (p, "overwrite"))
+        opts |= ARCHIVE_EXTRACT_NO_OVERWRITE;
 
     if (!(f = filemap_mmap_list (h, !direct, tags, pattern)))
         log_err_exit ("mmap-list");
@@ -326,7 +330,7 @@ static void extract (flux_t *h,
                 break; // end of stream
             log_msg_exit ("mmap-list: %s", future_strerror (f, errno));
         }
-        if (filemap_extract (h, files, direct, 0, &error, trace_fn, p) < 0)
+        if (filemap_extract (h, files, direct, opts, &error, trace_fn, p) < 0)
             log_msg_exit ("%s", error.text);
         flux_future_reset (f);
     }
@@ -415,6 +419,8 @@ static struct optparse_option get_opts[] = {
       .usage = "Specify comma-separated tags (default: main)", },
     { .name = "direct", .has_arg = 0,
       .usage = "Fetch filerefs directly (fastest for single client)", },
+    { .name = "overwrite", .has_arg = 0,
+      .usage = "Overwrite existing files when extracting", },
       OPTPARSE_TABLE_END
 };
 
@@ -441,7 +447,7 @@ static struct optparse_subcommand filemap_subcmds[] = {
       list_opts,
     },
     { "get",
-      "[--tags=LIST] [--directory=DIR] [PATTERN]",
+      "[--tags=LIST] [--directory=DIR] [--overwrite] [PATTERN]",
       "Extract files from content cache",
       subcmd_get,
       0,
