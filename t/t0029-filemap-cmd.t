@@ -55,6 +55,12 @@ test_expect_success 'create test file' '
 test_expect_success 'map nonexistent file fails' '
 	test_must_fail flux filemap map notafile
 '
+test_expect_success 'map unreadable file fails with appropriate error' '
+	touch unreadable &&
+	chmod ugo-r unreadable &&
+	test_must_fail flux filemap map unreadable 2>unreadable.err &&
+	grep "Permission denied" unreadable.err
+'
 test_expect_success 'map test file' '
 	flux filemap map ./testfile
 '
