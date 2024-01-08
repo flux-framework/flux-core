@@ -1647,7 +1647,8 @@ def add_batch_alloc_args(parser):
         help="Distribute allocated resource slots across N individual nodes",
     )
     parser.add_argument(
+        "-x",
         "--exclusive",
         action="store_true",
-        help="With --nodes, allocate nodes exclusively",
+        help="With -N, --nodes, allocate nodes exclusively",
     )
