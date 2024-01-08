@@ -19,7 +19,6 @@
 #include <libgen.h>
 #include <jansson.h>
 #include <archive.h>
-#include <archive_entry.h>
 
 #include "ccan/base64/base64.h"
 #include "ccan/str/str.h"
@@ -310,7 +309,6 @@ static void trace_fn (void *arg,
 
 static void extract (flux_t *h,
                      optparse_t *p,
-                     struct archive *archive,
                      const char *pattern)
 {
     json_t *tags = get_list_option (p, "tags", "main");
@@ -341,7 +339,6 @@ static int subcmd_get (optparse_t *p, int ac, char *av[])
     const char *directory = optparse_get_str (p, "directory", NULL);
     const char *pattern = NULL;
     flux_t *h;
-    struct archive *archive;
 
     if (n < ac)
         pattern = av[n++];
@@ -355,10 +352,7 @@ static int subcmd_get (optparse_t *p, int ac, char *av[])
     }
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(archive = archive_write_disk_new ()))
-        log_msg_exit ("error creating libarchive context");
-    extract (h, p, archive, pattern);
-    archive_write_free (archive);
+    extract (h, p, pattern);
     flux_close (h);
     return 0;
 }
