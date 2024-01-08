@@ -304,6 +304,27 @@ test_expect_success 'size reduction should cause an error' '
 	test_must_fail flux filemap get -C copydir 2>reduced.err &&
 	grep changed reduced.err
 '
+test_expect_success 'unmap test file' '
+	flux filemap unmap
+'
+
+test_expect_success 're-create and map test file' '
+	${LPTEST} >testfile &&
+	flux filemap map ./testfile
+'
+test_expect_success 'get copydir/testfile' '
+	rm -f copydir/testfile &&
+	flux filemap get -C copydir
+'
+test_expect_success 'get --overwrite works' '
+	flux filemap get --overwrite -C copydir
+'
+test_expect_success 'get refuses to overwrite without explicit option' '
+	test_must_fail flux filemap get -C copydir
+'
+test_expect_success 'unmap test file' '
+	flux filemap unmap
+'
 
 test_expect_success 'remove content module' '
 	flux exec flux module remove content
