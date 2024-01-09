@@ -108,7 +108,6 @@ _flux_complete_format_name() {
 #  Get the list of subcommands from FLUX_EXEC_PATH and hard-coded builtins
 __get_flux_subcommands() {
     local subcommands
-    local deprecated="mini.py"
     if [ -z "$FLUX_EXEC_PATH" ]; then
         FLUX_EXEC_PATH=`flux env printenv FLUX_EXEC_PATH`
     fi
@@ -118,9 +117,7 @@ __get_flux_subcommands() {
         for op in $dir/flux-*; do
             if [[ -x $op  ]]; then
                 op="${op##*flux-}"
-                if ! _flux_contains_word ${op} $deprecated; then
-                    subcommands+="${op%.*} "
-                fi
+                subcommands+="${op%.*} "
             fi
         done
     done
@@ -180,8 +177,8 @@ _flux_update()
     return 0
 }
 
-#  flux-mini(1) completions
-_flux_mini()
+#  flux-{run,submit,batch,alloc,bulksubmit}(1) completions
+_flux_submit_commands()
 {
     local subcmds="run submit batch alloc bulksubmit"
     local cmd=$1
@@ -287,22 +284,18 @@ _flux_mini()
         $ALLOC_OPTIONS \
     "
 
-    if [[ $cmd != "mini" ]]; then
-        if [[ $cur != -* ]]; then
-            compopt -o bashdefault -o default
-        fi
-        if _flux_complete_queue; then
-            return 0
-        fi
+    if [[ $cur != -* ]]; then
+        compopt -o bashdefault -o default
+    fi
+    if _flux_complete_queue; then
+        return 0
+    fi
 
-        var="${cmd}_OPTS"
-        COMPREPLY=( $(compgen -W "${!var}" -- "$cur") )
-        if [[ "${COMPREPLY[@]}" == *= ]]; then
-            # no space if suggestions ends with '='
-            compopt -o nospace
-        fi
-    else
-        COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
+    var="${cmd}_OPTS"
+    COMPREPLY=( $(compgen -W "${!var}" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # no space if suggestions ends with '='
+        compopt -o nospace
     fi
     return 0
 }
@@ -1423,7 +1416,7 @@ _flux_core()
     matched=t
     case "${cmd}" in
     submit|run|alloc|batch|bulksubmit)
-        _flux_mini $cmd
+        _flux_submit_commands $cmd
         ;;
     cancel)
         _flux_cancel $subcmd
