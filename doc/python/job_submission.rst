@@ -26,7 +26,7 @@ Basic Jobspec creation is generally done with the
 ``JobspecV1.from_command`` class method and its
 variants ``from_batch_command`` and ``from_nest_command``, which are helper
 methods replicating the jobspecs created by the
-``flux mini`` command-line utilities.
+job submission command-line utilities.
 
 
 .. autoclass:: flux.job.Jobspec
