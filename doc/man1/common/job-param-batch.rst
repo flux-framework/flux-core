@@ -15,6 +15,6 @@
 
    Distribute allocated resource slots across *N* individual nodes.
 
-.. option:: --exclusive
+.. option:: -x, --exclusive
 
    With :option:`--nodes`, allocate nodes exclusively.
