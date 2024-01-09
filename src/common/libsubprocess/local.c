@@ -27,7 +27,7 @@
 
 #include "subprocess.h"
 #include "subprocess_private.h"
-#include "command.h"
+#include "command_private.h"
 #include "local.h"
 #include "fork.h"
 #include "posix_spawn.h"
@@ -41,7 +41,7 @@ static void local_channel_flush (struct subprocess_channel *c)
     if (!(c->flags & CHANNEL_READ))
         return;
 
-    if (!c->eof_sent_to_caller && c->output_f) {
+    if (!c->eof_sent_to_caller && c->output_cb) {
         flux_buffer_t *fb;
         int len;
 
@@ -53,10 +53,10 @@ static void local_channel_flush (struct subprocess_channel *c)
         }
 
         while ((len = flux_buffer_bytes (fb)) > 0)
-            c->output_f (c->p, c->name);
+            c->output_cb (c->p, c->name);
 
         /* eof call */
-        c->output_f (c->p, c->name);
+        c->output_cb (c->p, c->name);
 
         c->eof_sent_to_caller = true;
         c->p->channels_eof_sent++;
@@ -68,8 +68,10 @@ static void local_channel_flush (struct subprocess_channel *c)
     }
 }
 
-static void local_in_cb (flux_reactor_t *r, flux_watcher_t *w,
-                         int revents, void *arg)
+static void local_in_cb (flux_reactor_t *r,
+                         flux_watcher_t *w,
+                         int revents,
+                         void *arg)
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     int err = 0;
@@ -95,7 +97,8 @@ static void local_in_cb (flux_reactor_t *r, flux_watcher_t *w,
 }
 
 static void local_output (struct subprocess_channel *c,
-                          flux_watcher_t *w, int revents,
+                          flux_watcher_t *w,
+                          int revents,
                           flux_subprocess_output_f output_cb)
 {
     if (revents & FLUX_POLLIN) {
@@ -144,8 +147,10 @@ static void local_output (struct subprocess_channel *c,
         subprocess_check_completed (c->p);
 }
 
-static void local_out_cb (flux_reactor_t *r, flux_watcher_t *w,
-                          int revents, void *arg)
+static void local_out_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
 {
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     local_output (c, w, revents, c->p->ops.on_channel_out);
@@ -166,7 +171,7 @@ static void local_stderr_cb (flux_reactor_t *r, flux_watcher_t *w,
 }
 
 static int channel_local_setup (flux_subprocess_t *p,
-                                flux_subprocess_output_f output_f,
+                                flux_subprocess_output_f output_cb,
                                 flux_watcher_f in_cb,
                                 flux_watcher_f out_cb,
                                 const char *name,
@@ -179,7 +184,7 @@ static int channel_local_setup (flux_subprocess_t *p,
     int fd_flags;
     int buffer_size;
 
-    if (!(c = channel_create (p, output_f, name, channel_flags))) {
+    if (!(c = channel_create (p, output_cb, name, channel_flags))) {
         llog_debug (p, "channel_create %s: %s", name, strerror (errno));
         goto error;
     }
@@ -374,8 +379,10 @@ static void close_child_fds (flux_subprocess_t *p)
     }
 }
 
-static void child_watch_cb (flux_reactor_t *r, flux_watcher_t *w,
-                            int revents, void *arg)
+static void child_watch_cb (flux_reactor_t *r,
+                            flux_watcher_t *w,
+                            int revents,
+                            void *arg)
 {
     flux_subprocess_t *p = arg;
     int status;

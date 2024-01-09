@@ -28,7 +28,7 @@
 
 #include "subprocess.h"
 #include "subprocess_private.h"
-#include "command.h"
+#include "command_private.h"
 #include "local.h"
 #include "remote.h"
 #include "util.h"
@@ -67,7 +67,7 @@ void channel_destroy (void *arg)
 }
 
 struct subprocess_channel *channel_create (flux_subprocess_t *p,
-                                           flux_subprocess_output_f output_f,
+                                           flux_subprocess_output_f output_cb,
                                            const char *name,
                                            int flags)
 {
@@ -78,7 +78,7 @@ struct subprocess_channel *channel_create (flux_subprocess_t *p,
         return NULL;
 
     c->p = p;
-    c->output_f = output_f;
+    c->output_cb = output_cb;
     if (!(c->name = strdup (name)))
         goto error;
     c->flags = flags;
@@ -167,16 +167,16 @@ static void subprocess_free (flux_subprocess_t *p)
     }
 }
 
-static flux_subprocess_t * subprocess_create (flux_t *h,
-                                              flux_reactor_t *r,
-                                              int flags,
-                                              const flux_cmd_t *cmd,
-                                              const flux_subprocess_ops_t *ops,
-                                              const flux_subprocess_hooks_t *hooks,
-                                              int rank,
-                                              bool local,
-                                              subprocess_log_f log_fn,
-                                              void *log_data)
+static flux_subprocess_t *subprocess_create (flux_t *h,
+                                         flux_reactor_t *r,
+                                         int flags,
+                                         const flux_cmd_t *cmd,
+                                         const flux_subprocess_ops_t *ops,
+                                         const flux_subprocess_hooks_t *hooks,
+                                         int rank,
+                                         bool local,
+                                         subprocess_log_f log_fn,
+                                         void *log_data)
 {
     flux_subprocess_t *p = calloc (1, sizeof (*p));
 
@@ -538,7 +538,8 @@ error:
     return NULL;
 }
 
-flux_subprocess_t * flux_local_exec (flux_reactor_t *r, int flags,
+flux_subprocess_t * flux_local_exec (flux_reactor_t *r,
+                                     int flags,
                                      const flux_cmd_t *cmd,
                                      const flux_subprocess_ops_t *ops)
 {
@@ -752,8 +753,10 @@ int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream)
     return ret;
 }
 
-int flux_subprocess_write (flux_subprocess_t *p, const char *stream,
-                           const char *buf, size_t len)
+int flux_subprocess_write (flux_subprocess_t *p,
+                           const char *stream,
+                           const char *buf,
+                           size_t len)
 {
     struct subprocess_channel *c;
     flux_buffer_t *fb;
@@ -925,7 +928,8 @@ static const char *subprocess_read (flux_subprocess_t *p,
 
 const char *flux_subprocess_read (flux_subprocess_t *p,
                                   const char *stream,
-                                  int len, int *lenp)
+                                  int len,
+                                  int *lenp)
 {
     return subprocess_read (p, stream, len, lenp, false, false, false, NULL);
 }
@@ -944,7 +948,8 @@ const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
     return subprocess_read (p, stream, 0, lenp, true, true, false, NULL);
 }
 
-int flux_subprocess_read_stream_closed (flux_subprocess_t *p, const char *stream)
+int flux_subprocess_read_stream_closed (flux_subprocess_t *p,
+                                        const char *stream)
 {
     struct subprocess_channel *c;
     flux_buffer_t *fb;
@@ -1222,7 +1227,9 @@ flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p)
 }
 
 int flux_subprocess_aux_set (flux_subprocess_t *p,
-                             const char *name, void *x, flux_free_f free_fn)
+                             const char *name,
+                             void *x,
+                             flux_free_f free_fn)
 {
     if (!p || (p->local && p->in_hook)) {
         errno = EINVAL;

@@ -23,7 +23,7 @@
 
 struct subprocess_channel {
     flux_subprocess_t *p;
-    flux_subprocess_output_f output_f;
+    flux_subprocess_output_f output_cb;
     char *name;
     int flags;
 
@@ -121,7 +121,7 @@ void state_change_start (flux_subprocess_t *p);
 void channel_destroy (void *arg);
 
 struct subprocess_channel *channel_create (flux_subprocess_t *p,
-                                           flux_subprocess_output_f output_f,
+                                           flux_subprocess_output_f output_cb,
                                            const char *name,
                                            int flags);
 

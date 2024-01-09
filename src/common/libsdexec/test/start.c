@@ -16,7 +16,7 @@
 #include <jansson.h>
 #include <flux/core.h>
 
-#include "src/common/libsubprocess/command.h"
+#include "src/common/libsubprocess/command_private.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/jpath.h"
 #include "start.h"

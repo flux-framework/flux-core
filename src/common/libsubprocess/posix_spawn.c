@@ -23,7 +23,7 @@
 #include "src/common/libutil/fdwalk.h"
 
 #include "subprocess_private.h"
-#include "command.h"
+#include "command_private.h"
 
 struct spawn_close_arg {
     posix_spawn_file_actions_t *fa;
