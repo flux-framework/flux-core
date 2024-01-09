@@ -36,5 +36,5 @@ class Validator(ValidatorPlugin):
         return (
             errno.EINVAL,
             "Direct job submission is disabled for this instance."
-            + " Please use the batch or alloc subcommands of flux-mini(1)",
+            + " Please use flux-batch(1) or flux-alloc(1)",
         )

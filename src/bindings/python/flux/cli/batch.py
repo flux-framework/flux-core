@@ -128,7 +128,7 @@ class BatchCmd(base.MiniCmd):
     def main(self, args):
         #  Save cmdline argv to flux-batch in case it must be reprocessed
         #  after applying directive options.
-        #  self.argv is sys.argv without flux-batch or flux-mini, batch:
+        #  self.argv is sys.argv without flux-batch:
         self.argv = sys.argv[1:]
         if self.argv and self.argv[0] == "batch":
             self.argv.pop(0)
