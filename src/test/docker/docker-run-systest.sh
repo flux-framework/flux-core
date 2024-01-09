@@ -101,7 +101,7 @@ checks_group "Launching system instance container $NAME" \
     || die "docker run of fluxorama test container failed"
 
 until docker exec -u $USER:$GID \
-    flux-system-test-$$ flux mini run hostname 2>/dev/null; do
+    flux-system-test-$$ flux run hostname 2>/dev/null; do
     echo "Waiting for flux-system-test-$$ to be ready"
     sleep 1
 done

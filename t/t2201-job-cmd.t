@@ -772,7 +772,7 @@ test_expect_success 'flux job: timeleft -H works with time limit' '
 	flux run -t 1m flux job timeleft -H >timeleft2H &&
 	grep "[0-9]s$" timeleft2H
 '
-test_expect_success 'flux job: timeleft works under mini alloc (and job)' '
+test_expect_success 'flux job: timeleft works under alloc (and job)' '
 	cat <<-EOF >test.sh &&
 	flux job timeleft > timeleft3
 	flux run flux job timeleft > timeleft4

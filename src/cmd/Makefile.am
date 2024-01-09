@@ -95,7 +95,6 @@ flux_LDADD = \
 
 dist_fluxcmd_SCRIPTS = \
 	flux-cron \
-	flux-mini.py \
 	flux-alloc.py \
 	flux-batch.py \
 	flux-run.py \

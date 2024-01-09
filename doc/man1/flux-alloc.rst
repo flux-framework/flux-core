@@ -44,7 +44,7 @@ refer to the subinstance, for example
    $ flux alloc --bg -N 2 --queue=batch
    ƒM7Zq9AKHno
    $ flux proxy ƒM7Zq9AKHno
-   $ flux mini run -n16 ./testprog
+   $ flux run -n16 ./testprog
    ...
    $ flux shutdown
    ...

@@ -56,9 +56,7 @@ LONGTESTSCRIPTS = \
 	t2801-top-cmd.t \
 	t2808-shutdown-cmd.t \
 	t2712-python-cli-alloc.t \
-	t2702-mini-alloc.t \
-	t2714-python-cli-batch.t \
-	t2701-mini-batch.t
+	t2714-python-cli-batch.t
 
 # This list is included in both TESTS and dist_check_SCRIPTS.
 TESTSCRIPTS = \
@@ -210,8 +208,6 @@ TESTSCRIPTS = \
 	t2616-job-shell-taskmap.t \
 	t2617-job-shell-stage-in.t \
 	t2618-job-shell-signal.t \
-	t2700-mini-cmd.t \
-	t2703-mini-bulksubmit.t \
 	t2710-python-cli-submit.t \
 	t2711-python-cli-run.t \
 	t2713-python-cli-bulksubmit.t \

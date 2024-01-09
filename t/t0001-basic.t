@@ -817,7 +817,6 @@ jobtap \
 keygen \
 kvs \
 logger \
-mini \
 module \
 ping \
 queue \
