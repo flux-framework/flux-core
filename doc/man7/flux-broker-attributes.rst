@@ -61,8 +61,7 @@ local-uri [Updates: C]
    existing directory.
 
 parent-uri
-   The value of the broker's :envvar:`FLUX_URI` environment variable.  This is
-   the URI that should be passed to :man3:`flux_open` to establish a connection
+   The URI that should be passed to :man3:`flux_open` to establish a connection
    to the enclosing instance.
 
 instance-level
