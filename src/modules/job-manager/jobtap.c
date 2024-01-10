@@ -671,19 +671,24 @@ static int jobtap_post_jobspec_updates (struct jobtap *jobtap,
                                         struct job *job)
 {
     int rc;
-    int saved_errno;
-    if (!jobtap->jobspec_update)
+    json_t *update = jobtap->jobspec_update;
+
+    if (!update)
         return 0;
+    /*
+     * Note: Ensure this function is reentrant by nullifying
+     * jobtap->jobspec_update before posting the jobspec-update event.
+     * The jobspec-update event may trigger other jobtap callbacks, most
+     * notably via a call to "job.update".
+     */
+    jobtap->jobspec_update = NULL;
     rc = event_job_post_pack (jobtap->ctx->event,
                               job,
                               "jobspec-update",
                               0,
                               "O",
-                              jobtap->jobspec_update);
-    saved_errno = errno;
-    json_decref (jobtap->jobspec_update);
-    jobtap->jobspec_update = NULL;
-    errno = saved_errno;
+                              update);
+    ERRNO_SAFE_WRAP (json_decref, update);
     return rc;
 }
 
