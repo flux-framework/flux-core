@@ -91,6 +91,47 @@ error:
     return -1;
 }
 
+static int update_cb (flux_plugin_t *p,
+                      const char *topic,
+                      flux_plugin_arg_t *args,
+                      void *data)
+{
+    json_t *updates = NULL;
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:o}",
+                                "updates", &updates) < 0) {
+        flux_jobtap_reject_job (p,
+                                args,
+                                "job.update: %s",
+                                flux_plugin_arg_strerror (args));
+    }
+    return 0;
+}
+
+static int new_cb (flux_plugin_t *p,
+                        const char *topic,
+                        flux_plugin_arg_t *args,
+                        void *data)
+{
+    flux_error_t error;
+    if (get_and_update_jobspec_name (&error, p, args, NULL, "new") < 0)
+        flux_jobtap_reject_job (p, args, "jobspec-update: %s", error.text);
+    return 0;
+}
+
+static int priority_cb (flux_plugin_t *p,
+                        const char *topic,
+                        flux_plugin_arg_t *args,
+                        void *data)
+{
+    flux_error_t error;
+    if (get_and_update_jobspec_name (&error, p, args, NULL, "priority") < 0)
+        flux_jobtap_reject_job (p, args, "jobspec-update: %s", error.text);
+    return 0;
+}
+
+
 static int validate_cb (flux_plugin_t *p,
                         const char *topic,
                         flux_plugin_arg_t *args,
@@ -128,7 +169,7 @@ static int depend_cb (flux_plugin_t *p,
                                      "expected job name was NULL");
         return -1;
     }
-    if (!streq (name, "validated")) {
+    if (!streq (name, "new")) {
         flux_jobtap_raise_exception (p,
                                      FLUX_JOBTAP_CURRENT_JOB,
                                      "jobspec-update", 0,
@@ -160,7 +201,10 @@ static int run_cb (flux_plugin_t *p,
 
 
 static const struct flux_plugin_handler tab[] = {
+    { "job.new", new_cb, NULL },
+    { "job.update", update_cb, NULL },
     { "job.validate", validate_cb, NULL },
+    { "job.state.priority", priority_cb, NULL },
     { "job.state.depend", depend_cb, NULL },
     { "job.state.run", run_cb, NULL },
     { 0 },
