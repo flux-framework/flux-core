@@ -747,7 +747,7 @@ static int event_jobtap_call (struct event *event,
         if (json_unpack (entry, "{s:o}", "context", &updates) < 0) {
             flux_log (event->ctx->h,
                       LOG_ERR,
-                      "unable to unpack jobspec-update contexto for %s",
+                      "unable to unpack jobspec-update context for %s",
                       idf58 (job->id));
             return -1;
         }
