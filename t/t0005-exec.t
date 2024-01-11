@@ -40,9 +40,21 @@ test_expect_success 'exec to all except a set of ranks' '
 	1
 	EOT
 '
-
+test_expect_success 'configure access.allow-guest-user = true' '
+	flux config load <<-EOT
+	access.allow-guest-user = true
+	EOT
+'
 test_expect_success 'exec to rank 0 from another rank is an error' '
 	test_must_fail flux exec -n -r 1 flux exec -n -r 0 /bin/true
+'
+test_expect_success 'configure access.allow-guest-user = false' '
+	flux config load <<-EOT
+	access.allow-guest-user = false
+	EOT
+'
+test_expect_success 'exec to rank 0 from another rank works' '
+	flux exec -n -r 1 flux exec -n -r 0 /bin/true
 '
 
 test_expect_success 'exec to non-existent rank is an error' '

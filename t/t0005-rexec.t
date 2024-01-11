@@ -243,7 +243,11 @@ test_expect_success 'rexec read_getline call works on remote streams' '
 	echo "barEOF" >> expected &&
 	test_cmp expected output
 '
-
+test_expect_success 'configure access.allow-guest-user = true' '
+	flux config load <<-EOT
+	access.allow-guest-user = true
+	EOT
+'
 test_expect_success 'get URI for rank 1 and check that it works' '
 	$rexec -r 1 flux getattr local-uri >uri1 &&
 	test $(FLUX_URI=$(cat uri1) flux getattr rank) -eq 1
@@ -276,6 +280,15 @@ test_expect_success NO_CHAIN_LINT 'ps, kill fail remotely on rank 0' '
 		$rexec_script kill --rank 0 15 $pid) &&
 	$rexec_script kill 15 $pid &&
 	wait_rexec_process_count 0 0
+'
+
+test_expect_success 'configure access.allow-guest-user = false' '
+	flux config load <<-EOT
+	access.allow-guest-user = false
+	EOT
+'
+test_expect_success 'rexec from rank 1 to rank 0 works' '
+	(FLUX_URI=$(cat uri1) $rexec -r 0 /bin/true)
 '
 
 test_expect_success NO_CHAIN_LINT 'kill fails with ESRCH when pid is unknown' '
