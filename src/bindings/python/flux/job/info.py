@@ -19,7 +19,7 @@ from datetime import datetime
 from itertools import chain
 
 import flux.constants
-from flux.core.inner import raw
+from flux.core.inner import ffi, raw
 from flux.job.JobID import JobID
 from flux.job.stats import JobStats
 from flux.memoized_property import memoized_property
@@ -40,6 +40,12 @@ except ImportError:
 
 def statetostr(stateid, fmt="L"):
     return raw.flux_job_statetostr(stateid, fmt).decode("utf-8")
+
+
+def strtostate(state):
+    result = ffi.new("flux_job_state_t [1]")
+    raw.flux_job_strtostate(state, result)
+    return int(result[0])
 
 
 def statetoemoji(stateid):
@@ -79,6 +85,12 @@ def resulttostr(resultid, fmt="L"):
     if resultid == "":
         return ""
     return raw.flux_job_resulttostr(resultid, fmt).decode("utf-8")
+
+
+def strtoresult(arg):
+    result = ffi.new("flux_job_result_t [1]")
+    raw.flux_job_strtoresult(arg, result)
+    return int(result[0])
 
 
 def resulttoemoji(resultid):
