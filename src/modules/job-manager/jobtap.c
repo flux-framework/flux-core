@@ -2118,7 +2118,7 @@ static int jobtap_job_vraise (struct jobtap *jobtap,
                                 job,
                                 type,
                                 severity,
-                                FLUX_USERID_UNKNOWN,
+                                jobtap->ctx->owner,
                                 note);
 }
 
