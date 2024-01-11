@@ -285,7 +285,7 @@ static void start_response_cb (flux_t *h,
                                  "{s:s s:i s:I s:s}",
                                  "type", xtype,
                                  "severity", xseverity,
-                                 "userid", (json_int_t) FLUX_USERID_UNKNOWN,
+                                 "userid", (json_int_t)ctx->owner,
                                  "note", xnote)  < 0)
             goto error_post;
     }

@@ -11,6 +11,8 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
+#include <sys/types.h>
 #include <flux/core.h>
 
 #include "src/common/libjob/job_hash.h"
@@ -157,6 +159,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     memset (&ctx, 0, sizeof (ctx));
     ctx.h = h;
+    ctx.owner = getuid ();
 
     if (!(ctx.active_jobs = job_hash_create ())
         || !(ctx.inactive_jobs = job_hash_create ())) {

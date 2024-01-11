@@ -20,6 +20,7 @@ struct job_manager {
     zhashx_t *inactive_jobs;
     int running_jobs; // count of jobs in RUN | CLEANUP state
     flux_jobid_t max_jobid; // largest jobid allocated thus far
+    uid_t owner;
     struct conf *conf;
     struct start *start;
     struct alloc *alloc;

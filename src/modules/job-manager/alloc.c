@@ -309,7 +309,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                  job,
                                  "alloc",
                                  0,
-                                 FLUX_USERID_UNKNOWN,
+                                 ctx->owner,
                                  note) < 0)
             goto teardown;
         break;
