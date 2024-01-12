@@ -95,7 +95,7 @@ const char *flux_attr_get (flux_t *h, const char *name)
     struct attr_cache *c;
     const char *val;
     int flags;
-    flux_future_t *f;
+    flux_future_t *f = NULL;
     char *cpy = NULL;
     const char *orig_name = name;
     char *proxy_remote = NULL;
@@ -118,24 +118,36 @@ const char *flux_attr_get (flux_t *h, const char *name)
      *  substituting FLUX_PROXY_REMOTE in an ssh:// uri.
      */
     if (streq (name, "parent-uri")
-        && (proxy_remote = getenv ("FLUX_PROXY_REMOTE"))) {
-        orig_name = name;
+        && (proxy_remote = getenv ("FLUX_PROXY_REMOTE")))
         name = "parent-remote-uri";
-    }
     if ((val = zhashx_lookup (c->cache, name)))
         return val;
-    if (!(f = flux_rpc_pack (h,
-                             "attr.get",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:s}",
-                             "name", orig_name)))
-        return NULL;
-    if (flux_rpc_get_unpack (f,
-                             "{s:s s:i}",
-                             "value", &val,
-                             "flags", &flags) < 0)
-        goto done;
+
+    /*  If FLUX_PROXY_REMOTE was set, try a lookup of 'orig_name' in
+     *  the cache before attempting an RPC. If successful, then set
+     *  the immutable flag for the parent-remote-uri attr (it should not
+     *  change), since 'flags' will not be set by the RPC, which is being
+     *  skipped.
+     */
+    if (proxy_remote && (val = zhashx_lookup (c->cache, orig_name)))
+        flags = FLUX_ATTRFLAG_IMMUTABLE;
+
+    /*  If we still don't have a value for this attribute, try an RPC:
+     */
+    if (!val) {
+        if (!(f = flux_rpc_pack (h,
+                                 "attr.get",
+                                 FLUX_NODEID_ANY,
+                                 0,
+                                 "{s:s}",
+                                 "name", orig_name)))
+            return NULL;
+        if (flux_rpc_get_unpack (f,
+                                 "{s:s s:i}",
+                                 "value", &val,
+                                 "flags", &flags) < 0)
+            goto done;
+    }
 
     /*  If proxy_remote is non-NULL then parent-uri has been aliased to
      *  parent-remote-uri. Swap a local URI to a remote:
