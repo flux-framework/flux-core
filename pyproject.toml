@@ -39,7 +39,6 @@ ignore_missing_imports = true
     "_flux._rlist",
     "_flux.cffi",
     "setuptools",
-    "jsonschema",
     "flux.utils",
     "flux.utils.parsedatetime",
     "flux.utils.tomli",

@@ -10,7 +10,6 @@ test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-list/list-rpc.py"
-PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-list/jobspec-permissive.jsonschema
 JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py"
 

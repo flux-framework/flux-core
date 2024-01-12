@@ -29,11 +29,6 @@ libingest_la_SOURCES = \
 	pipeline.h \
 	pipeline.c
 
-fluxschemadir = $(datadir)/flux/schema/jobspec/
-dist_fluxschema_DATA = \
-	schemas/jobspec.jsonschema \
-	schemas/jobspec_v1.jsonschema
-
 TESTS = \
 	test_util.t \
 	test_job.t

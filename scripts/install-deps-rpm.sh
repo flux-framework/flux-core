@@ -21,7 +21,6 @@ yum install \
   python36-cffi \
   python36-ply \
   python36-yaml \
-  python36-jsonschema \
   python3-sphinx \
   aspell \
   aspell-en \

@@ -260,11 +260,6 @@ AM_CHECK_PYMOD(yaml,
                ,
                [AC_MSG_ERROR([could not find python module yaml, version 3.10+ required])]
                )
-AM_CHECK_PYMOD(jsonschema,
-               [Version(jsonschema.__version__) >= Version ('2.3.0')],
-               ,
-               [AC_MSG_ERROR([could not find python module jsonschema, version 2.3.0+ required])]
-               )
 
 AS_IF([test "x$enable_docs" != "xno"], [
             AM_CHECK_PYMOD(sphinx,

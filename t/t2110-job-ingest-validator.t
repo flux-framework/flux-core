@@ -10,7 +10,6 @@ flux setattr log-stderr-level 1
 JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 Y2J="flux python ${JOBSPEC}/y2j.py"
 SUBMITBENCH="${FLUX_BUILD_DIR}/t/ingest/submitbench"
-SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
 BAD_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/bad-validate.py
 
 test_valid ()
@@ -79,10 +78,8 @@ test_expect_success 'validator plugin importer reports errors on import' '
 '
 test_expect_success 'flux job-validator --help shows help for selected plugins' '
 	flux job-validator --plugins=jobspec --help >help.jobspec.out 2>&1 &&
-	flux job-validator --plugins=schema --help >help.schema.out 2>&1 &&
 	flux job-validator --plugins=feasibility --help >help.feas.out 2>&1 &&
 	grep require-version help.jobspec.out &&
-	grep schema=SCHEMA help.schema.out &&
 	grep feasibility-service=NAME help.feas.out
 '
 test_expect_success 'flux job-validator errors on invalid plugin' '
@@ -101,13 +98,6 @@ test_expect_success 'flux job-validator rejects non-V1 jobspec' '
 	flux run --dry-run hostname | jq -c ".version = 2" | \
 		test_expect_code 1 \
 		flux job-validator --jobspec-only --require-version=1
-'
-test_expect_success 'flux job-validator --schema rejects invalid arg' '
-	flux run --dry-run hostname | \
-		test_expect_code 1 \
-		flux job-validator --jobspec-only \
-			--plugins=schema \
-			--schema=noexist
 '
 test_expect_success 'flux job-validator --feasibility-service works ' '
 	flux run -n 4888 --dry-run hostname | \
@@ -131,20 +121,6 @@ test_expect_success 'job-ingest: all valid jobspecs accepted' '
 	test_valid ${JOBSPEC}/valid/*
 '
 test_expect_success 'job-ingest: invalid jobs rejected' '
-	test_invalid ${JOBSPEC}/invalid/*
-'
-test_expect_success 'job-ingest: test python jsonschema validator' '
-	ingest_module reload \
-		validator-plugins=schema \
-		validator-args=--schema,${SCHEMA}
-'
-test_expect_success 'job-ingest: YAML jobspec is rejected by schema validator' '
-	test_must_fail flux job submit --urgency=0 ${JOBSPEC}/valid/basic.yaml
-'
-test_expect_success 'job-ingest: valid jobspecs accepted by schema validator' '
-	test_valid ${JOBSPEC}/valid/*
-'
-test_expect_success 'job-ingest: invalid jobs rejected by schema validator' '
 	test_invalid ${JOBSPEC}/invalid/*
 '
 test_expect_success 'job-ingest: stop the queue so no more jobs run' '

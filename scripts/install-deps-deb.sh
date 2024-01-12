@@ -21,7 +21,6 @@ apt install \
   python3-cffi \
   python3-ply \
   python3-yaml \
-  python3-jsonschema \
   python3-sphinx \
   aspell \
   aspell-en \
