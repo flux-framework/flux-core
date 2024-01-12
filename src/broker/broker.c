@@ -641,6 +641,11 @@ static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
         log_err_exit ("setattr parent-uri");
     unsetenv ("FLUX_URI");
 
+    /* Unset FLUX_PROXY_REMOTE since once a new broker starts we're no
+     * longer technically running under the influence of flux-proxy(1).
+     */
+    unsetenv ("FLUX_PROXY_REMOTE");
+
     val = getenv ("FLUX_KVS_NAMESPACE");
     if (attr_add (attrs, "parent-kvs-namespace", val, ATTR_IMMUTABLE) < 0)
         log_err_exit ("setattr parent-kvs-namespace");
