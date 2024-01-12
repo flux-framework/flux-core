@@ -142,6 +142,10 @@ test_expect_success 'parent-uri under remote flux-proxy is rewritten' '
 	test_debug "cat proxy-parent-uri.out" &&
 	grep ssh://user@$(hostname) proxy-parent-uri.out
 '
+test_expect_success 'flux-start does not hang under flux-proxy' '
+	run_timeout --kill-after=10 --env=FLUX_SSH=${tssh} 60 \
+		flux proxy $uri flux start true
+'
 test_expect_success 'cancel test job' '
 	flux cancel $id &&
 	flux job wait-event -vt 10 $id clean
