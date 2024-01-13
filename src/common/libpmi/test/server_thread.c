@@ -21,6 +21,7 @@
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libutil/fdutils.h"
+#include "src/common/liblsd/cbuf.h"
 
 #include "src/common/libtap/tap.h"
 
@@ -28,9 +29,12 @@
 
 struct pmi_server_context;
 
+// server side context for one client
 struct client {
     int sfd;
     int rank;
+    cbuf_t cbuf;
+    char buf[SIMPLE_MAX_PROTO_LINE];
     struct pmi_server_context *ctx;
 };
 
@@ -96,22 +100,38 @@ static void s_buf_cb (flux_reactor_t *r,
 {
     struct client *cli = arg;
     struct pmi_server_context *ctx = cli->ctx;
-    const char *buf;
-    int len;
-    int rc;
+    int nbytes;
 
     assert (ctx->magic == MAGIC_VALUE);
-    if (!(buf = flux_buffer_read_watcher_get_data (w, &len))) {
-        flux_reactor_stop_error (r);
-        return;
+
+    nbytes = cbuf_write_from_fd (cli->cbuf, cli->sfd, -1, NULL);
+    if (nbytes < 0) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN)
+            return;
+        goto error;
     }
-    rc = pmi_simple_server_request (ctx->pmi, buf, cli, cli->rank);
-    if (rc < 0) {
-        flux_reactor_stop_error (r);
-        return;
+    if (nbytes == 0) { // premature EOF
+        errno = EIO;
+        goto error;
     }
-    if (rc == 1)
-        flux_watcher_stop (w);
+    // truncation is not possible - buf is the same size as cbuf
+    while ((nbytes = cbuf_read_line (cli->cbuf,
+                                     cli->buf,
+                                     sizeof (cli->buf),
+                                     1)) != 0) {
+        if (nbytes < 0) // programming error
+            BAIL_OUT ("cbuf_read_line failed: %s", strerror (errno));
+        int rc = pmi_simple_server_request (ctx->pmi, cli->buf, cli, cli->rank);
+        if (rc < 0)
+            goto error;
+        if (rc == 1) {
+            flux_watcher_stop (w); // normal exit
+            break;
+        }
+    }
+    return;
+error:
+    flux_reactor_stop_error (r);
 }
 
 static int s_barrier_enter (void *arg)
@@ -128,22 +148,6 @@ static int s_barrier_enter (void *arg)
     return 0;
 }
 
-static flux_watcher_t *s_buf_create (flux_reactor_t *r, int fd, void *arg)
-{
-    flux_watcher_t *w;
-    w = flux_buffer_read_watcher_create (r,
-                                         fd,
-                                         SIMPLE_MAX_PROTO_LINE,
-                                         s_buf_cb,
-                                         FLUX_POLLIN | FLUX_WATCHER_LINE_BUFFER,
-                                         arg);
-    if (!w)
-        BAIL_OUT ("flux_buffer_read_watcher_create failed: %s",
-                  strerror (errno));
-    flux_watcher_start (w);
-    return w;
-}
-
 static void *server_thread (void *arg)
 {
     struct pmi_server_context *ctx = arg;
@@ -158,7 +162,13 @@ static void *server_thread (void *arg)
         BAIL_OUT ("calloc failed");
     for (i = 0; i < ctx->size; i++) {
         fd_set_nonblocking (ctx->cli[i].sfd);
-        w[i] = s_buf_create (reactor, ctx->cli[i].sfd, &ctx->cli[i]);
+        if (!(w[i] = flux_fd_watcher_create (reactor,
+                                             ctx->cli[i].sfd,
+                                             FLUX_POLLIN,
+                                             s_buf_cb,
+                                             &ctx->cli[i])))
+            BAIL_OUT ("could not create fd watcher: %s", strerror (errno));
+        flux_watcher_start (w[i]);
     }
     if (flux_reactor_run (reactor, 0) < 0)
         BAIL_OUT ("flux_reactor_run failed");
@@ -214,6 +224,12 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
         ctx->cli[i].sfd = fd[1];
         ctx->cli[i].rank = i;
         ctx->cli[i].ctx = ctx;
+        if (!(ctx->cli[i].cbuf = cbuf_create (SIMPLE_MAX_PROTO_LINE,
+                                              SIMPLE_MAX_PROTO_LINE))
+            || cbuf_opt_set (ctx->cli[i].cbuf,
+                             CBUF_OPT_OVERWRITE,
+                             CBUF_NO_DROP) < 0)
+            BAIL_OUT ("could not create circular buffer for client %d", i);
     }
 
     ctx->pmi = pmi_simple_server_create (server_ops,
@@ -240,6 +256,8 @@ void pmi_server_destroy (struct pmi_server_context *ctx)
         BAIL_OUT ("pthread_join failed");
     pmi_simple_server_destroy (ctx->pmi);
     zhashx_destroy (&ctx->kvs);
+    for (int i = 0; i < ctx->size; i++)
+        cbuf_destroy (ctx->cli[i].cbuf);
     free (ctx->cli);
     ctx->magic = ~MAGIC_VALUE;
     free (ctx);
