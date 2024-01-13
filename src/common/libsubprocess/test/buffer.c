@@ -17,9 +17,10 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include "src/common/libflux/buffer.h"
-#include "src/common/libflux/buffer_private.h"
 #include "src/common/libtap/tap.h"
+
+#include "buffer.h"
+#include "buffer_private.h"
 
 #define FLUX_BUFFER_TEST_MAXSIZE 1048576
 

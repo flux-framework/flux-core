@@ -14,6 +14,7 @@
 #include <flux/idset.h>
 
 #include "subprocess.h"
+#include "bufwatch.h"
 
 #define SUBPROCESS_DEFAULT_BUFSIZE 4194304
 

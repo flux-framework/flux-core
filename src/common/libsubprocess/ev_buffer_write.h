@@ -12,7 +12,7 @@
 #define _EV_BUFFER_WRITE_H
 
 #include "src/common/libev/ev.h"
-#include "src/common/libflux/buffer.h"
+#include "buffer.h"
 
 struct ev_buffer_write;
 

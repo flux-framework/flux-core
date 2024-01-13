@@ -33,7 +33,16 @@ libsubprocess_la_SOURCES = \
 	subprocess.c \
 	subprocess_private.h \
 	client.h \
-	client.c
+	client.c \
+	ev_buffer_read.h \
+	ev_buffer_read.c \
+	ev_buffer_write.h \
+	ev_buffer_write.c \
+	buffer.h \
+	buffer_private.h \
+	buffer.c \
+	bufwatch.h \
+	bufwatch.c
 
 fluxcoreinclude_HEADERS = \
 	command.h \
@@ -46,7 +55,9 @@ TESTS = \
 	test_channel.t \
 	test_remote.t \
 	test_iostress.t \
-	test_iochan.t
+	test_iochan.t \
+	test_buffer.t \
+	test_bufwatch.t
 
 check_PROGRAMS = \
 	$(TESTS) \
@@ -123,6 +134,16 @@ test_iochan_t_CPPFLAGS = \
 	$(test_cppflags)
 test_iochan_t_LDADD = $(test_ldadd)
 test_iochan_t_LDFLAGS = $(test_ldflags)
+
+test_buffer_t_SOURCES = test/buffer.c
+test_buffer_t_CPPFLAGS = $(test_cppflags)
+test_buffer_t_LDADD = $(test_ldadd)
+test_buffer_t_LDFLAGS = $(test_ldflags)
+
+test_bufwatch_t_SOURCES = test/bufwatch.c
+test_bufwatch_t_CPPFLAGS = $(test_cppflags)
+test_bufwatch_t_LDADD = $(test_ldadd)
+test_bufwatch_t_LDFLAGS = $(test_ldflags)
 
 test_echo_SOURCES = test/test_echo.c
 

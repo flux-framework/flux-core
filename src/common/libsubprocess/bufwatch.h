@@ -1,0 +1,66 @@
+/************************************************************\
+ * Copyright 2014 Lawrence Livermore National Security, LLC
+ * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+ *
+ * This file is part of the Flux resource manager framework.
+ * For details, see https://github.com/flux-framework.
+ *
+ * SPDX-License-Identifier: LGPL-3.0
+\************************************************************/
+
+#ifndef _BUFWATCH_H
+#define _BUFWATCH_H
+
+#include <flux/core.h>
+#include "buffer.h"
+
+enum {
+    FLUX_WATCHER_LINE_BUFFER = 1, /* line buffer data before invoking callback */
+};
+
+/* on eof, callback will be called with an empty buffer */
+/* if line buffered, second to last callback may not contain a full line */
+flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
+                                                 int size, flux_watcher_f cb,
+                                                 int flags, void *arg);
+
+flux_buffer_t *flux_buffer_read_watcher_get_buffer (flux_watcher_t *w);
+
+/* Get next chunk of data from a buffered read watcher. Gets the next
+ * line if the watcher is line buffered.
+ */
+const char *flux_buffer_read_watcher_get_data (flux_watcher_t *w,
+                                               int *lenp);
+
+/* Take a reference on read watcher to prevent read of EOF
+ * EOF will be delayed until decref drops refcount to 0.
+ */
+void flux_buffer_read_watcher_incref (flux_watcher_t *w);
+void flux_buffer_read_watcher_decref (flux_watcher_t *w);
+
+/* 'cb' only called after fd closed (FLUX_POLLOUT) or error (FLUX_POLLERR) */
+flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r, int fd,
+                                                  int size, flux_watcher_f cb,
+                                                  int flags, void *arg);
+
+flux_buffer_t *flux_buffer_write_watcher_get_buffer (flux_watcher_t *w);
+
+/* "write" EOF to buffer write watcher 'w'. The underlying fd will be closed
+ *  once the buffer is emptied. The underlying flux_buffer_t will be marked
+ *  readonly and subsequent flux_buffer_write* calls will return EROFS.
+ *
+ *  Once close(2) completes, the watcher callback is called with FLUX_POLLOUT.
+ *  Use flux_buffer_write_watcher_is_closed() to check for errors.
+ *
+ * Returns 0 on success, -1 on error with errno set.
+ */
+int flux_buffer_write_watcher_close (flux_watcher_t *w);
+
+/* Returns 1 if write watcher is closed, errnum from close in close_err */
+int flux_buffer_write_watcher_is_closed (flux_watcher_t *w, int *close_err);
+
+#endif /* !_BUFWATCH_H */
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */
