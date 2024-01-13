@@ -16,7 +16,6 @@ flux R encode -r0-1 -c0-1 >R.test
 	>R.test.first_fit
 
 
-SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
 dmesg_grep=${SHARNESS_TEST_SRCDIR}/scripts/dmesg-grep.py
 
 kvs_job_dir() {
@@ -31,18 +30,12 @@ list_R() {
 test_expect_success 'unload job-exec module to prevent job execution' '
 	flux module remove job-exec
 '
-test_expect_success 'sched-simple: reload ingest module with lax validator' '
-	flux module reload job-ingest \
-		validator-args="--schema,${SCHEMA}" \
-		validator-plugins=schema &&
-	flux exec -r all -x 0 flux module reload job-ingest \
-		validator-args="--schema,${SCHEMA}" \
-		validator-plugins=schema
+test_expect_success 'reload ingest without validator' '
+	flux module reload -f job-ingest disable-validator
 '
 test_expect_success 'sched-simple: generate jobspec for simple test job' '
 	flux run --dry-run hostname >basic.json
 '
-
 test_expect_success 'sched-simple cannot be loaded again under a new name' '
 	test_must_fail flux module load --name=newsched sched-simple
 '

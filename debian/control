@@ -21,7 +21,6 @@ Build-Depends:
   python3-yaml,
   python3-ply,
   python3-sphinx,
-  python3-jsonschema,
   jq
 
 Homepage: https://github.com/flux-framework/flux-core

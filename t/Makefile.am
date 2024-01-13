@@ -88,7 +88,6 @@ TESTSCRIPTS = \
 	t0016-cron-faketime.t \
 	t0017-security.t \
 	t0018-content-files.t \
-	t0019-jobspec-schema.t \
 	t0020-terminus.t \
 	t0022-jj-reader.t \
 	t0023-jobspec1-validate.t \
@@ -387,7 +386,6 @@ dist_check_SCRIPTS = \
 	job-list/list-id.py \
 	job-list/list-rpc.py \
 	job-list/job-list-helper.sh \
-	job-list/jobspec-permissive.jsonschema \
 	ingest/bad-validate.py
 
 check_PROGRAMS = \

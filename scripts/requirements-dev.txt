@@ -1,7 +1,6 @@
 cffi>=1.1
 ply>=3.9
 pyyaml>=3.10.0
-jsonschema>=2.3.0
 black==22.8.0
 flake8>=5.0.4
 isort>=5.9.3

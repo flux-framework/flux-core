@@ -18,7 +18,6 @@ test_under_flux 1 job
 flux setattr log-stderr-level 1
 
 SUBMITBENCH="${FLUX_BUILD_DIR}/t/ingest/submitbench"
-SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
 dmesg_grep=${SHARNESS_TEST_SRCDIR}/scripts/dmesg-grep.py
 
 test_expect_success 'job-ingest: validator was disabled by config' '
