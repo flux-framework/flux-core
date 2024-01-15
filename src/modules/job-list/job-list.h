@@ -17,12 +17,14 @@
 
 #include "job_state.h"
 #include "idsync.h"
+#include "match.h"
 
 struct list_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
     struct job_state_ctx *jsctx;
     struct idsync_ctx *isctx;
+    struct match_ctx *mctx;
 };
 
 const char **job_attrs (void);
