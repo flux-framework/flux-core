@@ -30,6 +30,7 @@ typedef int (*match_f) (struct list_constraint *,
                         flux_error_t *);
 
 struct list_constraint {
+    struct match_ctx *mctx;
     zlistx_t *values;
     match_f match;
     unsigned int comparisons;   /* total across multiple calls to job_match() */
@@ -152,7 +153,8 @@ static int match_true (struct list_constraint *c,
     return 1;
 }
 
-static struct list_constraint *list_constraint_new (match_f match_cb,
+static struct list_constraint *list_constraint_new (struct match_ctx *mctx,
+                                                    match_f match_cb,
                                                     destructor_f destructor_cb,
                                                     flux_error_t *errp)
 {
@@ -163,6 +165,7 @@ static struct list_constraint *list_constraint_new (match_f match_cb,
         errprintf (errp, "Out of memory");
         return NULL;
     }
+    c->mctx = mctx;
     c->match = match_cb;
     if (destructor_cb)
         zlistx_set_destructor (c->values, destructor_cb);
@@ -204,14 +207,15 @@ static int match_userid (struct list_constraint *c,
     return 0;
 }
 
-static struct list_constraint *create_userid_constraint (json_t *values,
+static struct list_constraint *create_userid_constraint (struct match_ctx *mctx,
+                                                         json_t *values,
                                                          flux_error_t *errp)
 {
     struct list_constraint *c;
     json_t *entry;
     size_t index;
 
-    if (!(c = list_constraint_new (match_userid, wrap_free, errp)))
+    if (!(c = list_constraint_new (mctx, match_userid, wrap_free, errp)))
         return NULL;
     json_array_foreach (values, index, entry) {
         uint32_t *userid;
@@ -233,7 +237,8 @@ static struct list_constraint *create_userid_constraint (json_t *values,
     return NULL;
 }
 
-static struct list_constraint *create_string_constraint (const char *op,
+static struct list_constraint *create_string_constraint (struct match_ctx *mctx,
+                                                         const char *op,
                                                          json_t *values,
                                                          match_f match_cb,
                                                          flux_error_t *errp)
@@ -242,7 +247,7 @@ static struct list_constraint *create_string_constraint (const char *op,
     json_t *entry;
     size_t index;
 
-    if (!(c = list_constraint_new (match_cb, wrap_free, errp)))
+    if (!(c = list_constraint_new (mctx, match_cb, wrap_free, errp)))
         return NULL;
     json_array_foreach (values, index, entry) {
         char *s = NULL;
@@ -279,10 +284,11 @@ static int match_name (struct list_constraint *c,
     return 0;
 }
 
-static struct list_constraint *create_name_constraint (json_t *values,
+static struct list_constraint *create_name_constraint (struct match_ctx *mctx,
+                                                       json_t *values,
                                                        flux_error_t *errp)
 {
-    return create_string_constraint ("name", values, match_name, errp);
+    return create_string_constraint (mctx, "name", values, match_name, errp);
 }
 
 static int match_queue (struct list_constraint *c,
@@ -301,13 +307,15 @@ static int match_queue (struct list_constraint *c,
     return 0;
 }
 
-static struct list_constraint *create_queue_constraint (json_t *values,
+static struct list_constraint *create_queue_constraint (struct match_ctx *mctx,
+                                                        json_t *values,
                                                         flux_error_t *errp)
 {
-    return create_string_constraint ("queue", values, match_queue, errp);
+    return create_string_constraint (mctx, "queue", values, match_queue, errp);
 }
 
 static struct list_constraint *create_bitmask_constraint (
+    struct match_ctx *mctx,
     const char *op,
     json_t *values,
     match_f match_cb,
@@ -322,7 +330,7 @@ static struct list_constraint *create_bitmask_constraint (
     if (!(bitmask = malloc (sizeof (*bitmask))))
         return NULL;
     (*bitmask) = tmp;
-    if (!(c = list_constraint_new (match_cb, wrap_free, errp))
+    if (!(c = list_constraint_new (mctx, match_cb, wrap_free, errp))
         || !zlistx_add_end (c->values, bitmask)) {
         list_constraint_destroy (c);
         free (bitmask);
@@ -342,10 +350,12 @@ static int match_states (struct list_constraint *c,
     return ((*states) & job->state) ? 1 : 0;
 }
 
-static struct list_constraint *create_states_constraint (json_t *values,
+static struct list_constraint *create_states_constraint (struct match_ctx *mctx,
+                                                         json_t *values,
                                                          flux_error_t *errp)
 {
-    return create_bitmask_constraint ("states",
+    return create_bitmask_constraint (mctx,
+                                      "states",
                                       values,
                                       match_states,
                                       array_to_states_bitmask,
@@ -404,10 +414,12 @@ static int array_to_results_bitmask (json_t *values, flux_error_t *errp)
     return results;
 }
 
-static struct list_constraint *create_results_constraint (json_t *values,
+static struct list_constraint *create_results_constraint (struct match_ctx *mctx,
+                                                          json_t *values,
                                                           flux_error_t *errp)
 {
-    return create_bitmask_constraint ("results",
+    return create_bitmask_constraint (mctx,
+                                      "results",
                                       values,
                                       match_results,
                                       array_to_results_bitmask,
@@ -462,7 +474,8 @@ static int match_timestamp (struct list_constraint *c,
         return t < tv->t_value;
 }
 
-static struct list_constraint *create_timestamp_constraint (const char *type,
+static struct list_constraint *create_timestamp_constraint (struct match_ctx *mctx,
+                                                            const char *type,
                                                             json_t *values,
                                                             flux_error_t *errp)
 {
@@ -506,7 +519,8 @@ static struct list_constraint *create_timestamp_constraint (const char *type,
     if (!tv)
         return NULL;
 
-    if (!(c = list_constraint_new (match_timestamp,
+    if (!(c = list_constraint_new (mctx,
+                                   match_timestamp,
                                    wrap_timestamp_value_destroy,
                                    errp))
         || !zlistx_add_end (c->values, tv)) {
@@ -563,7 +577,8 @@ static int match_not (struct list_constraint *c,
     return ret ? 0 : 1;
 }
 
-static struct list_constraint *conditional_constraint (const char *type,
+static struct list_constraint *conditional_constraint (struct match_ctx *mctx,
+                                                       const char *type,
                                                        json_t *values,
                                                        flux_error_t *errp)
 {
@@ -579,11 +594,14 @@ static struct list_constraint *conditional_constraint (const char *type,
     else /* streq (type, "not") */
         match_cb = match_not;
 
-    if (!(c = list_constraint_new (match_cb, list_constraint_destructor, errp)))
+    if (!(c = list_constraint_new (mctx,
+                                   match_cb,
+                                   list_constraint_destructor,
+                                   errp)))
         return NULL;
 
     json_array_foreach (values, index, entry) {
-        struct list_constraint *cp = list_constraint_create (entry, errp);
+        struct list_constraint *cp = list_constraint_create (mctx, entry, errp);
         if (!cp)
             goto error;
         if (!zlistx_add_end (c->values, cp)) {
@@ -609,10 +627,17 @@ void list_constraint_destroy (struct list_constraint *constraint)
     }
 }
 
-struct list_constraint *list_constraint_create (json_t *constraint, flux_error_t *errp)
+struct list_constraint *list_constraint_create (struct match_ctx *mctx,
+                                                json_t *constraint,
+                                                flux_error_t *errp)
 {
     const char *op;
     json_t *values;
+
+    if (!mctx) {
+        errno = EINVAL;
+        return NULL;
+    }
 
     if (constraint) {
         if (!json_is_object (constraint)) {
@@ -629,30 +654,30 @@ struct list_constraint *list_constraint_create (json_t *constraint, flux_error_t
                 return NULL;
             }
             if (streq (op, "userid"))
-                return create_userid_constraint (values, errp);
+                return create_userid_constraint (mctx, values, errp);
             else if (streq (op, "name"))
-                return create_name_constraint (values, errp);
+                return create_name_constraint (mctx, values, errp);
             else if (streq (op, "queue"))
-                return create_queue_constraint (values, errp);
+                return create_queue_constraint (mctx, values, errp);
             else if (streq (op, "states"))
-                return create_states_constraint (values, errp);
+                return create_states_constraint (mctx, values, errp);
             else if (streq (op, "results"))
-                return create_results_constraint (values, errp);
+                return create_results_constraint (mctx, values, errp);
             else if (streq (op, "t_submit")
                      || streq (op, "t_depend")
                      || streq (op, "t_run")
                      || streq (op, "t_cleanup")
                      || streq (op, "t_inactive"))
-                return create_timestamp_constraint (op, values, errp);
+                return create_timestamp_constraint (mctx, op, values, errp);
             else if (streq (op, "or") || streq (op, "and") || streq (op, "not"))
-                return conditional_constraint (op, values, errp);
+                return conditional_constraint (mctx, op, values, errp);
             else {
                 errprintf (errp, "unknown constraint operator: %s", op);
                 return NULL;
             }
         }
     }
-    return list_constraint_new (match_true, NULL, errp);
+    return list_constraint_new (mctx, match_true, NULL, errp);
 }
 
 int job_match (const struct job *job,
@@ -664,6 +689,22 @@ int job_match (const struct job *job,
         return -1;
     }
     return constraint->match (constraint, job, &constraint->comparisons, errp);
+}
+
+struct match_ctx *match_ctx_create (flux_t *h)
+{
+    struct match_ctx *mctx = NULL;
+
+    if (!(mctx = calloc (1, sizeof (*mctx))))
+        return NULL;
+    mctx->h = h;
+    return mctx;
+}
+
+void match_ctx_destroy (struct match_ctx *mctx)
+{
+    if (mctx)
+        free (mctx);
 }
 
 /* vi: ts=4 sw=4 expandtab

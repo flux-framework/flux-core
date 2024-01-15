@@ -20,13 +20,22 @@
 
 #include "job_data.h"
 
+struct match_ctx {
+    flux_t *h;
+};
+
+struct match_ctx *match_ctx_create (flux_t *h);
+
+void match_ctx_destroy (struct match_ctx *mctx);
+
 /*  Load and validate RFC 31 constraint spec 'constraint'.  'constraint'
  *  can be NULL to indicate a constraint that matches everything.
  *
  *  Returns a list constraint object if constraint is valid spec,
  *  Returns NULL with error in errp if errp != NULL.
  */
-struct list_constraint *list_constraint_create (json_t *constraint,
+struct list_constraint *list_constraint_create (struct match_ctx *mctx,
+                                                json_t *constraint,
                                                 flux_error_t *errp);
 
 void list_constraint_destroy (struct list_constraint *constraint);

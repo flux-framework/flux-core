@@ -314,7 +314,7 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-    if (!(c = list_constraint_create (constraint, &error))) {
+    if (!(c = list_constraint_create (ctx->mctx, constraint, &error))) {
         errprintf (&err,
                    "invalid payload: constraint object invalid: %s",
                    error.text);
