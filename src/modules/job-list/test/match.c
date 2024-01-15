@@ -24,6 +24,7 @@ static void list_constraint_create_corner_case (const char *str,
                                                 ...)
 {
     struct list_constraint *c;
+    struct match_ctx mctx = { .h = NULL };
     char buf[1024];
     flux_error_t error;
     json_error_t jerror;
@@ -37,7 +38,7 @@ static void list_constraint_create_corner_case (const char *str,
     vsnprintf(buf, sizeof (buf), fmt, ap);
     va_end (ap);
 
-    c = list_constraint_create (jc, &error);
+    c = list_constraint_create (&mctx, jc, &error);
 
     ok (c == NULL, "list_constraint_create fails on %s", buf);
     diag ("error: %s", error.text);
@@ -49,6 +50,10 @@ static void test_corner_case (void)
     ok (job_match (NULL, NULL, NULL) < 0
         && errno == EINVAL,
         "job_match returns EINVAL on NULL inputs");
+
+    ok (list_constraint_create (NULL, NULL, NULL) == NULL
+        && errno == EINVAL,
+        "list_constraint_create fails on all NULL inputs");
 
     list_constraint_create_corner_case ("{\"userid\":[1], \"name\":[\"foo\"] }",
                                         "object with too many keys");
@@ -133,6 +138,7 @@ static struct job *setup_job (uint32_t userid,
 static struct list_constraint *create_list_constraint (const char *constraint)
 {
     struct list_constraint *c;
+    struct match_ctx mctx = { .h = NULL };
     flux_error_t error;
     json_error_t jerror;
     json_t *jc = NULL;
@@ -142,7 +148,7 @@ static struct list_constraint *create_list_constraint (const char *constraint)
             BAIL_OUT ("json constraint invalid: %s", jerror.text);
     }
 
-    if (!(c = list_constraint_create (jc, &error)))
+    if (!(c = list_constraint_create (&mctx, jc, &error)))
         BAIL_OUT ("list constraint create fail: %s", error.text);
 
     json_decref (jc);
