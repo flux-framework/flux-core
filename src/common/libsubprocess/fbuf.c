@@ -24,7 +24,6 @@
 #include "src/common/liblsd/cbuf.h"
 
 #define FBUF_MIN   4096
-#define FBUF_MAGIC 0xeb4feb4f
 
 enum {
     FBUF_CB_TYPE_NONE,
@@ -34,7 +33,6 @@ enum {
 };
 
 struct fbuf {
-    int magic;
     int size;
     bool readonly;
     cbuf_t cbuf;
@@ -61,7 +59,6 @@ struct fbuf *fbuf_create (int size)
         goto cleanup;
     }
 
-    fb->magic = FBUF_MAGIC;
     fb->size = size;
     if (size < FBUF_MIN)
         minsize = size;
@@ -96,8 +93,7 @@ cleanup:
 void fbuf_destroy (void *data)
 {
     struct fbuf *fb = data;
-    if (fb && fb->magic == FBUF_MAGIC) {
-        fb->magic = ~FBUF_MAGIC;
+    if (fb) {
         cbuf_destroy (fb->cbuf);
         free (fb->buf);
         free (fb);
@@ -106,7 +102,7 @@ void fbuf_destroy (void *data)
 
 int fbuf_size (struct fbuf *fb)
 {
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
@@ -116,7 +112,7 @@ int fbuf_size (struct fbuf *fb)
 
 int fbuf_bytes (struct fbuf *fb)
 {
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
@@ -126,7 +122,7 @@ int fbuf_bytes (struct fbuf *fb)
 
 int fbuf_space (struct fbuf *fb)
 {
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
@@ -136,7 +132,7 @@ int fbuf_space (struct fbuf *fb)
 
 int fbuf_readonly (struct fbuf *fb)
 {
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
@@ -147,7 +143,7 @@ int fbuf_readonly (struct fbuf *fb)
 
 bool fbuf_is_readonly (struct fbuf *fb)
 {
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return false;
     }
@@ -203,7 +199,7 @@ static int set_cb (struct fbuf *fb,
 
 int fbuf_set_low_read_cb (struct fbuf *fb, fbuf_cb cb, int low, void *arg)
 {
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
@@ -213,7 +209,7 @@ int fbuf_set_low_read_cb (struct fbuf *fb, fbuf_cb cb, int low, void *arg)
 
 int fbuf_set_read_line_cb (struct fbuf *fb, fbuf_cb cb, void *arg)
 {
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
@@ -223,7 +219,7 @@ int fbuf_set_read_line_cb (struct fbuf *fb, fbuf_cb cb, void *arg)
 
 int fbuf_set_high_write_cb (struct fbuf *fb, fbuf_cb cb, int high, void *arg)
 {
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
@@ -253,7 +249,7 @@ int fbuf_drop (struct fbuf *fb, int len)
 {
     int ret;
 
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
@@ -300,7 +296,7 @@ const void *fbuf_peek (struct fbuf *fb, int len, int *lenp)
 {
     int ret;
 
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return NULL;
     }
@@ -328,7 +324,7 @@ const void *fbuf_read (struct fbuf *fb, int len, int *lenp)
 {
     int ret;
 
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return NULL;
     }
@@ -358,10 +354,7 @@ int fbuf_write (struct fbuf *fb, const void *data, int len)
 {
     int ret;
 
-    if (!fb
-        || fb->magic != FBUF_MAGIC
-        || !data
-        || len < 0) {
+    if (!fb || !data || len < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -381,7 +374,7 @@ int fbuf_write (struct fbuf *fb, const void *data, int len)
 
 int fbuf_lines (struct fbuf *fb)
 {
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
@@ -392,7 +385,7 @@ int fbuf_lines (struct fbuf *fb)
 bool fbuf_has_line (struct fbuf *fb)
 {
     char buf[1];
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return false;
     }
@@ -403,7 +396,7 @@ int fbuf_drop_line (struct fbuf *fb)
 {
     int ret;
 
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
@@ -420,7 +413,7 @@ const void *fbuf_peek_line (struct fbuf *fb, int *lenp)
 {
     int ret;
 
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return NULL;
     }
@@ -460,7 +453,7 @@ const void *fbuf_read_line (struct fbuf *fb, int *lenp)
 {
     int ret;
 
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return NULL;
     }
@@ -502,9 +495,7 @@ int fbuf_write_line (struct fbuf *fb, const char *data)
 {
     int ret;
 
-    if (!fb
-        || fb->magic != FBUF_MAGIC
-        || !data) {
+    if (!fb || !data) {
         errno = EINVAL;
         return -1;
     }
@@ -524,7 +515,7 @@ int fbuf_write_line (struct fbuf *fb, const char *data)
 
 int fbuf_peek_to_fd (struct fbuf *fb, int fd, int len)
 {
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
@@ -536,7 +527,7 @@ int fbuf_read_to_fd (struct fbuf *fb, int fd, int len)
 {
     int ret;
 
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
@@ -553,7 +544,7 @@ int fbuf_write_from_fd (struct fbuf *fb, int fd, int len)
 {
     int ret;
 
-    if (!fb || fb->magic != FBUF_MAGIC) {
+    if (!fb) {
         errno = EINVAL;
         return -1;
     }
