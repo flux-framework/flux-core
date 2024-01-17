@@ -16,29 +16,26 @@
 
 #include "src/common/libev/ev.h"
 
-#include "ev_buffer_read.h"
+#include "ev_fbuf_read.h"
 
-#include "buffer_private.h"
+#include "fbuf_private.h"
 
-static bool data_to_read (struct ev_buffer_read *ebr, bool *is_eof)
+static bool data_to_read (struct ev_fbuf_read *ebr, bool *is_eof)
 {
     if (ebr->line) {
-        if (flux_buffer_has_line (ebr->fb))
+        if (fbuf_has_line (ebr->fb))
             return true;
         /* if eof read, no lines, but left over data non-line data,
          * this data should be flushed to the user */
-        else if (ebr->eof_read
-                 && flux_buffer_bytes (ebr->fb))
+        else if (ebr->eof_read && fbuf_bytes (ebr->fb))
             return true;
     }
     else {
-        if (flux_buffer_bytes (ebr->fb) > 0)
+        if (fbuf_bytes (ebr->fb) > 0)
             return true;
     }
 
-    if (ebr->eof_read
-        && !ebr->eof_sent
-        && !flux_buffer_bytes (ebr->fb)) {
+    if (ebr->eof_read && !ebr->eof_sent && !fbuf_bytes (ebr->fb)) {
         if (is_eof)
             (*is_eof) = true;
         return true;
@@ -47,9 +44,9 @@ static bool data_to_read (struct ev_buffer_read *ebr, bool *is_eof)
     return false;
 }
 
-static void buffer_space_available_cb (flux_buffer_t *fb, void *arg)
+static void buffer_space_available_cb (struct fbuf *fb, void *arg)
 {
-    struct ev_buffer_read *ebr = arg;
+    struct ev_fbuf_read *ebr = arg;
 
     /* space is available, start ev io watcher again, assuming watcher
      * is not stopped by user */
@@ -57,17 +54,14 @@ static void buffer_space_available_cb (flux_buffer_t *fb, void *arg)
         ev_io_start (ebr->loop, &(ebr->io_w));
 
     /* clear this callback */
-    if (flux_buffer_set_high_write_cb (ebr->fb,
-                                       NULL,
-                                       0,
-                                       NULL) < 0)
+    if (fbuf_set_high_write_cb (ebr->fb, NULL, 0, NULL) < 0)
         return;
 }
 
 static void prepare_cb (struct ev_loop *loop, ev_prepare *w, int revents)
 {
-    struct ev_buffer_read *ebr = (struct ev_buffer_read *)((char *)w
-                            - offsetof (struct ev_buffer_read, prepare_w));
+    struct ev_fbuf_read *ebr = (struct ev_fbuf_read *)((char *)w
+                            - offsetof (struct ev_fbuf_read, prepare_w));
 
     if (data_to_read (ebr, NULL) == true)
         ev_idle_start (loop, &ebr->idle_w);
@@ -75,29 +69,29 @@ static void prepare_cb (struct ev_loop *loop, ev_prepare *w, int revents)
 
 static void buffer_read_cb (struct ev_loop *loop, ev_io *iow, int revents)
 {
-    struct ev_buffer_read *ebr = iow->data;
+    struct ev_fbuf_read *ebr = iow->data;
 
     if (revents & EV_READ) {
         int ret, space;
 
-        if ((space = flux_buffer_space (ebr->fb)) < 0)
+        if ((space = fbuf_space (ebr->fb)) < 0)
             return;
 
-        if ((ret = flux_buffer_write_from_fd (ebr->fb, ebr->fd, space)) < 0)
+        if ((ret = fbuf_write_from_fd (ebr->fb, ebr->fd, space)) < 0)
             return;
 
         if (!ret) {
-            ev_buffer_read_decref (ebr);
-            (void)flux_buffer_readonly (ebr->fb);
+            ev_fbuf_read_decref (ebr);
+            (void)fbuf_readonly (ebr->fb);
             ev_io_stop (ebr->loop, iow);
         }
         else if (ret == space) {
             /* buffer full, buffer_space_available_cb will be called
              * to re-enable io reactor when space is available */
-            if (flux_buffer_set_high_write_cb (ebr->fb,
-                                               buffer_space_available_cb,
-                                               flux_buffer_size (ebr->fb),
-                                               ebr) < 0)
+            if (fbuf_set_high_write_cb (ebr->fb,
+                                        buffer_space_available_cb,
+                                        fbuf_size (ebr->fb),
+                                        ebr) < 0)
                 return;
 
             ev_io_stop (ebr->loop, iow);
@@ -111,8 +105,8 @@ static void buffer_read_cb (struct ev_loop *loop, ev_io *iow, int revents)
 
 static void check_cb (struct ev_loop *loop, ev_check *w, int revents)
 {
-    struct ev_buffer_read *ebr = (struct ev_buffer_read *)((char *)w
-                            - offsetof (struct ev_buffer_read, check_w));
+    struct ev_fbuf_read *ebr = (struct ev_fbuf_read *)((char *)w
+                            - offsetof (struct ev_fbuf_read, check_w));
     bool is_eof = false;
 
     ev_idle_stop (loop, &ebr->idle_w);
@@ -126,11 +120,11 @@ static void check_cb (struct ev_loop *loop, ev_check *w, int revents)
     }
 }
 
-int ev_buffer_read_init (struct ev_buffer_read *ebr,
-                         int fd,
-                         int size,
-                         ev_buffer_read_f cb,
-                         struct ev_loop *loop)
+int ev_fbuf_read_init (struct ev_fbuf_read *ebr,
+                       int fd,
+                       int size,
+                       ev_fbuf_read_f cb,
+                       struct ev_loop *loop)
 {
     ebr->cb = cb;
     ebr->fd = fd;
@@ -140,7 +134,7 @@ int ev_buffer_read_init (struct ev_buffer_read *ebr,
     ebr->eof_sent = false;
     ebr->refcnt = 1;
 
-    if (!(ebr->fb = flux_buffer_create (size)))
+    if (!(ebr->fb = fbuf_create (size)))
         goto cleanup;
 
     ev_prepare_init (&ebr->prepare_w, prepare_cb);
@@ -152,40 +146,40 @@ int ev_buffer_read_init (struct ev_buffer_read *ebr,
     return 0;
 
 cleanup:
-    ev_buffer_read_cleanup (ebr);
+    ev_fbuf_read_cleanup (ebr);
     return -1;
 }
 
-void ev_buffer_read_cleanup (struct ev_buffer_read *ebr)
+void ev_fbuf_read_cleanup (struct ev_fbuf_read *ebr)
 {
     if (ebr) {
-        flux_buffer_destroy (ebr->fb);
+        fbuf_destroy (ebr->fb);
         ebr->fb = NULL;
     }
 }
 
-void ev_buffer_read_start (struct ev_loop *loop, struct ev_buffer_read *ebr)
+void ev_fbuf_read_start (struct ev_loop *loop, struct ev_fbuf_read *ebr)
 {
     if (!ebr->start) {
         ebr->start = true;
         ev_prepare_start (loop, &ebr->prepare_w);
         ev_check_start (loop, &ebr->check_w);
 
-        if (flux_buffer_space (ebr->fb) > 0)
+        if (fbuf_space (ebr->fb) > 0)
             ev_io_start (ebr->loop, &(ebr->io_w));
         else {
             /* buffer full, buffer_space_available_cb will be called
              * to re-enable io reactor when space is available */
-            if (flux_buffer_set_high_write_cb (ebr->fb,
-                                               buffer_space_available_cb,
-                                               flux_buffer_size (ebr->fb),
-                                               ebr) < 0)
+            if (fbuf_set_high_write_cb (ebr->fb,
+                                        buffer_space_available_cb,
+                                        fbuf_size (ebr->fb),
+                                        ebr) < 0)
                 return;
         }
     }
 }
 
-void ev_buffer_read_stop (struct ev_loop *loop, struct ev_buffer_read *ebr)
+void ev_fbuf_read_stop (struct ev_loop *loop, struct ev_fbuf_read *ebr)
 {
     if (ebr->start) {
         ev_prepare_stop (loop, &ebr->prepare_w);
@@ -196,12 +190,12 @@ void ev_buffer_read_stop (struct ev_loop *loop, struct ev_buffer_read *ebr)
     }
 }
 
-void ev_buffer_read_incref (struct ev_buffer_read *ebr)
+void ev_fbuf_read_incref (struct ev_fbuf_read *ebr)
 {
     ebr->refcnt++;
 }
 
-void ev_buffer_read_decref (struct ev_buffer_read *ebr)
+void ev_fbuf_read_decref (struct ev_fbuf_read *ebr)
 {
     if (--ebr->refcnt == 0)
         ebr->eof_read = true;

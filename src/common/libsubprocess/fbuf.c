@@ -18,22 +18,22 @@
 #include <stdbool.h>
 #include <stdarg.h>
 
-#include "buffer.h"
-#include "buffer_private.h"
+#include "fbuf.h"
+#include "fbuf_private.h"
 
 #include "src/common/liblsd/cbuf.h"
 
-#define FLUX_BUFFER_MIN   4096
-#define FLUX_BUFFER_MAGIC 0xeb4feb4f
+#define FBUF_MIN   4096
+#define FBUF_MAGIC 0xeb4feb4f
 
 enum {
-    FLUX_BUFFER_CB_TYPE_NONE,
-    FLUX_BUFFER_CB_TYPE_READ,
-    FLUX_BUFFER_CB_TYPE_READ_LINE,
-    FLUX_BUFFER_CB_TYPE_WRITE,
+    FBUF_CB_TYPE_NONE,
+    FBUF_CB_TYPE_READ,
+    FBUF_CB_TYPE_READ_LINE,
+    FBUF_CB_TYPE_WRITE,
 };
 
-struct flux_buffer {
+struct fbuf {
     int magic;
     int size;
     bool readonly;
@@ -41,15 +41,15 @@ struct flux_buffer {
     char *buf;                  /* internal buffer for user reads */
     int buflen;
     int cb_type;
-    flux_buffer_cb cb;
+    fbuf_cb cb;
     int cb_len;
     void *cb_arg;
 };
 
-flux_buffer_t *flux_buffer_create (int size)
+struct fbuf *fbuf_create (int size)
 {
-    flux_buffer_t *fb = NULL;
-    int minsize = FLUX_BUFFER_MIN;
+    struct fbuf *fb = NULL;
+    int minsize = FBUF_MIN;
 
     if (size <= 0) {
         errno = EINVAL;
@@ -61,12 +61,12 @@ flux_buffer_t *flux_buffer_create (int size)
         goto cleanup;
     }
 
-    fb->magic = FLUX_BUFFER_MAGIC;
+    fb->magic = FBUF_MAGIC;
     fb->size = size;
-    if (size < FLUX_BUFFER_MIN)
+    if (size < FBUF_MIN)
         minsize = size;
     else
-        minsize = FLUX_BUFFER_MIN;
+        minsize = FBUF_MIN;
     fb->readonly = false;
 
     /* buffer can grow to size specified by user */
@@ -84,29 +84,29 @@ flux_buffer_t *flux_buffer_create (int size)
         goto cleanup;
     }
 
-    fb->cb_type = FLUX_BUFFER_CB_TYPE_NONE;
+    fb->cb_type = FBUF_CB_TYPE_NONE;
 
     return fb;
 
 cleanup:
-    flux_buffer_destroy (fb);
+    fbuf_destroy (fb);
     return NULL;
 }
 
-void flux_buffer_destroy (void *data)
+void fbuf_destroy (void *data)
 {
-    flux_buffer_t *fb = data;
-    if (fb && fb->magic == FLUX_BUFFER_MAGIC) {
-        fb->magic = ~FLUX_BUFFER_MAGIC;
+    struct fbuf *fb = data;
+    if (fb && fb->magic == FBUF_MAGIC) {
+        fb->magic = ~FBUF_MAGIC;
         cbuf_destroy (fb->cbuf);
         free (fb->buf);
         free (fb);
     }
 }
 
-int flux_buffer_size (flux_buffer_t *fb)
+int fbuf_size (struct fbuf *fb)
 {
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }
@@ -114,9 +114,9 @@ int flux_buffer_size (flux_buffer_t *fb)
     return fb->size;
 }
 
-int flux_buffer_bytes (flux_buffer_t *fb)
+int fbuf_bytes (struct fbuf *fb)
 {
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }
@@ -124,9 +124,9 @@ int flux_buffer_bytes (flux_buffer_t *fb)
     return cbuf_used (fb->cbuf);
 }
 
-int flux_buffer_space (flux_buffer_t *fb)
+int fbuf_space (struct fbuf *fb)
 {
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }
@@ -134,9 +134,9 @@ int flux_buffer_space (flux_buffer_t *fb)
     return cbuf_free (fb->cbuf);
 }
 
-int flux_buffer_readonly (flux_buffer_t *fb)
+int fbuf_readonly (struct fbuf *fb)
 {
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }
@@ -145,22 +145,22 @@ int flux_buffer_readonly (flux_buffer_t *fb)
     return 0;
 }
 
-bool flux_buffer_is_readonly (flux_buffer_t *fb)
+bool fbuf_is_readonly (struct fbuf *fb)
 {
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return false;
     }
     return fb->readonly;
 }
 
-static int set_cb (flux_buffer_t *fb,
+static int set_cb (struct fbuf *fb,
                    int cb_type,
-                   flux_buffer_cb cb,
+                   fbuf_cb cb,
                    int cb_len,
                    void *cb_arg)
 {
-    if (fb->cb_type == FLUX_BUFFER_CB_TYPE_NONE) {
+    if (fb->cb_type == FBUF_CB_TYPE_NONE) {
         if (!cb)
             return 0;
 
@@ -176,7 +176,7 @@ static int set_cb (flux_buffer_t *fb,
     }
     else if (fb->cb_type == cb_type) {
         if (!cb) {
-            fb->cb_type = FLUX_BUFFER_CB_TYPE_NONE;
+            fb->cb_type = FBUF_CB_TYPE_NONE;
             fb->cb = NULL;
             fb->cb_len = 0;
             fb->cb_arg = NULL;
@@ -201,67 +201,59 @@ static int set_cb (flux_buffer_t *fb,
     return 0;
 }
 
-int flux_buffer_set_low_read_cb (flux_buffer_t *fb,
-                                 flux_buffer_cb cb,
-                                 int low,
-                                 void *arg)
+int fbuf_set_low_read_cb (struct fbuf *fb, fbuf_cb cb, int low, void *arg)
 {
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }
 
-    return set_cb (fb, FLUX_BUFFER_CB_TYPE_READ, cb, low, arg);
+    return set_cb (fb, FBUF_CB_TYPE_READ, cb, low, arg);
 }
 
-int flux_buffer_set_read_line_cb (flux_buffer_t *fb,
-                                  flux_buffer_cb cb,
-                                  void *arg)
+int fbuf_set_read_line_cb (struct fbuf *fb, fbuf_cb cb, void *arg)
 {
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }
 
-    return set_cb (fb, FLUX_BUFFER_CB_TYPE_READ_LINE, cb, 0, arg);
+    return set_cb (fb, FBUF_CB_TYPE_READ_LINE, cb, 0, arg);
 }
 
-int flux_buffer_set_high_write_cb (flux_buffer_t *fb,
-                                   flux_buffer_cb cb,
-                                   int high,
-                                   void *arg)
+int fbuf_set_high_write_cb (struct fbuf *fb, fbuf_cb cb, int high, void *arg)
 {
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }
 
-    return set_cb (fb, FLUX_BUFFER_CB_TYPE_WRITE, cb, high, arg);
+    return set_cb (fb, FBUF_CB_TYPE_WRITE, cb, high, arg);
 }
 
-void check_write_cb (flux_buffer_t *fb)
+void check_write_cb (struct fbuf *fb)
 {
-    if (fb->cb_type == FLUX_BUFFER_CB_TYPE_WRITE
-        && flux_buffer_bytes (fb) < fb->cb_len) {
+    if (fb->cb_type == FBUF_CB_TYPE_WRITE
+        && fbuf_bytes (fb) < fb->cb_len) {
         fb->cb (fb, fb->cb_arg);
     }
 }
 
-void check_read_cb (flux_buffer_t *fb)
+void check_read_cb (struct fbuf *fb)
 {
-    if (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ
-        && flux_buffer_bytes (fb) > fb->cb_len)
+    if (fb->cb_type == FBUF_CB_TYPE_READ
+        && fbuf_bytes (fb) > fb->cb_len)
             fb->cb (fb, fb->cb_arg);
-    else if (fb->cb_type == FLUX_BUFFER_CB_TYPE_READ_LINE
-             && flux_buffer_has_line (fb))
+    else if (fb->cb_type == FBUF_CB_TYPE_READ_LINE
+             && fbuf_has_line (fb))
             fb->cb (fb, fb->cb_arg);
 }
 
-int flux_buffer_drop (flux_buffer_t *fb, int len)
+int fbuf_drop (struct fbuf *fb, int len)
 {
     int ret;
 
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }
@@ -275,7 +267,7 @@ int flux_buffer_drop (flux_buffer_t *fb, int len)
 }
 
 /* check if internal buffer can hold data from user */
-static int return_buffer_check (flux_buffer_t *fb)
+static int return_buffer_check (struct fbuf *fb)
 {
     int used = cbuf_used (fb->cbuf);
 
@@ -304,11 +296,11 @@ static int return_buffer_check (flux_buffer_t *fb)
     return 0;
 }
 
-const void *flux_buffer_peek (flux_buffer_t *fb, int len, int *lenp)
+const void *fbuf_peek (struct fbuf *fb, int len, int *lenp)
 {
     int ret;
 
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return NULL;
     }
@@ -332,11 +324,11 @@ const void *flux_buffer_peek (flux_buffer_t *fb, int len, int *lenp)
     return fb->buf;
 }
 
-const void *flux_buffer_read (flux_buffer_t *fb, int len, int *lenp)
+const void *fbuf_read (struct fbuf *fb, int len, int *lenp)
 {
     int ret;
 
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return NULL;
     }
@@ -362,12 +354,12 @@ const void *flux_buffer_read (flux_buffer_t *fb, int len, int *lenp)
     return fb->buf;
 }
 
-int flux_buffer_write (flux_buffer_t *fb, const void *data, int len)
+int fbuf_write (struct fbuf *fb, const void *data, int len)
 {
     int ret;
 
     if (!fb
-        || fb->magic != FLUX_BUFFER_MAGIC
+        || fb->magic != FBUF_MAGIC
         || !data
         || len < 0) {
         errno = EINVAL;
@@ -387,9 +379,9 @@ int flux_buffer_write (flux_buffer_t *fb, const void *data, int len)
     return ret;
 }
 
-int flux_buffer_lines (flux_buffer_t *fb)
+int fbuf_lines (struct fbuf *fb)
 {
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }
@@ -397,21 +389,21 @@ int flux_buffer_lines (flux_buffer_t *fb)
     return cbuf_lines_used (fb->cbuf);
 }
 
-bool flux_buffer_has_line (flux_buffer_t *fb)
+bool fbuf_has_line (struct fbuf *fb)
 {
     char buf[1];
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return false;
     }
     return (cbuf_peek_line (fb->cbuf, buf, 0, 1) > 0);
 }
 
-int flux_buffer_drop_line (flux_buffer_t *fb)
+int fbuf_drop_line (struct fbuf *fb)
 {
     int ret;
 
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }
@@ -424,11 +416,11 @@ int flux_buffer_drop_line (flux_buffer_t *fb)
     return ret;
 }
 
-const void *flux_buffer_peek_line (flux_buffer_t *fb, int *lenp)
+const void *fbuf_peek_line (struct fbuf *fb, int *lenp)
 {
     int ret;
 
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return NULL;
     }
@@ -445,11 +437,11 @@ const void *flux_buffer_peek_line (flux_buffer_t *fb, int *lenp)
     return fb->buf;
 }
 
-const void *flux_buffer_peek_trimmed_line (flux_buffer_t *fb, int *lenp)
+const void *fbuf_peek_trimmed_line (struct fbuf *fb, int *lenp)
 {
     int tmp_lenp = 0;
 
-    if (!flux_buffer_peek_line (fb, &tmp_lenp))
+    if (!fbuf_peek_line (fb, &tmp_lenp))
         return NULL;
 
     if (tmp_lenp) {
@@ -464,11 +456,11 @@ const void *flux_buffer_peek_trimmed_line (flux_buffer_t *fb, int *lenp)
     return fb->buf;
 }
 
-const void *flux_buffer_read_line (flux_buffer_t *fb, int *lenp)
+const void *fbuf_read_line (struct fbuf *fb, int *lenp)
 {
     int ret;
 
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return NULL;
     }
@@ -487,11 +479,11 @@ const void *flux_buffer_read_line (flux_buffer_t *fb, int *lenp)
     return fb->buf;
 }
 
-const void *flux_buffer_read_trimmed_line (flux_buffer_t *fb, int *lenp)
+const void *fbuf_read_trimmed_line (struct fbuf *fb, int *lenp)
 {
     int tmp_lenp = 0;
 
-    if (!flux_buffer_read_line (fb, &tmp_lenp))
+    if (!fbuf_read_line (fb, &tmp_lenp))
         return NULL;
 
     if (tmp_lenp) {
@@ -506,12 +498,12 @@ const void *flux_buffer_read_trimmed_line (flux_buffer_t *fb, int *lenp)
     return fb->buf;
 }
 
-int flux_buffer_write_line (flux_buffer_t *fb, const char *data)
+int fbuf_write_line (struct fbuf *fb, const char *data)
 {
     int ret;
 
     if (!fb
-        || fb->magic != FLUX_BUFFER_MAGIC
+        || fb->magic != FBUF_MAGIC
         || !data) {
         errno = EINVAL;
         return -1;
@@ -530,9 +522,9 @@ int flux_buffer_write_line (flux_buffer_t *fb, const char *data)
     return ret;
 }
 
-int flux_buffer_peek_to_fd (flux_buffer_t *fb, int fd, int len)
+int fbuf_peek_to_fd (struct fbuf *fb, int fd, int len)
 {
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }
@@ -540,11 +532,11 @@ int flux_buffer_peek_to_fd (flux_buffer_t *fb, int fd, int len)
     return cbuf_peek_to_fd (fb->cbuf, fd, len);
 }
 
-int flux_buffer_read_to_fd (flux_buffer_t *fb, int fd, int len)
+int fbuf_read_to_fd (struct fbuf *fb, int fd, int len)
 {
     int ret;
 
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }
@@ -557,11 +549,11 @@ int flux_buffer_read_to_fd (flux_buffer_t *fb, int fd, int len)
     return ret;
 }
 
-int flux_buffer_write_from_fd (flux_buffer_t *fb, int fd, int len)
+int fbuf_write_from_fd (struct fbuf *fb, int fd, int len)
 {
     int ret;
 
-    if (!fb || fb->magic != FLUX_BUFFER_MAGIC) {
+    if (!fb || fb->magic != FBUF_MAGIC) {
         errno = EINVAL;
         return -1;
     }

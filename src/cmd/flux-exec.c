@@ -27,6 +27,8 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libsubprocess/fbuf.h"
+#include "src/common/libsubprocess/fbuf_watcher.h"
 #include "ccan/str/str.h"
 
 static struct optparse_option cmdopts[] = {
@@ -217,13 +219,13 @@ static void stdin_cb (flux_reactor_t *r,
                       int revents,
                       void *arg)
 {
-    flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+    struct fbuf *fb = fbuf_read_watcher_get_buffer (w);
     flux_subprocess_t *p;
     const char *ptr;
     int lenp;
 
-    if (!(ptr = flux_buffer_read (fb, -1, &lenp)))
-        log_err_exit ("flux_buffer_read");
+    if (!(ptr = fbuf_read (fb, -1, &lenp)))
+        log_err_exit ("fbuf_read");
 
     if (lenp) {
         p = zlist_first (subprocesses);
@@ -592,13 +594,13 @@ int main (int argc, char *argv[])
             log_err_exit ("atexit");
         if (fcntl (STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK) < 0)
             log_err_exit ("fcntl F_SETFL stdin");
-        if (!(stdin_w = flux_buffer_read_watcher_create (r,
-                                                         STDIN_FILENO,
-                                                         1 << 20,
-                                                         stdin_cb,
-                                                         0,
-                                                         NULL)))
-            log_err_exit ("flux_buffer_read_watcher_create");
+        if (!(stdin_w = fbuf_read_watcher_create (r,
+                                                  STDIN_FILENO,
+                                                  1 << 20,
+                                                  stdin_cb,
+                                                  0,
+                                                  NULL)))
+            log_err_exit ("fbuf_read_watcher_create");
     }
     if (signal (SIGINT, signal_cb) == SIG_ERR)
         log_err_exit ("signal");

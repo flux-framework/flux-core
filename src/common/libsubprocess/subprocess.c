@@ -53,8 +53,8 @@ void channel_destroy (void *arg)
         flux_watcher_destroy (c->buffer_read_stopped_w);
         c->buffer_read_w_started = false;
 
-        flux_buffer_destroy (c->write_buffer);
-        flux_buffer_destroy (c->read_buffer);
+        fbuf_destroy (c->write_buffer);
+        fbuf_destroy (c->read_buffer);
         flux_watcher_destroy (c->in_prep_w);
         flux_watcher_destroy (c->in_idle_w);
         flux_watcher_destroy (c->in_check_w);
@@ -640,7 +640,7 @@ flux_subprocess_t *flux_rexec (flux_t *h,
 int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)
 {
     struct subprocess_channel *c;
-    flux_buffer_t *fb;
+    struct fbuf *fb;
 
     if (!p || !stream
            || (p->local && p->in_hook)) {
@@ -658,7 +658,7 @@ int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)
         if (c->buffer_read_w_started)
             return 0;
 
-        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w)))
+        if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w)))
             return -1;
 
         if (!c->buffer_read_stopped_w) {
@@ -692,7 +692,7 @@ int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)
 int flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream)
 {
     struct subprocess_channel *c;
-    flux_buffer_t *fb;
+    struct fbuf *fb;
 
     if (!p || !stream
            || (p->local && p->in_hook)) {
@@ -710,7 +710,7 @@ int flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream)
         if (!c->buffer_read_w_started)
             return 0;
 
-        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w)))
+        if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w)))
             return -1;
     }
     else {
@@ -759,7 +759,7 @@ int flux_subprocess_write (flux_subprocess_t *p,
                            size_t len)
 {
     struct subprocess_channel *c;
-    flux_buffer_t *fb;
+    struct fbuf *fb;
     int ret;
 
     if (!p || !stream
@@ -789,16 +789,16 @@ int flux_subprocess_write (flux_subprocess_t *p,
             errno = EPIPE;
             return -1;
         }
-        if (!(fb = flux_buffer_write_watcher_get_buffer (c->buffer_write_w))) {
-            log_err ("flux_buffer_write_watcher_get_buffer");
+        if (!(fb = fbuf_write_watcher_get_buffer (c->buffer_write_w))) {
+            log_err ("fbuf_write_watcher_get_buffer");
             return -1;
         }
-        if (flux_buffer_space (fb) < len) {
+        if (fbuf_space (fb) < len) {
             errno = ENOSPC;
             return -1;
         }
-        if ((ret = flux_buffer_write (fb, buf, len)) < 0) {
-            log_err ("flux_buffer_write");
+        if ((ret = fbuf_write (fb, buf, len)) < 0) {
+            log_err ("fbuf_write");
             return -1;
         }
     }
@@ -808,12 +808,12 @@ int flux_subprocess_write (flux_subprocess_t *p,
             errno = EPIPE;
             return -1;
         }
-        if (flux_buffer_space (c->write_buffer) < len) {
+        if (fbuf_space (c->write_buffer) < len) {
             errno = ENOSPC;
             return -1;
         }
-        if ((ret = flux_buffer_write (c->write_buffer, buf, len)) < 0) {
-            log_err ("flux_buffer_write");
+        if ((ret = fbuf_write (c->write_buffer, buf, len)) < 0) {
+            log_err ("fbuf_write");
             return -1;
         }
     }
@@ -842,8 +842,8 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
 
     if (p->local) {
         if (p->state == FLUX_SUBPROCESS_RUNNING) {
-            if (flux_buffer_write_watcher_close (c->buffer_write_w) < 0) {
-                log_err ("flux_buffer_write_watcher_close");
+            if (fbuf_write_watcher_close (c->buffer_write_w) < 0) {
+                log_err ("fbuf_write_watcher_close");
                 return -1;
             }
         }
@@ -872,7 +872,7 @@ static const char *subprocess_read (flux_subprocess_t *p,
                                     bool *readonly)
 {
     struct subprocess_channel *c;
-    flux_buffer_t *fb;
+    struct fbuf *fb;
     const char *ptr;
 
     if (!p || !stream
@@ -898,7 +898,7 @@ static const char *subprocess_read (flux_subprocess_t *p,
     }
 
     if (p->local) {
-        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w)))
+        if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w)))
             return NULL;
     }
     else
@@ -906,20 +906,20 @@ static const char *subprocess_read (flux_subprocess_t *p,
 
     /* if readonly marked, indicates EOF received */
     if (readonly)
-        (*readonly) = flux_buffer_is_readonly (fb);
+        (*readonly) = fbuf_is_readonly (fb);
 
     if (read_line) {
         if (trimmed) {
-            if (!(ptr = flux_buffer_read_trimmed_line (fb, lenp)))
+            if (!(ptr = fbuf_read_trimmed_line (fb, lenp)))
                 return NULL;
         }
         else {
-            if (!(ptr = flux_buffer_read_line (fb, lenp)))
+            if (!(ptr = fbuf_read_line (fb, lenp)))
                 return NULL;
         }
     }
     else {
-        if (!(ptr = flux_buffer_read (fb, len, lenp)))
+        if (!(ptr = fbuf_read (fb, len, lenp)))
             return NULL;
     }
 
@@ -952,7 +952,7 @@ int flux_subprocess_read_stream_closed (flux_subprocess_t *p,
                                         const char *stream)
 {
     struct subprocess_channel *c;
-    flux_buffer_t *fb;
+    struct fbuf *fb;
 
     if (!p || !stream
            || (p->local && p->in_hook)) {
@@ -967,13 +967,13 @@ int flux_subprocess_read_stream_closed (flux_subprocess_t *p,
     }
 
     if (p->local) {
-        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w)))
+        if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w)))
             return -1;
     }
     else
         fb = c->read_buffer;
 
-    return flux_buffer_is_readonly (fb);
+    return fbuf_is_readonly (fb);
 }
 
 const char *flux_subprocess_getline (flux_subprocess_t *p,
@@ -1264,7 +1264,7 @@ void flux_subprocess_channel_incref (flux_subprocess_t *p, const char *name)
         return;
     if (!(c = zhash_lookup (p->channels, name)))
         return;
-    flux_buffer_read_watcher_incref (c->buffer_read_w);
+    fbuf_read_watcher_incref (c->buffer_read_w);
 }
 
 void flux_subprocess_channel_decref (flux_subprocess_t *p, const char *name)
@@ -1274,7 +1274,7 @@ void flux_subprocess_channel_decref (flux_subprocess_t *p, const char *name)
         return;
     if (!(c = zhash_lookup (p->channels, name)))
         return;
-    flux_buffer_read_watcher_decref (c->buffer_read_w);
+    fbuf_read_watcher_decref (c->buffer_read_w);
 }
 
 

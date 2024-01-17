@@ -34,15 +34,15 @@ libsubprocess_la_SOURCES = \
 	subprocess_private.h \
 	client.h \
 	client.c \
-	ev_buffer_read.h \
-	ev_buffer_read.c \
-	ev_buffer_write.h \
-	ev_buffer_write.c \
-	buffer.h \
-	buffer_private.h \
-	buffer.c \
-	bufwatch.h \
-	bufwatch.c
+	ev_fbuf_read.h \
+	ev_fbuf_read.c \
+	ev_fbuf_write.h \
+	ev_fbuf_write.c \
+	fbuf.h \
+	fbuf_private.h \
+	fbuf.c \
+	fbuf_watcher.h \
+	fbuf_watcher.c
 
 fluxcoreinclude_HEADERS = \
 	command.h \
@@ -56,8 +56,8 @@ TESTS = \
 	test_remote.t \
 	test_iostress.t \
 	test_iochan.t \
-	test_buffer.t \
-	test_bufwatch.t
+	test_fbuf.t \
+	test_fbuf_watcher.t
 
 check_PROGRAMS = \
 	$(TESTS) \
@@ -135,15 +135,15 @@ test_iochan_t_CPPFLAGS = \
 test_iochan_t_LDADD = $(test_ldadd)
 test_iochan_t_LDFLAGS = $(test_ldflags)
 
-test_buffer_t_SOURCES = test/buffer.c
-test_buffer_t_CPPFLAGS = $(test_cppflags)
-test_buffer_t_LDADD = $(test_ldadd)
-test_buffer_t_LDFLAGS = $(test_ldflags)
+test_fbuf_t_SOURCES = test/fbuf.c
+test_fbuf_t_CPPFLAGS = $(test_cppflags)
+test_fbuf_t_LDADD = $(test_ldadd)
+test_fbuf_t_LDFLAGS = $(test_ldflags)
 
-test_bufwatch_t_SOURCES = test/bufwatch.c
-test_bufwatch_t_CPPFLAGS = $(test_cppflags)
-test_bufwatch_t_LDADD = $(test_ldadd)
-test_bufwatch_t_LDFLAGS = $(test_ldflags)
+test_fbuf_watcher_t_SOURCES = test/fbuf_watcher.c
+test_fbuf_watcher_t_CPPFLAGS = $(test_cppflags)
+test_fbuf_watcher_t_LDADD = $(test_ldadd)
+test_fbuf_watcher_t_LDFLAGS = $(test_ldflags)
 
 test_echo_SOURCES = test/test_echo.c
 

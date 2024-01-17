@@ -164,7 +164,7 @@ static void remote_in_prep_cb (flux_reactor_t *r,
 {
     struct subprocess_channel *c = arg;
 
-    if (flux_buffer_bytes (c->write_buffer) > 0
+    if (fbuf_bytes (c->write_buffer) > 0
         || (c->closed && !c->write_eof_sent)
         || (c->p->state == FLUX_SUBPROCESS_EXITED
             || c->p->state == FLUX_SUBPROCESS_FAILED))
@@ -178,8 +178,8 @@ static int remote_write (struct subprocess_channel *c)
     bool eof = false;
     int rv = -1;
 
-    if (!(ptr = flux_buffer_read (c->write_buffer, -1, &lenp))) {
-        llog_debug (c->p, "flux_buffer_read: %s", strerror (errno));
+    if (!(ptr = fbuf_read (c->write_buffer, -1, &lenp))) {
+        llog_debug (c->p, "fbuf_read: %s", strerror (errno));
         set_failed (c->p, "internal buffer read error");
         goto error;
     }
@@ -188,9 +188,7 @@ static int remote_write (struct subprocess_channel *c)
 
     /* if closed / EOF about to be sent, can attach to this RPC to
      * avoid extra RPC */
-    if (!flux_buffer_bytes (c->write_buffer)
-        && c->closed
-        && !c->write_eof_sent)
+    if (!fbuf_bytes (c->write_buffer) && c->closed && !c->write_eof_sent)
         eof = true;
 
     if (subprocess_write (c->p->h,
@@ -245,14 +243,12 @@ static void remote_in_check_cb (flux_reactor_t *r,
 
     flux_watcher_stop (c->in_idle_w);
 
-    if (flux_buffer_bytes (c->write_buffer) > 0) {
+    if (fbuf_bytes (c->write_buffer) > 0) {
         if (remote_write (c) < 0)
             goto error;
     }
 
-    if (!flux_buffer_bytes (c->write_buffer)
-        && c->closed
-        && !c->write_eof_sent) {
+    if (!fbuf_bytes (c->write_buffer) && c->closed && !c->write_eof_sent) {
         if (remote_close (c) < 0)
             goto error;
         c->write_eof_sent = true;
@@ -286,8 +282,8 @@ static void remote_out_prep_cb (flux_reactor_t *r,
 
     /* no need to handle failure states, on fatal error, these
      * reactors are closed */
-    if ((c->line_buffered && flux_buffer_has_line (c->read_buffer))
-        || (!c->line_buffered && flux_buffer_bytes (c->read_buffer) > 0)
+    if ((c->line_buffered && fbuf_has_line (c->read_buffer))
+        || (!c->line_buffered && fbuf_bytes (c->read_buffer) > 0)
         || (c->read_eof_received && !c->eof_sent_to_caller))
         flux_watcher_start (c->out_idle_w);
 }
@@ -302,14 +298,14 @@ static void remote_out_check_cb (flux_reactor_t *r,
     flux_watcher_stop (c->out_idle_w);
 
     if ((c->line_buffered
-         && (flux_buffer_has_line (c->read_buffer)
+         && (fbuf_has_line (c->read_buffer)
              || (c->read_eof_received
-                 && flux_buffer_bytes (c->read_buffer) > 0)))
-        || (!c->line_buffered && flux_buffer_bytes (c->read_buffer) > 0)) {
+                 && fbuf_bytes (c->read_buffer) > 0)))
+        || (!c->line_buffered && fbuf_bytes (c->read_buffer) > 0)) {
         c->output_cb (c->p, c->name);
     }
 
-    if (!flux_buffer_bytes (c->read_buffer)
+    if (!fbuf_bytes (c->read_buffer)
         && c->read_eof_received
         && !c->eof_sent_to_caller) {
         c->output_cb (c->p, c->name);
@@ -355,8 +351,8 @@ static int remote_channel_setup (flux_subprocess_t *p,
     }
 
     if (channel_flags & CHANNEL_WRITE) {
-        if (!(c->write_buffer = flux_buffer_create (buffer_size))) {
-            llog_debug (p, "flux_buffer_create: %s", strerror (errno));
+        if (!(c->write_buffer = fbuf_create (buffer_size))) {
+            llog_debug (p, "fbuf_create: %s", strerror (errno));
             goto error;
         }
 
@@ -397,8 +393,8 @@ static int remote_channel_setup (flux_subprocess_t *p,
         if (wflag)
             c->line_buffered = true;
 
-        if (!(c->read_buffer = flux_buffer_create (buffer_size))) {
-            llog_debug (p, "flux_buffer_create: %s", strerror (errno));
+        if (!(c->read_buffer = fbuf_create (buffer_size))) {
+            llog_debug (p, "fbuf_create: %s", strerror (errno));
             goto error;
         }
         p->channels_eof_expected++;
@@ -543,7 +539,7 @@ static int remote_output (flux_subprocess_t *p,
     if (data && len) {
         int tmp;
 
-        tmp = flux_buffer_write (c->read_buffer, data, len);
+        tmp = fbuf_write (c->read_buffer, data, len);
         if (tmp >= 0 && tmp < len) {
             errno = ENOSPC; // short write is promoted to fatal error
             tmp = -1;
@@ -562,8 +558,8 @@ static int remote_output (flux_subprocess_t *p,
     }
     if (eof) {
         c->read_eof_received = true;
-        if (flux_buffer_readonly (c->read_buffer) < 0)
-            llog_debug (p, "flux_buffer_readonly: %s", strerror (errno));
+        if (fbuf_readonly (c->read_buffer) < 0)
+            llog_debug (p, "fbuf_readonly: %s", strerror (errno));
     }
     return 0;
 }

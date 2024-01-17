@@ -82,12 +82,12 @@ int cmd_option_line_buffer (flux_subprocess_t *p, const char *name)
         if (!strcasecmp (val, "false"))
             rv = 0;
         else if (!strcasecmp (val, "true"))
-            rv = FLUX_WATCHER_LINE_BUFFER;
+            rv = FBUF_WATCHER_LINE_BUFFER;
         else
             errno = EINVAL;
     }
     else
-        rv = FLUX_WATCHER_LINE_BUFFER;
+        rv = FBUF_WATCHER_LINE_BUFFER;
 
 cleanup:
     free (var);

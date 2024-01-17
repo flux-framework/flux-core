@@ -8,48 +8,42 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef FLUX_BUFFER_H
-#define FLUX_BUFFER_H
+#ifndef _LIBSUBPROCESS_FBUF_H
+#define _LIBSUBPROCESS_FBUF_H
 
 #include <stdbool.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-typedef struct flux_buffer flux_buffer_t;
-
 /* Create buffer.
  */
-flux_buffer_t *flux_buffer_create (int size);
+struct fbuf *fbuf_create (int size);
 
-void flux_buffer_destroy (void *fb);
+void fbuf_destroy (void *fb);
 
-/* Returns the buffer size, set when flux_buffer_create () was called */
-int flux_buffer_size (flux_buffer_t *fb);
+/* Returns the buffer size, set when fbuf_create () was called */
+int fbuf_size (struct fbuf *fb);
 
-/* Returns the number of bytes current stored in flux_buffer */
-int flux_buffer_bytes (flux_buffer_t *fb);
+/* Returns the number of bytes current stored in fbuf */
+int fbuf_bytes (struct fbuf *fb);
 
-/* Returns the number of bytes of space available in flux_buffer */
-int flux_buffer_space (flux_buffer_t *fb);
+/* Returns the number of bytes of space available in fbuf */
+int fbuf_space (struct fbuf *fb);
 
 /* Manage "readonly" status
- * - flux_buffer_readonly() makes it so writes are no longer allowed
+ * - fbuf_readonly() makes it so writes are no longer allowed
  *   to the buffer.  Reads are allowed until the buffer is empty.
  *   Changing a buffer to "readonly" can only be called once and
  *   cannot be disabled.  This is a convenience status can be used to
  *   indicate to users that the buffer is no longer usable.
- * - flux_buffer_is_readonly() returns true if a buffer is readonly,
+ * - fbuf_is_readonly() returns true if a buffer is readonly,
  *    and false if not.
  */
-int flux_buffer_readonly (flux_buffer_t *fb);
-bool  flux_buffer_is_readonly (flux_buffer_t *fb);
+int fbuf_readonly (struct fbuf *fb);
+bool fbuf_is_readonly (struct fbuf *fb);
 
 /* Drop up to [len] bytes of data in the buffer. Set [len] to -1
  * to drop all data.  Returns number of bytes dropped on success.
  */
-int flux_buffer_drop (flux_buffer_t *fb, int len);
+int fbuf_drop (struct fbuf *fb, int len);
 
 /* Read up to [len] bytes of data in the buffer without consuming it.
  * Pointer to buffer is returned to user and optionally length read
@@ -58,7 +52,7 @@ int flux_buffer_drop (flux_buffer_t *fb, int len);
  * shall not free returned pointer.  If no data is available, returns
  * pointer and length of 0.  Set [len] to -1 to read all data.
  */
-const void *flux_buffer_peek (flux_buffer_t *fb, int len, int *lenp);
+const void *fbuf_peek (struct fbuf *fb, int len, int *lenp);
 
 /* Read up to [len] bytes of data in the buffer and mark data as
  * consumed.  Pointer to buffer is returned to user and optionally
@@ -68,71 +62,67 @@ const void *flux_buffer_peek (flux_buffer_t *fb, int len, int *lenp);
  * available, returns pointer and length of 0.  Set [len] to -1 to
  * read all data.
  */
-const void *flux_buffer_read (flux_buffer_t *fb, int len, int *lenp);
+const void *fbuf_read (struct fbuf *fb, int len, int *lenp);
 
 /* Write [len] bytes of data into the buffer.  Returns number of bytes
  * written on success.
  */
-int flux_buffer_write (flux_buffer_t *fb, const void *data, int len);
+int fbuf_write (struct fbuf *fb, const void *data, int len);
 
 /* Determines lines available for peeking/reading.  Returns -1
  * on error, >= 0 for lines available */
-int flux_buffer_lines (flux_buffer_t *fb);
+int fbuf_lines (struct fbuf *fb);
 
 /* Return true if buffer has at least one unread line */
-bool flux_buffer_has_line (flux_buffer_t *fb);
+bool fbuf_has_line (struct fbuf *fb);
 
 /* Drop a line in the buffer.  Returns number of bytes dropped on
  * success. */
-int flux_buffer_drop_line (flux_buffer_t *fb);
+int fbuf_drop_line (struct fbuf *fb);
 
 /* Read a line in the buffer without consuming it.  Return buffer will
  * include newline.  Optionally return length of data returned in
  * [lenp].  If no line is available, returns pointer and length of
  * 0. Return NULL on error.
  */
-const void *flux_buffer_peek_line (flux_buffer_t *fb, int *lenp);
+const void *fbuf_peek_line (struct fbuf *fb, int *lenp);
 
-/* Identical to flux_buffer_peek_line(), but does not return trailing
+/* Identical to fbuf_peek_line(), but does not return trailing
  * newline */
-const void *flux_buffer_peek_trimmed_line (flux_buffer_t *fb, int *lenp);
+const void *fbuf_peek_trimmed_line (struct fbuf *fb, int *lenp);
 
 /* Read a line in the buffer and mark data as consumed.  Return buffer
  * will include newline.  Optionally return length of data returned in
  * [lenp].  If no line is available, returns pointer and length of 0.
  * Return NULL on error.
  */
-const void *flux_buffer_read_line (flux_buffer_t *fb, int *lenp);
+const void *fbuf_read_line (struct fbuf *fb, int *lenp);
 
-/* Identical to flux_buffer_read_line(), but does not return trailing
+/* Identical to fbuf_read_line(), but does not return trailing
  * newline */
-const void *flux_buffer_read_trimmed_line (flux_buffer_t *fb, int *lenp);
+const void *fbuf_read_trimmed_line (struct fbuf *fb, int *lenp);
 
 /* Write NUL terminated string data into the buffer and appends a
  * newline.  Returns number of bytes written on success.
  */
-int flux_buffer_write_line (flux_buffer_t *fb, const char *data);
+int fbuf_write_line (struct fbuf *fb, const char *data);
 
 /* Read up to [len] bytes from buffer to file descriptor [fd] without
  * consuming data.  Set [len] to -1 to read all data.  Returns number
  * of bytes read or -1 on error. */
-int flux_buffer_peek_to_fd (flux_buffer_t *fb, int fd, int len);
+int fbuf_peek_to_fd (struct fbuf *fb, int fd, int len);
 
 /* Read up to [len] bytes from buffer to file descriptor [fd] and mark
  * data as consumed.  Set [len] to -1 to read all data.  Returns
  * number of bytes read or -1 on error. */
-int flux_buffer_read_to_fd (flux_buffer_t *fb, int fd, int len);
+int fbuf_read_to_fd (struct fbuf *fb, int fd, int len);
 
 /* Write up to [len] bytes to buffer from file descriptor [fd].  Set
  * [len] to -1 to read an appropriate chunk size.  Returns number of
  * bytes written on success.
  */
-int flux_buffer_write_from_fd (flux_buffer_t *fb, int fd, int len);
+int fbuf_write_from_fd (struct fbuf *fb, int fd, int len);
 
-/* FUTURE: append, prepend, printf, add_flux_buffer, etc. */
+/* FUTURE: append, prepend, printf, add_fbuf, etc. */
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* !_FLUX_BUFFER_H */
+#endif /* !_LIBSUBPROCESS_FBUF_H */

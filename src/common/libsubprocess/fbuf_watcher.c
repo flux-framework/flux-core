@@ -21,32 +21,32 @@
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libflux/reactor_private.h"
 
-#include "bufwatch.h"
-#include "ev_buffer_read.h"
-#include "ev_buffer_write.h"
-#include "buffer.h"
-#include "buffer_private.h"
+#include "fbuf_watcher.h"
+#include "ev_fbuf_read.h"
+#include "ev_fbuf_write.h"
+#include "fbuf.h"
+#include "fbuf_private.h"
 
 static void buffer_read_start (flux_watcher_t *w)
 {
-    struct ev_buffer_read *ebr = (struct ev_buffer_read *)w->data;
-    ev_buffer_read_start (w->r->loop, ebr);
+    struct ev_fbuf_read *ebr = (struct ev_fbuf_read *)w->data;
+    ev_fbuf_read_start (w->r->loop, ebr);
 }
 
 static void buffer_read_stop (flux_watcher_t *w)
 {
-    struct ev_buffer_read *ebr = (struct ev_buffer_read *)w->data;
-    ev_buffer_read_stop (w->r->loop, ebr);
+    struct ev_fbuf_read *ebr = (struct ev_fbuf_read *)w->data;
+    ev_fbuf_read_stop (w->r->loop, ebr);
 }
 
 static void buffer_read_destroy (flux_watcher_t *w)
 {
-    struct ev_buffer_read *ebr = (struct ev_buffer_read *)w->data;
-    ev_buffer_read_cleanup (ebr);
+    struct ev_fbuf_read *ebr = (struct ev_fbuf_read *)w->data;
+    ev_fbuf_read_cleanup (ebr);
 }
 
 static void buffer_read_cb (struct ev_loop *loop,
-                            struct ev_buffer_read *ebr,
+                            struct ev_fbuf_read *ebr,
                             int revents)
 {
     struct flux_watcher *w = ebr->data;
@@ -60,11 +60,14 @@ static struct flux_watcher_ops buffer_read_watcher = {
     .destroy = buffer_read_destroy,
 };
 
-flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
-                                                 int size, flux_watcher_f cb,
-                                                 int flags, void *arg)
+flux_watcher_t *fbuf_read_watcher_create (flux_reactor_t *r,
+                                          int fd,
+                                          int size,
+                                          flux_watcher_f cb,
+                                          int flags,
+                                          void *arg)
 {
-    struct ev_buffer_read *ebr;
+    struct ev_fbuf_read *ebr;
     flux_watcher_t *w = NULL;
     int fd_flags;
 
@@ -88,14 +91,14 @@ flux_watcher_t *flux_buffer_read_watcher_create (flux_reactor_t *r, int fd,
 
     ebr = flux_watcher_get_data (w);
 
-    if (ev_buffer_read_init (ebr,
-                             fd,
-                             size,
-                             buffer_read_cb,
-                             r->loop) < 0)
+    if (ev_fbuf_read_init (ebr,
+                           fd,
+                           size,
+                           buffer_read_cb,
+                           r->loop) < 0)
         goto cleanup;
 
-    if (flags & FLUX_WATCHER_LINE_BUFFER)
+    if (flags & FBUF_WATCHER_LINE_BUFFER)
         ebr->line = true;
 
     ebr->data = w;
@@ -107,20 +110,20 @@ cleanup:
     return NULL;
 }
 
-flux_buffer_t *flux_buffer_read_watcher_get_buffer (flux_watcher_t *w)
+struct fbuf *fbuf_read_watcher_get_buffer (flux_watcher_t *w)
 {
     if (w)
-        return ((struct ev_buffer_read *)(w->data))->fb;
+        return ((struct ev_fbuf_read *)(w->data))->fb;
     return NULL;
 }
 
-const char *flux_buffer_read_watcher_get_data (flux_watcher_t *w, int *lenp)
+const char *fbuf_read_watcher_get_data (flux_watcher_t *w, int *lenp)
 {
     if (w) {
-        struct ev_buffer_read *eb = w->data;
+        struct ev_fbuf_read *eb = w->data;
         const char *data;
         if (eb->line) {
-            if (!(data = flux_buffer_read_line (eb->fb, lenp)))
+            if (!(data = fbuf_read_line (eb->fb, lenp)))
                 return NULL;
             if (*lenp > 0)
                 return data;
@@ -128,44 +131,44 @@ const char *flux_buffer_read_watcher_get_data (flux_watcher_t *w, int *lenp)
         /* Not line-buffered, or reading last bit of data which does
          * not contain a newline. Read any data:
          */
-        return flux_buffer_read (eb->fb, -1, lenp);
+        return fbuf_read (eb->fb, -1, lenp);
     }
     errno = EINVAL;
     return NULL;
 }
 
-void flux_buffer_read_watcher_incref (flux_watcher_t *w)
+void fbuf_read_watcher_incref (flux_watcher_t *w)
 {
     if (w)
-        ev_buffer_read_incref ((struct ev_buffer_read *)w->data);
+        ev_fbuf_read_incref ((struct ev_fbuf_read *)w->data);
 }
 
-void flux_buffer_read_watcher_decref (flux_watcher_t *w)
+void fbuf_read_watcher_decref (flux_watcher_t *w)
 {
     if (w)
-        ev_buffer_read_decref ((struct ev_buffer_read *)w->data);
+        ev_fbuf_read_decref ((struct ev_fbuf_read *)w->data);
 }
 
 static void buffer_write_start (flux_watcher_t *w)
 {
-    struct ev_buffer_write *ebw = (struct ev_buffer_write *)w->data;
-    ev_buffer_write_start (w->r->loop, ebw);
+    struct ev_fbuf_write *ebw = (struct ev_fbuf_write *)w->data;
+    ev_fbuf_write_start (w->r->loop, ebw);
 }
 
 static void buffer_write_stop (flux_watcher_t *w)
 {
-    struct ev_buffer_write *ebw = (struct ev_buffer_write *)w->data;
-    ev_buffer_write_stop (w->r->loop, ebw);
+    struct ev_fbuf_write *ebw = (struct ev_fbuf_write *)w->data;
+    ev_fbuf_write_stop (w->r->loop, ebw);
 }
 
 static void buffer_write_destroy (flux_watcher_t *w)
 {
-    struct ev_buffer_write *ebw = (struct ev_buffer_write *)w->data;
-    ev_buffer_write_cleanup (ebw);
+    struct ev_fbuf_write *ebw = (struct ev_fbuf_write *)w->data;
+    ev_fbuf_write_cleanup (ebw);
 }
 
 static void buffer_write_cb (struct ev_loop *loop,
-                             struct ev_buffer_write *ebw,
+                             struct ev_fbuf_write *ebw,
                              int revents)
 {
     struct flux_watcher *w = ebw->data;
@@ -179,11 +182,14 @@ static struct flux_watcher_ops buffer_write_watcher = {
     .destroy = buffer_write_destroy,
 };
 
-flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r, int fd,
-                                                  int size, flux_watcher_f cb,
-                                                  int flags, void *arg)
+flux_watcher_t *fbuf_write_watcher_create (flux_reactor_t *r,
+                                           int fd,
+                                           int size,
+                                           flux_watcher_f cb,
+                                           int flags,
+                                           void *arg)
 {
-    struct ev_buffer_write *ebw;
+    struct ev_fbuf_write *ebw;
     flux_watcher_t *w = NULL;
     int fd_flags;
 
@@ -208,11 +214,11 @@ flux_watcher_t *flux_buffer_write_watcher_create (flux_reactor_t *r, int fd,
 
     ebw = flux_watcher_get_data (w);
 
-    if (ev_buffer_write_init (ebw,
-                              fd,
-                              size,
-                              buffer_write_cb,
-                              r->loop) < 0)
+    if (ev_fbuf_write_init (ebw,
+                            fd,
+                            size,
+                            buffer_write_cb,
+                            r->loop) < 0)
         goto cleanup;
 
     ebw->data = w;
@@ -224,16 +230,16 @@ cleanup:
     return NULL;
 }
 
-flux_buffer_t *flux_buffer_write_watcher_get_buffer (flux_watcher_t *w)
+struct fbuf *fbuf_write_watcher_get_buffer (flux_watcher_t *w)
 {
     if (w)
-        return ((struct ev_buffer_write *)(w->data))->fb;
+        return ((struct ev_fbuf_write *)(w->data))->fb;
     return NULL;
 }
 
-int flux_buffer_write_watcher_close (flux_watcher_t *w)
+int fbuf_write_watcher_close (flux_watcher_t *w)
 {
-    struct ev_buffer_write *evw;
+    struct ev_fbuf_write *evw;
     if (!w) {
         errno = EINVAL;
         return (-1);
@@ -248,15 +254,15 @@ int flux_buffer_write_watcher_close (flux_watcher_t *w)
         return (-1);
     }
     evw->eof = true;
-    flux_buffer_readonly (evw->fb);
-    ev_buffer_write_wakeup (evw);
+    fbuf_readonly (evw->fb);
+    ev_fbuf_write_wakeup (evw);
     return (0);
 }
 
-int flux_buffer_write_watcher_is_closed (flux_watcher_t *w, int *errp)
+int fbuf_write_watcher_is_closed (flux_watcher_t *w, int *errp)
 {
     if (w) {
-        struct ev_buffer_write *evw = w->data;
+        struct ev_fbuf_write *evw = w->data;
         if (evw->closed && errp != NULL)
             *errp = evw->close_errno;
         return (evw->closed);

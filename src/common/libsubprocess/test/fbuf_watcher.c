@@ -18,7 +18,7 @@
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libtap/tap.h"
 
-#include "bufwatch.h"
+#include "fbuf_watcher.h"
 
 static void buffer_read (flux_reactor_t *r, flux_watcher_t *w,
                         int revents, void *arg)
@@ -30,11 +30,11 @@ static void buffer_read (flux_reactor_t *r, flux_watcher_t *w,
             "buffer: read callback incorrectly called with FLUX_POLLERR");
     }
     else if (revents & FLUX_POLLIN) {
-        flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+        struct fbuf *fb = fbuf_read_watcher_get_buffer (w);
         const void *ptr;
         int len;
 
-        ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
+        ok ((ptr = fbuf_read (fb, -1, &len)) != NULL,
             "buffer: read from buffer success");
 
         ok (len == 6,
@@ -68,7 +68,7 @@ static void buffer_read_data_unbuffered (flux_reactor_t *r,
         const void *ptr;
         int len;
 
-        ok ((ptr = flux_buffer_read_watcher_get_data (w, &len)) != NULL,
+        ok ((ptr = fbuf_read_watcher_get_data (w, &len)) != NULL,
             "buffer: read data from buffer success");
 
         ok (len == 6,
@@ -98,11 +98,11 @@ static void buffer_read_line (flux_reactor_t *r, flux_watcher_t *w,
             "buffer: read line callback incorrectly called with FLUX_POLLERR");
     }
     else if (revents & FLUX_POLLIN) {
-        flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+        struct fbuf *fb = fbuf_read_watcher_get_buffer (w);
         const void *ptr;
         int len;
 
-        ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL,
+        ok ((ptr = fbuf_read_line (fb, &len)) != NULL,
             "buffer: read line from buffer success");
 
         ok (len == 4,
@@ -141,7 +141,7 @@ static void buffer_read_data (flux_reactor_t *r, flux_watcher_t *w,
         const void *ptr;
         int len;
 
-        ok ((ptr = flux_buffer_read_watcher_get_data (w, &len)) != NULL,
+        ok ((ptr = fbuf_read_watcher_get_data (w, &len)) != NULL,
             "buffer: read data from buffer success");
 
         ok (len == 4,
@@ -178,7 +178,7 @@ static void buffer_write (flux_reactor_t *r, flux_watcher_t *w,
             "buffer: write callback called with FLUX_POLLERR");
     }
     else {
-        ok (flux_buffer_write_watcher_is_closed (w, NULL),
+        ok (fbuf_write_watcher_is_closed (w, NULL),
             "buffer: write callback called after close");
     }
 
@@ -197,11 +197,11 @@ static void buffer_read_fill (flux_reactor_t *r, flux_watcher_t *w,
             "buffer: read callback incorrectly called with FLUX_POLLERR");
     }
     else if (revents & FLUX_POLLIN) {
-        flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+        struct fbuf *fb = fbuf_read_watcher_get_buffer (w);
         const void *ptr;
         int len;
 
-        ok ((ptr = flux_buffer_read (fb, 6, &len)) != NULL,
+        ok ((ptr = fbuf_read (fb, 6, &len)) != NULL,
             "buffer: read from buffer success");
 
         ok (len == 6,
@@ -231,11 +231,11 @@ static void buffer_read_overflow (flux_reactor_t *r, flux_watcher_t *w,
             "buffer overflow test: read callback incorrectly called with FLUX_POLLERR");
     }
     else if (revents & FLUX_POLLIN) {
-        flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+        struct fbuf *fb = fbuf_read_watcher_get_buffer (w);
         const void *ptr;
         int len;
 
-        ok ((ptr = flux_buffer_read (fb, 6, &len)) != NULL,
+        ok ((ptr = fbuf_read (fb, 6, &len)) != NULL,
             "buffer overflow test: read from buffer success");
 
         ok (len == 6,
@@ -261,7 +261,7 @@ static void test_buffer (flux_reactor_t *reactor)
     int fd[2];
     int pfds[2];
     flux_watcher_t *w;
-    flux_buffer_t *fb;
+    struct fbuf *fb;
     int count;
     char buf[1024];
 
@@ -271,7 +271,7 @@ static void test_buffer (flux_reactor_t *reactor)
     /* read buffer test */
 
     count = 0;
-    w = flux_buffer_read_watcher_create (reactor,
+    w = fbuf_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
                                          buffer_read,
@@ -280,7 +280,7 @@ static void test_buffer (flux_reactor_t *reactor)
     ok (w != NULL,
         "buffer: read created");
 
-    fb = flux_buffer_read_watcher_get_buffer (w);
+    fb = fbuf_read_watcher_get_buffer (w);
 
     ok (fb != NULL,
         "buffer: buffer retrieved");
@@ -299,10 +299,10 @@ static void test_buffer (flux_reactor_t *reactor)
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
 
-    /* read buffer test with flux_buffer_read_watcher_get_data() */
+    /* read buffer test with fbuf_read_watcher_get_data() */
 
     count = 0;
-    w = flux_buffer_read_watcher_create (reactor,
+    w = fbuf_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
                                          buffer_read_data_unbuffered,
@@ -311,7 +311,7 @@ static void test_buffer (flux_reactor_t *reactor)
     ok (w != NULL,
         "buffer: read created");
 
-    fb = flux_buffer_read_watcher_get_buffer (w);
+    fb = fbuf_read_watcher_get_buffer (w);
 
     ok (fb != NULL,
         "buffer: buffer retrieved");
@@ -334,16 +334,16 @@ static void test_buffer (flux_reactor_t *reactor)
     /* read line buffer test */
 
     count = 0;
-    w = flux_buffer_read_watcher_create (reactor,
+    w = fbuf_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
                                          buffer_read_line,
-                                         FLUX_WATCHER_LINE_BUFFER,
+                                         FBUF_WATCHER_LINE_BUFFER,
                                          &count);
     ok (w != NULL,
         "buffer: read line created");
 
-    fb = flux_buffer_read_watcher_get_buffer (w);
+    fb = fbuf_read_watcher_get_buffer (w);
 
     ok (fb != NULL,
         "buffer: buffer retrieved");
@@ -362,18 +362,18 @@ static void test_buffer (flux_reactor_t *reactor)
     flux_watcher_stop (w);
     flux_watcher_destroy (w);
 
-    /* read line with flux_buffer_read_watcher_get_data() */
+    /* read line with fbuf_read_watcher_get_data() */
     count = 0;
-    w = flux_buffer_read_watcher_create (reactor,
+    w = fbuf_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
                                          buffer_read_data,
-                                         FLUX_WATCHER_LINE_BUFFER,
+                                         FBUF_WATCHER_LINE_BUFFER,
                                          &count);
     ok (w != NULL,
         "buffer: read line created");
 
-    fb = flux_buffer_read_watcher_get_buffer (w);
+    fb = fbuf_read_watcher_get_buffer (w);
 
     ok (fb != NULL,
         "buffer: buffer retrieved");
@@ -396,7 +396,7 @@ static void test_buffer (flux_reactor_t *reactor)
     /* write buffer test */
 
     count = 0;
-    w = flux_buffer_write_watcher_create (reactor,
+    w = fbuf_write_watcher_create (reactor,
                                           fd[0],
                                           1024,
                                           buffer_write,
@@ -405,14 +405,14 @@ static void test_buffer (flux_reactor_t *reactor)
     ok (w != NULL,
         "buffer: write created");
 
-    fb = flux_buffer_write_watcher_get_buffer (w);
+    fb = fbuf_write_watcher_get_buffer (w);
 
     ok (fb != NULL,
         "buffer: buffer retrieved");
 
     flux_watcher_start (w);
 
-    ok (flux_buffer_write (fb, "bazbar", 6) == 6,
+    ok (fbuf_write (fb, "bazbar", 6) == 6,
         "buffer: write to buffer success");
 
     ok (flux_reactor_run (reactor, 0) == 0,
@@ -434,7 +434,7 @@ static void test_buffer (flux_reactor_t *reactor)
     /* write buffer test, write to buffer before start */
 
     count = 0;
-    w = flux_buffer_write_watcher_create (reactor,
+    w = fbuf_write_watcher_create (reactor,
                                           fd[0],
                                           1024,
                                           buffer_write,
@@ -443,12 +443,12 @@ static void test_buffer (flux_reactor_t *reactor)
     ok (w != NULL,
         "buffer: write created");
 
-    fb = flux_buffer_write_watcher_get_buffer (w);
+    fb = fbuf_write_watcher_get_buffer (w);
 
     ok (fb != NULL,
         "buffer: buffer retrieved");
 
-    ok (flux_buffer_write (fb, "foobaz", 6) == 6,
+    ok (fbuf_write (fb, "foobaz", 6) == 6,
         "buffer: write to buffer success");
 
     flux_watcher_start (w);
@@ -471,7 +471,7 @@ static void test_buffer (flux_reactor_t *reactor)
     /* read buffer test, fill buffer before start */
 
     count = 0;
-    w = flux_buffer_read_watcher_create (reactor,
+    w = fbuf_read_watcher_create (reactor,
                                          fd[0],
                                          12, /* 12 bytes = 2 "foobars"s */
                                          buffer_read_fill,
@@ -480,12 +480,12 @@ static void test_buffer (flux_reactor_t *reactor)
     ok (w != NULL,
         "buffer: read created");
 
-    fb = flux_buffer_read_watcher_get_buffer (w);
+    fb = fbuf_read_watcher_get_buffer (w);
 
     ok (fb != NULL,
         "buffer: buffer retrieved");
 
-    ok (flux_buffer_write (fb, "foobarfoobar", 12) == 12,
+    ok (fbuf_write (fb, "foobarfoobar", 12) == 12,
         "buffer: write to buffer success");
 
     ok (write (fd[1], "foobar", 6) == 6,
@@ -505,7 +505,7 @@ static void test_buffer (flux_reactor_t *reactor)
     /* read line buffer corner case test - fill buffer to max still works */
 
     count = 0;
-    w = flux_buffer_read_watcher_create (reactor,
+    w = fbuf_read_watcher_create (reactor,
                                          fd[0],
                                          12, /* 12 bytes = 2 "foobar"s */
                                          buffer_read_overflow,
@@ -514,7 +514,7 @@ static void test_buffer (flux_reactor_t *reactor)
     ok (w != NULL,
         "buffer overflow test: read line created");
 
-    fb = flux_buffer_read_watcher_get_buffer (w);
+    fb = fbuf_read_watcher_get_buffer (w);
 
     ok (fb != NULL,
         "buffer overflow test: buffer retrieved");
@@ -535,14 +535,14 @@ static void test_buffer (flux_reactor_t *reactor)
 
     /* write buffer watcher close() testcase */
 
-    ok (flux_buffer_write_watcher_close (NULL) == -1 && errno == EINVAL,
-        "buffer: flux_buffer_write_watcher_close handles NULL argument");
+    ok (fbuf_write_watcher_close (NULL) == -1 && errno == EINVAL,
+        "buffer: fbuf_write_watcher_close handles NULL argument");
 
     count = 0;
     ok (pipe (pfds) == 0,
         "buffer: hey I can has a pipe!");
 
-    w = flux_buffer_write_watcher_create (reactor,
+    w = fbuf_write_watcher_create (reactor,
                                           pfds[1],
                                           1024,
                                           buffer_write,
@@ -554,7 +554,7 @@ static void test_buffer (flux_reactor_t *reactor)
     ok (fd_set_nonblocking (pfds[1]) >= 0,
         "buffer: fd_set_nonblocking");
 
-    w = flux_buffer_write_watcher_create (reactor,
+    w = fbuf_write_watcher_create (reactor,
                                           pfds[1],
                                           1024,
                                           buffer_write,
@@ -562,24 +562,24 @@ static void test_buffer (flux_reactor_t *reactor)
                                           &count);
     ok (w != NULL,
         "buffer: write watcher close: watcher created");
-    fb = flux_buffer_write_watcher_get_buffer (w);
+    fb = fbuf_write_watcher_get_buffer (w);
     ok (fb != NULL,
         "buffer: write watcher close: buffer retrieved");
 
-    ok (flux_buffer_write (fb, "foobaz", 6) == 6,
+    ok (fbuf_write (fb, "foobaz", 6) == 6,
         "buffer: write to buffer success");
 
-    ok (flux_buffer_write_watcher_is_closed (w, NULL) == 0,
-        "buffer: flux_buffer_write_watcher_is_closed returns false");
-    ok (flux_buffer_write_watcher_close (w) == 0,
-        "buffer: flux_buffer_write_watcher_close: Success");
-    ok (flux_buffer_write_watcher_is_closed (w, NULL) == 0,
+    ok (fbuf_write_watcher_is_closed (w, NULL) == 0,
+        "buffer: fbuf_write_watcher_is_closed returns false");
+    ok (fbuf_write_watcher_close (w) == 0,
+        "buffer: fbuf_write_watcher_close: Success");
+    ok (fbuf_write_watcher_is_closed (w, NULL) == 0,
         "buffer: watcher still not closed (close(2) not called yet)");
-    ok (flux_buffer_write_watcher_close (w) == -1 && errno == EINPROGRESS,
-        "buffer: flux_buffer_write_watcher_close: In progress");
+    ok (fbuf_write_watcher_close (w) == -1 && errno == EINPROGRESS,
+        "buffer: fbuf_write_watcher_close: In progress");
 
-    ok (flux_buffer_write (fb, "shouldfail", 10) == -1 && errno == EROFS,
-        "buffer: flux_buffer_write after close fails with EROFS");
+    ok (fbuf_write (fb, "shouldfail", 10) == -1 && errno == EROFS,
+        "buffer: fbuf_write after close fails with EROFS");
 
     flux_watcher_start (w);
 
@@ -588,10 +588,10 @@ static void test_buffer (flux_reactor_t *reactor)
 
     ok (count == 1,
         "buffer: write callback called once");
-    ok (flux_buffer_write_watcher_is_closed (w, &errnum) == 1 && errnum == 0,
-        "buffer: flux_buffer_write_watcher_is_closed returns true");
-    ok (flux_buffer_write_watcher_close (w) == -1 && errno == EINVAL,
-        "buffer: flux_buffer_write_watcher_close after close returns EINVAL");
+    ok (fbuf_write_watcher_is_closed (w, &errnum) == 1 && errnum == 0,
+        "buffer: fbuf_write_watcher_is_closed returns true");
+    ok (fbuf_write_watcher_close (w) == -1 && errno == EINVAL,
+        "buffer: fbuf_write_watcher_close after close returns EINVAL");
 
     ok (read (pfds[0], buf, 1024) == 6,
         "buffer: read from pipe success");
@@ -624,8 +624,8 @@ static void buffer_decref (flux_reactor_t *r,
 {
     struct buffer_fd_close *bfc = arg;
     bfc->count++;
-    flux_buffer_read_watcher_decref (bfc->w);
-    ok (true, "flux_buffer_read_watcher_decref");
+    fbuf_read_watcher_decref (bfc->w);
+    ok (true, "fbuf_read_watcher_decref");
     flux_watcher_destroy (w);
 }
 
@@ -635,7 +635,7 @@ static void buffer_read_fd_decref (flux_reactor_t *r,
                                    void *arg)
 {
     struct buffer_fd_close *bfc = arg;
-    flux_buffer_t *fb;
+    struct fbuf *fb;
     const void *ptr;
     int len;
 
@@ -648,8 +648,8 @@ static void buffer_read_fd_decref (flux_reactor_t *r,
         return;
     }
 
-    fb = flux_buffer_read_watcher_get_buffer (w);
-    ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
+    fb = fbuf_read_watcher_get_buffer (w);
+    ok ((ptr = fbuf_read (fb, -1, &len)) != NULL,
         "buffer decref: read from buffer success");
     if (!bfc->count) {
         flux_watcher_t *w;
@@ -668,7 +668,7 @@ static void buffer_read_fd_decref (flux_reactor_t *r,
     else {
         ok (bfc->count == 2,
             "buffer decref: EOF called only after manual decref");
-        ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
+        ok ((ptr = fbuf_read (fb, -1, &len)) != NULL,
             "buffer decref: read from buffer success");
 
         ok (len == 0,
@@ -688,12 +688,12 @@ static void buffer_read_fd_close (flux_reactor_t *r, flux_watcher_t *w,
             "buffer corner case: read callback incorrectly called with FLUX_POLLERR");
     }
     else if (revents & FLUX_POLLIN) {
-        flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+        struct fbuf *fb = fbuf_read_watcher_get_buffer (w);
         const void *ptr;
         int len;
 
         if (!bfc->count) {
-            ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
+            ok ((ptr = fbuf_read (fb, -1, &len)) != NULL,
                 "buffer corner case: read from buffer success");
 
             ok (len == 6,
@@ -705,7 +705,7 @@ static void buffer_read_fd_close (flux_reactor_t *r, flux_watcher_t *w,
             close (bfc->fd);
         }
         else {
-            ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
+            ok ((ptr = fbuf_read (fb, -1, &len)) != NULL,
                 "buffer corner case: read from buffer success");
 
             ok (len == 0,
@@ -733,12 +733,12 @@ static void buffer_read_line_fd_close (flux_reactor_t *r, flux_watcher_t *w,
             "buffer corner case: read line callback incorrectly called with FLUX_POLLERR");
     }
     else if (revents & FLUX_POLLIN) {
-        flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+        struct fbuf *fb = fbuf_read_watcher_get_buffer (w);
         const void *ptr;
         int len;
 
         if (!bfc->count) {
-            ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL,
+            ok ((ptr = fbuf_read_line (fb, &len)) != NULL,
                 "buffer corner case: read line from buffer success");
 
             ok (len == 7,
@@ -750,7 +750,7 @@ static void buffer_read_line_fd_close (flux_reactor_t *r, flux_watcher_t *w,
             close (bfc->fd);
         }
         else {
-            ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL,
+            ok ((ptr = fbuf_read_line (fb, &len)) != NULL,
                 "buffer corner case: read line from buffer success");
 
             ok (len == 0,
@@ -780,12 +780,12 @@ static void buffer_read_line_fd_close_and_left_over_data (flux_reactor_t *r,
             "buffer corner case: read line callback incorrectly called with FLUX_POLLERR");
     }
     else if (revents & FLUX_POLLIN) {
-        flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+        struct fbuf *fb = fbuf_read_watcher_get_buffer (w);
         const void *ptr;
         int len;
 
         if (!bfc->count) {
-            ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL,
+            ok ((ptr = fbuf_read_line (fb, &len)) != NULL,
                 "buffer corner case: read line from buffer success");
 
             ok (len == 7,
@@ -797,13 +797,13 @@ static void buffer_read_line_fd_close_and_left_over_data (flux_reactor_t *r,
             close (bfc->fd);
         }
         else if (bfc->count == 1) {
-            ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL,
+            ok ((ptr = fbuf_read_line (fb, &len)) != NULL,
                 "buffer corner case: read line from buffer success");
 
             ok (len == 0,
                 "buffer corner case: read line says no lines available");
 
-            ok ((ptr = flux_buffer_read (fb, -1, &len)) != NULL,
+            ok ((ptr = fbuf_read (fb, -1, &len)) != NULL,
                 "buffer corner case: read from buffer success");
 
             ok (len == 3,
@@ -813,7 +813,7 @@ static void buffer_read_line_fd_close_and_left_over_data (flux_reactor_t *r,
                 "buffer corner case: read line returned correct data");
         }
         else {
-            ok ((ptr = flux_buffer_read_line (fb, &len)) != NULL,
+            ok ((ptr = fbuf_read_line (fb, &len)) != NULL,
                 "buffer corner case: read line from buffer success");
 
             ok (len == 0,
@@ -844,7 +844,7 @@ static void test_buffer_refcnt (flux_reactor_t *reactor)
 
     bfc.count = 0;
     bfc.fd = fd[1];
-    w = flux_buffer_read_watcher_create (reactor,
+    w = fbuf_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
                                          buffer_read_fd_decref,
@@ -859,8 +859,8 @@ static void test_buffer_refcnt (flux_reactor_t *reactor)
 
     flux_watcher_start (w);
 
-    diag ("calling flux_buffer_read_watcher_incref");
-    flux_buffer_read_watcher_incref (w);
+    diag ("calling fbuf_read_watcher_incref");
+    fbuf_read_watcher_incref (w);
 
     ok (flux_reactor_run (reactor, 0) == 0,
         "buffer decref: reactor ran to completion");
@@ -878,7 +878,7 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
 {
     int fd[2];
     flux_watcher_t *w;
-    flux_buffer_t *fb;
+    struct fbuf *fb;
     struct buffer_fd_close bfc;
 
     /* read buffer corner case test - other end closes stream */
@@ -888,7 +888,7 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
 
     bfc.count = 0;
     bfc.fd = fd[1];
-    w = flux_buffer_read_watcher_create (reactor,
+    w = fbuf_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
                                          buffer_read_fd_close,
@@ -897,7 +897,7 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
     ok (w != NULL,
         "buffer corner case: read created");
 
-    fb = flux_buffer_read_watcher_get_buffer (w);
+    fb = fbuf_read_watcher_get_buffer (w);
 
     ok (fb != NULL,
         "buffer corner case: buffer retrieved");
@@ -925,16 +925,16 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
 
     bfc.count = 0;
     bfc.fd = fd[1];
-    w = flux_buffer_read_watcher_create (reactor,
+    w = fbuf_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
                                          buffer_read_line_fd_close,
-                                         FLUX_WATCHER_LINE_BUFFER,
+                                         FBUF_WATCHER_LINE_BUFFER,
                                          &bfc);
     ok (w != NULL,
         "buffer corner case: read line created");
 
-    fb = flux_buffer_read_watcher_get_buffer (w);
+    fb = fbuf_read_watcher_get_buffer (w);
 
     ok (fb != NULL,
         "buffer corner case: buffer retrieved");
@@ -962,16 +962,16 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
 
     bfc.count = 0;
     bfc.fd = fd[1];
-    w = flux_buffer_read_watcher_create (reactor,
+    w = fbuf_read_watcher_create (reactor,
                                          fd[0],
                                          1024,
                                          buffer_read_line_fd_close_and_left_over_data,
-                                         FLUX_WATCHER_LINE_BUFFER,
+                                         FBUF_WATCHER_LINE_BUFFER,
                                          &bfc);
     ok (w != NULL,
         "buffer corner case: read line created");
 
-    fb = flux_buffer_read_watcher_get_buffer (w);
+    fb = fbuf_read_watcher_get_buffer (w);
 
     ok (fb != NULL,
         "buffer corner case: buffer retrieved");

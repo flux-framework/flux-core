@@ -725,7 +725,9 @@ debug_stall_CPPFLAGS = $(test_cppflags)
 reactor_reactorcat_SOURCES = reactor/reactorcat.c
 reactor_reactorcat_CPPFLAGS = $(test_cppflags)
 reactor_reactorcat_LDADD = $(test_ldadd)
-reactor_reactorcat_LDFLAGS = $(test_ldflags)
+reactor_reactorcat_LDFLAGS = \
+	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(test_ldflags)
 
 rexec_rexec_SOURCES = rexec/rexec.c
 rexec_rexec_CPPFLAGS = $(test_cppflags)
