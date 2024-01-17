@@ -161,25 +161,6 @@ static void nonfull_transition_check (struct fbuf *fb, bool was_full)
     }
 }
 
-int fbuf_drop (struct fbuf *fb, int len)
-{
-    int ret;
-
-    if (!fb) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    bool full = cbuf_free (fb->cbuf) == 0 ? true : false;
-
-    if ((ret = cbuf_drop (fb->cbuf, len)) < 0)
-        return -1;
-
-    nonfull_transition_check (fb, full);
-
-    return ret;
-}
-
 /* check if internal buffer can hold data from user */
 static int return_buffer_check (struct fbuf *fb)
 {
@@ -208,34 +189,6 @@ static int return_buffer_check (struct fbuf *fb)
     }
 
     return 0;
-}
-
-const void *fbuf_peek (struct fbuf *fb, int len, int *lenp)
-{
-    int ret;
-
-    if (!fb) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if (return_buffer_check (fb) < 0)
-        return NULL;
-
-    if (len < 0)
-        len = cbuf_used (fb->cbuf);
-
-    if (len > fb->buflen)
-        len = fb->buflen;
-
-    if ((ret = cbuf_peek (fb->cbuf, fb->buf, len)) < 0)
-        return NULL;
-    fb->buf[ret] = '\0';
-
-    if (lenp)
-        (*lenp) = ret;
-
-    return fb->buf;
 }
 
 const void *fbuf_read (struct fbuf *fb, int len, int *lenp)
@@ -294,16 +247,6 @@ int fbuf_write (struct fbuf *fb, const void *data, int len)
     return ret;
 }
 
-int fbuf_lines (struct fbuf *fb)
-{
-    if (!fb) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    return cbuf_lines_used (fb->cbuf);
-}
-
 bool fbuf_has_line (struct fbuf *fb)
 {
     char buf[1];
@@ -312,65 +255,6 @@ bool fbuf_has_line (struct fbuf *fb)
         return false;
     }
     return (cbuf_peek_line (fb->cbuf, buf, 0, 1) > 0);
-}
-
-int fbuf_drop_line (struct fbuf *fb)
-{
-    int ret;
-
-    if (!fb) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    bool empty = cbuf_is_empty (fb->cbuf);
-
-    if ((ret = cbuf_drop_line (fb->cbuf, fb->buflen, 1)) < 0)
-        return -1;
-
-    nonempty_transition_check (fb, empty);
-
-    return ret;
-}
-
-const void *fbuf_peek_line (struct fbuf *fb, int *lenp)
-{
-    int ret;
-
-    if (!fb) {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    if (return_buffer_check (fb) < 0)
-        return NULL;
-
-    if ((ret = cbuf_peek_line (fb->cbuf, fb->buf, fb->buflen, 1)) < 0)
-        return NULL;
-
-    if (lenp)
-        (*lenp) = ret;
-
-    return fb->buf;
-}
-
-const void *fbuf_peek_trimmed_line (struct fbuf *fb, int *lenp)
-{
-    int tmp_lenp = 0;
-
-    if (!fbuf_peek_line (fb, &tmp_lenp))
-        return NULL;
-
-    if (tmp_lenp) {
-        if (fb->buf[tmp_lenp - 1] == '\n') {
-            fb->buf[tmp_lenp - 1] = '\0';
-            tmp_lenp--;
-        }
-    }
-    if (lenp)
-        (*lenp) = tmp_lenp;
-
-    return fb->buf;
 }
 
 const void *fbuf_read_line (struct fbuf *fb, int *lenp)
@@ -415,40 +299,6 @@ const void *fbuf_read_trimmed_line (struct fbuf *fb, int *lenp)
         (*lenp) = tmp_lenp;
 
     return fb->buf;
-}
-
-int fbuf_write_line (struct fbuf *fb, const char *data)
-{
-    int ret;
-
-    if (!fb || !data) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (fb->readonly) {
-        errno = EROFS;
-        return -1;
-    }
-
-    bool empty = cbuf_is_empty (fb->cbuf);
-
-    if ((ret = cbuf_write_line (fb->cbuf, (char *)data, NULL)) < 0)
-        return -1;
-
-    nonempty_transition_check (fb, empty);
-
-    return ret;
-}
-
-int fbuf_peek_to_fd (struct fbuf *fb, int fd, int len)
-{
-    if (!fb) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    return cbuf_peek_to_fd (fb->cbuf, fd, len);
 }
 
 int fbuf_read_to_fd (struct fbuf *fb, int fd, int len)

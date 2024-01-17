@@ -57,8 +57,8 @@ static void read_cb (flux_reactor_t *r, flux_watcher_t *w,
         || !(rfb = fbuf_read_watcher_get_buffer (w)))
         die ("failed to get read/write buffers from watchers!\n");
 
-    if (!(data = fbuf_peek (rfb, -1, &len)))
-        die ("fbuf_peek: %s\n", strerror (errno));
+    if (!(data = fbuf_read (rfb, -1, &len)))
+        die ("fbuf_read: %s\n", strerror (errno));
 
     if ((len > 0) && ((n = fbuf_write (wfb, data, len)) < 0))
         die ("fbuf_write: %s\n", strerror (errno));
@@ -68,8 +68,6 @@ static void read_cb (flux_reactor_t *r, flux_watcher_t *w,
         flux_watcher_stop (w);
     }
 
-    /* Drop data in read buffer that was successfully written to writer */
-    fbuf_drop (rfb, n);
     total_bytes += n;
 }
 

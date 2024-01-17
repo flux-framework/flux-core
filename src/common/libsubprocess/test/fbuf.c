@@ -46,52 +46,6 @@ void basic (void)
     ok (fbuf_space (fb) == FBUF_TEST_MAXSIZE,
         "fbuf_space initially returns FBUF_TEST_MAXSIZE");
 
-    /* write & peek tests */
-
-    ok (fbuf_write (fb, "foo", 3) == 3,
-        "fbuf_write works");
-
-    ok (fbuf_bytes (fb) == 3,
-        "fbuf_bytes returns length of bytes written");
-
-    ok (fbuf_space (fb) == (FBUF_TEST_MAXSIZE - 3),
-        "fbuf_space returns length of space left");
-
-    ok ((ptr = fbuf_peek (fb, 2, &len)) != NULL
-        && len == 2,
-        "fbuf_peek with specific length works");
-
-    ok (!memcmp (ptr, "fo", 2),
-        "fbuf_peek returns expected data");
-
-    ok ((ptr = fbuf_peek (fb, -1, &len)) != NULL
-        && len == 3,
-        "fbuf_peek with length -1 works");
-
-    ok (!memcmp (ptr, "foo", 3),
-        "fbuf_peek returns expected data");
-
-    ok (fbuf_bytes (fb) == 3,
-        "fbuf_bytes returns unchanged length after peek");
-
-    ok (fbuf_drop (fb, 2) == 2,
-        "fbuf_drop works");
-
-    ok (fbuf_bytes (fb) == 1,
-        "fbuf_bytes returns length of remaining bytes written");
-
-    ok (fbuf_space (fb) == (FBUF_TEST_MAXSIZE - 1),
-        "fbuf_space returns length of space left");
-
-    ok (fbuf_drop (fb, -1) == 1,
-        "fbuf_drop drops remaining bytes");
-
-    ok (fbuf_bytes (fb) == 0,
-        "fbuf_bytes returns 0 with all bytes dropped");
-
-    ok (fbuf_space (fb) == FBUF_TEST_MAXSIZE,
-        "fbuf_space initially returns FBUF_TEST_MAXSIZE");
-
     /* write and read tests */
 
     ok (fbuf_write (fb, "foo", 3) == 3,
@@ -115,10 +69,10 @@ void basic (void)
 
     ok ((ptr = fbuf_read (fb, -1, &len)) != NULL
         && len == 1,
-        "fbuf_peek with length -1 works");
+        "fbuf_read with length -1 works");
 
     ok (!memcmp (ptr, "o", 1),
-        "fbuf_peek returns expected data");
+        "fbuf_read returns expected data");
 
     ok (fbuf_bytes (fb) == 0,
         "fbuf_bytes returns 0 with all bytes read");
@@ -126,102 +80,16 @@ void basic (void)
     ok (fbuf_space (fb) == FBUF_TEST_MAXSIZE,
         "fbuf_space initially returns FBUF_TEST_MAXSIZE");
 
-    /* write_line & peek_line tests */
+    /* read_line tests */
 
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 on no line");
-
-    ok (fbuf_write_line (fb, "foo") == 4,
-        "fbuf_write_line works");
+    ok (fbuf_write (fb, "foo\n", 4) == 4,
+        "fbuf_write works");
 
     ok (fbuf_bytes (fb) == 4,
         "fbuf_bytes returns length of bytes written");
 
     ok (fbuf_space (fb) == (FBUF_TEST_MAXSIZE - 4),
         "fbuf_space returns length of space left");
-
-    ok (fbuf_lines (fb) == 1,
-        "fbuf_lines returns 1 on line written");
-    ok (fbuf_has_line (fb) == 1,
-        "fbuf_has_line returns true on line written");
-
-    ok ((ptr = fbuf_peek_line (fb, &len)) != NULL
-        && len == 4,
-        "fbuf_peek_line works");
-
-    ok (!memcmp (ptr, "foo\n", 4),
-        "fbuf_peek_line returns expected data");
-
-    ok (fbuf_bytes (fb) == 4,
-        "fbuf_bytes returns unchanged length after peek_line");
-
-    ok (fbuf_drop_line (fb) == 4,
-        "fbuf_drop_line works");
-
-    ok (fbuf_bytes (fb) == 0,
-        "fbuf_bytes returns 0 after drop_line");
-
-    ok (fbuf_space (fb) == FBUF_TEST_MAXSIZE,
-        "fbuf_space initially returns FBUF_TEST_MAXSIZE");
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 after drop_line");
-
-    /* write_line & peek_trimmed_line tests */
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 on no line");
-
-    ok (fbuf_write_line (fb, "foo") == 4,
-        "fbuf_write_line works");
-
-    ok (fbuf_bytes (fb) == 4,
-        "fbuf_bytes returns length of bytes written");
-
-    ok (fbuf_space (fb) == (FBUF_TEST_MAXSIZE - 4),
-        "fbuf_space returns length of space left");
-
-    ok (fbuf_lines (fb) == 1,
-        "fbuf_lines returns 1 on line written");
-
-    ok ((ptr = fbuf_peek_trimmed_line (fb, &len)) != NULL
-        && len == 3,
-        "fbuf_peek_trimmed_line works");
-
-    ok (!memcmp (ptr, "foo", 3),
-        "fbuf_peek_trimmed_line returns expected data");
-
-    ok (fbuf_bytes (fb) == 4,
-        "fbuf_bytes returns unchanged length after peek_trimmed_line");
-
-    ok (fbuf_drop_line (fb) == 4,
-        "fbuf_drop_line works");
-
-    ok (fbuf_bytes (fb) == 0,
-        "fbuf_bytes returns 0 after drop_line");
-
-    ok (fbuf_space (fb) == FBUF_TEST_MAXSIZE,
-        "fbuf_space initially returns FBUF_TEST_MAXSIZE");
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 after drop_line");
-
-    /* write_line & read_line tests */
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 on no line");
-
-    ok (fbuf_write_line (fb, "foo") == 4,
-        "fbuf_write_line works");
-
-    ok (fbuf_bytes (fb) == 4,
-        "fbuf_bytes returns length of bytes written");
-
-    ok (fbuf_space (fb) == (FBUF_TEST_MAXSIZE - 4),
-        "fbuf_space returns length of space left");
-
-    ok (fbuf_lines (fb) == 1,
-        "fbuf_lines returns 1 on line written");
 
     ok ((ptr = fbuf_read_line (fb, &len)) != NULL
         && len == 4,
@@ -235,76 +103,6 @@ void basic (void)
 
     ok (fbuf_space (fb) == FBUF_TEST_MAXSIZE,
         "fbuf_space initially returns FBUF_TEST_MAXSIZE");
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 after read_line");
-
-    /* write_line & read_trimmed_line tests */
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 on no line");
-
-    ok (fbuf_write_line (fb, "foo") == 4,
-        "fbuf_write_line works");
-
-    ok (fbuf_bytes (fb) == 4,
-        "fbuf_bytes returns length of bytes written");
-
-    ok (fbuf_space (fb) == (FBUF_TEST_MAXSIZE - 4),
-        "fbuf_space returns length of space left");
-
-    ok (fbuf_lines (fb) == 1,
-        "fbuf_lines returns 1 on line written");
-
-    ok ((ptr = fbuf_read_trimmed_line (fb, &len)) != NULL
-        && len == 3,
-        "fbuf_read_trimmed_line works");
-
-    ok (!memcmp (ptr, "foo", 3),
-        "fbuf_read_trimmed_line returns expected data");
-
-    ok (fbuf_bytes (fb) == 0,
-        "fbuf_bytes returns 0 after read_trimmed_line");
-
-    ok (fbuf_space (fb) == FBUF_TEST_MAXSIZE,
-        "fbuf_space initially returns FBUF_TEST_MAXSIZE");
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 after read_trimmed_line");
-
-    /* peek_to_fd tests */
-
-    ok (fbuf_write (fb, "foo", 3) == 3,
-        "fbuf_write works");
-
-    ok (fbuf_peek_to_fd (fb, pipefds[1], 2) == 2,
-        "fbuf_peek_to_fd specific length works");
-
-    memset (buf, '\0', 1024);
-    ok (read (pipefds[0], buf, 1024) == 2,
-        "read correct number of bytes");
-
-    ok (memcmp (buf, "fo", 2) == 0,
-        "read returned correct data");
-
-    ok (fbuf_bytes (fb) == 3,
-        "fbuf_bytes returns correct length after peek");
-
-    ok (fbuf_peek_to_fd (fb, pipefds[1], -1) == 3,
-        "fbuf_peek_to_fd length -1 works");
-
-    memset (buf, '\0', 1024);
-    ok (read (pipefds[0], buf, 1024) == 3,
-        "read correct number of bytes");
-
-    ok (memcmp (buf, "foo", 3) == 0,
-        "read returned correct data");
-
-    ok (fbuf_bytes (fb) == 3,
-        "fbuf_bytes returns correct length after peek");
-
-    ok (fbuf_drop (fb, -1) == 3,
-        "fbuf_drop drops remaining bytes");
 
     /* read_to_fd tests */
 
@@ -380,6 +178,7 @@ void notify_callback (void)
 {
     struct fbuf *fb;
     int count;
+    int len;
 
     ok ((fb = fbuf_create (16)) != NULL,
         "fbuf_create 16 byte buffer works");
@@ -405,14 +204,14 @@ void notify_callback (void)
     ok (count == 1,
         "notify was not called again on transition to full");
 
-    ok (fbuf_drop (fb, 1) == 1,
-        "fbuf_drop cleared one byte");
+    ok (fbuf_read (fb, 1, &len) != NULL && len == 1,
+        "fbuf_read cleared one byte");
 
     ok (count == 2,
         "notify was called again on transition from full");
 
-    ok (fbuf_drop (fb, -1) == 15,
-        "fbuf_drop cleared all data");
+    ok (fbuf_read (fb, -1, &len) != NULL && len == 15,
+        "fbuf_read cleared all data");
 
     ok (count == 2,
         "notify was not called on transition to empty");
@@ -450,46 +249,22 @@ void corner_case (void)
     errno = 0;
     ok (!fbuf_is_readonly (NULL) && errno == EINVAL,
         "fbuf_is_readonly returns false on NULL pointer");
-    ok (fbuf_drop (NULL, -1) < 0
-        && errno == EINVAL,
-        "fbuf_drop fails on NULL pointer");
-    ok (fbuf_peek (NULL, -1, NULL) == NULL
-        && errno == EINVAL,
-        "fbuf_peek fails on NULL pointer");
     ok (fbuf_read (NULL, -1, NULL) == NULL
         && errno == EINVAL,
         "fbuf_read fails on NULL pointer");
     ok (fbuf_write (NULL, NULL, 0) < 0
         && errno == EINVAL,
         "fbuf_write fails on NULL pointer");
-    ok (fbuf_lines (NULL) < 0
-        && errno == EINVAL,
-        "fbuf_lines fails on NULL pointer");
     errno = 0;
     ok (!fbuf_has_line (NULL)
         && errno == EINVAL,
         "fbuf_has_line returns false with errno set on NULL pointer");
-    ok (fbuf_drop_line (NULL) < 0
-        && errno == EINVAL,
-        "fbuf_drop_line fails on NULL pointer");
-    ok (fbuf_peek_line (NULL, NULL) == NULL
-        && errno == EINVAL,
-        "fbuf_peek_line fails on NULL pointer");
-    ok (fbuf_peek_trimmed_line (NULL, NULL) == NULL
-        && errno == EINVAL,
-        "fbuf_peek_trimmed_line fails on NULL pointer");
     ok (fbuf_read_line (NULL, NULL) == NULL
         && errno == EINVAL,
         "fbuf_read_line fails on NULL pointer");
     ok (fbuf_read_trimmed_line (NULL, NULL) == NULL
         && errno == EINVAL,
         "fbuf_read_trimmed_line fails on NULL pointer");
-    ok (fbuf_write_line (NULL, "foo") < 0
-        && errno == EINVAL,
-        "fbuf_write_line fails on NULL pointer");
-    ok (fbuf_peek_to_fd (NULL, 0, 0) < 0
-        && errno == EINVAL,
-        "fbuf_peek_to_fd fails on NULL pointer");
     ok (fbuf_read_to_fd (NULL, 0, 0) < 0
         && errno == EINVAL,
         "fbuf_read_to_fd fails on NULL pointer");
@@ -500,23 +275,11 @@ void corner_case (void)
     ok ((fb = fbuf_create (FBUF_TEST_MAXSIZE)) != NULL,
         "fbuf_create works");
 
-    ok ((ptr = fbuf_peek (fb, -1, &len)) != NULL,
-        "fbuf_peek works when no data available");
-    ok (len == 0,
-        "fbuf_peek returns length 0 when no data available");
     ok ((ptr = fbuf_read (fb, -1, &len)) != NULL,
         "fbuf_read works when no data available");
     ok (len == 0,
         "fbuf_read returns length 0 when no data available");
 
-    ok ((ptr = fbuf_peek_line (fb, &len)) != NULL,
-        "fbuf_peek_line works when no data available");
-    ok (len == 0,
-        "fbuf_peek_line returns length 0 when no data available");
-    ok ((ptr = fbuf_peek_trimmed_line (fb, &len)) != NULL,
-        "fbuf_peek_trimmed_line works when no data available");
-    ok (len == 0,
-        "fbuf_peek_trimmed_line returns length 0 when no data available");
     ok ((ptr = fbuf_read_line (fb, &len)) != NULL,
         "fbuf_read_line works when no data available");
     ok (len == 0,
@@ -534,9 +297,6 @@ void corner_case (void)
     ok (fbuf_write (fb, "foo", -1) < 0
         && errno == EINVAL,
         "fbuf_write fails on bad input");
-    ok (fbuf_write_line (fb, NULL) < 0
-        && errno == EINVAL,
-        "fbuf_write_line fails on bad input");
     ok (fbuf_write_from_fd (fb, -1, 0) < 0
         && errno == EINVAL,
         "fbuf_write_from_fd fails on bad input");
@@ -550,6 +310,7 @@ void corner_case (void)
 void full_buffer (void)
 {
     struct fbuf *fb;
+    int len;
 
     ok ((fb = fbuf_create (4)) != NULL,
         "fbuf_create works");
@@ -567,12 +328,8 @@ void full_buffer (void)
         && errno == ENOSPC,
         "fbuf_write fails with ENOSPC if exceeding buffer size");
 
-    ok (fbuf_drop (fb, -1) == 4,
-        "fbuf_drop works");
-
-    ok (fbuf_write_line (fb, "1234") < 0
-        && errno == ENOSPC,
-        "fbuf_write_line fails with ENOSPC if exceeding buffer size");
+    ok (fbuf_read (fb, -1, &len) != NULL && len == 4,
+        "fbuf_read drops all data");
 
     fbuf_destroy (fb);
 }
@@ -611,10 +368,6 @@ void readonly_buffer (void)
     ok (fbuf_write (fb, "foobar", 6) < 0
         && errno == EROFS,
         "fbuf_write fails b/c readonly is set");
-
-    ok (fbuf_write_line (fb, "foobar") < 0
-        && errno == EROFS,
-        "fbuf_write_line fails b/c readonly is set");
 
     ok (write (pipefds[1], "foo", 3) == 3,
         "write to pipe works");
