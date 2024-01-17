@@ -2213,21 +2213,14 @@ test_expect_success 'job-list returns expected jobspec changes after reload' '
 	flux job list -s inactive | grep $(cat update1.id) | jq -e ".duration == 1000.0"
 '
 
+#
+# After reload, job-list will not have ever seen any jobs submitted to
+# "defaultqueue" therefore the stats object is empty.
+#
 test_expect_success 'job stats in each queue correct after reload' '
 	defaultq=`flux job stats | jq ".queues[] | select( .name == \"defaultqueue\" )"` &&
 	updateq=`flux job stats | jq ".queues[] | select( .name == \"updatequeue\" )"` &&
-	echo $defaultq | jq -e ".job_states.depend == 0" &&
-	echo $defaultq | jq -e ".job_states.priority == 0" &&
-	echo $defaultq | jq -e ".job_states.sched == 0" &&
-	echo $defaultq | jq -e ".job_states.run == 0" &&
-	echo $defaultq | jq -e ".job_states.cleanup == 0" &&
-	echo $defaultq | jq -e ".job_states.inactive == 0" &&
-	echo $defaultq | jq -e ".job_states.total == 0" &&
-	echo $defaultq | jq -e ".successful == 0" &&
-	echo $defaultq | jq -e ".failed == 0" &&
-	echo $defaultq | jq -e ".canceled == 0" &&
-	echo $defaultq | jq -e ".timeout == 0" &&
-	echo $defaultq | jq -e ".inactive_purged == 0" &&
+	test -z "$defaultq" &&
 	echo $updateq | jq -e ".job_states.depend == 0" &&
 	echo $updateq | jq -e ".job_states.priority == 0" &&
 	echo $updateq | jq -e ".job_states.sched == 0" &&
