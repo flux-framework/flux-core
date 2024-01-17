@@ -2380,7 +2380,8 @@ fail:
     rlist_destroy (rl);
     rnode_destroy (n);
     free (ids);
-    hwloc_topology_destroy (topo);
+    if (topo)
+        hwloc_topology_destroy (topo);
     return NULL;
 }
 

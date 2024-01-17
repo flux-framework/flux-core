@@ -61,7 +61,7 @@ static int init_topo_from_xml (hwloc_topology_t *tp,
                                unsigned long flags)
 {
     if ((topo_init_common (tp, flags) < 0)
-        || (hwloc_topology_set_xmlbuffer (*tp, xml, strlen (xml) + 1) < 0)
+        || (hwloc_topology_set_xmlbuffer (*tp, xml, strlen (xml)) < 0)
         || (hwloc_topology_load (*tp) < 0)) {
         hwloc_topology_destroy (*tp);
         return (-1);
