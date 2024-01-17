@@ -231,14 +231,14 @@ while read line; do
 	per_resource=$(echo $line | awk -F== '{print $3}' | sed 's/  *$//')
 	test_expect_success "per-resource: $args" '
 	    echo $expected >expected.$test_count &&
-	    flux run $args --dry-run hostname > jobspec.$test_count &&
+	    flux run $args --dry-run --env=-* hostname > jobspec.$test_count &&
 	    $jj < jobspec.$test_count >output.$test_count &&
 	    test_debug "cat output.$test_count" &&
 	    test_cmp expected.$test_count output.$test_count &&
 	    if test -n "$per_resource"; then
 	        test_debug "echo expected $per_resource" &&
-	        jq -e ".attributes.system.shell.options.per_resource == \
-		   $per_resource"
+	        jq -e ".attributes.system.shell.options.\"per-resource\" == \
+		   $per_resource" < jobspec.$test_count
 	    fi
 	'
 done < per-resource-args.txt

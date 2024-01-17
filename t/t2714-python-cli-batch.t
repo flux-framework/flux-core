@@ -240,7 +240,8 @@ test_expect_success 'flux batch: file can be added via directives' '
 	cat \$FLUX_JOB_TMPDIR/foo
 	EOF
 	flux batch --dry-run directives5.sh >d5.json &&
-	jq -e ".attributes.system.files.foo.data == \"This is a test file\n\""
+	jq -e ".attributes.system.files.foo.data == \"This is a test file\n\"" \
+		<d5.json
 '
 test_expect_success 'flux batch: multiline --add-file requires name=' '
 	cat <<-EOF >directives6.sh &&
