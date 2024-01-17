@@ -44,10 +44,8 @@ struct fbuf *fbuf_create (int size)
         goto cleanup;
     }
 
-    if (!(fb = calloc (1, sizeof (*fb)))) {
-        errno = ENOMEM;
+    if (!(fb = calloc (1, sizeof (*fb))))
         goto cleanup;
-    }
 
     fb->size = size;
     if (size < FBUF_MIN)
@@ -66,10 +64,8 @@ struct fbuf *fbuf_create (int size)
     /* +1 for possible NUL on line reads */
     fb->buflen = minsize + 1;
 
-    if (!(fb->buf = malloc (fb->buflen))) {
-        errno = ENOMEM;
+    if (!(fb->buf = malloc (fb->buflen)))
         goto cleanup;
-    }
 
     return fb;
 
@@ -90,9 +86,12 @@ void fbuf_destroy (void *data)
 {
     struct fbuf *fb = data;
     if (fb) {
-        cbuf_destroy (fb->cbuf);
+        int saved_errno = errno;
+        if (fb->cbuf)
+            cbuf_destroy (fb->cbuf);
         free (fb->buf);
         free (fb);
+        errno = saved_errno;
     }
 }
 
