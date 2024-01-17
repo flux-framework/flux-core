@@ -19,18 +19,10 @@
 #include <stdarg.h>
 
 #include "fbuf.h"
-#include "fbuf_private.h"
 
 #include "src/common/liblsd/cbuf.h"
 
 #define FBUF_MIN   4096
-
-enum {
-    FBUF_CB_TYPE_NONE,
-    FBUF_CB_TYPE_READ,
-    FBUF_CB_TYPE_READ_LINE,
-    FBUF_CB_TYPE_WRITE,
-};
 
 struct fbuf {
     int size;
@@ -38,9 +30,7 @@ struct fbuf {
     cbuf_t cbuf;
     char *buf;                  /* internal buffer for user reads */
     int buflen;
-    int cb_type;
-    fbuf_cb cb;
-    int cb_len;
+    fbuf_notify_f cb;
     void *cb_arg;
 };
 
@@ -81,13 +71,19 @@ struct fbuf *fbuf_create (int size)
         goto cleanup;
     }
 
-    fb->cb_type = FBUF_CB_TYPE_NONE;
-
     return fb;
 
 cleanup:
     fbuf_destroy (fb);
     return NULL;
+}
+
+void fbuf_set_notify (struct fbuf *fb, fbuf_notify_f cb, void *arg)
+{
+    if (fb) {
+        fb->cb = cb;
+        fb->cb_arg = arg;
+    }
 }
 
 void fbuf_destroy (void *data)
@@ -150,99 +146,20 @@ bool fbuf_is_readonly (struct fbuf *fb)
     return fb->readonly;
 }
 
-static int set_cb (struct fbuf *fb,
-                   int cb_type,
-                   fbuf_cb cb,
-                   int cb_len,
-                   void *cb_arg)
+static void nonempty_transition_check (struct fbuf *fb, bool was_empty)
 {
-    if (fb->cb_type == FBUF_CB_TYPE_NONE) {
-        if (!cb)
-            return 0;
-
-        if (cb_len < 0) {
-            errno = EINVAL;
-            return -1;
-        }
-
-        fb->cb_type = cb_type;
-        fb->cb = cb;
-        fb->cb_len = cb_len;
-        fb->cb_arg = cb_arg;
-    }
-    else if (fb->cb_type == cb_type) {
-        if (!cb) {
-            fb->cb_type = FBUF_CB_TYPE_NONE;
-            fb->cb = NULL;
-            fb->cb_len = 0;
-            fb->cb_arg = NULL;
-        }
-        else {
-            if (cb_len < 0) {
-                errno = EINVAL;
-                return -1;
-            }
-
-            fb->cb_type = cb_type;
-            fb->cb = cb;
-            fb->cb_len = cb_len;
-            fb->cb_arg = cb_arg;
-        }
-    }
-    else {
-        errno = EEXIST;
-        return -1;
-    }
-
-    return 0;
-}
-
-int fbuf_set_low_read_cb (struct fbuf *fb, fbuf_cb cb, int low, void *arg)
-{
-    if (!fb) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    return set_cb (fb, FBUF_CB_TYPE_READ, cb, low, arg);
-}
-
-int fbuf_set_read_line_cb (struct fbuf *fb, fbuf_cb cb, void *arg)
-{
-    if (!fb) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    return set_cb (fb, FBUF_CB_TYPE_READ_LINE, cb, 0, arg);
-}
-
-int fbuf_set_high_write_cb (struct fbuf *fb, fbuf_cb cb, int high, void *arg)
-{
-    if (!fb) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    return set_cb (fb, FBUF_CB_TYPE_WRITE, cb, high, arg);
-}
-
-void check_write_cb (struct fbuf *fb)
-{
-    if (fb->cb_type == FBUF_CB_TYPE_WRITE
-        && fbuf_bytes (fb) < fb->cb_len) {
-        fb->cb (fb, fb->cb_arg);
-    }
-}
-
-void check_read_cb (struct fbuf *fb)
-{
-    if (fb->cb_type == FBUF_CB_TYPE_READ
-        && fbuf_bytes (fb) > fb->cb_len)
+    if (was_empty && cbuf_used (fb->cbuf) > 0) {
+        if (fb->cb)
             fb->cb (fb, fb->cb_arg);
-    else if (fb->cb_type == FBUF_CB_TYPE_READ_LINE
-             && fbuf_has_line (fb))
+    }
+}
+
+static void nonfull_transition_check (struct fbuf *fb, bool was_full)
+{
+    if (was_full && cbuf_free (fb->cbuf) > 0) {
+        if (fb->cb)
             fb->cb (fb, fb->cb_arg);
+    }
 }
 
 int fbuf_drop (struct fbuf *fb, int len)
@@ -254,10 +171,12 @@ int fbuf_drop (struct fbuf *fb, int len)
         return -1;
     }
 
+    bool full = cbuf_free (fb->cbuf) == 0 ? true : false;
+
     if ((ret = cbuf_drop (fb->cbuf, len)) < 0)
         return -1;
 
-    check_write_cb (fb);
+    nonfull_transition_check (fb, full);
 
     return ret;
 }
@@ -338,6 +257,8 @@ const void *fbuf_read (struct fbuf *fb, int len, int *lenp)
     if (len > fb->buflen)
         len = fb->buflen;
 
+    bool full = cbuf_free (fb->cbuf) == 0 ? true : false;
+
     if ((ret = cbuf_read (fb->cbuf, fb->buf, len)) < 0)
         return NULL;
     fb->buf[ret] = '\0';
@@ -345,7 +266,7 @@ const void *fbuf_read (struct fbuf *fb, int len, int *lenp)
     if (lenp)
         (*lenp) = ret;
 
-    check_write_cb (fb);
+    nonfull_transition_check (fb, full);
 
     return fb->buf;
 }
@@ -364,10 +285,12 @@ int fbuf_write (struct fbuf *fb, const void *data, int len)
         return -1;
     }
 
+    bool empty = cbuf_is_empty (fb->cbuf);
+
     if ((ret = cbuf_write (fb->cbuf, (void *)data, len, NULL)) < 0)
         return -1;
 
-    check_read_cb (fb);
+    nonempty_transition_check (fb, empty);
 
     return ret;
 }
@@ -401,10 +324,12 @@ int fbuf_drop_line (struct fbuf *fb)
         return -1;
     }
 
+    bool empty = cbuf_is_empty (fb->cbuf);
+
     if ((ret = cbuf_drop_line (fb->cbuf, fb->buflen, 1)) < 0)
         return -1;
 
-    check_write_cb (fb);
+    nonempty_transition_check (fb, empty);
 
     return ret;
 }
@@ -461,13 +386,15 @@ const void *fbuf_read_line (struct fbuf *fb, int *lenp)
     if (return_buffer_check (fb) < 0)
         return NULL;
 
+    bool full = cbuf_free (fb->cbuf) == 0 ? true : false;
+
     if ((ret = cbuf_read_line (fb->cbuf, fb->buf, fb->buflen, 1)) < 0)
         return NULL;
 
     if (lenp)
         (*lenp) = ret;
 
-    check_write_cb (fb);
+    nonfull_transition_check (fb, full);
 
     return fb->buf;
 }
@@ -505,10 +432,12 @@ int fbuf_write_line (struct fbuf *fb, const char *data)
         return -1;
     }
 
+    bool empty = cbuf_is_empty (fb->cbuf);
+
     if ((ret = cbuf_write_line (fb->cbuf, (char *)data, NULL)) < 0)
         return -1;
 
-    check_read_cb (fb);
+    nonempty_transition_check (fb, empty);
 
     return ret;
 }
@@ -532,10 +461,12 @@ int fbuf_read_to_fd (struct fbuf *fb, int fd, int len)
         return -1;
     }
 
+    bool full = cbuf_free (fb->cbuf) == 0 ? true : false;
+
     if ((ret = cbuf_read_to_fd (fb->cbuf, fd, len)) < 0)
         return -1;
 
-    check_write_cb (fb);
+    nonfull_transition_check (fb, full);
 
     return ret;
 }
@@ -554,10 +485,12 @@ int fbuf_write_from_fd (struct fbuf *fb, int fd, int len)
         return -1;
     }
 
+    bool empty = cbuf_is_empty (fb->cbuf);
+
     if ((ret = cbuf_write_from_fd (fb->cbuf, fd, len, NULL)) < 0)
         return -1;
 
-    check_read_cb (fb);
+    nonempty_transition_check (fb, empty);
 
     return ret;
 }

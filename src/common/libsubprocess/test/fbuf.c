@@ -20,14 +20,8 @@
 #include "src/common/libtap/tap.h"
 
 #include "fbuf.h"
-#include "fbuf_private.h"
 
 #define FBUF_TEST_MAXSIZE 1048576
-
-void empty_cb (struct fbuf *fb, void *arg)
-{
-    /* do nothing */
-}
 
 void basic (void)
 {
@@ -376,531 +370,52 @@ void basic (void)
     close (pipefds[1]);
 }
 
-void read_cb (struct fbuf *fb, void *arg)
+void notify_cb (struct fbuf *fb, void *arg)
 {
     int *count = arg;
-    const char *ptr;
-    int len;
-
     (*count)++;
-
-    ok ((ptr = fbuf_read (fb, -1, &len)) != NULL
-        && len == 6,
-        "fbuf_read in callback works");
-
-    ok (!memcmp (ptr, "foobar", 6),
-        "read in callback returns expected data");
 }
 
-void read_line_cb (struct fbuf *fb, void *arg)
-{
-    int *count = arg;
-    const char *ptr;
-    int len;
-
-    (*count)++;
-
-    ok ((ptr = fbuf_read_line (fb, &len)) != NULL
-        && len == 7,
-        "fbuf_read_line in callback works");
-
-    ok (!memcmp (ptr, "foobar\n", 7),
-        "read_line in callback returns expected data");
-}
-
-void write_cb (struct fbuf *fb, void *arg)
-{
-    int *count = arg;
-
-    (*count)++;
-
-    ok (fbuf_write (fb, "a", 1) == 1,
-        "fbuf_write in callback works");
-}
-
-void basic_callback (void)
+void notify_callback (void)
 {
     struct fbuf *fb;
-    const char *ptr;
-    int len;
-    int pipefds[2];
     int count;
-    char buf[1024];
 
-    ok (pipe (pipefds) == 0,
-        "pipe succeeded");
-
-    ok ((fb = fbuf_create (FBUF_TEST_MAXSIZE)) != NULL,
-        "fbuf_create works");
-
-    /* low read callback w/ write */
+    ok ((fb = fbuf_create (16)) != NULL,
+        "fbuf_create 16 byte buffer works");
+    fbuf_set_notify (fb, notify_cb, &count);
 
     count = 0;
-    ok (fbuf_set_low_read_cb (fb, read_cb, 3, &count) == 0,
-        "fbuf_set_low_read_cb success");
 
     ok (fbuf_write (fb, "foobar", 6) == 6,
-        "fbuf_write success");
+        "fbuf_write 6 bytes");
 
     ok (count == 1,
-        "read_cb called");
-
-    ok (fbuf_bytes (fb) == 0,
-        "fbuf_bytes returns 0 because callback read all data");
+        "notify was called on transition from empty");
 
     ok (fbuf_write (fb, "foo", 3) == 3,
-        "fbuf_write success");
+        "fbuf_write 3 bytes");
 
     ok (count == 1,
-        "read_cb not called again, because not above low mark");
+        "notify was not called again");
 
-    count = 0;
-    ok (fbuf_set_low_read_cb (fb, NULL, 0, &count) == 0,
-        "fbuf_set_low_read_cb clear callback success");
-
-    ok (fbuf_write (fb, "foo", 3) == 3,
-        "fbuf_write success");
-
-    ok (count == 0,
-        "read_cb cleared successfully");
-
-    ok (fbuf_drop (fb, -1) == 6,
-        "fbuf_drop cleared all data");
-
-    /* read line callback w/ write_line */
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 on no line");
-
-    count = 0;
-    ok (fbuf_set_read_line_cb (fb, read_line_cb, &count) == 0,
-        "fbuf_set_read_line_cb success");
-
-    ok (fbuf_write (fb, "foo", 3) == 3,
-        "fbuf_write success");
-
-    ok (count == 0,
-        "read_line_cb not called, no line written yet");
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 on no line");
-
-    ok (fbuf_write (fb, "bar\n", 4) == 4,
-        "fbuf_write success");
-
-    ok (fbuf_bytes (fb) == 0,
-        "fbuf_bytes returns 0 because callback read all data");
+    ok (fbuf_write (fb, "1234567", 7) == 7,
+        "fbuf_write 7 bytes success");
 
     ok (count == 1,
-        "read_line_cb called");
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 on no line, callback read all data");
-
-    count = 0;
-    ok (fbuf_set_read_line_cb (fb, NULL, &count) == 0,
-        "fbuf_set_read_line_cb clear callback success");
-
-    ok (fbuf_write_line (fb, "foo") == 4,
-        "fbuf_write_line success");
-
-    ok (count == 0,
-        "read_line_cb cleared successfully");
-
-    ok (fbuf_lines (fb) == 1,
-        "fbuf_lines returns 1, callback did not read line");
-
-    ok (fbuf_drop (fb, -1) == 4,
-        "fbuf_drop cleared all data");
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 after drop line");
-
-    /* low read callback w/ write_from_fd */
-
-    count = 0;
-    ok (fbuf_set_low_read_cb (fb, read_cb, 3, &count) == 0,
-        "fbuf_set_low_read_cb success");
-
-    ok (write (pipefds[1], "foobar", 6) == 6,
-        "write to pipe works");
-
-    ok (fbuf_write_from_fd (fb, pipefds[0], 6) == 6,
-        "fbuf_write_from_fd success");
-
-    ok (count == 1,
-        "read_cb called");
-
-    ok (fbuf_bytes (fb) == 0,
-        "fbuf_bytes returns 0 because callback read all data");
-
-    ok (write (pipefds[1], "foo", 3) == 3,
-        "write to pipe works");
-
-    ok (fbuf_write_from_fd (fb, pipefds[0], 3) == 3,
-        "fbuf_write_from_fd success");
-
-    ok (count == 1,
-        "read_cb not called again, because not above low mark");
-
-    count = 0;
-    ok (fbuf_set_low_read_cb (fb, NULL, 0, &count) == 0,
-        "fbuf_set_low_read_cb clear callback success");
-
-    ok (write (pipefds[1], "foo", 3) == 3,
-        "write to pipe works");
-
-    ok (fbuf_write_from_fd (fb, pipefds[0], 3) == 3,
-        "fbuf_write_from_fd success");
-
-    ok (count == 0,
-        "read_cb cleared successfully");
-
-    ok (fbuf_drop (fb, -1) == 6,
-        "fbuf_drop cleared all data");
-
-    /* high write callback w/ read */
-
-    ok (fbuf_write (fb, "foobar", 6) == 6,
-        "fbuf_write success");
-
-    count = 0;
-    ok (fbuf_set_high_write_cb (fb, write_cb, 3, &count) == 0,
-        "fbuf_set_high_write_cb success");
-
-    ok ((ptr = fbuf_read (fb, 3, &len)) != NULL
-        && len == 3,
-        "fbuf_read success");
-
-    ok (!memcmp (ptr, "foo", 3),
-        "fbuf_read returns expected data");
-
-    ok (count == 0,
-        "write_cb not called, not less than high");
-
-    ok ((ptr = fbuf_read (fb, 3, &len)) != NULL
-        && len == 3,
-        "fbuf_read success");
-
-    ok (!memcmp (ptr, "bar", 3),
-        "fbuf_read returns expected data");
-
-    ok (count == 1,
-        "write_cb called");
-
-    ok (fbuf_bytes (fb) == 1,
-        "fbuf_bytes returns 1 because callback wrote a byte");
-
-    count = 0;
-    ok (fbuf_set_high_write_cb (fb, NULL, 0, &count) == 0,
-        "fbuf_set_high_write_cb clear callback success");
-
-    ok ((ptr = fbuf_read (fb, -1, &len)) != NULL
-        && len == 1,
-        "fbuf_read success");
-
-    ok (!memcmp (ptr, "a", 1),
-        "fbuf_read returns expected data");
-
-    ok (count == 0,
-        "write_cb cleared successfully");
-
-    /* high write callback w/ drop */
-
-    ok (fbuf_write (fb, "foobar", 6) == 6,
-        "fbuf_write success");
-
-    count = 0;
-    ok (fbuf_set_high_write_cb (fb, write_cb, 3, &count) == 0,
-        "fbuf_set_high_write_cb success");
-
-    ok (fbuf_drop (fb, 3) == 3,
-        "fbuf_drop success");
-
-    ok (count == 0,
-        "write_cb not called, not less than high");
+        "notify was not called again on transition to full");
 
     ok (fbuf_drop (fb, 1) == 1,
-        "fbuf_drop success");
-
-    ok (count == 1,
-        "write_cb called");
-
-    ok (fbuf_bytes (fb) == 3,
-        "fbuf_bytes return correct bytes after drop and write cb");
-
-    count = 0;
-    ok (fbuf_set_high_write_cb (fb, NULL, 0, &count) == 0,
-        "fbuf_set_high_write_cb clear callback success");
-
-    ok (fbuf_drop (fb, 1) == 1,
-        "fbuf_drop success");
-
-    ok (count == 0,
-        "write_cb cleared successfully");
-
-    ok (fbuf_drop (fb, -1) == 2,
-        "fbuf_drop success");
-
-    /* high write callback w/ read_to_fd */
-
-    ok (fbuf_write (fb, "foobar", 6) == 6,
-        "fbuf_write success");
-
-    count = 0;
-    ok (fbuf_set_high_write_cb (fb, write_cb, 3, &count) == 0,
-        "fbuf_set_high_write_cb success");
-
-    ok (fbuf_read_to_fd (fb, pipefds[1], 3) == 3,
-        "fbuf_read_to_fd success");
-
-    ok (count == 0,
-        "write_cb not called, not less than high");
-
-    ok (fbuf_read_to_fd (fb, pipefds[1], 1) == 1,
-        "fbuf_read_to_fd success");
-
-    ok (count == 1,
-        "write_cb called");
-
-    ok (fbuf_bytes (fb) == 3,
-        "fbuf_bytes return correct bytes after read_to_fd and write cb");
-
-    count = 0;
-    ok (fbuf_set_high_write_cb (fb, NULL, 0, &count) == 0,
-        "fbuf_set_high_write_cb clear callback success");
-
-    ok (fbuf_read_to_fd (fb, pipefds[1], 1) == 1,
-        "fbuf_read_to_fd success");
-
-    ok (count == 0,
-        "write_cb cleared successfully");
-
-    ok (fbuf_drop (fb, -1) == 2,
-        "fbuf_drop success");
-
-    /* drain pipe, place in if statement to avoid uncheck return warnings */
-    if (read (pipefds[0], buf, 1024) < 0)
-        fprintf (stderr, "read error: %s\n", strerror (errno));
-
-    fbuf_destroy (fb);
-    close (pipefds[0]);
-    close (pipefds[1]);
-}
-
-void read_loop_cb (struct fbuf *fb, void *arg)
-{
-    int *count = arg;
-    const char *ptr;
-    int len;
-
-    while ((ptr = fbuf_read (fb, 6, &len)) && len > 0) {
-        (*count)++;
-        ok (ptr && len == 6,
-           "fbuf_read in loop works");
-        is (ptr, "foobar",
-           "fbuf_read in loop returns expected data");
-    }
-    ok (len == 0,
-        "fbuf_read() returns len == 0 when buffer is empty");
-}
-
-void read_line_loop_cb (struct fbuf *fb, void *arg)
-{
-    int *count = arg;
-    const char *ptr;
-    int len;
-
-    while ((ptr = fbuf_read_line (fb, &len)) && len > 0) {
-        (*count)++;
-        ok (ptr && len == 7,
-           "fbuf_read in loop works");
-        is (ptr, "foobar\n",
-           "fbuf_read in loop returns expected data");
-    }
-    ok (len == 0,
-        "fbuf_read_line() returns len == 0 when buffer is empty");
-
-}
-
-void callback_loops (void)
-{
-
-    struct fbuf *fb;
-    int count;
-
-    ok ((fb = fbuf_create (FBUF_TEST_MAXSIZE)) != NULL,
-        "fbuf_create works");
-
-    /* low read callback w/ write */
-
-    count = 0;
-    ok (fbuf_set_low_read_cb (fb, read_loop_cb, 3, &count) == 0,
-        "fbuf_set_low_read_cb success");
-
-    ok (fbuf_write (fb, "foobarfoobar", 12) == 12,
-        "fbuf_write success");
+        "fbuf_drop cleared one byte");
 
     ok (count == 2,
-        "read_loop_cb called, loop ran twice");
+        "notify was called again on transition from full");
 
-    ok (fbuf_bytes (fb) == 0,
-        "fbuf_bytes returns 0 because callback read all data");
-
-    ok (fbuf_set_low_read_cb (fb, NULL, 0, &count) == 0,
-        "fbuf clear read_cb");
-
-    /* read line callback w/ write_line */
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 on no line");
-    count = 0;
-    ok (fbuf_set_read_line_cb (fb, read_line_loop_cb, &count) == 0,
-        "fbuf_set_read_line_cb success");
-
-    ok (fbuf_write (fb, "foobar\nfoobar\n", 14) == 14,
-        "fbuf_write two lines success");
-
-    ok (fbuf_bytes (fb) == 0,
-        "fbuf_bytes returns 0 because callback read all data");
+    ok (fbuf_drop (fb, -1) == 15,
+        "fbuf_drop cleared all data");
 
     ok (count == 2,
-        "read_line_loop_cb called, two loops");
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 on no line, callback read all data");
-    fbuf_destroy (fb);
-}
-
-void disable_read_cb (struct fbuf *fb, void *arg)
-{
-    int *count = arg;
-    const char *ptr;
-    int len;
-
-    (*count)++;
-
-    ok ((ptr = fbuf_read (fb, 3, &len)) != NULL
-        && len == 3,
-        "fbuf_read in callback works");
-
-    ok (!fbuf_set_low_read_cb (fb,
-                                      NULL,
-                                      0,
-                                      NULL),
-        "read cb successfully disabled");
-}
-
-void disable_read_line_cb (struct fbuf *fb, void *arg)
-{
-    int *count = arg;
-    const char *ptr;
-    int len;
-
-    (*count)++;
-
-    ok ((ptr = fbuf_read_line (fb, &len)) != NULL
-        && len == 4,
-        "fbuf_read_line in callback works");
-
-    ok (!fbuf_set_read_line_cb (fb,
-                                       NULL,
-                                       NULL),
-        "read line cb successfully disabled");
-}
-
-void disable_write_cb (struct fbuf *fb, void *arg)
-{
-    int *count = arg;
-
-    (*count)++;
-
-    ok (!fbuf_set_high_write_cb (fb,
-                                        NULL,
-                                        0,
-                                        NULL),
-        "write cb successfully disabled");
-}
-
-void disable_callback (void)
-{
-    struct fbuf *fb;
-    const char *ptr;
-    int len;
-    int count;
-
-    ok ((fb = fbuf_create (FBUF_TEST_MAXSIZE)) != NULL,
-        "fbuf_create works");
-
-    /* low read callback w/ write */
-
-    count = 0;
-    ok (fbuf_set_low_read_cb (fb, disable_read_cb, 0, &count) == 0,
-        "fbuf_set_low_read_cb success");
-
-    ok (fbuf_write (fb, "foobar", 6) == 6,
-        "fbuf_write success");
-
-    ok (count == 1,
-        "disable_read_cb called only once, disabling callback in callback worked");
-
-    ok (fbuf_write (fb, "foo", 3) == 3,
-        "fbuf_write success");
-
-    ok (count == 1,
-        "disable_read_cb not called again, callback is disabled");
-
-    ok (fbuf_drop (fb, -1) == 6,
-        "fbuf_drop cleared all data");
-
-    /* read line callback w/ write_line */
-
-    ok (fbuf_lines (fb) == 0,
-        "fbuf_lines returns 0 on no line");
-    ok (!fbuf_has_line (fb),
-        "fbuf_has_line returns false on no line");
-
-    count = 0;
-    ok (fbuf_set_read_line_cb (fb, disable_read_line_cb, &count) == 0,
-        "fbuf_set_read_line_cb success");
-
-    ok (fbuf_write (fb, "foo\nfoo\n", 8) == 8,
-        "fbuf_write success");
-
-    ok (count == 1,
-        "disable_read_line_cb called only once, disabling callback in callback worked");
-
-    ok (fbuf_write (fb, "foo\n", 4) == 4,
-        "fbuf_write success");
-
-    ok (count == 1,
-        "disable_read_line_cb not called again, callback is disabled");
-
-    ok (fbuf_drop (fb, -1) == 8,
-        "fbuf_drop cleared all data");
-
-    /* high write callback w/ read */
-
-    ok (fbuf_write (fb, "foofoo", 6) == 6,
-        "fbuf_write success");
-
-    count = 0;
-    ok (fbuf_set_high_write_cb (fb, disable_write_cb, 6, &count) == 0,
-        "fbuf_set_high_write_cb success");
-
-    ok ((ptr = fbuf_read (fb, 3, &len)) != NULL
-        && len == 3,
-        "fbuf_read success");
-
-    ok (count == 1,
-        "disable_write_cb called correct number of times");
-
-    ok ((ptr = fbuf_read (fb, 3, &len)) != NULL
-        && len == 3,
-        "fbuf_read success");
-
-    ok (count == 1,
-        "disable_write_cb not called again, successfully disabled");
+        "notify was not called on transition to empty");
 
     fbuf_destroy (fb);
 }
@@ -935,15 +450,6 @@ void corner_case (void)
     errno = 0;
     ok (!fbuf_is_readonly (NULL) && errno == EINVAL,
         "fbuf_is_readonly returns false on NULL pointer");
-    ok (fbuf_set_low_read_cb (NULL, empty_cb, 0, NULL) < 0
-        && errno == EINVAL,
-        "fbuf_set_low_read_cb fails on NULL pointer");
-    ok (fbuf_set_read_line_cb (NULL, empty_cb, NULL) < 0
-        && errno == EINVAL,
-        "fbuf_set_read_line_cb fails on NULL pointer");
-    ok (fbuf_set_high_write_cb (NULL, empty_cb, 0, NULL) < 0
-        && errno == EINVAL,
-        "fbuf_set_high_write_cb fails on NULL pointer");
     ok (fbuf_drop (NULL, -1) < 0
         && errno == EINVAL,
         "fbuf_drop fails on NULL pointer");
@@ -1019,53 +525,6 @@ void corner_case (void)
         "fbuf_read_trimmed_line works when no data available");
     ok (len == 0,
         "fbuf_read_trimmed_line returns length 0 when no data available");
-
-    /* callback corner case tests */
-
-    ok (fbuf_set_low_read_cb (fb, empty_cb, -1, NULL) < 0
-        && errno == EINVAL,
-        "fbuf_set_low_read_cb fails on bad input");
-    ok (fbuf_set_low_read_cb (fb, empty_cb, 0, NULL) == 0,
-        "fbuf_set_low_read_cb success");
-    ok (fbuf_set_low_read_cb (fb, empty_cb, -1, NULL) < 0
-        && errno == EINVAL,
-        "fbuf_set_low_read_cb fails on bad input overwrite callback");
-    ok (fbuf_set_read_line_cb (fb, empty_cb, NULL) < 0
-        && errno == EEXIST,
-        "fbuf_set_read_line_cb fails if callback already set");
-    ok (fbuf_set_high_write_cb (fb, empty_cb, 0, NULL) < 0
-        && errno == EEXIST,
-        "fbuf_set_high_write_cb fails if callback already set");
-    ok (fbuf_set_low_read_cb (fb, NULL, 0, NULL) == 0,
-        "fbuf_set_low_read_cb success clear callback");
-
-    ok (fbuf_set_read_line_cb (fb, empty_cb, NULL) == 0,
-        "fbuf_set_read_line_cb success");
-    ok (fbuf_set_low_read_cb (fb, empty_cb, 0, NULL) < 0
-        && errno == EEXIST,
-        "fbuf_set_low_read_cb fails if callback already set");
-    ok (fbuf_set_high_write_cb (fb, empty_cb, 0, NULL) < 0
-        && errno == EEXIST,
-        "fbuf_set_high_write_cb fails if callback already set");
-    ok (fbuf_set_read_line_cb (fb, NULL, NULL) == 0,
-        "fbuf_set_read_line_cb success clear callback");
-
-    ok (fbuf_set_high_write_cb (fb, empty_cb, -1, NULL) < 0
-        && errno == EINVAL,
-        "fbuf_set_high_write_cb fails on bad input");
-    ok (fbuf_set_high_write_cb (fb, empty_cb, 0, NULL) == 0,
-        "fbuf_set_high_write_cb success");
-    ok (fbuf_set_high_write_cb (fb, empty_cb, -1, NULL) < 0
-        && errno == EINVAL,
-        "fbuf_set_high_write_cb fails on bad input overwrite callback");
-    ok (fbuf_set_low_read_cb (fb, empty_cb, 0, NULL) < 0
-        && errno == EEXIST,
-        "fbuf_set_low_read_cb fails if callback already set");
-    ok (fbuf_set_read_line_cb (fb, empty_cb, NULL) < 0
-        && errno == EEXIST,
-        "fbuf_set_read_line_cb fails if callback already set");
-    ok (fbuf_set_high_write_cb (fb, NULL, 0, NULL) == 0,
-        "fbuf_set_high_write_cb success clear callback");
 
     /* write corner case tests */
 
@@ -1218,9 +677,7 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     basic ();
-    basic_callback ();
-    callback_loops ();
-    disable_callback ();
+    notify_callback ();
     corner_case ();
     full_buffer ();
     readonly_buffer ();

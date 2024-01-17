@@ -39,7 +39,6 @@ libsubprocess_la_SOURCES = \
 	ev_fbuf_write.h \
 	ev_fbuf_write.c \
 	fbuf.h \
-	fbuf_private.h \
 	fbuf.c \
 	fbuf_watcher.h \
 	fbuf_watcher.c

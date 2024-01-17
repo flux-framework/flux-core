@@ -25,7 +25,6 @@
 #include "ev_fbuf_read.h"
 #include "ev_fbuf_write.h"
 #include "fbuf.h"
-#include "fbuf_private.h"
 
 static void buffer_read_start (flux_watcher_t *w)
 {

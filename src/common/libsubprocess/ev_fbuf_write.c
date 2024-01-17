@@ -20,8 +20,6 @@
 
 #include "ev_fbuf_write.h"
 
-#include "fbuf_private.h"
-
 static void buffer_write_cb (struct ev_loop *loop, ev_io *iow, int revents)
 {
     struct ev_fbuf_write *ebw = iow->data;
@@ -59,10 +57,12 @@ void ev_fbuf_write_wakeup (struct ev_fbuf_write *ebw)
         ev_io_start (ebw->loop, &(ebw->io_w));
 }
 
-static void buffer_data_available_cb (struct fbuf *fb, void *arg)
+static void buffer_notify_cb (struct fbuf *fb, void *arg)
 {
     struct ev_fbuf_write *ebw = arg;
-    ev_fbuf_write_wakeup (ebw);
+
+    if (fbuf_bytes (fb) > 0)
+        ev_fbuf_write_wakeup (ebw);
 }
 
 int ev_fbuf_write_init (struct ev_fbuf_write *ebw,
@@ -79,14 +79,10 @@ int ev_fbuf_write_init (struct ev_fbuf_write *ebw,
     if (!(ebw->fb = fbuf_create (size)))
         goto cleanup;
 
-    /* When any data becomes available, call buffer_data_available_cb,
+    /* When any data becomes available, call buffer_notify_cb,
      * which will start io reactor
      */
-    if (fbuf_set_low_read_cb (ebw->fb,
-                              buffer_data_available_cb,
-                              0,
-                              ebw) < 0)
-        goto cleanup;
+    fbuf_set_notify (ebw->fb, buffer_notify_cb, ebw);
 
     ev_io_init (&ebw->io_w, buffer_write_cb, ebw->fd, EV_WRITE);
     ebw->io_w.data = ebw;

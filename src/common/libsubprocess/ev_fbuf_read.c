@@ -18,8 +18,6 @@
 
 #include "ev_fbuf_read.h"
 
-#include "fbuf_private.h"
-
 static bool data_to_read (struct ev_fbuf_read *ebr, bool *is_eof)
 {
     if (ebr->line) {
@@ -44,18 +42,14 @@ static bool data_to_read (struct ev_fbuf_read *ebr, bool *is_eof)
     return false;
 }
 
-static void buffer_space_available_cb (struct fbuf *fb, void *arg)
+static void buffer_notify_cb (struct fbuf *fb, void *arg)
 {
     struct ev_fbuf_read *ebr = arg;
 
     /* space is available, start ev io watcher again, assuming watcher
      * is not stopped by user */
-    if (ebr->start)
+    if (ebr->start && fbuf_space (fb) > 0)
         ev_io_start (ebr->loop, &(ebr->io_w));
-
-    /* clear this callback */
-    if (fbuf_set_high_write_cb (ebr->fb, NULL, 0, NULL) < 0)
-        return;
 }
 
 static void prepare_cb (struct ev_loop *loop, ev_prepare *w, int revents)
@@ -86,14 +80,8 @@ static void buffer_read_cb (struct ev_loop *loop, ev_io *iow, int revents)
             ev_io_stop (ebr->loop, iow);
         }
         else if (ret == space) {
-            /* buffer full, buffer_space_available_cb will be called
+            /* buffer full, buffer_notify_cb will be called
              * to re-enable io reactor when space is available */
-            if (fbuf_set_high_write_cb (ebr->fb,
-                                        buffer_space_available_cb,
-                                        fbuf_size (ebr->fb),
-                                        ebr) < 0)
-                return;
-
             ev_io_stop (ebr->loop, iow);
         }
     }
@@ -136,6 +124,7 @@ int ev_fbuf_read_init (struct ev_fbuf_read *ebr,
 
     if (!(ebr->fb = fbuf_create (size)))
         goto cleanup;
+    fbuf_set_notify (ebr->fb, buffer_notify_cb, ebr);
 
     ev_prepare_init (&ebr->prepare_w, prepare_cb);
     ev_check_init (&ebr->check_w, check_cb);
@@ -167,15 +156,8 @@ void ev_fbuf_read_start (struct ev_loop *loop, struct ev_fbuf_read *ebr)
 
         if (fbuf_space (ebr->fb) > 0)
             ev_io_start (ebr->loop, &(ebr->io_w));
-        else {
-            /* buffer full, buffer_space_available_cb will be called
-             * to re-enable io reactor when space is available */
-            if (fbuf_set_high_write_cb (ebr->fb,
-                                        buffer_space_available_cb,
-                                        fbuf_size (ebr->fb),
-                                        ebr) < 0)
-                return;
-        }
+        /* else: buffer full, buffer_notify_cb will be called
+         * to re-enable io reactor when space is available */
     }
 }
 
