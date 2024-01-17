@@ -31,9 +31,12 @@ struct list_constraint *list_constraint_create (json_t *constraint,
 
 void list_constraint_destroy (struct list_constraint *constraint);
 
-/*  Return true if job matches constraints in RFC 31 constraint
- *   specification 'constraint'.
+/*  Return 1 if job matches constraints in RFC 31 constraint
+ *   specification 'constraint'.  Return 0 if not.  Return -1
+ *   on error.
  */
-bool job_match (const struct job *job, struct list_constraint *constraint);
+int job_match (const struct job *job,
+               struct list_constraint *constraint,
+               flux_error_t *errp);
 
 #endif /* !HAVE_JOB_LIST_MATCH_H */

@@ -56,6 +56,7 @@ int get_jobs_from_list (json_t *jobs,
 
     job = zlistx_first (list);
     while (job) {
+        int ret;
 
         /*  If job->t_inactive > 0. we're on the inactive jobs list and jobs are
          *  sorted on the inactive list, larger t_inactive first.
@@ -68,7 +69,9 @@ int get_jobs_from_list (json_t *jobs,
         if (job->t_inactive > 0. && job->t_inactive <= since)
             break;
 
-        if (job_match (job, c)) {
+        if ((ret = job_match (job, c, errp)) < 0)
+            return -1;
+        if (ret) {
             json_t *o;
             if (!(o = job_to_json (job, attrs, errp)))
                 return -1;

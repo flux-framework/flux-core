@@ -22,8 +22,11 @@
 
 #include "match.h"
 #include "match_util.h"
+#include "job_util.h"
 
-typedef bool (*match_f) (struct list_constraint *, const struct job *);
+typedef int (*match_f) (struct list_constraint *,
+                        const struct job *,
+                        flux_error_t *);
 
 struct list_constraint {
     zlistx_t *values;
@@ -123,9 +126,11 @@ static struct timestamp_value *timestamp_value_create_str (
     return timestamp_value_create (t, type, comp);
 }
 
-static bool match_true (struct list_constraint *c, const struct job *job)
+static int match_true (struct list_constraint *c,
+                       const struct job *job,
+                       flux_error_t *errp)
 {
-    return true;
+    return 1;
 }
 
 static struct list_constraint *list_constraint_new (match_f match_cb,
@@ -162,18 +167,19 @@ static void wrap_free (void **item)
     }
 }
 
-static bool match_userid (struct list_constraint *c,
-                          const struct job *job)
+static int match_userid (struct list_constraint *c,
+                         const struct job *job,
+                         flux_error_t *errp)
 {
     uint32_t *userid = zlistx_first (c->values);
     while (userid) {
         if ((*userid) == FLUX_USERID_UNKNOWN)
-            return true;
+            return 1;
         if ((*userid) == job->userid)
-            return true;
+            return 1;
         userid = zlistx_next (c->values);
     }
-    return false;
+    return 0;
 }
 
 static struct list_constraint *create_userid_constraint (json_t *values,
@@ -235,15 +241,17 @@ static struct list_constraint *create_string_constraint (const char *op,
     return NULL;
 }
 
-static bool match_name (struct list_constraint *c, const struct job *job)
+static int match_name (struct list_constraint *c,
+                       const struct job *job,
+                       flux_error_t *errp)
 {
     const char *name = zlistx_first (c->values);
     while (name) {
         if (job->name && streq (name, job->name))
-            return true;
+            return 1;
         name = zlistx_next (c->values);
     }
-    return false;
+    return 0;
 }
 
 static struct list_constraint *create_name_constraint (json_t *values,
@@ -252,15 +260,17 @@ static struct list_constraint *create_name_constraint (json_t *values,
     return create_string_constraint ("name", values, match_name, errp);
 }
 
-static bool match_queue (struct list_constraint *c, const struct job *job)
+static int match_queue (struct list_constraint *c,
+                        const struct job *job,
+                        flux_error_t *errp)
 {
     const char *queue = zlistx_first (c->values);
     while (queue) {
         if (job->queue && streq (queue, job->queue))
-            return true;
+            return 1;
         queue = zlistx_next (c->values);
     }
-    return false;
+    return 0;
 }
 
 static struct list_constraint *create_queue_constraint (json_t *values,
@@ -293,10 +303,12 @@ static struct list_constraint *create_bitmask_constraint (
     return c;
 }
 
-static bool match_states (struct list_constraint *c, const struct job *job)
+static int match_states (struct list_constraint *c,
+                         const struct job *job,
+                         flux_error_t *errp)
 {
     int *states = zlistx_first (c->values);
-    return ((*states) & job->state);
+    return ((*states) & job->state) ? 1 : 0;
 }
 
 static struct list_constraint *create_states_constraint (json_t *values,
@@ -309,13 +321,14 @@ static struct list_constraint *create_states_constraint (json_t *values,
                                       errp);
 }
 
-static bool match_results (struct list_constraint *c,
-                           const struct job *job)
+static int match_results (struct list_constraint *c,
+                          const struct job *job,
+                          flux_error_t *errp)
 {
     int *results = zlistx_first (c->values);
     if (job->state != FLUX_JOB_STATE_INACTIVE)
-        return false;
-    return ((*results) & job->result);
+        return 0;
+    return ((*results) & job->result) ? 1 : 0;
 }
 
 static int array_to_results_bitmask (json_t *values, flux_error_t *errp)
@@ -367,8 +380,9 @@ static struct list_constraint *create_results_constraint (json_t *values,
                                       errp);
 }
 
-static bool match_timestamp (struct list_constraint *c,
-                             const struct job *job)
+static int match_timestamp (struct list_constraint *c,
+                            const struct job *job,
+                            flux_error_t *errp)
 {
     struct timestamp_value *tv = zlistx_first (c->values);
     double t;
@@ -386,7 +400,7 @@ static bool match_timestamp (struct list_constraint *c,
         else if (job->states_mask & FLUX_JOB_STATE_DEPEND)
             t = job->t_depend;
         else
-            return false;
+            return 0;
     }
     else if (tv->t_type == MATCH_T_RUN
              && (job->states_mask & FLUX_JOB_STATE_RUN))
@@ -398,7 +412,7 @@ static bool match_timestamp (struct list_constraint *c,
              && (job->states_mask & FLUX_JOB_STATE_INACTIVE))
         t = job->t_inactive;
     else
-        return false;
+        return 0;
 
     if (tv->t_comp == MATCH_GREATER_THAN_EQUAL)
         return t >= tv->t_value;
@@ -465,34 +479,47 @@ static struct list_constraint *create_timestamp_constraint (const char *type,
     return c;
 }
 
-static bool match_and (struct list_constraint *c, const struct job *job)
+static int match_and (struct list_constraint *c,
+                      const struct job *job,
+                      flux_error_t *errp)
 {
     struct list_constraint *cp = zlistx_first (c->values);
     while (cp) {
-        if (!cp->match (cp, job))
-            return false;
+        int ret = cp->match (cp, job, errp);
+        /* i.e. return immediately if false or error */
+        if (ret != 1)
+            return ret;
         cp = zlistx_next (c->values);
     }
-    return true;
+    return 1;
 }
 
-static bool match_or (struct list_constraint *c, const struct job *job)
+static int match_or (struct list_constraint *c,
+                     const struct job *job,
+                     flux_error_t *errp)
 {
     struct list_constraint *cp = zlistx_first (c->values);
     /* no values in "or" defined as true per RFC31 */
     if (!cp)
-        return true;
+        return 1;
     while (cp) {
-        if (cp->match (cp, job))
-            return true;
+        int ret = cp->match (cp, job, errp);
+        /* i.e. return immediately if true or error */
+        if (ret != 0)
+            return ret;
         cp = zlistx_next (c->values);
     }
-    return false;
+    return 0;
 }
 
-static bool match_not (struct list_constraint *c, const struct job *job)
+static int match_not (struct list_constraint *c,
+                      const struct job *job,
+                      flux_error_t *errp)
 {
-    return !match_and (c, job);
+    int ret;
+    if ((ret = match_and (c, job, errp)) < 0)
+        return -1;
+    return ret ? 0 : 1;
 }
 
 static struct list_constraint *conditional_constraint (const char *type,
@@ -587,11 +614,15 @@ struct list_constraint *list_constraint_create (json_t *constraint, flux_error_t
     return list_constraint_new (match_true, NULL, errp);
 }
 
-bool job_match (const struct job *job, struct list_constraint *constraint)
+int job_match (const struct job *job,
+               struct list_constraint *constraint,
+               flux_error_t *errp)
 {
-    if (!job || !constraint)
-        return false;
-    return constraint->match (constraint, job);
+    if (!job || !constraint) {
+        errno = EINVAL;
+        return -1;
+    }
+    return constraint->match (constraint, job, errp);
 }
 
 /* vi: ts=4 sw=4 expandtab
