@@ -175,9 +175,7 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
 
 
 /* Start / stop a read stream temporarily on local processes.  This
- * may be useful for flow control.  If you desire to have a stream not
- * call 'on_stdout' or 'on_stderr' when the local subprocess has
- * started, see STREAM_STOP configuration above.
+ * may be useful for flow control.
  *
  * start and stop return 0 for success, -1 on error
  * status returns > 0 for started, 0 for stopped, -1 on error

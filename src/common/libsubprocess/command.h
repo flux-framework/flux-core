@@ -155,22 +155,6 @@ int flux_cmd_add_channel (flux_cmd_t *cmd, const char *name);
  *    - name + "_LINE_BUFFER" - configuring line buffering on channel name
  *    - stdout_LINE_BUFFER - configure line buffering for stdout
  *    - stderr_LINE_BUFFER - configure line buffering for stderr
- *
- *  "STREAM_STOP" option
- *
- *    By default, the 'on_output' callback
- *    can immediately begin receiving stdout/stderr data
- *    once a subprocess has started.  There are circumstances where a
- *    caller may wish to wait and can have the stream stopped by
- *    default and restarted later by flux_subprocess_stream_start().
- *    By setting this option to "true", the output callback will be
- *    stopped by default.  These options can also be set to "false" to
- *    keep default behavior.  Note that these options only apply to
- *    local subprocesses.
- *
- *    - name + "_STREAM_STOP" - configure start/stop on channel name
- *    - stdout_STREAM_STOP - configure start/stop for stdout
- *    - stderr_STREAM_STOP - configure start/stop for stderr
  */
 int flux_cmd_setopt (flux_cmd_t *cmd, const char *var, const char *val);
 const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);

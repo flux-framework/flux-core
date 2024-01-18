@@ -522,14 +522,6 @@ flux_subprocess_t * flux_local_exec (flux_reactor_t *r,
     return flux_local_exec_ex (r, flags, cmd, ops, NULL, NULL, NULL);
 }
 
-static int check_local_only_cmd_options (const flux_cmd_t *cmd)
-{
-    /* check for options that do not apply to remote subprocesses */
-    const char *substrings[] = { "STREAM_STOP", NULL };
-
-    return cmd_find_opts (cmd, substrings);
-}
-
 flux_subprocess_t *flux_rexec_ex (flux_t *h,
                                   const char *service_name,
                                   int rank,
@@ -560,12 +552,6 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
 
     /* user required to set some args */
     if (!flux_cmd_argc (cmd)) {
-        errno = EINVAL;
-        goto error;
-    }
-
-    /* make sure user didn't set local only cmd options */
-    if (check_local_only_cmd_options (cmd)) {
         errno = EINVAL;
         goto error;
     }
