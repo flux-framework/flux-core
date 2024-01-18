@@ -164,13 +164,9 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
 
 /* Start / stop a read stream temporarily on local processes.  This
  * may be useful for flow control.
- *
- * start and stop return 0 for success, -1 on error
- * status returns > 0 for started, 0 for stopped, -1 on error
  */
-int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream);
-int flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream);
-int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream);
+void flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream);
+void flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream);
 
 /*
  *  Write data to "stream" stream of subprocess `p`.  'stream' can be

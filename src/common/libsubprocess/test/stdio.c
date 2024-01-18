@@ -1060,31 +1060,6 @@ void test_stream_start_stop_basic (flux_reactor_t *r)
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "subprocess state == RUNNING after flux_local_exec");
 
-    ok (flux_subprocess_stream_status (p, "stdout") > 0,
-        "flux_subprocess_stream_status says stdout is started");
-    ok (flux_subprocess_stream_status (p, "stderr") > 0,
-        "flux_subprocess_stream_status says stderr is started");
-
-    ok (!flux_subprocess_stream_stop (p, "stdout"),
-        "flux_subprocess_stream_stop on stdout success");
-    ok (!flux_subprocess_stream_stop (p, "stderr"),
-        "flux_subprocess_stream_stop on stderr success");
-
-    ok (flux_subprocess_stream_status (p, "stdout") == 0,
-        "flux_subprocess_stream_status says stdout is stopped");
-    ok (flux_subprocess_stream_status (p, "stderr") == 0,
-        "flux_subprocess_stream_status says stderr is stopped");
-
-    ok (!flux_subprocess_stream_start (p, "stdout"),
-        "flux_subprocess_stream_start on stdout success");
-    ok (!flux_subprocess_stream_start (p, "stderr"),
-        "flux_subprocess_stream_start on stderr success");
-
-    ok (flux_subprocess_stream_status (p, "stdout") > 0,
-        "flux_subprocess_stream_status says stdout is started");
-    ok (flux_subprocess_stream_status (p, "stderr") > 0,
-        "flux_subprocess_stream_status says stderr is started");
-
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
@@ -1123,8 +1098,8 @@ void start_stdout_after_stderr_cb (flux_subprocess_t *p, const char *stream)
             ok (stdout_output_cb_count == 0
                 && stdout_output_cb_len_count == 0,
                 "received all stderr data and stdout output is still 0");
-            ok (!flux_subprocess_stream_start (p, "stdout"),
-                "flux_subprocess_stream_start on stdout success");
+            flux_subprocess_stream_start (p, "stdout");
+            diag ("flux_subprocess_stream_start on stdout");
         }
     }
 }
@@ -1169,8 +1144,8 @@ void test_stream_start_stop_initial_stop (flux_reactor_t *r)
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "subprocess state == RUNNING after flux_local_exec");
 
-    ok (!flux_subprocess_stream_stop (p, "stdout"),
-        "flux_subprocess_stream_stop on stdout success");
+    flux_subprocess_stream_stop (p, "stdout");
+    diag ("flux_subprocess_stream_stop on stdout");
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
@@ -1196,8 +1171,8 @@ void mid_stop_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_subprocess_t *p = arg;
     ok (stdout_output_cb_count == 1,
         "stdout callback has not been called since timer activated");
-    ok (!flux_subprocess_stream_start (p, "stdout"),
-        "flux_subprocess_stream_start on stdout success");
+    flux_subprocess_stream_start (p, "stdout");
+    diag ("flux_subprocess_stream_start on stdout");
     timer_cb_count++;
     flux_watcher_stop (w);
 }
@@ -1220,8 +1195,8 @@ void mid_stop_cb (flux_subprocess_t *p, const char *stream)
         flux_watcher_t *tw = NULL;
         ok (ptr && lenp > 0,
             "flux_subprocess_read read data on stdout: %d", lenp);
-        ok (!flux_subprocess_stream_stop (p, "stdout"),
-            "flux_subprocess_stream_stop on stdout success");
+        flux_subprocess_stream_stop (p, "stdout");
+        diag ("flux_subprocess_stream_stop on stdout");
         ok ((tw = flux_subprocess_aux_get (p, "tw")) != NULL,
             "flux_subprocess_aux_get timer success");
         flux_watcher_start (tw);

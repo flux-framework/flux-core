@@ -595,44 +595,28 @@ flux_subprocess_t *flux_rexec (flux_t *h,
     return flux_rexec_ex (h, "rexec", rank, flags, cmd, ops, NULL, NULL);
 }
 
-int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)
+void flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)
 {
     struct subprocess_channel *c;
-    struct fbuf *fb;
 
-    if (!p || !stream
-           || (p->local && p->in_hook)) {
-        errno = EINVAL;
-        return -1;
-    }
+    if (!p
+        || !stream
+        || !p->local
+        || p->in_hook
+        || !(c = zhash_lookup (p->channels, stream))
+        || !(c->flags & CHANNEL_READ)
+        || c->buffer_read_w_started
+        || !fbuf_read_watcher_get_buffer (c->buffer_read_w))
+        return;
 
-    c = zhash_lookup (p->channels, stream);
-    if (!c || !(c->flags & CHANNEL_READ)) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (p->local) {
-        if (c->buffer_read_w_started)
-            return 0;
-
-        if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w)))
-            return -1;
-
-        if (!c->buffer_read_stopped_w) {
-            /* use check watcher instead of idle watcher, as idle watcher
-             * could spin reactor */
-            c->buffer_read_stopped_w = flux_check_watcher_create (p->reactor,
-                                                                  NULL,
-                                                                  c);
-            if (!c->buffer_read_stopped_w)
-                return -1;
-        }
-    }
-    else {
-        /* not supported on remote right now */
-        errno = EINVAL;
-        return -1;
+    if (!c->buffer_read_stopped_w) {
+        /* use check watcher instead of idle watcher, as idle watcher
+         * could spin reactor */
+        c->buffer_read_stopped_w = flux_check_watcher_create (p->reactor,
+                                                              NULL,
+                                                              c);
+        if (!c->buffer_read_stopped_w)
+            return;
     }
 
     /* Note that in local.c, we never stop buffer_read_w
@@ -644,71 +628,25 @@ int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)
     flux_watcher_start (c->buffer_read_w);
     c->buffer_read_w_started = true;
     flux_watcher_stop (c->buffer_read_stopped_w);
-    return 0;
 }
 
-int flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream)
+void flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream)
 {
     struct subprocess_channel *c;
-    struct fbuf *fb;
 
-    if (!p || !stream
-           || (p->local && p->in_hook)) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    c = zhash_lookup (p->channels, stream);
-    if (!c || !(c->flags & CHANNEL_READ)) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (p->local) {
-        if (!c->buffer_read_w_started)
-            return 0;
-
-        if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w)))
-            return -1;
-    }
-    else {
-        /* not supported on remote right now */
-        errno = EINVAL;
-        return -1;
-    }
+    if (!p
+        || !stream
+        || !p->local
+        || p->in_hook
+        || !(c = zhash_lookup (p->channels, stream))
+        || !(c->flags & CHANNEL_READ)
+        || !c->buffer_read_w_started
+        || !fbuf_read_watcher_get_buffer (c->buffer_read_w))
+        return;
 
     flux_watcher_stop (c->buffer_read_w);
     c->buffer_read_w_started = false;
     flux_watcher_start (c->buffer_read_stopped_w);
-    return 0;
-}
-
-int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream)
-{
-    struct subprocess_channel *c;
-    int ret;
-
-    if (!p || !stream
-           || (p->local && p->in_hook)) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    c = zhash_lookup (p->channels, stream);
-    if (!c || !(c->flags & CHANNEL_READ)) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (p->local)
-        ret = c->buffer_read_w_started ? 1 : 0;
-    else {
-        /* not supported on remote right now */
-        errno = EINVAL;
-        return -1;
-    }
-
-    return ret;
 }
 
 int flux_subprocess_write (flux_subprocess_t *p,

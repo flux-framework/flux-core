@@ -111,15 +111,10 @@ void test_corner_cases (flux_reactor_t *r)
         "flux_rexec fails with cmd with invalid rank");
     flux_cmd_destroy (cmd);
 
-    ok (flux_subprocess_stream_start (NULL, NULL) < 0
-        && errno == EINVAL,
-        "flux_subprocess_stream_start fails with NULL pointer inputs");
-    ok (flux_subprocess_stream_stop (NULL, NULL) < 0
-        && errno == EINVAL,
-        "flux_subprocess_stream_stop fails with NULL pointer inputs");
-    ok (flux_subprocess_stream_status (NULL, NULL) < 0
-        && errno == EINVAL,
-        "flux_subprocess_stream_status fails with NULL pointer inputs");
+    lives_ok ({flux_subprocess_stream_start (NULL, NULL);},
+        "flux_subprocess_stream_start doesn't crash with NULL pointer inputs");
+    lives_ok ({flux_subprocess_stream_stop (NULL, NULL);},
+        "flux_subprocess_stream_stop doesn't crash with NULL pointer inputs");
 
     ok (flux_subprocess_write (NULL, "stdin", "foo", 3) < 0
         && errno == EINVAL,
@@ -198,15 +193,6 @@ void test_post_exec_errors (flux_reactor_t *r)
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "subprocess state == RUNNING after flux_local_exec");
-    ok (flux_subprocess_stream_start (p, NULL) < 0
-        && errno == EINVAL,
-        "flux_subprocess_stream_start returns EINVAL on bad stream");
-    ok (flux_subprocess_stream_stop (p, NULL) < 0
-        && errno == EINVAL,
-        "flux_subprocess_stream_stop returns EINVAL on bad stream");
-    ok (flux_subprocess_stream_status (p, NULL) < 0
-        && errno == EINVAL,
-        "flux_subprocess_stream_status returns EINVAL on bad stream");
     ok (flux_subprocess_write (p, NULL, NULL, 0) < 0
         && errno == EINVAL,
         "flux_subprocess_write returns EINVAL on bad input");
