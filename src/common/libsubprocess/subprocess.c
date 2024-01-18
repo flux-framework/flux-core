@@ -314,7 +314,7 @@ static void state_change_check_cb (flux_reactor_t *r,
     flux_watcher_stop (p->state_idle_w);
 
     /* always a chance caller may destroy subprocess in callback */
-    flux_subprocess_ref (p);
+    subprocess_incref (p);
 
     if (p->state_reported != p->state) {
         /* this is the ubiquitous fail state for internal failures,
@@ -344,7 +344,7 @@ static void state_change_check_cb (flux_reactor_t *r,
     if (p->state_reported == FLUX_SUBPROCESS_EXITED)
         subprocess_check_completed (p);
 
-    flux_subprocess_unref (p);
+    subprocess_decref (p);
 }
 
 static int subprocess_setup_state_change (flux_subprocess_t *p)
@@ -401,7 +401,7 @@ static void completed_check_cb (flux_reactor_t *r,
     flux_watcher_stop (p->completed_idle_w);
 
     /* always a chance caller may destroy subprocess in callback */
-    flux_subprocess_ref (p);
+    subprocess_incref (p);
 
     /* There is a small "racy" component, where the state we're at may
      * not yet align with the state that has been reported to the
@@ -420,7 +420,7 @@ static void completed_check_cb (flux_reactor_t *r,
         flux_watcher_stop (p->completed_check_w);
     }
 
-    flux_subprocess_unref (p);
+    subprocess_decref (p);
 }
 
 static int subprocess_setup_completed (flux_subprocess_t *p)
@@ -510,7 +510,7 @@ flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
     return p;
 
 error:
-    flux_subprocess_unref (p);
+    subprocess_decref (p);
     return NULL;
 }
 
@@ -586,7 +586,7 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
     return p;
 
 error:
-    flux_subprocess_unref (p);
+    subprocess_decref (p);
     return NULL;
 }
 
@@ -1023,7 +1023,7 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
     return f;
 }
 
-void flux_subprocess_ref (flux_subprocess_t *p)
+void subprocess_incref (flux_subprocess_t *p)
 {
     if (p) {
         if (p->local && p->in_hook)
@@ -1032,7 +1032,7 @@ void flux_subprocess_ref (flux_subprocess_t *p)
     }
 }
 
-void flux_subprocess_unref (flux_subprocess_t *p)
+void subprocess_decref (flux_subprocess_t *p)
 {
     if (p) {
         if (p->local && p->in_hook)
@@ -1040,6 +1040,11 @@ void flux_subprocess_unref (flux_subprocess_t *p)
         if (--p->refcount == 0)
             subprocess_free (p);
     }
+}
+
+void flux_subprocess_destroy (flux_subprocess_t *p)
+{
+    subprocess_decref (p);
 }
 
 flux_subprocess_state_t flux_subprocess_state (flux_subprocess_t *p)

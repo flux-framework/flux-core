@@ -284,13 +284,11 @@ const char *flux_subprocess_getline (flux_subprocess_t *p,
 flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signo);
 
 /*
- *  Add/remove a reference to subprocess object `p`. The subprocess object
- *   is destroyed once the last reference is removed.  These calls
- *   silently do nothing if called within a hook.
+ *  Remove a reference to subprocess object `p`. The subprocess object
+ *   is destroyed once the last reference is removed.  This call
+ *   silently deso nothing if called within a hook.
  */
-void flux_subprocess_ref (flux_subprocess_t *p);
-void flux_subprocess_unref (flux_subprocess_t *p);
-#define flux_subprocess_destroy(x) flux_subprocess_unref(x)
+void flux_subprocess_destroy (flux_subprocess_t *p);
 
 /*  Return current state value of subprocess.  Note this may differ
  *  than state returned in on_state_change callback, as a subprocess

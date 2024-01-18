@@ -21,6 +21,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libsubprocess/subprocess.h"
+#include "src/common/libsubprocess/subprocess_private.h"
 #include "src/common/libsubprocess/server.h"
 #include "ccan/str/str.h"
 
@@ -824,12 +825,12 @@ void test_refcount (flux_reactor_t *r)
         "subprocess state == RUNNING after flux_local_exec");
     ok (flux_subprocess_aux_set (p, "extra", extra, NULL) == 0,
         "flux_subprocess_aux_set success");
-    flux_subprocess_ref (p);
+    subprocess_incref (p);
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
-    flux_subprocess_unref (p);
+    subprocess_decref (p);
 
     /* normally this should fail, but we've increased the refcount so
      * subprocess should not be destroyed */
@@ -838,7 +839,7 @@ void test_refcount (flux_reactor_t *r)
     ok (tmp == extra,
         "flux_subprocess_aux_get returned correct pointer");
 
-    flux_subprocess_unref (p);
+    flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
 }
 

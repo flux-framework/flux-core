@@ -58,7 +58,7 @@ static void server_kill (flux_subprocess_t *p, int signum);
 static void proc_destructor (void **item)
 {
     if (item) {
-        flux_subprocess_unref (*item);
+        subprocess_decref (*item);
         *item = NULL;
     }
 }
@@ -373,7 +373,7 @@ error:
     }
     flux_cmd_destroy (cmd);
     free (env);
-    flux_subprocess_unref (p);
+    subprocess_decref (p);
 }
 
 static void server_write_cb (flux_t *h,

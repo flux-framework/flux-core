@@ -12,7 +12,7 @@
 #define _SUBPROCESS_PRIVATE_H
 
 #include <flux/idset.h>
-
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "subprocess.h"
 #include "fbuf_watcher.h"
 
@@ -127,6 +127,9 @@ struct subprocess_channel *channel_create (flux_subprocess_t *p,
                                            int flags);
 
 struct idset * subprocess_childfds (flux_subprocess_t *p);
+
+void subprocess_incref (flux_subprocess_t *p);
+void subprocess_decref (flux_subprocess_t *p);
 
 #endif /* !_SUBPROCESS_PRIVATE_H */
 
