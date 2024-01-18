@@ -41,8 +41,8 @@ void channel_destroy (void *arg)
 {
     struct subprocess_channel *c = arg;
     if (c) {
-        if (c->name)
-            free (c->name);
+        int saved_errno = errno;
+        free (c->name);
 
         if (c->parent_fd != -1)
             close (c->parent_fd);
@@ -63,6 +63,7 @@ void channel_destroy (void *arg)
         flux_watcher_destroy (c->out_check_w);
 
         free (c);
+        errno = saved_errno;
     }
 }
 
@@ -71,45 +72,20 @@ struct subprocess_channel *channel_create (flux_subprocess_t *p,
                                            const char *name,
                                            int flags)
 {
-    struct subprocess_channel *c = calloc (1, sizeof (*c));
-    int save_errno;
+    struct subprocess_channel *c;
 
-    if (!c)
+    if (!(c = calloc (1, sizeof (*c))))
         return NULL;
-
     c->p = p;
     c->output_cb = output_cb;
     if (!(c->name = strdup (name)))
         goto error;
     c->flags = flags;
-
-    c->eof_sent_to_caller = false;
-    c->closed = false;
-
     c->parent_fd = -1;
     c->child_fd = -1;
-    c->buffer_write_w = NULL;
-    c->buffer_read_w = NULL;
-    c->buffer_read_stopped_w = NULL;
-    c->buffer_read_w_started = false;
-
-    c->write_buffer = NULL;
-    c->read_buffer = NULL;
-    c->write_eof_sent = false;
-    c->read_eof_received = false;
-    c->in_prep_w = NULL;
-    c->in_idle_w = NULL;
-    c->in_check_w = NULL;
-    c->out_prep_w = NULL;
-    c->out_idle_w = NULL;
-    c->out_check_w = NULL;
-
     return c;
-
 error:
-    save_errno = errno;
     channel_destroy (c);
-    errno = save_errno;
     return NULL;
 }
 
