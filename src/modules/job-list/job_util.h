@@ -15,14 +15,7 @@
 
 #include "job_data.h"
 
-typedef struct {
-    char text[160];
-} job_list_error_t;
-
-void __attribute__((format (printf, 2, 3)))
-seterror (job_list_error_t *errp, const char *fmt, ...);
-
-json_t *job_to_json (struct job *job, json_t *attrs, job_list_error_t *errp);
+json_t *job_to_json (struct job *job, json_t *attrs, flux_error_t *errp);
 
 #endif /* ! _FLUX_JOB_LIST_JOB_UTIL_H */
 
