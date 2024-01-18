@@ -129,3 +129,5 @@ struct subprocess_channel *channel_create (flux_subprocess_t *p,
 struct idset * subprocess_childfds (flux_subprocess_t *p);
 
 #endif /* !_SUBPROCESS_PRIVATE_H */
+
+// vi: ts=4 sw=4 expandtab

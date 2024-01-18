@@ -43,3 +43,5 @@ void ev_fbuf_write_start (struct ev_loop *loop, struct ev_fbuf_write *ebw);
 void ev_fbuf_write_stop (struct ev_loop *loop, struct ev_fbuf_write *ebw);
 void ev_fbuf_write_wakeup (struct ev_fbuf_write *ebw);
 #endif /* !_EV_BUFFER_WRITE_H */
+
+// vi: ts=4 sw=4 expandtab

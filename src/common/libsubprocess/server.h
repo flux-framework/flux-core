@@ -54,3 +54,5 @@ void subprocess_server_destroy (subprocess_server_t *s);
 flux_future_t *subprocess_server_shutdown (subprocess_server_t *s, int signum);
 
 #endif /* !_SUBPROCESS_SERVER_H */
+
+// vi: ts=4 sw=4 expandtab

@@ -103,14 +103,14 @@ typedef struct {
 /*
  *  llog-compatible callback
  */
-typedef void (*subprocess_log_f) (void *arg,
-                                  const char *file,
-                                  int line,
-                                  const char *func,
-                                  const char *subsys,
-                                  int level,
-                                  const char *fmt,
-                                  va_list args);
+typedef void (*subprocess_log_f)(void *arg,
+                                 const char *file,
+                                 int line,
+                                 const char *func,
+                                 const char *subsys,
+                                 int level,
+                                 const char *fmt,
+                                 va_list args);
 
 
 /*
@@ -159,8 +159,8 @@ flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
                                        void *log_data);
 
 flux_subprocess_t *flux_rexec (flux_t *h,
-		               int rank,
-			       int flags,
+                               int rank,
+                               int flags,
                                const flux_cmd_t *cmd,
                                const flux_subprocess_ops_t *ops);
 
@@ -196,9 +196,9 @@ int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream);
  *  will be written and -1 will be returned with errno=ENOSPC.
  */
 int flux_subprocess_write (flux_subprocess_t *p,
-		           const char *stream,
+                           const char *stream,
                            const char *buf,
-			   size_t len);
+                           size_t len);
 
 /*
  *  Close "stream" stream of subprocess `p` and schedule EOF to be sent.
@@ -221,7 +221,7 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
 const char *flux_subprocess_read (flux_subprocess_t *p,
                                   const char *stream,
                                   int len,
-				  int *lenp);
+                                  int *lenp);
 
 /*
  *  Read line unread data from stream `stream`.  'stream' can be
@@ -347,8 +347,8 @@ flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p);
  */
 int flux_subprocess_aux_set (flux_subprocess_t *p,
                              const char *name,
-			     void *ctx,
-			     flux_free_f free);
+                             void *ctx,
+                             flux_free_f free);
 
 /*
  *  Return pointer to any context associated with `p` under `name`. If
@@ -369,3 +369,5 @@ void flux_subprocess_channel_decref (flux_subprocess_t *p, const char *name);
 #endif
 
 #endif /* !_FLUX_CORE_SUBPROCESS_H */
+
+// vi: ts=4 sw=4 expandtab

@@ -49,3 +49,5 @@ void ev_fbuf_read_incref (struct ev_fbuf_read *ebr);
 void ev_fbuf_read_decref (struct ev_fbuf_read *ebr);
 
 #endif /* !_LIBSUBPROCESS_EV_FBUF_READ_H */
+
+// vi: ts=4 sw=4 expandtab

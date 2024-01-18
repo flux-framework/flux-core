@@ -44,7 +44,7 @@ void flux_cmd_destroy (flux_cmd_t *cmd);
  *  Append formatted string to argv of `cmd`.
  */
 int flux_cmd_argv_appendf (flux_cmd_t *cmd,
-		           const char *fmt, ...)
+                           const char *fmt, ...)
                            __attribute__ ((format (printf, 2, 3)));
 
 /*
@@ -82,10 +82,10 @@ char *flux_cmd_stringify (const flux_cmd_t *cmd);
  *   If `overwrite` is non-zero then overwrite any existing setting for `name`.
  */
 int flux_cmd_setenvf (flux_cmd_t *cmd,
-		      int overwrite,
+                      int overwrite,
                       const char *name,
-		      const char *fmt,
-		      ...)
+                      const char *fmt,
+                      ...)
                       __attribute__ ((format (printf, 4, 5)));
 
 /*
@@ -180,3 +180,5 @@ const char *flux_cmd_getopt (flux_cmd_t *cmd, const char *var);
 #endif
 
 #endif /* !_SUBPROCESS_COMMAND_H */
+
+// vi: ts=4 sw=4 expandtab
