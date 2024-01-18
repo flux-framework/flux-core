@@ -65,11 +65,11 @@ def process_header(f, including_path="."):
                 return
         with open(f, "r") as header:
             for l in header.readlines():
-                m = re.search('#include\s*"([^"]*)"', l)
+                m = re.search(r'#include\s*"([^"]*)"', l)
                 if m:
                     nf = find_first(args.search, m.group(1), including_path)
                     process_header(nf, os.path.dirname(os.path.abspath(nf)))
-                if not re.match("#\s*include", l):
+                if not re.match(r"#\s*include", l):
                     mega_header += l
         checked_heads[f] = 1
 
