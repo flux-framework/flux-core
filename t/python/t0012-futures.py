@@ -32,10 +32,20 @@ class TestHandle(unittest.TestCase):
         self.f = flux.Flux()
         self.ping_payload = {"seq": 1, "pad": "stuff"}
 
+    @staticmethod
+    def is_subset(x, y):
+        """Return true if all keys in x are present and equal to keys in y"""
+        for key, val in x.items():
+            if key not in y:
+                raise ValueError(f"key {key} missing in {y}")
+            if y[key] != val:
+                raise ValueError(f"key {key} is not {val} (got {x[key]})")
+        return True
+
     def test_01_rpc_get(self):
         future = self.f.rpc("broker.ping", self.ping_payload)
         resp_payload = future.get()
-        self.assertDictContainsSubset(self.ping_payload, resp_payload)
+        self.assertTrue(self.is_subset(self.ping_payload, resp_payload))
 
     def test_02_get_flux(self):
         future = self.f.rpc("broker.ping", self.ping_payload)
@@ -43,7 +53,7 @@ class TestHandle(unittest.TestCase):
         # force a full garbage collection pass to test that the handle is not destructed
         gc.collect(2)
         resp_payload = future.get()
-        self.assertDictContainsSubset(self.ping_payload, resp_payload)
+        self.assertTrue(self.is_subset(self.ping_payload, resp_payload))
 
     def test_02_future_wait_for(self):
         future = self.f.rpc("broker.ping", self.ping_payload)
@@ -55,7 +65,7 @@ class TestHandle(unittest.TestCase):
                 self.fail(msg="future fulfillment timed out")
             else:
                 raise
-        self.assertDictContainsSubset(self.ping_payload, resp_payload)
+        self.assertTrue(self.is_subset(self.ping_payload, resp_payload))
 
     def test_03_future_then(self):
         """Register a 'then' cb and run the reactor to ensure it runs"""
@@ -67,7 +77,7 @@ class TestHandle(unittest.TestCase):
             try:
                 resp_payload = future.get()
                 cb_ran[0] = True
-                self.assertDictContainsSubset(arg, resp_payload)
+                self.assertTrue(self.is_subset(arg, resp_payload))
             finally:
                 # ensure that reactor is always stopped, avoiding a hung test
                 flux_handle.reactor_stop(reactor)

@@ -425,7 +425,7 @@ STDERR_DEVNULL = $(stderr_devnull_$(V))
 stderr_devnull_ =  $(stderr_devnull_$(AM_DEFAULT_VERBOSITY))
 stderr_devnull_0 = >/dev/null 2>&1
 
-$(MAN_FILES): conf.py $(RST_FILES)
+$(MAN_FILES): manpages.py conf.py $(RST_FILES)
 	$(sphinx_man) \
 	PYTHONPATH=$(PYTHONPATH):$(abs_srcdir) \
 	SPHINX_BUILDDIR=$(abs_builddir) $(PYTHON) \
