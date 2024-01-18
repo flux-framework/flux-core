@@ -19,27 +19,16 @@
 #include <assert.h>
 
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 #include "job-list.h"
 #include "job_util.h"
 
-void seterror (job_list_error_t *errp, const char *fmt, ...)
-{
-    if (errp) {
-        va_list ap;
-        int saved_errno = errno;
-        va_start (ap, fmt);
-        (void) vsnprintf (errp->text, sizeof (errp->text), fmt, ap);
-        va_end (ap);
-        errno = saved_errno;
-    }
-}
-
 static int store_attr (struct job *job,
                        const char *attr,
                        json_t *o,
-                       job_list_error_t *errp)
+                       flux_error_t *errp)
 {
     json_t *val = NULL;
 
@@ -219,7 +208,7 @@ static int store_attr (struct job *job,
         val = json_incref (grudgeset_tojson (job->dependencies));
     }
     else {
-        seterror (errp, "%s is not a valid attribute", attr);
+        errprintf (errp, "%s is not a valid attribute", attr);
         errno = EINVAL;
         return -1;
     }
@@ -237,7 +226,7 @@ out:
     return 0;
 }
 
-int store_all_attr (struct job *job, json_t *o, job_list_error_t *errp)
+int store_all_attr (struct job *job, json_t *o, flux_error_t *errp)
 {
     const char **ptr = job_attrs ();
 
@@ -260,7 +249,7 @@ int store_all_attr (struct job *job, json_t *o, job_list_error_t *errp)
  * EPROTO - malformed attrs array
  * ENOMEM - out of memory
  */
-json_t *job_to_json (struct job *job, json_t *attrs, job_list_error_t *errp)
+json_t *job_to_json (struct job *job, json_t *attrs, flux_error_t *errp)
 {
     json_t *val = NULL;
     size_t index;
@@ -280,7 +269,7 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_list_error_t *errp)
     json_array_foreach (attrs, index, value) {
         const char *attr = json_string_value (value);
         if (!attr) {
-            seterror (errp, "attr has no string value");
+            errprintf (errp, "attr has no string value");
             errno = EINVAL;
             goto error;
         }

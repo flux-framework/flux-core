@@ -18,6 +18,7 @@
 #include <assert.h>
 
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
@@ -30,7 +31,7 @@
 #include "state_match.h"
 
 json_t *get_job_by_id (struct job_state_ctx *jsctx,
-                       job_list_error_t *errp,
+                       flux_error_t *errp,
                        const flux_msg_t *msg,
                        flux_jobid_t id,
                        json_t *attrs,
@@ -44,7 +45,7 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
  * ENOMEM - out of memory
  */
 int get_jobs_from_list (json_t *jobs,
-                        job_list_error_t *errp,
+                        flux_error_t *errp,
                         zlistx_t *list,
                         int max_entries,
                         json_t *attrs,
@@ -94,7 +95,7 @@ int get_jobs_from_list (json_t *jobs,
  * ENOMEM - out of memory
  */
 json_t *get_jobs (struct job_state_ctx *jsctx,
-                  job_list_error_t *errp,
+                  flux_error_t *errp,
                   int max_entries,
                   double since,
                   json_t *attrs,
@@ -250,7 +251,7 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
               const flux_msg_t *msg, void *arg)
 {
     struct list_ctx *ctx = arg;
-    job_list_error_t err;
+    flux_error_t err;
     json_t *jobs;
     json_t *attrs;
     int max_entries;
@@ -266,7 +267,7 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
                              "attrs", &attrs,
                              "since", &since,
                              "constraint", &constraint) < 0) {
-        seterror (&err, "invalid payload: %s", flux_msg_last_error (msg));
+        errprintf (&err, "invalid payload: %s", flux_msg_last_error (msg));
         errno = EPROTO;
         goto error;
     }
@@ -291,31 +292,31 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
         }
     }
     if (max_entries < 0) {
-        seterror (&err, "invalid payload: max_entries < 0 not allowed");
+        errprintf (&err, "invalid payload: max_entries < 0 not allowed");
         errno = EPROTO;
         goto error;
     }
     if (since < 0.) {
-        seterror (&err, "invalid payload: since < 0.0 not allowed");
+        errprintf (&err, "invalid payload: since < 0.0 not allowed");
         errno = EPROTO;
         goto error;
     }
     if (!json_is_array (attrs)) {
-        seterror (&err, "invalid payload: attrs must be an array");
+        errprintf (&err, "invalid payload: attrs must be an array");
         errno = EPROTO;
         goto error;
     }
     if (!(c = list_constraint_create (constraint, &error))) {
-        seterror (&err,
-                  "invalid payload: constraint object invalid: %s",
-                  error.text);
+        errprintf (&err,
+                   "invalid payload: constraint object invalid: %s",
+                   error.text);
         errno = EPROTO;
         goto error;
     }
     if (!(statec = state_constraint_create (constraint, &error))) {
-        seterror (&err,
-                  "invalid payload: constraint object invalid: %s",
-                  error.text);
+        errprintf (&err,
+                   "invalid payload: constraint object invalid: %s",
+                   error.text);
         errno = EPROTO;
         goto error;
     }
@@ -422,7 +423,7 @@ int check_id_valid (struct job_state_ctx *jsctx,
  * ENOMEM - out of memory
  */
 json_t *get_job_by_id (struct job_state_ctx *jsctx,
-                       job_list_error_t *errp,
+                       flux_error_t *errp,
                        const flux_msg_t *msg,
                        flux_jobid_t id,
                        json_t *attrs,
@@ -473,7 +474,7 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
                  const flux_msg_t *msg, void *arg)
 {
     struct list_ctx *ctx = arg;
-    job_list_error_t err = {{0}};
+    flux_error_t err = {{0}};
     json_t *job;
     flux_jobid_t id;
     json_t *attrs;
@@ -485,19 +486,19 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
                              "id", &id,
                              "attrs", &attrs,
                              "state", &state) < 0) {
-        seterror (&err, "invalid payload: %s", flux_msg_last_error (msg));
+        errprintf (&err, "invalid payload: %s", flux_msg_last_error (msg));
         errno = EPROTO;
         goto error;
     }
 
     if (!json_is_array (attrs)) {
-        seterror (&err, "invalid payload: attrs must be an array");
+        errprintf (&err, "invalid payload: attrs must be an array");
         errno = EPROTO;
         goto error;
     }
 
     if (state && (state & ~valid_states)) {
-        seterror (&err, "invalid payload: invalid state specified");
+        errprintf (&err, "invalid payload: invalid state specified");
         errno = EPROTO;
         goto error;
     }

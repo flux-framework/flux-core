@@ -248,7 +248,7 @@ static void idsync_data_respond (struct idsync_ctx *isctx,
                                  struct idsync_data *isd,
                                  struct job *job)
 {
-    job_list_error_t err;
+    flux_error_t err;
     json_t *o;
 
     if (!(o = job_to_json (job, isd->attrs, &err)))
