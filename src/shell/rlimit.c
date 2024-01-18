@@ -58,8 +58,10 @@ static int rlimit_name_to_string (const char *name)
         return RLIMIT_NICE;
     if (streq (name, "rtprio"))
         return RLIMIT_RTPRIO;
+#ifdef RLIMIT_RTTIME
     if (streq (name, "rttime"))
         return RLIMIT_RTTIME;
+#endif
     if (streq (name, "sigpending"))
         return RLIMIT_SIGPENDING;
     return -1;
