@@ -63,6 +63,8 @@
 #include "src/common/libterminus/pty.h"
 #include "src/common/libtaskmap/taskmap_private.h"
 #include "src/common/librlist/rlist.h"
+#include "src/common/libsubprocess/fbuf.h"
+#include "src/common/libsubprocess/fbuf_watcher.h"
 #include "ccan/str/str.h"
 
 #ifndef VOLATILE
@@ -1975,8 +1977,8 @@ void attach_stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
     const char *ptr;
     int len;
 
-    if (!(ptr = flux_buffer_read_watcher_get_data (w, &len)))
-        log_err_exit ("flux_buffer_read_line on stdin");
+    if (!(ptr = fbuf_read_watcher_get_data (w, &len)))
+        log_err_exit ("fbuf_read_line on stdin");
     if (len > 0) {
         if (attach_send_shell (ctx, ctx->stdin_ranks, ptr, len, false) < 0)
             log_err_exit ("attach_send_shell");
@@ -2111,9 +2113,9 @@ static void attach_setup_stdin (struct attach_ctx *ctx)
         return;
 
     if (!ctx->unbuffered)
-        flags = FLUX_WATCHER_LINE_BUFFER;
+        flags = FBUF_WATCHER_LINE_BUFFER;
 
-    /* flux_buffer_read_watcher_create() requires O_NONBLOCK on
+    /* fbuf_read_watcher_create() requires O_NONBLOCK on
      * stdin */
 
     if ((stdin_flags = fd_set_nonblocking (STDIN_FILENO)) < 0)
@@ -2121,7 +2123,7 @@ static void attach_setup_stdin (struct attach_ctx *ctx)
     if (atexit (restore_stdin_flags) != 0)
         log_err_exit ("atexit");
 
-    w = flux_buffer_read_watcher_create (flux_get_reactor (ctx->h),
+    w = fbuf_read_watcher_create (flux_get_reactor (ctx->h),
                                          STDIN_FILENO,
                                          1 << 20,
                                          attach_stdin_cb,
@@ -2129,7 +2131,7 @@ static void attach_setup_stdin (struct attach_ctx *ctx)
                                          ctx);
     if (!w) {
         /* Users have reported rare occurrences of an EINVAL error
-         * from flux_buffer_read_watcher_create(), the cause of which
+         * from fbuf_read_watcher_create(), the cause of which
          * is not understood (See issue #5175). In many cases, perhaps all,
          * stdin is not used by the job, so aborting `flux job attach`
          * is an unnecessary failure. Therefore, just ignore stdin when
@@ -2139,7 +2141,7 @@ static void attach_setup_stdin (struct attach_ctx *ctx)
             log_msg ("Warning: ignoring stdin: failed to create watcher");
             return;
         }
-        log_err_exit ("flux_buffer_read_watcher_create");
+        log_err_exit ("fbuf_read_watcher_create");
     }
 
     if (!(ctx->stdin_rpcs = zlist_new ()))

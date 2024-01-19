@@ -16,6 +16,8 @@
 #include <fcntl.h>
 
 #include <flux/core.h>
+#include "src/common/libsubprocess/fbuf.h"
+#include "src/common/libsubprocess/fbuf_watcher.h"
 
 static int total_bytes = 0;
 
@@ -35,7 +37,7 @@ static void write_cb (flux_reactor_t *r, flux_watcher_t *w,
     if (revents & FLUX_POLLERR)
         die ("got POLLERR on stdout. Aborting\n");
 
-    if (flux_buffer_write_watcher_is_closed (w, &errnum)) {
+    if (fbuf_write_watcher_is_closed (w, &errnum)) {
         if (errnum)
             fprintf (stderr, "error: close: %s\n", strerror (errnum));
         flux_watcher_stop (w);
@@ -48,26 +50,24 @@ static void read_cb (flux_reactor_t *r, flux_watcher_t *w,
     const void *data;
     int len, n = 0;
     flux_watcher_t *writer = arg;
-    flux_buffer_t *wfb = NULL;
-    flux_buffer_t *rfb = NULL;;
+    struct fbuf *wfb = NULL;
+    struct fbuf *rfb = NULL;;
 
-    if (!(wfb = flux_buffer_write_watcher_get_buffer (writer))
-        || !(rfb = flux_buffer_read_watcher_get_buffer (w)))
+    if (!(wfb = fbuf_write_watcher_get_buffer (writer))
+        || !(rfb = fbuf_read_watcher_get_buffer (w)))
         die ("failed to get read/write buffers from watchers!\n");
 
-    if (!(data = flux_buffer_peek (rfb, -1, &len)))
-        die ("flux_buffer_peek: %s\n", strerror (errno));
+    if (!(data = fbuf_read (rfb, -1, &len)))
+        die ("fbuf_read: %s\n", strerror (errno));
 
-    if ((len > 0) && ((n = flux_buffer_write (wfb, data, len)) < 0))
-        die ("flux_buffer_write: %s\n", strerror (errno));
+    if ((len > 0) && ((n = fbuf_write (wfb, data, len)) < 0))
+        die ("fbuf_write: %s\n", strerror (errno));
     else if (len == 0) {
         /* Propagate EOF to writer, stop reader */
-        flux_buffer_write_watcher_close (writer);
+        fbuf_write_watcher_close (writer);
         flux_watcher_stop (w);
     }
 
-    /* Drop data in read buffer that was successfully written to writer */
-    flux_buffer_drop (rfb, n);
     total_bytes += n;
 }
 
@@ -97,9 +97,9 @@ int main (int argc, char *argv[])
     if (!(r = flux_reactor_create (0)))
         die ("flux_reactor_create failed\n");
 
-    ww = flux_buffer_write_watcher_create (r, STDOUT_FILENO, 4096,
+    ww = fbuf_write_watcher_create (r, STDOUT_FILENO, 4096,
                                            write_cb, 0, NULL);
-    rw = flux_buffer_read_watcher_create (r, STDIN_FILENO, 4096,
+    rw = fbuf_read_watcher_create (r, STDIN_FILENO, 4096,
                                           read_cb, 0, (void *) ww);
     if (!rw || !ww)
         die ("flux buffer watcher create failed\n");

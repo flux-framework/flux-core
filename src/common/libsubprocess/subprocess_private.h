@@ -14,6 +14,7 @@
 #include <flux/idset.h>
 
 #include "subprocess.h"
+#include "fbuf_watcher.h"
 
 #define SUBPROCESS_DEFAULT_BUFSIZE 4194304
 
@@ -44,8 +45,8 @@ struct subprocess_channel {
     bool buffer_read_w_started;
 
     /* remote */
-    flux_buffer_t *write_buffer;
-    flux_buffer_t *read_buffer;
+    struct fbuf *write_buffer;
+    struct fbuf *read_buffer;
     bool write_eof_sent;
     bool read_eof_received;
     flux_watcher_t *in_prep_w;

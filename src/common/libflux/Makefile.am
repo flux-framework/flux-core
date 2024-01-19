@@ -38,7 +38,6 @@ fluxcoreinclude_HEADERS = \
 	conf.h \
 	future.h \
 	barrier.h \
-	buffer.h \
 	service.h \
 	plugin.h \
 	sync.h \
@@ -81,16 +80,10 @@ libflux_la_SOURCES = \
 	conf.c \
 	ev_flux.h \
 	ev_flux.c \
-	ev_buffer_read.h \
-	ev_buffer_read.c \
-	ev_buffer_write.h \
-	ev_buffer_write.c \
 	control.c \
 	future.c \
 	composite_future.c \
 	barrier.c \
-	buffer_private.h \
-	buffer.c \
 	service.c \
 	version.c \
 	plugin.c \
@@ -112,7 +105,6 @@ TESTS = test_message.t \
 	test_future.t \
 	test_composite_future.t \
 	test_reactor.t \
-	test_buffer.t \
 	test_conf.t \
 	test_rpc.t \
 	test_rpc_chained.t \
@@ -193,10 +185,6 @@ test_composite_future_t_LDADD = $(test_ldadd)
 test_conf_t_SOURCES = test/conf.c
 test_conf_t_CPPFLAGS = $(test_cppflags)
 test_conf_t_LDADD = $(test_ldadd)
-
-test_buffer_t_SOURCES = test/buffer.c
-test_buffer_t_CPPFLAGS = $(test_cppflags)
-test_buffer_t_LDADD = $(test_ldadd)
 
 test_handle_t_SOURCES = test/handle.c
 test_handle_t_CPPFLAGS = $(test_cppflags)

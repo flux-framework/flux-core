@@ -27,6 +27,8 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libsubprocess/fbuf.h"
+#include "src/common/libsubprocess/fbuf_watcher.h"
 #include "ccan/str/str.h"
 
 static struct optparse_option cmdopts[] = {
@@ -212,16 +214,18 @@ void output_cb (flux_subprocess_t *p, const char *stream)
     }
 }
 
-static void stdin_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void stdin_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
-    flux_buffer_t *fb = flux_buffer_read_watcher_get_buffer (w);
+    struct fbuf *fb = fbuf_read_watcher_get_buffer (w);
     flux_subprocess_t *p;
     const char *ptr;
     int lenp;
 
-    if (!(ptr = flux_buffer_read (fb, -1, &lenp)))
-        log_err_exit ("flux_buffer_read");
+    if (!(ptr = fbuf_read (fb, -1, &lenp)))
+        log_err_exit ("fbuf_read");
 
     if (lenp) {
         p = zlist_first (subprocesses);
@@ -295,8 +299,10 @@ static void killall (zlist_t *l, int signum)
                 flux_future_t *f = flux_subprocess_kill (p, signum);
                 if (!f) {
                     if (optparse_getopt (opts, "verbose", NULL) > 0)
-                        fprintf (stderr, "failed to signal rank %d: %s\n",
-                                flux_subprocess_rank (p), strerror (errno));
+                        fprintf (stderr,
+                                 "failed to signal rank %d: %s\n",
+                                flux_subprocess_rank (p),
+                                strerror (errno));
                 }
                 /* don't care about response */
                 flux_future_destroy (f);
@@ -318,7 +324,8 @@ static void signal_cb (int signum)
                 if (!(idset_str = idset_encode (hanging, flags)))
                     log_err_exit ("idset_encode");
 
-                fprintf (stderr, "%s: command still running at exit\n",
+                fprintf (stderr,
+                         "%s: command still running at exit\n",
                          idset_str);
                 free (idset_str);
                 exit (1);
@@ -327,8 +334,10 @@ static void signal_cb (int signum)
     }
 
     if (optparse_getopt (opts, "verbose", NULL) > 0)
-        fprintf (stderr, "sending signal %d to %d running processes\n",
-                 signum, started - exited);
+        fprintf (stderr,
+                 "sending signal %d to %d running processes\n",
+                 signum,
+                 started - exited);
 
     killall (subprocesses, signum);
 
@@ -524,12 +533,15 @@ int main (int argc, char *argv[])
     monotime (&t0);
     if (optparse_getopt (opts, "verbose", NULL) > 0) {
         const char *argv0 = flux_cmd_arg (cmd, 0);
-        char *nodeset = idset_encode (ns, IDSET_FLAG_RANGE
-                                        | IDSET_FLAG_BRACKETS);
+        char *nodeset = idset_encode (ns,
+                                      IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS);
         if (!nodeset)
             log_err_exit ("idset_encode");
-        fprintf (stderr, "%03fms: Starting %s on %s\n",
-                 monotime_since (t0), argv0, nodeset);
+        fprintf (stderr,
+                 "%03fms: Starting %s on %s\n",
+                 monotime_since (t0),
+                 argv0,
+                 nodeset);
         free (nodeset);
     }
 
@@ -582,10 +594,13 @@ int main (int argc, char *argv[])
             log_err_exit ("atexit");
         if (fcntl (STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK) < 0)
             log_err_exit ("fcntl F_SETFL stdin");
-        if (!(stdin_w = flux_buffer_read_watcher_create (r, STDIN_FILENO,
-                                                         1 << 20, stdin_cb,
-                                                         0, NULL)))
-            log_err_exit ("flux_buffer_read_watcher_create");
+        if (!(stdin_w = fbuf_read_watcher_create (r,
+                                                  STDIN_FILENO,
+                                                  1 << 20,
+                                                  stdin_cb,
+                                                  0,
+                                                  NULL)))
+            log_err_exit ("fbuf_read_watcher_create");
     }
     if (signal (SIGINT, signal_cb) == SIG_ERR)
         log_err_exit ("signal");
@@ -597,8 +612,11 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_reactor_run");
 
     if (optparse_getopt (opts, "verbose", NULL) > 0)
-        fprintf (stderr, "%03fms: %d tasks complete with code %d\n",
-                 monotime_since (t0), exited, exit_code);
+        fprintf (stderr,
+                 "%03fms: %d tasks complete with code %d\n",
+                 monotime_since (t0),
+                 exited,
+                 exit_code);
 
     /* output message on any tasks that exited non-zero */
     if (!optparse_hasopt (opts, "quiet") && zhashx_size (exitsets) > 0) {

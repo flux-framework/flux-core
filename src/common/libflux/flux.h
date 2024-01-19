@@ -29,7 +29,6 @@
 #include "conf.h"
 #include "future.h"
 #include "barrier.h"
-#include "buffer.h"
 #include "service.h"
 #include "version.h"
 #include "plugin.h"

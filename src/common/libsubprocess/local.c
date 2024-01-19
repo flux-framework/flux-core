@@ -42,17 +42,17 @@ static void local_channel_flush (struct subprocess_channel *c)
         return;
 
     if (!c->eof_sent_to_caller && c->output_cb) {
-        flux_buffer_t *fb;
+        struct fbuf *fb;
         int len;
 
-        if (!(fb = flux_buffer_read_watcher_get_buffer (c->buffer_read_w))) {
+        if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w))) {
             llog_error (c->p,
-                        "flux_buffer_read_watcher_get_buffer: %s",
+                        "fbuf_read_watcher_get_buffer: %s",
                         strerror (errno));
             return;
         }
 
-        while ((len = flux_buffer_bytes (fb)) > 0)
+        while ((len = fbuf_bytes (fb)) > 0)
             c->output_cb (c->p, c->name);
 
         /* eof call */
@@ -76,10 +76,10 @@ static void local_in_cb (flux_reactor_t *r,
     struct subprocess_channel *c = (struct subprocess_channel *)arg;
     int err = 0;
 
-    if (flux_buffer_write_watcher_is_closed (w, &err) == 1) {
+    if (fbuf_write_watcher_is_closed (w, &err) == 1) {
         if (err) {
             llog_error (c->p,
-                        "flux_buffer_write_watcher close error: %s",
+                        "fbuf_write_watcher close error: %s",
                         strerror (err));
         }
         else
@@ -89,7 +89,7 @@ static void local_in_cb (flux_reactor_t *r,
     }
     else {
         llog_error (c->p,
-                    "flux_buffer_write_watcher: stream %s: %d: %s",
+                    "fbuf_write_watcher: stream %s: %d: %s",
                     c->name,
                     revents,
                     strerror (errno));
@@ -104,16 +104,16 @@ static void local_output (struct subprocess_channel *c,
     if (revents & FLUX_POLLIN) {
         bool eof_set = false;
         if (!c->eof_sent_to_caller) {
-            flux_buffer_t *fb;
+            struct fbuf *fb;
 
-            if (!(fb = flux_buffer_read_watcher_get_buffer (w))) {
+            if (!(fb = fbuf_read_watcher_get_buffer (w))) {
                 llog_error (c->p,
-                            "flux_buffer_read_watcher_get_buffer: %s",
+                            "fbuf_read_watcher_get_buffer: %s",
                             strerror (errno));
                 return;
             }
 
-            if (!flux_buffer_bytes (fb)) {
+            if (!fbuf_bytes (fb)) {
                 c->eof_sent_to_caller = true;
                 eof_set = true;
                 c->p->channels_eof_sent++;
@@ -137,10 +137,7 @@ static void local_output (struct subprocess_channel *c,
         }
     }
     else {
-        llog_error (c->p,
-                    "flux_buffer_read_watcher on %s: 0x%X:",
-                    c->name,
-                    revents);
+        llog_error (c->p, "fbuf_read_watcher on %s: 0x%X:", c->name, revents);
     }
 
     if (c->p->state == FLUX_SUBPROCESS_EXITED && c->eof_sent_to_caller)
@@ -214,16 +211,14 @@ static int channel_local_setup (flux_subprocess_t *p,
     }
 
     if ((channel_flags & CHANNEL_WRITE) && in_cb) {
-        c->buffer_write_w = flux_buffer_write_watcher_create (p->reactor,
-                                                              c->parent_fd,
-                                                              buffer_size,
-                                                              in_cb,
-                                                              0,
-                                                              c);
+        c->buffer_write_w = fbuf_write_watcher_create (p->reactor,
+                                                       c->parent_fd,
+                                                       buffer_size,
+                                                       in_cb,
+                                                       0,
+                                                       c);
         if (!c->buffer_write_w) {
-            llog_debug (p,
-                        "flux_buffer_write_watcher_create: %s",
-                        strerror (errno));
+            llog_debug (p, "fbuf_write_watcher_create: %s", strerror (errno));
             goto error;
         }
     }
@@ -239,16 +234,14 @@ static int channel_local_setup (flux_subprocess_t *p,
         if (wflag)
             c->line_buffered = true;
 
-        c->buffer_read_w = flux_buffer_read_watcher_create (p->reactor,
-                                                            c->parent_fd,
-                                                            buffer_size,
-                                                            out_cb,
-                                                            wflag,
-                                                            c);
+        c->buffer_read_w = fbuf_read_watcher_create (p->reactor,
+                                                     c->parent_fd,
+                                                     buffer_size,
+                                                     out_cb,
+                                                     wflag,
+                                                     c);
         if (!c->buffer_read_w) {
-            llog_debug (p,
-                        "flux_buffer_read_watcher_create: %s",
-                        strerror (errno));
+            llog_debug (p, "fbuf_read_watcher_create: %s", strerror (errno));
             goto error;
         }
 

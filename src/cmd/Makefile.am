@@ -140,13 +140,18 @@ flux_start_LDADD = \
 	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la
 
 flux_job_LDADD = \
-	$(fluxcmd_ldadd) \
+	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
 	$(top_builddir)/src/shell/libmpir.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
 	$(top_builddir)/src/common/libdebugged/libdebugged.la \
-	$(top_builddir)/src/common/libterminus/libterminus.la
+	$(top_builddir)/src/common/libterminus/libterminus.la \
+	$(fluxcmd_ldadd)
+
+flux_exec_LDADD = \
+	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(fluxcmd_ldadd)
 
 flux_terminus_LDADD = \
 	$(top_builddir)/src/common/libterminus/libterminus.la \
