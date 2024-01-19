@@ -270,6 +270,22 @@ matrix.add_build(
     docker_tag=True,
 )
 
+# Fedora 39
+# Note: caliper does not compile on Fedora 38
+matrix.add_build(
+    name="fedora39 - gcc-13.2,py3.12",
+    image="fedora39",
+    args=(
+        "--prefix=/usr"
+        " --sysconfdir=/etc"
+        " --with-systemdsystemunitdir=/etc/systemd/system"
+        " --localstatedir=/var"
+        " --with-flux-security"
+    ),
+    env=dict(PSM3_HAL="loopback"),
+    docker_tag=True,
+)
+
 matrix.add_build(
     name="alpine",
     image="alpine",
