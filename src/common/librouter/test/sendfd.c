@@ -65,19 +65,25 @@ void test_large (void)
     const char *topic;
     const void *buf2;
     int buf2len;
+#if defined(F_GETPIPE_SZ)
     int min_size = 16384;
     int size;
+#endif
 
     memset (buf, 0x0f, sizeof (buf));
 
     if (pipe2 (pfd, O_CLOEXEC) < 0)
         BAIL_OUT ("pipe2 failed");
 
+#if defined(F_GETPIPE_SZ)
     size = fcntl (pfd[1], F_GETPIPE_SZ);
     if (size < min_size)
         (void)fcntl (pfd[1], F_SETPIPE_SZ, min_size);
     size = fcntl (pfd[1], F_GETPIPE_SZ);
     skip (size < min_size, 4, "%d byte pipe is too small", size);
+#else
+    skip (true, 4, "F_GETPIPE_SZ not defined");
+#endif
     if (!(msg = flux_request_encode_raw ("foo.bar", buf, sizeof (buf))))
         BAIL_OUT ("flux_request_encode failed");
     ok (sendfd (pfd[1], msg, NULL) == 0,

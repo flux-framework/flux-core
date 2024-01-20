@@ -183,8 +183,8 @@ test_expect_success 'flux submit --output id mustache passes through to shell' '
 	test $(jq ".attributes.system.shell.options.output.stdout.path" musid.out) = "\"foo.{{id}}\""
 '
 test_expect_success 'flux submit --cwd passes through to jobspec' '
-	flux submit --cwd=/foo/bar/baz hostname > cwd.out &&
-	jq -e ".attributes.system.cwd == \"/foo/bar/baz\""
+	flux submit --cwd=/foo/bar/baz --dry-run hostname > cwd.out &&
+	jq -e ".attributes.system.cwd == \"/foo/bar/baz\"" < cwd.out
 '
 test_expect_success 'flux submit command arguments work' '
 	flux submit --dry-run a b c >args.out &&
@@ -286,9 +286,11 @@ test_expect_success 'flux submit --tasks-per-node works' '
 		--tasks-per-node=2 \
 		--dry-run true > ntasks-per-node.json &&
 	jq -e \
-	 ".attributes.system.shell.options.\"per-resource\".type == \"node\"" &&
+	 ".attributes.system.shell.options.\"per-resource\".type == \"node\"" \
+		< ntasks-per-node.json &&
 	jq -e \
-	 ".attributes.system.shell.options.\"per-resource\".count == 2"
+	 ".attributes.system.shell.options.\"per-resource\".count == 2" \
+		< ntasks-per-node.json
 '
 test_expect_success 'flux submit --input=IDSET fails' '
 	test_must_fail flux submit --input=0 hostname &&
