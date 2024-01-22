@@ -51,9 +51,15 @@ def job_list(
     since=0.0,
     name=None,
     queue=None,
+    constraint=None,
 ):
-    # N.B. an "and" operation with no values returns everything
-    constraint = {"and": []}
+    if constraint is None:
+        # N.B. an "and" operation with no values returns everything
+        constraint = {"and": []}
+    else:
+        # O/w, a provided constraint will be anded with other parameters below:
+        constraint = {"and": [constraint]}
+
     if userid != flux.constants.FLUX_USERID_UNKNOWN:
         constraint["and"].append({"userid": [userid]})
     if name:
@@ -83,7 +89,13 @@ def job_list(
 
 
 def job_list_inactive(
-    flux_handle, since=0.0, max_entries=1000, attrs=["all"], name=None, queue=None
+    flux_handle,
+    since=0.0,
+    max_entries=1000,
+    attrs=["all"],
+    name=None,
+    queue=None,
+    constraint=None,
 ):
     """Same as ``flux.job.list.job_list``, but lists only inactive jobs."""
     return job_list(
@@ -95,6 +107,7 @@ def job_list_inactive(
         since=since,
         name=name,
         queue=queue,
+        constraint=constraint,
     )
 
 
