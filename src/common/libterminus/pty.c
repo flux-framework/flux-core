@@ -56,7 +56,9 @@
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/aux.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
+#include "ccan/base64/base64.h"
 
 #define LLOG_SUBSYSTEM "pty"
 #include "src/common/libutil/llog.h"
@@ -405,6 +407,55 @@ int flux_pty_attach (struct flux_pty *pty)
     return 0;
 }
 
+static int encode_base64 (const char *data, int len, char **destp, int *lenp)
+{
+    ssize_t n;
+    char *dest = NULL;
+    size_t destlen = base64_encoded_length (len) + 1;
+
+    if (!(dest = malloc (destlen))
+        || ((n = base64_encode (dest, destlen, data, len)) < 0))
+        return -1;
+    *destp = dest;
+    *lenp = n;
+    return 0;
+}
+
+static json_t *pty_data_encode_base64 (const void *data, int len)
+{
+    json_t *o = NULL;
+    char *b64data = NULL;
+    int b64len = 0;
+
+    if (encode_base64 (data, len, &b64data, &b64len) < 0)
+        return NULL;
+
+    o = json_pack ("{s:s s:s s:s#}",
+                   "type", "data",
+                   "encoding", "base64",
+                   "data", b64data, b64len);
+
+    ERRNO_SAFE_WRAP (free, b64data);
+    return o;
+}
+
+json_t *pty_data_encode (const void *data, int len)
+{
+    json_t *o;
+
+    if (!(o = json_pack ("{s:s s:s#}",
+                         "type", "data",
+                         "data", (char *) data, len))) {
+        /*
+         *  json_pack() may fail if there are bytes that cannot be encoded
+         *  as UTF-8, e.g. U+0000 is specifically not allowed in jansson.
+         *  Try encoding as base64 instead.
+         */
+        o = pty_data_encode_base64 (data, len);
+    }
+    return o;
+}
+
 void pty_client_send_data (struct flux_pty *pty, void *data, int len)
 {
     struct pty_client *c = zlist_first (pty->clients);
@@ -414,12 +465,10 @@ void pty_client_send_data (struct flux_pty *pty, void *data, int len)
 
     while (c) {
         if (c->read_enabled) {
-            if (flux_respond_pack (pty->h,
-                                   c->req,
-                                   "{s:s s:s#}",
-                                   "type", "data",
-                                   "data", (char *) data, len) < 0)
+            json_t *o = pty_data_encode (data, len);
+            if (!o || flux_respond_pack (pty->h, c->req, "O", o) < 0)
                 llog_error (pty, "send data: %s", strerror (errno));
+            json_decref (o);
         }
         c = zlist_next (pty->clients);
     }
@@ -570,12 +619,82 @@ err:
     return -1;
 }
 
+static int decode_base64 (char *src,
+                          size_t srclen,
+                          char **datap,
+                          size_t *lenp)
+{
+    ssize_t rc;
+    char *data;
+    size_t size = base64_decoded_length (srclen) + 1;
+
+    if (!(data = malloc (size)))
+        return -1;
+    if ((rc = base64_decode (data, size, src, srclen)) < 0) {
+        ERRNO_SAFE_WRAP (free, data);
+        return -1;
+    }
+    *lenp = rc;
+    *datap = data;
+    return 0;
+}
+
+int pty_data_unpack (const flux_msg_t *msg,
+                     flux_error_t *errp,
+                     char **datap,
+                     size_t *lenp)
+{
+    const char *encoding = NULL;
+    void *data;
+    int len;
+
+    if (flux_msg_unpack (msg,
+                         "{s:s s?s}",
+                         "data", &data,
+                         "encoding", &encoding) < 0)
+        return errprintf (errp,
+                          "failed to unpack data msg: %s",
+                          strerror (errno));
+    len = strlen (data);
+
+    if (encoding) {
+        if (streq (encoding, "base64")) {
+            char *b64data = NULL;
+            size_t b64len;
+            if (decode_base64 (data, len, &b64data, &b64len) < 0) {
+                return errprintf (errp,
+                                  "failed to decode %d bytes of base64",
+                                  len);
+            }
+            if (flux_msg_aux_set (msg, NULL, b64data, free) < 0) {
+                ERRNO_SAFE_WRAP (free, b64data);
+                return errprintf (errp,
+                                  "flux_msg_aux_set: %s",
+                                  strerror (errno));
+            }
+            data = b64data;
+            len = b64len;
+        }
+        else {
+            errno = EPROTO;
+            return errprintf (errp,
+                              "invalid pty data encoding: %s",
+                              encoding);
+        }
+    }
+    *datap = data;
+    *lenp = len;
+    return 0;
+}
+
 static int pty_write (struct flux_pty *pty, const flux_msg_t *msg)
 {
-    const char *data;
+    char *data;
     size_t len;
-    if (flux_msg_unpack (msg, "{s:s%}", "data", &data, &len) < 0) {
-        llog_error (pty, "msg_unpack failed");
+    flux_error_t error;
+
+    if (pty_data_unpack (msg, &error, &data, &len) < 0) {
+        llog_error (pty, "%s", error.text);
         return -1;
     }
     if (write (pty->leader, data, len) < 0) {
