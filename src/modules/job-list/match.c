@@ -26,11 +26,13 @@
 
 typedef int (*match_f) (struct list_constraint *,
                         const struct job *,
+                        unsigned int *,
                         flux_error_t *);
 
 struct list_constraint {
     zlistx_t *values;
     match_f match;
+    unsigned int comparisons;   /* total across multiple calls to job_match() */
 };
 
 typedef enum {
@@ -53,6 +55,20 @@ struct timestamp_value {
     match_timestamp_type_t t_type;
     match_comparison_t t_comp;
 };
+
+#define CONSTRAINT_COMPARISON_MAX 1000000
+
+static inline int inc_check_comparison (unsigned int *comparisons,
+                                        flux_error_t *errp)
+{
+    if ((++(*comparisons)) > CONSTRAINT_COMPARISON_MAX) {
+        errprintf (errp,
+                   "Excessive comparisons made, "
+                   "limit search via states or since");
+        return -1;
+    }
+    return 0;
+}
 
 static void timestamp_value_destroy (void *data)
 {
@@ -128,8 +144,11 @@ static struct timestamp_value *timestamp_value_create_str (
 
 static int match_true (struct list_constraint *c,
                        const struct job *job,
+                       unsigned int *comparisons,
                        flux_error_t *errp)
 {
+    if (inc_check_comparison (comparisons, errp) < 0)
+        return -1;
     return 1;
 }
 
@@ -169,10 +188,13 @@ static void wrap_free (void **item)
 
 static int match_userid (struct list_constraint *c,
                          const struct job *job,
+                         unsigned int *comparisons,
                          flux_error_t *errp)
 {
     uint32_t *userid = zlistx_first (c->values);
     while (userid) {
+        if (inc_check_comparison (comparisons, errp) < 0)
+            return -1;
         if ((*userid) == FLUX_USERID_UNKNOWN)
             return 1;
         if ((*userid) == job->userid)
@@ -243,10 +265,13 @@ static struct list_constraint *create_string_constraint (const char *op,
 
 static int match_name (struct list_constraint *c,
                        const struct job *job,
+                       unsigned int *comparisons,
                        flux_error_t *errp)
 {
     const char *name = zlistx_first (c->values);
     while (name) {
+        if (inc_check_comparison (comparisons, errp) < 0)
+            return -1;
         if (job->name && streq (name, job->name))
             return 1;
         name = zlistx_next (c->values);
@@ -262,10 +287,13 @@ static struct list_constraint *create_name_constraint (json_t *values,
 
 static int match_queue (struct list_constraint *c,
                         const struct job *job,
+                        unsigned int *comparisons,
                         flux_error_t *errp)
 {
     const char *queue = zlistx_first (c->values);
     while (queue) {
+        if (inc_check_comparison (comparisons, errp) < 0)
+            return -1;
         if (job->queue && streq (queue, job->queue))
             return 1;
         queue = zlistx_next (c->values);
@@ -305,9 +333,12 @@ static struct list_constraint *create_bitmask_constraint (
 
 static int match_states (struct list_constraint *c,
                          const struct job *job,
+                         unsigned int *comparisons,
                          flux_error_t *errp)
 {
     int *states = zlistx_first (c->values);
+    if (inc_check_comparison (comparisons, errp) < 0)
+        return -1;
     return ((*states) & job->state) ? 1 : 0;
 }
 
@@ -323,9 +354,12 @@ static struct list_constraint *create_states_constraint (json_t *values,
 
 static int match_results (struct list_constraint *c,
                           const struct job *job,
+                          unsigned int *comparisons,
                           flux_error_t *errp)
 {
     int *results = zlistx_first (c->values);
+    if (inc_check_comparison (comparisons, errp) < 0)
+        return -1;
     if (job->state != FLUX_JOB_STATE_INACTIVE)
         return 0;
     return ((*results) & job->result) ? 1 : 0;
@@ -382,10 +416,14 @@ static struct list_constraint *create_results_constraint (json_t *values,
 
 static int match_timestamp (struct list_constraint *c,
                             const struct job *job,
+                            unsigned int *comparisons,
                             flux_error_t *errp)
 {
     struct timestamp_value *tv = zlistx_first (c->values);
     double t;
+
+    if (inc_check_comparison (comparisons, errp) < 0)
+        return -1;
 
     if (tv->t_type == MATCH_T_SUBMIT)
         t = job->t_submit;
@@ -481,11 +519,12 @@ static struct list_constraint *create_timestamp_constraint (const char *type,
 
 static int match_and (struct list_constraint *c,
                       const struct job *job,
+                      unsigned int *comparisons,
                       flux_error_t *errp)
 {
     struct list_constraint *cp = zlistx_first (c->values);
     while (cp) {
-        int ret = cp->match (cp, job, errp);
+        int ret = cp->match (cp, job, comparisons, errp);
         /* i.e. return immediately if false or error */
         if (ret != 1)
             return ret;
@@ -496,6 +535,7 @@ static int match_and (struct list_constraint *c,
 
 static int match_or (struct list_constraint *c,
                      const struct job *job,
+                     unsigned int *comparisons,
                      flux_error_t *errp)
 {
     struct list_constraint *cp = zlistx_first (c->values);
@@ -503,7 +543,7 @@ static int match_or (struct list_constraint *c,
     if (!cp)
         return 1;
     while (cp) {
-        int ret = cp->match (cp, job, errp);
+        int ret = cp->match (cp, job, comparisons, errp);
         /* i.e. return immediately if true or error */
         if (ret != 0)
             return ret;
@@ -514,10 +554,11 @@ static int match_or (struct list_constraint *c,
 
 static int match_not (struct list_constraint *c,
                       const struct job *job,
+                      unsigned int *comparisons,
                       flux_error_t *errp)
 {
     int ret;
-    if ((ret = match_and (c, job, errp)) < 0)
+    if ((ret = match_and (c, job, comparisons, errp)) < 0)
         return -1;
     return ret ? 0 : 1;
 }
@@ -622,7 +663,7 @@ int job_match (const struct job *job,
         errno = EINVAL;
         return -1;
     }
-    return constraint->match (constraint, job, errp);
+    return constraint->match (constraint, job, &constraint->comparisons, errp);
 }
 
 /* vi: ts=4 sw=4 expandtab
