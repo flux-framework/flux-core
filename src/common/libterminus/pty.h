@@ -13,6 +13,7 @@
 #ifndef FLUX_PTY_H
 #define FLUX_PTY_H
 
+#include <jansson.h>
 #include <flux/core.h>
 
 typedef void (*pty_log_f) (void *arg,
@@ -201,9 +202,22 @@ int flux_pty_aux_set (struct flux_pty *pty,
 
 void * flux_pty_aux_get (struct flux_pty *pty, const char *name);
 
+
 /*  Function exported for testing only
  */
 void pty_client_send_data (struct flux_pty *pty, void *data, int len);
+
+
+/*  Common function for unpacking pty data msg.
+ */
+int pty_data_unpack (const flux_msg_t *msg,
+                     flux_error_t *errp,
+                     char **datap,
+                     size_t *lenp);
+
+/*  Common function for encoding pty data msg.
+ */
+json_t *pty_data_encode (const void *data, int len);
 
 #endif /* !FLUX_PTY_H */
 

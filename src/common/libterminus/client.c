@@ -26,6 +26,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/llog.h"
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/str/str.h"
 
 #include "pty.h"
@@ -257,11 +258,17 @@ static void pty_client_attached (struct flux_pty_client *c)
 
 static void pty_client_data (struct flux_pty_client *c, flux_future_t *f)
 {
-    const char *data;
+    const flux_msg_t *msg;
+    char *data;
     size_t len;
+    flux_error_t error;
 
-    if (flux_rpc_get_unpack (f, "{s:s%}", "data", &data, &len) < 0) {
-        llog_error (c, "unpack: %s", future_strerror (f, errno));
+    if (flux_future_get (f, (const void **)&msg) < 0) {
+        llog_error (c, "data response: %s", future_strerror (f, errno));
+        return;
+    }
+    if (pty_data_unpack (msg, &error, &data, &len) < 0) {
+        llog_error (c, "unpack: %s", error.text);
         return;
     }
     if (write (STDIN_FILENO, data, len) < 0) {
@@ -407,14 +414,18 @@ flux_future_t *flux_pty_client_write (struct flux_pty_client *c,
                                       const void *buf,
                                       ssize_t len)
 {
+    flux_future_t *f;
+    json_t *o = NULL;
+
     if (!c || !buf || len < 0) {
         errno = EINVAL;
         return NULL;
     }
-    return flux_rpc_pack (c->h, c->service, c->rank, 0,
-                          "{s:s s:s%}",
-                          "type", "data",
-                          "data", buf, len);
+    if (!(o = pty_data_encode (buf, len)) )
+        return NULL;
+    f = flux_rpc_pack (c->h, c->service, c->rank, 0, "O", o);
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return f;
 }
 
 static void pty_read_cb (flux_reactor_t *r,

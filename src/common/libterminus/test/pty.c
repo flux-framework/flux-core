@@ -433,6 +433,14 @@ static void test_client (void)
         rc == 0 ? "Success" : strerror (errno));
     flux_future_destroy (f);
 
+    f = flux_pty_client_write (c, "bar\0\r\n", 6);
+    ok (f != NULL,
+        "flux_pty_client_write with U+0000");
+    ok (rc == 0,
+        "flux_pty_client_write: %s",
+        rc == 0 ? "Success" : strerror (errno));
+    flux_future_destroy (f);
+
     ok (flux_pty_client_detach (c) == 0,
         "flux_pty_client_detach");
 

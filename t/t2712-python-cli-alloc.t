@@ -173,13 +173,12 @@ test_expect_success 'flux alloc: resource.norestrict works in subinstance' '
 '
 test_expect_success 'flux alloc: flux alloc vi works' '
 	cat <<-'EOF' >input.json &&
-	[{"expect":"test\\\.txt", "send":":q!\n", "timeout":30}]
+	[{"expect":"test text file", "send":":q!\n", "timeout":30}]
 	EOF
 	cat <<-EOF >test.txt &&
 	test text file
 	EOF
-	$runpty -o vi.out --expect=input.json flux alloc -n1 vi test.txt &&
-	grep "test text file" vi.out
+	$runpty -o vi.out --expect=input.json flux alloc -n1 vi test.txt
 '
 test_expect_success 'flux alloc: flux alloc flux alloc works' '
 	cat <<-'EOF' >input2.json &&
