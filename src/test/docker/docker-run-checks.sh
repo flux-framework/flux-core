@@ -237,6 +237,8 @@ else
         -e S3_SECRET_ACCESS_KEY \
         -e S3_HOSTNAME \
         -e S3_BUCKET \
+	-e PSM3_HAL \
+	-e PSM3_DEVICES \
         --cap-add SYS_PTRACE \
         --tty \
         ${INTERACTIVE:+--interactive} \
