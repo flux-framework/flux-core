@@ -367,8 +367,8 @@ class JobWatcher:
         self.t0 = starttime
         self.log_events = log_events
         self.log_status = log_status
-        self.stdout = stdout
-        self.stderr = stderr
+        self.stdout = self._reopen(stdout)
+        self.stderr = self._reopen(stderr)
         self.labelio = labelio
         self.exitcode = 0
         self.show_progress = progress
@@ -378,6 +378,22 @@ class JobWatcher:
 
         if jobs:
             self.add_jobs(*jobs)
+
+    @staticmethod
+    def _reopen(stream):
+        """reconfigure/reopen stream with correct encoding and error handling"""
+        try:
+            # reconfigure() only available in >=3.7
+            stream.reconfigure(encoding="utf-8", errors="surrogateescape")
+            return stream
+        except AttributeError:
+            return open(
+                stream.fileno(),
+                mode="w",
+                encoding="utf-8",
+                errors="surrogateescape",
+                closefd=False,
+            )
 
     @staticmethod
     def _status_to_exitcode(status):
@@ -420,9 +436,9 @@ class JobWatcher:
         self.progress.add_jobs(*jobs)
 
         if stdout is None:
-            stdout = self.stdout
+            stdout = self._reopen(self.stdout)
         if stderr is None:
-            stderr = self.stderr
+            stderr = self._reopen(self.stderr)
 
         for job in jobs:
             if not self.t0 or job.t_submit < self.t0:

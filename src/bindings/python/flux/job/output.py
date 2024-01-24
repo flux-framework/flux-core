@@ -113,7 +113,9 @@ class OutputEvent(EventLogEvent):
             data = self.context["data"]
             if "encoding" in self.context:
                 if self.context["encoding"] == "base64":
-                    data = base64.b64decode(data)
+                    data = base64.b64decode(data).decode(
+                        "utf-8", errors="surrogateescape"
+                    )
             if "repeat" in self.context:
                 data *= self.context["repeat"]
             if labelio:
