@@ -33,9 +33,9 @@
 #include "ccan/str/str.h"
 #include "src/common/libcontent/content.h"
 #include "src/common/libfilemap/filemap.h"
+#include "src/common/libfilemap/fileref.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/monotime.h"
-#include "src/common/libutil/fileref.h"
 
 #include "builtins.h"
 #include "internal.h"

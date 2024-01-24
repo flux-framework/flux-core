@@ -27,7 +27,9 @@
 #include "src/common/libutil/dirwalk.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libcontent/content.h"
-#include "src/common/libutil/fileref.h"
+
+#include "fileref.h"
+
 
 /* Decode the raw data field a fileref object, setting the result in 'data'
  * and 'data_size'.  Caller must free.

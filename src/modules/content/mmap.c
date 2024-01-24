@@ -85,8 +85,8 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/fileref.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libfilemap/fileref.h"
 #include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
 

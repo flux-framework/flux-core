@@ -21,12 +21,13 @@
 #include <stdint.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libutil/fileref.h"
 #include "src/common/libutil/unlink_recursive.h"
 #include "src/common/libutil/blobref.h"
 #include "ccan/array_size/array_size.h"
 #include "src/common/libccan/ccan/str/str.h"
 #include "ccan/base64/base64.h"
+
+#include "fileref.h"
 
 static char testdir[1024];
 

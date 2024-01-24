@@ -25,10 +25,10 @@
 
 #include "ccan/base64/base64.h"
 
-#include "blobref.h"
-#include "errno_safe.h"
-#include "errprintf.h"
-#include "read_all.h"
+#include "src/common/libutil/blobref.h"
+#include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/read_all.h"
 #include "fileref.h"
 
 static int blobvec_append (json_t *blobvec,

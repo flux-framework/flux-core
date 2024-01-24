@@ -26,7 +26,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libcontent/content.h"
 #include "src/common/libfilemap/filemap.h"
-#include "src/common/libutil/fileref.h"
+#include "src/common/libfilemap/fileref.h"
 
 static const char *default_chunksize = "1M";
 static const char *default_small_file_threshold = "4K";
