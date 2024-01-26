@@ -18,6 +18,7 @@
  * 1. Find the interface associated with the default route, then
  *    look up address of that interface.
  * 2. Look up address associated with the hostname
+ * 3. Look up address associated with a specific interface.
  *
  * Main use case: determine bind address for a PMI-bootstrapped flux broker.
  *
@@ -29,6 +30,8 @@
  * FLUX_IPADDR_HOSTNAME
  *   if set, only method 2 is tried above
  *   if unset, first method 1 is tried, then if that fails, method 2 is tried
+ * FLUX_IPADDR_INTERFACE
+ *   if set, only method 3 is tried above
  *
  * Return address as a string in buf (up to len bytes, always null terminated)
  * Return 0 on success, -1 on error with error message written to errstr
