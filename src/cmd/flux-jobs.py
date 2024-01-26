@@ -21,7 +21,7 @@ from flux.job import JobID, JobInfo, JobInfoFormat, JobList, job_fields_to_attrs
 from flux.job.stats import JobStats
 from flux.util import (
     FilterAction,
-    FilterActionSetUpdate,
+    FilterActionConcatenate,
     FilterTrueAction,
     UtilConfig,
     help_formatter,
@@ -151,21 +151,21 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         if args.filter:
             LOGGER.warning("Both -a and --filter specified, ignoring -a")
         else:
-            args.filter.update(["pending", "running", "inactive"])
+            args.filter = "pending,running,inactive"
 
     if not args.filter:
-        args.filter = {"pending", "running"}
+        args.filter = "pending,running"
 
     jobs_rpc = JobList(
         flux_handle,
         ids=args.jobids,
         attrs=attrs,
-        filters=args.filter,
         user=args.user,
         max_entries=args.count,
         since=since,
         name=args.name,
         queue=args.queue,
+        constraint=args.filter,
     )
 
     jobs = jobs_rpc.jobs()
@@ -218,10 +218,9 @@ def parse_args():
     parser.add_argument(
         "-f",
         "--filter",
-        action=FilterActionSetUpdate,
-        metavar="STATE|RESULT",
-        default=set(),
-        help="List jobs with specific job state or result",
+        action=FilterActionConcatenate,
+        metavar="QUERY",
+        help="Restrict jobs using a constraint query string",
     )
     parser.add_argument(
         "--since",
