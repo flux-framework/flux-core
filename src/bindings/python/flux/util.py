@@ -226,6 +226,17 @@ class FilterActionSetUpdate(argparse.Action):
         getattr(namespace, self.dest).update(values)
 
 
+class FilterActionConcatenate(argparse.Action):
+    """Concatenate filter arguments separated with space"""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, "filtered", True)
+        current = getattr(namespace, self.dest)
+        if current is not None:
+            values = current + " " + values
+        setattr(namespace, self.dest, values)
+
+
 # pylint: disable=redefined-builtin
 class FilterTrueAction(argparse.Action):
     def __init__(
