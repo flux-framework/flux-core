@@ -229,6 +229,11 @@ affect the broker's PMI client.
    version 4 addresses.  Setting this variable to any value in the broker's
    environment causes it to prefer version 6 addresses.
 
+.. envvar:: FLUX_IPADDR_HOSTNAME
+
+   Force PMI bootstrap to assign the broker an address associated with a
+   particular network interface, like ``eth0``.
+
 
 CUSTOM OUTPUT FORMATS
 =====================
