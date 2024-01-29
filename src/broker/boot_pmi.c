@@ -151,7 +151,7 @@ static int format_bind_uri (char *buf, int bufsz, attr_t *attrs, int rank)
 
         if (ipaddr_getprimary (ipaddr, sizeof (ipaddr),
                                error, sizeof (error)) < 0) {
-            log_err ("%s", error);
+            log_msg ("%s", error);
             return -1;
         }
         if (snprintf (buf, bufsz, "tcp://%s:*", ipaddr) >= bufsz)
