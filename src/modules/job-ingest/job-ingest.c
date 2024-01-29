@@ -854,6 +854,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         if (fluid_init (&ctx.gen, 0, fluid_get_timestamp (max_jobid) + 1) < 0) {
             flux_log (h, LOG_ERR, "fluid_init failed");
             errno = EINVAL;
+            goto done;
         }
     }
     else {
@@ -873,12 +874,10 @@ int mod_main (flux_t *h, int argc, char **argv)
             goto done;
         }
         flux_future_destroy (f);
-        /* fluid_init() will fail on rank > 16K.
-         * Just skip loading the job module on those ranks.
-         */
         if (fluid_init (&ctx.gen, rank, timestamp) < 0) {
             flux_log (h, LOG_ERR, "fluid_init failed");
             errno = EINVAL;
+            goto done;
         }
     }
     flux_log (h, LOG_DEBUG, "fluid ts=%jums", (uint64_t)ctx.gen.timestamp);
