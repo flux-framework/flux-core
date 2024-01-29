@@ -45,18 +45,19 @@ static void free_wrapper (void **item)
 }
 
 static struct job_stats *queue_stats_lookup (struct job_stats_ctx *statsctx,
-                                             struct job *job)
+                                             const char *name,
+                                             bool create_if_missing)
 {
     struct job_stats *stats = NULL;
 
-    if (!job->queue)
+    if (!name)
         return NULL;
 
-    stats = zhashx_lookup (statsctx->queue_stats, job->queue);
-    if (!stats) {
+    stats = zhashx_lookup (statsctx->queue_stats, name);
+    if (!stats && create_if_missing) {
         if (!(stats = calloc (1, sizeof (*stats))))
             return NULL;
-        (void)zhashx_insert (statsctx->queue_stats, job->queue, stats);
+        (void)zhashx_insert (statsctx->queue_stats, name, stats);
     }
     return stats;
 }
@@ -127,7 +128,7 @@ void job_stats_update (struct job_stats_ctx *statsctx,
 
     stats_update (&statsctx->all, job, newstate);
 
-    if ((stats = queue_stats_lookup (statsctx, job)))
+    if ((stats = queue_stats_lookup (statsctx, job->queue, true)))
         stats_update (stats, job, newstate);
 
     arm_timer (statsctx);
@@ -138,7 +139,7 @@ void job_stats_add_queue (struct job_stats_ctx *statsctx,
 {
     struct job_stats *stats;
 
-    if ((stats = queue_stats_lookup (statsctx, job)))
+    if ((stats = queue_stats_lookup (statsctx, job->queue, true)))
         stats_add (stats, job, job->state);
 
     arm_timer (statsctx);
@@ -174,9 +175,16 @@ void job_stats_remove_queue (struct job_stats_ctx *statsctx,
 {
     struct job_stats *stats;
 
-    if ((stats = queue_stats_lookup (statsctx, job)))
-        stats_remove (stats, job);
+    if (!(stats = queue_stats_lookup (statsctx, job->queue, false))) {
+        if (job->queue)
+            flux_log (statsctx->h,
+                      LOG_DEBUG,
+                      "no queue stats for %s",
+                      job->queue);
+        return;
+    }
 
+    stats_remove (stats, job);
     arm_timer (statsctx);
 }
 
@@ -211,9 +219,16 @@ void job_stats_purge (struct job_stats_ctx *statsctx, struct job *job)
 
     stats_purge (&statsctx->all, job);
 
-    if ((stats = queue_stats_lookup (statsctx, job)))
-        stats_purge (stats, job);
+    if (!(stats = queue_stats_lookup (statsctx, job->queue, false))) {
+        if (job->queue)
+            flux_log (statsctx->h,
+                      LOG_DEBUG,
+                      "no queue stats for %s",
+                      job->queue);
+        return;
+    }
 
+    stats_purge (stats, job);
     arm_timer (statsctx);
 }
 
