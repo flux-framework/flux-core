@@ -11,8 +11,8 @@ import errno
 import json
 
 from _flux._core import ffi
-from flux.future import Future
 from flux.job._wrapper import _RAW as RAW
+from flux.kvs import WatchImplementation
 
 # Names of events that may appear in the main eventlog (i.e. ``eventlog="eventlog"``)
 # See Flux RFC 21 for documentation on each event.
@@ -74,23 +74,32 @@ class EventLogEvent(dict):
         )
 
 
-class JobEventWatchFuture(Future):
+class JobEventWatchFuture(WatchImplementation):
     """
     A future returned from job.event_watch_async().
     Adds get_event() method to return an EventLogEntry event
     """
 
-    def __del__(self):
-        if self.needs_cancel is not False:
-            self.cancel()
-        try:
-            super().__del__()
-        except AttributeError:
-            pass
-
     def __init__(self, future_handle):
         super().__init__(future_handle)
-        self.needs_cancel = True
+
+    def watch_get(self, future):
+        """
+        Implementation of watch_get() for JobEventWatchFuture.
+
+        Will be called from WatchABC.get()
+        """
+        result = ffi.new("char *[1]")
+        RAW.event_watch_get(future, result)
+        return EventLogEvent(ffi.string(result[0]).decode("utf-8"))
+
+    def watch_cancel(self, future):
+        """
+        Implementation of watch_cancel() for JobEventWatchFuture.
+
+        Will be called from WatchABC.cancel()
+        """
+        RAW.event_watch_cancel(future)
 
     def get_event(self, autoreset=True):
         """
@@ -101,41 +110,7 @@ class JobEventWatchFuture(Future):
         call to get_event() will try to fetch the next event and thus
         may block.
         """
-        result = ffi.new("char *[1]")
-        try:
-            #  Block until Future is ready:
-            self.wait_for()
-            RAW.event_watch_get(self.pimpl, result)
-        except OSError as exc:
-            if exc.errno == errno.ENODATA:
-                self.needs_cancel = False
-                return None
-            # raise handle exception if there is one
-            self.raise_if_handle_exception()
-            # re-raise all other exceptions
-            #
-            # Note: overwrite generic OSError strerror string with the
-            # EventWatch future error string to give the caller appropriate
-            # detail (e.g. instead of "No such file or directory" use
-            # "job <jobid> does not exist"
-            #
-            exc.strerror = self.error_string()
-            raise
-        event = EventLogEvent(ffi.string(result[0]).decode("utf-8"))
-        if autoreset is True:
-            self.reset()
-        return event
-
-    def cancel(self, stop=False):
-        """Cancel a streaming job.event_watch_async() future
-
-        If stop=True, then deactivate the multi-response future so no
-        further callbacks are called.
-        """
-        RAW.event_watch_cancel(self.pimpl)
-        self.needs_cancel = False
-        if stop:
-            self.stop()
+        return self.get(autoreset=autoreset)
 
 
 def event_watch_async(flux_handle, jobid, eventlog="eventlog"):
