@@ -423,6 +423,36 @@ error:
         flux_log_error (h, "error responding to job-stats request");
 }
 
+static int config_parse_queues (struct job_stats_ctx *statsctx,
+                                const flux_conf_t *conf,
+                                flux_error_t *errp)
+{
+    json_t *queues;
+
+    if (flux_conf_unpack (conf, NULL, "{s:o}", "queues", &queues) == 0
+        && json_object_size (queues) > 0) {
+        const char *name;
+        json_t *value;
+        json_object_foreach (queues, name, value) {
+            /* setup initial queue stats, so that user gets initial
+             * stats before first job is submitted to the queue */
+            if (!queue_stats_lookup (statsctx, name, true)) {
+                flux_log_error (statsctx->h, "queue_stats_lookup");
+                return -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int job_stats_config_reload (struct job_stats_ctx *statsctx,
+                             const flux_conf_t *conf,
+                             flux_error_t *errp)
+{
+    return config_parse_queues (statsctx, conf, errp);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-list.job-stats",
@@ -435,6 +465,7 @@ static const struct flux_msg_handler_spec htab[] = {
 struct job_stats_ctx *job_stats_ctx_create (flux_t *h)
 {
     struct job_stats_ctx *statsctx = NULL;
+    flux_error_t error;
 
     if (!(statsctx = calloc (1, sizeof (*statsctx))))
         return NULL;
@@ -455,6 +486,13 @@ struct job_stats_ctx *job_stats_ctx_create (flux_t *h)
                                                        timer_cb,
                                                        statsctx)))
         goto error;
+
+    if (config_parse_queues (statsctx,
+                             flux_get_conf (statsctx->h),
+                             &error) < 0) {
+        flux_log (statsctx->h, LOG_ERR, "%s", error.text);
+        goto error;
+    }
 
     return statsctx;
 

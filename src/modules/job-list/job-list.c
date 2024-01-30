@@ -107,6 +107,30 @@ static void disconnect_cb (flux_t *h,
     job_stats_disconnect (ctx->jsctx->statsctx, msg);
 }
 
+static void config_reload_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
+{
+    struct list_ctx *ctx = arg;
+    const flux_conf_t *conf;
+    flux_error_t error;
+    const char *errstr = NULL;
+
+    if (flux_conf_reload_decode (msg, &conf) < 0)
+        goto error;
+    if (job_state_config_reload (ctx->jsctx, conf, &error) < 0) {
+        errstr = error.text;
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-list.list",
@@ -147,6 +171,12 @@ static const struct flux_msg_handler_spec htab[] = {
       .topic_glob   = "job-list.disconnect",
       .cb           = disconnect_cb,
       .rolemask     = FLUX_ROLE_USER,
+    },
+    {
+      .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-list.config-reload",
+      .cb           = config_reload_cb,
+      .rolemask     = 0
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
