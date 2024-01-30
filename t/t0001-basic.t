@@ -429,6 +429,17 @@ test_expect_success 'tbon.endpoint uses tcp:// if tbon.prefertcp is set' '
 		flux getattr tbon.endpoint >endpoint2.out &&
 	grep "^tcp" endpoint2.out
 '
+test_expect_success 'FLUX_IPADDR_INTERFACE=lo works' '
+	FLUX_IPADDR_INTERFACE=lo flux start \
+		${ARGS} -s2 -o,-Stbon.prefertcp=1 \
+		flux getattr tbon.endpoint >endpoint3.out &&
+	grep "127.0.0.1" endpoint3.out
+'
+test_expect_success 'FLUX_IPADDR_INTERFACE=badiface fails' '
+	(export FLUX_IPADDR_INTERFACE=badiface; \
+		test_expect_code 137 flux start \
+		${ARGS} --test-exit-timeout=1s -s2 -o,-Stbon.prefertcp=1 true)
+'
 test_expect_success 'tbon.endpoint cannot be set' '
 	test_must_fail flux start ${ARGS} -s2 \
 		-o,--setattr=tbon.endpoint=ipc:///tmp/customflux /bin/true

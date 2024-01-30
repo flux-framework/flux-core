@@ -100,16 +100,17 @@ static struct ifaddrs *find_ifaddr (struct ifaddrs *ifaddr,
     return ifa;
 }
 
-static int getprimary_ifaddr (char *buf, int len, int prefer_family,
-                              char *errstr, int errstrsz)
+static int getnamed_ifaddr (char *buf,
+                            int len,
+                            const char *name,
+                            int prefer_family,
+                            char *errstr,
+                            int errstrsz)
 {
     struct ifaddrs *ifaddr;
     struct ifaddrs *ifa;
-    char name[64];
     int error;
 
-    if (getprimary_iface4 (name, sizeof (name), errstr, errstrsz) < 0)
-        return -1;
     if (getifaddrs (&ifaddr) < 0) {
         esprintf (errstr, errstrsz, "getifaddrs: %s", strerror (errno));
         return -1;
@@ -139,6 +140,18 @@ static int getprimary_ifaddr (char *buf, int len, int prefer_family,
     }
     freeifaddrs (ifaddr);
     return 0;
+}
+
+static int getprimary_ifaddr (char *buf,
+                              int len,
+                              int prefer_family,
+                              char *errstr,
+                              int errstrsz)
+{
+    char name[64];
+    if (getprimary_iface4 (name, sizeof (name), errstr, errstrsz) < 0)
+        return -1;
+    return getnamed_ifaddr (buf, len, name, prefer_family, errstr, errstrsz);
 }
 
 static struct addrinfo *find_addrinfo (struct addrinfo *addrinfo, int family)
@@ -205,12 +218,28 @@ int ipaddr_getprimary (char *buf, int len,
                        char *errstr, int errstrsz)
 {
     int prefer_family = getenv ("FLUX_IPADDR_V6") ? AF_INET6 : AF_INET;
+    const char *iface_name;
     int rc = -1;
 
-    if (getenv ("FLUX_IPADDR_HOSTNAME") == NULL)
-        rc = getprimary_ifaddr (buf, len, prefer_family, errstr, errstrsz);
-    if (rc < 0)
-        rc = getprimary_hostaddr (buf, len, prefer_family, errstr, errstrsz);
+    if ((iface_name = getenv ("FLUX_IPADDR_INTERFACE"))) {
+        rc = getnamed_ifaddr (buf,
+                              len,
+                              iface_name,
+                              prefer_family,
+                              errstr,
+                              errstrsz);
+    }
+    else {
+        if (getenv ("FLUX_IPADDR_HOSTNAME") == NULL)
+            rc = getprimary_ifaddr (buf, len, prefer_family, errstr, errstrsz);
+        if (rc < 0) {
+            rc = getprimary_hostaddr (buf,
+                                      len,
+                                      prefer_family,
+                                      errstr,
+                                      errstrsz);
+        }
+    }
     return rc;
 }
 
