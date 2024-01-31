@@ -138,6 +138,10 @@ static void config_reload_cb (flux_t *h,
         errstr = error.text;
         goto error;
     }
+    if (job_match_config_reload (ctx->mctx, conf, &error) < 0) {
+        errstr = error.text;
+        goto error;
+    }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config-reload request");
     return;

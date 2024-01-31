@@ -59,10 +59,12 @@ struct timestamp_value {
 
 #define CONSTRAINT_COMPARISON_MAX 1000000
 
-static inline int inc_check_comparison (unsigned int *comparisons,
+static inline int inc_check_comparison (struct match_ctx *mctx,
+                                        unsigned int *comparisons,
                                         flux_error_t *errp)
 {
-    if ((++(*comparisons)) > CONSTRAINT_COMPARISON_MAX) {
+    if (mctx->max_comparisons
+        && (++(*comparisons)) > mctx->max_comparisons) {
         errprintf (errp,
                    "Excessive comparisons made, "
                    "limit search via states or since");
@@ -148,7 +150,7 @@ static int match_true (struct list_constraint *c,
                        unsigned int *comparisons,
                        flux_error_t *errp)
 {
-    if (inc_check_comparison (comparisons, errp) < 0)
+    if (inc_check_comparison (c->mctx, comparisons, errp) < 0)
         return -1;
     return 1;
 }
@@ -196,7 +198,7 @@ static int match_userid (struct list_constraint *c,
 {
     uint32_t *userid = zlistx_first (c->values);
     while (userid) {
-        if (inc_check_comparison (comparisons, errp) < 0)
+        if (inc_check_comparison (c->mctx, comparisons, errp) < 0)
             return -1;
         if ((*userid) == FLUX_USERID_UNKNOWN)
             return 1;
@@ -275,7 +277,7 @@ static int match_name (struct list_constraint *c,
 {
     const char *name = zlistx_first (c->values);
     while (name) {
-        if (inc_check_comparison (comparisons, errp) < 0)
+        if (inc_check_comparison (c->mctx, comparisons, errp) < 0)
             return -1;
         if (job->name && streq (name, job->name))
             return 1;
@@ -298,7 +300,7 @@ static int match_queue (struct list_constraint *c,
 {
     const char *queue = zlistx_first (c->values);
     while (queue) {
-        if (inc_check_comparison (comparisons, errp) < 0)
+        if (inc_check_comparison (c->mctx, comparisons, errp) < 0)
             return -1;
         if (job->queue && streq (queue, job->queue))
             return 1;
@@ -345,7 +347,7 @@ static int match_states (struct list_constraint *c,
                          flux_error_t *errp)
 {
     int *states = zlistx_first (c->values);
-    if (inc_check_comparison (comparisons, errp) < 0)
+    if (inc_check_comparison (c->mctx, comparisons, errp) < 0)
         return -1;
     return ((*states) & job->state) ? 1 : 0;
 }
@@ -368,7 +370,7 @@ static int match_results (struct list_constraint *c,
                           flux_error_t *errp)
 {
     int *results = zlistx_first (c->values);
-    if (inc_check_comparison (comparisons, errp) < 0)
+    if (inc_check_comparison (c->mctx, comparisons, errp) < 0)
         return -1;
     if (job->state != FLUX_JOB_STATE_INACTIVE)
         return 0;
@@ -434,7 +436,7 @@ static int match_timestamp (struct list_constraint *c,
     struct timestamp_value *tv = zlistx_first (c->values);
     double t;
 
-    if (inc_check_comparison (comparisons, errp) < 0)
+    if (inc_check_comparison (c->mctx, comparisons, errp) < 0)
         return -1;
 
     if (tv->t_type == MATCH_T_SUBMIT)
@@ -691,14 +693,61 @@ int job_match (const struct job *job,
     return constraint->match (constraint, job, &constraint->comparisons, errp);
 }
 
+static int config_parse_max_comparisons (struct match_ctx *mctx,
+                                         const flux_conf_t *conf,
+                                         flux_error_t *errp)
+{
+    int64_t max_comparisons = CONSTRAINT_COMPARISON_MAX;
+    flux_error_t error;
+
+    if (flux_conf_unpack (conf,
+                          &error,
+                          "{s?{s?I}}",
+                          "job-list",
+                          "max_comparisons", &max_comparisons) < 0) {
+        errprintf (errp,
+                   "error reading config for job-list: %s",
+                   error.text);
+        return -1;
+    }
+
+    if (max_comparisons < 0) {
+        errprintf (errp, "job-list.max_comparisons must be >= 0");
+        return -1;
+    }
+
+    mctx->max_comparisons = max_comparisons;
+    return 0;
+}
+
+int job_match_config_reload (struct match_ctx *mctx,
+                             const flux_conf_t *conf,
+                             flux_error_t *errp)
+{
+    return config_parse_max_comparisons (mctx, conf, errp);
+}
+
 struct match_ctx *match_ctx_create (flux_t *h)
 {
     struct match_ctx *mctx = NULL;
+    flux_error_t error;
 
     if (!(mctx = calloc (1, sizeof (*mctx))))
         return NULL;
     mctx->h = h;
+
+    if (config_parse_max_comparisons (mctx,
+                                      flux_get_conf (mctx->h),
+                                      &error) < 0) {
+        flux_log (mctx->h, LOG_ERR, "%s", error.text);
+        goto error;
+    }
+
     return mctx;
+
+error:
+    match_ctx_destroy (mctx);
+    return NULL;
 }
 
 void match_ctx_destroy (struct match_ctx *mctx)
