@@ -2400,150 +2400,6 @@ test_expect_success 'list-attrs works' '
 	done
 '
 
-#
-#
-# stats & corner cases
-#
-
-test_expect_success 'job-list stats works' '
-	flux module stats --parse jobs.pending job-list &&
-	flux module stats --parse jobs.running job-list &&
-	flux module stats --parse jobs.inactive job-list &&
-	flux module stats --parse idsync.lookups job-list &&
-	flux module stats --parse idsync.waits job-list
-'
-test_expect_success 'list request with empty payload fails with EPROTO(71)' '
-	${RPC} job-list.list 71 </dev/null
-'
-test_expect_success 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
-	name="attrs-not-array" &&
-	$jq -j -c -n  "{max_entries:5, attrs:5}" \
-	  | $listRPC >${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 71: invalid payload: attrs must be an array
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
-	name="attr-not-string" &&
-	$jq -j -c -n  "{max_entries:5, attrs:[5]}" \
-	  | $listRPC > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: attr has no string value
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
-	name="field-not-valid" &&
-	$jq -j -c -n  "{max_entries:5, attrs:[\"foo\"]}" \
-	  | $listRPC > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: foo is not a valid attribute
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success 'list-id request with empty payload fails with EPROTO(71)' '
-	${RPC} job-list.list-id 71 </dev/null
-'
-test_expect_success 'list-id request with invalid input fails with EPROTO(71) (attrs not an array)' '
-	name="list-id-attrs-not-array" &&
-	id=`flux submit hostname | flux job id` &&
-	$jq -j -c -n  "{id:${id}, attrs:5}" \
-	  | $listRPC list-id > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 71: invalid payload: attrs must be an array
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success 'list-id request with invalid input fails with EINVAL(22) (attrs non-string)' '
-	name="list-id-invalid-attrs" &&
-	id=$(flux jobs -c1 -ano {id.dec}) &&
-	$jq -j -c -n  "{id:${id}, attrs:[5]}" \
-	  | $listRPC list-id > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: attr has no string value
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success 'list-id request with invalid input fails with EINVAL(22) (attrs illegal field)' '
-	name="list-id-invalid-attr" &&
-	id=$(flux jobs -c1 -ano {id.dec}) &&
-	$jq -j -c -n  "{id:${id}, attrs:[\"foo\"]}" \
-	  | $listRPC list-id >${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: foo is not a valid attribute
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-
-# Restart job-list from the KVS.  job-list used to pull in job eventlogs
-# directly from the KVS at startup, but now it gets them via the job manager
-# journal.  Therefore we need to restart the job-manager too, which requires
-# some other things to be restarted to get a functional system.
-restart_from_kvs() {
-	flux module remove job-list
-	flux module reload job-manager
-	flux module reload -f sched-simple
-	flux module reload -f job-exec
-	flux module load job-list
-}
-
-# N.B. we remove annotations from the alloc event in this test, but it could
-# be cached and replayed via the job-manager, so we need to reload it
-# and associated modules too
-test_expect_success 'job-list can handle events missing optional data (alloc)' '
-	userid=`id -u` &&
-	cat <<EOF >eventlog_empty_alloc.out &&
-{"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":16,"flags":0,"version":1}}
-{"timestamp":1001.0,"name":"validate"}
-{"timestamp":1002.0,"name":"depend"}
-{"timestamp":1003.0,"name":"priority","context":{"priority":8}}
-{"timestamp":1004.0,"name":"alloc","context":{}}
-{"timestamp":1005.0,"name":"start"}
-{"timestamp":1006.0,"name":"finish","context":{"status":0}}
-{"timestamp":1007.0,"name":"release","context":{"ranks":"all","final":true}}
-{"timestamp":1008.0,"name":"free"}
-{"timestamp":1009.0,"name":"clean"}
-EOF
-	jobid=`flux submit --wait hostname` &&
-	kvspath=`flux job id --to=kvs ${jobid}` &&
-	flux kvs put -r ${kvspath}.eventlog=- < eventlog_empty_alloc.out &&
-	restart_from_kvs &&
-	flux job list-ids ${jobid} > empty_alloc.out &&
-	cat empty_alloc.out | jq -e ".annotations == null"
-'
-# N.B. Note the original job was submitted with urgency 16, but we
-# hard code 8 in the fake eventlog.	 This is just to make sure the fake
-# eventlog was loaded correctly at the end of the test.
-#
-# N.B. We add extra events into this fake eventlog for testing
-test_expect_success 'job-list can handle events with superfluous context data' '
-	userid=`id -u` &&
-	cat <<EOF >eventlog_superfluous_context.out &&
-{"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":8,"flags":0,"version":1,"etc":1}}
-{"timestamp":1001.0,"name":"dependency-add","context":{"description":"begin-time=1234.000","etc":1}}
-{"timestamp":1002.0,"name":"validate","context":{"etc":1}}
-{"timestamp":1003.0,"name":"dependency-remove","context":{"description":"begin-time=1234.000","etc":1}}
-{"timestamp":1004.0,"name":"depend","context":{"etc":1}}
-{"timestamp":1005.0,"name":"priority","context":{"priority":8,"etc":1}}
-{"timestamp":1006.0,"name":"alloc","context":{"annotations":{"sched":{"resource_summary":"rank0/core0"}},"etc":1}}
-{"timestamp":1007.0,"name":"prolog-start","context":{"description":"job-manager.prolog","etc":1}}
-{"timestamp":1008.0,"name":"prolog-finish","context":{"description":"job-manager.prolog","status":0,"etc":1}}
-{"timestamp":1009.0,"name":"start","context":{"etc":1}}
-{"timestamp":1010.0,"name":"finish","context":{"status":0,"etc":1}}
-{"timestamp":1011.0,"name":"epilog-start","context":{"description":"job-manager.epilog","etc":1}}
-{"timestamp":1012.0,"name":"release","context":{"ranks":"all","final":true,"etc":1}}
-{"timestamp":1013.0,"name":"epilog-finish","context":{"description":"job-manager.epilog","status":0,"etc":1}}
-{"timestamp":1014.0,"name":"free","context":{"etc":1}}
-{"timestamp":1015.0,"name":"clean","context":{"etc":1}}
-EOF
-	jobid=`flux submit --wait --urgency=default hostname` &&
-	kvspath=`flux job id --to=kvs ${jobid}` &&
-	flux kvs put -r ${kvspath}.eventlog=- < eventlog_superfluous_context.out &&
-	restart_from_kvs &&
-	flux job list-ids ${jobid} > superfluous_context.out &&
-	cat superfluous_context.out | jq -e ".urgency == 8"
-'
 
 #
 # stress test
@@ -2567,6 +2423,20 @@ wait_jobs_finish() {
 test_expect_success LONGTEST 'stress job-list.list-id' '
 	flux python ${FLUX_SOURCE_DIR}/t/job-list/list-id.py 500 &&
 	wait_jobs_finish
+'
+
+#
+#
+# stats tests
+#
+
+
+test_expect_success 'job-list stats works' '
+	flux module stats --parse jobs.pending job-list &&
+	flux module stats --parse jobs.running job-list &&
+	flux module stats --parse jobs.inactive job-list &&
+	flux module stats --parse idsync.lookups job-list &&
+	flux module stats --parse idsync.waits job-list
 '
 
 test_expect_success 'configure batch,debug queues' '
@@ -2696,6 +2566,142 @@ test_expect_success 'job-stats correct after purge' '
 
 test_expect_success 'remove queues' '
 	flux config load < /dev/null
+'
+
+#
+# corner case tests
+#
+
+test_expect_success 'list request with empty payload fails with EPROTO(71)' '
+	${RPC} job-list.list 71 </dev/null
+'
+test_expect_success 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
+	name="attrs-not-array" &&
+	$jq -j -c -n  "{max_entries:5, attrs:5}" \
+	  | $listRPC >${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 71: invalid payload: attrs must be an array
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
+	name="attr-not-string" &&
+	$jq -j -c -n  "{max_entries:5, attrs:[5]}" \
+	  | $listRPC > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: attr has no string value
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
+	name="field-not-valid" &&
+	$jq -j -c -n  "{max_entries:5, attrs:[\"foo\"]}" \
+	  | $listRPC > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: foo is not a valid attribute
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'list-id request with empty payload fails with EPROTO(71)' '
+	${RPC} job-list.list-id 71 </dev/null
+'
+test_expect_success 'list-id request with invalid input fails with EPROTO(71) (attrs not an array)' '
+	name="list-id-attrs-not-array" &&
+	id=`flux submit hostname | flux job id` &&
+	$jq -j -c -n  "{id:${id}, attrs:5}" \
+	  | $listRPC list-id > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 71: invalid payload: attrs must be an array
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'list-id request with invalid input fails with EINVAL(22) (attrs non-string)' '
+	name="list-id-invalid-attrs" &&
+	id=$(flux jobs -c1 -ano {id.dec}) &&
+	$jq -j -c -n  "{id:${id}, attrs:[5]}" \
+	  | $listRPC list-id > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: attr has no string value
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'list-id request with invalid input fails with EINVAL(22) (attrs illegal field)' '
+	name="list-id-invalid-attr" &&
+	id=$(flux jobs -c1 -ano {id.dec}) &&
+	$jq -j -c -n  "{id:${id}, attrs:[\"foo\"]}" \
+	  | $listRPC list-id >${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: foo is not a valid attribute
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+# Restart job-list from the KVS.  job-list used to pull in job eventlogs
+# directly from the KVS at startup, but now it gets them via the job manager
+# journal.  Therefore we need to restart the job-manager too, which requires
+# some other things to be restarted to get a functional system.
+restart_from_kvs() {
+	flux module remove job-list
+	flux module reload job-manager
+	flux module reload -f sched-simple
+	flux module reload -f job-exec
+	flux module load job-list
+}
+
+# N.B. we remove annotations from the alloc event in this test, but it could
+# be cached and replayed via the job-manager, so we need to reload it
+# and associated modules too
+test_expect_success 'job-list can handle events missing optional data (alloc)' '
+	userid=`id -u` &&
+	cat <<EOF >eventlog_empty_alloc.out &&
+{"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":16,"flags":0,"version":1}}
+{"timestamp":1001.0,"name":"validate"}
+{"timestamp":1002.0,"name":"depend"}
+{"timestamp":1003.0,"name":"priority","context":{"priority":8}}
+{"timestamp":1004.0,"name":"alloc","context":{}}
+{"timestamp":1005.0,"name":"start"}
+{"timestamp":1006.0,"name":"finish","context":{"status":0}}
+{"timestamp":1007.0,"name":"release","context":{"ranks":"all","final":true}}
+{"timestamp":1008.0,"name":"free"}
+{"timestamp":1009.0,"name":"clean"}
+EOF
+	jobid=`flux submit --wait hostname` &&
+	kvspath=`flux job id --to=kvs ${jobid}` &&
+	flux kvs put -r ${kvspath}.eventlog=- < eventlog_empty_alloc.out &&
+	restart_from_kvs &&
+	flux job list-ids ${jobid} > empty_alloc.out &&
+	cat empty_alloc.out | jq -e ".annotations == null"
+'
+# N.B. Note the original job was submitted with urgency 16, but we
+# hard code 8 in the fake eventlog.	 This is just to make sure the fake
+# eventlog was loaded correctly at the end of the test.
+#
+# N.B. We add extra events into this fake eventlog for testing
+test_expect_success 'job-list can handle events with superfluous context data' '
+	userid=`id -u` &&
+	cat <<EOF >eventlog_superfluous_context.out &&
+{"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":8,"flags":0,"version":1,"etc":1}}
+{"timestamp":1001.0,"name":"dependency-add","context":{"description":"begin-time=1234.000","etc":1}}
+{"timestamp":1002.0,"name":"validate","context":{"etc":1}}
+{"timestamp":1003.0,"name":"dependency-remove","context":{"description":"begin-time=1234.000","etc":1}}
+{"timestamp":1004.0,"name":"depend","context":{"etc":1}}
+{"timestamp":1005.0,"name":"priority","context":{"priority":8,"etc":1}}
+{"timestamp":1006.0,"name":"alloc","context":{"annotations":{"sched":{"resource_summary":"rank0/core0"}},"etc":1}}
+{"timestamp":1007.0,"name":"prolog-start","context":{"description":"job-manager.prolog","etc":1}}
+{"timestamp":1008.0,"name":"prolog-finish","context":{"description":"job-manager.prolog","status":0,"etc":1}}
+{"timestamp":1009.0,"name":"start","context":{"etc":1}}
+{"timestamp":1010.0,"name":"finish","context":{"status":0,"etc":1}}
+{"timestamp":1011.0,"name":"epilog-start","context":{"description":"job-manager.epilog","etc":1}}
+{"timestamp":1012.0,"name":"release","context":{"ranks":"all","final":true,"etc":1}}
+{"timestamp":1013.0,"name":"epilog-finish","context":{"description":"job-manager.epilog","status":0,"etc":1}}
+{"timestamp":1014.0,"name":"free","context":{"etc":1}}
+{"timestamp":1015.0,"name":"clean","context":{"etc":1}}
+EOF
+	jobid=`flux submit --wait --urgency=default hostname` &&
+	kvspath=`flux job id --to=kvs ${jobid}` &&
+	flux kvs put -r ${kvspath}.eventlog=- < eventlog_superfluous_context.out &&
+	restart_from_kvs &&
+	flux job list-ids ${jobid} > superfluous_context.out &&
+	cat superfluous_context.out | jq -e ".urgency == 8"
 '
 
 # invalid job data tests
