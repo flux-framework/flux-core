@@ -22,6 +22,7 @@
 
 struct match_ctx {
     flux_t *h;
+    uint64_t max_comparisons;
 };
 
 struct match_ctx *match_ctx_create (flux_t *h);
@@ -47,5 +48,9 @@ void list_constraint_destroy (struct list_constraint *constraint);
 int job_match (const struct job *job,
                struct list_constraint *constraint,
                flux_error_t *errp);
+
+int job_match_config_reload (struct match_ctx *mctx,
+                             const flux_conf_t *conf,
+                             flux_error_t *errp);;
 
 #endif /* !HAVE_JOB_LIST_MATCH_H */
