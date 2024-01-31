@@ -2132,10 +2132,14 @@ test_expect_success 'job-list parses flux-restart events' '
 # jobspec-update event testing
 #
 
+# N.B. "defaultqueue" will habe jobs "submitted" to it, but updates
+# make it appear that jobs were not submitted to it.  "nosubmitqueue"
+# will never have jobs submitted to it.
 test_expect_success 'configure update queues' '
 	flux config load <<-EOT &&
 	[queues.defaultqueue]
 	[queues.updatequeue]
+	[queues.nosubmitqueue]
 	EOT
 	flux queue start --all
 '
@@ -2173,9 +2177,15 @@ test_expect_success 'job-list returns expected jobspec changes' '
 	flux job list -s inactive | grep $(cat update1.id) | jq -e ".duration == 1000.0"
 '
 
+#
+# "nosubmitqueue" never has job submitted to it, make sure stats
+# string is non-empty and filled with zeros.
+#
 test_expect_success 'job stats lists jobs in correct state in each queue' '
 	defaultq=`flux job stats | jq ".queues[] | select( .name == \"defaultqueue\" )"` &&
 	updateq=`flux job stats | jq ".queues[] | select( .name == \"updatequeue\" )"` &&
+	nosubmitq=`flux job stats | jq ".queues[] | select( .name == \"nosubmitqueue\" )"` &&
+	test -n "$nosubmitq" &&
 	echo $defaultq | jq -e ".job_states.depend == 0" &&
 	echo $defaultq | jq -e ".job_states.priority == 0" &&
 	echo $defaultq | jq -e ".job_states.sched == 0" &&
@@ -2199,7 +2209,19 @@ test_expect_success 'job stats lists jobs in correct state in each queue' '
 	echo $updateq | jq -e ".failed == 0" &&
 	echo $updateq | jq -e ".canceled == 0" &&
 	echo $updateq | jq -e ".timeout == 0" &&
-	echo $updateq | jq -e ".inactive_purged == 0"
+	echo $updateq | jq -e ".inactive_purged == 0" &&
+	echo $nosubmitq | jq -e ".job_states.depend == 0" &&
+	echo $nosubmitq | jq -e ".job_states.priority == 0" &&
+	echo $nosubmitq | jq -e ".job_states.sched == 0" &&
+	echo $nosubmitq | jq -e ".job_states.run == 0" &&
+	echo $nosubmitq | jq -e ".job_states.cleanup == 0" &&
+	echo $nosubmitq | jq -e ".job_states.inactive == 0" &&
+	echo $nosubmitq | jq -e ".job_states.total == 0" &&
+	echo $nosubmitq | jq -e ".successful == 0" &&
+	echo $nosubmitq | jq -e ".failed == 0" &&
+	echo $nosubmitq | jq -e ".canceled == 0" &&
+	echo $nosubmitq | jq -e ".timeout == 0" &&
+	echo $nosubmitq | jq -e ".inactive_purged == 0"
 '
 
 test_expect_success 'reload the job-list module' '
@@ -2215,12 +2237,26 @@ test_expect_success 'job-list returns expected jobspec changes after reload' '
 
 #
 # After reload, job-list will not have ever seen any jobs submitted to
-# "defaultqueue" therefore the stats object is empty.
+# "defaultqueue", need to check that stats string is non-empty and all
+# stats are 0.
 #
 test_expect_success 'job stats in each queue correct after reload' '
 	defaultq=`flux job stats | jq ".queues[] | select( .name == \"defaultqueue\" )"` &&
 	updateq=`flux job stats | jq ".queues[] | select( .name == \"updatequeue\" )"` &&
-	test -z "$defaultq" &&
+	test -n "$defaultq" &&
+	test -n "$nosubmitq" &&
+	echo $defaultq | jq -e ".job_states.depend == 0" &&
+	echo $defaultq | jq -e ".job_states.priority == 0" &&
+	echo $defaultq | jq -e ".job_states.sched == 0" &&
+	echo $defaultq | jq -e ".job_states.run == 0" &&
+	echo $defaultq | jq -e ".job_states.cleanup == 0" &&
+	echo $defaultq | jq -e ".job_states.inactive == 0" &&
+	echo $defaultq | jq -e ".job_states.total == 0" &&
+	echo $defaultq | jq -e ".successful == 0" &&
+	echo $defaultq | jq -e ".failed == 0" &&
+	echo $defaultq | jq -e ".canceled == 0" &&
+	echo $defaultq | jq -e ".timeout == 0" &&
+	echo $defaultq | jq -e ".inactive_purged == 0" &&
 	echo $updateq | jq -e ".job_states.depend == 0" &&
 	echo $updateq | jq -e ".job_states.priority == 0" &&
 	echo $updateq | jq -e ".job_states.sched == 0" &&
@@ -2232,7 +2268,19 @@ test_expect_success 'job stats in each queue correct after reload' '
 	echo $updateq | jq -e ".failed == 0" &&
 	echo $updateq | jq -e ".canceled == 0" &&
 	echo $updateq | jq -e ".timeout == 0" &&
-	echo $updateq | jq -e ".inactive_purged == 0"
+	echo $updateq | jq -e ".inactive_purged == 0" &&
+	echo $nosubmitq | jq -e ".job_states.depend == 0" &&
+	echo $nosubmitq | jq -e ".job_states.priority == 0" &&
+	echo $nosubmitq | jq -e ".job_states.sched == 0" &&
+	echo $nosubmitq | jq -e ".job_states.run == 0" &&
+	echo $nosubmitq | jq -e ".job_states.cleanup == 0" &&
+	echo $nosubmitq | jq -e ".job_states.inactive == 0" &&
+	echo $nosubmitq | jq -e ".job_states.total == 0" &&
+	echo $nosubmitq | jq -e ".successful == 0" &&
+	echo $nosubmitq | jq -e ".failed == 0" &&
+	echo $nosubmitq | jq -e ".canceled == 0" &&
+	echo $nosubmitq | jq -e ".timeout == 0" &&
+	echo $nosubmitq | jq -e ".inactive_purged == 0"
 '
 
 test_expect_success 'remove jobtap plugins and remove queue config' '
