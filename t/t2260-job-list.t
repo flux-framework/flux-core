@@ -6,6 +6,7 @@ test_description='Test flux job list services'
 
 . $(dirname $0)/sharness.sh
 
+export FLUX_CONF_DIR=$(pwd)
 test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
@@ -2085,6 +2086,70 @@ test_expect_success 'list request with all attr works (job fail)' '
 	cat all_fail.out | jq -e ".exception_severity" &&
 	cat all_fail.out | jq -e ".exception_note" &&
 	cat all_fail.out | jq -e ".result"
+'
+
+#
+# max comparison
+#
+
+test_expect_success 'default comparison can get all of the jobs' '
+	flux job list -A > /dev/null
+'
+
+test_expect_success 'remove job list module' '
+	flux module remove job-list
+'
+
+test_expect_success 'job-list: invalid max_comparisons leads to error' '
+	cat >joblist.toml <<EOF &&
+[job-list]
+max_comparisons = -1
+EOF
+	flux config reload &&
+	test_must_fail flux module load job-list
+'
+
+test_expect_success 'job-list: config low max_comparisons' '
+	cat >joblist.toml <<EOF &&
+[job-list]
+max_comparisons = 10
+EOF
+	flux config reload &&
+	flux module load job-list
+'
+
+test_expect_success 'flux job list fails on low comparison count' '
+	test_must_fail flux job list -A > /dev/null 2> comparisons.err &&
+	grep "Excessive comparisons" comparisons.err
+'
+
+test_expect_success 'job-list: update config with invalid input fails' '
+	test_must_fail flux config load <<-EOF
+[job-list]
+max_comparisons = -1
+EOF
+'
+
+test_expect_success 'job-list: update config bigger max_comparisons' '
+	flux config load <<-EOF
+[job-list]
+max_comparisons = 10000
+EOF
+'
+
+test_expect_success 'flux job list works again' '
+	flux job list -A > /dev/null
+'
+
+test_expect_success 'job-list: update config no comparison limit' '
+	flux config load <<-EOF
+[job-list]
+max_comparisons = 0
+EOF
+'
+
+test_expect_success 'flux job list works' '
+	flux job list -A > /dev/null
 '
 
 #
