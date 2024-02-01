@@ -19,12 +19,16 @@
 #include "src/modules/job-list/match.h"
 #include "ccan/str/str.h"
 
+/* normally created by job-list "main code" and passed to job_match().
+ * we create a global one here and initialize it manually.
+ */
+struct match_ctx mctx = { .h = NULL, .max_comparisons = 0 };
+
 static void list_constraint_create_corner_case (const char *str,
                                                 const char *fmt,
                                                 ...)
 {
     struct list_constraint *c;
-    struct match_ctx mctx = { .h = NULL };
     char buf[1024];
     flux_error_t error;
     json_error_t jerror;
@@ -138,7 +142,6 @@ static struct job *setup_job (uint32_t userid,
 static struct list_constraint *create_list_constraint (const char *constraint)
 {
     struct list_constraint *c;
-    struct match_ctx mctx = { .h = NULL };
     flux_error_t error;
     json_error_t jerror;
     json_t *jc = NULL;
