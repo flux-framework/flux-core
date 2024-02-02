@@ -1798,6 +1798,13 @@ void job_state_destroy (void *data)
     }
 }
 
+int job_state_config_reload (struct job_state_ctx *jsctx,
+                             const flux_conf_t *conf,
+                             flux_error_t *errp)
+{
+    return job_stats_config_reload (jsctx->statsctx, conf, errp);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

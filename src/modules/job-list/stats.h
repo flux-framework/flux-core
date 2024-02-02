@@ -51,6 +51,10 @@ void job_stats_disconnect (struct job_stats_ctx *statsctx,
  */
 int job_stats_watchers (struct job_stats_ctx *statsctx);
 
+int job_stats_config_reload (struct job_stats_ctx *statsctx,
+                             const flux_conf_t *conf,
+                             flux_error_t *errp);
+
 #endif /* ! _FLUX_JOB_LIST_JOB_STATS_H */
 
 // vi: ts=4 sw=4 expandtab

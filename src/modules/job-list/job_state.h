@@ -72,6 +72,10 @@ void job_state_unpause_cb (flux_t *h, flux_msg_handler_t *mh,
 
 int job_state_init_from_kvs (struct job_state_ctx *jsctx);
 
+int job_state_config_reload (struct job_state_ctx *jsctx,
+                             const flux_conf_t *conf,
+                             flux_error_t *errp);
+
 #endif /* ! _FLUX_JOB_LIST_JOB_STATE_H */
 
 /*

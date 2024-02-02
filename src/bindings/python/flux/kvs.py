@@ -795,6 +795,7 @@ class WatchImplementation(Future, ABC):
         try:
             super().__del__()
         except AttributeError:
+            # not an error if super did not implement
             pass
 
     def __init__(self, future_handle):
