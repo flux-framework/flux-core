@@ -58,6 +58,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <libgen.h>
 #ifdef HAVE_ARGZ_ADD
 #include <argz.h>
 #else
@@ -649,6 +650,25 @@ static int shell_pmi_init (flux_plugin_t *p,
     return 0;
 }
 
+/* Prepend 'path' to the environment variable 'name' which is assumed to
+ * be a colon-separated list. If 'name' isn't already set, set it to 'path'.
+ * Return 0 on success, -1 on failure.
+ */
+static int prepend_path_to_cmd_env (flux_cmd_t *cmd,
+                                    const char *name,
+                                    const char *path)
+{
+    const char *searchpath = flux_cmd_getenv (cmd, name);
+
+    return flux_cmd_setenvf (cmd,
+                             1,
+                             name,
+                             "%s%s%s",
+                             path,
+                             searchpath ? ":" : "",
+                             searchpath ? searchpath : "");
+}
+
 static int shell_pmi_task_init (flux_plugin_t *p,
                                 const char *topic,
                                 flux_plugin_arg_t *args,
@@ -674,12 +694,31 @@ static int shell_pmi_task_init (flux_plugin_t *p,
         return -1;
     if (flux_shell_task_channel_subscribe (task, "PMI_FD", pmi_fd_cb, pmi) < 0)
         return -1;
+    const char *pmipath;
+    if (!(pmipath = flux_conf_builtin_get ("pmi_library_path", FLUX_CONF_AUTO)))
+        return -1;
+    /* Flux libpmi.so and libpmi2.so are installed to a directory outside
+     * of the default ld.so search path.  Add this directory to LD_LIBRARY_PATH
+     * so Flux jobs find Flux PMI libs before Slurm's PMI libs which are in
+     * the system path (a tripping hazard).
+     * N.B. The cray-pals plugin in flux-coral2 will need to undo this
+     * so Cray MPICH finds the Cray libpmi2.so first which uses libpals.
+     * See also flux-framework/flux-core#5714.
+     */
+    char *cpy;
+    char *pmidir;
+    if (!(cpy = strdup (pmipath))
+        || !(pmidir = dirname (cpy))
+        || prepend_path_to_cmd_env (cmd, "LD_LIBRARY_PATH", pmidir) < 0) {
+        free (cpy);
+        return -1;
+    }
+    free (cpy);
     /* N.B. The pre-v5 OpenMPI flux MCA plugin dlopens the library pointed to
      * by FLUX_PMI_LIBRARY_PATH.  Since the library only works when this shell
      * plugin is active, set it here.
      */
-    const char *s = flux_conf_builtin_get ("pmi_library_path", FLUX_CONF_AUTO);
-    if (!s || flux_cmd_setenvf (cmd, 1, "FLUX_PMI_LIBRARY_PATH", "%s", s) < 0)
+    if (flux_cmd_setenvf (cmd, 1, "FLUX_PMI_LIBRARY_PATH", "%s", pmipath) < 0)
         return -1;
     return 0;
 }
