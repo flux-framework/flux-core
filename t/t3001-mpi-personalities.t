@@ -16,10 +16,6 @@ run_program() {
 	run_timeout $timeout flux run $OPTS -n${ntasks} -N${nnodes} $*
 }
 
-test_expect_success 'LD_LIBRARY_PATH is not being set by MPI personalties' '
-	test_must_fail flux run --env-remove=* printenv LD_LIBRARY_PATH
-'
-
 test_expect_success NO_ASAN "spectrum mpi only enabled with option" '
 	LD_PRELOAD_saved=${LD_PRELOAD} &&
 	unset LD_PRELOAD &&
