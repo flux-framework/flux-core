@@ -20,6 +20,24 @@ test_expect_success 'flux run sets PMI_FD' '
 test_expect_success 'flux run sets FLUX_PMI_LIBRARY_PATH' '
 	flux run printenv FLUX_PMI_LIBRARY_PATH
 '
+test_expect_success 'flux run sets LD_LIBRARY_PATH if unset' '
+	flux run --env=-LD_LIBRARY_PATH printenv LD_LIBRARY_PATH \
+	    >libpath.out &&
+	echo $(dirname $(flux config builtin pmi_library_path)) \
+	    >libpath.exp &&
+	test_cmp libpath.exp libpath.out
+'
+test_expect_success 'flux run prepends to LD_LIBRARY_PATH if set' '
+	flux run --env=LD_LIBRARY_PATH=/a printenv LD_LIBRARY_PATH \
+	    >libpath2.out &&
+	echo $(dirname $(flux config builtin pmi_library_path)):/a \
+	    >libpath2.exp &&
+	test_cmp libpath2.exp libpath2.out
+'
+test_expect_success 'flux run -o pmi=off does not set LD_LIBRARY_PATH' '
+	test_must_fail flux run -o pmi=off --env=-LD_LIBRARY_PATH \
+	    printenv LD_LIBRARY_PATH
+'
 test_expect_success 'flux run -o pmi=simple sets PMI_FD' '
 	flux run -o pmi=simple printenv PMI_FD
 '
