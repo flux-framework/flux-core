@@ -71,6 +71,7 @@ execution of the job:
  * change working directory to the cwd of the job
  * enter a barrier to ensure shell initialization is complete on all shells
  * emit ``shell.init`` event to exec.eventlog
+ * call ``shell.post-init`` plugin callbacks
  * create all local tasks. For each task, the following procedure is used
 
    - call ``task.init`` plugin callback
@@ -141,6 +142,10 @@ topics:
   Called after the shell has finished fetching and parsing the
   **jobspec** and **R** from the KVS, but before any tasks
   are started.
+
+**shell.post-init**
+  Called after the shell initialization barrier has completed, but
+  before starting any tasks.
 
 **task.init**
   Called for each task after the task info has been constructed
