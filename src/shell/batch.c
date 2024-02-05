@@ -97,11 +97,10 @@ batch_info_create (flux_shell_t *shell, json_t *batch)
         shell_debug ("Copying batch script size=%zu for job to %s",
                      len,
                      b->script);
-        if (write_all (fd, data, len) < 0) {
+        if (write_all (fd, data, len) < 0 || close (fd) < 0) {
             shell_log_error ("failed to write batch script");
             goto error;
         }
-        close (fd);
     }
     return b;
 error:
