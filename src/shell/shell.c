@@ -1387,6 +1387,11 @@ static int shell_init (flux_shell_t *shell)
     return plugstack_call (shell->plugstack, "shell.init", NULL);
 }
 
+static int shell_post_init (flux_shell_t *shell)
+{
+    return plugstack_call (shell->plugstack, "shell.post-init", NULL);
+}
+
 static int shell_task_init (flux_shell_t *shell)
 {
     return plugstack_call (shell->plugstack, "task.init", NULL);
@@ -1617,6 +1622,11 @@ int main (int argc, char *argv[])
     if (shell.info->shell_rank == 0
         && shell_eventlogger_emit_event (shell.ev, "shell.init") < 0)
             shell_die_errno (1, "failed to emit event shell.init");
+
+    /* Call shell.post-init plugins.
+     */
+    if (shell_post_init (&shell) < 0)
+        shell_die_errno (1, "shell_post_init");
 
     /* Create tasks
      */
