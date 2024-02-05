@@ -21,6 +21,7 @@ struct shell_builtin {
     flux_plugin_f connect;
     flux_plugin_f reconnect;
     flux_plugin_f init;
+    flux_plugin_f post_init;
     flux_plugin_f task_init;
     flux_plugin_f task_exec;
     flux_plugin_f task_fork;
