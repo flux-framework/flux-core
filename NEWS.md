@@ -1,3 +1,60 @@
+flux-core version 0.59.0 - 2024-02-06
+-------------------------------------
+
+## New Features
+ * broker: add `FLUX_IPADDR_INTERFACE` to select broker network interface
+   (#5707)
+ * python: support interface to perform KVS watch (#5389)
+ * python: support Python 3.12 (#5691)
+ * broker: allow single-user rexec to rank 0 (#5677)
+ * add -x option to flux-alloc and flux-batch (#5665)
+ * add flux filemap get --overwrite and change the default overwrite behavior
+   (#5662)
+ * shell: add shell.post-init plugin calllback topic between shell.init
+   and first task.init (#5179)
+ * pmi: prepend Flux PMI directory to `LD_LIBRARY_PATH` (#5715)
+ * shell: write hwloc XML to a file with `HWLOC_XMLFILE` set with
+   `-o hwloc.xmlfile` (#5721)
+
+## Fixes
+ * job-list: initialize queue stats (#5712)
+ * job-ingest: fix FLUID initialization error handling to allow scaling
+   beyond 16K brokers (#5710)
+ * python: fix `flux-watch: TypeError: Object of type 'bytes' is not JSON
+   serializable` (#5704)
+ * enable encode of pty data as base64 and make `flux alloc vi` test more
+   reliable (#5703)
+ * librlist: workaround xml buffer size issue in some hwloc versions (#5690)
+ * librlist: fix segfault when initializing topology from XML in later
+   hwloc versions (#5682)
+ * fix broker hang under `flux proxy` (#5680)
+ * set userid to instance owner in job manager exceptions (#5675)
+ * job-manager: fix duplicate posting of jobspec-update event from plugins
+   (#5673)
+ * broker: only set parent-uri when instance is a job (#5663)
+ * kvs: store correct namespace after getroot lookup (#5661)
+
+## Documentation
+ * docs: add `flux_msg_incref` manpage (#5624)
+ * doc: correct typo in `flux_requeue(3)` (#5660)
+
+## Cleanup
+ * libsubprocess: make `flux_buffer` class private (#5683)
+ * job-list: misc cleanup (#5687)
+ * drop the flux-mini command (#5666)
+ * libsubprocess:  minor clean up (#5667)
+
+## Build/Testsuite
+ * test: add some scaling test support (#5717)
+ * github: update checkout action to v4 to silence warnings (#5716)
+ * docker: add Dockerfile for fedora39 (#5713)
+ * ci: add fedora39 build (#5698)
+ * testsuite: fix testsuite errors discovered in conda-forge build
+   environment (#5685)
+ * drop jsonschema requirement (#5678)
+ * libpmi: add `JANSSON_CFLAGS` to Makefile.am (#5672)
+
+
 flux-core version 0.58.0 - 2024-01-04
 -------------------------------------
 
