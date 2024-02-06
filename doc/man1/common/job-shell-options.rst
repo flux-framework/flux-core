@@ -36,3 +36,6 @@
    * - :option:`exit-on-error`
      - Raise a fatal job exception immediately if first task exits with
        nonzero exit code.
+
+   * - :option:`hwloc.xmlfile`
+     - Write hwloc XML gathered by job to a file and set ``HWLOC_XMLFILE``

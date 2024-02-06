@@ -438,6 +438,10 @@ plugins include:
 
   Send signal :option:`signal.signum` *TIME* seconds before job expiration.
 
+.. option:: hwloc.xmlfile
+
+  Write the job shell's copy of hwloc XML to a file and set ``HWLOC_XMLFILE``.
+
 .. warning::
   The directory referenced by :envvar:`FLUX_JOB_TMPDIR` is cleaned up when the
   job ends, is guaranteed to be unique, and is generally on fast local storage

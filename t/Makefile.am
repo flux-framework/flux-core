@@ -207,6 +207,7 @@ TESTSCRIPTS = \
 	t2616-job-shell-taskmap.t \
 	t2617-job-shell-stage-in.t \
 	t2618-job-shell-signal.t \
+	t2619-job-shell-hwloc.t \
 	t2710-python-cli-submit.t \
 	t2711-python-cli-run.t \
 	t2713-python-cli-bulksubmit.t \
