@@ -84,6 +84,10 @@ test_expect_success 'taskmap is unchanged with --taskmap=block' '
 		| jq -e ".context.taskmap.map == [[0,4,4,1]]" &&
 	test_check_taskmap $id
 '
+test_expect_success 'shell dies with --taskmap=block:oops' '
+	test_must_fail_or_be_terminated flux run -N4 --tasks-per-node=4 \
+		--taskmap=block:oops ./map.sh
+'
 test_expect_success 'taskmap is correct for --tasks-per-node=2' '
 	id=$(flux submit -N4 --tasks-per-node=2 ./map.sh) &&
 	flux job wait-event -p guest.exec.eventlog -f json $id shell.start &&
