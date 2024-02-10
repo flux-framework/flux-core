@@ -1337,9 +1337,17 @@ static int shell_taskmap (flux_shell_t *shell)
         shell_log_error ("failed to parse taskmap shell option");
         return -1;
     }
-    if (rc == 0
-        || streq (scheme, "block"))
+    if (rc == 0)
         return 0;
+    if (streq (scheme, "block")) {
+        /*  A value is not allowed for the block taskmap scheme:
+         */
+        if (strlen (value) > 0)
+            shell_die (1,
+                       "block taskmap does not accept a value (got %s)",
+                       value);
+        return 0;
+    }
 
     shell_trace ("remapping tasks with scheme=%s value=%s",
                  scheme,
