@@ -253,6 +253,25 @@ static int reconnect (flux_t *h, void *arg)
     return 0;
 }
 
+static uid_t get_instance_owner (flux_t *h)
+{
+    const char *s;
+    char *endptr;
+    int id;
+
+    if (!(s = flux_attr_get (h, "security.owner"))) {
+        shell_log_errno ("error fetching security.owner attribute");
+        return (uid_t) 0;
+    }
+    errno = 0;
+    id = strtoul (s, &endptr, 10);
+    if (errno != 0 || *endptr != '\0') {
+        shell_log_error ("error parsing security.owner=%s", s);
+        return (uid_t) 0;
+    }
+    return (uid_t) id;
+}
+
 static void shell_connect_flux (flux_shell_t *shell)
 {
     uint32_t rank;
@@ -273,6 +292,8 @@ static void shell_connect_flux (flux_shell_t *shell)
     if (flux_get_rank (shell->h, &rank) < 0)
         shell_log_errno ("error fetching broker rank");
     shell->broker_rank = rank;
+
+    shell->broker_owner = get_instance_owner (shell->h);
 
     if (plugstack_call (shell->plugstack, "shell.connect", NULL) < 0)
         shell_log_errno ("shell.connect");
