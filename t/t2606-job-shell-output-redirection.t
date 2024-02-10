@@ -348,15 +348,22 @@ test_expect_success 'job-shell: shell errors are captured in error file' '
 	test_expect_code 127  flux run --error=test.err nosuchcommand &&
 	grep "nosuchcommand: No such file or directory" test.err
 '
-test_expect_success LONGTEST 'job-shell: output to kvs is truncated at 10MB' '
-	dd if=/dev/urandom bs=10240 count=800 | base64 --wrap 79 >expected &&
-	flux run cat expected >output 2>truncate.error &&
-	test_debug "cat truncate.error" &&
-	grep "stdout.*truncated" truncate.error
+test_expect_success 'job-shell: kvs output truncatation works' '
+	flux run -o output.limit=5 echo 0123456789 2>trunc.err &&
+	test_debug "cat trunc.err" &&
+	grep "stdout.*truncated" trunc.err
 '
-test_expect_success LONGTEST 'job-shell: stderr to kvs is truncated at 10MB' '
-	dd if=/dev/urandom bs=10240 count=800 | base64 --wrap 79 >expected &&
-	flux run sh -c "cat expected >&2"  >truncate2.error 2>&1 &&
-	grep "stderr.*truncated" truncate2.error
+test_expect_success 'job-shell: stderr truncation works' '
+	flux run -o output.limit=5 \
+		sh -c "echo 0123456789 >&2" >trunc2.error 2>&1 &&
+	grep "stderr.*truncated" trunc2.error
+'
+test_expect_success LONGTEST 'job-shell: no truncation at 10MB for single-user job' '
+	dd if=/dev/urandom bs=10240 count=800 | base64 --wrap 79 >10M+ &&
+	flux run cat 10M+ >10M+.output &&
+	test_cmp 10M+ 10M+.output
+'
+test_expect_success 'job-shell: invalid output.limit string is rejected' '
+	test_must_fail flux run -o output.limit=foo hostname
 '
 test_done

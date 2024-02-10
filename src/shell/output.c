@@ -53,6 +53,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libioencode/ioencode.h"
+#include "src/common/libutil/parse_size.h"
 #include "ccan/str/str.h"
 
 #include "task.h"
@@ -61,8 +62,7 @@
 #include "builtins.h"
 #include "log.h"
 
-#define OUTPUT_LIMIT_BYTES 1024*1024*10
-#define OUTPUT_LIMIT_STRING "10MB"
+#define MULTIUSER_OUTPUT_LIMIT "10M"
 
 enum {
     FLUX_OUTPUT_TYPE_TERM = 1,
@@ -82,6 +82,8 @@ struct shell_output_type_file {
 
 struct shell_output {
     flux_shell_t *shell;
+    const char *kvs_limit_string;
+    size_t kvs_limit_bytes;
     struct eventlogger *ev;
     double batch_timeout;
     int refcount;
@@ -341,6 +343,9 @@ static bool check_kvs_output_limit (struct shell_output *out,
     size_t *bytesp;
     size_t prev;
 
+    if (out->kvs_limit_bytes == 0)
+        return false;
+
     if (is_stdout) {
         stream = "stdout";
         bytesp = &out->stdout_bytes;
@@ -353,13 +358,13 @@ static bool check_kvs_output_limit (struct shell_output *out,
     prev = *bytesp;
     *bytesp += len;
 
-    if (*bytesp > OUTPUT_LIMIT_BYTES) {
+    if (*bytesp > out->kvs_limit_bytes) {
         /*  Only log an error when the threshold is reached.
         */
-        if (prev <= OUTPUT_LIMIT_BYTES)
+        if (prev <= out->kvs_limit_bytes)
             shell_warn ("%s will be truncated, %s limit exceeded",
                         stream,
-                        OUTPUT_LIMIT_STRING);
+                        out->kvs_limit_string);
         return true;
     }
     return false;
@@ -385,7 +390,7 @@ static int shell_output_kvs (struct shell_output *out)
                                out->stdout_bytes : out->stderr_bytes;
                 shell_warn ("%s: %zu of %zu bytes truncated",
                             is_stdout ? "stdout" : "stderr",
-                            total - OUTPUT_LIMIT_BYTES,
+                            total - out->kvs_limit_bytes,
                             total);
             }
         }
@@ -1135,6 +1140,53 @@ static int shell_lost (flux_plugin_t *p,
     return 0;
 }
 
+static int get_output_limit (struct shell_output *out)
+{
+    json_t *val = NULL;
+    uint64_t size;
+
+    /*  Set default to unlimited (0) for single-user instances,
+     *  O/w use the default multiuser output limit:
+     */
+    if (out->shell->broker_owner == getuid())
+        out->kvs_limit_string = "0";
+    else
+        out->kvs_limit_string = MULTIUSER_OUTPUT_LIMIT;
+
+    if (flux_shell_getopt_unpack (out->shell,
+                                  "output",
+                                  "{s?o}",
+                                  "limit", &val) < 0) {
+        shell_log_error ("Unable to unpack shell output.limit");
+        return -1;
+    }
+    if (val != NULL) {
+        if (json_is_integer (val)) {
+            out->kvs_limit_bytes = (size_t) json_integer_value (val);
+            if (out->kvs_limit_bytes > 0) {
+                /*  Need a string representation of limit for errors
+                */
+                char *s = strdup (encode_size (out->kvs_limit_bytes));
+                if (s && flux_shell_aux_set (out->shell, NULL, s, free) < 0)
+                    free (s);
+                else
+                    out->kvs_limit_string = s;
+            }
+            return 0;
+        }
+        if (!(out->kvs_limit_string = json_string_value (val))) {
+            shell_log_error ("Unable to convert output.limit to string");
+            return -1;
+        }
+    }
+    if (parse_size (out->kvs_limit_string, &size) < 0) {
+        shell_log_errno ("Invalid KVS output.limit=%s", out->kvs_limit_string);
+        return -1;
+    }
+    out->kvs_limit_bytes = (size_t) size;
+    return 0;
+}
+
 struct shell_output *shell_output_create (flux_shell_t *shell)
 {
     struct shell_output *out;
@@ -1147,6 +1199,8 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
     out->stdout_buffer_type = "line";
     out->stderr_buffer_type = "none";
 
+    if (get_output_limit (out) < 0)
+        goto error;
     if (shell_output_check_alternate_output (out) < 0)
         goto error;
     if (shell_output_check_alternate_buffer_type (out) < 0)
