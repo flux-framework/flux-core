@@ -39,6 +39,7 @@ with the following layout:
 ::
 
    "jobid":I,
+   "instance_owner":i,
    "rank":i,
    "size":i,
    "ntasks";i,
