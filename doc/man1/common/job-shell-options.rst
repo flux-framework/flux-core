@@ -39,3 +39,8 @@
 
    * - :option:`hwloc.xmlfile`
      - Write hwloc XML gathered by job to a file and set ``HWLOC_XMLFILE``
+
+   * - :option:`output.limit`
+     - Set KVS output limit to SIZE bytes, where SIZE may be a floating point
+       value including optional SI units: k, K, M, G. This value is ignored
+       if output is directed to a file with :option:`--output`.

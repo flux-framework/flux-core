@@ -318,6 +318,14 @@ plugins include:
   this option directly, as it will be set automatically by options
   of higher level commands such as :man1:`flux-submit`.
 
+.. option:: output.limit=SIZE
+
+   Truncate KVS output after SIZE bytes have been written. SIZE may
+   be a floating point value with optional SI units k, K, M, G. A value of
+   0 is considered unlimited. The default KVS output limit is 10M for jobs
+   in a multi-user instance or unlimited for single-user instance jobs.
+   This value is ignored if output is directed to a file.
+
 .. option:: output.{stdout,stderr}.path=PATH
 
   Set job stderr/out file output to PATH.
