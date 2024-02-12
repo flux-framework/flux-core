@@ -15,3 +15,10 @@ test_expect_success 'flux jobs lists job with correct userid' '
 test_expect_success 'flux proxy can submit jobs to system instance' '
 	flux proxy $(flux getattr local-uri) flux submit true
 '
+test_expect_success 'flux-shell limits kvs output to 10M for guest jobs' '
+	dd if=/dev/urandom bs=10240 count=800 | base64 --wrap 79 >large.in &&
+	flux run -vvv cat large.in >large.out 2>trunc.err &&
+	ls -lh large* &&
+	test_debug "cat trunc.err" &&
+	grep "stdout.*truncated" trunc.err
+'
