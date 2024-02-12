@@ -76,6 +76,7 @@ flux_SOURCES = \
 	builtin/dump.c \
 	builtin/restore.c \
 	builtin/filemap.c \
+	builtin/archive.c \
 	builtin/pmi.c \
 	builtin/shutdown.c
 nodist_flux_SOURCES = \
