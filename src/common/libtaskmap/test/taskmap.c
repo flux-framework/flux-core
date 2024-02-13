@@ -85,6 +85,22 @@ static void rfc34_tests ()
                 "taskmap is known");
         taskmap_destroy (map);
         free (s);
+
+        /*  Try raw back to taskmap:
+         */
+        map = taskmap_decode (t->expected, NULL);
+        ok (map != NULL,
+            "taskmap_decode (%s)",
+            t->expected);
+        if (map) {
+            ok ((s = taskmap_encode (map, 0)) != NULL,
+            "taskmap_encode works");
+            is (s, t->taskmap,
+                "taskmap=%s",
+                s);
+            taskmap_destroy (map);
+            free (s);
+        }
     }
 }
 
@@ -272,7 +288,6 @@ static void main_tests ()
 
 static const char *invalid[] = {
     "}",
-    "42",
     "{}",
     "{\"version\":1}",
     "{\"version\":1,\"map\":{}}",
@@ -553,6 +568,32 @@ void test_deranged (void)
     taskmap_destroy (map);
 }
 
+struct test_vector raw_tests[] = {
+    { "-1",        "error parsing range '-1'" },
+    { "1-3;a-b",   "error parsing range 'a-b'" },
+    { "1,1",       "range '1' is out of order" },
+    { "0-1;1-2",   "duplicate taskid specified: 1" },
+    { "5-15;0-10", "duplicate taskids specified: 5-10" },
+    { "1",         "missing taskid: 0" },
+    { "3-4;0-1",   "missing taskid: 2" },
+    { "0-1;10-11", "missing taskids: 2-9" },
+    { NULL, NULL },
+};
+
+static void test_raw_decode_errors (void)
+{
+    struct test_vector *t;
+    for (t = &raw_tests[0]; t->taskmap != NULL; t++) {
+        flux_error_t error;
+        ok (taskmap_decode (t->taskmap, &error) == NULL,
+            "taskmap_decode (%s) fails",
+            t->taskmap);
+        is (error.text, t->expected,
+            "taskmap_decode: %s",
+            error.text);
+    }
+}
+
 int main (int ac, char **av)
 {
     plan (NO_PLAN);
@@ -565,6 +606,7 @@ int main (int ac, char **av)
     append_cyclic_one ();
     test_check ();
     test_deranged ();
+    test_raw_decode_errors ();
     done_testing ();
 }
 
