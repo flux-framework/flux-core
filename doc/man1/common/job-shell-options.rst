@@ -23,7 +23,7 @@
      - Set PMI service(s) for launched programs (:option:`off|simple|LIST`)
 
    * - :option:`stage-in`
-     - Copy files previously mapped with :man1:`flux-filemap` to
+     - Copy files previously mapped with :man1:`flux-archive` to
        :envvar:`FLUX_JOB_TMPDIR`.
 
    * - :option:`pty.interactive`
