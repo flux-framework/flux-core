@@ -54,7 +54,7 @@ static int extract_job_files (flux_t *h,
         shell_log_errno ("chdir %s", dir);
         goto out;
     }
-    if (filemap_extract (h, files, true, 0, &error, trace, NULL) < 0) {
+    if (filemap_extract (h, files, 0, &error, trace, NULL) < 0) {
         shell_log_error ("%s", error.text);
         goto out;
     }

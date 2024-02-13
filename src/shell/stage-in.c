@@ -48,7 +48,6 @@ struct stage_in {
     flux_t *h;
     int count;
     size_t total_size;
-    int direct;
 };
 
 json_t *parse_tags (const char *s, const char *default_value)
@@ -111,7 +110,7 @@ static int extract (struct stage_in *ctx)
     flux_future_t *f;
 
     if (!(f = filemap_mmap_list (ctx->h,
-                                 !ctx->direct,
+                                 false,
                                  ctx->tags,
                                  ctx->pattern))) {
         shell_log_error ("mmap-list: %s", strerror (errno));
@@ -129,7 +128,6 @@ static int extract (struct stage_in *ctx)
         }
         if (filemap_extract (ctx->h,
                              files,
-                             ctx->direct,
                              0,
                              &error,
                              trace_cb,
@@ -192,11 +190,10 @@ static int stage_in (flux_shell_t *shell, json_t *config)
 
     if (json_is_object (config)) {
         if (json_unpack (config,
-                         "{s?s s?s s?s s?i}",
+                         "{s?s s?s s?s}",
                          "tags", &tags,
                          "pattern", &ctx.pattern,
-                         "destination", &destination,
-                         "direct", &ctx.direct)) {
+                         "destination", &destination)) {
             shell_log_error ("Error parsing stage_in shell option");
             goto error;
         }

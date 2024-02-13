@@ -55,35 +55,6 @@ static int decode_data (const char *s, void **data, size_t *data_size)
     return 0;
 }
 
-static json_t *load_fileref (flux_t *h,
-                             const char *blobref,
-                             flux_error_t *errp)
-{
-    flux_future_t *f;
-    const void *buf;
-    int size;
-    json_t *o;
-    json_error_t error;
-
-    if (!(f = content_load_byblobref (h, blobref, 0))
-        || content_load_get (f, &buf, &size) < 0) {
-        errprintf (errp,
-                   "error loading fileref from %s: %s",
-                   blobref,
-                   future_strerror (f, errno));
-        return NULL;
-    }
-    if (!(o = json_loads (buf, 0, &error))) {
-        errprintf (errp,
-                   "error decoding fileref object from %s: %s",
-                   blobref,
-                   error.text);
-        return NULL;
-    }
-    flux_future_destroy (f);
-    return o;
-}
-
 flux_future_t *filemap_mmap_list (flux_t *h,
                                   bool blobref,
                                   json_t *tags,
@@ -327,30 +298,8 @@ static int extract_file (flux_t *h,
     return 0;
 }
 
-static int extract_fileref (flux_t *h,
-                            const char *path,
-                            json_t *fileref,
-                            bool direct,
-                            struct archive *archive,
-                            flux_error_t *errp,
-                            filemap_trace_f trace_cb,
-                            void *arg)
-{
-    int rc;
-    json_t *o = NULL;
-    if (!direct) {
-        if (!(o = load_fileref (h, json_string_value (fileref), errp)))
-            return -1;
-        fileref = o;
-    }
-    rc = extract_file (h, archive, path, fileref, errp, trace_cb, arg);
-    json_decref (o);
-    return rc;
-}
-
 int filemap_extract (flux_t *h,
                      json_t *files,
-                     bool direct,
                      int libarchive_flags,
                      flux_error_t *errp,
                      filemap_trace_f trace_cb,
@@ -371,26 +320,24 @@ int filemap_extract (flux_t *h,
 
     if (json_is_array (files)) {
         json_array_foreach (files, index, entry) {
-            if (extract_fileref (h,
-                                 NULL,
-                                 entry,
-                                 direct,
-                                 archive,
-                                 errp,
-                                 trace_cb,
-                                 arg) < 0)
+            if (extract_file (h,
+                              archive,
+                              NULL,
+                              entry,
+                              errp,
+                              trace_cb,
+                              arg) < 0)
             goto out;
         }
     } else {
         json_object_foreach (files, key, entry) {
-            if (extract_fileref (h,
-                                 key,
-                                 entry,
-                                 direct,
-                                 archive,
-                                 errp,
-                                 trace_cb,
-                                 arg) < 0)
+            if (extract_file (h,
+                              archive,
+                              key,
+                              entry,
+                              errp,
+                              trace_cb,
+                              arg) < 0)
             goto out;
         }
     }
