@@ -8,13 +8,14 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* stage-in.c - copy previously mapped files for job */
+/* stage-in.c - copy previously archived files for job */
 
 #define FLUX_SHELL_PLUGIN_NAME "stage-in"
 
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <fnmatch.h>
 #include <unistd.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -42,7 +43,7 @@
 #include "info.h"
 
 struct stage_in {
-    json_t *tags;
+    json_t *names;
     const char *pattern;
     const char *destdir;
     flux_t *h;
@@ -50,7 +51,7 @@ struct stage_in {
     size_t total_size;
 };
 
-json_t *parse_tags (const char *s, const char *default_value)
+json_t *parse_names (const char *s, const char *default_value)
 {
     char *argz = NULL;
     size_t argz_len;
@@ -107,37 +108,51 @@ static void trace_cb (void *arg,
 
 static int extract (struct stage_in *ctx)
 {
-    flux_future_t *f;
+    size_t i;
+    json_t *nameobj;
 
-    if (!(f = filemap_mmap_list (ctx->h,
-                                 false,
-                                 ctx->tags,
-                                 ctx->pattern))) {
-        shell_log_error ("mmap-list: %s", strerror (errno));
-        return -1;
-    }
-    for (;;) {
-        json_t *files;
+    json_array_foreach (ctx->names, i, nameobj) {
+        char *key = NULL;
+        flux_future_t *f = NULL;
+        json_t *archive;
         flux_error_t error;
 
-        if (flux_rpc_get_unpack (f, "{s:o}", "files", &files) < 0) {
-            if (errno == ENODATA)
-                break; // end of stream
-            shell_log_error ("mmap-list: %s", future_strerror (f, errno));
+        if (asprintf (&key, "archive.%s", json_string_value (nameobj)) < 0
+            || !(f = flux_kvs_lookup (ctx->h, "primary", 0, key))
+            || flux_kvs_lookup_get_unpack (f, "o", &archive) < 0) {
+            shell_log_error ("could not lookup %s in primary KVS namespace: %s",
+                             key,
+                             future_strerror (f, errno));
+            flux_future_destroy (f);
             return -1;
         }
+        if (ctx->pattern) {
+            size_t index = 0;
+            while (index < json_array_size (archive)) {
+                json_t *entry;
+                const char *path;
+
+                if (!(entry = json_array_get (archive, index))
+                    || json_unpack (entry, "{s:s}", "path", &path) < 0
+                    || fnmatch (ctx->pattern, path, 0) != 0) {
+                    json_array_remove (archive, index);
+                    continue;
+                }
+                index++;
+            }
+        }
         if (filemap_extract (ctx->h,
-                             files,
+                             archive,
                              0,
                              &error,
                              trace_cb,
                              ctx) < 0) {
             shell_log_error ("%s", error.text);
+            flux_future_destroy (f);
             return -1;
         }
-        flux_future_reset (f);
+        flux_future_destroy (f);
     }
-    flux_future_destroy (f);
     return 0;
 }
 
@@ -181,7 +196,7 @@ done:
 static int stage_in (flux_shell_t *shell, json_t *config)
 {
     struct stage_in ctx;
-    const char *tags = NULL;
+    const char *names = NULL;
     const char *destination = NULL;
     bool leader_only = false;
 
@@ -191,15 +206,15 @@ static int stage_in (flux_shell_t *shell, json_t *config)
     if (json_is_object (config)) {
         if (json_unpack (config,
                          "{s?s s?s s?s}",
-                         "tags", &tags,
+                         "names", &names,
                          "pattern", &ctx.pattern,
                          "destination", &destination)) {
             shell_log_error ("Error parsing stage_in shell option");
             goto error;
         }
     }
-    if (!(ctx.tags = parse_tags (tags, "main"))) {
-        shell_log_error ("Error parsing stage_in.tags shell option");
+    if (!(ctx.names = parse_names (names, "main"))) {
+        shell_log_error ("Error parsing stage_in.names shell option");
         goto error;
     }
     if (destination) {
@@ -228,10 +243,10 @@ static int stage_in (flux_shell_t *shell, json_t *config)
             goto error;
     }
 
-    json_decref (ctx.tags);
+    json_decref (ctx.names);
     return 0;
 error:
-    json_decref (ctx.tags);
+    json_decref (ctx.names);
     return -1;
 }
 

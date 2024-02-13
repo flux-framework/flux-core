@@ -8,7 +8,7 @@ lptest=${FLUX_BUILD_DIR}/t/shell/lptest
 
 test_under_flux 4 job
 
-test_expect_success 'map the red test files' '
+test_expect_success 'archive the red test files' '
 	mkdir red &&
 	touch red/empty &&
 	truncate --size 8192 red/holy &&
@@ -16,21 +16,23 @@ test_expect_success 'map the red test files' '
 	echo foo >red/small &&
 	mkdir red/dir &&
 	ln -s dir red/link &&
-	flux filemap map -vv --tags red red
+	flux archive create -v --name=red red
 '
-test_expect_success 'map the blue test files' '
+test_expect_success 'archive the blue test files' '
 	dir=blue/a/b/c/d/e/f/g/h &&
 	mkdir -p $dir &&
 	echo bar >$dir/test &&
-	flux filemap map -vv --tags blue blue
+	flux archive create -v --name=blue blue
 '
-test_expect_success 'map the main test files' '
+test_expect_success 'archive the main test files' '
 	mkdir main &&
 	echo "Hello world!" >main/hello &&
-	flux filemap map -vv main
+	flux archive create -v main
 '
 test_expect_success 'list all the files' '
-	flux filemap list --long --tags=red,blue,main
+	flux archive extract --list-only -v --name=red &&
+	flux archive extract --list-only -v --name=blue &&
+	flux archive extract --list-only -v
 '
 test_expect_success 'create file tree checker script' '
 	cat >check.sh <<-EOT &&
@@ -41,24 +43,18 @@ test_expect_success 'create file tree checker script' '
 	EOT
 	chmod 755 check.sh
 '
-test_expect_success 'verify that stage-in works with default tag (main)' '
+test_expect_success 'verify that stage-in works with default key (main)' '
 	flux run -N4 -ostage-in ./check.sh main
 '
-test_expect_success 'verify that stage-in works with tags=red' '
-	flux run -N2 -ostage-in.tags=red ./check.sh red
+test_expect_success 'verify that stage-in works with names=red' '
+	flux run -N2 -ostage-in.names=red ./check.sh red
 '
-test_expect_success 'verify that stage-in works with tags=red,blue' '
-	flux run -N1 -ostage-in.tags=red,blue ./check.sh red blue
-'
-test_expect_success 'verify that stage-in.direct works' '
-	flux run -N1 \
-	    -ostage-in.tags=red \
-	    -ostage-in.direct \
-	    ./check.sh red
+test_expect_success 'verify that stage-in works with names=red,blue' '
+	flux run -N1 -ostage-in.names=red,blue ./check.sh red blue
 '
 test_expect_success 'verify that stage-in.pattern works' '
 	flux run -N1 \
-	    -ostage-in.tags=red,blue \
+	    -ostage-in.names=red,blue \
 	    -ostage-in.pattern=red/* \
 	    -overbose=2 \
             ./check.sh red 2>pattern.err
@@ -99,17 +95,22 @@ test_expect_success 'verify that stage-in.destination fails on bad prefix' '
 	    -o stage-in.destination=wrong:$(pwd)/testdest \
 	    /bin/true
 '
-test_expect_success 'unmap all' '
-	flux filemap unmap --tags=red,blue,main
+test_expect_success 'remove archives' '
+	flux archive remove &&
+	flux archive remove --name=blue &&
+	flux archive remove --name=red
 '
-test_expect_success 'map a test file and access it to prime the cache' '
+test_expect_success 'create a test file with random content' '
+        dd if=/dev/random of=foo bs=4096 count=1 conv=notrunc
+'
+test_expect_success 'map test file and access it to prime the cache' '
 	mkdir -p copydir &&
-        flux filemap map ./red/lptest &&
-	flux filemap get -C copydir &&
-	cmp red/lptest copydir/red/lptest
+        flux archive create --mmap ./foo &&
+	flux archive extract -C copydir &&
+	cmp foo copydir/foo
 '
 test_expect_success 'modify mapped test file without reducing its size' '
-        dd if=/dev/zero of=red/lptest bs=4096 count=1 conv=notrunc
+        dd if=/dev/zero of=foo bs=4096 count=1 conv=notrunc
 '
 test_expect_success 'content change should cause an error' '
         test_must_fail flux run -N1 -o stage-in /bin/true 2>changed.err &&
