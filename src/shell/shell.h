@@ -105,6 +105,7 @@ const struct taskmap *flux_shell_get_taskmap (flux_shell_t *shell);
 /*  Return shell info as a JSON string.
  *  {
  *   "jobid":I,
+ *   "instance_owner":i,
  *   "rank":i,
  *   "size":i,
  *   "ntasks";i,

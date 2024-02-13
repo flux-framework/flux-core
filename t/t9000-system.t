@@ -65,7 +65,7 @@ alias test_expect_success='expect_success_wrap'
 #
 for testscript in ${FLUX_SOURCE_DIR}/t/system/${T9000_SYSTEM_GLOB}; do
 	TEST_LABEL="$(basename $testscript)"
-	source $testscript
+	. $testscript
 done
 
 test_done
