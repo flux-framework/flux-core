@@ -76,7 +76,7 @@ TESTSCRIPTS = \
 	t0012-content-sqlite.t \
 	t0024-content-s3.t \
 	t0028-content-backing-none.t \
-	t0029-filemap-cmd.t \
+	t0029-archive-mmap.t \
 	t0030-marshall.t \
 	t0031-constraint-parser.t \
 	t0032-directives-parser.t \
