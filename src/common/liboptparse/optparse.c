@@ -110,7 +110,8 @@ optparse_option_dup (const struct optparse_option *src)
     struct optparse_option *o = calloc (1, sizeof (*o));
     if (o == NULL)
         return NULL;
-    if ((src->name && !(o->name = strdup (src->name)))
+    if ((src->name
+        && !(o->name = strdup (src->name)))
         || (src->arginfo && !(o->arginfo = strdup (src->arginfo)))
         || (src->usage && !(o->usage = strdup (src->usage))))
         goto err;
@@ -283,7 +284,8 @@ static optparse_err_t optparse_set_fatalerr_handle (optparse_t *p,
     return (0);
 }
 
-static optparse_err_t optparse_set_option_cb (optparse_t *p, const char *name,
+static optparse_err_t optparse_set_option_cb (optparse_t *p,
+                                              const char *name,
                                               optparse_cb_f fn)
 {
     struct option_info *o;
@@ -324,10 +326,12 @@ static const char * optparse_fullname (optparse_t *p)
 {
     if (!p->fullname) {
         char buf [1024];
-        snprintf (buf, sizeof (buf) - 1, "%s%s%s",
-                p->parent ? optparse_fullname (p->parent) :"",
-                p->parent ? " " : "",
-                p->program_name);
+        snprintf (buf,
+                  sizeof (buf) - 1,
+                  "%s%s%s",
+                  p->parent ? optparse_fullname (p->parent) :"",
+                  p->parent ? " " : "",
+                  p->program_name);
         p->fullname = strdup (buf);
     }
     return (p->fullname);
@@ -746,7 +750,8 @@ optparse_t *optparse_create (const char *prog)
      *  Register -h, --help
      */
     if (optparse_add_option (p, &help) != OPTPARSE_SUCCESS) {
-        fprintf (stderr, "failed to register --help option: %s\n",
+        fprintf (stderr,
+                 "failed to register --help option: %s\n",
                  strerror (errno));
         optparse_destroy (p);
         return (NULL);
@@ -806,12 +811,15 @@ optparse_err_t optparse_reg_subcommand (optparse_t *p,
     new = optparse_add_subcommand (p, name, cb);
     if (new == NULL)
         return OPTPARSE_NOMEM;
-    if ((usage &&
-         (e = optparse_set (new, OPTPARSE_USAGE, usage)) != OPTPARSE_SUCCESS)
-     || (doc &&
-         (e = optparse_add_doc (new, doc, -1)) != OPTPARSE_SUCCESS)
-     || (opts &&
-         (e = optparse_add_option_table (new, opts) != OPTPARSE_SUCCESS))) {
+    if ((usage && (e = optparse_set (new,
+                                     OPTPARSE_USAGE,
+                                     usage)) != OPTPARSE_SUCCESS)
+        || (doc && (e = optparse_add_doc (new,
+                                          doc,
+                                          -1)) != OPTPARSE_SUCCESS)
+        || (opts
+            && (e = optparse_add_option_table (new,
+                                               opts) != OPTPARSE_SUCCESS))) {
         optparse_destroy (new);
         return (e);
     }
@@ -828,8 +836,13 @@ optparse_err_t optparse_reg_subcommands (optparse_t *p,
     optparse_err_t e;
     struct optparse_subcommand *cmd = &cmds[0];
     while (cmd->name) {
-        e = optparse_reg_subcommand (p, cmd->name, cmd->fn, cmd->usage,
-                                        cmd->doc, cmd->flags, cmd->opts);
+        e = optparse_reg_subcommand (p,
+                                     cmd->name,
+                                     cmd->fn,
+                                     cmd->usage,
+                                     cmd->doc,
+                                     cmd->flags,
+                                     cmd->opts);
         if (e != OPTPARSE_SUCCESS)
             return (e);
         cmd++;
@@ -864,9 +877,11 @@ bool optparse_hasopt (optparse_t *p, const char *name)
 {
     int n;
     if ((n = optparse_getopt (p, name, NULL)) < 0) {
-        optparse_fatalmsg (p, 1,
+        optparse_fatalmsg (p,
+                           1,
                            "%s: optparse error: no such argument '%s'\n",
-                           p->program_name, name);
+                           p->program_name,
+                           name);
         return false;
     }
     return (n > 0);
@@ -880,9 +895,11 @@ int optparse_get_int (optparse_t *p, const char *name, int default_value)
     char *endptr;
 
     if ((n = optparse_getopt (p, name, &s)) < 0) {
-        optparse_fatalmsg (p, 1,
+        optparse_fatalmsg (p,
+                           1,
                            "%s: optparse error: no such argument '%s'\n",
-                           p->program_name, name);
+                           p->program_name,
+                           name);
         return -1;
     }
     if (n == 0)
@@ -897,13 +914,16 @@ int optparse_get_int (optparse_t *p, const char *name, int default_value)
         goto badarg;
     return l;
 badarg:
-    optparse_fatalmsg (p, 1,
+    optparse_fatalmsg (p,
+                       1,
                        "%s: Option '%s' requires an integer argument\n",
-                       p->program_name, name);
+                       p->program_name,
+                       name);
     return -1;
 }
 
-double optparse_get_double (optparse_t *p, const char *name,
+double optparse_get_double (optparse_t *p,
+                            const char *name,
                             double default_value)
 {
     int n;
@@ -912,9 +932,11 @@ double optparse_get_double (optparse_t *p, const char *name,
     char *endptr;
 
     if ((n = optparse_getopt (p, name, &s)) < 0) {
-        optparse_fatalmsg (p, 1,
+        optparse_fatalmsg (p,
+                           1,
                            "%s: optparse error: no such argument '%s'\n",
-                           p->program_name, name);
+                           p->program_name,
+                           name);
         return -1;
     }
     if (n == 0)
@@ -927,13 +949,16 @@ double optparse_get_double (optparse_t *p, const char *name,
         goto badarg;
     return d;
 badarg:
-    optparse_fatalmsg (p, 1,
+    optparse_fatalmsg (p,
+                       1,
                        "%s: Option '%s' requires a floating point argument\n",
-                       p->program_name, name);
+                       p->program_name,
+                       name);
     return -1;
 }
 
-double optparse_get_duration (optparse_t *p, const char *name,
+double optparse_get_duration (optparse_t *p,
+                              const char *name,
                               double default_value)
 {
     int n;
@@ -941,16 +966,21 @@ double optparse_get_duration (optparse_t *p, const char *name,
     const char *s = NULL;
 
     if ((n = optparse_getopt (p, name, &s)) < 0) {
-        optparse_fatalmsg (p, 1,
+        optparse_fatalmsg (p,
+                           1,
                            "%s: optparse error: no such argument '%s'\n",
-                           p->program_name, name);
+                           p->program_name,
+                           name);
     }
     if (n == 0)
         return default_value;
     if (fsd_parse_duration (s, &d) < 0) {
-        optparse_fatalmsg (p, 1,
+        optparse_fatalmsg (p,
+                           1,
                            "%s: Invalid argument for option '%s': '%s'",
-                           p->program_name, name, s);
+                           p->program_name,
+                           name,
+                           s);
         return -1;
     }
     return d;
@@ -968,15 +998,18 @@ uint64_t optparse_get_size (optparse_t *p,
         default_value = "0";
 
     if ((n = optparse_getopt (p, name, &s)) < 0) {
-        optparse_fatalmsg (p, 1,
+        optparse_fatalmsg (p,
+                           1,
                            "%s: optparse error: no such argument '%s'\n",
-                           p->program_name, name);
+                           p->program_name,
+                           name);
         return (uint64_t) -1;
     }
     if (n == 0)
         s = default_value;
     if (parse_size (s, &result) < 0) {
-        optparse_fatalmsg (p, 1,
+        optparse_fatalmsg (p,
+                           1,
                           "%s: invalid argument for option '%s': %s: %s\n",
                           p->program_name,
                           name,
@@ -1009,16 +1042,19 @@ int optparse_get_size_int (optparse_t *p,
     return (int)val;
 }
 
-const char *optparse_get_str (optparse_t *p, const char *name,
+const char *optparse_get_str (optparse_t *p,
+                              const char *name,
                               const char *default_value)
 {
     int n;
     const char *s;
 
     if ((n = optparse_getopt (p, name, &s)) < 0) {
-        optparse_fatalmsg (p, 1,
+        optparse_fatalmsg (p,
+                           1,
                            "%s: optparse error: no such argument '%s'\n",
-                           p->program_name, name);
+                           p->program_name,
+                           name);
         return NULL;
     }
     if (n == 0)
@@ -1375,14 +1411,18 @@ static int opt_append_sep (struct option_info *opt, const char *str)
     return (0);
 }
 
-static void opt_append_optarg (optparse_t *p, struct option_info *opt, const char *optarg)
+static void opt_append_optarg (optparse_t *p,
+                               struct option_info *opt,
+                               const char *optarg)
 {
     char *s;
     if (!opt->optargs)
         opt->optargs = zlist_new ();
     if (opt->autosplit) {
         if (opt_append_sep (opt, optarg) < 0)
-            optparse_fatalmsg (p, 1, "%s: append '%s': %s\n",
+            optparse_fatalmsg (p,
+                               1,
+                               "%s: append '%s': %s\n",
                                p->program_name,
                                optarg,
                                strerror (errno));
@@ -1401,12 +1441,22 @@ static void opt_append_optarg (optparse_t *p, struct option_info *opt, const cha
  *  Call reentrant internal version of getopt_long() directly copied from
  *   glibc. See getopt.c and getopt_int.h in this directory.
  */
-static int getopt_long_r (int argc, char *const *argv, const char *options,
-                const struct option *long_options, int *opt_index,
-                struct _getopt_data *d, int posixly_correct)
+static int getopt_long_r (int argc,
+                          char *const *argv,
+                          const char *options,
+                          const struct option *long_options,
+                          int *opt_index,
+                          struct _getopt_data *d,
+                          int posixly_correct)
 {
-  return _getopt_internal_r (argc, argv, options, long_options, opt_index,
-                             0, d, posixly_correct);
+  return _getopt_internal_r (argc,
+                             argv,
+                             options,
+                             long_options,
+                             opt_index,
+                             0,
+                             d,
+                             posixly_correct);
 }
 
 int optparse_parse_args (optparse_t *p, int argc, char *argv[])
@@ -1427,23 +1477,31 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
      */
     memset (&d, 0, sizeof (d));
 
-    while ((c = getopt_long_r (argc, argv, optstring, optz,
-                               &li, &d, p->posixly_correct)) >= 0) {
+    while ((c = getopt_long_r (argc,
+                               argv,
+                               optstring,
+                               optz,
+                               &li,
+                               &d,
+                               p->posixly_correct)) >= 0) {
         struct option_info *opt;
         struct optparse_option *o;
         if (c == ':') {
             (*p->log_fn) ("%s: '%s' missing argument\n",
-                          fullname, argv[d.optind-1]);
+                          fullname,
+                          argv[d.optind-1]);
             d.optind = -1;
             break;
         }
         else if (c == '?') {
             if (d.optopt != '\0')
                 (*p->log_fn) ("%s: unrecognized option '-%c'\n",
-                              fullname,  d.optopt);
+                              fullname,
+                              d.optopt);
             else
                 (*p->log_fn) ("%s: unrecognized option '%s'\n",
-                              fullname, argv[d.optind-1]);
+                              fullname,
+                              argv[d.optind-1]);
             (*p->log_fn) ("Try `%s --help' for more information.\n",
                           fullname);
             d.optind = -1;
@@ -1512,8 +1570,10 @@ int optparse_run_subcommand (optparse_t *p, int argc, char *argv[])
         return optparse_fatalerr (sp, 1);
 
     if (!(cb = zhash_lookup (sp->dhash, "optparse::cb"))) {
-        return optparse_fatalmsg (p, 1,
-            "subcommand %s: failed to lookup callback!\n", av[0]);
+        return optparse_fatalmsg (p,
+                                  1,
+                                  "subcommand %s: failed to lookup callback!\n",
+                                  av[0]);
     }
 
     return ((*cb) (sp, ac, av));
