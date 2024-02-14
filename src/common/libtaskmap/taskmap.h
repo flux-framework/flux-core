@@ -41,8 +41,9 @@ void taskmap_destroy (struct taskmap *map);
 int taskmap_append (struct taskmap *map, int nodeid, int nnodes, int ppn);
 
 /*  Decode string 'map' into taskmap object.
- *  The string may be a JSON array, RFC 34 wrapped object, or a mapping
- *   encoded in PMI-1 PMI_process_mapping form described in RFC 13.
+ *  The string may be a JSON array, RFC 34 wrapped object, a mapping
+ *   encoded in PMI-1 PMI_process_mapping form described in RFC 13, or
+ *   a raw, semicolon-delimited list of taskids.
  *  Returns taskmap on success, or NULL on error with error string in 'errp'.
  */
 struct taskmap *taskmap_decode (const char *map, flux_error_t *errp);

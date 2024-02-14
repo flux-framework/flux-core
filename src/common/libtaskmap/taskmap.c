@@ -415,6 +415,188 @@ error:
     return NULL;
 }
 
+struct raw_task {
+    int taskid;
+    int nodeid;
+    int repeat;
+};
+
+static void item_destructor (void **item)
+{
+    if (item) {
+        free (*item);
+        *item = NULL;
+    }
+}
+
+static int taskid_cmp (const void *a, const void *b)
+{
+    const struct raw_task *t1 = a;
+    const struct raw_task *t2 = b;
+    return (t1->taskid - t2->taskid);
+}
+
+static int raw_task_append (zlistx_t *l, int taskid, int nodeid, int repeat)
+{
+    struct raw_task *t = calloc (1, sizeof (*t));
+    if (!t)
+        return -1;
+    t->taskid = taskid;
+    t->nodeid = nodeid;
+    t->repeat = repeat;
+    if (!zlistx_add_end (l, t)) {
+        free (t);
+        return -1;
+    }
+    return 0;
+}
+
+static zlistx_t *raw_task_list_create (void)
+{
+    zlistx_t *l;
+    if (!(l = zlistx_new ())) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    zlistx_set_destructor (l, item_destructor);
+    zlistx_set_comparator (l, &taskid_cmp);
+    return l;
+}
+
+static int raw_task_list_append (zlistx_t *l,
+                                 const char *s,
+                                 int nodeid,
+                                 flux_error_t *errp)
+{
+    int rc = -1;
+    unsigned int id;
+    idset_error_t error;
+    struct idset *ids;
+
+    if (!(ids = idset_decode_ex (s, -1, 0, IDSET_FLAG_AUTOGROW, &error))) {
+        errprintf (errp, "%s", error.text);
+        goto error;
+    }
+    id = idset_first (ids);
+    while (id != IDSET_INVALID_ID) {
+        unsigned int next = idset_next (ids, id);
+        int repeat = 1;
+        while (next == id + repeat) {
+            next = idset_next (ids, next);
+            repeat++;
+        }
+        if (raw_task_append (l, id, nodeid, repeat) < 0) {
+            errprintf (errp, "Out of memory");
+            goto error;
+        }
+        id = next;
+    }
+    rc = 0;
+error:
+    idset_destroy (ids);
+    return rc;
+}
+
+static int raw_task_check (struct raw_task *a,
+                           struct raw_task *b,
+                           flux_error_t *errp)
+{
+    struct raw_task t_init = { .taskid = -1, .repeat = 1 };
+    int start, end1, end2, end;
+
+    if (a == NULL)
+        a = &t_init;
+
+    /*  Note: a->taskid <= b->taskid since taskmap_decode_raw() sorts
+     *   raw_task objects.
+     */
+    start = b->taskid;
+    end1 = a->taskid + a->repeat - 1;
+    end2 = b->taskid + b->repeat - 1;
+    end = end1 <= end2 ? end1 : end2;
+
+    /* If end - start is nonzero then we have overlap. report it.
+     */
+    int overlap = end - start;
+    if (overlap >= 0) {
+        /* taskid overlap detected, report as error
+         */
+        if (overlap == 0)
+            errprintf (errp, "duplicate taskid specified: %d", start);
+        else
+            errprintf (errp, "duplicate taskids specified: %d-%d", start, end);
+        return -1;
+    }
+    /*  Now check that tasks are consecutive. It is an error if not since
+     *  holes in taskids in a taskmap are not allowed
+     */
+    if (overlap != -1) {
+        if (overlap == -2)
+            return errprintf (errp, "missing taskid: %d", end + 1);
+        else
+            return errprintf (errp,
+                              "missing taskids: %d-%d",
+                              end + 1,
+                              end - overlap - 1);
+    }
+    return 0;
+}
+
+static struct taskmap *taskmap_decode_raw (const char *s, flux_error_t *errp)
+{
+    char *tok;
+    char *p;
+    char *q;
+    char *cpy = NULL;
+    struct taskmap *map = NULL;
+    zlistx_t *l = NULL;
+    int nodeid = 0;
+    struct raw_task *t, *prev;
+
+    if (!s || strlen (s) == 0) {
+        errprintf (errp, "Invalid argument");
+        return NULL;
+    }
+    if (!(map = taskmap_create ())
+        || !(cpy = strdup (s))
+        || !(l = raw_task_list_create ())) {
+        errprintf (errp, "Out of memory");
+        goto error;
+    }
+
+    p = cpy;
+
+    while ((tok = strtok_r (p, ";", &q))) {
+        if (raw_task_list_append (l, tok, nodeid++, errp) < 0)
+            goto error;
+        p = NULL;
+    }
+
+    /* sort by taskid */
+    zlistx_sort (l);
+    t = zlistx_first (l);
+    prev = NULL;
+
+    while (t) {
+        if (raw_task_check (prev, t, errp) < 0)
+            goto error;
+        if (taskmap_append (map, t->nodeid, 1, t->repeat) < 0) {
+            errprintf (errp, "taskmap_append: %s", strerror (errno));
+            goto error;
+        }
+        prev = t;
+        t = zlistx_next (l);
+    }
+    zlistx_destroy (&l);
+    free (cpy);
+    return map;
+error:
+    zlistx_destroy (&l);
+    taskmap_destroy (map);
+    free (cpy);
+    return NULL;
+}
+
 struct taskmap *taskmap_decode (const char *s, flux_error_t *errp)
 {
     struct taskmap *map = NULL;
@@ -435,11 +617,17 @@ struct taskmap *taskmap_decode (const char *s, flux_error_t *errp)
         || strstr (s, "vector,"))
         return taskmap_decode_pmi (s, errp);
 
+    /*  A string without special characters might be a raw taskmap:
+     */
+    if (!strpbrk (s, "({[]})"))
+        return taskmap_decode_raw (s, errp);
+
+    /*  O/w, decode as RFC 34 Taskmap
+     */
     if (!(o = json_loads (s, JSON_DECODE_ANY, &error))) {
         errprintf (errp, "%s", error.text);
         goto out;
     }
-
     map = taskmap_decode_json (o, errp);
 out:
     json_decref (o);
@@ -673,14 +861,6 @@ static char *list_join (zlistx_t *l, char *sep)
     }
     result[len - seplen] = '\0';
     return result;
-}
-
-static void item_destructor (void **item)
-{
-    if (item) {
-        free (*item);
-        *item = NULL;
-    }
 }
 
 static char *taskmap_encode_raw (const struct taskmap *map, int flags)
