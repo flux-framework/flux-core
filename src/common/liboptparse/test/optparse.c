@@ -1422,9 +1422,48 @@ static void test_optional_args ()
     optparse_destroy (p);
 }
 
+static void test_issue5732 ()
+{
+    optparse_t *p;
+    struct optparse_option opts [] = {
+        { .name = "dup",
+          .key  = 'd',
+          .has_arg = 1,
+          .arginfo = "S",
+          .usage = "test option"
+        },
+        { .name = "dup",
+          .key  = 'd',
+          .has_arg = 1,
+          .arginfo = "S",
+          .usage = "test option"
+        },
+        OPTPARSE_TABLE_END,
+    };
+    struct optparse_subcommand subcmds[] = {
+        { "sub1",
+          "[OPTIONS]...",
+          "Subcommand one",
+          subcmd,
+          0,
+          opts,
+        },
+        OPTPARSE_SUBCMD_END
+    };
+
+    p = optparse_create ("issue-5732");
+    if (!p)
+        BAIL_OUT ("optparse_create");
+    lives_ok ({ optparse_reg_subcommands (p, subcmds); },
+              "optparse_reg_subcommands lives with duplicated options");
+
+    optparse_destroy (p);
+}
+
+
 int main (int argc, char *argv[])
 {
-    plan (323);
+    plan (324);
 
     test_convenience_accessors (); /* 60 tests */
     test_usage_output (); /* 46 tests */
@@ -1442,6 +1481,7 @@ int main (int argc, char *argv[])
     test_reg_subcommands (); /* 1 test */
     test_optparse_get (); /* 13 tests */
     test_optional_args (); /* 9 tests */
+    test_issue5732 (); /* 1 test */
 
     done_testing ();
     return (0);
