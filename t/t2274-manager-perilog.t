@@ -282,6 +282,20 @@ test_expect_success 'perilog: epilog can be specified without a prolog' '
 	flux job wait-event -t 15 $jobid epilog-start &&
 	flux job wait-event -t 15 $jobid epilog-finish
 '
+test_expect_success 'perilog: canceled prolog does not drain ranks' '
+	cat <<-EOF >config/perilog.toml &&
+	[job-manager.prolog]
+	command = [ "flux", "perilog-run", "prolog", "-vesleep,30" ]
+	EOF
+	flux config reload &&
+	flux jobtap load --remove=*.so perilog.so &&
+	jobid=$(flux submit hostname) &&
+	flux job wait-event -t 15 $jobid prolog-start &&
+	flux cancel $jobid &&
+	flux job wait-event -vt 15 $jobid prolog-finish &&
+	flux resource drain &&
+	test "$(drained_ranks)" = ""
+'
 #  Note: run this job before taking rank 3 offline below
 test_expect_success 'perilog: run job across all 4 ranks' '
 	jobid=$(flux submit --wait-event=clean -N4 -n4 true)
