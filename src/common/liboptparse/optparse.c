@@ -697,8 +697,19 @@ void optparse_destroy (optparse_t *p)
         return;
 
     /* Unlink from parent */
-    if (p->parent && p->parent->subcommands)
+    if (p->parent && p->parent->subcommands) {
         zhash_delete (p->parent->subcommands, p->program_name);
+        /*
+         * zhash_delete() will call optparse_child_destroy(), which
+         * calls optparse_destroy() again. Return now and allow the
+         * rest of the optparse object to be freed on the next pass.
+         * (optparse_child_destroy() set p->parent = NULL)
+         *
+         * Note: This code path only occurs if a subcommand optparse
+         *  object is destroyed before its parent.
+         */
+        return;
+    }
 
     zlist_destroy (&p->option_list);
     zhash_destroy (&p->dhash);
