@@ -12,6 +12,7 @@
 #define _CONTENT_MMAP_H 1
 
 #include <stdbool.h>
+#include <jansson.h>
 
 #include "cache.h"
 
@@ -19,6 +20,8 @@ struct content_mmap *content_mmap_create (flux_t *h,
                                           const char *hash_name,
                                           int hash_size);
 void content_mmap_destroy (struct content_mmap *mm);
+
+json_t *content_mmap_get_stats (struct content_mmap *mm);
 
 struct content_region *content_mmap_region_lookup (struct content_mmap *mm,
                                                    const void *hash,

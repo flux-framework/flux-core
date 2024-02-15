@@ -728,6 +728,48 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
+json_t *content_mmap_get_stats (struct content_mmap *mm)
+{
+    const char *key;
+    json_t *o;
+    json_t *mmap;
+
+    if (!(o = json_object ()))
+        goto nomem;
+    key = hola_hash_first (mm->tags);
+    while (key) {
+        struct content_region *reg;
+        json_t *a;
+        if (!(a = json_array ()))
+            goto nomem;
+        reg = hola_list_first (mm->tags, key);
+        while (reg) {
+            json_t *s;
+            if (!(s = json_string (reg->fullpath))
+                || json_array_append_new (a, s) < 0) {
+                json_decref (s);
+                json_decref (a);
+                goto nomem;
+            }
+            reg = hola_list_next (mm->tags, key);
+        }
+        if (json_object_set_new (o, key, a) < 0) {
+            json_decref (a);
+            goto nomem;
+        }
+        key = hola_hash_next (mm->tags);
+    }
+    if (!(mmap = json_pack ("{s:O s:I}",
+                            "tags", o,
+                            "blobs", zhashx_size (mm->cache))))
+        goto nomem;
+    json_decref (o);
+    return mmap;
+nomem:
+    json_decref (o);
+    return NULL;
+}
+
 void content_mmap_destroy (struct content_mmap *mm)
 {
     if (mm) {
