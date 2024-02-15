@@ -380,10 +380,14 @@ struct content_region *content_mmap_region_lookup (struct content_mmap *mm,
 static struct content_region *content_mmap_region_create (
                                                  struct content_mmap *mm,
                                                  const char *path,
-                                                 const char *fpath,
-                                                 struct blobvec_param *param,
+                                                 int chunksize,
                                                  flux_error_t *error)
 {
+    struct blobvec_param param = {
+        .hashtype = mm->hash_name,
+        .chunksize = chunksize,
+        .small_file_threshold = 0, // always choose blobvec encoding here
+    };
     struct content_region *reg;
 
     if (!(reg = calloc (1, sizeof (*reg)))) {
@@ -393,15 +397,22 @@ static struct content_region *content_mmap_region_create (
     reg->refcount = 1;
     reg->mm = mm;
     reg->mapinfo.base = MAP_FAILED;
-    if (!(reg->fullpath = strdup (fpath)))
+    if (!(reg->fullpath = strdup (path)))
         goto error;
 
     if (!(reg->fileref = fileref_create_ex (path,
-                                            fpath,
-                                            param,
+                                            &param,
                                             &reg->mapinfo,
                                             error)))
         goto error;
+    /* fileref_create_ex() accepts all file types, but flux-archive(1) should
+     * not be requesting that files be mapped which do not meet criteria.
+     */
+    if (reg->mapinfo.base == MAP_FAILED) {
+        errprintf (error, "%s: not suitable for mapping", path);
+        errno = EINVAL;
+        goto error;
+    }
     if (region_cache_add (reg) < 0) {
         errprintf (error,
                    "%s: error caching region blobrefs: %s",
@@ -415,24 +426,6 @@ error:
     return NULL;
 }
 
-static int check_string_array (json_t *o, int min_count)
-{
-    size_t index;
-    json_t *entry;
-
-    if (!json_is_array (o)
-        || json_array_size (o) < min_count)
-        goto error;
-    json_array_foreach (o, index, entry) {
-        if (!json_is_string (entry))
-            goto error;
-    }
-    return 0;
-error:
-    errno = EPROTO;
-    return -1;
-}
-
 static void content_mmap_add_cb (flux_t *h,
                                  flux_msg_handler_t *mh,
                                  const flux_msg_t *msg,
@@ -440,45 +433,34 @@ static void content_mmap_add_cb (flux_t *h,
 {
     struct content_mmap *mm = arg;
     const char *path;
-    const char *fpath = NULL;
-    int disable_mmap;
-    struct blobvec_param param;
-    json_t *tags;
+    int chunksize;
+    const char *tag;
     struct content_region *reg = NULL;
     flux_error_t error;
     const char *errmsg = NULL;
-    size_t index;
-    json_t *entry;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s?s s:b s:i s:i s:o}",
+                             "{s:s s:i s:s}",
                              "path", &path,
-                             "fullpath", &fpath,
-                             "disable_mmap", &disable_mmap,
-                             "chunksize", &param.chunksize,
-                             "threshold", &param.small_file_threshold,
-                             "tags", &tags) < 0
-        || check_string_array (tags, 1) < 0)
+                             "chunksize", &chunksize,
+                             "tag", &tag) < 0)
         goto error;
     if (mm->rank != 0) {
         errmsg = "content may only be mmapped on rank 0";
         goto inval;
     }
-    param.hashtype = mm->hash_name;
-    if (!(reg = content_mmap_region_create (mm,
-                                            path,
-                                            fpath,
-                                            disable_mmap ? NULL : &param,
-                                            &error))) {
+    if (path[0] != '/') {
+        errmsg = "path must be fully qualified";
+        goto inval;
+    }
+    if (!(reg = content_mmap_region_create (mm, path, chunksize, &error))) {
         errmsg = error.text;
         goto error;
     }
-    json_array_foreach (tags, index, entry) {
-        // takes a reference on region
-        if (!hola_list_add_end (mm->tags, json_string_value (entry), reg))
-            goto error;
-    }
+    // takes a reference on region
+    if (!hola_list_add_end (mm->tags, tag, reg))
+        goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to content.mmap-add request");
     content_mmap_region_decref (reg);
@@ -498,22 +480,17 @@ static void content_mmap_remove_cb (flux_t *h,
 {
     struct content_mmap *mm = arg;
     const char *errmsg = NULL;
-    json_t *tags;
-    size_t index;
-    json_t *entry;
+    const char *tag;
     int unmap_count = 0;
 
-    if (flux_request_unpack (msg, NULL, "{s:o}", "tags", &tags) < 0
-        || check_string_array (tags, 1) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s}", "tag", &tag) < 0)
         goto error;
     if (mm->rank != 0) {
         errmsg = "content can only be mmapped on rank 0";
         goto inval;
     }
-    json_array_foreach (tags, index, entry) {
-        if (hola_hash_delete (mm->tags, json_string_value (entry)) == 0)
-            unmap_count++;
-    }
+    if (hola_hash_delete (mm->tags, tag) == 0)
+        unmap_count++;
     if (unmap_count > 0) {
         if (plug_cache_holes (mm) < 0) {
             errmsg = "error filling missing cache entries after unmap";

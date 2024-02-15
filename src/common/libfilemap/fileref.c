@@ -324,7 +324,6 @@ error:
 }
 
 json_t *fileref_create_ex (const char *path,
-                           const char *fullpath,
                            struct blobvec_param *param,
                            struct blobvec_mapinfo *mapinfop,
                            flux_error_t *error)
@@ -344,8 +343,6 @@ json_t *fileref_create_ex (const char *path,
             goto inval;
         }
     }
-    if (!fullpath)
-        fullpath = path;
     /* Store a relative path in the object so that extraction can specify a
      * destination directory, like tar(1) default behavior.
      */
@@ -359,8 +356,8 @@ json_t *fileref_create_ex (const char *path,
      * Avoid open(2) blocking on a FIFO with O_NONBLOCK, but restore blocking
      * behavior after open(2) succeeds.
      */
-    if ((fd = open (fullpath, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)) < 0) {
-        if (errno != ELOOP || lstat (fullpath, &sb) < 0) {
+    if ((fd = open (path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)) < 0) {
+        if (errno != ELOOP || lstat (path, &sb) < 0) {
             errprintf (error, "%s: %s", path, strerror (errno));
             goto error;
         }
@@ -419,7 +416,7 @@ json_t *fileref_create_ex (const char *path,
     /* symlink
      */
     else if (S_ISLNK (sb.st_mode)) {
-        if (!(o = fileref_create_symlink (relative_path, fullpath, &sb, error)))
+        if (!(o = fileref_create_symlink (relative_path, path, &sb, error)))
             goto error;
     }
     /* directory
@@ -454,7 +451,7 @@ error:
 
 json_t *fileref_create (const char *path, flux_error_t *error)
 {
-    return fileref_create_ex (path, NULL, NULL, NULL, error);
+    return fileref_create_ex (path, NULL, NULL, error);
 }
 
 void fileref_pretty_print (json_t *fileref,

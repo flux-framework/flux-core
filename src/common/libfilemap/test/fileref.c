@@ -45,7 +45,7 @@ static json_t *xfileref_create_vec (const char *path,
         .small_file_threshold = 4096,
     };
 
-    o = fileref_create_ex (path, NULL, &blobvec_param, NULL, &error);
+    o = fileref_create_ex (path, &blobvec_param, NULL, &error);
     if (!o)
         diag ("%s", error.text);
     return o;
@@ -650,7 +650,7 @@ void test_expfail (void)
     param.chunksize = 1024;
     param.hashtype = "smurfette";
     param.small_file_threshold = 0;
-    o = fileref_create_ex (mkpath ("test"), NULL, &param, NULL, &error);
+    o = fileref_create_ex (mkpath ("test"), &param, NULL, &error);
     if (!o)
         diag ("%s", error.text);
     ok (o == NULL && errno == EINVAL,
@@ -660,7 +660,7 @@ void test_expfail (void)
     param.chunksize = -1;
     param.hashtype = "sha1";
     param.small_file_threshold = 0;
-    o = fileref_create_ex (mkpath ("test"), NULL, &param, NULL, &error);
+    o = fileref_create_ex (mkpath ("test"), &param, NULL, &error);
     if (!o)
         diag ("%s", error.text);
     ok (o == NULL && errno == EINVAL,
@@ -670,7 +670,7 @@ void test_expfail (void)
     param.chunksize = 1024;
     param.hashtype = "sha1";
     param.small_file_threshold = -1;
-    o = fileref_create_ex (mkpath ("test"), NULL, &param, NULL, &error);
+    o = fileref_create_ex (mkpath ("test"), &param, NULL, &error);
     if (!o)
         diag ("%s", error.text);
     ok (o == NULL && errno == EINVAL,

@@ -72,28 +72,25 @@ struct create_ctx {
  */
 static void mmap_fileref_data (struct create_ctx *ctx, const char *path)
 {
+    char *fullpath;
     flux_future_t *f;
-    char *fpath;
 
     // relative path is preserved in the archive, but broker needs full path
-    if (!(fpath = realpath (path, NULL)))
+    if (!(fullpath = realpath (path, NULL)))
         log_err_exit ("%s", path);
 
     if (!(f = flux_rpc_pack (ctx->h,
                              "content.mmap-add",
                              0,
                              0,
-                             "{s:s s:s s:b s:i s:i s:[s]}",
-                             "path", path,
-                             "fullpath", fpath,
-                             "disable_mmap", 0,
-                             "threshold", 0, // disable small file handling
+                             "{s:s s:i s:s}",
+                             "path", fullpath,
                              "chunksize", ctx->param.chunksize,
-                             "tags", ctx->name))
+                             "tag", ctx->name))
         || flux_rpc_get (f, NULL))
         log_msg_exit ("%s: %s", path, future_strerror (f, errno));
     flux_future_destroy (f);
-    free (fpath);
+    free (fullpath);
 }
 
 /* Store the blobs of an RFC 37 blobvec-encoded fileref to the content store.
@@ -168,7 +165,6 @@ static void add_archive_file (struct create_ctx *ctx, const char *path)
     json_t *fileref;
 
     if (!(fileref = fileref_create_ex (path,
-                                       NULL,
                                        &ctx->param,
                                        &mapinfo,
                                        &error)))
@@ -394,8 +390,8 @@ static void unmap_archive (flux_t *h, const char *name)
                              "content.mmap-remove",
                              0,
                              0,
-                             "{s:[s]}",
-                             "tags", name))
+                             "{s:s}",
+                             "tag", name))
         || flux_rpc_get (f, NULL) < 0) {
         log_msg ("unmap %s: %s", name, future_strerror (f, errno));
     }
