@@ -175,8 +175,14 @@ async def run_per_rank(name, jobid, args):
         if proc.canceled:
             timeout_ids.set(rank)
             rc = 128 + signal.SIGTERM
-        elif rc != 0:
+        elif rc > 0 and rc <= 128:
+            #  process failed with non-zero exit code. Add this rank to
+            #  the failed set which will be drained.
             fail_ids.set(rank)
+        else:
+            #  process was signaled (returncode < 0) or shell reported it
+            #  was signaled (128+n). Do nothing in this case.
+            pass
         if rc > returncode:
             returncode = rc
 
