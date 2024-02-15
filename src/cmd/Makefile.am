@@ -75,7 +75,6 @@ flux_SOURCES = \
 	builtin/startlog.c \
 	builtin/dump.c \
 	builtin/restore.c \
-	builtin/filemap.c \
 	builtin/archive.c \
 	builtin/pmi.c \
 	builtin/shutdown.c
