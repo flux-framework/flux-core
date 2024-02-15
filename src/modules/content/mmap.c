@@ -17,16 +17,8 @@
  *
  * All files have one or more tags, so the regions are placed in a
  * hash-of-lists where the list names are tags, and the entries are struct
- * content_regions.  When files are listed or removed, the requestor provides
- * one or more tags.  (flux filemap has an implicit "main" tag, but that
- * is entirely implemented in the tools, not here).
- *
- * The general idea is that one makes a list query with tags and an optional
- * glob and gets back a list of blobrefs.  Each blobref represents a serialized
- * 'fileref' object that corresponds to a file/content_region.  Within the
- * fileref is optionally a vector of blobrefs representing data content.
- * Having obtained this list, the client can use it to pull the fileref, and
- * subsequently its data through the content cache.
+ * content_regions.  When files are mapped, the requestor provides a tag.
+ * When files are removed, the requestor provides (only) one or more tags.
  *
  * The content-cache calls content_mmap_region_lookup() on rank 0 when it
  * doesn't have a requested blobref in cache, and only consults the backing
@@ -38,14 +30,13 @@
  * Slightly tricky optimization:
  * To speed up content_mmap_region_lookup() we have mm->cache, which is used
  * to find a content_region given a hash.  The cache contains hash keys for
- * both mmapped data (fileref.blobvec) and serialized fileref objects.
- * A given hash may appear in multiple files or parts of the same file,
- * so when a file is mapped, we put all its hashes in mm->cache except those
- * that are already mapped.  If nothing is unmapped, then we know all the
- * blobrefs for all the files will remain valid.  However when something is
- * unmapped we could be losing pieces of unrelated files.  Since unmaps are
- * bulk operations involving tags, we just walk the entire hash-of-lists
- * at that time and restore any missing cache entries.
+ * mmapped data.  A given hash may appear in multiple files or parts of the
+ * same file, so when a file is mapped, we put all its hashes in mm->cache
+ * except those that are already mapped.  If nothing is unmapped, then we know
+ * all the blobrefs for all the files will remain valid.  However when
+ * something is unmapped we could be losing pieces of unrelated files.  Since
+ * unmaps are bulk operations involving tags, we just walk the entire
+ * hash-of-lists at that time and restore any missing cache entries.
  *
  * Safety issue:
  * The content addressable storage model relies on the fact that once hashed,
@@ -75,7 +66,6 @@
 #include <unistd.h>
 #include <limits.h>
 #include <stdlib.h>
-#include <fnmatch.h>
 #include <jansson.h>
 #include <assert.h>
 #include <flux/core.h>
@@ -95,7 +85,7 @@
 struct cache_entry {
     struct content_region *reg;
     const void *data;                       // pointer into reg->mapinfo.base
-    size_t size;                            //   or reg->fileref_data
+    size_t size;                            //
     void *hash;                             // contiguous with struct
 };
 
@@ -103,9 +93,6 @@ struct content_region {
     struct blobvec_mapinfo mapinfo;
     int refcount;
     json_t *fileref;
-    void *fileref_data;                     // encoded fileref data
-    size_t fileref_size;                    // encoded fileref size
-    char *blobref;                          // blobref for fileref data
 
     struct content_mmap *mm;
 
@@ -123,9 +110,6 @@ struct content_mmap {
 };
 
 static int content_hash_size;
-
-static const int max_blobrefs_per_response = 1000;
-static const int max_filerefs_per_response = 100;
 
 static const double max_check_age = 5; // seconds since last region stat(2)
 
@@ -228,14 +212,11 @@ static void region_cache_remove (struct content_region *reg)
                     cache_entry_remove (reg->mm, reg, blobref);
             }
         }
-        if (reg->blobref)
-            cache_entry_remove (reg->mm, reg, reg->blobref);
-
         errno = saved_errno;
     }
 }
 
-/* Add cache entries for entries associated with region (blobvec + fileref).
+/* Add cache entries for entries associated with region
  */
 static int region_cache_add (struct content_region *reg)
 {
@@ -244,11 +225,6 @@ static int region_cache_add (struct content_region *reg)
     json_t *data = NULL;
     json_t *entry;
 
-    if (cache_entry_add (reg,
-                         reg->fileref_data,
-                         reg->fileref_size,
-                         reg->blobref) < 0)
-        return -1;
     if (json_unpack (reg->fileref,
                      "{s?s s?o}",
                      "encoding", &encoding,
@@ -326,8 +302,6 @@ void content_mmap_region_decref (struct content_region *reg)
             (void)munmap (reg->mapinfo.base, reg->mapinfo.size);
         json_decref (reg->fileref);
         free (reg->fullpath);
-        free (reg->blobref);
-        free (reg->fileref_data);
         free (reg);
         errno = saved_errno;
     }
@@ -362,10 +336,6 @@ bool content_mmap_validate (struct content_region *reg,
                             int data_size)
 {
     char hash2[BLOBREF_MAX_DIGEST_SIZE];
-
-    // no need to check the fileref blob as it was not mmapped
-    if (data == reg->fileref_data)
-        return true;
 
     assert (reg->mapinfo.base != NULL);
     assert (data >= reg->mapinfo.base);
@@ -407,33 +377,6 @@ struct content_region *content_mmap_region_lookup (struct content_mmap *mm,
     return e->reg;
 }
 
-static int fileref_encode (json_t *fileref,
-                           const char *hash_name,
-                           void **fileref_data,
-                           size_t *fileref_size,
-                           char **blobrefp)
-{
-    void *data;
-    size_t size;
-    char blobref[BLOBREF_MAX_STRING_SIZE];
-    char *blobref_cpy;
-
-    if (!(data = json_dumps (fileref, JSON_COMPACT))) {
-        errno = ENOMEM;
-        return -1;
-    }
-    size = strlen (data) + 1;
-    if (blobref_hash (hash_name, data, size, blobref, sizeof (blobref)) < 0
-        || !(blobref_cpy = strdup (blobref))) {
-        ERRNO_SAFE_WRAP (free, data);
-        return -1;
-    }
-    *fileref_data = data;
-    *fileref_size = size;
-    *blobrefp = blobref_cpy;
-    return 0;
-}
-
 static struct content_region *content_mmap_region_create (
                                                  struct content_mmap *mm,
                                                  const char *path,
@@ -459,18 +402,6 @@ static struct content_region *content_mmap_region_create (
                                             &reg->mapinfo,
                                             error)))
         goto error;
-    if (fileref_encode (reg->fileref,
-                        mm->hash_name,
-                        &reg->fileref_data,
-                        &reg->fileref_size,
-                        &reg->blobref) < 0) {
-        errprintf (error,
-                   "%s: error encoding fileref: %s",
-                   path,
-                   strerror (errno));
-        goto error;
-    }
-
     if (region_cache_add (reg) < 0) {
         errprintf (error,
                    "%s: error caching region blobrefs: %s",
@@ -500,18 +431,6 @@ static int check_string_array (json_t *o, int min_count)
 error:
     errno = EPROTO;
     return -1;
-}
-
-static bool fnmatch_fileref (const char *pattern, json_t *fileref)
-{
-    if (pattern) {
-        const char *path;
-
-        if (json_unpack (fileref, "{s:s}", "path", &path) < 0
-            || fnmatch (pattern, path, 0) != 0)
-            return false;
-    }
-    return true;
 }
 
 static void content_mmap_add_cb (flux_t *h,
@@ -611,101 +530,6 @@ error:
         flux_log_error (h, "error responding to content.mmap-remove request");
 }
 
-/* Get a list of files that match tag(s) and glob pattern, if any.
- * Avoid listing duplicates (e.g. a file with multiple tags) by tracking
- * fileref blobrefs in a JSON object.  Send data in zero or more responses
- * (respecting max_blobrefs_per_response or max_filerefs_per_response)
- * terminated by ENODATA.
- */
-static void content_mmap_list_cb (flux_t *h,
-                                  flux_msg_handler_t *mh,
-                                  const flux_msg_t *msg,
-                                  void *arg)
-{
-    struct content_mmap *mm = arg;
-    const char *errmsg = NULL;
-    int blobref;
-    json_t *tags;
-    const char *pattern = NULL;
-    json_t *files = NULL;
-    json_t *uniqhash = NULL;
-    struct content_region *reg;
-    size_t index;
-    json_t *entry;
-
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{s:b s:o s?s}",
-                             "blobref", &blobref,
-                             "tags", &tags,
-                             "pattern", &pattern) < 0
-        || check_string_array (tags, 1) < 0)
-        goto error;
-    if (!flux_msg_is_streaming (msg)) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (mm->rank != 0) {
-        errmsg = "content can only be mmapped on rank 0";
-        errno = EINVAL;
-        goto error;
-    }
-    if (!(files = json_array ())
-        || !(uniqhash = json_object ())) {
-        json_decref (files);
-        goto nomem;
-    }
-    json_array_foreach (tags, index, entry) {
-        const char *name = json_string_value (entry);
-
-        reg = hola_list_first (mm->tags, name);
-        while (reg) {
-            if (!json_object_get (uniqhash, reg->blobref)
-                 && fnmatch_fileref (pattern, reg->fileref)) {
-                json_t *o;
-                if (json_object_set (uniqhash, reg->blobref, json_null ()) < 0)
-                    goto nomem;
-                if (blobref) {
-                    if (!(o = json_string (reg->blobref))
-                        || json_array_append_new (files, o) < 0) {
-                        json_decref (o);
-                        goto nomem;
-                    }
-                }
-                else {
-                    if (json_array_append (files, reg->fileref) < 0)
-                        goto nomem;
-                }
-                if (json_array_size (files) == (blobref ?
-                                                max_blobrefs_per_response :
-                                                max_filerefs_per_response)) {
-                    if (flux_respond_pack (h, msg, "{s:O}", "files", files) < 0)
-                        goto error;
-                    if (json_array_clear (files) < 0)
-                        goto nomem;
-                }
-            }
-            reg = hola_list_next (mm->tags, name);
-        }
-    }
-    if (json_array_size (files) > 0) {
-        if (flux_respond_pack (h, msg, "{s:O}", "files", files) < 0)
-            goto error;
-    }
-    if (flux_respond_error (h, msg, ENODATA, NULL) < 0) // end of stream
-        flux_log_error (h, "error responding to content.mmap-list request");
-    json_decref (files);
-    json_decref (uniqhash);
-    return;
-nomem:
-    errno = ENOMEM;
-error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "error responding to content.mmap-list request");
-    json_decref (files);
-    json_decref (uniqhash);
-}
-
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -717,12 +541,6 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "content.mmap-remove",
         content_mmap_remove_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "content.mmap-list",
-        content_mmap_list_cb,
         0
     },
     FLUX_MSGHANDLER_TABLE_END,

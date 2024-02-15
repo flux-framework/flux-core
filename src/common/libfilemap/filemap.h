@@ -30,15 +30,6 @@ typedef void (*filemap_trace_f) (void *arg,
                                  int64_t ctime,
                                  const char *encoding);
 
-/*
- *  Call content.mmap-list for tags in JSON array 'tags' with optional
- *   glob pattern 'pattern'.
- */
-flux_future_t *filemap_mmap_list (flux_t *h,
-                                  bool blobref,
-                                  json_t *tags,
-                                  const char *pattern);
-
 /*  Extract an RFC 37 File Archive in either array or dictionary form.
  *  If 'trace_cb' is set, then it will be called for each extracted file.
  *

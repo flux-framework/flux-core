@@ -55,35 +55,6 @@ static int decode_data (const char *s, void **data, size_t *data_size)
     return 0;
 }
 
-flux_future_t *filemap_mmap_list (flux_t *h,
-                                  bool blobref,
-                                  json_t *tags,
-                                  const char *pattern)
-{
-    flux_future_t *f;
-
-    if (pattern) {
-        f = flux_rpc_pack (h,
-                           "content.mmap-list",
-                           0,
-                           FLUX_RPC_STREAMING,
-                           "{s:b s:s s:O}",
-                           "blobref", blobref ? 1 : 0,
-                           "pattern", pattern,
-                           "tags", tags);
-    }
-    else {
-        f = flux_rpc_pack (h,
-                           "content.mmap-list",
-                           0,
-                           FLUX_RPC_STREAMING,
-                           "{s:b s:O}",
-                           "blobref", blobref ? 1 : 0,
-                           "tags", tags);
-    }
-    return f;
-}
-
 /* When ARCHIVE_EXTRACT_NO_OVERWRITE is set, the overwrite error from
  * libarchive-3.6 is "Attempt to write to an empty file". This is
  * going to be confusing when the file is not empty, such as the common
