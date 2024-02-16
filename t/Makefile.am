@@ -89,6 +89,7 @@ TESTSCRIPTS = \
 	t0017-security.t \
 	t0018-content-files.t \
 	t0020-terminus.t \
+	t0021-archive-cmd.t \
 	t0022-jj-reader.t \
 	t0023-jobspec1-validate.t \
 	t0026-flux-R.t \
