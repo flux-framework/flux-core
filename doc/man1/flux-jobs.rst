@@ -287,6 +287,9 @@ The field names that can be specified are:
 **id.f58**
   job ID in RFC 19 F58 (base58) encoding
 
+**id.f58plain**
+  job ID in RFC 19 F58 encoding with ascii ``f``
+
 **id.dec**
   job ID in decimal representation
 
