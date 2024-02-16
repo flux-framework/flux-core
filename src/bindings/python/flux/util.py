@@ -123,7 +123,7 @@ def encode_topic(topic):
     return topic
 
 
-def help_formatter(argwidth=40):
+def help_formatter(argwidth=40, raw_description=False):
     """
     Return our 'clean' HelpFormatter, if possible, with a wider default
      for the max width allowed for options.
@@ -161,6 +161,16 @@ def help_formatter(argwidth=40):
             default = action.dest.upper()
             args_string = self._format_args(action, default)
             return optstring + "=" + args_string
+
+    class FluxRawDescriptionHelpFormatter(
+        FluxHelpFormatter, argparse.RawDescriptionHelpFormatter
+    ):
+        pass
+
+    if raw_description:
+        return lambda prog: FluxRawDescriptionHelpFormatter(
+            prog, max_help_position=argwidth
+        )
 
     return lambda prog: FluxHelpFormatter(prog, max_help_position=argwidth)
 
