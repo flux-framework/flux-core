@@ -188,6 +188,40 @@ _flux_update()
     return 0
 }
 
+#  flux-hostlist(1) completions
+_flux_hostlist()
+{
+    local cmd=$1
+    OPTS="\
+        -e --expand \
+        -d --delimiter= \
+        -c --count \
+        -n --nth \
+        -L --limit= \
+        -S --sort \
+        -x --exclude= \
+        -u --union --unique \
+        -i --intersect \
+        -m --minus \
+        -X --xor \
+        -f --fallback \
+        -q --quiet \
+    "
+    if [[ $cur != -* ]]; then
+        # Substitute source name or recent jobid
+        jobs="$(flux jobs -ano $(_flux_id_fmt $cur))"
+        sources="local instance avail stdin $jobs"
+        COMPREPLY=( $(compgen -W "$sources $jobs" -- "$cur") )
+        return 0
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
 #  flux-{run,submit,batch,alloc,bulksubmit}(1) completions
 _flux_submit_commands()
 {
@@ -1509,6 +1543,9 @@ _flux_core()
         ;;
     update)
         _flux_update $subcmd
+        ;;
+    hostlist)
+        _flux_hostlist $subcmd
         ;;
     -*)
         COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )
