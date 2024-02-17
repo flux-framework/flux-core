@@ -29,6 +29,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/read_all.h"
+#include "src/common/libutil/fdutils.h"
 #include "fileref.h"
 
 static int blobvec_append (json_t *blobvec,
@@ -355,19 +356,22 @@ json_t *fileref_create_ex (const char *path,
         relative_path = ".";
     /* Avoid TOCTOU in S_ISREG case by opening before checking its type.
      * If open fails due to O_NOFOLLOW (ELOOP), get link info with lstat(2).
+     * Avoid open(2) blocking on a FIFO with O_NONBLOCK, but restore blocking
+     * behavior after open(2) succeeds.
      */
-    if ((fd = open (fullpath, O_RDONLY | O_NOFOLLOW)) < 0) {
+    if ((fd = open (fullpath, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)) < 0) {
         if (errno != ELOOP || lstat (fullpath, &sb) < 0) {
             errprintf (error, "%s: %s", path, strerror (errno));
             goto error;
         }
     }
     else {
-        if (fstat (fd, &sb) < 0) {
+        if (fstat (fd, &sb) < 0 || fd_set_blocking (fd) < 0) {
             errprintf (error, "%s: %s", path, strerror (errno));
             goto error;
         }
     }
+
     /* Empty reg file, possibly sparse with size > 0.
      */
     if (S_ISREG (sb.st_mode) && file_has_no_data (fd)) {
