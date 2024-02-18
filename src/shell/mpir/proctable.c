@@ -23,6 +23,7 @@
  *  - executables: the list of executables in 'nodelist' form
  *  - taskids: the list of task ids in 'rangelist' form
  *  - pids: the list of process ids in 'rangelist' form
+ *  - ranks: (not used in MPIR_proctable) list of broker ranks
  *
  */
 
@@ -47,6 +48,7 @@ struct proctable {
     struct nodelist  *executables;
     struct rangelist *taskids;
     struct rangelist *pids;
+    struct rangelist *ranks;
 };
 
 void proctable_destroy (struct proctable *p)
@@ -56,6 +58,7 @@ void proctable_destroy (struct proctable *p)
         nodelist_destroy (p->executables);
         rangelist_destroy (p->taskids);
         rangelist_destroy (p->pids);
+        rangelist_destroy (p->ranks);
         free (p->mpir_proctable);
         if (p->strings)
             zhashx_destroy (&p->strings);
@@ -90,7 +93,8 @@ struct proctable * proctable_create (void)
         || !(p->nodes = nodelist_create ())
         || !(p->executables = nodelist_create ())
         || !(p->taskids = rangelist_create ())
-        || !(p->pids = rangelist_create ())) {
+        || !(p->pids = rangelist_create ())
+        || !(p->ranks = rangelist_create ())) {
         proctable_destroy (p);
         return NULL;
     }
@@ -98,6 +102,7 @@ struct proctable * proctable_create (void)
 }
 
 int proctable_append_task (struct proctable *p,
+                           int broker_rank,
                            const char *hostname,
                            const char *executable,
                            int taskid,
@@ -106,7 +111,8 @@ int proctable_append_task (struct proctable *p,
     if (nodelist_append (p->nodes, hostname) < 0
         || nodelist_append (p->executables, executable) < 0
         || rangelist_append (p->taskids, taskid) < 0
-        || rangelist_append (p->pids, pid) < 0)
+        || rangelist_append (p->pids, pid) < 0
+        || rangelist_append (p->ranks, broker_rank) < 0)
         return -1;
     return 0;
 }
@@ -118,6 +124,10 @@ int proctable_append_proctable_destroy (struct proctable *p1,
         || nodelist_append_list_destroy (p1->executables, p2->executables) < 0
         || rangelist_append_list (p1->taskids, p2->taskids) < 0
         || rangelist_append_list (p1->pids, p2->pids) < 0)
+        return -1;
+    if (p1->ranks
+        && p2->ranks
+        && rangelist_append_list (p1->ranks, p2->ranks) < 0)
         return -1;
     p2->nodes = NULL;
     p2->executables = NULL;
@@ -131,20 +141,23 @@ struct proctable * proctable_from_json (json_t *o)
     json_t *exe;
     json_t *taskids;
     json_t *pids;
+    json_t *ranks;
     struct proctable *p;
 
-    if (json_unpack (o, "{so so so so}",
+    if (json_unpack (o, "{so so so so s?o}",
                         "ids", &taskids,
                         "executables", &exe,
                         "hosts", &nodes,
-                        "pids", &pids) < 0)
+                        "pids", &pids,
+                        "ranks", &ranks) < 0)
         return NULL;
     if (!(p = proctable_alloc ()))
         return NULL;
     if (!(p->nodes = nodelist_from_json (nodes))
         || !(p->executables = nodelist_from_json (exe))
         || !(p->taskids = rangelist_from_json (taskids))
-        || !(p->pids = rangelist_from_json (pids))) {
+        || !(p->pids = rangelist_from_json (pids))
+        || (ranks && !(p->ranks = rangelist_from_json (ranks)))) {
         proctable_destroy (p);
         return NULL;
     }
@@ -175,7 +188,10 @@ json_t *proctable_to_json (struct proctable *p)
         || !(x = rangelist_to_json (p->taskids))
         || json_object_set_new (o, "ids", x) < 0
         || !(x = rangelist_to_json (p->pids))
-        || json_object_set_new (o, "pids", x) < 0) {
+        || json_object_set_new (o, "pids", x) < 0
+        || !(x = rangelist_to_json (p->ranks))
+        || json_object_set_new (o, "ranks", x) < 0) {
+        json_decref (x);
         json_decref (o);
         return NULL;
     }
@@ -263,6 +279,49 @@ int proctable_get_size (struct proctable *p)
     return rangelist_size (p->taskids);
 }
 
+struct idset *proctable_get_ranks (struct proctable *p,
+                                   const struct idset *taskids)
+{
+    struct idset *result;
+    int taskid = 0;
+    int64_t rank;
+    if (!p->ranks) {
+        errno = ENOSYS;
+        return NULL;
+    }
+    if (!(result = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        return NULL;
+    rank = rangelist_first (p->ranks);
+    while (rank != RANGELIST_END) {
+        if (!taskids || idset_test (taskids, taskid))
+            if (idset_set (result, (unsigned int) rank) < 0)
+                goto error;
+        rank = rangelist_next (p->ranks);
+        taskid++;
+    }
+    return result;
+error:
+    idset_destroy (result);
+    return NULL;
+}
+
+int proctable_get_broker_rank (struct proctable *p, int taskid)
+{
+    int id = 0;
+    int64_t rank;
+    if (!p->ranks) {
+        errno = ENOSYS;
+        return -1;
+    }
+    rank = rangelist_first (p->ranks);
+    while (rank != RANGELIST_END) {
+        if (id == taskid)
+            return (int) rank;
+        rank = rangelist_next (p->ranks);
+        id++;
+    }
+    return -1;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
