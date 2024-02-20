@@ -301,12 +301,20 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_jobid_t id;
     uint32_t rolemask;
     int flags;
+    int valid_flags = 0;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:I s:o s:i}",
                              "id", &id,
                              "keys", &keys,
                              "flags", &flags) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
+        goto error;
+    }
+
+    if (flags & ~valid_flags) {
+        errno = EPROTO;
+        errmsg = "lookup request rejected with invalid flag";
         goto error;
     }
 
@@ -336,7 +344,7 @@ void lookup_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     lookup_ctx_destroy (l);
 }
