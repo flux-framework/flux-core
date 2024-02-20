@@ -3398,7 +3398,7 @@ int cmd_info (optparse_t *p, int argc, char **argv)
                                  "keys", "J",
                                  "flags", 0))
             || flux_rpc_get_unpack (f, "{s:s}", "J", &val) < 0)
-            log_msg_exit ("%s", future_strerror (f, errno ));
+            log_msg_exit ("%s", future_strerror (f, errno));
         if (!(new_val = flux_unwrap_string (val, false, NULL, &error)))
             log_msg_exit ("Failed to unwrap J to get jobspec: %s", error.text);
         val = new_val;
@@ -3423,7 +3423,7 @@ int cmd_info (optparse_t *p, int argc, char **argv)
                                     "{s:s s:s}",
                                     "jobspec", &jobspec,
                                     "eventlog", &eventlog) < 0)
-            log_msg_exit ("%s", future_strerror (f, errno ));
+            log_msg_exit ("%s", future_strerror (f, errno));
         val = new_val = reconstruct_current_jobspec (jobspec, eventlog);
     }
     /* The current (non --base) R is obtained through the
@@ -3440,7 +3440,7 @@ int cmd_info (optparse_t *p, int argc, char **argv)
                                  "key", key,
                                  "flags", 0))
             || flux_rpc_get_unpack (f, "{s:o}", key, &o) < 0)
-            log_msg_exit ("%s", future_strerror (f, errno ));
+            log_msg_exit ("%s", future_strerror (f, errno));
         if (!(new_val = json_dumps (o, JSON_COMPACT)))
             log_msg_exit ("error encoding R object");
         val = new_val;
@@ -3457,7 +3457,7 @@ int cmd_info (optparse_t *p, int argc, char **argv)
                                  "keys", key,
                                  "flags", 0))
             || flux_rpc_get_unpack (f, "{s:s}", key, &val) < 0)
-            log_msg_exit ("%s", future_strerror (f, errno ));
+            log_msg_exit ("%s", future_strerror (f, errno));
     }
 
     printf ("%s\n", val);
