@@ -322,4 +322,19 @@ test_expect_success 'lookup request with empty payload fails with EPROTO(71)' '
 	${RPC} job-info.lookup 71 </dev/null
 '
 
+test_expect_success 'lookup request with keys not and array fails with EPROTO(71)' '
+	$jq -j -c -n  "{id:12345, keys:1, flags:0}" \
+	  | ${RPC} job-info.lookup 71
+'
+
+test_expect_success 'lookup request with invalid keys fails with EPROTO(71)' '
+	$jq -j -c -n  "{id:12345, keys:[1], flags:0}" \
+	  | ${RPC} job-info.lookup 71
+'
+
+test_expect_success 'lookup request with invalid flags fails with EPROTO(71)' '
+	$jq -j -c -n  "{id:12345, keys:[\"jobspec\"], flags:8191}" \
+	  | ${RPC} job-info.lookup 71
+'
+
 test_done
