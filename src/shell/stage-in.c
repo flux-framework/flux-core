@@ -197,6 +197,7 @@ static int stage_in (flux_shell_t *shell, json_t *config)
 {
     struct stage_in ctx;
     const char *names = NULL;
+    const char *tags = NULL;
     const char *destination = NULL;
     bool leader_only = false;
 
@@ -205,13 +206,21 @@ static int stage_in (flux_shell_t *shell, json_t *config)
 
     if (json_is_object (config)) {
         if (json_unpack (config,
-                         "{s?s s?s s?s}",
+                         "{s?s s?s s?s s?s !}",
                          "names", &names,
+                         "tags", &tags,
                          "pattern", &ctx.pattern,
                          "destination", &destination)) {
             shell_log_error ("Error parsing stage_in shell option");
             goto error;
         }
+    }
+    if (tags) {
+        if (shell->info->shell_rank == 0) {
+            shell_warn ("Setting stage-in.names to the value of deprecated"
+                        " option stage-in.tags.");
+        }
+        names = tags;
     }
     if (!(ctx.names = parse_names (names, "main"))) {
         shell_log_error ("Error parsing stage_in.names shell option");
