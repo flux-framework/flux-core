@@ -43,6 +43,13 @@ static const char *default_small_file_threshold = "1K";
 const char *default_archive_hashtype = "sha1";
 const char *default_name = "main";
 
+#define OLD_FILEMAP_COMMAND 1
+
+#if OLD_FILEMAP_COMMAND
+const char *filemap_warning = "⚠️This command is deprecated.⚠️  "
+                              " Use flux-archive(1) instead.";
+#endif
+
 /* Return true if RFC 37 fileref has blobref encoding
  */
 static bool is_blobvec_encoding (json_t *fileref)
@@ -60,6 +67,7 @@ struct create_ctx {
     const char *name;
     const char *namespace;
     int verbose;
+    bool use_mmap;
     struct blobvec_param param;
     json_t *archive;
     flux_kvs_txn_t *txn;
@@ -172,7 +180,7 @@ static void add_archive_file (struct create_ctx *ctx, const char *path)
     if (json_array_append_new (ctx->archive, fileref) < 0)
         log_msg_exit ("%s: out of memory", path);
     if (is_blobvec_encoding (fileref)) {
-        if (optparse_hasopt (ctx->p, "mmap"))
+        if (ctx->use_mmap)
             mmap_fileref_data (ctx, path);
         else
             store_fileref_data (ctx, path, fileref, &mapinfo);
@@ -210,9 +218,24 @@ static int subcmd_create (optparse_t *p, int ac, char *av[])
         optparse_print_usage (p);
         exit (1);
     }
+    ctx.name = optparse_get_str (p, "name", NULL);
+#if OLD_FILEMAP_COMMAND
+    if (streq (av[0], "map")) {
+        fprintf (stderr, "%s\n", filemap_warning);
+        if (!optparse_hasopt (p, "disable-mmap"))
+            ctx.use_mmap = true;
+        ctx.name = optparse_get_str (p, "tags", ctx.name);
+    }
+    else if (optparse_hasopt (p, "tags")
+        || optparse_hasopt (p, "disable-mmap")) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+#endif
+    if (!ctx.name)
+        ctx.name = default_name;
 
     ctx.p = p;
-    ctx.name = optparse_get_str (p, "name", default_name);
     ctx.namespace = "primary";
     if (optparse_hasopt (p, "no-force-primary"))
         ctx.namespace = NULL;
@@ -234,7 +257,9 @@ static int subcmd_create (optparse_t *p, int ac, char *av[])
      * - the files must not change while they are mapped
      * - when the files are unmapped, references (blobrefs) become invalid
      */
-    if (optparse_hasopt (p, "mmap")) {
+    if (optparse_hasopt (p, "mmap"))
+        ctx.use_mmap = true;
+    if (ctx.use_mmap) {
         uint32_t rank;
         if (flux_get_rank (ctx.h, &rank) < 0)
             log_err_exit ("error fetching broker rank");
@@ -401,7 +426,7 @@ static void unmap_archive (flux_t *h, const char *name)
 static int subcmd_remove (optparse_t *p, int ac, char *av[])
 {
     const char *namespace = "primary";
-    const char *name = optparse_get_str (p, "name", default_name);
+    const char *name;
     int n = optparse_option_index (p);
     flux_t *h;
 
@@ -409,6 +434,19 @@ static int subcmd_remove (optparse_t *p, int ac, char *av[])
         optparse_print_usage (p);
         exit (1);
     }
+    name = optparse_get_str (p, "name", NULL);
+#if OLD_FILEMAP_COMMAND
+    if (streq (av[0], "unmap")) {
+        fprintf (stderr, "%s\n", filemap_warning);
+        name = optparse_get_str (p, "tags", name);
+    }
+    else if (optparse_hasopt (p, "tags")) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+#endif
+    if (!name)
+        name = default_name;
     if (optparse_hasopt (p, "no-force-primary"))
         namespace = NULL;
     if (!(h = builtin_get_flux_handle (p)))
@@ -463,7 +501,7 @@ static int subcmd_extract (optparse_t *p, int ac, char *av[])
 {
     int n = optparse_option_index (p);
     const char *directory = optparse_get_str (p, "directory", NULL);
-    const char *name = optparse_get_str (p, "name", default_name);
+    const char *name;
     const char *namespace = "primary";
     const char *pattern = NULL;
     int opts = 0;
@@ -481,6 +519,19 @@ static int subcmd_extract (optparse_t *p, int ac, char *av[])
         optparse_print_usage (p);
         exit (1);
     }
+    name = optparse_get_str (p, "name", NULL);
+#if OLD_FILEMAP_COMMAND
+    if (streq (av[0], "get")) {
+        fprintf (stderr, "%s\n", filemap_warning);
+        name = optparse_get_str (p, "tags", name);
+    }
+    else if (optparse_hasopt (p, "tags")) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+#endif
+    if (!name)
+        name = default_name;
     if (asprintf (&key, "archive.%s", name) < 0)
         log_msg_exit ("out of memory");
     if (optparse_hasopt (p, "no-force-primary"))
@@ -548,7 +599,7 @@ static int subcmd_extract (optparse_t *p, int ac, char *av[])
 static int subcmd_list (optparse_t *p, int ac, char *av[])
 {
     int n = optparse_option_index (p);
-    const char *name = optparse_get_str (p, "name", default_name);
+    const char *name;
     const char *namespace = "primary";
     const char *pattern = NULL;
     char *key;
@@ -564,6 +615,15 @@ static int subcmd_list (optparse_t *p, int ac, char *av[])
         optparse_print_usage (p);
         exit (1);
     }
+    name = optparse_get_str (p, "name", NULL);
+#if OLD_FILEMAP_COMMAND
+    if (optparse_hasopt (p, "tags")) {
+        fprintf (stderr, "%s\n", filemap_warning);
+        name = optparse_get_str (p, "tags", name);
+    }
+#endif
+    if (!name)
+        name = default_name;
     if (asprintf (&key, "archive.%s", name) < 0)
         log_msg_exit ("out of memory");
     if (optparse_hasopt (p, "no-force-primary"))
@@ -626,13 +686,19 @@ static struct optparse_option create_opts[] = {
       .usage = "Use mmap(2) to map file content" },
     { .name = "chunksize", .has_arg = 1, .arginfo = "N[KMG]",
       .usage = "Limit blob size to N bytes with 0=unlimited (default 1M)",
-      .flags = OPTPARSE_OPT_HIDDEN,
-    },
+      .flags = OPTPARSE_OPT_HIDDEN, },
     { .name = "small-file-threshold", .has_arg = 1, .arginfo = "N[KMG]",
       .usage = "Adjust the maximum size of a \"small file\" in bytes"
                " (default 1K)",
-      .flags = OPTPARSE_OPT_HIDDEN,
-    },
+      .flags = OPTPARSE_OPT_HIDDEN, },
+#if OLD_FILEMAP_COMMAND
+    { .name = "tags", .key = 'T', .has_arg = 1, .arginfo = "TAG",
+      .usage = "alias for --name",
+      .flags = OPTPARSE_OPT_HIDDEN, },
+    { .name = "disable-mmap", .has_arg = 0,
+      .usage = "map subcommand no longer implies mmap",
+      .flags = OPTPARSE_OPT_HIDDEN, },
+#endif
     OPTPARSE_TABLE_END
 };
 
@@ -643,6 +709,11 @@ static struct optparse_option remove_opts[] = {
       .usage = "Do not force archive to be in the primary KVS namespace", },
     { .name = "force", .key = 'f', .has_arg = 0,
       .usage = "Ignore a nonexistent archive", },
+#if OLD_FILEMAP_COMMAND
+    { .name = "tags", .key = 'T', .has_arg = 1, .arginfo = "TAG",
+      .usage = "alias for --name",
+      .flags = OPTPARSE_OPT_HIDDEN, },
+#endif
     OPTPARSE_TABLE_END
 };
 
@@ -661,6 +732,11 @@ static struct optparse_option extract_opts[] = {
       .usage = "Do not force archive to be in the primary KVS namespace", },
     { .name = "list-only", .key = 't', .has_arg = 0,
       .usage = "List table of contents without extracting", },
+#if OLD_FILEMAP_COMMAND
+    { .name = "tags", .key = 'T', .has_arg = 1, .arginfo = "TAG",
+      .usage = "alias for --name",
+      .flags = OPTPARSE_OPT_HIDDEN, },
+#endif
     OPTPARSE_TABLE_END
 };
 
@@ -673,6 +749,11 @@ static struct optparse_option list_opts[] = {
       .usage = "Show file type, mode, size", },
     { .name = "raw", .has_arg = 0,
       .usage = "Show raw RFC 37 file system object without decoding", },
+#if OLD_FILEMAP_COMMAND
+    { .name = "tags", .key = 'T', .has_arg = 1, .arginfo = "TAG",
+      .usage = "alias for --name",
+      .flags = OPTPARSE_OPT_HIDDEN, },
+#endif
     OPTPARSE_TABLE_END
 };
 
@@ -708,6 +789,47 @@ static struct optparse_subcommand archive_subcmds[] = {
     OPTPARSE_SUBCMD_END
 };
 
+#if OLD_FILEMAP_COMMAND
+int cmd_filemap (optparse_t *p, int ac, char *av[])
+{
+    if (optparse_run_subcommand (p, ac, av) != OPTPARSE_SUCCESS)
+        exit (1);
+    return 0;
+}
+
+static struct optparse_subcommand filemap_subcmds[] = {
+    { "map",
+      NULL,
+      NULL,
+      subcmd_create,
+      OPTPARSE_SUBCMD_HIDDEN,
+      create_opts,
+    },
+    { "unmap",
+      NULL,
+      NULL,
+      subcmd_remove,
+      OPTPARSE_SUBCMD_HIDDEN,
+      remove_opts,
+    },
+    { "get",
+      NULL,
+      NULL,
+      subcmd_extract,
+      OPTPARSE_SUBCMD_HIDDEN,
+      extract_opts,
+    },
+    { "list",
+      NULL,
+      NULL,
+      subcmd_list,
+      OPTPARSE_SUBCMD_HIDDEN,
+      list_opts,
+    },
+    OPTPARSE_SUBCMD_END
+};
+#endif
+
 int subcommand_archive_register (optparse_t *p)
 {
     optparse_err_t e;
@@ -720,11 +842,27 @@ int subcommand_archive_register (optparse_t *p)
                                  0,
                                  NULL);
     if (e != OPTPARSE_SUCCESS)
-        return (-1);
-
+        return -1;
     e = optparse_reg_subcommands (optparse_get_subcommand (p, "archive"),
                                   archive_subcmds);
-    return (e == OPTPARSE_SUCCESS ? 0 : -1);
+    if (e != OPTPARSE_SUCCESS)
+        return -1;
+#if OLD_FILEMAP_COMMAND
+    e = optparse_reg_subcommand (p,
+                                 "filemap",
+                                 cmd_filemap,
+                                 NULL,
+                                 filemap_warning,
+                                 0,
+                                 NULL);
+    if (e != OPTPARSE_SUCCESS)
+        return -1;
+    e = optparse_reg_subcommands (optparse_get_subcommand (p, "filemap"),
+                                  filemap_subcmds);
+    if (e != OPTPARSE_SUCCESS)
+        return -1;
+#endif
+    return 0;
 }
 
 /*
