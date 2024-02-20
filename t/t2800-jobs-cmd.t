@@ -471,13 +471,14 @@ test_expect_success 'flux-jobs --format={id} works' '
 	test_cmp idsI.out inactive.ids
 '
 
-test_expect_success 'flux-jobs --format={id.f58},{id.hex},{id.dothex},{id.words} works' '
-	flux jobs -ano {id.dec},{id.f58},{id.hex},{id.kvs},{id.dothex},{id.words} \
+test_expect_success 'flux-jobs --format={id.f58},{id.f58plain},{id.hex},{id.dothex},{id.words} works' '
+	flux jobs -ano {id.dec},{id.f58},{id.f58plain},{id.hex},{id.kvs},{id.dothex},{id.words} \
 	    | sort -n > ids.XX.out &&
 	for id in $(cat all.ids); do
-		printf "%s,%s,%s,%s,%s,%s\n" \
+		printf "%s,%s,%s,%s,%s,%s,%s\n" \
 		       $(flux job id --to=dec $id) \
 		       $(flux job id --to=f58 $id) \
+		       $(flux job id --to=f58plain $id) \
 		       $(flux job id --to=hex $id) \
 		       $(flux job id --to=kvs $id) \
 		       $(flux job id --to=dothex $id) \
@@ -1157,6 +1158,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	cat <<-EOF >headers.expected &&
 	id==JOBID
 	id.f58==JOBID
+	id.f58plain==JOBID
 	id.hex==JOBID
 	id.dothex==JOBID
 	id.words==JOBID

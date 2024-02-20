@@ -129,6 +129,17 @@ __get_flux_subcommands() {
     echo "$subcommands"
 }
 
+# Helper to emit id.f58plain when match begins with `f`
+_flux_id_fmt()
+{
+    local cur=$1
+    local fmt="{id}"
+    if [[ $cur == f* ]]; then
+        fmt="{id.f58plain}"
+    fi
+    echo "${fmt}"
+}
+
 #  flux-cancel(1) completions
 _flux_cancel()
 {
@@ -143,7 +154,7 @@ _flux_cancel()
     "
     if [[ $cur != -* ]]; then
         #  Attempt to substitute an active jobid
-        active_jobs=$(flux jobs -no {id})
+        active_jobs=$(flux jobs -no $(_flux_id_fmt $cur))
         COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
         return 0
     fi
@@ -165,8 +176,42 @@ _flux_update()
     "
     if [[ $cur != -* ]]; then
         #  Attempt to substitute an active jobid
-        active_jobs="$(flux jobs -no {id})"
+        active_jobs="$(flux jobs -no $(_flux_id_fmt $cur))"
         COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
+        return 0
+    fi
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
+#  flux-hostlist(1) completions
+_flux_hostlist()
+{
+    local cmd=$1
+    OPTS="\
+        -e --expand \
+        -d --delimiter= \
+        -c --count \
+        -n --nth \
+        -L --limit= \
+        -S --sort \
+        -x --exclude= \
+        -u --union --unique \
+        -i --intersect \
+        -m --minus \
+        -X --xor \
+        -f --fallback \
+        -q --quiet \
+    "
+    if [[ $cur != -* ]]; then
+        # Substitute source name or recent jobid
+        jobs="$(flux jobs -ano $(_flux_id_fmt $cur))"
+        sources="local instance avail stdin $jobs"
+        COMPREPLY=( $(compgen -W "$sources $jobs" -- "$cur") )
         return 0
     fi
     COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
@@ -516,7 +561,7 @@ _flux_job()
         if [[ $cur != -* ]]; then
            if _flux_contains_word ${cmd} ${subcmds}; then
                 #  These commands take active jobids by default:
-                active_jobs=$(flux jobs -no {id})
+                active_jobs=$(flux jobs -no $(_flux_id_fmt $cur))
                 COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
                 return 0
             fi
@@ -1080,7 +1125,7 @@ _flux_watch()
     "
     if [[ $cur != -* ]]; then
         #  Attempt to substitute an active jobid
-        active_jobs=$(flux jobs -no {id})
+        active_jobs=$(flux jobs -no $(_flux_id_fmt $cur))
         COMPREPLY=( $(compgen -W "${active_jobs}" -- "$cur") )
         return 0
     fi
@@ -1141,7 +1186,7 @@ _flux_top()
         return 0
     fi
     #  flux-top(1) can target jobids that are also instances
-    local jobs=$(flux jobs -no {uri}:{id} | grep -v ^None: \
+    local jobs=$(flux jobs -no {uri}:$(_flux_id_fmt $cur) | grep -v ^None: \
                  | sed -n 's/.*://p')
     COMPREPLY=( $(compgen -W "${OPTS} $jobs" -- "$cur") )
     if [[ "${COMPREPLY[@]}" == *= ]]; then
@@ -1498,6 +1543,9 @@ _flux_core()
         ;;
     update)
         _flux_update $subcmd
+        ;;
+    hostlist)
+        _flux_hostlist $subcmd
         ;;
     -*)
         COMPREPLY=( $(compgen -W "${FLUX_OPTS}" -- "$cur") )
