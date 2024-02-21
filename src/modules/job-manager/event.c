@@ -348,8 +348,7 @@ int event_job_action (struct event *event, struct job *job)
             break;
         case FLUX_JOB_STATE_INACTIVE:
             job->eventlog_readonly = 1;
-            if ((job->flags & FLUX_JOB_WAITABLE))
-                wait_notify_inactive (ctx->wait, job);
+            wait_notify_inactive (ctx->wait, job);
             /* Reminder: event_job_action() may be called more than once
              * for a job + state, therefore zhashx_insert() may fail here and
              * not be indicative of a problem.

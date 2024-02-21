@@ -173,8 +173,6 @@ void wait_notify_inactive (struct waitjob *wait, struct job *job)
     flux_t *h = wait->ctx->h;
     const flux_msg_t *req;
 
-    assert ((job->flags & FLUX_JOB_WAITABLE));
-
     if (job->waiter) {
         wait_respond (wait, job->waiter, job);
         flux_msg_decref (job->waiter);
@@ -197,7 +195,6 @@ void wait_notify_inactive (struct waitjob *wait, struct job *job)
  */
 void wait_notify_active (struct waitjob *wait, struct job *job)
 {
-    assert ((job->flags & FLUX_JOB_WAITABLE));
     wait->waitables++;
 }
 
@@ -244,10 +241,6 @@ static void wait_rpc (flux_t *h,
                 errstr = "job id already has a waiter";
                 goto error_nojob;
             }
-            if (!(job->flags & FLUX_JOB_WAITABLE)) {
-                errstr = "job was not submitted with FLUX_JOB_WAITABLE";
-                goto error_nojob;
-            }
             job->waiter = flux_msg_incref (msg);
             wait->waiters++;
             return;
@@ -255,7 +248,7 @@ static void wait_rpc (flux_t *h,
         /* Invalid jobid, not waitable, or already waited on.
          */
         else {
-            errstr = "invalid job id, or job may be inactive and not waitable";
+            errstr = "invalid job id, or already waited on";
             goto error_nojob;
         }
     }

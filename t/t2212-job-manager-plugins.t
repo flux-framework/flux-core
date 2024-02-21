@@ -171,12 +171,15 @@ test_expect_success 'job-manager: release held jobs' '
 test_expect_success 'job-manager: unload hold plugin' '
 	flux jobtap remove submit-hold.so
 '
+test_expect_success 'consume wait status all prior jobs' '
+	test_might_fail flux job wait --all
+'
 test_expect_success 'job-manager: test with random priority plugin' '
 	flux module reload sched-simple mode=unlimited &&
 	ncores=$(flux resource list -s free -no {ncores}) &&
 	sleepjob=$(flux submit -n ${ncores} sleep 3000) &&
 	flux jobtap load --remove=all ${PLUGINPATH}/random.so &&
-	flux bulksubmit --flags waitable --job-name=random-{} hostname \
+	flux bulksubmit --job-name=random-{} hostname \
 	    ::: $(seq 1 4) &&
 	flux jobs -c4 -no {name}:{priority} | sort > pri-before.out &&
 	sleep 1 &&
@@ -184,6 +187,7 @@ test_expect_success 'job-manager: test with random priority plugin' '
 	test_must_fail test_cmp pri-before.out pri-after.out &&
 	flux cancel $sleepjob &&
 	flux job wait-event -vt 30 $sleepjob clean &&
+	test_must_fail flux job wait $sleepjob &&
 	flux job wait --all -v
 '
 test_expect_success 'job-manager: run args test plugin' '
@@ -305,6 +309,9 @@ test_expect_success 'job-manager: jobtap plugin can raise job exception' '
 	     hostname) &&
 	flux job wait-event -v --match type=test $id exception
 '
+test_expect_success 'consume wait status all prior jobs' '
+	test_might_fail flux job wait --all
+'
 test_expect_success 'job-manager: run test plugin modes for priority.get' '
 	cat <<-EOF | sort >test-modes.priority.get &&
 	priority.get: fail
@@ -318,7 +325,7 @@ test_expect_success 'job-manager: run test plugin modes for priority.get' '
 	COUNT=$(cat test-modes.priority.get|wc -l) &&
 	flux queue stop &&
 	flux bulksubmit \
-	    --flags waitable --setattr=system.jobtap.test-mode={} hostname \
+	    --setattr=system.jobtap.test-mode={} hostname \
 	    :::: test-modes.priority.get > priority.get.jobids &&
 	flux python ./reprioritize.py &&
 	flux queue start &&

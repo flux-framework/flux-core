@@ -46,6 +46,9 @@ test_expect_success 'flux-shell: per-resource type=node works' '
 	EOF
 	test_cmp per-node.expected per-node.out
 '
+test_expect_success 'consume wait status all prior jobs' '
+	test_might_fail flux job wait --all
+'
 test_expect_success 'flux-shell: historical batch jobspec still work' '
 	for spec in $SHARNESS_TEST_SRCDIR/batch/jobspec/*.json; do
 		input=$(basename $spec) &&
@@ -55,7 +58,7 @@ test_expect_success 'flux-shell: historical batch jobspec still work' '
 		    jq -S ".attributes.system.environment.HOME=\"$HOME\"" |
 		    jq -S ".attributes.system.cwd=\"$(pwd)\"" \
 		    >$input &&
-		flux job submit --flags=waitable $input
+		flux job submit $input
 	done &&
 	flux job attach -vEX $(flux job last) &&
 	flux job wait --all --verbose

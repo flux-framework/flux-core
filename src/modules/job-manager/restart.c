@@ -268,8 +268,7 @@ static int restart_map_cb (struct job *job, void *arg, flux_error_t *error)
     }
     if (ctx->max_jobid < job->id)
         ctx->max_jobid = job->id;
-    if ((job->flags & FLUX_JOB_WAITABLE))
-        wait_notify_active (ctx->wait, job);
+    wait_notify_active (ctx->wait, job);
     if (event_job_action (ctx->event, job) < 0) {
         flux_log_error (ctx->h,
                         "replay warning: %s action failed on job %s",

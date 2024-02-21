@@ -132,8 +132,7 @@ static int submit_job (struct job_manager *ctx,
         set_errorf (errors, job->id, "error posting validate event");
         goto error_post_invalid;
     }
-    if ((job->flags & FLUX_JOB_WAITABLE))
-        wait_notify_active (ctx->wait, job);
+    wait_notify_active (ctx->wait, job);
     if (ctx->max_jobid < job->id)
         ctx->max_jobid = job->id;
     return 0;
