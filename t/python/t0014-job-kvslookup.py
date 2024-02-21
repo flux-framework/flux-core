@@ -159,6 +159,7 @@ class TestJob(unittest.TestCase):
         data = rpc.get()
         self.check_jobspec_str(data, self.jobid1, 0)
         data = rpc.get_decode()
+        self.check_jobspec_decoded(data, self.jobid1, 0)
         self.assertEqual(data["id"], self.jobid1, 0)
 
     def test_info_01_job_info_lookup_keys(self):

@@ -125,6 +125,25 @@ void apply_updates_R (flux_t *h,
     }
 }
 
+void apply_updates_jobspec (flux_t *h,
+                            flux_jobid_t id,
+                            const char *key,
+                            json_t *jobspec,
+                            json_t *context)
+{
+    const char *ckey;
+    json_t *value;
+
+    json_object_foreach (context, ckey, value) {
+        if (jpath_set (jobspec,
+                       ckey,
+                       value) < 0)
+            flux_log (h, LOG_INFO,
+                      "%s: failed to update job %s %s",
+                      __FUNCTION__, idf58 (id), key);
+    }
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
