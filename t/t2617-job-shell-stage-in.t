@@ -52,6 +52,18 @@ test_expect_success 'verify that stage-in works with names=red' '
 test_expect_success 'verify that stage-in works with names=red,blue' '
 	flux run -N1 -ostage-in.names=red,blue ./check.sh red blue
 '
+test_expect_success 'verify that stage-in works with deprecated tags option' '
+	flux run -N1 -ostage-in.tags=red,blue ./check.sh red blue 2>depr.err
+'
+test_expect_success 'and deprecation warning was printed' '
+	grep deprecated depr.err
+'
+test_expect_success 'verify that stage-in fails with unknown option' '
+	test_must_fail flux run -N1 -ostage-in.badopt /bin/true
+'
+test_expect_success 'verify that stage-in fails with unknown archive name' '
+	test_must_fail flux run -N1 -ostage-in.names=badarchive /bin/true
+'
 test_expect_success 'verify that stage-in.pattern works' '
 	flux run -N1 \
 	    -ostage-in.names=red,blue \
