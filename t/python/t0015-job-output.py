@@ -68,7 +68,7 @@ class TestJobOutput(unittest.TestCase):
             jobspec.setattr_shell_option("verbose", 1)
         if redirect is not None:
             jobspec.stdout = redirect
-        return flux.job.submit(self.fh, jobspec, waitable=True, urgency=urgency)
+        return flux.job.submit(self.fh, jobspec, urgency=urgency)
 
     def release_job(self, jobid):
         # Release job by setting urgency to default:

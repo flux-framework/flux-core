@@ -35,7 +35,7 @@ running = 0
 
 while done < njobs:
     if running < fanout and done + running < njobs:
-        jobid = job.submit(h, jobspec, waitable=True)
+        jobid = job.submit(h, jobspec)
         print("submit: {}".format(jobid))
         running += 1
 

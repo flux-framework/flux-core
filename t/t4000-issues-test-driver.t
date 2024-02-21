@@ -19,7 +19,6 @@ if test -z "$T4000_ISSUES_GLOB"; then
 fi
 
 flux bulksubmit -n1 -o pty --job-name={./%} -t 10m \
-	--flags=waitable \
 	--quiet --watch  \
 	flux start {} \
 	::: ${FLUX_SOURCE_DIR}/t/issues/${T4000_ISSUES_GLOB}

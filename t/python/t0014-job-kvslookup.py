@@ -31,7 +31,7 @@ class TestJob(unittest.TestCase):
         )
         testenv = {"FOO": "BAR"}
         compute_jobreq.environment = testenv
-        return flux.job.submit(self.fh, compute_jobreq, urgency=urgency, waitable=True)
+        return flux.job.submit(self.fh, compute_jobreq, urgency=urgency)
 
     @classmethod
     def setUpClass(self):

@@ -38,7 +38,7 @@ class TestJob(unittest.TestCase):
         )
         compute_jobreq.cwd = os.getcwd()
         compute_jobreq.environment = dict(os.environ)
-        return flux.job.submit(self.fh, compute_jobreq, waitable=True)
+        return flux.job.submit(self.fh, compute_jobreq)
 
     @classmethod
     def getJobs(self, rpc_handle):

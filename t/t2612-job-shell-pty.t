@@ -35,7 +35,7 @@ terminus_jobid() {
 }
 
 test_expect_success 'pty: submit a job with an interactive pty' '
-	id=$(flux submit --flags waitable -o pty.interactive tty) &&
+	id=$(flux submit -o pty.interactive tty) &&
 	terminus_jobid $id list &&
 	$runpty flux job attach ${id} &&
 	flux job wait $id

@@ -31,10 +31,10 @@ jobspec = JobspecV1.from_command(["/bin/true"])
 jobspec_fail = JobspecV1.from_command(["/bin/false"])
 for i in range(njobs):
     if i < njobs / 2:
-        jobid = job.submit(h, jobspec, waitable=True)
+        jobid = job.submit(h, jobspec)
         print("submit: {} /bin/true".format(jobid))
     else:
-        jobid = job.submit(h, jobspec_fail, waitable=True)
+        jobid = job.submit(h, jobspec_fail)
         print("submit: {} /bin/false".format(jobid))
 
 

@@ -77,13 +77,13 @@ test_expect_success 'flux batch --exclusive works' '
 		jq -e ".type == \"node\" and .exclusive"
 '
 test_expect_success NO_ASAN 'flux batch: submit a series of jobs' '
-	id1=$(flux batch --flags=waitable -n1 batch-script.sh) &&
-	id2=$(flux batch --flags=waitable -n4 batch-script.sh) &&
-	id3=$(flux batch --flags=waitable -N2 -n4 batch-script.sh) &&
+	id1=$(flux batch -n1 batch-script.sh) &&
+	id2=$(flux batch -n4 batch-script.sh) &&
+	id3=$(flux batch -N2 -n4 batch-script.sh) &&
 	flux resource list &&
 	flux jobs &&
-	id4=$(flux batch --flags=waitable -N2 -n2 -x batch-script.sh) &&
-	id5=$(flux batch --flags=waitable -N2 batch-script.sh) &&
+	id4=$(flux batch -N2 -n2 -x batch-script.sh) &&
+	id5=$(flux batch -N2 batch-script.sh) &&
 	run_timeout 180 flux job wait --verbose --all
 '
 test_expect_success NO_ASAN 'flux batch: job results are expected' '
@@ -100,15 +100,15 @@ test_expect_success MULTICORE 'flux batch: exclusive flag worked' '
 '
 
 test_expect_success 'flux batch: --output=kvs directs output to kvs' '
-	id=$(flux batch -n1 --flags=waitable --output=kvs batch-script.sh) &&
+	id=$(flux batch -n1 --output=kvs batch-script.sh) &&
 	run_timeout 180 flux job attach $id > kvs-output.log 2>&1 &&
 	test_debug "cat kvs-output.log" &&
 	grep "size=1 nodes=1" kvs-output.log
 '
 test_expect_success 'flux batch: --broker-opts works' '
-	id=$(flux batch -n1 --flags=waitable \
+	id=$(flux batch -n1 \
 	     --broker-opts=-v batch-script.sh) &&
-	id2=$(flux batch -n1 --flags=waitable \
+	id2=$(flux batch -n1 \
 	     --broker-opts=-v,-v batch-script.sh) &&
 	run_timeout 180 flux job wait $id &&
 	test_debug "cat flux-${id}.out" &&
@@ -172,19 +172,19 @@ test_expect_success 'flux batch: MPI env vars are not set in batch script' '
 '
 test_expect_success 'flux batch: --dump works' '
 	id=$(flux batch -N1 --dump \
-		--flags=waitable --wrap true) &&
+		--wrap true) &&
 	run_timeout 180 flux job wait $id &&
 	tar tvf flux-${id}-dump.tgz
 '
 test_expect_success 'flux batch: --dump=FILE works' '
 	id=$(flux batch -N1 --dump=testdump.tgz \
-		--flags=waitable --wrap true) &&
+		--wrap true) &&
 	run_timeout 180 flux job wait $id &&
 	tar tvf testdump.tgz
 '
 test_expect_success 'flux batch: --dump=FILE works with mustache' '
 	id=$(flux batch -N1 --dump=testdump-{{id}}.tgz \
-		--flags=waitable --wrap true) &&
+		--wrap true) &&
 	run_timeout 180 flux job wait $id &&
 	tar tvf testdump-${id}.tgz
 '

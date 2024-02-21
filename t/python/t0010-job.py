@@ -165,7 +165,7 @@ class TestJob(unittest.TestCase):
             jobspec.queue = 12
 
     def test_13_job_kvs(self):
-        jobid = job.submit(self.fh, self.basic_jobspec, waitable=True)
+        jobid = job.submit(self.fh, self.basic_jobspec)
         job.wait(self.fh, jobid=jobid)
         for job_kvs_dir in [
             job.job_kvs(self.fh, jobid),
@@ -187,7 +187,7 @@ class TestJob(unittest.TestCase):
 
     def test_15_job_cancel(self):
         self.sleep_jobspec = JobspecV1.from_command(["sleep", "1000"])
-        jobid = job.submit(self.fh, self.sleep_jobspec, waitable=True)
+        jobid = job.submit(self.fh, self.sleep_jobspec)
         job.cancel(self.fh, jobid)
         fut = job.wait_async(self.fh, jobid=jobid).wait_for(5.0)
         return_id, success, errmsg = fut.get_status()
@@ -196,7 +196,7 @@ class TestJob(unittest.TestCase):
 
     def test_16_job_kill(self):
         self.sleep_jobspec = JobspecV1.from_command(["sleep", "1000"])
-        jobid = job.submit(self.fh, self.sleep_jobspec, waitable=True)
+        jobid = job.submit(self.fh, self.sleep_jobspec)
 
         #  Wait for shell to fully start to avoid delay in signal
         job.event_wait(self.fh, jobid, name="start")
@@ -297,7 +297,8 @@ class TestJob(unittest.TestCase):
 
     def test_20_005_job_event_watch_with_cancel(self):
         jobid = job.submit(
-            self.fh, JobspecV1.from_command(["sleep", "3"]), waitable=True
+            self.fh,
+            JobspecV1.from_command(["sleep", "3"]),
         )
         self.assertTrue(jobid > 0)
         events = []
@@ -317,7 +318,8 @@ class TestJob(unittest.TestCase):
 
     def test_20_005_1_job_event_watch_with_cancel_stop_true(self):
         jobid = job.submit(
-            self.fh, JobspecV1.from_command(["sleep", "3"]), waitable=True
+            self.fh,
+            JobspecV1.from_command(["sleep", "3"]),
         )
         self.assertTrue(jobid > 0)
         events = []
@@ -776,7 +778,7 @@ class TestJob(unittest.TestCase):
             ["python3", "-c", "import flux; print(flux.job.timeleft())"]
         )
         spec.duration = "1m"
-        jobid = job.submit(self.fh, spec, waitable=True)
+        jobid = job.submit(self.fh, spec)
         job.wait(self.fh, jobid=jobid)
         try:
             job.timeleft()

@@ -31,7 +31,7 @@ h = flux.Flux()
 jobspec = JobspecV1.from_command(["/bin/true"])
 jobs = []
 for i in range(njobs):
-    jobid = job.submit(h, jobspec, waitable=True)
+    jobid = job.submit(h, jobspec)
     print("submit: {} /bin/true".format(jobid))
     jobs.append(jobid)
 
