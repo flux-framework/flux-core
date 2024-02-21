@@ -134,6 +134,28 @@ fluxcmd_PROGRAMS = \
 	flux-R \
 	flux-top
 
+flux_job_SOURCES = \
+	job/main.c \
+	job/common.c \
+	job/common.h \
+	job/attach.c \
+	job/submit.c \
+	job/list.c \
+	job/status.c \
+	job/id.c \
+	job/namespace.c \
+	job/urgency.c \
+	job/cancel.c \
+	job/eventlog.c \
+	job/info.c \
+	job/stats.c \
+	job/wait.c \
+	job/memo.c \
+	job/purge.c \
+	job/taskmap.c \
+	job/timeleft.c \
+	job/last.c
+
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
