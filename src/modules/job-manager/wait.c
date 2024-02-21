@@ -312,16 +312,6 @@ void wait_disconnect_rpc (flux_t *h,
     flux_msglist_disconnect (wait->requests, msg);
 }
 
-struct job *wait_zombie_first (struct waitjob *wait)
-{
-    return zhashx_first (wait->zombies);
-}
-
-struct job *wait_zombie_next (struct waitjob *wait)
-{
-    return zhashx_next (wait->zombies);
-}
-
 static void respond_unloading (flux_t *h, const flux_msg_t *msg)
 {
     if (flux_respond_error (h, msg, ENOSYS, "job-manager is unloading") < 0)

@@ -6,7 +6,6 @@ test_description='Test flux job manager wait handling'
 
 test_under_flux 1
 
-list_jobs=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
 SUBMIT_WAIT="flux python ${FLUX_SOURCE_DIR}/t/job-manager/submit-wait.py"
 SUBMIT_WAITANY="flux python ${FLUX_SOURCE_DIR}/t/job-manager/submit-waitany.py"
 SUBMIT_SW="flux python ${FLUX_SOURCE_DIR}/t/job-manager/submit-sliding-window.py"
@@ -15,10 +14,6 @@ JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 PRINT_CONSTANTS="${FLUX_BUILD_DIR}/t/job-manager/print-constants"
 
 flux setattr log-stderr-level 1
-
-test_job_count() {
-    test $(${list_jobs} | wc -l) -eq $1
-}
 
 print_jobid_any_py() {
 	flux python -c 'import flux.constants; print(f"{flux.constants.FLUX_JOBID_ANY:x}")'
@@ -45,21 +40,6 @@ test_expect_success "wait works on inactive,waitable job" '
 	JOBID=$(flux submit --flags waitable /bin/true) &&
 	flux job wait-event ${JOBID} clean &&
 	flux job wait ${JOBID}
-'
-
-test_expect_success "waitable inactive jobs are listed as zombies" '
-	JOBID=$(flux submit --flags waitable /bin/true) &&
-	echo ${JOBID} >id1.out &&
-	flux job wait-event ${JOBID} clean &&
-	${list_jobs} >list1.out &&
-	test $(wc -l <list1.out) -eq 1 &&
-	test "$($jq .state <list1.out | ${JOB_CONV} statetostr)" = "INACTIVE"
-'
-
-test_expect_success "zombies go away after they are waited for" '
-	flux job wait $(cat id1.out) &&
-	${list_jobs} >list2.out &&
-	test $(wc -l <list2.out) -eq 0
 '
 
 test_expect_success "wait works on three waitable jobs in reverse order" '
@@ -128,39 +108,30 @@ test_expect_success "wait --all fails with jobid" '
 '
 
 test_expect_success "wait --all works with no waitable jobs" '
-	test_job_count 0 &&
 	flux job wait --all
 '
 
 test_expect_success "wait --all works with one job" '
 	flux submit --flags waitable /bin/true &&
-	test_job_count 1 &&
-	flux job wait --all &&
-	test_job_count 0
+	flux job wait --all
 '
 
 test_expect_success "wait --all works with two jobs" '
 	flux submit --flags waitable /bin/true &&
 	flux submit --flags waitable /bin/true &&
-	test_job_count 2 &&
-	flux job wait --all &&
-	test_job_count 0
+	flux job wait --all
 '
 
 test_expect_success "wait --all fails when first job fails" '
 	flux submit --flags waitable /bin/false &&
 	flux submit --flags waitable /bin/true &&
-	test_job_count 2 &&
-	test_must_fail flux job wait --all &&
-	test_job_count 0
+	test_must_fail flux job wait --all
 '
 
 test_expect_success "wait --all fails when second job fails" '
 	flux submit --flags waitable /bin/true &&
 	flux submit --flags waitable /bin/false &&
-	test_job_count 2 &&
-	test_must_fail flux job wait --all &&
-	test_job_count 0
+	test_must_fail flux job wait --all
 '
 
 

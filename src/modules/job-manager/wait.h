@@ -27,9 +27,6 @@ void wait_disconnect_rpc (flux_t *h,
                           const flux_msg_t *msg,
                           void *arg);
 
-struct job *wait_zombie_first (struct waitjob *wait);
-struct job *wait_zombie_next (struct waitjob *wait);
-
 #endif /* ! _FLUX_JOB_MANAGER_WAIT_H */
 
 /*

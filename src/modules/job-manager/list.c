@@ -118,16 +118,6 @@ void list_handle_request (flux_t *h,
         }
         job = zhashx_next (ctx->active_jobs);
     }
-    /* Finally list any zombies - INACTIVE (I)
-     * (random order)
-     */
-    job = wait_zombie_first (ctx->wait);
-    while (job) {
-        if (list_append_job (jobs, job) < 0)
-            goto error;
-        job = wait_zombie_next (ctx->wait);
-    }
-
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
     json_decref (jobs);
