@@ -16,6 +16,10 @@
 #include <flux/core.h>
 
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libjob/idf58.h"
+#include "src/common/libutil/jpath.h"
+
+#include "ccan/str/str.h"
 
 flux_msg_t *cred_msg_pack (const char *topic,
                            struct flux_msg_cred cred,
@@ -95,6 +99,30 @@ error:
     json_decref (o);
     errno = saved_errno;
     return rc;
+}
+
+void apply_updates_R (flux_t *h,
+                      flux_jobid_t id,
+                      const char *key,
+                      json_t *R,
+                      json_t *context)
+{
+    const char *ckey;
+    json_t *value;
+
+    json_object_foreach (context, ckey, value) {
+        /* RFC 21 resource-update event only allows update
+         * to:
+         * - expiration
+         */
+        if (streq (ckey, "expiration"))
+            if (jpath_set (R,
+                           "execution.expiration",
+                           value) < 0)
+                flux_log (h, LOG_INFO,
+                          "%s: failed to update job %s %s",
+                          __FUNCTION__, idf58 (id), key);
+    }
 }
 
 /*

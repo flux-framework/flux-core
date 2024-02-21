@@ -38,7 +38,7 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
     int lookups = zlist_size (ctx->lookups);
     int watchers = zlist_size (ctx->watchers);
     int guest_watchers = zlist_size (ctx->guest_watchers);
-    int update_lookups = zlist_size (ctx->update_lookups);
+    int update_lookups = 0;     /* no longer supported */
     int update_watchers = update_watch_count (ctx);
     if (flux_respond_pack (h, msg, "{s:i s:i s:i s:i s:i}",
                            "lookups", lookups,
@@ -117,8 +117,6 @@ static void info_ctx_destroy (struct info_ctx *ctx)
             guest_watch_cleanup (ctx);
             zlist_destroy (&ctx->guest_watchers);
         }
-        if (ctx->update_lookups)
-            zlist_destroy (&ctx->update_lookups);
         if (ctx->update_watchers) {
             update_watch_cleanup (ctx);
             zlist_destroy (&ctx->update_watchers);
@@ -146,8 +144,6 @@ static struct info_ctx *info_ctx_create (flux_t *h)
     if (!(ctx->watchers = zlist_new ()))
         goto error;
     if (!(ctx->guest_watchers = zlist_new ()))
-        goto error;
-    if (!(ctx->update_lookups = zlist_new ()))
         goto error;
     if (!(ctx->update_watchers = zlist_new ()))
         goto error;

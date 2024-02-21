@@ -30,6 +30,18 @@ enum job_event_watch_flags {
     FLUX_JOB_EVENT_WATCH_WAITCREATE = 1, // wait for path to exist
 };
 
+enum job_lookup_flags {
+    /* return special fields as decoded JSON objects instead of strings
+     * - currently works for jobspec and R
+     */
+    FLUX_JOB_LOOKUP_JSON_DECODE = 1,
+    /* get current value of special fields by applying eventlog
+     * updates for those fields
+     * - currently works for R
+     */
+    FLUX_JOB_LOOKUP_CURRENT = 2,
+};
+
 enum job_urgency {
     FLUX_JOB_URGENCY_MIN = 0,
     FLUX_JOB_URGENCY_HOLD = FLUX_JOB_URGENCY_MIN,
