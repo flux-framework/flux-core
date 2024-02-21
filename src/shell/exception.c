@@ -48,7 +48,7 @@ static void exception_handler (flux_t *h,
 
     if (flux_respond (h, msg, NULL) < 0)
         shell_log_errno ("flux_respond");
-
+    return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         shell_log_errno ("flux_respond_error");
