@@ -291,6 +291,23 @@ static void exit_cb (struct bulk_exec *exec,
                                  "failed to terminate barrier: %s",
                                  strerror (errno));
     }
+
+    /*  If a shell exits due to signal report the shell as lost to
+     *  the leader shell. This avoids potential hangs in the leader
+     *  shell if it is waiting for data from job shells that did not
+     *  exit cleanly.
+     */
+    unsigned int rank = idset_first (ranks);
+    while (rank != IDSET_INVALID_ID) {
+        flux_subprocess_t *p = bulk_exec_get_subprocess (exec, rank);
+        int signo = flux_subprocess_signaled (p);
+        if (p && signo > 0) {
+            int shell_rank = resource_set_rank_index (job->R, rank);
+            if (shell_rank != 0)
+                lost_shell (job, false, shell_rank, NULL);
+        }
+        rank = idset_next (ranks, rank);
+    }
 }
 
 static int parse_service_option (json_t *jobspec,
