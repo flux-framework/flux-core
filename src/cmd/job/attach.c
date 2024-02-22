@@ -38,33 +38,12 @@
 #include "src/common/libterminus/pty.h"
 #include "src/common/libdebugged/debugged.h"
 #include "src/common/libutil/monotime.h"
-#include "src/shell/mpir/proctable.h"
 #include "ccan/str/str.h"
 
 #include "job/common.h"
+#include "job/mpir.h"
 
-#ifndef VOLATILE
-# if defined(__STDC__) || defined(__cplusplus)
-# define VOLATILE volatile
-# else
-# define VOLATILE
-# endif
-#endif
-
-#define MPIR_NULL                  0
-#define MPIR_DEBUG_SPAWNED         1
-#define MPIR_DEBUG_ABORTING        2
-
-VOLATILE int MPIR_debug_state    = MPIR_NULL;
-struct proctable *proctable      = NULL;
-MPIR_PROCDESC *MPIR_proctable    = NULL;
-int MPIR_proctable_size          = 0;
-char *MPIR_debug_abort_string    = NULL;
-int MPIR_i_am_starter            = 1;
-int MPIR_acquired_pre_main       = 1;
-int MPIR_force_to_main           = 1;
-int MPIR_partial_attach_ok       = 1;
-char *totalview_jobid            = NULL;
+char *totalview_jobid = NULL;
 
 int stdin_flags;
 
@@ -547,72 +526,6 @@ static void valid_or_exit_for_debug (struct attach_ctx *ctx)
     return;
 }
 
-static void setup_mpir_proctable (const char *s)
-{
-    if (!(proctable = proctable_from_json_string (s))) {
-        errno = EINVAL;
-        log_err_exit ("proctable_from_json_string");
-    }
-    MPIR_proctable = proctable_get_mpir_proctable (proctable,
-                                                   &MPIR_proctable_size);
-    if (!MPIR_proctable) {
-        errno = EINVAL;
-        log_err_exit ("proctable_get_mpir_proctable");
-    }
-}
-
-static void gen_attach_signal (struct attach_ctx *ctx)
-{
-    flux_future_t *f = NULL;
-    if (!(f = flux_job_kill (ctx->h, ctx->id, SIGCONT)))
-        log_err_exit ("flux_job_kill");
-    if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("kill %s: %s",
-                      ctx->jobid,
-                      future_strerror (f, errno));
-    flux_future_destroy (f);
-}
-
-static void setup_mpir_interface (struct attach_ctx *ctx, json_t *context)
-{
-    char topic [1024];
-    const char *s = NULL;
-    flux_future_t *f = NULL;
-    int stop_tasks_in_exec = 0;
-
-    if (json_unpack (context, "{s?b}", "sync", &stop_tasks_in_exec) < 0)
-        log_err_exit ("error decoding shell.init context");
-
-    snprintf (topic, sizeof (topic), "%s.proctable", ctx->service);
-
-    if (!(f = flux_rpc_pack (ctx->h, topic, ctx->leader_rank, 0, "{}")))
-        log_err_exit ("flux_rpc_pack");
-    if (flux_rpc_get (f, &s) < 0)
-        log_err_exit ("%s", topic);
-
-    setup_mpir_proctable (s);
-    flux_future_destroy (f);
-
-    MPIR_debug_state = MPIR_DEBUG_SPAWNED;
-
-    /* Signal the parallel debugger */
-    MPIR_Breakpoint ();
-
-    if (stop_tasks_in_exec || optparse_hasopt (ctx->p, "debug-emulate")) {
-        /* To support MPIR_partial_attach_ok, we need to send SIGCONT to
-         * those MPI processes to which the debugger didn't attach.
-         * However, all of the debuggers that I know of do ignore
-         * additional SIGCONT being sent to the processes they attached to.
-         * Therefore, we send SIGCONT to *every* MPI process.
-         *
-         * We also send SIGCONT under the debug-emulate flag. This allows us
-         * to write a test for attach mode. The running job will exit
-         * on SIGCONT.
-         */
-        gen_attach_signal (ctx);
-    }
-}
-
 static void attach_setup_stdin (struct attach_ctx *ctx)
 {
     flux_watcher_t *w;
@@ -916,8 +829,17 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
         else
             attach_setup_stdin (ctx);
     } else if (streq (name, "shell.start")) {
-        if (MPIR_being_debugged)
-            setup_mpir_interface (ctx, context);
+        if (MPIR_being_debugged) {
+            int stop_tasks_in_exec = 0;
+            if (json_unpack (context, "{s?b}", "sync", &stop_tasks_in_exec) < 0)
+                log_err ("error decoding shell.start context");
+            mpir_setup_interface (ctx->h,
+                                  ctx->id,
+                                  optparse_hasopt (ctx->p, "debug-emulate"),
+                                  stop_tasks_in_exec,
+                                  ctx->leader_rank,
+                                  ctx->service);
+        }
         handle_stdin_ranks (ctx, context);
     }
     else if (streq (name, "log")) {

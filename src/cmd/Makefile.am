@@ -138,6 +138,8 @@ flux_job_SOURCES = \
 	job/main.c \
 	job/common.c \
 	job/common.h \
+	job/mpir.c \
+	job/mpir.h \
 	job/attach.c \
 	job/submit.c \
 	job/list.c \
