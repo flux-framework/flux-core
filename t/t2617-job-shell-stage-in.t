@@ -128,5 +128,23 @@ test_expect_success 'content change should cause an error' '
         test_must_fail flux run -N1 -o stage-in /bin/true 2>changed.err &&
 	grep changed changed.err
 '
+test_expect_success 'Create files for example 2 of flux-archive(1)' '
+	mkdir -p project/dataset1 &&
+	mkdir -p home/fred &&
+	$lptest >project/dataset1/lptest &&
+	cat >home/fred/app <<-EOT &&
+	#!/bin/sh
+	find \$1 -type f
+	EOT
+	chmod +x home/fred/app
+'
+test_expect_success 'Verify that example 2 of flux-archive(1) works' '
+	flux archive create --name=dataset1 -C project dataset1 &&
+	flux archive create --name=app --mmap -C home/fred app &&
+	flux run -N4 -o stage-in.names=app,dataset1 \
+	    {{tmpdir}}/app {{tmpdir}}/dataset1 &&
+	flux archive remove --name=dataset1 &&
+	flux archive remove --name=app
+'
 
 test_done

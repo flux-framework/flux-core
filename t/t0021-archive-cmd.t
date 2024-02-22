@@ -173,5 +173,20 @@ test_expect_success 'archive exists in job KVS guest directory' '
 	jobdir=$(flux job last | flux job id --to=kvs) &&
 	flux kvs get $jobdir.guest.archive.mystuff >/dev/null
 '
+test_expect_success 'remove main archive' '
+	flux archive remove
+'
+test_expect_success 'Create files for example 1 of flux-archive(1)' '
+	mkdir -p project/dataset1 &&
+	echo foo >project/dataset1/testfile &&
+	echo bar >project/dataset1/testfile2
+'
+test_expect_success 'Ensure example 1 of flux-archive(1) works' '
+	flux archive create -C project dataset1 &&
+	flux exec -r 1 mkdir -p tmp.project &&
+	flux exec -r 1 flux archive extract --waitcreate -C tmp.project &&
+	flux exec -r 1 rm -r tmp.project &&
+	flux archive remove
+'
 
 test_done
