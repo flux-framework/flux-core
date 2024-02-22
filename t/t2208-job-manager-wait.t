@@ -159,12 +159,15 @@ test_expect_success "a second wait fails on inactive job" '
 	flux job wait ${JOBID} &&
 	test_expect_code 2 flux job wait ${JOBID}
 '
-
 test_expect_success "guest cannot wait on a job" '
+	flux jobs -a
+'
+
+test_expect_success "a user cannot wait on another user's job" '
 	JOBID=$(flux submit /bin/true) &&
-	export FLUX_HANDLE_ROLEMASK=0x2 &&
+	export FLUX_HANDLE_USERID=$(($(id -u)+1)) &&
 	test_expect_code 1 flux job wait ${JOBID} &&
-	unset FLUX_HANDLE_ROLEMASK
+	unset FLUX_HANDLE_USERID
 '
 test_expect_success "wait works with deprecated waitable flag" '
 	JOBID=$(flux submit --flags waitable /bin/true) &&

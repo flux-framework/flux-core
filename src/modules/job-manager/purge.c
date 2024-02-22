@@ -28,6 +28,7 @@
 #include "conf.h"
 #include "jobtap-internal.h"
 #include "restart.h"
+#include "wait.h"
 
 #define INACTIVE_NUM_UNLIMITED  (-1)
 #define INACTIVE_AGE_UNLIMITED  (-1.)
@@ -148,6 +149,7 @@ static int process_job_purge (struct purge *purge,
                        job,
                        "job.inactive-remove",
                        NULL);
+    wait_notify_inactive_remove (purge->ctx->wait, job);
 
     (void)zlistx_delete (purge->queue, job->handle);
     job->handle = NULL;

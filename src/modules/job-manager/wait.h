@@ -17,6 +17,7 @@
 #include "job-manager.h"
 
 void wait_notify_inactive (struct waitjob *wait, struct job *job);
+void wait_notify_inactive_remove (struct waitjob *wait, struct job *job);
 void wait_notify_active (struct waitjob *wait, struct job *job);
 
 struct waitjob *wait_ctx_create (struct job_manager *ctx);
