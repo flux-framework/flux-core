@@ -8,7 +8,7 @@ test_under_flux 2 job
 
 test_expect_success 'flux-shell: first task exit posts shell.task-exit event' '
 	jobid=$(flux submit /bin/true) &&
-	run_timeout 10 flux job wait-event -p guest.exec.eventlog \
+	run_timeout 10 flux job wait-event -p exec \
 		$jobid shell.task-exit
 '
 

@@ -201,32 +201,32 @@ test_expect_success 'create helper job submission script' '
 '
 test_expect_success 'job-shell: test shell kill event handling' '
 	id=$(flux submit -n4 -N4 ./sleepinf.sh) &&
-	flux job wait-event -p guest.exec.eventlog $id shell.init &&
-	flux job wait-event -p guest.output $id data &&
+	flux job wait-event -p exec $id shell.init &&
+	flux job wait-event -p output $id data &&
 	flux job kill $id &&
 	flux job wait-event $id finish >kill1.finish.out &&
 	grep status=$((15+128<<8)) kill1.finish.out
 '
 test_expect_success 'job-shell: test shell kill event handling: SIGKILL' '
 	id=$(flux submit -n4 -N4 ./sleepinf.sh) &&
-	flux job wait-event -p guest.exec.eventlog $id shell.init &&
-	flux job wait-event -p guest.output $id data &&
+	flux job wait-event -p exec $id shell.init &&
+	flux job wait-event -p output $id data &&
 	flux job kill -s SIGKILL $id &&
 	flux job wait-event $id finish >kill2.finish.out &&
 	grep status=$((9+128<<8)) kill2.finish.out
 '
 test_expect_success 'job-shell: test shell kill event handling: numeric signal' '
 	id=$(flux submit -n4 -N4 ./sleepinf.sh) &&
-	flux job wait-event -p guest.exec.eventlog $id shell.init &&
-	flux job wait-event -p guest.output $id data &&
+	flux job wait-event -p exec $id shell.init &&
+	flux job wait-event -p output $id data &&
 	flux job kill -s 2 $id &&
 	flux job wait-event $id finish >kill3.finish.out &&
 	grep status=$((2+128<<8)) kill3.finish.out
 '
 test_expect_success 'job-shell: mangled shell kill event logged' '
 	id=$(flux submit -n4 -N4 ./sleepinf.sh | flux job id) &&
-	flux job wait-event -p guest.exec.eventlog $id shell.init &&
-	flux job wait-event -p guest.output $id data &&
+	flux job wait-event -p exec $id shell.init &&
+	flux job wait-event -p output $id data &&
 	flux event pub shell-${id}.kill "{}" &&
 	flux job kill ${id} &&
 	flux job wait-event -vt 1 $id finish >kill4.finish.out &&
@@ -236,8 +236,8 @@ test_expect_success 'job-shell: mangled shell kill event logged' '
 '
 test_expect_success 'job-shell: shell kill event: kill(2) failure logged' '
 	id=$(flux submit -n4 -N4 ./sleepinf.sh | flux job id) &&
-	flux job wait-event -p guest.exec.eventlog $id shell.init &&
-	flux job wait-event -p guest.output $id data &&
+	flux job wait-event -p exec $id shell.init &&
+	flux job wait-event -p output $id data &&
 	flux event pub shell-${id}.kill "{\"signum\":199}" &&
 	flux job kill ${id} &&
 	flux job wait-event $id finish >kill5.finish.out &&

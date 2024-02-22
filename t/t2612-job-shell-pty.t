@@ -17,11 +17,11 @@ runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast"
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
 shell_leader_rank() {
-    flux job wait-event -f json -p guest.exec.eventlog $1 shell.init | \
+    flux job wait-event -f json -p exec $1 shell.init | 
         jq '.context["leader-rank"]'
 }
 shell_service() {
-    flux job wait-event -f json -p guest.exec.eventlog $1 shell.init | \
+    flux job wait-event -f json -p exec $1 shell.init | \
         jq -r '.context["service"]'
 }
 terminus_jobid() {
@@ -105,14 +105,14 @@ test_expect_success 'pty: pty.interactive forces a pty on rank 0' '
 		tty) &&
 	terminus_jobid $id list &&
 	$runpty flux job attach ${id} &&
-	flux job eventlog -p guest.output ${id} | grep "adding pty to rank 0"
+	flux job eventlog -p output ${id} | grep "adding pty to rank 0"
 '
 test_expect_success 'pty: -o pty.interactive and -o pty.capture can be used together' '
 	for i in $(seq 1 3); do
 		id=$(flux submit -o pty.interactive -o pty.capture tty) &&
 		$runpty flux job attach $id >ptyim.out 2>&1 &&
 		$runpty flux job attach $id &&
-		flux job eventlog -f json -p guest.output $id \
+		flux job eventlog -f json -p output $id \
 			| tail -n1 >last-event.$i
 	done &&
 	# Check that eof:true is the last event for all runs
