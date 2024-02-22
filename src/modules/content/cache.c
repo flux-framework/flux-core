@@ -850,16 +850,19 @@ static void content_stats_request (flux_t *h,
                                    void *arg)
 {
     struct content_cache *cache = arg;
+    json_t *o = content_mmap_get_stats (cache->mmap);
 
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:i s:i s:I s:i}",
+                           "{s:i s:i s:i s:I s:i s:O}",
                            "count", zhashx_size (cache->entries),
                            "valid", cache->acct_valid,
                            "dirty", cache->acct_dirty,
                            "size", cache->acct_size,
-                           "flush-batch-count", cache->flush_batch_count) < 0)
+                           "flush-batch-count", cache->flush_batch_count,
+                           "mmap", o ? o : json_null ()) < 0)
         flux_log_error (h, "content stats");
+    json_decref (o);
 }
 
 /* Handle request to store all dirty entries.  The store requests are batched

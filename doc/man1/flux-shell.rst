@@ -410,12 +410,12 @@ plugins include:
 .. option:: stage-in
 
   Copy files to the directory referenced by :envvar:`FLUX_JOB_TMPDIR` that
-  were previously mapped using :man1:`flux-filemap`.
+  were previously archived with :man1:`flux-archive`.
 
-.. option:: stage-in.tags=LIST
+.. option:: stage-in.names=LIST
 
-  Select files to copy by specifying a comma-separated list of tags.
-  If no tags are specified, the ``main`` tag is assumed.
+  Select archives to extract by specifying a comma-separated list of names
+  If no names are specified, ``main`` is assumed.
 
 .. option:: stage-in.pattern=PATTERN
 

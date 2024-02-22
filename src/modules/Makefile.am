@@ -78,6 +78,7 @@ content_la_SOURCES = \
 	content/checkpoint.c \
 	content/checkpoint.h
 content_la_LIBADD = \
+	$(top_builddir)/src/common/libfilemap/libfilemap.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
 content_la_LDFLAGS = $(fluxmod_ldflags) -module

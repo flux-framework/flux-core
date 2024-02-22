@@ -76,10 +76,11 @@ TESTSCRIPTS = \
 	t0012-content-sqlite.t \
 	t0024-content-s3.t \
 	t0028-content-backing-none.t \
-	t0029-filemap-cmd.t \
+	t0029-archive-mmap.t \
 	t0030-marshall.t \
 	t0031-constraint-parser.t \
 	t0032-directives-parser.t \
+	t0033-filemap-cmd.t \
 	t0025-broker-state-machine.t \
 	t0027-broker-groups.t \
 	t0013-config-file.t \
@@ -89,6 +90,7 @@ TESTSCRIPTS = \
 	t0017-security.t \
 	t0018-content-files.t \
 	t0020-terminus.t \
+	t0021-archive-cmd.t \
 	t0022-jj-reader.t \
 	t0023-jobspec1-validate.t \
 	t0026-flux-R.t \

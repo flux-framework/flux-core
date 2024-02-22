@@ -30,15 +30,13 @@ struct blobvec_mapinfo {
 
 
 /* Variant of fileref_create() with extra parameters to allow for 'blobvec'
- * encoding.  This is intended to be called from the broker.
- * - If non-NULL 'fullpath' is used in place of 'path' for open/stat/mmap.
+ * encoding.
  * - If 'param' is non-NULL, blobvec encoding is enabled with the specified
  *   params.
  * - If 'mapinfo' is non-NULL, and the file meets conditions for blobvec
  *   encoding, the file remains mapped in memory and its address is returned.
  */
 json_t *fileref_create_ex (const char *path,
-                           const char *fullpath,
                            struct blobvec_param *param,
                            struct blobvec_mapinfo *mapinfo,
                            flux_error_t *error);

@@ -25,10 +25,11 @@
 
 #include "ccan/base64/base64.h"
 
-#include "blobref.h"
-#include "errno_safe.h"
-#include "errprintf.h"
-#include "read_all.h"
+#include "src/common/libutil/blobref.h"
+#include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/read_all.h"
+#include "src/common/libutil/fdutils.h"
 #include "fileref.h"
 
 static int blobvec_append (json_t *blobvec,
@@ -323,7 +324,6 @@ error:
 }
 
 json_t *fileref_create_ex (const char *path,
-                           const char *fullpath,
                            struct blobvec_param *param,
                            struct blobvec_mapinfo *mapinfop,
                            flux_error_t *error)
@@ -343,8 +343,6 @@ json_t *fileref_create_ex (const char *path,
             goto inval;
         }
     }
-    if (!fullpath)
-        fullpath = path;
     /* Store a relative path in the object so that extraction can specify a
      * destination directory, like tar(1) default behavior.
      */
@@ -355,19 +353,22 @@ json_t *fileref_create_ex (const char *path,
         relative_path = ".";
     /* Avoid TOCTOU in S_ISREG case by opening before checking its type.
      * If open fails due to O_NOFOLLOW (ELOOP), get link info with lstat(2).
+     * Avoid open(2) blocking on a FIFO with O_NONBLOCK, but restore blocking
+     * behavior after open(2) succeeds.
      */
-    if ((fd = open (fullpath, O_RDONLY | O_NOFOLLOW)) < 0) {
-        if (errno != ELOOP || lstat (fullpath, &sb) < 0) {
+    if ((fd = open (path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)) < 0) {
+        if (errno != ELOOP || lstat (path, &sb) < 0) {
             errprintf (error, "%s: %s", path, strerror (errno));
             goto error;
         }
     }
     else {
-        if (fstat (fd, &sb) < 0) {
+        if (fstat (fd, &sb) < 0 || fd_set_blocking (fd) < 0) {
             errprintf (error, "%s: %s", path, strerror (errno));
             goto error;
         }
     }
+
     /* Empty reg file, possibly sparse with size > 0.
      */
     if (S_ISREG (sb.st_mode) && file_has_no_data (fd)) {
@@ -415,7 +416,7 @@ json_t *fileref_create_ex (const char *path,
     /* symlink
      */
     else if (S_ISLNK (sb.st_mode)) {
-        if (!(o = fileref_create_symlink (relative_path, fullpath, &sb, error)))
+        if (!(o = fileref_create_symlink (relative_path, path, &sb, error)))
             goto error;
     }
     /* directory
@@ -450,7 +451,7 @@ error:
 
 json_t *fileref_create (const char *path, flux_error_t *error)
 {
-    return fileref_create_ex (path, NULL, NULL, NULL, error);
+    return fileref_create_ex (path, NULL, NULL, error);
 }
 
 void fileref_pretty_print (json_t *fileref,

@@ -26,7 +26,7 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-getattr.1 \
 	man1/flux-dmesg.1 \
 	man1/flux-dump.1 \
-	man1/flux-filemap.1 \
+	man1/flux-archive.1 \
 	man1/flux-content.1 \
 	man1/flux-config.1 \
 	man1/flux-proxy.1 \
