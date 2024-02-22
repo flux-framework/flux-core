@@ -41,8 +41,8 @@ struct optparse_option eventlog_opts[] =  {
                "(default if omitted), 'never', or 'auto' (default)."
     },
     { .name = "path", .key = 'p', .has_arg = 1, .arginfo = "PATH",
-      .usage = "Specify alternate eventlog path suffix "
-               "(e.g. \"guest.exec.eventlog\")",
+      .usage = "Specify alternate eventlog name or path suffix "
+               "(e.g. \"exec\", \"output\", or \"guest.exec.eventlog\")",
     },
     OPTPARSE_TABLE_END
 };
@@ -78,8 +78,8 @@ struct optparse_option wait_event_opts[] =  {
                "(default if omitted), 'never', or 'auto' (default)."
     },
     { .name = "path", .key = 'p', .has_arg = 1, .arginfo = "PATH",
-      .usage = "Specify alternate eventlog path suffix "
-               "(e.g. \"guest.exec.eventlog\")",
+      .usage = "Specify alternate eventlog name or path suffix "
+               "(e.g. \"exec\", \"output\", or \"guest.exec.eventlog\")",
     },
     { .name = "waitcreate", .key = 'W', .has_arg = 0,
       .usage = "If path does not exist, wait for its creation",
@@ -95,6 +95,31 @@ struct eventlog_ctx {
     const char *path;
     struct eventlog_formatter *evf;
 };
+
+struct path_shortname {
+    const char *name;
+    const char *path;
+};
+
+/*  Set of shorthand names for common job eventlog paths:
+ */
+struct path_shortname eventlog_paths[] = {
+    { "exec",   "guest.exec.eventlog" },
+    { "output", "guest.output"        },
+    { "input",  "guest.input"         },
+    { NULL,     NULL                  },
+};
+
+const char *path_lookup (const char *name)
+{
+    const struct path_shortname *path = eventlog_paths;
+    while (path->name) {
+        if (streq (name, path->name))
+            return path->path;
+        path++;
+    }
+    return name;
+}
 
 static void formatter_parse_options (optparse_t *p,
                                      struct eventlog_formatter *evf)
@@ -169,7 +194,7 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
 
     ctx.jobid = argv[optindex++];
     ctx.id = parse_jobid (ctx.jobid);
-    ctx.path = optparse_get_str (p, "path", "eventlog");
+    ctx.path = path_lookup (optparse_get_str (p, "path", "eventlog"));
     ctx.p = p;
 
     if (!(ctx.evf = eventlog_formatter_create ()))
@@ -341,7 +366,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     ctx.id = parse_jobid (ctx.jobid);
     ctx.p = p;
     ctx.wait_event = argv[optindex++];
-    ctx.path = optparse_get_str (p, "path", "eventlog");
+    ctx.path = path_lookup (optparse_get_str (p, "path", "eventlog"));
     timeout = optparse_get_duration (p, "timeout", -1.0);
     if (optparse_hasopt (p, "waitcreate"))
         flags |= FLUX_JOB_EVENT_WATCH_WAITCREATE;

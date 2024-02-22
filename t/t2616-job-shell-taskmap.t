@@ -67,20 +67,20 @@ test_expect_success 'flux job taskmap fails with invalid arguments' '
 '
 test_expect_success 'taskmap is posted in shell.start event' '
 	id=$(flux submit ./map.sh) &&
-	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
+	flux job wait-event -p exec -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,1,1,1]]" &&
 	test_check_taskmap $id
 '
 test_expect_success 'taskmap is correct for --tasks-per-node=4' '
 	id=$(flux submit -N4 --tasks-per-node=4 ./map.sh) &&
-	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
+	flux job wait-event -p exec -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,4,4,1]]" &&
 	test_check_taskmap $id
 '
 test_expect_success 'taskmap is unchanged with --taskmap=block' '
 	id=$(flux submit -N4 --tasks-per-node=4 \
 		--taskmap=block ./map.sh) &&
-	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
+	flux job wait-event -p exec -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,4,4,1]]" &&
 	test_check_taskmap $id
 '
@@ -90,29 +90,29 @@ test_expect_success 'shell dies with --taskmap=block:oops' '
 '
 test_expect_success 'taskmap is correct for --tasks-per-node=2' '
 	id=$(flux submit -N4 --tasks-per-node=2 ./map.sh) &&
-	flux job wait-event -p guest.exec.eventlog -f json $id shell.start &&
-	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
+	flux job wait-event -p exec -f json $id shell.start &&
+	flux job wait-event -p exec -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,4,2,1]]" &&
 	test_check_taskmap $id
 '
 test_expect_success 'taskmap=cyclic works with valid args' '
 	id=$(flux submit --taskmap=cyclic -N4 --tasks-per-node=4 ./map.sh) &&
-	flux job wait-event -p guest.exec.eventlog -f json $id shell.start &&
-	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
+	flux job wait-event -p exec -f json $id shell.start &&
+	flux job wait-event -p exec -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,4,1,4]]" &&
 	test_check_taskmap $id
 '
 test_expect_success 'taskmap=cyclic:2 works' '
 	id=$(flux submit --taskmap=cyclic:2 -N4 --tasks-per-node=4 ./map.sh) &&
-	flux job wait-event -p guest.exec.eventlog -f json $id shell.start &&
-	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
+	flux job wait-event -p exec -f json $id shell.start &&
+	flux job wait-event -p exec -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,4,2,2]]" &&
 	test_check_taskmap $id
 '
 test_expect_success 'taskmap=cyclic:3 works' '
 	id=$(flux submit --taskmap=cyclic:3 -N4 --tasks-per-node=4 ./map.sh) &&
-	flux job wait-event -p guest.exec.eventlog -f json $id shell.start &&
-	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
+	flux job wait-event -p exec -f json $id shell.start &&
+	flux job wait-event -p exec -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[0,4,3,1],[0,4,1,1]]" &&
 	test_check_taskmap $id
 '
@@ -120,7 +120,7 @@ test_expect_success 'taskmap=manual works' '
 	id=$(flux submit \
 	     --taskmap=manual:"[[1,3,4,1],[0,1,4,1]]" \
 	     -N4 --tasks-per-node=4 ./map.sh) &&
-	flux job wait-event -p guest.exec.eventlog -f json $id shell.start \
+	flux job wait-event -p exec -f json $id shell.start \
 		| jq -e ".context.taskmap.map == [[1,3,4,1],[0,1,4,1]]" &&
 	test_check_taskmap $id
 '

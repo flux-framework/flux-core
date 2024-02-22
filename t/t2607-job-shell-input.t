@@ -216,7 +216,7 @@ test_expect_success 'flux-shell: no fatal exception after stdin sent to exited t
 	EOF
 	chmod +x ${name}.sh &&
 	id=$(flux submit -n2 -o verbose ./${name}.sh) &&
-	flux job wait-event -v -p guest.exec.eventlog ${id} shell.start &&
+	flux job wait-event -v -p exec ${id} shell.start &&
 	flux kvs get --watch --waitcreate --count=1 ${name}.0.started &&
 	flux kvs get --watch --waitcreate --count=1 ${name}.1.started &&
 	echo | flux job attach -XE ${id} &&

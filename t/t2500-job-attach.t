@@ -132,7 +132,7 @@ test_expect_success NO_CHAIN_LINT 'attach: output appears before cancel' '
 	jobid=$(flux submit ${script})
 	flux job attach -E ${jobid} 1>attach5.out 2>attach5.err &
 	waitpid=$! &&
-	flux job wait-event --timeout=10.0 -p guest.exec.eventlog ${jobid} test-output-ready &&
+	flux job wait-event --timeout=10.0 -p exec ${jobid} test-output-ready &&
 	flux cancel ${jobid} &&
 	! wait ${waitpid} &&
 	grep before attach5.out &&

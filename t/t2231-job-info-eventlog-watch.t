@@ -212,7 +212,10 @@ test_expect_success 'flux job wait-event -p works (guest.exec.eventlog)' '
 	fj_wait_event -p "guest.exec.eventlog" $jobid done > wait_event_path2.out &&
 	grep done wait_event_path2.out
 '
-
+test_expect_success 'flux job wait-event -p works (exec)' '
+	fj_wait_event -p exec $jobid done > wait_event_path2.1.out &&
+	grep done wait_event_path2.1.out
+'
 test_expect_success 'flux job wait-event -p works (non-guest eventlog)' '
 	jobid=$(submit_job) &&
 	kvsdir=$(flux job id --to=kvs $jobid) &&
@@ -236,9 +239,9 @@ test_expect_success 'flux job wait-event -p fails on path "guest."' '
 	test_must_fail fj_wait_event -p "guest." $jobid submit
 '
 
-test_expect_success 'flux job wait-event -p and --waitcreate works (guest.exec.eventlog)' '
+test_expect_success 'flux job wait-event -p and --waitcreate works (exec)' '
 	jobid=$(submit_job) &&
-	fj_wait_event --waitcreate -p "guest.exec.eventlog" $jobid done > wait_event_path4.out &&
+	fj_wait_event --waitcreate -p exec $jobid done > wait_event_path4.out &&
 	grep done wait_event_path4.out
 '
 
@@ -298,7 +301,8 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p invalid and --waitcrea
 
 test_expect_success 'flux job wait-event -p times out on no event (live job)' '
 	jobid=$(submit_job_live sleeplong.json) &&
-	test_expect_code 142 run_timeout -s ALRM 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
+	test_expect_code 142 run_timeout -s ALRM 0.2 \
+	    flux job wait-event -p exec $jobid foobar &&
 	flux cancel $jobid
 '
 
@@ -351,10 +355,10 @@ test_expect_success 'job-info: generate jobspec to consume all resources' '
 	flux run --dry-run -n4 -c2 sleep 300 > sleeplong-all-rsrc.json
 '
 
-test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (wait job)' '
+test_expect_success NO_CHAIN_LINT 'flux job wait-event -p exec works (wait job)' '
 	jobidall=$(submit_job_live sleeplong-all-rsrc.json)
 	jobid=$(submit_job_wait)
-	fj_wait_event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path7.out &
+	fj_wait_event -v -p exec ${jobid} done > wait_event_path7.out &
 	waitpid=$! &&
 	wait_watchers_nonzero "watchers" &&
 	wait_watchers_nonzero "guest_watchers" &&
@@ -370,7 +374,8 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 test_expect_success 'flux job wait-event -p times out on no event (wait job)' '
 	jobidall=$(submit_job_live sleeplong-all-rsrc.json) &&
 	jobid=$(submit_job_wait) &&
-	test_expect_code 142 run_timeout -s ALRM 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
+	test_expect_code 142 run_timeout -s ALRM 0.2 \
+	    flux job wait-event -p exec $jobid foobar &&
 	flux cancel $jobidall &&
 	flux cancel $jobid
 '
@@ -383,7 +388,7 @@ test_expect_success 'flux job wait-event -p times out on no event (wait job)' '
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (never start job)' '
 	jobidall=$(submit_job_live sleeplong-all-rsrc.json)
 	jobid=$(submit_job_wait)
-	fj_wait_event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path8.out &
+	fj_wait_event -v -p exec ${jobid} done > wait_event_path8.out &
 	waitpid=$! &&
 	wait_watchers_nonzero "watchers" &&
 	wait_watchers_nonzero "guest_watchers" &&

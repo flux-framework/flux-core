@@ -82,7 +82,7 @@ test_expect_success 'status: exit code ignores nonfatal exceptions' '
 	flux job status -vvv $jobid
 '
 test_expect_success 'status: returns 143 (SIGTERM) for canceled running job' '
-	flux job wait-event -p guest.exec.eventlog ${killed} shell.start &&
+	flux job wait-event -p exec ${killed} shell.start &&
 	flux cancel ${killed} &&
 	test_expect_code 143 flux job status -v ${killed}
 '

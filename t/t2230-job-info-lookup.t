@@ -199,7 +199,21 @@ test_expect_success 'flux job eventlog -p works (guest.exec.eventlog)' '
 	flux job eventlog -p "guest.exec.eventlog" $jobid > eventlog_path2.out &&
 	grep done eventlog_path2.out
 '
-
+test_expect_success 'flux job eventlog -p works (exec)' '
+	jobid=$(submit_job) &&
+	flux job eventlog -p exec $jobid > eventlog_path3.out &&
+	grep done eventlog_path3.out
+'
+test_expect_success 'flux job eventlog -p works (output)' '
+	jobid=$(submit_job) &&
+	flux job eventlog -p output $jobid > eventlog_path4.out &&
+	grep encoding eventlog_path4.out
+'
+test_expect_success 'flux job eventlog -p works (output)' '
+	jobid=$(submit_job) &&
+	flux job eventlog -p input $jobid > eventlog_path5.out &&
+	grep encoding eventlog_path5.out
+'
 test_expect_success 'flux job eventlog -p fails on invalid path' '
 	jobid=$(submit_job) &&
 	test_must_fail flux job eventlog -p "foobar" $jobid

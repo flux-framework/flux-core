@@ -694,7 +694,7 @@ test_expect_success 'flux-job: load modules for live kill tests' '
 # N.B. SIGTERM == 15
 test_expect_success 'flux-job: kill basic works' '
 	id=$(flux submit --wait-event=start sleep 100) &&
-	flux job wait-event -vt 30 -p guest.exec.eventlog $id shell.start &&
+	flux job wait-event -vt 30 -p exec $id shell.start &&
 	flux job kill ${id} &&
 	flux job wait-event -t 30 ${id} finish > kill1.out &&
 	grep status=$((15+128<<8)) kill1.out
@@ -703,7 +703,7 @@ test_expect_success 'flux-job: kill basic works' '
 # N.B. SIGUSR1 == 10
 test_expect_success 'flux-job: kill --signal works' '
 	id=$(flux submit --wait-event=start sleep 100) &&
-	flux job wait-event -vt 30 -p guest.exec.eventlog $id shell.start &&
+	flux job wait-event -vt 30 -p exec $id shell.start &&
 	flux job kill --signal=SIGUSR1 ${id} &&
 	flux job wait-event -t 30 ${id} finish > kill2.out &&
 	grep status=$((10+128<<8)) kill2.out
@@ -711,7 +711,7 @@ test_expect_success 'flux-job: kill --signal works' '
 
 test_expect_success 'flux job: killall -f kills one job' '
 	id=$(flux submit sleep 600) &&
-	flux job wait-event -vt 30 -p guest.exec.eventlog $id shell.init &&
+	flux job wait-event -vt 30 -p exec $id shell.init &&
 	flux job killall -f &&
 	run_timeout 60 flux queue drain
 '
@@ -720,7 +720,7 @@ test_expect_success 'flux job: cancel can operate on multiple jobs' '
 	ids=$(flux submit --bcc=1-3 sleep 600) &&
 	for id in ${ids}; do
 		flux job wait-event \
-			-vt 30 -p guest.exec.eventlog $id shell.init
+			-vt 30 -p exec $id shell.init
 	done &&
 	flux job cancel ${ids} cancel multiple jobs &&
 	for id in ${ids}; do
@@ -742,8 +742,7 @@ test_expect_success 'flux job: raise can operate on multiple jobs' '
 test_expect_success 'flux job: kill can operate on multiple jobs' '
 	ids=$(flux submit --wait-event=start --bcc=1-3 sleep 600) &&
 	for id in ${ids}; do
-		flux job wait-event \
-			-t 30 -p guest.exec.eventlog ${id} shell.init
+		flux job wait-event -t 30 -p exec ${id} shell.init
 	done &&
 	flux job kill ${ids} &&
 	for id in ${ids}; do

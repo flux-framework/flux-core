@@ -13,20 +13,20 @@ INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
 
 test_expect_success 'flux-shell: 1N: init and start shell events are emitted' '
 	id=$(flux submit -n1 -N1 /bin/true)  &&
-	flux job wait-event -vt 5 -p guest.exec.eventlog \
+	flux job wait-event -vt 5 -p exec \
 		-m leader-rank=0 ${id} shell.init &&
-	flux job wait-event -vt 5 -p guest.exec.eventlog \
+	flux job wait-event -vt 5 -p exec \
 		${id} shell.init  &&
-	flux job wait-event -vt 5 -p guest.exec.eventlog \
+	flux job wait-event -vt 5 -p exec \
 		${id} shell.start
 '
 test_expect_success 'flux-shell: 2N: init and start shell events are emitted' '
 	id=$(flux submit -n4 -N2 /bin/true)  &&
-	flux job wait-event -vt 5 -p guest.exec.eventlog \
+	flux job wait-event -vt 5 -p exec \
 		-m leader-rank=0  ${id} shell.init &&
-	flux job wait-event -vt 5 -p guest.exec.eventlog \
+	flux job wait-event -vt 5 -p exec \
 		-m size=2 ${id} shell.init  &&
-	flux job wait-event -vt 5 -p guest.exec.eventlog \
+	flux job wait-event -vt 5 -p exec \
 		${id} shell.start
 '
 test_expect_success 'flux-shell: plugin can add event context' '
@@ -35,7 +35,7 @@ test_expect_success 'flux-shell: plugin can add event context' '
 	plugin.load { file = "test-event.so" }
 	EOT
 	id=$(flux submit -o initrc=test-event.lua -n2 -N2 hostname) &&
-	flux job wait-event -vt 5 -p guest.exec.eventlog \
+	flux job wait-event -vt 5 -p exec \
 		-m event-test=foo ${id} shell.init
 
 '

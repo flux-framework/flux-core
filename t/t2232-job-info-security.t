@@ -99,20 +99,20 @@ test_expect_success 'flux job eventlog fails on bad first event (user)' '
 
 test_expect_success 'flux job guest.exec.eventlog works via -p (owner)' '
 	jobid=$(submit_job) &&
-	flux job eventlog -p guest.exec.eventlog $jobid
+	flux job eventlog -p exec $jobid
 '
 
 test_expect_success 'flux job guest.exec.eventlog works via -p (user)' '
 	jobid=$(submit_job 9000) &&
 	set_userid 9000 &&
-	flux job eventlog -p guest.exec.eventlog $jobid &&
+	flux job eventlog -p exec $jobid &&
 	unset_userid
 '
 
 test_expect_success 'flux job guest.exec.eventlog fails via -p (wrong user)' '
 	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	! flux job eventlog -p guest.exec.eventlog $jobid &&
+	! flux job eventlog -p exec $jobid &&
 	unset_userid
 '
 
@@ -202,33 +202,33 @@ test_expect_success 'flux job wait-event fails (wrong user)' '
 
 test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (owner)' '
 	jobid=$(submit_job) &&
-	flux job wait-event -p guest.exec.eventlog $jobid done
+	flux job wait-event -p exec $jobid done
 '
 
 test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (user)' '
 	jobid=$(submit_job 9000) &&
 	set_userid 9000 &&
-	flux job wait-event -p guest.exec.eventlog $jobid done &&
+	flux job wait-event -p exec $jobid done &&
 	unset_userid
 '
 
 test_expect_success 'flux job wait-event guest.exec.eventlog fails via -p (wrong user)' '
 	jobid=$(submit_job 9000) &&
 	set_userid 9999 &&
-	! flux job wait-event -p guest.exec.eventlog $jobid done &&
+	! flux job wait-event -p exec $jobid done &&
 	unset_userid
 '
 
 test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (live job, owner)' '
 	jobid=$(submit_job_live) &&
-	flux job wait-event -p guest.exec.eventlog $jobid init &&
+	flux job wait-event -p exec $jobid init &&
 	flux cancel $jobid
 '
 
 test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (live job, user)' '
 	jobid=$(submit_job_live 9000) &&
 	set_userid 9000 &&
-	flux job wait-event -p guest.exec.eventlog $jobid init &&
+	flux job wait-event -p exec $jobid init &&
 	unset_userid &&
 	flux cancel $jobid
 '
@@ -236,7 +236,7 @@ test_expect_success 'flux job wait-event guest.exec.eventlog works via -p (live 
 test_expect_success 'flux job wait-event guest.exec.eventlog fails via -p (live job, wrong user)' '
 	jobid=$(submit_job_live 9000) &&
 	set_userid 9999 &&
-	! flux job wait-event -p guest.exec.eventlog $jobid init &&
+	! flux job wait-event -p exec $jobid init &&
 	unset_userid &&
 	flux cancel $jobid
 '
