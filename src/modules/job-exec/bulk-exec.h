@@ -25,8 +25,8 @@ typedef void (*exec_exit_f) (struct bulk_exec *, void *arg,
 typedef void (*exec_io_f)   (struct bulk_exec *,
                              flux_subprocess_t *,
                              const char *stream,
-			     const char *data,
-			     int data_len,
+                             const char *data,
+                             int data_len,
                              void *arg);
 
 typedef void (*exec_error_f) (struct bulk_exec *,
@@ -42,10 +42,10 @@ struct bulk_exec_ops {
 };
 
 struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops,
-		                     const char *service,
-				     flux_jobid_t id,
-				     const char *name,
-				     void *arg);
+                                     const char *service,
+                                     flux_jobid_t id,
+                                     const char *name,
+                                     void *arg);
 
 void *bulk_exec_aux_get (struct bulk_exec *exec, const char *key);
 
