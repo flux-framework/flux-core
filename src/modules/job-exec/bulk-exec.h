@@ -97,4 +97,9 @@ int bulk_exec_total (struct bulk_exec *exec);
 /* Get subprocess remote exec service name (never returns NULL) */
 const char *bulk_exec_service_name (struct bulk_exec *exec);
 
+/*  Get the subprocess handle for a rank
+ */
+flux_subprocess_t *bulk_exec_get_subprocess (struct bulk_exec *exec,
+                                             int rank);
+
 #endif /* !HAVE_JOB_EXEC_BULK_EXEC_H */

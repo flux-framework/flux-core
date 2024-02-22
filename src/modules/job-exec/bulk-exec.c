@@ -752,5 +752,17 @@ const char *bulk_exec_service_name (struct bulk_exec *exec)
     return exec->service;
 }
 
+flux_subprocess_t *bulk_exec_get_subprocess (struct bulk_exec *exec, int rank)
+{
+    flux_subprocess_t *p = zlist_first (exec->processes);
+    while (p) {
+        if (flux_subprocess_rank (p) == rank)
+            return p;
+        p = zlist_next (exec->processes);
+    }
+    errno = ENOENT;
+    return NULL;
+}
+
 /* vi: ts=4 sw=4 expandtab
  */
