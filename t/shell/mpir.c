@@ -15,6 +15,7 @@
 #endif
 
 #include <flux/core.h>
+#include <flux/optparse.h>
 
 #include "src/common/libutil/log.h"
 #include "src/shell/mpir/proctable.h"
@@ -22,6 +23,22 @@
 struct proctable *proctable = NULL;
 MPIR_PROCDESC *MPIR_proctable = NULL;
 int MPIR_proctable_size = 0;
+
+static struct optparse_option opts[] = {
+    { .name = "leader-rank",
+      .key = 'r',
+      .has_arg = 1,
+      .arginfo = "RANK",
+      .usage = "specify shell leader rank"
+    },
+    { .name = "service",
+      .key = 's',
+      .has_arg = 1,
+      .arginfo = "NAME",
+      .usage = "specify shell service NAME"
+    },
+    OPTPARSE_TABLE_END
+};
 
 static void set_mpir_proctable (const char *s)
 {
@@ -41,13 +58,20 @@ int main (int ac, char **av)
     flux_future_t *f = NULL;
     const char *s = NULL;
     const char *service;
+    optparse_t *p;
 
     log_init ("mpir-test");
+    if (!(p = optparse_create ("mpir-test"))
+        || optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
+        log_err_exit ("optparse_create");
 
-    if (ac != 3)
-        log_msg_exit ("Usage: %s LEADER-RANK SERVICE\n", av [0]);
-    rank = atoi (av[1]);
-    service = av[2];
+    if (optparse_parse_args (p, ac, av) < 0)
+        exit (1);
+
+    rank = optparse_get_int (p, "leader-rank", -1);
+    service = optparse_get_str (p, "service", NULL);
+    if (rank < 0 || service == NULL)
+        log_msg_exit ("--rank and --service are required");
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");

@@ -28,7 +28,7 @@ for test in 1:1 2:2 2:4 4:4 4:8 4:7; do
 	id=$(flux submit -o stop-tasks-in-exec \
              -n${TASKS} -N${NODES} /bin/true)  &&
         flux job wait-event -vt 5 -p exec -m sync=true ${id} shell.start &&
-        ${mpir} $(shell_leader_rank $id) $(shell_service $id) &&
+        ${mpir} -r $(shell_leader_rank $id) -s $(shell_service $id) &&
         flux job kill -s CONT ${id} &&
         flux job attach ${id}
     '
@@ -42,9 +42,9 @@ test_expect_success 'flux-shell: test security of proctable method' '
     shell_service=$(shell_service $id) &&
     ( export FLUX_HANDLE_USERID=9999 &&
       export FLUX_HANDLE_ROLEMASK=0x2 &&
-      test_expect_code 1 ${mpir} $shell_rank $shell_service
+      test_expect_code 1 ${mpir} -r $shell_rank -s $shell_service
     ) &&
-    ${mpir} $(shell_leader_rank $id) $(shell_service $id) &&
+    ${mpir} -r $(shell_leader_rank $id) -s $(shell_service $id) &&
     flux job kill -s CONT ${id} &&
     flux job attach ${id}
 '
