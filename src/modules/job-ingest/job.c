@@ -100,12 +100,6 @@ struct job *job_create_from_request (const flux_msg_t *msg,
                    FLUX_JOB_URGENCY_DEFAULT);
         goto inval;
     }
-    if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
-        && (job->flags & FLUX_JOB_WAITABLE)) {
-        errprintf (error,
-                   "only the instance owner can submit with FLUX_JOB_WAITABLE");
-        goto inval;
-    }
     /* Validate jobspec signature, and unwrap(J) -> jobspec_str, _strsize.
      * Userid claimed by signature must match authenticated job->cred.userid.
      * If not the instance owner, a strong signature is required

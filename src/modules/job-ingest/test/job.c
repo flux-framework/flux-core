@@ -54,21 +54,6 @@ void test_job_flags_guest (void *sec, const char *J_signed)
     flux_msg_t *msg;
 
     skip (J_signed == NULL, 1,
-         "guest flags=WAITABLE (no guest support)");
-    msg = pack_request (false,
-                        "{s:s s:i s:i}",
-                        "J", J_signed,
-                        "urgency", FLUX_JOB_URGENCY_DEFAULT,
-                        "flags", FLUX_JOB_WAITABLE);
-    errno = 0;
-    if (!(job = job_create_from_request (msg, sec, &error)))
-        diag ("%s", error.text);
-    ok (job == NULL && errno == EINVAL,
-        "job_create_from_request flags=WAITABLE fails with EINVAL for guest");
-    flux_msg_decref (msg);
-    end_skip;
-
-    skip (J_signed == NULL, 1,
          "guest flags=NOVALIDATE (no guest support)");
     msg = pack_request (false,
                         "{s:s s:i s:i}",
