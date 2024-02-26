@@ -530,6 +530,7 @@ static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
     char key [128];
     char *taskids = NULL;
     struct taskmap *map;
+    struct rcalc_rankinfo rankinfo;
 
     if (!shell->info)
         return NULL;
@@ -551,13 +552,16 @@ static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
     if (!(taskids = get_rank_task_idset (map, rank)))
         return NULL;
 
+    if (rcalc_get_nth (shell->info->rcalc, rank, &rankinfo) < 0)
+        return NULL;
+
     o = json_pack_ex (&error, 0, "{ s:i s:i s:s s:{s:s s:s?}}",
-                   "broker_rank", rank,
+                   "broker_rank", rankinfo.rank,
                    "ntasks", taskmap_ntasks (map, rank),
                    "taskids", taskids,
                    "resources",
-                     "cores", shell->info->rankinfo.cores,
-                     "gpus",  shell->info->rankinfo.gpus);
+                     "cores", rankinfo.cores,
+                     "gpus",  rankinfo.gpus);
     free (taskids);
 
     if (o == NULL)
