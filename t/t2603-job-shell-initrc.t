@@ -4,7 +4,7 @@ test_description='Test flux-shell initrc.lua implementation'
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 1
+test_under_flux 4
 
 FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
@@ -280,4 +280,25 @@ test_expect_success 'flux-shell: initrc: shell.die function works' '
 		> ${name}.log 2>&1 &&
 	grep "FATAL: test: shell.die" ${name}.log
 '
+test_expect_success MULTICORE 'flux-shell: initrc: shell.rankinfo reports broker_rank' '
+	name=shell.rankinfo.broker_rank &&
+	cat >${name}.lua <<-EOF &&
+	ri0 = shell.get_rankinfo(0)
+	ri1 = shell.get_rankinfo(1)
+	if ri0.broker_rank ~= 1 or ri1.broker_rank ~= 3 then
+	  shell.log ("rankinfo(0).broker_rank = "
+	             ..shell.get_rankinfo(0).broker_rank)
+	  shell.log ("rankinfo(1).broker_rank = "
+	             ..shell.get_rankinfo(1).broker_rank)
+	  shell.die ("rankinfo.broker_rank incorrect!")
+	end
+	if ri0.ntasks ~= 2 or ri1.ntasks ~= 1 then
+	  shell.die ("got ri[0].ntasks = "..ri0.ntasks
+	             .." ri[1].ntasks = "..ri1.ntasks)
+	end
+	EOF
+	flux run -N2 -n3 --requires=rank:1,3 \
+	    -o verbose -o initrc=${name}.lua true
+'
+flux job info $(flux job last) R
 test_done
