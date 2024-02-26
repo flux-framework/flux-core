@@ -2,8 +2,6 @@
 
 test_description='Test flux-archive'
 
-. `dirname $0`/content/content-helper.sh
-
 . `dirname $0`/sharness.sh
 
 test_under_flux 2
@@ -15,7 +13,7 @@ umask 022
 
 # Usage: randbytes bytes
 randbytes() {
-	dd if=/dev/random bs=$1 count=1
+	dd if=/dev/urandom bs=$1 count=1
 }
 
 test_expect_success 'flux archive create --badopt prints unrecognized option' '
@@ -86,7 +84,7 @@ test_expect_success 'flux archive list works' '
 	test_cmp list.exp list.out
 '
 test_expect_success 'flux archive list -l works' '
-	flux archive list --l >list_l.out &&
+	flux archive list -l >list_l.out &&
 	cat >list_l.exp <<-EOT &&
 	f 0644     2048 testfile2
 	d 0755        0 testdir
