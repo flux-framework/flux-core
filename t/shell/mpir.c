@@ -19,10 +19,14 @@
 
 #include "src/common/libutil/log.h"
 #include "src/shell/mpir/proctable.h"
+#include "src/cmd/job/mpir.h"
 
-struct proctable *proctable = NULL;
-MPIR_PROCDESC *MPIR_proctable = NULL;
-int MPIR_proctable_size = 0;
+extern struct proctable *proctable;
+extern MPIR_PROCDESC *MPIR_proctable;
+extern int MPIR_proctable_size;
+
+extern char MPIR_executable_path[256];
+extern char MPIR_server_arguments[1024];
 
 static struct optparse_option opts[] = {
     { .name = "leader-rank",
@@ -37,35 +41,37 @@ static struct optparse_option opts[] = {
       .arginfo = "NAME",
       .usage = "specify shell service NAME"
     },
+    { .name = "tool-launch",
+      .key = 't',
+      .has_arg = 0,
+      .usage = "test tool launch via MPIR_executable_path",
+    },
     OPTPARSE_TABLE_END
 };
 
-static void set_mpir_proctable (const char *s)
+static void print_proctable (void)
 {
-    if (!(proctable = proctable_from_json_string (s)))
-        log_err_exit ("proctable_from_json_string");
-    MPIR_proctable = proctable_get_mpir_proctable (proctable,
-                                                   &MPIR_proctable_size);
-    if (!MPIR_proctable)
-        log_err_exit ("proctable_get_mpir_proctable");
+    json_t *o = proctable_to_json (proctable);
+    char *s = json_dumps (o, 0);
+    fprintf (stderr, "proctable=%s\n", s);
+    json_decref (o);
+    free (s);
 }
 
 int main (int ac, char **av)
 {
     int rank;
-    char topic [1024];
     flux_t *h = NULL;
-    flux_future_t *f = NULL;
-    const char *s = NULL;
     const char *service;
     optparse_t *p;
+    int optindex;
 
     log_init ("mpir-test");
     if (!(p = optparse_create ("mpir-test"))
         || optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
         log_err_exit ("optparse_create");
 
-    if (optparse_parse_args (p, ac, av) < 0)
+    if ((optindex = optparse_parse_args (p, ac, av)) < 0)
         exit (1);
 
     rank = optparse_get_int (p, "leader-rank", -1);
@@ -73,22 +79,36 @@ int main (int ac, char **av)
     if (rank < 0 || service == NULL)
         log_msg_exit ("--rank and --service are required");
 
+    if (optparse_hasopt (p, "tool-launch")) {
+        if (optindex == ac)
+            log_msg_exit ("--tool-launch requires specification of tool args");
+        /*  Set MPIR_executable_path */
+        snprintf (MPIR_executable_path,
+                  sizeof (MPIR_executable_path),
+                  "%s",
+                  av[optindex++]);
+        /*  Set MPIR_server_arguments */
+        int i = 0;
+        while (optindex < ac) {
+            int n = snprintf (MPIR_server_arguments+i,
+                              sizeof (MPIR_server_arguments) - i,
+                              "%s",
+                              av[optindex++]);
+            i += n + 1;
+        }
+    }
+
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    snprintf (topic, sizeof (topic), "%s.proctable", service);
-    if (!(f = flux_rpc_pack (h, topic, rank, 0, "{}")))
-        log_err_exit ("flux_rpc_pack");
-    if (flux_rpc_get (f, &s) < 0)
-        log_err_exit ("%s", topic);
+    mpir_setup_interface (h, 0, false, false, rank, service);
+    print_proctable ();
 
-    fprintf (stderr, "proctable=%s\n", s);
-
-    set_mpir_proctable (s);
+    flux_reactor_run (flux_get_reactor (h), 0);
 
     proctable_destroy (proctable);
-    flux_future_destroy (f);
     flux_close (h);
+    optparse_destroy (p);
     return 0;
 }
 
