@@ -113,7 +113,7 @@ test_expect_success 'remove archives' '
 	flux archive remove --name=red
 '
 test_expect_success 'create a test file with random content' '
-        dd if=/dev/random of=foo bs=4096 count=1 conv=notrunc
+        dd if=/dev/urandom of=foo bs=4096 count=1 conv=notrunc
 '
 test_expect_success 'map test file and access it to prime the cache' '
 	mkdir -p copydir &&
