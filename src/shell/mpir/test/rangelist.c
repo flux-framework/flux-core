@@ -71,6 +71,47 @@ void test_rangelist_append_dups (void)
     rangelist_destroy (rl2);
 }
 
+void test_rangelist_append_range_dups (void)
+{
+    struct rangelist *rl = rangelist_create ();
+    ok (rangelist_append (rl, 1) == 0
+        && rangelist_append (rl, 1) == 0
+        && rangelist_append (rl, 1) == 0
+        && rangelist_append (rl, 1) == 0,
+        "rangelist_append 4 1s");
+    ok (rangelist_append (rl, 2) == 0
+        && rangelist_append (rl, 2) == 0
+        && rangelist_append (rl, 2) == 0
+        && rangelist_append (rl, 2) == 0,
+        "rangelist_append 4 2s");
+    ok (rangelist_append (rl, 3) == 0
+        && rangelist_append (rl, 3) == 0
+        && rangelist_append (rl, 3) == 0
+        && rangelist_append (rl, 3) == 0,
+        "rangelist_append 4 3s");
+    ok (rangelist_append (rl, 4) == 0
+        && rangelist_append (rl, 4) == 0
+        && rangelist_append (rl, 4) == 0
+        && rangelist_append (rl, 4) == 0,
+        "rangelist_append 4 4s");
+    rangelist_diag (rl);
+
+    json_t *o;
+    ok ((o = rangelist_to_json (rl)) != NULL,
+        "rangelist_to_json");
+
+    struct rangelist *rl2 = rangelist_from_json (o);
+    ok (rl2 != NULL,
+        "rangelist_from_json works size=%d",
+        rangelist_size (rl2));
+    ok (rangelist_size (rl2) == rangelist_size (rl),
+        "rangelist_size matches");
+
+    json_decref (o);
+    rangelist_destroy (rl);
+    rangelist_destroy (rl2);
+}
+
 void test_rangelist_basic (void)
 {
     struct rangelist *rl2;
@@ -158,6 +199,7 @@ int main (int argc, char **argv)
     test_rangelist_basic ();
     test_rangelist_append ();
     test_rangelist_append_dups ();
+    test_rangelist_append_range_dups ();
     done_testing ();
     return 0;
 }
