@@ -62,6 +62,14 @@ static int create_xmlfile (flux_shell_t *shell)
         shell_log_errno ("failed to set HWLOC_XMLFILE in job environment");
         goto error;
     }
+    /*  Note: HWLOC_XMLFILE will be ignored if HWLOC_COMPONENTS is also set
+     *  in the environment, so unset that variable here.
+     */
+    if (flux_shell_unsetenv (shell, "HWLOC_COMPONENTS") < 0
+        && errno != ENOENT) {
+        shell_log_errno ("failed to unset HWLOC_COMPONENTS");
+        goto error;
+    }
     return 0;
 error:
     if (fd >= 0)
