@@ -14,6 +14,10 @@ test_expect_success 'shell: HWLOC_XMLFILE is not set for normal jobs' '
 test_expect_success 'shell: -o hwloc.xmlfile sets HWLOC_XMLFILE' '
 	flux run -o hwloc.xmlfile printenv HWLOC_XMLFILE
 '
+test_expect_success 'shell: -o hwloc.xmlfile unsets HWLOC_COMPONENTS' '
+	test_must_fail flux run --env=HWLOC_COMPONENTS=x86 -o hwloc.xmlfile \
+		printenv HWLOC_COMPONENTS
+'
 command -v hwloc-info >/dev/null && test_set_prereq HWLOC_INFO
 test_expect_success HWLOC_INFO 'shell: -o hwloc.xmlfile HWLOC_XMLFILE is valid' '
 	flux run -o hwloc.xmlfile sh -c "hwloc-info --input \$HWLOC_XMLFILE"
