@@ -38,7 +38,10 @@
        nonzero exit code.
 
    * - :option:`hwloc.xmlfile`
-     - Write hwloc XML gathered by job to a file and set ``HWLOC_XMLFILE``
+     - Write hwloc XML gathered by job to a file and set ``HWLOC_XMLFILE``.
+       Note that this option will also unset ``HWLOC_COMPONENTS`` if set, since
+       presence of this environment variable may cause hwloc to ignore
+       ``HWLOC_XMLFILE``.
 
    * - :option:`output.limit`
      - Set KVS output limit to SIZE bytes, where SIZE may be a floating point
