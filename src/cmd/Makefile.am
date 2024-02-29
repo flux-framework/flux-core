@@ -156,7 +156,8 @@ flux_job_SOURCES = \
 	job/purge.c \
 	job/taskmap.c \
 	job/timeleft.c \
-	job/last.c
+	job/last.c \
+	job/hostpids.c
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
