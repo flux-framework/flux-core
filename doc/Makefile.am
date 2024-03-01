@@ -454,8 +454,13 @@ EXTRA_DIST = \
 	guide/build.rst \
 	guide/support.rst \
 	guide/images/lgplv3-147x51.png \
+	guide/images/adminarch.dia \
+	guide/images/adminarch.png \
+	guide/images/fox-standing.svg \
+	guide/images/Frog-1.svg \
 	guide/start.rst \
 	guide/interact.rst \
+	guide/admin.rst \
 	guide/glossary.rst \
 	$(RST_FILES) \
 	man1/index.rst \

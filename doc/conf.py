@@ -55,26 +55,39 @@ domainrefs = {
     'linux:man1': {
         'text': '%s(1)',
         'url': 'https://linux.die.net/man/1/%s',
+        'url': 'http://man7.org/linux/man-pages/man1/%s.1.html'
     },
     'linux:man2': {
         'text': '%s(2)',
-        'url': 'https://linux.die.net/man/2/%s',
+        'url': 'http://man7.org/linux/man-pages/man2/%s.2.html'
     },
     'linux:man3': {
         'text': '%s(3)',
-        'url': 'https://linux.die.net/man/3/%s',
+        'url': 'http://man7.org/linux/man-pages/man3/%s.3.html'
     },
     'linux:man5': {
         'text': '%s(5)',
-        'url': 'https://linux.die.net/man/5/%s',
+        'url': 'http://man7.org/linux/man-pages/man5/%s.5.html'
     },
     'linux:man7': {
         'text': '%s(7)',
-        'url': 'https://linux.die.net/man/7/%s',
+        'url': 'http://man7.org/linux/man-pages/man7/%s.7.html'
     },
     'linux:man8': {
         'text': '%s(8)',
-        'url': 'https://linux.die.net/man/8/%s',
+        'url': 'http://man7.org/linux/man-pages/man8/%s.8.html'
+    },
+    'security:man3': {
+        'text': '%s(3)',
+        'url': 'https://flux-framework.readthedocs.io/projects/flux-security/en/latest/man3/%s.html'
+    },
+    'security:man5': {
+        'text': '%s(5)',
+        'url': 'https://flux-framework.readthedocs.io/projects/flux-security/en/latest/man5/%s.html'
+    },
+    'security:man8': {
+        'text': '%s(8)',
+        'url': 'https://flux-framework.readthedocs.io/projects/flux-security/en/latest/man8/%s.html'
     },
 }
 

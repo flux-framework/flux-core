@@ -101,6 +101,7 @@ Table of Contents
    guide/support
    guide/start
    guide/interact
+   guide/admin
    guide/glossary
    index_man
    python/index
