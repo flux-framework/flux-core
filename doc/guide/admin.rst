@@ -732,8 +732,12 @@ Adding Queues
 
 It may be useful to configure a Flux system instance with multiple queues.
 Each queue should be associated with a non-overlapping resource subset,
-identified by property name.  It is good practice for queues to create a
-new property that has the same name as the queue.
+identified by property name. It is good practice for queues to create a
+new property that has the same name as the queue. (There is no requirement
+that queue properties match the queue name, but this will cause extra entries
+in the PROPERTIES column for these queues. When queue names match property
+names, :command:`flux resource list` suppresses these matching properties
+in its output.)
 
 When queues are defined, all jobs must specify a queue at submission time.
 If that is inconvenient, then ``policy.jobspec.defaults.system.queue`` may
