@@ -26,6 +26,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libidset/idset.h"
+#include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libsubprocess/fbuf.h"
 #include "src/common/libsubprocess/fbuf_watcher.h"
@@ -54,6 +55,9 @@ static struct optparse_option cmdopts[] = {
       .usage = "Set subprocess option NAME to VALUE (multiple use ok)" },
     { .name = "with-imp", .has_arg = 0,
       .usage = "Run args under 'flux-imp run'" },
+    { .name = "jobid", .key = 'j', .has_arg = 1, .arginfo = "JOBID",
+      .usage = "Set target ranks to nodes assigned to JOBID and  "
+               "service name to job shell exec service" },
     OPTPARSE_TABLE_END
 };
 
@@ -412,13 +416,152 @@ static const char *get_flux_imp_path (flux_t *h)
     return imp;
 }
 
+/*  Return true if all ids in `idset` are valid indices into `ranks`.
+ */
+static bool check_valid_indices (struct idset *ranks,
+                                 struct idset *idset)
+{
+    /*  idset of NULL is valid since it will be treated as all ids
+     */
+    if (idset == NULL)
+        return true;
+    return (idset_last (idset) < idset_count (ranks));
+}
+
+static void filter_ranks (struct idset *ranks,
+                          const char *include,
+                          const char *exclude,
+                          bool relative)
+{
+    unsigned int i;
+    int n = 0;
+    struct idset *include_ids = NULL;
+    struct idset *exclude_ids = NULL;
+
+    if (!streq (include, "all")
+        && !(include_ids = idset_decode (include)))
+        log_err_exit ("failed to decode idset '%s'", include);
+
+    /*  include_ids is a set of indices into the `ranks` idset.
+     *  (This works because we always start with ranks [0, size-1])
+     *
+     *  Check that each index in include_ids is valid before proceeding.
+     */
+    if (!check_valid_indices (ranks, include_ids))
+        log_msg_exit ("One or more invalid --ranks specified: %s",
+                      include);
+
+    if (exclude && !(exclude_ids = idset_decode (exclude)))
+        log_err_exit ("error decoding --exclude idset");
+
+    /*  Note: it is not an error if exclude_ids falls outside of the
+     *  ranks idset, this is simply ignored.
+     */
+
+    i = idset_first (ranks);
+    while (i != IDSET_INVALID_ID) {
+        /*
+         * Remove this id from ranks if one of the following is true
+         *  - it is in exclude_ids if relative == false
+         *  - the index of this id is in exclude_ids if relative == true
+         *  - the index of this id is in include_ids if include_ids != NULL.
+         */
+        if (idset_test (exclude_ids, relative ? n : i)
+            || (include_ids && !idset_test (include_ids, n))) {
+            if (idset_clear (ranks, i) < 0)
+                log_err_exit ("idset_clear");
+        }
+        i = idset_next (ranks, i);
+        n++;
+    }
+    idset_destroy (include_ids);
+    idset_destroy (exclude_ids);
+}
+
+/*  Get job shell rexec service name and broker ranks for job.
+ */
+int get_jobid_rexec_info (flux_t *h,
+                          const char *jobid,
+                          char **servicep,
+                          struct idset **idsetp)
+{
+    flux_future_t *f;
+    flux_jobid_t id;
+    flux_job_state_t state;
+    const char *ranks;
+    struct idset *ids;
+    bool done = false;
+
+    if (flux_job_id_parse (jobid, &id) < 0)
+        log_msg_exit ("error parsing jobid: \"%s\"", jobid);
+
+    if (!(f = flux_rpc_pack (h,
+                            "job-list.list-id",
+                            FLUX_NODEID_ANY,
+                            0,
+                            "{s:I s:[ss]}",
+                            "id", id,
+                            "attrs", "ranks", "state"))
+        || flux_rpc_get_unpack (f,
+                                "{s:{s:i s:s}}",
+                                "job",
+                                 "state", &state,
+                                 "ranks", &ranks) < 0) {
+        if (errno == ENOENT)
+            log_msg_exit ("job %s not found", jobid);
+        log_err_exit ("unable to get info for job %s", jobid);
+    }
+
+    if (state != FLUX_JOB_STATE_RUN)
+        log_msg_exit ("job %s is not currently running", jobid);
+
+    if (!(ids = idset_decode (ranks)) || idset_empty (ids))
+        log_msg_exit ("failed to get assigned ranks for %s", jobid);
+    *idsetp = ids;
+
+    flux_future_destroy (f);
+
+    if (!(f = flux_job_event_watch (h,
+                                    id,
+                                    "guest.exec.eventlog",
+                                    FLUX_JOB_EVENT_WATCH_WAITCREATE)))
+        log_err_exit ("flux_job_event_watch");
+
+    while (!done) {
+        json_t *o;
+        json_t *context;
+        const char *event;
+        const char *name;
+
+        if (flux_job_event_watch_get (f, &event) < 0)
+            log_msg_exit ("failed to get shell.init event for %s", jobid);
+
+        if (!(o = eventlog_entry_decode (event))
+            || eventlog_entry_parse (o, NULL, &name, &context) < 0)
+            log_err_exit ("failed to decode exec eventlog event");
+
+        if (streq (name, "shell.init")) {
+            const char *service = NULL;
+            if (json_unpack (context, "{s:s}", "service", &service) < 0)
+                log_msg_exit ("failed to get service from shell.init event");
+            if (asprintf (servicep, "%s.rexec", service) < 0)
+                log_err_exit ("unable to create job rexec topic string");
+            done = true;
+        }
+        json_decref (o);
+        flux_future_reset (f);
+    }
+    flux_future_destroy (f);
+    return 0;
+}
+
 
 int main (int argc, char *argv[])
 {
     const char *optargp;
     int optindex;
     flux_reactor_t *r;
-    struct idset *ns;
+    struct idset *targets;
     uint32_t rank;
     flux_cmd_t *cmd;
     char *cwd = NULL;
@@ -431,6 +574,7 @@ int main (int argc, char *argv[])
     };
     struct timespec t0;
     const char *service_name;
+    char *job_service = NULL;
 
     log_init ("flux-exec");
 
@@ -502,38 +646,36 @@ int main (int argc, char *argv[])
                                      &imp_path);
     }
 
-    if (optparse_getopt (opts, "rank", &optargp) > 0
-        && !streq (optargp, "all")) {
-        if (!(ns = idset_decode (optargp)))
-            log_err_exit ("idset_decode");
-        if (!(rank_count = idset_count (ns)))
-            log_err_exit ("idset_count");
+    /* Get input ranks from --jobid if given:
+     */
+    if (optparse_getopt (opts, "jobid", &optargp) > 0) {
+        get_jobid_rexec_info (h, optargp, &job_service, &targets);
     }
     else {
-        if (!(ns = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        if (!(targets = idset_create (0, IDSET_FLAG_AUTOGROW)))
             log_err_exit ("idset_create");
-        if (idset_range_set (ns, 0, rank_range - 1) < 0)
+        if (idset_range_set (targets, 0, rank_range - 1) < 0)
             log_err_exit ("idset_range_set");
-        rank_count = rank_range;
     }
 
-    if (optparse_hasopt (opts, "exclude")) {
-        struct idset *xset;
+    /* Include and exclude ranks based on --rank and --exclude options
+     * Make rank exclusion relative to job ranks if --jobid was used.
+     */
+    filter_ranks (targets,
+                  optparse_get_str (opts, "rank", "all"),
+                  optparse_get_str (opts, "exclude", NULL),
+                  optparse_hasopt (opts, "jobid"));
 
-        if (!(xset = idset_decode (optparse_get_str (opts, "exclude", NULL))))
-            log_err_exit ("error decoding --exclude idset");
-        if (idset_range_clear (ns, idset_first (xset), idset_last (xset)) < 0)
-            log_err_exit ("error apply --exclude idset");
-        idset_destroy (xset);
-    }
-
-    if (!(hanging = idset_copy (ns)))
+    rank_count = idset_count (targets);
+    if (rank_count == 0)
+        log_msg_exit ("No targets specified");
+    if (!(hanging = idset_copy (targets)))
         log_err_exit ("idset_copy");
 
     monotime (&t0);
     if (optparse_getopt (opts, "verbose", NULL) > 0) {
         const char *argv0 = flux_cmd_arg (cmd, 0);
-        char *nodeset = idset_encode (ns,
+        char *nodeset = idset_encode (targets,
                                       IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS);
         if (!nodeset)
             log_err_exit ("idset_encode");
@@ -551,8 +693,10 @@ int main (int argc, char *argv[])
     if (!(exitsets = zhashx_new ()))
         log_err_exit ("zhashx_new()");
 
-    service_name = optparse_get_str (opts, "service", "rexec");
-    rank = idset_first (ns);
+    service_name = optparse_get_str (opts,
+                                     "service",
+                                     job_service ? job_service : "rexec");
+    rank = idset_first (targets);
     while (rank != IDSET_INVALID_ID) {
         flux_subprocess_t *p;
         if (!(p = flux_rexec_ex (h,
@@ -568,7 +712,7 @@ int main (int argc, char *argv[])
             log_err_exit ("zlist_append");
         if (!zlist_freefn (subprocesses, p, subprocess_destroy, true))
             log_err_exit ("zlist_freefn");
-        rank = idset_next (ns, rank);
+        rank = idset_next (targets, rank);
     }
 
     if (optparse_getopt (opts, "verbose", NULL) > 0)
@@ -630,7 +774,8 @@ int main (int argc, char *argv[])
 
     /* Clean up.
      */
-    idset_destroy (ns);
+    idset_destroy (targets);
+    free (job_service);
     free (cwd);
     flux_cmd_destroy(cmd);
     flux_close (h);

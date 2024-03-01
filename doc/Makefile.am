@@ -382,7 +382,6 @@ if ENABLE_DOCS
 man_MANS = $(MAN1_FILES) $(MAN3_FILES) $(MAN5_FILES) $(MAN7_FILES)
 $(RST_FILES): \
 	man1/common/resources.rst \
-	man1/common/nodeset.rst \
 	man1/common/job-param-additional.rst \
 	man1/common/job-param-batch.rst \
 	man1/common/job-param-common.rst \
@@ -461,7 +460,6 @@ EXTRA_DIST = \
 	$(RST_FILES) \
 	man1/index.rst \
 	man1/common/resources.rst \
-	man1/common/nodeset.rst \
 	man1/common/job-param-additional.rst \
 	man1/common/job-param-batch.rst \
 	man1/common/job-param-common.rst \
