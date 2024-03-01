@@ -25,9 +25,9 @@
  *   which is delta encoded from the previous entry (or 0 if this is the
  *   first entry in the rangelist).
  *
- * - If an entry is an array, it will have two elements. The fist element
- *   is delta encoded from the previous entry (or 0 if no previous entry)
- *   and represents the start value for a set of integers.
+ * - If an entry is an array, it will have two or three elements. The first
+ *   element is delta encoded from the previous entry (or 0 if no previous
+ *   entry) and represents the start value for a set of integers.
  *
  *   - if the second element is > 0, then it represents a run-length
  *     encoded set of integers beginning at start. E.g. [1234,4] represents
@@ -35,6 +35,10 @@
  *
  *   - if the second element is < 0, then it represents a number of
  *     repeats of the same value, e.g. [18, -3] represents [18, 18, 18].
+ *
+ *   - if there is a third element, this indicates that the first two
+ *     elements are repeated N times, e.g. [1, -1], [1 -1], [1, -1] is
+ *     equivalent to [1, -1, 2].
  */
 
 #if HAVE_CONFIG_H
@@ -254,6 +258,54 @@ json_t *range_to_json (struct range *r, int64_t base)
     return o;
 }
 
+static json_int_t range_json_val (json_t *array, size_t index)
+{
+    return json_integer_value (json_array_get (array, index));
+}
+
+static bool range_json_equal (json_t *a, json_t *b)
+{
+    if (range_json_val (a, 0) == range_json_val (b, 0)
+        && range_json_val (a, 1) == range_json_val (b, 1))
+        return true;
+    return false;
+}
+
+static int increment_range_repeat (json_t *range)
+{
+    json_t *val = NULL;
+    if (json_array_size (range) == 3) {
+        json_int_t repeat = range_json_val (range, 2);
+        if (!(val = json_integer (repeat + 1))
+            || json_array_set_new (range, 2, val) < 0)
+            goto error;
+        return 0;
+    }
+    if (!(val = json_integer (1))
+        || json_array_append_new (range, val) < 0)
+        goto error;
+    return 0;
+error:
+    json_decref (val);
+    return -1;
+}
+
+static bool check_previous_repeat (json_t *array, json_t *range)
+{
+    json_t *prev;
+    size_t size = json_array_size (array);
+    bool result = false;
+
+    if ((size = json_array_size (array)) == 0
+        || !(prev = json_array_get (array, size - 1))
+        || json_array_size (prev) < 2)
+        return false;
+    if ((result = range_json_equal (prev, range))
+        && increment_range_repeat (prev) < 0)
+        return false;
+    return result;
+}
+
 json_t *rangelist_to_json (struct rangelist *rl)
 {
     struct range *r;
@@ -264,7 +316,11 @@ json_t *rangelist_to_json (struct rangelist *rl)
     r = zlist_first (rl->ranges);
     while (r) {
         json_t *range = range_to_json (r, base);
-        if (!range || json_array_append_new (result, range) < 0) {
+        if (!range)
+            goto error;
+        if (check_previous_repeat (result, range))
+            json_decref (range);
+        else if (json_array_append_new (result, range) < 0) {
             json_decref (range);
             goto error;
         }
@@ -277,18 +333,24 @@ error:
     return NULL;
 }
 
-static struct range *range_from_json (json_t *o, int64_t base)
+static struct range *range_from_json (json_t *o, int64_t base, int *repeat)
 {
     int64_t min;
     int64_t range = 0;
 
+    if (repeat)
+        *repeat = 0;
+
     if (json_is_array (o)) {
-        if (json_array_size (o) != 2) {
+        size_t size = json_array_size (o);
+        if (size < 2 || size > 3) {
             errno = EINVAL;
             return NULL;
         }
         min = json_integer_value (json_array_get (o, 0));
         range = json_integer_value (json_array_get (o, 1));
+        if (size == 3 && repeat != NULL)
+            *repeat = json_integer_value (json_array_get (o, 2));
     }
     else {
         if (!json_is_integer (o)) {
@@ -323,12 +385,24 @@ struct rangelist *rangelist_from_json (json_t *o)
     if (!(rl = rangelist_create ()))
         return NULL;
     json_array_foreach (o, i, val) {
-        struct range *r = range_from_json (val, base);
+        int repeat;
+        struct range *r = range_from_json (val, base, &repeat);
+
         if (!r || rangelist_append_range (rl, r) < 0) {
             range_destroy (r);
             goto err;
         }
         base = range_max (r);
+
+        /* Handle repeating ranges */
+        for (int j = 0; j < repeat; j++) {
+            if (!(r = range_from_json (val, base, NULL))
+                || rangelist_append_range (rl, r) < 0) {
+                range_destroy (r);
+                goto err;
+            }
+            base = range_max (r);
+        }
     }
     return rl;
 err:

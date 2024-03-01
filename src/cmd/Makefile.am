@@ -138,6 +138,8 @@ flux_job_SOURCES = \
 	job/main.c \
 	job/common.c \
 	job/common.h \
+	job/mpir.c \
+	job/mpir.h \
 	job/attach.c \
 	job/submit.c \
 	job/list.c \
@@ -154,7 +156,8 @@ flux_job_SOURCES = \
 	job/purge.c \
 	job/taskmap.c \
 	job/timeleft.c \
-	job/last.c
+	job/last.c \
+	job/hostpids.c
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \

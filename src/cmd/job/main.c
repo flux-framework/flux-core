@@ -91,6 +91,10 @@ extern struct optparse_option timeleft_opts[];
 
 extern int cmd_last (optparse_t *p, int argc, char **argv);
 
+extern int cmd_hostpids (optparse_t *p, int argc, char **argv);
+extern struct optparse_option hostpids_opts[];
+
+
 static struct optparse_option global_opts[] =  {
     OPTPARSE_TABLE_END
 };
@@ -256,6 +260,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_timeleft,
       0,
       timeleft_opts,
+    },
+    { "hostpids",
+      "[OPTIONS] JOBID",
+      "Print host:pid pairs for tasks in JOBID",
+      cmd_hostpids,
+      0,
+      hostpids_opts,
     },
     { "last",
       "SLICE",
