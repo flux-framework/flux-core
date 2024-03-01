@@ -321,7 +321,7 @@ flux-sched
 flux-accounting (optional)
   Management of limits for individual users/projects, banks, and prioritization
   based on fair-share accounting.  For more information on how to configure
-  run flux-accounting, please refer to :ref:`flux-accounting-guide`.
+  run flux-accounting, please refer to the `Flux Accounting Guide <https://flux-framework.readthedocs.io/en/latest/guides/accounting-guide.html>`_.
 
 flux-pam (optional)
   A PAM module that can enable users to login to compute nodes that are
