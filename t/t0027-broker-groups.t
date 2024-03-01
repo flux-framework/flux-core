@@ -30,6 +30,15 @@ test_expect_success 'groups.get on rank > 0 fails with reasonable error' '
 	grep "only available on rank 0" test0.err
 '
 
+test_expect_success 'nonlocal groups.join fails with appropriate error' '
+	test_must_fail ${GROUPSCMD} join --rank 1 foo 2>rmtjoin.err &&
+	grep "restricted to the local broker" rmtjoin.err
+'
+test_expect_success 'nonlocal groups.leave fails with appropriate error' '
+	test_must_fail ${GROUPSCMD} leave --rank 1 foo 2>rmtleave.err &&
+	grep "restricted to the local broker" rmtleave.err
+'
+
 badjoin() {
 	flux python -c "import flux; print(flux.Flux().rpc(\"groups.join\").get())"
 }
