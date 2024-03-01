@@ -812,4 +812,45 @@ test_expect_success 'flux job: timeleft fails for invalid jobids' '
 	test_expect_code 1 flux job timeleft f1234 &&
 	test_expect_code 1 flux job timeleft x1234
 '
+test_expect_success 'flux job: hostpids fails for invalid jobid' '
+	test_expect_code 1 flux job hostpids oof
+'
+test_expect_success 'flux job: hostpids fails for unknown jobid' '
+	test_expect_code 1 flux job hostpids f1234
+'
+test_expect_success 'flux job: hostpids fails for inactive job' '
+	inactive_id=$(flux jobs -f inactive -nc 1 -o {id}) &&
+	test_expect_code 1 flux job hostpids $inactive_id
+'
+# note: sleep inf job shared by next few tests
+test_expect_success 'flux job: hostpids works for running job' '
+	id=$(flux submit -N2 -n2 --wait-event=start sleep inf) &&
+	flux job hostpids $id >hostpids1.out &&
+	test_debug "cat hostpids1.out" &&
+	test $(grep -c , hostpids1.out) -eq 1
+'
+test_expect_success 'flux job: hostpids --delimiter works' '
+	flux job hostpids --delimiter="\n" $id >hostpids2.out &&
+	test_debug "cat hostpids2.out" &&
+	test $(wc -l < hostpids2.out) -eq 2
+'
+test_expect_success 'flux job: hostpids --ranks works' '
+	test "$(flux job hostpids --ranks=1 $id)" = "$(tail -n1 hostpids2.out)"
+'
+test_expect_success 'flux job: hostpids invalid --ranks fails' '
+	test_must_fail flux job hostpids --ranks=foo $id
+'
+test_expect_success 'flux job: hostpids fails for non job owner' '
+	uid=$(($(id -u)+1)) &&
+	test_must_fail runas ${uid} \
+		flux job hostpids $id
+'
+test_expect_success 'flux job: hostpids -t, --timeout works' '
+	id2=$(flux submit --urgency=hold true) &&
+	test_must_fail flux job hostpids -t 0.1 $id2
+'
+test_expect_success 'terminate running jobs' '
+	flux cancel --all &&
+	flux queue idle
+'
 test_done
