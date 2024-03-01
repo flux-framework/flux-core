@@ -22,6 +22,7 @@ SYNOPSIS
 | **flux** **job** **timeleft** [*-H*] [*id*]
 | **flux** **job** **purge** [*-f*] [*--age-limit=FSD*] [*--num-limit=N*] [*ids...*]
 | **flux** **job** **info** [*--original*] [*--base*] *id* *key*
+| **flux** **job** **hostpids** [*OPTIONS*] *id*
 
 
 DESCRIPTION
@@ -456,6 +457,33 @@ R
      expiration time was extended (default)
 
    - with :option:`--base`: the initial R allocated by the scheduler
+
+hostpids
+--------
+
+.. program:: flux job hostpids
+
+:program:`flux job hostpids` prints a comma-delimited list of
+``hostname:PID`` pairs for all tasks in a running job. If the job is
+pending, :program:`flux job hostpids` will block until all tasks in the
+job are running.
+
+Options:
+
+.. option:: -d, --delimiter=STRING
+
+  Set the output delimiter to STRING (default=``,``).
+
+.. option:: -r, --ranks=IDSET
+
+  Restrict output to the task ranks in IDSET. The default is to display
+  all ranks.
+
+.. option:: -t, --timeout=DURATION
+
+  Timeout the command after DURATION, which is specified in FSD.
+  (a floating point value with optional suffix ``s`` for seconds,
+   ``m`` for minutes, ``h`` for hours, or ``d`` for days).
 
 
 RESOURCES

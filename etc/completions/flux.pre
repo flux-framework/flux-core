@@ -443,6 +443,7 @@ _flux_job()
         taskmap \
         timeleft \
         last \
+        hostpids \
     "
     local nojob_subcmds="\
         cancelall \
@@ -555,6 +556,11 @@ _flux_job()
     "
     local timeleft_OPTS="\
         -H --human
+    "
+    local hostpids_OPTS="\
+        -d --delimiter= \
+        -t --timeout= \
+        -r --ranks= \
     "
     local last_OPTS=""
     if [[ $cmd != "job" ]]; then
