@@ -548,7 +548,7 @@ static void parse_json (optparse_t *p, const char *json_str)
         o = obj;
 
     /* Display the resulting object/value, optionally forcing
-     * the type to int or dobule, and optionally scaling the result.
+     * the type to int or double, and optionally scaling the result.
      */
     scale = optparse_get_double (p, "scale", 1.0);
     typestr = optparse_get_str (p, "type", NULL);
