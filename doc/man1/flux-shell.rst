@@ -330,6 +330,11 @@ plugins include:
 
   Set job stderr/out file output to PATH.
 
+.. option:: output.mode=truncate|append
+
+  Set the mode in which output files are opened to either truncate or
+  append. The default is to truncate.
+
 .. option:: input.stdin.type=TYPE
 
   Set job input for **stdin** to *TYPE*. *TYPE* may be either ``service``

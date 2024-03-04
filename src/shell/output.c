@@ -78,6 +78,7 @@ struct shell_output_type_file {
     struct shell_output_fd *fdp;
     char *path;
     int label;
+    int flags;
 };
 
 struct shell_output {
@@ -791,11 +792,24 @@ shell_output_setup_type_file (struct shell_output *out,
                               struct shell_output_type_file *ofp_copy)
 {
     const char *path = NULL;
+    const char *mode = "truncate";
 
-    if (flux_shell_getopt_unpack (out->shell, "output",
-                                  "{s:{s?s}}",
-                                  stream, "path", &path) < 0)
+    if (flux_shell_getopt_unpack (out->shell,
+                                  "output",
+                                  "{s?s s:{s?s s?b}}",
+                                  "mode", &mode,
+                                  stream,
+                                    "path", &path,
+                                    "label", &ofp->label) < 0)
         return -1;
+
+    ofp->flags = O_CREAT | O_WRONLY;
+    if (streq (mode, "append"))
+        ofp->flags |= O_APPEND;
+    else if (streq (mode, "truncate"))
+        ofp->flags |= O_TRUNC;
+    else
+        shell_warn ("ignoring invalid output.mode=%s", mode);
 
     if (path == NULL) {
         shell_log_error ("path for %s file output not specified", stream);
@@ -805,15 +819,11 @@ shell_output_setup_type_file (struct shell_output *out,
     if (!(ofp->path = flux_shell_mustache_render (out->shell, path)))
         return -1;
 
-    if (flux_shell_getopt_unpack (out->shell, "output",
-                                  "{s:{s?b}}",
-                                  stream, "label", &(ofp->label)) < 0)
-        return -1;
-
     if (ofp_copy) {
         if (!(ofp_copy->path = strdup (ofp->path)))
             return -1;
         ofp_copy->label = ofp->label;
+        ofp_copy->flags = ofp->flags;
     }
 
     return 0;
@@ -963,7 +973,6 @@ static int shell_output_type_file_setup (struct shell_output *out,
                                          struct shell_output_type_file *ofp)
 {
     mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-    int open_flags = O_CREAT | O_TRUNC | O_WRONLY;
     struct shell_output_fd *fdp = NULL;
     int saved_errno, fd = -1;
 
@@ -973,7 +982,7 @@ static int shell_output_type_file_setup (struct shell_output *out,
         return 0;
     }
 
-    if ((fd = open (ofp->path, open_flags, mode)) < 0) {
+    if ((fd = open (ofp->path, ofp->flags, mode)) < 0) {
         shell_log_errno ("error opening output file '%s'", ofp->path);
         goto error;
     }

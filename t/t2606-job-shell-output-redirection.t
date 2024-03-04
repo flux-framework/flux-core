@@ -366,4 +366,27 @@ test_expect_success LONGTEST 'job-shell: no truncation at 10MB for single-user j
 test_expect_success 'job-shell: invalid output.limit string is rejected' '
 	test_must_fail flux run -o output.limit=foo hostname
 '
+test_expect_success 'job-shell: output.mode=append works' '
+	flux bulksubmit --watch --output=append.out \
+		-o output.mode=append echo {} \
+		::: one two three &&
+	test_debug "cat append.out" &&
+	test $(wc -l < append.out) -eq 3 &&
+	grep one append.out &&
+	grep two append.out &&
+	grep three append.out
+'
+test_expect_success 'job-shell: output.mode=truncate works' '
+	cat <<-EOF >trunc.out &&
+	test text
+	EOF
+	flux run --output=trunc.out hostname &&
+	test $(wc -l <trunc.out) -eq 1 &&
+	test_must_fail grep "test text" trunc.out
+'
+test_expect_success 'job-shell: invalid output.mode emits warning' '
+	flux run --output=inval.out -o output.mode=foo hostname 2>inval.err &&
+	test_debug "cat inval.out" &&
+	grep "ignoring invalid output.mode=foo" inval.err
+'
 test_done
