@@ -722,6 +722,8 @@ shell_mpir_SOURCES = shell/mpir.c
 shell_mpir_CPPFLAGS = $(test_cppflags)
 shell_mpir_LDADD = \
 	$(top_builddir)/src/shell/libmpir.la \
+	$(top_builddir)/src/cmd/job/mpir.o \
+	$(top_builddir)/src/common/libdebugged/libdebugged.la \
 	$(test_ldadd)
 shell_mpir_LDFLAGS = $(test_ldflags)
 

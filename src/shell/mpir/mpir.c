@@ -73,6 +73,7 @@ static int shell_rank (flux_shell_t *shell)
 }
 
 static int proctable_add_task (struct proctable *p,
+                               int broker_rank,
                                flux_shell_task_t *task)
 {
     flux_subprocess_t *proc;
@@ -93,6 +94,7 @@ static int proctable_add_task (struct proctable *p,
     }
 
     if (proctable_append_task (p,
+                               broker_rank,
                                hostname,
                                flux_cmd_arg (cmd, 0),
                                rank,
@@ -106,14 +108,23 @@ static int proctable_add_task (struct proctable *p,
 static struct proctable * local_proctable_create (flux_shell_t *shell)
 {
     flux_shell_task_t *task;
-    struct proctable *p = proctable_create ();
-    if (!p)
-        return NULL;
+    int broker_rank;
+    struct proctable *p;
 
+    if (flux_shell_rank_info_unpack (shell,
+                                     -1,
+                                     "{s:i}",
+                                     "broker_rank", &broker_rank) < 0) {
+        shell_log_errno ("failed to get broker rank of current shell");
+        return NULL;
+    }
+
+    if (!(p = proctable_create ()))
+        return NULL;
     if (!(task = flux_shell_task_first (shell)))
         shell_log_errno ("No tasks?!");
     while (task) {
-        if (proctable_add_task (p, task) < 0)
+        if (proctable_add_task (p, broker_rank, task) < 0)
             goto err;
         task = flux_shell_task_next (shell);
     }

@@ -9,6 +9,7 @@
 \************************************************************/
 
 #include <jansson.h>
+#include <flux/idset.h>
 
 #ifndef HAVE_PROCTABLE_H
 #define HAVE_PROCTABLE_H
@@ -39,6 +40,7 @@ json_t * proctable_to_json (struct proctable *p);
 /*  Append information for one task to the proctable `p`.
  */
 int proctable_append_task (struct proctable *p,
+                           int broker_rank,
                            const char *hostname,
                            const char *executable,
                            int taskid,
@@ -63,6 +65,14 @@ int proctable_append_proctable_destroy (struct proctable *p1,
  */
 MPIR_PROCDESC *proctable_get_mpir_proctable (struct proctable *p,
                                              int *sizep);
+
+/*  Return the idset of broker ranks which hold the taskids in the
+ *   provided idset. If taskids == NULL, then return all broker ranks.
+ */
+struct idset *proctable_get_ranks (struct proctable *p,
+                                   const struct idset *taskids);
+
+int proctable_get_broker_rank (struct proctable *p, int taskid);
 
 #endif
 

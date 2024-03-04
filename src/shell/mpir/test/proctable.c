@@ -17,64 +17,65 @@
 
 struct entry {
     const char *host;
+    int broker_rank;
     const char *executable;
     int taskid;
     int pid;
 };
 
 struct entry basic [] = {
-    { "foo0", "myapp", 0, 1234 },
-    { "foo0", "myapp", 1, 1235 },
-    { "foo0", "myapp", 2, 1236 },
-    { "foo0", "myapp", 3, 1237 },
-    { "foo1", "myapp", 4, 4589 },
-    { "foo1", "myapp", 5, 4590 },
-    { "foo1", "myapp", 6, 4591 },
-    { "foo1", "myapp", 7, 4592 },
-    { NULL, NULL, 0, 0 }
+    { "foo0", 0, "myapp", 0, 1234 },
+    { "foo0", 0, "myapp", 1, 1235 },
+    { "foo0", 0, "myapp", 2, 1236 },
+    { "foo0", 0, "myapp", 3, 1237 },
+    { "foo1", 1, "myapp", 4, 4589 },
+    { "foo1", 1, "myapp", 5, 4590 },
+    { "foo1", 1, "myapp", 6, 4591 },
+    { "foo1", 1, "myapp", 7, 4592 },
+    { NULL, 0, NULL, 0, 0 }
 };
 
 struct entry leadingzeros [] = {
-    { "foo00", "myapp", 0, 1234 },
-    { "foo00", "myapp", 1, 1235 },
-    { "foo00", "myapp", 2, 1236 },
-    { "foo00", "myapp", 3, 1237 },
-    { "foo01", "myapp", 4, 4589 },
-    { "foo01", "myapp", 5, 4590 },
-    { "foo01", "myapp", 6, 4591 },
-    { "foo01", "myapp", 7, 4592 },
-    { NULL, NULL, 0, 0 }
+    { "foo00", 13, "myapp", 0, 1234 },
+    { "foo00", 13, "myapp", 1, 1235 },
+    { "foo00", 13, "myapp", 2, 1236 },
+    { "foo00", 13, "myapp", 3, 1237 },
+    { "foo01", 15, "myapp", 4, 4589 },
+    { "foo01", 15, "myapp", 5, 4590 },
+    { "foo01", 15, "myapp", 6, 4591 },
+    { "foo01", 15, "myapp", 7, 4592 },
+    { NULL, 0, NULL, 0, 0 }
 };
 
 struct entry moreleadingzeros [] = {
-    { "foo008", "myapp", 0, 1234 },
-    { "foo008", "myapp", 1, 1235 },
-    { "foo009", "myapp", 2, 2689 },
-    { "foo009", "myapp", 3, 2690 },
-    { "foo010", "myapp", 4, 1236 },
-    { "foo010", "myapp", 5, 1237 },
-    { "foo011", "myapp", 6, 4589 },
-    { "foo011", "myapp", 7, 4590 },
-    { "foo012", "myapp", 8, 8591 },
-    { "foo012", "myapp", 9, 8592 },
-    { NULL, NULL, 0, 0 }
+    { "foo008", 8, "myapp", 0, 1234 },
+    { "foo008", 8, "myapp", 1, 1235 },
+    { "foo009", 9, "myapp", 2, 2689 },
+    { "foo009", 9, "myapp", 3, 2690 },
+    { "foo010", 10, "myapp", 4, 1236 },
+    { "foo010", 10, "myapp", 5, 1237 },
+    { "foo011", 11, "myapp", 6, 4589 },
+    { "foo011", 11, "myapp", 7, 4590 },
+    { "foo012", 12, "myapp", 8, 8591 },
+    { "foo012", 12, "myapp", 9, 8592 },
+    { NULL, 0, NULL, 0, 0 }
 };
 
 
 struct entry append1 [] = {
-    { "foo0", "myapp", 0, 1234 },
-    { "foo0", "myapp", 1, 1235 },
-    { "foo0", "myapp", 2, 1236 },
-    { "foo0", "myapp", 3, 1237 },
-    { NULL, NULL, 0, 0 },
+    { "foo0", 0, "myapp", 0, 1234 },
+    { "foo0", 0, "myapp", 1, 1235 },
+    { "foo0", 0, "myapp", 2, 1236 },
+    { "foo0", 0, "myapp", 3, 1237 },
+    { NULL, 0, NULL, 0, 0 },
 };
 
 struct entry append2 [] = {
-    { "foo1", "myapp", 4, 4589 },
-    { "foo1", "myapp", 5, 4590 },
-    { "foo1", "myapp", 6, 4591 },
-    { "foo1", "myapp", 7, 4592 },
-    { NULL, NULL, 0, 0 },
+    { "foo1", 1, "myapp", 4, 4589 },
+    { "foo1", 1, "myapp", 5, 4590 },
+    { "foo1", 1, "myapp", 6, 4591 },
+    { "foo1", 1, "myapp", 7, 4592 },
+    { NULL, 0, NULL, 0, 0 },
 };
 
 static struct proctable * proctable_test_create (struct entry e[])
@@ -84,12 +85,14 @@ static struct proctable * proctable_test_create (struct entry e[])
         BAIL_OUT ("proctable_create failed");
     while (e->host) {
         ok (proctable_append_task (p,
+                                   e->broker_rank,
                                    e->host,
                                    e->executable,
                                    e->taskid,
                                    e->pid) == 0,
-            "proctable_append [%s,%s,%d,%d]",
+            "proctable_append [%s,%d,%s,%d,%d]",
                                    e->host,
+                                   e->broker_rank,
                                    e->executable,
                                    e->taskid,
                                    e->pid);
@@ -124,13 +127,18 @@ static void proctable_check (struct proctable *p, const struct entry e[])
         "proctable_first_task works");
 
     for (int i = 0; i < size; i++) {
+        int broker_rank;
         is (table[i].host_name, e[i].host,
             "task%d: host is %s", i, table[i].host_name);
         is (table[i].executable_name, e[i].executable,
             "task%d: executable is %s", i, table[i].executable_name);
         ok (table[i].pid == e[i].pid,
             "task%d: pid is %d", i, table[i].pid);
+        broker_rank = proctable_get_broker_rank (p, i);
+        ok (broker_rank == e[i].broker_rank,
+            "task%d: broker rank is %d", i, broker_rank);
     }
+
 }
 
 static void dump_json (json_t *o)
