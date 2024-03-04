@@ -2942,7 +2942,7 @@ flux-core version 0.5.0 - 2016-10-27
 * Add hierarchical lwj directory support in kvs (#811)
 * doc/man1/flux-start.adoc: Fix example option usage (#852)
 * add dlopen RTLD_DEEPBIND flag (#849)
-* src/broker/broker.c: Fix typo flux_repond -> flux_respond (#851)
+* src/broker/broker.c: Fix typo (#851)
 * doc/man1/flux-module.adoc: Fix environment variable error (#850)
 * Pull in json-c, allowing internals to link against alternate json libraries. (#835)
 * Add enhanced flux_rpc functions using libjansson json_pack/unpack functions
