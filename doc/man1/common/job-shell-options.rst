@@ -47,3 +47,7 @@
      - Set KVS output limit to SIZE bytes, where SIZE may be a floating point
        value including optional SI units: k, K, M, G. This value is ignored
        if output is directed to a file with :option:`--output`.
+
+   * - :option:`output.mode`
+     - Set the open mode for output files to either "truncate" or "append".
+       The default is "truncate".
