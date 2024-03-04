@@ -13,6 +13,7 @@ extend-exclude = [
   "t/sharness.sh",
   "src/common/libutil/sha1.c",
   "src/common/libutil/test/sha1.c",
+  "src/common/libutil/test/blobref.c",
   "src/common/libmissing/*.[ch]",
   "t/hwloc-data/*",
 ]
