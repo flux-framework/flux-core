@@ -740,7 +740,9 @@ reactor_reactorcat_LDFLAGS = \
 rexec_rexec_SOURCES = rexec/rexec.c
 rexec_rexec_CPPFLAGS = $(test_cppflags)
 rexec_rexec_LDADD = $(test_ldadd)
-rexec_rexec_LDFLAGS = $(test_ldflags)
+rexec_rexec_LDFLAGS = \
+	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(test_ldflags)
 
 rexec_rexec_count_stdout_SOURCES = rexec/rexec_count_stdout.c
 rexec_rexec_count_stdout_CPPFLAGS = $(test_cppflags)
@@ -750,7 +752,9 @@ rexec_rexec_count_stdout_LDFLAGS = $(test_ldflags)
 rexec_rexec_getline_SOURCES = rexec/rexec_getline.c
 rexec_rexec_getline_CPPFLAGS = $(test_cppflags)
 rexec_rexec_getline_LDADD = $(test_ldadd)
-rexec_rexec_getline_LDFLAGS = $(test_ldflags)
+rexec_rexec_getline_LDFLAGS = \
+	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
+	$(test_ldflags)
 
 ingest_job_manager_la_SOURCES = ingest/job-manager.c
 ingest_job_manager_la_CPPFLAGS = $(test_cppflags)

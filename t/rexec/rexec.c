@@ -19,6 +19,7 @@
 #include <flux/core.h>
 #include <flux/optparse.h>
 
+#include "src/common/libsubprocess/subprocess_private.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/read_all.h"
 #include "ccan/str/str.h"
@@ -126,8 +127,8 @@ int main (int argc, char *argv[])
         .on_completion = completion_cb,
         .on_state_change = state_cb,
         .on_channel_out = NULL,
-        .on_stdout = flux_standard_output,
-        .on_stderr = flux_standard_output,
+        .on_stdout = subprocess_standard_output,
+        .on_stderr = subprocess_standard_output,
     };
     const char *optargp;
     int optindex;
@@ -168,7 +169,7 @@ int main (int argc, char *argv[])
             && !streq (optargp, "stderr")) {
             if (flux_cmd_add_channel (cmd, optargp) < 0)
                 log_err_exit ("flux_cmd_add_channel");
-            ops.on_channel_out = flux_standard_output;
+            ops.on_channel_out = subprocess_standard_output;
         }
     }
 

@@ -212,11 +212,7 @@ int subprocess_status (flux_subprocess_t *p)
     return p->status;
 }
 
-/*
- * Convenience Functions:
- */
-
-void flux_standard_output (flux_subprocess_t *p, const char *stream)
+void subprocess_standard_output (flux_subprocess_t *p, const char *stream)
 {
     /* everything except stderr goes to stdout */
     FILE *fstream = !strcasecmp (stream, "stderr") ? stderr : stdout;
@@ -227,14 +223,14 @@ void flux_standard_output (flux_subprocess_t *p, const char *stream)
      * regardless if stream is line buffered or not */
 
     if (!(ptr = flux_subprocess_read_line (p, stream, &lenp))) {
-        log_err ("flux_standard_output: read_line");
+        log_err ("subprocess_standard_output: read_line");
         return;
     }
 
     /* we're at the end of the stream, read any lingering data */
     if (!lenp && flux_subprocess_read_stream_closed (p, stream) > 0) {
         if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
-            log_err ("flux_standard_output: read_line");
+            log_err ("subprocess_standard_output: read_line");
             return;
         }
     }

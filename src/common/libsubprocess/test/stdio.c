@@ -21,6 +21,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libsubprocess/subprocess.h"
+#include "src/common/libsubprocess/subprocess_private.h"
 #include "src/common/libsubprocess/server.h"
 #include "ccan/str/str.h"
 
@@ -207,8 +208,8 @@ void test_basic_default_output (flux_reactor_t *r)
 
     flux_subprocess_ops_t ops = {
         .on_completion = completion_cb,
-        .on_stdout = flux_standard_output,
-        .on_stderr = flux_standard_output
+        .on_stdout = subprocess_standard_output,
+        .on_stderr = subprocess_standard_output
     };
     completion_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -1025,9 +1026,9 @@ void test_line_buffer_error (flux_reactor_t *r)
 
     flux_subprocess_ops_t ops = {
         .on_completion = completion_cb,
-        .on_channel_out = flux_standard_output,
-        .on_stdout = flux_standard_output,
-        .on_stderr = flux_standard_output
+        .on_channel_out = subprocess_standard_output,
+        .on_stdout = subprocess_standard_output,
+        .on_stderr = subprocess_standard_output
     };
     p = flux_local_exec (r, 0, cmd, &ops);
     ok (p == NULL
