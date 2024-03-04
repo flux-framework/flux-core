@@ -129,7 +129,7 @@ test_expect_success 'job-ingest: stop the queue so no more jobs run' '
 test_expect_success 'job-ingest: load feasibilty validator plugin' '
 	ingest_module reload validator-plugins=feasibility
 '
-test_expect_success 'job-ingest: feasibility check succceeds with ENOSYS' '
+test_expect_success 'job-ingest: feasibility check succeeds with ENOSYS' '
 	flux module remove sched-simple &&
 	flux submit -g 1 hostname &&
 	flux submit -n 10000 hostname &&
