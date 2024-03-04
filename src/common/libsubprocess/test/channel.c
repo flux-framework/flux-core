@@ -75,7 +75,7 @@ void channel_fd_env_cb (flux_subprocess_t *p, const char *stream)
         /* no length check, can't predict channel FD value */
     }
     else {
-        ok (flux_subprocess_read_stream_closed (p, stream) > 0,
+        ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
@@ -139,7 +139,7 @@ void channel_in_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_close success");
     }
     else {
-        ok (flux_subprocess_read_stream_closed (p, stream) > 0,
+        ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
@@ -375,7 +375,7 @@ void channel_nul_terminate_cb (flux_subprocess_t *p, const char *stream)
             "flux_subprocess_close success");
     }
     else {
-        ok (flux_subprocess_read_stream_closed (p, stream) > 0,
+        ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
         ptr = flux_subprocess_read (p, stream, -1, &lenp);

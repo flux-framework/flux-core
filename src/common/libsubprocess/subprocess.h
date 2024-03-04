@@ -233,11 +233,10 @@ const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
  * in output callbacks.  Those functions will return length 0 when no
  * lines are available, making it difficult to determine if the stream
  * has been closed and there is any non-newline terminated data left
- * available for reading with flux_subprocess_read().  Returns > 0 on
- * closed / eof seen, 0 if not, -1 on error.
+ * available for reading with flux_subprocess_read().
  */
-int flux_subprocess_read_stream_closed (flux_subprocess_t *p,
-                                        const char *stream);
+bool flux_subprocess_read_stream_closed (flux_subprocess_t *p,
+                                         const char *stream);
 
 /* flux_subprocess_getline() is a special case function
  * that behaves identically to flux_subprocess_read_line() but handles

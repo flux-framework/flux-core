@@ -228,7 +228,7 @@ void subprocess_standard_output (flux_subprocess_t *p, const char *stream)
     }
 
     /* we're at the end of the stream, read any lingering data */
-    if (!lenp && flux_subprocess_read_stream_closed (p, stream) > 0) {
+    if (!lenp && flux_subprocess_read_stream_closed (p, stream)) {
         if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
             log_err ("subprocess_standard_output: read_line");
             return;
@@ -844,32 +844,25 @@ const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
     return subprocess_read (p, stream, 0, lenp, true, true, false, NULL);
 }
 
-int flux_subprocess_read_stream_closed (flux_subprocess_t *p,
-                                        const char *stream)
+bool flux_subprocess_read_stream_closed (flux_subprocess_t *p,
+                                         const char *stream)
 {
     struct subprocess_channel *c;
     struct fbuf *fb;
 
-    if (!p || !stream
-           || (p->local && p->in_hook)) {
-        errno = EINVAL;
-        return -1;
-    }
+    if (!p
+        || !stream
+        || (p->local && p->in_hook)
+        || !(c = zhash_lookup (p->channels, stream))
+        || !(c->flags & CHANNEL_READ))
+        return false;
 
-    c = zhash_lookup (p->channels, stream);
-    if (!c || !(c->flags & CHANNEL_READ)) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (p->local) {
-        if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w)))
-            return -1;
-    }
+    if (p->local)
+        fb = fbuf_read_watcher_get_buffer (c->buffer_read_w);
     else
         fb = c->read_buffer;
 
-    return fbuf_is_readonly (fb);
+    return fb ? fbuf_is_readonly (fb) : false;
 }
 
 const char *flux_subprocess_getline (flux_subprocess_t *p,
