@@ -1631,7 +1631,7 @@ used to manage and report the status of the overlay network.
  * various other cleanup (#3762)
 
 ### Testsuite
- * udate to flux-security v0.5.0 in docker images (#3849)
+ * update to flux-security v0.5.0 in docker images (#3849)
  * make valgrind test opt-in (#3840)
  * add valgrind suppression for opencl and libev on aarch64 (#3794, #3809)
 
