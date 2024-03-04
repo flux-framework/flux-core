@@ -41,8 +41,8 @@ void channel_destroy (void *arg)
 {
     struct subprocess_channel *c = arg;
     if (c) {
-        if (c->name)
-            free (c->name);
+        int saved_errno = errno;
+        free (c->name);
 
         if (c->parent_fd != -1)
             close (c->parent_fd);
@@ -63,6 +63,7 @@ void channel_destroy (void *arg)
         flux_watcher_destroy (c->out_check_w);
 
         free (c);
+        errno = saved_errno;
     }
 }
 
@@ -71,45 +72,20 @@ struct subprocess_channel *channel_create (flux_subprocess_t *p,
                                            const char *name,
                                            int flags)
 {
-    struct subprocess_channel *c = calloc (1, sizeof (*c));
-    int save_errno;
+    struct subprocess_channel *c;
 
-    if (!c)
+    if (!(c = calloc (1, sizeof (*c))))
         return NULL;
-
     c->p = p;
     c->output_cb = output_cb;
     if (!(c->name = strdup (name)))
         goto error;
     c->flags = flags;
-
-    c->eof_sent_to_caller = false;
-    c->closed = false;
-
     c->parent_fd = -1;
     c->child_fd = -1;
-    c->buffer_write_w = NULL;
-    c->buffer_read_w = NULL;
-    c->buffer_read_stopped_w = NULL;
-    c->buffer_read_w_started = false;
-
-    c->write_buffer = NULL;
-    c->read_buffer = NULL;
-    c->write_eof_sent = false;
-    c->read_eof_received = false;
-    c->in_prep_w = NULL;
-    c->in_idle_w = NULL;
-    c->in_check_w = NULL;
-    c->out_prep_w = NULL;
-    c->out_idle_w = NULL;
-    c->out_check_w = NULL;
-
     return c;
-
 error:
-    save_errno = errno;
     channel_destroy (c);
-    errno = save_errno;
     return NULL;
 }
 
@@ -236,11 +212,7 @@ int subprocess_status (flux_subprocess_t *p)
     return p->status;
 }
 
-/*
- * Convenience Functions:
- */
-
-void flux_standard_output (flux_subprocess_t *p, const char *stream)
+void subprocess_standard_output (flux_subprocess_t *p, const char *stream)
 {
     /* everything except stderr goes to stdout */
     FILE *fstream = !strcasecmp (stream, "stderr") ? stderr : stdout;
@@ -251,14 +223,14 @@ void flux_standard_output (flux_subprocess_t *p, const char *stream)
      * regardless if stream is line buffered or not */
 
     if (!(ptr = flux_subprocess_read_line (p, stream, &lenp))) {
-        log_err ("flux_standard_output: read_line");
+        log_err ("subprocess_standard_output: read_line");
         return;
     }
 
     /* we're at the end of the stream, read any lingering data */
-    if (!lenp && flux_subprocess_read_stream_closed (p, stream) > 0) {
+    if (!lenp && flux_subprocess_read_stream_closed (p, stream)) {
         if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
-            log_err ("flux_standard_output: read_line");
+            log_err ("subprocess_standard_output: read_line");
             return;
         }
     }
@@ -338,7 +310,7 @@ static void state_change_check_cb (flux_reactor_t *r,
     flux_watcher_stop (p->state_idle_w);
 
     /* always a chance caller may destroy subprocess in callback */
-    flux_subprocess_ref (p);
+    subprocess_incref (p);
 
     if (p->state_reported != p->state) {
         /* this is the ubiquitous fail state for internal failures,
@@ -368,7 +340,7 @@ static void state_change_check_cb (flux_reactor_t *r,
     if (p->state_reported == FLUX_SUBPROCESS_EXITED)
         subprocess_check_completed (p);
 
-    flux_subprocess_unref (p);
+    subprocess_decref (p);
 }
 
 static int subprocess_setup_state_change (flux_subprocess_t *p)
@@ -425,7 +397,7 @@ static void completed_check_cb (flux_reactor_t *r,
     flux_watcher_stop (p->completed_idle_w);
 
     /* always a chance caller may destroy subprocess in callback */
-    flux_subprocess_ref (p);
+    subprocess_incref (p);
 
     /* There is a small "racy" component, where the state we're at may
      * not yet align with the state that has been reported to the
@@ -444,7 +416,7 @@ static void completed_check_cb (flux_reactor_t *r,
         flux_watcher_stop (p->completed_check_w);
     }
 
-    flux_subprocess_unref (p);
+    subprocess_decref (p);
 }
 
 static int subprocess_setup_completed (flux_subprocess_t *p)
@@ -534,7 +506,7 @@ flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
     return p;
 
 error:
-    flux_subprocess_unref (p);
+    subprocess_decref (p);
     return NULL;
 }
 
@@ -544,14 +516,6 @@ flux_subprocess_t * flux_local_exec (flux_reactor_t *r,
                                      const flux_subprocess_ops_t *ops)
 {
     return flux_local_exec_ex (r, flags, cmd, ops, NULL, NULL, NULL);
-}
-
-static int check_local_only_cmd_options (const flux_cmd_t *cmd)
-{
-    /* check for options that do not apply to remote subprocesses */
-    const char *substrings[] = { "STREAM_STOP", NULL };
-
-    return cmd_find_opts (cmd, substrings);
 }
 
 flux_subprocess_t *flux_rexec_ex (flux_t *h,
@@ -588,12 +552,6 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
         goto error;
     }
 
-    /* make sure user didn't set local only cmd options */
-    if (check_local_only_cmd_options (cmd)) {
-        errno = EINVAL;
-        goto error;
-    }
-
     if (!(r = flux_get_reactor (h)))
         goto error;
 
@@ -624,7 +582,7 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
     return p;
 
 error:
-    flux_subprocess_unref (p);
+    subprocess_decref (p);
     return NULL;
 }
 
@@ -637,44 +595,28 @@ flux_subprocess_t *flux_rexec (flux_t *h,
     return flux_rexec_ex (h, "rexec", rank, flags, cmd, ops, NULL, NULL);
 }
 
-int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)
+void flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)
 {
     struct subprocess_channel *c;
-    struct fbuf *fb;
 
-    if (!p || !stream
-           || (p->local && p->in_hook)) {
-        errno = EINVAL;
-        return -1;
-    }
+    if (!p
+        || !stream
+        || !p->local
+        || p->in_hook
+        || !(c = zhash_lookup (p->channels, stream))
+        || !(c->flags & CHANNEL_READ)
+        || c->buffer_read_w_started
+        || !fbuf_read_watcher_get_buffer (c->buffer_read_w))
+        return;
 
-    c = zhash_lookup (p->channels, stream);
-    if (!c || !(c->flags & CHANNEL_READ)) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (p->local) {
-        if (c->buffer_read_w_started)
-            return 0;
-
-        if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w)))
-            return -1;
-
-        if (!c->buffer_read_stopped_w) {
-            /* use check watcher instead of idle watcher, as idle watcher
-             * could spin reactor */
-            c->buffer_read_stopped_w = flux_check_watcher_create (p->reactor,
-                                                                  NULL,
-                                                                  c);
-            if (!c->buffer_read_stopped_w)
-                return -1;
-        }
-    }
-    else {
-        /* not supported on remote right now */
-        errno = EINVAL;
-        return -1;
+    if (!c->buffer_read_stopped_w) {
+        /* use check watcher instead of idle watcher, as idle watcher
+         * could spin reactor */
+        c->buffer_read_stopped_w = flux_check_watcher_create (p->reactor,
+                                                              NULL,
+                                                              c);
+        if (!c->buffer_read_stopped_w)
+            return;
     }
 
     /* Note that in local.c, we never stop buffer_read_w
@@ -686,71 +628,25 @@ int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream)
     flux_watcher_start (c->buffer_read_w);
     c->buffer_read_w_started = true;
     flux_watcher_stop (c->buffer_read_stopped_w);
-    return 0;
 }
 
-int flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream)
+void flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream)
 {
     struct subprocess_channel *c;
-    struct fbuf *fb;
 
-    if (!p || !stream
-           || (p->local && p->in_hook)) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    c = zhash_lookup (p->channels, stream);
-    if (!c || !(c->flags & CHANNEL_READ)) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (p->local) {
-        if (!c->buffer_read_w_started)
-            return 0;
-
-        if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w)))
-            return -1;
-    }
-    else {
-        /* not supported on remote right now */
-        errno = EINVAL;
-        return -1;
-    }
+    if (!p
+        || !stream
+        || !p->local
+        || p->in_hook
+        || !(c = zhash_lookup (p->channels, stream))
+        || !(c->flags & CHANNEL_READ)
+        || !c->buffer_read_w_started
+        || !fbuf_read_watcher_get_buffer (c->buffer_read_w))
+        return;
 
     flux_watcher_stop (c->buffer_read_w);
     c->buffer_read_w_started = false;
     flux_watcher_start (c->buffer_read_stopped_w);
-    return 0;
-}
-
-int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream)
-{
-    struct subprocess_channel *c;
-    int ret;
-
-    if (!p || !stream
-           || (p->local && p->in_hook)) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    c = zhash_lookup (p->channels, stream);
-    if (!c || !(c->flags & CHANNEL_READ)) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (p->local)
-        ret = c->buffer_read_w_started ? 1 : 0;
-    else {
-        /* not supported on remote right now */
-        errno = EINVAL;
-        return -1;
-    }
-
-    return ret;
 }
 
 int flux_subprocess_write (flux_subprocess_t *p,
@@ -948,32 +844,25 @@ const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
     return subprocess_read (p, stream, 0, lenp, true, true, false, NULL);
 }
 
-int flux_subprocess_read_stream_closed (flux_subprocess_t *p,
-                                        const char *stream)
+bool flux_subprocess_read_stream_closed (flux_subprocess_t *p,
+                                         const char *stream)
 {
     struct subprocess_channel *c;
     struct fbuf *fb;
 
-    if (!p || !stream
-           || (p->local && p->in_hook)) {
-        errno = EINVAL;
-        return -1;
-    }
+    if (!p
+        || !stream
+        || (p->local && p->in_hook)
+        || !(c = zhash_lookup (p->channels, stream))
+        || !(c->flags & CHANNEL_READ))
+        return false;
 
-    c = zhash_lookup (p->channels, stream);
-    if (!c || !(c->flags & CHANNEL_READ)) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (p->local) {
-        if (!(fb = fbuf_read_watcher_get_buffer (c->buffer_read_w)))
-            return -1;
-    }
+    if (p->local)
+        fb = fbuf_read_watcher_get_buffer (c->buffer_read_w);
     else
         fb = c->read_buffer;
 
-    return fbuf_is_readonly (fb);
+    return fb ? fbuf_is_readonly (fb) : false;
 }
 
 const char *flux_subprocess_getline (flux_subprocess_t *p,
@@ -1061,7 +950,7 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
     return f;
 }
 
-void flux_subprocess_ref (flux_subprocess_t *p)
+void subprocess_incref (flux_subprocess_t *p)
 {
     if (p) {
         if (p->local && p->in_hook)
@@ -1070,7 +959,7 @@ void flux_subprocess_ref (flux_subprocess_t *p)
     }
 }
 
-void flux_subprocess_unref (flux_subprocess_t *p)
+void subprocess_decref (flux_subprocess_t *p)
 {
     if (p) {
         if (p->local && p->in_hook)
@@ -1078,6 +967,11 @@ void flux_subprocess_unref (flux_subprocess_t *p)
         if (--p->refcount == 0)
             subprocess_free (p);
     }
+}
+
+void flux_subprocess_destroy (flux_subprocess_t *p)
+{
+    subprocess_decref (p);
 }
 
 flux_subprocess_state_t flux_subprocess_state (flux_subprocess_t *p)

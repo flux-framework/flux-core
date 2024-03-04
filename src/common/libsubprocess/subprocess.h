@@ -103,27 +103,15 @@ typedef struct {
 /*
  *  llog-compatible callback
  */
-typedef void (*subprocess_log_f) (void *arg,
-                                  const char *file,
-                                  int line,
-                                  const char *func,
-                                  const char *subsys,
-                                  int level,
-                                  const char *fmt,
-                                  va_list args);
+typedef void (*subprocess_log_f)(void *arg,
+                                 const char *file,
+                                 int line,
+                                 const char *func,
+                                 const char *subsys,
+                                 int level,
+                                 const char *fmt,
+                                 va_list args);
 
-
-/*
- * Convenience Functions:
- */
-
-/*  General output callback that will send output from the subprocess
- *  to stdout or stderr.  Set the `on_stdout` and/or `on_stderr`
- *  callbacks in flux_subprocess_ops_t and this function will output
- *  to stdout/stderr respectively.  You can also set 'on_channel_out'
- *  to this function, which will send all channel output to stdout.
- */
-void flux_standard_output (flux_subprocess_t *p, const char *stream);
 
 /*
  *  Subprocesses:
@@ -159,8 +147,8 @@ flux_subprocess_t *flux_local_exec_ex (flux_reactor_t *r,
                                        void *log_data);
 
 flux_subprocess_t *flux_rexec (flux_t *h,
-		               int rank,
-			       int flags,
+                               int rank,
+                               int flags,
                                const flux_cmd_t *cmd,
                                const flux_subprocess_ops_t *ops);
 
@@ -175,16 +163,10 @@ flux_subprocess_t *flux_rexec_ex (flux_t *h,
 
 
 /* Start / stop a read stream temporarily on local processes.  This
- * may be useful for flow control.  If you desire to have a stream not
- * call 'on_stdout' or 'on_stderr' when the local subprocess has
- * started, see STREAM_STOP configuration above.
- *
- * start and stop return 0 for success, -1 on error
- * status returns > 0 for started, 0 for stopped, -1 on error
+ * may be useful for flow control.
  */
-int flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream);
-int flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream);
-int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream);
+void flux_subprocess_stream_start (flux_subprocess_t *p, const char *stream);
+void flux_subprocess_stream_stop (flux_subprocess_t *p, const char *stream);
 
 /*
  *  Write data to "stream" stream of subprocess `p`.  'stream' can be
@@ -196,9 +178,9 @@ int flux_subprocess_stream_status (flux_subprocess_t *p, const char *stream);
  *  will be written and -1 will be returned with errno=ENOSPC.
  */
 int flux_subprocess_write (flux_subprocess_t *p,
-		           const char *stream,
+                           const char *stream,
                            const char *buf,
-			   size_t len);
+                           size_t len);
 
 /*
  *  Close "stream" stream of subprocess `p` and schedule EOF to be sent.
@@ -221,7 +203,7 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
 const char *flux_subprocess_read (flux_subprocess_t *p,
                                   const char *stream,
                                   int len,
-				  int *lenp);
+                                  int *lenp);
 
 /*
  *  Read line unread data from stream `stream`.  'stream' can be
@@ -251,11 +233,10 @@ const char *flux_subprocess_read_trimmed_line (flux_subprocess_t *p,
  * in output callbacks.  Those functions will return length 0 when no
  * lines are available, making it difficult to determine if the stream
  * has been closed and there is any non-newline terminated data left
- * available for reading with flux_subprocess_read().  Returns > 0 on
- * closed / eof seen, 0 if not, -1 on error.
+ * available for reading with flux_subprocess_read().
  */
-int flux_subprocess_read_stream_closed (flux_subprocess_t *p,
-                                        const char *stream);
+bool flux_subprocess_read_stream_closed (flux_subprocess_t *p,
+                                         const char *stream);
 
 /* flux_subprocess_getline() is a special case function
  * that behaves identically to flux_subprocess_read_line() but handles
@@ -286,13 +267,11 @@ const char *flux_subprocess_getline (flux_subprocess_t *p,
 flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signo);
 
 /*
- *  Add/remove a reference to subprocess object `p`. The subprocess object
- *   is destroyed once the last reference is removed.  These calls
- *   silently do nothing if called within a hook.
+ *  Remove a reference to subprocess object `p`. The subprocess object
+ *   is destroyed once the last reference is removed.  This call
+ *   silently deso nothing if called within a hook.
  */
-void flux_subprocess_ref (flux_subprocess_t *p);
-void flux_subprocess_unref (flux_subprocess_t *p);
-#define flux_subprocess_destroy(x) flux_subprocess_unref(x)
+void flux_subprocess_destroy (flux_subprocess_t *p);
 
 /*  Return current state value of subprocess.  Note this may differ
  *  than state returned in on_state_change callback, as a subprocess
@@ -347,8 +326,8 @@ flux_reactor_t * flux_subprocess_get_reactor (flux_subprocess_t *p);
  */
 int flux_subprocess_aux_set (flux_subprocess_t *p,
                              const char *name,
-			     void *ctx,
-			     flux_free_f free);
+                             void *ctx,
+                             flux_free_f free);
 
 /*
  *  Return pointer to any context associated with `p` under `name`. If
@@ -369,3 +348,5 @@ void flux_subprocess_channel_decref (flux_subprocess_t *p, const char *name);
 #endif
 
 #endif /* !_FLUX_CORE_SUBPROCESS_H */
+
+// vi: ts=4 sw=4 expandtab

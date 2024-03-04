@@ -61,3 +61,5 @@ zlist_t *cmd_channel_list (flux_cmd_t *cmd);
 int cmd_find_opts (const flux_cmd_t *cmd, const char **substrings);
 
 #endif /* !_SUBPROCESS_COMMAND_PRIVATE_H */
+
+// vi: ts=4 sw=4 expandtab

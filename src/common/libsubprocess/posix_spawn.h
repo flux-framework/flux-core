@@ -16,3 +16,5 @@
 int create_process_spawn (flux_subprocess_t *p);
 
 #endif /* !_SUBPROCESS_SPAWN_H */
+
+// vi: ts=4 sw=4 expandtab

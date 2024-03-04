@@ -16,3 +16,5 @@
 int subprocess_local_setup (flux_subprocess_t *p);
 
 #endif /* !_SUBPROCESS_LOCAL_H */
+
+// vi: ts=4 sw=4 expandtab

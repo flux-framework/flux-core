@@ -16,3 +16,5 @@
 int create_process_fork (flux_subprocess_t *p);
 
 #endif /* !_SUBPROCESS_FORK_H */
+
+// vi: ts=4 sw=4 expandtab

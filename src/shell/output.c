@@ -104,26 +104,6 @@ struct shell_output {
 static const int shell_output_lwm = 100;
 static const int shell_output_hwm = 1000;
 
-/* Pause/resume output on 'stream' of 'task'.
- */
-static void shell_output_control_task (struct shell_task *task,
-                                       const char *stream,
-                                       bool stop)
-{
-    if (stop) {
-        if (flux_subprocess_stream_stop (task->proc, stream) < 0)
-            shell_log_errno ("flux_subprocess_stream_stop %d:%s",
-                             task->rank,
-                             stream);
-    }
-    else {
-        if (flux_subprocess_stream_start (task->proc, stream) < 0)
-            shell_log_errno ("flux_subprocess_stream_start %d:%s",
-                             task->rank,
-                             stream);
-    }
-}
-
 /* Pause/resume output for all tasks.
  */
 static void shell_output_control (struct shell_output *out, bool stop)
@@ -133,8 +113,14 @@ static void shell_output_control (struct shell_output *out, bool stop)
     if (out->stopped != stop) {
         task = zlist_first (out->shell->tasks);
         while (task) {
-            shell_output_control_task (task, "stdout", stop);
-            shell_output_control_task (task, "stderr", stop);
+            if (stop) {
+                flux_subprocess_stream_stop (task->proc, "stdout");
+                flux_subprocess_stream_stop (task->proc, "stderr");
+            }
+            else {
+                flux_subprocess_stream_start (task->proc, "stdout");
+                flux_subprocess_stream_start (task->proc, "stderr");
+            }
             task = zlist_next (out->shell->tasks);
         }
         out->stopped = stop;

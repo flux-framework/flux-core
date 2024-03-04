@@ -438,17 +438,9 @@ static int start_local_watchers (flux_subprocess_t *p)
 
     c = zhash_first (p->channels);
     while (c) {
-        int ret;
         flux_watcher_start (c->buffer_write_w);
-        if ((ret = cmd_option_stream_stop (p, c->name)) < 0)
-            return -1;
-        if (ret) {
-            flux_watcher_start (c->buffer_read_stopped_w);
-        }
-        else {
-            flux_watcher_start (c->buffer_read_w);
-            c->buffer_read_w_started = true;
-        }
+        flux_watcher_start (c->buffer_read_w);
+        c->buffer_read_w_started = true;
         c = zhash_next (p->channels);
     }
     return 0;

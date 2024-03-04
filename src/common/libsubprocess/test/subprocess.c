@@ -21,6 +21,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libsubprocess/subprocess.h"
+#include "src/common/libsubprocess/subprocess_private.h"
 #include "src/common/libsubprocess/server.h"
 #include "ccan/str/str.h"
 
@@ -110,26 +111,10 @@ void test_corner_cases (flux_reactor_t *r)
         "flux_rexec fails with cmd with invalid rank");
     flux_cmd_destroy (cmd);
 
-    ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
-        "flux_cmd_create with 0 args works");
-    ok (flux_cmd_setcwd (cmd, "foobar") == 0,
-        "flux_cmd_setcwd works");
-    ok (flux_cmd_setopt (cmd, "stdout_STREAM_STOP", "true") == 0,
-        "flux_cmd_setopt works");
-    ok (flux_rexec (h, 0, 0, cmd, NULL) == NULL
-        && errno == EINVAL,
-        "flux_rexec fails with cmd with STREAM_STOP option");
-    flux_cmd_destroy (cmd);
-
-    ok (flux_subprocess_stream_start (NULL, NULL) < 0
-        && errno == EINVAL,
-        "flux_subprocess_stream_start fails with NULL pointer inputs");
-    ok (flux_subprocess_stream_stop (NULL, NULL) < 0
-        && errno == EINVAL,
-        "flux_subprocess_stream_stop fails with NULL pointer inputs");
-    ok (flux_subprocess_stream_status (NULL, NULL) < 0
-        && errno == EINVAL,
-        "flux_subprocess_stream_status fails with NULL pointer inputs");
+    lives_ok ({flux_subprocess_stream_start (NULL, NULL);},
+        "flux_subprocess_stream_start doesn't crash with NULL pointer inputs");
+    lives_ok ({flux_subprocess_stream_stop (NULL, NULL);},
+        "flux_subprocess_stream_stop doesn't crash with NULL pointer inputs");
 
     ok (flux_subprocess_write (NULL, "stdin", "foo", 3) < 0
         && errno == EINVAL,
@@ -146,9 +131,8 @@ void test_corner_cases (flux_reactor_t *r)
     ok (flux_subprocess_read_trimmed_line (NULL, "stdout", NULL) == NULL
         && errno == EINVAL,
         "flux_subprocess_read_trimmed_line fails with NULL pointer inputs");
-    ok (flux_subprocess_read_stream_closed (NULL, "stdout") < 0
-        && errno == EINVAL,
-        "flux_subprocess_read_stream_closed fails with NULL pointer input");
+    ok (flux_subprocess_read_stream_closed (NULL, "stdout") == false,
+        "flux_subprocess_read_stream_closed returns false with NULL pointer input");
     ok (flux_subprocess_kill (NULL, 0) == NULL
         && errno == EINVAL,
         "flux_subprocess_kill fails with NULL pointer input");
@@ -208,15 +192,6 @@ void test_post_exec_errors (flux_reactor_t *r)
 
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "subprocess state == RUNNING after flux_local_exec");
-    ok (flux_subprocess_stream_start (p, NULL) < 0
-        && errno == EINVAL,
-        "flux_subprocess_stream_start returns EINVAL on bad stream");
-    ok (flux_subprocess_stream_stop (p, NULL) < 0
-        && errno == EINVAL,
-        "flux_subprocess_stream_stop returns EINVAL on bad stream");
-    ok (flux_subprocess_stream_status (p, NULL) < 0
-        && errno == EINVAL,
-        "flux_subprocess_stream_status returns EINVAL on bad stream");
     ok (flux_subprocess_write (p, NULL, NULL, 0) < 0
         && errno == EINVAL,
         "flux_subprocess_write returns EINVAL on bad input");
@@ -238,9 +213,8 @@ void test_post_exec_errors (flux_reactor_t *r)
     ok (flux_subprocess_read_trimmed_line (p, "foo", NULL) == NULL
         && errno == EINVAL,
         "flux_subprocess_read_trimmed_line returns EINVAL on bad stream");
-    ok (flux_subprocess_read_stream_closed (p, "foo") < 0
-        && errno == EINVAL,
-        "flux_subprocess_read_stream_closed returns EINVAL on bad stream");
+    ok (flux_subprocess_read_stream_closed (p, "foo") == false,
+        "flux_subprocess_read_stream_closed returns false on bad stream");
     ok (flux_subprocess_kill (p, 0) == NULL
         && errno == EINVAL,
         "flux_subprocess_kill returns EINVAL on illegal signum");
@@ -520,7 +494,7 @@ void output_processes_cb (flux_subprocess_t *p, const char *stream)
         }
     }
     else {
-        ok (flux_subprocess_read_stream_closed (p, stream) > 0,
+        ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
@@ -602,7 +576,7 @@ void eof_cb (flux_subprocess_t *p, const char *stream)
         return;
     }
 
-    ok (flux_subprocess_read_stream_closed (p, stream) > 0,
+    ok (flux_subprocess_read_stream_closed (p, stream),
         "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
     ptr = flux_subprocess_read (p, stream, -1, &lenp);
@@ -835,12 +809,12 @@ void test_refcount (flux_reactor_t *r)
         "subprocess state == RUNNING after flux_local_exec");
     ok (flux_subprocess_aux_set (p, "extra", extra, NULL) == 0,
         "flux_subprocess_aux_set success");
-    flux_subprocess_ref (p);
+    subprocess_incref (p);
 
     int rc = flux_reactor_run (r, 0);
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
-    flux_subprocess_unref (p);
+    subprocess_decref (p);
 
     /* normally this should fail, but we've increased the refcount so
      * subprocess should not be destroyed */
@@ -849,7 +823,7 @@ void test_refcount (flux_reactor_t *r)
     ok (tmp == extra,
         "flux_subprocess_aux_get returned correct pointer");
 
-    flux_subprocess_unref (p);
+    flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
 }
 
@@ -1010,7 +984,7 @@ void fail_output_cb (flux_subprocess_t *p, const char *stream)
     }
 
     if ((*counter) == 0) {
-        ok (flux_subprocess_read_stream_closed (p, stream) > 0,
+        ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
         ptr = flux_subprocess_read (p, stream, -1, &lenp);
