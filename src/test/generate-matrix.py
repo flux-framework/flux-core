@@ -190,7 +190,7 @@ matrix.add_build(
     name="coverage",
     coverage_flags="ci-basic",
     coverage=True,
-    jobs=2,
+    jobs=4,
     args="--with-flux-security --enable-caliper",
 )
 
@@ -243,7 +243,7 @@ matrix.add_build(
     coverage_flags="ci-system",
     image="el8",
     coverage=True,
-    jobs=2,
+    jobs=4,
     command_args="--system",
     args="--with-flux-security --enable-caliper",
 )
