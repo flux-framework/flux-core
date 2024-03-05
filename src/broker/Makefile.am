@@ -53,6 +53,8 @@ libbroker_la_SOURCES = \
 	boot_config.c \
 	boot_pmi.h \
 	boot_pmi.c \
+	boot_flub.h \
+	boot_flub.c \
 	publisher.h \
 	publisher.c \
 	groups.h \
