@@ -14,7 +14,7 @@
  * children that connect to a locally provided socket, it only handles
  * one client, pre-connected on stdin, stdout.
  *
- * The ssh connectors starts flux-relay(1) remotely with ssh.
+ * The ssh connector starts flux-relay(1) remotely with ssh.
  * flux-relay(1) connects to a flux broker on the remote system.
  * The ssh connector communicates with flux-relay through stdio.
  *
@@ -137,7 +137,7 @@ static int cmd_relay (optparse_t *p, int ac, char *av[])
      *  unlikely event gethostname(3) fails, use "unknown-host".)
      *
      *  This will be more helpful than a literal "flux-relay" logging prefix
-     *  for end users that may be unknowningly using flux-relay as part of
+     *  for end users that may be unknowingly using flux-relay as part of
      *  the ssh connector.
      */
     log_init ("unknown-host");

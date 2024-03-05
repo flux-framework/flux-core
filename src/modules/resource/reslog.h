@@ -22,7 +22,7 @@ struct reslog *reslog_create (flux_t *h);
 void reslog_destroy (struct reslog *reslog);
 
 /* Post an event to the eventlog.  This function returns immediately,
- * and the commit to * the eventlog completes asynchronously.
+ * and the commit to the eventlog completes asynchronously.
  * If 'request' is non-NULL, a success/fail response is sent upon commit
  * completion.
  */

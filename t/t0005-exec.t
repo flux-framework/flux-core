@@ -110,7 +110,7 @@ test_expect_success 'flux exec -d none works' '
 
 # Run a script on ranks 0-3 simultaneously with each rank writing the
 #  rank id to a file. After successful completion, the contents of the files
-#  are verfied to ensure each rank connected to the right broker.
+#  are verified to ensure each rank connected to the right broker.
 test_expect_success 'test_on_rank works on multiple ranks' '
 	output_dir=$(pwd) &&
 	rm -f rank_output.* &&

@@ -410,7 +410,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     }
 
     /* Fetch the business card of all ranks and build hostlist.
-     * The hostlist is built indepenedently (and in parallel) on all ranks.
+     * The hostlist is built independently (and in parallel) on all ranks.
      */
     for (i = 0; i < info.size; i++) {
         const char *peer_hostname;
