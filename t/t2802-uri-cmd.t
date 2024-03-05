@@ -108,6 +108,10 @@ test_expect_success 'flux uri resolves hierarchical jobids with ?local' '
 	test_debug "echo ${jobid}/${jobid2}?local is ${uri}"
 
 '
+test_expect_success 'terminate batch job cleanly' '
+	flux proxy $(flux uri --local ${jobid}) flux cancel --all &&
+	flux job wait-event -vt 30 ${jobid} clean
+'
 test_expect_success 'flux uri jobid returns error for non-instance job' '
 	id=$(flux submit sleep 600) &&
 	test_expect_code 1 flux uri $id
