@@ -45,6 +45,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <regex.h>
 #include "src/common/libmissing/macros.h"
 #define EXIT_CODE(x) __W_EXITCODE(x,0)
 
@@ -55,6 +56,7 @@
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libjob/idf58.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 extern char **environ;
@@ -66,6 +68,7 @@ static struct perilog_conf {
     flux_cmd_t *prolog_cmd;    /*  Configured prolog command                */
     flux_cmd_t *epilog_cmd;    /*  Configured epilog command                */
     zhashx_t *processes;       /*  List of outstanding perilog_proc objects */
+    zlistx_t *log_ignore;      /*  List of regex patterns to ignore in logs */
 } perilog_config;
 
 
@@ -251,6 +254,19 @@ static void state_cb (flux_subprocess_t *sp, flux_subprocess_state_t state)
     }
 }
 
+static bool perilog_log_ignore (struct perilog_conf *conf, const char *s)
+{
+    if (conf->log_ignore) {
+        const regex_t *reg = zlistx_first (conf->log_ignore);
+        while (reg) {
+            if (regexec (reg, s, 0, NULL, 0) == 0)
+                return true;
+            reg = zlistx_next (conf->log_ignore);
+        }
+    }
+    return false;
+}
+
 static void io_cb (flux_subprocess_t *sp, const char *stream)
 {
     struct perilog_proc *proc = flux_subprocess_aux_get (sp, "perilog_proc");
@@ -265,7 +281,7 @@ static void io_cb (flux_subprocess_t *sp, const char *stream)
                         stream);
         return;
     }
-    if (len) {
+    if (len && !perilog_log_ignore (&perilog_config, s)) {
         int level = LOG_INFO;
         if (streq (stream, "stderr"))
             level = LOG_ERR;
@@ -531,13 +547,96 @@ fail:
     return NULL;
 }
 
+static regex_t *regexp_create (const char *pattern)
+{
+    regex_t *reg = calloc (1, sizeof (*reg));
+    if (!reg)
+        return NULL;
+    if (regcomp (reg, pattern, REG_EXTENDED | REG_NOSUB) != 0) {
+        free (reg);
+        return NULL;
+    }
+    return reg;
+}
+
+static void regexp_destroy (regex_t *reg)
+{
+    if (reg) {
+        int saved_errno = errno;
+        regfree (reg);
+        free (reg);
+        errno = saved_errno;
+    }
+}
+
+static void regexp_free (void **item)
+{
+    if (item) {
+        regex_t *reg = *item;
+        regexp_destroy (reg);
+        reg = NULL;
+    }
+}
+
+static zlistx_t *regexp_list_create ()
+{
+    zlistx_t *l = NULL;
+    if (!(l = zlistx_new ()))
+        return NULL;
+    zlistx_set_destructor (l, regexp_free);
+    return l;
+}
+
+static int regexp_list_append (zlistx_t *l,
+                               const char *pattern,
+                               flux_error_t *errp)
+{
+    regex_t *reg = NULL;
+    if (!(reg = regexp_create (pattern))) {
+        errprintf (errp, "Failed to compile regex: %s", pattern);
+        return -1;
+    }
+    if (!zlistx_add_end (l, reg)) {
+        regexp_destroy (reg);
+        errprintf (errp, "Out of memory adding regex pattern");
+        return -1;
+    }
+    return 0;
+}
+
+static int regexp_list_append_array (zlistx_t *l,
+                                     json_t *array,
+                                     flux_error_t *errp)
+{
+    size_t index;
+    json_t *entry;
+
+    if (!json_is_array (array)) {
+        errprintf (errp, "not an array");
+        return -1;
+    }
+
+    json_array_foreach (array, index, entry) {
+        const char *pattern = json_string_value (entry);
+        if (pattern == NULL) {
+            errprintf (errp, "all entries must be a string value");
+            return -1;
+        }
+        if (regexp_list_append (l, pattern, errp) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 /*  Parse [job-manager.prolog] and [job-manager.epilog] config
  */
-static int conf_init (flux_t *h, struct perilog_conf *conf)
+static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
 {
+    flux_t *h = flux_jobtap_get_flux (p);
     flux_error_t error;
     json_t *prolog = NULL;
     json_t *epilog = NULL;
+    json_t *log_ignore = NULL;
 
     memset (conf, 0, sizeof (*conf));
     conf->prolog_kill_timeout = 5.;
@@ -546,15 +645,30 @@ static int conf_init (flux_t *h, struct perilog_conf *conf)
     zhashx_set_destructor (conf->processes,
                            perilog_proc_destructor);
 
+    /*  Set up log ignore pattern list
+     */
+    if (!(conf->log_ignore = regexp_list_create ()))
+        return -1;
+    /*  Always ignore empty lines
+     */
+    if (regexp_list_append (conf->log_ignore, "^\\s*$", &error) < 0) {
+        flux_log (h,
+                  LOG_ERR,
+                  "perilog: failed to pass empty pattern to log-ignore: %s",
+                  error.text);
+        return -1;
+    }
     if (flux_conf_unpack (flux_get_conf (h),
                           &error,
-                          "{s?{s?{s?o s?F !} s?{s?o !}}}",
+                          "{s?{s?{s?o s?F !} s?{s?o !} s?{s?o}}}",
                           "job-manager",
                             "prolog",
                               "command", &prolog,
                               "kill-timeout", &conf->prolog_kill_timeout,
                             "epilog",
-                              "command", &epilog) < 0) {
+                              "command", &epilog,
+                            "perilog",
+                              "log-ignore", &log_ignore) < 0) {
         flux_log (h, LOG_ERR,
                   "prolog/epilog configuration error: %s",
                   error.text);
@@ -570,6 +684,15 @@ static int conf_init (flux_t *h, struct perilog_conf *conf)
         flux_log (h, LOG_ERR, "[job-manager.epilog] command malformed!");
         return -1;
     }
+    if (log_ignore
+        && regexp_list_append_array (conf->log_ignore,
+                                     log_ignore,
+                                     &error) < 0) {
+        flux_log (h,
+                  LOG_ERR,
+                  "perilog: error parsing conf.log_ignore: %s", error.text);
+        return -1;
+    }
     return 0;
 }
 
@@ -578,6 +701,7 @@ static void free_config (struct perilog_conf *conf)
     flux_cmd_destroy (conf->prolog_cmd);
     flux_cmd_destroy (conf->epilog_cmd);
     zhashx_destroy (&conf->processes);
+    zlistx_destroy (&conf->log_ignore);
 }
 
 static const struct flux_plugin_handler tab[] = {
@@ -589,7 +713,7 @@ static const struct flux_plugin_handler tab[] = {
 
 int flux_plugin_init (flux_plugin_t *p)
 {
-    if (conf_init (flux_jobtap_get_flux (p), &perilog_config) < 0
+    if (conf_init (p, &perilog_config) < 0
         || flux_plugin_aux_set (p,
                                 NULL,
                                 &perilog_config,

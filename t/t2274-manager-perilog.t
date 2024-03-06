@@ -296,6 +296,42 @@ test_expect_success 'perilog: canceled prolog does not drain ranks' '
 	flux resource drain &&
 	test "$(drained_ranks)" = ""
 '
+test_expect_success 'perilog: log-ignore works' '
+	cat <<-EOF >config/perilog.toml &&
+	[job-manager.prolog]
+	command = [ "printf", "foo: whee!\nbar: woo!\nbaz: important!\n" ]
+	[job-manager.perilog]
+	log-ignore = [ "^foo:.*", "^bar:" ]
+	EOF
+	flux config reload &&
+	flux jobtap load --remove=*.so perilog.so &&
+	flux dmesg -c >/dev/null &&
+	flux run hostname &&
+	flux dmesg -H > dmesg.out &&
+	test_debug "cat dmesg.out" &&
+	test_must_fail grep foo: dmesg.out &&
+	test_must_fail grep bar: dmesg.out &&
+	grep baz: dmesg.out
+'
+test_expect_success 'perilog: bad log-ignore entry is caught' '
+	cat <<-EOF >config/perilog.toml &&
+	[job-manager.perilog]
+	log-ignore = "foo"
+	EOF
+	flux config reload &&
+	test_must_fail flux jobtap load --remove=*.so perilog.so &&
+	flux dmesg -Hc | grep "not an array"
+'
+test_expect_success 'perilog: bad log-ignore regexp is caught' '
+	cat <<-EOF >config/perilog.toml &&
+	[job-manager.perilog]
+	log-ignore = [ "[" ]
+	EOF
+	flux config reload &&
+	test_must_fail flux jobtap load perilog.so &&
+	flux dmesg -Hc | grep "[fF]ailed to compile"
+'
+
 #  Note: run this job before taking rank 3 offline below
 test_expect_success 'perilog: run job across all 4 ranks' '
 	jobid=$(flux submit --wait-event=clean -N4 -n4 true)
