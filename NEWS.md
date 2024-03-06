@@ -1,3 +1,57 @@
+flux-core version 0.60.0 - 2024-03-05
+-------------------------------------
+
+Note: This release replaces the flux-filemap(1) command with an enhanced new
+command called flux-archive(1).  Simple invocations of flux-filemap(1) will
+continue to work for a while to enable migration to flux-archive(1).
+
+## New Features
+ * job-manager: support suppression of prolog/epilog output with
+   `perilog.log-ignore` pattern list (#5772)
+ * flux-job: attach: support MPIR tool launch extension (#5758)
+ * add `flux job hostpids` command (#5765)
+ * shell: support opening output files with `-o output.mode=append` (#5766)
+ * shell: add rexec plugin (#5605)
+ * shell: unset `HWLOC_COMPONENTS` with `hwloc.xmlfile` (#5759)
+ * flux-job: add shorthand paths for `flux job eventlog` and `wait-event`
+   (#5749)
+ * flux-archive: add new command for file broadcast (#5701)
+ * completions: support completion of jobids with plain `f`, support
+   flux-hostlist(1) (#5745)
+ * libtaskmap: support decode of raw (semicolon-delimited) taskmaps (#5735)
+ * shell: make kvs output limit configurable and default single-user jobs
+   to unlimited (#5732)
+ * add flux-hostlist(1) (#5724)
+
+## Fixes
+ * broker: catch an improper use of groups and handle it gracefully (#5762)
+ * shell: fix incorrect values returned from `flux_shell_get_rank_info(3)`
+   (#5756)
+ * shell: generate fatal error if `block` taskmap scheme has an argument
+   (#5730)
+ * do not drain ranks when job is canceled during prolog (#5742)
+ * optparse: fix segfault when subcommand registration fails due to invalid
+   options table (#5740)
+ * fix various typos (#5761)
+
+## Documentation
+ * doc: pull in admin guide (#5763)
+
+## Cleanup
+ * fix various typos (#5761)
+ * libsubprocess: minor API cleanup (#5699)
+ * cmd: split flux-job into separate source files (#5747)
+ * job-info: support lookup of updated jobspec, remove manual construction
+   of updated R / jobspec (#5635)
+ * job-info: add `JSON_DECODE` & `CURRENT` flags, deprecate
+   job-info.update-lookup (#5633)
+
+## Build/Testsuite
+ * github: update deprecated actions (#5768)
+ * testsuite: fix t2617 to utilize /dev/urandom (#5757)
+ * testsuite: fix random-generation of kvs archive files in t0021 (#5751)
+
+
 flux-core version 0.59.0 - 2024-02-06
 -------------------------------------
 
