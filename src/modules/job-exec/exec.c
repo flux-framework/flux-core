@@ -33,6 +33,7 @@
 #endif
 
 #include <unistd.h>
+#include <string.h>
 
 #include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
@@ -193,10 +194,11 @@ static int lost_shell (struct jobinfo *job,
      */
     if (!(f = jobinfo_shell_rpc_pack (job,
                                       "exception",
-                                      "{s:s s:i s:i}",
+                                      "{s:s s:i s:i s:s}",
                                       "type", "lost-shell",
                                       "severity", FLUX_JOB_EXCEPTION_CRIT,
-                                      "shell_rank", shell_rank)))
+                                      "shell_rank", shell_rank,
+                                      "message", msg)))
             return -1;
     if (flux_future_then (f, -1., lost_shell_continuation, job) < 0) {
         flux_future_destroy (f);
@@ -317,10 +319,16 @@ static void exit_cb (struct bulk_exec *exec,
     while (rank != IDSET_INVALID_ID) {
         flux_subprocess_t *p = bulk_exec_get_subprocess (exec, rank);
         int signo = flux_subprocess_signaled (p);
+        int shell_rank = resource_set_rank_index (job->R, rank);
         if (p && signo > 0) {
-            int shell_rank = resource_set_rank_index (job->R, rank);
             if (shell_rank != 0)
-                lost_shell (job, false, shell_rank, NULL);
+                lost_shell (job,
+                            false,
+                            shell_rank,
+                            "shell rank %d (on %s): %s",
+                            shell_rank,
+                            flux_get_hostbyrank (job->h, rank),
+                            strsignal (signo));
         }
         rank = idset_next (ranks, rank);
     }
