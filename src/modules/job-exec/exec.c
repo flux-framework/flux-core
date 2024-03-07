@@ -164,19 +164,29 @@ static void lost_shell_continuation (flux_future_t *f, void *arg)
 static int lost_shell (struct jobinfo *job,
                        bool raise_exception,
                        int shell_rank,
-                       const char *hostname)
+                       const char *fmt,
+                       ...)
 {
     flux_future_t *f;
+    char msgbuf[160];
+    int msglen = sizeof (msgbuf);
+    char *msg = msgbuf;
+    va_list ap;
+
+    if (fmt) {
+        va_start (ap, fmt);
+        if (vsnprintf (msg, msglen, fmt, ap) >= msglen)
+            (void) snprintf (msg, msglen, "%s", "lost contact with job shell");
+        va_end (ap);
+    }
 
     if (raise_exception) {
         /* Raise a non-fatal job exception */
         jobinfo_raise (job,
                        "node-failure",
                        FLUX_JOB_EXCEPTION_CRIT,
-                       "%s on %s (shell rank %d)",
-                       "lost contact with job shell",
-                       hostname,
-                       shell_rank);
+                       "%s",
+                       msg);
     }
 
     /* Also notify job shell rank 0 of exception
@@ -210,7 +220,13 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
     if (cmd) {
         if (errnum == EHOSTUNREACH) {
             if (!idset_test (job->critical_ranks, shell_rank)
-                && lost_shell (job, true, shell_rank, hostname) == 0)
+                && lost_shell (job,
+                               true,
+                               shell_rank,
+                               "%s on %s (shell rank %d)",
+                               "lost contact with job shell",
+                               hostname,
+                               shell_rank) == 0)
                 return;
             jobinfo_fatal_error (job,
                                 0,
