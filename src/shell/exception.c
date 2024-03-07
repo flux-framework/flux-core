@@ -34,14 +34,19 @@ static void exception_handler (flux_t *h,
     const char *type;
     int severity = -1;
     int shell_rank = -1;
+    const char *message = "";
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:i s:i}",
+                             "{s:s s:i s:i s?s}",
                              "type", &type,
                              "severity", &severity,
-                             "shell_rank", &shell_rank) < 0)
+                             "shell_rank", &shell_rank,
+                             "message", &message) < 0)
         goto error;
+
+    if (strlen (message) > 0)
+        shell_warn ("%s", message);
 
     if (streq (type, "lost-shell") && severity > 0) {
         flux_plugin_arg_t *args = flux_plugin_arg_create ();
