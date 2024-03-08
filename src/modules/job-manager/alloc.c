@@ -105,10 +105,6 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
              */
             if (job->alloc_pending)
                 requeue_pending (alloc, job);
-            /* jobs with free request pending (much smaller window for this
-             * to be true) need to be picked up again after 'ready'.
-             */
-            job->free_pending = 0;
             job = zhashx_next (ctx->active_jobs);
         }
         alloc->ready = false;
@@ -117,39 +113,6 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
         alloc->sched_sender = NULL;
         drain_check (alloc->ctx->drain);
     }
-}
-
-/* Handle a sched.free response.
- */
-static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
-{
-    struct job_manager *ctx = arg;
-    flux_jobid_t id = 0;
-    struct job *job;
-
-    if (flux_response_decode (msg, NULL, NULL) < 0)
-        goto teardown;
-    if (flux_msg_unpack (msg, "{s:I}", "id", &id) < 0)
-        goto teardown;
-    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        flux_log (h, LOG_ERR, "sched.free-response: id=%s not active",
-                  idf58 (id));
-        errno = EINVAL;
-        goto teardown;
-    }
-    if (!job->has_resources) {
-        flux_log (h, LOG_ERR, "sched.free-response: %s not allocated",
-                  idf58 (id));
-        errno = EINVAL;
-        goto teardown;
-    }
-    job->free_pending = 0;
-    if (event_job_post_pack (ctx->event, job, "free", 0, NULL) < 0)
-        goto teardown;
-    return;
-teardown:
-    interface_teardown (ctx->alloc, "free response error", errno);
 }
 
 /* Send sched.free request for job.
@@ -577,10 +540,9 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
 int alloc_send_free_request (struct alloc *alloc, struct job *job)
 {
     assert (job->state == FLUX_JOB_STATE_CLEANUP);
-    if (!job->free_pending && alloc->ready) {
+    if (alloc->ready) {
         if (free_request (alloc, job) < 0)
             return -1;
-        job->free_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
             (void)event_job_post_pack (alloc->ctx->event,
                                        job,
@@ -798,11 +760,6 @@ static const struct flux_msg_handler_spec htab[] = {
     {   FLUX_MSGTYPE_RESPONSE,
         "sched.alloc",
         alloc_response_cb,
-        0
-    },
-    {   FLUX_MSGTYPE_RESPONSE,
-        "sched.free",
-        free_response_cb,
         0
     },
     FLUX_MSGHANDLER_TABLE_END,

@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-/* Respond to a free request.
+/* This is a no-op now that sched.free doesn't require a response.
  */
 int schedutil_free_respond (schedutil_t *util, const flux_msg_t *msg);
 

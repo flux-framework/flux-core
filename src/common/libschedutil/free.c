@@ -19,11 +19,7 @@
 
 int schedutil_free_respond (schedutil_t *util, const flux_msg_t *msg)
 {
-    flux_jobid_t id;
-
-    if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
-        return -1;
-    return flux_respond_pack (util->h, msg, "{s:I}", "id", id);
+    return 0;
 }
 
 /*
