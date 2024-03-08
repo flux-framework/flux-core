@@ -187,8 +187,7 @@ test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 '
 test_expect_success 'sched-simple: there are no outstanding sched requests' '
 	flux queue status -v >queue_status.out &&
-	grep "0 alloc requests pending to scheduler" queue_status.out &&
-	grep "0 free requests pending to scheduler" queue_status.out
+	grep "0 alloc requests pending to scheduler" queue_status.out
 '
 test_expect_success 'sched-simple: reload in unlimited mode' '
 	flux module load sched-simple mode=unlimited &&
@@ -257,8 +256,7 @@ test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 '
 test_expect_success 'sched-simple: there are no outstanding sched requests' '
 	flux queue status -v >queue_status.out &&
-	grep "0 alloc requests pending to scheduler" queue_status.out &&
-	grep "0 free requests pending to scheduler" queue_status.out
+	grep "0 alloc requests pending to scheduler" queue_status.out
 '
 
 test_expect_success 'sched-simple: load sched-simple and wait for queue drain' '

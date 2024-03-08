@@ -51,7 +51,6 @@ struct alloc {
     unsigned int alloc_limit;
     // e.g. for mode limited w/ limit=1, max of 1
     unsigned int alloc_pending_count;
-    unsigned int free_pending_count;
     char *sched_sender; // for disconnect
 };
 
@@ -114,7 +113,6 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
         }
         alloc->ready = false;
         alloc->alloc_pending_count = 0;
-        alloc->free_pending_count = 0;
         free (alloc->sched_sender);
         alloc->sched_sender = NULL;
         drain_check (alloc->ctx->drain);
@@ -147,7 +145,6 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
     job->free_pending = 0;
-    ctx->alloc->free_pending_count--;
     if (event_job_post_pack (ctx->event, job, "free", 0, NULL) < 0)
         goto teardown;
     return;
@@ -590,7 +587,6 @@ int alloc_send_free_request (struct alloc *alloc, struct job *job)
                                        "debug.free-request",
                                        0,
                                        NULL);
-        alloc->free_pending_count++;
     }
     return 0;
 }
@@ -742,10 +738,9 @@ static void alloc_query_cb (flux_t *h,
 
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:i s:i s:i}",
+                           "{s:i s:i s:i}",
                            "queue_length", zlistx_size (alloc->queue),
                            "alloc_pending", alloc->alloc_pending_count,
-                           "free_pending", alloc->free_pending_count,
                            "running", alloc->ctx->running_jobs) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;

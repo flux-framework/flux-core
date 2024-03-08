@@ -37,7 +37,6 @@ test_expect_success 'job-manager: queue counts are as expected' '
 	Scheduling is started
 	2 alloc requests queued
 	2 alloc requests pending to scheduler
-	0 free requests pending to scheduler
 	2 running jobs
 	EOT
 	test_cmp counts_all1.exp counts_all1.out
@@ -58,7 +57,6 @@ test_expect_success 'job-manager: queue counts are as expected' '
 	Scheduling is stopped
 	0 alloc requests queued
 	0 alloc requests pending to scheduler
-	0 free requests pending to scheduler
 	2 running jobs
 	EOT
 	test_cmp counts_all2.exp counts_all2.out
@@ -89,7 +87,6 @@ test_expect_success 'job-manager: queue counts are as expected' '
 	Scheduling is started
 	1 alloc requests queued
 	2 alloc requests pending to scheduler
-	0 free requests pending to scheduler
 	2 running jobs
 	EOT
 	test_cmp counts_all3.exp counts_all3.out
@@ -173,7 +170,6 @@ test_expect_success 'job-manager: queue counts are as expected' '
 	debug: Scheduling is started
 	6 alloc requests queued
 	2 alloc requests pending to scheduler
-	0 free requests pending to scheduler
 	2 running jobs
 	EOT
 	test_cmp counts_named1.exp counts_named1.out
@@ -211,7 +207,6 @@ test_expect_success 'job-manager: queue counts are as expected' '
 	debug: Scheduling is stopped
 	0 alloc requests queued
 	2 alloc requests pending to scheduler
-	0 free requests pending to scheduler
 	2 running jobs
 	EOT
 	test_cmp counts_named2.exp counts_named2.out
@@ -253,7 +248,6 @@ test_expect_success 'job-manager: queue counts are as expected' '
 	debug: Scheduling is started
 	2 alloc requests queued
 	2 alloc requests pending to scheduler
-	0 free requests pending to scheduler
 	2 running jobs
 	EOT
 	test_cmp counts_named3.exp counts_named3.out
