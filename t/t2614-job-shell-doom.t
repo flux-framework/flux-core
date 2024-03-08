@@ -42,7 +42,23 @@ test_expect_success 'flux-shell: run script with 2 nodes and exit-on-error' '
 	test_must_fail run_timeout 30 flux run \
 		-n2 -N2 -o exit-on-error ./testscript.sh
 '
-
+test_expect_success 'flux-shell: exit-timeout catches lost shell' '
+	cat >test2.sh <<-"EOF" &&
+	#!/bin/bash
+	if test $FLUX_TASK_RANK -eq 1; then
+	    kill -9 $PPID
+	    exit
+	fi
+	sleep 30
+	EOF
+	chmod +x test2.sh &&
+	test_must_fail run_timeout 30 flux run \
+		-n2 -N2 -o exit-timeout=1s ./test2.sh
+'
+test_expect_success 'flux-shell: exit-on-error catches lost shell' '
+	test_must_fail run_timeout 30 flux run \
+		-n2 -N2 -o exit-on-error ./test2.sh
+'
 test_expect_success 'flux-shell: exit-timeout=aaa is rejected' '
 	test_must_fail flux run -o exit-timeout=aaa /bin/true
 '
