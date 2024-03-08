@@ -42,18 +42,18 @@ Options:\n\
      --inception               Run tests as flux jobs\n\
      --system                  Run under system instance\n\
  -q, --quiet                   Add --quiet to docker-build\n\
- -t, --tag=TAG                 If checks succeed, tag image as NAME\n\
- -i, --image=NAME              Use base docker image NAME (default=$IMAGE)\n\
- -p, --platform=NAME           Run on alternate platform (if supported)\n\
- -S, --flux-security-version=N Install flux-security vers N (default=$FLUX_SECURITY_VERSION)\n
- -j, --jobs=N                  Value for make -j (default=$JOBS)\n
+ -t, --tag TAG                 If checks succeed, tag image as NAME\n\
+ -i, --image NAME              Use base docker image NAME (default=$IMAGE)\n\
+ -p, --platform NAME           Run on alternate platform (if supported)\n\
+ -S, --flux-security-version N Install flux-security vers N (default=$FLUX_SECURITY_VERSION)\n
+ -j, --jobs N                  Value for make -j (default=$JOBS)\n
  -d, --distcheck               Run 'make distcheck' instead of 'make check'\n\
  -r, --recheck                 Run 'make recheck' after failure\n\
  -u, --unit-test-only          Only run unit tests\n\
      --quick-check             Only run check-prep and one basic test\n\
  -P, --no-poison               Do not install poison libflux and flux(1)\n\
- -D, --build-directory=DIRNAME Name of a subdir to build in, will be made\n\
-     --workdir=PATH            Use PATH as working directory for build\n\
+ -D, --build-directory DIRNAME Name of a subdir to build in, will be made\n\
+     --workdir PATH            Use PATH as working directory for build\n\
  -I, --interactive             Instead of running ci build, run docker\n\
                                 image with interactive shell.\n\
 "
@@ -61,6 +61,8 @@ Options:\n\
 # check if running in OSX
 if [[ "$(uname)" == "Darwin" ]]; then
     # BSD getopt
+    echo >&2 "WARNING: on Darwin/macOS be sure not to use equals signs (=) for specifying options; instead use"
+    echo >&2 "spaces. This is a known issue with macOS's default version of getopt."
     GETOPTS=`getopt $short_opts -- $*`
 else
     # GNU getopt
