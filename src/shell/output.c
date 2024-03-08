@@ -617,7 +617,7 @@ static void shell_output_write_completion (flux_future_t *f, void *arg)
 {
     struct shell_output *out = arg;
 
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0 && errno != ENOSYS)
         shell_log_errno ("shell_output_write");
     zlist_remove (out->pending_writes, f);
     flux_future_destroy (f);
@@ -738,7 +738,7 @@ void shell_output_destroy (struct shell_output *out)
             flux_future_t *f;
 
             while ((f = zlist_pop (out->pending_writes))) { // follower only
-                if (flux_future_get (f, NULL) < 0)
+                if (flux_future_get (f, NULL) < 0 && errno != ENOSYS)
                     shell_log_errno ("shell_output_write");
                 flux_future_destroy (f);
             }
