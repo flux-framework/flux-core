@@ -188,6 +188,11 @@ static int lost_shell (struct jobinfo *job,
                        FLUX_JOB_EXCEPTION_CRIT,
                        "%s",
                        msg);
+        /* If an exception was raised, do not duplicate the message
+         * to the shell exception service since the message will already
+         * be displayed as part of the exception note:
+         */
+        msg = "";
     }
 
     /* Also notify job shell rank 0 of exception
