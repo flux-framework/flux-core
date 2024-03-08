@@ -27,7 +27,7 @@ die() { echo -e "$prog: $@"; exit 1; }
 #
 declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,unit-test-only,quick-check,inception,platform:,workdir:,system"
 declare -r short_opts="hqIdi:S:j:t:D:Prup:"
-declare -r usage="
+declare usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
 Build docker image for CI builds, then run tests inside the new\n\
 container as the current user and group.\n\
@@ -59,9 +59,13 @@ Options:\n\
 "
 
 # check if running in OSX
-if [[ "$(uname)" == "Darwin" ]]; then
+if [[ "$(uname)" == "Darwin" ]] && [[ $FORCE_GNU_GETOPT != 1 ]]; then
     # BSD getopt
     GETOPTS=`getopt $short_opts -- $*`
+    usage=${usage}"\n\
+    You are using BSD getopt on macOS. BSD getopt does not recognize '='\n\
+    between options. Use a space instead. If gnu-getopt is first in your\n\
+    PATH, force the script to use that by setting FORCE_GNU_GETOPT=1.\n"
 else
     # GNU getopt
     GETOPTS=`getopt -u -o $short_opts -l $long_opts -n $prog -- $@`
