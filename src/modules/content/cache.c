@@ -190,8 +190,8 @@ static void cache_entry_destroy (struct cache_entry *e)
 {
     if (e) {
         int saved_errno = errno;
-        assert (e->load_requests == NULL);
-        assert (e->store_requests == NULL);
+        msgstack_destroy (&e->load_requests);
+        msgstack_destroy (&e->store_requests);
         if (e->mmapped)
             content_mmap_region_decref (e->data_container);
         else
