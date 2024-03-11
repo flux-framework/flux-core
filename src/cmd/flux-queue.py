@@ -92,7 +92,6 @@ def alloc_query(handle):
         sys.exit(1)
     print("{0} alloc requests queued".format(query["queue_length"]))
     print("{0} alloc requests pending to scheduler".format(query["alloc_pending"]))
-    print("{0} free requests pending to scheduler".format(query["free_pending"]))
     print("{0} running jobs".format(query["running"]))
 
 

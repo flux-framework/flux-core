@@ -260,7 +260,6 @@ test_expect_success 'flux-queue: queue status -v shows expected counts' '
 	Scheduling is started
 	1 alloc requests queued
 	1 alloc requests pending to scheduler
-	0 free requests pending to scheduler
 	1 running jobs
 	EOT
 	test_cmp stat.exp stat.out
@@ -282,7 +281,6 @@ test_expect_success 'flux-queue: queue status -v shows expected counts' '
 	Scheduling is stopped
 	0 alloc requests queued
 	0 alloc requests pending to scheduler
-	0 free requests pending to scheduler
 	0 running jobs
 	EOT
 	test_cmp stat2.exp stat2.out

@@ -51,7 +51,6 @@ struct alloc {
     unsigned int alloc_limit;
     // e.g. for mode limited w/ limit=1, max of 1
     unsigned int alloc_pending_count;
-    unsigned int free_pending_count;
     char *sched_sender; // for disconnect
 };
 
@@ -106,53 +105,14 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
              */
             if (job->alloc_pending)
                 requeue_pending (alloc, job);
-            /* jobs with free request pending (much smaller window for this
-             * to be true) need to be picked up again after 'ready'.
-             */
-            job->free_pending = 0;
             job = zhashx_next (ctx->active_jobs);
         }
         alloc->ready = false;
         alloc->alloc_pending_count = 0;
-        alloc->free_pending_count = 0;
         free (alloc->sched_sender);
         alloc->sched_sender = NULL;
         drain_check (alloc->ctx->drain);
     }
-}
-
-/* Handle a sched.free response.
- */
-static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
-                              const flux_msg_t *msg, void *arg)
-{
-    struct job_manager *ctx = arg;
-    flux_jobid_t id = 0;
-    struct job *job;
-
-    if (flux_response_decode (msg, NULL, NULL) < 0)
-        goto teardown;
-    if (flux_msg_unpack (msg, "{s:I}", "id", &id) < 0)
-        goto teardown;
-    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        flux_log (h, LOG_ERR, "sched.free-response: id=%s not active",
-                  idf58 (id));
-        errno = EINVAL;
-        goto teardown;
-    }
-    if (!job->has_resources) {
-        flux_log (h, LOG_ERR, "sched.free-response: %s not allocated",
-                  idf58 (id));
-        errno = EINVAL;
-        goto teardown;
-    }
-    job->free_pending = 0;
-    ctx->alloc->free_pending_count--;
-    if (event_job_post_pack (ctx->event, job, "free", 0, NULL) < 0)
-        goto teardown;
-    return;
-teardown:
-    interface_teardown (ctx->alloc, "free response error", errno);
 }
 
 /* Send sched.free request for job.
@@ -580,17 +540,15 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
 int alloc_send_free_request (struct alloc *alloc, struct job *job)
 {
     assert (job->state == FLUX_JOB_STATE_CLEANUP);
-    if (!job->free_pending && alloc->ready) {
+    if (alloc->ready) {
         if (free_request (alloc, job) < 0)
             return -1;
-        job->free_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
             (void)event_job_post_pack (alloc->ctx->event,
                                        job,
                                        "debug.free-request",
                                        0,
                                        NULL);
-        alloc->free_pending_count++;
     }
     return 0;
 }
@@ -742,10 +700,9 @@ static void alloc_query_cb (flux_t *h,
 
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:i s:i s:i}",
+                           "{s:i s:i s:i}",
                            "queue_length", zlistx_size (alloc->queue),
                            "alloc_pending", alloc->alloc_pending_count,
-                           "free_pending", alloc->free_pending_count,
                            "running", alloc->ctx->running_jobs) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
@@ -803,11 +760,6 @@ static const struct flux_msg_handler_spec htab[] = {
     {   FLUX_MSGTYPE_RESPONSE,
         "sched.alloc",
         alloc_response_cb,
-        0
-    },
-    {   FLUX_MSGTYPE_RESPONSE,
-        "sched.free",
-        free_response_cb,
         0
     },
     FLUX_MSGHANDLER_TABLE_END,

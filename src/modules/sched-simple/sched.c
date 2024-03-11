@@ -365,16 +365,16 @@ void free_cb (flux_t *h, const flux_msg_t *msg, const char *R_str, void *arg)
 
     if (flux_request_unpack (msg, NULL, "{s:o}", "R", &R) < 0) {
         flux_log (h, LOG_ERR, "free: error unpacking sched.free request");
-        if (flux_respond_error (h, msg, EINVAL, NULL) < 0)
-            flux_log_error (h, "free_cb: flux_respond_error");
         return;
     }
 
     if (try_free (h, ss, R) < 0) {
-        if (flux_respond_error (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "free_cb: flux_respond_error");
+        flux_log_error (h, "free: could not free R");
         return;
     }
+    /* This is a no-op now that sched.free requires no response
+     * but we still call it to get test coverage.
+     */
     if (schedutil_free_respond (ss->util_ctx, msg) < 0)
         flux_log_error (h, "free_cb: schedutil_free_respond");
 

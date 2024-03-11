@@ -327,16 +327,18 @@ int event_job_action (struct event *event, struct job *job)
                 && !job->perilog_active
                 && !job->alloc_bypass
                 && !job->start_pending
-                && !job->free_pending) {
+                && !job->free_posted) {
                 if (alloc_send_free_request (ctx->alloc, job) < 0)
                     return -1;
+                if (event_job_post_pack (ctx->event, job, "free", 0, NULL) < 0)
+                    return -1;
+                job->free_posted = 1;
             }
 
             /* Post cleanup event when cleanup is complete.
              */
             if (!job->alloc_queued
                 && !job->alloc_pending
-                && !job->free_pending
                 && !job->start_pending
                 && !job->has_resources
                 && !job_event_is_queued (job, "epilog-start")

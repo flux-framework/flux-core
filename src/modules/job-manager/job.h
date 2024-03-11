@@ -41,7 +41,7 @@ struct job {
     uint8_t alloc_queued:1; // queued for alloc, but alloc request not sent
     uint8_t alloc_pending:1;// alloc request sent to sched
     uint8_t alloc_bypass:1; // alloc bypass enabled
-    uint8_t free_pending:1; // free request sent to sched
+    uint8_t free_posted:1;  // free event already posted
     uint8_t has_resources:1;
     uint8_t start_pending:1;// start request sent to job-exec
     uint8_t reattach:1;

@@ -2356,8 +2356,7 @@ static int jobtap_emit_perilog_event (struct jobtap *jobtap,
      */
     if ((prolog && job->start_pending)
         || ((prolog && start) && job->state == FLUX_JOB_STATE_CLEANUP)
-        || (!prolog && job->state != FLUX_JOB_STATE_CLEANUP)
-        || (!prolog && job->free_pending)) {
+        || (!prolog && job->state != FLUX_JOB_STATE_CLEANUP)) {
         errno = EINVAL;
         return -1;
     }
