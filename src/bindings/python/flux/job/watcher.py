@@ -401,7 +401,7 @@ class JobWatcher:
         if os.WIFEXITED(status):
             status = os.WEXITSTATUS(status)
         elif os.WIFSIGNALED(status):
-            status = 127 + os.WTERMSIG(status)
+            status = 128 + os.WTERMSIG(status)
         return status
 
     def start(self):

@@ -88,6 +88,7 @@ struct shell_output {
     struct eventlogger *ev;
     double batch_timeout;
     int refcount;
+    struct idset *active_shells;
     zlist_t *pending_writes;
     json_t *output;
     bool stopped;
@@ -528,15 +529,25 @@ static void shell_output_decref (struct shell_output *out,
     }
 }
 
+static void shell_output_decref_shell_rank (struct shell_output *out,
+                                            int shell_rank,
+                                            flux_msg_handler_t *mh)
+{
+    if (idset_test (out->active_shells, shell_rank)
+        && idset_clear (out->active_shells, shell_rank) == 0)
+        shell_output_decref (out, mh);
+}
+
 static int shell_output_write_leader (struct shell_output *out,
                                       const char *type,
+                                      int shell_rank,
                                       json_t *o,
                                       flux_msg_handler_t *mh) // may be NULL
 {
     json_t *entry;
 
     if (streq (type, "eof")) {
-        shell_output_decref (out, mh);
+        shell_output_decref_shell_rank (out, shell_rank, mh);
         return 0;
     }
     if (!(entry = eventlog_entry_pack (0., type, "O", o))) // increfs 'o'
@@ -581,16 +592,18 @@ static void shell_output_write_cb (flux_t *h,
                                    void *arg)
 {
     struct shell_output *out = arg;
+    int shell_rank;
     json_t *o;
     const char *type;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:o}",
+                             "{s:s s:i s:o}",
                              "name", &type,
+                             "shell_rank", &shell_rank,
                              "context", &o) < 0)
         goto error;
-    if (shell_output_write_leader (out, type, o, mh) < 0)
+    if (shell_output_write_leader (out, type, shell_rank, o, mh) < 0)
         goto error;
     if (flux_respond (out->shell->h, msg, NULL) < 0)
         shell_log_errno ("flux_respond");
@@ -604,7 +617,7 @@ static void shell_output_write_completion (flux_future_t *f, void *arg)
 {
     struct shell_output *out = arg;
 
-    if (flux_future_get (f, NULL) < 0)
+    if (flux_future_get (f, NULL) < 0 && errno != ENOSYS)
         shell_log_errno ("shell_output_write");
     zlist_remove (out->pending_writes, f);
     flux_future_destroy (f);
@@ -618,9 +631,10 @@ static int shell_output_write_type (struct shell_output *out,
                                     json_t *context)
 {
     flux_future_t *f = NULL;
+    int shell_rank = out->shell->info->shell_rank;
 
-    if (out->shell->info->shell_rank == 0) {
-        if (shell_output_write_leader (out, type, context, NULL) < 0)
+    if (shell_rank == 0) {
+        if (shell_output_write_leader (out, type, 0, context, NULL) < 0)
             shell_log_errno ("shell_output_write_leader");
     }
     else {
@@ -628,8 +642,9 @@ static int shell_output_write_type (struct shell_output *out,
                                        "write",
                                         0,
                                         0,
-                                        "{s:s s:O}",
+                                        "{s:s s:i s:O}",
                                         "name", type,
+                                        "shell_rank", shell_rank,
                                         "context", context)))
             goto error;
         if (flux_future_then (f, -1, shell_output_write_completion, out) < 0)
@@ -699,10 +714,11 @@ static void shell_output_type_file_cleanup (struct shell_output_type_file *ofp)
 void shell_output_destroy (struct shell_output *out)
 {
     if (out) {
+        int shell_rank = out->shell->info->shell_rank;
         int saved_errno = errno;
         flux_future_t *f = NULL;
 
-        if (out->shell->info->shell_rank != 0) {
+        if (shell_rank != 0) {
             /* Nonzero shell rank: send EOF to leader shell to notify
              *  that no more messages will be sent to shell.write
              */
@@ -710,8 +726,10 @@ void shell_output_destroy (struct shell_output *out)
                                            "write",
                                             0,
                                             0,
-                                            "{s:s s:{}}",
-                                            "name", "eof", "context")))
+                                            "{s:s s:i s:{}}",
+                                            "name", "eof",
+                                            "shell_rank", shell_rank,
+                                            "context")))
                 shell_log_errno ("shell.write: eof");
             flux_future_destroy (f);
         }
@@ -720,7 +738,7 @@ void shell_output_destroy (struct shell_output *out)
             flux_future_t *f;
 
             while ((f = zlist_pop (out->pending_writes))) { // follower only
-                if (flux_future_get (f, NULL) < 0)
+                if (flux_future_get (f, NULL) < 0 && errno != ENOSYS)
                     shell_log_errno ("shell_output_write");
                 flux_future_destroy (f);
             }
@@ -1127,11 +1145,19 @@ static int shell_lost (flux_plugin_t *p,
                        void *data)
 {
     struct shell_output *out = data;
+    int shell_rank;
+
     /*  A shell has been lost. We need to decref the output refcount by 1
      *  since we'll never hear from that shell to avoid rank 0 shell from
      *  hanging.
      */
-    shell_output_decref (out, NULL);
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:i}",
+                                "shell_rank", &shell_rank) < 0)
+        return shell_log_errno ("shell.lost: unpack of shell_rank failed");
+    shell_output_decref_shell_rank (out, shell_rank, NULL);
+    shell_debug ("lost shell rank %d", shell_rank);
     return 0;
 }
 
@@ -1223,6 +1249,15 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
              *   to be decremented as they send EOF or exit.
              */
             out->refcount = (shell->info->shell_size - 1 + ntasks);
+
+            /*  Account for active shells to avoid double-decrement of
+             *  refcount when a shell exits prematurely
+             */
+            if (!(out->active_shells = idset_create (0, IDSET_FLAG_AUTOGROW))
+                || idset_range_set (out->active_shells,
+                                    0,
+                                    shell->info->shell_size - 1) < 0)
+                goto error;
             if (flux_shell_add_completion_ref (shell, "output.write") < 0)
                 goto error;
             if (!(out->output = json_array ())) {

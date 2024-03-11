@@ -52,6 +52,7 @@ struct shell_doom {
     bool exit_on_error;
     int exit_rc;
     int exit_rank;
+    bool lost_shell;
 };
 
 static int get_exit_code (json_t *task_info)
@@ -78,6 +79,24 @@ static int get_exit_rank (json_t *task_info)
     return rank;
 }
 
+static void doom_check (struct shell_doom *doom,
+                        int rank,
+                        int exitcode,
+                        bool lost_shell)
+{
+    doom->exit_rank = rank;
+    doom->exit_rc = exitcode;
+    doom->lost_shell = lost_shell;
+    if (doom->exit_on_error && doom->exit_rc != 0) {
+        shell_die (doom->exit_rc,
+                   "%srank %d failed and exit-on-error is set",
+                   doom->lost_shell ? "shell " : "",
+                   doom->exit_rank);
+    }
+    else if (doom->timeout != TIMEOUT_NONE)
+        flux_watcher_start (doom->timer);
+}
+
 static void doom_post (struct shell_doom *doom, json_t *task_info)
 {
     flux_kvs_txn_t *txn;
@@ -100,16 +119,10 @@ static void doom_post (struct shell_doom *doom, json_t *task_info)
         || !(f = flux_kvs_commit (doom->shell->h, NULL, 0, txn)))
         shell_log_errno ("error posting task-exit eventlog entry");
 
-    doom->exit_rc = get_exit_code (task_info);
-    doom->exit_rank = get_exit_rank (task_info);
-
-    if (doom->exit_on_error && doom->exit_rc != 0) {
-        shell_die (doom->exit_rc,
-                   "rank %d failed and exit-on-error is set",
-                   doom->exit_rank);
-    }
-    else if (f && doom->timeout != TIMEOUT_NONE)
-        flux_watcher_start (doom->timer);
+    doom_check (doom,
+                get_exit_rank (task_info),
+                get_exit_code (task_info),
+                false);
 
     flux_future_destroy (f); // fire and forget
     free (entrystr);
@@ -163,7 +176,8 @@ static void doom_timeout (flux_reactor_t *r,
 
     fsd_format_duration (fsd, sizeof (fsd), doom->timeout);
     shell_die (doom->exit_rc,
-               "rank %d exited and exit-timeout=%s has expired",
+               "%srank %d exited and exit-timeout=%s has expired",
+               doom->lost_shell ? "shell " : "",
                doom->exit_rank,
                fsd);
 }
@@ -192,6 +206,22 @@ static int doom_task_exit (flux_plugin_t *p,
             doom_notify (doom, task_info);
         doom->done = true;
     }
+    return 0;
+}
+
+static int doom_shell_lost (flux_plugin_t *p,
+                            const char *topic,
+                            flux_plugin_arg_t *args,
+                            void *arg)
+{
+    struct shell_doom *doom = arg;
+    int shell_rank;
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:i}",
+                                "shell_rank", &shell_rank) < 0)
+        return shell_log_errno ("shell.lost: unpack of shell_rank failed");
+    doom_check (doom, shell_rank, 1, true);
     return 0;
 }
 
@@ -285,6 +315,8 @@ static int doom_init (flux_plugin_t *p,
         doom_destroy (doom);
         return -1;
     }
+    if (flux_plugin_add_handler (p, "shell.lost", doom_shell_lost, doom) < 0)
+        return shell_log_errno ("failed to add shell.lost handler");
     return 0;
 }
 

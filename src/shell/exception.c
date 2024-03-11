@@ -34,21 +34,37 @@ static void exception_handler (flux_t *h,
     const char *type;
     int severity = -1;
     int shell_rank = -1;
+    const char *message = "";
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:i s:i}",
+                             "{s:s s:i s:i s?s}",
                              "type", &type,
                              "severity", &severity,
-                             "shell_rank", &shell_rank) < 0)
+                             "shell_rank", &shell_rank,
+                             "message", &message) < 0)
         goto error;
 
-    if (streq (type, "lost-shell") && severity > 0)
-        flux_shell_plugstack_call (shell, "shell.lost", NULL);
+    if (strlen (message) > 0)
+        shell_warn ("%s", message);
+
+    if (streq (type, "lost-shell") && severity > 0) {
+        flux_plugin_arg_t *args = flux_plugin_arg_create ();
+        if (!args
+            || flux_plugin_arg_pack (args,
+                                     FLUX_PLUGIN_ARG_IN,
+                                     "{s:i}",
+                                     "shell_rank", shell_rank) < 0) {
+            flux_plugin_arg_destroy (args);
+            goto error;
+        }
+        flux_shell_plugstack_call (shell, "shell.lost", args);
+        flux_plugin_arg_destroy (args);
+    }
 
     if (flux_respond (h, msg, NULL) < 0)
         shell_log_errno ("flux_respond");
-
+    return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         shell_log_errno ("flux_respond_error");

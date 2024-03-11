@@ -33,6 +33,7 @@
 #endif
 
 #include <unistd.h>
+#include <string.h>
 
 #include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
@@ -162,28 +163,47 @@ static void lost_shell_continuation (flux_future_t *f, void *arg)
 }
 
 static int lost_shell (struct jobinfo *job,
+                       bool raise_exception,
                        int shell_rank,
-                       const char *hostname)
+                       const char *fmt,
+                       ...)
 {
     flux_future_t *f;
+    char msgbuf[160];
+    int msglen = sizeof (msgbuf);
+    char *msg = msgbuf;
+    va_list ap;
 
-    /* Raise a non-fatal job exception */
-    jobinfo_raise (job,
-                   "node-failure",
-                   FLUX_JOB_EXCEPTION_CRIT,
-                   "%s on %s (shell rank %d)",
-                   "lost contact with job shell",
-                   hostname,
-                   shell_rank);
+    if (fmt) {
+        va_start (ap, fmt);
+        if (vsnprintf (msg, msglen, fmt, ap) >= msglen)
+            (void) snprintf (msg, msglen, "%s", "lost contact with job shell");
+        va_end (ap);
+    }
+
+    if (raise_exception) {
+        /* Raise a non-fatal job exception */
+        jobinfo_raise (job,
+                       "node-failure",
+                       FLUX_JOB_EXCEPTION_CRIT,
+                       "%s",
+                       msg);
+        /* If an exception was raised, do not duplicate the message
+         * to the shell exception service since the message will already
+         * be displayed as part of the exception note:
+         */
+        msg = "";
+    }
 
     /* Also notify job shell rank 0 of exception
      */
     if (!(f = jobinfo_shell_rpc_pack (job,
                                       "exception",
-                                      "{s:s s:i s:i}",
+                                      "{s:s s:i s:i s:s}",
                                       "type", "lost-shell",
                                       "severity", FLUX_JOB_EXCEPTION_CRIT,
-                                      "shell_rank", shell_rank)))
+                                      "shell_rank", shell_rank,
+                                      "message", msg)))
             return -1;
     if (flux_future_then (f, -1., lost_shell_continuation, job) < 0) {
         flux_future_destroy (f);
@@ -207,7 +227,13 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
     if (cmd) {
         if (errnum == EHOSTUNREACH) {
             if (!idset_test (job->critical_ranks, shell_rank)
-                && lost_shell (job, shell_rank, hostname) == 0)
+                && lost_shell (job,
+                               true,
+                               shell_rank,
+                               "%s on %s (shell rank %d)",
+                               "lost contact with job shell",
+                               hostname,
+                               shell_rank) == 0)
                 return;
             jobinfo_fatal_error (job,
                                 0,
@@ -287,6 +313,29 @@ static void exit_cb (struct bulk_exec *exec,
             jobinfo_fatal_error (job, 0,
                                  "failed to terminate barrier: %s",
                                  strerror (errno));
+    }
+
+    /*  If a shell exits due to signal report the shell as lost to
+     *  the leader shell. This avoids potential hangs in the leader
+     *  shell if it is waiting for data from job shells that did not
+     *  exit cleanly.
+     */
+    unsigned int rank = idset_first (ranks);
+    while (rank != IDSET_INVALID_ID) {
+        flux_subprocess_t *p = bulk_exec_get_subprocess (exec, rank);
+        int signo = flux_subprocess_signaled (p);
+        int shell_rank = resource_set_rank_index (job->R, rank);
+        if (p && signo > 0) {
+            if (shell_rank != 0)
+                lost_shell (job,
+                            false,
+                            shell_rank,
+                            "shell rank %d (on %s): %s",
+                            shell_rank,
+                            flux_get_hostbyrank (job->h, rank),
+                            strsignal (signo));
+        }
+        rank = idset_next (ranks, rank);
     }
 }
 
