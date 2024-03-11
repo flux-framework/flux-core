@@ -164,7 +164,10 @@ int free_request (struct alloc *alloc, struct job *job)
 
     if (!(msg = flux_request_encode ("sched.free", NULL)))
         return -1;
-    if (flux_msg_pack (msg, "{s:I}", "id", job->id) < 0)
+    if (flux_msg_pack (msg,
+                       "{s:I s:O}",
+                       "id", job->id,
+                       "R", job->R_redacted) < 0)
         goto error;
     if (flux_send (alloc->ctx->h, msg, 0) < 0)
         goto error;

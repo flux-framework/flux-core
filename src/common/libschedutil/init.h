@@ -22,7 +22,7 @@ extern "C" {
 typedef struct schedutil_ctx schedutil_t;
 
 enum schedutil_flags {
-    SCHEDUTIL_FREE_NOLOOKUP = 1, // ops->free() will be called with R=NULL
+    SCHEDUTIL_FREE_NOLOOKUP = 1, // now the default so this flag is ignored
 };
 
 /* Create a handle for the schedutil convenience library.

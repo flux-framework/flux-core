@@ -242,11 +242,14 @@ test_expect_success 'sched-simple: cancel jobs' '
 test_expect_success 'sched-simple: reload sched-simple to cover free flags' '
 	flux module reload sched-simple test-free-nolookup
 '
+# That SCHEDUTIL_FREE_NOLOOKUP is now a no-op but since flux-sched-0.33.0
+# still uses it, ensure that free still works when it is used
 test_expect_success 'sched-simple: submit job and cancel it' '
+	flux dmesg --clear &&
 	flux job submit basic.json >job19.id &&
 	flux job wait-event --timeout=5.0 $(cat job19.id) alloc &&
 	flux cancel $(cat job19.id) &&
-	$dmesg_grep -t 10 "free: R is NULL"
+	$dmesg_grep -t 10 "free: rank0/core0"
 '
 test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 	flux module remove sched-simple &&

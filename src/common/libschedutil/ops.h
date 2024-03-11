@@ -39,16 +39,12 @@ struct schedutil_ops {
                   const flux_msg_t *msg,
                   void *arg);
 
-    /* Callback for a free request.  R is looked up as a convenience.
-     * 'msg' and 'R' are only valid for the duration of this call.
+    /* Callback for a free request.
+     * Currently 'R' is always NULL and may be unpacked as a JSON object
+     * under the "R" key in 'msg' if needed.
+     * 'msg' is only valid for the duration of this call.
      * You should either respond to the request immediately (see
      * free.h), or cache this information for later response.
-     *
-     * If R is unneeded, it is recommended that the
-     * SCHEDUTIL_FREE_NOLOOKUP flag be set in schedutil_create().  By
-     * setting this flag, R will not be looked up, saving a KVS lookup
-     * on every invocation of this callback.  R will be set to NULL
-     * instead.
      */
     void (*free)(flux_t *h,
                  const flux_msg_t *msg,

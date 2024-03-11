@@ -336,13 +336,16 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
-static int try_free (flux_t *h, struct simple_sched *ss, const char *R)
+static int try_free (flux_t *h, struct simple_sched *ss, json_t *R)
 {
     int rc = -1;
     char *r = NULL;
-    struct rlist *alloc = rlist_from_R (R);
+    json_error_t error;
+    struct rlist *alloc = rlist_from_json (R, &error);
     if (!alloc) {
-        flux_log_error (h, "free: unable to parse R=%s", R);
+        char *s = json_dumps (R, JSON_COMPACT);
+        flux_log_error (h, "free: unable to parse R=%s: %s", s, error.text);
+        ERRNO_SAFE_WRAP (free, s);
         return -1;
     }
     r = rlist_dumps (alloc);
@@ -355,12 +358,13 @@ static int try_free (flux_t *h, struct simple_sched *ss, const char *R)
     return rc;
 }
 
-void free_cb (flux_t *h, const flux_msg_t *msg, const char *R, void *arg)
+void free_cb (flux_t *h, const flux_msg_t *msg, const char *R_str, void *arg)
 {
     struct simple_sched *ss = arg;
+    json_t *R;
 
-    if (!R) {
-        flux_log (h, LOG_ERR, "free: R is NULL");
+    if (flux_request_unpack (msg, NULL, "{s:o}", "R", &R) < 0) {
+        flux_log (h, LOG_ERR, "free: error unpacking sched.free request");
         if (flux_respond_error (h, msg, EINVAL, NULL) < 0)
             flux_log_error (h, "free_cb: flux_respond_error");
         return;
