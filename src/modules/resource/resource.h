@@ -21,6 +21,7 @@ struct resource_ctx {
     struct exclude *exclude;
     struct acquire *acquire;
     struct reslog *reslog;
+    struct status *status;
 
     flux_t *parent_h;
     int parent_refcount;

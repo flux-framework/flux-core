@@ -34,6 +34,7 @@
 #include "exclude.h"
 #include "acquire.h"
 #include "rutil.h"
+#include "status.h"
 
 /* Parse [resource] table.
  *
@@ -184,56 +185,6 @@ static void disconnect_cb (flux_t *h,
         acquire_disconnect (ctx->acquire, msg);
 }
 
-static void status_cb (flux_t *h,
-                       flux_msg_handler_t *mh,
-                       const flux_msg_t *msg,
-                       void *arg)
-{
-    struct resource_ctx *ctx = arg;
-    json_t *drain;
-    const json_t *R;
-    json_t *o = NULL;
-    const char *errstr = NULL;
-
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
-    if (ctx->rank != 0) {
-        errno = EPROTO;
-        errstr = "this RPC only works on rank 0";
-        goto error;
-    }
-    if (!(R = inventory_get (ctx->inventory)))
-        goto error;
-    if (!(drain = drain_get_info (ctx->drain)))
-        goto error;
-    if (!(o = json_pack ("{s:O s:o}", "R", R, "drain", drain))) {
-        json_decref (drain);
-        errno = ENOMEM;
-        goto error;
-    }
-    if (rutil_set_json_idset (o,
-                              "online",
-                              monitor_get_up (ctx->monitor)) < 0)
-        goto error;
-    if (rutil_set_json_idset (o,
-                              "offline",
-                              monitor_get_down (ctx->monitor)) < 0)
-        goto error;
-    if (rutil_set_json_idset (o,
-                              "exclude",
-                              exclude_get (ctx->exclude)) < 0)
-        goto error;
-    if (flux_respond_pack (h, msg, "o", o) < 0) {
-        flux_log_error (h, "error responding to resource.status request");
-        json_decref (o);
-    }
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to resource.status request");
-    json_decref (o);
-}
-
 flux_t *resource_parent_handle_open (struct resource_ctx *ctx)
 {
     if (!ctx->parent_h) {
@@ -261,6 +212,7 @@ static void resource_ctx_destroy (struct resource_ctx *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
+        status_destroy (ctx->status);
         acquire_destroy (ctx->acquire);
         drain_destroy (ctx->drain);
         topo_destroy (ctx->topology);
@@ -290,12 +242,6 @@ static const struct flux_msg_handler_spec htab[] = {
         .topic_glob = "resource.config-reload",
         .cb = config_reload_cb,
         .rolemask = 0
-    },
-    {
-        .typemask = FLUX_MSGTYPE_REQUEST,
-        .topic_glob = "resource.status",
-        .cb = status_cb,
-        .rolemask = FLUX_ROLE_USER,
     },
     {
         .typemask = FLUX_MSGTYPE_REQUEST,
@@ -500,7 +446,6 @@ int mod_main (flux_t *h, int argc, char **argv)
         if (!(ctx->drain = drain_create (ctx, eventlog)))
             goto error;
     }
-
     /*  topology is initialized after exclude/drain etc since this
      *  rank may attempt to drain itself due to a topology mismatch.
      */
@@ -509,6 +454,8 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (!(ctx->monitor = monitor_create (ctx,
                                          inventory_get_size (ctx->inventory),
                                          monitor_force_up)))
+        goto error;
+    if (!(ctx->status = status_create (ctx)))
         goto error;
     if (ctx->rank == 0) {
         if (post_restart_event (ctx, eventlog ? 1 : 0) < 0)
