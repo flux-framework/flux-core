@@ -161,8 +161,10 @@ int cancel_request (struct alloc *alloc, struct job *job)
 /* Handle a sched.alloc response.
  * Update flags.
  */
-static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void alloc_response_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     struct job_manager *ctx = arg;
     struct alloc *alloc = ctx->alloc;
@@ -349,8 +351,10 @@ error:
 /* sched-hello:
  * Scheduler obtains jobs that have resources allocated.
  */
-static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void hello_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct job_manager *ctx = arg;
     struct job *job;
@@ -392,8 +396,10 @@ error:
  * and tells job-manager to start allocations.  job-manager tells
  * scheduler how many jobs are in the queue.
  */
-static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void ready_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct job_manager *ctx = arg;
     const char *mode;
@@ -480,8 +486,10 @@ static bool alloc_work_available (struct job_manager *ctx)
  * Runs right before reactor calls poll(2).
  * If a job can be scheduled, start idle watcher.
  */
-static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
-                     int revents, void *arg)
+static void prep_cb (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
 {
     struct job_manager *ctx = arg;
 
@@ -493,8 +501,10 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
  * Runs right after reactor calls poll(2).
  * Stop idle watcher, and send next alloc request, if available.
  */
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void check_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     struct job_manager *ctx = arg;
     struct alloc *alloc = ctx->alloc;
@@ -662,7 +672,8 @@ int alloc_queue_recalc_pending (struct alloc *alloc)
            && tail) {
         if (job_priority_comparator (head, tail) < 0) {
             if (alloc_cancel_alloc_request (alloc, tail) < 0) {
-                flux_log_error (alloc->ctx->h, "%s: alloc_cancel_alloc_request",
+                flux_log_error (alloc->ctx->h,
+                                "%s: alloc_cancel_alloc_request",
                                 __FUNCTION__);
                 return -1;
             }
