@@ -47,7 +47,7 @@ except KeyboardInterrupt:
     sys.exit(0)
 EOF
 )
-id=$(flux submit -N4 --tasks-per-node=2 \
+id=$(flux submit -N4 --tasks-per-node=1 \
 	--input=/dev/null \
 	-o exit-timeout=none \
 	--add-file=critical.py="${CRITICAL_RANKS}" \
