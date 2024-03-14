@@ -172,7 +172,6 @@ error:
 }
 
 /* Handle client disconnect.
- * Abort a streaming resource.acquire RPC, if it matches.
  */
 static void disconnect_cb (flux_t *h,
                            flux_msg_handler_t *mh,
@@ -183,6 +182,8 @@ static void disconnect_cb (flux_t *h,
 
     if (ctx->acquire)
         acquire_disconnect (ctx->acquire, msg);
+    if (ctx->status)
+        status_disconnect (ctx->status, msg);
 }
 
 flux_t *resource_parent_handle_open (struct resource_ctx *ctx)
@@ -247,7 +248,7 @@ static const struct flux_msg_handler_spec htab[] = {
         .typemask = FLUX_MSGTYPE_REQUEST,
         .topic_glob = "resource.disconnect",
         .cb = disconnect_cb,
-        .rolemask = 0
+        .rolemask = FLUX_ROLE_USER
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
