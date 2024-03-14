@@ -22,11 +22,41 @@
 #include "exclude.h"
 #include "status.h"
 
+#include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
+
 struct status {
     struct resource_ctx *ctx;
     flux_msg_handler_t **handlers;
 };
 
+static json_t *prepare_response (struct status *status)
+{
+    struct resource_ctx *ctx = status->ctx;
+    const struct idset *down = monitor_get_down (ctx->monitor);
+    const struct idset *exclude = exclude_get (ctx->exclude);
+    const json_t *R;
+    json_t *o = NULL;
+    json_t *drain_info = NULL;
+
+    if (!(R = inventory_get (ctx->inventory))
+        || !(drain_info = drain_get_info (ctx->drain)))
+        goto error;
+    if (!(o = json_pack ("{s:O s:O}", "R", R, "drain", drain_info))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (rutil_set_json_idset (o, "online", monitor_get_up (ctx->monitor)) < 0
+        || rutil_set_json_idset (o, "offline", down) < 0
+        || rutil_set_json_idset (o, "exclude", exclude) < 0)
+        goto error;
+    json_decref (drain_info);
+    return o;
+error:
+    ERRNO_SAFE_WRAP (json_decref, o);
+    ERRNO_SAFE_WRAP (json_decref, drain_info);
+    return NULL;
+}
 
 static void status_cb (flux_t *h,
                        flux_msg_handler_t *mh,
@@ -34,53 +64,31 @@ static void status_cb (flux_t *h,
                        void *arg)
 {
     struct status *status = arg;
-    struct resource_ctx *ctx = status->ctx;
-    json_t *drain;
-    const json_t *R;
     json_t *o = NULL;
-    const char *errstr = NULL;
+    flux_error_t error;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
+    if (flux_request_decode (msg, NULL, NULL) < 0) {
+        errprintf (&error, "error decoding request: %s", strerror (errno));
         goto error;
-    if (ctx->rank != 0) {
+    }
+    if (status->ctx->rank != 0) {
+        errprintf (&error, "this RPC only works on rank 0");
         errno = EPROTO;
-        errstr = "this RPC only works on rank 0";
         goto error;
     }
-    if (!(R = inventory_get (ctx->inventory)))
-        goto error;
-    if (!(drain = drain_get_info (ctx->drain)))
-        goto error;
-    if (!(o = json_pack ("{s:O s:o}",
-                         "R", R,
-                         "drain", drain))) {
-        json_decref (drain);
-        errno = ENOMEM;
+    if (!(o = prepare_response (status))) {
+        errprintf (&error, "error preparing response: %s", strerror (errno));
         goto error;
     }
-    if (rutil_set_json_idset (o,
-                              "online",
-                              monitor_get_up (ctx->monitor)) < 0)
-        goto error;
-    if (rutil_set_json_idset (o,
-                              "offline",
-                              monitor_get_down (ctx->monitor)) < 0)
-        goto error;
-    if (rutil_set_json_idset (o,
-                              "exclude",
-                              exclude_get (ctx->exclude)) < 0)
-        goto error;
-    if (flux_respond_pack (h, msg, "o", o) < 0) {
+    if (flux_respond_pack (h, msg, "O", o) < 0)
         flux_log_error (h, "error responding to resource.status request");
-        json_decref (o);
-    }
+    json_decref (o);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, errstr) < 0)
+    if (flux_respond_error (h, msg, errno, error.text) < 0)
         flux_log_error (h, "error responding to resource.status request");
     json_decref (o);
 }
-
 
 static const struct flux_msg_handler_spec htab[] = {
     {
