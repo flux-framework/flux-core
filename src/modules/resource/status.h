@@ -13,6 +13,7 @@
 
 struct status *status_create (struct resource_ctx *ctx);
 void status_destroy (struct status *status);
+void status_disconnect (struct status *status, const flux_msg_t *msg);
 
 #endif /* ! _RESOURCE_STATUS_H */
 
