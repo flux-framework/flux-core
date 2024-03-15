@@ -14,13 +14,12 @@ jobs:
     - name: docker-run-checks with ASan
       timeout-minutes: 40
       env:
-        PRELOAD: /usr/lib64/libasan.so.6
-        ASAN_OPTIONS: detect_leaks=0,start_deactivated=true,replace_str=true
+        ASAN_OPTIONS: detect_leaks=0,start_deactivated=true,replace_str=true,verify_asan_link_order=false
         FLUX_TEST_TIMEOUT: 300
         TAP_DRIVER_QUIET: t
       run: >
         src/test/docker/docker-run-checks.sh \
-          --image=fedora34 --unit-test-only -j2 \
+          --image=fedora36 --unit-test-only -j4 \
           -- --with-flux-security --enable-sanitizer=address
 
     - name: after failure
