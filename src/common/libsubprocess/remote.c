@@ -106,7 +106,8 @@ static void sigpending_cb (flux_future_t *f, void *arg)
      * remote kill(2) (f).
      */
     flux_future_fulfill_with (prev, f);
-    flux_future_destroy (f);
+
+    /* Note, f is not destroyed here since it is owned by prev */
 }
 
 static void fwd_pending_signal (flux_subprocess_t *p)
@@ -118,12 +119,30 @@ static void fwd_pending_signal (flux_subprocess_t *p)
         flux_future_t *f = flux_subprocess_kill (p, p->signal_pending);
         if (!f || (flux_future_then (f, -1., sigpending_cb, prev) < 0))
             flux_future_fulfill_error (prev, errno, NULL);
+
+        /*  If 'prev' is destroyed, then also destroy 'f'. Otherwise,
+         *  use-after-free will occur with 'prev' if it is destroyed between
+         *  now and when sigpending_cb() is run:
+         */
+        if (flux_future_aux_set (prev,
+                                 NULL,
+                                 f,
+                                 (flux_free_f) flux_future_destroy) < 0) {
+            flux_future_fulfill_error (prev, errno, NULL);
+            flux_future_destroy (f);
+        }
     }
     else {
         /* Remote process exited or failed, not able to send signal */
         flux_future_fulfill_error (prev, EINVAL, NULL);
     }
     p->signal_pending = 0;
+
+    /*  Now drop the reference on 'prev' added in add_pending_signal().
+     *  This may destroy 'f' created above if the caller destroyed 'prev'
+     *  before this callback was called.
+     */
+    flux_future_decref (prev);
 }
 
 static void process_new_state (flux_subprocess_t *p,
