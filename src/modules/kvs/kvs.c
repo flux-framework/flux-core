@@ -950,8 +950,6 @@ static void kvstxn_apply (kvstxn_t *kt)
     assert (root);
 
     if (root->remove) {
-        flux_log (ctx->h, LOG_DEBUG, "%s: namespace %s removed", __FUNCTION__,
-                  ns);
         errnum = ENOTSUP;
         goto done;
     }
@@ -2073,11 +2071,8 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
      * - i.e. we're calling kvsroot_mgr_lookup_root() not
      *   kvsroot_mgr_lookup_root_safe().
      */
-    if (!(root = kvsroot_mgr_lookup_root (ctx->krm, ns))) {
-        flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
-                  __FUNCTION__, ns);
+    if (!(root = kvsroot_mgr_lookup_root (ctx->krm, ns)))
         return;
-    }
 
     finalize_transaction_bynames (ctx, root, names, errnum);
 }
@@ -2129,11 +2124,8 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
      *   order (commit/fence completes before namespace removed, but
      *   namespace remove event received before setroot).
      */
-    if (!(root = kvsroot_mgr_lookup_root (ctx->krm, ns))) {
-        flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
-                  __FUNCTION__, ns);
+    if (!(root = kvsroot_mgr_lookup_root (ctx->krm, ns)))
         return;
-    }
 
     if (root->setroot_pause) {
         flux_msg_t *msgcpy;
