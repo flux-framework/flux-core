@@ -696,7 +696,8 @@ static flux_future_t * namespace_move (struct jobinfo *job)
 {
     flux_t *h = job->ctx->h;
     flux_future_t *f = NULL;
-    flux_future_t *fnext = NULL;
+    flux_future_t *f1 = NULL;
+    flux_future_t *f2 = NULL;
 
     if (jobinfo_emit_event_pack_nowait (job, "done", NULL) < 0)
         flux_log_error (h, "emit_event");
@@ -710,15 +711,18 @@ static flux_future_t * namespace_move (struct jobinfo *job)
         flux_log_error (h, "namespace_move: jobinfo_emit_event");
         goto error;
     }
-    if (   !(fnext = flux_future_and_then (f, namespace_copy, job))
-        || !(fnext = flux_future_and_then (f=fnext, namespace_delete, job))) {
+    if (!(f1 = flux_future_and_then (f, namespace_copy, job))
+        || !(f1 = flux_future_or_then (f, namespace_copy, job))
+        || !(f2 = flux_future_and_then (f1, namespace_delete, job))
+        || !(f2 = flux_future_or_then (f1, namespace_delete, job))) {
         flux_log_error (h, "namespace_move: flux_future_and_then");
         goto error;
     }
-    return fnext;
+    return f2;
 error:
     flux_future_destroy (f);
-    flux_future_destroy (fnext);
+    flux_future_destroy (f1);
+    flux_future_destroy (f2);
     return NULL;
 }
 
@@ -843,7 +847,6 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
         jobinfo_fatal_error (job, errno, "failed to create guest ns");
         goto done;
     }
-    job->has_namespace = 1;
 
     /*  If an exception was received during startup, no need to continue
      *   with startup
@@ -939,6 +942,12 @@ static flux_future_t *ns_create_and_link (flux_t *h,
                                             flags);
     else
         f = flux_kvs_namespace_create (h, job->ns, job->userid, flags);
+
+    /*  Set job->has_namespace flag immediately after sending the namespace
+     *  create RPC. This avoids the potential to leave orphaned namespaces
+     *  if the job is canceled before the response is received.
+     */
+    job->has_namespace = 1;
 
     if (!f || !(f2 = flux_future_and_then (f, namespace_link, job))) {
         flux_log_error (h, "namespace_move: flux_future_and_then");
