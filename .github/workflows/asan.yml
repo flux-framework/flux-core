@@ -11,9 +11,13 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
     - run: git fetch --tags || true
+    - name: disable ASLR
+      run: |
+        sudo sysctl -w kernel.randomize_va_space=0
     - name: docker-run-checks with ASan
       timeout-minutes: 40
       env:
+        PRELOAD: /usr/lib64/libasan.so.8
         ASAN_OPTIONS: detect_leaks=0,start_deactivated=true,replace_str=true,verify_asan_link_order=false
         FLUX_TEST_TIMEOUT: 300
         TAP_DRIVER_QUIET: t
