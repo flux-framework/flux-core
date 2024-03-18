@@ -2066,8 +2066,12 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     /* if root not initialized, nothing to do
-     * - it is ok that the namespace be marked for removal, we may be
-     *   cleaning up lingering transactions.
+     * - note that it is possible the namespace has been marked for
+     *   removal, we may be cleaning up lingering transactions and
+     *   need to report to those callers that namespace not available
+     *   via finalize_transaction_bynames() below.
+     * - i.e. we're calling kvsroot_mgr_lookup_root() not
+     *   kvsroot_mgr_lookup_root_safe().
      */
     if (!(root = kvsroot_mgr_lookup_root (ctx->krm, ns))) {
         flux_log (ctx->h, LOG_ERR, "%s: received unknown namespace %s",
