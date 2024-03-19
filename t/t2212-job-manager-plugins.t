@@ -253,7 +253,7 @@ test_expect_success 'job-manager: load jobtap_api test plugin' '
 test_expect_success 'job-manager: test that job flags can be set' '
 	id=$(flux submit \
 	       --setattr=system.depend.set_flag=debug hostname) &&
-	flux job wait-event -vt 20 $id debug.free-request &&
+	flux job wait-event -vt 20 $id debug.alloc-request &&
 	flux job wait-event -vt 20 $id clean
 '
 
