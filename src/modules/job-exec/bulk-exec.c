@@ -542,14 +542,18 @@ void bulk_exec_kill_log_error (flux_future_t *f, flux_jobid_t id)
     const char *name = flux_future_first_child (f);
     while (name) {
         flux_future_t *cf = flux_future_get_child (f, name);
+        uint32_t rank = flux_rpc_get_nodeid (cf);
         if (flux_future_is_ready (cf)
-            && flux_future_get (cf, NULL) < 0) {
-            uint32_t rank = flux_rpc_get_nodeid (cf);
-            flux_log_error (h,
-                            "%s: exec_kill: %s (rank %lu)",
-                            idf58 (id),
-                            flux_get_hostbyrank (h, rank),
-                            (unsigned long)rank);
+            && flux_future_get (cf, NULL) < 0
+            && errno != ENOENT
+            && rank != FLUX_NODEID_ANY) {
+            flux_log (h,
+                      LOG_ERR,
+                      "%s: exec_kill: %s (rank %lu): %s",
+                      idf58 (id),
+                      flux_get_hostbyrank (h, rank),
+                      (unsigned long)rank,
+                      future_strerror (cf, errno));
         }
         name = flux_future_next_child (f);
     }
