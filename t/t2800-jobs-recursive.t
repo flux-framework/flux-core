@@ -104,4 +104,8 @@ test_expect_success 'flux jobs --json works with recursive jobs' '
 test_expect_success FLUX_SECURITY 'cancel alternate user job' '
 	flux cancel $(cat altid)
 '
+test_expect_success 'cancel recursive job safely' '
+	flux proxy $rid flux cancel --all &&
+	flux job wait-event -vt 30 $rid clean
+'
 test_done
