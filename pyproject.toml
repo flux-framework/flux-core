@@ -1,7 +1,6 @@
 [tool.black]
-profile = "black"
 target-version = ['py36']
-exclude = ["^env/", "^src/bindings/python/flux/utils/*/*.py", "^src/bindings/python/flux/utils/*/*/*.py"]
+force-exclude = "/^(env/|src/bindings/python/flux/utils)/"
 
 [tool.isort]
 profile = "black" # needed for black/isort compatibility

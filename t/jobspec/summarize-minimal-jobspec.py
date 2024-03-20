@@ -12,7 +12,7 @@ def load_jobspec(stream, prefix=""):
         data = stream.read().encode("utf-8")
         jobspec = yaml.safe_load(data)
         return jobspec
-    except (yaml.YAMLError) as e:
+    except yaml.YAMLError as e:
         print("{}{}".format(prefix, e.problem))
         sys.exit(1)
 

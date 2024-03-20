@@ -150,7 +150,7 @@ matrix.add_build(
 )
 
 # Debian: arm64, expensive, only on master and tags, only install
-if matrix.branch == 'master' or matrix.tag:
+if matrix.branch == "master" or matrix.tag:
     matrix.add_build(
         name="bookworm - arm64",
         image="bookworm",
@@ -296,7 +296,7 @@ matrix.add_build(
         " --localstatedir=/var"
         " --with-flux-security"
     ),
-    docker_tag=True
+    docker_tag=True,
 )
 
 # inception

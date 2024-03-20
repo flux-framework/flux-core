@@ -1,7 +1,7 @@
 cffi>=1.1
 ply>=3.9
 pyyaml>=3.10.0
-black==22.8.0
+black==24.3.0
 flake8>=5.0.4
 isort>=5.9.3
 mypy==0.971

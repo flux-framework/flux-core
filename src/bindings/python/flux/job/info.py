@@ -831,7 +831,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         creations of scheduler or user.
         """
         format_list = string.Formatter().parse(fmt)
-        for (_, field, _, _) in format_list:
+        for _, field, _, _ in format_list:
             if field and not field in self.headings:
                 if field.startswith("annotations."):
                     field_heading = field[len("annotations.") :].upper()

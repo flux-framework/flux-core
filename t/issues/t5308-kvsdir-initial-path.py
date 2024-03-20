@@ -19,4 +19,3 @@ jobdir.commit()
 jobdir2 = flux.job.job_kvs(handle, jobid)
 if jobdir2["foo"] != "bar":
     sys.exit(1)
-

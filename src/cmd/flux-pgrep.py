@@ -143,9 +143,11 @@ def parse_args():
     parser.add_argument(
         "-a",
         action="store_true",
-        help="Target jobs in all states"
-        if PROGRAM == "flux-pgrep"
-        else argparse.SUPPRESS,
+        help=(
+            "Target jobs in all states"
+            if PROGRAM == "flux-pgrep"
+            else argparse.SUPPRESS
+        ),
     )
     parser.add_argument("-A", action="store_true", help="Target all users")
     parser.add_argument(
