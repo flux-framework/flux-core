@@ -31,6 +31,22 @@ fluxpyso_LTLIBRARIES = \
 	_idset.la \
 	_rlist.la
 
+# This is codegen output
+fluxpyso_CODEGENJSON = \
+	codegen/_core.json \
+	codegen/_idset.json \
+	codegen/_hostlist.json
+
+fluxpyso_CODEGENINPUT = \
+	_core.so \
+	_idset.so \
+	_hostlist.so
+
+fluxpyso_WRAPPERS = \
+	$(top_builddir)/src/bindings/python/flux/wrapper/core.py \
+	$(top_builddir)/src/bindings/python/flux/wrapper/idset.py \
+	$(top_builddir)/src/bindings/python/flux/wrapper/hostlist.py
+
 fluxpyso_PYTHON = \
 	__init__.py
 
@@ -46,6 +62,7 @@ EXTRA_DIST = \
 	_hostlist_build.py \
 	_idset_build.py \
 	_rlist_build.py \
+	codegen.py \
 	make_clean_header.py
 
 STDERR_DEVNULL = $(stderr_devnull_$(V))
@@ -135,6 +152,15 @@ if HAVE_FLUX_SECURITY
 fluxpyso_LTLIBRARIES += \
 	_security.la
 
+fluxpyso_CODEGENINPUT += \
+    _security.so
+
+fluxpyso_CODEGENJSON += \
+	codegen/_security.json
+
+fluxpyso_WRAPPERS += \
+	$(top_builddir)/src/bindings/python/flux/wrapper/security.py
+
 nodist_fluxbindinginclude_HEADERS +=\
 	_security_preproc.h
 
@@ -174,7 +200,13 @@ lib-copy-vpath: ${fluxpyso_PYTHON} ${fluxpyso_LTLIBRARIES}
 		$(LN_S) .libs/$$LIB ./ $(STDERR_DEVNULL) || true; \
 	done
 
-all-local: lib-copy-vpath
+all-local: lib-copy-vpath ${fluxpyso_CODEGENJSON} ${fluxpyso_WRAPPERS}
+
+${fluxpyso_CODEGENJSON}:
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/codegen.py dump --out $(srcdir)/codegen ${fluxpyso_CODEGENINPUT}
+
+${fluxpyso_WRAPPERS}: ${fluxpyso_CODEGENJSON}
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/codegen.py generate --out $(top_srcdir)/src/bindings/python/flux/wrapper ${fluxpyso_CODEGENJSON}
 
 # Support VPATH builds
 clean-local-vpath:
@@ -182,7 +214,11 @@ clean-local-vpath:
 
 clean-local: clean-local-vpath
 	-rm -f *.c *.so *.pyc *.pyo *_clean.h *_preproc.h
-	-rm -rf __pycache__
+	-rm -rf __pycache__ ./codegen/*.json
+	-rm -rf $(top_builddir)/src/bindings/python/flux/wrapper/hostlist.py
+	-rm -rf $(top_builddir)/src/bindings/python/flux/wrapper/core.py
+	-rm -rf $(top_builddir)/src/bindings/python/flux/wrapper/security.py
+	-rm -rf $(top_builddir)/src/bindings/python/flux/wrapper/idset.py
 
 install-data-hook:
 	$(AM_V_at)echo Linking python modules in non-standard location... && \

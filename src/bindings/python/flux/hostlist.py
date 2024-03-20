@@ -12,7 +12,7 @@ import collections
 import numbers
 
 from _flux._hostlist import ffi, lib
-from flux.wrapper import Wrapper, WrapperPimpl
+from flux.wrapper import HostlistWrapper, WrapperPimpl
 
 
 class HostlistIterator:
@@ -39,7 +39,7 @@ class Hostlist(WrapperPimpl):
     encoding.
     """
 
-    class InnerWrapper(Wrapper):
+    class InnerWrapper(HostlistWrapper):
         def __init__(
             self,
             handle=None,
