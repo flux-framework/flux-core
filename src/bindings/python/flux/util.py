@@ -615,7 +615,7 @@ class OutputFormat:
         which will be made "safe" for use with string headings.
         """
         format_list = []
-        for (text, field, spec, _) in self.format_list:
+        for text, field, spec, _ in self.format_list:
             #  Remove number formatting on any spec:
             spec = re.sub(r"(0?\.)?(\d+)?[bcdoxXeEfFgGn%]$", r"\2", spec)
 
@@ -644,7 +644,7 @@ class OutputFormat:
         if except_fields is None:
             except_fields = []
         lst = []
-        for (text, field, spec, conv) in self.format_list:
+        for text, field, spec, conv in self.format_list:
             # Skip this field if it is in except_fields
             if field in except_fields:
                 # Preserve any format "prefix" (i.e. the text):
@@ -704,7 +704,7 @@ class OutputFormat:
         #
         lst = []
         index = 0
-        for (text, field, _, conv) in self.format_list:
+        for text, field, _, conv in self.format_list:
             if text.endswith("?:"):
                 fmt = self._fmt_tuple("", "0." + field, None, conv)
                 lst.append(dict(fmt=fmt, index=index))

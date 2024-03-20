@@ -15,6 +15,7 @@ if sys.hexversion >= 0x03000000:
 else:
     from StringIO import StringIO
 
+
 # Log modes
 class LogMode(object):
     LogToError, LogToDiagnostics, LogToYAML, LogToAttachment = range(4)

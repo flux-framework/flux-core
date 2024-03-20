@@ -869,25 +869,31 @@ class MiniCmd:
         parser.add_argument(
             "--input",
             type=str,
-            help="Redirect job stdin from FILENAME, bypassing KVS"
-            if not exclude_io
-            else argparse.SUPPRESS,
+            help=(
+                "Redirect job stdin from FILENAME, bypassing KVS"
+                if not exclude_io
+                else argparse.SUPPRESS
+            ),
             metavar="FILENAME",
         )
         parser.add_argument(
             "--output",
             type=str,
-            help="Redirect job stdout to FILENAME, bypassing KVS"
-            if not exclude_io
-            else argparse.SUPPRESS,
+            help=(
+                "Redirect job stdout to FILENAME, bypassing KVS"
+                if not exclude_io
+                else argparse.SUPPRESS
+            ),
             metavar="FILENAME",
         )
         parser.add_argument(
             "--error",
             type=str,
-            help="Redirect job stderr to FILENAME, bypassing KVS"
-            if not exclude_io
-            else argparse.SUPPRESS,
+            help=(
+                "Redirect job stderr to FILENAME, bypassing KVS"
+                if not exclude_io
+                else argparse.SUPPRESS
+            ),
             metavar="FILENAME",
         )
         parser.add_argument(
@@ -900,9 +906,11 @@ class MiniCmd:
             "-l",
             "--label-io",
             action="store_true",
-            help="Add rank labels to stdout, stderr lines"
-            if not exclude_io
-            else argparse.SUPPRESS,
+            help=(
+                "Add rank labels to stdout, stderr lines"
+                if not exclude_io
+                else argparse.SUPPRESS
+            ),
         )
         parser.add_argument(
             "--cwd", help="Set job working directory", metavar="DIRECTORY"

@@ -21,7 +21,9 @@ import os
 import sys
 
 if len(sys.argv) != 2:
-    print("requires a single errno constant name or number and converts to strerror string")
+    print(
+        "requires a single errno constant name or number and converts to strerror string"
+    )
 
 try:
     print(os.strerror(getattr(errno, sys.argv[1])))
