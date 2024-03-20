@@ -62,7 +62,7 @@ flux job wait-event -t 100 $jobid exception
 log "But running a 3 node job in $jobid still works:\n"
 flux proxy $jobid flux run -t 100s -N3 hostname
 
-log "Overlay status of $jobid should show rank offline:\n"
+log "Overlay status of $jobid should show rank lost:\n"
 flux proxy $jobid flux overlay status
 
 log "Call flux shutdown on $jobid\n"
