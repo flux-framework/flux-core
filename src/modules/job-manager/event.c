@@ -48,6 +48,7 @@
 #include "ccan/str/str.h"
 
 #include "alloc.h"
+#include "housekeeping.h"
 #include "start.h"
 #include "drain.h"
 #include "journal.h"
@@ -320,17 +321,18 @@ int event_job_action (struct event *event, struct job *job)
             /* N.B. start_pending indicates that the start request is still
              * expecting responses.  The final response is the 'release'
              * response with final=true.  Thus once the flag is clear,
-             * it is safe to release all resources to the scheduler.
+             * it is safe for the job to release its resources to housekeeping.
              */
             if (job->has_resources
                 && !job_event_is_queued (job, "epilog-start")
                 && !job->perilog_active
                 && !job->start_pending
                 && !job->free_posted) {
-                if (!job->alloc_bypass) {
-                    if (alloc_send_free_request (ctx->alloc, job) < 0)
-                        return -1;
-                }
+                if (housekeeping_start (ctx->housekeeping,
+                                        job->R_redacted,
+                                        job->id,
+                                        job->userid) < 0)
+                    return -1;
                 if (event_job_post_pack (ctx->event, job, "free", 0, NULL) < 0)
                     return -1;
                 job->free_posted = 1;

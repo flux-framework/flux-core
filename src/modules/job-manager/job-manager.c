@@ -27,6 +27,7 @@
 #include "list.h"
 #include "urgency.h"
 #include "alloc.h"
+#include "housekeeping.h"
 #include "start.h"
 #include "event.h"
 #include "drain.h"
@@ -79,22 +80,27 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct job_manager *ctx = arg;
     int journal_listeners = journal_listeners_count (ctx->journal);
+    json_t *housekeeping = housekeeping_get_stats (ctx->housekeeping);
+    if (!housekeeping)
+        goto error;
     if (flux_respond_pack (h,
                            msg,
-                           "{s:{s:i} s:i s:i s:I}",
+                           "{s:{s:i} s:i s:i s:I s:O}",
                            "journal",
                              "listeners", journal_listeners,
                            "active_jobs", zhashx_size (ctx->active_jobs),
                            "inactive_jobs", zhashx_size (ctx->inactive_jobs),
-                           "max_jobid", ctx->max_jobid) < 0) {
+                           "max_jobid", ctx->max_jobid,
+                           "housekeeping", housekeeping) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
-
+    json_decref (housekeeping);
     return;
  error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    json_decref (housekeeping);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -198,6 +204,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating scheduler interface");
         goto done;
     }
+    if (!(ctx.housekeeping = housekeeping_ctx_create (&ctx))) {
+        flux_log_error (h, "error creating resource housekeeping interface");
+        goto done;
+    }
     if (!(ctx.start = start_ctx_create (&ctx))) {
         flux_log_error (h, "error creating exec interface");
         goto done;
@@ -256,6 +266,7 @@ done:
     wait_ctx_destroy (ctx.wait);
     drain_ctx_destroy (ctx.drain);
     start_ctx_destroy (ctx.start);
+    housekeeping_ctx_destroy (ctx.housekeeping);
     alloc_ctx_destroy (ctx.alloc);
     submit_ctx_destroy (ctx.submit);
     event_ctx_destroy (ctx.event);

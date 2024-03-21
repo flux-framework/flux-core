@@ -219,6 +219,7 @@ job_manager_la_SOURCES =
 job_manager_la_LIBADD = \
 	$(builddir)/job-manager/libjob-manager.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
+	$(top_builddir)/src/common/libsubprocess/libsubprocess.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
