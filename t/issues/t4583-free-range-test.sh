@@ -36,7 +36,7 @@ fi
 
 #  Start a job with tbon.topo=kary:0
 log "Starting a child instance with flat topology\n"
-jobid=$(flux alloc -N4 --bg --broker-opts=-Stbon.topo=kary:0)
+jobid=$(flux alloc -N4 -o exit-timeout=none --bg --broker-opts=-Stbon.topo=kary:0)
 
 log "Started job $jobid\n"
 
@@ -62,7 +62,7 @@ flux job wait-event -t 100 $jobid exception
 log "But running a 3 node job in $jobid still works:\n"
 flux proxy $jobid flux run -t 100s -N3 hostname
 
-log "Overlay status of $jobid should show rank offline:\n"
+log "Overlay status of $jobid should show rank lost:\n"
 flux proxy $jobid flux overlay status
 
 log "Call flux shutdown on $jobid\n"
