@@ -123,13 +123,18 @@ static int init_testconf (flux_t *h, struct testconf *conf, json_t *jobspec)
     conf->mock_exception = NULL;
     conf->enabled = false;
 
-    if (json_unpack_ex (jobspec, &err, 0,
-                     "{s:{s:{s:{s:o}}}}",
-                     "attributes", "system", "exec",
-                     "test", &test) < 0)
+    if (json_unpack_ex (jobspec,
+                        &err,
+                        0,
+                        "{s:{s:{s:{s:o}}}}",
+                        "attributes",
+                         "system",
+                          "exec",
+                           "test", &test) < 0)
         return 0;
     conf->enabled = true;
-    if (json_unpack_ex (test, &err, 0,
+    if (json_unpack_ex (test,
+                        &err, 0,
                         "{s?s s?i s?i s?i s?s}",
                         "run_duration", &trun,
                         "override", &conf->override,
@@ -156,7 +161,8 @@ static bool testconf_mock_exception (struct testconf *conf, const char *where)
  */
 static void timer_cb (flux_reactor_t *r,
                       flux_watcher_t *w,
-                      int revents, void *arg)
+                      int revents,
+                      void *arg)
 {
     struct testexec *te = arg;
 
@@ -367,7 +373,8 @@ static void testexec_request_cb (flux_t *h,
     uint32_t owner;
     int code = 0;
 
-    if (flux_request_unpack (msg, NULL,
+    if (flux_request_unpack (msg,
+                             NULL,
                              "{s:s s:I s?i}",
                              "event", &event,
                              "jobid", &id,

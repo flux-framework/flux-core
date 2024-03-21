@@ -117,8 +117,10 @@ static int exec_exit_notify (struct bulk_exec *exec)
     return 0;
 }
 
-static void exit_batch_cb (flux_reactor_t *r, flux_watcher_t *w,
-                          int revents, void *arg)
+static void exit_batch_cb (flux_reactor_t *r,
+                           flux_watcher_t *w,
+                           int revents,
+                           void *arg)
 {
     struct bulk_exec *exec = arg;
     exec_exit_notify (exec);
@@ -274,7 +276,8 @@ static void subprocess_destroy_finish (flux_future_t *f, void *arg)
     flux_subprocess_t *p = arg;
     if (flux_future_get (f, NULL) < 0) {
         flux_t *h = flux_subprocess_aux_get (p, "flux_t");
-        flux_log_error (h, "subprocess_kill: %ju: %s",
+        flux_log_error (h,
+                        "subprocess_kill: %ju: %s",
                         (uintmax_t) flux_subprocess_pid (p),
                         future_strerror (f, errno));
     }

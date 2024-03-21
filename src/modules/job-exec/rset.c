@@ -90,11 +90,13 @@ static int rset_read_time_window (struct resource_set *r, json_error_t *errp)
      */
     r->expiration = 0.;
     r->starttime = 0.;
-    if (json_unpack_ex (r->R, errp, 0,
+    if (json_unpack_ex (r->R,
+                        errp,
+                        0,
                         "{s:{s?F s?F}}",
                         "execution",
-                        "starttime",  &r->starttime,
-                        "expiration", &r->expiration) < 0)
+                         "starttime",  &r->starttime,
+                         "expiration", &r->expiration) < 0)
         return -1;
     return 0;
 }

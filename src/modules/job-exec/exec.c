@@ -127,7 +127,8 @@ static int exec_barrier_enter (struct bulk_exec *exec)
     return 0;
 }
 
-static void output_cb (struct bulk_exec *exec, flux_subprocess_t *p,
+static void output_cb (struct bulk_exec *exec,
+                       flux_subprocess_t *p,
                        const char *stream,
                        const char *data,
                        int len,
@@ -310,7 +311,8 @@ static void exit_cb (struct bulk_exec *exec,
     if (ctx->barrier_completion_count == 0
         || ctx->barrier_enter_count > 0) {
         if (bulk_exec_write (exec, "stdin", "exit=1\n", 7) < 0)
-            jobinfo_fatal_error (job, 0,
+            jobinfo_fatal_error (job,
+                                 0,
                                  "failed to terminate barrier: %s",
                                  strerror (errno));
     }
@@ -487,8 +489,10 @@ err:
     return -1;
 }
 
-static void exec_check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                           int revents, void *arg)
+static void exec_check_cb (flux_reactor_t *r,
+                           flux_watcher_t *w,
+                           int revents,
+                           void *arg)
 {
     struct jobinfo *job = arg;
     struct bulk_exec *exec = job->data;

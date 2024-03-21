@@ -301,7 +301,8 @@ static int jobid_exception (flux_t *h, flux_jobid_t id,
                                       "note", note);
 }
 
-static int jobinfo_respond_error (struct jobinfo *job, int errnum,
+static int jobinfo_respond_error (struct jobinfo *job,
+                                  int errnum,
                                   const char *msg)
 {
     return jobid_exception (job->ctx->h,
@@ -319,21 +320,27 @@ static int jobinfo_send_release (struct jobinfo *job,
     int rc;
     flux_t *h = job->ctx->h;
     // XXX: idset ignored for now. Always release all resources
-    rc = flux_respond_pack (h, job->req, "{s:I s:s s{s:s s:b}}",
-                                         "id", job->id,
-                                         "type", "release",
-                                         "data", "ranks", "all",
-                                                 "final", true);
+    rc = flux_respond_pack (h,
+                            job->req,
+                            "{s:I s:s s{s:s s:b}}",
+                            "id", job->id,
+                            "type", "release",
+                            "data",
+                              "ranks", "all",
+                              "final", true);
     return rc;
 }
 
-static int jobinfo_respond (flux_t *h, struct jobinfo *job,
+static int jobinfo_respond (flux_t *h,
+                            struct jobinfo *job,
                             const char *event)
 {
-    return flux_respond_pack (h, job->req, "{s:I s:s s:{}}",
-                                           "id", job->id,
-                                           "type", event,
-                                           "data");
+    return flux_respond_pack (h,
+                              job->req,
+                              "{s:I s:s s:{}}",
+                              "id", job->id,
+                              "type", event,
+                              "data");
 }
 
 static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
@@ -348,11 +355,13 @@ static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
         jobinfo_emit_event_pack_nowait (job, "complete",
                                         "{ s:i }",
                                         "status", job->wait_status);
-        if (flux_respond_pack (h, job->req, "{s:I s:s s:{s:i}}",
-                                            "id", job->id,
-                                            "type", "finish",
-                                            "data",
-                                            "status", job->wait_status) < 0)
+        if (flux_respond_pack (h,
+                               job->req,
+                               "{s:I s:s s:{s:i}}",
+                               "id", job->id,
+                               "type", "finish",
+                               "data",
+                                 "status", job->wait_status) < 0)
             flux_log_error (h, "jobinfo_complete: flux_respond");
     }
 }
@@ -370,8 +379,10 @@ static void kill_shell_timer_cb (flux_reactor_t  *r,
     (*job->impl->kill) (job, SIGKILL);
 }
 
-static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
-                           int revents, void *arg)
+static void kill_timer_cb (flux_reactor_t *r,
+                           flux_watcher_t *w,
+                           int revents,
+                           void *arg)
 {
     struct jobinfo *job = arg;
     flux_future_t *f;
@@ -424,7 +435,12 @@ static void timelimit_cb (flux_reactor_t *r,
     /*  Timelimit reached. Generate "timeout" exception and send SIGALRM.
      *  Wait for a gracetime then forcibly terminate job.
      */
-    if (jobid_exception (job->h, job->id, job->req, "timeout", 0, 0,
+    if (jobid_exception (job->h,
+                         job->id,
+                         job->req,
+                         "timeout",
+                         0,
+                         0,
                          "resource allocation expired") < 0)
         flux_log_error (job->h,
                         "failed to generate timeout exception for %s",
@@ -540,8 +556,10 @@ static void jobinfo_cancel (struct jobinfo *job)
 
 static int jobinfo_finalize (struct jobinfo *job);
 
-static void jobinfo_fatal_verror (struct jobinfo *job, int errnum,
-                                  const char *fmt, va_list ap)
+static void jobinfo_fatal_verror (struct jobinfo *job,
+                                  int errnum,
+                                  const char *fmt,
+                                  va_list ap)
 {
     int n;
     char msg [256];
@@ -575,7 +593,8 @@ static void jobinfo_fatal_verror (struct jobinfo *job, int errnum,
     }
 }
 
-void jobinfo_fatal_error (struct jobinfo *job, int errnum,
+void jobinfo_fatal_error (struct jobinfo *job,
+                          int errnum,
                           const char *fmt, ...)
 {
     flux_t *h = job->ctx->h;
@@ -1077,12 +1096,14 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
 
     job->ctx = ctx;
 
-    if (flux_request_unpack (job->req, NULL, "{s:I s:i s:O s:b s:o}",
-                                             "id", &job->id,
-                                             "userid", &job->userid,
-                                             "jobspec", &job->jobspec,
-                                             "reattach", &job->reattach,
-                                             "R", &R) < 0) {
+    if (flux_request_unpack (job->req,
+                             NULL,
+                             "{s:I s:i s:O s:b s:o}",
+                             "id", &job->id,
+                             "userid", &job->userid,
+                             "jobspec", &job->jobspec,
+                             "reattach", &job->reattach,
+                             "R", &R) < 0) {
         flux_log_error (ctx->h, "start: flux_request_unpack");
         jobinfo_decref (job);
         return -1;
@@ -1143,8 +1164,10 @@ error:
     return -1;
 }
 
-static void start_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void start_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct job_exec_ctx *ctx = arg;
 
@@ -1158,8 +1181,10 @@ static void start_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 }
 
-static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void exception_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     struct job_exec_ctx *ctx = arg;
     flux_jobid_t id;
@@ -1167,10 +1192,12 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *type = NULL;
     struct jobinfo *job = NULL;
 
-    if (flux_event_unpack (msg, NULL, "{s:I s:s s:i}",
-                                      "id", &id,
-                                      "type", &type,
-                                      "severity", &severity) < 0) {
+    if (flux_event_unpack (msg,
+                           NULL,
+                           "{s:I s:s s:i}",
+                           "id", &id,
+                           "type", &type,
+                           "severity", &severity) < 0) {
         flux_log_error (h, "job-exception event");
         return;
     }
@@ -1204,7 +1231,8 @@ static void critical_ranks_cb (flux_t *h,
     struct idset *idset;
     struct jobinfo *job;
 
-    if (flux_request_unpack (msg, NULL,
+    if (flux_request_unpack (msg,
+                             NULL,
                              "{s:I s:s}",
                              "id", &id,
                              "ranks", &ranks) < 0)
