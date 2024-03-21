@@ -36,7 +36,7 @@ try:
 
     # Kill job shell on broker rank 3
     broker_rank = h.get_rank()
-    if broker_rank == 3:
+    if broker_rank == int(sys.argv[1]):
         #  kill job shell
         os.kill(os.getppid(), 9)
         sys.exit(0)
@@ -47,20 +47,27 @@ except KeyboardInterrupt:
     sys.exit(0)
 EOF
 )
-id=$(flux submit -N4 --tasks-per-node=1 \
-	--input=/dev/null \
-	-o exit-timeout=none \
-	--add-file=critical.py="${CRITICAL_RANKS}" \
-	flux python {{tmpdir}}/critical.py)
+for rank in 3 1; do
+    log ""
+    log "Testing handling of lost shell rank $rank:"
 
-log "Sumbmitted job $id. Waiting for shell rank 3 to be lost"
+    id=$(flux submit -N4 --tasks-per-node=1 \
+         --input=/dev/null \
+         -o exit-timeout=none \
+         --add-file=critical.py="${CRITICAL_RANKS}" \
+         flux python {{tmpdir}}/critical.py $rank)
 
-value="shell rank 3 (on $(hostname -s)): Killed"
-flux job wait-event -Wt 15 -Hvp output -m message="$value" $id log 
+    log "Sumbmitted job $id. Waiting for shell rank $rank to be lost"
 
-log "Sending SIGINT to $id. Job should now exit"
-flux job kill --signal=2 $id
-flux job attach -vEX $id
-rc=$?
-log "Job exited with rc=$rc (expecting 137 (128+9))"
-test $rc -eq 137 || die "Unexpected job exit code $rc"
+    value="shell rank $rank (on $(hostname -s)): Killed"
+    flux job wait-event -Wt 15 -Hvp output -m message="$value" $id log
+
+    log "Sending SIGINT to $id. Job should now exit"
+    flux job kill --signal=2 $id
+    flux job attach -vEX $id
+    rc=$?
+    log "Job exited with rc=$rc (expecting 137 (128+9))"
+    test $rc -eq 137 || die "Unexpected job exit code $rc"
+done
+
+

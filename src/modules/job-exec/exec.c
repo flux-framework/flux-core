@@ -352,6 +352,17 @@ static void exit_cb (struct bulk_exec *exec,
                             shell_rank,
                             flux_get_hostbyrank (job->h, rank),
                             strsignal (signo));
+            else {
+                /*  Job can't continue without the leader shell, which has
+                 *  terminated unexpectedly. Cancel the job now to avoid
+                 *  a potential hang.
+                 */
+                jobinfo_fatal_error (job,
+                                     0,
+                                     "shell rank 0 (on %s): %s",
+                                     flux_get_hostbyrank (job->h, rank),
+                                     strsignal (signo));
+            }
         }
         rank = idset_next (ranks, rank);
     }
