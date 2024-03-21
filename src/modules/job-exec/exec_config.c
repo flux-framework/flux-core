@@ -35,9 +35,12 @@ static const char *jobspec_get_job_shell (json_t *jobspec)
 {
     const char *path = NULL;
     if (jobspec)
-        (void) json_unpack (jobspec, "{s:{s:{s:{s:s}}}}",
-                                     "attributes", "system", "exec",
-                                     "job_shell", &path);
+        (void) json_unpack (jobspec,
+                            "{s:{s:{s:{s:s}}}}",
+                            "attributes",
+                             "system",
+                              "exec",
+                               "job_shell", &path);
     return path;
 }
 
@@ -53,9 +56,11 @@ static const char *jobspec_get_cwd (json_t *jobspec)
 {
     const char *cwd = NULL;
     if (jobspec)
-        (void) json_unpack (jobspec, "{s:{s:{s:s}}}",
-                                     "attributes", "system",
-                                     "cwd", &cwd);
+        (void) json_unpack (jobspec,
+                            "{s:{s:{s:s}}}",
+                             "attributes",
+                              "system",
+                               "cwd", &cwd);
     return cwd;
 }
 

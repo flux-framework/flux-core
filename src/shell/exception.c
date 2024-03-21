@@ -48,7 +48,7 @@ static void exception_handler (flux_t *h,
     if (strlen (message) > 0)
         shell_warn ("%s", message);
 
-    if (streq (type, "lost-shell") && severity > 0) {
+    if (streq (type, "lost-shell")) {
         flux_plugin_arg_t *args = flux_plugin_arg_create ();
         if (!args
             || flux_plugin_arg_pack (args,
