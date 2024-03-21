@@ -164,7 +164,7 @@ static void lost_shell_continuation (flux_future_t *f, void *arg)
 }
 
 static int lost_shell (struct jobinfo *job,
-                       bool raise_exception,
+                       bool critical,
                        int shell_rank,
                        const char *fmt,
                        ...)
@@ -174,6 +174,7 @@ static int lost_shell (struct jobinfo *job,
     int msglen = sizeof (msgbuf);
     char *msg = msgbuf;
     va_list ap;
+    int severity = critical ? 0 : FLUX_JOB_EXCEPTION_CRIT;
 
     if (fmt) {
         va_start (ap, fmt);
@@ -182,8 +183,11 @@ static int lost_shell (struct jobinfo *job,
         va_end (ap);
     }
 
-    if (raise_exception) {
-        /* Raise a non-fatal job exception */
+    if (!critical) {
+        /* Raise a non-fatal job exception if the lost shell was not critical.
+         * The job exec service will raise a fatal exception later for
+         * critical shells.
+         */
         jobinfo_raise (job,
                        "node-failure",
                        FLUX_JOB_EXCEPTION_CRIT,
@@ -202,7 +206,7 @@ static int lost_shell (struct jobinfo *job,
                                       "exception",
                                       "{s:s s:i s:i s:s}",
                                       "type", "lost-shell",
-                                      "severity", FLUX_JOB_EXCEPTION_CRIT,
+                                      "severity", severity,
                                       "shell_rank", shell_rank,
                                       "message", msg)))
             return -1;
@@ -211,6 +215,11 @@ static int lost_shell (struct jobinfo *job,
         return -1;
     }
     return 0;
+}
+
+static bool is_critical_rank (struct jobinfo *job, int shell_rank)
+{
+    return idset_test (job->critical_ranks, shell_rank);
 }
 
 static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
@@ -227,21 +236,28 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
      */
     if (cmd) {
         if (errnum == EHOSTUNREACH) {
-            if (!idset_test (job->critical_ranks, shell_rank)
-                && lost_shell (job,
-                               true,
-                               shell_rank,
-                               "%s on %s (shell rank %d)",
-                               "lost contact with job shell",
-                               hostname,
-                               shell_rank) == 0)
-                return;
-            jobinfo_fatal_error (job,
-                                0,
-                                "%s on broker %s (rank %d)",
-                                "lost contact with job shell",
-                                hostname,
-                                rank);
+            bool critical = is_critical_rank (job, shell_rank);
+
+            /*  Always notify rank 0 shell of a lost shell.
+             */
+            lost_shell (job,
+                        critical,
+                        shell_rank,
+                        "%s on %s (shell rank %d)",
+                        "lost contact with job shell",
+                        hostname,
+                        shell_rank);
+
+            /*  Raise a fatal error and terminate job immediately if
+             *  the lost shell was critical.
+             */
+            if (critical)
+                jobinfo_fatal_error (job,
+                                     0,
+                                     "%s on broker %s (rank %d)",
+                                     "lost contact with job shell",
+                                     hostname,
+                                     rank);
         }
         else if (errnum == ENOSYS) {
             jobinfo_fatal_error (job,
@@ -330,7 +346,7 @@ static void exit_cb (struct bulk_exec *exec,
         if (p && signo > 0) {
             if (shell_rank != 0)
                 lost_shell (job,
-                            false,
+                            is_critical_rank (job, shell_rank),
                             shell_rank,
                             "shell rank %d (on %s): %s",
                             shell_rank,
