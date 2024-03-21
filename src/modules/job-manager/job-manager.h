@@ -24,6 +24,7 @@ struct job_manager {
     struct conf *conf;
     struct start *start;
     struct alloc *alloc;
+    struct housekeeping *housekeeping;
     struct event *event;
     struct submit *submit;
     struct drain *drain;

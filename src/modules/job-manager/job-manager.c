@@ -27,6 +27,7 @@
 #include "list.h"
 #include "urgency.h"
 #include "alloc.h"
+#include "housekeeping.h"
 #include "start.h"
 #include "event.h"
 #include "drain.h"
@@ -198,6 +199,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating scheduler interface");
         goto done;
     }
+    if (!(ctx.housekeeping = housekeeping_ctx_create (&ctx))) {
+        flux_log_error (h, "error creating resource housekeeping interface");
+        goto done;
+    }
     if (!(ctx.start = start_ctx_create (&ctx))) {
         flux_log_error (h, "error creating exec interface");
         goto done;
@@ -256,6 +261,7 @@ done:
     wait_ctx_destroy (ctx.wait);
     drain_ctx_destroy (ctx.drain);
     start_ctx_destroy (ctx.start);
+    housekeeping_ctx_destroy (ctx.housekeeping);
     alloc_ctx_destroy (ctx.alloc);
     submit_ctx_destroy (ctx.submit);
     event_ctx_destroy (ctx.event);

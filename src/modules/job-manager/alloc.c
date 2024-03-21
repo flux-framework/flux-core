@@ -37,6 +37,7 @@
 #include "annotate.h"
 #include "raise.h"
 #include "queue.h"
+#include "housekeeping.h"
 
 struct alloc {
     struct job_manager *ctx;
@@ -117,10 +118,9 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
     }
 }
 
-/* Send sched.free request for job.
- * Update flags.
+/* Send sched.free request.
  */
-int free_request (struct alloc *alloc, struct job *job)
+int free_request (struct alloc *alloc, json_t *R, flux_jobid_t id)
 {
     flux_msg_t *msg;
 
@@ -128,8 +128,8 @@ int free_request (struct alloc *alloc, struct job *job)
         return -1;
     if (flux_msg_pack (msg,
                        "{s:I s:O}",
-                       "id", job->id,
-                       "R", job->R_redacted) < 0)
+                       "id", id,
+                       "R", R) < 0)
         goto error;
     if (flux_send (alloc->ctx->h, msg, 0) < 0)
         goto error;
@@ -385,6 +385,8 @@ static void hello_cb (flux_t *h,
         }
         job = zhashx_next (ctx->active_jobs);
     }
+    if (housekeeping_hello_respond (ctx->housekeeping, msg) < 0)
+        goto error;
     if (flux_respond_error (h, msg, ENODATA, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     return;
@@ -548,19 +550,11 @@ static void check_cb (flux_reactor_t *r,
                                    NULL);
 }
 
-/* called from event_job_action() FLUX_JOB_STATE_CLEANUP */
-int alloc_send_free_request (struct alloc *alloc, struct job *job)
+int alloc_send_free_request (struct alloc *alloc, json_t *R, flux_jobid_t id)
 {
-    assert (job->state == FLUX_JOB_STATE_CLEANUP);
     if (alloc->ready) {
-        if (free_request (alloc, job) < 0)
+        if (free_request (alloc, R, id) < 0)
             return -1;
-        if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post_pack (alloc->ctx->event,
-                                       job,
-                                       "debug.free-request",
-                                       0,
-                                       NULL);
     }
     return 0;
 }
