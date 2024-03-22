@@ -25,6 +25,15 @@ test_expect_success 'job-manager: attempt to load invalid plugin fails' '
 	test_debug "cat list2.out" &&
 	test_cmp list1.out list2.out
 '
+test_expect_success 'job-manager: loading invalid builtin plugin fails' '
+	test_must_fail flux jobtap load .foo
+'
+test_expect_success 'job-manager: builtin plugin can be removed' '
+	flux jobtap remove .history &&
+	flux jobtap list >list-nohist.out &&
+	test_must_fail grep ^\.history list-nohist.out &&
+	flux jobtap load .history
+'
 test_expect_success 'job-manager: load with invalid conf fails' '
 	cat <<-EOF >badconf.py &&
 	import flux
