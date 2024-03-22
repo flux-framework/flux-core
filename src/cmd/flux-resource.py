@@ -14,6 +14,7 @@ import json
 import logging
 import os.path
 import sys
+from itertools import combinations
 
 import flux
 from flux.hostlist import Hostlist
@@ -453,6 +454,34 @@ class ResourceSetExtra(ResourceSet):
         return queues
 
 
+def split_by_property_combinations(rset):
+    """
+    Split a resource set by all combinations of its properties.
+    This is done in hopes of splitting a resource into the minimum number
+    of subsets that may produce unique lines in the resource listing output.
+    """
+
+    def constraint_combinations(rset):
+        properties = set(json.loads(rset.get_properties()).keys())
+        sets = [
+            set(combination)
+            for i in range(1, len(properties) + 1)
+            for combination in combinations(properties, i)
+        ]
+        # Also include the empty set, i.e. resources with no properties
+        sets.append(set())
+
+        # generate RFC 31 constraint objects for each property combination
+        result = []
+        for cset in sets:
+            diff = properties - cset
+            cset.update(["^" + x for x in diff])
+            result.append({"properties": list(cset)})
+        return result
+
+    return [rset.copy_constraint(x) for x in constraint_combinations(rset)]
+
+
 def resources_uniq_lines(resources, states, formatter, config):
     """
     Generate a set of resource sets that would produce unique lines given
@@ -496,8 +525,10 @@ def resources_uniq_lines(resources, states, formatter, config):
                 lines[key].add(rset)
             continue
 
-        for rank in resources[state].ranks:
-            rset = resources[state].copy_ranks(rank)
+        for rset in split_by_property_combinations(resources[state]):
+            if not rset.ranks:
+                continue
+            rset.state = state
             rset = ResourceSetExtra(rset, flux_config=config)
             key = fmt.format(rset)
 
