@@ -418,11 +418,14 @@ class ResourceSetExtra(ResourceSet):
     def __init__(self, arg=None, version=1, flux_config=None):
         self.flux_config = flux_config
         if isinstance(arg, ResourceSet):
-            super().__init__(arg.encode(), version)
+            self._rset = arg
             if arg.state:
                 self.state = arg.state
         else:
-            super().__init__(arg, version)
+            self._rset = ResourceSet(arg, version)
+
+    def __getattr__(self, attr):
+        return getattr(self._rset, attr)
 
     @property
     def propertiesx(self):
