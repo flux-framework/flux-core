@@ -1269,6 +1269,7 @@ static int jobtap_load_builtin_ex (struct jobtap *jobtap,
                 return -1;
             return (*ex->init_cb) (p, ex->arg);
         }
+        ex = zlistx_next (jobtap->builtins_ex);
     }
     errno = ENOENT;
     return -1;
