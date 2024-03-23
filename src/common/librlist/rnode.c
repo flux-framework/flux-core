@@ -29,6 +29,8 @@
 static struct idset *util_idset_add_check (const struct idset *a,
                                            const struct idset *b)
 {
+    if (idset_count (a) == 0)
+        return idset_copy (b);
     if (idset_has_intersection (a, b)) {
         errno = EEXIST;
         return NULL;
