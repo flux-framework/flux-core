@@ -408,7 +408,7 @@ static void resource_continuation (flux_future_t *f, void *arg)
 
     if (flux_rpc_get_unpack (f, "o", &o) < 0) {
         if (errno != ENOSYS) /* Instance may not be up yet */
-            fatal (errno, "sched.resource-status RPC failed");
+            fatal (errno, "resource.sched-status RPC failed");
     }
     else {
         json_t *queue_constraint;
@@ -432,7 +432,7 @@ static void resource_continuation (flux_future_t *f, void *arg)
                                &sum->core.down,
                                &sum->gpu.down,
                                queue_constraint) < 0)
-            fatal (0, "error decoding sched.resource-status RPC response");
+            fatal (0, "error decoding resource.sched-status RPC response");
     }
     flux_future_destroy (f);
     sum->f_resource = NULL;
@@ -539,7 +539,7 @@ void summary_pane_query (struct summary_pane *sum)
 {
     if (!sum->f_resource) {
         if (!(sum->f_resource = flux_rpc (sum->top->h,
-                                          "sched.resource-status",
+                                          "resource.sched-status",
                                           NULL,
                                           0,
                                           0))
