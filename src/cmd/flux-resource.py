@@ -572,6 +572,14 @@ def get_resource_list(args):
     return resources, config
 
 
+def sort_output(args, items):
+    """
+    Sort by args.states order, then first rank in resource set
+    """
+    statepos = {x[1]: x[0] for x in enumerate(args.states)}
+    return sorted(items, key=lambda x: (statepos[x.state], x.ranks.first()))
+
+
 def list_handler(args):
     headings = {
         "state": "STATE",
@@ -591,7 +599,8 @@ def list_handler(args):
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
     lines = resources_uniq_lines(resources, args.states, formatter, config)
-    formatter.print_items(lines.values(), no_header=args.no_header)
+    items = sort_output(args, lines.values())
+    formatter.print_items(items, no_header=args.no_header)
 
 
 def info(args):
