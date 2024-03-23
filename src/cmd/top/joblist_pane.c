@@ -132,6 +132,12 @@ void joblist_pane_draw (struct joblist_pane *joblist)
         int nnodes;
         double t_run;
 
+        /* A running job is in the RUN or CLEANUP state.  Under racy circumstances
+         * a job could end up in the CLEANUP state without having entered the
+         * RUN state and some fields below would not be available.  If we fail
+         * to unpack this data, simply continue onto the next job.
+         */
+
         if (json_unpack (job,
                          "{s:I s:i s:i s:s s?s s:i s:i s:f s?{s?{s?s}}}",
                          "id", &id,
@@ -145,7 +151,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
                          "annotations",
                            "user",
                              "uri", &uri) < 0)
-            fatal (0, "error decoding a job record from job-list RPC");
+            continue;
 
         idstr = idf58 (id);
         (void)fsd_format_duration_ex (run, sizeof (run), fabs (now - t_run), 2);
@@ -233,8 +239,11 @@ void joblist_filter_jobs (struct joblist_pane *joblist)
                 fatal (ENOMEM, "error creating joblist array");
             json_array_foreach (joblist->jobs_all, index, job) {
                 const char *queue;
+                /* skip jobs that don't have queue configured.  Potentially
+                 * rare case in racy scenarios.
+                 */
                 if (json_unpack (job, "{s:s}", "queue", &queue) < 0)
-                    fatal (0, "error decoding a job record from job-list RPC");
+                    continue;
                 if (!streq (filter_queue, queue))
                     continue;
                 if (json_array_append (a, job) < 0)
