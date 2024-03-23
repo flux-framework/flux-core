@@ -1269,6 +1269,7 @@ static int jobtap_load_builtin_ex (struct jobtap *jobtap,
                 return -1;
             return (*ex->init_cb) (p, ex->arg);
         }
+        ex = zlistx_next (jobtap->builtins_ex);
     }
     errno = ENOENT;
     return -1;
@@ -1430,6 +1431,13 @@ int jobtap_plugin_load_first (struct jobtap *jobtap,
     return 0;
 }
 
+static bool is_builtin (const char *path)
+{
+    /*  A builtin plugin starts with '.' and does not contain a slash
+     */
+    return (path[0] == '.' && !strchr (path, '/'));
+}
+
 flux_plugin_t * jobtap_load (struct jobtap *jobtap,
                              const char *path,
                              json_t *conf,
@@ -1464,7 +1472,7 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
         if (rc < 0)
             goto error;
     }
-    if (path[0] == '.') {
+    if (is_builtin (path)) {
         if (jobtap_load_builtin (p, path) < 0
             && jobtap_load_builtin_ex (jobtap, p, path) < 0)
             goto error;
