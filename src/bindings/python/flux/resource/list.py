@@ -16,7 +16,7 @@ from flux.rpc import RPC
 
 class SchedResourceList:
     """
-    Encapsulate response from sched.resource-status query.
+    Encapsulate response from resource.sched-status query.
     The response will contain 3 Rv1 resource sets:
 
     :ivar all:         all resources known to scheduler
@@ -98,4 +98,4 @@ def resource_list(flux_handle):
     Returns:
         ResourceListRPC: a future representing the request.
     """
-    return ResourceListRPC(flux_handle, "sched.resource-status")
+    return ResourceListRPC(flux_handle, "resource.sched-status", nodeid=0)

@@ -227,7 +227,7 @@ class InstanceInfo:
             if not uri or SchedResourceList is None:
                 raise ValueError
             handle = flux.Flux(str(uri))
-            future = handle.rpc("sched.resource-status")
+            future = handle.rpc("resource.sched-status", nodeid=0)
             self.stats = StatsInfo(handle).update_sync()
             self.resources = SchedResourceList(future.get())
             self.initialized = True
