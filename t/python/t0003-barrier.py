@@ -20,7 +20,7 @@ from subflux import rerun_under_flux
 def barr_count(x, name, count):
     print(x, name, count)
     f = flux.Flux()
-    f.barrier(name, count)
+    f.barrier(name, count).get()
 
 
 def __flux_size():
@@ -33,8 +33,8 @@ class TestBarrier(unittest.TestCase):
         self.f = flux.Flux()
 
     def test_single(self):
-        self.f.barrier("testbarrier1", 1)
-        self.f.barrier("testbarrier1", 1)
+        self.f.barrier("testbarrier1", 1).get()
+        self.f.barrier("testbarrier1", 1).get()
 
     def test_eight(self):
         p = mp.Pool(8)
