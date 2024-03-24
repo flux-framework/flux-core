@@ -32,8 +32,8 @@ acquires a subset of resources from the resource service to allocate to jobs,
 and relies on the resource service to inform it of status changes that affect
 the usability of resources by jobs as described in RFC 27.
 
-The :program:`flux resource list` subcommand queries the scheduler for its view
-of resources, including allocated/free status.
+The :program:`flux resource list` subcommand queries the resource module
+for the scheduler view of resources, including allocated/free status.
 
 The other :program:`flux resource` subcommands operate on the resource service
 and are primarily of interest to system administrators of a Flux system
@@ -182,9 +182,9 @@ online
 resources that share a state and online/offline state.
 
 .. note::
-  :program:`flux resource status` queries both the resource service and
-  the scheduler to identify resources that are available, excluded by
-  configuration, or administratively drained or draining.
+  :program:`flux resource status` queries both the administrative and
+  scheduler view of resources to identify resources that are available,
+  excluded by configuration, or administratively drained or draining.
 
 .. option:: -s, --states=STATE,...
 
