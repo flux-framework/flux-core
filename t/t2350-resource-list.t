@@ -25,6 +25,12 @@ test_expect_success 'FLUX_RESOURCE_LIST_RPC works' '
 test_expect_success 'results are the same as before' '
 	test_cmp default.out sched.out
 '
+test_expect_success 'flux resource list works on follower ranks' '
+	flux exec -r 1 flux resource list >follower.out
+'
+test_expect_success 'results are the same as before' '
+	test_cmp default.out follower.out
+'
 
 test_expect_success 'flux resource list: FLUX_RESOURCE_LIST_FORMAT_DEFAULT works' '
 	FLUX_RESOURCE_LIST_FORMAT_DEFAULT="{nodelist} {nodelist}" \
