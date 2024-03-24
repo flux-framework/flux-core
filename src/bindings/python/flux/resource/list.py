@@ -8,6 +8,8 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import os
+
 from flux.idset import IDset
 from flux.memoized_property import memoized_property
 from flux.resource import ResourceSet
@@ -98,4 +100,5 @@ def resource_list(flux_handle):
     Returns:
         ResourceListRPC: a future representing the request.
     """
-    return ResourceListRPC(flux_handle, "resource.sched-status", nodeid=0)
+    topic = os.getenv("FLUX_RESOURCE_LIST_RPC") or "resource.sched-status"
+    return ResourceListRPC(flux_handle, topic, nodeid=0)
