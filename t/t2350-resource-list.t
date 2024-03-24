@@ -14,6 +14,17 @@ test_expect_success 'flux resource list: default lists some expected fields' '
 	grep NNODES default.out &&
 	grep NCORES default.out
 '
+test_expect_success 'make the same query using sched.resource-status' '
+	FLUX_RESOURCE_LIST_RPC=sched.resource-status \
+	FLUX_HANDLE_TRACE=1 \
+	flux resource list >sched.out 2>sched.err
+'
+test_expect_success 'FLUX_RESOURCE_LIST_RPC works' '
+	grep sched.resource-status sched.err
+'
+test_expect_success 'results are the same as before' '
+	test_cmp default.out sched.out
+'
 
 test_expect_success 'flux resource list: FLUX_RESOURCE_LIST_FORMAT_DEFAULT works' '
 	FLUX_RESOURCE_LIST_FORMAT_DEFAULT="{nodelist} {nodelist}" \
@@ -331,6 +342,11 @@ test_expect_success 'flux resource lists expected queues in states (single)' '
 	test $(grep -c "free 1 debug" list2.out) -eq 1 &&
 	test $(grep -c "allocated 1 batch" list2.out) -eq 1 &&
 	test $(grep -c "allocated 1 debug" list2.out) -eq 1
+'
+test_expect_success 'sched.resource-status produces the same results' '
+	FLUX_RESOURCE_LIST_RPC=sched.resource-status \
+	flux resource list -o "{state} {nnodes} {queue}" > list2_sched.out &&
+	test_cmp list2.out list2_sched.out
 '
 test_expect_success 'cleanup jobs' '
 	flux cancel $(cat job1A.id) $(cat job1B.id)
