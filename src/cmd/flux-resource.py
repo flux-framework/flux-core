@@ -14,6 +14,7 @@ import json
 import logging
 import os.path
 import sys
+from itertools import combinations
 
 import flux
 from flux.hostlist import Hostlist
@@ -418,11 +419,14 @@ class ResourceSetExtra(ResourceSet):
     def __init__(self, arg=None, version=1, flux_config=None):
         self.flux_config = flux_config
         if isinstance(arg, ResourceSet):
-            super().__init__(arg.encode(), version)
+            self._rset = arg
             if arg.state:
                 self.state = arg.state
         else:
-            super().__init__(arg, version)
+            self._rset = ResourceSet(arg, version)
+
+    def __getattr__(self, attr):
+        return getattr(self._rset, attr)
 
     @property
     def propertiesx(self):
@@ -448,6 +452,34 @@ class ResourceSetExtra(ResourceSet):
                 ):
                     queues = queues + "," + key if queues else key
         return queues
+
+
+def split_by_property_combinations(rset):
+    """
+    Split a resource set by all combinations of its properties.
+    This is done in hopes of splitting a resource into the minimum number
+    of subsets that may produce unique lines in the resource listing output.
+    """
+
+    def constraint_combinations(rset):
+        properties = set(json.loads(rset.get_properties()).keys())
+        sets = [
+            set(combination)
+            for i in range(1, len(properties) + 1)
+            for combination in combinations(properties, i)
+        ]
+        # Also include the empty set, i.e. resources with no properties
+        sets.append(set())
+
+        # generate RFC 31 constraint objects for each property combination
+        result = []
+        for cset in sets:
+            diff = properties - cset
+            cset.update(["^" + x for x in diff])
+            result.append({"properties": list(cset)})
+        return result
+
+    return [rset.copy_constraint(x) for x in constraint_combinations(rset)]
 
 
 def resources_uniq_lines(resources, states, formatter, config):
@@ -493,8 +525,10 @@ def resources_uniq_lines(resources, states, formatter, config):
                 lines[key].add(rset)
             continue
 
-        for rank in resources[state].ranks:
-            rset = resources[state].copy_ranks(rank)
+        for rset in split_by_property_combinations(resources[state]):
+            if not rset.ranks:
+                continue
+            rset.state = state
             rset = ResourceSetExtra(rset, flux_config=config)
             key = fmt.format(rset)
 
@@ -538,6 +572,14 @@ def get_resource_list(args):
     return resources, config
 
 
+def sort_output(args, items):
+    """
+    Sort by args.states order, then first rank in resource set
+    """
+    statepos = {x[1]: x[0] for x in enumerate(args.states)}
+    return sorted(items, key=lambda x: (statepos[x.state], x.ranks.first()))
+
+
 def list_handler(args):
     headings = {
         "state": "STATE",
@@ -557,7 +599,8 @@ def list_handler(args):
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
     lines = resources_uniq_lines(resources, args.states, formatter, config)
-    formatter.print_items(lines.values(), no_header=args.no_header)
+    items = sort_output(args, lines.values())
+    formatter.print_items(items, no_header=args.no_header)
 
 
 def info(args):
