@@ -30,9 +30,7 @@
  *   ranks in the initial program for the same reason as above.
  * - the 'resource.monitor-waitup' RPC allows a test to wait for some number
  *   of ranks to be up, where "up" is defined as having had an online event
- *   posted.  Thus, after waiting, resource.status (flux resource status)
- *   should show those ranks up, while sched.resource-status
- *   (flux resource list command) may still show them down.
+ *   posted.
  */
 
 #if HAVE_CONFIG_H

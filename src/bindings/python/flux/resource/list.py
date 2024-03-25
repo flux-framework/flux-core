@@ -8,6 +8,8 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import os
+
 from flux.idset import IDset
 from flux.memoized_property import memoized_property
 from flux.resource import ResourceSet
@@ -16,7 +18,7 @@ from flux.rpc import RPC
 
 class SchedResourceList:
     """
-    Encapsulate response from sched.resource-status query.
+    Encapsulate response from resource.sched-status query.
     The response will contain 3 Rv1 resource sets:
 
     :ivar all:         all resources known to scheduler
@@ -98,4 +100,5 @@ def resource_list(flux_handle):
     Returns:
         ResourceListRPC: a future representing the request.
     """
-    return ResourceListRPC(flux_handle, "sched.resource-status")
+    topic = os.getenv("FLUX_RESOURCE_LIST_RPC") or "resource.sched-status"
+    return ResourceListRPC(flux_handle, topic, nodeid=0)

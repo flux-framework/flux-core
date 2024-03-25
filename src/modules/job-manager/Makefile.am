@@ -125,10 +125,13 @@ TESTS = \
 test_ldadd = \
 	libjob-manager.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
-	$(LIBPTHREAD) $(JANSSON_LIBS)
+	$(LIBPTHREAD) \
+	$(JANSSON_LIBS) \
+	$(HWLOC_LIBS)
 
 test_cppflags = \
 	$(AM_CPPFLAGS)

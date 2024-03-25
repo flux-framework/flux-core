@@ -301,13 +301,15 @@ static void cancel_cb (flux_t *h,
  */
 void acquire_disconnect (struct acquire *acquire, const flux_msg_t *msg)
 {
-    flux_t *h = acquire->ctx->h;
-    int count;
+    if (acquire) { // acquire is NULL on rank > 0
+        flux_t *h = acquire->ctx->h;
+        int count;
 
-    if ((count = flux_msglist_disconnect (acquire->requests, msg)) < 0)
-        flux_log_error (h, "error handling discnonect request");
-    if (count > 0)
-        flux_log (h, LOG_DEBUG, "aborted %d resource.acquire(s)", count);
+        if ((count = flux_msglist_disconnect (acquire->requests, msg)) < 0)
+            flux_log_error (h, "error handling discnonect request");
+        if (count > 0)
+            flux_log (h, LOG_DEBUG, "aborted %d resource.acquire(s)", count);
+    }
 }
 
 /* An event was committed to resource.eventlog.

@@ -26,6 +26,8 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/idf58.h"
+#include "src/common/librlist/rlist.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 #include "job.h"
@@ -161,8 +163,10 @@ int cancel_request (struct alloc *alloc, struct job *job)
 /* Handle a sched.alloc response.
  * Update flags.
  */
-static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void alloc_response_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
 {
     struct job_manager *ctx = arg;
     struct alloc *alloc = ctx->alloc;
@@ -216,8 +220,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = EPROTO;
             goto teardown;
         }
+        (void)json_object_del (R, "scheduling");
         job->R_redacted = json_incref (R);
-        (void)json_object_del (job->R_redacted, "scheduling");
         if (annotations_update_and_publish (ctx, job, annotations) < 0)
             flux_log_error (h, "annotations_update: id=%s", idf58 (id));
 
@@ -349,8 +353,10 @@ error:
 /* sched-hello:
  * Scheduler obtains jobs that have resources allocated.
  */
-static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void hello_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct job_manager *ctx = arg;
     struct job *job;
@@ -392,8 +398,10 @@ error:
  * and tells job-manager to start allocations.  job-manager tells
  * scheduler how many jobs are in the queue.
  */
-static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void ready_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct job_manager *ctx = arg;
     const char *mode;
@@ -480,8 +488,10 @@ static bool alloc_work_available (struct job_manager *ctx)
  * Runs right before reactor calls poll(2).
  * If a job can be scheduled, start idle watcher.
  */
-static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
-                     int revents, void *arg)
+static void prep_cb (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
 {
     struct job_manager *ctx = arg;
 
@@ -493,8 +503,10 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
  * Runs right after reactor calls poll(2).
  * Stop idle watcher, and send next alloc request, if available.
  */
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
+static void check_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
 {
     struct job_manager *ctx = arg;
     struct alloc *alloc = ctx->alloc;
@@ -662,7 +674,8 @@ int alloc_queue_recalc_pending (struct alloc *alloc)
            && tail) {
         if (job_priority_comparator (head, tail) < 0) {
             if (alloc_cancel_alloc_request (alloc, tail) < 0) {
-                flux_log_error (alloc->ctx->h, "%s: alloc_cancel_alloc_request",
+                flux_log_error (alloc->ctx->h,
+                                "%s: alloc_cancel_alloc_request",
                                 __FUNCTION__);
                 return -1;
             }
@@ -706,6 +719,60 @@ static void alloc_query_cb (flux_t *h,
                            "running", alloc->ctx->running_jobs) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
+}
+
+static void resource_status_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    struct job_manager *ctx = arg;
+    struct alloc *alloc = ctx->alloc;
+    struct rlist *rl;
+    json_t *R = NULL;
+    flux_error_t error;
+    struct job *job;
+
+    if (!(rl = rlist_create ())) {
+        errprintf (&error, "error creating rlist object");
+        goto error;
+    }
+    job = zhashx_first (alloc->ctx->active_jobs);
+    while (job) {
+        if (job->has_resources && job->R_redacted && !job->alloc_bypass) {
+            struct rlist *rl2;
+            json_error_t jerror;
+
+            if (!(rl2 = rlist_from_json (job->R_redacted, &jerror))) {
+                errprintf (&error,
+                           "%s: error converting JSON to rlist: %s",
+                           idf58 (job->id),
+                           jerror.text);
+                goto error;
+            }
+            if (rlist_append (rl, rl2) < 0) {
+                errprintf (&error, "%s: duplicate allocation", idf58 (job->id));
+                rlist_destroy (rl2);
+                goto error;
+            }
+            rlist_destroy (rl2);
+        }
+        job = zhashx_next (alloc->ctx->active_jobs);
+    }
+    if (!(R = rlist_to_R (rl))) {
+        errprintf (&error, "error converting rlist to JSON");
+        goto error;
+    }
+    if (flux_respond_pack (h, msg, "{s:O}", "allocated", R) < 0)
+        flux_log_error (h, "error responding to resource-status request");
+    json_decref (R);
+    rlist_destroy (rl);
+    return;
+error:
+    if (flux_respond_error (h, msg, EINVAL, error.text) < 0)
+        flux_log_error (h, "error responding to resource-status request");
+    json_decref (R);
+    rlist_destroy (rl);
 }
 
 void alloc_disconnect_rpc (flux_t *h,
@@ -756,6 +823,11 @@ static const struct flux_msg_handler_spec htab[] = {
         "job-manager.alloc-query",
         alloc_query_cb,
         FLUX_ROLE_USER,
+    },
+    {   FLUX_MSGTYPE_REQUEST,
+        "job-manager.resource-status",
+        resource_status_cb,
+        0
     },
     {   FLUX_MSGTYPE_RESPONSE,
         "sched.alloc",

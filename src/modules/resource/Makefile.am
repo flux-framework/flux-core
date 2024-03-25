@@ -33,7 +33,9 @@ libresource_la_SOURCES = \
 	inventory.c \
 	inventory.h \
 	rutil.c \
-	rutil.h
+	rutil.h \
+	status.c \
+	status.h
 
 TESTS = test_rutil.t
 

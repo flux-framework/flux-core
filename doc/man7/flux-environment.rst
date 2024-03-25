@@ -344,6 +344,12 @@ components or writing tests.
    commands to resolve URIs to local form.  This is useful in test environments
    where the remote connector does not work.
 
+.. envvar:: FLUX_RESOURCE_STATUS_RPC
+
+   If set, :man1:`flux-resource` uses the specified RPC topic string instead
+   of ``resource.sched-status``.  This is used in test to verify that the
+   ``sched.resource-status`` RPC used in earlier releases still works for
+   backwards compatibility.
 
 MISCELLANEOUS
 =============
