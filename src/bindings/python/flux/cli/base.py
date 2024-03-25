@@ -629,12 +629,14 @@ class Xcmd:
         self.command = []
         for arg in args.command:
             try:
-                result = arg.format(*inputs, **kwargs).split("::list::")
+                val = self.preserve_mustache(arg)
+                result = val.format(*inputs, **kwargs).split("::list::")
+                newval = self.restore_mustache(result)
             except (IndexError, KeyError):
                 LOGGER.error("Invalid replacement string in command: '%s'", arg)
                 sys.exit(1)
-            if result:
-                self.command.extend(result)
+            if newval:
+                self.command.extend(newval)
 
         #  Format all supported mutable options defined in `mutable_args`
         #  Note: only list and string options are supported.

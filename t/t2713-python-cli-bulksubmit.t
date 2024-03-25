@@ -280,6 +280,15 @@ test_expect_success 'flux bulksubmit: preserves mustache templates' '
 	EOF
 	test_cmp mustache.expected mustache.out
 '
+test_expect_success 'flux bulksubmit: preserves mustache templates in command' '
+	flux bulksubmit --dry-run echo {{tmpdir}} ::: 0 1 >mustache-cmd.out &&
+	test_debug "cat mustache-cmd.out" &&
+	cat <<-EOF > mustache-cmd.expected  &&
+	bulksubmit: submit echo {{tmpdir}}
+	bulksubmit: submit echo {{tmpdir}}
+	EOF
+	test_cmp mustache-cmd.expected mustache-cmd.out
+'
 test_expect_success 'flux submit --log works and can substitute {cc}' '
 	flux submit --log=job{cc}.id --cc=1-5 hostname &&
 	for id in $(seq 1 5); do
