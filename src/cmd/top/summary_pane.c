@@ -532,17 +532,60 @@ void summary_pane_heartbeat (struct summary_pane *sum)
     flux_watcher_start (sum->heartblink);
 }
 
+static void resource_retry_cb (flux_future_t *f, void *arg)
+{
+    flux_future_t *result = arg;
+    flux_future_fulfill_with (result, f);
+    flux_future_destroy (f);
+}
+
+static void resource_enosys_check_cb (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+    flux_future_t *fretry = NULL;
+    flux_future_t *result = arg;
+
+    if (flux_future_get (f, NULL) == 0 || errno != ENOSYS) {
+        flux_future_fulfill_with (result, f);
+        return;
+    }
+    /*  The RPC failed with ENOSYS. Retry with sched.resource-status:
+     */
+    if (!(fretry = flux_rpc (h, "sched.resource-status", NULL, 0, 0))
+        || flux_future_then (fretry, -1., resource_retry_cb, result) < 0) {
+        flux_future_fulfill_error (result, errno, NULL);
+        flux_future_destroy (fretry);
+    }
+}
+
+flux_future_t *resource_sched_status (struct summary_pane *sum)
+{
+    flux_future_t *result = NULL;
+    flux_future_t *f = NULL;
+
+    /* Create empty future to contain result from either resource.sched-status
+     * or sched.resource-status RPC:
+     */
+    if (!(result = flux_future_create (NULL, NULL))
+        || !(f = flux_rpc (sum->top->h, "resource.sched-status", NULL, 0, 0))
+        || flux_future_then (f, -1., resource_enosys_check_cb, result) < 0)
+        goto error;
+
+    flux_future_set_flux (result, sum->top->h);
+    return result;
+error:
+    flux_future_destroy (result);
+    flux_future_destroy (f);
+    return NULL;
+}
+
 /* Send a query.
  * If there's already one pending, do nothing.
  */
 void summary_pane_query (struct summary_pane *sum)
 {
     if (!sum->f_resource) {
-        if (!(sum->f_resource = flux_rpc (sum->top->h,
-                                          "resource.sched-status",
-                                          NULL,
-                                          0,
-                                          0))
+        if (!(sum->f_resource = resource_sched_status (sum))
             || flux_future_then (sum->f_resource,
                                  -1,
                                  resource_continuation,
