@@ -267,7 +267,7 @@ class Flux(Wrapper):
         return FDWatcher(self, fd_int, events, callback, args=args)
 
     def barrier(self, name, nprocs):
-        self.flux_barrier(name, nprocs)
+        return Future(self.flux_barrier(name, nprocs))
 
     def get_rank(self):
         rank = ffi.new("uint32_t [1]")

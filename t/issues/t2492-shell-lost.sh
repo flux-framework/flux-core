@@ -30,7 +30,7 @@ try:
     taskid = int(os.environ["FLUX_TASK_RANK"])
     if taskid == 0:
         print(f"waiting on barrier for {size} tasks", flush=True)
-    h.barrier("test", size)
+    h.barrier("test", size).get()
     if taskid == 0:
         print(f"exited barrier", flush=True)
 
