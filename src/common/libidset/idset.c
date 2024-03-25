@@ -410,6 +410,7 @@ bool idset_equal (const struct idset *idset1,
                   const struct idset *idset2)
 {
     unsigned int id;
+    bool count_checked = false;
 
     if (!idset1 || !idset2)
         return false;
@@ -421,6 +422,7 @@ bool idset_equal (const struct idset *idset1,
         && !(idset2->flags & IDSET_FLAG_COUNT_LAZY)) {
         if (idset_count (idset1) != idset_count (idset2))
             return false;
+        count_checked = true;
     }
 
     id = vebsucc (idset1->T, 0);
@@ -429,6 +431,13 @@ bool idset_equal (const struct idset *idset1,
             return false; // id in idset1 not set in idset2
         id = vebsucc (idset1->T, id + 1);
     }
+
+    /* No need to iterate idset2 if counts were equal and all ids in idset1
+     * were found in idset2.
+     */
+    if (count_checked)
+        return true;
+
     id = vebsucc (idset2->T, 0);
     while (id < idset2->T.M) {
         if (vebsucc (idset1->T, id) != id)

@@ -29,6 +29,8 @@
 static struct idset *util_idset_add_check (const struct idset *a,
                                            const struct idset *b)
 {
+    if (idset_count (a) == 0)
+        return idset_copy (b);
     if (idset_has_intersection (a, b)) {
         errno = EEXIST;
         return NULL;
@@ -79,6 +81,20 @@ fail:
 static struct rnode_child *rnode_child_copy (const struct rnode_child *c)
 {
     return rnode_child_idset (c->name, c->ids, c->avail);
+}
+
+static int rnode_child_clear (struct rnode_child *c)
+{
+    /* clearing idsets manually is expensive. It is cheaper to destroy
+     * and recraete an empty idset. Update this code when that is no longer
+     * the case.
+     */
+    idset_destroy (c->avail);
+    idset_destroy (c->ids);
+    if (!(c->avail = idset_create (0, IDSET_FLAG_AUTOGROW))
+        || !(c->ids = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        return -1;
+    return 0;
 }
 
 static void rn_child_free (void **x)
@@ -463,8 +479,16 @@ struct rnode *rnode_diff (const struct rnode *a, const struct rnode *b)
     while (c) {
         struct rnode_child *nc = zhashx_lookup (n->children, c->name);
         if (nc) {
-            if (idset_subtract (nc->ids, c->ids) < 0
-                || idset_subtract (nc->avail, c->avail) < 0)
+            if (idset_equal (nc->ids, c->ids)) {
+                /* Optimization: if nc->ids == c->ids, then just replace
+                 * nc with empty idsets. This will be much faster than
+                 * idset_subtract().
+                 */
+                if (rnode_child_clear (nc) < 0)
+                    goto err;
+            }
+            else if (idset_subtract (nc->ids, c->ids) < 0
+                     || idset_subtract (nc->avail, c->avail) < 0)
                 goto err;
 
             /*  For non-core resources, remove empty sets:
