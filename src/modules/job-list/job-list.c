@@ -217,10 +217,6 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "initialization error");
         goto done;
     }
-    if (job_state_init_from_kvs (ctx->jsctx) < 0) {
-        flux_log_error (h, "initialization from kvs error");
-        goto done;
-    }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         goto done;
     rc = 0;

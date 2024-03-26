@@ -183,27 +183,10 @@ static void update_job_state (struct job_state_ctx *jsctx,
     job->states_mask |= job->state;
 }
 
-static void revert_job_state (struct job_state_ctx *jsctx,
-                              struct job *job,
-                              double timestamp)
-{
-    /* The flux-restart event is currently only posted to jobs in
-     * SCHED state since that is the only state transition defined
-     * for the event in RFC21.  In the future, other transitions
-     * may be defined.
-     */
-    if (job->state == FLUX_JOB_STATE_SCHED) {
-        job->states_mask &= ~(job->state);
-        update_job_state (jsctx, job, FLUX_JOB_STATE_PRIORITY, timestamp);
-    }
-}
-
 static int job_insert_list (struct job_state_ctx *jsctx,
                             struct job *job,
                             flux_job_state_t newstate)
 {
-    /* Note: comparator is set for running & inactive lists, but the
-     * sort calls are not called on zlistx_add_start() */
     if (newstate == FLUX_JOB_STATE_DEPEND
         || newstate == FLUX_JOB_STATE_PRIORITY
         || newstate == FLUX_JOB_STATE_SCHED) {
@@ -214,11 +197,11 @@ static int job_insert_list (struct job_state_ctx *jsctx,
     }
     else if (newstate == FLUX_JOB_STATE_RUN
              || newstate == FLUX_JOB_STATE_CLEANUP) {
-        if (!(job->list_handle = zlistx_add_start (jsctx->running, job)))
+        if (!(job->list_handle = zlistx_insert (jsctx->running, job, true)))
             goto enomem;
     }
     else { /* newstate == FLUX_JOB_STATE_INACTIVE */
-        if (!(job->list_handle = zlistx_add_start (jsctx->inactive, job)))
+        if (!(job->list_handle = zlistx_insert (jsctx->inactive, job, true)))
             goto enomem;
     }
 
@@ -714,324 +697,6 @@ error:
         flux_log_error (h, "error responding to unpause request");
 }
 
-static struct job *eventlog_restart_parse (struct job_state_ctx *jsctx,
-                                           const char *eventlog,
-                                           flux_jobid_t id)
-{
-    struct job *job = NULL;
-    json_t *a = NULL;
-    size_t index;
-    json_t *value;
-    int save_errno;
-
-    if (!(job = job_create (jsctx->h, id)))
-        goto error;
-
-    if (!(a = eventlog_decode (eventlog))) {
-        flux_log_error (jsctx->h, "%s: error parsing eventlog for %s",
-                        __FUNCTION__, idf58 (job->id));
-        goto error;
-    }
-
-    json_array_foreach (a, index, value) {
-        const char *name;
-        double timestamp;
-        json_t *context = NULL;
-
-        if (eventlog_entry_parse (value, &timestamp, &name, &context) < 0) {
-            flux_log_error (jsctx->h, "%s: error parsing entry for %s",
-                            __FUNCTION__, idf58 (job->id));
-            goto error;
-        }
-
-        job->eventlog_seq++;
-        if (streq (name, "submit")) {
-            if (submit_context_parse (jsctx->h, job, context) < 0)
-                goto error;
-            set_submit_timestamp (job, timestamp);
-        }
-        else if (streq (name, "validate")) {
-            update_job_state (jsctx, job, FLUX_JOB_STATE_DEPEND, timestamp);
-        }
-        else if (streq (name, "depend")) {
-            update_job_state (jsctx, job, FLUX_JOB_STATE_PRIORITY, timestamp);
-        }
-        else if (streq (name, "priority")) {
-            if (priority_context_parse (jsctx->h, job, context) < 0)
-                goto error;
-            if (job->state == FLUX_JOB_STATE_PRIORITY)
-                update_job_state (jsctx, job, FLUX_JOB_STATE_SCHED, timestamp);
-        }
-        else if (streq (name, "urgency")) {
-            if (urgency_context_parse (jsctx->h, job, context) < 0)
-                goto error;
-        }
-        else if (streq (name, "exception")) {
-            int severity;
-            if (exception_context_parse (jsctx->h, job, context, &severity) < 0)
-                goto error;
-            if (severity == 0)
-                update_job_state (jsctx, job, FLUX_JOB_STATE_CLEANUP, timestamp);
-        }
-        else if (streq (name, "alloc")) {
-            /* context not required if no annotations */
-            if (context) {
-                json_t *annotations;
-                if ((annotations = json_object_get (context, "annotations"))) {
-                    if (!json_is_null (annotations))
-                        job->annotations = json_incref (annotations);
-                }
-            }
-
-            if (job->state == FLUX_JOB_STATE_SCHED)
-                update_job_state (jsctx, job, FLUX_JOB_STATE_RUN, timestamp);
-        }
-        else if (streq (name, "finish")) {
-            if (finish_context_parse (jsctx->h, job, context) < 0)
-                goto error;
-            if (job->state == FLUX_JOB_STATE_RUN)
-                update_job_state (jsctx, job, FLUX_JOB_STATE_CLEANUP, timestamp);
-        }
-        else if (streq (name, "clean")) {
-            update_job_state (jsctx, job, FLUX_JOB_STATE_INACTIVE, timestamp);
-        }
-        else if (streq (name, "jobspec-update")) {
-            update_jobspec (jsctx, job, context, false);
-        }
-        else if (streq (name, "resource-update")) {
-            update_resource (jsctx, job, context);
-        }
-        else if (streq (name, "flux-restart")) {
-            revert_job_state (jsctx, job, timestamp);
-        }
-        else if (strstarts (name, "dependency-")) {
-            if (dependency_context_parse (jsctx->h, job, name+11, context) < 0)
-                goto error;
-        }
-        else if (streq (name, "memo")) {
-            if (context && memo_update (jsctx->h, job, context) < 0)
-                goto error;
-        }
-    }
-
-    if (job->state == FLUX_JOB_STATE_NEW) {
-        flux_log (jsctx->h, LOG_ERR, "%s: eventlog has no transition events",
-                  __FUNCTION__);
-        errno = EPROTO;
-        goto error;
-    }
-
-    json_decref (a);
-    return job;
-
-error:
-    save_errno = errno;
-    job_destroy (job);
-    json_decref (a);
-    errno = save_errno;
-    return NULL;
-}
-
-static int depthfirst_count_depth (const char *s)
-{
-    int count = 0;
-    while (*s) {
-        if (*s++ == '.')
-            count++;
-    }
-    return count;
-}
-
-static int depthfirst_map_one (struct job_state_ctx *jsctx,
-                               const char *key,
-                               int dirskip)
-{
-    struct job *job = NULL;
-    flux_jobid_t id;
-    flux_future_t *f1 = NULL;
-    flux_future_t *f2 = NULL;
-    flux_future_t *f3 = NULL;
-    const char *eventlog, *jobspec, *R;
-    char path[64];
-    int rc = 0; // non-fatal error
-
-    if (strlen (key) <= dirskip) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (fluid_decode (key + dirskip + 1, &id, FLUID_STRING_DOTHEX) < 0)
-        return -1;
-    if (flux_job_kvs_key (path, sizeof (path), id, "eventlog") < 0) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (!(f1 = flux_kvs_lookup (jsctx->h, NULL, 0, path)))
-        goto done;
-    if (flux_kvs_lookup_get (f1, &eventlog) < 0)
-        goto done;
-
-    if (!(job = eventlog_restart_parse (jsctx, eventlog, id)))
-        goto done;
-
-    if (flux_job_kvs_key (path, sizeof (path), id, "jobspec") < 0) {
-        errno = EINVAL;
-        goto done;
-    }
-    if (!(f2 = flux_kvs_lookup (jsctx->h, NULL, 0, path)))
-        goto done;
-    if (flux_kvs_lookup_get (f2, &jobspec) < 0)
-        goto done;
-
-    if (job_parse_jobspec (job, jobspec, job->jobspec_updates) < 0)
-        goto done;
-
-    /* eventlog parsing above would not have tracked queue specific
-     * stats b/c queue was unknown until the jobspec was parsed.  Must
-     * add this stat in specifically. */
-    if (job->queue)
-        job_stats_add_queue (jsctx->statsctx, job);
-
-    if (job->states_mask & FLUX_JOB_STATE_RUN) {
-        if (flux_job_kvs_key (path, sizeof (path), id, "R") < 0) {
-            errno = EINVAL;
-            goto done;
-        }
-        if (!(f3 = flux_kvs_lookup (jsctx->h, NULL, 0, path)))
-            goto done;
-        if (flux_kvs_lookup_get (f3, &R) < 0)
-            goto done;
-
-        if (job_parse_R (job, R, job->R_updates) < 0)
-            goto done;
-    }
-
-    if (job->states_mask & FLUX_JOB_STATE_INACTIVE)
-        eventlog_inactive_complete (job);
-
-    if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
-        errno = EEXIST;
-        goto done;
-    }
-
-    if (job_insert_list (jsctx, job, job->state) < 0)
-        goto done;
-
-    rc = 1;
-done:
-    if (rc == 0)
-        job_destroy (job);
-    flux_future_destroy (f1);
-    flux_future_destroy (f2);
-    flux_future_destroy (f3);
-    return rc;
-}
-
-static int depthfirst_map (struct job_state_ctx *jsctx,
-                           const char *key,
-                           int dirskip)
-{
-    flux_future_t *f;
-    const flux_kvsdir_t *dir;
-    flux_kvsitr_t *itr;
-    const char *name;
-    int path_level;
-    int count = 0;
-    int rc = -1;
-
-    path_level = depthfirst_count_depth (key + dirskip);
-    if (!(f = flux_kvs_lookup (jsctx->h, NULL, FLUX_KVS_READDIR, key)))
-        return -1;
-    if (flux_kvs_lookup_get_dir (f, &dir) < 0) {
-        if (errno == ENOENT && path_level == 0)
-            rc = 0;
-        goto done;
-    }
-    if (!(itr = flux_kvsitr_create (dir)))
-        goto done;
-    while ((name = flux_kvsitr_next (itr))) {
-        char *nkey;
-        int n;
-        if (!flux_kvsdir_isdir (dir, name))
-            continue;
-        if (!(nkey = flux_kvsdir_key_at (dir, name)))
-            goto done_destroyitr;
-        if (path_level == 3) // orig 'key' = .A.B.C, thus 'nkey' is complete
-            n = depthfirst_map_one (jsctx, nkey, dirskip);
-        else
-            n = depthfirst_map (jsctx, nkey, dirskip);
-        if (n < 0) {
-            int saved_errno = errno;
-            free (nkey);
-            errno = saved_errno;
-            goto done_destroyitr;
-        }
-        count += n;
-        free (nkey);
-    }
-    rc = count;
-done_destroyitr:
-    flux_kvsitr_destroy (itr);
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
-/* Call zlistx_sort() on the list, then reacquire the list handles since
- * they are no longer valid after sorting (flux-framework/flux-core#4465).
- */
-static void sort_job_list (zlistx_t *list)
-{
-    struct job *job;
-
-    zlistx_sort (list);
-
-    job = zlistx_first (list);
-    while (job) {
-        job->list_handle = zlistx_cursor (list);
-        job = zlistx_next (list);
-    }
-}
-
-/* Read jobs present in the KVS at startup. */
-int job_state_init_from_kvs (struct job_state_ctx *jsctx)
-{
-    const char *dirname = "job";
-    int dirskip = strlen (dirname);
-    int count;
-
-    count = depthfirst_map (jsctx, dirname, dirskip);
-    if (count < 0)
-        return -1;
-    flux_log (jsctx->h, LOG_DEBUG, "%s: read %d jobs", __FUNCTION__, count);
-
-    sort_job_list (jsctx->running);
-    sort_job_list (jsctx->inactive);
-    return 0;
-}
-
-static int job_update_eventlog_seq (struct job_state_ctx *jsctx,
-                                    struct job *job,
-                                    int latest_eventlog_seq)
-{
-    /* Ignore sequence < 0 */
-    if (latest_eventlog_seq < 0)
-        return 0;
-    if (latest_eventlog_seq <= job->eventlog_seq) {
-        flux_log (jsctx->h, LOG_INFO,
-                  "%s: job %s duplicate event (last = %d, latest = %d)",
-                  __FUNCTION__, idf58 (job->id),
-                  job->eventlog_seq, latest_eventlog_seq);
-        return 1;
-    }
-    if (latest_eventlog_seq > (job->eventlog_seq + 1))
-        flux_log (jsctx->h, LOG_INFO,
-                  "%s: job %s missed event (last = %d, latest = %d)",
-                  __FUNCTION__, idf58 (job->id),
-                  job->eventlog_seq, latest_eventlog_seq);
-    job->eventlog_seq = latest_eventlog_seq;
-    return 0;
-}
-
 static int job_transition_state (struct job_state_ctx *jsctx,
                                  struct job *job,
                                  flux_job_state_t newstate,
@@ -1106,7 +771,6 @@ static int submit_context_parse (flux_t *h,
 static int journal_submit_event (struct job_state_ctx *jsctx,
                                  struct job *job,
                                  flux_jobid_t id,
-                                 int eventlog_seq,
                                  double timestamp,
                                  json_t *context)
 {
@@ -1123,8 +787,6 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
             errno = ENOMEM;
             return -1;
         }
-        if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
-            return 0;
     }
 
     if (submit_context_parse (jsctx->h, job, context) < 0)
@@ -1456,41 +1118,23 @@ static int journal_dependency_event (struct job_state_ctx *jsctx,
     return dependency_context_parse (jsctx->h, job, cmd, context);
 }
 
-static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
+static int journal_process_event (struct job_state_ctx *jsctx,
+                                  flux_jobid_t id,
+                                  json_t *event)
 {
-    flux_jobid_t id;
-    int eventlog_seq;
-    json_t *entry;
     double timestamp;
     const char *name;
     struct job *job;
     json_t *context = NULL;
 
-    if (json_unpack (event, "{s:I s:i s:o}",
-                     "id", &id,
-                     "eventlog_seq", &eventlog_seq,
-                     "entry", &entry) < 0
-        || eventlog_entry_parse (entry, &timestamp, &name, &context) < 0) {
+    if (eventlog_entry_parse (event, &timestamp, &name, &context) < 0) {
         flux_log (jsctx->h, LOG_ERR, "%s: error parsing record",
                   __FUNCTION__);
         errno = EPROTO;
         return -1;
     }
 
-    /*
-     *  Lookup job. If eventlog sequence number is not greater than current,
-     *   then return (this event has already been processed, presumably via
-     *   restart from KVS).
-     *
-     *  FIXME: We need to override the sequence check for "memo" events
-     *   specifically since annotations events may overwrite them on
-     *   job-list module reload. This can be removed when memos are
-     *   separated from scheduler annotations.
-     */
-    if ((job = zhashx_lookup (jsctx->index, &id))
-         && (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1
-             && !streq (name, "memo")))
-            return 0;
+    job = zhashx_lookup (jsctx->index, &id);
 
     /* The "submit" event is now posted before the job transitions out of NEW
      * on the "validate" event.  If "invalidate" is posted instead, job
@@ -1529,7 +1173,6 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
         if (journal_submit_event (jsctx,
                                   job,
                                   id,
-                                  eventlog_seq,
                                   timestamp,
                                   context) < 0)
             return -1;
@@ -1631,14 +1274,18 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
 static int journal_process_events (struct job_state_ctx *jsctx,
                                    const flux_msg_t *msg)
 {
+    flux_jobid_t id;
     json_t *events;
     size_t index;
     json_t *value;
 
-    if (flux_msg_unpack (msg, "{s:o}", "events", &events) < 0)
+    if (flux_msg_unpack (msg,
+                        "{s:I s:o}",
+                        "id", &id,
+                        "events", &events) < 0)
         return -1;
     json_array_foreach (events, index, value) {
-        if (journal_process_event (jsctx, value) < 0)
+        if (journal_process_event (jsctx, id, value) < 0)
             return -1;
     }
 
@@ -1649,10 +1296,14 @@ static void job_events_journal_continuation (flux_future_t *f, void *arg)
 {
     struct job_state_ctx *jsctx = arg;
     const flux_msg_t *msg;
+    flux_jobid_t id;
     json_t *events;
 
     if (flux_future_get (f, (const void **)&msg) < 0
-        || flux_msg_unpack (msg, "{s:o}", "events", &events) < 0) {
+        || flux_msg_unpack (msg,
+                            "{s:I s:o}",
+                            "id", &id,
+                            "events", &events) < 0) {
         flux_log_error (jsctx->h, "error unpacking journal response");
         goto error;
     }
@@ -1663,6 +1314,23 @@ static void job_events_journal_continuation (flux_future_t *f, void *arg)
         goto error;
     }
 
+    /* Detect sentinel that delimits old and new events.  If there are no
+     * more old events, process backlog and begin processing new events
+     * as they arrive.
+     */
+    if (id == FLUX_JOBID_ANY) {
+        while ((msg = flux_msglist_pop (jsctx->backlog))) {
+            int rc = journal_process_events (jsctx, msg);
+            flux_msg_decref (msg);
+            if (rc < 0) {
+                flux_log_error (jsctx->h, "error processing journal backlog");
+                goto error;
+            }
+        }
+        jsctx->pause = false;
+        flux_future_reset (f);
+        return;
+    }
     if (jsctx->pause) {
         if (flux_msglist_append (jsctx->backlog, msg) < 0) {
             flux_log_error (jsctx->h, "error storing journal backlog");
@@ -1689,12 +1357,15 @@ static flux_future_t *job_events_journal (struct job_state_ctx *jsctx)
 {
     flux_future_t *f;
 
-    /* no filters on events-journal, stream all events */
+    /* Set full=true so that inactive jobs are included.
+     * Don't set allow/deny so that we receive all events.
+     */
     if (!(f = flux_rpc_pack (jsctx->h,
                              "job-manager.events-journal",
                              FLUX_NODEID_ANY,
                              FLUX_RPC_STREAMING,
-                             "{}"))
+                             "{s:b}",
+                             "full", 1))
         || flux_future_then (f,
                              -1,
                              job_events_journal_continuation,
@@ -1705,6 +1376,14 @@ static flux_future_t *job_events_journal (struct job_state_ctx *jsctx)
                   future_strerror (f, errno));
         goto error;
     }
+    /* Set 'pause' to defer processing of the initial events, so we can
+     * clear the message pipes as quickly as possible in the event of a
+     * large number of jobs in the system.  The pause flag is cleared and
+     * the backlog is processed once job-manager sends a response
+     * with id of FLUX_JOBID_ANY as a sentinel.
+     */
+    jsctx->pause = true;
+
     return f;
 error:
     flux_future_destroy (f);

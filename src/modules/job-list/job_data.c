@@ -78,7 +78,6 @@ struct job *job_create (flux_t *h, flux_jobid_t id)
 
     job->states_mask = FLUX_JOB_STATE_NEW;
     job->states_events_mask = FLUX_JOB_STATE_NEW;
-    job->eventlog_seq = -1;
     return job;
 }
 
