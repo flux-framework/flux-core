@@ -169,9 +169,33 @@ test_expect_success 'flux module stats job-ingest is open to guests' '
 	    flux module stats job-ingest >/dev/null
 '
 
-test_expect_success 'job-ingest: remove modules' '
-	flux module remove job-manager &&
+test_expect_success 'reload the real job-manager' '
+	flux module reload job-manager
+'
+test_expect_success 'unload job-ingest on all ranks' '
 	flux exec -r all flux module remove job-ingest
+'
+test_expect_success 'load job-ingest max-fluid-generator-id=1000000 fails' '
+	test_must_fail flux module load job-ingest \
+	    max-fluid-generator-id=1000000
+'
+test_expect_success 'reload job-ingest max-fluid-generator-id=2 on all ranks' '
+	for rank in $(seq 0 3); do \
+	    flux exec -r $rank flux module load job-ingest \
+	        max-fluid-generator-id=2; \
+	done
+'
+test_expect_success 'module is not loaded on rank 3' '
+	flux exec -r 3 flux module list >list3.out &&
+	test_must_fail grep job-ingest list3.out
+'
+test_expect_success 'but a job can be submitted on rank 3' '
+	flux exec -r 3 flux submit true
+'
+
+test_expect_success 'job-ingest: remove modules' '
+	flux module remove -f job-manager &&
+	flux exec -r all flux module remove -f job-ingest
 '
 
 test_done
