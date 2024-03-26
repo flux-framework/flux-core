@@ -61,6 +61,13 @@ test_expect_success 'flux-top summary shows no jobs initially' '
 	grep "0 running" nojobs.out &&
 	grep "0 failed" nojobs.out
 '
+test_expect_success 'flux-top falls back to sched.resource-status' '
+	FLUX_RESOURCE_LIST_RPC=foo.status \
+		$runpty \
+		flux top --test-exit --test-exit-dump=fallback.out >/dev/null &&
+	grep "nodes 0/${nnodes}" nojobs.out &&
+	grep "cores 0/${ncores}" nojobs.out
+'
 # Note: jpXCZedGfVQ is the base58 representation of FLUX_JOBID_ANY. We
 # grep for this value without f or ƒ in case build environment influences
 # presence of one of the other.
