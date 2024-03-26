@@ -646,24 +646,37 @@ int pty_data_unpack (const flux_msg_t *msg,
 {
     const char *encoding = NULL;
     void *data;
-    int len;
+    size_t len;
+    json_t *o;
+    json_error_t error;
 
-    if (flux_msg_unpack (msg,
-                         "{s:s s?s}",
-                         "data", &data,
-                         "encoding", &encoding) < 0)
+    /* Note: Use json_unpack_ex(3) in order to pass the JSON_ALLOW_NUL flag.
+     *  This is necessary since pty data packed with 's#' may contain NUL
+     *  characters, especially in the case of ^@/Ctrl-Space/etc, which is
+     *  encoded as a NUL character (empty string with len=1).
+     */
+    if (flux_msg_unpack (msg, "o", &o) < 0)
         return errprintf (errp,
                           "failed to unpack data msg: %s",
                           strerror (errno));
-    len = strlen (data);
-
+    if (json_unpack_ex (o,
+                        NULL,
+                        JSON_ALLOW_NUL,
+                        "{s:s% s?s}",
+                        "data", &data, &len,
+                        "encoding", &encoding) < 0) {
+        errno = EPROTO;
+        return errprintf (errp,
+                          "failed to unpack data msg: %s",
+                          error.text);
+    }
     if (encoding) {
         if (streq (encoding, "base64")) {
             char *b64data = NULL;
             size_t b64len;
             if (decode_base64 (data, len, &b64data, &b64len) < 0) {
                 return errprintf (errp,
-                                  "failed to decode %d bytes of base64",
+                                  "failed to decode %zu bytes of base64",
                                   len);
             }
             if (flux_msg_aux_set (msg, NULL, b64data, free) < 0) {

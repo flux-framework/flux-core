@@ -271,8 +271,8 @@ static void pty_client_data (struct flux_pty_client *c, flux_future_t *f)
         llog_error (c, "unpack: %s", error.text);
         return;
     }
-    if (write (STDIN_FILENO, data, len) < 0) {
-        llog_error (c, "data decode failed: %s", strerror (errno));
+    if (write (STDOUT_FILENO, data, len) < 0) {
+        llog_error (c, "write %zu bytes: %s", len, strerror (errno));
         return;
     }
 }

@@ -128,4 +128,15 @@ test_expect_success 'pty: no hang when invalid command is run under pty' '
 	test_expect_code 127 run_timeout 15 \
 		flux run -o pty.interactive nosuchcommand
 '
+# Note: test below uses printf(1) to send [Ctrl-SPACE (NUL), newline, Ctrl-D]
+# over the pty connection and expects ^@ (the standard representation of NUL)
+# to appear in output.
+nul_ctrl_d() {
+	python3 -c 'print("\x00\n\x04", end=None)'
+}
+test_expect_success 'pty: NUL (Ctrl-SPACE) character not dropped' '
+	nul_ctrl_d | flux run -vvv -o pty.interactive -o pty.capture cat -v &&
+	flux job eventlog -HLp output $(flux job last) &&
+	flux job eventlog -HLp output $(flux job last) | grep \\^@
+'
 test_done
