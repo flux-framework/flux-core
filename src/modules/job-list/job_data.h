@@ -90,7 +90,6 @@ struct job {
     json_t *jobspec_updates;
     json_t *R_updates;
 
-    int eventlog_seq;           /* last event seq read */
     int submit_version;         /* version number in submit context */
 };
 
