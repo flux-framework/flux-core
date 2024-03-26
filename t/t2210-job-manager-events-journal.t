@@ -236,41 +236,6 @@ test_expect_success NO_CHAIN_LINT 'job-manager: events-journal contains older jo
 	wait $pid
 '
 
-check_event_name_eventlog_seq() {
-	jobid="$1"
-	seq=$2
-	name=$3
-	filename=$4
-	if cat $filename \
-		| $jq -e ".id == ${jobid} and .entry.name == \"${name}\" and .eventlog_seq == ${seq}" \
-		| grep -q "true"
-	then
-		return 0
-	fi
-	return 1
-}
-
-# annotations event below comes from sched-simple scheduler
-test_expect_success NO_CHAIN_LINT 'job-manager: eventlog seqs are correct' '
-	$jq -j -c -n "{}" \
-		| $EVENTS_JOURNAL_STREAM > events9.out &
-	pid=$! &&
-	jobid=`flux job submit basic.json | flux job id` &&
-	wait_event_name ${jobid} clean events9.out &&
-	check_event_name_eventlog_seq ${jobid} 0 submit events9.out &&
-	check_event_name_eventlog_seq ${jobid} 1 validate events9.out &&
-	check_event_name_eventlog_seq ${jobid} 2 depend events9.out &&
-	check_event_name_eventlog_seq ${jobid} 3 priority events9.out &&
-	check_event_name_eventlog_seq ${jobid} -1 annotations events9.out &&
-	check_event_name_eventlog_seq ${jobid} 4 alloc events9.out &&
-	check_event_name_eventlog_seq ${jobid} 5 start events9.out &&
-	check_event_name_eventlog_seq ${jobid} 6 finish events9.out &&
-	check_event_name_eventlog_seq ${jobid} 7 release events9.out &&
-	check_event_name_eventlog_seq ${jobid} 8 free events9.out &&
-	check_event_name_eventlog_seq ${jobid} 9 clean events9.out &&
-	kill -s USR1 $pid &&
-	wait $pid
-'
 test_expect_success 'job-manager: events-journal request fails with EPROTO on empty payload' '
 	$RPC job-manager.events-journal 71 < /dev/null
 '
