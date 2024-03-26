@@ -31,7 +31,6 @@ struct job {
     json_t *jobspec_redacted;
     json_t *R_redacted;
     json_t *eventlog;
-    int eventlog_seq;           // eventlog count / sequence number
     flux_job_state_t state;
     json_t *event_queue;
     json_t *end_event;      // event that caused transition to CLEANUP state
