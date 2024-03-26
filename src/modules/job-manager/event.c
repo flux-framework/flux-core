@@ -812,6 +812,11 @@ int event_job_process_entry (struct event *event,
         }
     }
 
+    if (json_array_append (job->eventlog, entry) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+
     /*  Journal event sequence should match actual sequence of events
      *   in the job eventlog, so set eventlog_seq to -1 with
      *   EVENT_NO_COMMIT and do not advance job->eventlog_seq.

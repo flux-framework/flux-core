@@ -39,6 +39,7 @@ void job_decref (struct job *job)
         flux_msg_decref (job->waiter);
         json_decref (job->jobspec_redacted);
         json_decref (job->R_redacted);
+        json_decref (job->eventlog);
         json_decref (job->annotations);
         grudgeset_destroy (job->dependencies);
         subscribers_destroy (job);
@@ -58,7 +59,7 @@ struct job *job_incref (struct job *job)
     return job;
 }
 
-struct job *job_create (void)
+static struct job *job_alloc (void)
 {
     struct job *job;
 
@@ -79,6 +80,20 @@ struct job *job_create (void)
 error:
     job_decref (job);
     return NULL;
+}
+
+struct job *job_create (void)
+{
+    struct job *job;
+
+    if (!(job = job_alloc ()))
+        return NULL;
+    if (!(job->eventlog = json_array ())) {
+        errno = ENOMEM;
+        job_decref (job);
+        return NULL;
+    }
+    return job;
 }
 
 int job_dependency_count (struct job *job)
@@ -184,12 +199,11 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
                                       flux_error_t *error)
 {
     struct job *job;
-    json_t *a = NULL;
     size_t index;
     json_t *event;
     int version = -1; // invalid
 
-    if (!(job = job_create ()))
+    if (!(job = job_alloc()))
         return NULL;
     job->id = id;
 
@@ -212,12 +226,12 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
         (void)json_object_del (job->R_redacted, "scheduling");
     }
 
-    if (!(a = eventlog_decode (eventlog))) {
+    if (!(job->eventlog = eventlog_decode (eventlog))) {
         errprintf (error, "failed to decode eventlog");
         goto error;
     }
 
-    json_array_foreach (a, index, event) {
+    json_array_foreach (job->eventlog, index, event) {
         const char *name = "unknown";
         json_t *context;
 
@@ -264,13 +278,11 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
         goto inval;
     }
 
-    json_decref (a);
     return job;
 inval:
     errno = EINVAL;
 error:
     job_decref (job);
-    json_decref (a);
     return NULL;
 }
 
