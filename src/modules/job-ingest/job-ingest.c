@@ -55,7 +55,7 @@
  *   job.0000.0004.b200.0000
  *
  * The job-ingest module can be loaded on rank 0, or on many ranks across
- * the instance, rank < max FLUID id of 16384.  Each rank is relatively
+ * the instance, rank < max FLUID id - 1.  Each rank is relatively
  * independent and KVS commit scalability will ultimately limit the max
  * ingest rate for an instance.
  *
@@ -74,6 +74,12 @@
  * Too small, and KVS commit overhead will increase.
  */
 static const double batch_timeout = 0.01;
+
+/* There can be 2^14 FLUID generators per RFC 19.
+ * Reserve the top 16 for future use.
+ * This value may be set on the command line for testing.
+ */
+static int max_fluid_generator_id = 16384 - 16 - 1;
 
 struct job_ingest_ctx {
     flux_t *h;
@@ -651,6 +657,7 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
 {
     flux_error_t conf_error;
     const char *buffer_size = NULL;
+    const char *max_fluid_id = NULL;
 
     if (policy_validate (conf, error) < 0)
         return -1;
@@ -684,6 +691,9 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
         else if (strstarts (argv[i], "buffer-size=")) {
             buffer_size = argv[i]+12;
         }
+        else if (strstarts (argv[i], "max-fluid-generator-id=")) {
+            max_fluid_id = argv[i] + 23;
+        }
         else {
             errprintf (error, "Invalid option: %s", argv[i]);
             errno = EINVAL;
@@ -700,6 +710,14 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
                   LOG_DEBUG,
                   "worker input buffer set to %s",
                   ctx->buffer_size);
+    }
+    if (max_fluid_id) {
+        uint64_t val;
+        if (parse_size (max_fluid_id, &val) < 0 || val > 16384 - 1)
+            return errprintf (error,
+                              "Invalid max-fluid-generator-id: '%s'",
+                              max_fluid_id);
+        max_fluid_generator_id = val;
     }
     return pipeline_configure (ctx->pipeline,
                                conf,
@@ -830,6 +848,18 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_get_rank");
         goto done;
     }
+    /* If the rank exceeds the maximum FLUID generator ID, then return success
+     * and let job ingest be handled upstream.
+     */
+    if (rank > max_fluid_generator_id) {
+        flux_log (h,
+                  LOG_DEBUG,
+                  "job-ingest cannot allocate job IDs on ranks > %d."
+                  " Exiting - upstream will handle ingest requests.",
+                  max_fluid_generator_id);
+        rc = 0;
+        goto done;
+    }
     /* Initialize FLUID generator.
      * On rank 0, derive the starting timestamp from the job manager's
      * 'max_jobid' plus one.  On other ranks, ask upstream job-ingest.
@@ -875,18 +905,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         }
         flux_future_destroy (f);
         if (fluid_init (&ctx.gen, rank, timestamp) < 0) {
-            // See flux-framework/flux-core#5708
-            if (rank > 16383) {
-                flux_log (h,
-                          LOG_DEBUG,
-                          "job-ingest cannot allocate job IDs on ranks > 16383."
-                          " Exiting - upstream will handle ingest requests.");
-                rc = 0;
-            }
-            else {
-                flux_log (h, LOG_ERR, "fluid_init failed");
-                errno = EINVAL;
-            }
+            flux_log (h, LOG_ERR, "fluid_init failed");
+            errno = EINVAL;
             goto done;
         }
     }
