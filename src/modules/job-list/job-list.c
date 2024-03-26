@@ -57,15 +57,8 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                            "idsync",
                            "lookups", idsync_lookups,
                            "waits", idsync_waits,
-                           "stats_watchers", stats_watchers) < 0) {
-        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
-
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+                           "stats_watchers", stats_watchers) < 0)
+        flux_log_error (h, "error responding to stats-get request");
 }
 
 static void purge_cb (flux_t *h,
