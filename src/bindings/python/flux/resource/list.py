@@ -8,12 +8,14 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import errno
+import json
 import os
 
+from flux.future import FutureExt
 from flux.idset import IDset
 from flux.memoized_property import memoized_property
 from flux.resource import ResourceSet
-from flux.rpc import RPC
 
 
 class SchedResourceList:
@@ -80,9 +82,31 @@ class SchedResourceList:
         return res
 
 
-class ResourceListRPC(RPC):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class ResourceListRPC(FutureExt):
+    def __init__(self, flux_handle, topic, nodeid=0):
+        self.topic = topic
+        super().__init__(self._init_cb, flux_handle=flux_handle)
+
+    def _init_cb(self, future):
+        future.get_flux().rpc(self.topic, nodeid=0).then(self._list_cb)
+
+    def _list_cb(self, future):
+        try:
+            self.fulfill(future.get())
+        except Exception as exc:
+            if exc.errno == errno.ENOSYS:
+                #  Fall back to sched.resource-status:
+                future.get_flux().rpc("sched.resource-status", nodeid=0).then(
+                    self._fallback_cb
+                )
+            else:
+                self.fulfill_error(exc.errno, exc.strerror)
+
+    def _fallback_cb(self, future):
+        try:
+            self.fulfill(json.loads(future.get_str()))
+        except OSError as exc:
+            self.fulfill_error(exc.errno, exc.strerror)
 
     def get(self):
         """Return a SchedResourceList corresponding to the request.
