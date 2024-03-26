@@ -23,7 +23,6 @@
  */
 int journal_process_event (struct journal *journal,
                            flux_jobid_t id,
-                           int eventlog_seq,
                            const char *name,
                            json_t *entry);
 

@@ -21,8 +21,10 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/fsd.h"
 
 #include "conf.h"
+#include "job.h"
 #include "journal.h"
 
 #define DEFAULT_JOURNAL_SIZE_LIMIT 1000
@@ -31,9 +33,6 @@ struct journal {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
     struct flux_msglist *listeners;
-    /* holds most recent events for listeners */
-    zlist_t *events;
-    int size_limit;
 };
 
 struct journal_filter { // stored as aux item in request message
@@ -60,85 +59,133 @@ static bool allow_deny_check (const flux_msg_t *msg, const char *name)
     return add_entry;
 }
 
-/* wrap the eventlog entry in another object with the job id and
- * eventlog_seq.
- *
- * The job id is necessary so listeners can determine which job the
- * event is associated with.
- *
- * The eventlog sequence number is necessary so users can determine if the
- * event is a duplicate if they are reading events from another source
- * (i.e. they could be reading events from the job's eventlog in the
- * KVS).
- */
-static json_t *wrap_events_entry (flux_jobid_t id,
-                                  int eventlog_seq,
-                                  json_t *entry)
+static bool allow_all (const flux_msg_t *msg)
 {
-    json_t *wrapped_entry;
-    if (!(wrapped_entry = json_pack ("{s:I s:i s:O}",
-                                     "id", id,
-                                     "eventlog_seq", eventlog_seq,
-                                     "entry", entry))) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    return wrapped_entry;
-}
-
-static void json_decref_wrapper (void *data)
-{
-    json_t *o = (json_t *)data;
-    json_decref (o);
+    struct journal_filter *filter = flux_msg_aux_get (msg, "filter");
+    if (filter->allow || filter->deny)
+        return false;
+    return true;
 }
 
 int journal_process_event (struct journal *journal,
                            flux_jobid_t id,
-                           int eventlog_seq,
                            const char *name,
                            json_t *entry)
 {
     const flux_msg_t *msg;
-    json_t *wrapped_entry = NULL;
-
-    if (!(wrapped_entry = wrap_events_entry (id, eventlog_seq, entry)))
-        goto error;
 
     msg = flux_msglist_first (journal->listeners);
     while (msg) {
-        if (allow_deny_check (msg, name)) {
-            if (flux_respond_pack (journal->ctx->h,
-                                   msg,
-                                   "{s:[O]}",
-                                   "events", wrapped_entry) < 0)
-                flux_log_error (journal->ctx->h, "%s: flux_respond_pack",
-                                __FUNCTION__);
+        if (allow_deny_check (msg, name)
+            && flux_respond_pack (journal->ctx->h,
+                                  msg,
+                                  "{s:I s:[O]}",
+                                  "id", id,
+                                  "events", entry) < 0) {
+                flux_log_error (journal->ctx->h,
+                                "error responding to"
+                                " job-manager.events-journal request");
         }
         msg = flux_msglist_next (journal->listeners);
     }
-
-    if (zlist_size (journal->events) > journal->size_limit)
-        zlist_remove (journal->events, zlist_head (journal->events));
-    if (zlist_append (journal->events, json_incref (wrapped_entry)) < 0)
-        goto nomem;
-    zlist_freefn (journal->events,
-                  wrapped_entry,
-                  json_decref_wrapper,
-                  true);
-
-    json_decref (wrapped_entry);
     return 0;
-
-nomem:
-    errno = ENOMEM;
-error:
-    ERRNO_SAFE_WRAP (json_decref, wrapped_entry);
-    return -1;
 }
 
 static void filter_destroy (struct journal_filter *filter)
 {
     ERRNO_SAFE_WRAP (free, filter);
+}
+
+static int send_job_events (struct job_manager *ctx,
+                            const flux_msg_t *msg,
+                            struct job *job)
+{
+    json_t *eventlog;
+
+    if (allow_all (msg)) {
+        eventlog = json_incref (job->eventlog);
+    }
+    else {
+        size_t index;
+        json_t *entry;
+        const char *name;
+
+        if (!(eventlog = json_array ()))
+            goto nomem;
+        json_array_foreach (job->eventlog, index, entry) {
+            if (eventlog_entry_parse (entry, NULL, &name, NULL) < 0)
+                goto error;
+            if (!allow_deny_check (msg, name))
+                continue;
+            if (json_array_append (eventlog, entry) < 0)
+                goto nomem;
+        }
+    }
+    if (flux_respond_pack (ctx->h,
+                           msg,
+                           "{s:I s:O}",
+                           "id", job->id,
+                           "events", eventlog) < 0)
+        goto error;
+    json_decref (eventlog);
+    return 0;
+ nomem:
+    errno = ENOMEM;
+ error:
+    ERRNO_SAFE_WRAP (json_decref, eventlog);
+    return -1;
+}
+
+/* The entire backlog must be sent to a journal consumer before
+ * any new events can be generated, event if it's large.
+ */
+static int send_backlog (struct job_manager *ctx,
+                         const flux_msg_t *msg,
+                         bool full)
+{
+    struct job *job;
+    int job_count = zhashx_size (ctx->active_jobs);
+
+    if (full)
+        job_count += zhashx_size (ctx->inactive_jobs);
+
+    if (job_count > 0) {
+        flux_log (ctx->h,
+                  LOG_DEBUG,
+                  "begin sending journal backlog: %d jobs",
+                  job_count);
+    }
+
+    if (full) {
+        job = zhashx_first (ctx->inactive_jobs);
+        while (job) {
+            if (send_job_events (ctx, msg, job) < 0)
+                return -1;
+            job = zhashx_next (ctx->inactive_jobs);
+        }
+    }
+    job = zhashx_first (ctx->active_jobs);
+    while (job) {
+        if (send_job_events (ctx, msg, job) < 0)
+            return -1;
+        job = zhashx_next (ctx->active_jobs);
+    }
+
+    if (job_count > 0) {
+        flux_log (ctx->h,
+                  LOG_DEBUG,
+                  "finished sending journal backlog");
+    }
+    /* Send a special response with id = FLUX_JOB_ANY to demarcate the
+     * backlog from ongoing events.  The consumer may ignore this message.
+     */
+    if (flux_respond_pack (ctx->h,
+                           msg,
+                           "{s:I s:[]}",
+                           "id", FLUX_JOBID_ANY,
+                           "events") < 0)
+        return -1;
+    return 0;
 }
 
 static void journal_handle_request (flux_t *h,
@@ -147,19 +194,20 @@ static void journal_handle_request (flux_t *h,
                                     void *arg)
 {
     struct job_manager *ctx = arg;
+    const char *topic = "unknown";
     struct journal *journal = ctx->journal;
     struct journal_filter *filter;
+    int full = 0;
     const char *errstr = NULL;
-    json_t *a = NULL;
-    json_t *wrapped_entry;
 
     if (!(filter = calloc (1, sizeof (*filter))))
         goto error;
     if (flux_request_unpack (msg,
-                             NULL,
-                             "{s?o s?o}",
+                             &topic,
+                             "{s?o s?o s?b}",
                              "allow", &filter->allow,
-                             "deny", &filter->deny) < 0
+                             "deny", &filter->deny,
+                             "full", &full) < 0
         || flux_msg_aux_set (msg, "filter", filter,
                              (flux_free_f)filter_destroy) < 0) {
         filter_destroy (filter);
@@ -183,55 +231,16 @@ static void journal_handle_request (flux_t *h,
         goto error;
     }
 
+    if (send_backlog (ctx, msg, full) < 0) {
+        flux_log_error (h, "error responding to %s", topic);
+        return;
+    }
     if (flux_msglist_append (journal->listeners, msg) < 0)
         goto error;
-
-    wrapped_entry = zlist_first (journal->events);
-    while (wrapped_entry) {
-        const char *name;
-        flux_jobid_t id;
-
-        if (json_unpack (wrapped_entry,
-                         "{s:I s:{s:s}}",
-                         "id", &id,
-                         "entry",
-                           "name", &name) < 0) {
-            flux_log (h, LOG_ERR, "invalid wrapped entry");
-            goto error;
-        }
-
-        /* ensure job has not been purged */
-        if (!zhashx_lookup (ctx->active_jobs, &id)
-            && !zhashx_lookup (ctx->inactive_jobs, &id))
-            goto next;
-
-        if (allow_deny_check (msg, name)) {
-            if (!a) {
-                if (!(a = json_array ()))
-                    goto nomem;
-            }
-            if (json_array_append (a, wrapped_entry) < 0)
-                goto nomem;
-        }
-next:
-        wrapped_entry = zlist_next (journal->events);
-    }
-
-    if (a && json_array_size (a) > 0) {
-        if (flux_respond_pack (h, msg, "{s:O}", "events", a) < 0)
-            flux_log_error (h,
-                            "error responding to job-manager.events-journal");
-    }
-
-    json_decref (a);
     return;
-
-nomem:
-    errno = ENOMEM;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to job-manager.events-journal");
-    json_decref (a);
+        flux_log_error (h, "error responding to %s", topic);
 }
 
 static void journal_cancel_request (flux_t *h, flux_msg_handler_t *mh,
@@ -254,40 +263,11 @@ void journal_listeners_disconnect_rpc (flux_t *h,
         flux_log_error (h, "error handling job-manager.disconnect (journal)");
 }
 
-static int journal_parse_config (const flux_conf_t *conf,
-                                 flux_error_t *error,
-                                 void *arg)
-{
-    struct journal *journal = arg;
-    flux_error_t e;
-    int size_limit = -1;
-
-    if (flux_conf_unpack (conf,
-                          &e,
-                          "{s?{s?i}}",
-                          "job-manager",
-                            "journal-size-limit", &size_limit) < 0)
-        return errprintf (error,
-                          "job-manager.journal-size-limit: %s",
-                          e.text);
-    if (size_limit > 0) {
-        journal->size_limit = size_limit;
-        /* Drop some entries if the journal size is reduced below
-         * what is currently stored.
-         */
-        while (zlist_size (journal->events) > journal->size_limit)
-            zlist_remove (journal->events, zlist_head (journal->events));
-    }
-    return 1; // indicates to conf.c that callback wants updates
-}
-
 void journal_ctx_destroy (struct journal *journal)
 {
     if (journal) {
         int saved_errno = errno;
         flux_t *h = journal->ctx->h;
-
-        conf_unregister_callback (journal->ctx->conf, journal_parse_config);
 
         flux_msg_handler_delvec (journal->handlers);
         if (journal->listeners) {
@@ -302,8 +282,6 @@ void journal_ctx_destroy (struct journal *journal)
             }
             flux_msglist_destroy (journal->listeners);
         }
-        if (journal->events)
-            zlist_destroy (&journal->events);
         free (journal);
         errno = saved_errno;
     }
@@ -328,7 +306,6 @@ static const struct flux_msg_handler_spec htab[] = {
 struct journal *journal_ctx_create (struct job_manager *ctx)
 {
     struct journal *journal;
-    flux_error_t error;
 
     if (!(journal = calloc (1, sizeof (*journal))))
         return NULL;
@@ -337,24 +314,7 @@ struct journal *journal_ctx_create (struct job_manager *ctx)
         goto error;
     if (!(journal->listeners = flux_msglist_create ()))
         goto error;
-    if (!(journal->events = zlist_new ()))
-        goto nomem;
-    journal->size_limit = DEFAULT_JOURNAL_SIZE_LIMIT;
-
-    if (conf_register_callback (ctx->conf,
-                                &error,
-                                journal_parse_config,
-                                journal) < 0) {
-        flux_log (ctx->h,
-                  LOG_ERR,
-                  "error parsing job-manager config: %s",
-                  error.text);
-        goto error;
-    }
-
     return journal;
-nomem:
-    errno = ENOMEM;
 error:
     journal_ctx_destroy (journal);
     return NULL;

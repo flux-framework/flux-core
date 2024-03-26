@@ -791,7 +791,6 @@ int event_job_process_entry (struct event *event,
                              json_t *entry)
 {
     flux_job_state_t old_state = job->state;
-    int eventlog_seq = job->eventlog_seq;
     const char *name;
     json_t *context;
 
@@ -817,27 +816,13 @@ int event_job_process_entry (struct event *event,
         return -1;
     }
 
-    /*  Journal event sequence should match actual sequence of events
-     *   in the job eventlog, so set eventlog_seq to -1 with
-     *   EVENT_NO_COMMIT and do not advance job->eventlog_seq.
-     */
-    if ((flags & EVENT_NO_COMMIT))
-        eventlog_seq = -1;
-
-    /* call before eventlog_seq increment below */
     if (journal_process_event (event->ctx->journal,
                                job->id,
-                               eventlog_seq,
                                name,
                                entry) < 0)
         return -1;
     if (event_job_update (job, entry) < 0) // modifies job->state
         return -1;
-    /*
-     *  Only advance eventlog_seq if one was set for this job
-     */
-    if (eventlog_seq != -1)
-        job->eventlog_seq++;
     if (event_job_cache (event, job, name) < 0)
         return -1;
     if (!(flags & EVENT_NO_COMMIT)

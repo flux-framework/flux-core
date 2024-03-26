@@ -267,8 +267,6 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
          */
         if (index == 0 && version == -1)
             job->state = FLUX_JOB_STATE_DEPEND;
-
-        job->eventlog_seq++;
     }
 
     if (job->state == FLUX_JOB_STATE_NEW) {
