@@ -82,6 +82,7 @@ The full list of available args includes the following:
 name       type description
 ========== ==== ==========================================
 jobspec    o    jobspec with environment redacted
+R          o    R with scheduling key redacted (RUN state or later)
 id         I    jobid
 state      i    current job state
 prev_state i    previous state (``job.state.*`` callbacks)
@@ -207,6 +208,11 @@ job.state.priority
   a plugin should arrange for the priority to be set asynchronously using 
   ``flux_jobtap_reprioritize_job()``. See the :ref:`priority` section
   for more detailed information about plugin management of job priority.
+
+job.state.sched
+  In the callback for ``FLUX_JOB_STATE_SCHED`` a plugin may set ``R``
+  in output args. In this case, if an ``R`` is not already assigned, then
+  this will force ``R`` for the current job and bypass the scheduler.
 
 job.priority.get
   The job manager calls the ``job.priority.get`` topic whenever it wants
