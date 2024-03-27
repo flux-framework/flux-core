@@ -74,7 +74,9 @@ static bool gc_threshold_check (flux_t *h, optparse_t *p)
     get_gc_threshold (h, &gc_threshold);
 
     if (gc_threshold > 0 && version > gc_threshold) {
-        if (optparse_hasopt (p, "yes") || optparse_hasopt (p, "no")) {
+        if (optparse_hasopt (p, "yes")
+            || optparse_hasopt (p, "no")
+            || optparse_hasopt (p, "skip-gc")) {
             if (optparse_hasopt (p, "yes"))
                 rc = true;
             else
@@ -143,6 +145,11 @@ static int subcmd (optparse_t *p, int ac, char *av[])
     if (optparse_hasopt (p, "background"))
         flags &= ~FLUX_RPC_STREAMING;
 
+    if (optparse_hasopt (p, "skip-gc")) {
+        if (flux_attr_set (h, "content.dump", "") < 0)
+            log_err_exit ("error clearing content.dump attribute");
+    }
+
     if (optparse_hasopt (p, "gc")
         || optparse_hasopt (p, "dump")
         || gc_threshold_check (h, p)) {
@@ -176,6 +183,9 @@ static int subcmd (optparse_t *p, int ac, char *av[])
 }
 
 static struct optparse_option opts[] = {
+    { .name = "skip-gc", .has_arg = 0,
+      .usage = "Skip KVS garbage collection this time, if already enabled",
+    },
     { .name = "gc", .has_arg = 0,
       .usage = "Garbage collect KVS (short for --dump=auto)",
     },
