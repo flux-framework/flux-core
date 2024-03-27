@@ -26,6 +26,8 @@ AM_MAINTAINER_MODE([enable])
 
 AC_DEFINE([_GNU_SOURCE], 1,
           [Define _GNU_SOURCE so that we get all necessary prototypes])
+AC_DEFINE([EV_WALK_ENABLE], 1,
+          [Define EV_WALK_ENABLE to enable ev_walk])
 
 ##
 # Generate project versions from PACKAGE_VERSION (set from git describe above)
