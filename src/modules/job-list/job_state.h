@@ -58,6 +58,8 @@ struct job_state_ctx {
 
     /* stream of job events from the job-manager */
     flux_future_t *events;
+
+    bool initialized;
 };
 
 struct job_state_ctx *job_state_create (struct idsync_ctx *isctx);
