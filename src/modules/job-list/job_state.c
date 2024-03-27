@@ -274,7 +274,7 @@ static void update_job_state_and_list (struct job_state_ctx *jsctx,
                         job->list_handle,
                         search_direction (job));
 
-    idsync_check_waiting_id (jsctx->isctx, job);
+    idsync_check_waiting_id (jsctx->ctx->isctx, job);
 }
 
 static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
@@ -1382,16 +1382,16 @@ error:
     return NULL;
 }
 
-struct job_state_ctx *job_state_create (struct idsync_ctx *isctx)
+struct job_state_ctx *job_state_create (struct list_ctx *ctx)
 {
     struct job_state_ctx *jsctx = NULL;
 
     if (!(jsctx = calloc (1, sizeof (*jsctx)))) {
-        flux_log_error (isctx->h, "calloc");
+        flux_log_error (ctx->h, "calloc");
         return NULL;
     }
-    jsctx->h = isctx->h;
-    jsctx->isctx = isctx;
+    jsctx->h = ctx->h;
+    jsctx->ctx = ctx;
 
     /* Index is the primary data structure holding the job data
      * structures.  It is responsible for destruction.  Lists only

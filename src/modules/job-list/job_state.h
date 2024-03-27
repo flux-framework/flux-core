@@ -40,7 +40,7 @@
 
 struct job_state_ctx {
     flux_t *h;
-    struct idsync_ctx *isctx;
+    struct list_ctx *ctx;
 
     zhashx_t *index;
     zlistx_t *pending;
@@ -62,7 +62,7 @@ struct job_state_ctx {
     bool initialized;
 };
 
-struct job_state_ctx *job_state_create (struct idsync_ctx *isctx);
+struct job_state_ctx *job_state_create (struct list_ctx *ctx);
 
 void job_state_destroy (void *data);
 

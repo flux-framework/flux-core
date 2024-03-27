@@ -361,7 +361,7 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
         if (!(job = zhashx_lookup (jsctx->index, &isd->id))
             || job->state == FLUX_JOB_STATE_NEW) {
             /* Must wait for job-list to see state change */
-            if (idsync_wait_valid (jsctx->isctx, isd) < 0)
+            if (idsync_wait_valid (jsctx->ctx->isctx, isd) < 0)
                 flux_log_error (jsctx->h, "%s: idsync_wait_valid", __FUNCTION__);
             return;
         }
@@ -383,7 +383,7 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
 
 cleanup:
     /* will free isd memory */
-    idsync_check_id_valid_cleanup (jsctx->isctx, isd);
+    idsync_check_id_valid_cleanup (jsctx->ctx->isctx, isd);
     return;
 }
 
@@ -395,7 +395,7 @@ int check_id_valid (struct job_state_ctx *jsctx,
 {
     struct idsync_data *isd = NULL;
 
-    if (!(isd = idsync_check_id_valid (jsctx->isctx,
+    if (!(isd = idsync_check_id_valid (jsctx->ctx->isctx,
                                        id,
                                        msg,
                                        attrs,
@@ -457,7 +457,7 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
         || job->state == FLUX_JOB_STATE_NEW) {
         if (stall) {
             /* Must wait for job-list to see state change */
-            if (idsync_wait_valid_id (jsctx->isctx, id, msg, attrs, state) < 0) {
+            if (idsync_wait_valid_id (jsctx->ctx->isctx, id, msg, attrs, state) < 0) {
                 flux_log_error (jsctx->h, "%s: idsync_wait_valid_id",
                                 __FUNCTION__);
                 return NULL;
