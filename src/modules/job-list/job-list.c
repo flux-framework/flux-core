@@ -200,7 +200,7 @@ static struct list_ctx *list_ctx_create (flux_t *h)
         goto error;
     if (!(ctx->isctx = idsync_ctx_create (ctx->h)))
         goto error;
-    if (!(ctx->jsctx = job_state_create (ctx->isctx)))
+    if (!(ctx->jsctx = job_state_create (ctx)))
         goto error;
     return ctx;
 error:
