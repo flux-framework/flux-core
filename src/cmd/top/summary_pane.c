@@ -23,6 +23,8 @@
 
 #include "top.h"
 
+#define DEFAULT_RESOURCE_LIST_RPC "resource.sched-status"
+
 static const struct dimension win_dim = { 0, 0, 80, 6 };
 static const struct dimension level_dim = { 0, 0, 2, 1 };
 static const struct dimension title_dim = { 6, 0, 73, 1 };
@@ -63,6 +65,7 @@ struct summary_pane {
     uid_t owner;
     bool show_details;
     const char *instance_version;
+    const char *resource_rpc;
     double expiration;
     struct stats stats;
     struct resource_count node;
@@ -408,7 +411,7 @@ static void resource_continuation (flux_future_t *f, void *arg)
 
     if (flux_rpc_get_unpack (f, "o", &o) < 0) {
         if (errno != ENOSYS) /* Instance may not be up yet */
-            fatal (errno, "resource.sched-status RPC failed");
+            fatal (errno, "%s RPC failed", sum->resource_rpc);
     }
     else {
         json_t *queue_constraint;
@@ -432,7 +435,7 @@ static void resource_continuation (flux_future_t *f, void *arg)
                                &sum->core.down,
                                &sum->gpu.down,
                                queue_constraint) < 0)
-            fatal (0, "error decoding resource.sched-status RPC response");
+            fatal (0, "error decoding %s RPC response", sum->resource_rpc);
     }
     flux_future_destroy (f);
     sum->f_resource = NULL;
@@ -532,17 +535,60 @@ void summary_pane_heartbeat (struct summary_pane *sum)
     flux_watcher_start (sum->heartblink);
 }
 
+static void resource_retry_cb (flux_future_t *f, void *arg)
+{
+    flux_future_t *result = arg;
+    flux_future_fulfill_with (result, f);
+    flux_future_destroy (f);
+}
+
+static void resource_enosys_check_cb (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+    flux_future_t *fretry = NULL;
+    flux_future_t *result = arg;
+
+    if (flux_future_get (f, NULL) == 0 || errno != ENOSYS) {
+        flux_future_fulfill_with (result, f);
+        return;
+    }
+    /*  The RPC failed with ENOSYS. Retry with sched.resource-status:
+     */
+    if (!(fretry = flux_rpc (h, "sched.resource-status", NULL, 0, 0))
+        || flux_future_then (fretry, -1., resource_retry_cb, result) < 0) {
+        flux_future_fulfill_error (result, errno, NULL);
+        flux_future_destroy (fretry);
+    }
+}
+
+flux_future_t *resource_sched_status (struct summary_pane *sum)
+{
+    flux_future_t *result = NULL;
+    flux_future_t *f = NULL;
+
+    /* Create empty future to contain result from either the default resource
+     * list topic string or the sched.resource-status RPC:
+     */
+    if (!(result = flux_future_create (NULL, NULL))
+        || !(f = flux_rpc (sum->top->h, sum->resource_rpc, NULL, 0, 0))
+        || flux_future_then (f, -1., resource_enosys_check_cb, result) < 0)
+        goto error;
+
+    flux_future_set_flux (result, sum->top->h);
+    return result;
+error:
+    flux_future_destroy (result);
+    flux_future_destroy (f);
+    return NULL;
+}
+
 /* Send a query.
  * If there's already one pending, do nothing.
  */
 void summary_pane_query (struct summary_pane *sum)
 {
     if (!sum->f_resource) {
-        if (!(sum->f_resource = flux_rpc (sum->top->h,
-                                          "resource.sched-status",
-                                          NULL,
-                                          0,
-                                          0))
+        if (!(sum->f_resource = resource_sched_status (sum))
             || flux_future_then (sum->f_resource,
                                  -1,
                                  resource_continuation,
@@ -606,6 +652,9 @@ struct summary_pane *summary_pane_create (struct top *top)
     sum->owner = get_instance_attr_int (top->h, "security.owner");
     if (sum->owner == getuid ())
         sum->show_details = true;
+
+    if (!(sum->resource_rpc = getenv ("FLUX_RESOURCE_LIST_RPC")))
+        sum->resource_rpc = DEFAULT_RESOURCE_LIST_RPC;
 
     summary_pane_query (sum);
     summary_pane_draw (sum);
