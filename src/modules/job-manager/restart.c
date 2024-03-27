@@ -259,6 +259,7 @@ done:
 static int restart_map_cb (struct job *job, void *arg, flux_error_t *error)
 {
     struct job_manager *ctx = arg;
+    flux_job_state_t state = job->state;
 
     if (zhashx_insert (ctx->active_jobs, &job->id, job) < 0) {
         errprintf (error,
@@ -272,7 +273,8 @@ static int restart_map_cb (struct job *job, void *arg, flux_error_t *error)
         wait_notify_active (ctx->wait, job);
     if (event_job_action (ctx->event, job) < 0) {
         flux_log_error (ctx->h,
-                        "replay warning: %s action failed on job %s",
+                        "replay warning: %s->%s action failed on job %s",
+                        flux_job_statetostr (state, "L"),
                         flux_job_statetostr (job->state, "L"),
                         idf58 (job->id));
     }
