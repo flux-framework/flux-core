@@ -260,6 +260,11 @@ AM_CHECK_PYMOD(yaml,
                ,
                [AC_MSG_ERROR([could not find python module yaml, version 3.10+ required])]
                )
+AM_CHECK_PYMOD(ply,
+               [Version(ply.__version__) >= Version ('3.9')],
+               ,
+               [AC_MSG_ERROR([could not find python module ply, version 3.9+ required])]
+               )
 
 AS_IF([test "x$enable_docs" != "xno"], [
             AM_CHECK_PYMOD(sphinx,
