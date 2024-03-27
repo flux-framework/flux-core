@@ -23,6 +23,7 @@ ExecStart=/bin/bash -c '\
   -Sbroker.quorum-timeout=none \
   -Sbroker.exit-norestart=42 \
   -Sbroker.sd-notify=1 \
+  -Scontent.dump=auto \
   -Scontent.restore=auto \
 '
 SyslogIdentifier=flux
