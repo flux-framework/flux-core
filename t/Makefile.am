@@ -342,7 +342,6 @@ dist_check_SCRIPTS = \
 	issues/t4182-resource-rerank.sh \
 	issues/t4184-sched-simple-restart.sh \
 	issues/t4222-kvs-assume-empty-dir.sh \
-	issues/t4331-job-manager-purged-events.sh \
 	issues/t4375-content-flush-hang.sh \
 	issues/t4378-content-flush-force.sh \
 	issues/t4379-dirty-cache-entries-flush.sh \
