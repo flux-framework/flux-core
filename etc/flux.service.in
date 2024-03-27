@@ -4,7 +4,7 @@ Wants=munge.service
 
 [Service]
 Type=notify
-NotifyAccess=main
+NotifyAccess=all
 TimeoutStopSec=90
 KillMode=mixed
 ExecStart=/bin/bash -c '\
