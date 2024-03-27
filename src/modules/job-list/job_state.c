@@ -666,10 +666,18 @@ void job_state_pause_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     struct list_ctx *ctx = arg;
-
+    if (!ctx->jsctx->initialized) {
+        if (flux_msglist_append (ctx->deferred_requests, msg) < 0)
+            goto error;
+        return;
+    }
     ctx->jsctx->pause = true;
 
     if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to pause request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "error responding to pause request");
 }
 
@@ -679,6 +687,11 @@ void job_state_unpause_cb (flux_t *h, flux_msg_handler_t *mh,
     struct list_ctx *ctx = arg;
     const flux_msg_t *resp;
 
+    if (!ctx->jsctx->initialized) {
+        if (flux_msglist_append (ctx->deferred_requests, msg) < 0)
+            goto error;
+        return;
+    }
     resp = flux_msglist_first (ctx->jsctx->backlog);
     while (resp) {
         if (journal_process_events (ctx->jsctx, resp) < 0)
@@ -1328,6 +1341,7 @@ static void job_events_journal_continuation (flux_future_t *f, void *arg)
             }
         }
         jsctx->initialized = true;
+        requeue_deferred_requests (jsctx->ctx);
         flux_future_reset (f);
         return;
     }

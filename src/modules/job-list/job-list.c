@@ -43,6 +43,13 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct list_ctx *ctx = arg;
+
+    if (!ctx->jsctx->initialized) {
+        if (flux_msglist_append (ctx->deferred_requests, msg) < 0)
+            goto error;
+        return;
+    }
+
     int pending = zlistx_size (ctx->jsctx->pending);
     int running = zlistx_size (ctx->jsctx->running);
     int inactive = zlistx_size (ctx->jsctx->inactive);
@@ -58,6 +65,10 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                            "lookups", idsync_lookups,
                            "waits", idsync_waits,
                            "stats_watchers", stats_watchers) < 0)
+        flux_log_error (h, "error responding to stats-get request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "error responding to stats-get request");
 }
 
@@ -89,6 +100,17 @@ static void purge_cb (flux_t *h,
         }
     }
     flux_log (h, LOG_DEBUG, "purged %d inactive jobs", count);
+}
+
+void requeue_deferred_requests (struct list_ctx *ctx)
+{
+    const flux_msg_t *msg;
+
+    while ((msg = flux_msglist_pop (ctx->deferred_requests))) {
+        if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
+            flux_log_error (ctx->h, "error requeuing deferred request");
+        flux_msg_decref (msg);
+    }
 }
 
 static void disconnect_cb (flux_t *h,
@@ -179,6 +201,7 @@ static void list_ctx_destroy (struct list_ctx *ctx)
     if (ctx) {
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
+        flux_msglist_destroy (ctx->deferred_requests);
         if (ctx->jsctx)
             job_state_destroy (ctx->jsctx);
         if (ctx->isctx)
@@ -201,6 +224,8 @@ static struct list_ctx *list_ctx_create (flux_t *h)
     if (!(ctx->isctx = idsync_ctx_create (ctx->h)))
         goto error;
     if (!(ctx->jsctx = job_state_create (ctx)))
+        goto error;
+    if (!(ctx->deferred_requests = flux_msglist_create ()))
         goto error;
     return ctx;
 error:

@@ -262,6 +262,11 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
     struct state_constraint *statec = NULL;
     flux_error_t error;
 
+    if (!ctx->jsctx->initialized) {
+        if (flux_msglist_append (ctx->deferred_requests, msg) < 0)
+            goto error;
+        return;
+    }
     if (flux_request_unpack (msg, NULL, "{s:i s:o s?F s?o}",
                              "max_entries", &max_entries,
                              "attrs", &attrs,
@@ -482,6 +487,11 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
     int valid_states = FLUX_JOB_STATE_ACTIVE | FLUX_JOB_STATE_INACTIVE;
     bool stall = false;
 
+    if (!ctx->jsctx->initialized) {
+        if (flux_msglist_append (ctx->deferred_requests, msg) < 0)
+            goto error;
+        return;
+    }
     if (flux_request_unpack (msg, NULL, "{s:I s:o s?i}",
                              "id", &id,
                              "attrs", &attrs,
@@ -546,10 +556,16 @@ static int list_attrs_append (json_t *a, const char *attr)
 void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
+    struct list_ctx *ctx = arg;
     const char **attrs;
-    json_t *a;
+    json_t *a = NULL;
     int i;
 
+    if (!ctx->jsctx->initialized) {
+        if (flux_msglist_append (ctx->deferred_requests, msg) < 0)
+            goto error;
+        return;
+    }
     if (!(a = json_array ())) {
         errno = ENOMEM;
         goto error;
