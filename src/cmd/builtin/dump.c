@@ -11,6 +11,9 @@
 #if HAVE_CONFIG_H
 # include <config.h>
 #endif
+#if HAVE_LIBSYSTEMD
+#include <systemd/sd-daemon.h>
+#endif
 #include <unistd.h>
 #include <stdarg.h>
 #include <jansson.h>
@@ -33,6 +36,7 @@ static void dump_treeobj (struct archive *ar,
                           const char *path,
                           json_t *treeobj);
 
+static bool sd_notify_flag;
 static bool verbose;
 static bool quiet;
 static int content_flags;
@@ -49,12 +53,24 @@ static void progress (int delta_keys)
         && !quiet
         && (keycount % 100 == 0 || keycount < 10))
         fprintf (stderr, "\rflux-dump: archived %d keys", keycount);
+#if HAVE_LIBSYSTEMD
+    if (sd_notify_flag
+        && (keycount % 100 == 0 || keycount < 10)) {
+        sd_notifyf (0, "EXTEND_TIMEOUT_USEC=%d", 10000000); // 10s
+        sd_notifyf (0, "STATUS=flux-dump(1) has archived %d keys", keycount);
+    }
+#endif
 }
 
 static void progress_end (void)
 {
     if (!quiet && !verbose)
         fprintf (stderr, "\rflux-dump: archived %d keys\n", keycount);
+#if HAVE_LIBSYSTEMD
+    if (sd_notify_flag) {
+        sd_notifyf (0, "STATUS=flux-dump(1) has archived %d keys", keycount);
+    }
+#endif
 }
 
 static struct archive *dump_create (const char *outfile)
@@ -369,6 +385,15 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
     dump_gid = getgid ();
 
     h = builtin_get_flux_handle (p);
+
+    /* If the broker is using sd_notify(3) to talk to systemd during
+     * start/stop, we can use it to ensure systemd doesn't kill us
+     * while dumping during shutdown.  See flux-framework/flux-core#5778.
+     */
+    const char *s;
+    if ((s = flux_attr_get (h, "broker.sd-notify")) && !streq (s, "0"))
+        sd_notify_flag = true;
+
     ar = dump_create (outfile);
     if (optparse_hasopt (p, "checkpoint")) {
         flux_future_t *f;
