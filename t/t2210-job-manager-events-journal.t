@@ -194,7 +194,7 @@ test_expect_success NO_CHAIN_LINT 'job-manager: events-journal contains older jo
 	jobid2=`flux job submit basic.json | flux job id`
 	flux job wait-event ${jobid1} clean
 	flux job wait-event ${jobid2} clean
-	$jq -j -c -n "{allow:{depend:1, clean:1}}" \
+	$jq -j -c -n "{full:true, allow:{depend:1, clean:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events7.out &
 	pid=$! &&
 	jobid3=`flux job submit basic.json | flux job id` &&
