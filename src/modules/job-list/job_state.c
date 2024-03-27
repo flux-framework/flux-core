@@ -1327,11 +1327,11 @@ static void job_events_journal_continuation (flux_future_t *f, void *arg)
                 goto error;
             }
         }
-        jsctx->pause = false;
+        jsctx->initialized = true;
         flux_future_reset (f);
         return;
     }
-    if (jsctx->pause) {
+    if (!jsctx->initialized || jsctx->pause) {
         if (flux_msglist_append (jsctx->backlog, msg) < 0) {
             flux_log_error (jsctx->h, "error storing journal backlog");
             goto error;
@@ -1376,14 +1376,6 @@ static flux_future_t *job_events_journal (struct job_state_ctx *jsctx)
                   future_strerror (f, errno));
         goto error;
     }
-    /* Set 'pause' to defer processing of the initial events, so we can
-     * clear the message pipes as quickly as possible in the event of a
-     * large number of jobs in the system.  The pause flag is cleared and
-     * the backlog is processed once job-manager sends a response
-     * with id of FLUX_JOBID_ANY as a sentinel.
-     */
-    jsctx->pause = true;
-
     return f;
 error:
     flux_future_destroy (f);
