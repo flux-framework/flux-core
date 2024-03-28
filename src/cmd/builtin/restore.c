@@ -11,6 +11,9 @@
 #if HAVE_CONFIG_H
 # include <config.h>
 #endif
+#if HAVE_LIBSYSTEMD
+#include <systemd/sd-daemon.h>
+#endif
 #include <unistd.h>
 #include <stdarg.h>
 #include <jansson.h>
@@ -35,6 +38,7 @@
 
 #define BLOCKSIZE 10240 // taken from libarchive example
 
+static bool sd_notify_flag;
 static bool verbose;
 static bool quiet;
 static int content_flags;
@@ -56,6 +60,13 @@ static void progress (int delta_blob, int delta_keys)
                  keycount,
                  blobcount);
     }
+#if HAVE_LIBSYSTEMD
+    if (sd_notify_flag
+        && (keycount % 100 == 0 || keycount < 10)) {
+        sd_notifyf (0, "EXTEND_TIMEOUT_USEC=%d", 10000000); // 10s
+        sd_notifyf (0, "STATUS=flux-restore(1) has restored %d keys", keycount);
+    }
+#endif
 }
 static void progress_end (void)
 {
@@ -65,6 +76,11 @@ static void progress_end (void)
                  keycount,
                  blobcount);
     }
+#if HAVE_LIBSYSTEMD
+    if (sd_notify_flag) {
+        sd_notifyf (0, "STATUS=flux-restore(1) has restored %d keys", keycount);
+    }
+#endif
 }
 
 static struct archive *restore_create (const char *infile)
@@ -377,6 +393,11 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
     blob_size_limit = optparse_get_size_int (p, "size-limit", "0");
 
     h = builtin_get_flux_handle (p);
+
+    const char *s;
+    if ((s = flux_attr_get (h, "broker.sd-notify")) && !streq (s, "0"))
+        sd_notify_flag = true;
+
     ar = restore_create (infile);
 
     if (optparse_hasopt (p, "checkpoint")) {
