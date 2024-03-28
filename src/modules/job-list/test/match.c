@@ -19,6 +19,11 @@
 #include "src/modules/job-list/match.h"
 #include "ccan/str/str.h"
 
+/* normally created by job-list "main code" and passed to job_match().
+ * we create a global one here and initialize it manually.
+ */
+struct match_ctx mctx = { .h = NULL, .max_comparisons = 0 };
+
 static void list_constraint_create_corner_case (const char *str,
                                                 const char *fmt,
                                                 ...)
@@ -37,7 +42,7 @@ static void list_constraint_create_corner_case (const char *str,
     vsnprintf(buf, sizeof (buf), fmt, ap);
     va_end (ap);
 
-    c = list_constraint_create (jc, &error);
+    c = list_constraint_create (&mctx, jc, &error);
 
     ok (c == NULL, "list_constraint_create fails on %s", buf);
     diag ("error: %s", error.text);
@@ -46,8 +51,13 @@ static void list_constraint_create_corner_case (const char *str,
 
 static void test_corner_case (void)
 {
-    ok (job_match (NULL, NULL) == false,
-        "job_match returns false on NULL inputs");
+    ok (job_match (NULL, NULL, NULL) < 0
+        && errno == EINVAL,
+        "job_match returns EINVAL on NULL inputs");
+
+    ok (list_constraint_create (NULL, NULL, NULL) == NULL
+        && errno == EINVAL,
+        "list_constraint_create fails on all NULL inputs");
 
     list_constraint_create_corner_case ("{\"userid\":[1], \"name\":[\"foo\"] }",
                                         "object with too many keys");
@@ -141,7 +151,7 @@ static struct list_constraint *create_list_constraint (const char *constraint)
             BAIL_OUT ("json constraint invalid: %s", jerror.text);
     }
 
-    if (!(c = list_constraint_create (jc, &error)))
+    if (!(c = list_constraint_create (&mctx, jc, &error)))
         BAIL_OUT ("list constraint create fail: %s", error.text);
 
     json_decref (jc);
@@ -152,15 +162,16 @@ static void test_basic_special_cases (void)
 {
     struct job *job = setup_job (0, NULL, NULL, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0);
     struct list_constraint *c;
-    bool rv;
+    flux_error_t error;
+    int rv;
 
     c = create_list_constraint ("{}");
-    rv = job_match (job, c);
+    rv = job_match (job, c, &error);
     ok (rv == true, "empty object works as expected");
     list_constraint_destroy (c);
 
     c = create_list_constraint (NULL);
-    rv = job_match (job, c);
+    rv = job_match (job, c, &error);
     ok (rv == true, "NULL constraint works as expected");
     list_constraint_destroy (c);
 
@@ -169,7 +180,7 @@ static void test_basic_special_cases (void)
 
 struct basic_userid_test {
     uint32_t userid;
-    bool expected;
+    int expected;
 };
 
 struct basic_userid_constraint_test {
@@ -230,7 +241,8 @@ static void test_basic_userid (void)
         c = create_list_constraint (ctests->constraint);
         while (tests->userid) {
             struct job *job;
-            bool rv;
+            flux_error_t error;
+            int rv;
             job = setup_job (tests->userid,
                              NULL,
                              NULL,
@@ -241,7 +253,7 @@ static void test_basic_userid (void)
                              0.0,
                              0.0,
                              0.0);
-            rv = job_match (job, c);
+            rv = job_match (job, c, &error);
             ok (rv == tests->expected,
                 "basic userid job match test #%d/#%d",
                 index, index2);
@@ -258,7 +270,7 @@ static void test_basic_userid (void)
 
 struct basic_name_test {
     const char *name;
-    bool expected;
+    int expected;
     bool end;                   /* name can be NULL */
 };
 
@@ -316,7 +328,8 @@ static void test_basic_name (void)
         c = create_list_constraint (ctests->constraint);
         while (!tests->end) {
             struct job *job;
-            bool rv;
+            flux_error_t error;
+            int rv;
             job = setup_job (0,
                              tests->name,
                              NULL,
@@ -327,7 +340,7 @@ static void test_basic_name (void)
                              0.0,
                              0.0,
                              0.0);
-            rv = job_match (job, c);
+            rv = job_match (job, c, &error);
             ok (rv == tests->expected,
                 "basic name job match test #%d/#%d",
                 index, index2);
@@ -344,7 +357,7 @@ static void test_basic_name (void)
 
 struct basic_queue_test {
     const char *queue;
-    bool expected;
+    int expected;
     bool end;                   /* queue can be NULL */
 };
 
@@ -402,7 +415,8 @@ static void test_basic_queue (void)
         c = create_list_constraint (ctests->constraint);
         while (!tests->end) {
             struct job *job;
-            bool rv;
+            flux_error_t error;
+            int rv;
             job = setup_job (0,
                              NULL,
                              tests->queue,
@@ -413,7 +427,7 @@ static void test_basic_queue (void)
                              0.0,
                              0.0,
                              0.0);
-            rv = job_match (job, c);
+            rv = job_match (job, c, &error);
             ok (rv == tests->expected,
                 "basic queue job match test #%d/#%d",
                 index, index2);
@@ -430,7 +444,7 @@ static void test_basic_queue (void)
 
 struct basic_states_test {
     flux_job_state_t state;
-    bool expected;
+    int expected;
 };
 
 struct basic_states_constraint_test {
@@ -492,7 +506,8 @@ static void test_basic_states (void)
         c = create_list_constraint (ctests->constraint);
         while (tests->state) {
             struct job *job;
-            bool rv;
+            flux_error_t error;
+            int rv;
             job = setup_job (0,
                              NULL,
                              NULL,
@@ -503,7 +518,7 @@ static void test_basic_states (void)
                              0.0,
                              0.0,
                              0.0);
-            rv = job_match (job, c);
+            rv = job_match (job, c, &error);
             ok (rv == tests->expected,
                 "basic states job match test #%d/#%d",
                 index, index2);
@@ -521,7 +536,7 @@ static void test_basic_states (void)
 struct basic_results_test {
     flux_job_state_t state;
     flux_job_result_t result;
-    bool expected;
+    int expected;
 };
 
 struct basic_results_constraint_test {
@@ -585,7 +600,8 @@ static void test_basic_results (void)
         c = create_list_constraint (ctests->constraint);
         while (tests->state) {  /* result can be 0, iterate on state > 0 */
             struct job *job;
-            bool rv;
+            flux_error_t error;
+            int rv;
             job = setup_job (0,
                              NULL,
                              NULL,
@@ -596,7 +612,7 @@ static void test_basic_results (void)
                              0.0,
                              0.0,
                              0.0);
-            rv = job_match (job, c);
+            rv = job_match (job, c, &error);
             ok (rv == tests->expected,
                 "basic results job match test #%d/#%d",
                 index, index2);
@@ -619,7 +635,7 @@ struct basic_timestamp_test {
     double t_run;
     double t_cleanup;
     double t_inactive;
-    bool expected;
+    int expected;
     bool end;                   /* timestamps can be 0 */
 };
 
@@ -884,7 +900,8 @@ static void test_basic_timestamp (void)
         c = create_list_constraint (ctests->constraint);
         while (!tests->end) {
             struct job *job;
-            bool rv;
+            flux_error_t error;
+            int rv;
             job = setup_job (0,
                              NULL,
                              NULL,
@@ -897,7 +914,7 @@ static void test_basic_timestamp (void)
                              tests->t_inactive);
             /* special for legacy corner case */
             job->submit_version = tests->submit_version;
-            rv = job_match (job, c);
+            rv = job_match (job, c, &error);
             ok (rv == tests->expected,
                 "basic timestamp job match test #%d/#%d",
                 index, index2);
@@ -915,7 +932,7 @@ static void test_basic_timestamp (void)
 struct basic_conditionals_test {
     uint32_t userid;
     const char *name;
-    bool expected;
+    int expected;
 };
 
 struct basic_conditionals_constraint_test {
@@ -1090,7 +1107,8 @@ static void test_basic_conditionals (void)
         c = create_list_constraint (ctests->constraint);
         while (tests->userid) {
             struct job *job;
-            bool rv;
+            flux_error_t error;
+            int rv;
             job = setup_job (tests->userid,
                              tests->name,
                              NULL,
@@ -1101,7 +1119,7 @@ static void test_basic_conditionals (void)
                              0.0,
                              0.0,
                              0.0);
-            rv = job_match (job, c);
+            rv = job_match (job, c, &error);
             ok (rv == tests->expected,
                 "basic conditionals job match test #%d/#%d",
                 index, index2);
@@ -1124,7 +1142,7 @@ struct realworld_test {
     flux_job_state_t state;
     flux_job_result_t result;
     double t_inactive;
-    bool expected;
+    int expected;
 };
 
 struct realworld_constraint_test {
@@ -1497,7 +1515,8 @@ static void test_realworld (void)
         c = create_list_constraint (ctests->constraint);
         while (tests->userid) {
             struct job *job;
-            bool rv;
+            flux_error_t error;
+            int rv;
             job = setup_job (tests->userid,
                              tests->name,
                              tests->queue,
@@ -1508,7 +1527,7 @@ static void test_realworld (void)
                              0.0,
                              0.0,
                              tests->t_inactive);
-            rv = job_match (job, c);
+            rv = job_match (job, c, &error);
             ok (rv == tests->expected,
                 "realworld job match test #%d/#%d",
                 index, index2);
