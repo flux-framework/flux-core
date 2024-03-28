@@ -240,7 +240,8 @@ the following conversion flags are supported by :program:`flux jobs`:
 
 **!D**
    convert a timestamp field to ISO8601 date and time (e.g. 2020-01-07T13:31:00).
-   Defaults to empty string if timestamp field does not exist.
+   Defaults to empty string if timestamp field does not exist or the timestamp
+   is 0 (i.e epoch time).
 
 **!d**
    convert a timestamp to a Python datetime object. This allows datetime
