@@ -4,7 +4,7 @@ Wants=munge.service
 
 [Service]
 Type=notify
-NotifyAccess=main
+NotifyAccess=all
 TimeoutStopSec=90
 KillMode=mixed
 ExecStart=/bin/bash -c '\
@@ -23,6 +23,7 @@ ExecStart=/bin/bash -c '\
   -Sbroker.quorum-timeout=none \
   -Sbroker.exit-norestart=42 \
   -Sbroker.sd-notify=1 \
+  -Scontent.dump=auto \
   -Scontent.restore=auto \
 '
 SyslogIdentifier=flux

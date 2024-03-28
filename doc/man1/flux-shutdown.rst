@@ -82,6 +82,13 @@ OPTIONS
    the dump, and the link is removed.  :linux:man8:`systemd-tmpfiles`
    automatically cleans up dump files in ``/var/lib/flux/dump`` after 30 days.
 
+.. option:: --skip-gc
+
+   When garbage collection has been enabled automatically, as indicated
+   by the ``content.dump`` broker attribute, this option disables it
+   during shutdown.  Otherwise it is a preemptive "no" answer to the garbage
+   collection prompt.
+
 .. option:: -y, --yes
 
    Answer yes to any yes/no questions.
