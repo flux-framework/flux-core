@@ -6,15 +6,6 @@ test_description='Test flux job manager journal service'
 
 export FLUX_CONF_DIR=$(pwd)
 
-# set journal-size-limit to something more sensible in testing,
-# otherwise we'll be parsing 100s of entries regularly.  20 is a good
-# number, since it will always cover the prior two jobs that were
-# executed.
-cat >job-manager.toml <<EOF
-[job-manager]
-journal-size-limit = 50
-EOF
-
 test_under_flux 4
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
@@ -203,7 +194,7 @@ test_expect_success NO_CHAIN_LINT 'job-manager: events-journal contains older jo
 	jobid2=`flux job submit basic.json | flux job id`
 	flux job wait-event ${jobid1} clean
 	flux job wait-event ${jobid2} clean
-	$jq -j -c -n "{allow:{depend:1, clean:1}}" \
+	$jq -j -c -n "{full:true, allow:{depend:1, clean:1}}" \
 		| $EVENTS_JOURNAL_STREAM > events7.out &
 	pid=$! &&
 	jobid3=`flux job submit basic.json | flux job id` &&
@@ -236,41 +227,6 @@ test_expect_success NO_CHAIN_LINT 'job-manager: events-journal contains older jo
 	wait $pid
 '
 
-check_event_name_eventlog_seq() {
-	jobid="$1"
-	seq=$2
-	name=$3
-	filename=$4
-	if cat $filename \
-		| $jq -e ".id == ${jobid} and .entry.name == \"${name}\" and .eventlog_seq == ${seq}" \
-		| grep -q "true"
-	then
-		return 0
-	fi
-	return 1
-}
-
-# annotations event below comes from sched-simple scheduler
-test_expect_success NO_CHAIN_LINT 'job-manager: eventlog seqs are correct' '
-	$jq -j -c -n "{}" \
-		| $EVENTS_JOURNAL_STREAM > events9.out &
-	pid=$! &&
-	jobid=`flux job submit basic.json | flux job id` &&
-	wait_event_name ${jobid} clean events9.out &&
-	check_event_name_eventlog_seq ${jobid} 0 submit events9.out &&
-	check_event_name_eventlog_seq ${jobid} 1 validate events9.out &&
-	check_event_name_eventlog_seq ${jobid} 2 depend events9.out &&
-	check_event_name_eventlog_seq ${jobid} 3 priority events9.out &&
-	check_event_name_eventlog_seq ${jobid} -1 annotations events9.out &&
-	check_event_name_eventlog_seq ${jobid} 4 alloc events9.out &&
-	check_event_name_eventlog_seq ${jobid} 5 start events9.out &&
-	check_event_name_eventlog_seq ${jobid} 6 finish events9.out &&
-	check_event_name_eventlog_seq ${jobid} 7 release events9.out &&
-	check_event_name_eventlog_seq ${jobid} 8 free events9.out &&
-	check_event_name_eventlog_seq ${jobid} 9 clean events9.out &&
-	kill -s USR1 $pid &&
-	wait $pid
-'
 test_expect_success 'job-manager: events-journal request fails with EPROTO on empty payload' '
 	$RPC job-manager.events-journal 71 < /dev/null
 '
@@ -290,22 +246,6 @@ test_expect_success 'job-manager: events-journal request fails if deny not an ob
 	$jq -j -c -n "{deny:5}" > cc3.in &&
 	test_must_fail $EVENTS_JOURNAL_STREAM < cc3.in 2> cc3.err &&
 	grep "deny should be an object" cc3.err
-'
-
-test_expect_success 'job-manager: journal-size-limit can be reconfigured' '
-	cat >job-manager.toml <<-EOF &&
-	[job-manager]
-	journal-size-limit = 10
-	EOF
-	flux config reload
-'
-
-test_expect_success 'job-manager: journal-size-limit must be an integer' '
-	cat >job-manager.toml <<-EOF &&
-	[job-manager]
-	journal-size-limit = "not-a-number"
-	EOF
-	test_must_fail flux config reload
 '
 
 test_done

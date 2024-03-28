@@ -2475,6 +2475,19 @@ test_expect_success 'list-id request with invalid input fails with EINVAL(22) (a
 	EOF
 	test_cmp ${name}.expected ${name}.out
 '
+
+# Restart job-list from the KVS.  job-list used to pull in job eventlogs
+# directly from the KVS at startup, but now it gets them via the job manager
+# journal.  Therefore we need to restart the job-manager too, which requires
+# some other things to be restarted to get a functional system.
+restart_from_kvs() {
+	flux module remove job-list
+	flux module reload job-manager
+	flux module reload -f sched-simple
+	flux module reload -f job-exec
+	flux module load job-list
+}
+
 # N.B. we remove annotations from the alloc event in this test, but it could
 # be cached and replayed via the job-manager, so we need to reload it
 # and associated modules too
@@ -2495,11 +2508,7 @@ EOF
 	jobid=`flux submit --wait hostname` &&
 	kvspath=`flux job id --to=kvs ${jobid}` &&
 	flux kvs put -r ${kvspath}.eventlog=- < eventlog_empty_alloc.out &&
-	flux module remove job-list &&
-	flux module reload job-manager &&
-	flux module reload -f sched-simple &&
-	flux module reload -f job-exec &&
-	flux module load job-list &&
+	restart_from_kvs &&
 	flux job list-ids ${jobid} > empty_alloc.out &&
 	cat empty_alloc.out | jq -e ".annotations == null"
 '
@@ -2531,7 +2540,7 @@ EOF
 	jobid=`flux submit --wait --urgency=default hostname` &&
 	kvspath=`flux job id --to=kvs ${jobid}` &&
 	flux kvs put -r ${kvspath}.eventlog=- < eventlog_superfluous_context.out &&
-	flux module reload job-list &&
+	restart_from_kvs &&
 	flux job list-ids ${jobid} > superfluous_context.out &&
 	cat superfluous_context.out | jq -e ".urgency == 8"
 '

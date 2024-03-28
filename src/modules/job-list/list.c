@@ -262,6 +262,11 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
     struct state_constraint *statec = NULL;
     flux_error_t error;
 
+    if (!ctx->jsctx->initialized) {
+        if (flux_msglist_append (ctx->deferred_requests, msg) < 0)
+            goto error;
+        return;
+    }
     if (flux_request_unpack (msg, NULL, "{s:i s:o s?F s?o}",
                              "max_entries", &max_entries,
                              "attrs", &attrs,
@@ -361,7 +366,7 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
         if (!(job = zhashx_lookup (jsctx->index, &isd->id))
             || job->state == FLUX_JOB_STATE_NEW) {
             /* Must wait for job-list to see state change */
-            if (idsync_wait_valid (jsctx->isctx, isd) < 0)
+            if (idsync_wait_valid (jsctx->ctx->isctx, isd) < 0)
                 flux_log_error (jsctx->h, "%s: idsync_wait_valid", __FUNCTION__);
             return;
         }
@@ -383,7 +388,7 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
 
 cleanup:
     /* will free isd memory */
-    idsync_check_id_valid_cleanup (jsctx->isctx, isd);
+    idsync_check_id_valid_cleanup (jsctx->ctx->isctx, isd);
     return;
 }
 
@@ -395,7 +400,7 @@ int check_id_valid (struct job_state_ctx *jsctx,
 {
     struct idsync_data *isd = NULL;
 
-    if (!(isd = idsync_check_id_valid (jsctx->isctx,
+    if (!(isd = idsync_check_id_valid (jsctx->ctx->isctx,
                                        id,
                                        msg,
                                        attrs,
@@ -457,7 +462,7 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
         || job->state == FLUX_JOB_STATE_NEW) {
         if (stall) {
             /* Must wait for job-list to see state change */
-            if (idsync_wait_valid_id (jsctx->isctx, id, msg, attrs, state) < 0) {
+            if (idsync_wait_valid_id (jsctx->ctx->isctx, id, msg, attrs, state) < 0) {
                 flux_log_error (jsctx->h, "%s: idsync_wait_valid_id",
                                 __FUNCTION__);
                 return NULL;
@@ -482,6 +487,11 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
     int valid_states = FLUX_JOB_STATE_ACTIVE | FLUX_JOB_STATE_INACTIVE;
     bool stall = false;
 
+    if (!ctx->jsctx->initialized) {
+        if (flux_msglist_append (ctx->deferred_requests, msg) < 0)
+            goto error;
+        return;
+    }
     if (flux_request_unpack (msg, NULL, "{s:I s:o s?i}",
                              "id", &id,
                              "attrs", &attrs,
@@ -546,10 +556,16 @@ static int list_attrs_append (json_t *a, const char *attr)
 void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
+    struct list_ctx *ctx = arg;
     const char **attrs;
-    json_t *a;
+    json_t *a = NULL;
     int i;
 
+    if (!ctx->jsctx->initialized) {
+        if (flux_msglist_append (ctx->deferred_requests, msg) < 0)
+            goto error;
+        return;
+    }
     if (!(a = json_array ())) {
         errno = ENOMEM;
         goto error;
