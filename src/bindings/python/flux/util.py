@@ -462,6 +462,11 @@ class UtilFormatter(Formatter):
                 else:
                     raise
         elif conv == "D":
+            # the JobInfo class initializes many timestamps to 0.0 if
+            # they are not available.  Treat epoch time as special case
+            # and just return empty string.
+            if not value:
+                return ""
             # As above, but convert to ISO 8601 date time string.
             try:
                 value = datetime.fromtimestamp(value).strftime("%FT%T")
