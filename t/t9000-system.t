@@ -13,6 +13,8 @@ if test -n "$FLUX_ENABLE_SYSTEM_TESTS"; then
 		FLUX_TEST_INSTALLED_PATH=${FLUX_TEST_INSTALLED_PATH:-/usr/bin}
 	fi
 fi
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
 #  Do not run system tests by default unless FLUX_ENABLE_SYSTEM_TESTS
