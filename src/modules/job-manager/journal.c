@@ -22,6 +22,8 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libjob/idf58.h"
+#include "ccan/str/str.h"
 
 #include "conf.h"
 #include "job.h"
@@ -72,22 +74,46 @@ int journal_process_event (struct journal *journal,
                            const char *name,
                            json_t *entry)
 {
+    struct job_manager *ctx = journal->ctx;
     const flux_msg_t *msg;
+    json_t *o;
 
+    if (!(o = json_pack ("{s:I s:[O]}",
+                         "id", id,
+                         "events", entry)))
+        goto error;
+    if (streq (name, "validate")) {
+        struct job *job;
+        if (!(job = zhashx_lookup (ctx->active_jobs, &id))
+            || !job->jobspec_redacted
+            || json_object_set (o, "jobspec", job->jobspec_redacted) < 0)
+            goto error;
+    }
+    else if (streq (name, "alloc")) {
+        struct job *job;
+        if (!(job = zhashx_lookup (ctx->active_jobs, &id))
+            || !job->R_redacted
+            || json_object_set (o, "R", job->R_redacted) < 0)
+            goto error;
+    }
     msg = flux_msglist_first (journal->listeners);
     while (msg) {
         if (allow_deny_check (msg, name)
-            && flux_respond_pack (journal->ctx->h,
-                                  msg,
-                                  "{s:I s:[O]}",
-                                  "id", id,
-                                  "events", entry) < 0) {
-                flux_log_error (journal->ctx->h,
-                                "error responding to"
-                                " job-manager.events-journal request");
+            && flux_respond_pack (ctx->h, msg, "O", o) < 0) {
+            flux_log_error (ctx->h,
+                            "error responding to"
+                            " job-manager.events-journal request");
         }
         msg = flux_msglist_next (journal->listeners);
     }
+    json_decref (o);
+    return 0;
+error:
+    flux_log_error (ctx->h,
+                    "error preparing journal response for %s %s",
+                    idf58 (id),
+                    name);
+    json_decref (o);
     return 0;
 }
 
@@ -101,6 +127,7 @@ static int send_job_events (struct job_manager *ctx,
                             struct job *job)
 {
     json_t *eventlog;
+    json_t *o = NULL;
 
     if (allow_all (msg)) {
         eventlog = json_incref (job->eventlog);
@@ -121,17 +148,27 @@ static int send_job_events (struct job_manager *ctx,
                 goto nomem;
         }
     }
-    if (flux_respond_pack (ctx->h,
-                           msg,
-                           "{s:I s:O}",
-                           "id", job->id,
-                           "events", eventlog) < 0)
+    if (!(o = json_pack ("{s:I s:O}",
+                         "id", job->id,
+                         "events", eventlog)))
+        goto nomem;
+    if (job->jobspec_redacted) {
+        if (json_object_set (o, "jobspec", job->jobspec_redacted) < 0)
+            goto nomem;
+    }
+    if (job->R_redacted) {
+        if (json_object_set (o, "R", job->R_redacted) < 0)
+            goto nomem;
+    }
+    if (flux_respond_pack (ctx->h, msg, "O", o) < 0)
         goto error;
+    json_decref (o);
     json_decref (eventlog);
     return 0;
  nomem:
     errno = ENOMEM;
  error:
+    ERRNO_SAFE_WRAP (json_decref, o);
     ERRNO_SAFE_WRAP (json_decref, eventlog);
     return -1;
 }
