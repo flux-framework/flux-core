@@ -1297,6 +1297,10 @@ static int journal_process_events (struct job_state_ctx *jsctx,
                         "id", &id,
                         "events", &events) < 0)
         return -1;
+    if (!json_is_array (events)) {
+        errno = EPROTO;
+        return -1;
+    }
     json_array_foreach (events, index, value) {
         if (journal_process_event (jsctx, id, value) < 0)
             return -1;
@@ -1310,20 +1314,15 @@ static void job_events_journal_continuation (flux_future_t *f, void *arg)
     struct job_state_ctx *jsctx = arg;
     const flux_msg_t *msg;
     flux_jobid_t id;
-    json_t *events;
 
-    if (flux_future_get (f, (const void **)&msg) < 0
-        || flux_msg_unpack (msg,
-                            "{s:I s:o}",
-                            "id", &id,
-                            "events", &events) < 0) {
-        flux_log_error (jsctx->h, "error unpacking journal response");
-        goto error;
-    }
-
-    if (!json_is_array (events)) {
-        flux_log (jsctx->h, LOG_ERR, "%s: events EPROTO", __FUNCTION__);
-        errno = EPROTO;
+    if (flux_rpc_get_unpack (f, "{s:I}", "id", &id) < 0
+        || flux_future_get (f, (const void **)&msg) < 0) {
+        if (errno == ENODATA) {
+            flux_log (jsctx->h, LOG_INFO, "journal: EOF (exiting)");
+            flux_reactor_stop (flux_get_reactor (jsctx->h));
+            return;
+        }
+        flux_log (jsctx->h, LOG_ERR, "journal: %s", future_strerror (f, errno));
         goto error;
     }
 
