@@ -6,6 +6,7 @@ test_description='Test flux job list services'
 
 . $(dirname $0)/sharness.sh
 
+export FLUX_CONF_DIR=$(pwd)
 test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
@@ -24,6 +25,15 @@ fj_wait_event() {
 wait_jobid_state() {
 	flux job list-ids --wait-state=$2 $1 > /dev/null
 }
+
+test_expect_success 'setup specific fake hostnames' '
+	flux R encode -r 0-3 -c 0-1 -H node[0-3] \
+	   | tr -d "\n" \
+	   | flux kvs put -r resource.R=- &&
+	flux module unload sched-simple &&
+	flux module reload resource noverify &&
+	flux module load sched-simple
+'
 
 test_expect_success 'create helper job submission script' '
 	cat >sleepinf.sh <<-EOT &&
@@ -52,17 +62,11 @@ test_expect_success 'create helper job submission script' '
 # - alternate userid job listing
 
 test_expect_success 'submit jobs for job list testing' '
-	#  Create `hostname` and `sleep` jobspec
-	#  N.B. Used w/ `flux job submit` for serial job submission
-	#  for efficiency (vs serial `flux submit`.
-	#
-	flux submit --dry-run hostname >hostname.json &&
-	flux submit --dry-run --time-limit=5m sleep 600 > sleeplong.json &&
 	#
 	# submit jobs that will complete
 	#
 	for i in $(seq 0 3); do
-		flux job submit hostname.json >> inactiveids
+		flux submit --requires=host:node${i} hostname >> inactiveids
 		fj_wait_event `tail -n 1 inactiveids` clean
 	done &&
 	#
@@ -73,7 +77,7 @@ test_expect_success 'submit jobs for job list testing' '
 	#  Run a job that will fail, copy its JOBID to both inactive and
 	#	failed lists.
 	#
-	! jobid=`flux submit --wait nosuchcommand` &&
+	! jobid=`flux submit --requires=host:node0 --wait nosuchcommand` &&
 	echo $jobid >> inactiveids &&
 	flux job id $jobid > failedids &&
 	#
@@ -83,7 +87,7 @@ test_expect_success 'submit jobs for job list testing' '
 	# N.B. sleepinf.sh and wait-event on job data to workaround
 	# rare job startup race.  See #5210
 	#
-	jobid=`flux submit ./sleepinf.sh` &&
+	jobid=`flux submit --requires=host:node0 ./sleepinf.sh` &&
 	flux job wait-event -W -p guest.output $jobid data &&
 	flux job kill $jobid &&
 	fj_wait_event $jobid clean &&
@@ -97,7 +101,7 @@ test_expect_success 'submit jobs for job list testing' '
 	# N.B. sleepinf.sh and wait-event on job data to workaround
 	# rare job startup race.  See #5210
 	#
-	jobid=`flux submit ./sleepinf.sh` &&
+	jobid=`flux submit --requires=host:node0 ./sleepinf.sh` &&
 	flux job wait-event -W -p guest.output $jobid data &&
 	flux job raise --type=myexception --severity=0 -m "myexception" $jobid &&
 	fj_wait_event $jobid clean &&
@@ -108,28 +112,33 @@ test_expect_success 'submit jobs for job list testing' '
 	#  Run a job that will timeout, copy its JOBID to both inactive and
 	#	timeout lists.
 	#
-	jobid=`flux submit --time-limit=0.5s sleep 30` &&
+	jobid=`flux submit --requires=host:node0 --time-limit=0.5s sleep 30` &&
 	echo $jobid >> inactiveids &&
 	flux job id $jobid > timeout.ids &&
 	fj_wait_event ${jobid} clean &&
 	#
 	#  Submit 8 sleep jobs to fill up resources
 	#
+	#  N.B. no need to specify --requires:host, will be distributed
+	#  evenly
+	#
 	for i in $(seq 0 7); do
-		flux job submit sleeplong.json >> runningids
+		flux submit --time-limit=5m sleep 600 >> runningids
 	done &&
 	tac runningids | flux job id > running.ids &&
 	#
 	#  Submit a set of jobs with misc urgencies
 	#
-	id1=$(flux job submit -u20 hostname.json) &&
-	id2=$(flux job submit	   hostname.json) &&
-	id3=$(flux job submit -u31 hostname.json) &&
-	id4=$(flux job submit -u0  hostname.json) &&
-	id5=$(flux job submit -u20 hostname.json) &&
-	id6=$(flux job submit	   hostname.json) &&
-	id7=$(flux job submit -u31 hostname.json) &&
-	id8=$(flux job submit -u0  hostname.json) &&
+	#  N.B. no need to specify --requires:host, these jobs wont run
+	#
+	id1=$(flux submit --urgency=20 hostname) &&
+	id2=$(flux submit	       hostname) &&
+	id3=$(flux submit --urgency=31 hostname) &&
+	id4=$(flux submit --urgency=0  hostname) &&
+	id5=$(flux submit --urgency=20 hostname) &&
+	id6=$(flux submit	       hostname) &&
+	id7=$(flux submit --urgency=31 hostname) &&
+	id8=$(flux submit --urgency=0  hostname) &&
 	flux job id $id3 > pending.ids &&
 	flux job id $id7 >> pending.ids &&
 	flux job id $id1 >> pending.ids &&
@@ -605,6 +614,113 @@ test_expect_success 'flux job list all via t_depend (3)' '
 	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_constraint_all3.out &&
 	numlines=$(cat all.ids | wc -l) &&
 	test $(cat list_constraint_all3.out | wc -l) -eq ${numlines}
+'
+
+#
+# nodelist / hostlist constraint filtering
+#
+
+# N.B. all failed and timeout jobs we explicitly ran on node0, so
+# tests below don't test against node0 to make things easier.
+
+# N.B. failed.ids are jobs that failed after running, thus will have
+# had a node assigned.  timeout.ids obviously ran on a node, but timed
+# out.
+test_expect_success 'flux job list all jobs that ran on any node (1)' '
+	constraint="{ and: [ {hostlist:[\"node[0-3]\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist1.out &&
+	numlines=$(cat completed.ids running.ids failed.ids timeout.ids | wc -l) &&
+	test $(cat constraint_hostlist1.out | wc -l) -eq ${numlines}
+'
+
+test_expect_success 'flux job list all jobs that ran on any node (2)' '
+	constraint="{ and: [ {hostlist:[\"node[2-3]\", \"node1\", \"node0\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist2.out &&
+	numlines=$(cat completed.ids running.ids failed.ids timeout.ids | wc -l) &&
+	test $(cat constraint_hostlist2.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed non-bad jobs on nodes, so should be half of the jobs
+test_expect_success 'flux job list all jobs that ran on nodes[1-2] (1)' '
+	constraint="{ and: [ {hostlist:[\"node[1-2]\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist3.out &&
+	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist3.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed non-bad jobs on nodes, so should be half of the jobs
+test_expect_success 'flux job list all jobs that ran on nodes[1-2] (2)' '
+	constraint="{ and: [ {hostlist:[\"node1\", \"node2\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist4.out &&
+	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist4.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed non-bad jobs on nodes, so should be quarter of the jobs
+test_expect_success 'flux job list all jobs that ran on node3' '
+	constraint="{ and: [ {hostlist:[\"node3\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist5.out &&
+	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 4) &&
+	test $(cat constraint_hostlist5.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed completed jobs on nodes, so should be quarter of the jobs
+test_expect_success 'flux job list completed jobs that ran on node3' '
+	state=`${JOB_CONV} strtostate INACTIVE` &&
+	constraint="{ and: [ {hostlist:[\"node3\"]}, {states:[${state}]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist6.out &&
+	numlines=$(expr $(cat completed.ids | wc -l) / 4) &&
+	test $(cat constraint_hostlist6.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed running jobs on nodes, so should be quarter of the jobs
+test_expect_success 'flux job list running jobs that ran on node3' '
+	state=`${JOB_CONV} strtostate RUNNING` &&
+	constraint="{ and: [ {hostlist:[\"node3\"]}, {states:[${state}]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist7.out &&
+	numlines=$(expr $(cat running.ids | wc -l) / 4) &&
+	test $(cat constraint_hostlist7.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed running jobs on nodes, so should be half of the jobs
+# For this test, get start time of first running job
+test_expect_success 'flux job list of running jobs that ran on node[1-2] after certain time (1)' '
+	id=`tail -n1 running.ids` &&
+	t_submit=`flux job list-ids ${id} | $jq .t_submit` &&
+	constraint="{ and: [ {hostlist:[\"node[1-2]\"]}, {t_submit:[\">=${t_submit}\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist8.out &&
+	numlines=$(expr $(cat running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist8.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed running jobs on nodes, so should be half of the jobs
+# For this test, get last inactive time of completed jobs
+test_expect_success 'flux job list of running jobs that ran on node[1-2] after certain time (2)' '
+	id=`head -n1 completed.ids` &&
+	t_inactive=`flux job list-ids ${id} | $jq .t_inactive` &&
+	constraint="{ and: [ {hostlist:[\"node[1-2]\"]}, {t_submit:[\">${t_inactive}\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist9.out &&
+	numlines=$(expr $(cat running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist9.out | wc -l) -eq ${numlines}
+'
+
+# We evenly distributed completed & running jobs on nodes, so should be half of the jobs
+test_expect_success 'flux job list of all jobs that ran on node[1-2] after certain time' '
+	id=`head -n1 completed.ids` &&
+	constraint="{ and: [ {hostlist:[\"node[1-2]\"]}, {t_submit:[\">5\"]} ] }" &&
+	$jq -j -c -n  "{max_entries:1000, attrs:[], constraint:${constraint}}" \
+	  | $RPC job-list.list | $jq .jobs | $jq -c '.[]' | $jq .id > constraint_hostlist9.out &&
+	numlines=$(expr $(cat completed.ids running.ids | wc -l) / 2) &&
+	test $(cat constraint_hostlist9.out | wc -l) -eq ${numlines}
 '
 
 #
@@ -2088,6 +2204,69 @@ test_expect_success 'list request with all attr works (job fail)' '
 '
 
 #
+# max comparison
+#
+
+test_expect_success 'default comparison can get all of the jobs' '
+	flux job list -A > /dev/null
+'
+
+test_expect_success 'remove job list module' '
+	flux module remove job-list
+'
+
+test_expect_success 'job-list: invalid max_comparisons leads to error' '
+	cat >joblist.toml <<EOF &&
+[job-list]
+max_comparisons = -1
+EOF
+	flux config reload &&
+	test_must_fail flux module load job-list
+'
+
+test_expect_success 'job-list: config low max_comparisons' '
+	cat >joblist.toml <<EOF &&
+[job-list]
+max_comparisons = 10
+EOF
+	flux config reload &&
+	flux module load job-list
+'
+
+test_expect_success 'flux job list fails on low comparison count' '
+	test_must_fail flux job list -A > /dev/null
+'
+
+test_expect_success 'job-list: update config with invalid input fails' '
+	test_must_fail flux config load <<-EOF
+[job-list]
+max_comparisons = -1
+EOF
+'
+
+test_expect_success 'job-list: update config biggerr max_comparisons' '
+	flux config load <<-EOF
+[job-list]
+max_comparisons = 10000
+EOF
+'
+
+test_expect_success 'flux job list works again' '
+	flux job list -A > /dev/null
+'
+
+test_expect_success 'job-list: update config no comparison limit' '
+	flux config load <<-EOF
+[job-list]
+max_comparisons = 0
+EOF
+'
+
+test_expect_success 'flux job list works' '
+	flux job list -A > /dev/null
+'
+
+#
 # job-list can handle flux-restart events
 #
 # TODO: presently job-list depends on job-manager journal, so it is
@@ -2401,142 +2580,6 @@ test_expect_success 'list-attrs works' '
 '
 
 #
-#
-# stats & corner cases
-#
-
-test_expect_success 'job-list stats works' '
-	flux module stats --parse jobs.pending job-list &&
-	flux module stats --parse jobs.running job-list &&
-	flux module stats --parse jobs.inactive job-list &&
-	flux module stats --parse idsync.lookups job-list &&
-	flux module stats --parse idsync.waits job-list
-'
-test_expect_success 'list request with empty payload fails with EPROTO(71)' '
-	${RPC} job-list.list 71 </dev/null
-'
-test_expect_success 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
-	name="attrs-not-array" &&
-	$jq -j -c -n  "{max_entries:5, attrs:5}" \
-	  | $listRPC >${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 71: invalid payload: attrs must be an array
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
-	name="attr-not-string" &&
-	$jq -j -c -n  "{max_entries:5, attrs:[5]}" \
-	  | $listRPC > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: attr has no string value
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
-	name="field-not-valid" &&
-	$jq -j -c -n  "{max_entries:5, attrs:[\"foo\"]}" \
-	  | $listRPC > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: foo is not a valid attribute
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success 'list-id request with empty payload fails with EPROTO(71)' '
-	${RPC} job-list.list-id 71 </dev/null
-'
-test_expect_success 'list-id request with invalid input fails with EPROTO(71) (attrs not an array)' '
-	name="list-id-attrs-not-array" &&
-	id=`flux submit hostname | flux job id` &&
-	$jq -j -c -n  "{id:${id}, attrs:5}" \
-	  | $listRPC list-id > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 71: invalid payload: attrs must be an array
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success 'list-id request with invalid input fails with EINVAL(22) (attrs non-string)' '
-	name="list-id-invalid-attrs" &&
-	id=$(flux jobs -c1 -ano {id.dec}) &&
-	$jq -j -c -n  "{id:${id}, attrs:[5]}" \
-	  | $listRPC list-id > ${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: attr has no string value
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-test_expect_success 'list-id request with invalid input fails with EINVAL(22) (attrs illegal field)' '
-	name="list-id-invalid-attr" &&
-	id=$(flux jobs -c1 -ano {id.dec}) &&
-	$jq -j -c -n  "{id:${id}, attrs:[\"foo\"]}" \
-	  | $listRPC list-id >${name}.out &&
-	cat <<-EOF >${name}.expected &&
-	errno 22: foo is not a valid attribute
-	EOF
-	test_cmp ${name}.expected ${name}.out
-'
-# N.B. we remove annotations from the alloc event in this test, but it could
-# be cached and replayed via the job-manager, so we need to reload it
-# and associated modules too
-test_expect_success 'job-list can handle events missing optional data (alloc)' '
-	userid=`id -u` &&
-	cat <<EOF >eventlog_empty_alloc.out &&
-{"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":16,"flags":0,"version":1}}
-{"timestamp":1001.0,"name":"validate"}
-{"timestamp":1002.0,"name":"depend"}
-{"timestamp":1003.0,"name":"priority","context":{"priority":8}}
-{"timestamp":1004.0,"name":"alloc","context":{}}
-{"timestamp":1005.0,"name":"start"}
-{"timestamp":1006.0,"name":"finish","context":{"status":0}}
-{"timestamp":1007.0,"name":"release","context":{"ranks":"all","final":true}}
-{"timestamp":1008.0,"name":"free"}
-{"timestamp":1009.0,"name":"clean"}
-EOF
-	jobid=`flux submit --wait hostname` &&
-	kvspath=`flux job id --to=kvs ${jobid}` &&
-	flux kvs put -r ${kvspath}.eventlog=- < eventlog_empty_alloc.out &&
-	flux module remove job-list &&
-	flux module reload job-manager &&
-	flux module reload -f sched-simple &&
-	flux module reload -f job-exec &&
-	flux module load job-list &&
-	flux job list-ids ${jobid} > empty_alloc.out &&
-	cat empty_alloc.out | jq -e ".annotations == null"
-'
-# N.B. Note the original job was submitted with urgency 16, but we
-# hard code 8 in the fake eventlog.	 This is just to make sure the fake
-# eventlog was loaded correctly at the end of the test.
-#
-# N.B. We add extra events into this fake eventlog for testing
-test_expect_success 'job-list can handle events with superfluous context data' '
-	userid=`id -u` &&
-	cat <<EOF >eventlog_superfluous_context.out &&
-{"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":8,"flags":0,"version":1,"etc":1}}
-{"timestamp":1001.0,"name":"dependency-add","context":{"description":"begin-time=1234.000","etc":1}}
-{"timestamp":1002.0,"name":"validate","context":{"etc":1}}
-{"timestamp":1003.0,"name":"dependency-remove","context":{"description":"begin-time=1234.000","etc":1}}
-{"timestamp":1004.0,"name":"depend","context":{"etc":1}}
-{"timestamp":1005.0,"name":"priority","context":{"priority":8,"etc":1}}
-{"timestamp":1006.0,"name":"alloc","context":{"annotations":{"sched":{"resource_summary":"rank0/core0"}},"etc":1}}
-{"timestamp":1007.0,"name":"prolog-start","context":{"description":"job-manager.prolog","etc":1}}
-{"timestamp":1008.0,"name":"prolog-finish","context":{"description":"job-manager.prolog","status":0,"etc":1}}
-{"timestamp":1009.0,"name":"start","context":{"etc":1}}
-{"timestamp":1010.0,"name":"finish","context":{"status":0,"etc":1}}
-{"timestamp":1011.0,"name":"epilog-start","context":{"description":"job-manager.epilog","etc":1}}
-{"timestamp":1012.0,"name":"release","context":{"ranks":"all","final":true,"etc":1}}
-{"timestamp":1013.0,"name":"epilog-finish","context":{"description":"job-manager.epilog","status":0,"etc":1}}
-{"timestamp":1014.0,"name":"free","context":{"etc":1}}
-{"timestamp":1015.0,"name":"clean","context":{"etc":1}}
-EOF
-	jobid=`flux submit --wait --urgency=default hostname` &&
-	kvspath=`flux job id --to=kvs ${jobid}` &&
-	flux kvs put -r ${kvspath}.eventlog=- < eventlog_superfluous_context.out &&
-	flux module reload job-list &&
-	flux job list-ids ${jobid} > superfluous_context.out &&
-	cat superfluous_context.out | jq -e ".urgency == 8"
-'
-
-#
 # stress test
 #
 
@@ -2558,6 +2601,20 @@ wait_jobs_finish() {
 test_expect_success LONGTEST 'stress job-list.list-id' '
 	flux python ${FLUX_SOURCE_DIR}/t/job-list/list-id.py 500 &&
 	wait_jobs_finish
+'
+
+#
+#
+# stats tests
+#
+
+
+test_expect_success 'job-list stats works' '
+	flux module stats --parse jobs.pending job-list &&
+	flux module stats --parse jobs.running job-list &&
+	flux module stats --parse jobs.inactive job-list &&
+	flux module stats --parse idsync.lookups job-list &&
+	flux module stats --parse idsync.waits job-list
 '
 
 test_expect_success 'configure batch,debug queues' '
@@ -2689,6 +2746,134 @@ test_expect_success 'remove queues' '
 	flux config load < /dev/null
 '
 
+#
+# corner case tests
+#
+
+test_expect_success 'list request with empty payload fails with EPROTO(71)' '
+	${RPC} job-list.list 71 </dev/null
+'
+test_expect_success 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
+	name="attrs-not-array" &&
+	$jq -j -c -n  "{max_entries:5, attrs:5}" \
+	  | $listRPC >${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 71: invalid payload: attrs must be an array
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
+	name="attr-not-string" &&
+	$jq -j -c -n  "{max_entries:5, attrs:[5]}" \
+	  | $listRPC > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: attr has no string value
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
+	name="field-not-valid" &&
+	$jq -j -c -n  "{max_entries:5, attrs:[\"foo\"]}" \
+	  | $listRPC > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: foo is not a valid attribute
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'list-id request with empty payload fails with EPROTO(71)' '
+	${RPC} job-list.list-id 71 </dev/null
+'
+test_expect_success 'list-id request with invalid input fails with EPROTO(71) (attrs not an array)' '
+	name="list-id-attrs-not-array" &&
+	id=`flux submit hostname | flux job id` &&
+	$jq -j -c -n  "{id:${id}, attrs:5}" \
+	  | $listRPC list-id > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 71: invalid payload: attrs must be an array
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'list-id request with invalid input fails with EINVAL(22) (attrs non-string)' '
+	name="list-id-invalid-attrs" &&
+	id=$(flux jobs -c1 -ano {id.dec}) &&
+	$jq -j -c -n  "{id:${id}, attrs:[5]}" \
+	  | $listRPC list-id > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: attr has no string value
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'list-id request with invalid input fails with EINVAL(22) (attrs illegal field)' '
+	name="list-id-invalid-attr" &&
+	id=$(flux jobs -c1 -ano {id.dec}) &&
+	$jq -j -c -n  "{id:${id}, attrs:[\"foo\"]}" \
+	  | $listRPC list-id >${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: foo is not a valid attribute
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+# N.B. we remove annotations from the alloc event in this test, but it could
+# be cached and replayed via the job-manager, so we need to reload it
+# and associated modules too
+test_expect_success 'job-list can handle events missing optional data (alloc)' '
+	userid=`id -u` &&
+	cat <<EOF >eventlog_empty_alloc.out &&
+{"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":16,"flags":0,"version":1}}
+{"timestamp":1001.0,"name":"validate"}
+{"timestamp":1002.0,"name":"depend"}
+{"timestamp":1003.0,"name":"priority","context":{"priority":8}}
+{"timestamp":1004.0,"name":"alloc","context":{}}
+{"timestamp":1005.0,"name":"start"}
+{"timestamp":1006.0,"name":"finish","context":{"status":0}}
+{"timestamp":1007.0,"name":"release","context":{"ranks":"all","final":true}}
+{"timestamp":1008.0,"name":"free"}
+{"timestamp":1009.0,"name":"clean"}
+EOF
+	jobid=`flux submit --wait hostname` &&
+	kvspath=`flux job id --to=kvs ${jobid}` &&
+	flux kvs put -r ${kvspath}.eventlog=- < eventlog_empty_alloc.out &&
+	flux module remove job-list &&
+	flux module reload job-manager &&
+	flux module reload -f sched-simple &&
+	flux module reload -f job-exec &&
+	flux module load job-list &&
+	flux job list-ids ${jobid} > empty_alloc.out &&
+	cat empty_alloc.out | jq -e ".annotations == null"
+'
+# N.B. Note the original job was submitted with urgency 16, but we
+# hard code 8 in the fake eventlog.	 This is just to make sure the fake
+# eventlog was loaded correctly at the end of the test.
+#
+# N.B. We add extra events into this fake eventlog for testing
+test_expect_success 'job-list can handle events with superfluous context data' '
+	userid=`id -u` &&
+	cat <<EOF >eventlog_superfluous_context.out &&
+{"timestamp":1000.0,"name":"submit","context":{"userid":${userid},"urgency":8,"flags":0,"version":1,"etc":1}}
+{"timestamp":1001.0,"name":"dependency-add","context":{"description":"begin-time=1234.000","etc":1}}
+{"timestamp":1002.0,"name":"validate","context":{"etc":1}}
+{"timestamp":1003.0,"name":"dependency-remove","context":{"description":"begin-time=1234.000","etc":1}}
+{"timestamp":1004.0,"name":"depend","context":{"etc":1}}
+{"timestamp":1005.0,"name":"priority","context":{"priority":8,"etc":1}}
+{"timestamp":1006.0,"name":"alloc","context":{"annotations":{"sched":{"resource_summary":"rank0/core0"}},"etc":1}}
+{"timestamp":1007.0,"name":"prolog-start","context":{"description":"job-manager.prolog","etc":1}}
+{"timestamp":1008.0,"name":"prolog-finish","context":{"description":"job-manager.prolog","status":0,"etc":1}}
+{"timestamp":1009.0,"name":"start","context":{"etc":1}}
+{"timestamp":1010.0,"name":"finish","context":{"status":0,"etc":1}}
+{"timestamp":1011.0,"name":"epilog-start","context":{"description":"job-manager.epilog","etc":1}}
+{"timestamp":1012.0,"name":"release","context":{"ranks":"all","final":true,"etc":1}}
+{"timestamp":1013.0,"name":"epilog-finish","context":{"description":"job-manager.epilog","status":0,"etc":1}}
+{"timestamp":1014.0,"name":"free","context":{"etc":1}}
+{"timestamp":1015.0,"name":"clean","context":{"etc":1}}
+EOF
+	jobid=`flux submit --wait --urgency=default hostname` &&
+	kvspath=`flux job id --to=kvs ${jobid}` &&
+	flux kvs put -r ${kvspath}.eventlog=- < eventlog_superfluous_context.out &&
+	flux module reload job-list &&
+	flux job list-ids ${jobid} > superfluous_context.out &&
+	cat superfluous_context.out | jq -e ".urgency == 8"
+'
+
 # invalid job data tests
 #
 # to avoid potential racyness, wait up to 5 seconds for job to appear
@@ -2718,6 +2903,7 @@ test_expect_success 'reload job-ingest without validator' '
 '
 
 test_expect_success 'create illegal jobspec with empty command array' '
+	flux submit --dry-run hostname > hostname.json &&
 	cat hostname.json | $jq ".tasks[0].command = []" > bad_jobspec.json
 '
 
