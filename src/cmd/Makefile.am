@@ -14,6 +14,7 @@ AM_CPPFLAGS = \
 	$(FLUX_SECURITY_CFLAGS) \
 	$(HWLOC_CFLAGS) \
 	$(JANSSON_CFLAGS) \
+	$(LIBSYSTEMD_CFLAGS) \
 	$(LIBARCHIVE_CFLAGS)
 
 
@@ -87,6 +88,7 @@ flux_LDADD = \
 	$(top_builddir)/src/common/libpmi/libpmi_common.la \
 	$(top_builddir)/src/common/libfilemap/libfilemap.la \
 	$(LIBARCHIVE_LIBS) \
+	$(LIBSYSTEMD_LIBS) \
 	$(fluxcmd_ldadd)
 
 #

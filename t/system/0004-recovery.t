@@ -20,3 +20,12 @@ test_expect_success 'flux start --recover works from dump file' '
 test_expect_success 'restart flux' '
         sudo systemctl start flux
 '
+get_uptime_state () {
+	local state=$(flux uptime | cut -d' ' -f3) || state=unknown
+	echo $state
+}
+test_expect_success 'wait for flux to reach run state' '
+	while test $(get_uptime_state) != run; do \
+	    sleep 1; \
+	done
+'
