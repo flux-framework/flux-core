@@ -277,107 +277,6 @@ static void update_job_state_and_list (struct job_state_ctx *jsctx,
     idsync_check_waiting_id (jsctx->ctx->isctx, job);
 }
 
-static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
-{
-    struct job *job = arg;
-    struct job_state_ctx *jsctx = flux_future_aux_get (f, "job_state_ctx");
-    struct job_update *updt;
-    const char *s;
-    void *handle;
-
-    assert (jsctx);
-
-    if (flux_rpc_get_unpack (f, "{s:s}", "jobspec", &s) < 0) {
-        flux_log_error (jsctx->h, "%s: error jobspec for %s",
-                        __FUNCTION__, idf58 (job->id));
-        goto out;
-    }
-
-    if (job_parse_jobspec (job, s, job->jobspec_updates) < 0)
-        goto out;
-
-    updt = zlist_head (job->updates);
-    assert (updt);
-    update_job_state_and_list (jsctx, job, updt->state, updt->timestamp);
-    updt->finished = true;
-    process_updates (jsctx, job);
-
-out:
-    handle = zlistx_find (jsctx->futures, f);
-    if (handle)
-        zlistx_detach (jsctx->futures, handle);
-    flux_future_destroy (f);
-}
-
-static flux_future_t *state_depend_lookup (struct job_state_ctx *jsctx,
-                                           struct job *job)
-{
-    flux_future_t *f = NULL;
-
-    if (!(f = flux_rpc_pack (jsctx->h, "job-info.lookup", FLUX_NODEID_ANY, 0,
-                             "{s:I s:[s] s:i}",
-                             "id", job->id,
-                             "keys", "jobspec",
-                             "flags", 0))
-        || flux_future_then (f, -1, state_depend_lookup_continuation, job) < 0
-        || flux_future_aux_set (f, "job_state_ctx", jsctx, NULL) < 0) {
-        flux_future_destroy (f);
-        return NULL;
-    }
-    return f;
-}
-
-static void state_run_lookup_continuation (flux_future_t *f, void *arg)
-{
-    struct job *job = arg;
-    struct job_state_ctx *jsctx = flux_future_aux_get (f, "job_state_ctx");
-    struct job_update *updt;
-    const char *s;
-    void *handle;
-
-    assert (jsctx);
-
-    if (flux_rpc_get_unpack (f, "{s:s}", "R", &s) < 0) {
-        flux_log_error (jsctx->h, "%s: error eventlog for %s",
-                        __FUNCTION__, idf58 (job->id));
-        goto out;
-    }
-
-    if (job_parse_R (job, s, NULL) < 0)
-        goto out;
-
-    updt = zlist_head (job->updates);
-    assert (updt);
-    update_job_state_and_list (jsctx, job, updt->state, updt->timestamp);
-    updt->finished = true;
-    process_updates (jsctx, job);
-
-out:
-    handle = zlistx_find (jsctx->futures, f);
-    if (handle)
-        zlistx_detach (jsctx->futures, handle);
-    flux_future_destroy (f);
-}
-
-static flux_future_t *state_run_lookup (struct job_state_ctx *jsctx,
-                                        struct job *job)
-{
-    flux_future_t *f = NULL;
-
-    if (!(f = flux_rpc_pack (jsctx->h, "job-info.lookup", FLUX_NODEID_ANY, 0,
-                             "{s:I s:[s] s:i}",
-                             "id", job->id,
-                             "keys", "R",
-                             "flags", 0))
-        || flux_future_then (f, -1, state_run_lookup_continuation, job) < 0
-        || flux_future_aux_set (f, "job_state_ctx", jsctx, NULL) < 0) {
-        flux_future_destroy (f);
-        return NULL;
-    }
-
-    return f;
-}
-
 /* calculate any remaining fields */
 static void eventlog_inactive_complete (struct job *job)
 {
@@ -509,39 +408,25 @@ static void process_state_transition_update (struct job_state_ctx *jsctx,
             return;
         }
     }
-
-    if (updt->state == FLUX_JOB_STATE_DEPEND
-        || updt->state == FLUX_JOB_STATE_RUN) {
-        flux_future_t *f = NULL;
-
-        if (updt->state == FLUX_JOB_STATE_DEPEND) {
-            /* get initial jobspec */
-            if (!(f = state_depend_lookup (jsctx, job))) {
-                flux_log_error (jsctx->h, "%s: state_depend_lookup",
-                                __FUNCTION__);
-                return;
-            }
+    if (updt->state == FLUX_JOB_STATE_DEPEND) {
+        // process job->jobspec which was obtained from journal
+        if (job_parse_jobspec_cached (job, job->jobspec_updates) < 0) {
+            flux_log_error (jsctx->h,
+                            "%s: error parsing jobspec",
+                            idf58 (job->id));
         }
-        else { /* updt->state == FLUX_JOB_STATE_RUN */
-            /* get R to get node count, etc. */
-            if (!(f = state_run_lookup (jsctx, job))) {
-                flux_log_error (jsctx->h, "%s: state_run_lookup",
-                                __FUNCTION__);
-                return;
-            }
+        update_job_state_and_list (jsctx, job, updt->state, updt->timestamp);
+        updt->finished = true;
+    }
+    else if (updt->state == FLUX_JOB_STATE_RUN) {
+        // process job->R which was obtained from journal
+        if (job_parse_R_cached (job, NULL) < 0) {
+            flux_log_error (jsctx->h,
+                            "%s: error parsing R",
+                            idf58 (job->id));
         }
-
-        if (!zlistx_add_end (jsctx->futures, f)) {
-            flux_log (jsctx->h,
-                      LOG_ERR,
-                      "%s: zlistx_add_end: out of memory",
-                      __FUNCTION__);
-            flux_future_destroy (f);
-            return;
-        }
-
-        updt->processing = true;
-        return;
+        update_job_state_and_list (jsctx, job, updt->state, updt->timestamp);
+        updt->finished = true;
     }
     else {
         /* FLUX_JOB_STATE_PRIORITY */
@@ -1133,7 +1018,9 @@ static int journal_dependency_event (struct job_state_ctx *jsctx,
 
 static int journal_process_event (struct job_state_ctx *jsctx,
                                   flux_jobid_t id,
-                                  json_t *event)
+                                  json_t *event,
+                                  json_t *jobspec,
+                                  json_t *R)
 {
     double timestamp;
     const char *name;
@@ -1148,6 +1035,12 @@ static int journal_process_event (struct job_state_ctx *jsctx,
     }
 
     job = zhashx_lookup (jsctx->index, &id);
+    if (job) {
+        if (!job->jobspec && jobspec)
+            job->jobspec = json_incref (jobspec);
+        if (!job->R && R)
+            job->R = json_incref (R);
+    }
 
     /* The "submit" event is now posted before the job transitions out of NEW
      * on the "validate" event.  If "invalidate" is posted instead, job
@@ -1291,18 +1184,22 @@ static int journal_process_events (struct job_state_ctx *jsctx,
     json_t *events;
     size_t index;
     json_t *value;
+    json_t *jobspec = NULL;
+    json_t *R = NULL;
 
     if (flux_msg_unpack (msg,
-                        "{s:I s:o}",
+                        "{s:I s:o s?o s?o}",
                         "id", &id,
-                        "events", &events) < 0)
+                        "events", &events,
+                        "jobspec", &jobspec,
+                        "R", &R) < 0)
         return -1;
     if (!json_is_array (events)) {
         errno = EPROTO;
         return -1;
     }
     json_array_foreach (events, index, value) {
-        if (journal_process_event (jsctx, id, value) < 0)
+        if (journal_process_event (jsctx, id, value, jobspec, R) < 0)
             return -1;
     }
 
