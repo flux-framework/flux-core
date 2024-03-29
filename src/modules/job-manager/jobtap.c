@@ -51,6 +51,7 @@ extern int begin_time_plugin_init (flux_plugin_t *p);
 extern int validate_duration_plugin_init (flux_plugin_t *p);
 extern int update_duration_plugin_init (flux_plugin_t *p);
 extern int history_plugin_init (flux_plugin_t *p);
+extern int post_event_init (flux_plugin_t *p);
 
 struct jobtap_builtin {
     const char *name;
@@ -72,6 +73,7 @@ static struct jobtap_builtin jobtap_builtins [] = {
     { ".validate-duration", &validate_duration_plugin_init },
     { ".update-duration", &update_duration_plugin_init },
     { ".history", &history_plugin_init },
+    { ".post-event", &post_event_init },
     { 0 },
 };
 
