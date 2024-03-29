@@ -126,13 +126,13 @@ topics:
 **taskmap.SCHEME**
   Called when a taskmap scheme *SCHEME* is requested via the taskmap
   shell option or corresponding :option:`flux submit --taskmap` option.
-  Plugins that want to offer a different taskmap scheme than the defaults of
-  ``block``, ``cyclic``, and ``manual`` can register a ``taskmap.*`` plugin
-  callback and then users can request this mapping with the appropriate
-  :option:`flux submit --taskmap=name`` option.  The default block taskmap is
-  passed to the plugin as "taskmap" in the plugin input arguments, and the
-  plugin should return the new taskmap as a string in the output args.  This
-  callback is called before ``shell.init``.
+  Plugins that want to offer a different taskmap scheme than the defaults
+  of ``block``, ``cyclic``, ``hostfile``, and ``manual`` can register a
+  ``taskmap.*`` plugin callback and then users can request this mapping
+  with the appropriate :option:`flux submit --taskmap=name`` option.
+  The default block taskmap is passed to the plugin as "taskmap" in the
+  plugin input arguments, and the plugin should return the new taskmap as a
+  string in the output args.  This callback is called before ``shell.init``.
 
 **shell.connect**
   Called just after the shell connects to the local Flux broker. (Only
