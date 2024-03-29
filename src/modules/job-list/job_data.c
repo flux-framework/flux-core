@@ -367,13 +367,22 @@ nonfatal_error:
     return allow_nonfatal ? 0 : -1;
 }
 
+int job_parse_jobspec_cached (struct job *job, json_t *updates)
+{
+    if (!job->jobspec) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (parse_jobspec (job, true) < 0)
+        return -1;
+    return job_jobspec_update (job, updates);
+}
+
 int job_parse_jobspec (struct job *job, const char *s, json_t *updates)
 {
     if (load_jobspec (job, s, true) < 0)
         return -1;
-    if (parse_jobspec (job, true) < 0)
-        return -1;
-    return job_jobspec_update (job, updates);
+    return job_parse_jobspec_cached (job, updates);
 }
 
 int job_parse_jobspec_fatal (struct job *job, const char *s, json_t *updates)
@@ -465,13 +474,22 @@ cleanup:
     return rc;
 }
 
+int job_parse_R_cached (struct job *job, json_t *updates)
+{
+    if (!job->R) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (parse_R (job, true) < 0)
+        return -1;
+    return job_R_update (job, updates);
+}
+
 int job_parse_R (struct job *job, const char *s, json_t *updates)
 {
     if (load_R (job, s, true) < 0)
         return -1;
-    if (parse_R (job, true) < 0)
-        return -1;
-    return job_R_update (job, updates);
+    return job_parse_R_cached (job, updates);
 }
 
 int job_parse_R_fatal (struct job *job, const char *s, json_t *updates)

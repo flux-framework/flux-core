@@ -109,6 +109,7 @@ struct job *job_create (flux_t *h, flux_jobid_t id);
  * the jobspec.
  */
 int job_parse_jobspec (struct job *job, const char *s, json_t *updates);
+int job_parse_jobspec_cached (struct job *job, json_t *updates);
 
 /* identical to above, but all nonfatal errors will return error.
  * Primarily used for testing.
@@ -128,6 +129,7 @@ int job_jobspec_update (struct job *job, json_t *updates);
  * - ntasks (if necessary)
  */
 int job_parse_R (struct job *job, const char *s, json_t *updates);
+int job_parse_R_cached (struct job *job, json_t *updates);
 
 /* identical to above, but all nonfatal errors will return error.
  * Primarily used for testing.
