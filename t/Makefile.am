@@ -208,6 +208,7 @@ TESTSCRIPTS = \
 	t2614-job-shell-doom.t \
 	t2615-job-shell-rlimit.t \
 	t2616-job-shell-taskmap.t \
+	t2616-job-shell-taskmap-hostfile.t \
 	t2617-job-shell-stage-in.t \
 	t2618-job-shell-signal.t \
 	t2619-job-shell-hwloc.t \
