@@ -90,6 +90,7 @@ flux_shell_SOURCES = \
 	exception.c \
 	rlimit.c \
 	taskmap/cyclic.c \
+	taskmap/hostfile.c \
 	signal.c \
 	files.c \
 	oom.c \
