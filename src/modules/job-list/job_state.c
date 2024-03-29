@@ -1327,9 +1327,6 @@ struct job_state_ctx *job_state_create (struct list_ctx *ctx)
     if (!(jsctx->processing = zlistx_new ()))
         goto error;
 
-    if (!(jsctx->futures = zlistx_new ()))
-        goto error;
-
     if (!(jsctx->statsctx = job_stats_ctx_create (jsctx->h)))
         goto error;
 
@@ -1351,19 +1348,6 @@ void job_state_destroy (void *data)
     struct job_state_ctx *jsctx = data;
     if (jsctx) {
         int saved_errno = errno;
-        /* Don't destroy processing until futures are complete */
-        if (jsctx->futures) {
-            flux_future_t *f;
-            f = zlistx_first (jsctx->futures);
-            while (f) {
-                if (flux_future_get (f, NULL) < 0)
-                    flux_log_error (jsctx->h, "%s: flux_future_get",
-                                    __FUNCTION__);
-                flux_future_destroy (f);
-                f = zlistx_next (jsctx->futures);
-            }
-            zlistx_destroy (&jsctx->futures);
-        }
         /* Destroy index last, as it is the one that will actually
          * destroy the job objects */
         zlistx_destroy (&jsctx->processing);

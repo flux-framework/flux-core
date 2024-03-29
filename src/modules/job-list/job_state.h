@@ -34,8 +34,6 @@
  *
  * There is also an additional list `processing` that stores jobs that
  * cannot yet be stored on one of the lists above.
- *
- * The list `futures` is used to store in process futures.
  */
 
 struct job_state_ctx {
@@ -47,7 +45,6 @@ struct job_state_ctx {
     zlistx_t *running;
     zlistx_t *inactive;
     zlistx_t *processing;
-    zlistx_t *futures;
 
     /*  Job statistics: */
     struct job_stats_ctx *statsctx;
