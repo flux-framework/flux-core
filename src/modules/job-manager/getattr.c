@@ -70,6 +70,10 @@ static json_t *make_dict (struct job *job,
             if (json_object_set (dict, key, job->R_redacted) < 0)
                 goto nomem;
         }
+        else if (streq (key, "eventlog")) {
+            if (json_object_set (dict, key, job->eventlog) < 0)
+                goto nomem;
+        }
         else {
             errprintf (errp, "unknown attr %s", key);
             errno = ENOENT;

@@ -70,27 +70,17 @@ struct job {
     json_t *R;
     json_t *exception_context;
 
-    /* All internal changes (most notably job state transitions) are
-     * placed on the updates list.  We do not immediately update to
-     * the new state and place onto a new list until we have retrieved
-     * any necessary data associated to that state.  For example, when
-     * the 'depend' state has been seen, we don't immediately place it
-     * on the `pending` list.  We wait until we've retrieved data such
-     * as userid, urgency, etc.
-     *
-     * Track which states we have seen and have completed transition
+    /* Track which states we have seen and have completed transition
      * to.  States we've processed via the states_mask and states seen
      * via events stream in states_events_mask.
      */
-    zlist_t *updates;
     unsigned int states_mask;
     unsigned int states_events_mask;
     void *list_handle;
-    /* if updates in eventlog before jobspec / R read from KVS */
+    /* store updates that were received before jobspec/R objects */
     json_t *jobspec_updates;
     json_t *R_updates;
 
-    int eventlog_seq;           /* last event seq read */
     int submit_version;         /* version number in submit context */
 };
 
@@ -110,6 +100,7 @@ struct job *job_create (flux_t *h, flux_jobid_t id);
  * the jobspec.
  */
 int job_parse_jobspec (struct job *job, const char *s, json_t *updates);
+int job_parse_jobspec_cached (struct job *job, json_t *updates);
 
 /* identical to above, but all nonfatal errors will return error.
  * Primarily used for testing.
@@ -129,6 +120,7 @@ int job_jobspec_update (struct job *job, json_t *updates);
  * - ntasks (if necessary)
  */
 int job_parse_R (struct job *job, const char *s, json_t *updates);
+int job_parse_R_cached (struct job *job, json_t *updates);
 
 /* identical to above, but all nonfatal errors will return error.
  * Primarily used for testing.

@@ -42,7 +42,6 @@ void job_destroy (void *data)
         json_decref (job->exception_context);
         json_decref (job->jobspec_updates);
         json_decref (job->R_updates);
-        zlist_destroy (&job->updates);
         free (job);
         errno = save_errno;
     }
@@ -69,16 +68,8 @@ struct job *job_create (flux_t *h, flux_jobid_t id)
     job->expiration = -1.0;
     job->wait_status = -1;
     job->result = FLUX_JOB_RESULT_FAILED;
-
-    if (!(job->updates = zlist_new ())) {
-        errno = ENOMEM;
-        job_destroy (job);
-        return NULL;
-    }
-
     job->states_mask = FLUX_JOB_STATE_NEW;
     job->states_events_mask = FLUX_JOB_STATE_NEW;
-    job->eventlog_seq = -1;
     return job;
 }
 
@@ -368,13 +359,22 @@ nonfatal_error:
     return allow_nonfatal ? 0 : -1;
 }
 
+int job_parse_jobspec_cached (struct job *job, json_t *updates)
+{
+    if (!job->jobspec) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (parse_jobspec (job, true) < 0)
+        return -1;
+    return job_jobspec_update (job, updates);
+}
+
 int job_parse_jobspec (struct job *job, const char *s, json_t *updates)
 {
     if (load_jobspec (job, s, true) < 0)
         return -1;
-    if (parse_jobspec (job, true) < 0)
-        return -1;
-    return job_jobspec_update (job, updates);
+    return job_parse_jobspec_cached (job, updates);
 }
 
 int job_parse_jobspec_fatal (struct job *job, const char *s, json_t *updates)
@@ -466,13 +466,22 @@ cleanup:
     return rc;
 }
 
+int job_parse_R_cached (struct job *job, json_t *updates)
+{
+    if (!job->R) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (parse_R (job, true) < 0)
+        return -1;
+    return job_R_update (job, updates);
+}
+
 int job_parse_R (struct job *job, const char *s, json_t *updates)
 {
     if (load_R (job, s, true) < 0)
         return -1;
-    if (parse_R (job, true) < 0)
-        return -1;
-    return job_R_update (job, updates);
+    return job_parse_R_cached (job, updates);
 }
 
 int job_parse_R_fatal (struct job *job, const char *s, json_t *updates)

@@ -23,9 +23,12 @@ struct list_ctx {
     flux_msg_handler_t **handlers;
     struct job_state_ctx *jsctx;
     struct idsync_ctx *isctx;
+    struct flux_msglist *deferred_requests;
 };
 
 const char **job_attrs (void);
+
+void requeue_deferred_requests (struct list_ctx *ctx);
 
 #endif /* _FLUX_JOB_LIST_H */
 

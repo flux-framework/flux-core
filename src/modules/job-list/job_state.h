@@ -34,20 +34,17 @@
  *
  * There is also an additional list `processing` that stores jobs that
  * cannot yet be stored on one of the lists above.
- *
- * The list `futures` is used to store in process futures.
  */
 
 struct job_state_ctx {
     flux_t *h;
-    struct idsync_ctx *isctx;
+    struct list_ctx *ctx;
 
     zhashx_t *index;
     zlistx_t *pending;
     zlistx_t *running;
     zlistx_t *inactive;
     zlistx_t *processing;
-    zlistx_t *futures;
 
     /*  Job statistics: */
     struct job_stats_ctx *statsctx;
@@ -58,9 +55,11 @@ struct job_state_ctx {
 
     /* stream of job events from the job-manager */
     flux_future_t *events;
+
+    bool initialized;
 };
 
-struct job_state_ctx *job_state_create (struct idsync_ctx *isctx);
+struct job_state_ctx *job_state_create (struct list_ctx *ctx);
 
 void job_state_destroy (void *data);
 
@@ -69,8 +68,6 @@ void job_state_pause_cb (flux_t *h, flux_msg_handler_t *mh,
 
 void job_state_unpause_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg);
-
-int job_state_init_from_kvs (struct job_state_ctx *jsctx);
 
 int job_state_config_reload (struct job_state_ctx *jsctx,
                              const flux_conf_t *conf,

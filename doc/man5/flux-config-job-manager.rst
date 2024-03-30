@@ -13,11 +13,6 @@ table, which may contain the following keys:
 KEYS
 ====
 
-journal-size-limit
-   (optional) Integer value that determines the maximum number of job events to
-   be retained in the in-memory journal used to answer queries.  The default
-   is 1000.
-
 inactive-age-limit
    (optional) String (in RFC 23 Flux Standard Duration format) that specifies
    the maximum age of inactive jobs retained in the KVS.  The age is computed

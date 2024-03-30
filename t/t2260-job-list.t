@@ -2475,6 +2475,19 @@ test_expect_success 'list-id request with invalid input fails with EINVAL(22) (a
 	EOF
 	test_cmp ${name}.expected ${name}.out
 '
+
+# Restart job-list from the KVS.  job-list used to pull in job eventlogs
+# directly from the KVS at startup, but now it gets them via the job manager
+# journal.  Therefore we need to restart the job-manager too, which requires
+# some other things to be restarted to get a functional system.
+restart_from_kvs() {
+	flux module remove job-list
+	flux module reload job-manager
+	flux module reload -f sched-simple
+	flux module reload -f job-exec
+	flux module load job-list
+}
+
 # N.B. we remove annotations from the alloc event in this test, but it could
 # be cached and replayed via the job-manager, so we need to reload it
 # and associated modules too
@@ -2495,11 +2508,7 @@ EOF
 	jobid=`flux submit --wait hostname` &&
 	kvspath=`flux job id --to=kvs ${jobid}` &&
 	flux kvs put -r ${kvspath}.eventlog=- < eventlog_empty_alloc.out &&
-	flux module remove job-list &&
-	flux module reload job-manager &&
-	flux module reload -f sched-simple &&
-	flux module reload -f job-exec &&
-	flux module load job-list &&
+	restart_from_kvs &&
 	flux job list-ids ${jobid} > empty_alloc.out &&
 	cat empty_alloc.out | jq -e ".annotations == null"
 '
@@ -2531,7 +2540,7 @@ EOF
 	jobid=`flux submit --wait --urgency=default hostname` &&
 	kvspath=`flux job id --to=kvs ${jobid}` &&
 	flux kvs put -r ${kvspath}.eventlog=- < eventlog_superfluous_context.out &&
-	flux module reload job-list &&
+	restart_from_kvs &&
 	flux job list-ids ${jobid} > superfluous_context.out &&
 	cat superfluous_context.out | jq -e ".urgency == 8"
 '
@@ -2771,89 +2780,6 @@ test_expect_success 'flux job list works on job with no cwd' '
 
 test_expect_success 'reload job-ingest with defaults' '
 	ingest_module reload
-'
-
-# we make R invalid by overwriting it in the KVS before job-list will
-# look it up
-test_expect_success 'flux job list works on job with illegal R/json' '
-	${RPC} job-list.job-state-pause 0 </dev/null &&
-	jobid=`flux submit --wait hostname | flux job id` &&
-	jobkvspath=`flux job id --to kvs $jobid` &&
-	flux kvs put "${jobkvspath}.R=foobar" &&
-	${RPC} job-list.job-state-unpause 0 </dev/null &&
-	i=0 &&
-	while ! flux job list --states=inactive | grep $jobid > /dev/null \
-		   && [ $i -lt 5 ]
-	do
-		sleep 1
-		i=$((i + 1))
-	done &&
-	test "$i" -lt "5" &&
-	flux job list --states=inactive | grep $jobid > list_illegal_R.out &&
-	cat list_illegal_R.out | $jq -e ".ranks == null" &&
-	cat list_illegal_R.out | $jq -e ".nnodes == null" &&
-	cat list_illegal_R.out | $jq -e ".nodelist == null" &&
-	cat list_illegal_R.out | $jq -e ".expiration == null"
-'
-
-test_expect_success 'flux job list works on job with illegal R/valid json' '
-	${RPC} job-list.job-state-pause 0 </dev/null &&
-	jobid=`flux submit --wait hostname | flux job id` &&
-	jobkvspath=`flux job id --to kvs $jobid` &&
-	flux kvs put "${jobkvspath}.R={}" &&
-	${RPC} job-list.job-state-unpause 0 </dev/null &&
-	i=0 &&
-	while ! flux job list --states=inactive | grep $jobid > /dev/null \
-		   && [ $i -lt 5 ]
-	do
-		sleep 1
-		i=$((i + 1))
-	done &&
-	test "$i" -lt "5" &&
-	flux job list --states=inactive | grep $jobid > list_illegal_R.out &&
-	cat list_illegal_R.out | $jq -e ".ranks == null" &&
-	cat list_illegal_R.out | $jq -e ".nnodes == null" &&
-	cat list_illegal_R.out | $jq -e ".nodelist == null" &&
-	cat list_illegal_R.out | $jq -e ".expiration == null"
-'
-
-test_expect_success NO_CHAIN_LINT 'flux job list-ids works on job with illegal R/json' '
-	${RPC} job-list.job-state-pause 0 </dev/null
-	jobid=`flux submit --wait hostname | flux job id`
-	jobkvspath=`flux job id --to kvs $jobid` &&
-	flux kvs put "${jobkvspath}.R=foobar" &&
-	flux job list-ids ${jobid} > list_id_illegal_R.out &
-	pid=$!
-	wait_idsync 1 &&
-	${RPC} job-list.job-state-unpause 0 </dev/null &&
-	wait $pid &&
-	cat list_id_illegal_R.out | $jq -e ".id == ${jobid}"
-'
-
-test_expect_success NO_CHAIN_LINT 'flux job list-ids works on job with illegal R/valid json' '
-	${RPC} job-list.job-state-pause 0 </dev/null
-	jobid=`flux submit --wait hostname | flux job id`
-	jobkvspath=`flux job id --to kvs $jobid` &&
-	flux kvs put "${jobkvspath}.R={}" &&
-	flux job list-ids ${jobid} > list_id_illegal_R.out &
-	pid=$!
-	wait_idsync 1 &&
-	${RPC} job-list.job-state-unpause 0 </dev/null &&
-	wait $pid &&
-	cat list_id_illegal_R.out | $jq -e ".id == ${jobid}"
-'
-
-test_expect_success NO_CHAIN_LINT 'flux job list-ids works on job with illegal eventlog' '
-	${RPC} job-list.job-state-pause 0 </dev/null
-	jobid=`flux submit --wait hostname | flux job id`
-	jobkvspath=`flux job id --to kvs $jobid` &&
-	flux kvs put "${jobkvspath}.eventlog=foobar" &&
-	flux job list-ids ${jobid} > list_id_illegal_eventlog.out &
-	pid=$!
-	wait_idsync 1 &&
-	${RPC} job-list.job-state-unpause 0 </dev/null &&
-	wait $pid &&
-	cat list_id_illegal_eventlog.out | $jq -e ".id == ${jobid}"
 '
 
 test_expect_success 'flux job list works on racy annotations' '
