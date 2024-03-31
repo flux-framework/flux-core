@@ -68,23 +68,24 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
 	flux run --dry-run -n1 -N1 sleep 300 > sleeplong.json
 '
 
+test_expect_success 'submit and cancel job for test use' '
+	JOBID=$(submit_job)
+'
+
 test_expect_success 'flux job wait-event works' '
-	jobid=$(submit_job) &&
-	fj_wait_event $jobid submit > wait_event1.out &&
+	fj_wait_event $JOBID submit > wait_event1.out &&
 	grep submit wait_event1.out
 '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event errors on non-event' '
-	jobid=$(submit_job) &&
-	test_must_fail fj_wait_event $jobid foobar 2> wait_event2.err &&
+	test_must_fail fj_wait_event $JOBID foobar 2> wait_event2.err &&
 	grep "never received" wait_event2.err
 '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event does not see event after clean' '
-	jobid=$(submit_job) &&
-	kvsdir=$(flux job id --to=kvs $jobid) &&
+	kvsdir=$(flux job id --to=kvs $JOBID) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
-	test_must_fail fj_wait_event -v $jobid foobar 2> wait_event3.err &&
+	test_must_fail fj_wait_event -v $JOBID foobar 2> wait_event3.err &&
 	grep "never received" wait_event3.err
 '
 
@@ -93,22 +94,19 @@ test_expect_success 'flux job wait-event fails on bad id' '
 '
 
 test_expect_success 'flux job wait-event --quiet works' '
-	jobid=$(submit_job) &&
-	fj_wait_event --quiet $jobid submit > wait_event4.out &&
+	fj_wait_event --quiet $JOBID submit > wait_event4.out &&
 	! test -s wait_event4.out
 '
 
 test_expect_success 'flux job wait-event --verbose works' '
-	jobid=$(submit_job) &&
-	fj_wait_event --verbose $jobid clean > wait_event5.out &&
+	fj_wait_event --verbose $JOBID clean > wait_event5.out &&
 	grep submit wait_event5.out &&
 	grep start wait_event5.out &&
 	grep clean wait_event5.out
 '
 
 test_expect_success 'flux job wait-event --verbose doesnt show events after wait event' '
-	jobid=$(submit_job) &&
-	fj_wait_event --verbose $jobid submit > wait_event6.out &&
+	fj_wait_event --verbose $JOBID submit > wait_event6.out &&
 	grep submit wait_event6.out &&
 	! grep start wait_event6.out &&
 	! grep clean wait_event6.out
@@ -122,140 +120,118 @@ test_expect_success 'flux job wait-event --timeout works' '
 '
 
 test_expect_success 'flux job wait-event --format=json works' '
-	jobid=$(submit_job) &&
-	fj_wait_event --format=json $jobid submit > wait_event_format1.out &&
+	fj_wait_event --format=json $JOBID submit > wait_event_format1.out &&
 	grep -q "\"name\":\"submit\"" wait_event_format1.out &&
 	grep -q "\"userid\":$(id -u)" wait_event_format1.out
 '
 
 test_expect_success 'flux job wait-event --format=text works' '
-	jobid=$(submit_job) &&
-	fj_wait_event --format=text $jobid submit > wait_event_format2.out &&
+	fj_wait_event --format=text $JOBID submit > wait_event_format2.out &&
 	grep -q "submit" wait_event_format2.out &&
 	grep -q "userid=$(id -u)" wait_event_format2.out
 '
 
 test_expect_success 'flux job wait-event --format=invalid fails' '
-	jobid=$(submit_job) &&
-	test_must_fail fj_wait_event --format=invalid $jobid submit
+	test_must_fail fj_wait_event --format=invalid $JOBID submit
 '
 
 test_expect_success 'flux job wait-event --time-format=raw works' '
-	jobid=$(submit_job) &&
-	fj_wait_event --time-format=raw $jobid submit > wait_event_time_format1.out &&
+	fj_wait_event --time-format=raw $JOBID submit > wait_event_time_format1.out &&
 	get_timestamp_field submit wait_event_time_format1.out | grep "\."
 '
 
 test_expect_success 'flux job wait-event --time-format=iso works' '
-	jobid=$(submit_job) &&
-	fj_wait_event --time-format=iso $jobid submit > wait_event_time_format2.out &&
+	fj_wait_event --time-format=iso $JOBID submit > wait_event_time_format2.out &&
 	get_timestamp_field submit wait_event_time_format2.out | grep T | grep Z
 '
 
 test_expect_success 'flux job wait-event --time-format=offset works' '
-	jobid=$(submit_job) &&
-	fj_wait_event --time-format=offset $jobid submit > wait_event_time_format3A.out &&
+	fj_wait_event --time-format=offset $JOBID submit > wait_event_time_format3A.out &&
 	get_timestamp_field submit wait_event_time_format3A.out | grep "0.000000" &&
-	fj_wait_event --time-format=offset $jobid exception > wait_event_time_format3B.out &&
+	fj_wait_event --time-format=offset $JOBID exception > wait_event_time_format3B.out &&
 	get_timestamp_field exception wait_event_time_format3B.out | grep -v "0.000000"
 '
 
 test_expect_success 'flux job wait-event --time-format=invalid fails works' '
-	jobid=$(submit_job) &&
-	test_must_fail fj_wait_event --time-format=invalid $jobid submit
+	test_must_fail fj_wait_event --time-format=invalid $JOBID submit
 '
 
 test_expect_success 'flux job wait-event w/ match-context works (string w/ quotes)' '
-	jobid=$(submit_job) &&
-	fj_wait_event --match-context="type=\"cancel\"" $jobid exception > wait_event_context1.out &&
+	fj_wait_event --match-context="type=\"cancel\"" $JOBID exception > wait_event_context1.out &&
 	grep -q "exception" wait_event_context1.out &&
 	grep -q "type=\"cancel\"" wait_event_context1.out
 '
 
 test_expect_success 'flux job wait-event w/ match-context works (string w/o quotes)' '
-	jobid=$(submit_job) &&
-	fj_wait_event --match-context=type=cancel $jobid exception > wait_event_context2.out &&
+	fj_wait_event --match-context=type=cancel $JOBID exception > wait_event_context2.out &&
 	grep -q "exception" wait_event_context2.out &&
 	grep -q "type=\"cancel\"" wait_event_context2.out
 '
 
 test_expect_success 'flux job wait-event w/ match-context works (int)' '
-	jobid=$(submit_job) &&
-	fj_wait_event --match-context=flags=0 $jobid submit > wait_event_context3.out &&
+	fj_wait_event --match-context=flags=0 $JOBID submit > wait_event_context3.out &&
 	grep -q "submit" wait_event_context3.out &&
 	grep -q "flags=0" wait_event_context3.out
 '
 
 test_expect_success 'flux job wait-event w/ bad match-context fails (invalid key)' '
-	jobid=$(submit_job) &&
-	test_must_fail fj_wait_event --match-context=foo=bar $jobid exception
+	test_must_fail fj_wait_event --match-context=foo=bar $JOBID exception
 '
 
 test_expect_success 'flux job wait-event w/ bad match-context fails (invalid value)' '
-	jobid=$(submit_job) &&
-	test_must_fail fj_wait_event --match-context=type=foo $jobid exception
+	test_must_fail fj_wait_event --match-context=type=foo $JOBID exception
 '
 
 test_expect_success 'flux job wait-event w/ bad match-context fails (invalid input)' '
-	jobid=$(submit_job) &&
-	test_must_fail fj_wait_event --match-context=foo $jobid exception
+	test_must_fail fj_wait_event --match-context=foo $JOBID exception
 '
 
 test_expect_success 'flux job wait-event -p works (eventlog)' '
-	jobid=$(submit_job) &&
-	fj_wait_event -p "eventlog" $jobid submit > wait_event_path1.out &&
+	fj_wait_event -p "eventlog" $JOBID submit > wait_event_path1.out &&
 	grep submit wait_event_path1.out
 '
 
 test_expect_success 'flux job wait-event -p works (guest.exec.eventlog)' '
-	jobid=$(submit_job) &&
-	fj_wait_event -p "guest.exec.eventlog" $jobid done > wait_event_path2.out &&
+	fj_wait_event -p "guest.exec.eventlog" $JOBID done > wait_event_path2.out &&
 	grep done wait_event_path2.out
 '
 test_expect_success 'flux job wait-event -p works (exec)' '
-	fj_wait_event -p exec $jobid done > wait_event_path2.1.out &&
+	fj_wait_event -p exec $JOBID done > wait_event_path2.1.out &&
 	grep done wait_event_path2.1.out
 '
 test_expect_success 'flux job wait-event -p works (non-guest eventlog)' '
-	jobid=$(submit_job) &&
-	kvsdir=$(flux job id --to=kvs $jobid) &&
+	kvsdir=$(flux job id --to=kvs $JOBID) &&
 	flux kvs eventlog append ${kvsdir}.foobar.eventlog foobar &&
-	fj_wait_event -p "foobar.eventlog" $jobid foobar > wait_event_path3.out &&
+	fj_wait_event -p "foobar.eventlog" $JOBID foobar > wait_event_path3.out &&
 	grep foobar wait_event_path3.out
 '
 
 test_expect_success 'flux job wait-event -p fails on invalid path' '
-	jobid=$(submit_job) &&
-	test_must_fail fj_wait_event -p "foobar" $jobid submit
+	test_must_fail fj_wait_event -p "foobar" $JOBID submit
 '
 
 test_expect_success 'flux job wait-event -p fails on invalid guest path' '
-	jobid=$(submit_job) &&
-	test_must_fail fj_wait_event -p "guest.foobar" $jobid submit
+	test_must_fail fj_wait_event -p "guest.foobar" $JOBID submit
 '
 
 test_expect_success 'flux job wait-event -p fails on path "guest."' '
-	jobid=$(submit_job) &&
-	test_must_fail fj_wait_event -p "guest." $jobid submit
+	test_must_fail fj_wait_event -p "guest." $JOBID submit
 '
 
 test_expect_success 'flux job wait-event -p and --waitcreate works (exec)' '
-	jobid=$(submit_job) &&
-	fj_wait_event --waitcreate -p exec $jobid done > wait_event_path4.out &&
+	fj_wait_event --waitcreate -p exec $JOBID done > wait_event_path4.out &&
 	grep done wait_event_path4.out
 '
 
 test_expect_success 'flux job wait-event -p invalid and --waitcreate fails' '
-	jobid=$(submit_job) &&
-	test_must_fail fj_wait_event --waitcreate -p "guest.invalid" $jobid foobar 2> waitcreate1.err &&
+	test_must_fail fj_wait_event --waitcreate -p "guest.invalid" $JOBID foobar 2> waitcreate1.err &&
 	grep "not found" waitcreate1.err
 '
 
 test_expect_success 'flux job wait-event -p hangs on non-guest eventlog' '
-	jobid=$(submit_job) &&
-	kvsdir=$(flux job id --to=kvs $jobid) &&
+	kvsdir=$(flux job id --to=kvs $JOBID) &&
 	flux kvs eventlog append ${kvsdir}.foobar.eventlog foo &&
-	test_expect_code 142 run_timeout -s ALRM 0.2 flux job wait-event -p "foobar.eventlog" $jobid bar
+	test_expect_code 142 run_timeout -s ALRM 0.2 flux job wait-event -p "foobar.eventlog" $JOBID bar
 '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (live job)' '
@@ -312,8 +288,7 @@ test_expect_success 'flux job wait-event --count=0 errors' '
 '
 
 test_expect_success 'flux job wait-event --count=1 works' '
-	jobid=$(submit_job) &&
-	fj_wait_event --count=1 ${jobid} clean
+	fj_wait_event --count=1 ${JOBID} clean
 '
 
 test_expect_success 'flux job wait-event --count=2 works' '
