@@ -89,7 +89,8 @@ flux_shell_SOURCES = \
 	doom.c \
 	exception.c \
 	rlimit.c \
-	cyclic.c \
+	taskmap/cyclic.c \
+	taskmap/hostfile.c \
 	signal.c \
 	files.c \
 	oom.c \

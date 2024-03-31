@@ -773,6 +773,7 @@ void shell_output_destroy (struct shell_output *out)
             zhash_destroy (&out->fds);
         }
         eventlogger_destroy (out->ev);
+        idset_destroy (out->active_shells);
         free (out);
         errno = saved_errno;
     }
