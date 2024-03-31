@@ -182,6 +182,11 @@ test_expect_success 'flux job wait-event w/ bad match-context fails (invalid val
 	test_must_fail fj_wait_event --match-context=type=foo $JOBID exception
 '
 
+# Note: in test below, foo=0 would match severity=0 in buggy version
+test_expect_success 'flux job wait-event w/ bad match-context fails (issue #5845)' '
+	test_must_fail fj_wait_event --match-context=foo=0 $JOBID exception
+'
+
 test_expect_success 'flux job wait-event w/ bad match-context fails (invalid input)' '
 	test_must_fail fj_wait_event --match-context=foo $JOBID exception
 '
