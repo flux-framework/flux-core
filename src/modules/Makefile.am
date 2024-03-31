@@ -45,7 +45,8 @@ fluxmod_LTLIBRARIES = \
 	resource.la \
 	sched-simple.la \
 	sdexec.la \
-	sdbus.la
+	sdbus.la \
+	job-sql.la
 
 if ENABLE_CONTENT_S3
 fluxmod_LTLIBRARIES += content-s3.la
@@ -302,3 +303,12 @@ if HAVE_LIBSYSTEMD
 sdbus_la_LIBADD += $(LIBSYSTEMD_LIBS)
 endif
 sdbus_la_LDFLAGS = $(fluxmod_ldflags) -module
+
+job_sql_la_SOURCES = \
+        job-sql/job-sql.c
+job_sql_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libsqlite3/libsqlite3.la \
+	$(JANSSON_LIBS)
+job_sql_la_LDFLAGS = $(fluxmod_ldflags) -module
