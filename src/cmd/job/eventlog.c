@@ -234,30 +234,30 @@ struct wait_event_ctx {
 static bool wait_event_test_context (struct wait_event_ctx *ctx,
                                      json_t *context)
 {
-    void *iter;
-    bool match = false;
+    const char *key;
+    json_t *value;
 
-    iter = json_object_iter (context);
-    while (iter && !match) {
-        const char *key = json_object_iter_key (iter);
-        json_t *value = json_object_iter_value (iter);
+    json_object_foreach (context, key, value) {
         if (streq (key, ctx->context_key)) {
+            bool match;
             char *str = json_dumps (value, JSON_ENCODE_ANY|JSON_COMPACT);
-            if (streq (str, ctx->context_value))
-                match = true;
+            match = streq (str, ctx->context_value);
             free (str);
-        }
-        /* special case, json_dumps() will put quotes around string
-         * values.  Consider the case when user does not surround
-         * string value with quotes */
-        if (!match && json_is_string (value)) {
-            const char *str = json_string_value (value);
-            if (streq (str, ctx->context_value))
+
+            /* Also try json_string_value() when value is a string:
+             */
+            if (!match
+                && json_is_string (value)
+                && streq (json_string_value (value), ctx->context_value))
                 match = true;
+
+            /*  Return immediately if a match was found:
+             */
+            if (match)
+                return true;
         }
-        iter = json_object_iter_next (context, iter);
     }
-    return match;
+    return false;
 }
 
 static bool wait_event_test (struct wait_event_ctx *ctx, json_t *event)
