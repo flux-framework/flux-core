@@ -233,6 +233,7 @@ TESTSCRIPTS = \
 	t2812-flux-job-last.t \
 	t2813-flux-watch.t \
 	t2814-hostlist-cmd.t \
+	t2815-post-job-event.t \
 	t2900-job-timelimits.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
