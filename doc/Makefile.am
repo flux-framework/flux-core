@@ -451,6 +451,7 @@ EXTRA_DIST = \
 	domainrefs.py \
 	index.rst \
 	index_man.rst \
+	requirements.txt \
 	guide/build.rst \
 	guide/support.rst \
 	guide/images/lgplv3-147x51.png \
