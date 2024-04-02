@@ -74,7 +74,8 @@ libjob_manager_la_SOURCES = \
 	plugins/begin-time.c \
 	plugins/update-duration.c \
 	plugins/validate-duration.c \
-	plugins/history.c
+	plugins/history.c \
+	plugins/post-event.c
 
 fluxinclude_HEADERS = \
 	jobtap.h

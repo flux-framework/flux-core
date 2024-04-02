@@ -10,7 +10,7 @@ skip = [
   "src/bindings/python/flux/resource/__init__.py"]
 
 [tool.mypy]
-python_version = 3.6
+python_version = "3.6"
 files = ["src/cmd/**/*.py", "src/bindings/python/flux", "t/python/*.py"]
 mypy_path = ["src/bindings/python", "t/python/tap", "t/python"]
 allow_redefinition = true
