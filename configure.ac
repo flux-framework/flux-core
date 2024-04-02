@@ -569,6 +569,7 @@ AC_CONFIG_FILES( \
   src/common/libtaskmap/Makefile \
   src/common/libfilemap/Makefile \
   src/common/libsdexec/Makefile \
+  src/common/libsqlite3/Makefile \
   src/common/libmissing/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \

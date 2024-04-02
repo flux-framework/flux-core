@@ -29,6 +29,7 @@ SUBDIRS = \
 	libtaskmap \
 	libfilemap \
 	libsdexec \
+	libsqlite3 \
 	libmissing
 
 AM_CFLAGS = $(WARNING_CFLAGS) $(CODE_COVERAGE_CFLAGS)
