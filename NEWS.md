@@ -1,3 +1,59 @@
+flux-core version 0.61.0 - 2024-04-02
+-------------------------------------
+
+## New Features
+
+ * add utility for posting manual job events if required (#5848)
+ * add `--taskmap=hostfile:FILE` support (#5844)
+ * make KVS garbage collection automatic (#5840)
+ * add a faster way to get resource allocation status than
+   sched.resource-status RPC (#5796, #5834)
+ * job-manager: drop sched.free response requirement (#5786)
+ * job-manager: include R in sched.free request (#5783)
+
+## Fixes
+
+ * flux-job: fix `wait-event -m, --match-context`(#5846)
+ * eliminate duplicate KVS restart in job-list and job-manager (#5837)
+ * python: return empty string on epoch time for D conversion flag (#5841)
+ * configure: add missing check for python ply >= 3.9 (#5839)
+ * fix handling of `Ctrl-SPACE` (`NUL`) over job ptys (e.g. under `flux
+   job attach`) (#5833)
+ * job-ingest: fix handling of size > 16K and reserve some FLUID generator
+   IDs for future use (#5831)
+ * fix `flux submit` and `bulksubmit` handling of mustache templates in
+   command and args (#5817)
+ * flux-resource: improve performance of `flux resource list` (#5823)
+ * optimize key librlist functions to improve `flux resource list`
+   performance (#5824)
+ * python: fix handle barrier method to return a Future (#5825)
+ * job-manager: fix infinite loop when loading builtin jobtap plugin (#5822)
+ * flux-top: skip poorly formed job list records (#5821)
+ * job-exec: raise fatal job exception if rank 0 job shell is lost due to
+   signal (#5814)
+ * job-exec: improve cleanup after lost shell events (#5813)
+ * job-exec: fix potential leak of job KVS namespaces (#5805)
+ * job-exec: fix rare segfault at scale due to libsubprocess use-after-free
+   (#5803)
+ * kvs: remove excessive logging (#5804)
+ * modules/content: drop incorrect assertion (#5781)
+
+## Documentation
+ * add doc/requirements.txt to dist (#5852)
+ * doc: add missing R documentation to flux-jobtap-plugins(7) (#5838)
+
+## CI/Testsuite
+
+ * testsuite: fix potential hang in t2812-flux-job-last.t (#5835)
+ * testsuite: fix test racing with exit-timeout (#5810)
+ * python: update required versions of black and mypy (#5808)
+ * testsuite: fix lingering processes after `make check` (#5769)
+ * github: set `kernel.randomize_va_space=0` for asan build (#5802)
+ * github: run asan build on fedora36 (#5800)
+ * testsuite: fix test that kills the wrong processes (#5792)
+ * improve handling of lost job shells (#5780)
+
+
 flux-core version 0.60.0 - 2024-03-05
 -------------------------------------
 
