@@ -982,11 +982,9 @@ static int journal_process_event (struct job_state_ctx *jsctx,
             return -1;
     }
     else if (streq (name, "flux-restart")) {
-        /* Presently, job-list depends on job-manager.events-journal
-         * service.  So if job-manager reloads, job-list must be
-         * reloaded, making the probability of reaching this
-         * `flux-restart` path very low.  Code added for completeness
-         * and in case dependency removed in the future.
+        /* This can only be seen while processing the journal backlog
+         * as it is posted by the job manager during its KVS restart,
+         * which happens synchronously before the journal RPC is processed.
          */
         if (journal_revert_job (jsctx,
                                 job,
