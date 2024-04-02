@@ -427,7 +427,6 @@ if test "$have_libsystemd" = yes -a "$have_sd_bus_h" = yes; then
 fi
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.11.1], [], [])
 PKG_CHECK_MODULES([LZ4], [liblz4], [], [])
-PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
 PKG_CHECK_MODULES([LIBUUID], [uuid], [], [])
 PKG_CHECK_MODULES([CURSES], [ncursesw], [], [])
 PKG_CHECK_MODULES([LIBARCHIVE], [libarchive], [], [])
