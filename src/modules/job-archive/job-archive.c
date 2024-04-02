@@ -22,8 +22,8 @@
 #include <stdbool.h>
 #include <flux/core.h>
 #include <jansson.h>
-#include <sqlite3.h>
 
+#include "src/common/libsqlite3/sqlite3.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/tstat.h"

@@ -104,12 +104,11 @@ content_sqlite_la_SOURCES = \
         content-sqlite/content-sqlite.c
 content_sqlite_la_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
-	$(SQLITE_CFLAGS) \
 	$(LZ4_CFLAGS)
 content_sqlite_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(SQLITE_LIBS) \
+	$(top_builddir)/src/common/libsqlite3/libsqlite3.la \
 	$(LZ4_LIBS)
 content_sqlite_la_LDFLAGS = $(fluxmod_ldflags) -module
 
@@ -140,13 +139,12 @@ job_archive_la_SOURCES = \
 	job-archive/job-archive.c
 job_archive_la_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
-	$(SQLITE_CFLAGS) \
 	$(FLUX_SECURITY_CFLAGS)
 job_archive_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(JANSSON_LIBS) \
-	$(SQLITE_LIBS)
+	$(top_builddir)/src/common/libsqlite3/libsqlite3.la \
+	$(JANSSON_LIBS)
 job_archive_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 job_exec_la_SOURCES =
