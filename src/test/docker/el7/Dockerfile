@@ -31,7 +31,6 @@ RUN yum -y update \
       hwloc \
       hwloc-devel \
       jansson-devel \
-      sqlite-devel \
       uuid-devel \
       libuuid-devel \
       libfaketime \

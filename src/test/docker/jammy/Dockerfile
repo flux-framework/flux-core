@@ -90,7 +90,6 @@ RUN apt-get update \
         libncursesw5-dev \
         liblua5.2-dev \
         liblz4-dev \
-        libsqlite3-dev \
         uuid-dev \
         libhwloc-dev \
         libmpich-dev \
