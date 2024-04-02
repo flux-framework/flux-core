@@ -8,7 +8,36 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* journal.c - job event journaling and streaming to listeners
+/* journal.c - stream job events
+ *
+ * This allows another service to track detailed information about
+ * all jobs.  The journal consumer makes a job-manger.events-journal
+ * request with optional allow/deny filter and boolean 'full' flag:
+ *   {"full"?b, "allow"?{"name":1, ...}, "deny"?{"name:1, ...}}
+ *
+ * If "full" is true, the journal begins with all the inactive jobs.
+ * If "full" is false, the journal begins with all the active jobs.
+ * If "full" is unspecified, it is assumed to be false.
+ * If allow/deny rules are specified, they filter the job events by name.
+ *
+ * The journal consumer receives a stream of responses until the job
+ * manager is unloaded or the request is canceled.  Each response consists of
+ * an object containing a jobid, an array of events, and optional data:
+ *   {"id":I, "events":[], "jobspec"?s, "R"?s}
+ *
+ * During processing of the initial backlog, the events array will contain
+ * all the events posted so far for each job, plus R and jobspec if available.
+ * The jobs are returned in hash traversal order.  Once backlog processing
+ * is complete, a sentinel response is transmitted with id of FLUX_JOBID_ANY
+ * and an empty events array:
+ *   {"id":-1, "events":[]}
+ *
+ * The sentinel informs the consumer that it is now caught up and that future
+ * responses will be for events that are are posted in real time.
+ *
+ * Additional responses contain at most one event.  The redacted jobspec is
+ * included with the "validate" event.  The redacted R object is included
+ * with the "alloc" event.
  */
 
 #if HAVE_CONFIG_H
