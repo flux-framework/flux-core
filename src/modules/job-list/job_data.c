@@ -40,8 +40,6 @@ void job_destroy (void *data)
         json_decref (job->jobspec);
         json_decref (job->R);
         json_decref (job->exception_context);
-        json_decref (job->jobspec_updates);
-        json_decref (job->R_updates);
         free (job);
         errno = save_errno;
     }
