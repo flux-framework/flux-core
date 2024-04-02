@@ -13,7 +13,6 @@ yum install \
   lz4-devel \
   libarchive-devel \
   hwloc-devel \
-  sqlite-devel \
   lua \
   lua-devel \
   lua-posix \

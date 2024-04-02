@@ -12,7 +12,6 @@ Build-Depends:
   libjansson-dev,
   liblz4-dev,
   libhwloc-dev,
-  libsqlite3-dev,
   lua5.1,
   liblua5.1-dev,
   lua-posix,
