@@ -29,8 +29,6 @@
 #include "job.h"
 #include "journal.h"
 
-#define DEFAULT_JOURNAL_SIZE_LIMIT 1000
-
 struct journal {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
