@@ -666,15 +666,16 @@ components need to be configured, which is explained in the steps below.
           "-e", "/usr/libexec/flux/flux-imp,run,epilog"
        ]
 
-  4. (optional) If log messages from the prolog or epilog are filling
-     up the broker logs, a list of ignore patterns may be added via
-     the ``[job-manager.perilog]`` ``log-ignore`` array. Each entry
-     in the array should be a :linux:man7:`regex`. POSIX extended
-     regular expression syntax is supported, e.g.:
+ 4. (optional) If log messages from the prolog or epilog are filling
+    up the broker logs, a list of ignore patterns may be added via
+    the ``[job-manager.perilog]`` ``log-ignore`` array. Each entry
+    in the array should be a :linux:man7:`regex`. POSIX extended
+    regular expression syntax is supported, e.g.:
 
-     .. code-block:: toml
-     [job-manager]
-     perilog.log-ignore = [ ".*Xauth.*", "^foo:.*debug" ]
+    .. code-block:: toml
+
+      [job-manager]
+      perilog.log-ignore = [ ".*Xauth.*", "^foo:.*debug" ]
 
 Note that the ``flux perilog-run`` command will additionally execute any
 scripts in ``/etc/flux/system/{prolog,epilog}.d`` on rank 0 by default as
