@@ -77,9 +77,6 @@ struct job {
     unsigned int states_mask;
     unsigned int states_events_mask;
     void *list_handle;
-    /* store updates that were received before jobspec/R objects */
-    json_t *jobspec_updates;
-    json_t *R_updates;
 
     int submit_version;         /* version number in submit context */
 };

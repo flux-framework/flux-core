@@ -288,7 +288,7 @@ static void process_state_transition_update (struct job_state_ctx *jsctx,
     }
     if (state == FLUX_JOB_STATE_DEPEND) {
         // process job->jobspec which was obtained from journal
-        if (job_parse_jobspec_cached (job, job->jobspec_updates) < 0) {
+        if (job_parse_jobspec_cached (job, NULL) < 0) {
             flux_log_error (jsctx->h,
                             "%s: error parsing jobspec",
                             idf58 (job->id));
@@ -322,18 +322,13 @@ static void update_jobspec (struct job_state_ctx *jsctx,
                             json_t *context,
                             bool update_stats)
 {
-    /* we have not loaded the jobspec yet, save off jobspec updates
-     * for an update after jobspec retrieved
+    /* It is theoretically possible an update could occur before the
+     * jobspec is available.  We don't handle it, just log an error.
      */
     if (!job->jobspec) {
-        if (!job->jobspec_updates)
-            job->jobspec_updates = json_incref (context);
-        else {
-            if (json_object_update (job->jobspec_updates, context) < 0)
-                flux_log (jsctx->h, LOG_INFO,
-                          "%s: job %s failed to update jobspec",
-                          __FUNCTION__, idf58 (job->id));
-        }
+        flux_log (jsctx->h, LOG_ERR,
+                  "%s: job %s received jobspec update before jobspec",
+                  __FUNCTION__, idf58 (job->id));
         return;
     }
 
@@ -353,18 +348,13 @@ static void update_resource (struct job_state_ctx *jsctx,
                              struct job *job,
                              json_t *context)
 {
-    /* we have not loaded the R yet, save off R updates
-     * for an update after jobspec retrieved
+    /* R should always be available at this point, outside of
+     * testing scenarios.
      */
     if (!job->R) {
-        if (!job->R_updates)
-            job->R_updates = json_incref (context);
-        else {
-            if (json_object_update (job->R_updates, context) < 0)
-                flux_log (jsctx->h, LOG_INFO,
-                          "%s: job %s failed to update R",
-                          __FUNCTION__, idf58 (job->id));
-        }
+        flux_log (jsctx->h, LOG_ERR,
+                  "%s: job %s received resource update before R",
+                  __FUNCTION__, idf58 (job->id));
         return;
     }
 
