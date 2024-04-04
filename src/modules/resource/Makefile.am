@@ -35,7 +35,9 @@ libresource_la_SOURCES = \
 	rutil.c \
 	rutil.h \
 	status.c \
-	status.h
+	status.h \
+	drainset.h \
+	drainset.c
 
 TESTS = test_rutil.t
 
