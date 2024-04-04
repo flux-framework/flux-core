@@ -769,8 +769,9 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc2 - initial program
      */
     if (ctx->rank == 0 && !rc2_none) {
-        if (create_runat_rc2 (ctx->runat, ctx->init_shell_cmd,
-                                          ctx->init_shell_cmd_len) < 0) {
+        if (create_runat_rc2 (ctx->runat,
+                              ctx->init_shell_cmd,
+                              ctx->init_shell_cmd_len) < 0) {
             log_err ("create_runat_rc2");
             return -1;
         }
