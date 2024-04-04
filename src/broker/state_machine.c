@@ -358,6 +358,9 @@ static void action_run (struct state_machine *s)
 #endif
 }
 
+/* In the cleanup state, we run the shutdown script.  When the shutdown
+ * script is complete, we enter shutdown state.
+ */
 static void action_cleanup (struct state_machine *s)
 {
     /* Prevent new downstream clients from saying hello, but
@@ -366,9 +369,12 @@ static void action_cleanup (struct state_machine *s)
      */
     overlay_shutdown (s->ctx->overlay, false);
 
-    if (runat_is_defined (s->ctx->runat, "cleanup")) {
-        if (runat_start (s->ctx->runat, "cleanup", runat_completion_cb, s) < 0) {
-            flux_log_error (s->ctx->h, "runat_start cleanup");
+    if (runat_is_defined (s->ctx->runat, "shutdown")) {
+        if (runat_start (s->ctx->runat,
+                         "shutdown",
+                         runat_completion_cb,
+                         s) < 0) {
+            flux_log_error (s->ctx->h, "runat_start shutdown");
             state_machine_post (s, "cleanup-fail");
         }
     }
@@ -535,8 +541,8 @@ void state_machine_kill (struct state_machine *s, int signum)
                 state_machine_post (s, "shutdown");
             break;
         case STATE_CLEANUP:
-            if (runat_abort (s->ctx->runat, "cleanup") < 0)
-                flux_log_error (h, "runat_abort cleanup (signal %d)", signum);
+            if (runat_abort (s->ctx->runat, "shutdown") < 0)
+                flux_log_error (h, "runat_abort shutdown (signal %d)", signum);
             break;
         case STATE_FINALIZE:
             (void)runat_abort (s->ctx->runat, "rc3");
@@ -613,7 +619,7 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "rc2-success" : "rc2-fail");
     }
-    else if (streq (name, "cleanup")) {
+    else if (streq (name, "shutdown")) {
         if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "cleanup-success" : "cleanup-fail");
