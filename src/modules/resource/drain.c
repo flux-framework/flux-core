@@ -52,6 +52,7 @@
 #include "drain.h"
 #include "rutil.h"
 #include "inventory.h"
+#include "drainset.h"
 
 struct draininfo {
     bool drained;
@@ -272,34 +273,23 @@ done:
 
 json_t *drain_get_info (struct drain *drain)
 {
-    json_t *o;
-    unsigned int rank;
-
-    if (!(o = json_object ()))
-        goto nomem;
-    for (rank = 0; rank < drain->ctx->size; rank++) {
+    json_t *o = NULL;
+    struct drainset *ds = drainset_create ();
+    if (!ds)
+        goto error;
+    for (unsigned int rank = 0; rank < drain->ctx->size; rank++) {
         if (drain->info[rank].drained) {
-            char *reason = drain->info[rank].reason;
-            json_t *val;
-            if (!(val = json_pack ("{s:f s:s}",
-                                   "timestamp",
-                                   drain->info[rank].timestamp,
-                                   "reason",
-                                   reason ? reason : "")))
-                goto nomem;
-            if (rutil_idkey_insert_id (o, rank, val) < 0) {
-                ERRNO_SAFE_WRAP (json_decref, val);
+            if (drainset_drain_rank (ds,
+                                     rank,
+                                     drain->info[rank].timestamp,
+                                     drain->info[rank].reason) < 0)
                 goto error;
-            }
-            json_decref (val);
         }
     }
-    return o;
-nomem:
-    errno = ENOMEM;
+    o = drainset_to_json (ds);
 error:
-    ERRNO_SAFE_WRAP (json_decref, o);
-    return NULL;
+    drainset_destroy (ds);
+    return o;
 }
 
 struct idset *drain_get (struct drain *drain)
