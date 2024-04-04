@@ -39,7 +39,9 @@ libresource_la_SOURCES = \
 	drainset.h \
 	drainset.c
 
-TESTS = test_rutil.t
+TESTS = \
+	test_rutil.t \
+	test_drainset.t
 
 test_ldadd = \
 	$(builddir)/libresource.la \
@@ -68,3 +70,8 @@ test_rutil_t_SOURCES = test/rutil.c
 test_rutil_t_CPPFLAGS = $(test_cppflags)
 test_rutil_t_LDADD = $(test_ldadd)
 test_rutil_t_LDFLAGS = $(test_ldflags)
+
+test_drainset_t_SOURCES = test/drainset.c
+test_drainset_t_CPPFLAGS = $(test_cppflags)
+test_drainset_t_LDADD = $(test_ldadd)
+test_drainset_t_LDFLAGS = $(test_ldflags)
