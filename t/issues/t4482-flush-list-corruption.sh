@@ -39,5 +39,6 @@ chmod +x t4482.sh
 
 flux start -s 1 \
     -o,--setattr=broker.rc1_path= \
+    -o,--setattr=broker.shutdown_path= \
     -o,--setattr=broker.rc3_path= \
     ./t4482.sh

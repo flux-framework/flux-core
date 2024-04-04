@@ -200,6 +200,7 @@ reader() {
 	local dbdir=$1
         flux start -o,-Sbroker.rc1_path= \
                 -o,-Sbroker.rc3_path=\
+                -o,-Sbroker.shutdown_path=\
                 -o,-Sstatedir=$dbdir\
                 bash -c "\
                         flux module load content && \
@@ -214,6 +215,7 @@ writer() {
 	local dbdir=$1
         flux start -o,-Sbroker.rc1_path= \
                 -o,-Sbroker.rc3_path= \
+                -o,-Sbroker.shutdown_path= \
                 -o,-Sstatedir=$dbdir \
                 bash -c "\
                         flux module load content && \

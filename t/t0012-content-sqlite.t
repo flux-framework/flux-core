@@ -20,6 +20,7 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SPAMUTIL="${FLUX_BUILD_DIR}/t/kvs/content-spam"
 rc1_kvs=$SHARNESS_TEST_SRCDIR/rc/rc1-kvs
 rc3_kvs=$SHARNESS_TEST_SRCDIR/rc/rc3-kvs
+shutdown_kvs=$SHARNESS_TEST_SRCDIR/rc/shutdown-kvs
 
 test_expect_success 'load content module with lower purge/age thresholds' '
 	flux exec flux module load content \
@@ -333,12 +334,18 @@ test_expect_success 'reload module with no options and verify modes' '
 
 
 test_expect_success 'run flux without statedir and verify modes' '
-	flux start -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	flux start \
+	    -o,-Sbroker.rc1_path=$rc1_kvs \
+	    -o,-Sbroker.shutdown_path=$shutdown_kvs \
+	    -o,-Sbroker.rc3_path=$rc3_kvs \
 	    flux dmesg >logs3 &&
 	grep "journal_mode=OFF synchronous=OFF" logs3
 '
 test_expect_success 'run flux with statedir and verify modes' '
-	flux start -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	flux start \
+	    -o,-Sbroker.rc1_path=$rc1_kvs \
+	    -o,-Sbroker.shutdown_path=$shutdown_kvs \
+	    -o,-Sbroker.rc3_path=$rc3_kvs \
 	    -o,-Sstatedir=$(pwd) flux dmesg >logs4  &&
 	grep "journal_mode=WAL synchronous=NORMAL" logs4
 '
@@ -346,7 +353,10 @@ test_expect_success 'run flux with statedir and verify modes' '
 # Will create in WAL mode since statedir is set
 recreate_database()
 {
-	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+	flux start \
+	    -o,-Sbroker.rc1_path= \
+	    -o,-Sbroker.shutdown_path= \
+	    -o,-Sbroker.rc3_path= \
 	    -o,-Sstatedir=$(pwd) bash -c \
 	    "flux module load content &&
 	    flux module load content-sqlite truncate && \
@@ -355,7 +365,10 @@ recreate_database()
 }
 load_module_xfail()
 {
-	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+	flux start \
+	    -o,-Sbroker.rc1_path= \
+	    -o,-Sbroker.shutdown_path= \
+	    -o,-Sbroker.rc3_path= \
 	    -o,-Sstatedir=$(pwd) bash -c \
 	    "flux module load content; \
 	    flux module load content-sqlite; \

@@ -10,7 +10,7 @@ test_description='Test config file overlay bootstrap'
 
 
 # Avoid loading unnecessary modules in back to back broker tests
-ARGS="-Sbroker.rc1_path= -Sbroker.rc3_path="
+ARGS="-Sbroker.rc1_path= -Sbroker.rc3_path= -Sbroker.shutdown_path="
 
 # This option is compiled out of flux if zeromq is too old
 if flux broker ${ARGS} flux getattr tbon.tcp_user_timeout >/dev/null 2>&1; then
@@ -227,6 +227,7 @@ test_expect_success 'start size=2 instance with ipc://' '
 	EOT
 	flux start -s2 --test-hosts=fake[0-1] \
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		-o,-Sbroker.shutdown_path= \
 		-o,--config-path=conf8 \
 		./attrdump.sh >ipc.out &&
 	cat <<-EXP >ipc.exp &&
@@ -257,6 +258,7 @@ test_expect_success 'start size=3 instance with ipc:// and custom topology' '
 	EOT
 	flux start --test-size=3 --test-hosts=fake[0-2] \
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		-o,-Sbroker.shutdown_path= \
 		-o,--config-path=conf8a \
 		flux getattr tbon.maxlevel >conf8a.out &&
 	echo 2 >conf8a.exp &&
@@ -288,8 +290,8 @@ test_expect_success NO_CHAIN_LINT 'a warning is printed when upstream URI has un
 	host = "fake1"
 	EOT
 	FLUX_FAKE_HOSTNAME=fake1 \
-		flux broker -vv -Sbroker.rc1_path=,-Sbroker.rc3_path= \
-		--config-path=conf8b 2>warn.err &
+		flux broker -vv -Sbroker.rc1_path= -Sbroker.rc3_path= \
+		-Sbroker.shutdown_path= --config-path=conf8b 2>warn.err &
 	echo $! >warn.pid &&
 	waitgrep "unable to resolve upstream peer" warn.err 30
 '
@@ -325,6 +327,7 @@ test_expect_success 'start size=4 instance with tcp://' '
 	EOT
 	flux start -s4 --test-hosts=fake[0-3] \
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		-o,-Sbroker.shutdown_path= \
 		-o,--config-path=conf9 \
 		./attrdump.sh >tcp.out &&
 	cat <<-EXP >tcp.exp &&

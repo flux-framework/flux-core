@@ -24,6 +24,7 @@ test_expect_success 'expected broker attributes are set in recovery mode' '
 	EOT
 	flux start --recovery=$(pwd)/test1 \
 	    -o,-Sbroker.rc1_path= \
+	    -o,-Sbroker.shutdown_path= \
 	    -o,-Sbroker.rc3_path= \
 	    bash -c " \
 		flux getattr broker.recovery-mode && \
@@ -35,6 +36,7 @@ test_expect_success 'banner message is printed in interactive recovery mode' '
 	run_timeout --env=SHELL=/bin/sh 120 \
 	    $runpty -i none flux start \
 	        -o,-Sbroker.rc1_path= \
+	        -o,-Sbroker.shutdown_path= \
 	        -o,-Sbroker.rc3_path= \
 	        --recovery=$(pwd)/test1 >banner.out &&
 	grep "Entering Flux recovery mode" banner.out
@@ -42,6 +44,7 @@ test_expect_success 'banner message is printed in interactive recovery mode' '
 test_expect_success 'rc1 failure is ignored in recovery mode' '
 	flux start --recovery=$(pwd)/test1 \
 	    -o,-Sbroker.rc1_path=/bin/false \
+	    -o,-Sbroker.shutdown_path= \
 	    -o,-Sbroker.rc3_path= \
 	    echo "hello world" >hello.out &&
 	grep hello hello.out
@@ -65,6 +68,7 @@ test_expect_success 'banner message warns changes are not persistent' '
 	run_timeout --env=SHELL=/bin/sh 120 \
 	    $runpty -i none flux start \
 	        -o,-Sbroker.rc1_path= \
+	        -o,-Sbroker.shutdown_path= \
 	        -o,-Sbroker.rc3_path= \
 	        --recovery=$(pwd)/test1.tar >banner2.out &&
 	grep "changes will not be preserved" banner2.out

@@ -6,16 +6,17 @@ test_description='Test flux job manager restart'
 
 DUMPS=${SHARNESS_TEST_SRCDIR}/job-manager/dumps
 
-export FLUX_DISABLE_JOB_CLEANUP=t
+COMMON_START_OPTS=-o,--config-path=$(pwd)/conf.d,-Sbroker.shutdown_path=
 
 test_expect_success 'start instance with empty kvs, run one job, and dump' '
 	flux start -o,-Scontent.dump=dump.tar \
+	    -o,-Sbroker.shutdown_path= \
 	    flux run --env-remove=* /bin/true &&
 	test -f $(pwd)/dump.tar
 '
 
 restart_flux() {
-	flux start -o,-Scontent.restore=$1 \
+	flux start -o,-Scontent.restore=$1,-Sbroker.shutdown_path= \
 		flux module stats job-manager
 }
 
@@ -23,7 +24,9 @@ restart_flux() {
 # "not replayed" warnings were logged
 restart_with_job_warning() {
 	local out=$(basename $1).dmesg
-	flux start -o,-Scontent.restore=$1 /bin/true 2>$out
+	flux start -o,-Scontent.restore=$1 \
+	    -o,-Sbroker.shutdown_path= \
+	    /bin/true 2>$out
 	result=$?
 	cat $out
 	test $result -eq 0 && grep -q "not replayed:" $out
@@ -61,23 +64,28 @@ test_expect_success 'and max_jobid is still greater than zero' '
 '
 
 test_expect_success 'purging all jobs triggers jobid checkpoint update' '
-	flux start bash -c "flux run --env-remove=* /bin/true && \
+	flux start -o,-Sbroker.shutdown_path= \
+	    bash -c "flux run --env-remove=* /bin/true && \
 	    flux job purge -f --num-limit=0 && \
 	    flux kvs get checkpoint.job-manager"
 '
 
 test_expect_success 'verify that anon queue disable persists across restart' '
 	flux start -o,-Scontent.dump=dump_dis.tar \
+	    -o,-Sbroker.shutdown_path= \
 	    flux queue disable disable-restart-test &&
 	flux start -o,-Scontent.restore=dump_dis.tar \
+	    -o,-Sbroker.shutdown_path= \
 	    flux queue status >dump_dis.out &&
 	grep "disabled: disable-restart-test" dump_dis.out
 '
 
 test_expect_success 'verify that anon queue stopped persists across restart' '
 	flux start -o,-Scontent.dump=dump_stopped.tar \
+	    -o,-Sbroker.shutdown_path= \
 	    flux queue stop stop-restart-test &&
 	flux start -o,-Scontent.restore=dump_stopped.tar \
+	    -o,-Sbroker.shutdown_path= \
 	    flux queue status >dump_stopped.out &&
 	grep "stopped: stop-restart-test" dump_stopped.out
 '
@@ -88,22 +96,22 @@ test_expect_success 'verify that named queue enable/disable persists across rest
 	[queues.debug]
 	[queues.batch]
 	EOT
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.dump=dump_queue_enable1.tar \
 	    flux queue status >dump_queue_enable_1.out &&
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.restore=dump_queue_enable1.tar \
 	    -o,-Scontent.dump=dump_queue_enable2.tar \
 	    flux queue disable --queue=batch xyzzy &&
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.restore=dump_queue_enable2.tar \
 	    -o,-Scontent.dump=dump_queue_enable3.tar \
 	    flux queue status >dump_queue_enable_2.out &&
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.restore=dump_queue_enable3.tar \
 	    -o,-Scontent.dump=dump_queue_enable4.tar \
 	    flux queue enable --queue=batch &&
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.restore=dump_queue_enable4.tar \
 	    -o,-Scontent.dump=dump_queue_enable5.tar \
 	    flux queue status >dump_queue_enable_3.out &&
@@ -119,6 +127,7 @@ test_expect_success 'verify that named queue enable/disable persists across rest
 # is tested
 test_expect_success 'verify that instance can restart after config change' '
 	flux start -o,-Scontent.restore=dump_queue_enable5.tar \
+	    -o,-Sbroker.shutdown_path= \
 	    flux queue status >dump_queue_reconf.out &&
 	grep "^Job submission is enabled" dump_queue_reconf.out
 '
@@ -129,22 +138,22 @@ test_expect_success 'verify that named queue start/stop persists across restart'
 	[queues.debug]
 	[queues.batch]
 	EOT
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.dump=dump_queue_start1.tar \
 	    flux queue status >dump_queue_start_1.out &&
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.restore=dump_queue_start1.tar \
 	    -o,-Scontent.dump=dump_queue_start2.tar \
 	    flux queue start --queue=batch &&
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.restore=dump_queue_start2.tar \
 	    -o,-Scontent.dump=dump_queue_start3.tar \
 	    flux queue status >dump_queue_start_2.out &&
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.restore=dump_queue_start3.tar \
 	    -o,-Scontent.dump=dump_queue_start4.tar \
 	    flux queue stop --queue=batch xyzzy &&
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.restore=dump_queue_start4.tar \
 	    -o,-Scontent.dump=dump_queue_start5.tar \
 	    flux queue status >dump_queue_start_3.out &&
@@ -162,13 +171,13 @@ test_expect_success 'checkpointed queue no longer configured on restart is ignor
 	[queues.debug]
 	[queues.batch]
 	EOT
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.dump=dump_queue_missing.tar \
 	    flux queue disable --queue batch xyzzy &&
 	cat >conf.d/queues.toml <<-EOT &&
 	[queues.debug]
 	EOT
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.restore=dump_queue_missing.tar \
 	    flux queue status >dump_queue_missing.out &&
 	grep "^debug: Job submission is enabled" dump_queue_missing.out &&
@@ -182,14 +191,14 @@ test_expect_success 'new queue configured on restart uses defaults' '
 	[queues.debug]
 	[queues.batch]
 	EOT
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.dump=dump_queue_ignored.tar \
 	    flux queue disable --queue batch xyzzy &&
 	cat >conf.d/queues.toml <<-EOT &&
 	[queues.debug]
 	[queues.newqueue]
 	EOT
-	flux start -o,--config-path=$(pwd)/conf.d \
+	flux start ${COMMON_START_OPTS} \
 	    -o,-Scontent.restore=dump_queue_ignored.tar \
 	    flux queue status >dump_queue_ignored.out &&
 	grep "^debug: Job submission is enabled" dump_queue_ignored.out &&

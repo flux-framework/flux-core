@@ -9,7 +9,7 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SRPC=${FLUX_BUILD_DIR}/t/request/rpc_stream
-ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
+ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Sbroker.shutdown_path="
 GROUPSCMD="flux python ${SHARNESS_TEST_SRCDIR}/scripts/groups.py"
 
 test_expect_success 'quorum reached on instance with 1 TBON level' '
@@ -83,6 +83,7 @@ test_expect_success 'instance functions with late-joiner' '
 		flux start -s2 \
 		-o,-Slog-stderr-level=6 \
 		-o,-Sbroker.rc1_path="$(pwd)/rc1_block" \
+		-o,-Sbroker.shutdown_path= \
 		-o,-Sbroker.rc3_path= \
 		-o,-Sbroker.quorum=1 \
 		$(pwd)/rc2_unblock >late.out &&
@@ -115,6 +116,7 @@ test_expect_success 'monitor reports INIT(2) in rc1' '
 	echo 2 >rc1.exp &&
 	flux start \
 		-o,-Sbroker.rc1_path=$(pwd)/rc_getstate \
+		-o,-Sbroker.shutdown_path= \
 		-o,-Sbroker.rc3_path= \
 		/bin/true &&
 	test_cmp rc1.exp rc.out
@@ -124,17 +126,19 @@ test_expect_success 'monitor reports RUN(4) in rc2' '
 	echo 4 >rc2.exp &&
 	flux start \
 		-o,-Sbroker.rc1_path= \
+		-o,-Sbroker.shutdown_path= \
 		-o,-Sbroker.rc3_path= \
 		$(pwd)/rc_getstate &&
 	test_cmp rc2.exp rc.out
 '
 
-test_expect_success 'monitor reports CLEANUP(5) in cleanup script' '
+test_expect_success 'monitor reports CLEANUP(5) in shutdown script' '
 	echo 5 >cleanup.exp &&
 	flux start \
 		-o,-Sbroker.rc1_path= \
+		-o,-Sbroker.shutdown_path=$(pwd)/rc_getstate \
 		-o,-Sbroker.rc3_path= \
-		bash -c "echo $(pwd)/rc_getstate | flux admin cleanup-push" &&
+		/bin/true &&
 	test_cmp cleanup.exp rc.out
 '
 
@@ -142,6 +146,7 @@ test_expect_success 'monitor reports FINALIZE(7) in rc3' '
 	echo 7 >rc3.exp &&
 	flux start \
 		-o,-Sbroker.rc1_path= \
+		-o,-Sbroker.shutdown_path= \
 		-o,-Sbroker.rc3_path=$(pwd)/rc_getstate \
 		/bin/true &&
 	test_cmp rc3.exp rc.out
@@ -232,6 +237,7 @@ test_expect_success 'capture state transitions from instance with rc3 failure' '
 	test_expect_code 1 flux start \
 	    -o,-Slog-filename=states_rc3.log \
 	    -o,-Sbroker.rc1_path= \
+	    -o,-Sbroker.shutdown_path= \
 	    -o,-Sbroker.rc3_path=/bin/false \
 	    /bin/true
 '

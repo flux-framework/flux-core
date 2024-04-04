@@ -132,7 +132,7 @@ test_expect_success 'flux fortune with art works' '
 
 # Minimal is sufficient for these tests, but test_under_flux unavailable
 # clear the RC paths
-ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
+ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Sbroker.shutdown_path="
 
 test_expect_success 'flux-start in exec mode works' "
 	flux start ${ARGS} flux getattr size | grep -x 1
