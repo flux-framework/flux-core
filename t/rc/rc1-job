@@ -66,9 +66,3 @@ if [ $RANK -eq 0 ]
 then
     flux module debug --setbit 0x2 sched-simple
 fi
-
-test $RANK -ne 0 || flux admin cleanup-push <<-EOT
-	flux queue stop --all --nocheckpoint
-	flux cancel --all --states RUN
-	flux queue idle
-EOT

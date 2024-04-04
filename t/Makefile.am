@@ -303,6 +303,8 @@ EXTRA_DIST= \
 	rc/rc1-job \
 	rc/rc3-kvs \
 	rc/rc3-job \
+	rc/shutdown-kvs \
+	rc/shutdown-job \
 	shell/input \
 	shell/output \
 	shell/initrc/tests \
