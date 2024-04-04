@@ -111,6 +111,10 @@ The following configuration keys may be printed with
    The rc1 script path used by :man1:`flux-broker`, unless overridden by
    the ``broker.rc1_path`` broker attribute.
 
+**shutdown_path**
+   The shutdown script path used by :man1:`flux-broker`, unless overridden by
+   the ``broker.shutdown_path`` broker attribute.
+
 **rc3_path**
    The rc3 script path used by :man1:`flux-broker`, unless overridden by
    the ``broker.rc1_path`` broker attribute.

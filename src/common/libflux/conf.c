@@ -95,6 +95,11 @@ static struct builtin builtin_tab[] = {
         .val_intree = ABS_TOP_SRCDIR "/etc/rc1",
     },
     {
+        .key = "shutdown_path",
+        .val_installed = FLUXCONFDIR "/shutdown",
+        .val_intree = ABS_TOP_SRCDIR "/etc/shutdown",
+    },
+    {
         .key = "rc3_path",
         .val_installed = FLUXCONFDIR "/rc3",
         .val_intree = ABS_TOP_SRCDIR "/etc/rc3",
