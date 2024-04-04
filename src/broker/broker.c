@@ -757,11 +757,11 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc1 - initialization
      */
     if (rc1 && strlen (rc1) > 0) {
-        if (runat_push_shell_command (ctx->runat,
-                                      "rc1",
-                                      rc1,
-                                      RUNAT_FLAG_LOG_STDIO) < 0) {
-            log_err ("runat_push_shell_command rc1");
+        if (runat_push_command_line (ctx->runat,
+                                     "rc1",
+                                     rc1,
+                                     RUNAT_FLAG_LOG_STDIO) < 0) {
+            log_err ("runat_push_command_line rc1");
             return -1;
         }
     }
@@ -780,11 +780,11 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* shutdown - clean up in preparation for instance shutdown
      */
     if (ctx->rank == 0 && shutdown && strlen (shutdown) > 0) {
-        if (runat_push_shell_command (ctx->runat,
-                                      "shutdown",
+        if (runat_push_command_line (ctx->runat,
+                                     "shutdown",
                                       shutdown,
                                       RUNAT_FLAG_LOG_STDIO) < 0) {
-            log_err ("runat_push_shell_command shutdown");
+            log_err ("runat_push_command_line shutdown");
             return -1;
         }
     }
@@ -792,11 +792,11 @@ static int create_runat_phases (broker_ctx_t *ctx)
     /* rc3 - finalization
      */
     if (rc3 && strlen (rc3) > 0) {
-        if (runat_push_shell_command (ctx->runat,
-                                      "rc3",
-                                      rc3,
-                                      RUNAT_FLAG_LOG_STDIO) < 0) {
-            log_err ("runat_push_shell_command rc3");
+        if (runat_push_command_line (ctx->runat,
+                                     "rc3",
+                                     rc3,
+                                     RUNAT_FLAG_LOG_STDIO) < 0) {
+            log_err ("runat_push_command_line rc3");
             return -1;
         }
     }

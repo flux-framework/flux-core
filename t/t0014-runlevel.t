@@ -28,7 +28,7 @@ test_expect_success 'rc1 failure causes instance failure' '
 test_expect_success 'rc1 bad path handled same as failure' '
 	(
 	  SHELL=/bin/sh &&
-	  test_expect_code 127 flux start \
+	  test_expect_code 1 flux start \
 		-o,-Sbroker.rc1_path=rc1-nonexist \
 		-o,-Sbroker.rc3_path= \
 		-o,-Sbroker.shutdown_path= \
