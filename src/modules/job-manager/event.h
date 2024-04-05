@@ -22,9 +22,6 @@ enum job_manager_event_flags {
 
     /*  EVENT_NO_COMMIT events are the same as any other event, except
      *   that the event is not posted to the job eventlog in the KVS.
-     *   The event is not given a global sequence number, since this would
-     *   cause the events to be numbered incorrectly when replayed from
-     *   the eventlog in the KVS.
      */
     EVENT_NO_COMMIT = 1,
 };

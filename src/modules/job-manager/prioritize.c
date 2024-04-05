@@ -98,7 +98,7 @@ static int reprioritize_one (struct job_manager *ctx,
         && job->state != FLUX_JOB_STATE_PRIORITY
         && job->priority != FLUX_JOB_PRIORITY_MIN
         && job->priority != FLUX_JOB_PRIORITY_MAX)
-        flags = EVENT_JOURNAL_ONLY;
+        flags = EVENT_NO_COMMIT;
      */
 
     /*  Post 'priority' event.
