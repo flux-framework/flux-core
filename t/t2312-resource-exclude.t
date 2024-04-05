@@ -56,7 +56,7 @@ test_expect_success 'config with bad exclude idset fails' '
 	[resource]
 	exclude = "xxzz"
 	EOT
-	test_must_fail flux start -o,--config-path=resource.toml
+	test_must_fail flux start -o,--config-path=resource.toml true
 '
 
 test_expect_success 'config with out of range exclude idset fails' '
@@ -64,7 +64,7 @@ test_expect_success 'config with out of range exclude idset fails' '
 	[resource]
 	exclude = "1"
 	EOT
-	test_must_fail flux start -o,--config-path=resource.toml
+	test_must_fail flux start -o,--config-path=resource.toml true
 '
 
 # See flux-framework/flux-core#5337
