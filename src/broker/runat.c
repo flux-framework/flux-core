@@ -686,6 +686,12 @@ static void runat_push_cb (flux_t *h,
         errstr = "commands array is empty";
         goto error;
     }
+    /* Transition: treat "cleanup" as an alias for "shutdown"
+     * so framework projects that are still using flux admin cleanup-push
+     * can add commands to "shutdown".
+     */
+    if (streq (name, "cleanup"))
+        name = "shutdown";
     json_array_foreach (commands, index, el) {
         const char *cmdline = json_string_value (el);
         if (!cmdline || strlen (cmdline) == 0) {
