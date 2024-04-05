@@ -20,10 +20,6 @@ int rutil_idset_diff (const struct idset *old_set,
                       struct idset **add,
                       struct idset **sub);
 
-/* Check whether id is a member of encoded idset
- */
-bool rutil_idset_decode_test (const char *idset, unsigned long id);
-
 /* Set key=val in a json object, where val is the string
  * representation of 'ids', or the empty string if 'ids' is NULL.
  */
@@ -42,27 +38,15 @@ char *rutil_read_file (const char *path, flux_error_t *errp);
 json_t *rutil_load_file (const char *path, flux_error_t *errp);
 json_t *rutil_load_xml_dir (const char *path, flux_error_t *errp);
 
-/* Build object with idset keys.
- * Start with empty json_t object, then insert objects by id.
- * If json_equal() returns true on values, they are combined.
- */
-int rutil_idkey_insert_id (json_t *obj, unsigned int id, json_t *val);
-int rutil_idkey_insert_idset (json_t *obj, struct idset *ids, json_t *val);
-
 /* Map over object with idset keys, calling 'map' for each id.
  * map function returns 0 on success, -1 with errno set to abort.
  */
 typedef int (*rutil_idkey_map_f)(unsigned int id, json_t *val, void *arg);
 int rutil_idkey_map (json_t *obj, rutil_idkey_map_f map, void *arg);
 
-/* Merge obj2 into obj1, where both are objects with idset keys.
- */
-int rutil_idkey_merge (json_t *obj1, json_t *obj2);
-
 /* Count ranks represented in idkey object.
  */
 int rutil_idkey_count (json_t *obj);
-
 
 #endif /* !_FLUX_RESOURCE_RUTIL_H */
 
