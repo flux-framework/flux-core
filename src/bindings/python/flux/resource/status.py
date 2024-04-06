@@ -108,6 +108,7 @@ class ResourceStatus:
 
         # drain_info: ranks, timestamp, reason tuples for all drained resources
         self.drain_info = []
+        self._drain_lookup = {}
         for drain_ranks, entry in self.rstatus["drain"].items():
             ranks = IDset(drain_ranks)
             if include_ranks is not None:
@@ -115,6 +116,8 @@ class ResourceStatus:
             self.drained += ranks
             info = DrainInfo(ranks, entry["timestamp"], entry["reason"])
             self.drain_info.append(info)
+            for rank in ranks:
+                self._drain_lookup[rank] = info
 
         # create the set of draining ranks as the intersection of
         #  drained and allocated
@@ -146,7 +149,7 @@ class ResourceStatus:
         """
         if rank not in self.all:
             raise ValueError("invalid rank {rank}")
-        return next((i for i in self.drain_info if rank in i.ranks), None)
+        return self._drain_lookup.get(rank)
 
 
 class ResourceStatusRPC:
