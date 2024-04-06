@@ -859,8 +859,10 @@ int rlist_append (struct rlist *rl, const struct rlist *rl2)
     struct rnode *n = zlistx_first (rl2->nodes);
     while (n) {
         struct rnode *copy = rnode_copy_avail (n);
-        if (!copy || rlist_add_rnode (rl, copy) < 0)
+        if (!copy || rlist_add_rnode (rl, copy) < 0) {
+            rnode_destroy (copy);
             return -1;
+        }
         n = zlistx_next (rl2->nodes);
     }
 

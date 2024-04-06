@@ -218,6 +218,7 @@ static int update_properties (struct rlist *alloc, struct rlist *all)
     if (!(props = get_properties (all))
         || json_object_size (props) == 0) {
         json_decref (props);
+        idset_destroy (alloc_ranks);
         return 0;
     }
     json_object_foreach (props, name, val) {

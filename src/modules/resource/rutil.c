@@ -99,18 +99,6 @@ nomem:
     return -1;
 }
 
-bool rutil_idset_decode_test (const char *idset, unsigned long id)
-{
-    struct idset *ids;
-    bool result;
-
-    if (!(ids = idset_decode (idset)))
-        return false;
-    result = idset_test (ids, id);
-    idset_destroy (ids);
-    return result;
-}
-
 char *rutil_read_file (const char *path, flux_error_t *errp)
 {
     int fd;
@@ -242,109 +230,6 @@ json_t *rutil_load_xml_dir (const char *path, flux_error_t *errp)
     return o;
 }
 
-static int idkey_remove_id (json_t *obj, unsigned int id)
-{
-    const char *key;
-    json_t *val;
-
-    json_object_foreach (obj, key, val) {
-        struct idset *ids;
-        char *new_key;
-
-        if (!(ids = idset_decode (key)))
-            return -1;
-        if (idset_test (ids, id)) {
-            idset_clear (ids, id);
-            if (idset_count (ids) > 0) {
-                if (!(new_key = idset_encode (ids, IDSET_FLAG_RANGE))) {
-                    idset_destroy (ids);
-                    return -1;
-                }
-                if (json_object_set (obj, new_key, val) < 0) {
-                    free (new_key);
-                    idset_destroy (ids);
-                    errno = ENOMEM;
-                    return -1;
-                }
-                free (new_key);
-            }
-            (void)json_object_del (obj, key);
-            idset_destroy (ids);
-            break;
-        }
-        idset_destroy (ids);
-    }
-    return 0;
-}
-
-/* Insert 'new_ids' into 'obj' as follows:
- * 1) remove 'new_ids' from any existing keys in 'obj'
- * 2) look for existing entry with value same as 'val'
- * 3) if found, update key to include 'new_ids'
- * 4) if not found, add key consisting only of 'new_ids' to object
- */
-int rutil_idkey_insert_idset (json_t *obj, struct idset *new_ids, json_t *val)
-{
-    const char *orig_key;
-    json_t *orig_val;
-    bool found = false;
-    struct idset *ids = NULL;
-    char *key = NULL;
-    unsigned int id;
-
-    id = idset_first (new_ids);
-    while (id != IDSET_INVALID_ID) {
-        if (idkey_remove_id (obj, id) < 0)
-            return -1;
-        id = idset_next (new_ids, id);
-    }
-    json_object_foreach (obj, orig_key, orig_val) {
-        if (json_equal (orig_val, val)) {
-            found = true;
-            break;
-        }
-    }
-    if (found) {
-        if (!(ids = idset_decode (orig_key)))
-            return -1;
-        if (idset_add (ids, new_ids) < 0)
-            goto error;
-        if (!(key = idset_encode (ids, IDSET_FLAG_RANGE)))
-            goto error;
-        if (json_object_set (obj, key, val) < 0)
-            goto error;
-        (void)json_object_del (obj, orig_key);
-    }
-    else {
-        if (!(key = idset_encode (new_ids, IDSET_FLAG_RANGE)))
-            return -1;
-        if (json_object_set (obj, key, val) < 0)
-            goto error;
-    }
-    free (key);
-    idset_destroy (ids);
-    return 0;
-error:
-    ERRNO_SAFE_WRAP (free, key);
-    idset_destroy (ids);
-    return -1;
-}
-
-int rutil_idkey_insert_id (json_t *obj, unsigned int id, json_t *val)
-{
-    struct idset *new_ids;
-    int rc = -1;
-
-    if (!(new_ids = idset_create (0, IDSET_FLAG_AUTOGROW)))
-        return -1;
-    if (idset_set (new_ids, id) < 0)
-        goto done;
-    rc = rutil_idkey_insert_idset (obj, new_ids, val);
-done:
-    idset_destroy (new_ids);
-    return rc;
-}
-
 int rutil_idkey_map (json_t *obj, rutil_idkey_map_f map, void *arg)
 {
     const char *key;
@@ -366,18 +251,6 @@ int rutil_idkey_map (json_t *obj, rutil_idkey_map_f map, void *arg)
         idset_destroy (idset);
     }
     return 0;
-}
-
-static int idkey_merge_map (unsigned int id, json_t *val, void *arg)
-{
-    json_t *obj = arg;
-
-    return rutil_idkey_insert_id (obj, id, val);
-}
-
-int rutil_idkey_merge (json_t *obj1, json_t *obj2)
-{
-    return rutil_idkey_map (obj2, idkey_merge_map, obj1);
 }
 
 static int idkey_count_map (unsigned int id, json_t *val, void *arg)
