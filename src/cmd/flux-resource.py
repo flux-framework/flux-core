@@ -443,10 +443,10 @@ class ResourceSetExtra(ResourceSet):
     def queue(self):
         queues = ""
         if self.flux_config and "queues" in self.flux_config:
+            if not self.ranks:
+                return ""
             properties = json.loads(self.get_properties())
             for key, value in self.flux_config["queues"].items():
-                if not self.rlist:
-                    continue
                 if "requires" not in value or set(value["requires"]).issubset(
                     set(properties)
                 ):
