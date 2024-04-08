@@ -37,6 +37,7 @@
 #include "config.h"
 #endif
 #include <time.h>
+#include <math.h>
 #include <flux/core.h>
 #include <jansson.h>
 
@@ -281,7 +282,7 @@ json_t *drain_get_info (struct drain *drain)
         if (drain->info[rank].drained) {
             if (drainset_drain_rank (ds,
                                      rank,
-                                     drain->info[rank].timestamp,
+                                     round(drain->info[rank].timestamp),
                                      drain->info[rank].reason) < 0)
                 goto error;
         }
