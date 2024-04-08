@@ -2313,9 +2313,11 @@ static int rlist_mark_state (struct rlist *rl, bool up, const char *ids)
     i = idset_first (idset);
     while (i != IDSET_INVALID_ID) {
         struct rnode *n = rlist_find_rank (rl, i);
-        if (n->up != up)
-            count += idset_count (n->cores->avail);
-        n->up = up;
+        if (n) {
+            if (n->up != up)
+                count += idset_count (n->cores->avail);
+            n->up = up;
+        }
         i = idset_next (idset, i);
     }
     idset_destroy (idset);
