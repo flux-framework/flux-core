@@ -398,6 +398,7 @@ static int rlist_remove_rank (struct rlist *rl, int rank)
         errno = ENOENT;
         return -1;
     }
+    rank_hash_delete (rl, rank);
     zlistx_delete (rl->nodes, handle);
     return 0;
 }
