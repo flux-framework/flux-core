@@ -2112,6 +2112,43 @@ static void test_rlist_config_inval (void)
     json_decref (o);
 }
 
+static void test_issue_5868 (void)
+{
+    char *R;
+    char *s;
+    struct rlist *rl;
+    struct idset *ranks;
+
+    if (!(R = R_create ("0-3",
+                        "0-3",
+                        NULL,
+                        "foo[0-3]",
+                        NULL)))
+        BAIL_OUT ("issue5868: R_create");
+
+    if (!(rl = rlist_from_R (R)))
+        BAIL_OUT ("issue5868: rlist_from_R() failed");
+    /*  Remove ranks 0-1
+     */
+    if (!(ranks = idset_decode ("0-1")))
+        BAIL_OUT ("issue5868: idset_create failed");
+    if (rlist_remove_ranks (rl, ranks) < 0)
+        BAIL_OUT ("issue5868: rlist_remove_ranks failed");
+    idset_destroy (ranks);
+
+    ok (rlist_mark_down (rl, "0-2") == 0,
+        "issue5868: rlist_mark_down (0-2) ignores missing ranks");
+
+    s = rlist_dumps (rl);
+    diag ("%s", s);
+    is (s, "rank3/core[0-3]",
+        "issue5868: expected resources remain up");
+
+    free (s);
+    rlist_destroy (rl);
+    free (R);
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
@@ -2142,7 +2179,7 @@ int main (int ac, char *av[])
     test_properties ();
     test_issue4290 ();
     test_rlist_config_inval ();
-
+    test_issue_5868 ();
     done_testing ();
 }
 
