@@ -329,8 +329,6 @@ static void reslog_cb (struct reslog *reslog,
     json_t *resobj;
     const flux_msg_t *msg;
 
-    flux_log (ctx->h, LOG_DEBUG, "%s: %s event posted", __func__, name);
-
     msg = flux_msglist_first (acquire->requests);
     while (msg) {
         struct acquire_request *ar = flux_msg_aux_get (msg, "acquire");
