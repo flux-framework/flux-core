@@ -398,6 +398,7 @@ static int rlist_remove_rank (struct rlist *rl, int rank)
         errno = ENOENT;
         return -1;
     }
+    rank_hash_delete (rl, rank);
     zlistx_delete (rl->nodes, handle);
     return 0;
 }
@@ -2163,6 +2164,7 @@ struct rlist *rlist_alloc (struct rlist *rl,
 
     if (!rl || !ai) {
         errno = EINVAL;
+        errprintf (errp, "Invalid argument");
         return NULL;
     }
 
@@ -2173,6 +2175,8 @@ struct rlist *rlist_alloc (struct rlist *rl,
         result = rlist_alloc_constrained (rl, ai, errp);
     else {
         result = rlist_try_alloc (rl, ai);
+        if (!result)
+            errprintf (errp, "%s", strerror (errno));
 
         if (!result && (errno == ENOSPC)) {
             if (!rlist_alloc_feasible (rl,
@@ -2312,9 +2316,11 @@ static int rlist_mark_state (struct rlist *rl, bool up, const char *ids)
     i = idset_first (idset);
     while (i != IDSET_INVALID_ID) {
         struct rnode *n = rlist_find_rank (rl, i);
-        if (n->up != up)
-            count += idset_count (n->cores->avail);
-        n->up = up;
+        if (n) {
+            if (n->up != up)
+                count += idset_count (n->cores->avail);
+            n->up = up;
+        }
         i = idset_next (idset, i);
     }
     idset_destroy (idset);
