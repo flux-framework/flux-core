@@ -842,6 +842,7 @@ static void broker_online_cb (flux_future_t *f, void *arg)
         quorum_reached = true;
 
     if (strlen (members) > 0
+        && s->state == STATE_QUORUM
         && (quorum_reached || now - last_update > 5)) {
         char *hosts = flux_hostmap_lookup (s->ctx->h, members, NULL);
         flux_log (s->ctx->h, LOG_INFO, "online: %s (ranks %s)", hosts, members);
