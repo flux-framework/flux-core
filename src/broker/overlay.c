@@ -449,19 +449,6 @@ static struct child *child_lookup_online (struct overlay *ov, const char *id)
     return ov->child_hash ?  zhashx_lookup (ov->child_hash, id) : NULL;
 }
 
-/* Slow path to look up child regardless of its status.
- */
-static struct child *child_lookup (struct overlay *ov, const char *id)
-{
-    struct child *child;
-
-    foreach_overlay_child (ov, child) {
-        if (streq (child->uuid, id))
-            return child;
-    }
-    return NULL;
-}
-
 /* Lookup (direct) child peer by rank.
  * Returns NULL on lookup failure.
  */
@@ -903,44 +890,33 @@ static void child_cb (flux_reactor_t *r,
         goto done;
     }
     if (!(child = child_lookup_online (ov, uuid))) {
-        /* If child is not online but we know this uuid, message is from a
-         * child that has already transitioned to offline/lost:
-         * - message sent while control DISCONNECT is in flight
-         * - network partition disconnected child; now it's back
-         * Send a disconnect control message, which is required in the second
-         * case, and won't hurt in the first.
+        /* This is a new peer trying to introduce itself by sending an
+         * overlay.hello request.
+         * N.B. the broker generates a new UUID on startup, and hello is only
+         * sent once on startup, in overlay_connect().  Therefore, it is
+         * assumed that a overlay.hello is always introducing a new UUID and
+         * we don't bother checking if we've seen this UUID before, which can
+         * be slow given current design.  See flux-framework/flux-core#5864.
          */
-        if ((child = child_lookup (ov, uuid))) {
-            /* Don't log dropped messages as first case above is expected,
-             * it this can be noisey.  See flux-framework/flux-core#4180
-             */
-            (void)overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0);
-        }
-        /* Hello new peer!
-         * hello_request_handler() completes the handshake.
-         */
-        else if (type == FLUX_MSGTYPE_REQUEST
+        if (type == FLUX_MSGTYPE_REQUEST
             && flux_msg_get_topic (msg, &topic) == 0
             && streq (topic, "overlay.hello")) {
             hello_request_handler (ov, msg);
         }
-        /* New peer is trying to communicate without first saying hello.
-         * This likely means that *this broker* restarted without getting a
-         * message through to the child, and the child still thinks it is
-         * communicating with the same broker (since 0MQ hides reconnects).
-         * Send CONTROL_DISCONNECT to force subtree panic.
+        /* Or one of the following cases occurred that requires (or at least
+         * will not be harmed by) a DISCONNECT message sent to the peer:
+         * 1) This is a known peer that has transitioned to offline/lost _here_
+         *    but the DISCONNECT is still in flight to the peer.
+         * 2) This is a known peer that has transitioned to offline/lost
+         *    as a result of a network partition, but the child never received
+         *    the DISCONNECT and connectivity has been restored.
+         * 3) This is a new-to-us peer because *we* restarted without getting
+         *    a message through (e.g. crash)
+         * Control send failures may occur, see flux-framework/flux-core#4464.
+         * Don't log here, see flux-framework/flux-core#4180.
          */
         else {
-            if (overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0) < 0) {
-                /* See flux-framework/flux-core#4464
-                 * Failure to send CONTROL_DISCONNECT occurs naturally, e.g.
-                 * when requests from a peer that fails overlay.hello are in
-                 * the socket queue behind the hello request.  The peer closes
-                 * its end of the socket when hello fails, and meanwhile we
-                 * are trying to send a CONTROL_DISCONNECT for each additional
-                 * message and failing once the socket closes.  Do not log.
-                 */
-            }
+            (void)overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0);
         }
         goto done;
     }
