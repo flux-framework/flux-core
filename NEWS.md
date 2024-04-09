@@ -1,3 +1,29 @@
+flux-core version 0.61.1 - 2024-04-09
+-------------------------------------
+
+## Fixes:
+
+ * broker: reduce log noise (#5869)
+ * shutdown: unload perilog plugin during shutdown (#5871)
+ * fix broker crash in `resource.status` RPC handling when excluded ranks
+   are also down (#5870)
+ * broker: avoid slow offline child UUID lookup (#5867)
+ * resource: round timestamp of drained ranks (#5866)
+ * fix more performance issues in `flux resource` (#5865)
+ * resource: improve `resource.status` response time with many drained ranks
+   (#5863)
+
+## Cleanup
+
+ * minor cleanup in job-manager journal and job-list (mostly inline docs)
+   (#5850)
+ * job-list: remove jobspec/R update dead code (#5853)
+
+## Documentation
+
+ * doc: add path to 'manpages' to conf.py (#5855)
+ * doc: fix whitespace issues in admin guide (#5854)
+
 flux-core version 0.61.0 - 2024-04-02
 -------------------------------------
 
