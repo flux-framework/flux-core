@@ -99,8 +99,6 @@ static void zap_cb (flux_reactor_t *r,
     const char *status_text = "No access";
     const char *user_id = "";
     struct cert *cert;
-    const char *name = NULL;
-    int log_level = LOG_ERR;
 
     if ((req = mpart_recv (zap->sock))) {
         if (!mpart_streq (req, 0, "1.0")
@@ -113,16 +111,9 @@ static void zap_cb (flux_reactor_t *r,
             status_code = "200";
             status_text = "OK";
             user_id = pubkey;
-            name = cert_meta_get (cert, "name");
-            log_level = LOG_DEBUG;
         }
-        if (!name)
-            name = "unknown";
-        logger (zap,
-                log_level,
-                "overlay auth cert-name=%s %s",
-                name,
-                status_text);
+        else
+            logger (zap, LOG_ERR, "overlay auth %s", status_text);
 
         if (!(rep = mpart_create ()))
             goto done;
