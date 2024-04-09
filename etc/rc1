@@ -113,6 +113,7 @@ fi
 if test $RANK -eq 0; then
     if test -z "${FLUX_DISABLE_JOB_CLEANUP}"; then
 	flux admin cleanup-push <<-EOT
+	flux jobtap remove perilog 2>/dev/null || true
 	flux queue stop --quiet --all --nocheckpoint
 	flux cancel --user=all --quiet --states RUN
 	flux queue idle --quiet
