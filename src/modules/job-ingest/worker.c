@@ -139,7 +139,6 @@ static void worker_timeout (flux_reactor_t *r, flux_watcher_t *timer,
                             int revents, void *arg)
 {
     struct worker *w = arg;
-    flux_log (w->h, LOG_DEBUG, "%s: inactivity timeout", w->name);
     worker_stop (w);
 }
 
