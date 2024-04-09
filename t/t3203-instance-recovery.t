@@ -70,29 +70,34 @@ test_expect_success 'banner message warns changes are not persistent' '
 	grep "changes will not be preserved" banner2.out
 '
 test_expect_success 'recovery mode aborts early if statedir is missing' '
-	test_must_fail flux start --recovery=$(pwd)/test2 2>dirmissing.err &&
+	test_must_fail flux start --recovery=$(pwd)/test2 true \
+		2>dirmissing.err &&
 	grep "No such file or directory" dirmissing.err
 '
 test_expect_success 'recovery mode aborts early if statedir lacks rwx' '
 	mkdir -p test2 &&
 	chmod 600 test2 &&
-	test_must_fail flux start --recovery=$(pwd)/test2 2>norwx.err &&
+	test_must_fail flux start --recovery=$(pwd)/test2 true \
+		2>norwx.err &&
 	grep "no access" norwx.err
 '
 test_expect_success 'recovery mode aborts early if content is missing' '
 	chmod 700 test2 &&
-	test_must_fail flux start --recovery=$(pwd)/test2 2>empty.err &&
+	test_must_fail flux start --recovery=$(pwd)/test2 true \
+		2>empty.err &&
 	grep "No such file or directory" empty.err
 '
 test_expect_success 'recovery mode aborts early if content unwritable' '
 	touch test2/content.sqlite &&
 	chmod 400 test2/content.sqlite &&
-	test_must_fail flux start --recovery=$(pwd)/test2 2>nowrite.err &&
+	test_must_fail flux start --recovery=$(pwd)/test2 true \
+		2>nowrite.err &&
 	grep "no write permission" nowrite.err
 '
 test_expect_success 'recovery mode aborts early if content unreadable' '
 	chmod 200 test2/content.sqlite &&
-	test_must_fail flux start --recovery=$(pwd)/test2 2>noread.err &&
+	test_must_fail flux start --recovery=$(pwd)/test2 true \
+		2>noread.err &&
 	grep "no read permission" noread.err
 '
 
