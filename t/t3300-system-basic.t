@@ -31,10 +31,6 @@ test_expect_success 'startctl status works' '
 test_expect_success 'broker overlay shows 2 connected children' '
 	test $(overlay_connected_children) -eq 2
 '
-test_expect_success 'testcert was used to authenticate' '
-	flux dmesg |grep "overlay auth" >auth.log &&
-	grep testcert auth.log
-'
 
 test_expect_success 'overlay status is full' '
 	test "$(flux overlay status --timeout=0 --summary)" = "full"

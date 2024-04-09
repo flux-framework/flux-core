@@ -81,7 +81,6 @@ struct groups {
     flux_watcher_t *batch_timer;
     uint32_t rank;
     struct idset *self;
-    bool verbose;
     struct idset *torpid; // current list of torpid peers at this broker rank
 };
 
@@ -229,15 +228,6 @@ static void batch_apply (struct groups *g)
         }
         json_array_foreach (a, index, entry) {
             batch_apply_one (g, group, entry);
-        }
-        if (g->verbose && g->ctx->rank == 0) {
-            char *s = idset_encode (group->members, IDSET_FLAG_RANGE);
-            flux_log (g->ctx->h,
-                      LOG_DEBUG,
-                      "groups: %s=%s",
-                      name,
-                      s && strlen (s) > 0 ? s : "");
-            free (s);
         }
         get_respond_all (g, group);
     }
@@ -820,7 +810,6 @@ struct groups *groups_create (struct broker *ctx)
     if (!(g = calloc (1, sizeof (*g))))
         return NULL;
     g->ctx = ctx;
-    g->verbose = 1;
     if (!(g->batch = json_object ())
         || !(g->groups = zhashx_new ())) {
         errno = ENOMEM;
