@@ -87,14 +87,24 @@ test_expect_success 'recovery mode aborts early if content is missing' '
 		2>empty.err &&
 	grep "No such file or directory" empty.err
 '
-test_expect_success 'recovery mode aborts early if content unwritable' '
+#  Note: some environments (such as fakeroot) do not appear to respect
+#  file permissions. In this case a read-only file is writeable and a
+#  write-only file may be readable, which will cause the following two
+#  tests to fail. Check for this condition and set a prereq that perms
+#  are working:
+#
+touch test_perms
+chmod 400 test_perms
+echo test >test_perms || test_set_prereq WORKING_PERMS
+
+test_expect_success WORKING_PERMS 'recovery mode aborts early if content unwritable' '
 	touch test2/content.sqlite &&
 	chmod 400 test2/content.sqlite &&
 	test_must_fail flux start --recovery=$(pwd)/test2 true \
 		2>nowrite.err &&
 	grep "no write permission" nowrite.err
 '
-test_expect_success 'recovery mode aborts early if content unreadable' '
+test_expect_success WORKING_PERMS 'recovery mode aborts early if content unreadable' '
 	chmod 200 test2/content.sqlite &&
 	test_must_fail flux start --recovery=$(pwd)/test2 true \
 		2>noread.err &&
