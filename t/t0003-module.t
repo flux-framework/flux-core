@@ -29,6 +29,12 @@ module_getinfo () {
 	FLUX_HANDLE_TRACE=1 flux python -c "import flux; print(flux.Flux().rpc(\"$1.info\").get_str())"
 }
 
+# Usage: module_debug_defer modname True|False
+module_debug_defer () {
+        flux python -c "import flux; flux.Flux().rpc(\"broker.module-debug\",{\"name\":\"$1\",\"defer\":$2}).get()"
+}
+
+
 test_expect_success 'module: load test module' '
 	flux module load $testmod
 '
@@ -285,6 +291,31 @@ test_expect_success 'module: load without unload causes broker failure' '
 '
 test_expect_success 'module: module name is called out' '
 	grep ".content. was not properly shut down" nounload.err
+'
+
+test_expect_success 'module: load testmod' '
+        flux module load $testmod
+'
+test_expect_success 'module-debug name=badname fails' '
+        test_must_fail module_debug_defer badname True
+'
+test_expect_success 'module-debug defer=42 fails (not boolean)' '
+        test_must_fail module_debug_defer testmod 42
+'
+test_expect_success 'module-debug name=testmod defer=True works' '
+        module_debug_defer testmod True
+'
+test_expect_success 'testmod does not respond to ping' '
+        test_expect_code 137 run_timeout 2 flux ping --count=1 testmod
+'
+test_expect_success 'module-debug name=testmod defer=False works' '
+        module_debug_defer testmod False
+'
+test_expect_success 'testmod does respond to ping' '
+        run_timeout 10 flux ping --count=1 testmod
+'
+test_expect_success 'module: remove testmod' '
+        flux module remove -f testmod
 '
 
 test_done
