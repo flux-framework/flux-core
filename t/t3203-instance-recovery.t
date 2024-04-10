@@ -70,29 +70,44 @@ test_expect_success 'banner message warns changes are not persistent' '
 	grep "changes will not be preserved" banner2.out
 '
 test_expect_success 'recovery mode aborts early if statedir is missing' '
-	test_must_fail flux start --recovery=$(pwd)/test2 2>dirmissing.err &&
+	test_must_fail flux start --recovery=$(pwd)/test2 true \
+		2>dirmissing.err &&
 	grep "No such file or directory" dirmissing.err
 '
 test_expect_success 'recovery mode aborts early if statedir lacks rwx' '
 	mkdir -p test2 &&
 	chmod 600 test2 &&
-	test_must_fail flux start --recovery=$(pwd)/test2 2>norwx.err &&
+	test_must_fail flux start --recovery=$(pwd)/test2 true \
+		2>norwx.err &&
 	grep "no access" norwx.err
 '
 test_expect_success 'recovery mode aborts early if content is missing' '
 	chmod 700 test2 &&
-	test_must_fail flux start --recovery=$(pwd)/test2 2>empty.err &&
+	test_must_fail flux start --recovery=$(pwd)/test2 true \
+		2>empty.err &&
 	grep "No such file or directory" empty.err
 '
-test_expect_success 'recovery mode aborts early if content unwritable' '
+#  Note: some environments (such as fakeroot) do not appear to respect
+#  file permissions. In this case a read-only file is writeable and a
+#  write-only file may be readable, which will cause the following two
+#  tests to fail. Check for this condition and set a prereq that perms
+#  are working:
+#
+touch test_perms
+chmod 400 test_perms
+echo test >test_perms || test_set_prereq WORKING_PERMS
+
+test_expect_success WORKING_PERMS 'recovery mode aborts early if content unwritable' '
 	touch test2/content.sqlite &&
 	chmod 400 test2/content.sqlite &&
-	test_must_fail flux start --recovery=$(pwd)/test2 2>nowrite.err &&
+	test_must_fail flux start --recovery=$(pwd)/test2 true \
+		2>nowrite.err &&
 	grep "no write permission" nowrite.err
 '
-test_expect_success 'recovery mode aborts early if content unreadable' '
+test_expect_success WORKING_PERMS 'recovery mode aborts early if content unreadable' '
 	chmod 200 test2/content.sqlite &&
-	test_must_fail flux start --recovery=$(pwd)/test2 2>noread.err &&
+	test_must_fail flux start --recovery=$(pwd)/test2 true \
+		2>noread.err &&
 	grep "no read permission" noread.err
 '
 
