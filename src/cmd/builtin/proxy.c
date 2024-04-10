@@ -265,7 +265,7 @@ error:
 }
 
 /* Compare proxy version with broker version.
- * Require major, minor, and patch numbers to match, ignoring patch suffix.
+ * Require major and minor to match.  Ignore patch and any git suffix.
  */
 static void version_check (flux_t *h, bool force)
 {
@@ -276,15 +276,16 @@ static void version_check (flux_t *h, bool force)
         log_err_exit ("flux_attr_get version");
     if (sscanf (version, "%u.%u.%u", &n[0], &n[1], &n[2]) != 3
         || n[0] != FLUX_CORE_VERSION_MAJOR
-        || n[1] != FLUX_CORE_VERSION_MINOR
-        || n[2] != FLUX_CORE_VERSION_PATCH) {
+        || n[1] != FLUX_CORE_VERSION_MINOR) {
         if (force) {
-            log_msg ("warning: proxy version %s != broker version %s",
+            log_msg ("warning: proxy version %s may not interoperate"
+                     " with broker version %s",
                       FLUX_CORE_VERSION_STRING,
                       version);
         }
         else {
-            log_msg_exit ("fatal: proxy version %s != broker version %s "
+            log_msg_exit ("fatal: proxy version %s may not interoperate"
+                          " with broker version %s "
                           "(--force to connect anyway)",
                           FLUX_CORE_VERSION_STRING,
                           version);
