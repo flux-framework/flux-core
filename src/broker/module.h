@@ -77,6 +77,11 @@ int module_start (module_t *p);
  */
 int module_stop (module_t *p, flux_t *h);
 
+/* Defer all messages that would be sent to module if flag=true.
+ * Stop deferring them and send backlog if flag=false.
+ */
+int module_set_defer (module_t *p, bool flag);
+
 /*  Mute module. Do not send any more messages.
  */
 void module_mute (module_t *p);

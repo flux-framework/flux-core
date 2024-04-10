@@ -1434,6 +1434,38 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+static void broker_module_debug_cb (flux_t *h,
+                                    flux_msg_handler_t *mh,
+                                    const flux_msg_t *msg,
+                                    void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    const char *name;
+    int defer = -1;
+    module_t *p;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s?b}",
+                             "name", &name,
+                             "defer", &defer) < 0)
+        goto error;
+    if (!(p = modhash_lookup_byname (ctx->modhash, name))) {
+        errno = ENOENT;
+        goto error;
+    }
+    if (defer != -1) {
+        if (module_set_defer (p, defer) < 0)
+            goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to module-debug request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to module-debug request");
+}
+
 /* This is a message handler for status messages from modules, not to be
  * confused with module_status_cb().
  */
@@ -1631,6 +1663,12 @@ static const struct flux_msg_handler_spec htab[] = {
         "broker.lsmod",
         broker_lsmod_cb,
         FLUX_ROLE_USER,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "broker.module-debug",
+        broker_module_debug_cb,
+        0,
     },
     {
         FLUX_MSGTYPE_REQUEST,

@@ -77,6 +77,7 @@ struct broker_module {
 
     struct flux_msglist *rmmod_requests;
     struct flux_msglist *insmod_requests;
+    struct flux_msglist *deferred_messages;
 
     flux_t *h;               /* module's handle */
     struct subhash *sub;
@@ -439,6 +440,13 @@ int module_sendmsg_new (module_t *p, flux_msg_t **msg)
             return -1;
         }
     }
+    if (p->deferred_messages) {
+        if (flux_msglist_append (p->deferred_messages, *msg) < 0)
+            return -1;
+        flux_msg_decref (*msg);
+        *msg = NULL;
+        return 0;
+    }
     return flux_send_new (p->h_broker, msg, 0);
 }
 
@@ -498,6 +506,7 @@ void module_destroy (module_t *p)
     json_decref (p->attr_cache);
     flux_msglist_destroy (p->rmmod_requests);
     flux_msglist_destroy (p->insmod_requests);
+    flux_msglist_destroy (p->deferred_messages);
     subhash_destroy (p->sub);
     free (p);
     errno = saved_errno;
@@ -529,6 +538,26 @@ done:
 void module_mute (module_t *p)
 {
     p->muted = true;
+}
+
+int module_set_defer (module_t *p, bool flag)
+{
+    if (flag && !p->deferred_messages) {
+        if (!(p->deferred_messages = flux_msglist_create ()))
+            return -1;
+    }
+    if (!flag && p->deferred_messages) {
+        const flux_msg_t *msg;
+        while ((msg = flux_msglist_pop (p->deferred_messages))) {
+            if (flux_send_new (p->h_broker, (flux_msg_t **)&msg, 0) < 0) {
+                flux_msg_decref (msg);
+                return -1;
+            }
+        }
+        flux_msglist_destroy (p->deferred_messages);
+        p->deferred_messages = NULL;
+    }
+    return 0;
 }
 
 int module_start (module_t *p)
