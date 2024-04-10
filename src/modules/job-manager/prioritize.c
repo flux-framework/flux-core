@@ -125,7 +125,7 @@ static int reprioritize_one (struct job_manager *ctx,
     }
     else if (job->alloc_pending) {
         if (job->priority == FLUX_JOB_PRIORITY_MIN) {
-            if (alloc_cancel_alloc_request (ctx->alloc, job) < 0)
+            if (alloc_cancel_alloc_request (ctx->alloc, job, false) < 0)
                 return -1;
         }
         else if (oneshot) {

@@ -120,7 +120,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
 /* Send sched.free request for job.
  * Update flags.
  */
-int free_request (struct alloc *alloc, struct job *job)
+int free_request (struct alloc *alloc, flux_jobid_t id, json_t *R)
 {
     flux_msg_t *msg;
 
@@ -128,8 +128,8 @@ int free_request (struct alloc *alloc, struct job *job)
         return -1;
     if (flux_msg_pack (msg,
                        "{s:I s:O}",
-                       "id", job->id,
-                       "R", job->R_redacted) < 0)
+                       "id", id,
+                       "R", R) < 0)
         goto error;
     if (flux_send (alloc->ctx->h, msg, 0) < 0)
         goto error;
@@ -188,20 +188,25 @@ static void alloc_response_cb (flux_t *h,
                          "annotations", &annotations,
                          "R", &R) < 0)
         goto teardown;
-    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        flux_log (h, LOG_ERR, "sched.alloc-response: id=%s not active",
-                  idf58 (id));
-        errno = EINVAL;
-        goto teardown;
-    }
-    if (!job->alloc_pending) {
-        flux_log (h, LOG_ERR, "sched.alloc-response: id=%s not requested",
-                  idf58 (id));
-        errno = EINVAL;
-        goto teardown;
-    }
+
+    job = zhashx_lookup (ctx->active_jobs, &id);
+    if (job && !job->alloc_pending)
+        job = NULL;
+
     switch (type) {
     case FLUX_SCHED_ALLOC_SUCCESS:
+        if (!R) {
+            flux_log (h, LOG_ERR, "sched.alloc-response: protocol error");
+            errno = EPROTO;
+            goto teardown;
+        }
+        (void)json_object_del (R, "scheduling");
+        alloc->alloc_pending_count--;
+
+        if (!job) {
+            (void)free_request (alloc, id, R);
+            break;
+        }
         if (alloc->alloc_limit) {
             if (zlistx_delete (alloc->pending_jobs, job->handle) < 0)
                 flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
@@ -215,19 +220,12 @@ static void alloc_response_cb (flux_t *h,
             errno = EEXIST;
             goto teardown;
         }
-        if (!R) {
-            flux_log (h, LOG_ERR, "sched.alloc-response: protocol error");
-            errno = EPROTO;
-            goto teardown;
-        }
-        (void)json_object_del (R, "scheduling");
         job->R_redacted = json_incref (R);
         if (annotations_update_and_publish (ctx, job, annotations) < 0)
             flux_log_error (h, "annotations_update: id=%s", idf58 (id));
 
         /*  Only modify job state after annotation event is published
          */
-        alloc->alloc_pending_count--;
         job->alloc_pending = 0;
         if (job->annotations) {
             if (event_job_post_pack (ctx->event,
@@ -248,11 +246,15 @@ static void alloc_response_cb (flux_t *h,
             errno = EPROTO;
             goto teardown;
         }
+        if (!job)
+            break;
         if (annotations_update_and_publish (ctx, job, annotations) < 0)
             flux_log_error (h, "annotations_update: id=%s", idf58 (id));
         break;
     case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
+        if (!job)
+            break;
         job->alloc_pending = 0;
         if (alloc->alloc_limit) {
             if (zlistx_delete (alloc->pending_jobs, job->handle) < 0)
@@ -282,6 +284,8 @@ static void alloc_response_cb (flux_t *h,
         break;
     case FLUX_SCHED_ALLOC_CANCEL:
         alloc->alloc_pending_count--;
+        if (!job)
+            break;
         if (job->state == FLUX_JOB_STATE_SCHED)
             requeue_pending (alloc, job);
         else {
@@ -553,7 +557,7 @@ int alloc_send_free_request (struct alloc *alloc, struct job *job)
 {
     assert (job->state == FLUX_JOB_STATE_CLEANUP);
     if (alloc->ready) {
-        if (free_request (alloc, job) < 0)
+        if (free_request (alloc, job->id, job->R_redacted) < 0)
             return -1;
         if ((job->flags & FLUX_JOB_DEBUG))
             (void)event_job_post_pack (alloc->ctx->event,
@@ -598,11 +602,30 @@ void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job)
 /* called from event_job_action() FLUX_JOB_STATE_CLEANUP
  * or alloc_queue_recalc_pending() if queue order has changed.
  */
-int alloc_cancel_alloc_request (struct alloc *alloc, struct job *job)
+int alloc_cancel_alloc_request (struct alloc *alloc,
+                                struct job *job,
+                                bool finalize)
 {
     if (job->alloc_pending) {
         if (cancel_request (alloc, job) < 0)
             return -1;
+        if (finalize) {
+            job->alloc_pending = 0;
+            if (alloc->alloc_limit) {
+                (void)zlistx_delete (alloc->pending_jobs, job->handle);
+                job->handle = NULL;
+            }
+            bool cleared = false;
+            annotations_clear (job, &cleared);
+            if (cleared) {
+                (void)event_job_post_pack (alloc->ctx->event,
+                                           job,
+                                           "annotations",
+                                           EVENT_NO_COMMIT,
+                                           "{s:n}",
+                                           "annotations");
+            }
+        }
     }
     return 0;
 }
@@ -673,7 +696,7 @@ int alloc_queue_recalc_pending (struct alloc *alloc)
            && head
            && tail) {
         if (job_priority_comparator (head, tail) < 0) {
-            if (alloc_cancel_alloc_request (alloc, tail) < 0) {
+            if (alloc_cancel_alloc_request (alloc, tail, false) < 0) {
                 flux_log_error (alloc->ctx->h,
                                 "%s: alloc_cancel_alloc_request",
                                 __FUNCTION__);

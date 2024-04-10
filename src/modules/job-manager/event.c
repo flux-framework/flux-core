@@ -293,7 +293,7 @@ int event_job_action (struct event *event, struct job *job)
              * SCHED state, dequeue the job first.
              */
             if (job->alloc_pending)
-                alloc_cancel_alloc_request (ctx->alloc, job);
+                alloc_cancel_alloc_request (ctx->alloc, job, false);
             if (job->alloc_queued)
                 alloc_dequeue_alloc_request (ctx->alloc, job);
             break;
@@ -313,7 +313,7 @@ int event_job_action (struct event *event, struct job *job)
             break;
         case FLUX_JOB_STATE_CLEANUP:
             if (job->alloc_pending)
-                alloc_cancel_alloc_request (ctx->alloc, job);
+                alloc_cancel_alloc_request (ctx->alloc, job, true);
             if (job->alloc_queued)
                 alloc_dequeue_alloc_request (ctx->alloc, job);
 

@@ -665,7 +665,7 @@ static void queue_stop (struct queue *queue, const char *name)
                 if (job->alloc_queued)
                     alloc_dequeue_alloc_request (queue->ctx->alloc, job);
                 else if (job->alloc_pending)
-                    alloc_cancel_alloc_request (queue->ctx->alloc, job);
+                    alloc_cancel_alloc_request (queue->ctx->alloc, job, false);
             }
             job = zhashx_next (queue->ctx->active_jobs);
         }
