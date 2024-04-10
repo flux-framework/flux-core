@@ -170,6 +170,7 @@ TESTSCRIPTS = \
 	t2302-sched-simple-up-down.t \
 	t2303-sched-hello.t \
 	t2304-sched-simple-alloc-check.t \
+	t2305-sched-slow.t \
 	t2310-resource-module.t \
 	t2311-resource-drain.t \
 	t2312-resource-exclude.t \
