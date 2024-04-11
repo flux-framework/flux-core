@@ -1041,22 +1041,27 @@ done:
     flux_msg_destroy (msg);
 }
 
+
+#define V_MAJOR(v)  (((v) >> 16) & 0xff)
+#define V_MINOR(v)  (((v) >> 8) & 0xff)
+#define V_PATCH(v)  ((v) & 0xff)
+
 /* Check child flux-core version 'v1' against this broker's version 'v2'.
- * For now we require an exact match of (major,minor,patch) and
+ * For now we require an exact match of MAJOR.MINOR, but not PATCH.
  * ignore any commit id appended to the version string.
  * Return 0 on error, or -1 on failure with message for child in 'error'.
  */
 static bool version_check (int v1, int v2, flux_error_t *error)
 {
-    if (v1 != v2) {
+    if (V_MAJOR (v1) != V_MAJOR (v2) || V_MINOR (v1) != V_MINOR (v2)) {
         errprintf (error,
                   "client (%u.%u.%u) version mismatched with server (%u.%u.%u)",
-                  (v1 >> 16) & 0xff,
-                  (v1 >> 8) & 0xff,
-                  v1 & 0xff,
-                  (v2 >> 16) & 0xff,
-                  (v2 >> 8) & 0xff,
-                  v2 & 0xff);
+                  V_MAJOR (v1),
+                  V_MINOR (v1),
+                  V_PATCH (v1),
+                  V_MAJOR (v2),
+                  V_MINOR (v2),
+                  V_PATCH (v2));
         return false;
     }
     return true;
