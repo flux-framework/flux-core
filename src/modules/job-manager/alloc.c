@@ -599,8 +599,21 @@ void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job)
     }
 }
 
-/* called from event_job_action() FLUX_JOB_STATE_CLEANUP
- * or alloc_queue_recalc_pending() if queue order has changed.
+/* Send a sched.cancel request for job.  This RPC receives no direct response.
+ * Instead, the sched.alloc request receives a FLUX_SCHED_ALLOC_CANCEL or a
+ * FLUX_SCHED_ALLOC_SUCCESS response.
+ *
+ * As described in RFC 27, sched.alloc requests are canceled when:
+ * 1) a job in SCHED state is canceled
+ * 2) a queue is administratively disabled
+ * 3) when repriortizing jobs in limited mode
+ *
+ * The finalize flag is for the first case.  It allows the job to continue
+ * through CLEANUP without waiting for the scheduler to respond to the cancel.
+ * The sched.alloc response handler must handle the case where the job is
+ * no longer active or its alloc_pending flag is clear.  Essentially 'finalize'
+ * causes the job related finalization stuff to happen here rather than
+ * in the sched.alloc response handler.
  */
 int alloc_cancel_alloc_request (struct alloc *alloc,
                                 struct job *job,
