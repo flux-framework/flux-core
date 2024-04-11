@@ -16,8 +16,6 @@
 #include "job.h"
 #include "job-manager.h"
 
-void annotations_clear (struct job *job, bool *cleared);
-void annotations_sched_clear (struct job *job, bool *cleared);
 int annotations_update (struct job *job, const char *path, json_t *annotations);
 
 struct annotate *annotate_ctx_create (struct job_manager *ctx);
@@ -29,6 +27,14 @@ int update_annotation_recursive (json_t *orig, const char *path, json_t *new);
 int annotations_update_and_publish (struct job_manager *ctx,
                                     struct job *job,
                                     json_t *annotations);
+
+/* clear key from annotations, or clear all annotations if key == NULL.
+ * If that transitioned the annotations object from non-empty to empty,
+ * post an annotations event with the context of {"annotations":null}.
+ */
+void annotations_clear_and_publish (struct job_manager *ctx,
+                                    struct job *job,
+                                    const char *key);
 
 #endif /* ! _FLUX_JOB_MANAGER_ANNOTATE_H */
 /*

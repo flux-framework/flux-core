@@ -29,6 +29,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/jpath.h"
+#include "src/common/libjob/idf58.h"
 
 #include "job.h"
 #include "event.h"
@@ -40,26 +41,11 @@ struct annotate {
     flux_msg_handler_t **handlers;
 };
 
-void annotations_clear (struct job *job, bool *cleared)
+static void annotations_clear (struct job *job)
 {
     if (job->annotations) {
         json_decref (job->annotations);
         job->annotations = NULL;
-        if (cleared)
-            (*cleared) = true;
-    }
-}
-
-void annotations_sched_clear (struct job *job, bool *cleared)
-{
-    if (job->annotations) {
-        if (json_object_del (job->annotations, "sched") == 0) {
-            /* Special case if annotations are now empty */
-            if (!json_object_size (job->annotations))
-                annotations_clear (job, NULL);
-            if (cleared)
-                (*cleared) = true;
-        }
     }
 }
 
@@ -93,9 +79,34 @@ int annotations_update (struct job *job, const char *path, json_t *annotations)
          * will handle advertisement of the clear.
          */
         if (!json_object_size (job->annotations))
-            annotations_clear (job, NULL);
+            annotations_clear (job);
     }
     return 0;
+}
+
+void annotations_clear_and_publish (struct job_manager *ctx,
+                                    struct job *job,
+                                    const char *key)
+{
+    if (job->annotations) {
+        if (key)
+            (void)json_object_del (job->annotations, key);
+        else
+            (void)json_object_clear (job->annotations);
+        if (json_object_size (job->annotations) == 0) {
+            annotations_clear (job);
+            if (event_job_post_pack (ctx->event,
+                                     job,
+                                     "annotations",
+                                     EVENT_NO_COMMIT,
+                                     "{s:n}",
+                                     "annotations") < 0) {
+                flux_log_error (ctx->h,
+                                "error posting null annotations event for %s",
+                                idf58 (job->id));
+            }
+        }
+    }
 }
 
 int annotations_update_and_publish (struct job_manager *ctx,

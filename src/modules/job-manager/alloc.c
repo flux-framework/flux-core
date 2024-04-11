@@ -60,7 +60,6 @@ static void requeue_pending (struct alloc *alloc, struct job *job)
 {
     struct job_manager *ctx = alloc->ctx;
     bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
-    bool cleared = false;
 
     assert (job->alloc_pending);
     if (job->handle) {
@@ -74,18 +73,7 @@ static void requeue_pending (struct alloc *alloc, struct job *job)
             flux_log (ctx->h, LOG_ERR, "failed to enqueue job for scheduling");
         job->alloc_queued = 1;
     }
-    annotations_sched_clear (job, &cleared);
-    if (cleared) {
-        if (event_job_post_pack (ctx->event,
-                                 job,
-                                 "annotations",
-                                 EVENT_NO_COMMIT,
-                                 "{s:n}",
-                                 "annotations") < 0)
-            flux_log_error (ctx->h,
-                            "%s: event_job_post_pack",
-                            __FUNCTION__);
-    }
+    annotations_clear_and_publish (ctx, job, "sched");
 }
 
 /* Initiate teardown.  Clear any alloc/free requests, and clear
@@ -176,7 +164,6 @@ static void alloc_response_cb (flux_t *h,
     json_t *annotations = NULL;
     json_t *R = NULL;
     struct job *job;
-    bool cleared = false;
 
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto teardown; // ENOSYS here if scheduler not loaded/shutting down
@@ -261,19 +248,7 @@ static void alloc_response_cb (flux_t *h,
                 flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
             job->handle = NULL;
         }
-        annotations_clear (job, &cleared);
-        if (cleared) {
-            if (event_job_post_pack (ctx->event,
-                                     job,
-                                     "annotations",
-                                     EVENT_NO_COMMIT,
-                                     "{s:n}",
-                                     "annotations") < 0)
-                flux_log_error (ctx->h,
-                                "%s: event_job_post_pack: id=%s",
-                                __FUNCTION__,
-                                idf58 (id));
-        }
+        annotations_clear_and_publish (ctx, job, NULL);
         if (raise_job_exception (ctx,
                                  job,
                                  "alloc",
@@ -294,21 +269,9 @@ static void alloc_response_cb (flux_t *h,
                     flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
                 job->handle = NULL;
             }
-            annotations_clear (job, &cleared);
+            annotations_clear_and_publish (ctx, job, NULL);
         }
         job->alloc_pending = 0;
-        if (cleared) {
-            if (event_job_post_pack (ctx->event,
-                                     job,
-                                     "annotations",
-                                     EVENT_NO_COMMIT,
-                                     "{s:n}",
-                                     "annotations") < 0)
-                flux_log_error (ctx->h,
-                                "%s: event_job_post_pack: id=%s",
-                                __FUNCTION__,
-                                idf58 (id));
-        }
         if (queue_started (alloc->ctx->queue, job)) {
             if (event_job_action (ctx->event, job) < 0) {
                 flux_log_error (h,
@@ -628,16 +591,7 @@ int alloc_cancel_alloc_request (struct alloc *alloc,
                 (void)zlistx_delete (alloc->pending_jobs, job->handle);
                 job->handle = NULL;
             }
-            bool cleared = false;
-            annotations_clear (job, &cleared);
-            if (cleared) {
-                (void)event_job_post_pack (alloc->ctx->event,
-                                           job,
-                                           "annotations",
-                                           EVENT_NO_COMMIT,
-                                           "{s:n}",
-                                           "annotations");
-            }
+            annotations_clear_and_publish (alloc->ctx, job, NULL);
         }
     }
     return 0;
