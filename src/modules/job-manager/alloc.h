@@ -31,8 +31,13 @@ void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job);
 
 /* Send a request to cancel pending alloc request.
  * This function is a no-op if job->alloc_pending is not set.
+ * If finalize is true, update the job as though the cancelation
+ * request has already been handled, so the job can progress through
+ * CLEANUP without waiting for the scheduler response.
  */
-int alloc_cancel_alloc_request (struct alloc *alloc, struct job *job);
+int alloc_cancel_alloc_request (struct alloc *alloc,
+                                struct job *job,
+                                bool finalize);
 
 /* Accessor for the count of queued alloc requests.
  */
