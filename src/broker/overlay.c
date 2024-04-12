@@ -993,12 +993,13 @@ static void parent_cb (flux_reactor_t *r,
             && flux_msg_get_topic (msg, &topic) == 0
             && streq (topic, "overlay.hello")) {
             hello_response_handler (ov, msg);
+            goto done;
         }
-        else {
+        else if (type != FLUX_MSGTYPE_CONTROL) {
             logdrop (ov, OVERLAY_UPSTREAM, msg,
                      "message received before hello handshake completed");
+            goto done;
         }
-        goto done;
     }
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
