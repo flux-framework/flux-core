@@ -1013,11 +1013,11 @@ static void parent_cb (flux_reactor_t *r,
             flux_msg_route_disable (msg);
             break;
         case FLUX_MSGTYPE_CONTROL: {
-            int type, reason;
-            if (flux_control_decode (msg, &type, &reason) < 0) {
+            int ctrl_type, reason;
+            if (flux_control_decode (msg, &ctrl_type, &reason) < 0) {
                 logdrop (ov, OVERLAY_UPSTREAM, msg, "malformed control");
             }
-            else if (type == CONTROL_DISCONNECT) {
+            else if (ctrl_type == CONTROL_DISCONNECT) {
                 flux_log (ov->h, LOG_CRIT,
                           "%s (rank %lu) sent disconnect control message",
                           flux_get_hostbyrank (ov->h, ov->parent.rank),
