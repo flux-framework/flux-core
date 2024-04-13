@@ -360,6 +360,12 @@ static void action_run (struct state_machine *s)
 
 static void action_cleanup (struct state_machine *s)
 {
+    /* Prevent new downstream clients from saying hello, but
+     * let existing ones continue to communiate so they can
+     * shut down and disconnect.
+     */
+    overlay_shutdown (s->ctx->overlay, false);
+
     if (runat_is_defined (s->ctx->runat, "cleanup")) {
         if (runat_start (s->ctx->runat, "cleanup", runat_completion_cb, s) < 0) {
             flux_log_error (s->ctx->h, "runat_start cleanup");
@@ -372,7 +378,11 @@ static void action_cleanup (struct state_machine *s)
 
 static void action_finalize (struct state_machine *s)
 {
-    overlay_shutdown (s->ctx->overlay);
+    /* Now that all clients have disconnected, finalize all
+     * downstream communication.
+     */
+    overlay_shutdown (s->ctx->overlay, true);
+
     if (runat_is_defined (s->ctx->runat, "rc3")) {
         if (runat_start (s->ctx->runat, "rc3", runat_completion_cb, s) < 0) {
             flux_log_error (s->ctx->h, "runat_start rc3");

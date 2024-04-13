@@ -170,6 +170,7 @@ struct overlay {
 
     struct parent parent;
 
+    bool shutdown_in_progress;  // no new downstream connections permitted
     void *bind_zsock;           // NULL if no downstream peers
     char *bind_uri;
     flux_watcher_t *bind_w;
@@ -776,9 +777,12 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
             && (child = child_lookup_online (ov, uuid))) {
             flux_log (ov->h,
                       LOG_ERR,
-                      "%s (rank %d) transitioning to LOST due to %s",
+                      "%s (rank %d) transitioning to %s->LOST"
+                      " after %ds due to %s",
                       flux_get_hostbyrank (ov->h, child->rank),
                       (int)child->rank,
+                      subtree_status_str (child->status),
+                      (int)(monotime_since (child->status_timestamp) / 1000.0),
                       "EHOSTUNREACH error on send");
             overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
         }
@@ -900,7 +904,8 @@ static void child_cb (flux_reactor_t *r,
          */
         if (type == FLUX_MSGTYPE_REQUEST
             && flux_msg_get_topic (msg, &topic) == 0
-            && streq (topic, "overlay.hello")) {
+            && streq (topic, "overlay.hello")
+            && !ov->shutdown_in_progress) {
             hello_request_handler (ov, msg);
         }
         /* Or one of the following cases occurred that requires (or at least
@@ -912,6 +917,7 @@ static void child_cb (flux_reactor_t *r,
          *    the DISCONNECT and connectivity has been restored.
          * 3) This is a new-to-us peer because *we* restarted without getting
          *    a message through (e.g. crash)
+         * 4) A peer said hello while shutdown is in progress
          * Control send failures may occur, see flux-framework/flux-core#4464.
          * Don't log here, see flux-framework/flux-core#4180.
          */
@@ -993,12 +999,13 @@ static void parent_cb (flux_reactor_t *r,
             && flux_msg_get_topic (msg, &topic) == 0
             && streq (topic, "overlay.hello")) {
             hello_response_handler (ov, msg);
+            goto done;
         }
-        else {
+        else if (type != FLUX_MSGTYPE_CONTROL) {
             logdrop (ov, OVERLAY_UPSTREAM, msg,
                      "message received before hello handshake completed");
+            goto done;
         }
-        goto done;
     }
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
@@ -1013,11 +1020,11 @@ static void parent_cb (flux_reactor_t *r,
             flux_msg_route_disable (msg);
             break;
         case FLUX_MSGTYPE_CONTROL: {
-            int type, reason;
-            if (flux_control_decode (msg, &type, &reason) < 0) {
+            int ctrl_type, reason;
+            if (flux_control_decode (msg, &ctrl_type, &reason) < 0) {
                 logdrop (ov, OVERLAY_UPSTREAM, msg, "malformed control");
             }
-            else if (type == CONTROL_DISCONNECT) {
+            else if (ctrl_type == CONTROL_DISCONNECT) {
                 flux_log (ov->h, LOG_CRIT,
                           "%s (rank %lu) sent disconnect control message",
                           flux_get_hostbyrank (ov->h, ov->parent.rank),
@@ -1409,11 +1416,14 @@ int overlay_bind (struct overlay *ov, const char *uri)
 
 /* Don't allow downstream peers to reconnect while we are shutting down.
  */
-void overlay_shutdown (struct overlay *overlay)
+void overlay_shutdown (struct overlay *overlay, bool unbind)
 {
-    if (overlay->bind_zsock && overlay->bind_uri)
-        if (zmq_unbind (overlay->bind_zsock, overlay->bind_uri) < 0)
-            flux_log (overlay->h, LOG_ERR, "zmq_unbind failed");
+    overlay->shutdown_in_progress = true;
+    if (unbind) {
+        if (overlay->bind_zsock && overlay->bind_uri)
+            if (zmq_unbind (overlay->bind_zsock, overlay->bind_uri) < 0)
+                flux_log (overlay->h, LOG_ERR, "zmq_unbind failed");
+    }
 }
 
 /* Call after overlay bootstrap (bind/connect),
