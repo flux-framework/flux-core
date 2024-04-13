@@ -1,3 +1,16 @@
+flux-core version 0.61.2 - 2024-04-12
+-------------------------------------
+
+## Fixes:
+
+ * broker: improve handling of overlay network during shutdown (#5883)
+ * job-manager: canceled job need not wait for sched (#5877)
+ * broker: allow patch versions to interoperate (#5879)
+
+## Testsuite:
+
+ * testsuite: fix `t3203-instance-recovery.t` under `fakeroot` (#5875)
+
 flux-core version 0.61.1 - 2024-04-09
 -------------------------------------
 
