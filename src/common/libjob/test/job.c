@@ -473,6 +473,35 @@ static void check_job_timeleft (void)
         "flux_job_timeleft (h, error, NULL) returns EINVAL");
 }
 
+static void check_waitstatus_to_exitcode (void)
+{
+    flux_error_t error;
+    ok (flux_job_waitstatus_to_exitcode (-1, &error) < 0 && errno == EINVAL,
+        "flux_job_waitstatus_to_exitcode (-1) returns EINVAL");
+    is (error.text, "unexpected wait(2) status -1",
+        "error.text is %s", error.text);
+    ok (flux_job_waitstatus_to_exitcode (0, &error) == 0,
+        "flux_job_waitstatus_to_exitcode (0) returns 0");
+    is (error.text, "",
+        "error.text is cleared");
+    ok (flux_job_waitstatus_to_exitcode (9, &error) == 128+9,
+        "flux_job_waitstatus_to_exitcode (9) == %d", 128+9);
+    is (error.text, "job shell Killed",
+        "error.text is %s", error.text);
+    ok (flux_job_waitstatus_to_exitcode (1<<8, &error) == 1,
+        "flux_job_waitstatus_to_exitcode (1<<8) = 1");
+    is (error.text, "task(s) exited with exit code 1",
+        "error.text is %s", error.text);
+    ok (flux_job_waitstatus_to_exitcode ((128+15)<< 8, &error) == 128+15,
+        "flux_job_waitstatus_to_exitcode ((128+15)<<8) = 128+15");
+    is (error.text, "task(s) Terminated",
+        "error.text is %s", error.text);
+    ok (flux_job_waitstatus_to_exitcode ((128+11)<<8, &error) == 128+11,
+        "flux_job_waitstatus_to_exitcode ((128+11)<<8) = 128+11");
+    is (error.text, "task(s) Segmentation fault",
+        "error.text is %s", error.text);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -494,6 +523,8 @@ int main (int argc, char *argv[])
     check_jobid_parse_encode ();
 
     check_job_timeleft ();
+
+    check_waitstatus_to_exitcode ();
 
     done_testing ();
     return 0;
