@@ -107,27 +107,12 @@ static int decode_job_result (struct job *job,
      */
     else if (streq (name, "finish")) {
         int status;
-
         if (json_unpack (context, "{s:i}", "status", &status) < 0)
             return -1;
-        if (WIFSIGNALED (status)) {
-            errprintf (errp,
-                       "task(s) %s",
-                       strsignal (WTERMSIG (status)));
+        if (flux_job_waitstatus_to_exitcode (status, errp) != 0)
             *success = false;
-        }
-        else if (WIFEXITED (status)) {
-            errprintf (errp,
-                       "task(s) exited with exit code %d",
-                       WEXITSTATUS (status));
-            *success = WEXITSTATUS (status) == 0 ? true : false;
-        }
-        else {
-            errprintf (errp,
-                       "unexpected wait(2) status %d",
-                       status);
-            *success = false;
-        }
+        else
+            *success = true;
     }
     else
         return -1;
