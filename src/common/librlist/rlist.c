@@ -1709,6 +1709,10 @@ json_t *rlist_to_R (struct rlist *rl)
     if (!rl)
         return NULL;
 
+    /*  Reset default sort to order nodes by "rank" */
+    zlistx_set_comparator (rl->nodes, by_rank);
+    zlistx_sort (rl->nodes);
+
     if (!(R_lite = rlist_compressed (rl)))
         goto fail;
 
