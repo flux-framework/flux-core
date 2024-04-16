@@ -282,6 +282,13 @@ char *flux_unwrap_string (const char *in,
                           uint32_t *userid,
                           flux_error_t *error);
 
+
+/* Convert the waitstatus from a job `finish` event to an exit code.
+ * If the job exited with nonzero status, then place an appropriate error
+ * message in errp->text.
+ */
+int flux_job_waitstatus_to_exitcode (int waitstatus, flux_error_t *errp);
+
 #ifdef __cplusplus
 }
 #endif

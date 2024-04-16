@@ -83,6 +83,31 @@ test_expect_success 'attach: submit a job and cancel it' '
 test_expect_success 'attach: exit code reflects cancellation' '
 	! flux job attach $(cat jobid2)
 '
+test_expect_success 'attach: reports task exit code with nonzero exit' '
+	id=$(flux submit sh -c 'exit 42') &&
+	test_must_fail flux job attach $id 2>exited.err &&
+	test_debug "cat exited.err" &&
+	grep "exited with exit code 42" exited.err
+'
+test_expect_success 'attach: reports Killed when job tasks are killed' '
+	id=$(flux submit --wait-event=exec.shell.start sleep 30) &&
+	flux job kill -s 9 $id &&
+	test_must_fail_or_be_terminated flux job attach $id 2>killed.err &&
+	test_debug "cat killed.err" &&
+	grep Killed killed.err
+'
+test_expect_success 'attach: reports Terminated when tasks are terminated' '
+	id=$(flux submit --wait-event=exec.shell.start sleep 30) &&
+	flux job kill -s 15 $id &&
+	test_must_fail_or_be_terminated flux job attach $id 2>terminated.err &&
+	test_debug "cat terminated.err" &&
+	grep Terminated terminated.err
+'
+test_expect_success 'attach: reports job shell Killed if job shell is killed' '
+	id=$(flux submit --wait-event=exec.shell.start sh -c "kill -9 \$PPID") &&
+	test_must_fail_or_be_terminated flux job attach $id 2>shell-killed.out &&
+	grep "job shell Killed" shell-killed.out
+'
 
 # Usage run_attach seq
 # Run a 30s job, then attach to it in the background

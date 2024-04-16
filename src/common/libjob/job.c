@@ -194,6 +194,40 @@ out:
     return rc;
 }
 
+int flux_job_waitstatus_to_exitcode (int waitstatus, flux_error_t *errp)
+{
+    int code;
+
+    /*  If waitstatus indicates WIFSIGNALED, then this means the job shell
+     *  was signaled, not the tasks. Report accordingly:
+     */
+    if (WIFSIGNALED (waitstatus)) {
+        /*  Whether the job shell or one or more tasks is terminated by a
+         *  signal, set the exit code to signal + 128
+         */
+        code = WTERMSIG (waitstatus) + 128;
+        errprintf (errp, "job shell %s", strsignal (WTERMSIG (waitstatus)));
+    }
+    else if (WIFEXITED (waitstatus)) {
+        code = WEXITSTATUS (waitstatus);
+        /*  If exit code > 128, then tasks were likely terminated by a
+         *  signal. (job shell returns 128+signo in this case)
+         */
+        if (code > 128)
+            errprintf (errp, "task(s) %s", strsignal (code - 128));
+        else if (code > 0)
+            errprintf (errp, "task(s) exited with exit code %d", code);
+        else /* Ensure errp->text is cleared */
+            err_init (errp);
+    }
+    else {
+        errprintf (errp, "unexpected wait(2) status %d", waitstatus);
+        code = -1;
+        errno = EINVAL;
+    }
+    return code;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
