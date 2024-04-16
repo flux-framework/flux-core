@@ -68,9 +68,6 @@ static int terminus_server (flux_t *h, void *arg)
     int rc = -1;
     struct flux_terminus_server *t;
 
-    /*  set rank == -1 for testing. Avoid flux_get_rank(3) */
-    setenv ("FLUX_TERMINUS_TEST_SERVER", "t", 1);
-
     /*  N.B.: test_server handle `h` already has reactor with SIGCHLD
      *   flag set.
      */
@@ -475,6 +472,9 @@ int main (int argc, char *argv[])
      */
     if (getenv ("SHELL") == NULL)
         setenv ("SHELL", "/bin/sh", 1);
+
+    /*  set rank == -1 for testing. Avoid flux_get_rank(3) */
+    setenv ("FLUX_TERMINUS_TEST_SERVER", "t", 1);
 
     test_invalid_args ();
     test_kill_server_empty ();
