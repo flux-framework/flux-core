@@ -97,9 +97,13 @@ test_expect_success 'flux overlay status --highlight expected failures' '
 '
 
 test_expect_success 'flux overlay status --color option works' '
+	test_must_fail flux overlay status -Lfoo &&
 	test_must_fail flux overlay status --color=foo &&
+	flux overlay status -Lnever --highlight=0 | grep "<<0" &&
 	flux overlay status --color=never --highlight=0 | grep "<<0" &&
+	flux overlay status -Lauto --highlight=0 | grep "<<0" &&
 	flux overlay status --color=auto --highlight=0 | grep "<<0" &&
+	flux overlay status -L --highlight=0 | grep "\[" &&
 	flux overlay status --color --highlight=0 | grep "\["
 '
 
