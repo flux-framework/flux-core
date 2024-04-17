@@ -58,6 +58,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
+#include "src/broker/state_machine.h" // for STATE_CLEANUP
 
 extern char **environ;
 
@@ -69,6 +70,8 @@ static struct perilog_conf {
     flux_cmd_t *epilog_cmd;    /*  Configured epilog command                */
     zhashx_t *processes;       /*  List of outstanding perilog_proc objects */
     zlistx_t *log_ignore;      /*  List of regex patterns to ignore in logs */
+    flux_future_t *watch_f;    /*  Watch for broker entering CLEANUP state */
+    bool shutting_down;        /*  True when broker has entered CLEANUP */
 } perilog_config;
 
 
@@ -404,6 +407,17 @@ static int job_finish_cb (flux_plugin_t *p,
     if (perilog_config.epilog_cmd == NULL)
         return 0;
 
+    /*  Don't start new epilog processes if the broker is shutting down.
+     *   Flux currently cancels running jobs as part of shutdown.  If the
+     *   broker takes longer than the systemd TimeoutStopSec (e.g. 90s) to
+     *   stop, it may be killed and data may be lost.  Since epilog scripts
+     *   are site-defined and may take an arbitrarily long time to run,
+     *   simply skip them during shutdown.  This may be relaxed once Flux
+     *   is capable of restarting with running jobs.
+     */
+    if (perilog_config.shutting_down)
+        return 0;
+
     if (run_command (p, args, 0, perilog_config.epilog_cmd) < 0) {
         flux_jobtap_raise_exception (p,
                                      FLUX_JOBTAP_CURRENT_JOB,
@@ -628,6 +642,26 @@ static int regexp_list_append_array (zlistx_t *l,
     return 0;
 }
 
+static void monitor_continuation (flux_future_t *f, void *arg)
+{
+    struct perilog_conf *conf = arg;
+    flux_t *h = flux_future_get_flux (f);
+    int state = -1;
+
+    if (flux_rpc_get_unpack (f, "{s:i}", "state", &state) < 0) {
+        if (errno != ENODATA) {
+            flux_log (h,
+                      LOG_ERR,
+                      "error watching broker state: %s",
+                      future_strerror (f, errno));
+        }
+        return;
+    }
+    if (state == STATE_CLEANUP) // the broker state, not a job state!
+        conf->shutting_down = true;
+    flux_future_reset (f);
+}
+
 /*  Parse [job-manager.prolog] and [job-manager.epilog] config
  */
 static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
@@ -693,11 +727,28 @@ static int conf_init (flux_plugin_t *p, struct perilog_conf *conf)
                   "perilog: error parsing conf.log_ignore: %s", error.text);
         return -1;
     }
+    /* Watch for broker transition to CLEANUP.
+     */
+    if (!(conf->watch_f = flux_rpc_pack (h,
+                                         "state-machine.monitor",
+                                          0,
+                                          FLUX_RPC_STREAMING,
+                                          "{s:i}",
+                                          "final", STATE_CLEANUP))
+        || flux_future_then (conf->watch_f,
+                             -1,
+                             monitor_continuation,
+                             conf) < 0) {
+        flux_log_error (h, "perilog: error watching broker state");
+        return -1;
+    }
+
     return 0;
 }
 
 static void free_config (struct perilog_conf *conf)
 {
+    flux_future_destroy (conf->watch_f);
     flux_cmd_destroy (conf->prolog_cmd);
     flux_cmd_destroy (conf->epilog_cmd);
     zhashx_destroy (&conf->processes);

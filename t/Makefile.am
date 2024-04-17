@@ -359,6 +359,7 @@ dist_check_SCRIPTS = \
 	issues/t5308-kvsdir-initial-path.py \
 	issues/t5368-kvs-commit-clear.py \
 	issues/t5657-kvs-getroot-namespace.sh \
+	issues/t5892-shutdown-no-epilog.sh \
 	issues/t2492-shell-lost.sh \
 	python/__init__.py \
 	python/subflux.py \
