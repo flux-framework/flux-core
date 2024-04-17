@@ -91,6 +91,18 @@ static int setup_module_profiling (module_t *p)
     cali_begin_int_byname ("flux.rank", p->rank);
     cali_begin_string_byname ("flux.name", p->name);
 #endif
+    size_t len = strlen (p->name);
+    // one character longer than target to pass -Wstringop-truncation
+    char local_name[17] = {0};
+    const char *name_ptr = p->name;
+    // pthread name is limited to 16 bytes including \0 on linux
+    if (len > 15) {
+        strncpy (local_name, p->name, 16);
+        local_name[15] = 0;
+        name_ptr = local_name;
+    }
+    // Set the name of each thread to its module name
+    (void) pthread_setname_np (pthread_self (), name_ptr);
     return (0);
 }
 
