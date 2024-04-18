@@ -13,11 +13,6 @@
  * A fatal exception is raised on jobs that are granted resources already
  * granted to another.
  *
- * In order to be sure that the exception can be raised before a short job
- * becomes inactive, R is looked up in the KVS synchronously, causing the
- * job manager to be briefly unresponsive.  Hence, this plugin is primarily
- * suited for debug/test situations.
- *
  * N.B.  This plugin does not account for any jobs that might already have
  * allocations when the plugin is loaded.
  */
@@ -70,41 +65,6 @@ static struct resdb *resdb_create (void)
     return resdb;
 }
 
-/* Generate the kvs path to R for a given job
- */
-static int res_makekey (flux_jobid_t id, char *buf, size_t size)
-{
-    char dir[128];
-    if (flux_job_id_encode (id, "kvs", dir, sizeof (dir)) < 0)
-        return -1;
-    if (snprintf (buf, size, "%s.R", dir) >= size) {
-        errno = EOVERFLOW;
-        return -1;
-    }
-    return 0;
-}
-
-/* Synchronously look up R for a given job and convert it to an rlist object
- * which the caller must destroy with rlist_destroy().
- */
-static struct rlist *res_lookup (flux_t *h, flux_jobid_t id)
-{
-    char key[128];
-    flux_future_t *f = NULL;
-    const char *R;
-    struct rlist *rlist;
-
-    if (res_makekey (id, key, sizeof (key)) < 0
-        || !(f = flux_kvs_lookup (h, NULL, 0, key))
-        || flux_kvs_lookup_get (f, &R) < 0
-        || !(rlist = rlist_from_R (R))) {
-        flux_future_destroy (f);
-        return NULL;
-    }
-    flux_future_destroy (f);
-    return rlist;
-}
-
 /* When a job is presented to the scheduler via the RFC 27 'hello' handshake
  * upon scheduler reload, the scheduler raises a fatal scheduler-restart
  * exception if it cannot re-allocate the job's resources and the job manager
@@ -137,12 +97,14 @@ static int jobtap_cb (flux_plugin_t *p,
     flux_t *h = flux_jobtap_get_flux (p);
     flux_jobid_t id;
     json_t *entry = NULL;
+    json_t *R = NULL;
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
-                                "{s:I s?o}",
+                                "{s:I s?o s?o}",
                                 "id", &id,
-                                "entry", &entry) < 0) {
+                                "entry", &entry,
+                                "R", &R) < 0) {
         flux_log (h,
                   LOG_ERR,
                   "%s %s: unpack: %s",
@@ -163,29 +125,29 @@ static int jobtap_cb (flux_plugin_t *p,
                             topic);
         }
     }
-    /* Look up R that was just allocated to the job and attach it to the job
-     * aux container so we don't have to look it up again on free.  Call
-     * rlist_append() to add the resources to resdb->allocated.  If that
-     * fails, some resources are already allocated so raise a fatal exception
-     * on the job.
+    /* Attach R that was just allocated to the job to the job aux container
+     * so we don't have to parse it again on free.  Call rlist_append() to add
+     * the resources to resdb->allocated.  If that fails, some resources are
+     * already allocated so raise a fatal exception on the job.
      */
     else if (streq (topic, "job.event.alloc")) {
-        struct rlist *R;
-        if (!(R = res_lookup (h, id))
+        struct rlist *rl = NULL;
+        if (!R
+            || !(rl = rlist_from_json (R, NULL))
             || flux_jobtap_job_aux_set (p,
                                         id,
                                         PLUGIN_NAME "::R",
-                                        R,
+                                        rl,
                                         (flux_free_f)rlist_destroy) < 0) {
             flux_log_error (h,
-                            "%s(%s) %s: failed to lookup or cache R",
+                            "%s(%s) %s: failed to parse or cache R",
                             PLUGIN_NAME,
                             idf58 (id),
                             topic);
-            rlist_destroy (R);
+            rlist_destroy (rl);
             return -1;
         }
-        if (rlist_append (resdb->allocated, R) < 0) {
+        if (rlist_append (resdb->allocated, rl) < 0) {
             flux_jobtap_raise_exception (p,
                                          id,
                                          "alloc-check",
@@ -199,10 +161,10 @@ static int jobtap_cb (flux_plugin_t *p,
      */
     else if (streq (topic, "job.event.free")
         || (streq (topic, "job.event.exception") && is_hello_failure (entry))) {
-        struct rlist *R = flux_jobtap_job_aux_get (p, id, PLUGIN_NAME "::R");
-        if (R) {
+        struct rlist *rl = flux_jobtap_job_aux_get (p, id, PLUGIN_NAME "::R");
+        if (rl) {
             struct rlist *diff;
-            if (!(diff = rlist_diff (resdb->allocated, R))) {
+            if (!(diff = rlist_diff (resdb->allocated, rl))) {
                 flux_log_error (h,
                                 "%s(%s) %s: rlist_diff",
                                 PLUGIN_NAME,
