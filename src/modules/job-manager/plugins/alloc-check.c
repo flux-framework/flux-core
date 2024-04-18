@@ -33,6 +33,7 @@
 #include "ccan/str/str.h"
 #include "src/common/librlist/rlist.h"
 #include "src/common/libjob/idf58.h"
+#include "src/common/libeventlog/eventlog.h"
 
 #define PLUGIN_NAME    "alloc-check"
 static const char *auxname = PLUGIN_NAME "::resdb";
@@ -104,6 +105,29 @@ static struct rlist *res_lookup (flux_t *h, flux_jobid_t id)
     return rlist;
 }
 
+/* When a job is presented to the scheduler via the RFC 27 'hello' handshake
+ * upon scheduler reload, the scheduler raises a fatal scheduler-restart
+ * exception if it cannot re-allocate the job's resources and the job manager
+ * marks resources free without posting a free event.  This plugin must
+ * account for those resources.  See flux-framework/flux-core#5889
+ */
+static bool is_hello_failure (json_t *entry)
+{
+    const char *type;
+    int severity;
+    json_t *context;
+
+    if (eventlog_entry_parse (entry, NULL, NULL, &context) == 0
+        && json_unpack (context,
+                        "{s:i s:s}",
+                        "severity", &severity,
+                        "type", &type) == 0
+        && severity == 0
+        && streq (type, "scheduler-restart"))
+        return true;
+    return false;
+}
+
 static int jobtap_cb (flux_plugin_t *p,
                       const char *topic,
                       flux_plugin_arg_t *args,
@@ -112,11 +136,13 @@ static int jobtap_cb (flux_plugin_t *p,
     struct resdb *resdb = flux_plugin_aux_get (p, auxname);
     flux_t *h = flux_jobtap_get_flux (p);
     flux_jobid_t id;
+    json_t *entry = NULL;
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
-                                "{s:I}",
-                                "id", &id) < 0) {
+                                "{s:I s?o}",
+                                "id", &id,
+                                "entry", &entry) < 0) {
         flux_log (h,
                   LOG_ERR,
                   "%s %s: unpack: %s",
@@ -171,7 +197,8 @@ static int jobtap_cb (flux_plugin_t *p,
      * from resdb->allocated.  Any jobs that had allocations before the module
      * will not have the R aux item, so silently return success in that case.
      */
-    else if (streq (topic, "job.event.free")) {
+    else if (streq (topic, "job.event.free")
+        || (streq (topic, "job.event.exception") && is_hello_failure (entry))) {
         struct rlist *R = flux_jobtap_job_aux_get (p, id, PLUGIN_NAME "::R");
         if (R) {
             struct rlist *diff;
@@ -193,6 +220,7 @@ static int jobtap_cb (flux_plugin_t *p,
 static const struct flux_plugin_handler tab[] = {
     { "job.event.alloc",   jobtap_cb,    NULL },
     { "job.event.free",    jobtap_cb,    NULL },
+    { "job.event.exception", jobtap_cb,  NULL },
     { "job.new",           jobtap_cb,    NULL },
     { 0 }
 };
