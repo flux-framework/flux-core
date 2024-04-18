@@ -136,7 +136,7 @@ nul_ctrl_d() {
 }
 test_expect_success 'pty: NUL (Ctrl-SPACE) character not dropped' '
 	nul_ctrl_d | flux run -vvv -o pty.interactive -o pty.capture cat -v &&
-	flux job eventlog -HLp output $(flux job last) &&
-	flux job eventlog -HLp output $(flux job last) | grep \\^@
+	flux job eventlog -HL -p output $(flux job last) &&
+	flux job eventlog -HL -p output $(flux job last) | grep \\^@
 '
 test_done
