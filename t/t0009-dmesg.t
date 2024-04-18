@@ -138,16 +138,20 @@ test_expect_success 'dmesg -H, --human --delta works' '
 test_expect_success 'dmesg --delta without --human fails' '
 	test_must_fail flux dmesg --delta
 '
-test_expect_success 'dmesg -H, --human --color works' '
-	flux dmesg --human --color | sed -n 1p | grep "^" &&
-	flux dmesg --human --color | sed -n 2p | grep "^"
-'
-test_expect_success 'dmesg colorizes lines by severity' '
-	for s in emerg alert crit err warning notice debug; do
-	    flux logger --severity=$s severity=$s &&
-	    flux dmesg --human --color | grep "[^ ]*severity=$s"
-	done
-'
+
+for opt in "-L" "-Lalways" "--color" "--color=always"; do
+	test_expect_success "dmesg -H, --human $opt works" '
+		flux dmesg --human $opt | sed -n 1p | grep "^" &&
+		flux dmesg --human $opt | sed -n 2p | grep "^"
+	'
+	test_expect_success "dmesg colorizes lines by severity" '
+		for s in emerg alert crit err warning notice debug; do
+		    flux logger --severity=$s severity=$s &&
+		    flux dmesg --human $opt | grep "[^ ]*severity=$s"
+		done
+	'
+done
+
 test_expect_success 'dmesg with invalid --color option fails' '
 	test_must_fail flux dmesg --color=foo
 '

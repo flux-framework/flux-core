@@ -37,6 +37,7 @@ struct optparse_option eventlog_opts[] =  {
                "and --time-format.",
     },
     { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
       .usage = "Colorize output when supported; WHEN can be 'always' "
                "(default if omitted), 'never', or 'auto' (default)."
     },
@@ -74,6 +75,7 @@ struct optparse_option wait_event_opts[] =  {
       .usage = "Output all events before matched event",
     },
     { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
       .usage = "Colorize output when supported; WHEN can be 'always' "
                "(default if omitted), 'never', or 'auto' (default)."
     },

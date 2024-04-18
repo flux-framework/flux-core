@@ -69,7 +69,7 @@ test_expect_success 'flux kvs eventlog get/wait-event reject invalid --color' '
 	test_must_fail flux kvs eventlog get --color=foo test.human &&
 	test_must_fail flux kvs eventlog wait-event --color=foo test.human primus
 '
-for opt in "-L" "--color" "--color=always"; do
+for opt in "-L" "-Lalways" "--color" "--color=always"; do
 	test_expect_success "flux kvs eventlog get $opt forces color on" '
 		name=notty${opt##--color=} &&
 		outfile=color-${name:-default}.out &&

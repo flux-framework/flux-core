@@ -81,6 +81,7 @@ static struct optparse_option dmesg_opts[] = {
     { .name = "delta",  .key = 'd',  .has_arg = 0,
       .usage = "With --human, show timestamp delta between messages", },
     { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
       .usage = "Colorize output when supported; WHEN can be 'always' "
                "(default if omitted), 'never', or 'auto' (default)." },
     OPTPARSE_TABLE_END,

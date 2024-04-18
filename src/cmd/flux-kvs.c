@@ -2221,6 +2221,7 @@ static struct optparse_option eventlog_get_opts[] =  {
       .usage = "Display human-readable output",
     },
     { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
       .usage = "Colorize output when supported; WHEN can be 'always' "
                "(default if omitted), 'never', or 'auto' (default)."
     },
@@ -2250,6 +2251,7 @@ static struct optparse_option eventlog_wait_event_opts[] =  {
       .usage = "Display human-readable output",
     },
     { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
       .usage = "Colorize output when supported; WHEN can be 'always' "
                "(default if omitted), 'never', or 'auto' (default)."
     },
