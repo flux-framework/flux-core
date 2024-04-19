@@ -119,7 +119,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
                              "constraint", c)))
         log_err_exit ("flux_rpc_pack");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
-        log_err_exit ("flux job-list.list");
+        log_msg_exit ("flux job-list.list: %s", future_strerror (f, errno));
     json_array_foreach (jobs, index, value) {
         char *str;
         str = json_dumps (value, 0);
@@ -173,7 +173,7 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
                              "constraint", c)))
         log_err_exit ("flux_rpc_pack");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
-        log_err_exit ("flux job-list.list");
+        log_msg_exit ("flux job-list.list: %s", future_strerror (f, errno));
     json_array_foreach (jobs, index, value) {
         char *str;
         str = json_dumps (value, 0);
@@ -193,7 +193,7 @@ void list_id_continuation (flux_future_t *f, void *arg)
     json_t *job;
     char *str;
     if (flux_rpc_get_unpack (f, "{s:o}", "job", &job) < 0)
-        log_err_exit ("flux_job_list_id");
+        log_msg_exit ("flux job-list.list-d: %s", future_strerror (f, errno));
     str = json_dumps (job, 0);
     if (!str)
         log_msg_exit ("error parsing list-id response");

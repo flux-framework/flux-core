@@ -138,6 +138,10 @@ static void config_reload_cb (flux_t *h,
         errstr = error.text;
         goto error;
     }
+    if (job_match_config_reload (ctx->mctx, conf, &error) < 0) {
+        errstr = error.text;
+        goto error;
+    }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to config-reload request");
     return;
@@ -206,6 +210,8 @@ static void list_ctx_destroy (struct list_ctx *ctx)
             job_state_destroy (ctx->jsctx);
         if (ctx->isctx)
             idsync_ctx_destroy (ctx->isctx);
+        if (ctx->mctx)
+            match_ctx_destroy (ctx->mctx);
         free (ctx);
         errno = saved_errno;
     }
@@ -226,6 +232,8 @@ static struct list_ctx *list_ctx_create (flux_t *h)
     if (!(ctx->jsctx = job_state_create (ctx)))
         goto error;
     if (!(ctx->deferred_requests = flux_msglist_create ()))
+        goto error;
+    if (!(ctx->mctx = match_ctx_create (ctx->h)))
         goto error;
     return ctx;
 error:

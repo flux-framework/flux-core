@@ -17,6 +17,7 @@
 
 #include "job_state.h"
 #include "idsync.h"
+#include "match.h"
 
 struct list_ctx {
     flux_t *h;
@@ -24,6 +25,7 @@ struct list_ctx {
     struct job_state_ctx *jsctx;
     struct idsync_ctx *isctx;
     struct flux_msglist *deferred_requests;
+    struct match_ctx *mctx;
 };
 
 const char **job_attrs (void);
