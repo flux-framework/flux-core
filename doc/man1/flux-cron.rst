@@ -16,7 +16,7 @@ SYNOPSIS
 | **flux** **cron** **start** *ids...*
 | **flux** **cron** **delete** [*--kill*] *ids...*
 | **flux** **cron** **dump** [*--key=KEY*] *ids...*
-| **flux** **cron** **sync** [*--disable*] [*--epsilon=TIME*] *ids...*
+| **flux** **cron** **sync** [*--disable*] [*--epsilon=TIME*] *topic*
 
 
 DESCRIPTION
