@@ -365,7 +365,7 @@ tuned via the :option:`--task-history-count` option, described in the
 EXTRA OPTIONS section.
 
 Commands are normally executed immediately on the interval or event
-trigger for which they are configured. However, if the :option:`--sync-event`
+trigger for which they are configured. However, if the :option:`sync`
 option is active on the cron module, tasks execution will be deferred
 until the next synchronization event. See the documentation above
 for :program:`flux cron sync` for more information.
