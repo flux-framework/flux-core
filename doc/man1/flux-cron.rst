@@ -371,6 +371,27 @@ until the next synchronization event. See the documentation above
 for :program:`flux cron sync` for more information.
 
 
+EXAMPLES
+========
+
+Run a script every hour
+
+::
+
+   $ flux cron interval 1h my_script.sh
+   interval: cron-1 created
+
+Run a script only when the event "cron.trigger" is published
+
+::
+
+   $ flux cron event cron.trigger my_script.sh
+   event: cron-2 created
+   ...
+   $ flux event pub cron.trigger
+
+
+
 RESOURCES
 =========
 
