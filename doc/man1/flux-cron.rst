@@ -11,7 +11,7 @@ SYNOPSIS
 | **flux** **cron** **event** [*-E*] [*-d* *DIR*] [*-o* *OPT...*] *topic* *command*
 | **flux** **cron** **interval** [*-E*] [*-d* *DIR*] [*-o* *OPT...*] *interval* *command*
 
-| **flux** **cron** **list** [*ids...*]
+| **flux** **cron** **list**
 | **flux** **cron** **stop** *ids...*
 | **flux** **cron** **start** *ids...*
 | **flux** **cron** **delete** [*--kill*] *ids...*
