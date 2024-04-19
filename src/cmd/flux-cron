@@ -415,7 +415,7 @@ program:SubCommand {
 program:SubCommand {
  name = "list",
  description = "List registered and stopped flux-cron jobs",
- usage = "[IDs]",
+ usage = "",
  options = {},
  handler = function (self, arg)
 
