@@ -516,7 +516,7 @@ static int cron_ctx_sync_event_init (cron_ctx_t *ctx, const char *topic)
         flux_log_error (ctx->h, "sync_event_init: subscribe (%s)", topic);
         return (-1);
     }
-    /* Do not start the handler until we have entries on the the list */
+    /* Do not start the handler until we have entries on the list */
     return (0);
 }
 
