@@ -112,6 +112,12 @@ async def run_with_timeout(cmd, label, timeout=1800.0):
     return p
 
 
+def plural(sequence):
+    if len(sequence) > 1:
+        return "s"
+    return ""
+
+
 async def run_per_rank(name, jobid, args):
     """Run args.exec_per_rank on every rank of jobid
 
@@ -141,7 +147,13 @@ async def run_per_rank(name, jobid, args):
     offline = offline_ranks(handle) & ranks
     if offline:
         returncode = 1
-        LOGGER.info("%s: %s: ranks %s offline. Skipping.", jobid, name, offline)
+        LOGGER.warning(
+            "%s: %s: rank%s %s offline. Skipping.",
+            jobid,
+            name,
+            plural(offline),
+            offline,
+        )
         ranks.subtract(offline)
         if args.drain_offline:
             drain(handle, offline, f"offline for {jobid} {name}")
