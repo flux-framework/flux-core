@@ -93,7 +93,8 @@ at
 
 .. program:: flux cron at
 
-Run *command* at specific date and time described by *time*.
+Run *command* at specific date and time described by *time*.  Any time
+string that can be parsed by :linux:man1:`date` is acceptable.
 
 .. option:: -o, options=LIST
 
@@ -160,7 +161,8 @@ interval
 
 Create a cron entry to execute *command* every *interval*, where *interval*
 is an arbitrary floating point duration with optional suffix *s* for
-seconds, *m* for minutes, *h* for hours and *d* for days.
+seconds, *m* for minutes, *h* for hours and *d* for days.  If no suffix is
+specified, seconds is assumed.
 
 .. option:: -n, --name=STRING
 
@@ -168,8 +170,10 @@ seconds, *m* for minutes, *h* for hours and *d* for days.
 
 .. option:: -a, --after=TIME
 
-  The first task will run after a delay of *TIME* instead of *interval*.
-  After the first task the entry will continue to execute every *interval*.
+  The first task will run after a delay of *TIME* instead of *interval*, where
+  *TIME* is an arbitrary floating point duration specified in the same format
+  as *interval*.  After the first task the entry will continue to execute
+  every *interval*.
 
 .. option:: -c, --count=N
 
