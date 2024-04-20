@@ -426,6 +426,16 @@ MISCELLANEOUS
    command front end executable used by the ssh connector to start
    :program:`flux relay` on the remote system.
 
+.. envvar:: DBUS_SESSION_BUS_ADDRESS
+
+   :man1:`flux-exec` sets this to point to the Flux instance owner's
+   D-Bus instance, to ensure that a remote invocation of
+   :option:`systemctl --user` accesses the service manager for the Flux
+   instance owner.  This is helpful when debugging a system instance
+   configured to launch jobs with systemd, as described in
+   :man5:`flux-config-exec`.
+
+
 .. _sub_command_environment:
 
 SUB-COMMAND ENVIRONMENT

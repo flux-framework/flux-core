@@ -269,4 +269,17 @@ test_expect_success 'stdin broadcast -- long lines' '
 	done
 '
 
+test_expect_success 'dbus environment variable is set' '
+	DBUS_SESSION_BUS_ADDRESS= \
+	    flux exec -r 0 printenv DBUS_SESSION_BUS_ADDRESS
+'
+test_expect_success 'dbus environment variable is not overwritten if set' '
+	DBUS_SESSION_BUS_ADDRESS=xyz \
+	    flux exec -r 0 printenv DBUS_SESSION_BUS_ADDRESS >dbus.out &&
+	cat >dbus.exp <<-EOT &&
+	xyz
+	EOT
+	test_cmp dbus.exp dbus.out
+'
+
 test_done

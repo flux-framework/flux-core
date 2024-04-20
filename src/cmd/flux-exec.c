@@ -646,6 +646,19 @@ int main (int argc, char *argv[])
                                      &imp_path);
     }
 
+    /* Allow systemd commands to work on flux systemd instance by
+     * setting DBUS_SESSION_BUS_ADDRESS if not already set.
+     * See flux-framework/flux-core#5901
+     */
+    const char *security_owner;
+    if (!(security_owner = flux_attr_get (h, "security.owner")))
+        log_err_exit ("failed to fetch security.owner attribute");
+    (void)flux_cmd_setenvf (cmd,
+                            0,
+                            "DBUS_SESSION_BUS_ADDRESS",
+                            "unix:path=/run/user/%s/bus",
+                            security_owner);
+
     /* Get input ranks from --jobid if given:
      */
     if (optparse_getopt (opts, "jobid", &optargp) > 0) {
