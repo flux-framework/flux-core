@@ -847,6 +847,7 @@ int cmd_parse_config (optparse_t *p, int argc, char **argv)
 {
     flux_error_t error;
     json_t *o = NULL;
+    const char *path = NULL;
     struct rlist *rl = NULL;
     flux_conf_t *conf;
 
@@ -854,13 +855,31 @@ int cmd_parse_config (optparse_t *p, int argc, char **argv)
         log_msg_exit ("flux_conf_parse: %s", error.text);
 
     if (flux_conf_unpack (conf, &error,
-                          "{s:{s:o}}",
+                          "{s:{s?o s?s}}",
                           "resource",
-                          "config", &o) < 0)
+                            "config", &o,
+                            "path", &path) < 0)
         log_msg_exit ("Config file error: %s", error.text);
 
-    if (!(rl = rlist_from_config (o, &error)))
-        log_msg_exit ("Config file error: %s", error.text);
+    if (!o) {
+        json_error_t e;
+
+        if (!path) {
+            log_msg_exit ("Config file error:"
+                          " resource.config or resource.path must be defined");
+        }
+        if (!(o = json_load_file (path, 0, &e))
+            || !(rl = rlist_from_json (o, &e))) {
+            if (e.line == -1)
+                log_msg_exit ("%s: %s", path, e.text);
+            log_msg_exit ("%s: %s on line %d", path, e.text, e.line);
+        }
+        json_decref (o);
+    }
+    else {
+        if (!(rl = rlist_from_config (o, &error)))
+            log_msg_exit ("Config file error: %s", error.text);
+    }
 
     rlist_puts (rl);
 
