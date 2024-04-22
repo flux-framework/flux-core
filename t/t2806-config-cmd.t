@@ -181,6 +181,15 @@ test_expect_success 'flux-config builtin fails on unknown key' '
 test_expect_success 'flux-config builtin works on known key' '
 	flux config builtin rc1_path
 '
+test_expect_success 'flux-config builtin --intree works' '
+	flux config builtin --intree rc1_path >rc1_path_intree
+'
+test_expect_success 'flux-config builtin --installed works' '
+	flux config builtin --installed rc1_path >rc1_path_installed
+'
+test_expect_success 'flux-config builtin intree and installed return different values' '
+	test_must_fail test_cmp rc1_path_intree rc1_path_installed
+'
 test_expect_success 'flux-config get works as guest' '
 	runas_guest flux config get >obj
 '
