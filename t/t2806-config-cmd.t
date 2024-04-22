@@ -4,6 +4,12 @@ test_description='Test flux config get'
 
 . $(dirname $0)/sharness.sh
 
+FLUXCONFDIR=$(dirname $(flux config builtin --installed rc1_path))
+test -d $FLUXCONFDIR/system/conf.d || test_set_prereq NO_SYSTEM_CONF
+test -d $FLUXCONFDIR/security/conf.d || test_set_prereq NO_SECURITY_CONF
+test -d $FLUXCONFDIR/imp/conf.d || test_set_prereq NO_IMP_CONF
+
+
 mkdir config
 cat <<EOF >config/config.toml
 [foo]
@@ -181,6 +187,15 @@ test_expect_success 'flux-config builtin fails on unknown key' '
 test_expect_success 'flux-config builtin works on known key' '
 	flux config builtin rc1_path
 '
+test_expect_success 'flux-config builtin --intree works' '
+	flux config builtin --intree rc1_path >rc1_path_intree
+'
+test_expect_success 'flux-config builtin --installed works' '
+	flux config builtin --installed rc1_path >rc1_path_installed
+'
+test_expect_success 'flux-config builtin intree and installed return different values' '
+	test_must_fail test_cmp rc1_path_intree rc1_path_installed
+'
 test_expect_success 'flux-config get works as guest' '
 	runas_guest flux config get >obj
 '
@@ -192,6 +207,30 @@ test_expect_success 'flux-config reload fails as guest' '
 '
 test_expect_success 'flux-config builtin works as guest' '
 	runas_guest flux config builtin rc1_path
+'
+test_expect_success 'flux-config get works when --config-path points to dir' '
+	mkdir -p altconfig &&
+	echo "flag = 99" >altconfig/foo.toml &&
+	flux config get --config-path=altconfig | jq -e .flag
+'
+test_expect_success 'flux-config get works when --config-path points to file' '
+	flux config get --config-path=altconfig/foo.toml | jq -e .flag
+'
+test_expect_success 'flux-config get fails when --config-path path is wrong' '
+	test_must_fail flux config get --config-path=/not/a/file
+'
+test_expect_success 'flux-config get fails when --config-path is invalid' '
+	echo "x x x" >badconf.toml &&
+	test_must_fail flux config get --config-path=badconf.toml
+'
+test_expect_success NO_SYSTEM_CONF 'flux-config get --config-path=system fails when missing' '
+	test_must_fail flux config get --config-path=system
+'
+test_expect_success NO_SECURITY_CONF 'flux-config get --config-path=security fails when missing' '
+	test_must_fail flux config get --config-path=security
+'
+test_expect_success NO_IMP_CONF 'flux-config get --config-path=imp fails when missing' '
+	test_must_fail flux config get --config-path=imp
 '
 
 test_done

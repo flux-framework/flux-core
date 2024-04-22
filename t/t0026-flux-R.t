@@ -367,4 +367,20 @@ test_expect_success 'flux R parse-config detects invalid property' '
 	test_must_fail flux R parse-config conf
 '
 
+test_expect_success 'flux R parse-config also works with resource.path' '
+	flux R encode -r 0-1 >R.path &&
+	cat <<-EOF >conf/resource.toml &&
+	resource.path = "R.path"
+	EOF
+	flux R parse-config conf
+'
+test_expect_success 'flux R parse-config fails when resource.path = bad R' '
+	echo "bad json" >R.path &&
+	test_must_fail flux R parse-config conf
+'
+test_expect_success 'flux R parse-config fails when resource.path = missing R' '
+	rm -f R.path &&
+	test_must_fail flux R parse-config conf
+'
+
 test_done

@@ -19,6 +19,7 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/tomltk.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #include "builtin.h"
 
@@ -122,8 +123,10 @@ static void print_config_item (json_t *o,
 static int config_get (optparse_t *p, int ac, char *av[])
 {
     int optindex = optparse_option_index (p);
-    flux_t *h;
+    flux_t *h = NULL;
     flux_future_t *f = NULL;
+    const char *config_path = NULL;
+    flux_conf_t *conf = NULL;
     json_t *o;
     const char *path = NULL;
     const char *typestr;
@@ -136,12 +139,32 @@ static int config_get (optparse_t *p, int ac, char *av[])
         optparse_print_usage (p);
         exit (1);
     }
-    if (!(h = builtin_get_flux_handle (p)))
-        log_err_exit ("flux_open");
-    if (!(f = flux_rpc (h, "config.get", NULL, FLUX_NODEID_ANY, 0))
-        || flux_rpc_get_unpack (f, "o", &o) < 0)
-        log_msg_exit ("Error fetching config object: %s",
-                      future_strerror (f, errno));
+    if ((config_path = optparse_get_str (p, "config-path", NULL))) {
+        char buf[1024];
+        flux_error_t error;
+
+        if (streq (config_path, "system")
+            || streq (config_path, "security")
+            || streq (config_path, "imp")) {
+            snprintf (buf,
+                      sizeof (buf),
+                      "%s/%s/conf.d",
+                      FLUXCONFDIR,
+                      config_path);
+            config_path = buf;
+        }
+        if (!(conf = flux_conf_parse (config_path, &error))
+            || flux_conf_unpack (conf, &error, "o", &o) < 0)
+            log_msg_exit ("%s", error.text);
+    }
+    else {
+        if (!(h = builtin_get_flux_handle (p)))
+            log_err_exit ("flux_open");
+        if (!(f = flux_rpc (h, "config.get", NULL, FLUX_NODEID_ANY, 0))
+            || flux_rpc_get_unpack (f, "o", &o) < 0)
+            log_msg_exit ("Error fetching config object: %s",
+                          future_strerror (f, errno));
+    }
     typestr = optparse_get_str (p, "type", "any");
     if (parse_json_type (typestr, &type, &fsd_subtype) < 0)
         log_msg_exit ("Unknown type: %s", typestr);
@@ -152,6 +175,7 @@ static int config_get (optparse_t *p, int ac, char *av[])
                        fsd_subtype,
                        p);
 
+    flux_conf_decref (conf);
     flux_future_destroy (f);
     flux_close (h);
     return (0);
@@ -162,13 +186,21 @@ static int builtin_get (optparse_t *p, int ac, char *av[])
     int optindex = optparse_option_index (p);
     const char *name;
     const char *value;
+    int flags;
 
     if (optindex != ac - 1) {
         optparse_print_usage (p);
         exit (1);
     }
+    if (optparse_hasopt (p, "installed"))
+        flags = FLUX_CONF_INSTALLED;
+    else if (optparse_hasopt (p, "intree"))
+        flags = FLUX_CONF_INTREE;
+    else
+        flags = FLUX_CONF_AUTO;
+
     name = av[optindex];
-    value = flux_conf_builtin_get (name, FLUX_CONF_AUTO);
+    value = flux_conf_builtin_get (name, flags);
     if (!value)
         log_msg_exit ("%s is invalid", name);
     printf ("%s\n", value);
@@ -260,6 +292,10 @@ int cmd_config (optparse_t *p, int ac, char *av[])
 }
 
 static struct optparse_option get_opts[] = {
+    { .name = "config-path", .key = 'c', .has_arg = 1,
+      .arginfo = "PATH|system|security|imp",
+      .usage = "Get broker config from PATH (default: use live config)"
+    },
     { .name = "type", .key = 't', .has_arg = 1, .arginfo = "TYPE",
       .usage = "Set expected type (any, string, integer, real, boolean"
           ", object, array, fsd, fsd-integer, fsd-real)",
@@ -273,6 +309,15 @@ static struct optparse_option get_opts[] = {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option builtin_opts[] = {
+    { .name = "intree", .has_arg = 0,
+      .usage = "Force in-tree paths to be used"
+    },
+    { .name = "installed", .has_arg = 0,
+      .usage = "Force installed paths to be used",
+    },
+    OPTPARSE_TABLE_END
+};
 
 static struct optparse_subcommand config_subcmds[] = {
     { "load",
@@ -290,7 +335,7 @@ static struct optparse_subcommand config_subcmds[] = {
       NULL,
     },
     { "get",
-      "[--type=TYPE] [--quiet] [--default=VAL] [PATH]",
+      "[OPTIONS] [NAME]",
       "Query broker configuration values",
       config_get,
       0,
@@ -301,7 +346,7 @@ static struct optparse_subcommand config_subcmds[] = {
       "Print compiled-in Flux configuration values",
       builtin_get,
       0,
-      NULL,
+      builtin_opts,
     },
     OPTPARSE_SUBCMD_END
 };

@@ -54,6 +54,16 @@ scripts.
    *fsd* prints the value in its human-readable, string form. *fsd-integer*
    and *fsd-real* print the value in integer and real seconds, respectively.
 
+.. option:: -c, --config-path=PATH
+
+   Read configuration from PATH instead of fetching configuration from local
+   broker.  If PATH is a directory, then read all TOML files from that
+   directory. If PATH is a file, then load configuration as JSON if the file
+   extension is ``.json``, otherwise load the file as TOML.  As a special case,
+   ``system``, ``security``, and ``imp`` may be used as shorthand for the
+   compiled-in paths to system configuration objects.
+
+
 builtin
 -------
 
@@ -75,6 +85,12 @@ configuration key names.  This command is available to all users.
    was run from the flux-core source tree, and substitutes source tree
    specific values if found to be in tree.  This enables Flux testing without
    requiring installation.
+
+.. option:: --intree
+   Force :program:`flux config builtin` to return in-tree paths.
+
+.. option:: --installed
+   Force :program:`flux config builtin` to return installed paths.
 
 load
 ----
