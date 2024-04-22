@@ -24,6 +24,7 @@
 #include "exec_config.h"
 #include "ccan/str/str.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 
 static const char *default_cwd = "/tmp";
 
@@ -196,8 +197,13 @@ static void exec_config_init (struct exec_config *ec)
 /*  Initialize configurations for use by job-exec bulk-exec
  *  implementation
  */
-int config_init (flux_t *h, int argc, char **argv)
+int config_setup (flux_t *h,
+                  const flux_conf_t *conf,
+                  int argc,
+                  char **argv,
+                  flux_error_t *errp)
 {
+    struct exec_config tmpconf;
     flux_error_t err;
 
     /* Per trws comment in 97421e88987535260b10d6a19551cea625f26ce4
@@ -206,72 +212,72 @@ int config_init (flux_t *h, int argc, char **argv)
      * dlclose, so a subsequent dlopen doesn't re-clear globals and
      * similar.
      *
-     * So we must re-initialize globals on each config_init().
+     * So we must re-initialize globals everytime we reload the module.
      */
-    exec_config_init (&exec_conf);
+    exec_config_init (&tmpconf);
 
     /*  Check configuration for exec.job-shell */
-    if (flux_conf_unpack (flux_get_conf (h),
+    if (flux_conf_unpack (conf,
                           &err,
                           "{s?{s?s}}",
                           "exec",
-                            "job-shell", &exec_conf.default_job_shell) < 0) {
-        flux_log (h, LOG_ERR,
-                  "error reading config value exec.job-shell: %s",
-                  err.text);
+                            "job-shell", &tmpconf.default_job_shell) < 0) {
+        errprintf (errp,
+                   "error reading config value exec.job-shell: %s",
+                   err.text);
         return -1;
     }
 
     /*  Check configuration for exec.imp */
-    if (flux_conf_unpack (flux_get_conf (h),
+    if (flux_conf_unpack (conf,
                           &err,
                           "{s?{s?s}}",
                           "exec",
-                            "imp", &exec_conf.flux_imp_path) < 0) {
-        flux_log (h, LOG_ERR,
-                  "error reading config value exec.imp: %s",
-                  err.text);
+                            "imp", &tmpconf.flux_imp_path) < 0) {
+        errprintf (errp,
+                   "error reading config value exec.imp: %s",
+                   err.text);
         return -1;
     }
 
     /*  Check configuration for exec.service and exec.service-override */
-    if (flux_conf_unpack (flux_get_conf (h),
+    if (flux_conf_unpack (conf,
                           &err,
                           "{s?{s?s s?b}}",
                           "exec",
-                            "service", &exec_conf.exec_service,
+                            "service", &tmpconf.exec_service,
                             "service-override",
-                              &exec_conf.exec_service_override) < 0) {
-        flux_log (h, LOG_ERR,
-                  "error reading config value exec.service: %s",
-                  err.text);
+                              &tmpconf.exec_service_override) < 0) {
+        errprintf (errp,
+                   "error reading config value exec.service: %s",
+                   err.text);
         return -1;
     }
 
     /*  Check configuration for exec.sdexec-properties */
-    if (flux_conf_unpack (flux_get_conf (h),
+    if (flux_conf_unpack (conf,
                           &err,
                           "{s?{s?o}}",
                           "exec",
                             "sdexec-properties",
-                              &exec_conf.sdexec_properties) < 0) {
-        flux_log (h, LOG_ERR,
+                              &tmpconf.sdexec_properties) < 0) {
+        errprintf (errp,
                   "error reading config table exec.sdexec-properties: %s",
                   err.text);
         return -1;
     }
-    if (exec_conf.sdexec_properties) {
+    if (tmpconf.sdexec_properties) {
         const char *k;
         json_t *v;
 
-        if (!json_is_object (exec_conf.sdexec_properties)) {
-            flux_log (h, LOG_ERR, "exec.sdexec-properties is not a table");
+        if (!json_is_object (tmpconf.sdexec_properties)) {
+            errprintf (errp, "exec.sdexec-properties is not a table");
             errno = EINVAL;
             return -1;
         }
-        json_object_foreach (exec_conf.sdexec_properties, k, v) {
+        json_object_foreach (tmpconf.sdexec_properties, k, v) {
             if (!json_is_string (v)) {
-                flux_log (h, LOG_ERR,
+                errprintf (errp,
                           "exec.sdexec-properties.%s is not a string",
                           k);
                 errno = EINVAL;
@@ -284,14 +290,15 @@ int config_init (flux_t *h, int argc, char **argv)
         /* Finally, override values on cmdline */
         for (int i = 0; i < argc; i++) {
             if (strstarts (argv[i], "job-shell="))
-                exec_conf.default_job_shell = argv[i]+10;
+                tmpconf.default_job_shell = argv[i]+10;
             else if (strstarts (argv[i], "imp="))
-                exec_conf.flux_imp_path = argv[i]+4;
+                tmpconf.flux_imp_path = argv[i]+4;
             else if (strstarts (argv[i], "service="))
-                exec_conf.exec_service = argv[i]+8;
+                tmpconf.exec_service = argv[i]+8;
         }
     }
 
+    exec_conf = tmpconf;
     return 0;
 }
 
