@@ -20,6 +20,7 @@ test_under_flux 4 full \
     -o,--config-path=$(pwd)/config,-Stbon.topo=kary:4 \
     --test-exit-mode=leader
 
+OFFLINE_PLUGIN=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs/offline.so
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
 flux setattr log-stderr-level 1
@@ -340,9 +341,35 @@ test_expect_success 'perilog: run job across all 4 ranks' '
 '
 #  Note: rank 3 is taken offline after this point for testing handling
 #  of offline ranks.
-test_expect_success 'perilog: disconnect rank 3 for offline tests' '
+#
+#  The rank is taken offline via the test jobtap plugin offline.so, which
+#  explicitly sets rank 3 offline in RUN state before allowing the job to
+#  proceed. This is required to simulate a rank going offline between
+#  the scheduler assigning resources and the prolog starting.
+#
+test_expect_success 'perilog: create config to run flux-perilog-run' '
+	cat <<-EOF >config/perilog.toml &&
+	[job-manager.prolog]
+	command = [ "flux", "perilog-run", "prolog", "-e", "true" ]
+	EOF
+	flux config reload
+'
+test_expect_success 'perilog: load offline.so before perilog.so' '
+	flux jobtap load $OFFLINE_PLUGIN &&
+	flux jobtap load perilog.so
+'
+test_expect_success 'perilog: prolog with offline ranks raises sev 1 exception' '
+	id=$(flux submit -N4 -n4 true) &&
+	flux job wait-event -vt 15 -m severity=1 $id exception &&
+	flux job wait-event -t 15 $id clean &&
+	test_must_fail flux job attach $id &&
+	flux jobtap remove offline.so
+'
+test_expect_success 'perilog: offline ranks are logged by prolog' '
+	flux dmesg -HL | grep "rank 3 offline"
+'
+test_expect_success 'perilog: check that rank 3 is now offline' '
 	flux resource status &&
-	flux overlay disconnect 3 &&
 	test_must_fail $startctl wait 3 &&
 	test "$(flux resource status -s offline -no {ranks})" = "3"
 '
