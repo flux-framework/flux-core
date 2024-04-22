@@ -162,13 +162,21 @@ static int builtin_get (optparse_t *p, int ac, char *av[])
     int optindex = optparse_option_index (p);
     const char *name;
     const char *value;
+    int flags;
 
     if (optindex != ac - 1) {
         optparse_print_usage (p);
         exit (1);
     }
+    if (optparse_hasopt (p, "installed"))
+        flags = FLUX_CONF_INSTALLED;
+    else if (optparse_hasopt (p, "intree"))
+        flags = FLUX_CONF_INTREE;
+    else
+        flags = FLUX_CONF_AUTO;
+
     name = av[optindex];
-    value = flux_conf_builtin_get (name, FLUX_CONF_AUTO);
+    value = flux_conf_builtin_get (name, flags);
     if (!value)
         log_msg_exit ("%s is invalid", name);
     printf ("%s\n", value);
@@ -273,6 +281,15 @@ static struct optparse_option get_opts[] = {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option builtin_opts[] = {
+    { .name = "intree", .has_arg = 0,
+      .usage = "Force in-tree paths to be used"
+    },
+    { .name = "installed", .has_arg = 0,
+      .usage = "Force installed paths to be used",
+    },
+    OPTPARSE_TABLE_END
+};
 
 static struct optparse_subcommand config_subcmds[] = {
     { "load",
@@ -301,7 +318,7 @@ static struct optparse_subcommand config_subcmds[] = {
       "Print compiled-in Flux configuration values",
       builtin_get,
       0,
-      NULL,
+      builtin_opts,
     },
     OPTPARSE_SUBCMD_END
 };
