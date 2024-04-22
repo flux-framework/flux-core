@@ -493,6 +493,7 @@ check_LTLIBRARIES = \
 	job-manager/plugins/resource-update-expiration.la \
 	job-manager/plugins/update-test.la \
 	job-manager/plugins/project-bank-validate.la \
+	job-manager/plugins/offline.la \
 	stats/stats-basic.la \
 	stats/stats-immediate.la
 
@@ -1053,6 +1054,16 @@ job_manager_plugins_project_bank_validate_la_LDFLAGS = \
 job_manager_plugins_project_bank_validate_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugin_offline_la_SOURCES = \
+	job-manager/plugins/offline.a
+job_manager_plugin_offline_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_offline_la_LDFLAGS = \
+        $(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_offline_la_LIBADD = \
+        $(top_builddir)/src/common/libflux-internal.la \
+        $(top_builddir)/src/common/libflux-core.la
 
 hwloc_hwloc_convert_SOURCES = hwloc/hwloc-convert.c
 hwloc_hwloc_convert_CPPFLAGS = $(HWLOC_CFLAGS) $(test_cppflags)
