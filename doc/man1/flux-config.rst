@@ -54,6 +54,16 @@ scripts.
    *fsd* prints the value in its human-readable, string form. *fsd-integer*
    and *fsd-real* print the value in integer and real seconds, respectively.
 
+.. option:: -c, --config-path=PATH
+
+   Read configuration from PATH instead of fetching configuration from local
+   broker.  If PATH is a directory, then read all TOML files from that
+   directory. If PATH is a file, then load configuration as JSON if the file
+   extension is ``.json``, otherwise load the file as TOML.  As a special case,
+   ``system``, ``security``, and ``imp`` may be used as shorthand for the
+   compiled-in paths to system configuration objects.
+
+
 builtin
 -------
 
