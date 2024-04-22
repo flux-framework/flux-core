@@ -16,7 +16,9 @@ command = [
 ]
 EOF
 
-test_under_flux 4 full -o,--config-path=$(pwd)/config --test-exit-mode=leader
+test_under_flux 4 full \
+    -o,--config-path=$(pwd)/config,-Stbon.topo=kary:4 \
+    --test-exit-mode=leader
 
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
