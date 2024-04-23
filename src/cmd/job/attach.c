@@ -119,6 +119,9 @@ struct attach_ctx {
     bool statusline;
     char *last_event;
     bool fatal_exception;
+    int last_queue_update;
+    char *queue;
+    bool queue_stopped;
 };
 
 void attach_completed_check (struct attach_ctx *ctx)
@@ -914,6 +917,61 @@ static struct job_event_notifications attach_notifications[] = {
     { NULL, NULL, 0},
 };
 
+static void queue_status_cb (flux_future_t *f, void *arg)
+{
+    struct attach_ctx *ctx = arg;
+    int start;
+    if (flux_rpc_get_unpack (f, "{s:b}", "start", &start) == 0)
+        ctx->queue_stopped = !start;
+    flux_future_destroy (f);
+}
+
+static void fetch_queue_status (struct attach_ctx *ctx)
+{
+    flux_future_t *f = NULL;
+
+    /*  We don't yet have the queue, do nothing
+     */
+    if (!ctx->queue)
+        return;
+
+    if (streq (ctx->queue, "default"))
+        f = flux_rpc (ctx->h, "job-manager.queue-status", "{}", 0, 0);
+    else
+        f = flux_rpc_pack (ctx->h,
+                           "job-manager.queue-status",
+                            0,
+                            0,
+                            "{s:s?}",
+                            "name", ctx->queue);
+    if (f && flux_future_then (f, -1., queue_status_cb, ctx) < 0)
+        flux_future_destroy (f);
+}
+
+static void job_queue_cb (flux_future_t *f, void *arg)
+{
+    struct attach_ctx *ctx = arg;
+    const char *queue = "default";
+    if (flux_rpc_get_unpack (f, "{s:{s?s}}", "job", "queue", &queue) == 0)
+        ctx->queue = strdup (queue);
+    flux_future_destroy (f);
+}
+
+static void fetch_job_queue (struct attach_ctx *ctx)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_rpc_pack (ctx->h,
+                             "job-list.list-id",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:I s:[s]}",
+                             "id", ctx->id,
+                             "attrs", "queue"))
+        || flux_future_then (f, -1., job_queue_cb, ctx) < 0)
+        flux_future_destroy (f);
+}
+
 static const char *job_event_notify_string (const char *name)
 {
     struct job_event_notifications *t = attach_notifications;
@@ -940,7 +998,9 @@ static void attach_notify (struct attach_ctx *ctx,
                            const char *event_name,
                            double ts)
 {
+    char buf[64];
     const char *msg;
+
     if (!event_name)
         return;
     if (ctx->statusline
@@ -949,6 +1009,34 @@ static void attach_notify (struct attach_ctx *ctx,
         int dt = ts - ctx->timestamp_zero;
         int width = 80;
         struct winsize w;
+
+        if (streq (msg, "waiting for resources")) {
+            /*  Fetch job queue if not already available so queue status
+             *  can be checked in case allocations are stopped:
+             */
+            if (!ctx->queue)
+                fetch_job_queue (ctx);
+            else {
+                /*  Check queue status, only check again every ~10s
+                 */
+                if (ctx->last_queue_update <= 0
+                    || (dt - ctx->last_queue_update >= 10)) {
+                    ctx->last_queue_update = dt;
+                    fetch_queue_status (ctx);
+                }
+            }
+
+            /*  Amend status if queue is stopped:
+             */
+            if (ctx->queue_stopped) {
+                if (snprintf (buf,
+                              sizeof (buf),
+                              "%s (%s queue stopped)",
+                              msg,
+                              ctx->queue) < sizeof (buf))
+                    msg = buf;
+            }
+        }
 
         /* Adjust width of status so timer is right justified:
          */
@@ -1245,6 +1333,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     free (ctx.service);
     free (totalview_jobid);
     free (ctx.last_event);
+    free (ctx.queue);
     free (ctx.stdin_ranks);
 
     if (ctx.fatal_exception && ctx.exit_code == 0)
