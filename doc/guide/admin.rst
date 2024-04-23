@@ -12,10 +12,6 @@ resource manager on a cluster.
     Flux is still beta software and many of the interfaces documented
     in this guide may change with regularity.
 
-.. warning::
-    The Flux system instance is primarily tested on a 128 node cluster.
-
-
 ***********************
 Overview and Background
 ***********************
