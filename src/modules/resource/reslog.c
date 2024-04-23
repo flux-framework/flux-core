@@ -37,10 +37,10 @@ static const char *auxkey = "flux::event_info";
  */
 static void notify_callback (struct reslog *reslog, json_t *event)
 {
-    if (reslog->cb) {
-        const char *name;
-        json_t *context;
+    const char *name;
+    json_t *context;
 
+    if (reslog->cb) {
         if (json_unpack (event,
                          "{s:s s:o}",
                          "name", &name,
@@ -78,7 +78,7 @@ int post_handler (struct reslog *reslog, flux_future_t *f)
     struct event_info *info = flux_future_aux_get (f, auxkey);
     int rc;
 
-    if ((rc = flux_rpc_get (f, NULL)) < 0) {
+    if ((rc = flux_future_get (f, NULL)) < 0) {
         flux_log_error (reslog->h, "committing to %s", RESLOG_KEY);
         if (info->msg) {
             if (flux_respond_error (reslog->h, info->msg, errno, NULL) < 0)
@@ -96,6 +96,12 @@ int post_handler (struct reslog *reslog, flux_future_t *f)
 done:
     zlist_remove (reslog->pending, f);
     flux_future_destroy (f);
+
+    if ((f = zlist_first (reslog->pending))
+        && (info = flux_future_aux_get (f, auxkey))
+        && info->msg == NULL)
+        flux_future_fulfill (f, NULL, NULL);
+
     return rc;
 }
 
@@ -120,6 +126,7 @@ int reslog_post_pack (struct reslog *reslog,
                       const flux_msg_t *request,
                       double timestamp,
                       const char *name,
+                      int flags,
                       const char *fmt,
                       ...)
 {
@@ -136,14 +143,23 @@ int reslog_post_pack (struct reslog *reslog,
 
     if (!event)
         return -1;
-    if (!(val = eventlog_entry_encode (event)))
-        goto error;
-    if (!(txn = flux_kvs_txn_create ()))
-        goto error;
-    if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, RESLOG_KEY, val) < 0)
-        goto error;
-    if (!(f = flux_kvs_commit (reslog->h, NULL, 0, txn)))
-        goto error;
+    if ((flags & EVENT_NO_COMMIT)) {
+        if (!(f = flux_future_create (NULL, NULL)))
+            goto error;
+        flux_future_set_flux (f, reslog->h);
+        if (zlist_size (reslog->pending) == 0)
+            flux_future_fulfill (f, NULL, NULL);
+    }
+    else {
+        if (!(val = eventlog_entry_encode (event)))
+            goto error;
+        if (!(txn = flux_kvs_txn_create ()))
+            goto error;
+        if (flux_kvs_txn_put (txn, FLUX_KVS_APPEND, RESLOG_KEY, val) < 0)
+            goto error;
+        if (!(f = flux_kvs_commit (reslog->h, NULL, 0, txn)))
+            goto error;
+    }
     if (!(info = event_info_create (event, request)))
         goto error;
     if (flux_future_aux_set (f,
@@ -155,14 +171,14 @@ int reslog_post_pack (struct reslog *reslog,
     }
     if (flux_future_then (f, -1, post_continuation, reslog) < 0)
         goto error;
-    if (zlist_append (reslog->pending, f) < 0) {
-        errno = ENOMEM;
-        goto error;
-    }
-    flux_kvs_txn_destroy (txn);
+    if (zlist_append (reslog->pending, f) < 0)
+        goto nomem;
     free (val);
+    flux_kvs_txn_destroy (txn);
     json_decref (event);
     return 0;
+nomem:
+    errno = ENOMEM;
 error:
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);

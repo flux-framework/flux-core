@@ -111,6 +111,7 @@ static void broker_online_cb (flux_future_t *f, void *arg)
                                  NULL,
                                  0.,
                                  "online",
+                                 0,
                                  "{s:s}",
                                  "idset",
                                  online) < 0) {
@@ -124,6 +125,7 @@ static void broker_online_cb (flux_future_t *f, void *arg)
                                  NULL,
                                  0.,
                                  "offline",
+                                 0,
                                  "{s:s}",
                                  "idset",
                                  offline) < 0) {

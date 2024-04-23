@@ -13,6 +13,10 @@
 
 struct reslog;
 
+enum reslog_flags {
+    EVENT_NO_COMMIT = 1,
+};
+
 typedef void (*reslog_cb_f)(struct reslog *reslog,
                             const char *name,
                             json_t *context,
@@ -30,6 +34,7 @@ int reslog_post_pack (struct reslog *reslog,
                       const flux_msg_t *request,
                       double timestamp,
                       const char *name,
+                      int flags,
                       const char *fmt,
                       ...);
 

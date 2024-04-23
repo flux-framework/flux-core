@@ -276,6 +276,7 @@ int post_restart_event (struct resource_ctx *ctx, int restart)
                           NULL,
                           0.,
                           "resource-init",
+                          0,
                           "O",
                           o) < 0)
         goto error;

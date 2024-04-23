@@ -131,6 +131,7 @@ static int inventory_put_finalize (struct inventory *inv)
                           NULL,
                           0.,
                           "resource-define",
+                          0,
                           "{s:s}",
                           "method",
                           method) < 0) {
@@ -421,6 +422,7 @@ static void inventory_put_update_cb (flux_future_t *f, void *arg)
                           NULL,
                           0.,
                           "resource-update",
+                          0,
                           "{s:f}",
                           "expiration",
                           expiration) < 0) {
