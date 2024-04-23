@@ -71,6 +71,31 @@ test_expect_success 'attach: --show-status properly accounts prolog-start events
 	flux job wait-event $jobid2 clean &&
 	flux jobtap remove perilog-test.so
 '
+test_expect_success NO_CHAIN_LINT 'attach: --show-status notes stopped queue' '
+	flux queue stop &&
+	test_when_finished "flux queue start" &&
+	jobid=$(flux submit hostname) &&
+	$runpty -f asciicast -o stopped-queue.out \
+		flux job attach --show-status $jobid &
+	waitfile.lua -v -t 15 -p "default queue stopped" stopped-queue.out &&
+	flux queue start &&
+	wait
+'
+test_expect_success NO_CHAIN_LINT 'attach: --show-status notes stopped named queue' '
+	flux config load <<-EOF &&
+	[queues.batch]
+	[queues.debug]
+	EOF
+	flux queue stop --verbose --all &&
+	jobid=$(flux submit -qbatch hostname) &&
+	$runpty -f asciicast -o stopped-batch.out \
+		flux job attach --show-status $jobid &
+	waitfile.lua -v -t 15 -p "batch queue stopped" stopped-batch.out &&
+	flux queue start --all &&
+	wait &&
+	flux config load </dev/null &&
+	flux queue status
+'
 test_expect_success 'attach: shows output from job' '
 	run_timeout 5 flux job attach $(cat jobid1) | grep foo
 '
