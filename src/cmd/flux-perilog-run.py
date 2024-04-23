@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 import flux
+from flux.future import Future
 from flux.idset import IDset
 from flux.job import JobID
 from flux.resource import ResourceSet
@@ -112,6 +113,19 @@ async def run_with_timeout(cmd, label, timeout=1800.0):
     return p
 
 
+def job_raise(handle, jobid, message):
+    try:
+        Future(handle.flux_job_raise(jobid, "prolog", 1, message)).get()
+    except OSError as exc:
+        LOGGER.error(f"Failed to raise exception: {message}: {exc}")
+
+
+def plural(sequence):
+    if len(sequence) > 1:
+        return "s"
+    return ""
+
+
 async def run_per_rank(name, jobid, args):
     """Run args.exec_per_rank on every rank of jobid
 
@@ -141,7 +155,25 @@ async def run_per_rank(name, jobid, args):
     offline = offline_ranks(handle) & ranks
     if offline:
         returncode = 1
-        LOGGER.info("%s: %s: ranks %s offline. Skipping.", jobid, name, offline)
+        LOGGER.warning(
+            "%s: %s: rank%s %s offline. Skipping.",
+            jobid,
+            name,
+            plural(offline),
+            offline,
+        )
+        #  If this is a prolog, the job will get a fatal exception after the
+        #  prolog finishes, but the exception will be generic such as:
+        #
+        #  "prolog exited with exit code=1".
+        #
+        #  We can't raise a fatal exception here, because that would terminate
+        #  this script and other prologs would not finish. So, raise a
+        #  nonfatal exception to give a hint to the user and admins why the
+        #  prolog failed:
+        #
+        if name == "prolog":
+            job_raise(handle, jobid, f"rank{plural(offline)} {offline} offline")
         ranks.subtract(offline)
         if args.drain_offline:
             drain(handle, offline, f"offline for {jobid} {name}")
