@@ -86,5 +86,68 @@ test_expect_success 'job-exec: bad imp config causes module failure' '
 		flux dmesg > ${name}.log 2>&1 &&
 	grep "error reading config value exec.imp" ${name}.log
 '
-
+test_expect_success 'job-exec: can specify exec service on cmdline' '
+	flux module reload -f job-exec service=foo &&
+	flux module stats -p impl.bulk-exec.config.exec_service job-exec > stats3.out &&
+	grep "foo" stats3.out
+'
+test_expect_success 'job-exec: exec service can be set in exec conf' '
+	name=exec-service &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	service = "bar"
+	EOF
+	flux start -o,--config-path=${name}.toml -s1 \
+		flux module stats -p impl.bulk-exec.config.exec_service job-exec > ${name}.out 2>&1 &&
+	grep "bar" ${name}.out
+'
+test_expect_success 'job-exec: exec service override can be set in exec conf' '
+	name=exec-service-override &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	service = "bar"
+	service-override = true
+	EOF
+	flux start -o,--config-path=${name}.toml -s1 \
+		flux module stats -p impl.bulk-exec.config.exec_service_override job-exec > ${name}.out 2>&1 &&
+	val=$(cat ${name}.out) &&
+	test $val -eq 1
+'
+test_expect_success 'job-exec: sdexex properties can be set in exec conf' '
+	name=sdexec-properties &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	service = "sdexec"
+	[exec.sdexec-properties]
+	MemoryHigh = "200M"
+	MemoryMax = "100M"
+	EOF
+	flux start -o,--config-path=${name}.toml -s1 \
+		flux module stats -p impl.bulk-exec.config.sdexec_properties job-exec > ${name}.out 2>&1 &&
+	jq -e ".MemoryHigh == \"200M\"" < ${name}.out &&
+	jq -e ".MemoryMax == \"100M\"" < ${name}.out
+'
+test_expect_success 'job-exec: bad sdexec properties causes module failure (type 1)' '
+	name=bad-sdexec-properties1 &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	service = "sdexec"
+	sdexec-properties = 42
+	EOF
+	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
+	grep "exec.sdexec-properties is not a table" ${name}.log
+'
+test_expect_success 'job-exec: bad sdexec properties causes module failure (type 2)' '
+	name=bad-sdexec-properties2 &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	service = "sdexec"
+	[exec.sdexec-properties]
+	MemoryHigh = 42
+	EOF
+	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
+	grep "exec.sdexec-properties.MemoryHigh is not a string" ${name}.log
+'
 test_done
