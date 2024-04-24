@@ -11,12 +11,12 @@ SYNOPSIS
 | **flux** **cron** **event** [*-E*] [*-d* *DIR*] [*-o* *OPT...*] *topic* *command*
 | **flux** **cron** **interval** [*-E*] [*-d* *DIR*] [*-o* *OPT...*] *interval* *command*
 
-| **flux** **cron** **list** [*ids...*]
+| **flux** **cron** **list**
 | **flux** **cron** **stop** *ids...*
 | **flux** **cron** **start** *ids...*
 | **flux** **cron** **delete** [*--kill*] *ids...*
 | **flux** **cron** **dump** [*--key=KEY*] *ids...*
-| **flux** **cron** **sync** [*--disable*] [*--epsilon=TIME*] *ids...*
+| **flux** **cron** **sync** [*--disable*] [*--epsilon=TIME*] *topic*
 
 
 DESCRIPTION
@@ -93,7 +93,8 @@ at
 
 .. program:: flux cron at
 
-Run *command* at specific date and time described by *time*.
+Run *command* at specific date and time described by *time*.  Any time
+string that can be parsed by :linux:man1:`date` is acceptable.
 
 .. option:: -o, options=LIST
 
@@ -160,7 +161,8 @@ interval
 
 Create a cron entry to execute *command* every *interval*, where *interval*
 is an arbitrary floating point duration with optional suffix *s* for
-seconds, *m* for minutes, *h* for hours and *d* for days.
+seconds, *m* for minutes, *h* for hours and *d* for days.  If no suffix is
+specified, seconds is assumed.
 
 .. option:: -n, --name=STRING
 
@@ -168,8 +170,10 @@ seconds, *m* for minutes, *h* for hours and *d* for days.
 
 .. option:: -a, --after=TIME
 
-  The first task will run after a delay of *TIME* instead of *interval*.
-  After the first task the entry will continue to execute every *interval*.
+  The first task will run after a delay of *TIME* instead of *interval*, where
+  *TIME* is an arbitrary floating point duration specified in the same format
+  as *interval*.  After the first task the entry will continue to execute
+  every *interval*.
 
 .. option:: -c, --count=N
 
@@ -361,10 +365,31 @@ tuned via the :option:`--task-history-count` option, described in the
 EXTRA OPTIONS section.
 
 Commands are normally executed immediately on the interval or event
-trigger for which they are configured. However, if the :option:`--sync-event`
+trigger for which they are configured. However, if the :option:`sync`
 option is active on the cron module, tasks execution will be deferred
 until the next synchronization event. See the documentation above
 for :program:`flux cron sync` for more information.
+
+
+EXAMPLES
+========
+
+Run a script every hour
+
+::
+
+   $ flux cron interval 1h my_script.sh
+   interval: cron-1 created
+
+Run a script only when the event "cron.trigger" is published
+
+::
+
+   $ flux cron event cron.trigger my_script.sh
+   event: cron-2 created
+   ...
+   $ flux event pub cron.trigger
+
 
 
 RESOURCES

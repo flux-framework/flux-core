@@ -353,7 +353,7 @@ end
 program:SubCommand {
  name = "dump",
  description = "Dump values from a cron entry",
- usage = "[IDs]",
+ usage = "IDs",
  options = {
     { name = "key", char = "k", arg = "KEY",
       usage = "Print only KEY from the entry",
@@ -415,7 +415,7 @@ program:SubCommand {
 program:SubCommand {
  name = "list",
  description = "List registered and stopped flux-cron jobs",
- usage = "[IDs]",
+ usage = "",
  options = {},
  handler = function (self, arg)
 
