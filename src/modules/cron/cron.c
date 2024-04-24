@@ -516,7 +516,7 @@ static int cron_ctx_sync_event_init (cron_ctx_t *ctx, const char *topic)
         flux_log_error (ctx->h, "sync_event_init: subscribe (%s)", topic);
         return (-1);
     }
-    /* Do not start the handler until we have entries on the the list */
+    /* Do not start the handler until we have entries on the list */
     return (0);
 }
 
@@ -666,6 +666,7 @@ static void cron_sync_handler (flux_t *h, flux_msg_handler_t *w,
     const char *topic;
     int disable;
     double epsilon;
+    bool sync_event_before = ctx->sync_event ? true : false;
 
     if (flux_request_unpack (msg, NULL, "{}") < 0)
         goto error;
@@ -679,6 +680,11 @@ static void cron_sync_handler (flux_t *h, flux_msg_handler_t *w,
     if (topic) {
         if (cron_ctx_sync_event_init (ctx, topic) < 0)
             goto error;
+        /* If we changed the sync event, restart the message handler
+         * if there are any current deferred jobs
+         */
+        if (zlist_size (ctx->deferred) > 0)
+            flux_msg_handler_start (ctx->mh);
     }
 
     if (!flux_request_unpack (msg, NULL, "{ s:F }", "sync_epsilon", &epsilon))
@@ -690,6 +696,17 @@ static void cron_sync_handler (flux_t *h, flux_msg_handler_t *w,
                                "sync_epsilon", ctx->sync_epsilon) < 0)
             flux_log_error (h, "cron.request: flux_respond_pack");
     } else {
+        if (sync_event_before) {
+            /* If we just disabled a sync event, any cron jobs on the
+             * deferred list can never be executed (i.e. the deferred
+             * callback can never be triggered now).  These deferred
+             * jobs would have already been executed if there wasn't a
+             * sync event, so just execute them right now.
+             */
+            cron_entry_t *e;
+            while ((e = zlist_pop (ctx->deferred)))
+                cron_entry_run_task (e);
+        }
         if (flux_respond_pack (h, msg, "{ s:b }", "sync_disabled", true) < 0)
             flux_log_error (h, "cron.request: flux_respond_pack");
     }
