@@ -498,22 +498,6 @@ static int undrain_rank_idset (struct drain *drain,
     return rc;
 }
 
-int undrain_ranks (struct drain *drain, const struct idset *ranks)
-{
-    struct idset *drained = NULL;
-    struct idset *undrain_ranks = NULL;
-    int rc = -1;
-
-    if (!(drained = drain_get (drain))
-        || !(undrain_ranks = idset_intersect (ranks, drained)))
-        goto out;
-    rc = undrain_rank_idset (drain, NULL, undrain_ranks);
-out:
-    idset_destroy (drained);
-    idset_destroy (undrain_ranks);
-    return rc;
-}
-
 /* Un-drain a set of ranked execution targets.
  * If any of the ranks are not drained, fail the whole request.
  */

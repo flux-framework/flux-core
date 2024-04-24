@@ -27,11 +27,6 @@ json_t *drain_get_info  (struct drain *drain);
  */
 int drain_rank (struct drain *drain, uint32_t rank, const char *reason);
 
-/* Undrain 'ranks'. Call this on rank 0 only, otherwise use resource.drain RPC
- * It is not an error if any rank in 'ranks' is already drained.
- */
-int undrain_ranks (struct drain *drain, const struct idset *ranks);
-
 #endif /* !_FLUX_RESOURCE_DRAIN_H */
 
 /*
