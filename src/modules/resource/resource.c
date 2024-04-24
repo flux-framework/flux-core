@@ -253,66 +253,6 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-/* Post 'resource-init' event that summarizes the current monitor,
- * drain, and exclude state.  For replay purposes, all events prior to the
- * most recent 'resource-init' can be ignored.
- */
-int post_restart_event (struct resource_ctx *ctx, int restart)
-{
-    json_t *o;
-    json_t *drain;
-
-    if (!(drain = drain_get_info (ctx->drain)))
-        return -1;
-    if (!(o = json_pack ("{s:b s:o}", "restart", restart, "drain", drain))) {
-        json_decref (drain);
-        goto nomem;
-    }
-    if (rutil_set_json_idset (o, "online", monitor_get_up (ctx->monitor)) < 0)
-        goto error;
-    if (rutil_set_json_idset (o, "exclude", exclude_get (ctx->exclude)) < 0)
-        goto error;
-    if (reslog_post_pack (ctx->reslog,
-                          NULL,
-                          0.,
-                          "resource-init",
-                          0,
-                          "O",
-                          o) < 0)
-        goto error;
-    json_decref (o);
-    return 0;
-nomem:
-    errno = ENOMEM;
-error:
-    ERRNO_SAFE_WRAP (json_decref, o);
-    return -1;
-}
-
-/* Remove entries prior to the most recent 'resource-init' event from
- * 'eventlog'. N.B. they remain in the KVS.
- */
-static int prune_eventlog (json_t *eventlog)
-{
-    size_t index;
-    json_t *entry;
-    size_t last_entry = json_array_size (eventlog);
-    const char *name;
-
-    json_array_foreach (eventlog, index, entry) {
-        if (eventlog_entry_parse (entry, NULL, &name, NULL) == 0
-                && streq (name, "resource-init"))
-            last_entry = index;
-    }
-    if (last_entry < json_array_size (eventlog)) {
-        for (index = 0; index < last_entry; index++) {
-            if (json_array_remove (eventlog, 0) < 0)
-                return -1;
-        }
-    }
-    return 0;
-}
-
 /* Synchronously read resource.eventlog, and parse into
  * a JSON array for replay by the various subsystems.
  * 'eventlog' is set to NULL if it doesn't exist (no error).
@@ -335,11 +275,6 @@ static int reload_eventlog (flux_t *h, json_t **eventlog)
     else {
         if (!(o = eventlog_decode (s))) {
             flux_log_error (h, "%s: decode error", RESLOG_KEY);
-            goto error;
-        }
-        if (prune_eventlog (o) < 0) {
-            flux_log (h, LOG_ERR, "%s: pruning error", RESLOG_KEY);
-            ERRNO_SAFE_WRAP (json_decref, o);
             goto error;
         }
     }
@@ -459,12 +394,6 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto error;
     if (!(ctx->status = status_create (ctx)))
         goto error;
-    if (ctx->rank == 0) {
-        if (post_restart_event (ctx, eventlog ? 1 : 0) < 0)
-            goto error;
-        if (reslog_sync (ctx->reslog) < 0)
-            goto error;
-    }
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
         goto error;
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
