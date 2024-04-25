@@ -44,6 +44,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libidset/idset.h"
+#include "src/common/libhostlist/hostlist.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "ccan/str/str.h"
 
@@ -557,6 +558,66 @@ error:
     idset_destroy (idset);
 }
 
+/* Add rank to ids, adjusting rank if the rank:host mapping has changed.
+ * Don't add the rank if the host no longer exists, or if it exceeds
+ * the instance size.
+ *
+ * N.B. When running multiple brokers per node, flux_get_rankbyhost()
+ * returns the first rank on 'host', so its result cannot be directly
+ * used as the new rank.  Instead, first check that flux_get_hostbyrank()
+ * differs from 'host'.
+ */
+static void add_target (struct idset *ids,
+                        unsigned int rank,
+                        const char *host,
+                        flux_t *h)
+{
+    if (host) {
+        const char *nhost = flux_get_hostbyrank (h, rank);
+        int nrank;
+
+        if (!streq (host, nhost)) { // nhost could be "(null)" on bad rank
+            if ((nrank = flux_get_rankbyhost (h, host)) < 0)
+                return;
+            rank = nrank;
+        }
+    }
+    (void)idset_set (ids, rank); // no-op if rank exceeds fixed set size
+}
+
+/* Return an idset containing decoded 'ranks', possibly adjusted based on
+ * 'nodelist' and the instance size.  Any ranks that are invalid are simply
+ * not added (not treated as an error).
+ */
+static struct idset *decode_targets (struct drain *drain,
+                                     const char *ranks,
+                                     const char *nodelist)
+{
+    struct idset *ids;
+    struct hostlist *nl = NULL;
+    struct idset *newids = NULL;
+    unsigned int rank;
+    int index;
+
+    if (!(ids = idset_decode (ranks))
+        || (nodelist && !(nl = hostlist_decode (nodelist)))
+        || !(newids = idset_create (drain->ctx->size, 0)))
+        goto done;
+
+    index = 0;
+    rank = idset_first (ids);
+    while (rank != IDSET_INVALID_ID) {
+        const char *host = nl ?  hostlist_nth (nl, index++) : NULL;
+
+        add_target (newids, rank, host, drain->ctx->h);
+        rank = idset_next (ids, rank);
+    }
+done:
+    hostlist_destroy (nl);
+    idset_destroy (ids);
+    return newids;
+}
+
 /* Recover drained idset from eventlog.
  */
 static int replay_eventlog (struct drain *drain, const json_t *eventlog)
@@ -577,15 +638,17 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
                 return -1;
             if (streq (name, "drain")) {
                 int overwrite = 1;
+                const char *nodelist = NULL;
                 if (json_unpack (context,
-                                 "{s:s s?s s?i}",
+                                 "{s:s s?s s?s s?i}",
                                  "idset", &s,
+                                 "nodelist", &nodelist,
                                  "reason", &reason,
                                  "overwrite", &overwrite) < 0) {
                     errno = EPROTO;
                     return -1;
                 }
-                if (!(idset = idset_decode (s)))
+                if (!(idset = decode_targets (drain, s, nodelist)))
                     return -1;
                 if (update_draininfo_idset (drain,
                                             idset,
@@ -599,11 +662,15 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
                 idset_destroy (idset);
             }
             else if (streq (name, "undrain")) {
-                if (json_unpack (context, "{s:s}", "idset", &s) < 0) {
+                const char *nodelist = NULL;
+                if (json_unpack (context,
+                                 "{s:s s?s}",
+                                 "idset", &s,
+                                 "nodelist", &nodelist) < 0) {
                     errno = EPROTO;
                     return -1;
                 }
-                if (!(idset = idset_decode (s)))
+                if (!(idset = decode_targets (drain, s, nodelist)))
                     return -1;
                 if (update_draininfo_idset (drain,
                                             idset,
