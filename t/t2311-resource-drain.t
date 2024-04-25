@@ -95,7 +95,7 @@ test_expect_success 'drain suggests --force with existing reason' '
 	test_must_fail flux resource drain 1 test_reason_updated \
 		>update-failed.log 2>&1 &&
 	test_debug "cat update-failed.log" &&
-	grep -i 'use --force' update-failed.log
+	grep -i "use --force" update-failed.log
 '
 
 test_expect_success 'drain reason can be updated with --force' '
