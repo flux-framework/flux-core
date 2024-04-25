@@ -342,7 +342,31 @@ test_expect_success 'flux resource drain works without scheduler loaded' '
 	test $(flux resource status -s drain -no {nnodes}) -eq ${SIZE}
 '
 
-test_expect_success 'load scheduler again to free end-of-test resources' '
+test_expect_success 'resource can replay eventlog with pre v0.62 events' '
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713893408.8647039,"name":"resource-init","context":{"restart":false,"drain":{},"online":"","exclude":""}}
+	{"timestamp":1713893408.8673074,"name":"resource-define","context":{"method":"configuration"}}
+	{"timestamp":1713893411.0698946,"name":"online","context":{"idset":"0"}}
+	{"timestamp":1713893411.7209313,"name":"online","context":{"idset":"1"}}
+	{"timestamp":1713893412.2919452,"name":"online","context":{"idset":"2-3"}}
+	{"timestamp":1713905771.5895882,"name":"offline","context":{"idset":"1-3"}}
+	{"timestamp":1713905772.5933509,"name":"resource-init","context":{"restart":true,"drain":{},"online":"","exclude":""}}
+	{"timestamp":1713905772.5948801,"name":"resource-define","context":{"method":"configuration"}}
+	{"timestamp":1713906350.984611,"name":"drain","context":{"idset":"2","reason":"smurfs","overwrite":0}}
+	{"timestamp":1713906351.000000,"name":"drain","context":{"idset":"2","reason":"underwear","overwrite":1}}
+	{"timestamp":1713906369.9485908,"name":"resource-init","context":{"restart":true,"drain":{"2":{"timestamp":1713906351.000000,"reason":"underwear"}},"online":"","exclude":""}}
+	EOT
+	flux module reload resource
+'
+test_expect_success 'nodes drained in old eventlog are drained after replay' '
+	flux resource drain -n -o "{ranks} {reason}" >legacydrain.out &&
+	cat >legacydrain.exp<<-EOT &&
+	2 underwear
+	EOT
+	test_cmp legacydrain.exp legacydrain.out
+'
+
+test_expect_success 'load scheduler' '
 	flux module load sched-simple
 '
 
