@@ -374,6 +374,62 @@ test_expect_success 'nodes drained in old eventlog are drained after replay' '
 	test_cmp legacydrain.exp legacydrain.out
 '
 
+test_expect_success 'resource can replay eventlog with bad ranks' '
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713906351.000000,"name":"drain","context":{"idset":"42","reason":"","overwrite":0}}
+	EOT
+	flux module reload resource noverify
+'
+
+test_expect_success 'no nodes are drained after replay' '
+	test -z "$(flux resource drain -n -o {nnodes})"
+'
+
+test_expect_success 'reload resource with two nodes drained and nodelist' '
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713906350.984611,"name":"drain","context":{"idset":"1-2","nodelist":"fake[1-2]","reason":"uvula","overwrite":0}}
+	EOT
+	flux module reload resource noverify
+'
+
+test_expect_success 'the correct two nodes are drained after replay' '
+	flux resource drain -n -o "{ranks} {reason}" >drainhosts.out &&
+	cat >drainhosts.exp<<-EOT &&
+	1-2 uvula
+	EOT
+	test_cmp drainhosts.exp drainhosts.out
+'
+
+test_expect_success 'reload resource with two nodes remapped' '
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713906350.984611,"name":"drain","context":{"idset":"1-2","nodelist":"fake[2-3]","reason":"uvula","overwrite":0}}
+	EOT
+	flux module reload resource noverify
+'
+
+test_expect_success 'the remapped nodes are drained after replay' '
+	flux resource drain -n -o "{ranks} {reason}" >drainhosts2.out &&
+	cat >drainhosts2.exp<<-EOT &&
+	2-3 uvula
+	EOT
+	test_cmp drainhosts2.exp drainhosts2.out
+'
+
+test_expect_success 'reload resource with two nodes remapped, one bad host' '
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713906350.984611,"name":"drain","context":{"idset":"1-2","nodelist":"fake[3-4]","reason":"uvula","overwrite":0}}
+	EOT
+	flux module reload resource noverify
+'
+
+test_expect_success 'the remapped nodes are drained after replay' '
+	flux resource drain -n -o "{ranks} {reason}" >drainhosts3.out &&
+	cat >drainhosts3.exp<<-EOT &&
+	3 uvula
+	EOT
+	test_cmp drainhosts3.exp drainhosts3.out
+'
+
 test_expect_success 'load scheduler' '
 	flux module load sched-simple
 '
