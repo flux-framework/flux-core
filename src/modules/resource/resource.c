@@ -274,7 +274,7 @@ static int reload_eventlog (flux_t *h, json_t **eventlog)
     }
     else {
         if (!(o = eventlog_decode (s))) {
-            flux_log_error (h, "%s: decode error", RESLOG_KEY);
+            flux_log (h, LOG_ERR, "%s: decode error", RESLOG_KEY);
             goto error;
         }
     }

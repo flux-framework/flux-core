@@ -620,7 +620,9 @@ done:
 
 /* Recover drained idset from eventlog.
  */
-static int replay_eventlog (struct drain *drain, const json_t *eventlog)
+static int replay_eventlog (struct drain *drain,
+                            const json_t *eventlog,
+                            flux_error_t *error)
 {
     size_t index;
     json_t *entry;
@@ -634,8 +636,10 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
             const char *reason = NULL;
             struct idset *idset;
 
-            if (eventlog_entry_parse (entry, &timestamp, &name, &context) < 0)
+            if (eventlog_entry_parse (entry, &timestamp, &name, &context) < 0) {
+                errprintf (error, "line %zu: event parse error", index + 1);
                 return -1;
+            }
             if (streq (name, "drain")) {
                 int overwrite = 1;
                 const char *nodelist = NULL;
@@ -645,17 +649,25 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
                                  "nodelist", &nodelist,
                                  "reason", &reason,
                                  "overwrite", &overwrite) < 0) {
+                    errprintf (error, "line %zu: drain parse error", index + 1);
                     errno = EPROTO;
                     return -1;
                 }
-                if (!(idset = decode_targets (drain, s, nodelist)))
+                if (!(idset = decode_targets (drain, s, nodelist))) {
+                    errprintf (error,
+                               "line %zu: drain target decode error",
+                               index + 1);
                     return -1;
+                }
                 if (update_draininfo_idset (drain,
                                             idset,
                                             true,
                                             timestamp,
                                             reason,
                                             overwrite) < 0) {
+                    errprintf (error,
+                               "line %zu: drain update error",
+                               index + 1);
                     idset_destroy (idset);
                     return -1;
                 }
@@ -667,17 +679,27 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
                                  "{s:s s?s}",
                                  "idset", &s,
                                  "nodelist", &nodelist) < 0) {
+                    errprintf (error,
+                               "line %zu: undrain parse error",
+                               index + 1);
                     errno = EPROTO;
                     return -1;
                 }
-                if (!(idset = decode_targets (drain, s, nodelist)))
+                if (!(idset = decode_targets (drain, s, nodelist))) {
+                    errprintf (error,
+                               "line %zu: undrain target decode error",
+                               index + 1);
                     return -1;
+                }
                 if (update_draininfo_idset (drain,
                                             idset,
                                             false,
                                             timestamp,
                                             NULL,
                                             1) < 0) {
+                    errprintf (error,
+                               "line %zu: undrain update error",
+                               index + 1);
                     idset_destroy (idset);
                     return -1;
                 }
@@ -794,8 +816,8 @@ struct drain *drain_create (struct resource_ctx *ctx, const json_t *eventlog)
             || flux_future_then (drain->f, -1, broker_torpid_cb, drain) < 0)
             goto error;
     }
-    if (replay_eventlog (drain, eventlog) < 0) {
-        flux_log_error (ctx->h, "problem replaying eventlog drain state");
+    if (replay_eventlog (drain, eventlog, &error) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: %s", RESLOG_KEY, error.text);
         goto error;
     }
     if (reconcile_excluded (drain, exclude_get (ctx->exclude), &error) < 0) {
