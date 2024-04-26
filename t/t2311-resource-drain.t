@@ -5,7 +5,8 @@ test_description='Test resource drain/undrain'
 . `dirname $0`/sharness.sh
 
 SIZE=4
-test_under_flux $SIZE
+test_under_flux $SIZE full -o,-Shostlist=fake[0-3]
+
 
 # Usage: waitup N
 #   where N is a count of online ranks
@@ -26,6 +27,13 @@ drain_timestamp () {
 
 test_expect_success 'wait for monitor to declare all ranks are up' '
 	waitdown 0
+'
+# fake hostnames match the ones set on the broker command line
+test_expect_success 'load fake resources' '
+	flux module remove sched-simple &&
+	flux R encode -r 0-3 -c 0-1 -H fake[0-3] >R &&
+	flux resource reload R &&
+	flux module load sched-simple
 '
 
 test_expect_success 'flux resource drain: default lists some expected fields' '
@@ -137,7 +145,7 @@ test_expect_success 'drain works with idset' '
 
 test_expect_success 'reload resource module to simulate instance restart' '
 	flux module remove sched-simple &&
-	flux module reload resource &&
+	flux module reload resource noverify &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -162,7 +170,7 @@ test_expect_success 'resource.eventlog has three undrain events' '
 
 test_expect_success 'reload resource module to simulate instance restart' '
 	flux module remove sched-simple &&
-	flux module reload resource &&
+	flux module reload resource noverify &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -178,7 +186,7 @@ test_expect_success 'reload resource module with one node excluded' '
 	flux module remove sched-simple &&
 	flux module remove resource &&
 	echo "resource.exclude = \"0\"" | flux config load &&
-	flux module load resource &&
+	flux module load resource noverify &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -205,7 +213,7 @@ test_expect_success 'reload resource module with no nodes excluded' '
 	flux module remove sched-simple &&
 	flux module remove resource &&
 	echo "resource.exclude = \"\"" | flux config load &&
-	flux module load resource &&
+	flux module load resource noverify &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -221,7 +229,7 @@ test_expect_success 'drained rank subsequently excluded is ignored' '
 	flux module remove sched-simple &&
 	flux module remove resource &&
 	echo resource.exclude = \"1\" | flux config load &&
-	flux module load resource &&
+	flux module load resource noverify &&
 	waitdown 0 &&
 	flux module load sched-simple &&
 	test $(flux resource status -s drain -no {nnodes}) -eq 0 &&
@@ -232,7 +240,7 @@ test_expect_success 'reload resource module with no nodes excluded' '
 	flux module remove sched-simple &&
 	flux module remove resource &&
 	echo "resource.exclude = \"\"" | flux config load &&
-	flux module load resource &&
+	flux module load resource noverify &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -261,9 +269,9 @@ test_expect_success 'drain fails if idset is out of range' '
 #  are running on the same host
 #
 test_expect_success 'un/drain works with hostnames' '
-	flux resource drain $(hostname) &&
-	test $(flux resource list -n -s down -o {nnodes}) -eq $SIZE &&
-	flux resource undrain $(hostname) &&
+	flux resource drain fake[2-3] &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq 2 &&
+	flux resource undrain fake[2-3] &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 0
 '
 
@@ -320,14 +328,14 @@ test_expect_success 'flux resource drain differentiates drain/draining' '
 	flux resource undrain $(flux resource status -s drain -no {ranks}) &&
 	id=$(flux submit --wait-event=start sleep 300) &&
 	rank=$(flux jobs -no {ranks} $id) &&
-	flux resource drain $(hostname) &&
+	flux resource drain fake0 &&
 	test_debug "flux resource drain" &&
 	test_debug "flux resource status" &&
 	test $(flux resource status -s draining -no {ranks}) = "$rank" &&
 	flux resource drain | grep draining &&
 	flux cancel $id &&
 	flux job wait-event $id clean &&
-	test $(flux resource status -s drain -no {nnodes}) -eq ${SIZE}
+	test $(flux resource status -s drain -no {nnodes}) -eq 1
 '
 
 test_expect_success 'flux resource drain supports --include' '
@@ -339,7 +347,7 @@ test_expect_success 'flux resource drain supports --include' '
 test_expect_success 'flux resource drain works without scheduler loaded' '
 	flux module unload sched-simple &&
 	flux resource drain &&
-	test $(flux resource status -s drain -no {nnodes}) -eq ${SIZE}
+	test $(flux resource status -s drain -no {nnodes}) -eq 1
 '
 
 test_expect_success 'resource can replay eventlog with pre v0.62 events' '
@@ -356,7 +364,7 @@ test_expect_success 'resource can replay eventlog with pre v0.62 events' '
 	{"timestamp":1713906351.000000,"name":"drain","context":{"idset":"2","reason":"underwear","overwrite":1}}
 	{"timestamp":1713906369.9485908,"name":"resource-init","context":{"restart":true,"drain":{"2":{"timestamp":1713906351.000000,"reason":"underwear"}},"online":"","exclude":""}}
 	EOT
-	flux module reload resource
+	flux module reload resource noverify
 '
 test_expect_success 'nodes drained in old eventlog are drained after replay' '
 	flux resource drain -n -o "{ranks} {reason}" >legacydrain.out &&
