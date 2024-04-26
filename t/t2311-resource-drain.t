@@ -430,6 +430,33 @@ test_expect_success 'the remapped nodes are drained after replay' '
 	test_cmp drainhosts3.exp drainhosts3.out
 '
 
+test_expect_success 'a malformed event in the eventlog prevents loading' '
+	flux module remove -f resource &&
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{}
+	EOT
+	test_must_fail flux module load resource noverify
+'
+test_expect_success 'a malformed drain context in the eventlog prevents loading' '
+	flux module remove -f resource &&
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713906350.984611,"name":"drain","context":{}}
+	EOT
+	test_must_fail flux module load resource noverify
+'
+test_expect_success 'a malformed undrain context in the eventlog fails' '
+	flux module remove -f resource &&
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713906350.984611,"name":"undrain","context":{}}
+	EOT
+	test_must_fail flux module load resource noverify
+'
+test_expect_success '' '
+	flux module remove -f resource &&
+	flux kvs unlink resource.eventlog &&
+	flux module load resource noverify
+'
+
 test_expect_success 'load scheduler' '
 	flux module load sched-simple
 '
