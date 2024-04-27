@@ -479,8 +479,10 @@ static struct client *client_create (int rank, void *arg)
 /* zhashx_destructor_fn footprint */
 static void client_destroy (void **item)
 {
-    free (*item);
-    *item = NULL;
+    if (item) {
+        free (*item);
+        *item = NULL;
+    }
 }
 
 /* zhashx_hash_fn footprint */

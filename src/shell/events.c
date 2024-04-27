@@ -62,8 +62,8 @@ static void emitted_event_destroy (void *data)
 static void emitted_event_destroy_wrapper (void **data)
 {
     if (data) {
-        struct emitted_event *e = *((struct emitted_event **)data);
-        emitted_event_destroy (e);
+        emitted_event_destroy (*data);
+        *data = NULL;
     }
 }
 

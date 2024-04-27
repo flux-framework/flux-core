@@ -118,8 +118,10 @@ void plugstack_destroy (struct plugstack *st)
 
 static void plugin_destroy (flux_plugin_t **pp)
 {
-    flux_plugin_destroy (*pp);
-    *pp = NULL;
+    if (pp) {
+        flux_plugin_destroy (*pp);
+        *pp = NULL;
+    }
 }
 
 struct plugstack * plugstack_create (void)

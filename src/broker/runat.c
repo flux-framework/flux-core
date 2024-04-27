@@ -445,9 +445,10 @@ error:
 /* zhashx_destructor_fn signature */
 static void runat_entry_destroy_wrapper (void **arg)
 {
-    struct runat_entry **entry = (struct runat_entry **)arg;
-    if (entry)
-        runat_entry_destroy (*entry);
+    if (arg) {
+        runat_entry_destroy (*arg);
+        *arg = NULL;
+    }
 }
 
 /* Push 'cmd' onto command list 'name', creating it if it doesn't exist.

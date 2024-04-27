@@ -73,10 +73,9 @@ static int msg_hash_uuid_matchtag_key_cmp (const void *key1, const void *key2)
  */
 static void msg_hash_destructor (void **item)
 {
-    const flux_msg_t **msg = (const flux_msg_t **)item;
-    if (msg) {
-        flux_msg_decref (*msg);
-        *msg = NULL;
+    if (item) {
+        flux_msg_decref (*item);
+        item = NULL;
     }
 }
 

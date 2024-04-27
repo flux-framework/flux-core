@@ -71,7 +71,10 @@ static void jobreq_destroy (struct jobreq *job)
 
 static void jobreq_destructor (void **x)
 {
-    jobreq_destroy (*x);
+    if (x) {
+        jobreq_destroy (*x);
+        *x = NULL;
+    }
 }
 
 #define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))

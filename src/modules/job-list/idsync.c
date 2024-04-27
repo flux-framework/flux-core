@@ -45,8 +45,8 @@ void idsync_data_destroy (void *data)
 static void idsync_data_destroy_wrapper (void **data)
 {
     if (data) {
-        struct idsync_data **isd = (struct idsync_data **) data;
-        idsync_data_destroy (*isd);
+        idsync_data_destroy (*data);
+        *data = NULL;
     }
 }
 
@@ -86,6 +86,7 @@ static void idsync_wait_list_destroy (void **data)
             zlistx_destroy (&iwl->l);
             free (iwl);
         }
+        *data = NULL;
     }
 }
 
