@@ -1056,7 +1056,7 @@ job_manager_plugins_project_bank_validate_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
 job_manager_plugin_offline_la_SOURCES = \
-	job-manager/plugins/offline.a
+	job-manager/plugins/offline.c
 job_manager_plugin_offline_la_CPPFLAGS = \
 	$(test_cppflags)
 job_manager_plugins_offline_la_LDFLAGS = \

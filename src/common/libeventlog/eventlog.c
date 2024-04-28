@@ -30,29 +30,18 @@ int eventlog_entry_parse (json_t *entry,
 {
     double t;
     const char *n;
-    json_t *c;
+    json_t *c = NULL;
 
-    if (!entry) {
+    if (!entry
+        || json_unpack (entry,
+                        "{s:F s:s s?o}",
+                        "timestamp", &t,
+                        "name", &n,
+                        "context", &c) < 0
+        || (c && !json_is_object (c))) {
         errno = EINVAL;
         return -1;
     }
-
-    if (json_unpack (entry, "{ s:F s:s }",
-                     "timestamp", &t,
-                     "name", &n) < 0) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (!json_unpack (entry, "{ s:o }", "context", &c)) {
-        if (!json_is_object (c)) {
-            errno = EINVAL;
-            return -1;
-        }
-    }
-    else
-        c = NULL;
-
     if (timestamp)
         (*timestamp) = t;
     if (name)

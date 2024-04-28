@@ -481,11 +481,13 @@ int flux_cmd_argc (const flux_cmd_t *cmd)
 
 char *flux_cmd_stringify (const flux_cmd_t *cmd)
 {
-    char *result = calloc (1, cmd->argz_len);
-    if (!memcpy (result, cmd->argz, cmd->argz_len)) {
-        free (result);
+    if (cmd->argz_len == 0)
+        return strdup ("");
+
+    char *result;
+    if (!(result = malloc (cmd->argz_len)))
         return NULL;
-    }
+    memcpy (result, cmd->argz, cmd->argz_len);
     argz_stringify (result, cmd->argz_len, ' ');
     return result;
 }

@@ -121,8 +121,10 @@ void rlist_destroy (struct rlist *rl)
 
 static void rn_free_fn (void **x)
 {
-    rnode_destroy (*(struct rnode **)x);
-    *x = NULL;
+    if (x) {
+        rnode_destroy (*(struct rnode **)x);
+        *x = NULL;
+    }
 }
 
 static void valfree (void **item)
@@ -643,7 +645,7 @@ static void free_item (void **x)
 {
     if (x) {
         free (*x);
-        x = NULL;
+        *x = NULL;
     }
 }
 

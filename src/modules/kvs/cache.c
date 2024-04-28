@@ -497,9 +497,10 @@ const char *cache_entry_get_blobref (struct cache_entry *entry)
 
 static void cache_entry_destroy_wrapper (void **arg)
 {
-    struct cache_entry **entry = (struct cache_entry **)arg;
-    if (entry)
-        cache_entry_destroy (*entry);
+    if (arg) {
+        cache_entry_destroy (*arg);
+        *arg = NULL;
+    }
 }
 
 struct cache *cache_create (flux_reactor_t *r)
