@@ -11,7 +11,7 @@
 /* journal.c - stream job events
  *
  * This allows another service to track detailed information about
- * all jobs.  The journal consumer makes a job-manger.events-journal
+ * all jobs.  The journal consumer makes a job-manager.events-journal
  * request with optional allow/deny filter and boolean 'full' flag:
  *   {"full"?b, "allow"?{"name":1, ...}, "deny"?{"name:1, ...}}
  *
