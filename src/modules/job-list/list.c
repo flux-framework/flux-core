@@ -180,7 +180,9 @@ static int legacy_list_rpc (flux_t *h,
     json_t *a = NULL;
     json_t *o;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s:o s:i s:i s:i s?F s?s s?s}",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i s:o s:i s:i s:i s?F s?s s?s}",
                              "max_entries", max_entries,
                              "attrs", attrs,
                              "userid", &userid,
@@ -250,8 +252,10 @@ error:
     return -1;
 }
 
-void list_cb (flux_t *h, flux_msg_handler_t *mh,
-              const flux_msg_t *msg, void *arg)
+void list_cb (flux_t *h,
+              flux_msg_handler_t *mh,
+              const flux_msg_t *msg,
+              void *arg)
 {
     struct list_ctx *ctx = arg;
     flux_error_t err;
@@ -270,7 +274,9 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         return;
     }
-    if (flux_request_unpack (msg, NULL, "{s:i s:o s?F s?o}",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i s:o s?F s?o}",
                              "max_entries", &max_entries,
                              "attrs", &attrs,
                              "since", &since,
@@ -375,14 +381,21 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
         }
         else {
             json_t *o;
-            if (!(o = get_job_by_id (jsctx, NULL, isd->msg,
-                                     isd->id, isd->attrs, isd->state, NULL))) {
+            if (!(o = get_job_by_id (jsctx,
+                                     NULL,
+                                     isd->msg,
+                                     isd->id,
+                                     isd->attrs,
+                                     isd->state,
+                                     NULL))) {
                 flux_log_error (jsctx->h, "%s: get_job_by_id", __FUNCTION__);
                 goto cleanup;
             }
             if (flux_respond_pack (jsctx->h, isd->msg, "{s:O}", "job", o) < 0) {
                 json_decref (o);
-                flux_log_error (jsctx->h, "%s: flux_respond_pack", __FUNCTION__);
+                flux_log_error (jsctx->h,
+                                "%s: flux_respond_pack",
+                                __FUNCTION__);
                 goto cleanup;
             }
             json_decref (o);
@@ -465,8 +478,13 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
         || job->state == FLUX_JOB_STATE_NEW) {
         if (stall) {
             /* Must wait for job-list to see state change */
-            if (idsync_wait_valid_id (jsctx->ctx->isctx, id, msg, attrs, state) < 0) {
-                flux_log_error (jsctx->h, "%s: idsync_wait_valid_id",
+            if (idsync_wait_valid_id (jsctx->ctx->isctx,
+                                      id,
+                                      msg,
+                                      attrs,
+                                      state) < 0) {
+                flux_log_error (jsctx->h,
+                                "%s: idsync_wait_valid_id",
                                 __FUNCTION__);
                 return NULL;
             }
@@ -478,8 +496,10 @@ json_t *get_job_by_id (struct job_state_ctx *jsctx,
     return job_to_json (job, attrs, errp);
 }
 
-void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
-                 const flux_msg_t *msg, void *arg)
+void list_id_cb (flux_t *h,
+                 flux_msg_handler_t *mh,
+                 const flux_msg_t *msg,
+                 void *arg)
 {
     struct list_ctx *ctx = arg;
     flux_error_t err = {{0}};
@@ -495,7 +515,9 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         return;
     }
-    if (flux_request_unpack (msg, NULL, "{s:I s:o s?i}",
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:o s?i}",
                              "id", &id,
                              "attrs", &attrs,
                              "state", &state) < 0) {
@@ -556,8 +578,10 @@ static int list_attrs_append (json_t *a, const char *attr)
     return 0;
 }
 
-void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
-                    const flux_msg_t *msg, void *arg)
+void list_attrs_cb (flux_t *h,
+                    flux_msg_handler_t *mh,
+                    const flux_msg_t *msg,
+                    void *arg)
 {
     struct list_ctx *ctx = arg;
     const char **attrs;
