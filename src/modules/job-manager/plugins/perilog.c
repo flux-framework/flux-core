@@ -314,7 +314,6 @@ static int run_command (flux_plugin_t *p,
         .on_stdout = io_cb,
         .on_stderr = io_cb
     };
-    char path[PATH_MAX + 1];
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
@@ -325,8 +324,7 @@ static int run_command (flux_plugin_t *p,
         return -1;
     }
 
-    if (flux_cmd_setcwd (cmd, getcwd (path, sizeof (path))) < 0
-        || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_ID", "%s", idf58 (id)) < 0
+    if (flux_cmd_setenvf (cmd, 1, "FLUX_JOB_ID", "%s", idf58 (id)) < 0
         || flux_cmd_setenvf (cmd, 1, "FLUX_JOB_USERID", "%u", userid) < 0) {
         flux_log_error (h, "%s: flux_cmd_create", prolog ? "prolog" : "epilog");
         return -1;
