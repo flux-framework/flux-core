@@ -143,16 +143,17 @@ static void subprocess_free (flux_subprocess_t *p)
     }
 }
 
-static flux_subprocess_t *subprocess_create (flux_t *h,
-                                         flux_reactor_t *r,
-                                         int flags,
-                                         const flux_cmd_t *cmd,
-                                         const flux_subprocess_ops_t *ops,
-                                         const flux_subprocess_hooks_t *hooks,
-                                         int rank,
-                                         bool local,
-                                         subprocess_log_f log_fn,
-                                         void *log_data)
+static flux_subprocess_t *subprocess_create (
+    flux_t *h,
+    flux_reactor_t *r,
+    int flags,
+    const flux_cmd_t *cmd,
+    const flux_subprocess_ops_t *ops,
+    const flux_subprocess_hooks_t *hooks,
+    int rank,
+    bool local,
+    subprocess_log_f log_fn,
+    void *log_data)
 {
     flux_subprocess_t *p = calloc (1, sizeof (*p));
 
@@ -374,9 +375,9 @@ static int subprocess_setup_state_change (flux_subprocess_t *p)
 }
 
 static void completed_prep_cb (flux_reactor_t *r,
-                                  flux_watcher_t *w,
-                                  int revents,
-                                  void *arg)
+                               flux_watcher_t *w,
+                               int revents,
+                               void *arg)
 {
     flux_subprocess_t *p = arg;
 
