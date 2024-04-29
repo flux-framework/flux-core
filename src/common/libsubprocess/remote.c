@@ -55,8 +55,6 @@ static void start_channel_watchers (flux_subprocess_t *p)
     while (c) {
         flux_watcher_start (c->in_prep_w);
         flux_watcher_start (c->in_check_w);
-        flux_watcher_start (c->out_prep_w);
-        flux_watcher_start (c->out_check_w);
         c = zhash_next (p->channels);
     }
 }
@@ -292,6 +290,17 @@ error:
     c->p->f = NULL;
 }
 
+static bool remote_out_data_available (struct subprocess_channel *c)
+{
+    /* no need to handle failure states, on fatal error, these
+     * reactors are closed */
+    if ((c->line_buffered && fbuf_has_line (c->read_buffer))
+        || (!c->line_buffered && fbuf_bytes (c->read_buffer) > 0)
+        || (c->read_eof_received && !c->eof_sent_to_caller))
+        return true;
+    return false;
+}
+
 static void remote_out_prep_cb (flux_reactor_t *r,
                                 flux_watcher_t *w,
                                 int revents,
@@ -299,11 +308,7 @@ static void remote_out_prep_cb (flux_reactor_t *r,
 {
     struct subprocess_channel *c = arg;
 
-    /* no need to handle failure states, on fatal error, these
-     * reactors are closed */
-    if ((c->line_buffered && fbuf_has_line (c->read_buffer))
-        || (!c->line_buffered && fbuf_bytes (c->read_buffer) > 0)
-        || (c->read_eof_received && !c->eof_sent_to_caller))
+    if (remote_out_data_available (c))
         flux_watcher_start (c->out_idle_w);
 }
 
@@ -334,15 +339,18 @@ static void remote_out_check_cb (flux_reactor_t *r,
 
     /* no need to handle failure states, on fatal error, these
      * reactors are closed */
-    if (c->eof_sent_to_caller) {
+    if (!remote_out_data_available (c) || c->eof_sent_to_caller) {
+        /* if no data in buffer, shut down prep/check */
         flux_watcher_stop (c->out_prep_w);
         flux_watcher_stop (c->out_check_w);
 
-        /* close input side as well */
-        flux_watcher_stop (c->in_prep_w);
-        flux_watcher_stop (c->in_idle_w);
-        flux_watcher_stop (c->in_check_w);
-        c->closed = true;
+        /* close input side as well if eof sent to caller */
+        if (c->eof_sent_to_caller) {
+            flux_watcher_stop (c->in_prep_w);
+            flux_watcher_stop (c->in_idle_w);
+            flux_watcher_stop (c->in_check_w);
+            c->closed = true;
+        }
     }
 
     if (c->p->state == FLUX_SUBPROCESS_EXITED && c->eof_sent_to_caller)
@@ -579,6 +587,11 @@ static int remote_output (flux_subprocess_t *p,
         c->read_eof_received = true;
         if (fbuf_readonly (c->read_buffer) < 0)
             llog_debug (p, "fbuf_readonly: %s", strerror (errno));
+    }
+    if (remote_out_data_available (c)) {
+        /* read buffer has stuff in it, start watchers */
+        flux_watcher_start (c->out_prep_w);
+        flux_watcher_start (c->out_check_w);
     }
     return 0;
 }
