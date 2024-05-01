@@ -285,6 +285,14 @@ Some sites choose instead to configure the ``kernel.core_pattern``
 files to the program's current working directory.  Please note that the system
 instance broker runs as the ``flux`` user with a working directory of ``/``
 and thus would not have write permission on its current working directory.
+This can be worked around by installing a systemd override file, e.g.
+
+.. code-block::
+
+  # /etc/systemd/system/flux.service.d/override.conf
+  [Service]
+  WorkingDirectory=/var/lib/flux
+  LimitCORE=infinity:infinity
 
 .. note::
   If you do observe a ``flux-broker`` crash, please open a github issue at
