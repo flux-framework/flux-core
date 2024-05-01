@@ -304,6 +304,7 @@ struct continuation_info {
 };
 
 struct chained_future {
+    int refcount;
     bool continued;
     flux_future_t *next;
     flux_future_t *prev;
@@ -390,6 +391,15 @@ static void chained_continuation (flux_future_t *prev, void *arg)
         flux_future_destroy (prev);
 }
 
+static void chained_future_decref (struct chained_future *cf)
+{
+    if (--cf->refcount == 0) {
+        int saved_errno = errno;
+        free (cf);
+        errno = saved_errno;
+    }
+}
+
 /*  Initialization for a chained future. Get current reactor for this
  *   context and install it in "previous" future, _then_ set the "then"
  *   callback for that future to `chained_continuation()` which will
@@ -432,6 +442,18 @@ error:
     fulfill_next (f, cf->next);
 }
 
+static void cf_next_destroy (struct chained_future *cf)
+{
+    /*  cf->next is being destroyed. If cf->prev is still active, destroy
+     *  it now since no longer makes sense to trigger the cf->prev callback.
+     */
+    flux_future_destroy (cf->prev);
+    cf->prev = NULL;
+
+    /*  Release reference on cf taken by cf->next
+     */
+    chained_future_decref (cf);
+}
 
 /*  Allocate a chained future structure */
 static struct chained_future *chained_future_alloc (void)
@@ -443,12 +465,40 @@ static struct chained_future *chained_future_alloc (void)
         free (cf);
         return (NULL);
     }
+
+    /*  If cf->next is destroyed then later cf->prev is fulfilled, this
+     *  can cause use-after-free of cf->next in chained_continuation() and/or
+     *  flux_future_continue(3). Additionally, a reasonable expectation
+     *  is that destruction of cf->next will stop any previous future in
+     *  the chain. Therefore, arrange to have this object notified when
+     *  cf->next is destroyed so that cf->prev can also be destroyed
+     *  (if it has not yet been destroyed already. That case is handled
+     *   by nullifying cf->prev when prev is destroyed)
+     */
+    if (flux_future_aux_set (cf->next,
+                             NULL,
+                             cf,
+                             (flux_free_f) cf_next_destroy) < 0) {
+        flux_future_destroy (cf->next);
+        free (cf);
+        return NULL;
+    }
+
+    /*  Take one reference on cf for cf->next (released in cf_next_destroy())
+     */
+    cf->refcount = 1;
     return (cf);
 }
 
-static void chained_future_destroy (struct chained_future *cf)
+static void nullify_prev (struct chained_future *cf)
 {
-    free (cf);
+    /*  cf->prev has been destroyed. Ensure we don't reference it again
+     *  by nullifying the reference in cf.
+     */
+    cf->prev = NULL;
+
+    /* Remove reference added by this callback */
+    chained_future_decref (cf);
 }
 
 /*  Create a chained future on `f` by embedding a chained future
@@ -478,7 +528,30 @@ static struct chained_future *chained_future_create (flux_future_t *f)
         chained_future_decref (cf);
         return NULL;
     }
+
+    /* Increment refcount for cf->prev
+     */
+    cf->refcount++;
     cf->prev = f;
+
+    /* Nullify cf->prev on destruction of f to notify cf_next_destroy() that
+     *  prev was already destroyed. (See note in chained_future_alloc()).
+     */
+    if (flux_future_aux_set (f,
+                             NULL,
+                             cf,
+                             (flux_free_f) nullify_prev) < 0) {
+        chained_future_decref (cf);
+        return NULL;
+    }
+
+    /* Increment refcount again for nullify_prev aux item. This is necessary
+     *  since the order of aux_item destructors can't be guaranteed.
+     *  This increment is done separately to avoid leaking cf in case of
+     *  flux_future_aux_set() failure above.
+     */
+    cf->refcount++;
+
     /*
      * Ensure the empty "next" future we have just created inherits
      *  the same reactor (if any) and handle (if any) from the previous
