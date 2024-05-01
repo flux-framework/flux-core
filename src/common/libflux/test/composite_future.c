@@ -761,6 +761,45 @@ void test_future_fulfill_next (flux_reactor_t *r)
     flux_future_destroy (f2);
 }
 
+static bool issue5923_and_then_called = false;
+static bool issue5923_then_called = false;
+
+static void issue5923_and_then_cb (flux_future_t *f, void *arg)
+{
+    issue5923_and_then_called = false;
+    flux_future_destroy (f);
+}
+
+static void issue5923_then_cb (flux_future_t *f, void *arg)
+{
+    issue5923_then_called = true;
+    ok (flux_future_get (f, NULL) < 0 && errno == ETIMEDOUT,
+        "issue5923: then cb timed out");
+    flux_future_destroy (f);
+}
+
+static void test_issue_5923 (flux_reactor_t *r)
+{
+    flux_future_t *prev, *next;
+
+    if (!(prev = future_timeout (0.1)))
+        BAIL_OUT ("future_timeout failed");
+    flux_future_set_reactor (prev, r);
+
+    if (!(next = flux_future_and_then (prev, issue5923_and_then_cb, NULL)))
+        BAIL_OUT ("flux_future_and_then failed");
+
+    if (flux_future_then (next, 0.001, issue5923_then_cb, NULL) < 0)
+        BAIL_OUT ("flux_future_then failed");
+
+    ok (flux_reactor_run (r, 0) == 0,
+        "flux_reactor_run returns 0");
+    ok (issue5923_then_called,
+        "issue5923: then_cb was called");
+    ok (!issue5923_and_then_called,
+        "issue5923: and_then_cb was not called");
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *reactor;
@@ -789,6 +828,8 @@ int main (int argc, char *argv[])
     test_empty_composite (reactor);
 
     test_future_fulfill_next (reactor);
+
+    test_issue_5923 (reactor);
 
     flux_reactor_destroy (reactor);
 
