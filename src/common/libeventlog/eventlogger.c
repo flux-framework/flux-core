@@ -253,6 +253,7 @@ struct eventlogger *eventlogger_create (flux_t *h,
 {
     struct eventlogger *ev = calloc (1, sizeof (*ev));
     if (ev) {
+        ev->refcount = 1;
         ev->pending = zlist_new ();
         if (!ev->pending) {
             eventlogger_destroy (ev);
@@ -264,7 +265,6 @@ struct eventlogger *eventlogger_create (flux_t *h,
         ev->current = NULL;
         ev->ops = *ops;
         ev->arg = arg;
-        ev->refcount = 1;
     }
     return ev;
 }
