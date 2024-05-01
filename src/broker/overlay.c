@@ -776,13 +776,10 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
             && (child = child_lookup_online (ov, uuid))) {
             flux_log (ov->h,
                       LOG_ERR,
-                      "%s (rank %d) transitioning to %s->LOST"
-                      " after %ds due to %s",
+                      "%s (rank %d) has disconnected unexpectedly."
+                      " Marking it LOST.",
                       flux_get_hostbyrank (ov->h, child->rank),
-                      (int)child->rank,
-                      subtree_status_str (child->status),
-                      (int)(monotime_since (child->status_timestamp) / 1000.0),
-                      "EHOSTUNREACH error on send");
+                      (int)child->rank);
             overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
         }
         errno = saved_errno;
