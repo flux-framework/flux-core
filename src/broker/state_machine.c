@@ -98,6 +98,7 @@ static void action_run (struct state_machine *s);
 static void action_cleanup (struct state_machine *s);
 static void action_shutdown (struct state_machine *s);
 static void action_finalize (struct state_machine *s);
+static void action_goodbye (struct state_machine *s);
 static void action_exit (struct state_machine *s);
 
 static void runat_completion_cb (struct runat *r, const char *name, void *arg);
@@ -120,7 +121,7 @@ static struct state statetab[] = {
     { STATE_CLEANUP,    "cleanup",          action_cleanup },
     { STATE_SHUTDOWN,   "shutdown",         action_shutdown },
     { STATE_FINALIZE,   "finalize",         action_finalize },
-    { STATE_GOODBYE,    "goodbye",          NULL },
+    { STATE_GOODBYE,    "goodbye",          action_goodbye },
     { STATE_EXIT,       "exit",             action_exit },
 };
 
@@ -404,6 +405,14 @@ static void action_shutdown (struct state_machine *s)
                     overlay_get_child_peer_count (s->ctx->overlay));
     }
 #endif
+}
+
+static void action_goodbye (struct state_machine *s)
+{
+    /* On rank 0, "goodbye" is posted by shutdown.c.
+     */
+    if (s->ctx->rank > 0)
+        state_machine_post (s, "goodbye");
 }
 
 static void rmmod_continuation (flux_future_t *f, void *arg)
