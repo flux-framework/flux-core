@@ -372,7 +372,7 @@ error:
     flux_future_fulfill_error (f, errno, NULL);
 }
 
-static void flux_future_timeout_clear (flux_future_t *f)
+static void future_timeout_clear (flux_future_t *f)
 {
     flux_watcher_t *w = flux_future_aux_get (f, "watcher");
     ok (w != NULL, "timeout stop: got timer watcher");
@@ -380,7 +380,7 @@ static void flux_future_timeout_clear (flux_future_t *f)
         flux_watcher_stop (w);
 }
 
-static flux_future_t *flux_future_timeout (double s)
+static flux_future_t *future_timeout (double s)
 {
     double *dptr = calloc (1, sizeof (*dptr));
     if (dptr == NULL)
@@ -429,8 +429,8 @@ void test_composite_all_async (bool with_error)
     ok (flux_future_push (fc, "f1", f) == 0,
         "flux_future_push success");
 
-    if (!(f = flux_future_timeout (0.1)))
-        BAIL_OUT ("flux_future_timeout failed");
+    if (!(f = future_timeout (0.1)))
+        BAIL_OUT ("future_timeout failed");
 
     ok (flux_future_push (fc, "timeout", f) == 0,
         "flux_future_push timeout success");
@@ -470,7 +470,7 @@ void async_any_check (flux_future_t *fc, void *arg)
         "async: retrieved handle to timeout future");
     ok (flux_future_is_ready (f) == false,
         "async: timeout future not yet fulfilled");
-    flux_future_timeout_clear (f);
+    future_timeout_clear (f);
     async_any_check_rc = 0;
     /* Required so we pop out of reactor since we will still have
      *  active watchers */
@@ -493,8 +493,8 @@ void test_composite_any_async (bool with_error)
     ok (flux_future_push (fc, "f1", f) == 0,
         "flux_future_push success");
 
-    if (!(f = flux_future_timeout (1.0)))
-        BAIL_OUT ("flux_future_timeout failed");
+    if (!(f = future_timeout (1.0)))
+        BAIL_OUT ("future_timeout failed");
 
     ok (flux_future_push (fc, "timeout", f) == 0,
         "flux_future_push timeout success");
