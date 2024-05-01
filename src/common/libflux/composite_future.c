@@ -165,8 +165,12 @@ static flux_future_t *future_create_composite (int wait_any)
 {
     struct composite_future *cf = composite_future_create ();
     flux_future_t *f = flux_future_create (composite_future_init, (void *) cf);
-    if (!f || !cf || flux_future_aux_set (f, "flux::composite", cf,
-                         (flux_free_f) composite_future_destroy) < 0) {
+    if (!f
+        || !cf
+        || flux_future_aux_set (f,
+                                "flux::composite",
+                                cf,
+                                (flux_free_f) composite_future_destroy) < 0) {
         composite_future_destroy (cf);
         flux_future_destroy (f);
         return (NULL);
@@ -265,11 +269,11 @@ const char *flux_future_next_child (flux_future_t *f)
  *   If the user calls both and_then() and or_then(), the same cf->next
  *   future is returned, since only one of these calls will be used.
  *
- *  The underlying then() callback for `f` is subsequently set to use 
+ *  The underlying then() callback for `f` is subsequently set to use
  *   chained_continuation() below, which will call `and_then()` on successful
  *   fulfillment of f (aka `prev`) or or_then() on failure. These continuations
  *   are passed `f, arg` as if a normal continuation was used with
- *   flux_future_then(3). These callbacks may use one of 
+ *   flux_future_then(3). These callbacks may use one of
  *   flux_future_continue(3) or flux_future_continue_error(3) to schedule
  *   fulfillment of the internal `cf->next` future based on a new
  *   intermediate future created during the continuation (e.g. when a
@@ -367,7 +371,8 @@ static void chained_continuation (flux_future_t *prev, void *arg)
      *   cf->next using prev directly.
      */
     if (!cf->continued && flux_future_fulfill_with (cf->next, prev) < 0) {
-        flux_future_fatal_error (cf->next, errno,
+        flux_future_fatal_error (cf->next,
+                                 errno,
                                  "chained_continuation: fulfill_with failed");
     }
 
@@ -393,7 +398,9 @@ static void chained_continuation (flux_future_t *prev, void *arg)
 static void chained_future_init (flux_future_t *f, void *arg)
 {
     struct chained_future *cf = arg;
-    if (cf == NULL || cf->prev == NULL || cf->next == NULL
+    if (cf == NULL
+        || cf->prev == NULL
+        || cf->next == NULL
         || !(flux_future_get_reactor (f))) {
         errno = EINVAL;
         goto error;
@@ -454,7 +461,8 @@ static void chained_future_destroy (struct chained_future *cf)
 static struct chained_future *chained_future_create (flux_future_t *f)
 {
     struct chained_future *cf = flux_future_aux_get (f, "flux::chained");
-    if (cf == NULL && (cf = chained_future_alloc ())) {
+    if (cf == NULL
+        && (cf = chained_future_alloc ())) {
         if (flux_future_aux_set (f, "flux::chained",
                                  (void *) cf,
                                  (flux_free_f) chained_future_destroy) < 0) {
@@ -521,7 +529,8 @@ int flux_future_continue (flux_future_t *prev, flux_future_t *f)
 
 /* "Continue" the chained "next" future embedded in `prev` with an error
  */
-void flux_future_continue_error (flux_future_t *prev, int errnum,
+void flux_future_continue_error (flux_future_t *prev,
+                                 int errnum,
                                  const char *errstr)
 {
     struct chained_future *cf = chained_future_get (prev);
@@ -546,7 +555,8 @@ int flux_future_fulfill_next (flux_future_t *f,
 }
 
 flux_future_t *flux_future_and_then (flux_future_t *prev,
-                                     flux_continuation_f next_cb, void *arg)
+                                     flux_continuation_f next_cb,
+                                     void *arg)
 {
     struct chained_future *cf = chained_future_create (prev);
     if (!cf)
@@ -557,7 +567,8 @@ flux_future_t *flux_future_and_then (flux_future_t *prev,
 }
 
 flux_future_t *flux_future_or_then (flux_future_t *prev,
-                                    flux_continuation_f or_cb, void *arg)
+                                    flux_continuation_f or_cb,
+                                    void *arg)
 {
     struct chained_future *cf = chained_future_create (prev);
     if (!cf)
