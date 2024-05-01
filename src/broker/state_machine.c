@@ -361,7 +361,7 @@ static void action_run (struct state_machine *s)
 static void action_cleanup (struct state_machine *s)
 {
     /* Prevent new downstream clients from saying hello, but
-     * let existing ones continue to communiate so they can
+     * let existing ones continue to communicate so they can
      * shut down and disconnect.
      */
     overlay_shutdown (s->ctx->overlay, false);
