@@ -460,15 +460,23 @@ static void chained_future_destroy (struct chained_future *cf)
  */
 static struct chained_future *chained_future_create (flux_future_t *f)
 {
-    struct chained_future *cf = flux_future_aux_get (f, "flux::chained");
-    if (cf == NULL
-        && (cf = chained_future_alloc ())) {
-        if (flux_future_aux_set (f, "flux::chained",
-                                 (void *) cf,
-                                 (flux_free_f) chained_future_destroy) < 0) {
-            chained_future_destroy (cf);
-            return (NULL);
-        }
+    struct chained_future *cf;
+
+    /*  If future `f` is already chained, then just return the existing
+     *  stored chained_future object:
+     */
+    if ((cf = flux_future_aux_get (f, "flux::chained")))
+        return cf;
+
+    /*  Otherwise, create one and store it:
+     */
+    if (!(cf = chained_future_alloc ())
+        || flux_future_aux_set (f,
+                                "flux::chained",
+                               (void *) cf,
+                               (flux_free_f) chained_future_decref) < 0) {
+        chained_future_decref (cf);
+        return NULL;
     }
     cf->prev = f;
     /*
