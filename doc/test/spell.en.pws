@@ -888,3 +888,5 @@ Sstatedir
 xr
 acknowledgements
 netdev
+LimitCORE
+WorkingDirectory
