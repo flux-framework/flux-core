@@ -538,8 +538,8 @@ test_expect_success 'tbon.topo with unknown scheme fails' '
 		/bin/true 2>badscheme.err &&
 	grep "unknown topology scheme" badscheme.err
 '
-test_expect_success 'tbon.topo is kary:2 by default' '
-	echo "kary:2" >topo.exp &&
+test_expect_success 'tbon.topo is kary:32 by default' '
+	echo "kary:32" >topo.exp &&
 	flux broker ${ARGS} flux getattr tbon.topo >topo.out &&
 	test_cmp topo.exp topo.out
 '
