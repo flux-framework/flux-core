@@ -17,7 +17,7 @@ KEYS
 
 topo
    (optional) A URI that selects a specific tree topology.  The default value
-   is ``kary:2`` when bootstrapping from PMI, and ``custom`` when bootstrapping
+   is ``kary:32`` when bootstrapping from PMI, and ``custom`` when bootstrapping
    from configuration, as described in :man5:`flux-config-bootstrap`.
    The configured value may be overridden by setting the ``tbon.topo`` broker
    attribute.

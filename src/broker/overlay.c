@@ -2021,7 +2021,7 @@ static int overlay_configure_zmqdebug (struct overlay *ov)
  */
 static int overlay_configure_topo (struct overlay *ov)
 {
-    const char *topo_uri = "kary:2";
+    const char *topo_uri = "kary:32";
     const flux_conf_t *cf;
 
     if ((cf = flux_get_conf (ov->h))) {
