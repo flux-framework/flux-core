@@ -151,7 +151,7 @@ tbon.topo [Updates: C]
    scheme selects a complete, k-ary tree with fanout *k*, with ``kary:0``
    meaning that rank 0 is the parent of all other ranks by convention.  The
    ``binomial`` scheme selects a binomial tree topology of the minimum order
-   that fits the instance size.  Default: ``kary:2``, unless bootstrapping by
+   that fits the instance size.  Default: ``kary:32``, unless bootstrapping by
    TOML configuration, then see :man5:`flux-config-bootstrap`.
 
 tbon.descendants
