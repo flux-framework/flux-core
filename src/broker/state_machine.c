@@ -152,6 +152,7 @@ static struct state_next nexttab[] = {
 };
 
 static const double default_quorum_timeout = 60; // log slow joiners
+static const double goodbye_timeout = 60;
 
 static void state_action (struct state_machine *s, broker_state_t state)
 {
@@ -407,12 +408,37 @@ static void action_shutdown (struct state_machine *s)
 #endif
 }
 
+static void goodbye_continuation (flux_future_t *f, void *arg)
+{
+    struct state_machine *s = arg;
+    if (flux_future_get (f, NULL) < 0) {
+        flux_log (s->ctx->h,
+                  LOG_ERR,
+                  "overlay.goodbye: %s",
+                  future_strerror (f, errno));
+    }
+    state_machine_post (s, "goodbye");
+    flux_future_destroy (f);
+}
+
 static void action_goodbye (struct state_machine *s)
 {
     /* On rank 0, "goodbye" is posted by shutdown.c.
+     * On other ranks, send a goodbye message and wait for a response
+     * (with timeout) before continuing on.
      */
-    if (s->ctx->rank > 0)
-        state_machine_post (s, "goodbye");
+    if (s->ctx->rank > 0) {
+        flux_future_t *f;
+        if (!(f = overlay_goodbye_parent (s->ctx->overlay))
+            || flux_future_then (f,
+                                 goodbye_timeout,
+                                 goodbye_continuation,
+                                 s) < 0) {
+            flux_log_error (s->ctx->h, "error sending overlay.goodbye request");
+            flux_future_destroy (f);
+            state_machine_post (s, "goodbye");
+        }
+    }
 }
 
 static void rmmod_continuation (flux_future_t *f, void *arg)

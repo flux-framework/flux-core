@@ -124,6 +124,8 @@ struct parent {
     bool hello_error;
     bool hello_responded;
     bool offline;           // set upon receipt of CONTROL_DISCONNECT
+    bool goodbye_sent;
+    flux_future_t *f_goodbye;
     struct rpc_track *tracker;
     struct zmqutil_monitor *monitor;
 };
@@ -507,7 +509,7 @@ static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg)
 {
     int rc = -1;
 
-    if (!ov->parent.zsock || ov->parent.offline) {
+    if (!ov->parent.zsock || ov->parent.offline || ov->parent.goodbye_sent) {
         errno = EHOSTUNREACH;
         goto done;
     }
@@ -1478,6 +1480,74 @@ int overlay_set_monitor_cb (struct overlay *ov,
     return 0;
 }
 
+/* A child has sent an overlay.goodbye request.
+ * Respond, then transition it to OFFLINE.
+ */
+static void overlay_goodbye_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    struct overlay *ov = arg;
+    const char *uuid;
+    struct child *child;
+    flux_msg_t *response = NULL;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0
+        || !(uuid = flux_msg_route_last (msg))
+        || !(child = child_lookup_online (ov, uuid)))
+        goto error;
+    if (!(response = flux_response_derive (msg, 0)))
+        goto error;
+    if (overlay_sendmsg_child (ov, response) < 0) {
+        flux_msg_decref (response);
+        goto error;
+    }
+    overlay_child_status_update (ov, child, SUBTREE_STATUS_OFFLINE);
+    flux_msg_decref (response);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to overlay.goodbye");
+}
+
+/* The parent has responded to overlay.goodbye.  Fulfill the future
+ * returned by overlay_goodbye_parent() so the state machine can
+ * make progress.
+ */
+static void overlay_goodbye_response_cb (flux_t *h,
+                                         flux_msg_handler_t *mh,
+                                         const flux_msg_t *msg,
+                                         void *arg)
+{
+    struct overlay *ov = arg;
+    flux_future_fulfill (ov->parent.f_goodbye, NULL, NULL);
+}
+
+/* This allows the state machine to delay overlay_destroy() and its
+ * disconnection from the parent until the parent has marked this peer
+ * offline and sent an acknowledgement.  If we simply send a control status
+ * offline message and disconnect, the parent may log errors if it sends any
+ * messages to this peer (such as broadcasts) before the offline message is
+ * processed and gets an EHOSTUNREACH for an online peer.
+ * See flux-framework/flux-core#5881.
+ */
+flux_future_t *overlay_goodbye_parent (struct overlay *ov)
+{
+    flux_msg_t *msg;
+
+    if (!(msg = flux_request_encode ("overlay.goodbye", NULL))
+        || flux_msg_set_rolemask (msg, FLUX_ROLE_OWNER) < 0
+        || overlay_sendmsg_parent (ov, msg) < 0) {
+        flux_msg_decref (msg);
+        return NULL;
+    }
+    ov->parent.goodbye_sent = true; // suppress further sends to parent
+    flux_msg_decref (msg);
+    flux_future_incref (ov->parent.f_goodbye);
+    return ov->parent.f_goodbye;
+}
+
 static int child_rpc_track_count (struct overlay *ov)
 {
     int count = 0;
@@ -2068,6 +2138,7 @@ void overlay_destroy (struct overlay *ov)
         flux_msg_handler_delvec (ov->handlers);
         ov->status = SUBTREE_STATUS_OFFLINE;
         overlay_control_parent (ov, CONTROL_STATUS, ov->status);
+        flux_future_destroy (ov->parent.f_goodbye);
 
         zmq_close (ov->parent.zsock);
         free (ov->parent.uri);
@@ -2134,6 +2205,18 @@ static const struct flux_msg_handler_spec htab[] = {
         overlay_disconnect_subtree_cb,
         0
     },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.goodbye",
+        overlay_goodbye_cb,
+        0,
+    },
+    {
+        FLUX_MSGTYPE_RESPONSE,
+        "overlay.goodbye",
+        overlay_goodbye_response_cb,
+        0,
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -2192,6 +2275,9 @@ struct overlay *overlay_create (flux_t *h,
         goto nomem;
     if (!(ov->health_requests = flux_msglist_create ()))
         goto error;
+    if (!(ov->parent.f_goodbye = flux_future_create (NULL, NULL)))
+        goto error;
+    flux_future_set_flux (ov->parent.f_goodbye, h);
     return ov;
 nomem:
     errno = ENOMEM;

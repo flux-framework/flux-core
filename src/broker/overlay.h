@@ -156,6 +156,11 @@ int overlay_register_attrs (struct overlay *overlay);
  */
 void overlay_shutdown (struct overlay *overlay, bool unbind);
 
+/* Say goodbye to parent.
+ * After this, sends to parent are dropped.
+ */
+flux_future_t *overlay_goodbye_parent (struct overlay *overlay);
+
 #endif /* !_BROKER_OVERLAY_H */
 
 /*
