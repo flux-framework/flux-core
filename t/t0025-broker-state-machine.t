@@ -164,7 +164,8 @@ test_expect_success 'all expected events and state transitions occurred' '
 '
 
 test_expect_success 'capture state transitions from size=2 instance' '
-	flux start ${ARGS} --test-size=2 -o,-Slog-stderr-level=6 \
+	flux start ${ARGS} --test-size=2 \
+		-o,-Slog-stderr-level=6,-Slog-stderr-mode=local \
 		/bin/true 2>states2.log
 '
 
@@ -189,7 +190,7 @@ test_expect_success 'all expected events and state transitions occurred on rank 
 	grep "\[1\]: cleanup-none: cleanup->shutdown"		states2.log &&
 	grep "\[1\]: children-none: shutdown->finalize"	        states2.log &&
 	grep "\[1\]: rc3-none: finalize->goodbye"		states2.log &&
-	grep "\[1\]: goodbye: goodbye->exit"			states2.log
+	grep "\[1\]: goodbye: goodbye->exit"		        states2.log
 '
 
 test_expect_success 'capture state transitions from instance with rc1 failure' '
