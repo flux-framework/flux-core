@@ -410,9 +410,13 @@ def status(args):
         rstatus = resource_status(handle).get()
 
     if args.queue:
-        config = {}
-        if handle is not None:
-            config = handle.rpc("config.get").get()
+        if args.config_file:
+            with open(args.config_file) as fp:
+                config = json.load(fp)
+        else:
+            config = {}
+            if handle is not None:
+                config = handle.rpc("config.get").get()
         try:
             rstatus.filter(ranks_by_queue(rstatus.rset, config, args.queue))
         except ValueError as exc:
@@ -460,6 +464,7 @@ def status(args):
 def drain_list(args):
     fmt = FluxResourceConfig("drain").load().get_format_string(args.format)
     args.from_stdin = False
+    args.config_file = False
     args.format = fmt
     args.states = "drain"
     args.skip_empty = True
@@ -606,6 +611,9 @@ def get_resource_list(args):
 
     if args.from_stdin:
         resources = SchedResourceList(json.load(sys.stdin))
+        if args.config_file:
+            with open(args.config_file) as fp:
+                config = json.load(fp)
     else:
         handle = flux.Flux()
         rpcs = [resource_list(handle), handle.rpc("config.get")]
@@ -811,6 +819,7 @@ def main():
     status_parser.add_argument(
         "--from-stdin", action="store_true", help=argparse.SUPPRESS
     )
+    status_parser.add_argument("--config-file", help=argparse.SUPPRESS)
     status_parser.add_argument(
         "--skip-empty",
         action="store_true",
@@ -854,6 +863,7 @@ def main():
     list_parser.add_argument(
         "--from-stdin", action="store_true", help=argparse.SUPPRESS
     )
+    list_parser.add_argument("--config-file", help=argparse.SUPPRESS)
     list_parser.set_defaults(func=list_handler)
 
     # flux-resource info:
@@ -882,6 +892,7 @@ def main():
     info_parser.add_argument(
         "--from-stdin", action="store_true", help=argparse.SUPPRESS
     )
+    info_parser.add_argument("--config-file", help=argparse.SUPPRESS)
     info_parser.set_defaults(func=info)
 
     reload_parser = subparsers.add_parser(
@@ -927,6 +938,7 @@ def main():
         help="Include only specified queues in output",
     )
     R_parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
+    R_parser.add_argument("--config-file", help=argparse.SUPPRESS)
 
     args = parser.parse_args()
     args.func(args)
