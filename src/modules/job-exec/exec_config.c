@@ -26,11 +26,13 @@
 #include "src/common/libutil/errno_safe.h"
 
 static const char *default_cwd = "/tmp";
-static const char *default_job_shell = NULL;
-static const char *flux_imp_path = NULL;
-static const char *exec_service = "rexec";
-static int exec_service_override = 0;
-static json_t *sdexec_properties = NULL;
+
+/* Global configs initialized in config_init() */
+static const char *default_job_shell;
+static const char *flux_imp_path;
+static const char *exec_service;
+static int exec_service_override;
+static json_t *sdexec_properties;
 
 static const char *jobspec_get_job_shell (json_t *jobspec)
 {
@@ -183,10 +185,19 @@ int config_init (flux_t *h, int argc, char **argv)
 {
     flux_error_t err;
 
-    /*  Set default job shell path from builtin configuration,
-     *   allow override via configuration, then cmdline.
+    /* Per trws comment in 97421e88987535260b10d6a19551cea625f26ce4
+     *
+     * The musl libc loader doesn't actually unload objects on
+     * dlclose, so a subsequent dlopen doesn't re-clear globals and
+     * similar.
+     *
+     * So we must re-initialize globals on each config_init().
      */
     default_job_shell = flux_conf_builtin_get ("shell_path", FLUX_CONF_AUTO);
+    flux_imp_path = NULL;
+    exec_service = "rexec";
+    exec_service_override = 0;
+    sdexec_properties = NULL;
 
     /*  Check configuration for exec.job-shell */
     if (flux_conf_unpack (flux_get_conf (h),
