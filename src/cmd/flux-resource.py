@@ -156,6 +156,45 @@ def undrain(args):
     RPC(flux.Flux(), "resource.undrain", {"targets": args.targets}, nodeid=0).get()
 
 
+class QueueResources:
+    """
+    Convenience class to map queues to resource sets
+    """
+
+    def __init__(self, resource_set, config):
+        self._queues = {}
+        if "queues" not in config:
+            return
+        for queue in config["queues"]:
+            if "requires" in config["queues"][queue]:
+                result = resource_set.copy_constraint(
+                    {"properties": config["queues"][queue]["requires"]}
+                )
+            else:
+                result = resource_set.copy()
+            self._queues[queue] = result
+
+    def queue(self, queue):
+        if queue not in self._queues:
+            raise ValueError(f"{queue}: no such queue")
+        return self._queues[queue]
+
+
+def ranks_by_queue(resource_set, config, queues):
+    """
+    Return all ranks associated with a list of queues
+    Args:
+        resource_set: The resource set to query
+        config: a Flux config object including queue configuration, if any.
+        queues: one or more queues specified as a comma-separated string
+    """
+    queue_resources = QueueResources(resource_set, config)
+    ranks = IDset()
+    for queue in queues.split(","):
+        ranks.add(queue_resources.queue(queue).ranks)
+    return ranks
+
+
 class AltField:
     """
     Convenient wrapper for fields that have an ascii and non-ascii
@@ -360,12 +399,24 @@ def status(args):
 
     fmt = FluxResourceConfig("status").load().get_format_string(args.format)
 
+    handle = None
+
     #  Get payload from stdin or from resource.status RPC:
     if args.from_stdin:
         input_str = sys.stdin.read()
         rstatus = ResourceStatus(json.loads(input_str) if input_str else None)
     else:
-        rstatus = resource_status(flux.Flux()).get()
+        handle = flux.Flux()
+        rstatus = resource_status(handle).get()
+
+    if args.queue:
+        config = {}
+        if handle is not None:
+            config = handle.rpc("config.get").get()
+        try:
+            rstatus.filter(ranks_by_queue(rstatus.rset, config, args.queue))
+        except ValueError as exc:
+            raise ValueError(f"--queue: {exc}") from None
 
     if args.include:
         try:
@@ -564,11 +615,18 @@ def get_resource_list(args):
         except Exception as e:
             LOGGER.warning("Could not get flux config: " + str(e))
 
+    if args.queue:
+        try:
+            resources.filter(ranks_by_queue(resources.all, config, args.queue))
+        except ValueError as exc:
+            raise ValueError(f"--queue: {exc}") from None
+
     if args.include:
         try:
             resources.filter(include=args.include)
         except (ValueError, TypeError) as exc:
             raise ValueError(f"--include: {exc}") from None
+
     return resources, config
 
 
@@ -666,6 +724,12 @@ def main():
         + "provided as an idset or hostlist.",
     )
     drain_parser.add_argument(
+        "-q",
+        "--queue",
+        metavar="QUEUE,...",
+        help="Include only specified queues in output",
+    )
+    drain_parser.add_argument(
         "-o",
         "--format",
         default="default",
@@ -725,6 +789,12 @@ def main():
         + "provided as an idset or hostlist.",
     )
     status_parser.add_argument(
+        "-q",
+        "--queue",
+        metavar="QUEUE,...",
+        help="Include only specified queues in output",
+    )
+    status_parser.add_argument(
         "-n", "--no-header", action="store_true", help="Suppress header output"
     )
     status_parser.add_argument(
@@ -773,6 +843,12 @@ def main():
         + "provided as an idset or hostlist.",
     )
     list_parser.add_argument(
+        "-q",
+        "--queue",
+        metavar="QUEUE,...",
+        help="Include only specified queues in output",
+    )
+    list_parser.add_argument(
         "-n", "--no-header", action="store_true", help="Suppress header output"
     )
     list_parser.add_argument(
@@ -796,6 +872,12 @@ def main():
         metavar="TARGETS",
         help="Include only specified targets in output set. TARGETS may be "
         + "provided as an idset or hostlist.",
+    )
+    info_parser.add_argument(
+        "-q",
+        "--queue",
+        metavar="QUEUE,...",
+        help="Include only specified queues in output",
     )
     info_parser.add_argument(
         "--from-stdin", action="store_true", help=argparse.SUPPRESS
@@ -837,6 +919,12 @@ def main():
         metavar="TARGETS",
         help="Include only specified targets in output set. TARGETS may be "
         + "provided as an idset or hostlist.",
+    )
+    R_parser.add_argument(
+        "-q",
+        "--queue",
+        metavar="QUEUE,...",
+        help="Include only specified queues in output",
     )
     R_parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
 
