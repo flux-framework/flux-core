@@ -62,14 +62,6 @@ test_expect_success 'resource.eventlog exists' '
 	flux kvs eventlog get -u resource.eventlog >eventlog.out
 '
 
-test_expect_success 'resource-init context says restart=false' '
-	test "$(grep_event resource-init <eventlog.out|jq .restart)" = "false"
-'
-
-test_expect_success 'resource-init context says online is empty set' '
-	test "$(grep_event resource-init <eventlog.out|jq .online)" = "\"\""
-'
-
 test_expect_success 'wait until resource-define event is posted' '
 	flux kvs eventlog wait-event -t 5 resource.eventlog resource-define
 '
@@ -86,11 +78,6 @@ test_expect_success 'reload resource module and re-capture eventlog' '
 	pre=$(wc -l <pre_restart.out) &&
 	post=$(wc -l <restart.out) &&
 	tail -$(($post-$pre)) restart.out > post_restart.out
-'
-
-test_expect_success 'new resource-init context says restart=true' '
-	test "$(grep_event resource-init <post_restart.out \
-		|jq .restart)" = "true"
 '
 
 test_expect_success 'reconfig with extra key fails' '

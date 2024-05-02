@@ -44,6 +44,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libidset/idset.h"
+#include "src/common/libhostlist/hostlist.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "ccan/str/str.h"
 
@@ -224,6 +225,7 @@ static void broker_torpid_cb (flux_future_t *f, void *arg)
     double timestamp;
     const char *reason = "broker was unresponsive";
     char *idstr = NULL;
+    char *nodelist = NULL;
 
     if (flux_rpc_get_unpack (f, "{s:s}", "members", &members) < 0) {
         flux_log_error (h, "drain: group.get failed");
@@ -255,12 +257,15 @@ static void broker_torpid_cb (flux_future_t *f, void *arg)
             goto done;
         }
         if (!(idstr = idset_encode (ids, IDSET_FLAG_RANGE))
+            || !(nodelist = flux_hostmap_lookup (h, idstr, NULL))
             || reslog_post_pack (drain->ctx->reslog,
                                  NULL,
                                  timestamp,
                                  "drain",
-                                 "{s:s s:s}",
+                                 0,
+                                 "{s:s s:s s:s}",
                                  "idset", idstr,
+                                 "nodelist", nodelist,
                                  "reason", reason) < 0) {
             flux_log_error (h, "error posting drain event for torpid nodes");
             goto done;
@@ -268,6 +273,7 @@ static void broker_torpid_cb (flux_future_t *f, void *arg)
     }
 done:
     idset_destroy (ids);
+    free (nodelist);
     free (idstr);
     flux_future_reset (f);
 }
@@ -356,6 +362,7 @@ static void drain_cb (flux_t *h,
     struct idset *idset = NULL;
     const char *errstr = NULL;
     char *idstr = NULL;
+    char *nodelist = NULL;
     flux_error_t error;
     double timestamp;
     int overwrite = 0;
@@ -405,7 +412,8 @@ static void drain_cb (flux_t *h,
                                 reason,
                                 overwrite) < 0)
         goto error;
-    if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE)))
+    if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE))
+        || !(nodelist = flux_hostmap_lookup (h, idstr, NULL)))
         goto error;
 
     /*  If draining with no reason, do not encode 'reason' in the
@@ -416,8 +424,10 @@ static void drain_cb (flux_t *h,
                                msg,
                                timestamp,
                                "drain",
-                               "{s:s s:s s:i}",
+                               0,
+                               "{s:s s:s s:s s:i}",
                                "idset", idstr,
+                               "nodelist", nodelist,
                                "reason", reason,
                                "overwrite", overwrite);
     else
@@ -425,17 +435,21 @@ static void drain_cb (flux_t *h,
                                msg,
                                timestamp,
                                "drain",
-                               "{s:s s:i}",
+                               0,
+                               "{s:s s:s s:i}",
                                "idset", idstr,
+                               "nodelist", nodelist,
                                "overwrite", overwrite);
     if (rc < 0)
         goto error;
+    free (nodelist);
     free (idstr);
     idset_destroy (idset);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to drain request");
+    free (nodelist);
     free (idstr);
     idset_destroy (idset);
 }
@@ -458,6 +472,7 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
                           NULL,
                           timestamp,
                           "drain",
+                          0,
                           "{s:s s:s}",
                           "idset",
                           rankstr,
@@ -474,38 +489,27 @@ static int undrain_rank_idset (struct drain *drain,
                                struct idset *idset)
 {
     char *idstr;
-    int rc;
+    char *nodelist = NULL;
+    int rc = -1;
 
     if (idset_count (idset) == 0)
         return 0;
     if (update_draininfo_idset (drain, idset, false, 0., NULL, 1) < 0)
         return -1;
-    if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE)))
-        return -1;
+    if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE))
+        || !(nodelist = flux_hostmap_lookup (drain->ctx->h, idstr, NULL)))
+        goto done;
     rc = reslog_post_pack (drain->ctx->reslog,
                            msg,
                            0.,
                            "undrain",
-                           "{s:s}",
-                           "idset",
-                           idstr);
-    free (idstr);
-    return rc;
-}
-
-int undrain_ranks (struct drain *drain, const struct idset *ranks)
-{
-    struct idset *drained = NULL;
-    struct idset *undrain_ranks = NULL;
-    int rc = -1;
-
-    if (!(drained = drain_get (drain))
-        || !(undrain_ranks = idset_intersect (ranks, drained)))
-        goto out;
-    rc = undrain_rank_idset (drain, NULL, undrain_ranks);
-out:
-    idset_destroy (drained);
-    idset_destroy (undrain_ranks);
+                           0,
+                           "{s:s s:s}",
+                           "idset", idstr,
+                           "nodelist", nodelist);
+done:
+    ERRNO_SAFE_WRAP (free, nodelist);
+    ERRNO_SAFE_WRAP (free, idstr);
     return rc;
 }
 
@@ -554,47 +558,74 @@ error:
     idset_destroy (idset);
 }
 
-static int replay_map (unsigned int id, json_t *val, void *arg)
+/* Add rank to ids, adjusting rank if the rank:host mapping has changed.
+ * Don't add the rank if the host no longer exists, or if it exceeds
+ * the instance size.
+ *
+ * N.B. When running multiple brokers per node, flux_get_rankbyhost()
+ * returns the first rank on 'host', so its result cannot be directly
+ * used as the new rank.  Instead, first check that flux_get_hostbyrank()
+ * differs from 'host'.
+ */
+static void add_target (struct idset *ids,
+                        unsigned int rank,
+                        const char *host,
+                        flux_t *h)
 {
-    struct drain_init_args *args = arg;
-    struct drain *drain = args->drain;
-    const char *reason;
-    double timestamp;
-    char *cpy;
+    if (host) {
+        const char *nhost = flux_get_hostbyrank (h, rank);
+        int nrank;
 
-    /* Ignore excluded ranks */
-    if (idset_test (args->exclude, id))
-        return 0;
+        if (!streq (host, nhost)) { // nhost could be "(null)" on bad rank
+            if ((nrank = flux_get_rankbyhost (h, host)) < 0)
+                return;
+            rank = nrank;
+        }
+    }
+    (void)idset_set (ids, rank); // no-op if rank exceeds fixed set size
+}
 
-    if (id >= drain->ctx->size) {
-        errno = EINVAL;
-        return -1;
+/* Return an idset containing decoded 'ranks', possibly adjusted based on
+ * 'nodelist' and the instance size.  Any ranks that are invalid are simply
+ * not added (not treated as an error).
+ */
+static struct idset *decode_targets (struct drain *drain,
+                                     const char *ranks,
+                                     const char *nodelist)
+{
+    struct idset *ids;
+    struct hostlist *nl = NULL;
+    struct idset *newids = NULL;
+    unsigned int rank;
+    int index;
+
+    if (!(ids = idset_decode (ranks))
+        || (nodelist && !(nl = hostlist_decode (nodelist)))
+        || !(newids = idset_create (drain->ctx->size, 0)))
+        goto done;
+
+    index = 0;
+    rank = idset_first (ids);
+    while (rank != IDSET_INVALID_ID) {
+        const char *host = nl ?  hostlist_nth (nl, index++) : NULL;
+
+        add_target (newids, rank, host, drain->ctx->h);
+        rank = idset_next (ids, rank);
     }
-    if (json_unpack (val,
-                     "{s:f s:s}",
-                     "timestamp",
-                     &timestamp,
-                     "reason",
-                     &reason) < 0) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (!(cpy = strdup (reason))) // in this object, reason="" if unset
-        return -1;
-    free (drain->info[id].reason);
-    drain->info[id].reason = cpy;
-    drain->info[id].timestamp = timestamp;
-    drain->info[id].drained = true;
-    return 0;
+done:
+    hostlist_destroy (nl);
+    idset_destroy (ids);
+    return newids;
 }
 
 /* Recover drained idset from eventlog.
  */
-static int replay_eventlog (struct drain *drain, const json_t *eventlog)
+static int replay_eventlog (struct drain *drain,
+                            const json_t *eventlog,
+                            flux_error_t *error)
 {
     size_t index;
     json_t *entry;
-    const struct idset *exclude = exclude_get (drain->ctx->exclude);
 
     if (eventlog) {
         json_array_foreach (eventlog, index, entry) {
@@ -603,63 +634,72 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
             json_t *context;
             const char *s;
             const char *reason = NULL;
-            json_t *draininfo = NULL;
             struct idset *idset;
 
-            if (eventlog_entry_parse (entry, &timestamp, &name, &context) < 0)
+            if (eventlog_entry_parse (entry, &timestamp, &name, &context) < 0) {
+                errprintf (error, "line %zu: event parse error", index + 1);
                 return -1;
-            if (streq (name, "resource-init")) {
-                struct drain_init_args args = {
-                    .drain = drain,
-                    .exclude = exclude
-                };
-                if (json_unpack (context, "{s:o}", "drain", &draininfo) < 0) {
-                    errno = EPROTO;
-                    return -1;
-                }
-                if (rutil_idkey_map (draininfo, replay_map, &args) < 0)
-                    return -1;
             }
-            else if (streq (name, "drain")) {
+            if (streq (name, "drain")) {
                 int overwrite = 1;
+                const char *nodelist = NULL;
                 if (json_unpack (context,
-                                 "{s:s s?s s?i}",
+                                 "{s:s s?s s?s s?i}",
                                  "idset", &s,
+                                 "nodelist", &nodelist,
                                  "reason", &reason,
                                  "overwrite", &overwrite) < 0) {
+                    errprintf (error, "line %zu: drain parse error", index + 1);
                     errno = EPROTO;
                     return -1;
                 }
-                if (!(idset = idset_decode (s)))
+                if (!(idset = decode_targets (drain, s, nodelist))) {
+                    errprintf (error,
+                               "line %zu: drain target decode error",
+                               index + 1);
                     return -1;
-                if (exclude && idset_subtract (idset, exclude) < 0)
-                    return -1;
+                }
                 if (update_draininfo_idset (drain,
                                             idset,
                                             true,
                                             timestamp,
                                             reason,
                                             overwrite) < 0) {
+                    errprintf (error,
+                               "line %zu: drain update error",
+                               index + 1);
                     idset_destroy (idset);
                     return -1;
                 }
                 idset_destroy (idset);
             }
             else if (streq (name, "undrain")) {
-                if (json_unpack (context, "{s:s}", "idset", &s) < 0) {
+                const char *nodelist = NULL;
+                if (json_unpack (context,
+                                 "{s:s s?s}",
+                                 "idset", &s,
+                                 "nodelist", &nodelist) < 0) {
+                    errprintf (error,
+                               "line %zu: undrain parse error",
+                               index + 1);
                     errno = EPROTO;
                     return -1;
                 }
-                if (!(idset = idset_decode (s)))
+                if (!(idset = decode_targets (drain, s, nodelist))) {
+                    errprintf (error,
+                               "line %zu: undrain target decode error",
+                               index + 1);
                     return -1;
-                if (exclude && idset_subtract (idset, exclude) < 0)
-                    return -1;
+                }
                 if (update_draininfo_idset (drain,
                                             idset,
                                             false,
                                             timestamp,
                                             NULL,
                                             1) < 0) {
+                    errprintf (error,
+                               "line %zu: undrain update error",
+                               index + 1);
                     idset_destroy (idset);
                     return -1;
                 }
@@ -668,6 +708,69 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
         }
     }
     return 0;
+}
+
+/* Excluded targets may not be drained.  If, after replaying the eventlog,
+ * any excluded nodes are drained, undrain them.  Besides updating the current
+ * drain state, an undrain event must be posted to resource.eventlog so that
+ * if the target is unexcluded later on, it starts out undrained.
+ */
+static int reconcile_excluded (struct drain *drain,
+                               const struct idset *exclude,
+                               flux_error_t *error)
+{
+    struct idset *drained;
+    struct idset *undrain_ranks = NULL;
+    char *s = NULL;
+    char *nodelist = NULL;
+    int rc = -1;
+
+    if (!exclude)
+        return 0;
+    if (!(drained = drain_get (drain))
+        || !(undrain_ranks = idset_intersect (drained, exclude))) {
+        errprintf (error,
+                   "error calculating drained ∩ excluded: %s",
+                   strerror (errno));
+        goto done;
+    }
+    if (idset_count (undrain_ranks) > 0) {
+        double timestamp;
+        if (get_timestamp_now (&timestamp) < 0
+            || update_draininfo_idset (drain,
+                                       undrain_ranks,
+                                       false,
+                                       timestamp,
+                                       NULL,
+                                       1) < 0) {
+            errprintf (error,
+                       "error draining excluded nodes: %s",
+                       strerror (errno));
+            goto done;
+        }
+        if (!(s = idset_encode (undrain_ranks, IDSET_FLAG_RANGE))
+            || !(nodelist = flux_hostmap_lookup (drain->ctx->h, s, NULL))
+            || reslog_post_pack (drain->ctx->reslog,
+                                 NULL,
+                                 timestamp,
+                                 "undrain",
+                                 0,
+                                 "{s:s s:s}",
+                                 "idset", s,
+                                 "nodelist", nodelist) < 0) {
+            errprintf (error,
+                       "error posting drain event for excluded nodes: %s",
+                       strerror (errno));
+            goto done;
+        }
+    }
+    rc = 0;
+done:
+    ERRNO_SAFE_WRAP (free, nodelist);
+    ERRNO_SAFE_WRAP (free, s);
+    idset_destroy (undrain_ranks);
+    idset_destroy (drained);
+    return rc;
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -696,6 +799,7 @@ void drain_destroy (struct drain *drain)
 struct drain *drain_create (struct resource_ctx *ctx, const json_t *eventlog)
 {
     struct drain *drain;
+    flux_error_t error;
 
     if (!(drain = calloc (1, sizeof (*drain))))
         return NULL;
@@ -712,8 +816,12 @@ struct drain *drain_create (struct resource_ctx *ctx, const json_t *eventlog)
             || flux_future_then (drain->f, -1, broker_torpid_cb, drain) < 0)
             goto error;
     }
-    if (replay_eventlog (drain, eventlog) < 0) {
-        flux_log_error (ctx->h, "problem replaying eventlog drain state");
+    if (replay_eventlog (drain, eventlog, &error) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: %s", RESLOG_KEY, error.text);
+        goto error;
+    }
+    if (reconcile_excluded (drain, exclude_get (ctx->exclude), &error) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s", error.text);
         goto error;
     }
     if (flux_msg_handler_addvec (ctx->h, htab, drain, &drain->handlers) < 0)

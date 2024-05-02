@@ -5,7 +5,8 @@ test_description='Test resource drain/undrain'
 . `dirname $0`/sharness.sh
 
 SIZE=4
-test_under_flux $SIZE
+test_under_flux $SIZE full -o,-Shostlist=fake[0-3]
+
 
 # Usage: waitup N
 #   where N is a count of online ranks
@@ -26,6 +27,13 @@ drain_timestamp () {
 
 test_expect_success 'wait for monitor to declare all ranks are up' '
 	waitdown 0
+'
+# fake hostnames match the ones set on the broker command line
+test_expect_success 'load fake resources' '
+	flux module remove sched-simple &&
+	flux R encode -r 0-3 -c 0-1 -H fake[0-3] >R &&
+	flux resource reload R &&
+	flux module load sched-simple
 '
 
 test_expect_success 'flux resource drain: default lists some expected fields' '
@@ -95,7 +103,7 @@ test_expect_success 'drain suggests --force with existing reason' '
 	test_must_fail flux resource drain 1 test_reason_updated \
 		>update-failed.log 2>&1 &&
 	test_debug "cat update-failed.log" &&
-	grep -i 'use --force' update-failed.log
+	grep -i "use --force" update-failed.log
 '
 
 test_expect_success 'drain reason can be updated with --force' '
@@ -137,7 +145,7 @@ test_expect_success 'drain works with idset' '
 
 test_expect_success 'reload resource module to simulate instance restart' '
 	flux module remove sched-simple &&
-	flux module reload resource &&
+	flux module reload resource noverify &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -162,7 +170,7 @@ test_expect_success 'resource.eventlog has three undrain events' '
 
 test_expect_success 'reload resource module to simulate instance restart' '
 	flux module remove sched-simple &&
-	flux module reload resource &&
+	flux module reload resource noverify &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -178,7 +186,7 @@ test_expect_success 'reload resource module with one node excluded' '
 	flux module remove sched-simple &&
 	flux module remove resource &&
 	echo "resource.exclude = \"0\"" | flux config load &&
-	flux module load resource &&
+	flux module load resource noverify &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -205,7 +213,7 @@ test_expect_success 'reload resource module with no nodes excluded' '
 	flux module remove sched-simple &&
 	flux module remove resource &&
 	echo "resource.exclude = \"\"" | flux config load &&
-	flux module load resource &&
+	flux module load resource noverify &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -221,7 +229,7 @@ test_expect_success 'drained rank subsequently excluded is ignored' '
 	flux module remove sched-simple &&
 	flux module remove resource &&
 	echo resource.exclude = \"1\" | flux config load &&
-	flux module load resource &&
+	flux module load resource noverify &&
 	waitdown 0 &&
 	flux module load sched-simple &&
 	test $(flux resource status -s drain -no {nnodes}) -eq 0 &&
@@ -232,7 +240,7 @@ test_expect_success 'reload resource module with no nodes excluded' '
 	flux module remove sched-simple &&
 	flux module remove resource &&
 	echo "resource.exclude = \"\"" | flux config load &&
-	flux module load resource &&
+	flux module load resource noverify &&
 	waitdown 0 &&
 	flux module load sched-simple
 '
@@ -261,9 +269,9 @@ test_expect_success 'drain fails if idset is out of range' '
 #  are running on the same host
 #
 test_expect_success 'un/drain works with hostnames' '
-	flux resource drain $(hostname) &&
-	test $(flux resource list -n -s down -o {nnodes}) -eq $SIZE &&
-	flux resource undrain $(hostname) &&
+	flux resource drain fake[2-3] &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq 2 &&
+	flux resource undrain fake[2-3] &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 0
 '
 
@@ -320,14 +328,14 @@ test_expect_success 'flux resource drain differentiates drain/draining' '
 	flux resource undrain $(flux resource status -s drain -no {ranks}) &&
 	id=$(flux submit --wait-event=start sleep 300) &&
 	rank=$(flux jobs -no {ranks} $id) &&
-	flux resource drain $(hostname) &&
+	flux resource drain fake0 &&
 	test_debug "flux resource drain" &&
 	test_debug "flux resource status" &&
 	test $(flux resource status -s draining -no {ranks}) = "$rank" &&
 	flux resource drain | grep draining &&
 	flux cancel $id &&
 	flux job wait-event $id clean &&
-	test $(flux resource status -s drain -no {nnodes}) -eq ${SIZE}
+	test $(flux resource status -s drain -no {nnodes}) -eq 1
 '
 
 test_expect_success 'flux resource drain supports --include' '
@@ -339,10 +347,117 @@ test_expect_success 'flux resource drain supports --include' '
 test_expect_success 'flux resource drain works without scheduler loaded' '
 	flux module unload sched-simple &&
 	flux resource drain &&
-	test $(flux resource status -s drain -no {nnodes}) -eq ${SIZE}
+	test $(flux resource status -s drain -no {nnodes}) -eq 1
 '
 
-test_expect_success 'load scheduler again to free end-of-test resources' '
+test_expect_success 'resource can replay eventlog with pre v0.62 events' '
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713893408.8647039,"name":"resource-init","context":{"restart":false,"drain":{},"online":"","exclude":""}}
+	{"timestamp":1713893408.8673074,"name":"resource-define","context":{"method":"configuration"}}
+	{"timestamp":1713893411.0698946,"name":"online","context":{"idset":"0"}}
+	{"timestamp":1713893411.7209313,"name":"online","context":{"idset":"1"}}
+	{"timestamp":1713893412.2919452,"name":"online","context":{"idset":"2-3"}}
+	{"timestamp":1713905771.5895882,"name":"offline","context":{"idset":"1-3"}}
+	{"timestamp":1713905772.5933509,"name":"resource-init","context":{"restart":true,"drain":{},"online":"","exclude":""}}
+	{"timestamp":1713905772.5948801,"name":"resource-define","context":{"method":"configuration"}}
+	{"timestamp":1713906350.984611,"name":"drain","context":{"idset":"2","reason":"smurfs","overwrite":0}}
+	{"timestamp":1713906351.000000,"name":"drain","context":{"idset":"2","reason":"underwear","overwrite":1}}
+	{"timestamp":1713906369.9485908,"name":"resource-init","context":{"restart":true,"drain":{"2":{"timestamp":1713906351.000000,"reason":"underwear"}},"online":"","exclude":""}}
+	EOT
+	flux module reload resource noverify
+'
+test_expect_success 'nodes drained in old eventlog are drained after replay' '
+	flux resource drain -n -o "{ranks} {reason}" >legacydrain.out &&
+	cat >legacydrain.exp<<-EOT &&
+	2 underwear
+	EOT
+	test_cmp legacydrain.exp legacydrain.out
+'
+
+test_expect_success 'resource can replay eventlog with bad ranks' '
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713906351.000000,"name":"drain","context":{"idset":"42","reason":"","overwrite":0}}
+	EOT
+	flux module reload resource noverify
+'
+
+test_expect_success 'no nodes are drained after replay' '
+	test -z "$(flux resource drain -n -o {nnodes})"
+'
+
+test_expect_success 'reload resource with two nodes drained and nodelist' '
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713906350.984611,"name":"drain","context":{"idset":"1-2","nodelist":"fake[1-2]","reason":"uvula","overwrite":0}}
+	EOT
+	flux module reload resource noverify
+'
+
+test_expect_success 'the correct two nodes are drained after replay' '
+	flux resource drain -n -o "{ranks} {reason}" >drainhosts.out &&
+	cat >drainhosts.exp<<-EOT &&
+	1-2 uvula
+	EOT
+	test_cmp drainhosts.exp drainhosts.out
+'
+
+test_expect_success 'reload resource with two nodes remapped' '
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713906350.984611,"name":"drain","context":{"idset":"1-2","nodelist":"fake[2-3]","reason":"uvula","overwrite":0}}
+	EOT
+	flux module reload resource noverify
+'
+
+test_expect_success 'the remapped nodes are drained after replay' '
+	flux resource drain -n -o "{ranks} {reason}" >drainhosts2.out &&
+	cat >drainhosts2.exp<<-EOT &&
+	2-3 uvula
+	EOT
+	test_cmp drainhosts2.exp drainhosts2.out
+'
+
+test_expect_success 'reload resource with two nodes remapped, one bad host' '
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713906350.984611,"name":"drain","context":{"idset":"1-2","nodelist":"fake[3-4]","reason":"uvula","overwrite":0}}
+	EOT
+	flux module reload resource noverify
+'
+
+test_expect_success 'the remapped nodes are drained after replay' '
+	flux resource drain -n -o "{ranks} {reason}" >drainhosts3.out &&
+	cat >drainhosts3.exp<<-EOT &&
+	3 uvula
+	EOT
+	test_cmp drainhosts3.exp drainhosts3.out
+'
+
+test_expect_success 'a malformed event in the eventlog prevents loading' '
+	flux module remove -f resource &&
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{}
+	EOT
+	test_must_fail flux module load resource noverify
+'
+test_expect_success 'a malformed drain context in the eventlog prevents loading' '
+	flux module remove -f resource &&
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713906350.984611,"name":"drain","context":{}}
+	EOT
+	test_must_fail flux module load resource noverify
+'
+test_expect_success 'a malformed undrain context in the eventlog fails' '
+	flux module remove -f resource &&
+	flux kvs put --raw resource.eventlog=- <<-EOT &&
+	{"timestamp":1713906350.984611,"name":"undrain","context":{}}
+	EOT
+	test_must_fail flux module load resource noverify
+'
+test_expect_success '' '
+	flux module remove -f resource &&
+	flux kvs unlink resource.eventlog &&
+	flux module load resource noverify
+'
+
+test_expect_success 'load scheduler' '
 	flux module load sched-simple
 '
 
