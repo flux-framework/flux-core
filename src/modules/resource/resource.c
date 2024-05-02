@@ -35,6 +35,7 @@
 #include "acquire.h"
 #include "rutil.h"
 #include "status.h"
+#include "upgrade.h"
 
 /* Parse [resource] table.
  *
@@ -370,6 +371,12 @@ int mod_main (flux_t *h, int argc, char **argv)
         if (!(ctx->reslog = reslog_create (h)))
             goto error;
         if (reload_eventlog (h, &eventlog) < 0)
+            goto error;
+        /* One time only: purge the eventlog (including KVS) of
+         * pre-0.62.0 events, upgrading drain events with hostnames.
+         * See flux-framework/flux-core#5931.
+         */
+        if (upgrade_eventlog (h, &eventlog) < 0)
             goto error;
         if (!(ctx->acquire = acquire_create (ctx)))
             goto error;
