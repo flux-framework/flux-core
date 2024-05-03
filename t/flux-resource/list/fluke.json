@@ -1,0 +1,57 @@
+{
+  "all": {
+    "version": 1,
+    "execution": {
+      "R_lite": [
+        {
+          "rank": "0-100",
+          "children": {
+            "core": "0-3"
+          }
+        }
+      ],
+      "starttime": 0.0,
+      "expiration": 0.0,
+      "nodelist": [
+        "fluke[3-103]"
+      ],
+      "properties": {
+        "debug": "93-100",
+        "batch": "0-92"
+      }
+    }
+  },
+  "down": {
+    "version": 1,
+    "execution": {
+      "R_lite": [
+        {
+          "rank": "14-15,21,40,58,62,73-74,76,89,94-95,100",
+          "children": {
+            "core": "0-3"
+          }
+        }
+      ],
+      "starttime": 0.0,
+      "expiration": 0.0,
+      "nodelist": [
+        "fluke[17-18,24,43,61,65,76-77,79,92,97-98,103]"
+      ],
+      "properties": {
+        "debug": "94-95,100",
+        "batch": "14-15,21,40,58,62,73-74,76,89"
+      }
+    }
+  },
+  "allocated": {
+    "version": 1,
+    "execution": {
+      "R_lite": [],
+      "starttime": 0.0,
+      "expiration": 0.0,
+      "nodelist": [
+        ""
+      ]
+    }
+  }
+}

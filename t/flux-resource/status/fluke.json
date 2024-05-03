@@ -1,0 +1,38 @@
+{
+  "R": {
+    "execution": {
+      "R_lite": [
+        {
+          "children": {
+            "core": "0-3"
+          },
+          "rank": "0-100"
+        }
+      ],
+      "expiration": 0.0,
+      "nodelist": [
+        "fluke[1,3,108,6-103]"
+      ],
+      "properties": {
+        "batch": "3-92",
+        "debug": "93-100",
+        "testprop": "99-100"
+      },
+      "starttime": 0.0
+    },
+    "version": 1
+  },
+  "drain": {
+    "15": {
+      "reason": "broker was unresponsive",
+      "timestamp": 1709673393.7776122
+    },
+    "40": {
+      "reason": "broker was unresponsive",
+      "timestamp": 1711663831.1545894
+    }
+  },
+  "exclude": "0-2",
+  "offline": "14,21,58,62,73-74,76,89,94-95,100",
+  "online": "0-13,15-20,22-57,59-61,63-72,75,77-88,90-93,96-99"
+}

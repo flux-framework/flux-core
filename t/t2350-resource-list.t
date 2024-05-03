@@ -113,6 +113,57 @@ for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
     '
 done
 
+# Special case tests for -q, --queue using fluke.json and fluke.config
+
+FLUKE_CONFIG=${SHARNESS_TEST_SRCDIR}/flux-resource/list/fluke.config
+FLUKE_INPUT=${SHARNESS_TEST_SRCDIR}/flux-resource/list/fluke.json
+test_expect_success 'flux-resource list supports -q, --queue' '
+	flux resource list --queue=debug \
+		--from-stdin --config-file=$FLUKE_CONFIG \
+		< $FLUKE_INPUT > fluke-debug.output &&
+	test_debug "cat fluke-debug.output" &&
+	test_must_fail grep batch fluke-debug.output &&
+	flux resource list --queue=batch \
+		--from-stdin --config-file=$FLUKE_CONFIG \
+		< $FLUKE_INPUT > fluke-batch.output &&
+	test_debug "cat fluke-batch.output" &&
+	test_must_fail grep debug fluke-batch.output &&
+	flux resource list --queue=debug,batch \
+		--from-stdin --config-file=$FLUKE_CONFIG \
+		< $FLUKE_INPUT > fluke-both.output &&
+	grep debug fluke-both.output &&
+	grep batch fluke-both.output
+'
+test_expect_success 'flux-resource R supports -q, --queue' '
+	flux resource R --queue=debug \
+		--from-stdin --config-file=$FLUKE_CONFIG \
+		< $FLUKE_INPUT >debug.R.out &&
+	test_must_fail grep batch debug.R.out &&
+	flux resource R --queue=batch \
+		--from-stdin --config-file=$FLUKE_CONFIG \
+		< $FLUKE_INPUT > batch.R.out &&
+	test_must_fail grep debug batch.R.out &&
+	flux resource R --queue=debug,batch \
+		--from-stdin --config-file=$FLUKE_CONFIG \
+		< $FLUKE_INPUT > both.R.out &&
+	grep debug both.R.out &&
+	grep batch both.R.out
+'
+test_expect_success 'flux-resource info supports -q, --queue' '
+	flux resource info --queue=debug \
+		--from-stdin --config-file=$FLUKE_CONFIG \
+		< $FLUKE_INPUT > info-debug.output &&
+	cat <<-EOF >info-debug.expected &&
+	8 Nodes, 32 Cores, 0 GPUs
+	EOF
+	test_cmp info-debug.expected info-debug.output
+'
+test_expect_success 'flux-resource -q, --queue reports invalid queue' '
+	test_must_fail flux resource list --queue=foo \
+		--from-stdin --config-file=$FLUKE_CONFIG \
+		< $FLUKE_INPUT 2>badqueue.err &&
+	grep "foo: no such queue" badqueue.err
+'
 test_expect_success 'flux-resource list supports --include' '
 	flux resource list -s all -ni 0 >list-include.output &&
 	test_debug "cat list-include.output" &&
@@ -476,6 +527,16 @@ test_expect_success 'flux resource lists expected queues in states (every)' '
 	test $(grep "allocated 1" listqueue_every2.out | grep -c debug) -eq 1 &&
 	test $(grep "allocated 1" listqueue_every2.out | grep -c every) -eq 2 &&
 	test $(grep "down 0" listqueue_every2.out | grep -c every) -eq 0
+'
+test_expect_success 'flux resource list --queue works for a queue with no constraints' '
+	flux resource list --queue=every -o "{state} {nnodes} {queue}" >queue-every.out &&
+	test $(grep "free 1" queue-every.out | grep -c batch) -eq 1 &&
+	test $(grep "free 1" queue-every.out | grep -c debug) -eq 1 &&
+	test $(grep "free 1" queue-every.out | grep -c every) -eq 2 &&
+	test $(grep "allocated 1" queue-every.out | grep -c batch) -eq 1 &&
+	test $(grep "allocated 1" queue-every.out | grep -c debug) -eq 1 &&
+	test $(grep "allocated 1" queue-every.out | grep -c every) -eq 2 &&
+	test $(grep "down 0" queue-every.out | grep -c every) -eq 0
 '
 test_expect_success 'cleanup jobs' '
 	flux cancel $(cat job2A.id) $(cat job2B.id)

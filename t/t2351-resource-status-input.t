@@ -26,6 +26,40 @@ for input in ${INPUTDIR}/*.json; do
     '
 done
 
+# Special case for --queue handling using fluke.json and fluke.config
+FLUKE_CONFIG=${SHARNESS_TEST_SRCDIR}/flux-resource/status/fluke.config
+FLUKE_INPUT=${SHARNESS_TEST_SRCDIR}/flux-resource/status/fluke.json
+test_expect_success 'flux-resource status: -q, --queue works' '
+	flux resource status --queue=debug \
+		--format="$FORMAT" \
+		--from-stdin --config-file=$FLUKE_CONFIG \
+		< $FLUKE_INPUT > fluke-debug.output &&
+	cat <<-EOF >fluke-debug.expected &&
+	     STATE NNODES RANKS           NODELIST
+	     avail      5 93,96-99        fluke[96,99-102]
+	    avail*      3 94-95,100       fluke[97-98,103]
+	EOF
+	test_cmp fluke-debug.expected fluke-debug.output &&
+	flux resource status --queue=batch \
+		--format="$FORMAT" \
+		--from-stdin --config-file=$FLUKE_CONFIG \
+		< $FLUKE_INPUT > fluke-batch.output &&
+	cat <<-EOF >fluke-batch.expected &&
+	     STATE NNODES RANKS           NODELIST
+	     avail     80 3-13,16-20,22-39,41-57,59-61,63-72,75,77-88,90-92 fluke[6-16,19-23,25-42,44-60,62-64,66-75,78,80-91,93-95]
+	    avail*      8 14,21,58,62,73-74,76,89 fluke[17,24,61,65,76-77,79,92]
+	   drained      2 15,40           fluke[18,43]
+	EOF
+	test_cmp fluke-batch.expected fluke-batch.output
+'
+test_expect_success 'flux-resource status -q, --queue fails on invalid queue' '
+	test_must_fail flux resource status --queue=foo \
+		--format="$FORMAT" \
+		--from-stdin --config-file=$FLUKE_CONFIG \
+		< $FLUKE_INPUT 2>invalidqueue.err &&
+	grep "foo: no such queue" invalidqueue.err
+'
+
 #  Ensure all tested inputs can also work with --include
 #  We simply restrict to rank 0 and then ensure {ranks} returns only 0
 for input in ${INPUTDIR}/*.json; do
