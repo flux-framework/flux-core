@@ -419,6 +419,7 @@ void bulk_exec_destroy (struct bulk_exec *exec)
         flux_watcher_destroy (exec->prep);
         flux_watcher_destroy (exec->check);
         flux_watcher_destroy (exec->idle);
+        flux_watcher_destroy (exec->exit_batch_timer);
         aux_destroy (&exec->aux);
         free (exec->name);
         free (exec->service);
