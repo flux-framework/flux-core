@@ -376,7 +376,7 @@ test_expect_success 'nodes drained in old eventlog are drained after replay' '
 
 test_expect_success 'resource can replay eventlog with bad ranks' '
 	flux kvs put --raw resource.eventlog=- <<-EOT &&
-	{"timestamp":1713906351.000000,"name":"drain","context":{"idset":"42","reason":"","overwrite":0}}
+	{"timestamp":1713906351.000000,"name":"drain","context":{"idset":"42","nodelist":"fake42","reason":"","overwrite":0}}
 	EOT
 	flux module reload resource noverify
 '
@@ -385,7 +385,7 @@ test_expect_success 'no nodes are drained after replay' '
 	test -z "$(flux resource drain -n -o {nnodes})"
 '
 
-test_expect_success 'reload resource with two nodes drained and nodelist' '
+test_expect_success 'reload resource with two nodes drained' '
 	flux kvs put --raw resource.eventlog=- <<-EOT &&
 	{"timestamp":1713906350.984611,"name":"drain","context":{"idset":"1-2","nodelist":"fake[1-2]","reason":"uvula","overwrite":0}}
 	EOT

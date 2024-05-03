@@ -605,14 +605,14 @@ static struct idset *decode_targets (struct drain *drain,
     int index;
 
     if (!(ids = idset_decode (ranks))
-        || (nodelist && !(nl = hostlist_decode (nodelist)))
+        || !(nl = hostlist_decode (nodelist))
         || !(newids = idset_create (drain->ctx->size, 0)))
         goto done;
 
     index = 0;
     rank = idset_first (ids);
     while (rank != IDSET_INVALID_ID) {
-        const char *host = nl ?  hostlist_nth (nl, index++) : NULL;
+        const char *host = hostlist_nth (nl, index++);
 
         add_target (newids, rank, host, drain->ctx->h);
         rank = idset_next (ids, rank);
@@ -647,9 +647,9 @@ static int replay_eventlog (struct drain *drain,
             }
             if (streq (name, "drain")) {
                 int overwrite = 1;
-                const char *nodelist = NULL;
+                const char *nodelist;
                 if (json_unpack (context,
-                                 "{s:s s?s s?s s?i}",
+                                 "{s:s s:s s?s s?i}",
                                  "idset", &s,
                                  "nodelist", &nodelist,
                                  "reason", &reason,
@@ -681,7 +681,7 @@ static int replay_eventlog (struct drain *drain,
             else if (streq (name, "undrain")) {
                 const char *nodelist = NULL;
                 if (json_unpack (context,
-                                 "{s:s s?s}",
+                                 "{s:s s:s}",
                                  "idset", &s,
                                  "nodelist", &nodelist) < 0) {
                     errprintf (error,
