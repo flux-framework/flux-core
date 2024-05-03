@@ -366,6 +366,7 @@ _flux_resource()
         -o --format= \
         -s --states= \
         -n --no-header \
+        -q --queue= \
         -i --include= \
     "
     local status_OPTS="\
@@ -374,6 +375,7 @@ _flux_resource()
     local R_OPTS="\
         -h --help \
         -s --states= \
+        -q --queue= \
         -i --include= \
     "
     local undrain_OPTS="\
@@ -385,6 +387,7 @@ _flux_resource()
         -u --update \
         -o --format= \
         -n --no-header \
+        -q --queue= \
         -i --include= \
     "
 
@@ -399,6 +402,9 @@ _flux_resource()
         if [[ "${COMPREPLY[@]}" == *= ]]; then
             # Add space if there is not a '=' in suggestions
             compopt -o nospace
+        fi
+        if _flux_complete_queue flux resource ${cmd}; then
+            return 0
         fi
         if _flux_complete_format_name flux resource ${cmd}; then
             return 0
