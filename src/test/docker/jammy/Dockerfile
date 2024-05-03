@@ -110,6 +110,7 @@ RUN apt-get update \
         enchant-2 \
         aspell \
         aspell-en \
+        time \
  && rm -rf /var/lib/apt/lists/*
 
 RUN locale-gen en_US.UTF-8
