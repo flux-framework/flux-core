@@ -46,14 +46,30 @@ struct optparse_option taskmap_opts[] = {
     OPTPARSE_TABLE_END
 };
 
+static flux_t *handle = NULL;
+
+static void global_flux_close (void)
+{
+    flux_close (handle);
+}
+
+static flux_t *global_flux_open (void)
+{
+    if (!handle) {
+        if (!(handle = flux_open (NULL, 0)))
+            log_err_exit ("flux_open");
+        atexit (global_flux_close);
+    }
+    return handle;
+}
+
 static struct taskmap *get_job_taskmap (flux_jobid_t id)
 {
     struct taskmap *map;
     flux_t *h;
     flux_future_t *f;
 
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
+    h = global_flux_open ();
 
     if (!(f = flux_job_event_watch (h, id, "guest.exec.eventlog", 0)))
         log_err_exit ("flux_job_event_watch");
@@ -88,7 +104,6 @@ static struct taskmap *get_job_taskmap (flux_jobid_t id)
         flux_future_reset (f);
     }
     flux_future_destroy (f);
-    flux_close (h);
     return map;
 }
 
@@ -102,8 +117,7 @@ static char *job_nodeid_to_hostname (flux_jobid_t id, int nodeid)
     struct rlist *rl;
     struct hostlist *hl;
 
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
+    h = global_flux_open ();
 
     if (!(f = flux_rpc_pack (h, "job-info.lookup", FLUX_NODEID_ANY, 0,
                              "{s:I s:[s] s:i}",
