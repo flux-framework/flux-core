@@ -9,11 +9,11 @@ flux-resource(1)
 SYNOPSIS
 ========
 
-| **flux** **resource** **list** [*-n*] [*-o* *FORMAT*] [*-s* *STATES*] [*-i* *TARGETS*]
-| **flux** **resource** **info** [*-s* *STATES*] [*-i* *TARGETS*]
-| **flux** **resource** **R** [*-s* *STATES*] [*-i* *TARGETS*]
+| **flux** **resource** **list** [*-n*] [*-o* *FORMAT*] [*-s* *STATES*] [*-q* *QUEUE*] [*-i* *TARGETS*]
+| **flux** **resource** **info** [*-s* *STATES*] [*-q* *QUEUE*] [*-i* *TARGETS*]
+| **flux** **resource** **R** [*-s* *STATES*] [*-q* *QUEUE*] [*-i* *TARGETS*]
 
-| **flux** **resource** **status** [*-n*] [*-o* *FORMAT*] [*-s* *STATES*] [*-i* *TARGETS*]
+| **flux** **resource** **status** [*-n*] [*-o* *FORMAT*] [*-s* *STATES*] [*-q* *QUEUE*] [*-i* *TARGETS*]
 
 | **flux** **resource** **drain** [*-n*] [*-o* *FORMAT*] [*-i* *TARGETS*]
 | **flux** **resource** **drain** [*-f*] [*-u*] [*targets*] [*reason*]
@@ -92,6 +92,11 @@ all
 
   If unspecified, :option:`free,allocated,down` is used.
 
+.. option:: -q, --queue=QUEUE,...
+
+  Filter results to only include resources in the specified *QUEUE*. Multiple
+  queues may be separated by a comma.
+
 .. option:: -i, --include=TARGETS
 
   Filter results to only include resources matching *TARGETS*, which may be
@@ -123,6 +128,11 @@ example::
 
   If unspecified, :option:`all` is used.
 
+.. option:: -q, --queue=QUEUE,...
+
+  Filter results to only include resources in the specified *QUEUE*. Multiple
+  queues may be separated by a comma.
+
 .. option:: -i, --include=TARGETS
 
   Filter results to only include resources matching *TARGETS*, which may be
@@ -142,6 +152,11 @@ Emit an RFC 20 Resource Set based on the scheduler view of resources.
   the `list`_ command.
 
   If unspecified, :option:`all` is used.
+
+.. option:: -q, --queue=QUEUE,...
+
+  Filter results to only include resources in the specified *QUEUE*. Multiple
+  queues may be separated by a comma.
 
 .. option:: -i, --include=TARGETS
 
@@ -193,6 +208,11 @@ resources that share a state and online/offline state.
   If unspecified, :option:`avail,exclude,draining,drained` is used.
 
 
+.. option:: -q, --queue=QUEUE,...
+
+  Filter results to only include resources in the specified *QUEUE*. Multiple
+  queues may be separated by a comma.
+
 .. option:: -i, --include=TARGETS
 
   Filter the results to only include resources matching *TARGETS*, which
@@ -232,6 +252,11 @@ following options are available:
 .. option:: -n,--no-header
 
   Suppress header from output,
+
+.. option:: -q, --queue=QUEUE,...
+
+  Filter results to only include resources in the specified *QUEUE*. Multiple
+  queues may be separated by a comma.
 
 .. option:: -i, --include=TARGETS
 
