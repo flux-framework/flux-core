@@ -180,6 +180,7 @@ TESTSCRIPTS = \
 	t2350-resource-list.t \
 	t2351-resource-status-input.t \
 	t2352-resource-cmd-config.t \
+	t2353-resource-eventlog.t \
 	t2400-job-exec-test.t \
 	t2401-job-exec-hello.t \
 	t2402-job-exec-dummy.t \
@@ -313,6 +314,7 @@ EXTRA_DIST= \
 	scripts/groups.py \
 	scripts/rexec.py \
 	jobspec \
+	resource \
 	marshall \
 	batch \
 	job-manager/dumps \
