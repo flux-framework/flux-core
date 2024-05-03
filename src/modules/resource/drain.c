@@ -458,6 +458,8 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
 {
     char rankstr[16];
     double timestamp;
+    char *nodelist = NULL;
+    int rc = -1;
 
     if (rank >= drain->ctx->size || !reason) {
         errno = EINVAL;
@@ -468,20 +470,23 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
     if (update_draininfo_rank (drain, rank, true, timestamp, reason, 0) < 0)
         return -1;
     snprintf (rankstr, sizeof (rankstr), "%ju", (uintmax_t)rank);
+    if (!(nodelist = flux_hostmap_lookup (drain->ctx->h, rankstr, NULL)))
+        return -1;
     if (reslog_post_pack (drain->ctx->reslog,
                           NULL,
                           timestamp,
                           "drain",
                           0,
-                          "{s:s s:s}",
-                          "idset",
-                          rankstr,
-                          "reason",
-                          reason) < 0)
-        return -1;
-    if (reslog_sync (drain->ctx->reslog) < 0)
-        return -1;
-    return 0;
+                          "{s:s s:s s:s}",
+                          "idset", rankstr,
+                          "nodelist", nodelist,
+                          "reason", reason) < 0
+        || reslog_sync (drain->ctx->reslog) < 0)
+        goto done;
+    rc = 0;
+done:
+    ERRNO_SAFE_WRAP (free, nodelist);
+    return rc;
 }
 
 static int undrain_rank_idset (struct drain *drain,
