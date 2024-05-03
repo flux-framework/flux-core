@@ -107,19 +107,20 @@ static struct taskmap *get_job_taskmap (flux_jobid_t id)
     return map;
 }
 
-static char *job_nodeid_to_hostname (flux_jobid_t id, int nodeid)
+static struct hostlist *job_hostlist (flux_jobid_t id)
 {
     flux_t *h;
     flux_future_t *f;
-    char *result;
-    const char *host;
     const char *R;
     struct rlist *rl;
     struct hostlist *hl;
 
     h = global_flux_open ();
 
-    if (!(f = flux_rpc_pack (h, "job-info.lookup", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-info.lookup",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:I s:[s] s:i}",
                              "id", id,
                              "keys", "R",
@@ -129,12 +130,20 @@ static char *job_nodeid_to_hostname (flux_jobid_t id, int nodeid)
         || !(rl = rlist_from_R (R))
         || !(hl = rlist_nodelist (rl)))
         log_err_exit ("failed to get hostlist for job");
+    rlist_destroy (rl);
+    flux_future_destroy (f);
+    return hl;
+}
+
+static char *job_nodeid_to_hostname (flux_jobid_t id, int nodeid)
+{
+    char *result;
+    const char *host;
+    struct hostlist *hl = job_hostlist (id);
     if (!(host = hostlist_nth (hl, nodeid)))
         log_err_exit ("failed to get hostname for node %d", nodeid);
     result = strdup (host);
     hostlist_destroy (hl);
-    rlist_destroy (rl);
-    flux_future_destroy (f);
     return result;
 }
 
