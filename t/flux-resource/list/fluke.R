@@ -1,0 +1,1 @@
+{"version": 1, "execution": {"R_lite": [{"rank": "0-100", "children": {"core": "0-3"}}], "starttime": 0.0, "expiration": 0.0, "nodelist": ["fluke[3-103]"], "properties": {"batch": "0-92", "debug": "93-100"}}}
