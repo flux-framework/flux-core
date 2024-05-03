@@ -61,6 +61,17 @@ enum {
     FLUX_SUBPROCESS_FLAGS_SETPGRP = 2,
     /* use fork(2)/exec(2) even if posix_spawn(3) available */
     FLUX_SUBPROCESS_FLAGS_FORK_EXEC = 4,
+    /* flux_rexec(): In order to improve performance, do not locally
+     * copy and buffer output from the remote subprocess.  Immediately
+     * call output callbacks.  Users should call
+     * flux_subprocess_read() to retrieve the data.  If
+     * flux_subprocess_read() is not called, data will be lost.  Data
+     * will not be NUL terminated.  flux_subprocess_read() should be
+     * called only once.  If called more than once, the same data is
+     * returned.  Use of other read functions will result in a EPERM
+     * error.
+     */
+    FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF = 8,
 };
 
 /*
@@ -195,7 +206,8 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
  *
  *   Returns length of data on success and -1 on error with errno set.
  *   Buffer of data is returned in bufp.  Buffer is guaranteed to be
- *   NUL terminated.  User shall not free returned pointer.
+ *   NUL terminated unless the FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF flag
+ *   has been specified.  User shall not free returned pointer.
  *
  *   In most cases, a length of 0 indicates that the subprocess has
  *   closed this stream.  A length of 0 could be returned if read

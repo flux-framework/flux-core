@@ -420,35 +420,37 @@ static int remote_channel_setup (flux_subprocess_t *p,
         if (wflag)
             c->line_buffered = true;
 
-        if (!(c->read_buffer = fbuf_create (buffer_size))) {
-            llog_debug (p, "fbuf_create: %s", strerror (errno));
-            goto error;
+        if (!(p->flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF)) {
+            if (!(c->read_buffer = fbuf_create (buffer_size))) {
+                llog_debug (p, "fbuf_create: %s", strerror (errno));
+                goto error;
+            }
+
+            if (!(c->out_prep_w = flux_prepare_watcher_create (p->reactor,
+                                                               remote_out_prep_cb,
+                                                               c))) {
+                llog_debug (p, "flux_prepare_watcher_create: %s", strerror (errno));
+                goto error;
+            }
+
+            if (!(c->out_idle_w = flux_idle_watcher_create (p->reactor,
+                                                            NULL,
+                                                            c))) {
+                llog_debug (p, "flux_idle_watcher_create: %s", strerror (errno));
+                goto error;
+            }
+
+            if (!(c->out_check_w = flux_check_watcher_create (p->reactor,
+                                                              remote_out_check_cb,
+                                                              c))) {
+                llog_debug (p, "flux_check_watcher_create: %s", strerror (errno));
+                goto error;
+            }
+
+            /* don't start these watchers until we've reached the running
+             * state */
         }
         p->channels_eof_expected++;
-
-        if (!(c->out_prep_w = flux_prepare_watcher_create (p->reactor,
-                                                           remote_out_prep_cb,
-                                                           c))) {
-            llog_debug (p, "flux_prepare_watcher_create: %s", strerror (errno));
-            goto error;
-        }
-
-        if (!(c->out_idle_w = flux_idle_watcher_create (p->reactor,
-                                                        NULL,
-                                                        c))) {
-            llog_debug (p, "flux_idle_watcher_create: %s", strerror (errno));
-            goto error;
-        }
-
-        if (!(c->out_check_w = flux_check_watcher_create (p->reactor,
-                                                          remote_out_check_cb,
-                                                          c))) {
-            llog_debug (p, "flux_check_watcher_create: %s", strerror (errno));
-            goto error;
-        }
-
-        /* don't start these watchers until we've reached the running
-         * state */
     }
 
     if (zhash_insert (p->channels, name, c) < 0) {
@@ -543,11 +545,53 @@ int subprocess_remote_setup (flux_subprocess_t *p, const char *service_name)
     return 0;
 }
 
-static int remote_output (flux_subprocess_t *p,
-                          const char *stream,
-                          const char *data,
-                          int len,
-                          bool eof)
+static int remote_output_local_unbuf (flux_subprocess_t *p,
+                                      const char *stream,
+                                      const char *data,
+                                      int len,
+                                      bool eof)
+{
+    struct subprocess_channel *c;
+
+    if (!(c = zhash_lookup (p->channels, stream))) {
+        llog_debug (p,
+                    "Error returning %d bytes received from remote"
+                    " subprocess pid %d %s: unknown channel name",
+                    len,
+                    (int)flux_subprocess_pid (p),
+                    stream);
+        errno = EPROTO;
+        set_failed (p, "error returning unknown channel %s", stream);
+        return -1;
+    }
+
+    if (data && len) {
+        c->unbuf_data = data;
+        c->unbuf_len = len;
+        if (eof)
+            c->read_eof_received = true;
+        c->output_cb (c->p, c->name);
+    }
+    /* N.B. any data not consumed by the user is lost, so if eof is
+     * seen, we send it immediately */
+    if (eof) {
+        c->read_eof_received = true;
+        c->unbuf_data = NULL;
+        c->unbuf_len = 0;
+
+        c->output_cb (c->p, c->name);
+
+        c->eof_sent_to_caller = true;
+        c->p->channels_eof_sent++;
+    }
+    return 0;
+}
+
+static int remote_output_buffered (flux_subprocess_t *p,
+                                   const char *stream,
+                                   const char *data,
+                                   int len,
+                                   bool eof)
 {
     struct subprocess_channel *c;
 
@@ -637,8 +681,14 @@ static void rexec_continuation (flux_future_t *f, void *arg)
         process_new_state (p, FLUX_SUBPROCESS_EXITED);
     }
     else if (subprocess_rexec_is_output (f, &stream, &data, &len, &eof)) {
-        if (remote_output (p, stream, data, len, eof) < 0)
-            goto error;
+        if (p->flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF) {
+            if (remote_output_local_unbuf (p, stream, data, len, eof) < 0)
+                goto error;
+        }
+        else {
+            if (remote_output_buffered (p, stream, data, len, eof) < 0)
+                goto error;
+        }
     }
     flux_future_reset (f);
     return;
