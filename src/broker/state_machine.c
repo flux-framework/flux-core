@@ -98,6 +98,7 @@ static void action_run (struct state_machine *s);
 static void action_cleanup (struct state_machine *s);
 static void action_shutdown (struct state_machine *s);
 static void action_finalize (struct state_machine *s);
+static void action_goodbye (struct state_machine *s);
 static void action_exit (struct state_machine *s);
 
 static void runat_completion_cb (struct runat *r, const char *name, void *arg);
@@ -120,7 +121,7 @@ static struct state statetab[] = {
     { STATE_CLEANUP,    "cleanup",          action_cleanup },
     { STATE_SHUTDOWN,   "shutdown",         action_shutdown },
     { STATE_FINALIZE,   "finalize",         action_finalize },
-    { STATE_GOODBYE,    "goodbye",          NULL },
+    { STATE_GOODBYE,    "goodbye",          action_goodbye },
     { STATE_EXIT,       "exit",             action_exit },
 };
 
@@ -151,6 +152,7 @@ static struct state_next nexttab[] = {
 };
 
 static const double default_quorum_timeout = 60; // log slow joiners
+static const double goodbye_timeout = 60;
 
 static void state_action (struct state_machine *s, broker_state_t state)
 {
@@ -361,7 +363,7 @@ static void action_run (struct state_machine *s)
 static void action_cleanup (struct state_machine *s)
 {
     /* Prevent new downstream clients from saying hello, but
-     * let existing ones continue to communiate so they can
+     * let existing ones continue to communicate so they can
      * shut down and disconnect.
      */
     overlay_shutdown (s->ctx->overlay, false);
@@ -404,6 +406,39 @@ static void action_shutdown (struct state_machine *s)
                     overlay_get_child_peer_count (s->ctx->overlay));
     }
 #endif
+}
+
+static void goodbye_continuation (flux_future_t *f, void *arg)
+{
+    struct state_machine *s = arg;
+    if (flux_future_get (f, NULL) < 0) {
+        flux_log (s->ctx->h,
+                  LOG_ERR,
+                  "overlay.goodbye: %s",
+                  future_strerror (f, errno));
+    }
+    state_machine_post (s, "goodbye");
+    flux_future_destroy (f);
+}
+
+static void action_goodbye (struct state_machine *s)
+{
+    /* On rank 0, "goodbye" is posted by shutdown.c.
+     * On other ranks, send a goodbye message and wait for a response
+     * (with timeout) before continuing on.
+     */
+    if (s->ctx->rank > 0) {
+        flux_future_t *f;
+        if (!(f = overlay_goodbye_parent (s->ctx->overlay))
+            || flux_future_then (f,
+                                 goodbye_timeout,
+                                 goodbye_continuation,
+                                 s) < 0) {
+            flux_log_error (s->ctx->h, "error sending overlay.goodbye request");
+            flux_future_destroy (f);
+            state_machine_post (s, "goodbye");
+        }
+    }
 }
 
 static void rmmod_continuation (flux_future_t *f, void *arg)

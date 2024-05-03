@@ -9,6 +9,10 @@
 \************************************************************/
 
 /* shutdown.c - manage instance shutdown on behalf of flux-shutdown(1)
+ *
+ * This is only active on rank 0.
+ * On rank 0, this posts the "goodbye" event to the broker state machine.
+ * On other ranks it is generated internally in state_machine.c.
  */
 
 #if HAVE_CONFIG_H
@@ -271,8 +275,10 @@ struct shutdown *shutdown_create (struct broker *ctx)
                                     shutdown,
                                     &shutdown->handlers) < 0)
         goto error;
-    if (!(shutdown->f_monitor = monitor_request (shutdown)))
-        return NULL;
+    if (ctx->rank == 0) {
+        if (!(shutdown->f_monitor = monitor_request (shutdown)))
+            return NULL;
+    }
     return shutdown;
 error:
     shutdown_destroy (shutdown);
