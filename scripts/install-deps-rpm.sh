@@ -24,6 +24,7 @@ yum install \
   python3-sphinx \
   aspell \
   aspell-en \
+  time \
   valgrind-devel \
   mpich-devel \
   jq

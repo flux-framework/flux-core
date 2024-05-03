@@ -65,6 +65,7 @@ RUN yum -y update \
 	enchant \
 	aspell \
 	aspell-en \
+	time \
 	glibc-langpack-en \
  && yum clean all
 

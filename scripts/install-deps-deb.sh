@@ -24,6 +24,7 @@ apt install \
   python3-sphinx \
   aspell \
   aspell-en \
+  time \
   valgrind \
   libmpich-dev \
   jq
