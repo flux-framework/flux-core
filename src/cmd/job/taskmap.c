@@ -46,7 +46,7 @@ struct optparse_option taskmap_opts[] = {
     OPTPARSE_TABLE_END
 };
 
-static struct taskmap *flux_job_taskmap (flux_jobid_t id)
+static struct taskmap *get_job_taskmap (flux_jobid_t id)
 {
     struct taskmap *map;
     flux_t *h;
@@ -92,7 +92,7 @@ static struct taskmap *flux_job_taskmap (flux_jobid_t id)
     return map;
 }
 
-static char *flux_job_nodeid_to_hostname (flux_jobid_t id, int nodeid)
+static char *job_nodeid_to_hostname (flux_jobid_t id, int nodeid)
 {
     flux_t *h;
     flux_future_t *f;
@@ -143,7 +143,7 @@ int cmd_taskmap (optparse_t *p, int argc, char **argv)
             log_msg_exit ("error decoding taskmap: %s", error.text);
     }
     else
-        map = flux_job_taskmap (id);
+        map = get_job_taskmap (id);
 
     if ((val = optparse_get_int (p, "taskids", -1)) != -1) {
         const struct idset *ids = taskmap_taskids (map, val);
@@ -168,7 +168,7 @@ int cmd_taskmap (optparse_t *p, int argc, char **argv)
         if (result < 0)
             log_err_exit ("failed to get nodeid for task %d", val);
         if (optparse_hasopt (p, "hostname")) {
-            char *host = flux_job_nodeid_to_hostname (id, result);
+            char *host = job_nodeid_to_hostname (id, result);
             printf ("%s\n", host);
             free (host);
         }
