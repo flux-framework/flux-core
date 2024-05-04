@@ -105,3 +105,4 @@ Table of Contents
    guide/glossary
    index_man
    python/index
+   guide/internals

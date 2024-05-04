@@ -461,6 +461,8 @@ EXTRA_DIST = \
 	guide/interact.rst \
 	guide/admin.rst \
 	guide/glossary.rst \
+	guide/internals.rst \
+	guide/kvs.rst \
 	$(RST_FILES) \
 	man1/index.rst \
 	man1/common/resources.rst \
