@@ -347,13 +347,14 @@ support task mapping formats:
 
    Print the hostname of the node that rank task *TASKID*
 
-.. option:: --to=raw|pmi|multiline
+.. option:: --to=raw|pmi|multiline|hosts
 
-   Convert the taskmap to *raw* or *pmi* formats (described in RFC 34), or
-   *multiline* which prints the node ID of each task, one per line. The
-   default behavior is to print the RFC 34 taskmap. This option can be useful
-   to convert between mapping forms, since :program:`flux job taskmap` can
-   take a raw, pmi, or RFC 34 task map on the command line.
+   Convert the taskmap to *raw* or *pmi* formats (described in RFC 34),
+   *multiline* which prints the node ID of each task, one per line,
+   or *hosts* which prints a list of taskids for each host. The default
+   behavior is to print the RFC 34 taskmap. This option can be useful
+   to convert between mapping forms, since :program:`flux job taskmap`
+   can take a raw, pmi, or RFC 34 task map on the command line.
 
 Only one of the above options may be used per call.
 
