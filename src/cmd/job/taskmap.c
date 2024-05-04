@@ -41,19 +41,35 @@ struct optparse_option taskmap_opts[] = {
     },
     { .name = "to", .has_arg = 1, .arginfo="FORMAT",
       .usage = "Convert an RFC 34 taskmap to another format "
-               "(FORMAT can be raw, pmi, or multiline)",
+               "(FORMAT can be raw, pmi, hosts, or multiline)",
     },
     OPTPARSE_TABLE_END
 };
 
-static struct taskmap *flux_job_taskmap (flux_jobid_t id)
+static flux_t *handle = NULL;
+
+static void global_flux_close (void)
+{
+    flux_close (handle);
+}
+
+static flux_t *global_flux_open (void)
+{
+    if (!handle) {
+        if (!(handle = flux_open (NULL, 0)))
+            log_err_exit ("flux_open");
+        atexit (global_flux_close);
+    }
+    return handle;
+}
+
+static struct taskmap *get_job_taskmap (flux_jobid_t id)
 {
     struct taskmap *map;
     flux_t *h;
     flux_future_t *f;
 
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
+    h = global_flux_open ();
 
     if (!(f = flux_job_event_watch (h, id, "guest.exec.eventlog", 0)))
         log_err_exit ("flux_job_event_watch");
@@ -88,24 +104,23 @@ static struct taskmap *flux_job_taskmap (flux_jobid_t id)
         flux_future_reset (f);
     }
     flux_future_destroy (f);
-    flux_close (h);
     return map;
 }
 
-static char *flux_job_nodeid_to_hostname (flux_jobid_t id, int nodeid)
+static struct hostlist *job_hostlist (flux_jobid_t id)
 {
     flux_t *h;
     flux_future_t *f;
-    char *result;
-    const char *host;
     const char *R;
     struct rlist *rl;
     struct hostlist *hl;
 
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
+    h = global_flux_open ();
 
-    if (!(f = flux_rpc_pack (h, "job-info.lookup", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h,
+                             "job-info.lookup",
+                             FLUX_NODEID_ANY,
+                             0,
                              "{s:I s:[s] s:i}",
                              "id", id,
                              "keys", "R",
@@ -115,13 +130,42 @@ static char *flux_job_nodeid_to_hostname (flux_jobid_t id, int nodeid)
         || !(rl = rlist_from_R (R))
         || !(hl = rlist_nodelist (rl)))
         log_err_exit ("failed to get hostlist for job");
+    rlist_destroy (rl);
+    flux_future_destroy (f);
+    return hl;
+}
+
+static char *job_nodeid_to_hostname (flux_jobid_t id, int nodeid)
+{
+    char *result;
+    const char *host;
+    struct hostlist *hl = job_hostlist (id);
     if (!(host = hostlist_nth (hl, nodeid)))
         log_err_exit ("failed to get hostname for node %d", nodeid);
     result = strdup (host);
     hostlist_destroy (hl);
-    rlist_destroy (rl);
-    flux_future_destroy (f);
     return result;
+}
+
+static void output_hosts_to_taskids (struct taskmap *map, flux_jobid_t id)
+{
+    struct hostlist *hl = job_hostlist (id);
+
+    for (int i = 0; i < taskmap_nnodes (map); i++) {
+        char *ids;
+        const struct idset *idset;
+        const char *host;
+
+        if (!(idset = taskmap_taskids (map, i))
+                || !((ids = idset_encode (idset, IDSET_FLAG_RANGE))))
+            log_err_exit ("failed to get taskids for nodeid %d", i);
+        if (!(host = hostlist_nth (hl, i)))
+            log_err_exit ("failed to get hostname for nodeid %d", i);
+
+        printf ("%s: %s\n", host, ids);
+        free (ids);
+    }
+    hostlist_destroy (hl);
 }
 
 int cmd_taskmap (optparse_t *p, int argc, char **argv)
@@ -131,7 +175,7 @@ int cmd_taskmap (optparse_t *p, int argc, char **argv)
     int val;
     const char *to;
     char *s;
-    flux_jobid_t id;
+    flux_jobid_t id = FLUX_JOBID_ANY;
 
     if (optindex == argc) {
         optparse_print_usage (p);
@@ -143,7 +187,7 @@ int cmd_taskmap (optparse_t *p, int argc, char **argv)
             log_msg_exit ("error decoding taskmap: %s", error.text);
     }
     else
-        map = flux_job_taskmap (id);
+        map = get_job_taskmap (id);
 
     if ((val = optparse_get_int (p, "taskids", -1)) != -1) {
         const struct idset *ids = taskmap_taskids (map, val);
@@ -168,7 +212,9 @@ int cmd_taskmap (optparse_t *p, int argc, char **argv)
         if (result < 0)
             log_err_exit ("failed to get nodeid for task %d", val);
         if (optparse_hasopt (p, "hostname")) {
-            char *host = flux_job_nodeid_to_hostname (id, result);
+            if (id == FLUX_JOBID_ANY)
+                log_msg_exit ("taskmap: can't use --hostname without a jobid");
+            char *host = job_nodeid_to_hostname (id, result);
             printf ("%s\n", host);
             free (host);
         }
@@ -187,6 +233,12 @@ int cmd_taskmap (optparse_t *p, int argc, char **argv)
                 printf ("%d: %d\n", i, taskmap_nodeid (map, i));
             }
             taskmap_destroy (map);
+            return 0;
+        }
+        else if (streq (to, "hosts")) {
+            if (id == FLUX_JOBID_ANY)
+                log_msg_exit ("taskmap: can't use --to=hosts without a jobid");
+            output_hosts_to_taskids (map, id);
             return 0;
         }
         else
