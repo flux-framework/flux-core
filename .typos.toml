@@ -16,6 +16,7 @@ extend-exclude = [
   "src/common/libutil/test/blobref.c",
   "src/common/libmissing/*.[ch]",
   "t/hwloc-data/*",
+  "doc/test/spell.en.pws",
 ]
 
 [default.extend-words]

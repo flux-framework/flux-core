@@ -140,3 +140,5 @@ test_kvs_wait_version_t_LDADD = \
 	$(test_ldadd)
 test_kvs_wait_version_t_LDFLAGS = \
 	$(test_ldflags)
+
+EXTRA_DIST = README.md

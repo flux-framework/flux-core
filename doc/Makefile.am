@@ -457,10 +457,17 @@ EXTRA_DIST = \
 	guide/images/adminarch.png \
 	guide/images/fox-standing.svg \
 	guide/images/Frog-1.svg \
+	guide/images/states.dot \
+	guide/images/states.png \
+	guide/images/states_norm.dot \
+	guide/images/states_norm.png \
 	guide/start.rst \
 	guide/interact.rst \
 	guide/admin.rst \
 	guide/glossary.rst \
+	guide/internals.rst \
+	guide/kvs.rst \
+	guide/broker.rst \
 	$(RST_FILES) \
 	man1/index.rst \
 	man1/common/resources.rst \
