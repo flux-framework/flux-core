@@ -143,3 +143,5 @@ test_topology_t_SOURCES = test/topology.c
 test_topology_t_CPPFLAGS = $(test_cppflags)
 test_topology_t_LDADD = $(test_ldadd)
 test_topology_t_LDFLAGS = $(test_ldflags)
+
+EXTRA_DIST = README.md
