@@ -13,7 +13,7 @@ BASE_DOCKER_REPO=fluxrm/testenv
 WORKDIR=/usr/src
 IMAGE=bookworm
 JOBS=2
-MOUNT_HOME_ARGS="--volume=$HOME:/home/$USER -e HOME"
+MOUNT_HOME_ARGS="--volume=$HOME:$HOME -e HOME"
 
 if test "$PROJECT" = "flux-core"; then
   FLUX_SECURITY_VERSION=0.11.0
@@ -167,7 +167,7 @@ checks_group "Building image $IMAGE for user $USER $(id -u) group=$(id -g)" \
     || die "docker build failed"
 
 if [[ -n "$MOUNT_HOME_ARGS" ]]; then
-    echo "mounting $HOME as /home/$USER"
+    echo "mounting $HOME as $HOME"
 fi
 echo "mounting $TOP as $WORKDIR"
 
