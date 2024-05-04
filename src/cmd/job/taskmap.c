@@ -175,7 +175,7 @@ int cmd_taskmap (optparse_t *p, int argc, char **argv)
     int val;
     const char *to;
     char *s;
-    flux_jobid_t id;
+    flux_jobid_t id = FLUX_JOBID_ANY;
 
     if (optindex == argc) {
         optparse_print_usage (p);
@@ -212,6 +212,8 @@ int cmd_taskmap (optparse_t *p, int argc, char **argv)
         if (result < 0)
             log_err_exit ("failed to get nodeid for task %d", val);
         if (optparse_hasopt (p, "hostname")) {
+            if (id == FLUX_JOBID_ANY)
+                log_msg_exit ("taskmap: can't use --hostname without a jobid");
             char *host = job_nodeid_to_hostname (id, result);
             printf ("%s\n", host);
             free (host);
@@ -234,6 +236,8 @@ int cmd_taskmap (optparse_t *p, int argc, char **argv)
             return 0;
         }
         else if (streq (to, "hosts")) {
+            if (id == FLUX_JOBID_ANY)
+                log_msg_exit ("taskmap: can't use --to=hosts without a jobid");
             output_hosts_to_taskids (map, id);
             return 0;
         }
