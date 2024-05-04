@@ -30,7 +30,15 @@ test_expect_success 'flux job taskmap works' '
 	test "$(flux job taskmap --ntasks=0 $id)" = "4" &&
 	test "$(flux job taskmap --nodeid=15 $id)" = "3" &&
 	test "$(flux job taskmap --hostname=0 $id)" = "$(hostname)" &&
-	test "$(flux job taskmap --to=pmi $id)" = "(vector,(0,4,4))"
+	test "$(flux job taskmap --to=pmi $id)" = "(vector,(0,4,4))" &&
+	flux job taskmap --to=hosts $id > taskmap.hosts &&
+	cat <<-EOF >taskmap.hosts.expected &&
+	$(hostname): 0-3
+	$(hostname): 4-7
+	$(hostname): 8-11
+	$(hostname): 12-15
+	EOF
+	test_cmp taskmap.hosts.expected taskmap.hosts
 '
 test_expect_success 'flux job taskmap works with taskmap on cmdline' '
 	flux job taskmap --to=raw "[[0,4,4,1]]" &&
@@ -63,7 +71,11 @@ test_expect_success 'flux job taskmap fails with invalid arguments' '
 	grep "failed to get nodeid for task 24" no-nodeid.err &&
 	test_must_fail flux job taskmap --to=foo $id 2>bad-to.err &&
 	test_debug "cat bad-to.err" &&
-	grep "invalid value" bad-to.err
+	grep "invalid value" bad-to.err &&
+	test_must_fail flux job taskmap --hostname=0 "[[0,1,1,1]]" 2>no-hosts.err &&
+	grep "without a jobid" no-hosts.err &&
+	test_must_fail flux job taskmap --to=hosts "[[0,1,1,1]]" 2>no-hosts2.err &&
+	grep "without a jobid" no-hosts2.err
 '
 test_expect_success 'taskmap is posted in shell.start event' '
 	id=$(flux submit ./map.sh) &&
