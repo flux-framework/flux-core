@@ -6,3 +6,4 @@ Resources for Flux Developers
    :caption: Contents:
 
    kvs
+   broker
