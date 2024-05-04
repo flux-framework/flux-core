@@ -41,7 +41,7 @@ struct optparse_option taskmap_opts[] = {
     },
     { .name = "to", .has_arg = 1, .arginfo="FORMAT",
       .usage = "Convert an RFC 34 taskmap to another format "
-               "(FORMAT can be raw, pmi, or multiline)",
+               "(FORMAT can be raw, pmi, hosts, or multiline)",
     },
     OPTPARSE_TABLE_END
 };
@@ -147,6 +147,27 @@ static char *job_nodeid_to_hostname (flux_jobid_t id, int nodeid)
     return result;
 }
 
+static void output_hosts_to_taskids (struct taskmap *map, flux_jobid_t id)
+{
+    struct hostlist *hl = job_hostlist (id);
+
+    for (int i = 0; i < taskmap_nnodes (map); i++) {
+        char *ids;
+        const struct idset *idset;
+        const char *host;
+
+        if (!(idset = taskmap_taskids (map, i))
+                || !((ids = idset_encode (idset, IDSET_FLAG_RANGE))))
+            log_err_exit ("failed to get taskids for nodeid %d", i);
+        if (!(host = hostlist_nth (hl, i)))
+            log_err_exit ("failed to get hostname for nodeid %d", i);
+
+        printf ("%s: %s\n", host, ids);
+        free (ids);
+    }
+    hostlist_destroy (hl);
+}
+
 int cmd_taskmap (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
@@ -210,6 +231,10 @@ int cmd_taskmap (optparse_t *p, int argc, char **argv)
                 printf ("%d: %d\n", i, taskmap_nodeid (map, i));
             }
             taskmap_destroy (map);
+            return 0;
+        }
+        else if (streq (to, "hosts")) {
+            output_hosts_to_taskids (map, id);
             return 0;
         }
         else
