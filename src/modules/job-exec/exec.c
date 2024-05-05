@@ -38,6 +38,7 @@
 #include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "job-exec.h"
 #include "exec_config.h"
@@ -618,6 +619,31 @@ static int exec_config (flux_t *h, int argc, char **argv)
     return config_init (h, argc, argv);
 }
 
+static int exec_stats (json_t **stats)
+{
+    json_t *o = NULL;
+    json_t *conf = NULL;
+
+    if (!(o = json_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+
+    if (config_get_stats (&conf) < 0)
+        goto error;
+
+    if (json_object_set_new (o, "config", conf) < 0)
+        goto error;
+
+    (*stats) = o;
+    return 0;
+
+error:
+    ERRNO_SAFE_WRAP (json_decref, o);
+    ERRNO_SAFE_WRAP (json_decref, conf);
+    return -1;
+}
+
 struct exec_implementation bulkexec = {
     .name =     "bulk-exec",
     .config =   exec_config,
@@ -626,7 +652,7 @@ struct exec_implementation bulkexec = {
     .start =    exec_start,
     .kill =     exec_kill,
     .cancel =   exec_cancel,
-    .stats =    NULL,
+    .stats =    exec_stats,
 };
 
 /* vi: ts=4 sw=4 expandtab

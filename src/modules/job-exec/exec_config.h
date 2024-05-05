@@ -29,6 +29,8 @@ json_t *config_get_sdexec_properties (void);
 
 bool config_get_exec_service_override (void);
 
+int config_get_stats (json_t **config_stats);
+
 int config_init (flux_t *h, int argc, char **argv);
 
 #endif /* !HAVE_JOB_EXEC_CONFIG_EXEC_H */

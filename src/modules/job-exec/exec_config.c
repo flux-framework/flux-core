@@ -23,6 +23,7 @@
 
 #include "exec_config.h"
 #include "ccan/str/str.h"
+#include "src/common/libutil/errno_safe.h"
 
 static const char *default_cwd = "/tmp";
 static const char *default_job_shell = NULL;
@@ -94,6 +95,85 @@ bool config_get_exec_service_override (void)
 json_t *config_get_sdexec_properties (void)
 {
     return sdexec_properties;
+}
+
+static int config_add_stats_string (json_t *o,
+                                    const char *key,
+                                    const char *value)
+{
+    json_t *s;
+
+    if (!value)
+        return 0;
+
+    if (!(s = json_string (value))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    if (json_object_set_new (o, key, s) < 0) {
+        json_decref (s);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
+static int config_add_stats_int (json_t *o,
+                                 const char *key,
+                                 int value)
+{
+    json_t *s = json_integer (value);
+    if (!s) {
+        errno = ENOMEM;
+        return -1;
+    }
+    if (json_object_set_new (o, key, s) < 0) {
+        json_decref (s);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
+int config_get_stats (json_t **config_stats)
+{
+    json_t *o = NULL;
+
+    if (!(o = json_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+
+    if (config_add_stats_string (o,
+                                 "default_cwd",
+                                 default_cwd) < 0
+        || config_add_stats_string (o,
+                                    "default_job_shell",
+                                    default_job_shell) < 0
+        || config_add_stats_string (o,
+                                    "flux_imp_path",
+                                    flux_imp_path) < 0
+        || config_add_stats_string (o,
+                                    "exec_service",
+                                    exec_service) < 0)
+        goto error;
+
+    if (config_add_stats_int (o,
+                              "exec_service_override",
+                              exec_service_override) < 0)
+        goto error;
+
+    if (sdexec_properties) {
+        if (json_object_set (o, "sdexec_properties", sdexec_properties) < 0)
+            goto error;
+    }
+
+    (*config_stats) = o;
+    return 0;
+
+error:
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return -1;
 }
 
 /*  Initialize common configurations for use by job-exec exec modules.
