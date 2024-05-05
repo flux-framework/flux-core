@@ -37,7 +37,9 @@ libresource_la_SOURCES = \
 	status.c \
 	status.h \
 	drainset.h \
-	drainset.c
+	drainset.c \
+	upgrade.h \
+	upgrade.c
 
 TESTS = \
 	test_rutil.t \

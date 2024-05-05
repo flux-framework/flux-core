@@ -458,6 +458,8 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
 {
     char rankstr[16];
     double timestamp;
+    char *nodelist = NULL;
+    int rc = -1;
 
     if (rank >= drain->ctx->size || !reason) {
         errno = EINVAL;
@@ -468,20 +470,23 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
     if (update_draininfo_rank (drain, rank, true, timestamp, reason, 0) < 0)
         return -1;
     snprintf (rankstr, sizeof (rankstr), "%ju", (uintmax_t)rank);
+    if (!(nodelist = flux_hostmap_lookup (drain->ctx->h, rankstr, NULL)))
+        return -1;
     if (reslog_post_pack (drain->ctx->reslog,
                           NULL,
                           timestamp,
                           "drain",
                           0,
-                          "{s:s s:s}",
-                          "idset",
-                          rankstr,
-                          "reason",
-                          reason) < 0)
-        return -1;
-    if (reslog_sync (drain->ctx->reslog) < 0)
-        return -1;
-    return 0;
+                          "{s:s s:s s:s}",
+                          "idset", rankstr,
+                          "nodelist", nodelist,
+                          "reason", reason) < 0
+        || reslog_sync (drain->ctx->reslog) < 0)
+        goto done;
+    rc = 0;
+done:
+    ERRNO_SAFE_WRAP (free, nodelist);
+    return rc;
 }
 
 static int undrain_rank_idset (struct drain *drain,
@@ -600,14 +605,14 @@ static struct idset *decode_targets (struct drain *drain,
     int index;
 
     if (!(ids = idset_decode (ranks))
-        || (nodelist && !(nl = hostlist_decode (nodelist)))
+        || !(nl = hostlist_decode (nodelist))
         || !(newids = idset_create (drain->ctx->size, 0)))
         goto done;
 
     index = 0;
     rank = idset_first (ids);
     while (rank != IDSET_INVALID_ID) {
-        const char *host = nl ?  hostlist_nth (nl, index++) : NULL;
+        const char *host = hostlist_nth (nl, index++);
 
         add_target (newids, rank, host, drain->ctx->h);
         rank = idset_next (ids, rank);
@@ -642,9 +647,9 @@ static int replay_eventlog (struct drain *drain,
             }
             if (streq (name, "drain")) {
                 int overwrite = 1;
-                const char *nodelist = NULL;
+                const char *nodelist;
                 if (json_unpack (context,
-                                 "{s:s s?s s?s s?i}",
+                                 "{s:s s:s s?s s?i}",
                                  "idset", &s,
                                  "nodelist", &nodelist,
                                  "reason", &reason,
@@ -676,7 +681,7 @@ static int replay_eventlog (struct drain *drain,
             else if (streq (name, "undrain")) {
                 const char *nodelist = NULL;
                 if (json_unpack (context,
-                                 "{s:s s?s}",
+                                 "{s:s s:s}",
                                  "idset", &s,
                                  "nodelist", &nodelist) < 0) {
                     errprintf (error,
