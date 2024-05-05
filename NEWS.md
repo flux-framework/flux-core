@@ -1,3 +1,57 @@
+flux-core version 0.62.0 - 2024-05-07
+-------------------------------------
+
+
+## New Features
+ * job-exec: support config reload (#5913)
+ * job-exec: support module stats to see current bulk-exec configuration
+   (#5943)
+ * do not filter caches when loading hwloc topology (#5945)
+ * shell: add `hwloc.restrict` option to restrict `HWLOC_XMLFILE` to assigned
+   resources (#5944)
+ * cleanup resource.eventlog and handle remapped ranks (#5914)
+ * resource: upgrade KVS resource.eventlog if needed (#5936)
+ * flux-resource: add `-q, --queue=QUEUE` option (#5935)
+ * change default tbon.topo to kary:32 (#5930)
+ * flux-job: add `flux job taskmap --to=hosts` (#5941)
+ * notify user of stopped queue in `flux job attach` (#5911)
+ * add options for offline config file parsing (#5907)
+ * flux-exec: set up systemd environment to support sdexec debugging (#5903)
+ * job-list: limit constraint comparisons to avoid DoS (#5681)
+ * broker/module.c: name threads (#5895)
+ * suppress epilog on jobs canceled during shutdown (try no. 2) (#5894)
+
+## Fixes
+ * libsubprocess: reduce remote output prep/check (#5932)
+ * job-exec: fix potential use-after-free in bulk-exec implementation (#5937)
+ * broker: avoid LOST due to EHOSTUNREACH messages during shutdown (#5928)
+ * fix possible use-after-free in chained future implementation (#5927)
+ * job-manager: perilog: do not set working directory on subprocesses (#5922)
+ * cron: fix race if sync event changed or disabled (#5908)
+ * job-manager: improve handling of offline ranks in job prolog (#5910)
+ * Support optional arg in -L (--color) short option (#5890)
+ * alloc-check: account for resources in scheduler hello failure (#5897)
+ * librlist: sort rlist before generating R (#5887)
+ * properly report signaled tasks in `flux job wait` and `flux job attach`
+   (#5886)
+
+## Documentation
+ * doc: convert internals docs to readthedocs (#5939)
+ * doc: enhance core dump instructions in admin guide (#5926)
+ * doc: add pre-flight checklist to admin guide (#5899)
+ * doc: various minor flux-cron(1) fixes and improvements (#5905)
+
+## Cleanup
+ * job-exec: silence nuisance logging (#5948)
+ * assorted minor source cleanup (#5918, #5924)
+
+## CI/Testsuite
+ * docker-run-checks: ensure we match user's home (#5938)
+ * deps/docker: add 'time' as a dependency for tests (#5933)
+ * fix potential segfault in `test_terminus.t` (#5888)
+ * docker: add script help message for macOS (#5779)
+
+
 flux-core version 0.61.2 - 2024-04-12
 -------------------------------------
 
