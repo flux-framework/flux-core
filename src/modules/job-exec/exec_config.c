@@ -267,13 +267,6 @@ int config_init (flux_t *h, int argc, char **argv)
         }
     }
 
-    flux_log (h, LOG_DEBUG, "using default shell path %s", default_job_shell);
-    if (flux_imp_path) {
-        flux_log (h,
-                  LOG_DEBUG,
-                  "using imp path %s (with helper)",
-                  flux_imp_path);
-    }
     return 0;
 }
 
