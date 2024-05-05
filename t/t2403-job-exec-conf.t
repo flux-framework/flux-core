@@ -18,26 +18,22 @@ test_expect_success 'job-exec: bad kill-timeout value causes module failure' '
 '
 test_expect_success 'job-exec: kill-timeout can be set in exec conf' '
 	name=killconf &&
-	mkdir ${name}.d &&
-	cat <<-EOF > ${name}.d/exec.toml &&
+	cat <<-EOF > ${name}.toml &&
 	[exec]
 	kill-timeout = ".5m"
 	EOF
-	( export FLUX_CONF_DIR=${name}.d &&
-	  flux start -s1 flux dmesg > ${name}.log 2>&1
-	) &&
+	flux start -o,--config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
 	grep "using kill-timeout of 30s" ${name}.log
 '
 test_expect_success 'job-exec: bad kill-timeout config causes module failure' '
 	name=bad-killconf &&
-	mkdir ${name}.d &&
-	cat <<-EOF > ${name}.d/exec.toml &&
+	cat <<-EOF > ${name}.toml &&
 	[exec]
 	kill-timeout = "foo"
 	EOF
-	( export FLUX_CONF_DIR=${name}.d &&
-	  test_must_fail flux start -s1 flux dmesg > ${name}.log 2>&1
-	) &&
+	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
 	grep "invalid kill-timeout: foo" ${name}.log
 '
 test_expect_success 'job-exec: can specify default-shell on cmdline' '
@@ -48,26 +44,22 @@ test_expect_success 'job-exec: can specify default-shell on cmdline' '
 '
 test_expect_success 'job-exec: job-shell can be set in exec conf' '
 	name=shellconf &&
-	mkdir ${name}.d &&
-	cat <<-EOF > ${name}.d/exec.toml &&
+	cat <<-EOF > ${name}.toml &&
 	[exec]
 	job-shell = "my-flux-shell"
 	EOF
-	( export FLUX_CONF_DIR=${name}.d &&
-	  flux start -s1 flux dmesg > ${name}.log 2>&1
-	) &&
+	flux start -o,--config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
 	grep "using default shell path my-flux-shell" ${name}.log
 '
 test_expect_success 'job-exec: bad job-shell config causes module failure' '
 	name=bad-shellconf &&
-	mkdir ${name}.d &&
-	cat <<-EOF > ${name}.d/exec.toml &&
+	cat <<-EOF > ${name}.toml &&
 	[exec]
 	job-shell = 42
 	EOF
-	( export FLUX_CONF_DIR=${name}.d &&
-	  test_must_fail flux start -s1 flux dmesg > ${name}.log 2>&1
-	) &&
+	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
 	grep "error reading config value exec.job-shell" ${name}.log
 '
 test_expect_success 'job-exec: can specify imp path on cmdline' '
@@ -78,26 +70,22 @@ test_expect_success 'job-exec: can specify imp path on cmdline' '
 '
 test_expect_success 'job-exec: imp path can be set in exec conf' '
 	name=impconf &&
-	mkdir ${name}.d &&
-	cat <<-EOF > ${name}.d/exec.toml &&
+	cat <<-EOF > ${name}.toml &&
 	[exec]
 	imp = "my-flux-imp"
 	EOF
-	( export FLUX_CONF_DIR=${name}.d &&
-	  flux start -s1 flux dmesg > ${name}.log 2>&1
-	) &&
+	flux start -o,--config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
 	grep "using imp path my-flux-imp" ${name}.log
 '
 test_expect_success 'job-exec: bad imp config causes module failure' '
 	name=bad-impconf &&
-	mkdir ${name}.d &&
-	cat <<-EOF > ${name}.d/exec.toml &&
+	cat <<-EOF > ${name}.toml &&
 	[exec]
 	imp = 42
 	EOF
-	( export FLUX_CONF_DIR=${name}.d &&
-	  test_must_fail flux start -s1 flux dmesg > ${name}.log 2>&1
-	) &&
+	test_must_fail flux start -o,--config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
 	grep "error reading config value exec.imp" ${name}.log
 '
 
