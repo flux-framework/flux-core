@@ -37,10 +37,9 @@ test_expect_success 'job-exec: bad kill-timeout config causes module failure' '
 	grep "invalid kill-timeout: foo" ${name}.log
 '
 test_expect_success 'job-exec: can specify default-shell on cmdline' '
-	flux dmesg -C &&
 	flux module reload -f job-exec job-shell=/path/to/shell &&
-	flux dmesg &&
-	flux dmesg | grep "default shell path /path/to/shell"
+	flux module stats -p impl.bulk-exec.config.default_job_shell job-exec > stats1.out &&
+	grep "/path/to/shell" stats1.out
 '
 test_expect_success 'job-exec: job-shell can be set in exec conf' '
 	name=shellconf &&
@@ -49,8 +48,8 @@ test_expect_success 'job-exec: job-shell can be set in exec conf' '
 	job-shell = "my-flux-shell"
 	EOF
 	flux start -o,--config-path=${name}.toml -s1 \
-		flux dmesg > ${name}.log 2>&1 &&
-	grep "using default shell path my-flux-shell" ${name}.log
+		flux module stats -p impl.bulk-exec.config.default_job_shell job-exec > ${name}.out 2>&1 &&
+	grep "my-flux-shell" ${name}.out
 '
 test_expect_success 'job-exec: bad job-shell config causes module failure' '
 	name=bad-shellconf &&
@@ -63,10 +62,9 @@ test_expect_success 'job-exec: bad job-shell config causes module failure' '
 	grep "error reading config value exec.job-shell" ${name}.log
 '
 test_expect_success 'job-exec: can specify imp path on cmdline' '
-	flux dmesg -C &&
 	flux module reload -f job-exec imp=/path/to/imp &&
-	flux dmesg &&
-	flux dmesg | grep "using imp path /path/to/imp"
+	flux module stats -p impl.bulk-exec.config.flux_imp_path job-exec > stats2.out &&
+	grep "/path/to/imp" stats2.out
 '
 test_expect_success 'job-exec: imp path can be set in exec conf' '
 	name=impconf &&
@@ -75,8 +73,8 @@ test_expect_success 'job-exec: imp path can be set in exec conf' '
 	imp = "my-flux-imp"
 	EOF
 	flux start -o,--config-path=${name}.toml -s1 \
-		flux dmesg > ${name}.log 2>&1 &&
-	grep "using imp path my-flux-imp" ${name}.log
+		flux module stats -p impl.bulk-exec.config.flux_imp_path job-exec > ${name}.out 2>&1 &&
+	grep "my-flux-imp" ${name}.out
 '
 test_expect_success 'job-exec: bad imp config causes module failure' '
 	name=bad-impconf &&
