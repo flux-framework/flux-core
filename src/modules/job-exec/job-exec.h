@@ -23,7 +23,7 @@ struct jobinfo;
 
 /*  Exec implementation interface:
  *
- *  An exec implementation must include the methods below:
+ *  An exec implementation must include the methods below (except where noted):
  *
  *   - config:  (optional) called once at module load for configuration
  *
@@ -44,6 +44,8 @@ struct jobinfo;
  *
  *   - cancel:  cancel any pending work (i.e. shells yet to be executed)
  *
+ *   - stats:   (optional) get json object of exec implementation stats
+ *
  */
 struct exec_implementation {
     const char *name;
@@ -54,6 +56,7 @@ struct exec_implementation {
     int  (*start)   (struct jobinfo *job);
     int  (*kill)    (struct jobinfo *job, int signum);
     int  (*cancel)  (struct jobinfo *job);
+    int  (*stats)   (json_t **stats);
 };
 
 /*  Exec job information */

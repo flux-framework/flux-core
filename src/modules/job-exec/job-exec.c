@@ -1441,6 +1441,40 @@ static int unload_implementations (struct job_exec_ctx *ctx)
     return 0;
 }
 
+static void stats_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
+{
+    struct exec_implementation *impl;
+    json_t *o = NULL;
+    int i = 0;
+
+    if (!(o = json_object ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    while ((impl = implementations[i]) && impl->name) {
+        json_t *stats = NULL;
+        if (impl->stats) {
+            if ((*impl->stats) (&stats) == 0 && stats) {
+                if (json_object_set_new (o, impl->name, stats) < 0) {
+                    errno = ENOMEM;
+                    goto error;
+                }
+            }
+        }
+        i++;
+    }
+    if (flux_respond_pack (h, msg, "{s:o}", "impl", o) < 0)
+        flux_log_error (h, "error responding to stats-get request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to stats-get request");
+    json_decref (o);
+}
+
 static const struct flux_msg_handler_spec htab[]  = {
     { FLUX_MSGTYPE_REQUEST, "job-exec.start", start_cb,     0 },
     { FLUX_MSGTYPE_EVENT,   "job-exception",  exception_cb, 0 },
@@ -1450,6 +1484,7 @@ static const struct flux_msg_handler_spec htab[]  = {
        FLUX_ROLE_USER
     },
     { FLUX_MSGTYPE_REQUEST, "job-exec.expiration", expiration_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job-exec.stats-get", stats_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END
 };
 

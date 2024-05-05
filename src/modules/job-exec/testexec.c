@@ -500,6 +500,7 @@ struct exec_implementation testexec = {
     .exit =     testexec_exit,
     .start =    testexec_start,
     .kill =     testexec_kill,
+    .stats =    NULL,
 };
 
 /* vi: ts=4 sw=4 expandtab

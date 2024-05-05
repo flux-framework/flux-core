@@ -626,6 +626,7 @@ struct exec_implementation bulkexec = {
     .start =    exec_start,
     .kill =     exec_kill,
     .cancel =   exec_cancel,
+    .stats =    NULL,
 };
 
 /* vi: ts=4 sw=4 expandtab
