@@ -271,7 +271,8 @@ int jobinfo_emit_event_pack_nowait (struct jobinfo *job,
     return rc;
 }
 
-static int jobid_exception (flux_t *h, flux_jobid_t id,
+static int jobid_exception (flux_t *h,
+                            flux_jobid_t id,
                             const flux_msg_t *msg,
                             const char *type,
                             int severity,
