@@ -39,8 +39,10 @@ const char **job_attrs (void)
     return attrs;
 }
 
-static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
-                      const flux_msg_t *msg, void *arg)
+static void stats_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
 {
     struct list_ctx *ctx = arg;
 
