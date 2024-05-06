@@ -40,10 +40,6 @@ static int topo_init_common (hwloc_topology_t *tp, unsigned long flags)
                                            HWLOC_TYPE_FILTER_KEEP_IMPORTANT)
         < 0)
         return -1;
-    if (hwloc_topology_set_cache_types_filter(*tp,
-                                              HWLOC_TYPE_FILTER_KEEP_STRUCTURE)
-        < 0)
-        return -1;
     if (hwloc_topology_set_icache_types_filter(*tp,
                                                HWLOC_TYPE_FILTER_KEEP_STRUCTURE)
         < 0)
