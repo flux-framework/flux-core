@@ -27,12 +27,16 @@
 
 static const char *default_cwd = "/tmp";
 
+struct exec_config {
+    const char *default_job_shell;
+    const char *flux_imp_path;
+    const char *exec_service;
+    int exec_service_override;
+    json_t *sdexec_properties;
+};
+
 /* Global configs initialized in config_init() */
-static const char *default_job_shell;
-static const char *flux_imp_path;
-static const char *exec_service;
-static int exec_service_override;
-static json_t *sdexec_properties;
+static struct exec_config exec_conf;
 
 static const char *jobspec_get_job_shell (json_t *jobspec)
 {
@@ -52,7 +56,7 @@ const char *config_get_job_shell (struct jobinfo *job)
     const char *path = NULL;
     if (job)
         path = jobspec_get_job_shell (job->jobspec);
-    return path ? path : default_job_shell;
+    return path ? path : exec_conf.default_job_shell;
 }
 
 static const char *jobspec_get_cwd (json_t *jobspec)
@@ -81,22 +85,22 @@ const char *config_get_cwd (struct jobinfo *job)
 
 const char *config_get_imp_path (void)
 {
-    return flux_imp_path;
+    return exec_conf.flux_imp_path;
 }
 
 const char *config_get_exec_service (void)
 {
-    return exec_service;
+    return exec_conf.exec_service;
 }
 
 bool config_get_exec_service_override (void)
 {
-    return exec_service_override;
+    return exec_conf.exec_service_override;
 }
 
 json_t *config_get_sdexec_properties (void)
 {
-    return sdexec_properties;
+    return exec_conf.sdexec_properties;
 }
 
 static int config_add_stats_string (json_t *o,
@@ -151,22 +155,24 @@ int config_get_stats (json_t **config_stats)
                                  default_cwd) < 0
         || config_add_stats_string (o,
                                     "default_job_shell",
-                                    default_job_shell) < 0
+                                    exec_conf.default_job_shell) < 0
         || config_add_stats_string (o,
                                     "flux_imp_path",
-                                    flux_imp_path) < 0
+                                    exec_conf.flux_imp_path) < 0
         || config_add_stats_string (o,
                                     "exec_service",
-                                    exec_service) < 0)
+                                    exec_conf.exec_service) < 0)
         goto error;
 
     if (config_add_stats_int (o,
                               "exec_service_override",
-                              exec_service_override) < 0)
+                              exec_conf.exec_service_override) < 0)
         goto error;
 
-    if (sdexec_properties) {
-        if (json_object_set (o, "sdexec_properties", sdexec_properties) < 0)
+    if (exec_conf.sdexec_properties) {
+        if (json_object_set (o,
+                             "sdexec_properties",
+                             exec_conf.sdexec_properties) < 0)
             goto error;
     }
 
@@ -176,6 +182,15 @@ int config_get_stats (json_t **config_stats)
 error:
     ERRNO_SAFE_WRAP (json_decref, o);
     return -1;
+}
+
+static void exec_config_init (struct exec_config *ec)
+{
+    ec->default_job_shell = flux_conf_builtin_get ("shell_path", FLUX_CONF_AUTO);
+    ec->flux_imp_path = NULL;
+    ec->exec_service = "rexec";
+    ec->exec_service_override = 0;
+    ec->sdexec_properties = NULL;
 }
 
 /*  Initialize configurations for use by job-exec bulk-exec
@@ -193,18 +208,14 @@ int config_init (flux_t *h, int argc, char **argv)
      *
      * So we must re-initialize globals on each config_init().
      */
-    default_job_shell = flux_conf_builtin_get ("shell_path", FLUX_CONF_AUTO);
-    flux_imp_path = NULL;
-    exec_service = "rexec";
-    exec_service_override = 0;
-    sdexec_properties = NULL;
+    exec_config_init (&exec_conf);
 
     /*  Check configuration for exec.job-shell */
     if (flux_conf_unpack (flux_get_conf (h),
                           &err,
                           "{s?{s?s}}",
                           "exec",
-                            "job-shell", &default_job_shell) < 0) {
+                            "job-shell", &exec_conf.default_job_shell) < 0) {
         flux_log (h, LOG_ERR,
                   "error reading config value exec.job-shell: %s",
                   err.text);
@@ -216,7 +227,7 @@ int config_init (flux_t *h, int argc, char **argv)
                           &err,
                           "{s?{s?s}}",
                           "exec",
-                            "imp", &flux_imp_path) < 0) {
+                            "imp", &exec_conf.flux_imp_path) < 0) {
         flux_log (h, LOG_ERR,
                   "error reading config value exec.imp: %s",
                   err.text);
@@ -228,8 +239,9 @@ int config_init (flux_t *h, int argc, char **argv)
                           &err,
                           "{s?{s?s s?b}}",
                           "exec",
-                            "service", &exec_service,
-                            "service-override", &exec_service_override) < 0) {
+                            "service", &exec_conf.exec_service,
+                            "service-override",
+                              &exec_conf.exec_service_override) < 0) {
         flux_log (h, LOG_ERR,
                   "error reading config value exec.service: %s",
                   err.text);
@@ -241,22 +253,23 @@ int config_init (flux_t *h, int argc, char **argv)
                           &err,
                           "{s?{s?o}}",
                           "exec",
-                            "sdexec-properties", &sdexec_properties) < 0) {
+                            "sdexec-properties",
+                              &exec_conf.sdexec_properties) < 0) {
         flux_log (h, LOG_ERR,
                   "error reading config table exec.sdexec-properties: %s",
                   err.text);
         return -1;
     }
-    if (sdexec_properties) {
+    if (exec_conf.sdexec_properties) {
         const char *k;
         json_t *v;
 
-        if (!json_is_object (sdexec_properties)) {
+        if (!json_is_object (exec_conf.sdexec_properties)) {
             flux_log (h, LOG_ERR, "exec.sdexec-properties is not a table");
             errno = EINVAL;
             return -1;
         }
-        json_object_foreach (sdexec_properties, k, v) {
+        json_object_foreach (exec_conf.sdexec_properties, k, v) {
             if (!json_is_string (v)) {
                 flux_log (h, LOG_ERR,
                           "exec.sdexec-properties.%s is not a string",
@@ -271,11 +284,11 @@ int config_init (flux_t *h, int argc, char **argv)
         /* Finally, override values on cmdline */
         for (int i = 0; i < argc; i++) {
             if (strstarts (argv[i], "job-shell="))
-                default_job_shell = argv[i]+10;
+                exec_conf.default_job_shell = argv[i]+10;
             else if (strstarts (argv[i], "imp="))
-                flux_imp_path = argv[i]+4;
+                exec_conf.flux_imp_path = argv[i]+4;
             else if (strstarts (argv[i], "service="))
-                exec_service = argv[i]+8;
+                exec_conf.exec_service = argv[i]+8;
         }
     }
 
