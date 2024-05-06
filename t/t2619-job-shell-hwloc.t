@@ -33,4 +33,14 @@ test_expect_success 'shell: -o hwloc.xmlfile sets HWLOC_XMLFILE per node' '
 test_expect_success 'shell: bad hwloc.xmlfile value is an error' '
 	test_must_fail flux run -o hwloc.xmlfile=foo printenv HWLOC_XMLFILE
 '
+if which hwloc-bind > /dev/null; then
+        NCORES=$(hwloc-bind --get | hwloc-calc --number-of core | tail -n 1)
+        test $NCORES = 1 || test_set_prereq MULTICORE
+fi
+test_expect_success MULTICORE 'shell: -o hwloc.restrict restricts hwloc XML' '
+	flux run -n1 -o hwloc.xmlfile -o hwloc.restrict \
+		hwloc-calc --number-of core all &&
+	test $(flux run -n1 -o hwloc.xmlfile -o hwloc.restrict \
+		hwloc-calc --number-of core all) -eq 1
+'
 test_done
