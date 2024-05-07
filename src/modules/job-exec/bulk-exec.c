@@ -549,7 +549,7 @@ void bulk_exec_kill_log_error (flux_future_t *f, flux_jobid_t id)
         uint32_t rank = flux_rpc_get_nodeid (cf);
         if (flux_future_is_ready (cf)
             && flux_future_get (cf, NULL) < 0
-            && errno != ENOENT
+            && errno != ESRCH
             && rank != FLUX_NODEID_ANY) {
             flux_log (h,
                       LOG_ERR,
