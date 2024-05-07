@@ -59,6 +59,7 @@ struct testexec_ctx {
     flux_msg_handler_t *mh;  /* testexec RPC handler */
     flux_msg_handler_t *dh;  /* disconnect handler */
     zhashx_t *jobs;
+    bool allow_guests;
 };
 
 struct testconf {
@@ -218,6 +219,12 @@ static int testexec_init (struct jobinfo *job)
     }
     else if (!conf.enabled)
         return 0;
+    if (job->multiuser && !testexec_ctx->allow_guests) {
+        jobinfo_fatal_error (job,
+                             0,
+                             "guests may not use test exec implementation");
+        return -1;
+    }
     if (!(te = testexec_create (job, conf))) {
         jobinfo_fatal_error (job, errno, "failed to init test exec module");
         return -1;
@@ -488,6 +495,13 @@ static int testexec_config (flux_t *h,
         if (!(testexec_ctx = testexec_ctx_create (h)))
             return -1;
     }
+    if (flux_conf_unpack (conf,
+                          errp,
+                          "{s?{s?{s?b}}}",
+                          "exec",
+                           "testexec",
+                             "allow-guests", &testexec_ctx->allow_guests) < 0)
+        return -1;
     return 0;
 }
 
