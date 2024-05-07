@@ -6,12 +6,24 @@ test_description='Test flux job execution service in simulated mode'
 
 test_under_flux 1 job
 
+flux version | grep -q libflux-security && test_set_prereq FLUX_SECURITY
+
 flux setattr log-stderr-level 1
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 job_kvsdir()    { flux job id --to=kvs $1; }
 exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; }
+
+submit_as_alternate_user()
+{
+        FAKE_USERID=42
+        flux run --dry-run "$@" | \
+          flux python ${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py $FAKE_USERID \
+            >job.signed
+        FLUX_HANDLE_USERID=$FAKE_USERID \
+          flux job submit --flags=signed job.signed
+}
 
 test_expect_success 'job-exec: generate jobspec for simple test job' '
 	flux run \
@@ -173,6 +185,24 @@ test_expect_success 'job-exec: critical-ranks RPC handles unexpected input' '
           export FLUX_HANDLE_USERID=$newid &&
             test_must_fail flux python critical-ranks.py $id 0
         )
+'
+test_expect_success FLUX_SECURITY 'job-exec: guests denied access to test exec' '
+	jobid=$(submit_as_alternate_user \
+		--setattr=exec.test.run_duration=1s hostname) &&
+	flux job wait-event -Hvt 15s $jobid exception &&
+	flux job wait-event -Ht 15s $jobid exception >testexec-denied.out &&
+	grep "guests may not use test" testexec-denied.out
+'
+test_expect_success FLUX_SECURITY \
+	'job-exec: guest access to test exec can be configured' '
+	flux config load <<-EOF &&
+	[exec.testexec]
+	allow-guests = true
+	EOF
+	jobid=$(submit_as_alternate_user \
+		--setattr=exec.test.run_duration=0.1s hostname) &&
+	flux job wait-event -vHt 15s $jobid clean &&
+	flux job status -vvv $jobid
 '
 
 if ! grep 'release 7' /etc/centos-release >/dev/null 2>&1 \
