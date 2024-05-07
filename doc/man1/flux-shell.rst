@@ -457,6 +457,12 @@ plugins include:
   Note that this option will also unset ``HWLOC_COMPONENTS`` since presence
   of this environment variable may cause hwloc to ignore ``HWLOC_XMLFILE``.
 
+.. option:: hwloc.restrict
+
+  With :option:`hwloc.xmlfile`, restrict the exported topology XML to only
+  the resources assigned to the current job. By default the XML is not
+  restricted.
+
 .. warning::
   The directory referenced by :envvar:`FLUX_JOB_TMPDIR` is cleaned up when the
   job ends, is guaranteed to be unique, and is generally on fast local storage

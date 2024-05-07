@@ -43,6 +43,11 @@
        presence of this environment variable may cause hwloc to ignore
        ``HWLOC_XMLFILE``.
 
+   * - :option:`hwloc.restrict`
+     - With :option:`hwloc.xmlfile`, restrict the exported topology XML to only
+       those resources assigned to the current job. By default, the XML is
+       not restricted.
+
    * - :option:`output.limit`
      - Set KVS output limit to SIZE bytes, where SIZE may be a floating point
        value including optional SI units: k, K, M, G. This value is ignored
