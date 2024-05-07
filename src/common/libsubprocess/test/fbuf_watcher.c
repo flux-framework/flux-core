@@ -272,11 +272,11 @@ static void test_buffer (flux_reactor_t *reactor)
 
     count = 0;
     w = fbuf_read_watcher_create (reactor,
-                                         fd[0],
-                                         1024,
-                                         buffer_read,
-                                         0,
-                                         &count);
+                                  fd[0],
+                                  1024,
+                                  buffer_read,
+                                  0,
+                                  &count);
     ok (w != NULL,
         "buffer: read created");
 
@@ -303,11 +303,11 @@ static void test_buffer (flux_reactor_t *reactor)
 
     count = 0;
     w = fbuf_read_watcher_create (reactor,
-                                         fd[0],
-                                         1024,
-                                         buffer_read_data_unbuffered,
-                                         0,
-                                         &count);
+                                  fd[0],
+                                  1024,
+                                  buffer_read_data_unbuffered,
+                                  0,
+                                  &count);
     ok (w != NULL,
         "buffer: read created");
 
@@ -335,11 +335,11 @@ static void test_buffer (flux_reactor_t *reactor)
 
     count = 0;
     w = fbuf_read_watcher_create (reactor,
-                                         fd[0],
-                                         1024,
-                                         buffer_read_line,
-                                         FBUF_WATCHER_LINE_BUFFER,
-                                         &count);
+                                  fd[0],
+                                  1024,
+                                  buffer_read_line,
+                                  FBUF_WATCHER_LINE_BUFFER,
+                                  &count);
     ok (w != NULL,
         "buffer: read line created");
 
@@ -365,11 +365,11 @@ static void test_buffer (flux_reactor_t *reactor)
     /* read line with fbuf_read_watcher_get_data() */
     count = 0;
     w = fbuf_read_watcher_create (reactor,
-                                         fd[0],
-                                         1024,
-                                         buffer_read_data,
-                                         FBUF_WATCHER_LINE_BUFFER,
-                                         &count);
+                                  fd[0],
+                                  1024,
+                                  buffer_read_data,
+                                  FBUF_WATCHER_LINE_BUFFER,
+                                  &count);
     ok (w != NULL,
         "buffer: read line created");
 
@@ -397,11 +397,11 @@ static void test_buffer (flux_reactor_t *reactor)
 
     count = 0;
     w = fbuf_write_watcher_create (reactor,
-                                          fd[0],
-                                          1024,
-                                          buffer_write,
-                                          0,
-                                          &count);
+                                   fd[0],
+                                   1024,
+                                   buffer_write,
+                                   0,
+                                   &count);
     ok (w != NULL,
         "buffer: write created");
 
@@ -435,11 +435,11 @@ static void test_buffer (flux_reactor_t *reactor)
 
     count = 0;
     w = fbuf_write_watcher_create (reactor,
-                                          fd[0],
-                                          1024,
-                                          buffer_write,
-                                          0,
-                                          &count);
+                                   fd[0],
+                                   1024,
+                                   buffer_write,
+                                   0,
+                                   &count);
     ok (w != NULL,
         "buffer: write created");
 
@@ -472,11 +472,11 @@ static void test_buffer (flux_reactor_t *reactor)
 
     count = 0;
     w = fbuf_read_watcher_create (reactor,
-                                         fd[0],
-                                         12, /* 12 bytes = 2 "foobars"s */
-                                         buffer_read_fill,
-                                         0,
-                                         &count);
+                                  fd[0],
+                                  12, /* 12 bytes = 2 "foobars"s */
+                                  buffer_read_fill,
+                                  0,
+                                  &count);
     ok (w != NULL,
         "buffer: read created");
 
@@ -506,11 +506,11 @@ static void test_buffer (flux_reactor_t *reactor)
 
     count = 0;
     w = fbuf_read_watcher_create (reactor,
-                                         fd[0],
-                                         12, /* 12 bytes = 2 "foobar"s */
-                                         buffer_read_overflow,
-                                         0,
-                                         &count);
+                                  fd[0],
+                                  12, /* 12 bytes = 2 "foobar"s */
+                                  buffer_read_overflow,
+                                  0,
+                                  &count);
     ok (w != NULL,
         "buffer overflow test: read line created");
 
@@ -543,11 +543,11 @@ static void test_buffer (flux_reactor_t *reactor)
         "buffer: hey I can has a pipe!");
 
     w = fbuf_write_watcher_create (reactor,
-                                          pfds[1],
-                                          1024,
-                                          buffer_write,
-                                          0,
-                                          &count);
+                                   pfds[1],
+                                   1024,
+                                   buffer_write,
+                                   0,
+                                   &count);
     ok (w == NULL && errno == EINVAL,
         "buffer: write_watcher_create fails with EINVAL if fd !nonblocking");
 
@@ -555,11 +555,11 @@ static void test_buffer (flux_reactor_t *reactor)
         "buffer: fd_set_nonblocking");
 
     w = fbuf_write_watcher_create (reactor,
-                                          pfds[1],
-                                          1024,
-                                          buffer_write,
-                                          0,
-                                          &count);
+                                   pfds[1],
+                                   1024,
+                                   buffer_write,
+                                   0,
+                                   &count);
     ok (w != NULL,
         "buffer: write watcher close: watcher created");
     fb = fbuf_write_watcher_get_buffer (w);
@@ -845,11 +845,11 @@ static void test_buffer_refcnt (flux_reactor_t *reactor)
     bfc.count = 0;
     bfc.fd = fd[1];
     w = fbuf_read_watcher_create (reactor,
-                                         fd[0],
-                                         1024,
-                                         buffer_read_fd_decref,
-                                         0,
-                                         &bfc);
+                                  fd[0],
+                                  1024,
+                                  buffer_read_fd_decref,
+                                  0,
+                                  &bfc);
     ok (w != NULL,
         "buffer decref: read created");
     bfc.w = w;
@@ -889,11 +889,11 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
     bfc.count = 0;
     bfc.fd = fd[1];
     w = fbuf_read_watcher_create (reactor,
-                                         fd[0],
-                                         1024,
-                                         buffer_read_fd_close,
-                                         0,
-                                         &bfc);
+                                  fd[0],
+                                  1024,
+                                  buffer_read_fd_close,
+                                  0,
+                                  &bfc);
     ok (w != NULL,
         "buffer corner case: read created");
 
@@ -926,11 +926,11 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
     bfc.count = 0;
     bfc.fd = fd[1];
     w = fbuf_read_watcher_create (reactor,
-                                         fd[0],
-                                         1024,
-                                         buffer_read_line_fd_close,
-                                         FBUF_WATCHER_LINE_BUFFER,
-                                         &bfc);
+                                  fd[0],
+                                  1024,
+                                  buffer_read_line_fd_close,
+                                  FBUF_WATCHER_LINE_BUFFER,
+                                  &bfc);
     ok (w != NULL,
         "buffer corner case: read line created");
 
@@ -963,11 +963,11 @@ static void test_buffer_corner_case (flux_reactor_t *reactor)
     bfc.count = 0;
     bfc.fd = fd[1];
     w = fbuf_read_watcher_create (reactor,
-                                         fd[0],
-                                         1024,
-                                         buffer_read_line_fd_close_and_left_over_data,
-                                         FBUF_WATCHER_LINE_BUFFER,
-                                         &bfc);
+                                  fd[0],
+                                  1024,
+                                  buffer_read_line_fd_close_and_left_over_data,
+                                  FBUF_WATCHER_LINE_BUFFER,
+                                  &bfc);
     ok (w != NULL,
         "buffer corner case: read line created");
 
