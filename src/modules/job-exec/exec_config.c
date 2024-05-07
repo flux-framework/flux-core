@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* Flux job-exec configuration common code */
+/* Flux bulk-exec configuration code */
 
 #if HAVE_CONFIG_H
 # include "config.h"
@@ -176,7 +176,8 @@ error:
     return -1;
 }
 
-/*  Initialize common configurations for use by job-exec exec modules.
+/*  Initialize configurations for use by job-exec bulk-exec
+ *  implementation
  */
 int config_init (flux_t *h, int argc, char **argv)
 {
