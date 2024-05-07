@@ -28,7 +28,7 @@ export FLUX_CONF_DIR=$(pwd)/conf.d
 test_under_flux 2 job
 
 test_expect_success 'job-exec: module configured to use IMP' '
-	flux module stats -p impl.bulk-exec.config.flux_imp_path job-exec | grep ${IMP}
+	flux module stats -p bulk-exec.config.flux_imp_path job-exec | grep ${IMP}
 '
 test_expect_success 'job-exec: job as instance owner works' '
 	test "$(id -u)" = "$(flux run id -u)"
