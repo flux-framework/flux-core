@@ -233,7 +233,7 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
     }
 
     if (!lenp) {
-        if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
+        if (!(ptr = flux_subprocess_read (p, stream, &lenp))) {
             flux_log_error (t->h, "%s: flux_subprocess_read",
                             __FUNCTION__);
             return;

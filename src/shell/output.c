@@ -1358,7 +1358,7 @@ static void task_none_output_cb (struct shell_task *task,
     }
     else if (!len) {
         /* stderr is unbuffered */
-        if (!(data = flux_subprocess_read (task->proc, stream, -1, &len))) {
+        if (!(data = flux_subprocess_read (task->proc, stream, &len))) {
             shell_log_errno ("read %s task %d", stream, task->rank);
             return;
         }

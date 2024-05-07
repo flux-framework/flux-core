@@ -96,7 +96,7 @@ void output_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        ptr = flux_subprocess_read (p, stream, -1, &lenp);
+        ptr = flux_subprocess_read (p, stream, &lenp);
         ok (ptr != NULL
             && lenp == 0,
             "flux_subprocess_read on %s read EOF", stream);
@@ -249,7 +249,7 @@ void output_default_stream_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", "stdout");
 
-        ptr = flux_subprocess_read (p, "stdout", -1, &lenp);
+        ptr = flux_subprocess_read (p, "stdout", &lenp);
         ok (ptr != NULL
             && lenp == 0,
             "flux_subprocess_read on %s read EOF", "stdout");
@@ -314,7 +314,7 @@ void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
             && lenp == 0,
             "flux_subprocess_read_line on %s read 0 lines", stream);
 
-        ptr = flux_subprocess_read (p, stream, -1, &lenp);
+        ptr = flux_subprocess_read (p, stream, &lenp);
         ok (ptr != NULL
             && lenp > 0,
             "flux_subprocess_read on %s read success", stream);
@@ -331,7 +331,7 @@ void output_no_newline_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        ptr = flux_subprocess_read (p, stream, -1, &lenp);
+        ptr = flux_subprocess_read (p, stream, &lenp);
         ok (ptr != NULL
             && lenp == 0,
             "flux_subprocess_read on %s read EOF", stream);
@@ -402,7 +402,7 @@ void output_trimmed_line_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        ptr = flux_subprocess_read (p, stream, -1, &lenp);
+        ptr = flux_subprocess_read (p, stream, &lenp);
         ok (ptr != NULL
             && lenp == 0,
             "flux_subprocess_read on %s read EOF", stream);
@@ -494,7 +494,7 @@ void multiple_lines_output_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        ptr = flux_subprocess_read (p, stream, -1, &lenp);
+        ptr = flux_subprocess_read (p, stream, &lenp);
         ok (ptr != NULL
             && lenp == 0,
             "flux_subprocess_read on %s read EOF", stream);
@@ -564,7 +564,7 @@ void stdin_closed_cb (flux_subprocess_t *p, const char *stream)
     ok (flux_subprocess_read_stream_closed (p, stream),
         "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-    ptr = flux_subprocess_read (p, stream, -1, &lenp);
+    ptr = flux_subprocess_read (p, stream, &lenp);
     ok (ptr != NULL
         && lenp == 0,
         "flux_subprocess_read on %s read EOF", stream);
@@ -709,12 +709,12 @@ void output_read_line_until_eof_error_cb (flux_subprocess_t *p, const char *stre
 
         /* drain whatever is in the buffer, we don't care about
          * contents for this test */
-        ptr = flux_subprocess_read (p, stream, -1, &lenp);
+        ptr = flux_subprocess_read (p, stream, &lenp);
         ok (ptr != NULL && lenp > 0,
             "flux_subprocess_read on %s success", stream);
     }
     else {
-        ptr = flux_subprocess_read (p, stream, -1, &lenp);
+        ptr = flux_subprocess_read (p, stream, &lenp);
         ok (ptr != NULL
             && lenp == 0,
             "flux_subprocess_read on %s read EOF", stream);
@@ -889,7 +889,7 @@ void line_output_cb (flux_subprocess_t *p, const char *stream)
         ok (flux_subprocess_read_stream_closed (p, stream),
             "flux_subprocess_read_stream_closed saw EOF on %s", stream);
 
-        ptr = flux_subprocess_read (p, stream, -1, &lenp);
+        ptr = flux_subprocess_read (p, stream, &lenp);
         ok (ptr != NULL && lenp == 0,
             "flux_subprocess_read on %s read EOF", stream);
     }
@@ -1089,7 +1089,7 @@ void start_stdout_after_stderr_cb (flux_subprocess_t *p, const char *stream)
         return;
     }
 
-    ptr = flux_subprocess_read (p, stream, -1, &lenp);
+    ptr = flux_subprocess_read (p, stream, &lenp);
     (*counter)++;
     (*len_counter)+= lenp;
 
@@ -1190,7 +1190,7 @@ void mid_stop_cb (flux_subprocess_t *p, const char *stream)
         return;
     }
 
-    ptr = flux_subprocess_read (p, stream, -1, &lenp);
+    ptr = flux_subprocess_read (p, stream, &lenp);
     if (stdout_output_cb_count == 0) {
         flux_watcher_t *tw = NULL;
         ok (ptr && lenp > 0,

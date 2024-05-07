@@ -190,8 +190,7 @@ int flux_subprocess_write (flux_subprocess_t *p,
 int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
 
 /*
- *  Read up to `len` bytes of unread data from stream `stream`.  To
- *   read all data, specify 'len' of -1.  'stream' can be "stdout",
+ *  Read unread data from stream `stream`.  'stream' can be "stdout",
  *   "stderr", or the name of a stream specified with flux_cmd_add_channel().
  *
  *   Returns pointer to buffer on success and NULL on error with errno
@@ -208,7 +207,6 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
  */
 const char *flux_subprocess_read (flux_subprocess_t *p,
                                   const char *stream,
-                                  int len,
                                   int *lenp);
 
 /*
