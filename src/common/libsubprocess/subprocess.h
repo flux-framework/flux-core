@@ -215,6 +215,11 @@ const char *flux_subprocess_read (flux_subprocess_t *p,
  *   be NUL terminated.  If no line is available, returns pointer and
  *   length of zero.  User shall not free returned pointer.  Length of
  *   buffer returned can optionally returned in 'lenp'.
+ *
+ *   A length of zero may be returned if the stream is closed OR if
+ *   the stream is line buffered and a line is not yet available. Use
+ *   flux_subprocess_read_stream_closed() to distinguish between the
+ *   two.
  */
 const char *flux_subprocess_read_line (flux_subprocess_t *p,
                                        const char *stream,
