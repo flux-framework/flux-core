@@ -407,18 +407,14 @@ static void server_write_cb (flux_t *h,
         goto out;
     }
 
+    /* If the subprocess can't be found or is no longer running, just silently
+     * drop the data. This is expected if tasks are killed or exit with data
+     * in flight, and is not necessarily an error, and can be common enough
+     * that the log messages end up being a nuisance.
+     */
     if (!(p = proc_find_bypid (s, pid))
-        || p->state != FLUX_SUBPROCESS_RUNNING) {
-        if (len > 0) { // skip logging if no data is being dropped (e.g. eof)
-            llog_error (s,
-                        "Error writing %d bytes to subprocess pid %d %s: %s",
-                        len,
-                        (int)pid,
-                        stream,
-                        p ? "not running" : "unknown pid");
-        }
+        || p->state != FLUX_SUBPROCESS_RUNNING)
         goto out;
-    }
 
     if (data && len) {
         int rc = flux_subprocess_write (p, stream, data, len);
