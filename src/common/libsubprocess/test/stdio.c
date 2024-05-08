@@ -39,6 +39,8 @@ int multiple_lines_stderr_output_cb_count;
 int stdin_closed_stdout_cb_count;
 int stdin_closed_stderr_cb_count;
 int timer_cb_count;
+char outputbuf[1024];
+int outputbuf_len;
 
 static int fdcount (void)
 {
@@ -130,6 +132,78 @@ void test_basic_stdout (flux_reactor_t *r)
     ok (rc == 0, "flux_reactor_run returned zero status");
     ok (completion_cb_count == 1, "completion callback called 1 time");
     ok (stdout_output_cb_count == 2, "stdout output callback called 2 times");
+    ok (stderr_output_cb_count == 0, "stderr output callback called 0 times");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
+void output_no_readline_cb (flux_subprocess_t *p, const char *stream)
+{
+    const char *ptr;
+    char cmpbuf[1024];
+    int lenp = 0;
+    int *counter;
+
+    if (!strcasecmp (stream, "stdout"))
+        counter = &stdout_output_cb_count;
+    else if (!strcasecmp (stream, "stderr"))
+        counter = &stderr_output_cb_count;
+    else {
+        ok (false, "unexpected stream %s", stream);
+        return;
+    }
+
+    ptr = flux_subprocess_read (p, stream, &lenp);
+    ok (ptr != NULL,
+        "flux_subprocess_read on %s success", stream);
+
+    if (lenp > 0) {
+        memcpy (outputbuf + outputbuf_len, ptr, lenp);
+        outputbuf_len += lenp;
+    }
+    else {
+        ok (flux_subprocess_read_stream_closed (p, stream),
+            "flux_subprocess_read_stream_closed saw EOF on %s", stream);
+
+        sprintf (cmpbuf, "%s:hi\n", stream);
+        ok (streq (outputbuf, cmpbuf),
+            "flux_subprocess_read_line returned correct data");
+        /* 1 + 2 + 1 for ':', "hi", '\n' */
+        ok (outputbuf_len == (strlen (stream) + 1 + 2 + 1),
+            "flux_subprocess_read returned correct amount of data");
+    }
+
+    (*counter)++;
+}
+
+/* use flux_subprocess_read() instead of flux_subprocess_read_line() */
+void test_basic_stdout_no_readline (flux_reactor_t *r)
+{
+    char *av[] = { TEST_SUBPROCESS_DIR "test_echo", "-P", "-O", "hi", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (4, av, environ)) != NULL, "flux_cmd_create");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = completion_cb,
+        .on_stdout = output_no_readline_cb
+    };
+    completion_cb_count = 0;
+    stdout_output_cb_count = 0;
+    stderr_output_cb_count = 0;
+    memset (outputbuf, '\0', sizeof (outputbuf));
+    outputbuf_len = 0;
+    p = flux_local_exec (r, 0, cmd, &ops);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    ok (stdout_output_cb_count >= 2, "stdout output callback called atleast 2 times");
     ok (stderr_output_cb_count == 0, "stderr output callback called 0 times");
     flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
@@ -1283,6 +1357,8 @@ int main (int argc, char *argv[])
 
     diag ("basic_stdout");
     test_basic_stdout (r);
+    diag ("basic_stdout_no_readline");
+    test_basic_stdout_no_readline (r);
     diag ("basic_stderr");
     test_basic_stderr (r);
     diag ("basic_stdout_and_stderr");
