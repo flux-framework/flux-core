@@ -1481,7 +1481,7 @@ static void stats_cb (flux_t *h,
         }
         i++;
     }
-    if (flux_respond_pack (h, msg, "{s:o}", "impl", o) < 0)
+    if (flux_respond_pack (h, msg, "o", o) < 0)
         flux_log_error (h, "error responding to stats-get request");
     return;
 error:
