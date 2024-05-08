@@ -25,7 +25,8 @@ struct jobinfo;
  *
  *  An exec implementation must include the methods below (except where noted):
  *
- *   - config:  (optional) called once at module load for configuration
+ *   - config:  (optional) called at module load for configuration and config
+ *              reload.
  *
  *   - unload:  (optional) called once at module unload
  *
@@ -49,7 +50,11 @@ struct jobinfo;
  */
 struct exec_implementation {
     const char *name;
-    int  (*config)  (flux_t *h, int argc, char **argv);
+    int  (*config)  (flux_t *h,
+                     const flux_conf_t *conf,
+                     int argc,
+                     char **argv,
+                     flux_error_t *errp);
     void (*unload)  (void);
     int  (*init)    (struct jobinfo *job);
     void (*exit)    (struct jobinfo *job);

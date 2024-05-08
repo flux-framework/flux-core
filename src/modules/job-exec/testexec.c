@@ -478,10 +478,16 @@ error:
     return NULL;
 }
 
-static int testexec_config (flux_t *h, int argc, char **argv)
+static int testexec_config (flux_t *h,
+                            const flux_conf_t *conf,
+                            int argc,
+                            char **argv,
+                            flux_error_t *errp)
 {
-    if (!(testexec_ctx = testexec_ctx_create (h)))
-        return -1;
+    if (!testexec_ctx) {
+        if (!(testexec_ctx = testexec_ctx_create (h)))
+            return -1;
+    }
     return 0;
 }
 

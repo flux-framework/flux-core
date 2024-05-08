@@ -151,4 +151,34 @@ test_expect_success STRESS 'exceeding memory.max causes job failure' '
 	    $stress --timeout 60 --vm-keep --vm 1 --vm-bytes 200M
 '
 
+#
+# reload / update config
+#
+# N.B. do these tests last, as they will alter the config of the
+# job-exec module and could affect above tests
+#
+
+test_expect_success 'change values of memory containment' '
+	cat >config/config.toml <<EOT
+	[systemd]
+	enable = true
+	sdbus-debug = true
+	sdexec-debug = true
+	[exec]
+	service = "sdexec"
+	[exec.sdexec-properties]
+	MemoryHigh = "100M"
+	MemoryMax = "infinity"
+	EOT
+	flux config reload
+'
+test_expect_success 'memory.high configuration changed' '
+	flux run $getcg memory.high >highupdate.out &&
+	test_cmp 100M.exp highupdate.out
+'
+test_expect_success 'memory.max configuration changed' '
+	flux run $getcg memory.max >maxupdate.out &&
+	test_cmp inf.exp maxupdate.out
+'
+
 test_done

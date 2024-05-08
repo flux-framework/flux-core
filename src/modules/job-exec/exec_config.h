@@ -17,6 +17,11 @@
 
 #include "job-exec.h"
 
+/* Configuration getters.  It is not safe to hold on to returned
+ * values.  Callers should strdup() / json_incref() / etc. values
+ * they wish to access for later use.
+ */
+
 const char *config_get_job_shell (struct jobinfo *job);
 
 const char *config_get_cwd (struct jobinfo *job);
@@ -31,7 +36,11 @@ bool config_get_exec_service_override (void);
 
 int config_get_stats (json_t **config_stats);
 
-int config_init (flux_t *h, int argc, char **argv);
+int config_setup (flux_t *h,
+                  const flux_conf_t *conf,
+                  int argc,
+                  char **argv,
+                  flux_error_t *errp);
 
 #endif /* !HAVE_JOB_EXEC_CONFIG_EXEC_H */
 

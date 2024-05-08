@@ -609,9 +609,13 @@ static void exec_exit (struct jobinfo *job)
     job->data = NULL;
 }
 
-static int exec_config (flux_t *h, int argc, char **argv)
+static int exec_config (flux_t *h,
+                        const flux_conf_t *conf,
+                        int argc,
+                        char **argv,
+                        flux_error_t *errp)
 {
-    return config_init (h, argc, argv);
+    return config_setup (h, conf, argc, argv, errp);
 }
 
 static int exec_stats (json_t **stats)

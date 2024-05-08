@@ -99,6 +99,7 @@
 #include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 #include "job-exec.h"
@@ -120,6 +121,8 @@ static struct exec_implementation * implementations[] = {
 
 struct job_exec_ctx {
     flux_t *              h;
+    int                   argc; /* needed for later reparse */
+    char **               argv; /* needed for later reparse */
     flux_msg_handler_t ** handlers;
     zhashx_t *            jobs;
 };
@@ -1311,12 +1314,16 @@ static void job_exec_ctx_destroy (struct job_exec_ctx *ctx)
     free (ctx);
 }
 
-static struct job_exec_ctx * job_exec_ctx_create (flux_t *h)
+static struct job_exec_ctx * job_exec_ctx_create (flux_t *h,
+                                                  int argc,
+                                                  char **argv)
 {
     struct job_exec_ctx *ctx = calloc (1, sizeof (*ctx));
     if (ctx == NULL)
         return NULL;
     ctx->h = h;
+    ctx->argc = argc;
+    ctx->argv = argv;
     if (!(ctx->jobs = job_hash_create ())) {
         ERRNO_SAFE_WRAP (free, ctx);
         return NULL;
@@ -1380,10 +1387,18 @@ static int job_exec_initialize (flux_t *h, int argc, char **argv)
 static int configure_implementations (flux_t *h, int argc, char **argv)
 {
     struct exec_implementation *impl;
+    const flux_conf_t *conf;
+    flux_error_t err;
     int i = 0;
+    if (!(conf = flux_get_conf (h))) {
+        flux_log_error (h, "error retrieving flux conf");
+        return -1;
+    }
     while ((impl = implementations[i]) && impl->name) {
-        if (impl->config && (*impl->config) (h, argc, argv) < 0)
+        if (impl->config && (*impl->config) (h, conf, argc, argv, &err) < 0) {
+            flux_log (h, LOG_ERR, "%s", err.text);
             return -1;
+        }
         i++;
     }
     return 0;
@@ -1475,6 +1490,42 @@ error:
     json_decref (o);
 }
 
+static void config_reload_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
+{
+    struct job_exec_ctx *ctx = arg;
+    const flux_conf_t *conf;
+    struct exec_implementation *impl;
+    flux_error_t err;
+    int i = 0;
+
+    if (flux_conf_reload_decode (msg, &conf) < 0) {
+        errprintf (&err, "Error parsing new config: %s", strerror (errno));
+        goto error;
+    }
+
+    while ((impl = implementations[i]) && impl->name) {
+        if (impl->config) {
+            if ((*impl->config) (h, conf, ctx->argc, ctx->argv, &err) < 0)
+                goto error;
+        }
+        i++;
+    }
+    if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
+        errprintf (&err, "error updating cached configuration");
+        flux_conf_decref (conf);
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, err.text) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+}
+
 static const struct flux_msg_handler_spec htab[]  = {
     { FLUX_MSGTYPE_REQUEST, "job-exec.start", start_cb,     0 },
     { FLUX_MSGTYPE_EVENT,   "job-exception",  exception_cb, 0 },
@@ -1485,6 +1536,7 @@ static const struct flux_msg_handler_spec htab[]  = {
     },
     { FLUX_MSGTYPE_REQUEST, "job-exec.expiration", expiration_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "job-exec.stats-get", stats_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "job-exec.config-reload", config_reload_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END
 };
 
@@ -1492,7 +1544,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     int saved_errno = 0;
     int rc = -1;
-    struct job_exec_ctx *ctx = job_exec_ctx_create (h);
+    struct job_exec_ctx *ctx = job_exec_ctx_create (h, argc, argv);
 
     if (job_exec_initialize (h, argc, argv) < 0
         || configure_implementations (h, argc, argv) < 0) {
