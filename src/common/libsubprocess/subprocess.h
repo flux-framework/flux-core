@@ -197,8 +197,14 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
  *   Returns pointer to buffer on success and NULL on error with errno
  *   set.  Buffer is guaranteed to be NUL terminated.  User shall not
  *   free returned pointer.  Length of buffer returned can optionally
- *   returned in 'lenp'.  A length of 0 indicates that the subprocess
- *   has closed this stream.
+ *   returned in 'lenp'.
+ *
+ *   In most cases, a length of 0 indicates that the subprocess has
+ *   closed this stream.  A length of 0 could be returned if read
+ *   functions are called multiple times within a single output
+ *   callback, so it is generally recommended to call this function
+ *   once per output callback.  flux_subprocess_read_stream_closed()
+ *   can always be used to verify if the stream is in fact closed.
  */
 const char *flux_subprocess_read (flux_subprocess_t *p,
                                   const char *stream,
