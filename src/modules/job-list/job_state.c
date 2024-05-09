@@ -487,11 +487,14 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
                                  struct job *job,
                                  flux_jobid_t id,
                                  double timestamp,
-                                 json_t *context)
+                                 json_t *context,
+                                 json_t *jobspec)
 {
     if (!job) {
         if (!(job = job_create (jsctx->h, id)))
             return -1;
+        if (jobspec)
+            job->jobspec = json_incref (jobspec);
         if (zhashx_insert (jsctx->index, &job->id, job) < 0) {
             job_destroy (job);
             errno = EEXIST;
@@ -855,8 +858,6 @@ static int journal_process_event (struct job_state_ctx *jsctx,
 
     job = zhashx_lookup (jsctx->index, &id);
     if (job) {
-        if (!job->jobspec && jobspec)
-            job->jobspec = json_incref (jobspec);
         if (!job->R && R)
             job->R = json_incref (R);
     }
@@ -899,7 +900,8 @@ static int journal_process_event (struct job_state_ctx *jsctx,
                                   job,
                                   id,
                                   timestamp,
-                                  context) < 0)
+                                  context,
+                                  jobspec) < 0)
             return -1;
     }
     else if (streq (name, "validate")) {

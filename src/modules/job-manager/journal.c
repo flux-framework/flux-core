@@ -36,7 +36,7 @@
  * responses will be for events that are are posted in real time.
  *
  * Additional responses contain at most one event.  The redacted jobspec is
- * included with the "validate" event.  The redacted R object is included
+ * included with the "submit" event.  The redacted R object is included
  * with the "alloc" event.
  */
 
@@ -109,7 +109,7 @@ int journal_process_event (struct journal *journal,
                          "id", id,
                          "events", entry)))
         goto error;
-    if (streq (name, "validate")) {
+    if (streq (name, "submit")) {
         struct job *job;
         if (!(job = zhashx_lookup (ctx->active_jobs, &id))
             || !job->jobspec_redacted
