@@ -45,6 +45,12 @@ test_expect_success 'start a recursive job' '
 			 flux queue idle") &&
 	flux job wait-event $id clean
 '
+test_expect_success 'allow guest user access to testexec' '
+	flux config load <<-EOF
+	[exec.testexec]
+	allow-guests = true
+	EOF
+'
 test_expect_success FLUX_SECURITY 'submit fake instance job as another user' '
 	submit_fake_user_instance
 '
