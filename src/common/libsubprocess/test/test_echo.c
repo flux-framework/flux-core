@@ -114,11 +114,8 @@ main (int argc, char *argv[])
 
     if (channel) {
         const char *fdstr;
-        char channelstr[1024];
 
-        sprintf (channelstr, "%s", channel_name);
-
-        if (!(fdstr = getenv (channelstr))) {
+        if (!(fdstr = getenv (channel_name))) {
             perror ("getenv");
             exit (1);
         }
