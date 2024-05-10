@@ -206,7 +206,7 @@ const char *flux_subprocess_read (flux_subprocess_t *p,
                                   int *lenp);
 
 /*
- *  Read line unread data from stream `stream`.  'stream' can be
+ *  Read line of unread data from stream `stream`.  'stream' can be
  *   "stdout", "stderr", or the name of a stream specified with
  *   flux_cmd_add_channel().
  *
