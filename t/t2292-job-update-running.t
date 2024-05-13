@@ -54,6 +54,12 @@ job_manager_get_starttime() {
 	job_manager_get_R $1 | jq .R.execution.starttime
 }
 
+test_expect_success 'configure testexec to allow guest access' '
+	flux config load <<-EOF
+	[exec.testexec]
+	allow-guests = true
+	EOF
+'
 test_expect_success 'instance owner can adjust expiration of their own job' '
 	jobid=$(flux submit --wait-event=start -t5m sleep 300) &&
 	expiration=$(job_manager_get_expiration $jobid) &&

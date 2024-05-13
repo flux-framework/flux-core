@@ -38,6 +38,10 @@ sdexec-properties
    (optional) A table of systemd properties to set for all jobs.  All values
    must be strings.  See SDEXEC PROPERTIES below.
 
+testexec
+   (options) A table of keys (see :ref:`testexec`) for configuring the
+   **job-exec** test execution implementation (used in mainly for testing).
+
 
 SDEXEC PROPERTIES
 =================
@@ -61,6 +65,15 @@ MemoryMin, MemoryLow
    described above.
 
 
+.. _testexec:
+
+TESTEXEC
+========
+
+allow-guests
+  Boolean value enables access to the testexec implementation from guest
+  users. By default, guests cannot use this implementation.
+
 EXAMPLES
 ========
 
@@ -76,6 +89,11 @@ EXAMPLES
    service = "sdexec"
    [exec.sdexec-properties]
    MemoryMax = "90%"
+
+::
+
+   [exec.testexec]
+   allow-guests = true
 
 
 RESOURCES
