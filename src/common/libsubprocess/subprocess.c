@@ -231,7 +231,7 @@ void subprocess_standard_output (flux_subprocess_t *p, const char *stream)
     /* we're at the end of the stream, read any lingering data */
     if (!lenp && flux_subprocess_read_stream_closed (p, stream)) {
         if (!(ptr = flux_subprocess_read (p, stream, &lenp))) {
-            log_err ("subprocess_standard_output: read_line");
+            log_err ("subprocess_standard_output: read");
             return;
         }
     }
