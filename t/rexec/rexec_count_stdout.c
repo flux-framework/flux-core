@@ -64,7 +64,7 @@ void output_cb (flux_subprocess_t *p, const char *stream)
 
     /* we're at the end of the stream, read any lingering data */
     if (!lenp && flux_subprocess_read_stream_closed (p, stream)) {
-        if (!(ptr = flux_subprocess_read (p, stream, -1, &lenp))) {
+        if (!(ptr = flux_subprocess_read (p, stream, &lenp))) {
             log_err ("flux_subprocess_read");
             return;
         }

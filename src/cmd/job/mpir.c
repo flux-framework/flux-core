@@ -188,7 +188,7 @@ static void output_cb (flux_subprocess_t *p, const char *stream)
 
     line = flux_subprocess_read_trimmed_line (p, stream, &len);
     if (line && len == 0)
-        line = flux_subprocess_read (p, stream, -1, &len);
+        line = flux_subprocess_read (p, stream, &len);
     if (len)
         log_msg ("MPIR: rank %d: %s: %s: %s", rank, prog, stream, line);
 }

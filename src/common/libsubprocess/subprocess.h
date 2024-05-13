@@ -190,23 +190,27 @@ int flux_subprocess_write (flux_subprocess_t *p,
 int flux_subprocess_close (flux_subprocess_t *p, const char *stream);
 
 /*
- *  Read up to `len` bytes of unread data from stream `stream`.  To
- *   read all data, specify 'len' of -1.  'stream' can be "stdout",
+ *  Read unread data from stream `stream`.  'stream' can be "stdout",
  *   "stderr", or the name of a stream specified with flux_cmd_add_channel().
  *
  *   Returns pointer to buffer on success and NULL on error with errno
  *   set.  Buffer is guaranteed to be NUL terminated.  User shall not
  *   free returned pointer.  Length of buffer returned can optionally
- *   returned in 'lenp'.  A length of 0 indicates that the subprocess
- *   has closed this stream.
+ *   returned in 'lenp'.
+ *
+ *   In most cases, a length of 0 indicates that the subprocess has
+ *   closed this stream.  A length of 0 could be returned if read
+ *   functions are called multiple times within a single output
+ *   callback, so it is generally recommended to call this function
+ *   once per output callback.  flux_subprocess_read_stream_closed()
+ *   can always be used to verify if the stream is in fact closed.
  */
 const char *flux_subprocess_read (flux_subprocess_t *p,
                                   const char *stream,
-                                  int len,
                                   int *lenp);
 
 /*
- *  Read line unread data from stream `stream`.  'stream' can be
+ *  Read line of unread data from stream `stream`.  'stream' can be
  *   "stdout", "stderr", or the name of a stream specified with
  *   flux_cmd_add_channel().
  *
@@ -215,6 +219,11 @@ const char *flux_subprocess_read (flux_subprocess_t *p,
  *   be NUL terminated.  If no line is available, returns pointer and
  *   length of zero.  User shall not free returned pointer.  Length of
  *   buffer returned can optionally returned in 'lenp'.
+ *
+ *   A length of zero may be returned if the stream is closed OR if
+ *   the stream is line buffered and a line is not yet available. Use
+ *   flux_subprocess_read_stream_closed() to distinguish between the
+ *   two.
  */
 const char *flux_subprocess_read_line (flux_subprocess_t *p,
                                        const char *stream,
